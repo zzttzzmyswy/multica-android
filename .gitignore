@@ -8,6 +8,7 @@ dist
 out
 .turbo
 build
+bin
 dist-electron
 release
 *.tsbuildinfo
