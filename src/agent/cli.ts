@@ -149,14 +149,19 @@ async function main() {
   }
 
   // Build tools config if any tools options are set
-  const toolsConfig =
-    opts.toolsProfile || opts.toolsAllow || opts.toolsDeny
-      ? {
-          profile: opts.toolsProfile as any,
-          allow: opts.toolsAllow,
-          deny: opts.toolsDeny,
-        }
-      : undefined;
+  let toolsConfig: import("./tools/policy.js").ToolsConfig | undefined;
+  if (opts.toolsProfile || opts.toolsAllow || opts.toolsDeny) {
+    toolsConfig = {};
+    if (opts.toolsProfile) {
+      toolsConfig.profile = opts.toolsProfile as any;
+    }
+    if (opts.toolsAllow) {
+      toolsConfig.allow = opts.toolsAllow;
+    }
+    if (opts.toolsDeny) {
+      toolsConfig.deny = opts.toolsDeny;
+    }
+  }
 
   const agent = new Agent({
     profileId: opts.profile,

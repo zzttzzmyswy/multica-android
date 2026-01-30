@@ -131,8 +131,12 @@ export function getProfilePolicy(
   const resolved = TOOL_PROFILES[profile];
   if (!resolved) return undefined;
   if (!resolved.allow && !resolved.deny) return undefined;
-  return {
-    allow: resolved.allow ? [...resolved.allow] : undefined,
-    deny: resolved.deny ? [...resolved.deny] : undefined,
-  };
+  const result: { allow?: string[]; deny?: string[] } = {};
+  if (resolved.allow) {
+    result.allow = [...resolved.allow];
+  }
+  if (resolved.deny) {
+    result.deny = [...resolved.deny];
+  }
+  return result;
 }

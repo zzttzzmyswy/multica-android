@@ -161,7 +161,12 @@ describe("glob", () => {
 
       expect(result.details.count).toBe(0);
       expect(result.details.files).toHaveLength(0);
-      expect(result.content[0].text).toContain("No files found");
+      const content = result.content[0];
+      expect(content).toBeDefined();
+      expect(content?.type).toBe("text");
+      if (content?.type === "text") {
+        expect(content.text).toContain("No files found");
+      }
     });
 
     it("should sort files by modification time (most recent first)", async () => {

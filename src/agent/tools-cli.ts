@@ -60,7 +60,8 @@ function parseArgs(argv: string[]): CliOptions {
     if (!arg) break;
 
     if (arg === "--profile") {
-      opts.profile = args.shift();
+      const value = args.shift();
+      if (value) opts.profile = value;
       continue;
     }
     if (arg === "--allow") {
@@ -74,7 +75,8 @@ function parseArgs(argv: string[]): CliOptions {
       continue;
     }
     if (arg === "--provider") {
-      opts.provider = args.shift();
+      const value = args.shift();
+      if (value) opts.provider = value;
       continue;
     }
     if (arg === "--subagent") {
@@ -93,20 +95,32 @@ function listTools(opts: CliOptions) {
   console.log("");
 
   // Build config
-  const config: ToolsConfig | undefined =
-    opts.profile || opts.allow || opts.deny
-      ? {
-          profile: opts.profile as any,
-          allow: opts.allow,
-          deny: opts.deny,
-        }
-      : undefined;
+  let config: ToolsConfig | undefined;
+  if (opts.profile || opts.allow || opts.deny) {
+    config = {};
+    if (opts.profile) {
+      config.profile = opts.profile as any;
+    }
+    if (opts.allow) {
+      config.allow = opts.allow;
+    }
+    if (opts.deny) {
+      config.deny = opts.deny;
+    }
+  }
 
-  const filtered = filterTools(allTools, {
-    config,
-    provider: opts.provider,
-    isSubagent: opts.isSubagent,
-  });
+  const filterOpts: import("./tools/policy.js").FilterToolsOptions = {};
+  if (config) {
+    filterOpts.config = config;
+  }
+  if (opts.provider) {
+    filterOpts.provider = opts.provider;
+  }
+  if (opts.isSubagent) {
+    filterOpts.isSubagent = opts.isSubagent;
+  }
+
+  const filtered = filterTools(allTools, filterOpts);
 
   if (config || opts.provider || opts.isSubagent) {
     console.log("Applied filters:");
