@@ -4,11 +4,11 @@ import "@multica/ui/globals.css";
 import {
   SidebarProvider,
   SidebarInset,
-  SidebarTrigger,
 } from "@multica/ui/components/ui/sidebar";
 import { AppSidebar } from "@multica/ui/components/app-sidebar";
 import { ThemeProvider } from "@multica/ui/components/theme-provider";
 import { Toaster } from "@multica/ui/components/ui/sonner";
+import { HubSidebar } from "./components/hub-sidebar";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -33,12 +33,6 @@ export const metadata: Metadata = {
   description: "Distributed AI agent framework",
 };
 
-const NAV_ITEMS = [
-  { title: "Home", url: "#" },
-  { title: "Documents", url: "#" },
-  { title: "Settings", url: "#" },
-];
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -56,7 +50,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <SidebarProvider>
-            <AppSidebar items={NAV_ITEMS} />
+            <AppSidebar>
+              <HubSidebar />
+            </AppSidebar>
             <SidebarInset>
               <div className="flex h-dvh overflow-hidden">{children}</div>
             </SidebarInset>

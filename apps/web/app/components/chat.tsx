@@ -1,85 +1,104 @@
 "use client";
 
-import { useRef, useState, useCallback } from "react";
+import { useRef, useCallback } from "react";
 import { SidebarTrigger } from "@multica/ui/components/ui/sidebar";
-import { Button } from "@multica/ui/components/ui/button";
+import { Badge } from "@multica/ui/components/ui/badge";
 import { ChatInput } from "@multica/ui/components/chat-input";
 import { MemoizedMarkdown } from "@multica/ui/components/markdown";
 import { useMessages } from "../hooks/use-messages";
-import { useDeviceId } from "../hooks/use-device-id";
+import { useGateway } from "../hooks/use-gateway";
+import { useHub } from "../hooks/use-hub";
+import { useActiveAgent } from "../hooks/use-active-agent";
 import { useScrollFade } from "../hooks/use-scroll-fade";
 import { cn } from "@multica/ui/lib/utils";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { Copy01Icon, CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
-import { toast } from "@multica/ui/components/ui/sonner";
+
+const STATE_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  registered: "default",
+  connected: "secondary",
+  connecting: "secondary",
+  disconnected: "destructive",
+}
 
 export function Chat() {
-  const deviceId = useDeviceId();
-  const messages = useMessages();
-  const mainRef = useRef<HTMLElement>(null);
-  const fadeStyle = useScrollFade(mainRef);
-  const [copied, setCopied] = useState(false);
+  const activeAgentId = useActiveAgent((s) => s.activeAgentId)
+  const { messages, addUserMessage, addAssistantMessage } = useMessages()
+  const { hub } = useHub()
 
-  const handleCopy = useCallback(async () => {
-    if (!deviceId) return;
-    await navigator.clipboard.writeText(deviceId);
-    setCopied(true);
-    toast.success("Device ID copied");
-    setTimeout(() => setCopied(false), 2000);
-  }, [deviceId]);
+  const { state: gwState, send } = useGateway({
+    onMessage: (msg) => {
+      const payload = msg.payload as { agentId?: string; content?: string }
+      if (payload?.agentId && payload?.content) {
+        addAssistantMessage(payload.content, payload.agentId)
+      }
+    },
+  })
+
+  const handleSend = useCallback((text: string) => {
+    if (!hub?.hubId || !activeAgentId) return
+    addUserMessage(text, activeAgentId)
+    send(hub.hubId, "message", { agentId: activeAgentId, content: text })
+  }, [hub?.hubId, activeAgentId, addUserMessage, send])
+
+  const filtered = activeAgentId
+    ? messages.filter(m => m.agentId === activeAgentId)
+    : []
+
+  const canSend = gwState === "registered" && !!activeAgentId
+
+  const mainRef = useRef<HTMLElement>(null)
+  const fadeStyle = useScrollFade(mainRef)
 
   return (
     <div className="h-dvh flex flex-col overflow-hidden w-full">
       <header className="flex items-center gap-2 p-2">
         <SidebarTrigger />
-        <span className="text-xs text-muted-foreground font-mono">
-          {deviceId || "\u00A0"}
-        </span>
-        {deviceId && (
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={handleCopy}
-            aria-label="Copy device ID"
-          >
-            <HugeiconsIcon
-              icon={copied ? CheckmarkCircle02Icon : Copy01Icon}
-              strokeWidth={2}
-              className={cn("size-3", copied && "text-green-500")}
-            />
-          </Button>
+        <Badge variant={STATE_VARIANT[gwState] ?? "outline"} className="text-xs">
+          {gwState}
+        </Badge>
+        {activeAgentId && (
+          <span className="text-xs text-muted-foreground font-mono">
+            Agent: {activeAgentId.slice(0, 8)}...
+          </span>
         )}
       </header>
 
       <main ref={mainRef} className="flex-1 overflow-y-auto min-h-0" style={fadeStyle}>
-        <div className="px-4 py-6 space-y-6 max-w-4xl mx-auto">
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={cn(
-                "flex",
-                msg.role === "user" ? "justify-end" : "justify-start"
-              )}
-            >
+        {!activeAgentId ? (
+          <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+            Select an agent to start chatting
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+            Send a message to start the conversation
+          </div>
+        ) : (
+          <div className="px-4 py-6 space-y-6 max-w-4xl mx-auto">
+            {filtered.map((msg) => (
               <div
+                key={msg.id}
                 className={cn(
-                  "max-w-[85%] rounded-2xl px-4 py-3",
-                  msg.role === "user"
-                    ? "bg-muted"
-                    : ""
+                  "flex",
+                  msg.role === "user" ? "justify-end" : "justify-start"
                 )}
               >
-                <MemoizedMarkdown mode="minimal" id={msg.id}>
-                  {msg.content}
-                </MemoizedMarkdown>
+                <div
+                  className={cn(
+                    "max-w-[85%] rounded-2xl px-4 py-3",
+                    msg.role === "user" ? "bg-muted" : ""
+                  )}
+                >
+                  <MemoizedMarkdown mode="minimal" id={msg.id}>
+                    {msg.content}
+                  </MemoizedMarkdown>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </main>
 
       <footer className="w-full p-2 pt-1 max-w-4xl mx-auto">
-        <ChatInput />
+        <ChatInput onSubmit={handleSend} disabled={!canSend} />
       </footer>
     </div>
   );
