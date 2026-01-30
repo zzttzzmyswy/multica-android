@@ -79,7 +79,7 @@ export function HubSidebar() {
                       onClick={() => setActiveAgentId(agent.id)}
                       className="font-mono text-xs flex-1 min-w-0"
                     >
-                      {agent.id}
+                      <span>{agent.id}</span>
                     </SidebarMenuButton>
                     <button
                       onClick={() => {
