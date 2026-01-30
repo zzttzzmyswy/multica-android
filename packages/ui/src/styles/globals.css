@@ -137,6 +137,17 @@
   color: var(--shiki-dark) !important;
 }
 
+/* Scroll fade hint utilities — mask content edges to hint at scrollable overflow */
+.mask-fade-y {
+  mask-image: linear-gradient(to bottom, transparent 0%, black 32px, black calc(100% - 32px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 32px, black calc(100% - 32px), transparent 100%);
+}
+
+.mask-fade-bottom {
+  mask-image: linear-gradient(to bottom, black 0%, black calc(100% - 32px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black calc(100% - 32px), transparent 100%);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

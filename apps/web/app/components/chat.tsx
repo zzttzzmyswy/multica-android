@@ -1,15 +1,19 @@
 "use client";
 
+import { useRef } from "react";
 import { SidebarTrigger } from "@multica/ui/components/ui/sidebar";
 import { ChatInput } from "@multica/ui/components/chat-input";
 import { MemoizedMarkdown } from "@multica/ui/components/markdown";
 import { useDeviceStore } from "@multica/store";
 import { useMessages } from "../hooks/use-messages";
+import { useScrollFade } from "../hooks/use-scroll-fade";
 import { cn } from "@multica/ui/lib/utils";
 
 export function Chat() {
   const deviceId = useDeviceStore((s) => s.deviceId);
   const messages = useMessages();
+  const mainRef = useRef<HTMLElement>(null);
+  const fadeStyle = useScrollFade(mainRef);
 
   return (
     <div className="h-dvh flex flex-col overflow-hidden w-full">
@@ -20,7 +24,7 @@ export function Chat() {
         </span>
       </header>
 
-      <main className="flex-1 overflow-y-auto min-h-0">
+      <main ref={mainRef} className="flex-1 overflow-y-auto min-h-0" style={fadeStyle}>
         <div className="px-4 py-6 space-y-6 max-w-4xl mx-auto">
           {messages.map((msg) => (
             <div
@@ -47,7 +51,7 @@ export function Chat() {
         </div>
       </main>
 
-      <footer className="w-full px-4 max-w-4xl mx-auto">
+      <footer className="w-full p-2 pt-1 max-w-4xl mx-auto">
         <ChatInput />
       </footer>
     </div>
