@@ -1,14 +1,14 @@
-# Tools System
+# 工具系统
 
-[中文文档](./README.zh-CN.md)
+[English](./README.md)
 
-The tools system provides LLM agents with capabilities to interact with the external world. Tools are the "hands and feet" of an agent - without tools, an LLM can only generate text responses.
+工具系统为 LLM Agent 提供与外部世界交互的能力。工具是 Agent 的"手和脚"——没有工具，LLM 只能生成文本响应。
 
-## Architecture Overview
+## 架构概览
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        Tool Definition                          │
+│                        工具定义                                  │
 │  (AgentTool from @mariozechner/pi-agent-core)                  │
 │                                                                 │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
@@ -19,200 +19,200 @@ The tools system provides LLM agents with capabilities to interact with the exte
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    4-Layer Policy Filter                        │
+│                    4 层策略过滤器                                 │
 │                                                                 │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │ Layer 1: Profile                                         │  │
-│  │ Base tool set: minimal | coding | web | full             │  │
+│  │ 第 1 层: Profile                                         │  │
+│  │ 基础工具集: minimal | coding | web | full                │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                              │                                  │
 │                              ▼                                  │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │ Layer 2: Global Allow/Deny                               │  │
-│  │ User customization via CLI or config                     │  │
+│  │ 第 2 层: 全局 Allow/Deny                                 │  │
+│  │ 通过 CLI 或配置文件进行用户自定义                          │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                              │                                  │
 │                              ▼                                  │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │ Layer 3: Provider-Specific                               │  │
-│  │ Different rules for different LLM providers              │  │
+│  │ 第 3 层: Provider 特定规则                                │  │
+│  │ 不同 LLM Provider 有不同的规则                            │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                              │                                  │
 │                              ▼                                  │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │ Layer 4: Subagent Restrictions                           │  │
-│  │ Limited tools for spawned child agents                   │  │
+│  │ 第 4 层: Subagent 限制                                   │  │
+│  │ 子 Agent 的工具访问受限                                   │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                      Filtered Tools                             │
-│              (passed to pi-agent-core)                          │
+│                      过滤后的工具                                │
+│              (传递给 pi-agent-core)                             │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Available Tools
+## 可用工具
 
-| Tool          | Name            | Description                                   |
+| 工具          | 名称            | 描述                                          |
 | ------------- | --------------- | --------------------------------------------- |
-| Read          | `read`          | Read file contents                            |
-| Write         | `write`         | Write content to files                        |
-| Edit          | `edit`          | Edit existing files                           |
-| Glob          | `glob`          | Find files by pattern                         |
-| Exec          | `exec`          | Execute shell commands                        |
-| Process       | `process`       | Manage long-running processes                 |
-| Web Fetch     | `web_fetch`     | Fetch and extract content from URLs           |
-| Web Search    | `web_search`    | Search the web (requires API key)             |
-| Memory Get    | `memory_get`    | Retrieve a value from persistent memory       |
-| Memory Set    | `memory_set`    | Store a value in persistent memory            |
-| Memory Delete | `memory_delete` | Delete a value from persistent memory         |
-| Memory List   | `memory_list`   | List all keys in persistent memory            |
+| Read          | `read`          | 读取文件内容                                  |
+| Write         | `write`         | 写入文件内容                                  |
+| Edit          | `edit`          | 编辑现有文件                                  |
+| Glob          | `glob`          | 按模式查找文件                                |
+| Exec          | `exec`          | 执行 Shell 命令                               |
+| Process       | `process`       | 管理长时间运行的进程                          |
+| Web Fetch     | `web_fetch`     | 从 URL 获取并提取内容                         |
+| Web Search    | `web_search`    | 搜索网络（需要 API Key）                      |
+| Memory Get    | `memory_get`    | 从持久化内存中获取值                          |
+| Memory Set    | `memory_set`    | 向持久化内存中存储值                          |
+| Memory Delete | `memory_delete` | 从持久化内存中删除值                          |
+| Memory List   | `memory_list`   | 列出持久化内存中的所有键                      |
 
-> **Note**: Memory tools require a `profileId` to be specified. They store data in the profile's memory directory.
+> **注意**: Memory 工具需要指定 `profileId`。数据存储在 Profile 的 memory 目录中。
 
-## Tool Groups
+## 工具组
 
-Groups provide shortcuts for allowing/denying multiple tools at once:
+工具组提供了一次性允许/禁止多个工具的快捷方式：
 
-| Group           | Tools                                             |
+| 组              | 工具                                              |
 | --------------- | ------------------------------------------------- |
 | `group:fs`      | read, write, edit, glob                           |
 | `group:runtime` | exec, process                                     |
 | `group:web`     | web_search, web_fetch                             |
 | `group:memory`  | memory_get, memory_set, memory_delete, memory_list|
-| `group:core`    | All of the above (excluding memory)               |
+| `group:core`    | 以上所有（不包括 memory）                         |
 
-## Tool Profiles
+## 工具配置文件
 
-Profiles are predefined tool sets for common use cases:
+配置文件是为常见用例预定义的工具集：
 
-| Profile   | Description             | Tools                              |
-| --------- | ----------------------- | ---------------------------------- |
-| `minimal` | No tools (chat-only)    | None                               |
-| `coding`  | File system + execution | group:fs, group:runtime            |
-| `web`     | Coding + web access     | group:fs, group:runtime, group:web |
-| `full`    | No restrictions         | All tools                          |
+| Profile   | 描述                | 工具                               |
+| --------- | ------------------- | ---------------------------------- |
+| `minimal` | 无工具（仅聊天）    | 无                                 |
+| `coding`  | 文件系统 + 执行     | group:fs, group:runtime            |
+| `web`     | 编码 + 网络访问     | group:fs, group:runtime, group:web |
+| `full`    | 无限制              | 所有工具                           |
 
-## Usage
+## 使用方法
 
-### CLI Usage
+### CLI 使用
 
 ```bash
-# Use a specific profile
+# 使用特定配置文件
 pnpm agent:cli --tools-profile coding "list files"
 
-# Minimal profile with specific tools allowed
+# 最小配置文件 + 允许特定工具
 pnpm agent:cli --tools-profile minimal --tools-allow exec "run ls"
 
-# Deny specific tools
+# 禁止特定工具
 pnpm agent:cli --tools-deny exec,process "read file.txt"
 
-# Use tool groups
+# 使用工具组
 pnpm agent:cli --tools-allow group:fs "read config.json"
 ```
 
-### Programmatic Usage
+### 编程使用
 
 ```typescript
 import { Agent } from './runner.js';
 
 const agent = new Agent({
    tools: {
-      // Layer 1: Base profile
+      // 第 1 层: 基础配置文件
       profile: 'coding',
 
-      // Layer 2: Global customization
-      allow: ['web_fetch'], // Add web_fetch to coding profile
-      deny: ['exec'], // But deny exec
+      // 第 2 层: 全局自定义
+      allow: ['web_fetch'], // 在 coding 配置文件基础上添加 web_fetch
+      deny: ['exec'], // 但禁止 exec
 
-      // Layer 3: Provider-specific rules
+      // 第 3 层: Provider 特定规则
       byProvider: {
          google: {
-            deny: ['exec', 'process'], // Google models can't use runtime tools
+            deny: ['exec', 'process'], // Google 模型不能使用运行时工具
          },
       },
    },
 
-   // Layer 4: Subagent mode
+   // 第 4 层: Subagent 模式
    isSubagent: false,
 });
 ```
 
-### Inspecting Tool Configuration
+### 检查工具配置
 
-Use the tools CLI to inspect and test configurations:
+使用 tools CLI 检查和测试配置：
 
 ```bash
-# List all available tools
+# 列出所有可用工具
 pnpm tools:cli list
 
-# List tools after applying a profile
+# 列出应用配置文件后的工具
 pnpm tools:cli list --profile coding
 
-# List tools with deny rules
+# 列出带有禁止规则的工具
 pnpm tools:cli list --profile coding --deny exec
 
-# Show all tool groups
+# 显示所有工具组
 pnpm tools:cli groups
 
-# Show all profiles
+# 显示所有配置文件
 pnpm tools:cli profiles
 ```
 
-## Policy System Details
+## 策略系统详情
 
-### Layer 1: Profile
+### 第 1 层: Profile
 
-The profile determines the base set of available tools. If not specified, all tools are available.
+配置文件决定了可用工具的基础集合。如果未指定，则所有工具都可用。
 
 ```typescript
-// In groups.ts
+// 在 groups.ts 中
 export const TOOL_PROFILES = {
-   minimal: { allow: [] }, // No tools
-   coding: { allow: ['group:fs', 'group:runtime'] }, // FS + execution
-   web: { allow: ['group:fs', 'group:runtime', 'group:web'] }, // + web
-   full: {}, // No restrictions
+   minimal: { allow: [] }, // 无工具
+   coding: { allow: ['group:fs', 'group:runtime'] }, // 文件系统 + 执行
+   web: { allow: ['group:fs', 'group:runtime', 'group:web'] }, // + 网络
+   full: {}, // 无限制
 };
 ```
 
-### Layer 2: Global Allow/Deny
+### 第 2 层: 全局 Allow/Deny
 
-User-specified allow/deny lists that modify the profile's tool set:
+用户指定的 allow/deny 列表，用于修改配置文件的工具集：
 
--  `allow`: Only these tools are available (additive to profile)
--  `deny`: These tools are blocked (takes precedence over allow)
+-  `allow`: 只有这些工具可用（在配置文件基础上添加）
+-  `deny`: 这些工具被阻止（优先于 allow）
 
-### Layer 3: Provider-Specific
+### 第 3 层: Provider 特定规则
 
-Different LLM providers may have different capabilities or restrictions:
+不同的 LLM Provider 可能有不同的能力或限制：
 
 ```typescript
 {
   byProvider: {
-    google: { deny: ["exec"] },      // Gemini can't execute commands
-    anthropic: { allow: ["*"] },     // Claude has full access
+    google: { deny: ["exec"] },      // Gemini 不能执行命令
+    anthropic: { allow: ["*"] },     // Claude 有完全访问权限
   }
 }
 ```
 
-### Layer 4: Subagent Restrictions
+### 第 4 层: Subagent 限制
 
-When `isSubagent: true`, additional restrictions are applied to prevent spawned agents from accessing sensitive tools like session management.
+当 `isSubagent: true` 时，会应用额外的限制，防止子 Agent 访问敏感工具（如会话管理）。
 
-## Adding New Tools
+## 添加新工具
 
-1. Create a new file in `src/agent/tools/` (e.g., `my-tool.ts`)
+1. 在 `src/agent/tools/` 中创建新文件（例如 `my-tool.ts`）
 
-2. Define the tool using TypeBox for the schema:
+2. 使用 TypeBox 定义工具的 Schema：
 
 ```typescript
 import { Type } from '@sinclair/typebox';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 
 const MyToolSchema = Type.Object({
-   param1: Type.String({ description: 'Parameter description' }),
+   param1: Type.String({ description: '参数描述' }),
    param2: Type.Optional(Type.Number()),
 });
 
@@ -220,23 +220,23 @@ export function createMyTool(): AgentTool<typeof MyToolSchema> {
    return {
       name: 'my_tool',
       label: 'My Tool',
-      description: 'What this tool does',
+      description: '这个工具做什么',
       parameters: MyToolSchema,
       execute: async (toolCallId, args) => {
-         // Implementation
+         // 实现
          return { result: 'success' };
       },
    };
 }
 ```
 
-3. Register the tool in `src/agent/tools.ts`:
+3. 在 `src/agent/tools.ts` 中注册工具：
 
 ```typescript
 import { createMyTool } from './tools/my-tool.js';
 
 export function createAllTools(cwd: string): AgentTool<any>[] {
-   // ... existing tools
+   // ... 现有工具
    const myTool = createMyTool();
 
    return [
@@ -247,7 +247,7 @@ export function createAllTools(cwd: string): AgentTool<any>[] {
 }
 ```
 
-4. Add the tool to appropriate groups in `groups.ts`:
+4. 在 `groups.ts` 中将工具添加到适当的组：
 
 ```typescript
 export const TOOL_GROUPS: Record<string, string[]> = {
@@ -256,17 +256,17 @@ export const TOOL_GROUPS: Record<string, string[]> = {
 };
 ```
 
-## Testing
+## 测试
 
-Run the policy system tests:
+运行策略系统测试：
 
 ```bash
 npx tsx src/agent/tools/policy.test.ts
 ```
 
-## Agent Profile Integration
+## Agent Profile 集成
 
-Tools configuration can be defined in Agent Profile's `config.json`, allowing different agents to have different tool capabilities:
+工具配置可以在 Agent Profile 的 `config.json` 中定义，允许不同的 Agent 拥有不同的工具能力：
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -289,7 +289,7 @@ Tools configuration can be defined in Agent Profile's `config.json`, allowing di
     └──────────┘     └──────────┘     └──────────┘
 ```
 
-Each Agent's Profile can define its own tools configuration in `config.json`:
+每个 Agent 的 Profile 可以在 `config.json` 中定义自己的工具配置：
 
 ```json
 {
@@ -302,29 +302,29 @@ Each Agent's Profile can define its own tools configuration in `config.json`:
 }
 ```
 
-See [Profile README](../profile/README.md) for full documentation.
+详见 [Profile README](../profile/README.md)。
 
-### Config Priority
+### 配置优先级
 
-When both Profile config and CLI options are provided:
+当同时提供 Profile 配置和 CLI 选项时：
 
-1. **Profile `config.json`** - Base configuration
-2. **CLI options** - Override/extend profile settings
+1. **Profile `config.json`** - 基础配置
+2. **CLI 选项** - 覆盖/扩展 Profile 设置
 
 ```bash
-# Profile has tools.profile = "coding"
-# CLI adds --tools-deny exec
-# Result: coding profile without exec tool
+# Profile 有 tools.profile = "coding"
+# CLI 添加 --tools-deny exec
+# 结果: coding 配置文件但没有 exec 工具
 pnpm agent:cli --profile my-agent --tools-deny exec "list files"
 ```
 
-## Future Tools
+## 未来工具
 
-The following tools are planned for future implementation:
+以下工具计划在未来实现：
 
-- **Browser** - Simplified web automation (screenshot, click, type)
+- **Browser** - 简化的网页自动化（截图、点击、输入）
 - **Session Management** - `sessions_list`, `sessions_history`, `sessions_send`, `sessions_spawn`, `session_status`
-- **Image** - Image generation and manipulation
-- **Cron** - Scheduled task execution
-- **Message** - Inter-agent communication
-- **Canvas** - Visual output generation
+- **Image** - 图像生成和处理
+- **Cron** - 定时任务执行
+- **Message** - Agent 间通信
+- **Canvas** - 可视化输出生成
