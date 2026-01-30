@@ -268,6 +268,60 @@ Run the policy system tests:
 npx tsx src/agent/tools/policy.test.ts
 ```
 
+## Agent Profile Integration
+
+Tools configuration can be defined in Agent Profile's `config.json`, allowing different agents to have different tool capabilities:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      Super Multica Hub                          │
+│                                                                 │
+│   ┌───────────┐    ┌───────────┐    ┌───────────┐              │
+│   │  Agent A  │    │  Agent B  │    │  Agent C  │              │
+│   │  Profile: │    │  Profile: │    │  Profile: │              │
+│   │  coder    │    │  reviewer │    │  devops   │              │
+│   │           │    │           │    │           │              │
+│   │  tools:   │    │  tools:   │    │  tools:   │              │
+│   │  coding   │    │  minimal  │    │  full     │              │
+│   └─────┬─────┘    └─────┬─────┘    └─────┬─────┘              │
+│         │                │                │                     │
+└─────────┼────────────────┼────────────────┼─────────────────────┘
+          │                │                │
+          ▼                ▼                ▼
+    ┌──────────┐     ┌──────────┐     ┌──────────┐
+    │  Client  │     │  Client  │     │  Client  │
+    └──────────┘     └──────────┘     └──────────┘
+```
+
+Each Agent's Profile can define its own tools configuration in `config.json`:
+
+```json
+{
+  "tools": {
+    "profile": "coding",
+    "deny": ["exec"]
+  },
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-20250514"
+}
+```
+
+See [Profile README](../profile/README.md) for full documentation.
+
+### Config Priority
+
+When both Profile config and CLI options are provided:
+
+1. **Profile `config.json`** - Base configuration
+2. **CLI options** - Override/extend profile settings
+
+```bash
+# Profile has tools.profile = "coding"
+# CLI adds --tools-deny exec
+# Result: coding profile without exec tool
+pnpm agent:cli --profile my-agent --tools-deny exec "list files"
+```
+
 ## Roadmap
 
 ### Phase 1: Infrastructure (Done)
@@ -276,9 +330,8 @@ npx tsx src/agent/tools/policy.test.ts
 - [x] CLI support (`--tools-profile`, `--tools-allow`, `--tools-deny`)
 - [x] Tools inspection CLI (`pnpm tools:cli`)
 
-### Phase 2: Config File Support
-- [ ] `multica.json` tools section - configure tools via project config file
-- [ ] Agent Profile tools integration - default tools config per profile
+### Phase 2: Config File Support (Done)
+- [x] Agent Profile tools integration - default tools config per profile
 
 ### Phase 3: Core Tools
 - [ ] Browser tool - simplified web automation (screenshot, click, type)
