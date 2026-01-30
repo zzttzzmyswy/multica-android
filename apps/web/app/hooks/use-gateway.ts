@@ -12,7 +12,10 @@ export function useGateway(options?: UseGatewayOptions) {
   const [state, setState] = useState<ConnectionState>("disconnected")
   const clientRef = useRef<GatewayClient | null>(null)
   const onMessageRef = useRef(options?.onMessage)
-  onMessageRef.current = options?.onMessage
+
+  useEffect(() => {
+    onMessageRef.current = options?.onMessage
+  })
 
   useEffect(() => {
     if (!deviceId) return

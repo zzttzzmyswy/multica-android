@@ -38,13 +38,14 @@ export function useScrollFade(
     const el = ref.current;
     if (!el) return;
 
-    update();
+    const frame = requestAnimationFrame(update);
 
     el.addEventListener("scroll", update, { passive: true });
     const ro = new ResizeObserver(update);
     ro.observe(el);
 
     return () => {
+      cancelAnimationFrame(frame);
       el.removeEventListener("scroll", update);
       ro.disconnect();
     };

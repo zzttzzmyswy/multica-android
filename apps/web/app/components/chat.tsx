@@ -37,11 +37,11 @@ export function Chat() {
     },
   })
 
-  const handleSend = useCallback((text: string) => {
+  const handleSend = (text: string) => {
     if (!hub?.hubId || !activeAgentId) return
     addUserMessage(text, activeAgentId)
     send(hub.hubId, "message", { agentId: activeAgentId, content: text })
-  }, [hub?.hubId, activeAgentId, addUserMessage, send])
+  }
 
   const filtered = activeAgentId
     ? messages.filter(m => m.agentId === activeAgentId)
