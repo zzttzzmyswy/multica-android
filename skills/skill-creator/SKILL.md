@@ -102,6 +102,8 @@ The skill is automatically loaded (hot-reload). Verify with:
 pnpm skills:cli list | grep <skill-name>
 ```
 
+**IMPORTANT: Do NOT create .skill package files.** Skills are loaded directly from the directory structure. There is no packaging step needed.
+
 ## SKILL.md Format
 
 Every skill must have a `SKILL.md` file with YAML frontmatter:
