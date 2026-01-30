@@ -1,5 +1,7 @@
 # Skills 系统
 
+[English](./README.md) | [中文](./README.zh-CN.md)
+
 Skills 通过 `SKILL.md` 定义文件扩展 Agent 的能力。
 
 ## 目录

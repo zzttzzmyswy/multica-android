@@ -1,5 +1,7 @@
 # Skills System
 
+[English](./README.md) | [中文](./README.zh-CN.md)
+
 Skills extend agent capabilities through `SKILL.md` definition files.
 
 ## Table of Contents

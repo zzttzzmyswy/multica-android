@@ -153,7 +153,33 @@ Each profile contains:
 
 ## Skills
 
-Skills are modular capabilities that extend agent functionality. They are defined in `SKILL.md` files with YAML frontmatter.
+Skills are modular capabilities that extend agent functionality through `SKILL.md` definition files. For complete documentation, see [Skills System Documentation](./src/agent/skills/README.md).
+
+### Key Features
+
+- **Multi-source loading** - Bundled, user-installed, plugin-based, and profile-specific skills
+- **GitHub installation** - `pnpm skills:cli add owner/repo` to install from GitHub
+- **Slash command invocation** - `/skill-name args` in interactive mode
+- **Eligibility filtering** - Auto-filter by platform, binaries, and environment
+- **Hot reload** - File watcher for development
+- **Plugin system** - Auto-discover skills from npm packages with `multica.plugin.json`
+
+### Quick Start
+
+```bash
+# List all skills
+pnpm skills:cli list
+
+# Install skills from GitHub
+pnpm skills:cli add anthropics/skills
+
+# Check skill status with diagnostics
+pnpm skills:cli status
+pnpm skills:cli status pdf -v
+
+# Remove installed skills
+pnpm skills:cli remove skills
+```
 
 ### Built-in Skills
 
@@ -161,33 +187,6 @@ Located in `/skills/`:
 
 - **commit** - Git commit helper following conventional commits
 - **code-review** - Code review assistance
-
-### Skill Format
-
-```yaml
----
-name: Skill Name
-description: What it does
-version: 1.0.0
-metadata:
-  emoji: 📝
-  requiresBinaries: [git]
-  platforms: [darwin, linux]
-  tags: [git, tools]
----
-
-## Instructions
-(markdown instructions for the agent)
-```
-
-### Eligibility Filtering
-
-Skills can specify requirements:
-- `requiresBinaries` - Required CLI tools
-- `requiresEnvVars` - Required environment variables
-- `platforms` - Supported platforms (darwin, linux, win32)
-
-Skills are automatically filtered based on the current environment.
 
 ## Agent Tools
 
