@@ -5,7 +5,7 @@
  * Compatible with OpenClaw/AgentSkills specification
  */
 
-import type { Skill, SkillManagerOptions, SkillsConfig } from "./types.js";
+import type { Skill, SkillManagerOptions, SkillsConfig, SkillCommandSpec, SkillInvocationResult } from "./types.js";
 import { loadAllSkills, getBundledSkillsDir, getProfileSkillsDir } from "./loader.js";
 import {
   filterEligibleSkills,
@@ -22,6 +22,12 @@ import {
   type SkillsChangeEvent,
   type SkillsChangeListener,
 } from "./watcher.js";
+import {
+  buildSkillCommands,
+  resolveSkillInvocation,
+  getCommandCompletions,
+  isModelInvocable,
+} from "./invoke.js";
 
 // Re-export types and utilities
 export type {
@@ -37,6 +43,10 @@ export type {
   SkillInstallSpec,
   SkillRequirements,
   EligibilityResult,
+  SkillInvocationPolicy,
+  SkillCommandSpec,
+  SkillCommandDispatch,
+  SkillInvocationResult,
 } from "./types.js";
 
 export {
@@ -90,6 +100,18 @@ export {
   type SkillAddRequest,
   type SkillAddResult,
 } from "./add.js";
+
+// Export invoke module
+export {
+  resolveInvocationPolicy,
+  isUserInvocable,
+  isModelInvocable,
+  sanitizeCommandName,
+  buildSkillCommands,
+  findSkillCommand,
+  resolveSkillInvocation,
+  getCommandCompletions,
+} from "./invoke.js";
 
 /**
  * SkillManager - Loads and manages skills
@@ -388,5 +410,96 @@ export class SkillManager {
     }
 
     return result;
+  }
+
+  // ============================================================================
+  // Invocation Methods
+  // ============================================================================
+
+  private cachedCommands: SkillCommandSpec[] | undefined;
+  private cachedCommandsVersion: number = 0;
+
+  /**
+   * Get user-invocable skill commands
+   *
+   * @param options - Optional reserved names to avoid
+   * @returns Array of command specifications
+   */
+  getSkillCommands(options?: { reservedNames?: Set<string> }): SkillCommandSpec[] {
+    this.ensureLoaded();
+
+    const currentVersion = getSkillsVersion();
+    if (this.cachedCommands && this.cachedCommandsVersion === currentVersion) {
+      return this.cachedCommands;
+    }
+
+    this.cachedCommands = buildSkillCommands(this.eligibleSkills!, options);
+    this.cachedCommandsVersion = currentVersion;
+    return this.cachedCommands;
+  }
+
+  /**
+   * Resolve a user command to a skill invocation
+   *
+   * @param input - User input (e.g., "/pdf edit file.pdf")
+   * @returns Invocation result or null if not a skill command
+   */
+  resolveCommand(input: string): SkillInvocationResult | null {
+    this.ensureLoaded();
+    const commands = this.getSkillCommands();
+    return resolveSkillInvocation(input, commands, this.eligibleSkills!);
+  }
+
+  /**
+   * Get command completions for a prefix
+   *
+   * @param prefix - Input prefix (e.g., "/p" or "p")
+   * @returns Matching command names with leading /
+   */
+  getCompletions(prefix: string): string[] {
+    const commands = this.getSkillCommands();
+    return getCommandCompletions(prefix, commands);
+  }
+
+  /**
+   * Build skills prompt excluding user-only skills
+   *
+   * Only includes skills that are model-invocable (disableModelInvocation !== true)
+   *
+   * @returns Formatted skill documentation for AI system prompt
+   */
+  buildModelSkillsPrompt(): string {
+    this.ensureLoaded();
+
+    const modelSkills = new Map<string, Skill>();
+    for (const [id, skill] of this.eligibleSkills!) {
+      if (isModelInvocable(skill)) {
+        modelSkills.set(id, skill);
+      }
+    }
+
+    if (modelSkills.size === 0) {
+      return "";
+    }
+
+    const parts: string[] = [];
+    parts.push("# Available Skills\n");
+    parts.push("You have access to the following skills:\n");
+
+    for (const [id, skill] of modelSkills) {
+      const emoji = skill.frontmatter.metadata?.emoji ?? "🔧";
+      const name = skill.frontmatter.name;
+      const desc = skill.frontmatter.description ?? "No description provided";
+
+      parts.push(`## ${emoji} ${name} (${id})`);
+      parts.push(`${desc}\n`);
+
+      if (skill.instructions) {
+        parts.push(skill.instructions);
+        parts.push("");
+      }
+    }
+
+    return parts.join("\n");
   }
 }
