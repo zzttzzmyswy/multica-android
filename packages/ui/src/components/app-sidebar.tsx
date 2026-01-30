@@ -3,25 +3,16 @@ import {
   SidebarHeader,
   SidebarContent,
   SidebarFooter,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarGroupContent,
   SidebarMenu,
   SidebarMenuItem,
-  SidebarMenuButton,
 } from "@multica/ui/components/ui/sidebar"
 import { ThemeToggle } from "@multica/ui/components/theme-toggle"
 
-interface NavItem {
-  title: string
-  url: string
-}
-
 interface AppSidebarProps {
-  items: NavItem[]
+  children?: React.ReactNode
 }
 
-export function AppSidebar({ items }: AppSidebarProps) {
+export function AppSidebar({ children }: AppSidebarProps) {
   return (
     <Sidebar>
       <SidebarHeader>
@@ -36,20 +27,7 @@ export function AppSidebar({ items }: AppSidebarProps) {
           </span>
         </div>
       </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {items.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton>{item.title}</SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
+      <SidebarContent>{children}</SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>

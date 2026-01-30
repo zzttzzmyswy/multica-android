@@ -4,13 +4,18 @@ import { Button } from "@multica/ui/components/ui/button";
 import { ArrowUpIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
-export function ChatInput() {
+interface ChatInputProps {
+  onSubmit?: (value: string) => void;
+  disabled?: boolean;
+}
+
+export function ChatInput({ onSubmit, disabled }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSubmit = () => {
     const value = textareaRef.current?.value ?? "";
     if (!value.trim()) return;
-    console.log("submit:", value);
+    onSubmit?.(value);
     textareaRef.current!.value = "";
     // reset height
     textareaRef.current!.style.height = "auto";
@@ -21,6 +26,7 @@ export function ChatInput() {
       <textarea
         ref={textareaRef}
         rows={2}
+        disabled={disabled}
         placeholder="Type a message..."
         onChange={(e) => {
           e.target.style.height = "auto";
@@ -32,10 +38,10 @@ export function ChatInput() {
             handleSubmit();
           }
         }}
-        className="w-full resize-none bg-transparent px-1 py-1 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+        className="w-full resize-none bg-transparent px-1 py-1 text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-50"
       />
       <div className="flex items-center justify-end pt-2">
-        <Button size="icon" onClick={handleSubmit}>
+        <Button size="icon" onClick={handleSubmit} disabled={disabled}>
           <HugeiconsIcon strokeWidth={2.5} icon={ArrowUpIcon} />
         </Button>
       </div>
