@@ -112,7 +112,7 @@ export function Chat() {
               >
                 <div
                   className={cn(
-                    msg.role === "user" ? "bg-muted rounded-md max-w-[60%] p-1 px-2.5" : "w-full max-w-[90%] p-1 px-2.5"
+                    msg.role === "user" ? "bg-muted rounded-md max-w-[60%] p-1 px-2.5" : "w-full p-1 px-2.5"
                   )}
                 >
                   <MemoizedMarkdown mode="minimal" id={msg.id}>
