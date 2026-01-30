@@ -1,19 +1,9 @@
 "use client"
 
 import { Markdown } from "@multica/ui/components/markdown"
-import {
-  Sidebar,
-  SidebarHeader,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarGroupContent,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarInset,
-  SidebarTrigger,
-} from "@multica/ui/components/ui/sidebar"
+import { ChatInput } from "@multica/ui/components/chat-input"
+import { AppSidebar } from "@multica/ui/components/app-sidebar"
+import { SidebarInset, SidebarTrigger } from "@multica/ui/components/ui/sidebar"
 
 const MOCK_MD = `# Markdown 渲染器示例
 
@@ -67,36 +57,19 @@ const NAV_ITEMS = [
 export default function Page() {
   return (
     <>
-      <Sidebar>
-        <SidebarHeader>
-          <span className="text-lg font-semibold px-2 py-1">Multica</span>
-        </SidebarHeader>
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {NAV_ITEMS.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton>
-                      {item.title}
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </SidebarContent>
-      </Sidebar>
+      <AppSidebar items={NAV_ITEMS} />
       <SidebarInset>
         <header className="flex h-12 items-center border-b px-4">
           <SidebarTrigger />
         </header>
-        <main className="flex-1 p-8">
+        <div className="flex-1 p-8">
           <div className="max-w-2xl mx-auto">
             <Markdown mode="full">{MOCK_MD}</Markdown>
+            <div className="mt-8">
+              <ChatInput />
+            </div>
           </div>
-        </main>
+        </div>
       </SidebarInset>
     </>
   )
