@@ -297,11 +297,93 @@ pnpm skills:cli install <id> <install-id> # Specific install option
 
 ---
 
+## Status Diagnostics
+
+The `status` command provides detailed diagnostics for understanding why skills are or aren't eligible.
+
+### Summary Status
+
+```bash
+pnpm skills:cli status        # Show summary with grouping by issue type
+pnpm skills:cli status -v     # Verbose mode with hints
+```
+
+Output shows:
+- Total/eligible/ineligible counts
+- Ineligible skills grouped by issue type (binary, env, platform, etc.)
+
+### Detailed Skill Status
+
+```bash
+pnpm skills:cli status <skill-id>
+```
+
+Output includes:
+- Basic skill info (name, version, source, path)
+- **Eligibility status** with detailed diagnostics
+- **Requirements checklist** showing which binaries/env vars are present
+- **Install options** with availability status
+- **Quick actions** with actionable hints to resolve issues
+
+### Diagnostic Types
+
+| Type | Description | Example Hint |
+|------|-------------|--------------|
+| `disabled` | Skill disabled in config | Enable via `skills.<id>.enabled: true` |
+| `not_in_allowlist` | Bundled skill not allowed | Add to `config.allowBundled` array |
+| `platform` | Platform mismatch | "Only works on: darwin, linux" |
+| `binary` | Missing required binary | "brew install git" |
+| `any_binary` | No alternative binary found | "Install any of: npm, pnpm, yarn" |
+| `env` | Missing environment variable | "export OPENAI_API_KEY=..." |
+| `config` | Missing config value | "Set config path: browser.enabled" |
+
+---
+
+## Async Serialization
+
+The skills system uses async serialization to prevent concurrent operations from corrupting files or causing race conditions.
+
+### How It Works
+
+Operations with the same key are executed sequentially:
+
+```typescript
+import { serialize, SerializeKeys } from "./skills/index.js";
+
+// These will execute sequentially, not in parallel
+const p1 = serialize(SerializeKeys.skillAdd("my-skill"), () => addSkill(...));
+const p2 = serialize(SerializeKeys.skillAdd("my-skill"), () => addSkill(...));
+
+// This runs in parallel (different key)
+const p3 = serialize(SerializeKeys.skillAdd("other-skill"), () => addSkill(...));
+```
+
+### Built-in Serialization
+
+The following operations are automatically serialized:
+- `addSkill()` - by skill name
+- `removeSkill()` - by skill name
+- `installSkill()` - by skill ID
+
+### Utility Functions
+
+```typescript
+import {
+  isProcessing,   // Check if key is being processed
+  getQueueLength, // Get pending operations count
+  getActiveKeys,  // Get all active operation keys
+  waitForKey,     // Wait for key operations to complete
+  waitForAll,     // Wait for all operations
+} from "./skills/index.js";
+```
+
+---
+
 ## Troubleshooting
 
 **Skill not showing as eligible?**
 
-Run `pnpm skills:cli status <skill-id>` to see the specific reason.
+Run `pnpm skills:cli status <skill-id>` to see detailed diagnostics with actionable hints.
 
 **Override a bundled skill?**
 
@@ -310,3 +392,7 @@ Create a skill with the same ID in `~/.super-multica/skills/` or profile skills 
 **Hot reload not working?**
 
 Ensure `chokidar` is installed: `pnpm add chokidar`
+
+**Concurrent operations causing issues?**
+
+All add/remove/install operations are automatically serialized. If you're building custom integrations, use the `serialize()` function with appropriate keys.
