@@ -4,13 +4,13 @@ import { useRef } from "react";
 import { SidebarTrigger } from "@multica/ui/components/ui/sidebar";
 import { ChatInput } from "@multica/ui/components/chat-input";
 import { MemoizedMarkdown } from "@multica/ui/components/markdown";
-import { useDeviceStore } from "@multica/store";
 import { useMessages } from "../hooks/use-messages";
+import { useDeviceId } from "../hooks/use-device-id";
 import { useScrollFade } from "../hooks/use-scroll-fade";
 import { cn } from "@multica/ui/lib/utils";
 
 export function Chat() {
-  const deviceId = useDeviceStore((s) => s.deviceId);
+  const deviceId = useDeviceId();
   const messages = useMessages();
   const mainRef = useRef<HTMLElement>(null);
   const fadeStyle = useScrollFade(mainRef);
@@ -19,8 +19,8 @@ export function Chat() {
     <div className="h-dvh flex flex-col overflow-hidden w-full">
       <header className="flex items-center gap-2 p-2">
         <SidebarTrigger />
-        <span className="text-xs text-muted-foreground font-mono" suppressHydrationWarning>
-          {deviceId.slice(0, 8)}
+        <span className="text-xs text-muted-foreground font-mono">
+          {deviceId ? deviceId.slice(0, 8) : "\u00A0"}
         </span>
       </header>
 
