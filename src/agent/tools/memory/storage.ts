@@ -135,9 +135,10 @@ export function memorySet(
   const now = Date.now();
   const existing = memoryGet(trimmedKey, options);
 
+  const trimmedDescription = description?.trim();
   const entry: MemoryEntry = {
     value,
-    description: description?.trim() || undefined,
+    ...(trimmedDescription ? { description: trimmedDescription } : {}),
     createdAt: existing.found ? existing.entry.createdAt : now,
     updatedAt: now,
   };
@@ -217,7 +218,7 @@ export function memoryList(
         const entry = JSON.parse(content) as MemoryEntry;
         entries.push({
           key,
-          description: entry.description,
+          ...(entry.description ? { description: entry.description } : {}),
           updatedAt: entry.updatedAt,
         });
       } catch {

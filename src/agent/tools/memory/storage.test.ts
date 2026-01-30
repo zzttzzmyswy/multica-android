@@ -199,7 +199,7 @@ describe("memory storage", () => {
       const result = memoryList(undefined, undefined, options);
 
       // project.config should be first as it was updated most recently
-      expect(result.keys[0].key).toBe("project.config");
+      expect(result.keys[0]?.key).toBe("project.config");
     });
 
     it("should return empty array for non-existent directory", () => {
