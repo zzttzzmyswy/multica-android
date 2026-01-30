@@ -1,4 +1,5 @@
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
+import type { SkillsConfig } from "./skills/types.js";
 
 export type AgentRunResult = {
   text: string;
@@ -58,6 +59,8 @@ export type AgentOptions = {
   enableSkills?: boolean | undefined;
   /** Additional directories to search for skills */
   extraSkillDirs?: string[] | undefined;
+  /** Full skills configuration */
+  skills?: SkillsConfig | undefined;
 };
 
 export interface Message {

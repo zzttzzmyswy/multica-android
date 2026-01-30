@@ -1,19 +1,25 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { checkEligibility, filterEligibleSkills } from "./eligibility.js";
-import type { Skill, SkillFrontmatter, EligibilityResult } from "./types.js";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { checkEligibility, filterEligibleSkills, type EligibilityContext } from "./eligibility.js";
+import type { Skill, SkillFrontmatter } from "./types.js";
 
 // Helper to create a skill for testing
 function createSkill(
   id: string,
   frontmatter: Partial<SkillFrontmatter> & { name: string },
+  source: "bundled" | "profile" = "bundled",
 ): Skill {
   return {
     id,
     frontmatter: frontmatter as SkillFrontmatter,
     instructions: "Test instructions",
-    source: "bundled",
+    source,
     filePath: `/path/to/${id}/SKILL.md`,
   };
+}
+
+// Helper to create context
+function ctx(platform: NodeJS.Platform): EligibilityContext {
+  return { platform };
 }
 
 describe("eligibility", () => {
@@ -24,12 +30,12 @@ describe("eligibility", () => {
           name: "Test Skill",
         });
 
-        const result = checkEligibility(skill, "darwin");
+        const result = checkEligibility(skill, ctx("darwin"));
         expect(result.eligible).toBe(true);
         expect(result.reasons).toBeUndefined();
       });
 
-      it("should be eligible when current platform matches", () => {
+      it("should be eligible when current platform matches (legacy platforms field)", () => {
         const skill = createSkill("test", {
           name: "Test Skill",
           metadata: {
@@ -37,8 +43,20 @@ describe("eligibility", () => {
           },
         });
 
-        expect(checkEligibility(skill, "darwin").eligible).toBe(true);
-        expect(checkEligibility(skill, "linux").eligible).toBe(true);
+        expect(checkEligibility(skill, ctx("darwin")).eligible).toBe(true);
+        expect(checkEligibility(skill, ctx("linux")).eligible).toBe(true);
+      });
+
+      it("should be eligible when current platform matches (new os field)", () => {
+        const skill = createSkill("test", {
+          name: "Test Skill",
+          metadata: {
+            os: ["darwin", "linux"],
+          },
+        });
+
+        expect(checkEligibility(skill, ctx("darwin")).eligible).toBe(true);
+        expect(checkEligibility(skill, ctx("linux")).eligible).toBe(true);
       });
 
       it("should be ineligible when platform does not match", () => {
@@ -49,7 +67,7 @@ describe("eligibility", () => {
           },
         });
 
-        const result = checkEligibility(skill, "win32");
+        const result = checkEligibility(skill, ctx("win32"));
         expect(result.eligible).toBe(false);
         expect(result.reasons).toContain(
           "Platform 'win32' not supported (requires: darwin)",
@@ -64,13 +82,13 @@ describe("eligibility", () => {
           },
         });
 
-        const result = checkEligibility(skill, "darwin");
+        const result = checkEligibility(skill, ctx("darwin"));
         expect(result.eligible).toBe(true);
       });
     });
 
     describe("binary requirements", () => {
-      it("should be eligible when required binary exists", () => {
+      it("should be eligible when required binary exists (legacy requiresBinaries)", () => {
         const skill = createSkill("test", {
           name: "Test Skill",
           metadata: {
@@ -79,7 +97,21 @@ describe("eligibility", () => {
         });
 
         // node should exist in the test environment
-        const result = checkEligibility(skill, "darwin");
+        const result = checkEligibility(skill, ctx("darwin"));
+        expect(result.eligible).toBe(true);
+      });
+
+      it("should be eligible when required binary exists (new requires.bins)", () => {
+        const skill = createSkill("test", {
+          name: "Test Skill",
+          metadata: {
+            requires: {
+              bins: ["node"],
+            },
+          },
+        });
+
+        const result = checkEligibility(skill, ctx("darwin"));
         expect(result.eligible).toBe(true);
       });
 
@@ -91,7 +123,7 @@ describe("eligibility", () => {
           },
         });
 
-        const result = checkEligibility(skill, "darwin");
+        const result = checkEligibility(skill, ctx("darwin"));
         expect(result.eligible).toBe(false);
         expect(result.reasons).toContainEqual(
           expect.stringContaining("Required binary not found: nonexistent-binary-xyz-123"),
@@ -106,7 +138,7 @@ describe("eligibility", () => {
           },
         });
 
-        const result = checkEligibility(skill, "darwin");
+        const result = checkEligibility(skill, ctx("darwin"));
         expect(result.eligible).toBe(false);
         expect(result.reasons?.length).toBe(2);
         expect(result.reasons).toContainEqual(
@@ -125,8 +157,41 @@ describe("eligibility", () => {
           },
         });
 
-        const result = checkEligibility(skill, "darwin");
+        const result = checkEligibility(skill, ctx("darwin"));
         expect(result.eligible).toBe(true);
+      });
+    });
+
+    describe("anyBins requirements", () => {
+      it("should be eligible when at least one binary exists", () => {
+        const skill = createSkill("test", {
+          name: "Test Skill",
+          metadata: {
+            requires: {
+              anyBins: ["nonexistent-1", "node", "nonexistent-2"],
+            },
+          },
+        });
+
+        const result = checkEligibility(skill, ctx("darwin"));
+        expect(result.eligible).toBe(true);
+      });
+
+      it("should be ineligible when none of anyBins exist", () => {
+        const skill = createSkill("test", {
+          name: "Test Skill",
+          metadata: {
+            requires: {
+              anyBins: ["nonexistent-1", "nonexistent-2"],
+            },
+          },
+        });
+
+        const result = checkEligibility(skill, ctx("darwin"));
+        expect(result.eligible).toBe(false);
+        expect(result.reasons).toContainEqual(
+          expect.stringContaining("None of required binaries found"),
+        );
       });
     });
 
@@ -141,7 +206,7 @@ describe("eligibility", () => {
         process.env = originalEnv;
       });
 
-      it("should be eligible when required env vars exist", () => {
+      it("should be eligible when required env vars exist (legacy requiresEnv)", () => {
         process.env.TEST_VAR = "value";
 
         const skill = createSkill("test", {
@@ -151,7 +216,23 @@ describe("eligibility", () => {
           },
         });
 
-        const result = checkEligibility(skill, "darwin");
+        const result = checkEligibility(skill, ctx("darwin"));
+        expect(result.eligible).toBe(true);
+      });
+
+      it("should be eligible when required env vars exist (new requires.env)", () => {
+        process.env.TEST_VAR = "value";
+
+        const skill = createSkill("test", {
+          name: "Test Skill",
+          metadata: {
+            requires: {
+              env: ["TEST_VAR"],
+            },
+          },
+        });
+
+        const result = checkEligibility(skill, ctx("darwin"));
         expect(result.eligible).toBe(true);
       });
 
@@ -165,7 +246,7 @@ describe("eligibility", () => {
           },
         });
 
-        const result = checkEligibility(skill, "darwin");
+        const result = checkEligibility(skill, ctx("darwin"));
         expect(result.eligible).toBe(true);
       });
 
@@ -179,7 +260,7 @@ describe("eligibility", () => {
           },
         });
 
-        const result = checkEligibility(skill, "darwin");
+        const result = checkEligibility(skill, ctx("darwin"));
         expect(result.eligible).toBe(false);
         expect(result.reasons).toContainEqual(
           expect.stringContaining("Required environment variable not set: MISSING_VAR"),
@@ -198,9 +279,156 @@ describe("eligibility", () => {
           },
         });
 
-        const result = checkEligibility(skill, "darwin");
+        const result = checkEligibility(skill, ctx("darwin"));
         expect(result.eligible).toBe(false);
         expect(result.reasons?.length).toBe(2);
+      });
+
+      it("should be eligible when env var provided via skillConfig", () => {
+        delete process.env.API_KEY;
+
+        const skill = createSkill("test", {
+          name: "Test Skill",
+          metadata: {
+            requires: {
+              env: ["API_KEY"],
+            },
+          },
+        });
+
+        const result = checkEligibility(skill, {
+          platform: "darwin",
+          config: {
+            entries: {
+              test: {
+                env: { API_KEY: "secret" },
+              },
+            },
+          },
+        });
+        expect(result.eligible).toBe(true);
+      });
+
+      it("should be eligible when env var provided via apiKey + primaryEnv", () => {
+        delete process.env.GEMINI_API_KEY;
+
+        const skill = createSkill("test", {
+          name: "Test Skill",
+          metadata: {
+            primaryEnv: "GEMINI_API_KEY",
+            requires: {
+              env: ["GEMINI_API_KEY"],
+            },
+          },
+        });
+
+        const result = checkEligibility(skill, {
+          platform: "darwin",
+          config: {
+            entries: {
+              test: {
+                apiKey: "my-api-key",
+              },
+            },
+          },
+        });
+        expect(result.eligible).toBe(true);
+      });
+    });
+
+    describe("always flag", () => {
+      it("should be eligible when always is true regardless of other checks", () => {
+        const skill = createSkill("test", {
+          name: "Test Skill",
+          metadata: {
+            always: true,
+            requiresBinaries: ["nonexistent-binary"],
+            requiresEnv: ["NONEXISTENT_VAR"],
+          },
+        });
+
+        const result = checkEligibility(skill, ctx("darwin"));
+        expect(result.eligible).toBe(true);
+      });
+    });
+
+    describe("config disabled", () => {
+      it("should be ineligible when explicitly disabled in config", () => {
+        const skill = createSkill("test", {
+          name: "Test Skill",
+        });
+
+        const result = checkEligibility(skill, {
+          platform: "darwin",
+          config: {
+            entries: {
+              test: {
+                enabled: false,
+              },
+            },
+          },
+        });
+        expect(result.eligible).toBe(false);
+        expect(result.reasons).toContain("Skill disabled in configuration");
+      });
+    });
+
+    describe("bundled allowlist", () => {
+      it("should be ineligible when bundled skill not in allowlist", () => {
+        const skill = createSkill("test", {
+          name: "Test Skill",
+        }, "bundled");
+
+        const result = checkEligibility(skill, {
+          platform: "darwin",
+          config: {
+            allowBundled: ["other-skill"],
+          },
+        });
+        expect(result.eligible).toBe(false);
+        expect(result.reasons).toContain("Bundled skill not in allowlist");
+      });
+
+      it("should be eligible when bundled skill in allowlist", () => {
+        const skill = createSkill("test", {
+          name: "Test Skill",
+        }, "bundled");
+
+        const result = checkEligibility(skill, {
+          platform: "darwin",
+          config: {
+            allowBundled: ["test", "other-skill"],
+          },
+        });
+        expect(result.eligible).toBe(true);
+      });
+
+      it("should allow all bundled skills when allowlist is empty", () => {
+        const skill = createSkill("test", {
+          name: "Test Skill",
+        }, "bundled");
+
+        const result = checkEligibility(skill, {
+          platform: "darwin",
+          config: {
+            allowBundled: [],
+          },
+        });
+        expect(result.eligible).toBe(true);
+      });
+
+      it("should not affect profile skills", () => {
+        const skill = createSkill("test", {
+          name: "Test Skill",
+        }, "profile");
+
+        const result = checkEligibility(skill, {
+          platform: "darwin",
+          config: {
+            allowBundled: ["other-skill"],
+          },
+        });
+        expect(result.eligible).toBe(true);
       });
     });
 
@@ -227,9 +455,11 @@ describe("eligibility", () => {
           },
         });
 
-        const result = checkEligibility(skill, "darwin");
+        // Note: platform check fails first and returns early
+        const result = checkEligibility(skill, ctx("darwin"));
         expect(result.eligible).toBe(false);
-        expect(result.reasons?.length).toBe(3);
+        // Platform check returns early
+        expect(result.reasons?.length).toBe(1);
       });
 
       it("should be eligible when all requirements met", () => {
@@ -244,7 +474,7 @@ describe("eligibility", () => {
           },
         });
 
-        const result = checkEligibility(skill, "darwin");
+        const result = checkEligibility(skill, ctx("darwin"));
         expect(result.eligible).toBe(true);
         expect(result.reasons).toBeUndefined();
       });
@@ -258,7 +488,7 @@ describe("eligibility", () => {
         },
       });
 
-      // Call without platform argument
+      // Call without context
       const result = checkEligibility(skill);
       expect(result.eligible).toBe(true);
     });
@@ -290,7 +520,7 @@ describe("eligibility", () => {
         })],
       ]);
 
-      const eligible = filterEligibleSkills(skills, "darwin");
+      const eligible = filterEligibleSkills(skills, ctx("darwin"));
 
       expect(eligible.size).toBe(2);
       expect(eligible.has("darwin-only")).toBe(true);
@@ -306,7 +536,7 @@ describe("eligibility", () => {
         })],
       ]);
 
-      const eligible = filterEligibleSkills(skills, "darwin");
+      const eligible = filterEligibleSkills(skills, ctx("darwin"));
 
       expect(eligible.size).toBe(0);
     });
@@ -318,15 +548,35 @@ describe("eligibility", () => {
         ["skill-3", createSkill("skill-3", { name: "Skill 3" })],
       ]);
 
-      const eligible = filterEligibleSkills(skills, "darwin");
+      const eligible = filterEligibleSkills(skills, ctx("darwin"));
 
       expect(eligible.size).toBe(3);
     });
 
     it("should handle empty input map", () => {
       const skills = new Map<string, Skill>();
-      const eligible = filterEligibleSkills(skills, "darwin");
+      const eligible = filterEligibleSkills(skills, ctx("darwin"));
       expect(eligible.size).toBe(0);
+    });
+
+    it("should respect config when filtering", () => {
+      const skills = new Map<string, Skill>([
+        ["enabled-skill", createSkill("enabled-skill", { name: "Enabled" })],
+        ["disabled-skill", createSkill("disabled-skill", { name: "Disabled" })],
+      ]);
+
+      const eligible = filterEligibleSkills(skills, {
+        platform: "darwin",
+        config: {
+          entries: {
+            "disabled-skill": { enabled: false },
+          },
+        },
+      });
+
+      expect(eligible.size).toBe(1);
+      expect(eligible.has("enabled-skill")).toBe(true);
+      expect(eligible.has("disabled-skill")).toBe(false);
     });
   });
 });

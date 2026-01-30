@@ -2,6 +2,8 @@
 import * as readline from "readline";
 import { Agent } from "./runner.js";
 import type { AgentOptions } from "./types.js";
+import { SkillManager } from "./skills/index.js";
+import { autocompleteInput, type AutocompleteOption } from "./autocomplete.js";
 
 type CliOptions = {
   profile?: string | undefined;
@@ -95,11 +97,24 @@ function printWelcome(sessionId: string) {
   console.log("");
 }
 
-function printHelp() {
-  console.log("\nAvailable commands:");
+function printHelp(skillManager?: SkillManager) {
+  console.log("\nBuilt-in commands:");
   for (const [cmd, desc] of Object.entries(COMMANDS)) {
     console.log(`  /${cmd.padEnd(12)} ${desc}`);
   }
+
+  // Show skill commands if available
+  if (skillManager) {
+    const reservedNames = new Set(Object.keys(COMMANDS));
+    const skillCommands = skillManager.getSkillCommands({ reservedNames });
+    if (skillCommands.length > 0) {
+      console.log("\nSkill commands:");
+      for (const cmd of skillCommands) {
+        console.log(`  /${cmd.name.padEnd(12)} ${cmd.description}`);
+      }
+    }
+  }
+
   console.log("\nJust type your message and press Enter to chat with the agent.");
   console.log("");
 }
@@ -111,10 +126,20 @@ class InteractiveCLI {
   private multilineMode = false;
   private multilineBuffer: string[] = [];
   private running = true;
+  private skillManager: SkillManager;
+  private reservedNames: Set<string>;
 
   constructor(opts: CliOptions) {
     this.opts = opts;
     this.agent = this.createAgent(opts.session);
+
+    // Initialize SkillManager for tab completion
+    this.skillManager = new SkillManager({
+      profileId: opts.profile,
+    });
+
+    // Build list of reserved command names (built-in CLI commands)
+    this.reservedNames = new Set(Object.keys(COMMANDS));
 
     this.rl = readline.createInterface({
       input: process.stdin,
@@ -127,6 +152,47 @@ class InteractiveCLI {
       console.log("\nGoodbye!");
       process.exit(0);
     });
+  }
+
+  /**
+   * Get autocomplete suggestions for input
+   */
+  private getSuggestions(input: string): AutocompleteOption[] {
+    if (!input.startsWith("/")) {
+      return [];
+    }
+
+    const prefix = input.slice(1).toLowerCase();
+    const suggestions: AutocompleteOption[] = [];
+
+    // Add built-in command suggestions
+    for (const [cmd, desc] of Object.entries(COMMANDS)) {
+      if (cmd.toLowerCase().startsWith(prefix)) {
+        suggestions.push({
+          value: `/${cmd}`,
+          label: desc.slice(0, 40),
+        });
+      }
+    }
+
+    // Add skill command suggestions
+    const skillCommands = this.skillManager.getSkillCommands({ reservedNames: this.reservedNames });
+    for (const cmd of skillCommands) {
+      if (cmd.name.toLowerCase().startsWith(prefix)) {
+        suggestions.push({
+          value: `/${cmd.name}`,
+          label: cmd.description.slice(0, 40),
+        });
+      }
+    }
+
+    // Sort: shorter first, then alphabetically
+    suggestions.sort((a, b) => {
+      if (a.value.length !== b.value.length) return a.value.length - b.value.length;
+      return a.value.localeCompare(b.value);
+    });
+
+    return suggestions;
   }
 
   private createAgent(sessionId?: string): Agent {
@@ -155,10 +221,14 @@ class InteractiveCLI {
 
   private async loop() {
     while (this.running) {
-      const input = await this.readline(this.prompt());
-      if (input === null) break;
+      let input: string;
 
       if (this.multilineMode) {
+        // Use simple readline for multiline mode
+        const lineInput = await this.readline(this.prompt());
+        if (lineInput === null) break;
+        input = lineInput;
+
         if (input === ".") {
           // End of multiline input
           const fullInput = this.multilineBuffer.join("\n");
@@ -171,6 +241,17 @@ class InteractiveCLI {
           this.multilineBuffer.push(input);
         }
         continue;
+      }
+
+      // Use autocomplete input for normal mode
+      try {
+        input = await autocompleteInput({
+          prompt: this.prompt(),
+          getSuggestions: (text) => this.getSuggestions(text),
+          maxSuggestions: 8,
+        });
+      } catch {
+        break;
       }
 
       const trimmed = input.trim();
@@ -200,7 +281,7 @@ class InteractiveCLI {
 
     switch (cmd) {
       case "help":
-        printHelp();
+        printHelp(this.skillManager);
         return true;
 
       case "exit":
@@ -238,7 +319,17 @@ class InteractiveCLI {
         return true;
 
       default:
-        // Unknown command - let the agent handle it
+        // Check if it's a skill command
+        const invocation = this.skillManager.resolveCommand(input);
+        if (invocation) {
+          // Skill command found - send to agent with skill instructions as context
+          const skillPrompt = invocation.args
+            ? `[Skill: ${invocation.command.name}]\n\n${invocation.instructions}\n\nUser request: ${invocation.args}`
+            : `[Skill: ${invocation.command.name}]\n\n${invocation.instructions}`;
+          await this.handleInput(skillPrompt);
+          return true;
+        }
+        // Unknown command - let the agent handle it as-is
         return false;
     }
   }
