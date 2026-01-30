@@ -1,7 +1,5 @@
-"use client"
-
-import { ComponentExample } from "@multica/ui/components/component-example";
+import { Chat } from "./components/chat";
 
 export default function Page() {
-  return <ComponentExample />;
+  return <Chat />;
 }

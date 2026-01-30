@@ -5,6 +5,7 @@ import { AppModule } from "./app.module.js";
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  app.enableCors();
   app.useLogger(app.get(Logger));
 
   const port = process.env["PORT"] ?? 4000;
