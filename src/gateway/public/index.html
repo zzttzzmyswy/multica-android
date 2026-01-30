@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Geneva Client</title>
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Geneva">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon.svg">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface-2: #334155;
+      --border: #334155;
+      --text: #f1f5f9;
+      --text-dim: #94a3b8;
+      --text-muted: #64748b;
+      --accent: #6366f1;
+      --accent-glow: rgba(99,102,241,0.15);
+      --green: #22c55e;
+      --yellow: #eab308;
+      --red: #ef4444;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro", "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Header */
+    .header {
+      padding: calc(var(--safe-top) + 12px) 16px 12px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      background: var(--bg);
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: background 0.3s;
+    }
+    .status-dot.on { background: var(--green); box-shadow: 0 0 8px rgba(34,197,94,0.5); }
+    .status-dot.connecting { background: var(--yellow); }
+    .device-label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: 6px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Content area */
+    .content {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* Cards */
+    .card {
+      margin: 12px;
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 16px;
+      border: 1px solid var(--border);
+    }
+    .card-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    /* Inputs */
+    .input-group { margin-bottom: 12px; }
+    .input-group:last-child { margin-bottom: 0; }
+    .input-label {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+    }
+    input[type="text"] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      color: var(--text);
+      font-size: 0.95rem;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+    input[type="text"]:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    input[type="text"]::placeholder { color: var(--text-muted); }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+      min-height: 48px;
+      border: none;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: transform 0.1s, opacity 0.2s;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.4; pointer-events: none; }
+    .btn-accent {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: white;
+      box-shadow: 0 4px 12px rgba(99,102,241,0.3);
+    }
+    .btn-danger {
+      background: var(--surface-2);
+      color: var(--red);
+    }
+    .btn-send {
+      background: var(--accent);
+      color: white;
+      min-width: 48px;
+      width: 48px;
+      border-radius: 12px;
+      flex-shrink: 0;
+    }
+
+    /* Chat area */
+    .chat-container {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+    }
+    .chat-container.active {
+      display: flex;
+    }
+
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 12px;
+    }
+    .msg {
+      max-width: 85%;
+      padding: 10px 14px;
+      border-radius: 16px;
+      margin-bottom: 6px;
+      font-size: 0.9rem;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+    .msg-self {
+      background: linear-gradient(135deg, #6366f1, #7c3aed);
+      color: white;
+      margin-left: auto;
+      border-bottom-right-radius: 4px;
+    }
+    .msg-in {
+      background: var(--surface);
+      color: var(--text);
+      border-bottom-left-radius: 4px;
+    }
+    .msg-system {
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      text-align: center;
+      max-width: 100%;
+      padding: 4px 0;
+    }
+    .msg-from {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+
+    /* Target bar */
+    .target-bar {
+      padding: 8px 12px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .target-bar input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      color: var(--text);
+      font-size: 0.8rem;
+      font-family: inherit;
+    }
+    .target-bar input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    /* Compose bar */
+    .compose {
+      display: flex;
+      gap: 8px;
+      padding: 10px 12px calc(var(--safe-bottom) + 10px);
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .compose input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      color: var(--text);
+      font-size: 0.95rem;
+      font-family: inherit;
+    }
+    .compose input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    /* Setup screen (shown when disconnected) */
+    .setup-screen {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-row">
+      <h1>Geneva</h1>
+      <div class="status-pill">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-text">Disconnected</span>
+      </div>
+    </div>
+    <div class="device-label" id="device-label"></div>
+  </div>
+
+  <!-- Setup Screen -->
+  <div class="setup-screen" id="setup-screen">
+    <div class="card">
+      <div class="card-title">Connection</div>
+      <div class="input-group">
+        <label class="input-label">Gateway URL</label>
+        <input type="text" id="gateway-url" placeholder="http://localhost:3000">
+      </div>
+      <button class="btn btn-accent" id="btn-connect" onclick="doConnect()">Connect</button>
+    </div>
+  </div>
+
+  <!-- Chat Screen -->
+  <div class="chat-container" id="chat-screen">
+    <div class="target-bar">
+      <input type="text" id="target-device-id" placeholder="Target Device ID">
+      <input type="text" id="target-agent-id" placeholder="Agent ID">
+    </div>
+    <div class="messages" id="messages"></div>
+    <div class="compose">
+      <input type="text" id="msg-input" placeholder="Message..." onkeydown="if(event.key==='Enter')doSend()">
+      <button class="btn btn-send" onclick="doSend()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Disconnect floating button (visible when connected) -->
+  <div id="disconnect-fab" style="display:none; position:fixed; top:calc(var(--safe-top) + 56px); right:12px; z-index:10;">
+    <button class="btn btn-danger" style="width:auto; min-height:36px; padding:0 14px; font-size:0.8rem; border-radius:20px;" onclick="doDisconnect()">Disconnect</button>
+  </div>
+
+  <script src="https://cdn.socket.io/4.8.3/socket.io.min.js"></script>
+  <script>
+    // --- Device ID ---
+    const STORAGE_KEY = 'geneva-client-device-id';
+    let deviceId = localStorage.getItem(STORAGE_KEY);
+    if (!deviceId) {
+      deviceId = crypto.randomUUID();
+      localStorage.setItem(STORAGE_KEY, deviceId);
+    }
+    document.getElementById('device-label').textContent = 'Device: ' + deviceId;
+
+    // Restore saved values
+    document.getElementById('gateway-url').value =
+      localStorage.getItem('geneva-client-gateway-url') || window.location.origin;
+
+    let socket = null;
+
+    function setStatus(state) {
+      const dot = document.getElementById('status-dot');
+      const text = document.getElementById('status-text');
+      dot.className = 'status-dot' + ({
+        disconnected: '',
+        connecting: ' connecting',
+        connected: ' on',
+        registered: ' on'
+      }[state] || '');
+      text.textContent = state.charAt(0).toUpperCase() + state.slice(1);
+    }
+
+    function appendMsg(type, text, from) {
+      const el = document.getElementById('messages');
+      const wrap = document.createElement('div');
+      wrap.style.display = 'flex';
+      wrap.style.flexDirection = 'column';
+      wrap.style.alignItems = type === 'self' ? 'flex-end' : type === 'system' ? 'center' : 'flex-start';
+
+      if (from && type === 'in') {
+        const label = document.createElement('div');
+        label.className = 'msg-from';
+        label.textContent = from;
+        wrap.appendChild(label);
+      }
+
+      const div = document.createElement('div');
+      div.className = 'msg msg-' + type;
+      div.textContent = text;
+      wrap.appendChild(div);
+
+      el.appendChild(wrap);
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function showChat() {
+      document.getElementById('setup-screen').style.display = 'none';
+      document.getElementById('chat-screen').classList.add('active');
+      document.getElementById('disconnect-fab').style.display = 'block';
+
+      // Restore targets
+      document.getElementById('target-device-id').value =
+        localStorage.getItem('geneva-client-target-device-id') || '';
+      document.getElementById('target-agent-id').value =
+        localStorage.getItem('geneva-client-target-agent-id') || '';
+    }
+
+    function showSetup() {
+      document.getElementById('setup-screen').style.display = 'block';
+      document.getElementById('chat-screen').classList.remove('active');
+      document.getElementById('disconnect-fab').style.display = 'none';
+      document.getElementById('btn-connect').disabled = false;
+    }
+
+    function doConnect() {
+      const url = document.getElementById('gateway-url').value.trim();
+      if (!url) return;
+
+      localStorage.setItem('geneva-client-gateway-url', url);
+      setStatus('connecting');
+      document.getElementById('btn-connect').disabled = true;
+
+      socket = io(url, {
+        path: '/ws',
+        query: { deviceId, deviceType: 'client' },
+        reconnection: true,
+        reconnectionDelay: 1000,
+      });
+
+      socket.on('connect', () => {
+        setStatus('connected');
+      });
+
+      socket.on('registered', (res) => {
+        if (res.success) {
+          setStatus('registered');
+          showChat();
+          appendMsg('system', 'Connected');
+        } else {
+          appendMsg('system', 'Registration failed: ' + res.error);
+          setStatus('disconnected');
+          document.getElementById('btn-connect').disabled = false;
+        }
+      });
+
+      socket.on('receive', (msg) => {
+        const content = typeof msg.payload === 'string' ? msg.payload : JSON.stringify(msg.payload);
+        appendMsg('in', content, msg.from);
+      });
+
+      socket.on('send_error', (err) => {
+        appendMsg('system', 'Error: ' + err.error);
+      });
+
+      socket.on('disconnect', (reason) => {
+        setStatus('disconnected');
+        appendMsg('system', 'Disconnected: ' + reason);
+      });
+
+      socket.on('connect_error', (err) => {
+        appendMsg('system', 'Connection error: ' + err.message);
+        setStatus('disconnected');
+        document.getElementById('btn-connect').disabled = false;
+      });
+    }
+
+    function doDisconnect() {
+      if (socket) { socket.disconnect(); socket = null; }
+      setStatus('disconnected');
+      showSetup();
+    }
+
+    function doSend() {
+      const input = document.getElementById('msg-input');
+      const text = input.value.trim();
+      const targetDeviceId = document.getElementById('target-device-id').value.trim();
+      const targetAgentId = document.getElementById('target-agent-id').value.trim();
+      if (!text || !socket) return;
+      if (!targetDeviceId || !targetAgentId) return;
+
+      localStorage.setItem('geneva-client-target-device-id', targetDeviceId);
+      localStorage.setItem('geneva-client-target-agent-id', targetAgentId);
+
+      socket.emit('send', {
+        id: crypto.randomUUID(),
+        uid: null,
+        from: deviceId,
+        to: targetDeviceId,
+        action: 'message',
+        payload: { agentId: targetAgentId, content: text },
+      });
+
+      appendMsg('self', text);
+      input.value = '';
+    }
+
+    // --- PWA: Register Service Worker ---
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>
