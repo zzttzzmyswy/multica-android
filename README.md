@@ -187,6 +187,7 @@ Located in `/skills/`:
 
 - **commit** - Git commit helper following conventional commits
 - **code-review** - Code review assistance
+- **skill-creator** - Create and manage custom skills (meta-skill for self-extension)
 
 ## Agent Tools
 
