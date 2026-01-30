@@ -25,7 +25,16 @@ export function AppSidebar({ items }: AppSidebarProps) {
   return (
     <Sidebar>
       <SidebarHeader>
-        <span className="text-lg font-semibold px-2 py-1">Multica</span>
+        <div className="flex items-center gap-2.5 px-2 py-1">
+          <img
+            src="/icon.png"
+            alt="Multica"
+            className="size-7 rounded-md"
+          />
+          <span className="text-sm tracking-wide font-[family-name:var(--font-brand)]">
+            Multica
+          </span>
+        </div>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
