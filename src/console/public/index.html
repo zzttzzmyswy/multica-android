@@ -335,7 +335,7 @@
     <!-- Stats -->
     <div class="stats" id="stats">
       <div class="stat-card">
-        <div class="stat-label">Device ID</div>
+        <div class="stat-label">Hub ID</div>
         <div class="stat-value" id="stat-device">—</div>
       </div>
       <div class="stat-card">
@@ -425,7 +425,7 @@
       ]);
 
       // Stats
-      const deviceId = hubRes.deviceId || '—';
+      const deviceId = hubRes.hubId || '—';
       document.getElementById('stat-device').innerHTML =
         `<span title="${deviceId}">${truncateId(deviceId)}</span>` +
         (deviceId !== '—' ? `<button class="copy-btn" onclick="copyText('${deviceId}', this)">${copyIcon()}</button>` : '');

@@ -17,7 +17,7 @@ export class AppController {
   @Get("hub")
   getHub() {
     return {
-      deviceId: this.hub.deviceId,
+      hubId: this.hub.hubId,
       url: this.hub.url,
       connectionState: this.hub.connectionState,
       agentCount: this.hub.listAgents().length,

@@ -1,7 +1,7 @@
 import type { HubOptions } from "./types.js";
 import type { ConnectionState } from "../shared/gateway-sdk/types.js";
 import { AsyncAgent } from "../agent/async-agent.js";
-import { getDeviceId } from "./device.js";
+import { getHubId } from "./hub-identity.js";
 import { GatewayClient } from "../shared/gateway-sdk/client.js";
 import { loadAgentRecords, addAgentRecord, removeAgentRecord } from "./agent-store.js";
 
@@ -11,7 +11,7 @@ export class Hub {
   private client: GatewayClient;
   url: string;
   readonly path: string;
-  readonly deviceId: string;
+  readonly hubId: string;
 
   /** Current Gateway connection state */
   get connectionState(): ConnectionState {
@@ -21,7 +21,7 @@ export class Hub {
   constructor(url: string, path?: string) {
     this.url = url;
     this.path = path ?? "/ws";
-    this.deviceId = getDeviceId();
+    this.hubId = getHubId();
     this.client = this.createClient(this.url);
     this.client.connect();
     this.restoreAgents();
@@ -42,7 +42,7 @@ export class Hub {
     const client = new GatewayClient({
       url,
       path: this.path,
-      deviceId: this.deviceId,
+      deviceId: this.hubId,
       deviceType: "client",
       autoReconnect: true,
       reconnectDelay: 1000,
