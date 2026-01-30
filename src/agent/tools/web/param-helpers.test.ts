@@ -1,6 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { readStringParam, readNumberParam, jsonResult } from "./param-helpers.js";
 
+// Helper to safely get text content from result
+function getTextContent(result: ReturnType<typeof jsonResult>): string {
+  const content = result.content[0];
+  if (content?.type === "text") {
+    return content.text;
+  }
+  throw new Error("Expected text content");
+}
+
 describe("param-helpers", () => {
   describe("readStringParam", () => {
     it("should return string value when present", () => {
@@ -195,8 +204,11 @@ describe("param-helpers", () => {
       const result = jsonResult(payload);
 
       expect(result.content).toHaveLength(1);
-      expect(result.content[0].type).toBe("text");
-      expect(result.content[0].text).toBe(JSON.stringify(payload, null, 2));
+      const content = result.content[0];
+      expect(content?.type).toBe("text");
+      if (content?.type === "text") {
+        expect(content.text).toBe(JSON.stringify(payload, null, 2));
+      }
       expect(result.details).toBe(payload);
     });
 
@@ -204,7 +216,7 @@ describe("param-helpers", () => {
       const payload = [1, 2, 3];
       const result = jsonResult(payload);
 
-      expect(result.content[0].text).toBe(JSON.stringify(payload, null, 2));
+      expect(getTextContent(result)).toBe(JSON.stringify(payload, null, 2));
       expect(result.details).toBe(payload);
     });
 
@@ -212,14 +224,14 @@ describe("param-helpers", () => {
       const payload = "simple string";
       const result = jsonResult(payload);
 
-      expect(result.content[0].text).toBe('"simple string"');
+      expect(getTextContent(result)).toBe('"simple string"');
       expect(result.details).toBe(payload);
     });
 
     it("should handle null payload", () => {
       const result = jsonResult(null);
 
-      expect(result.content[0].text).toBe("null");
+      expect(getTextContent(result)).toBe("null");
       expect(result.details).toBeNull();
     });
 
@@ -230,8 +242,8 @@ describe("param-helpers", () => {
       };
       const result = jsonResult(payload);
 
-      expect(result.content[0].text).toContain("user");
-      expect(result.content[0].text).toContain("settings");
+      expect(getTextContent(result)).toContain("user");
+      expect(getTextContent(result)).toContain("settings");
       expect(result.details).toBe(payload);
     });
   });

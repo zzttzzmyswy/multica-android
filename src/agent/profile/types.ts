@@ -2,6 +2,8 @@
  * Agent Profile Type Definitions
  */
 
+import type { ToolsConfig } from "../tools/policy.js";
+
 /** Profile filename constants */
 export const PROFILE_FILES = {
   soul: "soul.md",
@@ -9,7 +11,20 @@ export const PROFILE_FILES = {
   tools: "tools.md",
   memory: "memory.md",
   bootstrap: "bootstrap.md",
+  config: "config.json",
 } as const;
+
+/** Profile config.json structure */
+export interface ProfileConfig {
+  /** Tools policy configuration */
+  tools?: ToolsConfig;
+  /** Default LLM provider */
+  provider?: string;
+  /** Default model */
+  model?: string;
+  /** Default thinking level */
+  thinkingLevel?: string;
+}
 
 /** Agent Profile configuration */
 export interface AgentProfile {
@@ -25,6 +40,8 @@ export interface AgentProfile {
   memory?: string | undefined;
   /** Initial context - guidance information for each conversation */
   bootstrap?: string | undefined;
+  /** Profile configuration (from config.json) */
+  config?: ProfileConfig | undefined;
 }
 
 /** Profile Manager options */
