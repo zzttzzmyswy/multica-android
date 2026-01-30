@@ -2,6 +2,7 @@ import {
   Sidebar,
   SidebarHeader,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupLabel,
   SidebarGroupContent,
@@ -9,6 +10,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from "@multica/ui/components/ui/sidebar"
+import { ThemeToggle } from "@multica/ui/components/theme-toggle"
 
 interface NavItem {
   title: string
@@ -39,6 +41,13 @@ export function AppSidebar({ items }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <ThemeToggle />
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
     </Sidebar>
   )
 }
