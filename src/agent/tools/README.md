@@ -53,38 +53,45 @@ The tools system provides LLM agents with capabilities to interact with the exte
 
 ## Available Tools
 
-| Tool | Name | Description |
-|------|------|-------------|
-| Read | `read` | Read file contents |
-| Write | `write` | Write content to files |
-| Edit | `edit` | Edit existing files |
-| Glob | `glob` | Find files by pattern |
-| Exec | `exec` | Execute shell commands |
-| Process | `process` | Manage long-running processes |
-| Web Fetch | `web_fetch` | Fetch and extract content from URLs |
-| Web Search | `web_search` | Search the web (requires API key) |
+| Tool          | Name            | Description                                   |
+| ------------- | --------------- | --------------------------------------------- |
+| Read          | `read`          | Read file contents                            |
+| Write         | `write`         | Write content to files                        |
+| Edit          | `edit`          | Edit existing files                           |
+| Glob          | `glob`          | Find files by pattern                         |
+| Exec          | `exec`          | Execute shell commands                        |
+| Process       | `process`       | Manage long-running processes                 |
+| Web Fetch     | `web_fetch`     | Fetch and extract content from URLs           |
+| Web Search    | `web_search`    | Search the web (requires API key)             |
+| Memory Get    | `memory_get`    | Retrieve a value from persistent memory       |
+| Memory Set    | `memory_set`    | Store a value in persistent memory            |
+| Memory Delete | `memory_delete` | Delete a value from persistent memory         |
+| Memory List   | `memory_list`   | List all keys in persistent memory            |
+
+> **Note**: Memory tools require a `profileId` to be specified. They store data in the profile's memory directory.
 
 ## Tool Groups
 
 Groups provide shortcuts for allowing/denying multiple tools at once:
 
-| Group | Tools |
-|-------|-------|
-| `group:fs` | read, write, edit, glob |
-| `group:runtime` | exec, process |
-| `group:web` | web_search, web_fetch |
-| `group:core` | All of the above |
+| Group           | Tools                                             |
+| --------------- | ------------------------------------------------- |
+| `group:fs`      | read, write, edit, glob                           |
+| `group:runtime` | exec, process                                     |
+| `group:web`     | web_search, web_fetch                             |
+| `group:memory`  | memory_get, memory_set, memory_delete, memory_list|
+| `group:core`    | All of the above (excluding memory)               |
 
 ## Tool Profiles
 
 Profiles are predefined tool sets for common use cases:
 
-| Profile | Description | Tools |
-|---------|-------------|-------|
-| `minimal` | No tools (chat-only) | None |
-| `coding` | File system + execution | group:fs, group:runtime |
-| `web` | Coding + web access | group:fs, group:runtime, group:web |
-| `full` | No restrictions | All tools |
+| Profile   | Description             | Tools                              |
+| --------- | ----------------------- | ---------------------------------- |
+| `minimal` | No tools (chat-only)    | None                               |
+| `coding`  | File system + execution | group:fs, group:runtime            |
+| `web`     | Coding + web access     | group:fs, group:runtime, group:web |
+| `full`    | No restrictions         | All tools                          |
 
 ## Usage
 
@@ -107,27 +114,27 @@ pnpm agent:cli --tools-allow group:fs "read config.json"
 ### Programmatic Usage
 
 ```typescript
-import { Agent } from "./runner.js";
+import { Agent } from './runner.js';
 
 const agent = new Agent({
-  tools: {
-    // Layer 1: Base profile
-    profile: "coding",
+   tools: {
+      // Layer 1: Base profile
+      profile: 'coding',
 
-    // Layer 2: Global customization
-    allow: ["web_fetch"],  // Add web_fetch to coding profile
-    deny: ["exec"],        // But deny exec
+      // Layer 2: Global customization
+      allow: ['web_fetch'], // Add web_fetch to coding profile
+      deny: ['exec'], // But deny exec
 
-    // Layer 3: Provider-specific rules
-    byProvider: {
-      google: {
-        deny: ["exec", "process"],  // Google models can't use runtime tools
+      // Layer 3: Provider-specific rules
+      byProvider: {
+         google: {
+            deny: ['exec', 'process'], // Google models can't use runtime tools
+         },
       },
-    },
-  },
+   },
 
-  // Layer 4: Subagent mode
-  isSubagent: false,
+   // Layer 4: Subagent mode
+   isSubagent: false,
 });
 ```
 
@@ -161,18 +168,19 @@ The profile determines the base set of available tools. If not specified, all to
 ```typescript
 // In groups.ts
 export const TOOL_PROFILES = {
-  minimal: { allow: [] },                              // No tools
-  coding: { allow: ["group:fs", "group:runtime"] },   // FS + execution
-  web: { allow: ["group:fs", "group:runtime", "group:web"] },  // + web
-  full: {},                                            // No restrictions
+   minimal: { allow: [] }, // No tools
+   coding: { allow: ['group:fs', 'group:runtime'] }, // FS + execution
+   web: { allow: ['group:fs', 'group:runtime', 'group:web'] }, // + web
+   full: {}, // No restrictions
 };
 ```
 
 ### Layer 2: Global Allow/Deny
 
 User-specified allow/deny lists that modify the profile's tool set:
-- `allow`: Only these tools are available (additive to profile)
-- `deny`: These tools are blocked (takes precedence over allow)
+
+-  `allow`: Only these tools are available (additive to profile)
+-  `deny`: These tools are blocked (takes precedence over allow)
 
 ### Layer 3: Provider-Specific
 
@@ -198,42 +206,42 @@ When `isSubagent: true`, additional restrictions are applied to prevent spawned 
 2. Define the tool using TypeBox for the schema:
 
 ```typescript
-import { Type } from "@sinclair/typebox";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import { Type } from '@sinclair/typebox';
+import type { AgentTool } from '@mariozechner/pi-agent-core';
 
 const MyToolSchema = Type.Object({
-  param1: Type.String({ description: "Parameter description" }),
-  param2: Type.Optional(Type.Number()),
+   param1: Type.String({ description: 'Parameter description' }),
+   param2: Type.Optional(Type.Number()),
 });
 
 export function createMyTool(): AgentTool<typeof MyToolSchema> {
-  return {
-    name: "my_tool",
-    label: "My Tool",
-    description: "What this tool does",
-    parameters: MyToolSchema,
-    execute: async (toolCallId, args) => {
-      // Implementation
-      return { result: "success" };
-    },
-  };
+   return {
+      name: 'my_tool',
+      label: 'My Tool',
+      description: 'What this tool does',
+      parameters: MyToolSchema,
+      execute: async (toolCallId, args) => {
+         // Implementation
+         return { result: 'success' };
+      },
+   };
 }
 ```
 
 3. Register the tool in `src/agent/tools.ts`:
 
 ```typescript
-import { createMyTool } from "./tools/my-tool.js";
+import { createMyTool } from './tools/my-tool.js';
 
 export function createAllTools(cwd: string): AgentTool<any>[] {
-  // ... existing tools
-  const myTool = createMyTool();
+   // ... existing tools
+   const myTool = createMyTool();
 
-  return [
-    ...baseTools,
-    myTool as AgentTool<any>,
-    // ...
-  ];
+   return [
+      ...baseTools,
+      myTool as AgentTool<any>,
+      // ...
+   ];
 }
 ```
 
@@ -241,23 +249,9 @@ export function createAllTools(cwd: string): AgentTool<any>[] {
 
 ```typescript
 export const TOOL_GROUPS: Record<string, string[]> = {
-  "group:my_category": ["my_tool", "other_tool"],
-  // ...
+   'group:my_category': ['my_tool', 'other_tool'],
+   // ...
 };
-```
-
-## Debugging
-
-Enable debug mode to see tool filtering in action:
-
-```bash
-pnpm agent:cli --tools-profile minimal --debug "your prompt"
-```
-
-This will output:
-```
-[debug] Tools config: {"profile":"minimal"}
-[debug] Resolved 0 tools: (none)
 ```
 
 ## Testing
@@ -297,12 +291,12 @@ Each Agent's Profile can define its own tools configuration in `config.json`:
 
 ```json
 {
-  "tools": {
-    "profile": "coding",
-    "deny": ["exec"]
-  },
-  "provider": "anthropic",
-  "model": "claude-sonnet-4-20250514"
+   "tools": {
+      "profile": "coding",
+      "deny": ["exec"]
+   },
+   "provider": "anthropic",
+   "model": "claude-sonnet-4-20250514"
 }
 ```
 
@@ -325,23 +319,28 @@ pnpm agent:cli --profile my-agent --tools-deny exec "list files"
 ## Roadmap
 
 ### Phase 1: Infrastructure (Done)
-- [x] Tool policy system (`policy.ts`)
-- [x] Tool groups definition (`groups.ts`)
-- [x] CLI support (`--tools-profile`, `--tools-allow`, `--tools-deny`)
-- [x] Tools inspection CLI (`pnpm tools:cli`)
+
+-  [x] Tool policy system (`policy.ts`)
+-  [x] Tool groups definition (`groups.ts`)
+-  [x] CLI support (`--tools-profile`, `--tools-allow`, `--tools-deny`)
+-  [x] Tools inspection CLI (`pnpm tools:cli`)
 
 ### Phase 2: Config File Support (Done)
-- [x] Agent Profile tools integration - default tools config per profile
+
+-  [x] Agent Profile tools integration - default tools config per profile
 
 ### Phase 3: Core Tools
-- [ ] Browser tool - simplified web automation (screenshot, click, type)
-- [ ] Session management tools - `sessions_list`, `sessions_history`, `sessions_send`, `sessions_spawn`, `session_status`
 
-### Phase 4: Enhanced Tools
-- [ ] Memory tool - persistent key-value storage for agent memory
-- [ ] Image tool - image generation and manipulation
+-  [ ] Browser tool - simplified web automation (screenshot, click, type)
+-  [ ] Session management tools - `sessions_list`, `sessions_history`, `sessions_send`, `sessions_spawn`, `session_status`
+
+### Phase 4: Enhanced Tools (Partial)
+
+-  [x] Memory tool - persistent key-value storage for agent memory
+-  [ ] Image tool - image generation and manipulation
 
 ### Phase 5: Advanced Features
-- [ ] Cron tool - scheduled task execution
-- [ ] Message tool - inter-agent communication
-- [ ] Canvas tool - visual output generation
+
+-  [ ] Cron tool - scheduled task execution
+-  [ ] Message tool - inter-agent communication
+-  [ ] Canvas tool - visual output generation
