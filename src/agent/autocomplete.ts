@@ -161,15 +161,25 @@ export function autocompleteInput(config: AutocompleteConfig): Promise<string> {
         return;
       }
 
-      // Handle Tab - select first/next suggestion
+      // Handle Tab - cycle through suggestions or complete selected one
       if (key.name === "tab") {
         if (suggestions.length > 0) {
-          if (key.shift) {
-            selectedIndex = selectedIndex <= 0 ? suggestions.length - 1 : selectedIndex - 1;
+          if (selectedIndex >= 0) {
+            // Already have a selection - complete it to input
+            const selected = suggestions[selectedIndex]!;
+            input = selected.value + " ";
+            cursorPos = input.length;
+            selectedIndex = -1;
+            render();
           } else {
-            selectedIndex = selectedIndex >= suggestions.length - 1 ? 0 : selectedIndex + 1;
+            // No selection yet - select first item
+            if (key.shift) {
+              selectedIndex = suggestions.length - 1;
+            } else {
+              selectedIndex = 0;
+            }
+            render();
           }
-          render();
         }
         return;
       }
