@@ -2,11 +2,16 @@
  * Skills Module
  *
  * Manages skill loading, eligibility filtering, and system prompt generation
+ * Compatible with OpenClaw/AgentSkills specification
  */
 
-import type { Skill, SkillManagerOptions } from "./types.js";
+import type { Skill, SkillManagerOptions, SkillsConfig } from "./types.js";
 import { loadAllSkills, getBundledSkillsDir, getProfileSkillsDir } from "./loader.js";
-import { filterEligibleSkills, checkEligibility } from "./eligibility.js";
+import {
+  filterEligibleSkills,
+  checkEligibility,
+  type EligibilityContext,
+} from "./eligibility.js";
 
 // Re-export types and utilities
 export type {
@@ -15,11 +20,33 @@ export type {
   SkillMetadata,
   SkillSource,
   SkillManagerOptions,
+  SkillsConfig,
+  SkillConfig,
+  SkillsLoadConfig,
+  SkillsInstallConfig,
+  SkillInstallSpec,
+  SkillRequirements,
   EligibilityResult,
 } from "./types.js";
 
-export { SKILL_FILE, SKILL_SOURCE_PRECEDENCE } from "./types.js";
-export { checkEligibility, filterEligibleSkills } from "./eligibility.js";
+export {
+  SKILL_FILE,
+  SKILL_SOURCE_PRECEDENCE,
+  getSkillKey,
+  getSkillConfig,
+  normalizeRequirements,
+  normalizePlatforms,
+} from "./types.js";
+
+export {
+  checkEligibility,
+  filterEligibleSkills,
+  binaryExists,
+  resolveConfigPath,
+  isConfigPathTruthy,
+  type EligibilityContext,
+} from "./eligibility.js";
+
 export { parseFrontmatter, parseSkillFile } from "./parser.js";
 export { loadAllSkills, getBundledSkillsDir, getProfileSkillsDir } from "./loader.js";
 
@@ -27,7 +54,7 @@ export { loadAllSkills, getBundledSkillsDir, getProfileSkillsDir } from "./loade
  * SkillManager - Loads and manages skills
  *
  * Provides access to skills from multiple sources with precedence handling
- * and eligibility filtering.
+ * and eligibility filtering based on configuration.
  */
 export class SkillManager {
   private readonly options: SkillManagerOptions;
@@ -39,12 +66,25 @@ export class SkillManager {
   }
 
   /**
+   * Get the eligibility context for filtering
+   */
+  private getEligibilityContext(): EligibilityContext {
+    return {
+      config: this.options.config,
+      platform: this.options.platform,
+    };
+  }
+
+  /**
    * Ensure skills are loaded (lazy loading)
    */
   private ensureLoaded(): void {
     if (this.skills) return;
     this.skills = loadAllSkills(this.options);
-    this.eligibleSkills = filterEligibleSkills(this.skills, this.options.platform);
+    this.eligibleSkills = filterEligibleSkills(
+      this.skills,
+      this.getEligibilityContext(),
+    );
   }
 
   /**
@@ -86,12 +126,41 @@ export class SkillManager {
   }
 
   /**
+   * Check eligibility for a specific skill
+   *
+   * @param skillId - Skill identifier
+   * @returns Eligibility result or undefined if skill not found
+   */
+  checkSkillEligibility(skillId: string): { eligible: boolean; reasons?: string[] | undefined } | undefined {
+    const skill = this.getSkillFromAll(skillId);
+    if (!skill) return undefined;
+    return checkEligibility(skill, this.getEligibilityContext());
+  }
+
+  /**
    * Reload skills from disk
    * Clears cache and reloads on next access
    */
   reload(): void {
     this.skills = undefined;
     this.eligibleSkills = undefined;
+  }
+
+  /**
+   * Update configuration and reload
+   *
+   * @param config - New skills configuration
+   */
+  updateConfig(config: SkillsConfig): void {
+    (this.options as { config?: SkillsConfig }).config = config;
+    this.reload();
+  }
+
+  /**
+   * Get the current configuration
+   */
+  getConfig(): SkillsConfig | undefined {
+    return this.options.config;
   }
 
   /**
@@ -147,10 +216,22 @@ export class SkillManager {
    *
    * @returns Array of skill info for display
    */
-  listSkills(): Array<{ id: string; name: string; emoji: string; description: string }> {
+  listSkills(): Array<{
+    id: string;
+    name: string;
+    emoji: string;
+    description: string;
+    source: string;
+  }> {
     this.ensureLoaded();
 
-    const result: Array<{ id: string; name: string; emoji: string; description: string }> = [];
+    const result: Array<{
+      id: string;
+      name: string;
+      emoji: string;
+      description: string;
+      source: string;
+    }> = [];
 
     for (const [id, skill] of this.eligibleSkills!) {
       result.push({
@@ -158,6 +239,49 @@ export class SkillManager {
         name: skill.frontmatter.name,
         emoji: skill.frontmatter.metadata?.emoji ?? "🔧",
         description: skill.frontmatter.description ?? "No description",
+        source: skill.source,
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * List all skills with eligibility status
+   *
+   * @returns Array of skill info with eligibility status
+   */
+  listAllSkillsWithStatus(): Array<{
+    id: string;
+    name: string;
+    emoji: string;
+    description: string;
+    source: string;
+    eligible: boolean;
+    reasons?: string[] | undefined;
+  }> {
+    this.ensureLoaded();
+
+    const result: Array<{
+      id: string;
+      name: string;
+      emoji: string;
+      description: string;
+      source: string;
+      eligible: boolean;
+      reasons?: string[] | undefined;
+    }> = [];
+
+    for (const [id, skill] of this.skills!) {
+      const eligibility = checkEligibility(skill, this.getEligibilityContext());
+      result.push({
+        id,
+        name: skill.frontmatter.name,
+        emoji: skill.frontmatter.metadata?.emoji ?? "🔧",
+        description: skill.frontmatter.description ?? "No description",
+        source: skill.source,
+        eligible: eligibility.eligible,
+        reasons: eligibility.reasons,
       });
     }
 
