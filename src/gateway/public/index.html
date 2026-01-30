@@ -674,7 +674,8 @@
       });
 
       socket.on('receive', (msg) => {
-        const content = typeof msg.payload === 'string' ? msg.payload : JSON.stringify(msg.payload);
+        const p = msg.payload;
+        const content = typeof p === 'string' ? p : (p && p.content ? p.content : JSON.stringify(p));
         appendMsg('in', content, msg.from);
       });
 
