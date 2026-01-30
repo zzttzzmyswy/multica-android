@@ -170,9 +170,11 @@ function resolveProviderPolicy(
  * Get subagent tool policy.
  */
 export function getSubagentPolicy(extraDeny?: string[]): ToolPolicy {
-  return {
-    deny: mergeDeny(DEFAULT_SUBAGENT_TOOL_DENY, extraDeny),
-  };
+  const deny = mergeDeny(DEFAULT_SUBAGENT_TOOL_DENY, extraDeny);
+  if (deny) {
+    return { deny };
+  }
+  return {};
 }
 
 // ============================================================================
@@ -214,10 +216,13 @@ export function filterTools(
 
   // Layer 2: Global allow/deny
   if (config?.allow || config?.deny) {
-    const globalPolicy: ToolPolicy = {
-      allow: config.allow,
-      deny: config.deny,
-    };
+    const globalPolicy: ToolPolicy = {};
+    if (config.allow) {
+      globalPolicy.allow = config.allow;
+    }
+    if (config.deny) {
+      globalPolicy.deny = config.deny;
+    }
     filtered = filterToolsByPolicy(filtered, globalPolicy);
   }
 
@@ -239,6 +244,75 @@ export function filterTools(
 }
 
 /**
+ * Merge two ToolsConfig objects.
+ * The override config takes precedence:
+ * - profile: override wins if set
+ * - allow: union of both
+ * - deny: union of both
+ * - byProvider: deep merge with override taking precedence
+ */
+export function mergeToolsConfig(
+  base?: ToolsConfig,
+  override?: ToolsConfig,
+): ToolsConfig | undefined {
+  if (!base && !override) return undefined;
+  if (!base) return override;
+  if (!override) return base;
+
+  const result: ToolsConfig = {};
+
+  // profile: override wins
+  const profile = override.profile ?? base.profile;
+  if (profile) {
+    result.profile = profile;
+  }
+
+  // allow: union
+  const allow = mergeAllow(base.allow, override.allow);
+  if (allow) {
+    result.allow = allow;
+  }
+
+  // deny: union
+  const deny = mergeDeny(base.deny, override.deny);
+  if (deny) {
+    result.deny = deny;
+  }
+
+  // byProvider: deep merge
+  if (base.byProvider || override.byProvider) {
+    const providers = new Set([
+      ...Object.keys(base.byProvider ?? {}),
+      ...Object.keys(override.byProvider ?? {}),
+    ]);
+
+    const byProvider: Record<string, ToolPolicy> = {};
+    for (const provider of providers) {
+      const basePolicy = base.byProvider?.[provider];
+      const overridePolicy = override.byProvider?.[provider];
+
+      if (basePolicy && overridePolicy) {
+        const merged: ToolPolicy = {};
+        const pAllow = mergeAllow(basePolicy.allow, overridePolicy.allow);
+        if (pAllow) {
+          merged.allow = pAllow;
+        }
+        const pDeny = mergeDeny(basePolicy.deny, overridePolicy.deny);
+        if (pDeny) {
+          merged.deny = pDeny;
+        }
+        byProvider[provider] = merged;
+      } else {
+        byProvider[provider] = overridePolicy ?? basePolicy!;
+      }
+    }
+    result.byProvider = byProvider;
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+/**
  * Check if a specific tool would be allowed given the options.
  */
 export function wouldToolBeAllowed(
@@ -257,10 +331,13 @@ export function wouldToolBeAllowed(
 
   // Layer 2: Global allow/deny
   if (config?.allow || config?.deny) {
-    const globalPolicy: ToolPolicy = {
-      allow: config.allow,
-      deny: config.deny,
-    };
+    const globalPolicy: ToolPolicy = {};
+    if (config.allow) {
+      globalPolicy.allow = config.allow;
+    }
+    if (config.deny) {
+      globalPolicy.deny = config.deny;
+    }
     if (!isToolAllowed(toolName, globalPolicy)) {
       return false;
     }

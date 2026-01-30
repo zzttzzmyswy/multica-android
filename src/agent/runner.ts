@@ -11,6 +11,7 @@ import {
   DEFAULT_CONTEXT_TOKENS,
   type ContextWindowGuardResult,
 } from "./context-window/index.js";
+import { mergeToolsConfig, type ToolsConfig } from "./tools/policy.js";
 
 /**
  * Get API Key based on provider.
@@ -249,7 +250,21 @@ export class Agent {
     }
 
     this.agent.setModel(model);
-    this.agent.setTools(resolveTools(options));
+
+    // Merge Profile tools config with options.tools (options takes precedence)
+    const profileToolsConfig = this.profile?.getToolsConfig();
+    const mergedToolsConfig = mergeToolsConfig(profileToolsConfig, options.tools);
+    const toolsOptions = mergedToolsConfig ? { ...options, tools: mergedToolsConfig } : options;
+
+    const tools = resolveTools(toolsOptions);
+    if (this.debug) {
+      if (profileToolsConfig) {
+        console.error(`[debug] Profile tools config: ${JSON.stringify(profileToolsConfig)}`);
+      }
+      console.error(`[debug] Merged tools config: ${JSON.stringify(mergedToolsConfig)}`);
+      console.error(`[debug] Resolved ${tools.length} tools: ${tools.map(t => t.name).join(", ") || "(none)"}`);
+    }
+    this.agent.setTools(tools);
 
     const restoredMessages = this.session.loadMessages();
     if (restoredMessages.length > 0) {
