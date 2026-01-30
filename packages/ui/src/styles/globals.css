@@ -83,6 +83,9 @@
   --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
   --sidebar-border: oklch(0.92 0.004 286.32);
   --sidebar-ring: oklch(0.705 0.015 286.067);
+  --scrollbar-thumb: oklch(0.82 0.003 286);
+  --scrollbar-thumb-hover: oklch(0.705 0.015 286.067);
+  --scrollbar-track: transparent;
 }
 
 .dark {
@@ -117,6 +120,9 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.552 0.016 285.938);
+  --scrollbar-thumb: oklch(1 0 0 / 15%);
+  --scrollbar-thumb-hover: oklch(1 0 0 / 30%);
+  --scrollbar-track: transparent;
 }
 
 /* Shiki dual themes: CSS-only light/dark switching via CSS variables */
@@ -136,6 +142,22 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  *::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 3px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
   }
   body {
     @apply bg-background text-foreground;
