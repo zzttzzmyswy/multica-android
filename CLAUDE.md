@@ -84,7 +84,7 @@ cp .env.example .env
 
 ## Atomic Commits
 
-After completing any task that modifies code, create atomic commits without asking for permission.
+After completing any task that modifies code, you MUST create atomic commits before ending the conversation.
 
 1. Run `git status` and `git diff` to see all modifications
 2. Skip if no changes exist
@@ -99,4 +99,19 @@ Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`
 - Each commit should be independently meaningful and buildable
 - Related test files go with their implementation
 - Never create empty commits or combine unrelated changes
+- If all changes are related to one logical unit, a single commit is fine
+- Keep commit messages concise but descriptive
 - `git commit --amend` only for immediate small fixes to the last commit
+
+### Examples
+
+If you modified:
+- `src/api/user.ts` (added new endpoint)
+- `src/api/user.test.ts` (tests for new endpoint)
+- `src/utils/format.ts` (refactored helper)
+- `README.md` (updated docs)
+
+Create three commits:
+1. `git add src/api/user.ts src/api/user.test.ts && git commit -m "feat(api): add user profile endpoint"`
+2. `git add src/utils/format.ts && git commit -m "refactor(utils): simplify date formatting logic"`
+3. `git add README.md && git commit -m "docs: update API documentation"`

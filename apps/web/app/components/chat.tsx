@@ -88,11 +88,6 @@ export function Chat() {
         <Badge variant={STATE_VARIANT[gwState] ?? "outline"} className="text-xs">
           {gwState}
         </Badge>
-        {activeAgentId && (
-          <span className="text-xs text-muted-foreground font-mono">
-            Agent: {activeAgentId.slice(0, 8)}...
-          </span>
-        )}
       </header>
 
       <main ref={mainRef} className="flex-1 overflow-y-auto min-h-0" style={fadeStyle}>
