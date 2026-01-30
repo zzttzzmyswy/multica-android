@@ -224,6 +224,10 @@ export interface SkillManagerOptions {
   platform?: NodeJS.Platform | undefined;
   /** Skills configuration */
   config?: SkillsConfig | undefined;
+  /** Workspace directory for plugin discovery (defaults to cwd) */
+  workspaceDir?: string | undefined;
+  /** Additional paths to search for plugins (directories with multica.plugin.json) */
+  pluginPaths?: string[] | undefined;
 }
 
 /**

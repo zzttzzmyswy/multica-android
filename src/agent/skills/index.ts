@@ -129,6 +129,19 @@ export {
   SerializeKeys,
 } from "./serialize.js";
 
+// Export plugin module
+export {
+  PLUGIN_MANIFEST_FILENAME,
+  loadPluginManifest,
+  loadPluginRegistry,
+  resolvePluginSkillDirs,
+  getPluginRegistry,
+  type PluginManifest,
+  type PluginRecord,
+  type PluginDiagnostic,
+  type PluginRegistry,
+} from "./plugin.js";
+
 /**
  * SkillManager - Loads and manages skills
  *

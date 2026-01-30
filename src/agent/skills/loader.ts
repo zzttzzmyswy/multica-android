@@ -2,6 +2,7 @@
  * Skills Loader
  *
  * Multi-source loading with precedence handling
+ * Supports bundled skills, user-installed skills, profile skills, and plugin skills
  */
 
 import { existsSync, readdirSync, statSync } from "node:fs";
@@ -11,6 +12,7 @@ import type { Skill, SkillSource, SkillManagerOptions } from "./types.js";
 import { SKILL_FILE, SKILL_SOURCE_PRECEDENCE } from "./types.js";
 import { parseSkillFile } from "./parser.js";
 import { DATA_DIR } from "../../shared/index.js";
+import { resolvePluginSkillDirs } from "./plugin.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -118,8 +120,9 @@ export function getProfileSkillsDir(profileId: string, profileBaseDir?: string):
  * Loading order (lowest to highest precedence):
  * 1. bundled - Package bundled skills
  * 2. extra - User-configured extra directories
- * 3. managed - ~/.super-multica/skills/ (user-installed via `skills add`)
- * 4. profile - ~/.super-multica/agent-profiles/<profileId>/skills/
+ * 3. plugins - Skills from npm packages with multica.plugin.json
+ * 4. managed - ~/.super-multica/skills/ (user-installed via `skills add`)
+ * 5. profile - ~/.super-multica/agent-profiles/<profileId>/skills/
  *
  * @param options - Loader options
  * @returns Map of skill ID to Skill
@@ -127,12 +130,20 @@ export function getProfileSkillsDir(profileId: string, profileBaseDir?: string):
 export function loadAllSkills(options: SkillManagerOptions = {}): Map<string, Skill> {
   const skillMap = new Map<string, Skill>();
 
+  // Discover plugin skill directories
+  const pluginSkillDirs = resolvePluginSkillDirs({
+    workspaceDir: options.workspaceDir ?? process.cwd(),
+    extraPaths: options.pluginPaths ?? [],
+  });
+
   // Define sources in order of precedence (lowest first)
   const sources: Array<[string, SkillSource]> = [
     // Bundled skills (lowest precedence)
     [BUNDLED_DIR, "bundled"],
     // Extra directories (treated as bundled)
     ...(options.extraDirs ?? []).map((d): [string, SkillSource] => [d, "bundled"]),
+    // Plugin skills (between extra and managed)
+    ...pluginSkillDirs.map((d): [string, SkillSource] => [d, "bundled"]),
     // Managed skills (user-installed via `skills add`)
     [MANAGED_DIR, "profile"],
   ];
