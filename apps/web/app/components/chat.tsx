@@ -5,6 +5,8 @@ import { SidebarTrigger } from "@multica/ui/components/ui/sidebar";
 import { Badge } from "@multica/ui/components/ui/badge";
 import { ChatInput } from "@multica/ui/components/chat-input";
 import { MemoizedMarkdown } from "@multica/ui/components/markdown";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { UserIcon } from "@hugeicons/core-free-icons";
 import { useMessages } from "../hooks/use-messages";
 import { useGateway } from "../hooks/use-gateway";
 import { useHub } from "../hooks/use-hub";
@@ -64,8 +66,9 @@ export function Chat() {
 
       <main ref={mainRef} className="flex-1 overflow-y-auto min-h-0" style={fadeStyle}>
         {!activeAgentId ? (
-          <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-            Select an agent to start chatting
+          <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
+            <HugeiconsIcon icon={UserIcon} strokeWidth={1.5} className="size-10 opacity-30" />
+            <span className="text-sm">Select an agent to start chatting</span>
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
@@ -98,7 +101,11 @@ export function Chat() {
       </main>
 
       <footer className="w-full p-2 pt-1 max-w-4xl mx-auto">
-        <ChatInput onSubmit={handleSend} disabled={!canSend} />
+        <ChatInput
+          onSubmit={handleSend}
+          disabled={!canSend}
+          placeholder={!activeAgentId ? "Select an agent first..." : "Type a message..."}
+        />
       </footer>
     </div>
   );
