@@ -7,7 +7,6 @@ import {
   SidebarGroupContent,
   SidebarMenu,
   SidebarMenuItem,
-  SidebarMenuButton,
 } from "@multica/ui/components/ui/sidebar"
 import { Button } from "@multica/ui/components/ui/button"
 import { HugeiconsIcon } from "@hugeicons/react"
@@ -73,21 +72,23 @@ export function HubSidebar() {
               )}
               {agents.map(agent => (
                 <SidebarMenuItem key={agent.id} className="group/agent-item">
-                  <div className="flex items-center gap-1 w-full">
-                    <SidebarMenuButton
-                      isActive={agent.id === activeAgentId}
-                      onClick={() => setActiveAgentId(agent.id)}
-                      className="font-mono text-xs flex-1 min-w-0"
-                    >
-                      <span>{agent.id}</span>
-                    </SidebarMenuButton>
+                  <div
+                    role="button"
+                    onClick={() => setActiveAgentId(agent.id)}
+                    data-active={agent.id === activeAgentId || undefined}
+                    className="flex items-center w-full h-8 px-2 rounded-md cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active]:bg-sidebar-accent data-[active]:font-medium"
+                  >
+                    <span className="flex-1 min-w-0 truncate font-mono text-xs">
+                      {agent.id}
+                    </span>
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation()
                         if (activeAgentId === agent.id) setActiveAgentId(null)
                         deleteAgent(agent.id)
                       }}
                       title="Delete agent"
-                      className="shrink-0 size-5 flex items-center justify-center rounded-md opacity-0 group-hover/agent-item:opacity-100 hover:bg-sidebar-accent text-muted-foreground transition-opacity cursor-pointer"
+                      className="shrink-0 size-5 flex items-center justify-center rounded-md opacity-0 group-hover/agent-item:opacity-100 hover:bg-sidebar-accent-foreground/10 text-muted-foreground transition-opacity cursor-pointer"
                     >
                       <HugeiconsIcon icon={Delete02Icon} strokeWidth={1.5} className="size-3.5" />
                     </button>
