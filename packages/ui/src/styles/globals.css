@@ -119,6 +119,20 @@
   --sidebar-ring: oklch(0.552 0.016 285.938);
 }
 
+/* Shiki dual themes: CSS-only light/dark switching via CSS variables */
+/* @see https://shiki.style/guide/dual-themes */
+.shiki,
+.shiki span {
+  color: var(--shiki-light);
+  background-color: var(--shiki-light-bg);
+}
+
+.dark .shiki,
+.dark .shiki span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
