@@ -41,9 +41,12 @@ export function useHub() {
     } catch { /* silent */ }
   }, [])
 
-  const createAgent = useCallback(async () => {
-    await fetch(`${CONSOLE_URL}/api/agents`, { method: "POST" })
+  const createAgent = useCallback(async (): Promise<string | null> => {
+    const res = await fetch(`${CONSOLE_URL}/api/agents`, { method: "POST" })
     await fetchAgents()
+    if (!res.ok) return null
+    const data = await res.json()
+    return data.id ?? null
   }, [fetchAgents])
 
   const deleteAgent = useCallback(async (id: string) => {

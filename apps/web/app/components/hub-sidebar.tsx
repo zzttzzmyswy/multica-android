@@ -10,7 +10,7 @@ import {
 } from "@multica/ui/components/ui/sidebar"
 import { Button } from "@multica/ui/components/ui/button"
 import { HugeiconsIcon } from "@hugeicons/react"
-import { PlusSignIcon, Delete02Icon, Loading03Icon } from "@hugeicons/core-free-icons"
+import { PlusSignIcon, Delete02Icon } from "@hugeicons/core-free-icons"
 import { useHub } from "../hooks/use-hub"
 import { useActiveAgent } from "../hooks/use-active-agent"
 
@@ -60,10 +60,13 @@ export function HubSidebar() {
       {status === "connected" && (
         <SidebarGroup>
           <SidebarGroupLabel>Agents</SidebarGroupLabel>
-          <SidebarGroupAction onClick={createAgent} title="Create agent">
+          <SidebarGroupAction onClick={async () => {
+            const id = await createAgent()
+            if (id) setActiveAgentId(id)
+          }} title="Create agent">
             <HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} className="size-4" />
           </SidebarGroupAction>
-          <SidebarGroupContent>
+          <SidebarGroupContent className="flex flex-col gap-1">
             <SidebarMenu>
               {agents.length === 0 && (
                 <div className="px-2 py-2 text-xs text-muted-foreground/60">
