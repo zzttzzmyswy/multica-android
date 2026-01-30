@@ -33,39 +33,57 @@ Before creating, clarify:
 
 ### Step 2: Initialize the Skill
 
-**CRITICAL: Always use the init_skill.py script to create skills.** This ensures the skill is created in the correct location (`~/.super-multica/skills/`).
+**CRITICAL: Always create skills in `~/.super-multica/skills/`, NOT in the current working directory.**
+
+Create the skill directory and files:
 
 ```bash
-# Basic usage
-python3 ~/.super-multica/skills/skill-creator/scripts/init_skill.py <skill-name>
+# 1. Create the skill directory
+mkdir -p ~/.super-multica/skills/<skill-name>
 
-# With description and resources
-python3 ~/.super-multica/skills/skill-creator/scripts/init_skill.py my-skill \
-  --description "What this skill does" \
-  --resources scripts
+# 2. Create SKILL.md with proper structure
+cat > ~/.super-multica/skills/<skill-name>/SKILL.md << 'EOF'
+---
+name: <Skill Name>
+description: <What this skill does and when to use it>
+version: 1.0.0
+metadata:
+  emoji: "🔧"
+  tags:
+    - custom
+---
+
+## Instructions
+
+<Instructions for using this skill>
+EOF
+
+# 3. (Optional) Create scripts directory if needed
+mkdir -p ~/.super-multica/skills/<skill-name>/scripts
 ```
 
-**Script options:**
-- `--description, -d` - Skill description
-- `--emoji, -e` - Emoji for display (default: 🔧)
-- `--tag, -t` - Primary tag (default: custom)
-- `--resources, -r` - Create directories: `scripts`, `references`, or both
-
-**Examples:**
+**Example - Creating a translator skill:**
 ```bash
-# Simple skill
-python3 scripts/init_skill.py translator -d "Translate text between languages"
+mkdir -p ~/.super-multica/skills/translator
 
-# Skill with helper script
-python3 scripts/init_skill.py pdf-rotator -d "Rotate PDF pages" -r scripts
+cat > ~/.super-multica/skills/translator/SKILL.md << 'EOF'
+---
+name: Translator
+description: Translate text between languages. Use when user asks to translate text.
+version: 1.0.0
+metadata:
+  emoji: "🌐"
+  tags:
+    - language
+---
 
-# Skill with references
-python3 scripts/init_skill.py api-helper -d "Help with API calls" -r scripts,references
-```
+## Instructions
 
-The script path when running from the skill-creator directory:
-```bash
-python3 ~/.super-multica/skills/skill-creator/scripts/init_skill.py <skill-name>
+When asked to translate text:
+1. Identify source and target languages
+2. Provide accurate, natural translations
+3. For ambiguous terms, offer alternatives
+EOF
 ```
 
 ### Step 3: Edit the Skill
