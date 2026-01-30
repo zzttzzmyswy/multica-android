@@ -2,6 +2,7 @@
 import * as readline from "readline";
 import { Agent } from "./runner.js";
 import type { AgentOptions } from "./types.js";
+import { SkillManager } from "./skills/index.js";
 
 type CliOptions = {
   profile?: string | undefined;
@@ -95,11 +96,24 @@ function printWelcome(sessionId: string) {
   console.log("");
 }
 
-function printHelp() {
-  console.log("\nAvailable commands:");
+function printHelp(skillManager?: SkillManager) {
+  console.log("\nBuilt-in commands:");
   for (const [cmd, desc] of Object.entries(COMMANDS)) {
     console.log(`  /${cmd.padEnd(12)} ${desc}`);
   }
+
+  // Show skill commands if available
+  if (skillManager) {
+    const reservedNames = new Set(Object.keys(COMMANDS));
+    const skillCommands = skillManager.getSkillCommands({ reservedNames });
+    if (skillCommands.length > 0) {
+      console.log("\nSkill commands:");
+      for (const cmd of skillCommands) {
+        console.log(`  /${cmd.name.padEnd(12)} ${cmd.description}`);
+      }
+    }
+  }
+
   console.log("\nJust type your message and press Enter to chat with the agent.");
   console.log("");
 }
@@ -111,15 +125,25 @@ class InteractiveCLI {
   private multilineMode = false;
   private multilineBuffer: string[] = [];
   private running = true;
+  private skillManager: SkillManager;
 
   constructor(opts: CliOptions) {
     this.opts = opts;
     this.agent = this.createAgent(opts.session);
 
+    // Initialize SkillManager for tab completion
+    this.skillManager = new SkillManager({
+      profileId: opts.profile,
+    });
+
+    // Build list of reserved command names (built-in CLI commands)
+    const reservedNames = new Set(Object.keys(COMMANDS));
+
     this.rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
       terminal: true,
+      completer: (line: string) => this.completer(line, reservedNames),
     });
 
     this.rl.on("close", () => {
@@ -127,6 +151,44 @@ class InteractiveCLI {
       console.log("\nGoodbye!");
       process.exit(0);
     });
+  }
+
+  /**
+   * Tab completion handler for readline
+   * Completes both built-in commands and skill commands
+   */
+  private completer(
+    line: string,
+    reservedNames: Set<string>,
+  ): [string[], string] {
+    // Only complete if line starts with /
+    if (!line.startsWith("/")) {
+      return [[], line];
+    }
+
+    const prefix = line.slice(1).toLowerCase();
+
+    // Get built-in command completions
+    const builtinCompletions = Object.keys(COMMANDS)
+      .filter((cmd) => cmd.toLowerCase().startsWith(prefix))
+      .map((cmd) => `/${cmd}`);
+
+    // Get skill command completions
+    const skillCommands = this.skillManager.getSkillCommands({ reservedNames });
+    const skillCompletions = skillCommands
+      .filter((cmd) => cmd.name.toLowerCase().startsWith(prefix))
+      .map((cmd) => `/${cmd.name}`);
+
+    // Combine and deduplicate
+    const allCompletions = [...new Set([...builtinCompletions, ...skillCompletions])];
+
+    // Sort: shorter first, then alphabetically
+    allCompletions.sort((a, b) => {
+      if (a.length !== b.length) return a.length - b.length;
+      return a.localeCompare(b);
+    });
+
+    return [allCompletions, line];
   }
 
   private createAgent(sessionId?: string): Agent {
@@ -200,7 +262,7 @@ class InteractiveCLI {
 
     switch (cmd) {
       case "help":
-        printHelp();
+        printHelp(this.skillManager);
         return true;
 
       case "exit":
@@ -238,7 +300,17 @@ class InteractiveCLI {
         return true;
 
       default:
-        // Unknown command - let the agent handle it
+        // Check if it's a skill command
+        const invocation = this.skillManager.resolveCommand(input);
+        if (invocation) {
+          // Skill command found - send to agent with skill instructions as context
+          const skillPrompt = invocation.args
+            ? `[Skill: ${invocation.command.name}]\n\n${invocation.instructions}\n\nUser request: ${invocation.args}`
+            : `[Skill: ${invocation.command.name}]\n\n${invocation.instructions}`;
+          await this.handleInput(skillPrompt);
+          return true;
+        }
+        // Unknown command - let the agent handle it as-is
         return false;
     }
   }
