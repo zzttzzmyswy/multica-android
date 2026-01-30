@@ -11,8 +11,7 @@ import { UserIcon, Copy01Icon, CheckmarkCircle02Icon } from "@hugeicons/core-fre
 import { toast } from "@multica/ui/components/ui/sonner";
 import { useMessages } from "../hooks/use-messages";
 import { useGateway } from "../hooks/use-gateway";
-import { useHub } from "../hooks/use-hub";
-import { useActiveAgent } from "../hooks/use-active-agent";
+import { useHubStore } from "../hooks/use-hub-store";
 import { useDeviceId } from "../hooks/use-device-id";
 import { useScrollFade } from "../hooks/use-scroll-fade";
 import { cn } from "@multica/ui/lib/utils";
@@ -25,9 +24,9 @@ const STATE_VARIANT: Record<string, "default" | "secondary" | "destructive" | "o
 }
 
 export function Chat() {
-  const activeAgentId = useActiveAgent((s) => s.activeAgentId)
+  const activeAgentId = useHubStore((s) => s.activeAgentId)
+  const hub = useHubStore((s) => s.hub)
   const { messages, addUserMessage, addAssistantMessage } = useMessages()
-  const { hub } = useHub()
 
   const { state: gwState, send } = useGateway({
     onMessage: (msg) => {

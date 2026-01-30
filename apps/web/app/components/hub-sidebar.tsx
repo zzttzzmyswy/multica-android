@@ -11,8 +11,8 @@ import {
 import { Button } from "@multica/ui/components/ui/button"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { PlusSignIcon, Delete02Icon } from "@hugeicons/core-free-icons"
-import { useHub } from "../hooks/use-hub"
-import { useActiveAgent } from "../hooks/use-active-agent"
+import { useHubStore } from "../hooks/use-hub-store"
+import { useHubInit } from "../hooks/use-hub-init"
 
 const STATUS_DOT: Record<string, string> = {
   connected: "bg-green-500/60",
@@ -29,9 +29,16 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 export function HubSidebar() {
-  const { status, hub, agents, fetchHub, createAgent, deleteAgent } = useHub()
-  const activeAgentId = useActiveAgent((s) => s.activeAgentId)
-  const setActiveAgentId = useActiveAgent((s) => s.setActiveAgentId)
+  useHubInit()
+
+  const status = useHubStore((s) => s.status)
+  const hub = useHubStore((s) => s.hub)
+  const agents = useHubStore((s) => s.agents)
+  const activeAgentId = useHubStore((s) => s.activeAgentId)
+  const fetchHub = useHubStore((s) => s.fetchHub)
+  const createAgent = useHubStore((s) => s.createAgent)
+  const deleteAgent = useHubStore((s) => s.deleteAgent)
+  const setActiveAgentId = useHubStore((s) => s.setActiveAgentId)
 
   return (
     <>
@@ -60,13 +67,10 @@ export function HubSidebar() {
       {status === "connected" && (
         <SidebarGroup>
           <SidebarGroupLabel>Agents</SidebarGroupLabel>
-          <SidebarGroupAction onClick={async () => {
-            const id = await createAgent()
-            if (id) setActiveAgentId(id)
-          }} title="Create agent">
+          <SidebarGroupAction onClick={createAgent} title="Create agent">
             <HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} className="size-4" />
           </SidebarGroupAction>
-          <SidebarGroupContent className="flex flex-col gap-1">
+          <SidebarGroupContent>
             <SidebarMenu>
               {agents.length === 0 && (
                 <div className="px-2 py-2 text-xs text-muted-foreground/60">
@@ -87,7 +91,6 @@ export function HubSidebar() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        if (activeAgentId === agent.id) setActiveAgentId(null)
                         deleteAgent(agent.id)
                       }}
                       title="Delete agent"
