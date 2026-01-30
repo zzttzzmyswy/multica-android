@@ -13,8 +13,7 @@ const isDev = process.env.NODE_ENV !== "production";
   imports: [
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, "public"),
-      serveRoot: "/",
-      exclude: ["/api/(.*)", "/ws/(.*)"],
+      serveRoot: "/client",
     }),
     LoggerModule.forRoot({
       pinoHttp: isDev

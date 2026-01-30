@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Geneva">
-  <link rel="manifest" href="/manifest.json">
-  <link rel="icon" href="/icon.png" type="image/png">
-  <link rel="apple-touch-icon" href="/icon.png">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.png" type="image/png">
+  <link rel="apple-touch-icon" href="icon.png">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
@@ -485,7 +485,7 @@
 
     // --- PWA: Register Service Worker ---
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker.register('sw.js', { scope: '/client/' }).catch(() => {});
     }
   </script>
 </body>

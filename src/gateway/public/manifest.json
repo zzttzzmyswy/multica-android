@@ -2,14 +2,15 @@
   "name": "Geneva Client",
   "short_name": "Geneva",
   "description": "Mobile client for Geneva Gateway",
-  "start_url": "/",
+  "start_url": "/client/",
+  "scope": "/client/",
   "display": "standalone",
   "orientation": "portrait",
   "theme_color": "#0f172a",
   "background_color": "#0f172a",
   "icons": [
     {
-      "src": "/icon.png",
+      "src": "/client/icon.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
