@@ -1,4 +1,4 @@
-const CACHE_NAME = "geneva-client-v1";
+const CACHE_NAME = "multica-client-v1";
 const PRECACHE_URLS = ["/client/", "/client/icon.png"];
 
 self.addEventListener("install", (event) => {

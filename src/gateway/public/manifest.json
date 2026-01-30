@@ -1,7 +1,7 @@
 {
-  "name": "Geneva Client",
-  "short_name": "Geneva",
-  "description": "Mobile client for Geneva Gateway",
+  "name": "Multica Client",
+  "short_name": "Multica",
+  "description": "Mobile client for Multica Gateway",
   "start_url": "/client/",
   "scope": "/client/",
   "display": "standalone",
