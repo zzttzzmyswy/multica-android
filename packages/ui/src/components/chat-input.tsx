@@ -35,8 +35,8 @@ export function ChatInput() {
         className="w-full resize-none bg-transparent px-1 py-1 text-sm text-foreground outline-none placeholder:text-muted-foreground"
       />
       <div className="flex items-center justify-end pt-2">
-        <Button size="icon-sm" onClick={handleSubmit}>
-          <HugeiconsIcon icon={ArrowUpIcon} />
+        <Button size="icon" onClick={handleSubmit}>
+          <HugeiconsIcon strokeWidth={2.5} icon={ArrowUpIcon} />
         </Button>
       </div>
     </div>
