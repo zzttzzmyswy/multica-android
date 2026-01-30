@@ -5,6 +5,7 @@ Skills extend agent capabilities through `SKILL.md` definition files.
 ## Table of Contents
 
 - [SKILL.md Specification](#skillmd-specification)
+- [Skill Invocation](#skill-invocation)
 - [Loading & Precedence](#loading--precedence)
 - [CLI Commands](#cli-commands)
 
@@ -113,6 +114,75 @@ install:
 | `download` | Download & extract | `url`, `archiveType` |
 
 **Common fields:** `id`, `label`, `platforms`, `when`
+
+---
+
+## Skill Invocation
+
+Skills can be invoked by users via slash commands (`/skill-name`) or automatically by the AI model.
+
+### User Invocation
+
+In the interactive CLI, type `/` followed by a skill name to invoke it:
+
+```
+You: /pdf analyze report.pdf
+```
+
+**Tab completion**: Type `/p` then press Tab to see matching skills like `/pdf`.
+
+**List available skills**: Type `/help` to see all available skill commands.
+
+### Invocation Control
+
+Control how skills can be invoked using frontmatter fields:
+
+```yaml
+---
+name: My Skill
+user-invocable: true           # Can be invoked via /command (default: true)
+disable-model-invocation: false # Include in AI prompt (default: false)
+---
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `user-invocable` | `true` | Enable `/command` invocation in CLI |
+| `disable-model-invocation` | `false` | If `true`, skill is hidden from AI's system prompt |
+
+**Use cases:**
+
+- **User-only skill** (`disable-model-invocation: true`): User can invoke via `/command`, but AI won't use it automatically
+- **AI-only skill** (`user-invocable: false`): AI can use it, but no `/command` available
+- **Disabled skill** (both `false`): Hidden from both user and AI
+
+### Command Dispatch
+
+For advanced integrations, skills can dispatch directly to tools:
+
+```yaml
+---
+name: PDF Tool
+command-dispatch: tool
+command-tool: pdf-processor
+command-arg-mode: raw
+---
+```
+
+| Field | Description |
+|-------|-------------|
+| `command-dispatch` | Set to `tool` to enable tool dispatch |
+| `command-tool` | Name of the tool to invoke |
+| `command-arg-mode` | How arguments are passed (`raw` = as-is) |
+
+### Command Name Normalization
+
+Skill names are normalized for command use:
+
+- Converted to lowercase
+- Special characters replaced with underscores
+- Truncated to 32 characters max
+- Duplicate names get numeric suffixes (e.g., `pdf_2`)
 
 ---
 
