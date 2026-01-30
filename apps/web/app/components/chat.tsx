@@ -1,12 +1,14 @@
 "use client";
 
-import { useRef, useCallback } from "react";
+import { useRef, useState, useCallback } from "react";
 import { SidebarTrigger } from "@multica/ui/components/ui/sidebar";
 import { Badge } from "@multica/ui/components/ui/badge";
+import { Button } from "@multica/ui/components/ui/button";
 import { ChatInput } from "@multica/ui/components/chat-input";
 import { MemoizedMarkdown } from "@multica/ui/components/markdown";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { UserIcon } from "@hugeicons/core-free-icons";
+import { UserIcon, Copy01Icon, CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
+import { toast } from "@multica/ui/components/ui/sonner";
 import { useMessages } from "../hooks/use-messages";
 import { useGateway } from "../hooks/use-gateway";
 import { useHub } from "../hooks/use-hub";
@@ -47,6 +49,15 @@ export function Chat() {
 
   const canSend = gwState === "registered" && !!activeAgentId
 
+  const [copied, setCopied] = useState(false)
+  const handleCopy = useCallback(async () => {
+    if (!activeAgentId) return
+    await navigator.clipboard.writeText(activeAgentId)
+    setCopied(true)
+    toast.success("Agent ID copied")
+    setTimeout(() => setCopied(false), 2000)
+  }, [activeAgentId])
+
   const mainRef = useRef<HTMLElement>(null)
   const fadeStyle = useScrollFade(mainRef)
 
@@ -58,9 +69,23 @@ export function Chat() {
           {gwState}
         </Badge>
         {activeAgentId && (
-          <span className="text-xs text-muted-foreground font-mono">
-            Agent: {activeAgentId.slice(0, 8)}...
-          </span>
+          <>
+            <span className="text-xs text-muted-foreground font-mono">
+              Agent: {activeAgentId.slice(0, 8)}...
+            </span>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={handleCopy}
+              aria-label="Copy agent ID"
+            >
+              <HugeiconsIcon
+                icon={copied ? CheckmarkCircle02Icon : Copy01Icon}
+                strokeWidth={2}
+                className={cn("size-3", copied && "text-green-500")}
+              />
+            </Button>
+          </>
         )}
       </header>
 
