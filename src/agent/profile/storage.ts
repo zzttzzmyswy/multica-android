@@ -4,7 +4,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { PROFILE_FILES, type AgentProfile } from "./types.js";
+import { PROFILE_FILES, type AgentProfile, type ProfileConfig } from "./types.js";
 import { DATA_DIR } from "../../shared/index.js";
 
 const DEFAULT_BASE_DIR = join(DATA_DIR, "agent-profiles");
@@ -60,6 +60,33 @@ export function writeProfileFile(
   writeFileSync(filePath, content, "utf-8");
 }
 
+/** 读取 config.json */
+export function readProfileConfig(
+  profileId: string,
+  options?: StorageOptions,
+): ProfileConfig | undefined {
+  const content = readProfileFile(profileId, PROFILE_FILES.config, options);
+  if (!content) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(content) as ProfileConfig;
+  } catch {
+    // Invalid JSON, return undefined
+    return undefined;
+  }
+}
+
+/** 写入 config.json */
+export function writeProfileConfig(
+  profileId: string,
+  config: ProfileConfig,
+  options?: StorageOptions,
+): void {
+  const content = JSON.stringify(config, null, 2);
+  writeProfileFile(profileId, PROFILE_FILES.config, content, options);
+}
+
 /** 加载完整的 AgentProfile */
 export function loadProfile(profileId: string, options?: StorageOptions): AgentProfile {
   return {
@@ -69,12 +96,13 @@ export function loadProfile(profileId: string, options?: StorageOptions): AgentP
     tools: readProfileFile(profileId, PROFILE_FILES.tools, options),
     memory: readProfileFile(profileId, PROFILE_FILES.memory, options),
     bootstrap: readProfileFile(profileId, PROFILE_FILES.bootstrap, options),
+    config: readProfileConfig(profileId, options),
   };
 }
 
 /** 保存 AgentProfile（只写入非空字段） */
 export function saveProfile(profile: AgentProfile, options?: StorageOptions): void {
-  const { id, soul, identity, tools, memory, bootstrap } = profile;
+  const { id, soul, identity, tools, memory, bootstrap, config } = profile;
 
   if (soul !== undefined) {
     writeProfileFile(id, PROFILE_FILES.soul, soul, options);
@@ -90,5 +118,8 @@ export function saveProfile(profile: AgentProfile, options?: StorageOptions): vo
   }
   if (bootstrap !== undefined) {
     writeProfileFile(id, PROFILE_FILES.bootstrap, bootstrap, options);
+  }
+  if (config !== undefined) {
+    writeProfileConfig(id, config, options);
   }
 }

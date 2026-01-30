@@ -4,7 +4,8 @@
  * 管理 agent 的身份、人格、记忆等配置
  */
 
-import type { AgentProfile, CreateProfileOptions, ProfileManagerOptions } from "./types.js";
+import type { AgentProfile, CreateProfileOptions, ProfileConfig, ProfileManagerOptions } from "./types.js";
+import type { ToolsConfig } from "../tools/policy.js";
 import { DEFAULT_TEMPLATES } from "./templates.js";
 import {
   ensureProfileDir,
@@ -14,7 +15,7 @@ import {
   saveProfile,
 } from "./storage.js";
 
-export { type AgentProfile, type CreateProfileOptions, type ProfileManagerOptions } from "./types.js";
+export { type AgentProfile, type CreateProfileOptions, type ProfileConfig, type ProfileManagerOptions } from "./types.js";
 export { DEFAULT_TEMPLATES } from "./templates.js";
 export { getProfileDir, profileExists } from "./storage.js";
 
@@ -151,5 +152,17 @@ export class ProfileManager {
     }
 
     return parts.join("\n\n");
+  }
+
+  /** 获取 tools 配置 */
+  getToolsConfig(): ToolsConfig | undefined {
+    const profile = this.getProfile();
+    return profile?.config?.tools;
+  }
+
+  /** 获取完整的 profile config */
+  getProfileConfig(): ProfileConfig | undefined {
+    const profile = this.getProfile();
+    return profile?.config;
   }
 }
