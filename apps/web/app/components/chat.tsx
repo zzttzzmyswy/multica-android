@@ -13,6 +13,7 @@ import { useMessages } from "../hooks/use-messages";
 import { useGateway } from "../hooks/use-gateway";
 import { useHub } from "../hooks/use-hub";
 import { useActiveAgent } from "../hooks/use-active-agent";
+import { useDeviceId } from "../hooks/use-device-id";
 import { useScrollFade } from "../hooks/use-scroll-fade";
 import { cn } from "@multica/ui/lib/utils";
 
@@ -49,13 +50,23 @@ export function Chat() {
 
   const canSend = gwState === "registered" && !!activeAgentId
 
-  const [copied, setCopied] = useState(false)
-  const handleCopy = useCallback(async () => {
+  const deviceId = useDeviceId()
+  const [deviceCopied, setDeviceCopied] = useState(false)
+  const handleCopyDevice = useCallback(async () => {
+    if (!deviceId) return
+    await navigator.clipboard.writeText(deviceId)
+    setDeviceCopied(true)
+    toast.success("Device ID copied")
+    setTimeout(() => setDeviceCopied(false), 2000)
+  }, [deviceId])
+
+  const [agentCopied, setAgentCopied] = useState(false)
+  const handleCopyAgent = useCallback(async () => {
     if (!activeAgentId) return
     await navigator.clipboard.writeText(activeAgentId)
-    setCopied(true)
+    setAgentCopied(true)
     toast.success("Agent ID copied")
-    setTimeout(() => setCopied(false), 2000)
+    setTimeout(() => setAgentCopied(false), 2000)
   }, [activeAgentId])
 
   const mainRef = useRef<HTMLElement>(null)
@@ -65,6 +76,25 @@ export function Chat() {
     <div className="h-dvh flex flex-col overflow-hidden w-full">
       <header className="flex items-center gap-2 p-2">
         <SidebarTrigger />
+        {deviceId && (
+          <>
+            <span className="text-xs text-muted-foreground font-mono">
+              {deviceId}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={handleCopyDevice}
+              aria-label="Copy device ID"
+            >
+              <HugeiconsIcon
+                icon={deviceCopied ? CheckmarkCircle02Icon : Copy01Icon}
+                strokeWidth={2}
+                className={cn("size-3", deviceCopied && "text-green-500")}
+              />
+            </Button>
+          </>
+        )}
         <Badge variant={STATE_VARIANT[gwState] ?? "outline"} className="text-xs">
           {gwState}
         </Badge>
@@ -76,13 +106,13 @@ export function Chat() {
             <Button
               variant="ghost"
               size="icon-xs"
-              onClick={handleCopy}
+              onClick={handleCopyAgent}
               aria-label="Copy agent ID"
             >
               <HugeiconsIcon
-                icon={copied ? CheckmarkCircle02Icon : Copy01Icon}
+                icon={agentCopied ? CheckmarkCircle02Icon : Copy01Icon}
                 strokeWidth={2}
-                className={cn("size-3", copied && "text-green-500")}
+                className={cn("size-3", agentCopied && "text-green-500")}
               />
             </Button>
           </>
@@ -111,8 +141,7 @@ export function Chat() {
               >
                 <div
                   className={cn(
-                    "max-w-[85%] rounded-2xl px-4 py-3",
-                    msg.role === "user" ? "bg-muted" : ""
+                    msg.role === "user" ? "bg-muted rounded-md max-w-[60%] p-1 px-2.5" : "w-full max-w-[90%] p-1 px-2.5"
                   )}
                 >
                   <MemoizedMarkdown mode="minimal" id={msg.id}>
