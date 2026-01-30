@@ -1,7 +1,7 @@
 ---
 name: Skill Creator
-description: Create, edit, and manage custom skills to extend agent capabilities
-version: 1.0.0
+description: Create, edit, and manage custom skills to extend agent capabilities. Use when the user asks to create a new skill, build a custom capability, or extend the agent's functionality.
+version: 1.1.0
 metadata:
   emoji: "🛠️"
   always: true
@@ -15,23 +15,78 @@ metadata:
 
 You can create, edit, and manage skills to extend your own capabilities or help users build custom skills.
 
-### Skills Directory
+## Skill Creation Process
 
-Custom skills are stored in `~/.super-multica/skills/`. Each skill is a directory containing a `SKILL.md` file.
+**ALWAYS follow these steps in order when creating a new skill:**
 
+1. Understand what the skill should do
+2. Initialize the skill using `init_skill.py`
+3. Edit the generated SKILL.md
+4. Test the skill
+
+### Step 1: Understand the Skill
+
+Before creating, clarify:
+- What functionality should the skill provide?
+- When should it be triggered?
+- Does it need helper scripts?
+
+### Step 2: Initialize the Skill
+
+**CRITICAL: Always use the init_skill.py script to create skills.** This ensures the skill is created in the correct location (`~/.super-multica/skills/`).
+
+```bash
+# Basic usage
+python3 ~/.super-multica/skills/skill-creator/scripts/init_skill.py <skill-name>
+
+# With description and resources
+python3 ~/.super-multica/skills/skill-creator/scripts/init_skill.py my-skill \
+  --description "What this skill does" \
+  --resources scripts
 ```
-~/.super-multica/skills/
-├── my-skill/
-│   └── SKILL.md
-├── another-skill/
-│   ├── SKILL.md
-│   └── scripts/
-│       └── helper.py
+
+**Script options:**
+- `--description, -d` - Skill description
+- `--emoji, -e` - Emoji for display (default: 🔧)
+- `--tag, -t` - Primary tag (default: custom)
+- `--resources, -r` - Create directories: `scripts`, `references`, or both
+
+**Examples:**
+```bash
+# Simple skill
+python3 scripts/init_skill.py translator -d "Translate text between languages"
+
+# Skill with helper script
+python3 scripts/init_skill.py pdf-rotator -d "Rotate PDF pages" -r scripts
+
+# Skill with references
+python3 scripts/init_skill.py api-helper -d "Help with API calls" -r scripts,references
 ```
 
-### SKILL.md Format
+The script path when running from the skill-creator directory:
+```bash
+python3 ~/.super-multica/skills/skill-creator/scripts/init_skill.py <skill-name>
+```
 
-Every skill must have a `SKILL.md` file with YAML frontmatter and Markdown instructions:
+### Step 3: Edit the Skill
+
+After initialization, edit `~/.super-multica/skills/<skill-name>/SKILL.md`:
+
+1. Update the `description` - This is the primary trigger mechanism
+2. Write clear `## Instructions` - What the agent should do
+3. Add helper scripts to `scripts/` if needed
+4. Add reference docs to `references/` if needed
+
+### Step 4: Test the Skill
+
+The skill is automatically loaded (hot-reload). Verify with:
+```bash
+pnpm skills:cli list | grep <skill-name>
+```
+
+## SKILL.md Format
+
+Every skill must have a `SKILL.md` file with YAML frontmatter:
 
 ```markdown
 ---
@@ -42,16 +97,14 @@ metadata:
   emoji: "🔧"
   tags:
     - category1
-    - category2
   requires:
     bins: [required-binary]
     env: [REQUIRED_ENV_VAR]
-  os: [darwin, linux]
 ---
 
 ## Instructions
 
-Detailed instructions that will be injected into your system prompt...
+Detailed instructions for using this skill...
 ```
 
 ### Frontmatter Fields
@@ -59,195 +112,65 @@ Detailed instructions that will be injected into your system prompt...
 | Field | Required | Description |
 |-------|----------|-------------|
 | `name` | Yes | Display name for the skill |
-| `description` | No | Short description |
+| `description` | Yes | Short description (triggers skill selection) |
 | `version` | No | Semantic version |
 | `metadata.emoji` | No | Emoji for display |
 | `metadata.tags` | No | Categorization tags |
-| `metadata.always` | No | If true, always include (skip eligibility) |
 | `metadata.requires.bins` | No | Required binaries (all must exist) |
 | `metadata.requires.anyBins` | No | Alternative binaries (one must exist) |
 | `metadata.requires.env` | No | Required environment variables |
-| `metadata.os` | No | Supported platforms: darwin, linux, win32 |
 
-### Creating a Skill
+## Directory Structure
 
-**IMPORTANT**: Always create skills in `~/.super-multica/skills/`, NOT in the current working directory.
+Skills are stored in `~/.super-multica/skills/`:
 
-To create a new skill:
-
-1. Create the skill directory (use absolute path):
-   ```bash
-   mkdir -p ~/.super-multica/skills/<skill-name>
-   ```
-
-2. Write the SKILL.md file at `~/.super-multica/skills/<skill-name>/SKILL.md`
-
-3. If including scripts, create them at `~/.super-multica/skills/<skill-name>/scripts/`
-
-4. The skill will be automatically loaded (hot-reload is enabled)
-
-### Example: Creating a Translation Skill
-
-```markdown
----
-name: Translator
-description: Translate text between languages
-version: 1.0.0
-metadata:
-  emoji: "🌐"
-  tags:
-    - language
-    - translation
----
-
-## Instructions
-
-When asked to translate text:
-
-1. Identify the source and target languages
-2. If source language is not specified, detect it from the text
-3. Provide accurate, natural-sounding translations
-4. For ambiguous terms, offer alternative translations with context
-5. Preserve formatting (bullet points, paragraphs, etc.)
-
-### Supported Languages
-
-You can translate between any common languages including:
-English, Chinese, Japanese, Korean, Spanish, French, German, etc.
-
-### Example Usage
-
-User: "Translate 'Hello, how are you?' to Chinese"
-Response: "你好，你好吗？" (Nǐ hǎo, nǐ hǎo ma?)
+```
+~/.super-multica/skills/
+├── my-skill/
+│   └── SKILL.md
+├── another-skill/
+│   ├── SKILL.md
+│   ├── scripts/
+│   │   └── helper.py
+│   └── references/
+│       └── api-docs.md
 ```
 
-### Example: Creating a Code Formatter Skill
-
-```markdown
----
-name: Code Formatter
-description: Format and beautify code in various languages
-version: 1.0.0
-metadata:
-  emoji: "✨"
-  requires:
-    anyBins: [prettier, black, gofmt]
-  tags:
-    - code
-    - formatting
----
-
-## Instructions
-
-When asked to format code:
-
-1. Detect the programming language
-2. Apply language-specific formatting rules
-3. Use available formatters when possible:
-   - JavaScript/TypeScript: prettier
-   - Python: black
-   - Go: gofmt
-4. If no formatter is available, apply standard conventions
-```
-
-### Editing a Skill
+## Editing Existing Skills
 
 To modify an existing skill:
 
 1. Read the current SKILL.md file
-2. Make your changes to the frontmatter or instructions
-3. Save the file - changes take effect immediately
+2. Make changes to frontmatter or instructions
+3. Save - changes take effect immediately (hot-reload)
 
-### Listing Skills
+## Listing and Removing Skills
 
-To see available skills, check the skills directory:
 ```bash
-ls ~/.super-multica/skills/
-```
-
-Or use the CLI:
-```bash
+# List all skills
 pnpm skills:cli list
-```
 
-### Removing a Skill
+# Check skill status
+pnpm skills:cli status <skill-name>
 
-To remove a skill:
-```bash
+# Remove a skill
+pnpm skills:cli remove <skill-name>
+# or
 rm -rf ~/.super-multica/skills/<skill-name>
 ```
 
-Or use the CLI:
-```bash
-pnpm skills:cli remove <skill-name>
-```
+## Best Practices
 
-### Progressive Disclosure
+1. **Use init_skill.py** - Never create skills manually in random directories
+2. **Clear description** - Include "when to use" triggers in the description
+3. **Concise instructions** - Keep SKILL.md under 500 lines
+4. **Test scripts** - Run helper scripts to verify they work
+5. **Single responsibility** - Each skill should do one thing well
 
-Skills use a multi-level loading system to manage context efficiently:
+## Skill Precedence
 
-1. **Metadata** (name + description) - Always loaded for skill selection (~50-100 tokens)
-2. **SKILL.md body** - Loaded when skill is invoked or relevant
-3. **Bundled resources** - Loaded on-demand when referenced
-
-**Design principle**: Keep SKILL.md concise. The context window is shared with conversation history and other skills. Only include information that the agent doesn't already know.
-
-**For large skills**, split content into separate files:
-
-```
-my-skill/
-├── SKILL.md              # Core workflow and navigation
-├── references/
-│   ├── api-docs.md       # Detailed API documentation
-│   └── examples.md       # Extended examples
-└── scripts/
-    └── helper.py         # Reusable scripts
-```
-
-In SKILL.md, reference them with clear guidance:
-```markdown
-## Advanced Features
-
-- **API Reference**: See `references/api-docs.md` for complete method documentation
-- **Examples**: See `references/examples.md` for common patterns
-```
-
-### Best Practices
-
-1. **Concise Instructions**: Keep SKILL.md under 500 lines; split larger content into references
-2. **Clear Triggers**: Write descriptions that help the agent know when to use the skill
-3. **Examples**: Include usage examples in your skill
-4. **Requirements**: Specify binaries/env vars if needed
-5. **Versioning**: Update version when making changes
-6. **Tags**: Use descriptive tags for organization
-7. **Single Responsibility**: Each skill should do one thing well
-
-### Including Scripts
-
-Skills can include helper scripts in a `scripts/` subdirectory:
-
-```
-my-skill/
-├── SKILL.md
-└── scripts/
-    ├── process.py
-    └── helper.sh
-```
-
-Reference them in your instructions:
-```markdown
-To process data, run the helper script:
-\`\`\`bash
-python ~/.super-multica/skills/my-skill/scripts/process.py
-\`\`\`
-```
-
-### Skill Precedence
-
-Skills from different sources have different priorities (highest wins):
+Skills from different sources (highest priority wins):
 1. Profile-specific skills (`~/.super-multica/agent-profiles/<id>/skills/`)
 2. User-installed skills (`~/.super-multica/skills/`)
 3. Plugin skills (from npm packages)
 4. Bundled skills (built into the application)
-
-A user skill with the same ID as a bundled skill will override it.
