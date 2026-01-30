@@ -106,6 +106,20 @@ export interface SkillFrontmatter {
   homepage?: string | undefined;
   /** Skill-specific metadata */
   metadata?: SkillMetadata | undefined;
+
+  // Invocation control fields
+  /** Whether users can invoke via /command (default: true) */
+  userInvocable?: boolean | undefined;
+  /** Whether to exclude from AI system prompt (default: false) */
+  disableModelInvocation?: boolean | undefined;
+
+  // Command dispatch fields
+  /** Command dispatch mode (e.g., "tool") */
+  commandDispatch?: string | undefined;
+  /** Tool name for dispatch (when commandDispatch: "tool") */
+  commandTool?: string | undefined;
+  /** Argument mode for dispatch (default: "raw") */
+  commandArgMode?: string | undefined;
 }
 
 /**
@@ -220,6 +234,61 @@ export interface EligibilityResult {
   eligible: boolean;
   /** Reasons for ineligibility */
   reasons?: string[] | undefined;
+}
+
+// ============================================================================
+// Invocation Types
+// ============================================================================
+
+/**
+ * Skill invocation policy
+ * Controls how a skill can be invoked
+ */
+export interface SkillInvocationPolicy {
+  /** Whether users can invoke this skill via /command (default: true) */
+  userInvocable: boolean;
+  /** Whether to exclude from AI's system prompt (default: false) */
+  disableModelInvocation: boolean;
+}
+
+/**
+ * Command dispatch specification
+ * For skills that dispatch directly to a tool
+ */
+export interface SkillCommandDispatch {
+  /** Dispatch type */
+  kind: "tool";
+  /** Tool name to invoke */
+  toolName: string;
+  /** How to pass arguments (default: "raw") */
+  argMode?: "raw" | undefined;
+}
+
+/**
+ * Skill command specification
+ * Represents a user-invocable skill command
+ */
+export interface SkillCommandSpec {
+  /** Normalized command name (e.g., "pdf" for /pdf) */
+  name: string;
+  /** Original skill name/ID */
+  skillId: string;
+  /** Command description */
+  description: string;
+  /** Optional dispatch behavior */
+  dispatch?: SkillCommandDispatch | undefined;
+}
+
+/**
+ * Skill invocation result
+ */
+export interface SkillInvocationResult {
+  /** The matched command */
+  command: SkillCommandSpec;
+  /** Arguments passed to the command */
+  args?: string | undefined;
+  /** The skill instructions to inject */
+  instructions: string;
 }
 
 /**

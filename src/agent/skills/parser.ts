@@ -89,7 +89,59 @@ function validateFrontmatter(raw: Record<string, unknown>): SkillFrontmatter | n
     };
   }
 
+  // Parse invocation control fields
+  // Support both kebab-case and camelCase for compatibility
+  const userInvocableRaw =
+    raw["user-invocable"] ?? raw["userInvocable"] ?? raw["user_invocable"];
+  if (typeof userInvocableRaw === "boolean") {
+    frontmatter.userInvocable = userInvocableRaw;
+  } else if (typeof userInvocableRaw === "string") {
+    frontmatter.userInvocable = parseBooleanString(userInvocableRaw);
+  }
+
+  const disableModelRaw =
+    raw["disable-model-invocation"] ??
+    raw["disableModelInvocation"] ??
+    raw["disable_model_invocation"];
+  if (typeof disableModelRaw === "boolean") {
+    frontmatter.disableModelInvocation = disableModelRaw;
+  } else if (typeof disableModelRaw === "string") {
+    frontmatter.disableModelInvocation = parseBooleanString(disableModelRaw);
+  }
+
+  // Parse command dispatch fields
+  const dispatchRaw =
+    raw["command-dispatch"] ?? raw["commandDispatch"] ?? raw["command_dispatch"];
+  if (typeof dispatchRaw === "string") {
+    frontmatter.commandDispatch = dispatchRaw.trim().toLowerCase();
+  }
+
+  const toolRaw = raw["command-tool"] ?? raw["commandTool"] ?? raw["command_tool"];
+  if (typeof toolRaw === "string") {
+    frontmatter.commandTool = toolRaw.trim();
+  }
+
+  const argModeRaw =
+    raw["command-arg-mode"] ?? raw["commandArgMode"] ?? raw["command_arg_mode"];
+  if (typeof argModeRaw === "string") {
+    frontmatter.commandArgMode = argModeRaw.trim().toLowerCase();
+  }
+
   return frontmatter;
+}
+
+/**
+ * Parse boolean from string value
+ */
+function parseBooleanString(value: string): boolean | undefined {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "true" || normalized === "yes" || normalized === "1") {
+    return true;
+  }
+  if (normalized === "false" || normalized === "no" || normalized === "0") {
+    return false;
+  }
+  return undefined;
 }
 
 /**
