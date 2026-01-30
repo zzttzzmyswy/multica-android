@@ -3,6 +3,7 @@ import * as readline from "readline";
 import { Agent } from "./runner.js";
 import type { AgentOptions } from "./types.js";
 import { SkillManager } from "./skills/index.js";
+import { autocompleteInput, type AutocompleteOption } from "./autocomplete.js";
 
 type CliOptions = {
   profile?: string | undefined;
@@ -126,6 +127,7 @@ class InteractiveCLI {
   private multilineBuffer: string[] = [];
   private running = true;
   private skillManager: SkillManager;
+  private reservedNames: Set<string>;
 
   constructor(opts: CliOptions) {
     this.opts = opts;
@@ -137,13 +139,12 @@ class InteractiveCLI {
     });
 
     // Build list of reserved command names (built-in CLI commands)
-    const reservedNames = new Set(Object.keys(COMMANDS));
+    this.reservedNames = new Set(Object.keys(COMMANDS));
 
     this.rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
       terminal: true,
-      completer: (line: string) => this.completer(line, reservedNames),
     });
 
     this.rl.on("close", () => {
@@ -154,41 +155,44 @@ class InteractiveCLI {
   }
 
   /**
-   * Tab completion handler for readline
-   * Completes both built-in commands and skill commands
+   * Get autocomplete suggestions for input
    */
-  private completer(
-    line: string,
-    reservedNames: Set<string>,
-  ): [string[], string] {
-    // Only complete if line starts with /
-    if (!line.startsWith("/")) {
-      return [[], line];
+  private getSuggestions(input: string): AutocompleteOption[] {
+    if (!input.startsWith("/")) {
+      return [];
     }
 
-    const prefix = line.slice(1).toLowerCase();
+    const prefix = input.slice(1).toLowerCase();
+    const suggestions: AutocompleteOption[] = [];
 
-    // Get built-in command completions
-    const builtinCompletions = Object.keys(COMMANDS)
-      .filter((cmd) => cmd.toLowerCase().startsWith(prefix))
-      .map((cmd) => `/${cmd}`);
+    // Add built-in command suggestions
+    for (const [cmd, desc] of Object.entries(COMMANDS)) {
+      if (cmd.toLowerCase().startsWith(prefix)) {
+        suggestions.push({
+          value: `/${cmd}`,
+          label: desc.slice(0, 40),
+        });
+      }
+    }
 
-    // Get skill command completions
-    const skillCommands = this.skillManager.getSkillCommands({ reservedNames });
-    const skillCompletions = skillCommands
-      .filter((cmd) => cmd.name.toLowerCase().startsWith(prefix))
-      .map((cmd) => `/${cmd.name}`);
-
-    // Combine and deduplicate
-    const allCompletions = [...new Set([...builtinCompletions, ...skillCompletions])];
+    // Add skill command suggestions
+    const skillCommands = this.skillManager.getSkillCommands({ reservedNames: this.reservedNames });
+    for (const cmd of skillCommands) {
+      if (cmd.name.toLowerCase().startsWith(prefix)) {
+        suggestions.push({
+          value: `/${cmd.name}`,
+          label: cmd.description.slice(0, 40),
+        });
+      }
+    }
 
     // Sort: shorter first, then alphabetically
-    allCompletions.sort((a, b) => {
-      if (a.length !== b.length) return a.length - b.length;
-      return a.localeCompare(b);
+    suggestions.sort((a, b) => {
+      if (a.value.length !== b.value.length) return a.value.length - b.value.length;
+      return a.value.localeCompare(b.value);
     });
 
-    return [allCompletions, line];
+    return suggestions;
   }
 
   private createAgent(sessionId?: string): Agent {
@@ -217,10 +221,14 @@ class InteractiveCLI {
 
   private async loop() {
     while (this.running) {
-      const input = await this.readline(this.prompt());
-      if (input === null) break;
+      let input: string;
 
       if (this.multilineMode) {
+        // Use simple readline for multiline mode
+        const lineInput = await this.readline(this.prompt());
+        if (lineInput === null) break;
+        input = lineInput;
+
         if (input === ".") {
           // End of multiline input
           const fullInput = this.multilineBuffer.join("\n");
@@ -233,6 +241,17 @@ class InteractiveCLI {
           this.multilineBuffer.push(input);
         }
         continue;
+      }
+
+      // Use autocomplete input for normal mode
+      try {
+        input = await autocompleteInput({
+          prompt: this.prompt(),
+          getSuggestions: (text) => this.getSuggestions(text),
+          maxSuggestions: 8,
+        });
+      } catch {
+        break;
       }
 
       const trimmed = input.trim();
