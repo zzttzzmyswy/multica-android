@@ -3,6 +3,8 @@
  *
  * Filter skills based on platform, binaries, environment, and configuration
  * Compatible with OpenClaw eligibility rules
+ *
+ * Enhanced with detailed diagnostics and actionable hints
  */
 
 import { execSync } from "node:child_process";
@@ -17,6 +19,35 @@ import {
   normalizeRequirements,
   normalizePlatforms,
 } from "./types.js";
+
+// ============================================================================
+// Diagnostic Types
+// ============================================================================
+
+export type DiagnosticType =
+  | "disabled"
+  | "not_in_allowlist"
+  | "platform"
+  | "binary"
+  | "any_binary"
+  | "env"
+  | "config";
+
+export interface DiagnosticItem {
+  /** Type of diagnostic issue */
+  type: DiagnosticType;
+  /** Human-readable message */
+  message: string;
+  /** Actionable hint to resolve the issue */
+  hint?: string | undefined;
+  /** Related values (e.g., missing binary names) */
+  values?: string[] | undefined;
+}
+
+export interface DetailedEligibilityResult extends EligibilityResult {
+  /** Detailed diagnostics for each issue */
+  diagnostics?: DiagnosticItem[] | undefined;
+}
 
 // ============================================================================
 // Binary and Environment Checks
@@ -162,38 +193,69 @@ export function checkEligibility(
   skill: Skill,
   context: EligibilityContext = {},
 ): EligibilityResult {
+  const result = checkEligibilityDetailed(skill, context);
+  // Return simple result for backward compatibility
+  return {
+    eligible: result.eligible,
+    reasons: result.reasons,
+  };
+}
+
+/**
+ * Check eligibility with detailed diagnostics
+ *
+ * Same as checkEligibility but returns detailed diagnostics with hints
+ *
+ * @param skill - Skill to check
+ * @param context - Eligibility context
+ * @returns Detailed eligibility result with diagnostics
+ */
+export function checkEligibilityDetailed(
+  skill: Skill,
+  context: EligibilityContext = {},
+): DetailedEligibilityResult {
   const { config, platform = process.platform, customConfig } = context;
   const reasons: string[] = [];
+  const diagnostics: DiagnosticItem[] = [];
   const metadata = skill.frontmatter.metadata;
   const skillConfig = getSkillConfig(skill, config);
 
   // 1. Check if explicitly disabled in config
   if (skillConfig?.enabled === false) {
-    return {
-      eligible: false,
-      reasons: [`Skill disabled in configuration`],
-    };
+    const msg = "Skill disabled in configuration";
+    reasons.push(msg);
+    diagnostics.push({
+      type: "disabled",
+      message: msg,
+      hint: `Enable by setting skills.${getSkillKey(skill)}.enabled: true in config`,
+    });
+    return { eligible: false, reasons, diagnostics };
   }
 
   // 2. Check bundled allowlist
   if (!isBundledSkillAllowed(skill, config?.allowBundled)) {
-    return {
-      eligible: false,
-      reasons: [`Bundled skill not in allowlist`],
-    };
+    const msg = "Bundled skill not in allowlist";
+    reasons.push(msg);
+    diagnostics.push({
+      type: "not_in_allowlist",
+      message: msg,
+      hint: `Add '${getSkillKey(skill)}' to config.allowBundled array`,
+    });
+    return { eligible: false, reasons, diagnostics };
   }
 
   // 3. Platform check
   const platforms = normalizePlatforms(metadata);
   if (platforms.length > 0 && !platforms.includes(platform)) {
-    reasons.push(
-      `Platform '${platform}' not supported (requires: ${platforms.join(", ")})`,
-    );
-  }
-
-  // Early return if platform check failed
-  if (reasons.length > 0) {
-    return { eligible: false, reasons };
+    const msg = `Platform '${platform}' not supported (requires: ${platforms.join(", ")})`;
+    reasons.push(msg);
+    diagnostics.push({
+      type: "platform",
+      message: msg,
+      hint: `This skill only works on: ${platforms.join(", ")}`,
+      values: platforms,
+    });
+    return { eligible: false, reasons, diagnostics };
   }
 
   // 4. Always flag - skip remaining checks
@@ -206,10 +268,20 @@ export function checkEligibility(
 
   // 5. Required binaries check (all must exist)
   if (requirements.bins && requirements.bins.length > 0) {
+    const missingBins: string[] = [];
     for (const bin of requirements.bins) {
       if (!binaryExists(bin)) {
+        missingBins.push(bin);
         reasons.push(`Required binary not found: ${bin}`);
       }
+    }
+    if (missingBins.length > 0) {
+      diagnostics.push({
+        type: "binary",
+        message: `Missing required binaries: ${missingBins.join(", ")}`,
+        hint: generateBinaryInstallHint(missingBins, skill),
+        values: missingBins,
+      });
     }
   }
 
@@ -217,13 +289,19 @@ export function checkEligibility(
   if (requirements.anyBins && requirements.anyBins.length > 0) {
     const anyFound = requirements.anyBins.some((bin) => binaryExists(bin));
     if (!anyFound) {
-      reasons.push(
-        `None of required binaries found: ${requirements.anyBins.join(", ")}`,
-      );
+      const msg = `None of required binaries found: ${requirements.anyBins.join(", ")}`;
+      reasons.push(msg);
+      diagnostics.push({
+        type: "any_binary",
+        message: msg,
+        hint: `Install any one of: ${requirements.anyBins.join(", ")}`,
+        values: requirements.anyBins,
+      });
     }
   }
 
   // 7. Environment variable check
+  const missingEnvVars: string[] = [];
   if (requirements.env && requirements.env.length > 0) {
     for (const envVar of requirements.env) {
       // Check if env var exists
@@ -235,23 +313,177 @@ export function checkEligibility(
       // Check if provided via apiKey + primaryEnv match
       if (skillConfig?.apiKey && metadata?.primaryEnv === envVar) continue;
 
+      missingEnvVars.push(envVar);
       reasons.push(`Required environment variable not set: ${envVar}`);
     }
   }
+  if (missingEnvVars.length > 0) {
+    diagnostics.push({
+      type: "env",
+      message: `Missing environment variables: ${missingEnvVars.join(", ")}`,
+      hint: generateEnvHint(missingEnvVars, skill),
+      values: missingEnvVars,
+    });
+  }
 
   // 8. Config path check
+  const missingConfigs: string[] = [];
   if (requirements.config && requirements.config.length > 0) {
     for (const configPath of requirements.config) {
       if (!isConfigPathTruthy(customConfig, configPath)) {
+        missingConfigs.push(configPath);
         reasons.push(`Required config path not truthy: ${configPath}`);
       }
     }
+  }
+  if (missingConfigs.length > 0) {
+    diagnostics.push({
+      type: "config",
+      message: `Missing config values: ${missingConfigs.join(", ")}`,
+      hint: `Set the following config paths: ${missingConfigs.join(", ")}`,
+      values: missingConfigs,
+    });
   }
 
   return {
     eligible: reasons.length === 0,
     reasons: reasons.length > 0 ? reasons : undefined,
+    diagnostics: diagnostics.length > 0 ? diagnostics : undefined,
   };
+}
+
+// ============================================================================
+// Hint Generation
+// ============================================================================
+
+/**
+ * Generate installation hints for missing binaries
+ */
+function generateBinaryInstallHint(binaries: string[], skill: Skill): string {
+  const hints: string[] = [];
+
+  // Check if skill has install specs for these binaries
+  const installSpecs = skill.frontmatter.metadata?.install;
+  if (installSpecs && installSpecs.length > 0) {
+    hints.push(`Run: pnpm skills:cli install ${skill.id}`);
+  }
+
+  // Generate platform-specific hints
+  const platform = process.platform;
+
+  for (const bin of binaries) {
+    const installHint = getBinaryInstallHint(bin, platform);
+    if (installHint && !hints.includes(installHint)) {
+      hints.push(installHint);
+    }
+  }
+
+  if (hints.length === 0) {
+    hints.push(`Install: ${binaries.join(", ")}`);
+  }
+
+  return hints.join(" OR ");
+}
+
+/**
+ * Get platform-specific install hint for a binary
+ */
+function getBinaryInstallHint(binary: string, platform: NodeJS.Platform): string | null {
+  const commonBinaries: Record<string, Record<string, string>> = {
+    // Package managers
+    brew: { darwin: "Install Homebrew: /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"" },
+    npm: { darwin: "brew install node", linux: "apt install nodejs", win32: "Download from nodejs.org" },
+    pnpm: { "*": "npm install -g pnpm" },
+    yarn: { "*": "npm install -g yarn" },
+    bun: { darwin: "brew install bun", linux: "curl -fsSL https://bun.sh/install | bash" },
+
+    // Common tools
+    git: { darwin: "brew install git", linux: "apt install git", win32: "Download from git-scm.com" },
+    python: { darwin: "brew install python", linux: "apt install python3", win32: "Download from python.org" },
+    python3: { darwin: "brew install python", linux: "apt install python3" },
+    pip: { "*": "python -m ensurepip" },
+    uv: { darwin: "brew install uv", linux: "curl -LsSf https://astral.sh/uv/install.sh | sh" },
+
+    // Development tools
+    go: { darwin: "brew install go", linux: "apt install golang-go" },
+    rustc: { "*": "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh" },
+    cargo: { "*": "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh" },
+    java: { darwin: "brew install openjdk", linux: "apt install default-jdk" },
+
+    // PDF tools
+    pdftk: { darwin: "brew install pdftk-java", linux: "apt install pdftk" },
+    qpdf: { darwin: "brew install qpdf", linux: "apt install qpdf" },
+    gs: { darwin: "brew install ghostscript", linux: "apt install ghostscript" },
+    magick: { darwin: "brew install imagemagick", linux: "apt install imagemagick" },
+
+    // Other common
+    ffmpeg: { darwin: "brew install ffmpeg", linux: "apt install ffmpeg" },
+    jq: { darwin: "brew install jq", linux: "apt install jq" },
+    curl: { darwin: "brew install curl", linux: "apt install curl" },
+    wget: { darwin: "brew install wget", linux: "apt install wget" },
+  };
+
+  const hints = commonBinaries[binary];
+  if (!hints) return null;
+
+  // Check for platform-specific hint
+  if (hints[platform]) {
+    return hints[platform]!;
+  }
+
+  // Check for wildcard hint
+  if (hints["*"]) {
+    return hints["*"];
+  }
+
+  return null;
+}
+
+/**
+ * Generate hints for missing environment variables
+ */
+function generateEnvHint(envVars: string[], skill: Skill): string {
+  const hints: string[] = [];
+  const skillKey = getSkillKey(skill);
+
+  for (const envVar of envVars) {
+    // Check for well-known API key patterns
+    if (envVar.endsWith("_API_KEY") || envVar.endsWith("_KEY")) {
+      const service = envVar.replace(/_API_KEY$|_KEY$/, "").toLowerCase();
+      hints.push(`Set ${envVar} in your environment or add to .env file`);
+
+      // Add provider-specific hints
+      const providerHint = getApiKeyHint(envVar);
+      if (providerHint) {
+        hints.push(providerHint);
+      }
+    } else {
+      hints.push(`export ${envVar}=<value>`);
+    }
+  }
+
+  // Also suggest config-based approach
+  hints.push(`Or configure via: skills.${skillKey}.env.${envVars[0]}`);
+
+  return hints.slice(0, 3).join(" OR ");
+}
+
+/**
+ * Get hint for obtaining API keys
+ */
+function getApiKeyHint(envVar: string): string | null {
+  const keyHints: Record<string, string> = {
+    OPENAI_API_KEY: "Get from: platform.openai.com/api-keys",
+    ANTHROPIC_API_KEY: "Get from: console.anthropic.com",
+    GOOGLE_API_KEY: "Get from: console.cloud.google.com",
+    PERPLEXITY_API_KEY: "Get from: perplexity.ai/settings/api",
+    DEEPSEEK_API_KEY: "Get from: platform.deepseek.com",
+    GROQ_API_KEY: "Get from: console.groq.com",
+    MISTRAL_API_KEY: "Get from: console.mistral.ai",
+    TOGETHER_API_KEY: "Get from: api.together.xyz",
+  };
+
+  return keyHints[envVar] ?? null;
 }
 
 /**
