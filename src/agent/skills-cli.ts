@@ -19,6 +19,8 @@ import {
   addSkill,
   removeSkill,
   listInstalledSkills,
+  checkEligibilityDetailed,
+  type DiagnosticItem,
 } from "./skills/index.js";
 
 // ============================================================================
@@ -139,39 +141,91 @@ function cmdList(manager: SkillManager, verbose: boolean): void {
   console.log(`Total: ${skills.length} skills (${eligibleCount} eligible)`);
 }
 
-function cmdStatus(manager: SkillManager, skillId?: string): void {
+function cmdStatus(manager: SkillManager, skillId?: string, verbose?: boolean): void {
   if (!skillId) {
-    // Show summary status
-    const skills = manager.listAllSkillsWithStatus();
-    const eligible = skills.filter((s) => s.eligible);
-    const ineligible = skills.filter((s) => !s.eligible);
-
-    console.log("\nSkills Status Summary:\n");
-    console.log(`  Total:      ${skills.length}`);
-    console.log(`  Eligible:   ${eligible.length}`);
-    console.log(`  Ineligible: ${ineligible.length}`);
-
-    if (ineligible.length > 0) {
-      console.log("\nIneligible Skills:");
-      for (const s of ineligible) {
-        console.log(`  - ${s.id}: ${s.reasons?.join(", ") ?? "unknown reason"}`);
-      }
-    }
+    // Show summary status with diagnostics
+    cmdStatusSummary(manager, verbose);
     return;
   }
 
-  // Show specific skill status
+  // Show specific skill status with detailed diagnostics
+  cmdStatusDetail(manager, skillId, verbose);
+}
+
+function cmdStatusSummary(manager: SkillManager, verbose?: boolean): void {
+  const skills = manager.listAllSkillsWithStatus();
+  const eligible = skills.filter((s) => s.eligible);
+  const ineligible = skills.filter((s) => !s.eligible);
+
+  console.log("\nSkills Status Summary:\n");
+  console.log(`  Total:      ${skills.length}`);
+  console.log(`  \x1b[32mEligible:   ${eligible.length}\x1b[0m`);
+  console.log(`  \x1b[31mIneligible: ${ineligible.length}\x1b[0m`);
+
+  if (ineligible.length > 0) {
+    console.log("\n─────────────────────────────────────────");
+    console.log("Ineligible Skills:");
+
+    // Group by issue type
+    const byIssue: Map<string, string[]> = new Map();
+    for (const s of ineligible) {
+      const skill = manager.getSkillFromAll(s.id);
+      if (skill) {
+        const detailed = checkEligibilityDetailed(skill);
+        const mainIssue = detailed.diagnostics?.[0]?.type ?? "unknown";
+        const existing = byIssue.get(mainIssue) ?? [];
+        existing.push(s.id);
+        byIssue.set(mainIssue, existing);
+      }
+    }
+
+    // Print grouped issues
+    const issueLabels: Record<string, string> = {
+      disabled: "Disabled in config",
+      not_in_allowlist: "Not in allowlist",
+      platform: "Platform mismatch",
+      binary: "Missing binaries",
+      any_binary: "Missing binaries (any)",
+      env: "Missing environment variables",
+      config: "Missing config values",
+      unknown: "Unknown issues",
+    };
+
+    for (const [issue, skillIds] of byIssue) {
+      const label = issueLabels[issue] ?? issue;
+      console.log(`\n  \x1b[33m${label}:\x1b[0m`);
+      for (const id of skillIds) {
+        const skill = manager.getSkillFromAll(id);
+        if (skill && verbose) {
+          const detailed = checkEligibilityDetailed(skill);
+          const diag = detailed.diagnostics?.[0];
+          console.log(`    - ${id}`);
+          if (diag?.hint) {
+            console.log(`      \x1b[36mHint: ${diag.hint}\x1b[0m`);
+          }
+        } else {
+          console.log(`    - ${id}`);
+        }
+      }
+    }
+
+    console.log("\n─────────────────────────────────────────");
+    console.log(`\x1b[36mTip: Run 'pnpm skills:cli status <skill-id>' for detailed diagnostics\x1b[0m`);
+  }
+}
+
+function cmdStatusDetail(manager: SkillManager, skillId: string, verbose?: boolean): void {
   const skill = manager.getSkillFromAll(skillId);
   if (!skill) {
     console.error(`Skill not found: ${skillId}`);
     process.exit(1);
   }
 
-  const eligibility = manager.checkSkillEligibility(skillId);
+  const detailed = checkEligibilityDetailed(skill);
   const metadata = skill.frontmatter.metadata;
 
   console.log(`\n${metadata?.emoji ?? "🔧"} ${skill.frontmatter.name}`);
-  console.log("─".repeat(40));
+  console.log("═".repeat(50));
   console.log(`ID:          ${skill.id}`);
   console.log(`Description: ${skill.frontmatter.description ?? "N/A"}`);
   console.log(`Version:     ${skill.frontmatter.version ?? "N/A"}`);
@@ -180,37 +234,48 @@ function cmdStatus(manager: SkillManager, skillId?: string): void {
   console.log(`Homepage:    ${skill.frontmatter.homepage ?? metadata?.homepage ?? "N/A"}`);
 
   console.log();
-  console.log(`Eligible: ${eligibility?.eligible ? "\x1b[32m✓ Yes\x1b[0m" : "\x1b[31m✗ No\x1b[0m"}`);
+  console.log("─".repeat(50));
+  console.log(`Status: ${detailed.eligible ? "\x1b[32m✓ ELIGIBLE\x1b[0m" : "\x1b[31m✗ NOT ELIGIBLE\x1b[0m"}`);
 
-  if (!eligibility?.eligible && eligibility?.reasons) {
-    console.log("Reasons:");
-    for (const reason of eligibility.reasons) {
-      console.log(`  - ${reason}`);
+  // Show detailed diagnostics
+  if (!detailed.eligible && detailed.diagnostics) {
+    console.log("\nDiagnostics:");
+    for (const diag of detailed.diagnostics) {
+      printDiagnostic(diag);
     }
   }
 
-  // Show requirements
-  if (metadata?.requires || metadata?.requiresBinaries || metadata?.requiresEnv) {
-    console.log("\nRequirements:");
-    const bins = metadata.requires?.bins ?? metadata.requiresBinaries ?? [];
-    const anyBins = metadata.requires?.anyBins ?? [];
-    const envs = metadata.requires?.env ?? metadata.requiresEnv ?? [];
+  // Show requirements summary
+  const requirements = metadata?.requires;
+  const hasBins = requirements?.bins?.length ?? metadata?.requiresBinaries?.length ?? 0;
+  const hasAnyBins = requirements?.anyBins?.length ?? 0;
+  const hasEnvs = requirements?.env?.length ?? metadata?.requiresEnv?.length ?? 0;
 
-    if (bins.length > 0) {
-      console.log(`  Binaries: ${bins.join(", ")}`);
+  if (hasBins > 0 || hasAnyBins > 0 || hasEnvs > 0) {
+    console.log("\n─".repeat(50));
+    console.log("Requirements:");
+
+    if (hasBins > 0) {
+      const bins = requirements?.bins ?? metadata?.requiresBinaries ?? [];
+      printRequirementStatus("Binaries (all required)", bins, checkBinaries);
     }
-    if (anyBins.length > 0) {
-      console.log(`  Any of: ${anyBins.join(", ")}`);
+
+    if (hasAnyBins > 0) {
+      const anyBins = requirements?.anyBins ?? [];
+      printRequirementStatus("Binaries (any one)", anyBins, checkBinaries, true);
     }
-    if (envs.length > 0) {
-      console.log(`  Environment: ${envs.join(", ")}`);
+
+    if (hasEnvs > 0) {
+      const envs = requirements?.env ?? metadata?.requiresEnv ?? [];
+      printRequirementStatus("Environment vars", envs, checkEnvVars);
     }
   }
 
   // Show install options
   const installOptions = getInstallOptions(skill);
   if (installOptions.length > 0) {
-    console.log("\nInstall Options:");
+    console.log("\n─".repeat(50));
+    console.log("Install Options:");
     for (const opt of installOptions) {
       const status = opt.available ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m";
       console.log(`  ${status} [${opt.id}] ${opt.label}`);
@@ -219,6 +284,90 @@ function cmdStatus(manager: SkillManager, skillId?: string): void {
       }
     }
   }
+
+  // Show quick actions if not eligible
+  if (!detailed.eligible) {
+    console.log("\n─".repeat(50));
+    console.log("\x1b[33mQuick Actions:\x1b[0m");
+
+    for (const diag of detailed.diagnostics ?? []) {
+      if (diag.hint) {
+        console.log(`  → ${diag.hint}`);
+      }
+    }
+
+    if (installOptions.length > 0) {
+      console.log(`  → pnpm skills:cli install ${skillId}`);
+    }
+  }
+}
+
+function printDiagnostic(diag: DiagnosticItem): void {
+  const typeColors: Record<string, string> = {
+    disabled: "\x1b[33m",
+    not_in_allowlist: "\x1b[33m",
+    platform: "\x1b[35m",
+    binary: "\x1b[31m",
+    any_binary: "\x1b[31m",
+    env: "\x1b[34m",
+    config: "\x1b[36m",
+  };
+
+  const color = typeColors[diag.type] ?? "\x1b[37m";
+  const reset = "\x1b[0m";
+
+  console.log(`\n  ${color}[${diag.type.toUpperCase()}]${reset}`);
+  console.log(`  ${diag.message}`);
+
+  if (diag.values && diag.values.length > 0) {
+    console.log(`  Values: ${diag.values.join(", ")}`);
+  }
+
+  if (diag.hint) {
+    console.log(`  \x1b[36m💡 ${diag.hint}${reset}`);
+  }
+}
+
+function printRequirementStatus(
+  label: string,
+  items: string[],
+  checker: (items: string[]) => Map<string, boolean>,
+  anyMode: boolean = false,
+): void {
+  const status = checker(items);
+  const found = Array.from(status.entries()).filter(([, ok]) => ok).map(([name]) => name);
+  const missing = Array.from(status.entries()).filter(([, ok]) => !ok).map(([name]) => name);
+
+  const allOk = anyMode ? found.length > 0 : missing.length === 0;
+  const statusIcon = allOk ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m";
+
+  console.log(`\n  ${statusIcon} ${label}:`);
+  for (const [name, ok] of status) {
+    const icon = ok ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m";
+    console.log(`      ${icon} ${name}`);
+  }
+}
+
+function checkBinaries(bins: string[]): Map<string, boolean> {
+  const result = new Map<string, boolean>();
+  for (const bin of bins) {
+    try {
+      const cmd = process.platform === "win32" ? `where ${bin}` : `which ${bin}`;
+      require("child_process").execSync(cmd, { stdio: "ignore" });
+      result.set(bin, true);
+    } catch {
+      result.set(bin, false);
+    }
+  }
+  return result;
+}
+
+function checkEnvVars(envs: string[]): Map<string, boolean> {
+  const result = new Map<string, boolean>();
+  for (const env of envs) {
+    result.set(env, env in process.env);
+  }
+  return result;
 }
 
 async function cmdInstall(manager: SkillManager, skillId: string, installId?: string): Promise<void> {
@@ -366,7 +515,7 @@ async function main(): Promise<void> {
       break;
 
     case "status":
-      cmdStatus(manager, args[0]);
+      cmdStatus(manager, args[0], verbose);
       break;
 
     case "install":
