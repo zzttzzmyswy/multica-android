@@ -1,0 +1,19 @@
+{
+  "name": "Multica Client",
+  "short_name": "Multica",
+  "description": "Mobile client for Multica Gateway",
+  "start_url": "/client/",
+  "scope": "/client/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0f172a",
+  "background_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/client/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
