@@ -81,6 +81,16 @@ export {
   type SkillsChangeListener,
 } from "./watcher.js";
 
+// Export add module
+export {
+  addSkill,
+  removeSkill,
+  listInstalledSkills,
+  parseSource,
+  type SkillAddRequest,
+  type SkillAddResult,
+} from "./add.js";
+
 /**
  * SkillManager - Loads and manages skills
  *

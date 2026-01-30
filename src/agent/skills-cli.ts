@@ -8,24 +8,30 @@
  *   pnpm skills:cli list              List all skills
  *   pnpm skills:cli status [id]       Show skill status
  *   pnpm skills:cli install <id>      Install skill dependencies
+ *   pnpm skills:cli add <source>      Add skill from GitHub
+ *   pnpm skills:cli remove <name>     Remove an installed skill
  */
 
 import {
   SkillManager,
   installSkill,
   getInstallOptions,
+  addSkill,
+  removeSkill,
+  listInstalledSkills,
 } from "./skills/index.js";
 
 // ============================================================================
 // Types
 // ============================================================================
 
-type Command = "list" | "status" | "install" | "help";
+type Command = "list" | "status" | "install" | "add" | "remove" | "help";
 
 interface ParsedArgs {
   command: Command;
   args: string[];
   verbose: boolean;
+  force: boolean;
 }
 
 // ============================================================================
@@ -35,6 +41,7 @@ interface ParsedArgs {
 function parseArgs(argv: string[]): ParsedArgs {
   const args = [...argv];
   let verbose = false;
+  let force = false;
   const positional: string[] = [];
 
   while (args.length > 0) {
@@ -46,8 +53,13 @@ function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
 
+    if (arg === "--force" || arg === "-f") {
+      force = true;
+      continue;
+    }
+
     if (arg === "--help" || arg === "-h") {
-      return { command: "help", args: [], verbose };
+      return { command: "help", args: [], verbose, force };
     }
 
     positional.push(arg);
@@ -56,7 +68,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   const command = (positional[0] ?? "help") as Command;
   const commandArgs = positional.slice(1);
 
-  return { command, args: commandArgs, verbose };
+  return { command, args: commandArgs, verbose, force };
 }
 
 // ============================================================================
@@ -74,15 +86,21 @@ Commands:
   list              List all available skills
   status [id]       Show detailed status of a skill (or all skills)
   install <id>      Install dependencies for a skill
+  add <source>      Add skill from GitHub (owner/repo or owner/repo/skill)
+  remove <name>     Remove an installed skill
 
 Options:
   -v, --verbose     Show more details
+  -f, --force       Force overwrite existing skill
   -h, --help        Show this help
 
 Examples:
   pnpm skills:cli list
   pnpm skills:cli status commit
   pnpm skills:cli install nano-pdf
+  pnpm skills:cli add vercel-labs/agent-skills
+  pnpm skills:cli add vercel-labs/agent-skills/perplexity
+  pnpm skills:cli remove agent-skills
 `);
 }
 
@@ -247,17 +265,99 @@ async function cmdInstall(manager: SkillManager, skillId: string, installId?: st
 }
 
 // ============================================================================
+// Add/Remove Commands
+// ============================================================================
+
+async function cmdAdd(source: string, force: boolean): Promise<void> {
+  console.log(`\nAdding skill from '${source}'...`);
+
+  const result = await addSkill({
+    source,
+    force,
+  });
+
+  if (result.ok) {
+    console.log(`\n\x1b[32m✓ ${result.message}\x1b[0m`);
+    if (result.skills && result.skills.length > 1) {
+      console.log("\nSkills found:");
+      for (const name of result.skills) {
+        console.log(`  - ${name}`);
+      }
+    }
+    if (result.path) {
+      console.log(`\nInstalled to: ${result.path}`);
+    }
+  } else {
+    console.error(`\n\x1b[31m✗ ${result.message}\x1b[0m`);
+    process.exit(1);
+  }
+}
+
+async function cmdRemove(name: string): Promise<void> {
+  console.log(`\nRemoving skill '${name}'...`);
+
+  const result = await removeSkill(name);
+
+  if (result.ok) {
+    console.log(`\n\x1b[32m✓ ${result.message}\x1b[0m`);
+  } else {
+    console.error(`\n\x1b[31m✗ ${result.message}\x1b[0m`);
+    process.exit(1);
+  }
+}
+
+async function cmdListInstalled(): Promise<void> {
+  const skills = await listInstalledSkills();
+
+  if (skills.length === 0) {
+    console.log("\nNo skills installed in ~/.super-multica/skills/");
+    console.log("Use 'pnpm skills:cli add <source>' to add skills.");
+    return;
+  }
+
+  console.log("\nInstalled skills (~/.super-multica/skills/):\n");
+  for (const name of skills) {
+    console.log(`  - ${name}`);
+  }
+  console.log(`\nTotal: ${skills.length} installed`);
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 
 async function main(): Promise<void> {
-  const { command, args, verbose } = parseArgs(process.argv.slice(2));
+  const { command, args, verbose, force } = parseArgs(process.argv.slice(2));
 
   if (command === "help") {
     printHelp();
     return;
   }
 
+  switch (command) {
+    case "add":
+      if (!args[0]) {
+        console.error("Usage: pnpm skills:cli add <source> [--force]");
+        console.error("\nSource formats:");
+        console.error("  owner/repo              Clone entire repository");
+        console.error("  owner/repo/skill-name   Clone single skill directory");
+        console.error("  owner/repo@branch       Clone specific branch/tag");
+        process.exit(1);
+      }
+      await cmdAdd(args[0], force);
+      return;
+
+    case "remove":
+      if (!args[0]) {
+        console.error("Usage: pnpm skills:cli remove <skill-name>");
+        await cmdListInstalled();
+        process.exit(1);
+      }
+      await cmdRemove(args[0]);
+      return;
+  }
+
+  // Commands that need SkillManager
   const manager = new SkillManager();
 
   switch (command) {
