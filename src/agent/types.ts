@@ -1,5 +1,6 @@
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { SkillsConfig } from "./skills/types.js";
+import type { ToolsConfig } from "./tools/policy.js";
 
 export type AgentRunResult = {
   text: string;
@@ -61,6 +62,12 @@ export type AgentOptions = {
   extraSkillDirs?: string[] | undefined;
   /** Full skills configuration */
   skills?: SkillsConfig | undefined;
+
+  // === Tools Configuration ===
+  /** Tools policy configuration (profile, allow/deny, byProvider) */
+  tools?: ToolsConfig | undefined;
+  /** Whether this is a subagent (applies restricted tool set) */
+  isSubagent?: boolean | undefined;
 };
 
 export interface Message {
