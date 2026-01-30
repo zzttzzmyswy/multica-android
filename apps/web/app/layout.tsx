@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "@multica/ui/globals.css";
+import { SidebarProvider } from "@multica/ui/components/ui/sidebar";
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
@@ -29,7 +30,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <SidebarProvider>
+          {children}
+        </SidebarProvider>
       </body>
     </html>
   );

@@ -1,6 +1,19 @@
 "use client"
 
 import { Markdown } from "@multica/ui/components/markdown"
+import {
+  Sidebar,
+  SidebarHeader,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarInset,
+  SidebarTrigger,
+} from "@multica/ui/components/ui/sidebar"
 
 const MOCK_MD = `# Markdown 渲染器示例
 
@@ -45,12 +58,46 @@ async function fetchUser(id: string): Promise<User> {
 这是一个 [链接示例](https://github.com)。
 `
 
+const NAV_ITEMS = [
+  { title: "Home", url: "#" },
+  { title: "Documents", url: "#" },
+  { title: "Settings", url: "#" },
+]
+
 export default function Page() {
   return (
-    <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-8">
-      <div className="max-w-2xl w-full">
-        <Markdown mode="full">{MOCK_MD}</Markdown>
-      </div>
-    </div>
+    <>
+      <Sidebar>
+        <SidebarHeader>
+          <span className="text-lg font-semibold px-2 py-1">Multica</span>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {NAV_ITEMS.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton>
+                      {item.title}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+      </Sidebar>
+      <SidebarInset>
+        <header className="flex h-12 items-center border-b px-4">
+          <SidebarTrigger />
+        </header>
+        <main className="flex-1 p-8">
+          <div className="max-w-2xl mx-auto">
+            <Markdown mode="full">{MOCK_MD}</Markdown>
+          </div>
+        </main>
+      </SidebarInset>
+    </>
   )
 }
