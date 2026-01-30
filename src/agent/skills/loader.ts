@@ -20,35 +20,58 @@ const DEFAULT_PROFILE_BASE_DIR = join(DATA_DIR, "agent-profiles");
 /** Bundled skills directory (relative to package) */
 const BUNDLED_DIR = join(__dirname, "../../../skills");
 
+/** Managed skills directory (user-installed via `skills add`) */
+const MANAGED_DIR = join(DATA_DIR, "skills");
+
 /**
  * Discover skill directories in a given base path
  * A valid skill directory contains a SKILL.md file
+ * Searches up to maxDepth levels deep
  *
  * @param baseDir - Base directory to search
+ * @param maxDepth - Maximum depth to search (default: 3)
  * @returns Array of absolute paths to skill directories
  */
-function discoverSkillDirs(baseDir: string): string[] {
+function discoverSkillDirs(baseDir: string, maxDepth: number = 3): string[] {
   if (!existsSync(baseDir)) {
     return [];
   }
 
-  try {
-    const entries = readdirSync(baseDir);
-    return entries
-      .map((name) => join(baseDir, name))
-      .filter((path) => {
+  const results: string[] = [];
+
+  function scan(dir: string, depth: number): void {
+    if (depth > maxDepth) return;
+
+    try {
+      const entries = readdirSync(dir);
+
+      for (const name of entries) {
+        // Skip hidden directories
+        if (name.startsWith(".")) continue;
+
+        const fullPath = join(dir, name);
+
         try {
-          if (!statSync(path).isDirectory()) {
-            return false;
+          if (!statSync(fullPath).isDirectory()) continue;
+
+          // Check if this directory has SKILL.md
+          if (existsSync(join(fullPath, SKILL_FILE))) {
+            results.push(fullPath);
+          } else {
+            // Recurse into subdirectory
+            scan(fullPath, depth + 1);
           }
-          return existsSync(join(path, SKILL_FILE));
         } catch {
-          return false;
+          // Skip inaccessible directories
         }
-      });
-  } catch {
-    return [];
+      }
+    } catch {
+      // Skip inaccessible directories
+    }
   }
+
+  scan(baseDir, 0);
+  return results;
 }
 
 /**
@@ -95,7 +118,8 @@ export function getProfileSkillsDir(profileId: string, profileBaseDir?: string):
  * Loading order (lowest to highest precedence):
  * 1. bundled - Package bundled skills
  * 2. extra - User-configured extra directories
- * 3. profile - ~/.super-multica/agent-profiles/<profileId>/skills/
+ * 3. managed - ~/.super-multica/skills/ (user-installed via `skills add`)
+ * 4. profile - ~/.super-multica/agent-profiles/<profileId>/skills/
  *
  * @param options - Loader options
  * @returns Map of skill ID to Skill
@@ -109,6 +133,8 @@ export function loadAllSkills(options: SkillManagerOptions = {}): Map<string, Sk
     [BUNDLED_DIR, "bundled"],
     // Extra directories (treated as bundled)
     ...(options.extraDirs ?? []).map((d): [string, SkillSource] => [d, "bundled"]),
+    // Managed skills (user-installed via `skills add`)
+    [MANAGED_DIR, "profile"],
   ];
 
   // Add profile skills if profileId is provided (highest precedence)
