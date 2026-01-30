@@ -60,11 +60,15 @@ export {
 
 export {
   checkEligibility,
+  checkEligibilityDetailed,
   filterEligibleSkills,
   binaryExists,
   resolveConfigPath,
   isConfigPathTruthy,
   type EligibilityContext,
+  type DiagnosticType,
+  type DiagnosticItem,
+  type DetailedEligibilityResult,
 } from "./eligibility.js";
 
 export { parseFrontmatter, parseSkillFile } from "./parser.js";
@@ -112,6 +116,18 @@ export {
   resolveSkillInvocation,
   getCommandCompletions,
 } from "./invoke.js";
+
+// Export serialize module
+export {
+  serialize,
+  createSerialized,
+  isProcessing,
+  getQueueLength,
+  getActiveKeys,
+  waitForKey,
+  waitForAll,
+  SerializeKeys,
+} from "./serialize.js";
 
 /**
  * SkillManager - Loads and manages skills
