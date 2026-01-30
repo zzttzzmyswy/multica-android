@@ -12,6 +12,16 @@ import {
   checkEligibility,
   type EligibilityContext,
 } from "./eligibility.js";
+import {
+  startSkillsWatcher,
+  stopSkillsWatcher,
+  getSkillsVersion,
+  bumpSkillsVersion,
+  onSkillsChange,
+  isWatcherActive,
+  type SkillsChangeEvent,
+  type SkillsChangeListener,
+} from "./watcher.js";
 
 // Re-export types and utilities
 export type {
@@ -50,16 +60,41 @@ export {
 export { parseFrontmatter, parseSkillFile } from "./parser.js";
 export { loadAllSkills, getBundledSkillsDir, getProfileSkillsDir } from "./loader.js";
 
+// Export install module
+export {
+  installSkill,
+  selectPreferredInstallSpec,
+  getInstallOptions,
+  type SkillInstallRequest,
+  type SkillInstallResult,
+} from "./install.js";
+
+// Export watcher module
+export {
+  startSkillsWatcher,
+  stopSkillsWatcher,
+  getSkillsVersion,
+  bumpSkillsVersion,
+  onSkillsChange,
+  isWatcherActive,
+  type SkillsChangeEvent,
+  type SkillsChangeListener,
+} from "./watcher.js";
+
 /**
  * SkillManager - Loads and manages skills
  *
  * Provides access to skills from multiple sources with precedence handling
  * and eligibility filtering based on configuration.
+ *
+ * Supports hot-reload via file watching when enabled.
  */
 export class SkillManager {
   private readonly options: SkillManagerOptions;
   private skills: Map<string, Skill> | undefined;
   private eligibleSkills: Map<string, Skill> | undefined;
+  private loadedVersion: number = 0;
+  private unsubscribeWatcher: (() => void) | undefined;
 
   constructor(options: SkillManagerOptions = {}) {
     this.options = options;
@@ -77,14 +112,70 @@ export class SkillManager {
 
   /**
    * Ensure skills are loaded (lazy loading)
+   * Also checks if reload is needed due to file changes
    */
   private ensureLoaded(): void {
+    const currentVersion = getSkillsVersion();
+
+    // Reload if version changed (file watcher triggered)
+    if (this.skills && this.loadedVersion !== currentVersion) {
+      this.skills = undefined;
+      this.eligibleSkills = undefined;
+    }
+
     if (this.skills) return;
+
     this.skills = loadAllSkills(this.options);
     this.eligibleSkills = filterEligibleSkills(
       this.skills,
       this.getEligibilityContext(),
     );
+    this.loadedVersion = currentVersion;
+  }
+
+  /**
+   * Start file watching for hot reload
+   *
+   * @returns Promise that resolves when watcher is started
+   */
+  async startWatching(): Promise<void> {
+    // Don't start if watching is disabled in config
+    if (this.options.config?.load?.watch === false) {
+      return;
+    }
+
+    // Subscribe to changes for automatic reload
+    this.unsubscribeWatcher = onSkillsChange(() => {
+      // Just invalidate cache, reload happens on next access
+      this.skills = undefined;
+      this.eligibleSkills = undefined;
+    });
+
+    // Start the watcher (enabled by default unless explicitly set to false)
+    const watchEnabled = this.options.config?.load?.watch ?? true;
+    await startSkillsWatcher({
+      extraDirs: this.options.extraDirs,
+      debounceMs: this.options.config?.load?.watchDebounceMs,
+      enabled: watchEnabled,
+    });
+  }
+
+  /**
+   * Stop file watching
+   */
+  async stopWatching(): Promise<void> {
+    if (this.unsubscribeWatcher) {
+      this.unsubscribeWatcher();
+      this.unsubscribeWatcher = undefined;
+    }
+    await stopSkillsWatcher();
+  }
+
+  /**
+   * Check if file watching is active
+   */
+  isWatching(): boolean {
+    return isWatcherActive();
   }
 
   /**
@@ -144,6 +235,7 @@ export class SkillManager {
   reload(): void {
     this.skills = undefined;
     this.eligibleSkills = undefined;
+    bumpSkillsVersion("manual");
   }
 
   /**
