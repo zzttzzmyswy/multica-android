@@ -1,5 +1,5 @@
 const CACHE_NAME = "geneva-client-v1";
-const PRECACHE_URLS = ["/", "/icon.svg"];
+const PRECACHE_URLS = ["/", "/icon.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
