@@ -189,6 +189,17 @@ Located in `/skills/`:
 - **code-review** - Code review assistance
 - **skill-creator** - Create and manage custom skills (meta-skill for self-extension)
 
+### Creating Custom Skills
+
+The agent can create new skills to extend its own capabilities. Simply ask the agent to create a skill:
+
+```
+User: Create a skill that helps me format JSON
+Agent: [Creates ~/.super-multica/skills/json-formatter/SKILL.md]
+```
+
+Skills are automatically loaded via hot-reload. See the [skill-creator SKILL.md](./skills/skill-creator/SKILL.md) for the complete guide.
+
 ## Agent Tools
 
 ### exec
