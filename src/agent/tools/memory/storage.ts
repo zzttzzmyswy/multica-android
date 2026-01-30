@@ -119,7 +119,7 @@ export function memorySet(
   options: MemoryStorageOptions,
 ): { success: true } | { success: false; error: string } {
   const validation = validateKey(key);
-  if (!validation.valid) {
+  if (validation.valid === false) {
     return { success: false, error: validation.error };
   }
 
@@ -161,7 +161,7 @@ export function memoryDelete(
   options: MemoryStorageOptions,
 ): { success: true; existed: boolean } | { success: false; error: string } {
   const validation = validateKey(key);
-  if (!validation.valid) {
+  if (validation.valid === false) {
     return { success: false, error: validation.error };
   }
 
