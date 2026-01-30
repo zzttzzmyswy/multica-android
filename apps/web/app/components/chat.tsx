@@ -11,7 +11,7 @@ import { useScrollFade } from "../hooks/use-scroll-fade";
 import { cn } from "@multica/ui/lib/utils";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Copy01Icon, CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
-import { toast } from "sonner";
+import { toast } from "@multica/ui/components/ui/sonner";
 
 export function Chat() {
   const deviceId = useDeviceId();
