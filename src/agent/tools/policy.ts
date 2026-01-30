@@ -60,7 +60,7 @@ function compilePattern(pattern: string): CompiledPattern {
   const escaped = normalized.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return {
     kind: "regex",
-    value: new RegExp(`^${escaped.replaceAll("\\*", ".*")}$`),
+    value: new RegExp(`^${escaped.replace(/\\\*/g, ".*")}$`),
   };
 }
 
