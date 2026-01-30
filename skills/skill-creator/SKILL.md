@@ -71,16 +71,20 @@ Detailed instructions that will be injected into your system prompt...
 
 ### Creating a Skill
 
+**IMPORTANT**: Always create skills in `~/.super-multica/skills/`, NOT in the current working directory.
+
 To create a new skill:
 
-1. Create the skill directory:
+1. Create the skill directory (use absolute path):
    ```bash
    mkdir -p ~/.super-multica/skills/<skill-name>
    ```
 
-2. Write the SKILL.md file with proper frontmatter and instructions
+2. Write the SKILL.md file at `~/.super-multica/skills/<skill-name>/SKILL.md`
 
-3. The skill will be automatically loaded (hot-reload is enabled)
+3. If including scripts, create them at `~/.super-multica/skills/<skill-name>/scripts/`
+
+4. The skill will be automatically loaded (hot-reload is enabled)
 
 ### Example: Creating a Translation Skill
 
