@@ -1,3 +1,3 @@
 export { Hub } from "./hub.js";
-export { getDeviceId } from "./device.js";
+export { getHubId } from "./hub-identity.js";
 export type { HubOptions } from "./types.js";
