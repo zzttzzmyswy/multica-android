@@ -33,16 +33,25 @@ Before creating, clarify:
 
 ### Step 2: Initialize the Skill
 
-**CRITICAL: Always create skills in `~/.super-multica/skills/`, NOT in the current working directory.**
+**CRITICAL: Never create skills in the current working directory.**
 
-Create the skill directory and files:
+**Choose the correct directory based on context:**
+- **If running under a profile**: Create in `~/.super-multica/agent-profiles/<profile-id>/skills/` (profile-specific)
+- **If no profile**: Create in `~/.super-multica/skills/` (global)
 
 ```bash
-# 1. Create the skill directory
-mkdir -p ~/.super-multica/skills/<skill-name>
+# For profile-specific skill (when running under a profile):
+mkdir -p ~/.super-multica/agent-profiles/<profile-id>/skills/<skill-name>
 
-# 2. Create SKILL.md with proper structure
-cat > ~/.super-multica/skills/<skill-name>/SKILL.md << 'EOF'
+# For global skill (when no profile is active):
+mkdir -p ~/.super-multica/skills/<skill-name>
+```
+
+Create SKILL.md with proper structure:
+
+```bash
+# Replace <SKILL_DIR> with the appropriate path from above
+cat > <SKILL_DIR>/SKILL.md << 'EOF'
 ---
 name: <Skill Name>
 description: <What this skill does and when to use it>
@@ -58,11 +67,11 @@ metadata:
 <Instructions for using this skill>
 EOF
 
-# 3. (Optional) Create scripts directory if needed
-mkdir -p ~/.super-multica/skills/<skill-name>/scripts
+# (Optional) Create scripts directory if needed
+mkdir -p <SKILL_DIR>/scripts
 ```
 
-**Example - Creating a translator skill:**
+**Example - Creating a translator skill (global):**
 ```bash
 mkdir -p ~/.super-multica/skills/translator
 
@@ -88,7 +97,7 @@ EOF
 
 ### Step 3: Edit the Skill
 
-After initialization, edit `~/.super-multica/skills/<skill-name>/SKILL.md`:
+After initialization, edit the `SKILL.md` file in the skill directory:
 
 1. Update the `description` - This is the primary trigger mechanism
 2. Write clear `## Instructions` - What the agent should do
@@ -142,18 +151,24 @@ Detailed instructions for using this skill...
 
 ## Directory Structure
 
-Skills are stored in `~/.super-multica/skills/`:
+Skills are stored in two locations:
 
 ```
+# Global skills (available to all profiles)
 ~/.super-multica/skills/
 ├── my-skill/
 │   └── SKILL.md
-├── another-skill/
-│   ├── SKILL.md
-│   ├── scripts/
-│   │   └── helper.py
-│   └── references/
-│       └── api-docs.md
+└── another-skill/
+    ├── SKILL.md
+    ├── scripts/
+    │   └── helper.py
+    └── references/
+        └── api-docs.md
+
+# Profile-specific skills (only for this profile)
+~/.super-multica/agent-profiles/<profile-id>/skills/
+└── profile-only-skill/
+    └── SKILL.md
 ```
 
 ## Editing Existing Skills
@@ -173,10 +188,13 @@ pnpm skills:cli list
 # Check skill status
 pnpm skills:cli status <skill-name>
 
-# Remove a skill
+# Remove a global skill
 pnpm skills:cli remove <skill-name>
 # or
 rm -rf ~/.super-multica/skills/<skill-name>
+
+# Remove a profile-specific skill
+rm -rf ~/.super-multica/agent-profiles/<profile-id>/skills/<skill-name>
 ```
 
 ## Best Practices
