@@ -169,6 +169,9 @@ export function getManagedSkillsDir(): string {
  * @returns Map of skill ID to Skill
  */
 export function loadAllSkills(options: SkillManagerOptions = {}): Map<string, Skill> {
+  // Initialize managed skills on first load (copies bundled skills if needed)
+  initializeManagedSkills();
+
   const skillMap = new Map<string, Skill>();
 
   // 1. Load managed skills (lower precedence)
