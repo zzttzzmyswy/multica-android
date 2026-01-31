@@ -22,7 +22,12 @@ function extractText(message: AgentMessage | undefined): string {
     .join("");
 }
 
-function toolDisplayName(name: string): string {
+function truncate(s: string, max: number): string {
+  return s.length > max ? s.slice(0, max) + "…" : s;
+}
+
+// Exported for testing
+export function toolDisplayName(name: string): string {
   const map: Record<string, string> = {
     read: "ReadFile",
     write: "WriteFile",
@@ -39,11 +44,11 @@ function toolDisplayName(name: string): string {
   return map[name] || name;
 }
 
-function formatToolArgs(name: string, args: unknown): string {
+// Exported for testing
+export function formatToolArgs(name: string, args: unknown): string {
   if (!args || typeof args !== "object") return "";
   const record = args as Record<string, unknown>;
   const get = (key: string) => (record[key] !== undefined ? String(record[key]) : "");
-  const truncate = (s: string, max: number) => (s.length > max ? s.slice(0, max) + "…" : s);
   switch (name) {
     case "read":
       return get("path") || get("file");
@@ -95,7 +100,8 @@ function formatToolLine(name: string, args: unknown, result?: unknown): string {
   return line;
 }
 
-function extractResultDetails(result: unknown): Record<string, unknown> | null {
+// Exported for testing
+export function extractResultDetails(result: unknown): Record<string, unknown> | null {
   if (!result || typeof result !== "object") return null;
 
   // Try to extract from AgentMessage content array (JSON result)
@@ -116,11 +122,10 @@ function extractResultDetails(result: unknown): Record<string, unknown> | null {
   return result as Record<string, unknown>;
 }
 
-function formatResultSummary(name: string, result: unknown): string {
+// Exported for testing
+export function formatResultSummary(name: string, result: unknown): string {
   const details = extractResultDetails(result);
   if (!details) return "";
-
-  const truncate = (s: string, max: number) => (s.length > max ? s.slice(0, max) + "…" : s);
 
   switch (name) {
     case "glob": {
@@ -130,7 +135,6 @@ function formatResultSummary(name: string, result: unknown): string {
     }
     case "web_search": {
       if (details.error) return `error: ${details.message || details.error}`;
-      const provider = details.provider || "search";
       if (details.content) {
         // Perplexity result
         const citations = Array.isArray(details.citations) ? details.citations.length : 0;
