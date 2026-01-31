@@ -47,7 +47,7 @@ export function createExecTool(defaultCwd?: string): AgentTool<typeof ExecSchema
     description:
       "Execute a shell command. If the command doesn't complete within yieldMs (default 10s), it automatically runs in background and returns a process ID with any output collected so far. Use 'process output <id>' to check output, 'process status <id>' to check status, 'process stop <id>' to terminate.",
     parameters: ExecSchema,
-    execute: async (_toolCallId, args, signal) => {
+    execute: async (_toolCallId, args, signal, onUpdate) => {
       const { command, cwd, timeoutMs, yieldMs = DEFAULT_YIELD_MS } = args as ExecArgs;
       const effectiveCwd = cwd || defaultCwd;
 
@@ -66,6 +66,29 @@ export function createExecTool(defaultCwd?: string): AgentTool<typeof ExecSchema
         // Register process immediately to start buffering output
         // This ensures output is captured even before yield timeout
         const processId = registerProcess(child, command, effectiveCwd, "exec");
+
+        // Stream output updates via onUpdate callback
+        // Note: appendOutput is already called by registerProcess, we just emit updates here
+        const emitUpdate = () => {
+          if (!onUpdate || yielded) return;
+          const entry = PROCESS_REGISTRY.get(processId);
+          if (!entry) return;
+          onUpdate({
+            content: [{ type: "text", text: entry.tailBuffer || "(running...)" }],
+            details: {
+              output: entry.tailBuffer,
+              exitCode: null,
+              truncated: false,
+              processId,
+            },
+          });
+        };
+
+        // Listen to stdout/stderr to trigger onUpdate (data collection is handled by registerProcess)
+        if (onUpdate) {
+          child.stdout?.on("data", emitUpdate);
+          child.stderr?.on("data", emitUpdate);
+        }
 
         // Timeout handling (hard kill)
         if (timeoutMs && timeoutMs > 0) {
