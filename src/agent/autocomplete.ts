@@ -24,14 +24,16 @@ export interface AutocompleteConfig {
 // ANSI escape codes
 const ESC = "\x1b";
 const CLEAR_LINE = `${ESC}[2K`;
-const CURSOR_UP = (n: number) => `${ESC}[${n}A`;
-const CURSOR_DOWN = (n: number) => `${ESC}[${n}B`;
+const CURSOR_UP = (n: number) => (n > 0 ? `${ESC}[${n}A` : "");
 const CURSOR_TO_COL = (n: number) => `${ESC}[${n}G`;
 const DIM = `${ESC}[2m`;
 const RESET = `${ESC}[0m`;
 const INVERSE = `${ESC}[7m`;
-const HIDE_CURSOR = `${ESC}[?25l`;
 const SHOW_CURSOR = `${ESC}[?25h`;
+const SAVE_CURSOR = `${ESC}[s`;
+const RESTORE_CURSOR = `${ESC}[u`;
+const CLEAR_TO_END = `${ESC}[J`;
+const CURSOR_DOWN = (n: number) => (n > 0 ? `${ESC}[${n}B` : "");
 
 /**
  * Read a line with real-time autocomplete dropdown
@@ -47,7 +49,7 @@ export function autocompleteInput(config: AutocompleteConfig): Promise<string> {
     let cursorPos = 0;
     let suggestions: AutocompleteOption[] = [];
     let selectedIndex = -1;
-    let displayedLines = 0;
+    let initialized = false;
 
     // Enable raw mode
     if (stdin.isTTY) {
@@ -56,7 +58,6 @@ export function autocompleteInput(config: AutocompleteConfig): Promise<string> {
     readline.emitKeypressEvents(stdin);
 
     const cleanup = () => {
-      clearSuggestions();
       stdout.write(SHOW_CURSOR);
       if (stdin.isTTY) {
         stdin.setRawMode(false);
@@ -65,15 +66,40 @@ export function autocompleteInput(config: AutocompleteConfig): Promise<string> {
     };
 
     const render = () => {
-      // Clear previous suggestions
-      clearSuggestions();
+      if (!initialized) {
+        // First render - save cursor position as anchor
+        stdout.write(SAVE_CURSOR);
+        initialized = true;
+      } else {
+        // Restore to anchor and clear everything after it
+        stdout.write(RESTORE_CURSOR);
+        stdout.write(CLEAR_TO_END);
+        // Re-save in case terminal scrolled
+        stdout.write(SAVE_CURSOR);
+      }
 
-      // Render input line
-      stdout.write(`\r${CLEAR_LINE}${prompt}${input}`);
+      // Write prompt and input
+      stdout.write(`${prompt}${input}`);
 
-      // Position cursor
-      const cursorCol = prompt.length + cursorPos + 1;
-      stdout.write(CURSOR_TO_COL(cursorCol));
+      // Calculate cursor position accounting for line wrapping
+      const termWidth = stdout.columns || 80;
+      const cursorOffset = prompt.length + cursorPos;
+
+      // Handle edge case: when cursor is exactly at line boundary,
+      // show it at end of current line, not start of next line
+      let cursorRow: number;
+      let cursorCol: number;
+      if (cursorOffset > 0 && cursorOffset % termWidth === 0) {
+        cursorRow = cursorOffset / termWidth - 1;
+        cursorCol = termWidth;
+      } else {
+        cursorRow = Math.floor(cursorOffset / termWidth);
+        cursorCol = (cursorOffset % termWidth) + 1;
+      }
+
+      // Calculate total lines for suggestions positioning
+      const totalLength = prompt.length + input.length;
+      const totalLines = Math.ceil(totalLength / termWidth) || 1;
 
       // Get and display suggestions if input starts with /
       if (input.startsWith("/") && input.length > 1) {
@@ -85,8 +111,9 @@ export function autocompleteInput(config: AutocompleteConfig): Promise<string> {
             selectedIndex = suggestions.length - 1;
           }
 
+          // Move to end of input text before showing suggestions
+          // Cursor is currently at end of text, just go to new line
           stdout.write("\n");
-          displayedLines = suggestions.length;
 
           for (let i = 0; i < suggestions.length; i++) {
             const opt = suggestions[i]!;
@@ -102,33 +129,32 @@ export function autocompleteInput(config: AutocompleteConfig): Promise<string> {
             }
           }
 
-          // Move cursor back up to input line
-          if (displayedLines > 0) {
-            stdout.write(CURSOR_UP(displayedLines));
-          }
+          // Move cursor back up to input line (accounting for wrapped lines)
+          const linesFromEnd = totalLines - 1 - cursorRow;
+          stdout.write(CURSOR_UP(suggestions.length + linesFromEnd));
           stdout.write(CURSOR_TO_COL(cursorCol));
         }
       } else {
         suggestions = [];
         selectedIndex = -1;
       }
-    };
 
-    const clearSuggestions = () => {
-      if (displayedLines > 0) {
-        // Move down and clear each line
-        for (let i = 0; i < displayedLines; i++) {
-          stdout.write(`\n${CLEAR_LINE}`);
-        }
-        // Move back up
-        stdout.write(CURSOR_UP(displayedLines));
-        displayedLines = 0;
+      // Position cursor for wrapped text
+      // After writing, cursor is at end of text. Move to correct position.
+      // Go back to start of input block, then move to target row/col
+      const endRow = totalLines - 1;
+      if (endRow > cursorRow) {
+        stdout.write(CURSOR_UP(endRow - cursorRow));
       }
+      stdout.write(CURSOR_TO_COL(cursorCol));
     };
 
     const submit = (value: string) => {
+      // Clear suggestions before submitting
+      stdout.write(RESTORE_CURSOR);
+      stdout.write(CLEAR_TO_END);
+      stdout.write(`${prompt}${value}\n`);
       cleanup();
-      stdout.write("\n");
       resolve(value);
     };
 
