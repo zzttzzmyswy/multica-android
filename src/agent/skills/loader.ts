@@ -6,13 +6,35 @@
  * 2. profile - ~/.super-multica/agent-profiles/<id>/skills/ (profile-specific)
  */
 
-import { existsSync, readdirSync, statSync, mkdirSync, cpSync } from "node:fs";
+import { existsSync, readdirSync, statSync, mkdirSync, cpSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Skill, SkillSource, SkillManagerOptions } from "./types.js";
 import { SKILL_FILE, SKILL_SOURCE_PRECEDENCE } from "./types.js";
 import { parseSkillFile } from "./parser.js";
 import { DATA_DIR } from "../../shared/index.js";
+
+/**
+ * Compare two semver version strings
+ * Returns: 1 if a > b, -1 if a < b, 0 if equal
+ */
+function compareVersions(a: string | undefined, b: string | undefined): number {
+  if (!a && !b) return 0;
+  if (!a) return -1;
+  if (!b) return 1;
+
+  const partsA = a.split(".").map((n) => parseInt(n, 10) || 0);
+  const partsB = b.split(".").map((n) => parseInt(n, 10) || 0);
+
+  const maxLen = Math.max(partsA.length, partsB.length);
+  for (let i = 0; i < maxLen; i++) {
+    const numA = partsA[i] ?? 0;
+    const numB = partsB[i] ?? 0;
+    if (numA > numB) return 1;
+    if (numA < numB) return -1;
+  }
+  return 0;
+}
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -116,6 +138,7 @@ export function getProfileSkillsDir(profileId: string, profileBaseDir?: string):
 /**
  * Initialize managed skills directory with bundled skills
  * Copies bundled skills to ~/.super-multica/skills/ if not already present
+ * Updates existing skills if bundled version is higher
  *
  * This should be called once during application startup.
  */
@@ -130,7 +153,7 @@ export function initializeManagedSkills(): void {
     return;
   }
 
-  // Copy each bundled skill if not already in managed
+  // Sync each bundled skill to managed directory
   try {
     const entries = readdirSync(BUNDLED_DIR);
     for (const skillName of entries) {
@@ -140,8 +163,29 @@ export function initializeManagedSkills(): void {
       const src = join(BUNDLED_DIR, skillName);
       const dest = join(MANAGED_DIR, skillName);
 
-      // Only copy directories that don't already exist
-      if (!existsSync(dest) && statSync(src).isDirectory()) {
+      // Skip if not a directory
+      if (!statSync(src).isDirectory()) continue;
+
+      // Check if skill exists in managed
+      if (!existsSync(dest)) {
+        // Skill doesn't exist, copy it
+        cpSync(src, dest, { recursive: true });
+        continue;
+      }
+
+      // Skill exists, check versions
+      const bundledSkill = parseSkillFile(join(src, SKILL_FILE), skillName, "bundled");
+      const managedSkill = parseSkillFile(join(dest, SKILL_FILE), skillName, "bundled");
+
+      if (!bundledSkill) continue; // Invalid bundled skill, skip
+
+      const bundledVersion = bundledSkill.frontmatter.version;
+      const managedVersion = managedSkill?.frontmatter.version;
+
+      // Update if bundled version is higher
+      if (compareVersions(bundledVersion, managedVersion) > 0) {
+        // Remove old and copy new
+        rmSync(dest, { recursive: true });
         cpSync(src, dest, { recursive: true });
       }
     }
