@@ -22,18 +22,24 @@ Super Multica is a distributed AI agent framework with a monorepo architecture. 
 # Install dependencies
 pnpm install
 
-# Development (all services concurrently: gateway:3000, console, web:3001)
-pnpm dev
+# Multica CLI (unified entry point)
+multica                   # Interactive mode (default)
+multica run "<prompt>"    # Run a single prompt
+multica chat              # Interactive REPL mode
+multica session list      # List sessions
+multica profile list      # List profiles
+multica skills list       # List skills
+multica tools list        # List tools
+multica credentials init  # Initialize credentials
+multica dev               # Start all dev services
+multica help              # Show help
 
-# Individual services
-pnpm dev:gateway          # WebSocket gateway only
-pnpm dev:console          # NestJS console with agent
-pnpm dev:web              # Next.js web app
-pnpm dev:desktop          # Electron desktop app
-
-# Agent CLI
-pnpm agent:cli            # Non-interactive agent
-pnpm agent:interactive    # Interactive REPL mode
+# Development servers
+multica dev               # All services (gateway:3000, console:4000, web:3001)
+multica dev gateway       # WebSocket gateway only
+multica dev console       # NestJS console with agent
+multica dev web           # Next.js web app
+multica dev desktop       # Electron desktop app
 
 # Build (turbo-orchestrated)
 pnpm build
@@ -57,7 +63,7 @@ Frontend (web:3001 / desktop)
         → Agent Engine (LLM runner, sessions, skills, tools)
 ```
 
-**Agent Engine** (`src/agent/`): Orchestrates LLM interactions with multi-provider support (OpenAI, Anthropic, DeepSeek, Kimi, Groq, Mistral, Google, Together). Features session management (JSONL-based, UUIDv7 IDs), profile system (`~/.super-multica/agent-profiles/`), modular skills with hot-reload, and token-aware context window guards (compaction modes: tokens, count, summary). CLI tools are organized in `src/agent/cli/` (interactive, non-interactive, profile, skills, tools).
+**Agent Engine** (`src/agent/`): Orchestrates LLM interactions with multi-provider support (OpenAI, Anthropic, DeepSeek, Kimi, Groq, Mistral, Google, Together). Features session management (JSONL-based, UUIDv7 IDs), profile system (`~/.super-multica/agent-profiles/`), modular skills with hot-reload, and token-aware context window guards (compaction modes: tokens, count, summary). Unified CLI in `src/agent/cli/index.ts` with subcommands in `src/agent/cli/commands/`.
 
 **Gateway** (`src/gateway/`): NestJS WebSocket server with Socket.io for real-time message passing, RPC request/response, and streaming.
 
@@ -82,7 +88,7 @@ Frontend (web:3001 / desktop)
 Use JSON5 credential files instead of `.env`:
 
 ```bash
-pnpm credentials:cli init
+multica credentials init
 ```
 
 This creates:
