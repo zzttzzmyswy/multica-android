@@ -123,6 +123,11 @@ export class ProfileManager {
     return this.profile;
   }
 
+  /** 获取 profile 目录路径 */
+  getProfileDir(): string {
+    return getProfileDir(this.profileId, { baseDir: this.baseDir });
+  }
+
   /** 构建 system prompt */
   buildSystemPrompt(): string {
     const profile = this.getProfile();
@@ -155,6 +160,10 @@ export class ProfileManager {
     if (profile.bootstrap) {
       parts.push(profile.bootstrap);
     }
+
+    // 注入 profile 目录路径，让 Agent 知道文件在哪里
+    const profileDir = this.getProfileDir();
+    parts.push(`## Profile Directory\n\nYour profile files are located at: \`${profileDir}\`\n\nUse \`edit\` or \`write\` tools to update these files when needed.`);
 
     return parts.join("\n\n");
   }
