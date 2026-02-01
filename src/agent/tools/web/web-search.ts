@@ -16,16 +16,18 @@ import type { CacheEntry } from "./cache.js";
 import { jsonResult, readNumberParam, readStringParam } from "./param-helpers.js";
 import { credentialManager } from "../../credentials.js";
 
-const SEARCH_PROVIDERS = ["brave", "perplexity"] as const;
-type SearchProvider = (typeof SEARCH_PROVIDERS)[number];
+export const SEARCH_PROVIDERS = ["brave", "perplexity"] as const;
+export type SearchProvider = (typeof SEARCH_PROVIDERS)[number];
 
-const DEFAULT_SEARCH_COUNT = 5;
-const MAX_SEARCH_COUNT = 10;
+export const DEFAULT_SEARCH_COUNT = 5;
+export const MAX_SEARCH_COUNT = 10;
 
 const BRAVE_SEARCH_ENDPOINT = "https://api.search.brave.com/res/v1/web/search";
-const DEFAULT_PERPLEXITY_BASE_URL = "https://openrouter.ai/api/v1";
+const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const PERPLEXITY_DIRECT_BASE_URL = "https://api.perplexity.ai";
-const DEFAULT_PERPLEXITY_MODEL = "perplexity/sonar-pro";
+// Model names differ by provider: Perplexity direct uses "sonar-pro", OpenRouter uses "perplexity/sonar-pro"
+const PERPLEXITY_DIRECT_MODEL = "sonar-pro";
+const OPENROUTER_PERPLEXITY_MODEL = "perplexity/sonar-pro";
 const PERPLEXITY_KEY_PREFIXES = ["pplx-"];
 const OPENROUTER_KEY_PREFIXES = ["sk-or-"];
 
@@ -117,13 +119,13 @@ export type WebSearchResult = {
     }
 );
 
-function resolveSearchCount(value: unknown, fallback: number): number {
+export function resolveSearchCount(value: unknown, fallback: number): number {
   const parsed = typeof value === "number" && Number.isFinite(value) ? value : fallback;
   const clamped = Math.max(1, Math.min(MAX_SEARCH_COUNT, Math.floor(parsed)));
   return clamped;
 }
 
-function normalizeFreshness(value: string | undefined): string | undefined {
+export function normalizeFreshness(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const trimmed = value.trim();
   if (!trimmed) return undefined;
@@ -158,7 +160,7 @@ function isValidIsoDate(value: string): boolean {
   );
 }
 
-function resolveSiteName(url: string | undefined): string | undefined {
+export function resolveSiteName(url: string | undefined): string | undefined {
   if (!url) return undefined;
   try {
     return new URL(url).hostname;
@@ -167,18 +169,19 @@ function resolveSiteName(url: string | undefined): string | undefined {
   }
 }
 
-function inferPerplexityBaseUrl(apiKey: string): string {
+export function inferPerplexityConfig(apiKey: string): { baseUrl: string; defaultModel: string } {
   const normalized = apiKey.toLowerCase();
   if (PERPLEXITY_KEY_PREFIXES.some((prefix) => normalized.startsWith(prefix))) {
-    return PERPLEXITY_DIRECT_BASE_URL;
+    return { baseUrl: PERPLEXITY_DIRECT_BASE_URL, defaultModel: PERPLEXITY_DIRECT_MODEL };
   }
   if (OPENROUTER_KEY_PREFIXES.some((prefix) => normalized.startsWith(prefix))) {
-    return DEFAULT_PERPLEXITY_BASE_URL;
+    return { baseUrl: OPENROUTER_BASE_URL, defaultModel: OPENROUTER_PERPLEXITY_MODEL };
   }
-  return DEFAULT_PERPLEXITY_BASE_URL;
+  // Default to OpenRouter for unknown key formats
+  return { baseUrl: OPENROUTER_BASE_URL, defaultModel: OPENROUTER_PERPLEXITY_MODEL };
 }
 
-function resolvePerplexityApiKey(): { apiKey: string; source: string } | { apiKey: null; source: "none" } {
+export function resolvePerplexityApiKey(): { apiKey: string; source: string } | { apiKey: null; source: "none" } {
   const perplexityKey = (credentialManager.getToolConfig("perplexity")?.apiKey ?? "").trim();
   if (perplexityKey) {
     return { apiKey: perplexityKey, source: "perplexity" };
@@ -192,11 +195,11 @@ function resolvePerplexityApiKey(): { apiKey: string; source: string } | { apiKe
   return { apiKey: null, source: "none" };
 }
 
-function resolveBraveApiKey(): string | undefined {
+export function resolveBraveApiKey(): string | undefined {
   return (credentialManager.getToolConfig("brave")?.apiKey ?? "").trim() || undefined;
 }
 
-function resolveProvider(requested?: string): SearchProvider {
+export function resolveProvider(requested?: string): SearchProvider {
   if (requested === "perplexity") return "perplexity";
   if (requested === "brave") return "brave";
 
@@ -211,7 +214,7 @@ function resolveProvider(requested?: string): SearchProvider {
   return "brave";
 }
 
-async function runPerplexitySearch(params: {
+export async function runPerplexitySearch(params: {
   query: string;
   apiKey: string;
   baseUrl: string;
@@ -252,7 +255,7 @@ async function runPerplexitySearch(params: {
   return { content, citations };
 }
 
-async function runBraveSearch(params: {
+export async function runBraveSearch(params: {
   query: string;
   count: number;
   apiKey: string;
@@ -347,8 +350,9 @@ async function runWebSearch(params: {
 
     const apiKey = perplexityResult.apiKey;
     const perplexityConfig = credentialManager.getToolConfig("perplexity");
-    const baseUrl = (perplexityConfig?.baseUrl ?? "").trim() || inferPerplexityBaseUrl(apiKey);
-    const model = (perplexityConfig?.model ?? "").trim() || DEFAULT_PERPLEXITY_MODEL;
+    const inferred = inferPerplexityConfig(apiKey);
+    const baseUrl = (perplexityConfig?.baseUrl ?? "").trim() || inferred.baseUrl;
+    const model = (perplexityConfig?.model ?? "").trim() || inferred.defaultModel;
     const { content, citations } = await runPerplexitySearch({
       query: params.query,
       apiKey,
