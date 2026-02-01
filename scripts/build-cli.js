@@ -28,44 +28,48 @@ const stripShebangPlugin = {
 };
 
 async function build() {
-  const entryPoints = [
-    { entry: "src/agent/cli/interactive.ts", outfile: "bin/multica-interactive.mjs" },
-    { entry: "src/agent/cli/non-interactive.ts", outfile: "bin/multica-cli.mjs" },
-    { entry: "src/agent/cli/profile.ts", outfile: "bin/multica-profile.mjs" },
-    { entry: "src/agent/credentials-cli.ts", outfile: "bin/multica-credentials.mjs" },
-  ];
+  // Unified CLI entry point
+  const entryPoint = {
+    entry: "src/agent/cli/index.ts",
+    outfile: "bin/multica.mjs",
+  };
 
-  for (const { entry, outfile } of entryPoints) {
-    console.log(`Building ${entry} -> ${outfile}...`);
+  console.log(`Building ${entryPoint.entry} -> ${entryPoint.outfile}...`);
 
-    await esbuild.build({
-      entryPoints: [resolve(rootDir, entry)],
-      outfile: resolve(rootDir, outfile),
-      bundle: true,
-      platform: "node",
-      target: "node20",
-      format: "esm",
-      banner: {
-        js: "#!/usr/bin/env node",
-      },
-      plugins: [stripShebangPlugin],
-      sourcemap: true,
-      minify: false,
-      // Externalize all dependencies - they will be loaded from node_modules at runtime
-      external: allDeps,
-    });
+  await esbuild.build({
+    entryPoints: [resolve(rootDir, entryPoint.entry)],
+    outfile: resolve(rootDir, entryPoint.outfile),
+    bundle: true,
+    platform: "node",
+    target: "node20",
+    format: "esm",
+    banner: {
+      js: "#!/usr/bin/env node",
+    },
+    plugins: [stripShebangPlugin],
+    sourcemap: true,
+    minify: false,
+    // Externalize all dependencies - they will be loaded from node_modules at runtime
+    external: allDeps,
+  });
 
-    // Make executable
-    chmodSync(resolve(rootDir, outfile), 0o755);
-    console.log(`  ✓ ${outfile}`);
-  }
+  // Make executable
+  chmodSync(resolve(rootDir, entryPoint.outfile), 0o755);
+  console.log(`  ✓ ${entryPoint.outfile}`);
 
-  console.log("\nBuild complete! Binaries are in ./bin/");
+  console.log("\nBuild complete! Binary is in ./bin/");
   console.log("\nUsage:");
-  console.log("  node bin/multica-interactive.mjs  # Interactive CLI");
-  console.log("  node bin/multica-cli.mjs          # Non-interactive CLI");
-  console.log("  node bin/multica-profile.mjs      # Profile management");
-  console.log("\nNote: The built binaries require node_modules to be present.");
+  console.log("  multica                    # Interactive mode (default)");
+  console.log("  multica run <prompt>       # Run a single prompt");
+  console.log("  multica chat               # Interactive mode");
+  console.log("  multica session list       # List sessions");
+  console.log("  multica profile list       # List profiles");
+  console.log("  multica skills list        # List skills");
+  console.log("  multica tools list         # List tools");
+  console.log("  multica credentials init   # Initialize credentials");
+  console.log("  multica dev                # Start dev servers");
+  console.log("  multica help               # Show help");
+  console.log("\nNote: The built binary requires node_modules to be present.");
   console.log("Run 'pnpm install --prod' to install only production dependencies.");
 }
 
