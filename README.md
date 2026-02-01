@@ -42,7 +42,7 @@ The Agent reads credentials from JSON5 files (no `.env` required).
 Create empty templates:
 
 ```bash
-pnpm credentials:cli init
+multica credentials init
 ```
 
 This creates:
@@ -85,9 +85,9 @@ Example `skills.env.json5` (dynamic keys):
 Start services directly (no `source .env`):
 
 ```bash
-pnpm dev:console
-pnpm agent:cli "hello"
-pnpm dev:gateway
+multica dev console
+multica run "hello"
+multica dev gateway
 ```
 
 Optional overrides:
@@ -104,31 +104,51 @@ Each setting is resolved in order (first match wins):
 3. **Session metadata** — restored from previous session
 4. **Default** — `kimi-coding` provider with `kimi-k2-thinking` model
 
-## Agent CLI
+## Multica CLI
 
-Use the agent module directly from the CLI for isolated testing.
+The unified CLI provides access to all agent features through a single command.
 
 ```bash
-# New sessions get a UUIDv7 ID (shown on start)
-pnpm agent:cli "hello"
-# [session: 019c0b0a-b111-765c-8bbd-f4149beac9c4]
+# Interactive mode (default)
+multica
+multica chat
+multica chat --profile my-agent
+
+# Run a single prompt
+multica run "hello"
+multica run --session demo "remember my name is Alice"
+
+# Session management
+multica session list
+multica session show abc12345
+multica session delete abc12345
 
 # Continue a session
-pnpm agent:cli --session 019c0b0a-b111-765c-8bbd-f4149beac9c4 "what did I say?"
-
-# Or use a custom session name
-pnpm agent:cli --session demo "remember my name is Alice"
-pnpm agent:cli --session demo "what's my name?"
+multica --session abc12345
+multica run --session abc12345 "what did I say?"
 
 # Override provider/model
-pnpm agent:cli --provider openai --model gpt-4o-mini "hi"
+multica run --provider openai --model gpt-4o-mini "hi"
 
 # Use an agent profile
-pnpm agent:cli --profile my-agent "hello"
+multica chat --profile my-agent
 
 # Set thinking level
-pnpm agent:cli --thinking high "solve this complex problem"
+multica run --thinking high "solve this complex problem"
+
+# Development servers
+multica dev                # Start all services
+multica dev gateway        # Gateway only (:3000)
+multica dev console        # Console only (:4000)
+multica dev web            # Web app only (:3001)
+
+# Help
+multica help
+multica run --help
+multica session --help
 ```
+
+Short alias: `mu` (same as `multica`)
 
 ## Sessions
 
@@ -156,16 +176,19 @@ Agent profiles define identity, personality, tools, and memory for an agent. Pro
 
 ```bash
 # Create a new profile with default templates
-pnpm agent:profile new my-agent
+multica profile new my-agent
 
 # List all profiles
-pnpm agent:profile list
+multica profile list
 
 # Show profile contents
-pnpm agent:profile show my-agent
+multica profile show my-agent
 
 # Open profile directory in file manager
-pnpm agent:profile edit my-agent
+multica profile edit my-agent
+
+# Delete a profile
+multica profile delete my-agent
 ```
 
 ### Profile Structure
@@ -194,17 +217,20 @@ Skills are modular capabilities that extend agent functionality through `SKILL.m
 
 ```bash
 # List all skills
-pnpm skills:cli list
+multica skills list
 
 # Install skills from GitHub
-pnpm skills:cli add anthropics/skills
+multica skills add anthropics/skills
 
 # Check skill status with diagnostics
-pnpm skills:cli status
-pnpm skills:cli status pdf -v
+multica skills status
+multica skills status pdf -v
+
+# Install skill dependencies
+multica skills install nano-pdf
 
 # Remove installed skills
-pnpm skills:cli remove skills
+multica skills remove skills
 ```
 
 ### Built-in Skills
@@ -320,22 +346,31 @@ The Hub manages multiple agents and gateway connections:
 
 ## Scripts
 
-### Agent Commands
+### Multica CLI Commands
 
-- `pnpm agent:cli` - Run the agent CLI for module-level testing
-- `pnpm agent:interactive` - Interactive REPL mode
-- `pnpm agent:profile` - Manage agent profiles
+- `multica` / `mu` - Unified CLI entry point
+- `multica run <prompt>` - Run a single prompt
+- `multica chat` - Interactive REPL mode
+- `multica session <cmd>` - Session management
+- `multica profile <cmd>` - Profile management
+- `multica skills <cmd>` - Skills management
+- `multica tools <cmd>` - Tool policy inspection
+- `multica credentials <cmd>` - Credentials management
+- `multica dev [service]` - Development servers
+- `multica help` - Show help
 
-### Development
+### Development (shortcuts)
 
-- `pnpm dev` - Run full stack in development mode
+- `pnpm dev` - Run full stack (gateway + console + web)
 - `pnpm dev:gateway` - Run gateway only
 - `pnpm dev:console` - Run console only
 - `pnpm dev:web` - Run web app only
+- `pnpm dev:desktop` - Run desktop app
 
 ### Build & Test
 
 - `pnpm build` - Build for production
 - `pnpm build:sdk` - Build SDK package
+- `pnpm build:cli` - Build CLI binary
 - `pnpm start` - Run production build
 - `pnpm typecheck` - Type check without emitting
