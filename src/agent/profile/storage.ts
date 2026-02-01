@@ -93,7 +93,6 @@ export function loadProfile(profileId: string, options?: StorageOptions): AgentP
     id: profileId,
     soul: readProfileFile(profileId, PROFILE_FILES.soul, options),
     identity: readProfileFile(profileId, PROFILE_FILES.identity, options),
-    tools: readProfileFile(profileId, PROFILE_FILES.tools, options),
     memory: readProfileFile(profileId, PROFILE_FILES.memory, options),
     bootstrap: readProfileFile(profileId, PROFILE_FILES.bootstrap, options),
     config: readProfileConfig(profileId, options),
@@ -102,16 +101,13 @@ export function loadProfile(profileId: string, options?: StorageOptions): AgentP
 
 /** 保存 AgentProfile（只写入非空字段） */
 export function saveProfile(profile: AgentProfile, options?: StorageOptions): void {
-  const { id, soul, identity, tools, memory, bootstrap, config } = profile;
+  const { id, soul, identity, memory, bootstrap, config } = profile;
 
   if (soul !== undefined) {
     writeProfileFile(id, PROFILE_FILES.soul, soul, options);
   }
   if (identity !== undefined) {
     writeProfileFile(id, PROFILE_FILES.identity, identity, options);
-  }
-  if (tools !== undefined) {
-    writeProfileFile(id, PROFILE_FILES.tools, tools, options);
   }
   if (memory !== undefined) {
     writeProfileFile(id, PROFILE_FILES.memory, memory, options);

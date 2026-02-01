@@ -152,7 +152,6 @@ describe("storage", () => {
 
       writeFileSync(join(dir, "SOUL.md"), "Soul content");
       writeFileSync(join(dir, "IDENTITY.md"), "Identity content");
-      writeFileSync(join(dir, "TOOLS.md"), "Tools content");
       writeFileSync(join(dir, "MEMORY.md"), "Memory content");
       writeFileSync(join(dir, "BOOTSTRAP.md"), "Bootstrap content");
 
@@ -161,7 +160,6 @@ describe("storage", () => {
       expect(profile.id).toBe(profileId);
       expect(profile.soul).toBe("Soul content");
       expect(profile.identity).toBe("Identity content");
-      expect(profile.tools).toBe("Tools content");
       expect(profile.memory).toBe("Memory content");
       expect(profile.bootstrap).toBe("Bootstrap content");
     });
@@ -178,7 +176,6 @@ describe("storage", () => {
       expect(profile.id).toBe(profileId);
       expect(profile.soul).toBe("Soul only");
       expect(profile.identity).toBeUndefined();
-      expect(profile.tools).toBeUndefined();
       expect(profile.memory).toBeUndefined();
       expect(profile.bootstrap).toBeUndefined();
     });
@@ -198,7 +195,6 @@ describe("storage", () => {
         id: "save-test",
         soul: "Soul data",
         identity: "Identity data",
-        tools: "Tools data",
         memory: "Memory data",
         bootstrap: "Bootstrap data",
       };
@@ -208,7 +204,6 @@ describe("storage", () => {
       const dir = join(testBaseDir, profile.id);
       expect(readFileSync(join(dir, "SOUL.md"), "utf-8")).toBe("Soul data");
       expect(readFileSync(join(dir, "IDENTITY.md"), "utf-8")).toBe("Identity data");
-      expect(readFileSync(join(dir, "TOOLS.md"), "utf-8")).toBe("Tools data");
       expect(readFileSync(join(dir, "MEMORY.md"), "utf-8")).toBe("Memory data");
       expect(readFileSync(join(dir, "BOOTSTRAP.md"), "utf-8")).toBe("Bootstrap data");
     });
@@ -218,7 +213,6 @@ describe("storage", () => {
         id: "partial-save",
         soul: "Soul only",
         identity: undefined,
-        tools: undefined,
         memory: undefined,
         bootstrap: undefined,
       };
@@ -228,7 +222,6 @@ describe("storage", () => {
       const dir = join(testBaseDir, profile.id);
       expect(existsSync(join(dir, "SOUL.md"))).toBe(true);
       expect(existsSync(join(dir, "IDENTITY.md"))).toBe(false);
-      expect(existsSync(join(dir, "TOOLS.md"))).toBe(false);
     });
 
     it("should create profile directory if needed", () => {

@@ -44,7 +44,6 @@ export function createAgentProfile(
   if (useTemplates) {
     profile.soul = DEFAULT_TEMPLATES.soul;
     profile.identity = DEFAULT_TEMPLATES.identity;
-    profile.tools = DEFAULT_TEMPLATES.tools;
     profile.memory = DEFAULT_TEMPLATES.memory;
     profile.bootstrap = DEFAULT_TEMPLATES.bootstrap;
 
@@ -137,10 +136,6 @@ export class ProfileManager {
 
     if (profile.soul) {
       parts.push(profile.soul);
-    }
-
-    if (profile.tools) {
-      parts.push(profile.tools);
     }
 
     if (profile.memory) {
