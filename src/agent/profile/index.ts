@@ -44,6 +44,8 @@ export function createAgentProfile(
   if (useTemplates) {
     profile.soul = DEFAULT_TEMPLATES.soul;
     profile.identity = DEFAULT_TEMPLATES.identity;
+    profile.user = DEFAULT_TEMPLATES.user;
+    profile.workspace = DEFAULT_TEMPLATES.workspace;
     profile.memory = DEFAULT_TEMPLATES.memory;
     profile.bootstrap = DEFAULT_TEMPLATES.bootstrap;
 
@@ -136,6 +138,14 @@ export class ProfileManager {
 
     if (profile.soul) {
       parts.push(profile.soul);
+    }
+
+    if (profile.user) {
+      parts.push(profile.user);
+    }
+
+    if (profile.workspace) {
+      parts.push(profile.workspace);
     }
 
     if (profile.memory) {

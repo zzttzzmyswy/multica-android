@@ -8,6 +8,8 @@ import type { ToolsConfig } from "../tools/policy.js";
 export const PROFILE_FILES = {
   soul: "soul.md",
   identity: "identity.md",
+  user: "user.md",
+  workspace: "workspace.md",
   memory: "memory.md",
   bootstrap: "bootstrap.md",
   config: "config.json",
@@ -33,6 +35,10 @@ export interface AgentProfile {
   soul?: string | undefined;
   /** Identity information - agent's name and self-awareness */
   identity?: string | undefined;
+  /** User profile - information about the person being assisted */
+  user?: string | undefined;
+  /** Workspace guidelines - behavior rules and conventions */
+  workspace?: string | undefined;
   /** Persistent memory - long-term knowledge base */
   memory?: string | undefined;
   /** Initial context - guidance information for each conversation */
