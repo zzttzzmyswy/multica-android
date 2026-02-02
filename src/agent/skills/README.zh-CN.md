@@ -205,7 +205,17 @@ Skills 从两个来源加载，优先级从低到高：
 
 ### 添加 Profile 专属 Skills
 
-Profile 专属 skills 不通过 CLI 安装，需要手动创建在 profile 的 skills 目录中：
+可以使用 `--profile` 选项直接安装 skills 到特定 profile：
+
+```bash
+# 安装 skill 到特定 profile
+multica skills add owner/repo --profile my-agent
+
+# 强制覆盖安装
+multica skills add owner/repo/skill-name --profile my-agent --force
+```
+
+也可以手动创建：
 
 ```bash
 # 创建 profile skills 目录

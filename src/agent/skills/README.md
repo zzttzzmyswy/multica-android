@@ -205,7 +205,17 @@ On first run, bundled skills are automatically copied to the managed directory (
 
 ### Adding Profile-Specific Skills
 
-Profile-specific skills are not installed via CLI. Instead, manually create them in the profile's skills directory:
+You can install skills directly to a profile using the `--profile` option:
+
+```bash
+# Install skill to a specific profile
+multica skills add owner/repo --profile my-agent
+
+# Install with force overwrite
+multica skills add owner/repo/skill-name --profile my-agent --force
+```
+
+Alternatively, create them manually:
 
 ```bash
 # Create profile skills directory
