@@ -2,29 +2,21 @@
 
 import { useEffect } from "react"
 import { useHubStore } from "./hub"
-import { useDeviceId } from "./device-id"
 import { useGatewayStore } from "./gateway"
 
 export function useHubInit() {
+  const gwState = useGatewayStore((s) => s.connectionState)
   const fetchHub = useHubStore((s) => s.fetchHub)
-  const status = useHubStore((s) => s.status)
   const fetchAgents = useHubStore((s) => s.fetchAgents)
-  const deviceId = useDeviceId()
 
-  useEffect(() => { fetchHub() }, [fetchHub])
+  // Once WS is registered, fetch hub info and agents via RPC
   useEffect(() => {
-    if (status === "connected") fetchAgents()
-  }, [status, fetchAgents])
-  useEffect(() => {
-    const id = setInterval(fetchHub, 30_000)
-    return () => clearInterval(id)
-  }, [fetchHub])
-
-  // Connect gateway when hub is ready and deviceId is available
-  useEffect(() => {
-    if (status === "connected" && deviceId) {
-      useGatewayStore.getState().connect(deviceId)
-      return () => { useGatewayStore.getState().disconnect() }
+    if (gwState === "registered") {
+      fetchHub()
+      fetchAgents()
     }
-  }, [status, deviceId])
+    if (gwState === "disconnected") {
+      useHubStore.setState({ status: "idle", hub: null, agents: [], activeAgentId: null })
+    }
+  }, [gwState, fetchHub, fetchAgents])
 }

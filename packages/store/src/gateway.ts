@@ -5,25 +5,30 @@ import { useMessagesStore } from "./messages"
 
 interface GatewayState {
   connectionState: ConnectionState
+  hubId: string | null
   lastError: SendErrorResponse | null
 }
 
 interface GatewayActions {
-  connect: (deviceId: string) => void
+  connect: (deviceId: string, hubId: string) => void
   disconnect: () => void
   send: (to: string, action: string, payload: unknown) => void
+  request: <T = unknown>(method: string, params?: unknown) => Promise<T>
 }
 
 export type GatewayStore = GatewayState & GatewayActions
 
 let client: GatewayClient | null = null
 
-export const useGatewayStore = create<GatewayStore>()((set) => ({
+export const useGatewayStore = create<GatewayStore>()((set, get) => ({
   connectionState: "disconnected",
+  hubId: null,
   lastError: null,
 
-  connect: (deviceId) => {
+  connect: (deviceId, hubId) => {
     if (client) return
+
+    set({ hubId })
 
     client = new GatewayClient({
       url: getGatewayUrl(),
@@ -47,11 +52,19 @@ export const useGatewayStore = create<GatewayStore>()((set) => ({
       client.disconnect()
       client = null
     }
-    set({ connectionState: "disconnected" })
+    set({ connectionState: "disconnected", hubId: null })
   },
 
   send: (to, action, payload) => {
     if (!client?.isRegistered) return
     client.send(to, action, payload)
+  },
+
+  request: <T = unknown>(method: string, params?: unknown): Promise<T> => {
+    const { hubId } = get()
+    if (!client?.isRegistered || !hubId) {
+      return Promise.reject(new Error("Not connected"))
+    }
+    return client.request<T>(hubId, method, params)
   },
 }))

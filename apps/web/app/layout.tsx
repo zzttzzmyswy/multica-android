@@ -12,7 +12,6 @@ import { Toaster } from "@multica/ui/components/ui/sonner";
 import { HubSidebar } from "@multica/ui/components/hub-sidebar";
 
 setConfig({
-  consoleUrl: process.env.NEXT_PUBLIC_CONSOLE_URL ?? "http://localhost:4000",
   gatewayUrl: process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:3000",
 });
 

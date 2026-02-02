@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import {
   SidebarGroup,
   SidebarGroupLabel,
@@ -9,9 +10,10 @@ import {
   SidebarMenuItem,
 } from "@multica/ui/components/ui/sidebar"
 import { Button } from "@multica/ui/components/ui/button"
+import { Input } from "@multica/ui/components/ui/input"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { PlusSignIcon, Delete02Icon } from "@hugeicons/core-free-icons"
-import { useHubStore } from "@multica/store"
+import { useHubStore, useDeviceId, useGatewayStore } from "@multica/store"
 import { useHubInit } from "@multica/store"
 import { Skeleton } from "@multica/ui/components/ui/skeleton"
 
@@ -36,38 +38,75 @@ export function HubSidebar() {
   const hub = useHubStore((s) => s.hub)
   const agents = useHubStore((s) => s.agents)
   const activeAgentId = useHubStore((s) => s.activeAgentId)
-  const fetchHub = useHubStore((s) => s.fetchHub)
   const createAgent = useHubStore((s) => s.createAgent)
   const deleteAgent = useHubStore((s) => s.deleteAgent)
   const setActiveAgentId = useHubStore((s) => s.setActiveAgentId)
+
+  const gwState = useGatewayStore((s) => s.connectionState)
+  const connect = useGatewayStore((s) => s.connect)
+  const disconnect = useGatewayStore((s) => s.disconnect)
+  const deviceId = useDeviceId()
+
+  const [hubIdInput, setHubIdInput] = useState("")
+  const isDisconnected = gwState === "disconnected"
+  const isConnecting = gwState === "connecting" || gwState === "connected"
+
+  const handleConnect = () => {
+    const id = hubIdInput.trim()
+    if (!id || !deviceId) return
+    connect(deviceId, id)
+  }
 
   return (
     <>
       <SidebarGroup>
         <SidebarGroupLabel>Hub</SidebarGroupLabel>
         <SidebarGroupContent>
-          <div className="flex items-center gap-2 px-2 py-1 text-sm">
-            <span className={`size-2 rounded-full shrink-0 ${STATUS_DOT[status]}`} />
-            <span className="text-muted-foreground/70 text-xs">{STATUS_LABEL[status]}</span>
-          </div>
-          {status === "connected" && hub ? (
-            <div className="px-2 text-xs text-muted-foreground/50 font-mono truncate">
-              {hub.hubId}
-            </div>
-          ) : (status === "idle" || status === "loading") ? (
-            <Skeleton className="mx-2 h-3.5 w-32" />
-          ) : null}
-          {status === "error" && (
-            <div className="px-2 pt-1">
-              <Button variant="outline" size="sm" onClick={fetchHub} className="w-full text-xs">
-                Retry
+          {isDisconnected ? (
+            <div className="px-2 space-y-2 py-1">
+              <Input
+                value={hubIdInput}
+                onChange={(e) => setHubIdInput(e.target.value)}
+                placeholder="Enter Hub ID..."
+                className="h-7 text-xs font-mono"
+                onKeyDown={(e) => e.key === "Enter" && handleConnect()}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleConnect}
+                disabled={!hubIdInput.trim() || !deviceId}
+                className="w-full text-xs"
+              >
+                Connect
               </Button>
             </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-2 px-2 py-1 text-sm">
+                <span className={`size-2 rounded-full shrink-0 ${STATUS_DOT[status] ?? STATUS_DOT.idle}`} />
+                <span className="text-muted-foreground/70 text-xs">
+                  {isConnecting ? "Connecting..." : STATUS_LABEL[status]}
+                </span>
+              </div>
+              {status === "connected" && hub ? (
+                <div className="px-2 text-xs text-muted-foreground/50 font-mono truncate">
+                  {hub.hubId}
+                </div>
+              ) : (status === "idle" || status === "loading") ? (
+                <Skeleton className="mx-2 h-3.5 w-32" />
+              ) : null}
+              <div className="px-2 pt-1">
+                <Button variant="outline" size="sm" onClick={disconnect} className="w-full text-xs">
+                  Disconnect
+                </Button>
+              </div>
+            </>
           )}
         </SidebarGroupContent>
       </SidebarGroup>
 
-      {(status === "idle" || status === "loading") && (
+      {isConnecting && (
         <SidebarGroup>
           <SidebarGroupLabel>Agents</SidebarGroupLabel>
           <SidebarGroupContent>

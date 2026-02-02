@@ -1,13 +1,14 @@
 import { create } from "zustand"
-import { consoleApi } from "@multica/fetch"
 import { toast } from "sonner"
+import type {
+  GetHubInfoResult,
+  ListAgentsResult,
+  CreateAgentResult,
+  DeleteAgentResult,
+} from "@multica/sdk"
+import { useGatewayStore } from "./gateway"
 
-export interface HubInfo {
-  hubId: string
-  url: string
-  connectionState: string
-  agentCount: number
-}
+export type HubInfo = GetHubInfoResult
 
 export interface Agent {
   id: string
@@ -44,11 +45,9 @@ export const useHubStore = create<HubStore>()((set, get) => ({
   fetchHub: async () => {
     set({ status: "loading" })
     try {
-      const data = await consoleApi.get<HubInfo>("/api/hub")
-      set({
-        hub: data,
-        status: data.connectionState === "registered" ? "connected" : "error",
-      })
+      const { request } = useGatewayStore.getState()
+      const data = await request<GetHubInfoResult>("getHubInfo")
+      set({ hub: data, status: "connected" })
     } catch {
       set({ status: "error", hub: null })
     }
@@ -56,8 +55,9 @@ export const useHubStore = create<HubStore>()((set, get) => ({
 
   fetchAgents: async () => {
     try {
-      const data = await consoleApi.get<Agent[]>("/api/agents")
-      set({ agents: data })
+      const { request } = useGatewayStore.getState()
+      const data = await request<ListAgentsResult>("listAgents")
+      set({ agents: data.agents })
     } catch (e) {
       toast.error("Failed to fetch agents")
       console.error(e)
@@ -66,7 +66,8 @@ export const useHubStore = create<HubStore>()((set, get) => ({
 
   createAgent: async (options?) => {
     try {
-      const data = await consoleApi.post<{ id: string }>("/api/agents", options)
+      const { request } = useGatewayStore.getState()
+      const data = await request<CreateAgentResult>("createAgent", options)
       await get().fetchAgents()
       if (data.id) set({ activeAgentId: data.id })
     } catch (e) {
@@ -78,7 +79,8 @@ export const useHubStore = create<HubStore>()((set, get) => ({
   deleteAgent: async (id) => {
     if (get().activeAgentId === id) set({ activeAgentId: null })
     try {
-      await consoleApi.delete("/api/agents/" + id)
+      const { request } = useGatewayStore.getState()
+      await request<DeleteAgentResult>("deleteAgent", { id })
       await get().fetchAgents()
     } catch (e) {
       toast.error("Failed to delete agent")

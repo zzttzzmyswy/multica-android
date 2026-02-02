@@ -29,11 +29,11 @@ export function Chat() {
   const filtered = useMemo(() => messages.filter(m => m.agentId === activeAgentId), [messages, activeAgentId])
 
   const handleSend = useCallback((text: string) => {
-    const hub = useHubStore.getState().hub
+    const { hubId } = useGatewayStore.getState()
     const agentId = useHubStore.getState().activeAgentId
-    if (!hub?.hubId || !agentId) return
+    if (!hubId || !agentId) return
     useMessagesStore.getState().addUserMessage(text, agentId)
-    useGatewayStore.getState().send(hub.hubId, "message", { agentId, content: text })
+    useGatewayStore.getState().send(hubId, "message", { agentId, content: text })
   }, [])
 
   const canSend = gwState === "registered" && !!activeAgentId
