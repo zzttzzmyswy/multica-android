@@ -9,6 +9,8 @@ import type {
   SendErrorResponse,
   PingPayload,
   DeviceType,
+  DeviceInfo,
+  ListDevicesResponse,
 } from "./types.js";
 import { GatewayEvents } from "./types.js";
 import {
@@ -158,6 +160,24 @@ export class GatewayClient {
         data,
         (response: { event: string; data: string }) => {
           resolve(response.data);
+        }
+      );
+    });
+  }
+
+  /** List all devices connected to the Gateway */
+  listDevices(): Promise<DeviceInfo[]> {
+    return new Promise((resolve, reject) => {
+      if (!this.socket || !this.isRegistered) {
+        reject(new Error("Not registered"));
+        return;
+      }
+
+      this.socket.emit(
+        GatewayEvents.LIST_DEVICES,
+        {},
+        (response: ListDevicesResponse) => {
+          resolve(response.devices);
         }
       );
     });

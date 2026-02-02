@@ -169,6 +169,17 @@ export class EventsGateway
     this.server.to(targetSocketId).emit(GatewayEvents.RECEIVE, message);
   }
 
+  @SubscribeMessage(GatewayEvents.LIST_DEVICES)
+  handleListDevices(
+    @ConnectedSocket() client: Socket
+  ): { devices: DeviceInfo[] } {
+    const senderDevice = this.socketToDevice.get(client.id);
+    if (!senderDevice) {
+      return { devices: [] };
+    }
+    return { devices: this.getOnlineDevices() };
+  }
+
   @SubscribeMessage(GatewayEvents.PING)
   handlePing(
     @MessageBody() data: PingPayload,
@@ -184,7 +195,7 @@ export class EventsGateway
   }
 
   /** Get online devices of specified type */
-  getOnlineDevicesByType(type: "client" | "agent"): DeviceInfo[] {
+  getOnlineDevicesByType(type: DeviceType): DeviceInfo[] {
     return this.getOnlineDevices().filter((d) => d.deviceType === type);
   }
 

@@ -66,7 +66,7 @@ export class Hub {
       url,
       path: this.path,
       deviceId: this.hubId,
-      deviceType: "client",
+      deviceType: "hub",
       autoReconnect: true,
       reconnectDelay: 1000,
     });

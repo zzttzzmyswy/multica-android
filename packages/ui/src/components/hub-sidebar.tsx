@@ -43,18 +43,24 @@ export function HubSidebar() {
   const setActiveAgentId = useHubStore((s) => s.setActiveAgentId)
 
   const gwState = useGatewayStore((s) => s.connectionState)
-  const connect = useGatewayStore((s) => s.connect)
-  const disconnect = useGatewayStore((s) => s.disconnect)
-  const deviceId = useDeviceId()
+  const hubId = useGatewayStore((s) => s.hubId)
+  const hubs = useGatewayStore((s) => s.hubs)
+  const setHubId = useGatewayStore((s) => s.setHubId)
+  const listDevices = useGatewayStore((s) => s.listDevices)
 
   const [hubIdInput, setHubIdInput] = useState("")
-  const isDisconnected = gwState === "disconnected"
-  const isConnecting = gwState === "connecting" || gwState === "connected"
+  const isRegistered = gwState === "registered"
+  const needsHubSelection = isRegistered && !hubId
 
   const handleConnect = () => {
     const id = hubIdInput.trim()
-    if (!id || !deviceId) return
-    connect(deviceId, id)
+    if (!id) return
+    setHubId(id)
+  }
+
+  const handleDisconnect = () => {
+    useGatewayStore.setState({ hubId: null })
+    useHubStore.setState({ status: "idle", hub: null, agents: [], activeAgentId: null })
   }
 
   return (
@@ -62,31 +68,61 @@ export function HubSidebar() {
       <SidebarGroup>
         <SidebarGroupLabel>Hub</SidebarGroupLabel>
         <SidebarGroupContent>
-          {isDisconnected ? (
+          {!isRegistered ? (
+            <div className="flex items-center gap-2 px-2 py-1 text-sm">
+              <span className="size-2 rounded-full shrink-0 bg-yellow-500/50 animate-pulse" />
+              <span className="text-muted-foreground/70 text-xs">
+                {gwState === "disconnected" ? "Connecting to Gateway..." : "Registering..."}
+              </span>
+            </div>
+          ) : needsHubSelection ? (
             <div className="px-2 space-y-2 py-1">
+              {hubs.length > 0 && (
+                <div className="space-y-1">
+                  {hubs.map((h) => (
+                    <button
+                      key={h.deviceId}
+                      onClick={() => setHubId(h.deviceId)}
+                      className="w-full text-left px-2 py-1 rounded-md text-xs font-mono hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer truncate"
+                    >
+                      {h.deviceId}
+                    </button>
+                  ))}
+                </div>
+              )}
               <Input
                 value={hubIdInput}
                 onChange={(e) => setHubIdInput(e.target.value)}
-                placeholder="Enter Hub ID..."
+                placeholder="Or enter Hub ID..."
                 className="h-7 text-xs font-mono"
                 onKeyDown={(e) => e.key === "Enter" && handleConnect()}
               />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleConnect}
-                disabled={!hubIdInput.trim() || !deviceId}
-                className="w-full text-xs"
-              >
-                Connect
-              </Button>
+              <div className="flex gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleConnect}
+                  disabled={!hubIdInput.trim()}
+                  className="flex-1 text-xs"
+                >
+                  Connect
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => listDevices()}
+                  className="text-xs"
+                >
+                  Refresh
+                </Button>
+              </div>
             </div>
           ) : (
             <>
               <div className="flex items-center gap-2 px-2 py-1 text-sm">
                 <span className={`size-2 rounded-full shrink-0 ${STATUS_DOT[status] ?? STATUS_DOT.idle}`} />
                 <span className="text-muted-foreground/70 text-xs">
-                  {isConnecting ? "Connecting..." : STATUS_LABEL[status]}
+                  {STATUS_LABEL[status]}
                 </span>
               </div>
               {status === "connected" && hub ? (
@@ -97,7 +133,7 @@ export function HubSidebar() {
                 <Skeleton className="mx-2 h-3.5 w-32" />
               ) : null}
               <div className="px-2 pt-1">
-                <Button variant="outline" size="sm" onClick={disconnect} className="w-full text-xs">
+                <Button variant="outline" size="sm" onClick={handleDisconnect} className="w-full text-xs">
                   Disconnect
                 </Button>
               </div>
@@ -106,7 +142,7 @@ export function HubSidebar() {
         </SidebarGroupContent>
       </SidebarGroup>
 
-      {isConnecting && (
+      {isRegistered && hubId && (status === "idle" || status === "loading") && (
         <SidebarGroup>
           <SidebarGroupLabel>Agents</SidebarGroupLabel>
           <SidebarGroupContent>

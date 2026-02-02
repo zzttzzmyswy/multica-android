@@ -11,6 +11,7 @@ export {
   type ConnectionState,
   type PingPayload,
   type PongResponse,
+  type ListDevicesResponse,
 } from "./types.js";
 
 // Actions
