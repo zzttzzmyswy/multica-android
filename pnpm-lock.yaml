@@ -285,6 +285,9 @@ importers:
       react:
         specifier: 'catalog:'
         version: 19.2.3
+      uuid:
+        specifier: ^13.0.0
+        version: 13.0.0
       zustand:
         specifier: 'catalog:'
         version: 5.0.10(@types/react@19.2.10)(react@19.2.3)(use-sync-external-store@1.6.0(react@19.2.3))

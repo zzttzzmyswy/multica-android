@@ -10,6 +10,7 @@
   "dependencies": {
     "@multica/fetch": "workspace:*",
     "react": "catalog:",
+    "uuid": "^13.0.0",
     "zustand": "catalog:"
   },
   "devDependencies": {

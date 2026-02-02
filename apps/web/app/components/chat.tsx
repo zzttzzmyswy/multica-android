@@ -12,7 +12,7 @@ import { toast } from "@multica/ui/components/ui/sonner";
 import { useMessages } from "../hooks/use-messages";
 import { useGateway } from "../hooks/use-gateway";
 import { useHubStore } from "@multica/store";
-import { useDeviceId } from "../hooks/use-device-id";
+import { useDeviceId } from "@multica/store";
 import { useScrollFade } from "../hooks/use-scroll-fade";
 import { cn } from "@multica/ui/lib/utils";
 

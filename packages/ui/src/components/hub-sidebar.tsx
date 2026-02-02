@@ -68,7 +68,7 @@ export function HubSidebar() {
         <SidebarGroup>
           <SidebarGroupLabel>Agents</SidebarGroupLabel>
           <SidebarGroupAction onClick={() => createAgent()} title="Create agent">
-            <HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} className="size-4" />
+            <HugeiconsIcon icon={PlusSignIcon} />
           </SidebarGroupAction>
           <SidebarGroupContent>
             <SidebarMenu>

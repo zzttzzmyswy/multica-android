@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react"
 import { GatewayClient, type ConnectionState, type RoutedMessage } from "@multica/sdk"
-import { useDeviceId } from "./use-device-id"
+import { useDeviceId } from "@multica/store"
 import { GATEWAY_URL } from "../lib/config"
 
 interface UseGatewayOptions {
