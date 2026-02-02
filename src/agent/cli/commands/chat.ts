@@ -11,7 +11,13 @@ import { Agent } from "../../runner.js";
 import type { AgentOptions } from "../../types.js";
 import { SkillManager } from "../../skills/index.js";
 import { autocompleteInput, type AutocompleteOption } from "../autocomplete.js";
-import { colors, dim, cyan, brightCyan, yellow, green, gray } from "../colors.js";
+import { colors, dim, cyan, brightCyan, yellow, green, gray, red } from "../colors.js";
+import {
+  getProviderList,
+  getCurrentProvider,
+  getLoginInstructions,
+  type ProviderInfo,
+} from "../../credentials/providers.js";
 
 type ChatOptions = {
   profile?: string;
@@ -31,6 +37,7 @@ const COMMANDS = {
   session: "Show current session ID",
   new: "Start a new session",
   multiline: "Toggle multi-line input mode (end with a line containing only '.')",
+  provider: "Show current provider and available options",
 };
 
 function printHelp() {
@@ -455,6 +462,10 @@ class InteractiveCLI {
         }
         return true;
 
+      case "provider":
+        this.showProviderStatus();
+        return true;
+
       default:
         const invocation = this.skillManager.resolveCommand(input);
         if (invocation) {
@@ -466,6 +477,57 @@ class InteractiveCLI {
         }
         return false;
     }
+  }
+
+  private showProviderStatus() {
+    const providers = getProviderList();
+    const currentProvider = this.opts.provider ?? getCurrentProvider();
+
+    console.log(`\n${cyan("🔌 Provider Status")}\n`);
+    console.log(`${dim("Current:")} ${green(currentProvider)}`);
+    if (this.opts.model) {
+      console.log(`${dim("Model:")} ${yellow(this.opts.model)}`);
+    }
+
+    console.log(`\n${dim("Available Providers:")}`);
+
+    // Group by auth method
+    const apiKeyProviders = providers.filter(p => p.authMethod === "api-key");
+    const oauthProviders = providers.filter(p => p.authMethod === "oauth");
+
+    // OAuth providers first (more interesting)
+    for (const p of oauthProviders) {
+      const status = p.available ? green("✓") : red("✗");
+      const current = p.id === currentProvider || (p.id === "claude-code" && currentProvider === "anthropic" && p.available) ? yellow(" (current)") : "";
+      const authLabel = cyan("[OAuth]");
+      const statusLabel = p.available ? green("ready") : dim("not logged in");
+      console.log(`  ${status} ${p.name.padEnd(20)} ${authLabel.padEnd(18)} ${statusLabel}${current}`);
+    }
+
+    // API Key providers
+    for (const p of apiKeyProviders) {
+      const status = p.available ? green("✓") : red("✗");
+      const current = p.id === currentProvider ? yellow(" (current)") : "";
+      const authLabel = dim("[API Key]");
+      const statusLabel = p.available ? green("configured") : dim("not configured");
+      console.log(`  ${status} ${p.name.padEnd(20)} ${authLabel.padEnd(18)} ${statusLabel}${current}`);
+    }
+
+    console.log(`\n${dim("To switch provider:")}`);
+    console.log(`  ${dim("•")} ${cyan("OAuth:")} Run login command (e.g., ${yellow("claude login")}), then restart`);
+    console.log(`  ${dim("•")} ${cyan("API Key:")} Add to ${yellow("~/.super-multica/credentials.json5")}`);
+    console.log(`  ${dim("•")} ${cyan("Session:")} Use ${yellow("--provider <name>")} flag when starting chat`);
+
+    // If user hasn't logged into Claude Code, show instructions
+    const claudeCode = providers.find(p => p.id === "claude-code");
+    if (claudeCode && !claudeCode.available) {
+      console.log(`\n${cyan("💡 Tip:")} To use Claude Code (free with Claude subscription):`);
+      console.log(`  1. Install Claude Code: ${yellow("npm install -g @anthropic-ai/claude-code")}`);
+      console.log(`  2. Login: ${yellow("claude login")}`);
+      console.log(`  3. Restart multica with: ${yellow("multica chat --provider claude-code")}`);
+    }
+
+    console.log("");
   }
 
   private async handleInput(input: string) {
