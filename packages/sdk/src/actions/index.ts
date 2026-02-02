@@ -14,6 +14,8 @@ export {
   type ResponseErrorPayload,
   isResponseSuccess,
   isResponseError,
+  type GetAgentMessagesParams,
+  type GetAgentMessagesResult,
 } from "./rpc.js";
 
 export { StreamAction, type StreamPayload } from "./stream.js";

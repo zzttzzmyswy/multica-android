@@ -11,6 +11,19 @@ import type {
   DeviceType,
 } from "./types.js";
 import { GatewayEvents } from "./types.js";
+import {
+  RequestAction,
+  ResponseAction,
+  type RequestPayload,
+  type ResponsePayload,
+  isResponseSuccess,
+} from "./actions/rpc.js";
+
+interface PendingRequest<T = unknown> {
+  resolve: (value: T) => void;
+  reject: (reason: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+}
 
 interface ResolvedOptions {
   url: string;
@@ -26,6 +39,7 @@ export class GatewayClient {
   private options: ResolvedOptions;
   private callbacks: GatewayClientCallbacks = {};
   private _state: ConnectionState = "disconnected";
+  private pendingRequests = new Map<string, PendingRequest>();
 
   constructor(options: GatewayClientOptions) {
     if (!options.deviceId) {
@@ -149,6 +163,32 @@ export class GatewayClient {
     });
   }
 
+  /** Send an RPC request and wait for the response */
+  request<T = unknown>(
+    to: string,
+    method: string,
+    params?: unknown,
+    timeout = 10_000,
+  ): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      if (!this.socket || !this.isRegistered) {
+        reject(new Error("Not registered"));
+        return;
+      }
+
+      const requestId = this.generateMessageId();
+      const timer = setTimeout(() => {
+        this.pendingRequests.delete(requestId);
+        reject(new Error(`RPC request timed out: ${method}`));
+      }, timeout);
+
+      this.pendingRequests.set(requestId, { resolve: resolve as (v: unknown) => void, reject, timer });
+
+      const payload: RequestPayload = { requestId, method, params };
+      this.send(to, RequestAction, payload);
+    });
+  }
+
   /** 注册连接回调 */
   onConnect(callback: (socketId: string) => void): this {
     this.callbacks.onConnect = callback;
@@ -219,6 +259,12 @@ export class GatewayClient {
 
     this.socket.on("disconnect", (reason: string) => {
       this.setState("disconnected");
+      // Reject all pending RPC requests
+      for (const [id, pending] of this.pendingRequests) {
+        clearTimeout(pending.timer);
+        pending.reject(new Error("Disconnected"));
+      }
+      this.pendingRequests.clear();
       this.callbacks.onDisconnect?.(reason);
     });
 
@@ -235,6 +281,21 @@ export class GatewayClient {
     );
 
     this.socket.on(GatewayEvents.RECEIVE, (message: RoutedMessage) => {
+      // Intercept RPC responses and resolve pending requests
+      if (message.action === ResponseAction) {
+        const response = message.payload as ResponsePayload;
+        const pending = this.pendingRequests.get(response.requestId);
+        if (pending) {
+          this.pendingRequests.delete(response.requestId);
+          clearTimeout(pending.timer);
+          if (isResponseSuccess(response)) {
+            pending.resolve(response.payload);
+          } else {
+            pending.reject(new Error(`RPC error [${response.error.code}]: ${response.error.message}`));
+          }
+          return;
+        }
+      }
       this.callbacks.onMessage?.(message);
     });
 
