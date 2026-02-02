@@ -32,6 +32,8 @@ export interface SkillAddRequest {
   force?: boolean | undefined;
   /** Timeout in milliseconds (default: 60000) */
   timeoutMs?: number | undefined;
+  /** Profile ID to install to (installs to profile's skills directory instead of global) */
+  profileId?: string | undefined;
 }
 
 export interface SkillAddResult {
@@ -65,6 +67,19 @@ const DEFAULT_TIMEOUT_MS = 60_000;
 
 /** Skills directory: ~/.super-multica/skills */
 const SKILLS_DIR = join(DATA_DIR, "skills");
+
+/** Profile base directory: ~/.super-multica/agent-profiles */
+const PROFILE_BASE_DIR = join(DATA_DIR, "agent-profiles");
+
+/**
+ * Get the skills directory for a given profile or global
+ */
+function getSkillsDir(profileId?: string): string {
+  if (profileId) {
+    return join(PROFILE_BASE_DIR, profileId, "skills");
+  }
+  return SKILLS_DIR;
+}
 
 // ============================================================================
 // Source Parsing
@@ -396,9 +411,12 @@ async function addSkillInternal(request: SkillAddRequest): Promise<SkillAddResul
   const { owner, repo, skillPath, ref } = parsed;
   const repoUrl = `https://github.com/${owner}/${repo}.git`;
 
+  // Determine target directory based on profileId
+  const skillsDir = getSkillsDir(request.profileId);
+
   // Determine target name
   const targetName = request.name ?? (skillPath ? basename(skillPath) : repo);
-  const targetDir = join(SKILLS_DIR, targetName);
+  const targetDir = join(skillsDir, targetName);
 
   // Check if exists
   if (existsSync(targetDir) && !request.force) {
@@ -409,7 +427,7 @@ async function addSkillInternal(request: SkillAddRequest): Promise<SkillAddResul
   }
 
   // Ensure skills directory exists
-  await mkdir(SKILLS_DIR, { recursive: true });
+  await mkdir(skillsDir, { recursive: true });
 
   // Remove existing if force
   if (existsSync(targetDir)) {
@@ -492,12 +510,13 @@ async function addSkillInternal(request: SkillAddRequest): Promise<SkillAddResul
     return dir === targetDir ? targetName : basename(dir);
   });
 
+  const destination = request.profileId ? `profile '${request.profileId}'` : "global skills";
   return {
     ok: true,
     message:
       skillNames.length === 1
-        ? `Added skill '${targetName}' to ${targetDir}`
-        : `Added ${skillNames.length} skills from ${owner}/${repo}`,
+        ? `Added skill '${targetName}' to ${destination}`
+        : `Added ${skillNames.length} skills from ${owner}/${repo} to ${destination}`,
     path: targetDir,
     skills: skillNames.length > 0 ? skillNames : [targetName],
   };

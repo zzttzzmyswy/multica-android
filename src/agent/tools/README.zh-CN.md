@@ -99,18 +99,20 @@
 
 ### CLI 使用
 
+所有命令使用统一的 `multica` CLI（开发时使用 `pnpm multica`）。
+
 ```bash
 # 使用特定配置文件
-pnpm agent:cli --tools-profile coding "list files"
+multica run --tools-profile coding "list files"
 
 # 最小配置文件 + 允许特定工具
-pnpm agent:cli --tools-profile minimal --tools-allow exec "run ls"
+multica run --tools-profile minimal --tools-allow exec "run ls"
 
 # 禁止特定工具
-pnpm agent:cli --tools-deny exec,process "read file.txt"
+multica run --tools-deny exec,process "read file.txt"
 
 # 使用工具组
-pnpm agent:cli --tools-allow group:fs "read config.json"
+multica run --tools-allow group:fs "read config.json"
 ```
 
 ### 编程使用
@@ -146,19 +148,19 @@ const agent = new Agent({
 
 ```bash
 # 列出所有可用工具
-pnpm tools:cli list
+multica tools list
 
 # 列出应用配置文件后的工具
-pnpm tools:cli list --profile coding
+multica tools list --profile coding
 
 # 列出带有禁止规则的工具
-pnpm tools:cli list --profile coding --deny exec
+multica tools list --profile coding --deny exec
 
 # 显示所有工具组
-pnpm tools:cli groups
+multica tools groups
 
 # 显示所有配置文件
-pnpm tools:cli profiles
+multica tools profiles
 ```
 
 ## 策略系统详情
@@ -261,7 +263,7 @@ export const TOOL_GROUPS: Record<string, string[]> = {
 运行策略系统测试：
 
 ```bash
-npx tsx src/agent/tools/policy.test.ts
+pnpm test src/agent/tools/policy.test.ts
 ```
 
 ## Agent Profile 集成
@@ -315,7 +317,7 @@ npx tsx src/agent/tools/policy.test.ts
 # Profile 有 tools.profile = "coding"
 # CLI 添加 --tools-deny exec
 # 结果: coding 配置文件但没有 exec 工具
-pnpm agent:cli --profile my-agent --tools-deny exec "list files"
+multica run --profile my-agent --tools-deny exec "list files"
 ```
 
 ## 未来工具

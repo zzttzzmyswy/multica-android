@@ -203,6 +203,40 @@ Higher priority sources override skills with the same ID.
 
 On first run, bundled skills are automatically copied to the managed directory (`~/.super-multica/skills/`). This makes them editable and allows users to customize or remove them.
 
+### Adding Profile-Specific Skills
+
+You can install skills directly to a profile using the `--profile` option:
+
+```bash
+# Install skill to a specific profile
+multica skills add owner/repo --profile my-agent
+
+# Install with force overwrite
+multica skills add owner/repo/skill-name --profile my-agent --force
+```
+
+Alternatively, create them manually:
+
+```bash
+# Create profile skills directory
+mkdir -p ~/.super-multica/agent-profiles/<profile-id>/skills/<skill-name>
+
+# Create the SKILL.md file
+cat > ~/.super-multica/agent-profiles/<profile-id>/skills/<skill-name>/SKILL.md << 'EOF'
+---
+name: My Profile Skill
+version: 1.0.0
+description: A skill specific to this profile
+---
+
+# Instructions
+
+Your skill instructions here...
+EOF
+```
+
+Profile skills automatically override managed skills with the same ID, allowing per-profile customization.
+
 ### Eligibility Filtering
 
 After loading, skills are filtered by:
@@ -219,13 +253,15 @@ Only skills passing all checks are marked as eligible.
 
 ## CLI Commands
 
+All commands use the unified `multica` CLI (or `pnpm multica` during development).
+
 ### List Skills
 
 ```bash
-pnpm skills:cli list           # List all skills
-pnpm skills:cli list -v        # Verbose mode
-pnpm skills:cli status         # Summary status
-pnpm skills:cli status <id>    # Specific skill status
+multica skills list           # List all skills
+multica skills list -v        # Verbose mode
+multica skills status         # Summary status
+multica skills status <id>    # Specific skill status
 ```
 
 ### Install from GitHub
@@ -247,32 +283,32 @@ anthropics/skills/
 
 Install the entire repository (all 16 skills):
 ```bash
-pnpm skills:cli add anthropics/skills
+multica skills add anthropics/skills
 # Installs to: ~/.super-multica/skills/skills/
 # All skills available: algorithmic-art, brand-guidelines, pdf, etc.
 ```
 
 Install a single skill only:
 ```bash
-pnpm skills:cli add anthropics/skills/skills/pdf
+multica skills add anthropics/skills/skills/pdf
 # Installs to: ~/.super-multica/skills/pdf/
 # Only the pdf skill is installed
 ```
 
 Install from a specific branch or tag:
 ```bash
-pnpm skills:cli add anthropics/skills@main
+multica skills add anthropics/skills@main
 ```
 
 Using full URL:
 ```bash
-pnpm skills:cli add https://github.com/anthropics/skills
-pnpm skills:cli add https://github.com/anthropics/skills/tree/main/skills/pdf
+multica skills add https://github.com/anthropics/skills
+multica skills add https://github.com/anthropics/skills/tree/main/skills/pdf
 ```
 
 Force overwrite existing:
 ```bash
-pnpm skills:cli add anthropics/skills --force
+multica skills add anthropics/skills --force
 ```
 
 **Supported formats:**
@@ -288,15 +324,15 @@ pnpm skills:cli add anthropics/skills --force
 ### Remove Skills
 
 ```bash
-pnpm skills:cli remove <name>   # Remove installed skill
-pnpm skills:cli remove          # List installed skills
+multica skills remove <name>   # Remove installed skill
+multica skills remove          # List installed skills
 ```
 
 ### Install Dependencies
 
 ```bash
-pnpm skills:cli install <id>              # Install skill dependencies
-pnpm skills:cli install <id> <install-id> # Specific install option
+multica skills install <id>              # Install skill dependencies
+multica skills install <id> <install-id> # Specific install option
 ```
 
 ---
@@ -308,8 +344,8 @@ The `status` command provides detailed diagnostics for understanding why skills 
 ### Summary Status
 
 ```bash
-pnpm skills:cli status        # Show summary with grouping by issue type
-pnpm skills:cli status -v     # Verbose mode with hints
+multica skills status        # Show summary with grouping by issue type
+multica skills status -v     # Verbose mode with hints
 ```
 
 Output shows:
@@ -319,7 +355,7 @@ Output shows:
 ### Detailed Skill Status
 
 ```bash
-pnpm skills:cli status <skill-id>
+multica skills status <skill-id>
 ```
 
 Output includes:

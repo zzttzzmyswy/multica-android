@@ -99,18 +99,20 @@ Profiles are predefined tool sets for common use cases:
 
 ### CLI Usage
 
+All commands use the unified `multica` CLI (or `pnpm multica` during development).
+
 ```bash
 # Use a specific profile
-pnpm agent:cli --tools-profile coding "list files"
+multica run --tools-profile coding "list files"
 
 # Minimal profile with specific tools allowed
-pnpm agent:cli --tools-profile minimal --tools-allow exec "run ls"
+multica run --tools-profile minimal --tools-allow exec "run ls"
 
 # Deny specific tools
-pnpm agent:cli --tools-deny exec,process "read file.txt"
+multica run --tools-deny exec,process "read file.txt"
 
 # Use tool groups
-pnpm agent:cli --tools-allow group:fs "read config.json"
+multica run --tools-allow group:fs "read config.json"
 ```
 
 ### Programmatic Usage
@@ -146,19 +148,19 @@ Use the tools CLI to inspect and test configurations:
 
 ```bash
 # List all available tools
-pnpm tools:cli list
+multica tools list
 
 # List tools after applying a profile
-pnpm tools:cli list --profile coding
+multica tools list --profile coding
 
 # List tools with deny rules
-pnpm tools:cli list --profile coding --deny exec
+multica tools list --profile coding --deny exec
 
 # Show all tool groups
-pnpm tools:cli groups
+multica tools groups
 
 # Show all profiles
-pnpm tools:cli profiles
+multica tools profiles
 ```
 
 ## Policy System Details
@@ -261,7 +263,7 @@ export const TOOL_GROUPS: Record<string, string[]> = {
 Run the policy system tests:
 
 ```bash
-npx tsx src/agent/tools/policy.test.ts
+pnpm test src/agent/tools/policy.test.ts
 ```
 
 ## Agent Profile Integration
@@ -315,7 +317,7 @@ When both Profile config and CLI options are provided:
 # Profile has tools.profile = "coding"
 # CLI adds --tools-deny exec
 # Result: coding profile without exec tool
-pnpm agent:cli --profile my-agent --tools-deny exec "list files"
+multica run --profile my-agent --tools-deny exec "list files"
 ```
 
 ## Future Tools
