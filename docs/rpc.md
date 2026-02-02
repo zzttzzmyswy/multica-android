@@ -207,6 +207,136 @@ const result = await client.request<GetAgentMessagesResult>(
 }
 ```
 
+### `getHubInfo`
+
+Returns Hub status information. No parameters required.
+
+**Response:**
+
+```ts
+interface GetHubInfoResult {
+  hubId: string;          // Hub device ID
+  url: string;            // Current Gateway URL
+  connectionState: string; // "disconnected" | "connecting" | "connected" | "registered"
+  agentCount: number;     // Number of active agents
+}
+```
+
+**Example:**
+
+```ts
+const info = await client.request<GetHubInfoResult>(hubDeviceId, "getHubInfo");
+```
+
+---
+
+### `listAgents`
+
+Lists all active agents. No parameters required.
+
+**Response:**
+
+```ts
+interface ListAgentsResult {
+  agents: { id: string; closed: boolean }[];
+}
+```
+
+**Example:**
+
+```ts
+const result = await client.request<ListAgentsResult>(hubDeviceId, "listAgents");
+```
+
+---
+
+### `createAgent`
+
+Creates a new agent or restores an existing one.
+
+**Parameters:**
+
+```ts
+interface CreateAgentParams {
+  id?: string;  // optional - reuse existing session ID
+}
+```
+
+**Response:**
+
+```ts
+interface CreateAgentResult {
+  id: string;   // the created/restored agent session ID
+}
+```
+
+**Example:**
+
+```ts
+const result = await client.request<CreateAgentResult>(hubDeviceId, "createAgent");
+// or with specific ID:
+const result = await client.request<CreateAgentResult>(hubDeviceId, "createAgent", { id: "existing-id" });
+```
+
+---
+
+### `deleteAgent`
+
+Closes and removes an agent.
+
+**Parameters:**
+
+```ts
+interface DeleteAgentParams {
+  id: string;   // required - agent ID to delete
+}
+```
+
+**Response:**
+
+```ts
+interface DeleteAgentResult {
+  ok: boolean;  // true if agent was found and deleted
+}
+```
+
+**Example:**
+
+```ts
+const result = await client.request<DeleteAgentResult>(hubDeviceId, "deleteAgent", { id: "019abc12-..." });
+```
+
+---
+
+### `updateGateway`
+
+Reconnects the Hub to a different Gateway URL.
+
+**Parameters:**
+
+```ts
+interface UpdateGatewayParams {
+  url: string;  // required - new Gateway URL
+}
+```
+
+**Response:**
+
+```ts
+interface UpdateGatewayResult {
+  url: string;            // the new URL
+  connectionState: string; // connection state after reconnect
+}
+```
+
+**Example:**
+
+```ts
+const result = await client.request<UpdateGatewayResult>(hubDeviceId, "updateGateway", { url: "http://localhost:4000" });
+```
+
+---
+
 ## Adding New RPC Methods
 
 1. Create a handler file in `src/hub/rpc/handlers/`:

@@ -16,6 +16,14 @@ export {
   isResponseError,
   type GetAgentMessagesParams,
   type GetAgentMessagesResult,
+  type GetHubInfoResult,
+  type ListAgentsResult,
+  type CreateAgentParams,
+  type CreateAgentResult,
+  type DeleteAgentParams,
+  type DeleteAgentResult,
+  type UpdateGatewayParams,
+  type UpdateGatewayResult,
 } from "./rpc.js";
 
 export { StreamAction, type StreamPayload } from "./stream.js";

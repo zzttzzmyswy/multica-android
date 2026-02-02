@@ -72,3 +72,47 @@ export interface GetAgentMessagesResult {
   offset: number;
   limit: number;
 }
+
+/** getHubInfo - no params needed */
+export interface GetHubInfoResult {
+  hubId: string;
+  url: string;
+  connectionState: string;
+  agentCount: number;
+}
+
+/** listAgents - no params needed */
+export interface ListAgentsResult {
+  agents: { id: string; closed: boolean }[];
+}
+
+/** createAgent - request params */
+export interface CreateAgentParams {
+  id?: string;
+}
+
+/** createAgent - response payload */
+export interface CreateAgentResult {
+  id: string;
+}
+
+/** deleteAgent - request params */
+export interface DeleteAgentParams {
+  id: string;
+}
+
+/** deleteAgent - response payload */
+export interface DeleteAgentResult {
+  ok: boolean;
+}
+
+/** updateGateway - request params */
+export interface UpdateGatewayParams {
+  url: string;
+}
+
+/** updateGateway - response payload */
+export interface UpdateGatewayResult {
+  url: string;
+  connectionState: string;
+}
