@@ -118,6 +118,11 @@ export function extractResultDetails(result: unknown): Record<string, unknown> |
     }
   }
 
+  const withDetails = result as { details?: unknown };
+  if (withDetails.details && typeof withDetails.details === "object") {
+    return withDetails.details as Record<string, unknown>;
+  }
+
   // Try direct object access
   return result as Record<string, unknown>;
 }
@@ -252,8 +257,18 @@ export function createAgentOutput(params: {
       }
       case "tool_execution_end": {
         // Stop spinner and show final result with summary
-        if (event.isError) {
-          const errorText = extractText(event.result) || "Tool failed";
+        const details = extractResultDetails(event.result);
+        const errorField = details?.error;
+        const hasError =
+          event.isError ||
+          Boolean(errorField) ||
+          details?.success === false;
+        if (hasError) {
+          const errorText =
+            (typeof details?.message === "string" && details.message) ||
+            (typeof errorField === "string" && errorField) ||
+            extractText(event.result) ||
+            "Tool failed";
           const bullet = colors.toolError("✗");
           const title = colors.toolName(toolDisplayName(event.toolName));
           spinner.stop(`${bullet} ${title}: ${colors.toolError(errorText)}`);
