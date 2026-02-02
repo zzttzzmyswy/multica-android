@@ -1,12 +1,22 @@
-import type { HubOptions } from "./types.js";
-import { GatewayClient, type ConnectionState } from "@multica/sdk";
+import {
+  GatewayClient,
+  type ConnectionState,
+  RequestAction,
+  ResponseAction,
+  type RequestPayload,
+  type ResponseSuccessPayload,
+  type ResponseErrorPayload,
+} from "@multica/sdk";
 import { AsyncAgent } from "../agent/async-agent.js";
 import { getHubId } from "./hub-identity.js";
 import { loadAgentRecords, addAgentRecord, removeAgentRecord } from "./agent-store.js";
+import { RpcDispatcher, RpcError } from "./rpc/dispatcher.js";
+import { createGetAgentMessagesHandler } from "./rpc/handlers/get-agent-messages.js";
 
 export class Hub {
   private readonly agents = new Map<string, AsyncAgent>();
   private readonly agentSenders = new Map<string, string>();
+  private readonly rpc: RpcDispatcher;
   private client: GatewayClient;
   url: string;
   readonly path: string;
@@ -21,6 +31,10 @@ export class Hub {
     this.url = url;
     this.path = path ?? "/ws";
     this.hubId = getHubId();
+
+    this.rpc = new RpcDispatcher();
+    this.rpc.register("getAgentMessages", createGetAgentMessagesHandler());
+
     this.client = this.createClient(this.url);
     this.client.connect();
     this.restoreAgents();
@@ -61,6 +75,15 @@ export class Hub {
 
     client.onMessage((msg) => {
       console.log(`[Hub] Received message: id=${msg.id} from=${msg.from} to=${msg.to} action=${msg.action} payload=${JSON.stringify(msg.payload)}`);
+
+      // RPC request
+      if (msg.action === RequestAction) {
+        const payload = msg.payload as RequestPayload;
+        void this.handleRpc(msg.from, payload);
+        return;
+      }
+
+      // Regular chat message
       const payload = msg.payload as { agentId?: string; content?: string } | undefined;
       const agentId = payload?.agentId;
       const content = payload?.content;
@@ -128,6 +151,28 @@ export class Hub {
           content: msg.content,
         });
       }
+    }
+  }
+
+  /** Handle RPC request and send response back via Gateway */
+  private async handleRpc(from: string, request: RequestPayload): Promise<void> {
+    const { requestId, method } = request;
+    try {
+      const result = await this.rpc.dispatch(method, request.params);
+      this.client.send<ResponseSuccessPayload>(from, ResponseAction, {
+        requestId,
+        ok: true,
+        payload: result,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const code = err instanceof RpcError ? err.code : "RPC_ERROR";
+      console.error(`[Hub] RPC error: method=${method} code=${code} error=${message}`);
+      this.client.send<ResponseErrorPayload>(from, ResponseAction, {
+        requestId,
+        ok: false,
+        error: { code, message },
+      });
     }
   }
 
