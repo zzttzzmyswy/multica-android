@@ -490,6 +490,8 @@ class InteractiveCLI {
     }
 
     console.log(`\n${dim("Available Providers:")}`);
+    console.log(`  ${dim("ID".padEnd(16))} ${dim("Name".padEnd(20))} ${dim("Auth".padEnd(12))} ${dim("Status")}`);
+    console.log(`  ${dim("─".repeat(70))}`);
 
     // Group by auth method
     const apiKeyProviders = providers.filter(p => p.authMethod === "api-key");
@@ -498,33 +500,40 @@ class InteractiveCLI {
     // OAuth providers first (more interesting)
     for (const p of oauthProviders) {
       const status = p.available ? green("✓") : red("✗");
-      const current = p.id === currentProvider || (p.id === "claude-code" && currentProvider === "anthropic" && p.available) ? yellow(" (current)") : "";
-      const authLabel = cyan("[OAuth]");
+      const isCurrent = p.id === currentProvider || (p.id === "claude-code" && currentProvider === "anthropic" && p.available);
+      const current = isCurrent ? yellow(" (current)") : "";
+      const idDisplay = isCurrent ? yellow(p.id.padEnd(16)) : p.id.padEnd(16);
+      const authLabel = cyan("OAuth");
       const statusLabel = p.available ? green("ready") : dim("not logged in");
-      console.log(`  ${status} ${p.name.padEnd(20)} ${authLabel.padEnd(18)} ${statusLabel}${current}`);
+      console.log(`  ${status} ${idDisplay} ${p.name.padEnd(20)} ${authLabel.padEnd(12)} ${statusLabel}${current}`);
     }
 
     // API Key providers
     for (const p of apiKeyProviders) {
       const status = p.available ? green("✓") : red("✗");
-      const current = p.id === currentProvider ? yellow(" (current)") : "";
-      const authLabel = dim("[API Key]");
+      const isCurrent = p.id === currentProvider;
+      const current = isCurrent ? yellow(" (current)") : "";
+      const idDisplay = isCurrent ? yellow(p.id.padEnd(16)) : p.id.padEnd(16);
+      const authLabel = dim("API Key");
       const statusLabel = p.available ? green("configured") : dim("not configured");
-      console.log(`  ${status} ${p.name.padEnd(20)} ${authLabel.padEnd(18)} ${statusLabel}${current}`);
+      console.log(`  ${status} ${idDisplay} ${p.name.padEnd(20)} ${authLabel.padEnd(12)} ${statusLabel}${current}`);
     }
 
-    console.log(`\n${dim("To switch provider:")}`);
-    console.log(`  ${dim("•")} ${cyan("OAuth:")} Run login command (e.g., ${yellow("claude login")}), then restart`);
-    console.log(`  ${dim("•")} ${cyan("API Key:")} Add to ${yellow("~/.super-multica/credentials.json5")}`);
-    console.log(`  ${dim("•")} ${cyan("Session:")} Use ${yellow("--provider <name>")} flag when starting chat`);
+    console.log(`\n${dim("Usage:")}`);
+    console.log(`  ${yellow("multica --provider <id>")}       ${dim("Start chat with specific provider")}`);
+    console.log(`  ${yellow("multica --provider <id> --model <model>")}  ${dim("Specify model too")}`);
+
+    console.log(`\n${dim("Examples:")}`);
+    console.log(`  ${yellow("multica --provider claude-code")}  ${dim("Use Claude Code OAuth")}`);
+    console.log(`  ${yellow("multica --provider openai")}       ${dim("Use OpenAI with API Key")}`);
 
     // If user hasn't logged into Claude Code, show instructions
     const claudeCode = providers.find(p => p.id === "claude-code");
     if (claudeCode && !claudeCode.available) {
       console.log(`\n${cyan("💡 Tip:")} To use Claude Code (free with Claude subscription):`);
-      console.log(`  1. Install Claude Code: ${yellow("npm install -g @anthropic-ai/claude-code")}`);
-      console.log(`  2. Login: ${yellow("claude login")}`);
-      console.log(`  3. Restart multica with: ${yellow("multica chat --provider claude-code")}`);
+      console.log(`  1. Install: ${yellow("npm install -g @anthropic-ai/claude-code")}`);
+      console.log(`  2. Login:   ${yellow("claude login")}`);
+      console.log(`  3. Use:     ${yellow("multica --provider claude-code")}`);
     }
 
     console.log("");
