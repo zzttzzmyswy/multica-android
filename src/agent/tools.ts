@@ -1,5 +1,4 @@
 import type { AgentOptions } from "./types.js";
-import { getModel } from "@mariozechner/pi-ai";
 import { createCodingTools } from "@mariozechner/pi-coding-agent";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { createExecTool } from "./tools/exec.js";
@@ -9,24 +8,16 @@ import { createWebFetchTool, createWebSearchTool } from "./tools/web/index.js";
 import { createMemoryTools } from "./tools/memory/index.js";
 import { filterTools } from "./tools/policy.js";
 
-export function resolveModel(options: AgentOptions) {
-  if (options.provider && options.model) {
-    // Type assertion needed because provider/model come from dynamic user config
-    return (getModel as (p: string, m: string) => ReturnType<typeof getModel>)(
-      options.provider,
-      options.model,
-    );
-  }
-  return getModel("kimi-coding", "kimi-k2-thinking");
-}
+// Re-export resolveModel from providers for backwards compatibility
+export { resolveModel } from "./providers/index.js";
 
 /** Options for creating tools */
 export interface CreateToolsOptions {
   cwd: string;
   /** Profile ID for memory tools (optional) */
-  profileId?: string;
+  profileId?: string | undefined;
   /** Base directory for profiles (optional) */
-  profileBaseDir?: string;
+  profileBaseDir?: string | undefined;
 }
 
 /**

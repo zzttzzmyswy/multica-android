@@ -11,7 +11,14 @@ import { Agent } from "../../runner.js";
 import type { AgentOptions } from "../../types.js";
 import { SkillManager } from "../../skills/index.js";
 import { autocompleteInput, type AutocompleteOption } from "../autocomplete.js";
-import { colors, dim, cyan, brightCyan, yellow, green, gray } from "../colors.js";
+import { colors, dim, cyan, brightCyan, yellow, green, gray, red } from "../colors.js";
+import {
+  getProviderList,
+  getCurrentProvider,
+  getLoginInstructions,
+  getProviderMeta,
+  type ProviderInfo,
+} from "../../providers/index.js";
 
 type ChatOptions = {
   profile?: string;
@@ -31,6 +38,8 @@ const COMMANDS = {
   session: "Show current session ID",
   new: "Start a new session",
   multiline: "Toggle multi-line input mode (end with a line containing only '.')",
+  provider: "Show current provider and available options",
+  model: "Show or switch model (usage: /model [model-name])",
 };
 
 function printHelp() {
@@ -455,6 +464,14 @@ class InteractiveCLI {
         }
         return true;
 
+      case "provider":
+        this.showProviderStatus();
+        return true;
+
+      case "model":
+        this.handleModelCommand(input);
+        return true;
+
       default:
         const invocation = this.skillManager.resolveCommand(input);
         if (invocation) {
@@ -466,6 +483,126 @@ class InteractiveCLI {
         }
         return false;
     }
+  }
+
+  private handleModelCommand(input: string) {
+    const parts = input.trim().split(/\s+/);
+    const modelArg = parts.slice(1).join(" ").trim();
+    const currentProvider = this.opts.provider ?? getCurrentProvider();
+    const providerMeta = getProviderMeta(currentProvider);
+
+    if (!providerMeta) {
+      console.log(`${red("Error:")} Unknown provider: ${currentProvider}\n`);
+      return;
+    }
+
+    // No argument - show current model and available models
+    if (!modelArg) {
+      console.log(`\n${cyan("🎯 Model Status")}\n`);
+      console.log(`${dim("Provider:")} ${green(currentProvider)}`);
+      console.log(`${dim("Current model:")} ${yellow(this.opts.model ?? providerMeta.defaultModel)}`);
+      console.log(`${dim("Default model:")} ${gray(providerMeta.defaultModel)}`);
+
+      console.log(`\n${dim("Available models for")} ${green(currentProvider)}${dim(":")}`);
+      for (const model of providerMeta.models) {
+        const isCurrent = model === (this.opts.model ?? providerMeta.defaultModel);
+        const marker = isCurrent ? yellow(" (current)") : "";
+        const modelDisplay = isCurrent ? yellow(model) : model;
+        console.log(`  • ${modelDisplay}${marker}`);
+      }
+
+      console.log(`\n${dim("Switch model:")} ${yellow(`/model <model-name>`)}`);
+      console.log(`${dim("Example:")} ${yellow(`/model ${providerMeta.models[0]}`)}`);
+      console.log("");
+      return;
+    }
+
+    // Check if model is valid for current provider
+    const normalizedModel = modelArg.toLowerCase();
+    const matchedModel = providerMeta.models.find(
+      (m) => m.toLowerCase() === normalizedModel
+    );
+
+    if (!matchedModel) {
+      console.log(`${red("Error:")} Model "${modelArg}" is not available for provider "${currentProvider}".`);
+      console.log(`\n${dim("Available models:")}`);
+      for (const model of providerMeta.models) {
+        console.log(`  • ${model}`);
+      }
+      console.log("");
+      return;
+    }
+
+    // Switch model
+    const oldModel = this.opts.model ?? providerMeta.defaultModel;
+    this.opts.model = matchedModel;
+
+    // Recreate agent with new model
+    this.agent = this.createAgent(this.agent.sessionId);
+    this.updateStatusBar();
+
+    console.log(`${green("✓")} Model switched: ${gray(oldModel)} → ${yellow(matchedModel)}`);
+    console.log(`${dim("Session preserved:")} ${gray(this.agent.sessionId.slice(0, 8))}...\n`);
+  }
+
+  private showProviderStatus() {
+    const providers = getProviderList();
+    const currentProvider = this.opts.provider ?? getCurrentProvider();
+
+    console.log(`\n${cyan("🔌 Provider Status")}\n`);
+    console.log(`${dim("Current:")} ${green(currentProvider)}`);
+    if (this.opts.model) {
+      console.log(`${dim("Model:")} ${yellow(this.opts.model)}`);
+    }
+
+    console.log(`\n${dim("Available Providers:")}`);
+    console.log(`  ${dim("ID".padEnd(16))} ${dim("Name".padEnd(20))} ${dim("Auth".padEnd(12))} ${dim("Status")}`);
+    console.log(`  ${dim("─".repeat(70))}`);
+
+    // Group by auth method
+    const apiKeyProviders = providers.filter(p => p.authMethod === "api-key");
+    const oauthProviders = providers.filter(p => p.authMethod === "oauth");
+
+    // OAuth providers first (more interesting)
+    for (const p of oauthProviders) {
+      const status = p.available ? green("✓") : red("✗");
+      const isCurrent = p.id === currentProvider || (p.id === "claude-code" && currentProvider === "anthropic" && p.available);
+      const current = isCurrent ? yellow(" (current)") : "";
+      const idDisplay = isCurrent ? yellow(p.id.padEnd(16)) : p.id.padEnd(16);
+      const authLabel = cyan("OAuth");
+      const statusLabel = p.available ? green("ready") : dim("not logged in");
+      console.log(`  ${status} ${idDisplay} ${p.name.padEnd(20)} ${authLabel.padEnd(12)} ${statusLabel}${current}`);
+    }
+
+    // API Key providers
+    for (const p of apiKeyProviders) {
+      const status = p.available ? green("✓") : red("✗");
+      const isCurrent = p.id === currentProvider;
+      const current = isCurrent ? yellow(" (current)") : "";
+      const idDisplay = isCurrent ? yellow(p.id.padEnd(16)) : p.id.padEnd(16);
+      const authLabel = dim("API Key");
+      const statusLabel = p.available ? green("configured") : dim("not configured");
+      console.log(`  ${status} ${idDisplay} ${p.name.padEnd(20)} ${authLabel.padEnd(12)} ${statusLabel}${current}`);
+    }
+
+    console.log(`\n${dim("Usage:")}`);
+    console.log(`  ${yellow("multica --provider <id>")}       ${dim("Start chat with specific provider")}`);
+    console.log(`  ${yellow("multica --provider <id> --model <model>")}  ${dim("Specify model too")}`);
+
+    console.log(`\n${dim("Examples:")}`);
+    console.log(`  ${yellow("multica --provider claude-code")}  ${dim("Use Claude Code OAuth")}`);
+    console.log(`  ${yellow("multica --provider openai")}       ${dim("Use OpenAI with API Key")}`);
+
+    // If user hasn't logged into Claude Code, show instructions
+    const claudeCode = providers.find(p => p.id === "claude-code");
+    if (claudeCode && !claudeCode.available) {
+      console.log(`\n${cyan("💡 Tip:")} To use Claude Code (free with Claude subscription):`);
+      console.log(`  1. Install: ${yellow("npm install -g @anthropic-ai/claude-code")}`);
+      console.log(`  2. Login:   ${yellow("claude login")}`);
+      console.log(`  3. Use:     ${yellow("multica --provider claude-code")}`);
+    }
+
+    console.log("");
   }
 
   private async handleInput(input: string) {

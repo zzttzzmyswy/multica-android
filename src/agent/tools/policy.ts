@@ -183,11 +183,11 @@ export function getSubagentPolicy(extraDeny?: string[]): ToolPolicy {
 
 export interface FilterToolsOptions {
   /** Tool configuration */
-  config?: ToolsConfig;
+  config?: ToolsConfig | undefined;
   /** Current LLM provider (for provider-specific rules) */
-  provider?: string;
+  provider?: string | undefined;
   /** Whether this is a subagent (applies subagent restrictions) */
-  isSubagent?: boolean;
+  isSubagent?: boolean | undefined;
 }
 
 /**

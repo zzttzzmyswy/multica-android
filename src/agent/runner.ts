@@ -8,38 +8,18 @@ import { ProfileManager } from "./profile/index.js";
 import { SkillManager } from "./skills/index.js";
 import { credentialManager, getCredentialsPath } from "./credentials.js";
 import {
+  resolveApiKey,
+  resolveBaseUrl,
+  resolveModelId,
+  isOAuthProvider,
+  getLoginInstructions,
+} from "./providers/index.js";
+import {
   checkContextWindow,
   DEFAULT_CONTEXT_TOKENS,
   type ContextWindowGuardResult,
 } from "./context-window/index.js";
 import { mergeToolsConfig, type ToolsConfig } from "./tools/policy.js";
-
-/**
- * Get API Key based on provider.
- * Priority: explicit key > provider-specific env var > generic env var format.
- */
-function resolveApiKey(provider: string, explicitKey?: string): string | undefined {
-  if (explicitKey) return explicitKey;
-  return credentialManager.getLlmProviderConfig(provider)?.apiKey;
-}
-
-/**
- * Get Base URL based on provider.
- * Priority: explicit URL > provider-specific env var > generic env var format.
- */
-function resolveBaseUrl(provider: string, explicitUrl?: string): string | undefined {
-  if (explicitUrl) return explicitUrl;
-  return credentialManager.getLlmProviderConfig(provider)?.baseUrl;
-}
-
-/**
- * Get Model ID based on provider.
- * Priority: explicit model > provider-specific env var > generic env var format.
- */
-function resolveModelId(provider: string, explicitModel?: string): string | undefined {
-  if (explicitModel) return explicitModel;
-  return credentialManager.getLlmProviderConfig(provider)?.model;
-}
 
 export class Agent {
   private readonly agent: PiAgentCore;
@@ -64,10 +44,37 @@ export class Agent {
     const resolvedModel = resolveModelId(resolvedProvider, options.model);
     const apiKey = resolveApiKey(resolvedProvider, options.apiKey);
 
+    // Validate credentials before proceeding
+    if (!apiKey) {
+      if (isOAuthProvider(resolvedProvider)) {
+        // OAuth provider without valid credentials - show login instructions
+        const instructions = getLoginInstructions(resolvedProvider);
+        throw new Error(
+          `Provider "${resolvedProvider}" requires authentication.\n\n` +
+          `${instructions}\n\n` +
+          `After logging in, run: multica --provider ${resolvedProvider}`,
+        );
+      }
+      // API Key provider without key - show configuration instructions
+      throw new Error(
+        `Provider "${resolvedProvider}" requires an API key.\n\n` +
+        `Add your API key to: ${getCredentialsPath()}\n\n` +
+        `Example:\n` +
+        `{\n` +
+        `  "llm": {\n` +
+        `    "provider": "${resolvedProvider}",\n` +
+        `    "providers": {\n` +
+        `      "${resolvedProvider}": {\n` +
+        `        "apiKey": "your-api-key-here"\n` +
+        `      }\n` +
+        `    }\n` +
+        `  }\n` +
+        `}`,
+      );
+    }
+
     this.agent = new PiAgentCore(
-      apiKey
-        ? { getApiKey: (_provider: string) => apiKey }
-        : {},
+      { getApiKey: (_provider: string) => apiKey },
     );
 
     // Load Agent Profile (if profileId is specified)
