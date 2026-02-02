@@ -37,7 +37,7 @@ export interface MemoryStorageOptions {
   /** Profile ID (required for storage path) */
   profileId: string;
   /** Base directory for profiles */
-  baseDir?: string;
+  baseDir?: string | undefined;
 }
 
 /** Result from memory_list */
