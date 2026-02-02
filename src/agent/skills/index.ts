@@ -479,11 +479,13 @@ export class SkillManager {
   }
 
   /**
-   * Build skills prompt excluding user-only skills
+   * Build skills prompt excluding user-only skills (metadata only)
    *
    * Only includes skills that are model-invocable (disableModelInvocation !== true)
+   * Uses progressive loading: only outputs name + description, not full instructions
+   * Full instructions are loaded on-demand via getSkillInstructions() when a skill is triggered
    *
-   * @returns Formatted skill documentation for AI system prompt
+   * @returns Formatted skill metadata for AI system prompt
    */
   buildModelSkillsPrompt(): string {
     this.ensureLoaded();
@@ -501,20 +503,45 @@ export class SkillManager {
 
     const parts: string[] = [];
     parts.push("# Available Skills\n");
-    parts.push("You have access to the following skills:\n");
+    parts.push("You have access to the following skills. When you need to use a skill, the full instructions will be provided.\n");
 
     for (const [id, skill] of modelSkills) {
       const emoji = skill.frontmatter.metadata?.emoji ?? "🔧";
       const name = skill.frontmatter.name;
       const desc = skill.frontmatter.description ?? "No description provided";
 
-      parts.push(`## ${emoji} ${name} (${id})`);
-      parts.push(`${desc}\n`);
+      // Progressive loading: only output metadata, not full instructions
+      parts.push(`- ${emoji} **${name}** (\`${id}\`): ${desc}`);
+    }
 
-      if (skill.instructions) {
-        parts.push(skill.instructions);
-        parts.push("");
-      }
+    parts.push("");
+    return parts.join("\n");
+  }
+
+  /**
+   * Build full skill prompt for injection when a skill is triggered
+   *
+   * This is used for on-demand loading - when a skill is invoked,
+   * this method provides the complete instructions to inject into context
+   *
+   * @param skillId - Skill identifier
+   * @returns Formatted skill prompt with full instructions, or undefined if not found
+   */
+  buildSkillPromptForInjection(skillId: string): string | undefined {
+    const skill = this.getSkill(skillId);
+    if (!skill) return undefined;
+
+    const emoji = skill.frontmatter.metadata?.emoji ?? "🔧";
+    const name = skill.frontmatter.name;
+    const desc = skill.frontmatter.description ?? "No description provided";
+
+    const parts: string[] = [];
+    parts.push(`# Skill: ${emoji} ${name}\n`);
+    parts.push(`${desc}\n`);
+
+    if (skill.instructions) {
+      parts.push("## Instructions\n");
+      parts.push(skill.instructions);
     }
 
     return parts.join("\n");
