@@ -3,7 +3,7 @@ export {
   HelloResponseAction,
   type HelloPayload,
   type HelloResponsePayload,
-} from "./hello.js";
+} from "./hello";
 
 export {
   RequestAction,
@@ -25,6 +25,6 @@ export {
   type DeleteAgentResult,
   type UpdateGatewayParams,
   type UpdateGatewayResult,
-} from "./rpc.js";
+} from "./rpc";
 
-export { StreamAction, type StreamPayload } from "./stream.js";
+export { StreamAction, type StreamPayload } from "./stream";

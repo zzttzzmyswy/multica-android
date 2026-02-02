@@ -2,14 +2,9 @@
   "name": "@multica/sdk",
   "version": "0.1.0",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "private": true,
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
-    },
+    ".": "./src/index.ts",
     "./*": "./src/*.ts"
   },
   "scripts": {

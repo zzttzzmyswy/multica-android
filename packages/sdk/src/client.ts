@@ -11,15 +11,15 @@ import type {
   DeviceType,
   DeviceInfo,
   ListDevicesResponse,
-} from "./types.js";
-import { GatewayEvents } from "./types.js";
+} from "./types";
+import { GatewayEvents } from "./types";
 import {
   RequestAction,
   ResponseAction,
   type RequestPayload,
   type ResponsePayload,
   isResponseSuccess,
-} from "./actions/rpc.js";
+} from "./actions/rpc";
 
 interface PendingRequest<T = unknown> {
   resolve: (value: T) => void;

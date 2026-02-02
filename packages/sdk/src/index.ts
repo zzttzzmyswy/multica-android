@@ -1,4 +1,4 @@
-export { GatewayClient } from "./client.js";
+export { GatewayClient } from "./client";
 export {
   GatewayEvents,
   type DeviceType,
@@ -12,7 +12,7 @@ export {
   type PingPayload,
   type PongResponse,
   type ListDevicesResponse,
-} from "./types.js";
+} from "./types";
 
 // Actions
-export * from "./actions/index.js";
+export * from "./actions/index";
