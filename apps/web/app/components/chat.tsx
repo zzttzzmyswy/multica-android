@@ -9,10 +9,8 @@ import { MemoizedMarkdown } from "@multica/ui/components/markdown";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { UserIcon, Copy01Icon, CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
 import { toast } from "@multica/ui/components/ui/sonner";
-import { useMessages } from "../hooks/use-messages";
 import { useGateway } from "../hooks/use-gateway";
-import { useHubStore } from "@multica/store";
-import { useDeviceId } from "@multica/store";
+import { useHubStore, useDeviceId, useMessagesStore } from "@multica/store";
 import { useScrollFade } from "../hooks/use-scroll-fade";
 import { cn } from "@multica/ui/lib/utils";
 
@@ -26,7 +24,9 @@ const STATE_VARIANT: Record<string, "default" | "secondary" | "destructive" | "o
 export function Chat() {
   const activeAgentId = useHubStore((s) => s.activeAgentId)
   const hub = useHubStore((s) => s.hub)
-  const { messages, addUserMessage, addAssistantMessage } = useMessages()
+  const addUserMessage = useMessagesStore((s) => s.addUserMessage)
+  const addAssistantMessage = useMessagesStore((s) => s.addAssistantMessage)
+  const messages = useMessagesStore((s) => s.messages)
 
   const { state: gwState, send } = useGateway({
     onMessage: (msg) => {
