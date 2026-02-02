@@ -95,6 +95,63 @@ Optional overrides:
 - `SMC_CREDENTIALS_PATH` — custom path for `credentials.json5`
 - `SMC_SKILLS_ENV_PATH` — custom path for `skills.env.json5`
 
+### LLM Providers
+
+Super Multica supports multiple LLM providers with two authentication methods:
+
+**OAuth Providers** (use external CLI login):
+- `claude-code` — Claude Code OAuth (requires `claude login`)
+- `openai-codex` — OpenAI Codex OAuth (requires `codex login`)
+
+**API Key Providers** (configure in `credentials.json5`):
+- `anthropic`, `openai`, `kimi-coding`, `google`, `groq`, `mistral`, `xai`, `openrouter`
+
+#### Check Provider Status
+
+```bash
+# In interactive mode
+/provider
+
+# Output shows all providers with status
+🔌 Provider Status
+
+Current: kimi-coding
+
+Available Providers:
+  ID               Name                 Auth         Status
+  ──────────────────────────────────────────────────────────────────────
+  ✓ claude-code    Claude Code (OAuth)  OAuth        ready
+  ✗ openai-codex   Codex (OAuth)        OAuth        not logged in
+  ✓ kimi-coding    Kimi Code            API Key      configured (current)
+  ...
+```
+
+#### Using OAuth Providers
+
+```bash
+# 1. Install and login to Claude Code
+npm install -g @anthropic-ai/claude-code
+claude login
+
+# 2. Start multica with claude-code provider
+multica --provider claude-code
+```
+
+#### Using API Key Providers
+
+Add your API key to `~/.super-multica/credentials.json5`:
+
+```json5
+{
+  llm: {
+    provider: "openai",
+    providers: {
+      openai: { apiKey: "sk-xxx" }
+    }
+  }
+}
+```
+
 ### Configuration Priority
 
 Each setting is resolved in order (first match wins):
