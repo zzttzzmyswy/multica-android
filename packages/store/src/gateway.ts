@@ -1,9 +1,11 @@
 import { create } from "zustand"
 import { GatewayClient, type ConnectionState, type DeviceInfo, type SendErrorResponse } from "@multica/sdk"
-import { getGatewayUrl } from "@multica/fetch"
 import { useMessagesStore } from "./messages"
 
+const DEFAULT_GATEWAY_URL = "http://localhost:3000"
+
 interface GatewayState {
+  gatewayUrl: string
   connectionState: ConnectionState
   hubId: string | null
   hubs: DeviceInfo[]
@@ -11,6 +13,7 @@ interface GatewayState {
 }
 
 interface GatewayActions {
+  setGatewayUrl: (url: string) => void
   connect: (deviceId: string) => void
   disconnect: () => void
   setHubId: (hubId: string) => void
@@ -24,16 +27,19 @@ export type GatewayStore = GatewayState & GatewayActions
 let client: GatewayClient | null = null
 
 export const useGatewayStore = create<GatewayStore>()((set, get) => ({
+  gatewayUrl: DEFAULT_GATEWAY_URL,
   connectionState: "disconnected",
   hubId: null,
   hubs: [],
   lastError: null,
 
+  setGatewayUrl: (url) => set({ gatewayUrl: url }),
+
   connect: (deviceId) => {
     if (client) return
 
     client = new GatewayClient({
-      url: getGatewayUrl(),
+      url: get().gatewayUrl,
       deviceId,
       deviceType: "client",
     })

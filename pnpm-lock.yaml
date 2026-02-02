@@ -214,9 +214,6 @@ importers:
       '@hugeicons/react':
         specifier: ^1.1.4
         version: 1.1.4(react@19.2.3)
-      '@multica/fetch':
-        specifier: workspace:*
-        version: link:../../packages/fetch
       '@multica/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
@@ -285,9 +282,6 @@ importers:
 
   packages/store:
     dependencies:
-      '@multica/fetch':
-        specifier: workspace:*
-        version: link:../fetch
       '@multica/sdk':
         specifier: workspace:*
         version: link:../sdk
