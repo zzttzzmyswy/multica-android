@@ -29,6 +29,7 @@ interface ParsedArgs {
   args: string[];
   verbose: boolean;
   force: boolean;
+  profile?: string;
 }
 
 function printHelp() {
@@ -46,6 +47,7 @@ ${cyan("Commands:")}
 ${cyan("Options:")}
   ${yellow("-v, --verbose")}       Show more details
   ${yellow("-f, --force")}         Force overwrite existing skill
+  ${yellow("-p, --profile")} <id>  Install to specific profile's skills directory
 
 ${cyan("Source Formats:")} ${dim("(for add command)")}
   owner/repo              Clone entire repository
@@ -68,6 +70,9 @@ ${cyan("Examples:")}
 
   ${dim("# Remove a skill")}
   multica skills remove agent-skills
+
+  ${dim("# Add skill to a specific profile")}
+  multica skills add owner/repo --profile my-agent
 `);
 }
 
@@ -75,6 +80,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   const args = [...argv];
   let verbose = false;
   let force = false;
+  let profile: string | undefined;
   const positional: string[] = [];
 
   while (args.length > 0) {
@@ -91,8 +97,13 @@ function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
 
+    if (arg === "--profile" || arg === "-p") {
+      profile = args.shift();
+      continue;
+    }
+
     if (arg === "--help" || arg === "-h") {
-      return { command: "help", args: [], verbose, force };
+      return { command: "help", args: [], verbose, force, profile };
     }
 
     positional.push(arg);
@@ -101,7 +112,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   const command = (positional[0] ?? "help") as Command;
   const commandArgs = positional.slice(1);
 
-  return { command, args: commandArgs, verbose, force };
+  return { command, args: commandArgs, verbose, force, profile };
 }
 
 function cmdList(manager: SkillManager, verbose: boolean): void {
@@ -399,12 +410,14 @@ async function cmdInstall(manager: SkillManager, skillId: string, installId?: st
   }
 }
 
-async function cmdAdd(source: string, force: boolean): Promise<void> {
-  console.log(`\nAdding skill from '${source}'...`);
+async function cmdAdd(source: string, force: boolean, profileId?: string): Promise<void> {
+  const destination = profileId ? `profile '${profileId}'` : "global skills";
+  console.log(`\nAdding skill from '${source}' to ${destination}...`);
 
   const result = await addSkill({
     source,
     force,
+    profileId,
   });
 
   if (result.ok) {
@@ -454,7 +467,7 @@ async function cmdListInstalled(): Promise<void> {
 }
 
 export async function skillsCommand(args: string[]): Promise<void> {
-  const { command, args: cmdArgs, verbose, force } = parseArgs(args);
+  const { command, args: cmdArgs, verbose, force, profile } = parseArgs(args);
 
   if (command === "help") {
     printHelp();
@@ -464,14 +477,17 @@ export async function skillsCommand(args: string[]): Promise<void> {
   switch (command) {
     case "add":
       if (!cmdArgs[0]) {
-        console.error("Usage: multica skills add <source> [--force]");
+        console.error("Usage: multica skills add <source> [--force] [--profile <id>]");
         console.error("\nSource formats:");
         console.error("  owner/repo              Clone entire repository");
         console.error("  owner/repo/skill-name   Clone single skill directory");
         console.error("  owner/repo@branch       Clone specific branch/tag");
+        console.error("\nOptions:");
+        console.error("  --force, -f             Overwrite existing skill");
+        console.error("  --profile, -p <id>      Install to profile's skills directory");
         process.exit(1);
       }
-      await cmdAdd(cmdArgs[0], force);
+      await cmdAdd(cmdArgs[0], force, profile);
       return;
 
     case "remove":
