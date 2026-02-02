@@ -7,6 +7,7 @@ import { SessionManager } from "./session/session-manager.js";
 import { ProfileManager } from "./profile/index.js";
 import { SkillManager } from "./skills/index.js";
 import { credentialManager, getCredentialsPath } from "./credentials.js";
+import { resolveProviderConfig } from "./credentials/providers.js";
 import {
   checkContextWindow,
   DEFAULT_CONTEXT_TOKENS,
@@ -16,10 +17,24 @@ import { mergeToolsConfig, type ToolsConfig } from "./tools/policy.js";
 
 /**
  * Get API Key based on provider.
- * Priority: explicit key > provider-specific env var > generic env var format.
+ * Priority: explicit key > OAuth credentials > credentials.json5 config.
+ *
+ * Supports OAuth providers like "claude-code" and "openai-codex" by
+ * reading credentials from their respective CLI tools.
  */
 function resolveApiKey(provider: string, explicitKey?: string): string | undefined {
   if (explicitKey) return explicitKey;
+
+  // Try OAuth providers first (claude-code, openai-codex)
+  const providerConfig = resolveProviderConfig(provider);
+  if (providerConfig?.apiKey) {
+    return providerConfig.apiKey;
+  }
+  if (providerConfig?.accessToken) {
+    return providerConfig.accessToken;
+  }
+
+  // Fall back to credentials.json5
   return credentialManager.getLlmProviderConfig(provider)?.apiKey;
 }
 

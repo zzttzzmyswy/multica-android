@@ -9,14 +9,52 @@ import { createWebFetchTool, createWebSearchTool } from "./tools/web/index.js";
 import { createMemoryTools } from "./tools/memory/index.js";
 import { filterTools } from "./tools/policy.js";
 
+/**
+ * Provider alias mapping for OAuth providers.
+ * Maps friendly names to actual pi-ai provider names.
+ */
+const PROVIDER_ALIAS: Record<string, string> = {
+  "claude-code": "anthropic", // Claude Code OAuth uses anthropic API
+};
+
+/**
+ * Default models for each provider.
+ */
+const DEFAULT_MODELS: Record<string, string> = {
+  "anthropic": "claude-sonnet-4-20250514",
+  "claude-code": "claude-sonnet-4-20250514",
+  "openai": "gpt-4o",
+  "openai-codex": "gpt-5.1",
+  "kimi-coding": "kimi-k2-thinking",
+  "google": "gemini-2.0-flash",
+  "groq": "llama-3.3-70b-versatile",
+  "mistral": "mistral-large-latest",
+};
+
 export function resolveModel(options: AgentOptions) {
   if (options.provider && options.model) {
+    // Map provider alias (e.g., claude-code -> anthropic)
+    const actualProvider = PROVIDER_ALIAS[options.provider] ?? options.provider;
+
     // Type assertion needed because provider/model come from dynamic user config
     return (getModel as (p: string, m: string) => ReturnType<typeof getModel>)(
-      options.provider,
+      actualProvider,
       options.model,
     );
   }
+
+  // If only provider specified, use default model for that provider
+  if (options.provider) {
+    const actualProvider = PROVIDER_ALIAS[options.provider] ?? options.provider;
+    const defaultModel = DEFAULT_MODELS[options.provider] ?? DEFAULT_MODELS[actualProvider];
+    if (defaultModel) {
+      return (getModel as (p: string, m: string) => ReturnType<typeof getModel>)(
+        actualProvider,
+        defaultModel,
+      );
+    }
+  }
+
   return getModel("kimi-coding", "kimi-k2-thinking");
 }
 
