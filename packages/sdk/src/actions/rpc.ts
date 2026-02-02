@@ -5,6 +5,8 @@ export const ResponseAction = "response" as const;
 
 /** 请求帧 payload */
 export interface RequestPayload<T = unknown> {
+  /** 请求 ID，由客户端生成，服务端原样回传到 ResponsePayload.requestId */
+  requestId: string;
   /** 调用的方法名 */
   method: string;
   /** 方法参数 */
@@ -52,4 +54,21 @@ export function isResponseError(
   response: ResponsePayload
 ): response is ResponseErrorPayload {
   return response.ok === false;
+}
+
+// ============ RPC Method Types ============
+
+/** getAgentMessages - request params */
+export interface GetAgentMessagesParams {
+  agentId: string;
+  offset?: number;
+  limit?: number;
+}
+
+/** getAgentMessages - response payload */
+export interface GetAgentMessagesResult {
+  messages: unknown[];
+  total: number;
+  offset: number;
+  limit: number;
 }
