@@ -17,7 +17,7 @@ import {
   getCurrentProvider,
   getLoginInstructions,
   type ProviderInfo,
-} from "../../credentials/providers.js";
+} from "../../oauth/providers.js";
 
 type ChatOptions = {
   profile?: string;

@@ -36,13 +36,13 @@ export interface ProviderInfo {
 
 export interface ProviderConfig {
   provider: string;
-  model?: string;
-  apiKey?: string;
-  baseUrl?: string;
+  model?: string | undefined;
+  apiKey?: string | undefined;
+  baseUrl?: string | undefined;
   // OAuth specific
-  accessToken?: string;
-  refreshToken?: string;
-  expires?: number;
+  accessToken?: string | undefined;
+  refreshToken?: string | undefined;
+  expires?: number | undefined;
 }
 
 // ============================================================

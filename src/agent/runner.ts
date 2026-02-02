@@ -7,7 +7,7 @@ import { SessionManager } from "./session/session-manager.js";
 import { ProfileManager } from "./profile/index.js";
 import { SkillManager } from "./skills/index.js";
 import { credentialManager, getCredentialsPath } from "./credentials.js";
-import { resolveProviderConfig } from "./credentials/providers.js";
+import { resolveProviderConfig } from "./oauth/providers.js";
 import {
   checkContextWindow,
   DEFAULT_CONTEXT_TOKENS,
