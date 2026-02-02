@@ -12,6 +12,11 @@ import { getHubId } from "./hub-identity.js";
 import { loadAgentRecords, addAgentRecord, removeAgentRecord } from "./agent-store.js";
 import { RpcDispatcher, RpcError } from "./rpc/dispatcher.js";
 import { createGetAgentMessagesHandler } from "./rpc/handlers/get-agent-messages.js";
+import { createGetHubInfoHandler } from "./rpc/handlers/get-hub-info.js";
+import { createListAgentsHandler } from "./rpc/handlers/list-agents.js";
+import { createCreateAgentHandler } from "./rpc/handlers/create-agent.js";
+import { createDeleteAgentHandler } from "./rpc/handlers/delete-agent.js";
+import { createUpdateGatewayHandler } from "./rpc/handlers/update-gateway.js";
 
 export class Hub {
   private readonly agents = new Map<string, AsyncAgent>();
@@ -34,6 +39,11 @@ export class Hub {
 
     this.rpc = new RpcDispatcher();
     this.rpc.register("getAgentMessages", createGetAgentMessagesHandler());
+    this.rpc.register("getHubInfo", createGetHubInfoHandler(this));
+    this.rpc.register("listAgents", createListAgentsHandler(this));
+    this.rpc.register("createAgent", createCreateAgentHandler(this));
+    this.rpc.register("deleteAgent", createDeleteAgentHandler(this));
+    this.rpc.register("updateGateway", createUpdateGatewayHandler(this));
 
     this.client = this.createClient(this.url);
     this.client.connect();
@@ -56,7 +66,7 @@ export class Hub {
       url,
       path: this.path,
       deviceId: this.hubId,
-      deviceType: "client",
+      deviceType: "hub",
       autoReconnect: true,
       reconnectDelay: 1000,
     });

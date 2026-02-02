@@ -4,6 +4,7 @@ export const GatewayEvents = {
   PING: "ping",
   PONG: "pong",
   REGISTERED: "registered",
+  LIST_DEVICES: "list-devices",
 
   // Message routing
   SEND: "send",
@@ -14,7 +15,7 @@ export const GatewayEvents = {
 // ============ Device Related ============
 
 /** Device type */
-export type DeviceType = "client" | "agent";
+export type DeviceType = "client" | "hub" | "agent";
 
 /** Device information */
 export interface DeviceInfo {
@@ -52,6 +53,11 @@ export interface SendErrorResponse {
   messageId: string;
   error: string;
   code: "DEVICE_NOT_FOUND" | "NOT_REGISTERED" | "INVALID_MESSAGE";
+}
+
+/** List devices response */
+export interface ListDevicesResponse {
+  devices: DeviceInfo[];
 }
 
 // ============ Ping/Pong ============

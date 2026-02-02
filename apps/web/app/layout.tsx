@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inter, Playfair_Display } from "next/font/google";
-import { setConfig } from "@multica/fetch";
+import { useGatewayStore } from "@multica/store";
 import "@multica/ui/globals.css";
 import {
   SidebarProvider,
@@ -11,10 +11,10 @@ import { ThemeProvider } from "@multica/ui/components/theme-provider";
 import { Toaster } from "@multica/ui/components/ui/sonner";
 import { HubSidebar } from "@multica/ui/components/hub-sidebar";
 
-setConfig({
-  consoleUrl: process.env.NEXT_PUBLIC_CONSOLE_URL ?? "http://localhost:4000",
-  gatewayUrl: process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:3000",
-});
+const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL;
+if (gatewayUrl) {
+  useGatewayStore.getState().setGatewayUrl(gatewayUrl);
+}
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 

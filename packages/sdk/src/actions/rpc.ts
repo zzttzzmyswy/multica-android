@@ -65,10 +65,83 @@ export interface GetAgentMessagesParams {
   limit?: number;
 }
 
+/** Content block types from the agent engine */
+export interface TextContentBlock {
+  type: "text";
+  text: string;
+}
+
+export interface ThinkingContentBlock {
+  type: "thinking";
+  thinking: string;
+}
+
+export interface ToolCallBlock {
+  type: "tool_use";
+  id: string;
+  name: string;
+  input: unknown;
+}
+
+export interface ImageContentBlock {
+  type: "image";
+  url: string;
+}
+
+/** Agent message returned by getAgentMessages (mirrors pi-ai Message) */
+export type AgentMessageItem =
+  | { role: "user"; content: string | (TextContentBlock | ImageContentBlock)[]; timestamp: number }
+  | { role: "assistant"; content: (TextContentBlock | ThinkingContentBlock | ToolCallBlock)[]; timestamp: number }
+  | { role: "tool_result"; toolCallId: string; content: (TextContentBlock | ImageContentBlock)[]; isError: boolean; timestamp: number }
+
 /** getAgentMessages - response payload */
 export interface GetAgentMessagesResult {
-  messages: unknown[];
+  messages: AgentMessageItem[];
   total: number;
   offset: number;
   limit: number;
+}
+
+/** getHubInfo - no params needed */
+export interface GetHubInfoResult {
+  hubId: string;
+  url: string;
+  connectionState: string;
+  agentCount: number;
+}
+
+/** listAgents - no params needed */
+export interface ListAgentsResult {
+  agents: { id: string; closed: boolean }[];
+}
+
+/** createAgent - request params */
+export interface CreateAgentParams {
+  id?: string;
+}
+
+/** createAgent - response payload */
+export interface CreateAgentResult {
+  id: string;
+}
+
+/** deleteAgent - request params */
+export interface DeleteAgentParams {
+  id: string;
+}
+
+/** deleteAgent - response payload */
+export interface DeleteAgentResult {
+  ok: boolean;
+}
+
+/** updateGateway - request params */
+export interface UpdateGatewayParams {
+  url: string;
+}
+
+/** updateGateway - response payload */
+export interface UpdateGatewayResult {
+  url: string;
+  connectionState: string;
 }

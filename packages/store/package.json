@@ -8,7 +8,6 @@
     "./*": "./src/*.ts"
   },
   "dependencies": {
-    "@multica/fetch": "workspace:*",
     "@multica/sdk": "workspace:*",
     "react": "catalog:",
     "sonner": "^2.0.7",

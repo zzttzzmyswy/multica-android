@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import {
   SidebarGroup,
   SidebarGroupLabel,
@@ -9,9 +10,10 @@ import {
   SidebarMenuItem,
 } from "@multica/ui/components/ui/sidebar"
 import { Button } from "@multica/ui/components/ui/button"
+import { Input } from "@multica/ui/components/ui/input"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { PlusSignIcon, Delete02Icon } from "@hugeicons/core-free-icons"
-import { useHubStore } from "@multica/store"
+import { useHubStore, useDeviceId, useGatewayStore } from "@multica/store"
 import { useHubInit } from "@multica/store"
 import { Skeleton } from "@multica/ui/components/ui/skeleton"
 
@@ -36,38 +38,111 @@ export function HubSidebar() {
   const hub = useHubStore((s) => s.hub)
   const agents = useHubStore((s) => s.agents)
   const activeAgentId = useHubStore((s) => s.activeAgentId)
-  const fetchHub = useHubStore((s) => s.fetchHub)
   const createAgent = useHubStore((s) => s.createAgent)
   const deleteAgent = useHubStore((s) => s.deleteAgent)
   const setActiveAgentId = useHubStore((s) => s.setActiveAgentId)
+
+  const gwState = useGatewayStore((s) => s.connectionState)
+  const hubId = useGatewayStore((s) => s.hubId)
+  const hubs = useGatewayStore((s) => s.hubs)
+  const setHubId = useGatewayStore((s) => s.setHubId)
+  const listDevices = useGatewayStore((s) => s.listDevices)
+
+  const [hubIdInput, setHubIdInput] = useState("")
+  const isRegistered = gwState === "registered"
+  const needsHubSelection = isRegistered && !hubId
+
+  const handleConnect = () => {
+    const id = hubIdInput.trim()
+    if (!id) return
+    setHubId(id)
+  }
+
+  const handleDisconnect = () => {
+    useGatewayStore.setState({ hubId: null })
+    useHubStore.setState({ status: "idle", hub: null, agents: [], activeAgentId: null })
+  }
 
   return (
     <>
       <SidebarGroup>
         <SidebarGroupLabel>Hub</SidebarGroupLabel>
         <SidebarGroupContent>
-          <div className="flex items-center gap-2 px-2 py-1 text-sm">
-            <span className={`size-2 rounded-full shrink-0 ${STATUS_DOT[status]}`} />
-            <span className="text-muted-foreground/70 text-xs">{STATUS_LABEL[status]}</span>
-          </div>
-          {status === "connected" && hub ? (
-            <div className="px-2 text-xs text-muted-foreground/50 font-mono truncate">
-              {hub.hubId}
+          {!isRegistered ? (
+            <div className="flex items-center gap-2 px-2 py-1 text-sm">
+              <span className="size-2 rounded-full shrink-0 bg-yellow-500/50 animate-pulse" />
+              <span className="text-muted-foreground/70 text-xs">
+                {gwState === "disconnected" ? "Connecting to Gateway..." : "Registering..."}
+              </span>
             </div>
-          ) : (status === "idle" || status === "loading") ? (
-            <Skeleton className="mx-2 h-3.5 w-32" />
-          ) : null}
-          {status === "error" && (
-            <div className="px-2 pt-1">
-              <Button variant="outline" size="sm" onClick={fetchHub} className="w-full text-xs">
-                Retry
-              </Button>
+          ) : needsHubSelection ? (
+            <div className="px-2 space-y-2 py-1">
+              {hubs.length > 0 && (
+                <div className="space-y-1">
+                  {hubs.map((h) => (
+                    <button
+                      key={h.deviceId}
+                      onClick={() => setHubId(h.deviceId)}
+                      className="w-full text-left px-2 py-1 rounded-md text-xs font-mono hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer truncate"
+                    >
+                      {h.deviceId}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <Input
+                value={hubIdInput}
+                onChange={(e) => setHubIdInput(e.target.value)}
+                placeholder="Or enter Hub ID..."
+                className="h-7 text-xs font-mono"
+                onKeyDown={(e) => e.key === "Enter" && handleConnect()}
+              />
+              <div className="flex gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleConnect}
+                  disabled={!hubIdInput.trim()}
+                  className="flex-1 text-xs"
+                >
+                  Connect
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => listDevices()}
+                  className="text-xs"
+                >
+                  Refresh
+                </Button>
+              </div>
             </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-2 px-2 py-1 text-sm">
+                <span className={`size-2 rounded-full shrink-0 ${STATUS_DOT[status] ?? STATUS_DOT.idle}`} />
+                <span className="text-muted-foreground/70 text-xs">
+                  {STATUS_LABEL[status]}
+                </span>
+              </div>
+              {status === "connected" && hub ? (
+                <div className="px-2 text-xs text-muted-foreground/50 font-mono truncate">
+                  {hub.hubId}
+                </div>
+              ) : (status === "idle" || status === "loading") ? (
+                <Skeleton className="mx-2 h-3.5 w-32" />
+              ) : null}
+              <div className="px-2 pt-1">
+                <Button variant="outline" size="sm" onClick={handleDisconnect} className="w-full text-xs">
+                  Disconnect
+                </Button>
+              </div>
+            </>
           )}
         </SidebarGroupContent>
       </SidebarGroup>
 
-      {(status === "idle" || status === "loading") && (
+      {isRegistered && hubId && (status === "idle" || status === "loading") && (
         <SidebarGroup>
           <SidebarGroupLabel>Agents</SidebarGroupLabel>
           <SidebarGroupContent>
