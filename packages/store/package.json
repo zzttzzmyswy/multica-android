@@ -11,6 +11,7 @@
     "@multica/fetch": "workspace:*",
     "@multica/sdk": "workspace:*",
     "react": "catalog:",
+    "sonner": "^2.0.7",
     "uuid": "^13.0.0",
     "zustand": "catalog:"
   },

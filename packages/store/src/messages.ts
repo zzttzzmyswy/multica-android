@@ -17,7 +17,6 @@ interface MessagesActions {
   addAssistantMessage: (content: string, agentId: string) => void
   updateMessage: (id: string, content: string) => void
   loadMessages: (agentId: string, msgs: Message[]) => void
-  getMessagesByAgent: (agentId: string) => Message[]
   clearMessages: (agentId?: string) => void
 }
 
@@ -48,10 +47,6 @@ export const useMessagesStore = create<MessagesStore>()((set, get) => ({
     set((s) => ({
       messages: [...s.messages.filter((m) => m.agentId !== agentId), ...msgs],
     }))
-  },
-
-  getMessagesByAgent: (agentId) => {
-    return get().messages.filter((m) => m.agentId === agentId)
   },
 
   clearMessages: (agentId?) => {

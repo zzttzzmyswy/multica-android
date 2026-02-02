@@ -24,6 +24,7 @@ export function useHubInit() {
   useEffect(() => {
     if (status === "connected" && deviceId) {
       useGatewayStore.getState().connect(deviceId)
+      return () => { useGatewayStore.getState().disconnect() }
     }
   }, [status, deviceId])
 }

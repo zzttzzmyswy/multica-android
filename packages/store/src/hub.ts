@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import { consoleApi } from "@multica/fetch"
+import { toast } from "sonner"
 
 export interface HubInfo {
   hubId: string
@@ -57,7 +58,10 @@ export const useHubStore = create<HubStore>()((set, get) => ({
     try {
       const data = await consoleApi.get<Agent[]>("/api/agents")
       set({ agents: data })
-    } catch { /* silent */ }
+    } catch (e) {
+      toast.error("Failed to fetch agents")
+      console.error(e)
+    }
   },
 
   createAgent: async (options?) => {
@@ -65,7 +69,10 @@ export const useHubStore = create<HubStore>()((set, get) => ({
       const data = await consoleApi.post<{ id: string }>("/api/agents", options)
       await get().fetchAgents()
       if (data.id) set({ activeAgentId: data.id })
-    } catch { /* silent */ }
+    } catch (e) {
+      toast.error("Failed to create agent")
+      console.error(e)
+    }
   },
 
   deleteAgent: async (id) => {
@@ -73,6 +80,9 @@ export const useHubStore = create<HubStore>()((set, get) => ({
     try {
       await consoleApi.delete("/api/agents/" + id)
       await get().fetchAgents()
-    } catch { /* silent */ }
+    } catch (e) {
+      toast.error("Failed to delete agent")
+      console.error(e)
+    }
   },
 }))

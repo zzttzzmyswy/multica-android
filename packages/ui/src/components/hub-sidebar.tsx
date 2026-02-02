@@ -13,6 +13,7 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import { PlusSignIcon, Delete02Icon } from "@hugeicons/core-free-icons"
 import { useHubStore } from "@multica/store"
 import { useHubInit } from "@multica/store"
+import { Skeleton } from "@multica/ui/components/ui/skeleton"
 
 const STATUS_DOT: Record<string, string> = {
   connected: "bg-green-500/60",
@@ -49,11 +50,13 @@ export function HubSidebar() {
             <span className={`size-2 rounded-full shrink-0 ${STATUS_DOT[status]}`} />
             <span className="text-muted-foreground/70 text-xs">{STATUS_LABEL[status]}</span>
           </div>
-          {status === "connected" && hub && (
+          {status === "connected" && hub ? (
             <div className="px-2 text-xs text-muted-foreground/50 font-mono truncate">
               {hub.hubId}
             </div>
-          )}
+          ) : (status === "idle" || status === "loading") ? (
+            <Skeleton className="mx-2 h-3.5 w-32" />
+          ) : null}
           {status === "error" && (
             <div className="px-2 pt-1">
               <Button variant="outline" size="sm" onClick={fetchHub} className="w-full text-xs">
@@ -63,6 +66,19 @@ export function HubSidebar() {
           )}
         </SidebarGroupContent>
       </SidebarGroup>
+
+      {(status === "idle" || status === "loading") && (
+        <SidebarGroup>
+          <SidebarGroupLabel>Agents</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <div className="space-y-2 px-2 py-1">
+              <Skeleton className="h-6 w-full rounded-md" />
+              <Skeleton className="h-6 w-3/4 rounded-md" />
+              <Skeleton className="h-6 w-5/6 rounded-md" />
+            </div>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      )}
 
       {status === "connected" && (
         <SidebarGroup>
