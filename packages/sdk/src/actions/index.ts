@@ -14,6 +14,7 @@ export {
   type ResponseErrorPayload,
   isResponseSuccess,
   isResponseError,
+  type AgentMessageItem,
   type GetAgentMessagesParams,
   type GetAgentMessagesResult,
   type GetHubInfoResult,
