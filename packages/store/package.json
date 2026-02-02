@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@multica/fetch": "workspace:*",
+    "@multica/sdk": "workspace:*",
     "react": "catalog:",
     "uuid": "^13.0.0",
     "zustand": "catalog:"

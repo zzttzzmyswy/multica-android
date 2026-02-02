@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inter, Playfair_Display } from "next/font/google";
+import { setConfig } from "@multica/fetch";
 import "@multica/ui/globals.css";
+
+setConfig({
+  consoleUrl: process.env.NEXT_PUBLIC_CONSOLE_URL ?? "http://localhost:4000",
+  gatewayUrl: process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:3000",
+});
 import {
   SidebarProvider,
   SidebarInset,
