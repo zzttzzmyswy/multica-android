@@ -16,6 +16,7 @@ import {
   getProviderList,
   getCurrentProvider,
   getLoginInstructions,
+  getProviderMeta,
   type ProviderInfo,
 } from "../../providers/index.js";
 
@@ -38,6 +39,7 @@ const COMMANDS = {
   new: "Start a new session",
   multiline: "Toggle multi-line input mode (end with a line containing only '.')",
   provider: "Show current provider and available options",
+  model: "Show or switch model (usage: /model [model-name])",
 };
 
 function printHelp() {
@@ -466,6 +468,10 @@ class InteractiveCLI {
         this.showProviderStatus();
         return true;
 
+      case "model":
+        this.handleModelCommand(input);
+        return true;
+
       default:
         const invocation = this.skillManager.resolveCommand(input);
         if (invocation) {
@@ -477,6 +483,66 @@ class InteractiveCLI {
         }
         return false;
     }
+  }
+
+  private handleModelCommand(input: string) {
+    const parts = input.trim().split(/\s+/);
+    const modelArg = parts.slice(1).join(" ").trim();
+    const currentProvider = this.opts.provider ?? getCurrentProvider();
+    const providerMeta = getProviderMeta(currentProvider);
+
+    if (!providerMeta) {
+      console.log(`${red("Error:")} Unknown provider: ${currentProvider}\n`);
+      return;
+    }
+
+    // No argument - show current model and available models
+    if (!modelArg) {
+      console.log(`\n${cyan("🎯 Model Status")}\n`);
+      console.log(`${dim("Provider:")} ${green(currentProvider)}`);
+      console.log(`${dim("Current model:")} ${yellow(this.opts.model ?? providerMeta.defaultModel)}`);
+      console.log(`${dim("Default model:")} ${gray(providerMeta.defaultModel)}`);
+
+      console.log(`\n${dim("Available models for")} ${green(currentProvider)}${dim(":")}`);
+      for (const model of providerMeta.models) {
+        const isCurrent = model === (this.opts.model ?? providerMeta.defaultModel);
+        const marker = isCurrent ? yellow(" (current)") : "";
+        const modelDisplay = isCurrent ? yellow(model) : model;
+        console.log(`  • ${modelDisplay}${marker}`);
+      }
+
+      console.log(`\n${dim("Switch model:")} ${yellow(`/model <model-name>`)}`);
+      console.log(`${dim("Example:")} ${yellow(`/model ${providerMeta.models[0]}`)}`);
+      console.log("");
+      return;
+    }
+
+    // Check if model is valid for current provider
+    const normalizedModel = modelArg.toLowerCase();
+    const matchedModel = providerMeta.models.find(
+      (m) => m.toLowerCase() === normalizedModel
+    );
+
+    if (!matchedModel) {
+      console.log(`${red("Error:")} Model "${modelArg}" is not available for provider "${currentProvider}".`);
+      console.log(`\n${dim("Available models:")}`);
+      for (const model of providerMeta.models) {
+        console.log(`  • ${model}`);
+      }
+      console.log("");
+      return;
+    }
+
+    // Switch model
+    const oldModel = this.opts.model ?? providerMeta.defaultModel;
+    this.opts.model = matchedModel;
+
+    // Recreate agent with new model
+    this.agent = this.createAgent(this.agent.sessionId);
+    this.updateStatusBar();
+
+    console.log(`${green("✓")} Model switched: ${gray(oldModel)} → ${yellow(matchedModel)}`);
+    console.log(`${dim("Session preserved:")} ${gray(this.agent.sessionId.slice(0, 8))}...\n`);
   }
 
   private showProviderStatus() {
