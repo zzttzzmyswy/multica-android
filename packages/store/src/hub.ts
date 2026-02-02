@@ -1,32 +1,36 @@
 import { create } from "zustand"
-import { CONSOLE_URL } from "../lib/config"
+import { consoleApi } from "@multica/fetch"
 
-interface HubInfo {
+export interface HubInfo {
   hubId: string
   url: string
   connectionState: string
   agentCount: number
 }
 
-interface Agent {
+export interface Agent {
   id: string
   closed: boolean
 }
 
-type HubStatus = "idle" | "loading" | "connected" | "error"
+export type HubStatus = "idle" | "loading" | "connected" | "error"
 
-interface HubStore {
+interface HubState {
   status: HubStatus
   hub: HubInfo | null
   agents: Agent[]
   activeAgentId: string | null
+}
 
+interface HubActions {
   setActiveAgentId: (id: string | null) => void
   fetchHub: () => Promise<void>
   fetchAgents: () => Promise<void>
-  createAgent: () => Promise<void>
+  createAgent: (options?: Record<string, unknown>) => Promise<void>
   deleteAgent: (id: string) => Promise<void>
 }
+
+export type HubStore = HubState & HubActions
 
 export const useHubStore = create<HubStore>()((set, get) => ({
   status: "idle",
@@ -39,9 +43,7 @@ export const useHubStore = create<HubStore>()((set, get) => ({
   fetchHub: async () => {
     set({ status: "loading" })
     try {
-      const res = await fetch(`${CONSOLE_URL}/api/hub`)
-      if (!res.ok) throw new Error(res.statusText)
-      const data: HubInfo = await res.json()
+      const data = await consoleApi.get<HubInfo>("/api/hub")
       set({
         hub: data,
         status: data.connectionState === "registered" ? "connected" : "error",
@@ -53,23 +55,24 @@ export const useHubStore = create<HubStore>()((set, get) => ({
 
   fetchAgents: async () => {
     try {
-      const res = await fetch(`${CONSOLE_URL}/api/agents`)
-      if (res.ok) set({ agents: await res.json() })
+      const data = await consoleApi.get<Agent[]>("/api/agents")
+      set({ agents: data })
     } catch { /* silent */ }
   },
 
-  createAgent: async () => {
-    const res = await fetch(`${CONSOLE_URL}/api/agents`, { method: "POST" })
-    await get().fetchAgents()
-    if (res.ok) {
-      const data = await res.json()
+  createAgent: async (options?) => {
+    try {
+      const data = await consoleApi.post<{ id: string }>("/api/agents", options)
+      await get().fetchAgents()
       if (data.id) set({ activeAgentId: data.id })
-    }
+    } catch { /* silent */ }
   },
 
   deleteAgent: async (id) => {
     if (get().activeAgentId === id) set({ activeAgentId: null })
-    await fetch(`${CONSOLE_URL}/api/agents/${id}`, { method: "DELETE" })
-    await get().fetchAgents()
+    try {
+      await consoleApi.delete("/api/agents/" + id)
+      await get().fetchAgents()
+    } catch { /* silent */ }
   },
 }))

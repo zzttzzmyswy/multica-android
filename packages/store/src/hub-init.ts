@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
-import { useHubStore } from "./use-hub-store"
+import { useHubStore } from "./hub"
 
 export function useHubInit() {
   const fetchHub = useHubStore((s) => s.fetchHub)

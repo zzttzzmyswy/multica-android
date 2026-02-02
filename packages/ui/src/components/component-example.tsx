@@ -65,49 +65,12 @@ import {
 import { Textarea } from "@multica/ui/components/ui/textarea"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { PlusSignIcon, BluetoothIcon, MoreVerticalCircle01Icon, FileIcon, FolderIcon, FolderOpenIcon, CodeIcon, MoreHorizontalCircle01Icon, SearchIcon, FloppyDiskIcon, DownloadIcon, EyeIcon, LayoutIcon, PaintBoardIcon, SunIcon, MoonIcon, ComputerIcon, UserIcon, CreditCardIcon, SettingsIcon, KeyboardIcon, LanguageCircleIcon, NotificationIcon, MailIcon, ShieldIcon, HelpCircleIcon, File01Icon, LogoutIcon } from "@hugeicons/core-free-icons"
-import { useCounterStore } from "@multica/store/counter"
-
 export function ComponentExample() {
   return (
     <ExampleWrapper>
-      <CounterExample />
       <CardExample />
       <FormExample />
     </ExampleWrapper>
-  )
-}
-
-function CounterExample() {
-  const { count, increment, decrement, reset } = useCounterStore()
-
-  return (
-    <Example title="Counter (Zustand Store)">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>Shared Counter</CardTitle>
-          <CardDescription>
-            This counter uses Zustand from @multica/store, shared across web and desktop.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center gap-4">
-            <Button variant="outline" size="icon" onClick={decrement}>
-              -
-            </Button>
-            <span className="text-4xl font-bold tabular-nums">{count}</span>
-            <Button variant="outline" size="icon" onClick={increment}>
-              +
-            </Button>
-          </div>
-        </CardContent>
-        <CardFooter className="justify-between">
-          <Button variant="ghost" onClick={reset}>
-            Reset
-          </Button>
-          <Badge variant="secondary">Count: {count}</Badge>
-        </CardFooter>
-      </Card>
-    </Example>
   )
 }
 

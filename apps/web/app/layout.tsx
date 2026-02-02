@@ -8,7 +8,7 @@ import {
 import { AppSidebar } from "@multica/ui/components/app-sidebar";
 import { ThemeProvider } from "@multica/ui/components/theme-provider";
 import { Toaster } from "@multica/ui/components/ui/sonner";
-import { HubSidebar } from "./components/hub-sidebar";
+import { HubSidebar } from "@multica/ui/components/hub-sidebar";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 

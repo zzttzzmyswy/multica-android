@@ -11,7 +11,7 @@ import { UserIcon, Copy01Icon, CheckmarkCircle02Icon } from "@hugeicons/core-fre
 import { toast } from "@multica/ui/components/ui/sonner";
 import { useMessages } from "../hooks/use-messages";
 import { useGateway } from "../hooks/use-gateway";
-import { useHubStore } from "../hooks/use-hub-store";
+import { useHubStore } from "@multica/store";
 import { useDeviceId } from "../hooks/use-device-id";
 import { useScrollFade } from "../hooks/use-scroll-fade";
 import { cn } from "@multica/ui/lib/utils";

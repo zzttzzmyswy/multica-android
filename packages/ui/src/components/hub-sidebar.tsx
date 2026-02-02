@@ -11,8 +11,8 @@ import {
 import { Button } from "@multica/ui/components/ui/button"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { PlusSignIcon, Delete02Icon } from "@hugeicons/core-free-icons"
-import { useHubStore } from "../hooks/use-hub-store"
-import { useHubInit } from "../hooks/use-hub-init"
+import { useHubStore } from "@multica/store"
+import { useHubInit } from "@multica/store"
 
 const STATUS_DOT: Record<string, string> = {
   connected: "bg-green-500/60",
@@ -67,7 +67,7 @@ export function HubSidebar() {
       {status === "connected" && (
         <SidebarGroup>
           <SidebarGroupLabel>Agents</SidebarGroupLabel>
-          <SidebarGroupAction onClick={createAgent} title="Create agent">
+          <SidebarGroupAction onClick={() => createAgent()} title="Create agent">
             <HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} className="size-4" />
           </SidebarGroupAction>
           <SidebarGroupContent>
