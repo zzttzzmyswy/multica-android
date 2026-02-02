@@ -7,54 +7,19 @@ import { SessionManager } from "./session/session-manager.js";
 import { ProfileManager } from "./profile/index.js";
 import { SkillManager } from "./skills/index.js";
 import { credentialManager, getCredentialsPath } from "./credentials.js";
-import { resolveProviderConfig, isOAuthProvider, getLoginInstructions } from "./oauth/providers.js";
+import {
+  resolveApiKey,
+  resolveBaseUrl,
+  resolveModelId,
+  isOAuthProvider,
+  getLoginInstructions,
+} from "./providers/index.js";
 import {
   checkContextWindow,
   DEFAULT_CONTEXT_TOKENS,
   type ContextWindowGuardResult,
 } from "./context-window/index.js";
 import { mergeToolsConfig, type ToolsConfig } from "./tools/policy.js";
-
-/**
- * Get API Key based on provider.
- * Priority: explicit key > OAuth credentials > credentials.json5 config.
- *
- * Supports OAuth providers like "claude-code" and "openai-codex" by
- * reading credentials from their respective CLI tools.
- */
-function resolveApiKey(provider: string, explicitKey?: string): string | undefined {
-  if (explicitKey) return explicitKey;
-
-  // Try OAuth providers first (claude-code, openai-codex)
-  const providerConfig = resolveProviderConfig(provider);
-  if (providerConfig?.apiKey) {
-    return providerConfig.apiKey;
-  }
-  if (providerConfig?.accessToken) {
-    return providerConfig.accessToken;
-  }
-
-  // Fall back to credentials.json5
-  return credentialManager.getLlmProviderConfig(provider)?.apiKey;
-}
-
-/**
- * Get Base URL based on provider.
- * Priority: explicit URL > provider-specific env var > generic env var format.
- */
-function resolveBaseUrl(provider: string, explicitUrl?: string): string | undefined {
-  if (explicitUrl) return explicitUrl;
-  return credentialManager.getLlmProviderConfig(provider)?.baseUrl;
-}
-
-/**
- * Get Model ID based on provider.
- * Priority: explicit model > provider-specific env var > generic env var format.
- */
-function resolveModelId(provider: string, explicitModel?: string): string | undefined {
-  if (explicitModel) return explicitModel;
-  return credentialManager.getLlmProviderConfig(provider)?.model;
-}
 
 export class Agent {
   private readonly agent: PiAgentCore;
