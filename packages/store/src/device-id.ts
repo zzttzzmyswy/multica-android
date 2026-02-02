@@ -1,3 +1,5 @@
+"use client"
+
 import { useSyncExternalStore } from "react"
 import { v7 as uuidv7 } from "uuid"
 

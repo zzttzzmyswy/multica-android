@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useMemo } from "react";
 import { SidebarTrigger } from "@multica/ui/components/ui/sidebar";
 import { Badge } from "@multica/ui/components/ui/badge";
 import { Button } from "@multica/ui/components/ui/button";
@@ -9,11 +9,9 @@ import { MemoizedMarkdown } from "@multica/ui/components/markdown";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { UserIcon, Copy01Icon, CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
 import { toast } from "@multica/ui/components/ui/sonner";
-import { useMessages } from "../hooks/use-messages";
-import { useGateway } from "../hooks/use-gateway";
-import { useHubStore } from "../hooks/use-hub-store";
-import { useDeviceId } from "../hooks/use-device-id";
-import { useScrollFade } from "../hooks/use-scroll-fade";
+import { useHubStore, useDeviceId, useMessagesStore, useGatewayStore } from "@multica/store";
+import { useScrollFade } from "@multica/ui/hooks/use-scroll-fade";
+import { Skeleton } from "@multica/ui/components/ui/skeleton";
 import { cn } from "@multica/ui/lib/utils";
 
 const STATE_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -25,27 +23,18 @@ const STATE_VARIANT: Record<string, "default" | "secondary" | "destructive" | "o
 
 export function Chat() {
   const activeAgentId = useHubStore((s) => s.activeAgentId)
-  const hub = useHubStore((s) => s.hub)
-  const { messages, addUserMessage, addAssistantMessage } = useMessages()
+  const gwState = useGatewayStore((s) => s.connectionState)
 
-  const { state: gwState, send } = useGateway({
-    onMessage: (msg) => {
-      const payload = msg.payload as { agentId?: string; content?: string }
-      if (payload?.agentId && payload?.content) {
-        addAssistantMessage(payload.content, payload.agentId)
-      }
-    },
-  })
+  const messages = useMessagesStore((s) => s.messages)
+  const filtered = useMemo(() => messages.filter(m => m.agentId === activeAgentId), [messages, activeAgentId])
 
-  const handleSend = (text: string) => {
-    if (!hub?.hubId || !activeAgentId) return
-    addUserMessage(text, activeAgentId)
-    send(hub.hubId, "message", { agentId: activeAgentId, content: text })
-  }
-
-  const filtered = activeAgentId
-    ? messages.filter(m => m.agentId === activeAgentId)
-    : []
+  const handleSend = useCallback((text: string) => {
+    const hub = useHubStore.getState().hub
+    const agentId = useHubStore.getState().activeAgentId
+    if (!hub?.hubId || !agentId) return
+    useMessagesStore.getState().addUserMessage(text, agentId)
+    useGatewayStore.getState().send(hub.hubId, "message", { agentId, content: text })
+  }, [])
 
   const canSend = gwState === "registered" && !!activeAgentId
 
@@ -53,10 +42,14 @@ export function Chat() {
   const [deviceCopied, setDeviceCopied] = useState(false)
   const handleCopyDevice = useCallback(async () => {
     if (!deviceId) return
-    await navigator.clipboard.writeText(deviceId)
-    setDeviceCopied(true)
-    toast.success("Device ID copied")
-    setTimeout(() => setDeviceCopied(false), 2000)
+    try {
+      await navigator.clipboard.writeText(deviceId)
+      setDeviceCopied(true)
+      toast.success("Device ID copied")
+      setTimeout(() => setDeviceCopied(false), 2000)
+    } catch {
+      toast.error("Failed to copy")
+    }
   }, [deviceId])
 
   const mainRef = useRef<HTMLElement>(null)
@@ -66,7 +59,7 @@ export function Chat() {
     <div className="h-dvh flex flex-col overflow-hidden w-full">
       <header className="flex items-center gap-2 p-2">
         <SidebarTrigger />
-        {deviceId && (
+        {deviceId ? (
           <>
             <span className="text-xs text-muted-foreground font-mono">
               {deviceId}
@@ -84,6 +77,8 @@ export function Chat() {
               />
             </Button>
           </>
+        ) : (
+          <Skeleton className="h-4 w-56" />
         )}
         <Badge variant={STATE_VARIANT[gwState] ?? "outline"} className="text-xs">
           {gwState}
