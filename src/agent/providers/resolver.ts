@@ -10,7 +10,7 @@ import { credentialManager } from "../credentials.js";
 import {
   readClaudeCliCredentials,
   readCodexCliCredentials,
-} from "../oauth/cli-credentials.js";
+} from "./oauth/cli-credentials.js";
 import {
   PROVIDER_ALIAS,
   getProviderMeta,

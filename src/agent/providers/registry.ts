@@ -9,7 +9,7 @@ import { credentialManager } from "../credentials.js";
 import {
   hasValidClaudeCliCredentials,
   hasValidCodexCliCredentials,
-} from "../oauth/cli-credentials.js";
+} from "./oauth/cli-credentials.js";
 
 // ============================================================
 // Types
@@ -50,24 +50,24 @@ const PROVIDER_REGISTRY: Record<string, ProviderMeta> = {
     id: "claude-code",
     name: "Claude Code (OAuth)",
     authMethod: "oauth",
-    defaultModel: "claude-sonnet-4-20250514",
-    models: ["claude-sonnet-4-20250514", "claude-opus-4-20250514"],
+    defaultModel: "claude-opus-4-5",
+    models: ["claude-opus-4-5", "claude-sonnet-4-5", "claude-haiku-4-5"],
     loginCommand: "claude login",
   },
   "openai-codex": {
     id: "openai-codex",
     name: "Codex (OAuth)",
     authMethod: "oauth",
-    defaultModel: "gpt-5.1",
-    models: ["gpt-5.1", "gpt-5.1-codex-max"],
+    defaultModel: "gpt-5.2",
+    models: ["gpt-5.2", "gpt-5.2-codex", "gpt-5.1-codex", "gpt-5.1-codex-mini", "gpt-5.1-codex-max"],
     loginCommand: "codex login",
   },
   "anthropic": {
     id: "anthropic",
     name: "Anthropic (API Key)",
     authMethod: "api-key",
-    defaultModel: "claude-sonnet-4-20250514",
-    models: ["claude-sonnet-4-20250514", "claude-opus-4-20250514", "claude-haiku-3-5-20241022"],
+    defaultModel: "claude-sonnet-4-5",
+    models: ["claude-opus-4-5", "claude-sonnet-4-5", "claude-haiku-4-5"],
     loginUrl: "https://console.anthropic.com/",
   },
   "openai": {
