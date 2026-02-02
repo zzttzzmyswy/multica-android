@@ -269,3 +269,24 @@ export function getLoginInstructions(providerId: string): string {
 
   return "No login instructions available.";
 }
+
+/**
+ * Check if a provider uses OAuth authentication
+ */
+export function isOAuthProvider(providerId: string): boolean {
+  const info = PROVIDER_INFO[providerId];
+  return info?.authMethod === "oauth";
+}
+
+/**
+ * Check if provider is available (has valid credentials)
+ */
+export function isProviderAvailable(providerId: string): boolean {
+  const info = PROVIDER_INFO[providerId];
+  if (!info) return false;
+
+  if (info.authMethod === "oauth") {
+    return isOAuthAvailable(providerId);
+  }
+  return isApiKeyConfigured(providerId);
+}
