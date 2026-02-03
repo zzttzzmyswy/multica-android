@@ -23,6 +23,7 @@ export class Agent {
   private readonly skillManager?: SkillManager;
   private readonly contextWindowGuard: ContextWindowGuardResult;
   private readonly debug: boolean;
+  private initialized = false;
 
   /** Current session ID */
   readonly sessionId: string;
@@ -172,31 +173,6 @@ export class Agent {
     }
     this.agent.setTools(tools);
 
-    const restoredMessages = this.session.loadMessages();
-    if (restoredMessages.length > 0) {
-      if (this.debug) {
-        console.error(`[debug] Restoring ${restoredMessages.length} messages from session`);
-        for (const msg of restoredMessages) {
-          const msgAny = msg as any;
-          const content = Array.isArray(msgAny.content)
-            ? msgAny.content.map((c: any) => c.type || "text").join(", ")
-            : typeof msgAny.content;
-          console.error(`[debug]   ${msg.role}: ${content}`);
-          if (Array.isArray(msgAny.content)) {
-            for (const block of msgAny.content) {
-              if (block.type === "tool_use") {
-                console.error(`[debug]     tool_use id: ${block.id}, name: ${block.name}`);
-              }
-              if (block.type === "tool_result") {
-                console.error(`[debug]     tool_result tool_use_id: ${block.tool_use_id}`);
-              }
-            }
-          }
-        }
-      }
-      this.agent.replaceMessages(restoredMessages);
-    }
-
     this.session.saveMeta({
       provider: this.agent.state.model?.provider,
       model: this.agent.state.model?.id,
@@ -216,6 +192,34 @@ export class Agent {
   }
 
   async run(prompt: string): Promise<AgentRunResult> {
+    if (!this.initialized) {
+      await this.session.repairIfNeeded((msg) => console.error(msg));
+      const restoredMessages = this.session.loadMessages();
+      if (restoredMessages.length > 0) {
+        if (this.debug) {
+          console.error(`[debug] Restoring ${restoredMessages.length} messages from session`);
+          for (const msg of restoredMessages) {
+            const msgAny = msg as any;
+            const content = Array.isArray(msgAny.content)
+              ? msgAny.content.map((c: any) => c.type || "text").join(", ")
+              : typeof msgAny.content;
+            console.error(`[debug]   ${msg.role}: ${content}`);
+            if (Array.isArray(msgAny.content)) {
+              for (const block of msgAny.content) {
+                if (block.type === "tool_use") {
+                  console.error(`[debug]     tool_use id: ${block.id}, name: ${block.name}`);
+                }
+                if (block.type === "tool_result") {
+                  console.error(`[debug]     tool_result tool_use_id: ${block.tool_use_id}`);
+                }
+              }
+            }
+          }
+        }
+        this.agent.replaceMessages(restoredMessages);
+      }
+      this.initialized = true;
+    }
     this.output.state.lastAssistantText = "";
     await this.agent.prompt(prompt);
     return { text: this.output.state.lastAssistantText, error: this.agent.state.error };
