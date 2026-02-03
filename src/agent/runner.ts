@@ -3,7 +3,13 @@ import { v7 as uuidv7 } from "uuid";
 import type { AgentOptions, AgentRunResult } from "./types.js";
 import { createAgentOutput } from "./cli/output.js";
 import { resolveModel, resolveTools } from "./tools.js";
-import { resolveApiKey, resolveBaseUrl, resolveModelId } from "./providers/index.js";
+import {
+  resolveApiKey,
+  resolveApiKeyForProfile,
+  resolveApiKeyForProvider,
+  resolveBaseUrl,
+  resolveModelId,
+} from "./providers/index.js";
 import { SessionManager } from "./session/session-manager.js";
 import { ProfileManager } from "./profile/index.js";
 import { SkillManager } from "./skills/index.js";
@@ -14,6 +20,42 @@ import {
   type ContextWindowGuardResult,
 } from "./context-window/index.js";
 import { mergeToolsConfig, type ToolsConfig } from "./tools/policy.js";
+import {
+  loadAuthProfileStore,
+  resolveAuthProfileOrder,
+  isProfileInCooldown,
+  markAuthProfileFailure,
+  markAuthProfileUsed,
+  markAuthProfileGood,
+} from "./auth-profiles/index.js";
+import type { AuthProfileFailureReason } from "./auth-profiles/index.js";
+
+// ============================================================
+// Error classification for auth profile rotation
+// ============================================================
+
+function classifyError(error: unknown): AuthProfileFailureReason {
+  const msg = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+
+  if (msg.includes("401") || msg.includes("403") || msg.includes("unauthorized") || msg.includes("invalid api key") || msg.includes("authentication")) {
+    return "auth";
+  }
+  if (msg.includes("429") || msg.includes("rate limit") || msg.includes("rate_limit") || msg.includes("too many requests")) {
+    return "rate_limit";
+  }
+  if (msg.includes("billing") || msg.includes("quota") || msg.includes("insufficient") || msg.includes("payment")) {
+    return "billing";
+  }
+  if (msg.includes("timeout") || msg.includes("timed out") || msg.includes("econnreset") || msg.includes("etimedout")) {
+    return "timeout";
+  }
+  return "unknown";
+}
+
+/** Check if an error is potentially retryable via profile rotation */
+function isRotatableError(reason: AuthProfileFailureReason): boolean {
+  return reason === "auth" || reason === "rate_limit" || reason === "billing";
+}
 
 export class Agent {
   private readonly agent: PiAgentCore;
@@ -23,24 +65,67 @@ export class Agent {
   private readonly skillManager?: SkillManager;
   private readonly contextWindowGuard: ContextWindowGuardResult;
   private readonly debug: boolean;
+  private readonly stderr: NodeJS.WritableStream;
+
+  // Auth profile rotation state
+  private readonly resolvedProvider: string;
+  private currentApiKey: string | undefined;
+  private currentProfileId: string | undefined;
+  private profileCandidates: string[];
+  private profileIndex: number;
+  private readonly pinnedProfile: boolean;
 
   /** Current session ID */
   readonly sessionId: string;
 
   constructor(options: AgentOptions = {}) {
     const stdout = options.logger?.stdout ?? process.stdout;
-    const stderr = options.logger?.stderr ?? process.stderr;
-    this.output = createAgentOutput({ stdout, stderr });
+    this.stderr = options.logger?.stderr ?? process.stderr;
+    this.output = createAgentOutput({ stdout, stderr: this.stderr });
     this.debug = options.debug ?? false;
 
     // Resolve provider and model from options > env vars > defaults
-    const resolvedProvider = options.provider ?? credentialManager.getLlmProvider() ?? "kimi-coding";
-    const resolvedModel = resolveModelId(resolvedProvider, options.model);
-    const apiKey = resolveApiKey(resolvedProvider, options.apiKey);
+    this.resolvedProvider = options.provider ?? credentialManager.getLlmProvider() ?? "kimi-coding";
+    const resolvedModel = resolveModelId(this.resolvedProvider, options.model);
+
+    // === Auth profile resolution ===
+    this.pinnedProfile = !!(options.authProfileId || options.apiKey);
+
+    if (options.apiKey) {
+      // Explicit API key — no rotation
+      this.currentApiKey = options.apiKey;
+      this.currentProfileId = this.resolvedProvider;
+      this.profileCandidates = [];
+      this.profileIndex = 0;
+    } else if (options.authProfileId) {
+      // Pinned profile — no rotation
+      this.currentApiKey = resolveApiKeyForProfile(options.authProfileId)
+        ?? resolveApiKey(this.resolvedProvider);
+      this.currentProfileId = options.authProfileId;
+      this.profileCandidates = [];
+      this.profileIndex = 0;
+    } else {
+      // Profile-aware resolution with rotation support
+      const resolved = resolveApiKeyForProvider(this.resolvedProvider);
+      if (resolved) {
+        this.currentApiKey = resolved.apiKey;
+        this.currentProfileId = resolved.profileId;
+      } else {
+        this.currentApiKey = undefined;
+        this.currentProfileId = undefined;
+      }
+
+      // Load full candidate list for rotation
+      const store = loadAuthProfileStore();
+      this.profileCandidates = resolveAuthProfileOrder(this.resolvedProvider, store);
+      this.profileIndex = this.currentProfileId
+        ? Math.max(0, this.profileCandidates.indexOf(this.currentProfileId))
+        : 0;
+    }
 
     this.agent = new PiAgentCore(
-      apiKey
-        ? { getApiKey: (_provider: string) => apiKey }
+      this.currentApiKey
+        ? { getApiKey: (_provider: string) => this.currentApiKey! }
         : {},
     );
 
@@ -86,7 +171,7 @@ export class Agent {
       return tempSession.getMeta();
     })();
 
-    const effectiveProvider = resolvedModel ? resolvedProvider : (options.provider ?? storedMeta?.provider);
+    const effectiveProvider = resolvedModel ? this.resolvedProvider : (options.provider ?? storedMeta?.provider);
     const effectiveModel = resolvedModel ?? options.model ?? storedMeta?.model;
     let model = resolveModel({ ...options, provider: effectiveProvider, model: effectiveModel });
 
@@ -112,7 +197,7 @@ export class Agent {
 
     // 警告：context window 较小
     if (this.contextWindowGuard.shouldWarn) {
-      stderr.write(
+      this.stderr.write(
         `[Context Window Guard] WARNING: Low context window: ${this.contextWindowGuard.tokens} tokens (source: ${this.contextWindowGuard.source})\n`,
       );
     }
@@ -130,7 +215,7 @@ export class Agent {
 
     // 获取 API Key（用于 summary 模式）
     const summaryApiKey = compactionMode === "summary"
-      ? resolveApiKey(resolvedProvider, options.apiKey)
+      ? resolveApiKey(this.resolvedProvider, options.apiKey)
       : undefined;
 
     // 创建 SessionManager（带 context window 配置）
@@ -208,6 +293,10 @@ export class Agent {
       this.output.handleEvent(event);
       this.handleSessionEvent(event);
     });
+
+    if (this.debug && this.currentProfileId) {
+      console.error(`[debug] Auth profile: ${this.currentProfileId} (pinned=${this.pinnedProfile}, candidates=${this.profileCandidates.length})`);
+    }
   }
 
   /** Subscribe to raw AgentEvent from the underlying engine */
@@ -217,8 +306,79 @@ export class Agent {
 
   async run(prompt: string): Promise<AgentRunResult> {
     this.output.state.lastAssistantText = "";
-    await this.agent.prompt(prompt);
+
+    try {
+      await this.agent.prompt(prompt);
+    } catch (error) {
+      // Attempt auth profile rotation on retryable errors
+      if (!this.pinnedProfile && this.profileCandidates.length > 1 && this.currentProfileId) {
+        const reason = classifyError(error);
+        if (isRotatableError(reason)) {
+          markAuthProfileFailure(this.currentProfileId, reason);
+
+          if (this.debug) {
+            this.stderr.write(
+              `[auth-profile] Profile "${this.currentProfileId}" failed (${reason}), attempting rotation...\n`,
+            );
+          }
+
+          if (this.advanceAuthProfile()) {
+            if (this.debug) {
+              this.stderr.write(
+                `[auth-profile] Rotated to profile "${this.currentProfileId}"\n`,
+              );
+            }
+            // Retry with new profile
+            this.output.state.lastAssistantText = "";
+            await this.agent.prompt(prompt);
+          } else {
+            throw error; // No more profiles to try
+          }
+        } else {
+          throw error; // Non-rotatable error
+        }
+      } else {
+        throw error; // Pinned profile or single profile
+      }
+    }
+
+    // Mark success
+    if (this.currentProfileId) {
+      markAuthProfileUsed(this.currentProfileId);
+      markAuthProfileGood(this.resolvedProvider, this.currentProfileId);
+    }
+
     return { text: this.output.state.lastAssistantText, error: this.agent.state.error };
+  }
+
+  /**
+   * Advance to the next non-cooldown auth profile.
+   * Returns true if a new profile was activated, false if exhausted.
+   */
+  private advanceAuthProfile(): boolean {
+    const store = loadAuthProfileStore();
+    const startIndex = this.profileIndex;
+
+    for (let i = 1; i < this.profileCandidates.length; i++) {
+      const nextIndex = (startIndex + i) % this.profileCandidates.length;
+      const candidateId = this.profileCandidates[nextIndex] as string | undefined;
+      if (!candidateId) continue;
+
+      // Skip profiles in cooldown
+      const stats = store.usageStats?.[candidateId];
+      if (stats && isProfileInCooldown(stats)) continue;
+
+      // Try to resolve API key
+      const apiKey = resolveApiKeyForProfile(candidateId);
+      if (!apiKey) continue;
+
+      this.currentApiKey = apiKey;
+      this.currentProfileId = candidateId;
+      this.profileIndex = nextIndex;
+      return true;
+    }
+
+    return false;
   }
 
   private handleSessionEvent(event: AgentEvent) {
