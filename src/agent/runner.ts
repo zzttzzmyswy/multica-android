@@ -91,7 +91,21 @@ export class Agent {
     this.debug = options.debug ?? false;
 
     // Resolve provider and model from options > env vars > defaults
-    this.resolvedProvider = options.provider ?? credentialManager.getLlmProvider() ?? "kimi-coding";
+    const defaultProvider = options.provider ?? credentialManager.getLlmProvider() ?? "kimi-coding";
+    if (options.authProfileId) {
+      const profileProvider = options.authProfileId.includes(":")
+        ? options.authProfileId.split(":")[0]!
+        : options.authProfileId;
+      if (options.provider && options.provider !== profileProvider) {
+        throw new Error(
+          `authProfileId provider mismatch: authProfileId="${options.authProfileId}" ` +
+          `does not match provider="${options.provider}"`,
+        );
+      }
+      this.resolvedProvider = profileProvider;
+    } else {
+      this.resolvedProvider = defaultProvider;
+    }
     const resolvedModel = resolveModelId(this.resolvedProvider, options.model);
 
     // === Auth profile resolution ===
@@ -327,12 +341,13 @@ export class Agent {
       } catch (error) {
         lastError = error;
 
-        if (!canRotate || !this.currentProfileId) throw error;
-
         const reason = classifyError(error);
-        if (!isRotatableError(reason)) throw error;
+        if (this.currentProfileId && isRotatableError(reason)) {
+          markAuthProfileFailure(this.currentProfileId, reason);
+        }
 
-        markAuthProfileFailure(this.currentProfileId, reason);
+        if (!canRotate || !this.currentProfileId) throw error;
+        if (!isRotatableError(reason)) throw error;
 
         if (this.debug) {
           this.stderr.write(
