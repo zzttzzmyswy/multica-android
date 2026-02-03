@@ -532,4 +532,32 @@ export class Agent {
   getProfileId(): string | undefined {
     return this.profile?.getProfile()?.id;
   }
+
+  /**
+   * Get agent display name from profile config.
+   */
+  getAgentName(): string | undefined {
+    return this.profile?.getName();
+  }
+
+  /**
+   * Update agent display name in profile config.
+   */
+  setAgentName(name: string): void {
+    this.profile?.updateName(name);
+  }
+
+  /**
+   * Get user.md content from profile.
+   */
+  getUserContent(): string | undefined {
+    return this.profile?.getUserContent();
+  }
+
+  /**
+   * Update user.md content in profile.
+   */
+  setUserContent(content: string): void {
+    this.profile?.updateUserContent(content);
+  }
 }

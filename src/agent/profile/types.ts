@@ -15,6 +15,8 @@ export const PROFILE_FILES = {
 
 /** Profile config.json structure */
 export interface ProfileConfig {
+  /** Agent display name */
+  name?: string;
   /** Tools policy configuration */
   tools?: ToolsConfig;
   /** Default LLM provider */

@@ -13,7 +13,10 @@ import {
   loadProfile,
   profileExists,
   saveProfile,
+  writeProfileConfig,
+  writeProfileFile,
 } from "./storage.js";
+import { PROFILE_FILES } from "./types.js";
 
 export { type AgentProfile, type CreateProfileOptions, type ProfileConfig, type ProfileManagerOptions } from "./types.js";
 export { DEFAULT_TEMPLATES } from "./templates.js";
@@ -214,5 +217,39 @@ export class ProfileManager {
 
     this.updateToolsConfig(newConfig);
     return newConfig;
+  }
+
+  /** 获取 Agent 名称 */
+  getName(): string | undefined {
+    const profile = this.getProfile();
+    return profile?.config?.name;
+  }
+
+  /** 更新 Agent 名称 */
+  updateName(name: string): void {
+    const profile = this.getOrCreateProfile(false);
+    const currentConfig = profile.config ?? {};
+    const newConfig: ProfileConfig = {
+      ...currentConfig,
+      name,
+    };
+    profile.config = newConfig;
+    this.profile = profile;
+    writeProfileConfig(this.profileId, newConfig, { baseDir: this.baseDir });
+  }
+
+  /** 获取 user.md 内容 */
+  getUserContent(): string | undefined {
+    const profile = this.getProfile();
+    return profile?.user;
+  }
+
+  /** 更新 user.md 内容 */
+  updateUserContent(content: string): void {
+    writeProfileFile(this.profileId, PROFILE_FILES.user, content, { baseDir: this.baseDir });
+    // Update cached profile
+    if (this.profile) {
+      this.profile.user = content;
+    }
   }
 }

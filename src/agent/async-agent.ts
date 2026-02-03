@@ -148,4 +148,32 @@ export class AsyncAgent {
   getProfileId(): string | undefined {
     return this.agent.getProfileId();
   }
+
+  /**
+   * Get agent display name from profile config.
+   */
+  getAgentName(): string | undefined {
+    return this.agent.getAgentName();
+  }
+
+  /**
+   * Update agent display name in profile config.
+   */
+  setAgentName(name: string): void {
+    this.agent.setAgentName(name);
+  }
+
+  /**
+   * Get user.md content from profile.
+   */
+  getUserContent(): string | undefined {
+    return this.agent.getUserContent();
+  }
+
+  /**
+   * Update user.md content in profile.
+   */
+  setUserContent(content: string): void {
+    this.agent.setUserContent(content);
+  }
 }
