@@ -268,7 +268,9 @@ export class Agent {
     this.agent.setModel(model);
 
     // Save original tools config from options (for later merging during reload)
-    this.originalToolsConfig = options.tools;
+    if (options.tools) {
+      this.originalToolsConfig = options.tools;
+    }
 
     // Merge Profile tools config with options.tools (options takes precedence)
     const profileToolsConfig = this.profile?.getToolsConfig();

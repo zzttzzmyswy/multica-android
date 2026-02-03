@@ -4,7 +4,7 @@ import { Agent } from "./runner.js";
 import { Channel } from "./channel.js";
 import type { AgentOptions, Message } from "./types.js";
 
-const devNull = { write: () => true } as NodeJS.WritableStream;
+const devNull = { write: () => true } as unknown as NodeJS.WritableStream;
 
 /** Discriminated union of legacy Message (error fallback) and raw AgentEvent */
 export type ChannelItem = Message | AgentEvent;
