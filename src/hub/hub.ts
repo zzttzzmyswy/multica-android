@@ -196,19 +196,25 @@ export class Hub {
           content: item.content,
         });
       } else {
+        // Filter: only forward events useful for frontend rendering
         const maybeMessage = (item as { message?: { role?: string } }).message;
         const isAssistantMessage = maybeMessage?.role === "assistant";
-        if (item.type === "message_start" && isAssistantMessage) {
+        const shouldForward =
+          ((item.type === "message_start" || item.type === "message_update" || item.type === "message_end") && isAssistantMessage)
+          || item.type === "tool_execution_start"
+          || item.type === "tool_execution_end";
+        if (!shouldForward) continue;
+
+        if (item.type === "message_start") {
           this.beginStream(agent.sessionId, item);
         }
         const streamId = this.getActiveStreamId(agent.sessionId, item);
-        // Raw AgentEvent — forward via StreamAction
         this.client.send(targetDeviceId, StreamAction, {
           streamId,
           agentId: agent.sessionId,
           event: item,
         });
-        if (item.type === "message_end" && isAssistantMessage) {
+        if (item.type === "message_end") {
           this.endStream(agent.sessionId);
         }
       }
