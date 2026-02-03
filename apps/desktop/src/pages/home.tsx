@@ -57,7 +57,7 @@ export default function HomePage() {
             gateway={hubInfo?.url ?? 'http://localhost:3000'}
             hubId={hubInfo?.hubId ?? 'unknown'}
             agentId={primaryAgent?.id}
-            expirySeconds={300}
+            expirySeconds={30}
             size={180}
           />
         </div>
