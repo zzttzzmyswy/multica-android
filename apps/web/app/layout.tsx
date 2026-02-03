@@ -1,21 +1,10 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inter, Playfair_Display } from "next/font/google";
-import { useGatewayStore } from "@multica/store";
 import "@multica/ui/globals.css";
-import {
-  SidebarProvider,
-  SidebarInset,
-} from "@multica/ui/components/ui/sidebar";
-import { AppSidebar } from "@multica/ui/components/app-sidebar";
 import { ThemeProvider } from "@multica/ui/components/theme-provider";
 import { Toaster } from "@multica/ui/components/ui/sonner";
-import { HubSidebar } from "@multica/ui/components/hub-sidebar";
+import { ConnectionBar } from "@multica/ui/components/connection-bar";
 import { ServiceWorkerRegister } from "./sw-register";
-
-const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL;
-if (gatewayUrl) {
-  useGatewayStore.getState().setGatewayUrl(gatewayUrl);
-}
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -64,14 +53,10 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <SidebarProvider>
-            <AppSidebar>
-              <HubSidebar />
-            </AppSidebar>
-            <SidebarInset>
-              <div className="flex h-dvh overflow-hidden">{children}</div>
-            </SidebarInset>
-          </SidebarProvider>
+          <div className="flex h-dvh">
+            <ConnectionBar />
+            <div className="flex-1 overflow-hidden">{children}</div>
+          </div>
         </ThemeProvider>
         <Toaster />
         <ServiceWorkerRegister />
