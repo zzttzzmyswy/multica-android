@@ -1,11 +1,14 @@
 "use client";
 
 import { useRef, useState, useCallback, useMemo } from "react";
+import { useTheme } from "next-themes";
 import { Button } from "@multica/ui/components/ui/button";
 import { Textarea } from "@multica/ui/components/ui/textarea";
 import { ChatInput } from "@multica/ui/components/chat-input";
 import { MemoizedMarkdown } from "@multica/ui/components/markdown";
 import { StreamingMarkdown } from "@multica/ui/components/markdown/StreamingMarkdown";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Sun01Icon, Moon01Icon } from "@hugeicons/core-free-icons";
 import { toast } from "@multica/ui/components/ui/sonner";
 import {
   useHubStore,
@@ -24,6 +27,7 @@ import { cn } from "@multica/ui/lib/utils";
 export function Chat() {
   useHubInit()
   const deviceId = useDeviceId()
+  const { theme, setTheme } = useTheme()
 
   const activeAgentId = useHubStore((s) => s.activeAgentId)
   const gwState = useGatewayStore((s) => s.connectionState)
@@ -70,23 +74,36 @@ export function Chat() {
   return (
     <div className="h-dvh flex flex-col overflow-hidden w-full">
       {/* Header */}
-      <header className="flex items-center justify-between px-4 py-2 border-b shrink-0">
-        <div className="flex items-center gap-2.5">
-          <img src="/icon.png" alt="Multica" className="size-6 rounded-md" />
-          <span className="text-sm tracking-wide font-[family-name:var(--font-brand)]">
-            Multica
-          </span>
+      <header>
+        <div className="flex items-center justify-between px-4 py-2 max-w-4xl mx-auto">
+          <div className="flex items-center gap-2.5">
+            <img src="/icon.png" alt="Multica" className="size-6 rounded-md" />
+            <span className="text-sm tracking-wide font-[family-name:var(--font-brand)]">
+              Multica
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="size-8 text-muted-foreground"
+            >
+              <HugeiconsIcon icon={Sun01Icon} strokeWidth={1.5} className="size-4 dark:hidden" />
+              <HugeiconsIcon icon={Moon01Icon} strokeWidth={1.5} className="size-4 hidden dark:block" />
+            </Button>
+            {isConnected && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDisconnect}
+                className="text-xs text-muted-foreground"
+              >
+                Disconnect
+              </Button>
+            )}
+          </div>
         </div>
-        {isConnected && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleDisconnect}
-            className="text-xs text-muted-foreground"
-          >
-            Disconnect
-          </Button>
-        )}
       </header>
 
       {/* Main */}
@@ -113,7 +130,6 @@ export function Chat() {
                 }}
               />
               <Button
-                variant="outline"
                 size="sm"
                 onClick={handleConnect}
                 disabled={!codeInput.trim() || gwState === "connecting"}
