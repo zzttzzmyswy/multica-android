@@ -100,6 +100,10 @@ export function createSessionsSpawnTool(
           model,
         });
 
+        // Write the task to the child (non-blocking) before registering,
+        // so waitForIdle() observes the queued work.
+        childAgent.write(task);
+
         // Register the run for lifecycle tracking
         registerSubagentRun({
           runId,
@@ -110,9 +114,6 @@ export function createSessionsSpawnTool(
           cleanup,
           timeoutSeconds,
         });
-
-        // Write the task to the child (non-blocking)
-        childAgent.write(task);
 
         return {
           content: [

@@ -47,10 +47,9 @@ export function initSubagentRegistry(): void {
           resumedRuns.add(runId);
           handleRunCompletion(record);
         }
-      }
-      // If not ended, the child agent session is lost on restart —
-      // mark as ended with unknown outcome
-      else if (!record.startedAt) {
+      } else {
+        // If not ended, the child agent session is lost on restart —
+        // mark as ended with unknown outcome
         record.endedAt = Date.now();
         record.outcome = { status: "unknown" };
         persist();
@@ -246,6 +245,10 @@ function handleRunCompletion(record: SubagentRunRecord): void {
 
   if (!announced) {
     console.warn(`[SubagentRegistry] Announce flow failed for run ${record.runId}`);
+    // Allow retry on next restart if announce failed.
+    record.cleanupHandled = false;
+    persist();
+    return;
   }
 
   // Handle session cleanup
