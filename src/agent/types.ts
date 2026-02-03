@@ -66,6 +66,8 @@ export type AgentOptions = {
   tools?: ToolsConfig | undefined;
   /** Whether this is a subagent (applies restricted tool set) */
   isSubagent?: boolean | undefined;
+  /** Parent session ID (for subagent lineage tracking) */
+  parentSessionId?: string | undefined;
 };
 
 export interface Message {
