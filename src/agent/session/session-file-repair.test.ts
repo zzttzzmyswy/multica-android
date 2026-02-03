@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { repairSessionFileIfNeeded } from "./session-file-repair.js";
 import { acquireSessionWriteLock } from "./session-write-lock.js";
 
@@ -16,6 +16,10 @@ vi.mock("./session-write-lock.js", async () => {
 });
 
 describe("repairSessionFileIfNeeded", () => {
+  beforeEach(() => {
+    vi.mocked(acquireSessionWriteLock).mockClear();
+  });
+
   it("rewrites session files that contain malformed lines", async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "multica-session-repair-"));
     const file = path.join(dir, "session.jsonl");
