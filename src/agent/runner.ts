@@ -34,11 +34,15 @@ import type { AuthProfileFailureReason } from "./auth-profiles/index.js";
 // Error classification for auth profile rotation
 // ============================================================
 
-function classifyError(error: unknown): AuthProfileFailureReason {
+/** Classify an error into an auth profile failure reason */
+export function classifyError(error: unknown): AuthProfileFailureReason {
   const msg = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
 
   if (msg.includes("401") || msg.includes("403") || msg.includes("unauthorized") || msg.includes("invalid api key") || msg.includes("authentication")) {
     return "auth";
+  }
+  if (msg.includes("400") || msg.includes("invalid request") || msg.includes("malformed") || msg.includes("bad request") || msg.includes("schema")) {
+    return "format";
   }
   if (msg.includes("429") || msg.includes("rate limit") || msg.includes("rate_limit") || msg.includes("too many requests")) {
     return "rate_limit";
@@ -53,8 +57,9 @@ function classifyError(error: unknown): AuthProfileFailureReason {
 }
 
 /** Check if an error is potentially retryable via profile rotation */
-function isRotatableError(reason: AuthProfileFailureReason): boolean {
-  return reason === "auth" || reason === "rate_limit" || reason === "billing";
+export function isRotatableError(reason: AuthProfileFailureReason): boolean {
+  // timeout is rotatable because some providers hang on rate limit instead of returning 429
+  return reason === "auth" || reason === "rate_limit" || reason === "billing" || reason === "timeout";
 }
 
 export class Agent {
@@ -307,38 +312,43 @@ export class Agent {
   async run(prompt: string): Promise<AgentRunResult> {
     this.output.state.lastAssistantText = "";
 
-    try {
-      await this.agent.prompt(prompt);
-    } catch (error) {
-      // Attempt auth profile rotation on retryable errors
-      if (!this.pinnedProfile && this.profileCandidates.length > 1 && this.currentProfileId) {
+    const canRotate = !this.pinnedProfile && this.profileCandidates.length > 1;
+    let lastError: unknown;
+
+    // Loop to exhaust all candidate profiles on rotatable errors
+    while (true) {
+      try {
+        await this.agent.prompt(prompt);
+        break; // success — exit loop
+      } catch (error) {
+        lastError = error;
+
+        if (!canRotate || !this.currentProfileId) throw error;
+
         const reason = classifyError(error);
-        if (isRotatableError(reason)) {
-          markAuthProfileFailure(this.currentProfileId, reason);
+        if (!isRotatableError(reason)) throw error;
 
-          if (this.debug) {
-            this.stderr.write(
-              `[auth-profile] Profile "${this.currentProfileId}" failed (${reason}), attempting rotation...\n`,
-            );
-          }
+        markAuthProfileFailure(this.currentProfileId, reason);
 
-          if (this.advanceAuthProfile()) {
-            if (this.debug) {
-              this.stderr.write(
-                `[auth-profile] Rotated to profile "${this.currentProfileId}"\n`,
-              );
-            }
-            // Retry with new profile
-            this.output.state.lastAssistantText = "";
-            await this.agent.prompt(prompt);
-          } else {
-            throw error; // No more profiles to try
-          }
-        } else {
-          throw error; // Non-rotatable error
+        if (this.debug) {
+          this.stderr.write(
+            `[auth-profile] Profile "${this.currentProfileId}" failed (${reason}), attempting rotation...\n`,
+          );
         }
-      } else {
-        throw error; // Pinned profile or single profile
+
+        if (!this.advanceAuthProfile()) {
+          throw lastError; // All profiles exhausted
+        }
+
+        if (this.debug) {
+          this.stderr.write(
+            `[auth-profile] Rotated to profile "${this.currentProfileId}"\n`,
+          );
+        }
+
+        // Reset output for retry
+        this.output.state.lastAssistantText = "";
+        // continue loop with new profile
       }
     }
 
