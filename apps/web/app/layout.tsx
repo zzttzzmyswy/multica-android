@@ -3,7 +3,6 @@ import { Geist, Geist_Mono, Inter, Playfair_Display } from "next/font/google";
 import "@multica/ui/globals.css";
 import { ThemeProvider } from "@multica/ui/components/theme-provider";
 import { Toaster } from "@multica/ui/components/ui/sonner";
-import { ConnectionBar } from "@multica/ui/components/connection-bar";
 import { ServiceWorkerRegister } from "./sw-register";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
@@ -53,10 +52,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <div className="flex h-dvh">
-            <ConnectionBar />
-            <div className="flex-1 overflow-hidden">{children}</div>
-          </div>
+          <div className="flex h-dvh overflow-hidden">{children}</div>
         </ThemeProvider>
         <Toaster />
         <ServiceWorkerRegister />

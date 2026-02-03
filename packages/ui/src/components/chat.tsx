@@ -1,23 +1,59 @@
 "use client";
 
-import { useRef, useCallback, useMemo } from "react";
+import { useRef, useState, useCallback, useMemo } from "react";
+import { Button } from "@multica/ui/components/ui/button";
+import { Textarea } from "@multica/ui/components/ui/textarea";
 import { ChatInput } from "@multica/ui/components/chat-input";
 import { MemoizedMarkdown } from "@multica/ui/components/markdown";
 import { StreamingMarkdown } from "@multica/ui/components/markdown/StreamingMarkdown";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { UserIcon } from "@hugeicons/core-free-icons";
-import { useHubStore, useMessagesStore, useGatewayStore } from "@multica/store";
+import { toast } from "@multica/ui/components/ui/sonner";
+import {
+  useHubStore,
+  useMessagesStore,
+  useGatewayStore,
+  useHubInit,
+  useDeviceId,
+  parseConnectionCode,
+  saveConnection,
+  clearConnection,
+} from "@multica/store";
 import { useScrollFade } from "@multica/ui/hooks/use-scroll-fade";
 import { useAutoScroll } from "@multica/ui/hooks/use-auto-scroll";
 import { cn } from "@multica/ui/lib/utils";
 
 export function Chat() {
+  useHubInit()
+  const deviceId = useDeviceId()
+
   const activeAgentId = useHubStore((s) => s.activeAgentId)
   const gwState = useGatewayStore((s) => s.connectionState)
+  const hubId = useGatewayStore((s) => s.hubId)
 
   const messages = useMessagesStore((s) => s.messages)
   const streamingIds = useMessagesStore((s) => s.streamingIds)
   const filtered = useMemo(() => messages.filter(m => m.agentId === activeAgentId), [messages, activeAgentId])
+
+  const isConnected = gwState === "registered" && !!hubId && !!activeAgentId
+  const [codeInput, setCodeInput] = useState("")
+
+  const handleConnect = useCallback(() => {
+    const trimmed = codeInput.trim()
+    if (!trimmed) return
+    try {
+      const info = parseConnectionCode(trimmed)
+      saveConnection(info)
+      useGatewayStore.getState().connectWithCode(info, deviceId)
+      setCodeInput("")
+    } catch (e) {
+      toast.error((e as Error).message)
+    }
+  }, [codeInput, deviceId])
+
+  const handleDisconnect = useCallback(() => {
+    useGatewayStore.getState().disconnect()
+    useHubStore.setState({ status: "idle", hub: null, agents: [], activeAgentId: null })
+    clearConnection()
+  }, [])
 
   const handleSend = useCallback((text: string) => {
     const { hubId } = useGatewayStore.getState()
@@ -27,19 +63,65 @@ export function Chat() {
     useGatewayStore.getState().send(hubId, "message", { agentId, content: text })
   }, [])
 
-  const canSend = gwState === "registered" && !!activeAgentId
-
   const mainRef = useRef<HTMLElement>(null)
   const fadeStyle = useScrollFade(mainRef)
   useAutoScroll(mainRef)
 
   return (
     <div className="h-dvh flex flex-col overflow-hidden w-full">
+      {/* Header */}
+      <header className="flex items-center justify-between px-4 py-2 border-b shrink-0">
+        <div className="flex items-center gap-2.5">
+          <img src="/icon.png" alt="Multica" className="size-6 rounded-md" />
+          <span className="text-sm tracking-wide font-[family-name:var(--font-brand)]">
+            Multica
+          </span>
+        </div>
+        {isConnected && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleDisconnect}
+            className="text-xs text-muted-foreground"
+          >
+            Disconnect
+          </Button>
+        )}
+      </header>
+
+      {/* Main */}
       <main ref={mainRef} className="flex-1 overflow-y-auto min-h-0" style={fadeStyle}>
-        {!activeAgentId ? (
-          <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
-            <HugeiconsIcon icon={UserIcon} strokeWidth={1.5} className="size-10 opacity-30" />
-            <span className="text-sm">Paste a connection code to start</span>
+        {!isConnected ? (
+          <div className="flex flex-col items-center justify-center h-full gap-4 px-4">
+            <div className="text-center space-y-1">
+              <p className="text-sm text-muted-foreground">Paste a connection code to start</p>
+              {(gwState === "connecting" || gwState === "connected") && (
+                <p className="text-xs text-muted-foreground/60 animate-pulse">Connecting...</p>
+              )}
+            </div>
+            <div className="w-full max-w-sm space-y-3">
+              <Textarea
+                value={codeInput}
+                onChange={(e) => setCodeInput(e.target.value)}
+                placeholder="Paste connection code here..."
+                className="text-xs font-mono min-h-[100px] resize-none"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault()
+                    handleConnect()
+                  }
+                }}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleConnect}
+                disabled={!codeInput.trim() || gwState === "connecting"}
+                className="w-full text-xs"
+              >
+                Connect
+              </Button>
+            </div>
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
@@ -77,11 +159,12 @@ export function Chat() {
         )}
       </main>
 
+      {/* Footer */}
       <footer className="w-full p-2 pt-1 max-w-4xl mx-auto">
         <ChatInput
           onSubmit={handleSend}
-          disabled={!canSend}
-          placeholder={!activeAgentId ? "Paste a connection code first..." : "Type a message..."}
+          disabled={!isConnected}
+          placeholder={!isConnected ? "Connect first..." : "Type a message..."}
         />
       </footer>
     </div>
