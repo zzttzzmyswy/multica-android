@@ -84,21 +84,6 @@ export function ConnectionQRCode({
     return `multica://connect?${params.toString()}`
   }, [gateway, hubId, agentId, token, expiresAt])
 
-  // Countdown timer
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000))
-      setRemainingSeconds(remaining)
-
-      // Auto-refresh when expired
-      if (remaining === 0) {
-        handleRefresh()
-      }
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [expiresAt])
-
   // Refresh token handler
   const handleRefresh = useCallback(() => {
     const newToken = generateToken()
@@ -119,6 +104,21 @@ export function ConnectionQRCode({
       })
     }
   }, [gateway, hubId, agentId, expirySeconds, onRefresh])
+
+  // Countdown timer
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000))
+      setRemainingSeconds(remaining)
+
+      // Auto-refresh when expired
+      if (remaining === 0) {
+        handleRefresh()
+      }
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [expiresAt, handleRefresh])
 
   // Copy link handler
   const handleCopyLink = async () => {
