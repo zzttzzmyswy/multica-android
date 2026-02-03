@@ -22,6 +22,8 @@ import { createUpdateGatewayHandler } from "./rpc/handlers/update-gateway.js";
 export class Hub {
   private readonly agents = new Map<string, AsyncAgent>();
   private readonly agentSenders = new Map<string, string>();
+  private readonly agentStreamIds = new Map<string, string>();
+  private readonly agentStreamCounters = new Map<string, number>();
   private readonly rpc: RpcDispatcher;
   private client: GatewayClient;
   url: string;
@@ -144,31 +146,77 @@ export class Hub {
       addAgentRecord({ id: agent.sessionId, createdAt: Date.now() });
     }
 
-    // Forward streaming events to the requesting client
-    agent.onStream((payload) => {
-      const targetDeviceId = this.agentSenders.get(agent.sessionId);
-      if (targetDeviceId) {
-        this.client.send(targetDeviceId, StreamAction, payload);
-      }
-    });
-
-    // Internally consume messages produced by agent (fallback for non-stream scenarios)
+    // Internally consume agent output (AgentEvent stream + error Messages)
     void this.consumeAgent(agent);
 
     console.log(`Agent created: ${agent.sessionId}`);
     return agent;
   }
 
+  private getMessageIdFromEvent(event: unknown): string | undefined {
+    if (!event || typeof event !== "object") return undefined;
+    const maybeMsg = (event as { message?: unknown }).message;
+    if (!maybeMsg || typeof maybeMsg !== "object") return undefined;
+    const id = (maybeMsg as { id?: unknown }).id;
+    return typeof id === "string" && id.length > 0 ? id : undefined;
+  }
+
+  private beginStream(agentId: string, event: unknown): string {
+    const explicitId = this.getMessageIdFromEvent(event);
+    if (explicitId) {
+      this.agentStreamIds.set(agentId, explicitId);
+      return explicitId;
+    }
+    const next = (this.agentStreamCounters.get(agentId) ?? 0) + 1;
+    this.agentStreamCounters.set(agentId, next);
+    const fallback = `${agentId}:${next}`;
+    this.agentStreamIds.set(agentId, fallback);
+    return fallback;
+  }
+
+  private getActiveStreamId(agentId: string, event: unknown): string {
+    return this.agentStreamIds.get(agentId) ?? this.getMessageIdFromEvent(event) ?? agentId;
+  }
+
+  private endStream(agentId: string): void {
+    this.agentStreamIds.delete(agentId);
+  }
+
   /** Internally read agent output and send via Gateway */
   private async consumeAgent(agent: AsyncAgent): Promise<void> {
-    for await (const msg of agent.read()) {
-      console.log(`[${agent.sessionId}] ${msg.content}`);
+    for await (const item of agent.read()) {
       const targetDeviceId = this.agentSenders.get(agent.sessionId);
-      if (targetDeviceId) {
+      if (!targetDeviceId) continue;
+
+      if ("content" in item) {
+        // Legacy Message (error fallback)
+        console.log(`[${agent.sessionId}] ${item.content}`);
         this.client.send(targetDeviceId, "message", {
           agentId: agent.sessionId,
-          content: msg.content,
+          content: item.content,
         });
+      } else {
+        // Filter: only forward events useful for frontend rendering
+        const maybeMessage = (item as { message?: { role?: string } }).message;
+        const isAssistantMessage = maybeMessage?.role === "assistant";
+        const shouldForward =
+          ((item.type === "message_start" || item.type === "message_update" || item.type === "message_end") && isAssistantMessage)
+          || item.type === "tool_execution_start"
+          || item.type === "tool_execution_end";
+        if (!shouldForward) continue;
+
+        if (item.type === "message_start") {
+          this.beginStream(agent.sessionId, item);
+        }
+        const streamId = this.getActiveStreamId(agent.sessionId, item);
+        this.client.send(targetDeviceId, StreamAction, {
+          streamId,
+          agentId: agent.sessionId,
+          event: item,
+        });
+        if (item.type === "message_end") {
+          this.endStream(agent.sessionId);
+        }
       }
     }
   }
@@ -211,6 +259,8 @@ export class Hub {
     agent.close();
     this.agents.delete(id);
     this.agentSenders.delete(id);
+    this.agentStreamIds.delete(id);
+    this.agentStreamCounters.delete(id);
     removeAgentRecord(id);
     return true;
   }
@@ -219,6 +269,9 @@ export class Hub {
     for (const [id, agent] of this.agents) {
       agent.close();
       this.agents.delete(id);
+      this.agentSenders.delete(id);
+      this.agentStreamIds.delete(id);
+      this.agentStreamCounters.delete(id);
     }
     this.client.disconnect();
     console.log("Hub shut down");

@@ -3,17 +3,11 @@ import { v7 as uuidv7 } from "uuid";
 import type { AgentOptions, AgentRunResult } from "./types.js";
 import { createAgentOutput } from "./cli/output.js";
 import { resolveModel, resolveTools } from "./tools.js";
+import { resolveApiKey, resolveBaseUrl, resolveModelId } from "./providers/index.js";
 import { SessionManager } from "./session/session-manager.js";
 import { ProfileManager } from "./profile/index.js";
 import { SkillManager } from "./skills/index.js";
 import { credentialManager, getCredentialsPath } from "./credentials.js";
-import {
-  resolveApiKey,
-  resolveBaseUrl,
-  resolveModelId,
-  isOAuthProvider,
-  getLoginInstructions,
-} from "./providers/index.js";
 import {
   checkContextWindow,
   DEFAULT_CONTEXT_TOKENS,
@@ -44,37 +38,10 @@ export class Agent {
     const resolvedModel = resolveModelId(resolvedProvider, options.model);
     const apiKey = resolveApiKey(resolvedProvider, options.apiKey);
 
-    // Validate credentials before proceeding
-    if (!apiKey) {
-      if (isOAuthProvider(resolvedProvider)) {
-        // OAuth provider without valid credentials - show login instructions
-        const instructions = getLoginInstructions(resolvedProvider);
-        throw new Error(
-          `Provider "${resolvedProvider}" requires authentication.\n\n` +
-          `${instructions}\n\n` +
-          `After logging in, run: multica --provider ${resolvedProvider}`,
-        );
-      }
-      // API Key provider without key - show configuration instructions
-      throw new Error(
-        `Provider "${resolvedProvider}" requires an API key.\n\n` +
-        `Add your API key to: ${getCredentialsPath()}\n\n` +
-        `Example:\n` +
-        `{\n` +
-        `  "llm": {\n` +
-        `    "provider": "${resolvedProvider}",\n` +
-        `    "providers": {\n` +
-        `      "${resolvedProvider}": {\n` +
-        `        "apiKey": "your-api-key-here"\n` +
-        `      }\n` +
-        `    }\n` +
-        `  }\n` +
-        `}`,
-      );
-    }
-
     this.agent = new PiAgentCore(
-      { getApiKey: (_provider: string) => apiKey },
+      apiKey
+        ? { getApiKey: (_provider: string) => apiKey }
+        : {},
     );
 
     // Load Agent Profile (if profileId is specified)
@@ -162,7 +129,9 @@ export class Agent {
     const compactionMode = options.compactionMode ?? "tokens"; // 默认使用 token 模式
 
     // 获取 API Key（用于 summary 模式）
-    const summaryApiKey = compactionMode === "summary" ? resolveApiKey(model.provider, options.apiKey) : undefined;
+    const summaryApiKey = compactionMode === "summary"
+      ? resolveApiKey(resolvedProvider, options.apiKey)
+      : undefined;
 
     // 创建 SessionManager（带 context window 配置）
     this.session = new SessionManager({
@@ -241,7 +210,7 @@ export class Agent {
     });
   }
 
-  /** Subscribe to agent events (returns unsubscribe function) */
+  /** Subscribe to raw AgentEvent from the underlying engine */
   subscribe(fn: (event: AgentEvent) => void): () => void {
     return this.agent.subscribe(fn);
   }

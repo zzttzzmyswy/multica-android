@@ -1,18 +1,19 @@
 import { v7 as uuidv7 } from "uuid";
+import type { AgentEvent } from "@mariozechner/pi-agent-core";
 import { Agent } from "./runner.js";
 import { Channel } from "./channel.js";
-import { extractText } from "./extract-text.js";
 import type { AgentOptions, Message } from "./types.js";
-import type { StreamPayload } from "@multica/sdk";
 
 const devNull = { write: () => true } as NodeJS.WritableStream;
 
+/** Discriminated union of legacy Message (error fallback) and raw AgentEvent */
+export type ChannelItem = Message | AgentEvent;
+
 export class AsyncAgent {
   private readonly agent: Agent;
-  private readonly channel = new Channel<Message>();
+  private readonly channel = new Channel<ChannelItem>();
   private _closed = false;
   private queue: Promise<void> = Promise.resolve();
-  private streamCallback?: (payload: StreamPayload) => void;
   readonly sessionId: string;
 
   constructor(options?: AgentOptions) {
@@ -21,16 +22,15 @@ export class AsyncAgent {
       logger: { stdout: devNull, stderr: devNull },
     });
     this.sessionId = this.agent.sessionId;
-    this.setupStreamEvents();
+
+    // Forward raw AgentEvent into the channel
+    this.agent.subscribe((event: AgentEvent) => {
+      this.channel.send(event);
+    });
   }
 
   get closed(): boolean {
     return this._closed;
-  }
-
-  /** Register callback for streaming events */
-  onStream(cb: (payload: StreamPayload) => void): void {
-    this.streamCallback = cb;
   }
 
   /** Write message to agent (non-blocking, serialized queue) */
@@ -41,15 +41,9 @@ export class AsyncAgent {
       .then(async () => {
         if (this._closed) return;
         const result = await this.agent.run(content);
-        // Only send final message via channel if no stream callback
-        // (stream callback already sent the final content)
-        if (!this.streamCallback) {
-          if (result.text) {
-            this.channel.send({ id: uuidv7(), content: result.text });
-          }
-          if (result.error) {
-            this.channel.send({ id: uuidv7(), content: `[error] ${result.error}` });
-          }
+        // Normal text is delivered via message_end event; only handle errors here
+        if (result.error) {
+          this.channel.send({ id: uuidv7(), content: `[error] ${result.error}` });
         }
       })
       .catch((err) => {
@@ -58,8 +52,8 @@ export class AsyncAgent {
       });
   }
 
-  /** Continuously read message stream */
-  read(): AsyncIterable<Message> {
+  /** Continuously read channel stream (AgentEvent + error Messages) */
+  read(): AsyncIterable<ChannelItem> {
     return this.channel;
   }
 
@@ -68,51 +62,5 @@ export class AsyncAgent {
     if (this._closed) return;
     this._closed = true;
     this.channel.close();
-  }
-
-  private setupStreamEvents(): void {
-    let currentStreamId: string | null = null;
-
-    this.agent.subscribe((event) => {
-      if (!this.streamCallback) return;
-
-      switch (event.type) {
-        case "message_start": {
-          if (event.message.role === "assistant") {
-            currentStreamId = uuidv7();
-            this.streamCallback({
-              streamId: currentStreamId,
-              agentId: this.sessionId,
-              state: "delta",
-              content: extractText(event.message),
-            });
-          }
-          break;
-        }
-        case "message_update": {
-          if (event.message.role === "assistant" && currentStreamId) {
-            this.streamCallback({
-              streamId: currentStreamId,
-              agentId: this.sessionId,
-              state: "delta",
-              content: extractText(event.message),
-            });
-          }
-          break;
-        }
-        case "message_end": {
-          if (event.message.role === "assistant" && currentStreamId) {
-            this.streamCallback({
-              streamId: currentStreamId,
-              agentId: this.sessionId,
-              state: "final",
-              content: extractText(event.message),
-            });
-            currentStreamId = null;
-          }
-          break;
-        }
-      }
-    });
   }
 }
