@@ -22,6 +22,8 @@ export {
 
 export {
   resolveAuthStorePath,
+  coerceStore,
+  ensureAuthStoreFile,
   loadAuthProfileStore,
   saveAuthProfileStore,
   updateAuthProfileStore,
@@ -30,6 +32,7 @@ export {
 export {
   listProfilesForProvider,
   resolveAuthProfileOrder,
+  type AuthProfileOrderOptions,
 } from "./order.js";
 
 export {

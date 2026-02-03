@@ -7,6 +7,7 @@
 /** Reason for an auth profile failure, determines cooldown behavior */
 export type AuthProfileFailureReason =
   | "auth"
+  | "format"
   | "rate_limit"
   | "billing"
   | "timeout"

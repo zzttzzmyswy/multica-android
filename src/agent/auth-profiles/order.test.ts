@@ -2,11 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { resolveAuthProfileOrder, listProfilesForProvider } from "./order.js";
 import type { AuthProfileStore } from "./types.js";
 
+// Track mock profiles for credential validation
+let _profiles: Record<string, { apiKey?: string }> = {};
+let _order: Record<string, string[]> = {};
+
 // Mock credentialManager
 vi.mock("../credentials.js", () => {
-  let _profiles: Record<string, { apiKey?: string }> = {};
-  let _order: Record<string, string[]> = {};
-
   return {
     credentialManager: {
       listProfileIdsForProvider(provider: string): string[] {
@@ -17,27 +18,33 @@ vi.mock("../credentials.js", () => {
       getLlmOrder(provider: string): string[] | undefined {
         return _order[provider];
       },
-      // Test helpers
-      __setProfiles(profiles: Record<string, { apiKey?: string }>) {
-        _profiles = profiles;
-      },
-      __setOrder(order: Record<string, string[]>) {
-        _order = order;
+      getLlmProviderConfig(profileId: string): { apiKey?: string } | undefined {
+        return _profiles[profileId];
       },
     },
   };
 });
 
-// Import the mock to use test helpers
-import { credentialManager } from "../credentials.js";
-const mock = credentialManager as unknown as {
-  __setProfiles: (p: Record<string, { apiKey?: string }>) => void;
-  __setOrder: (o: Record<string, string[]>) => void;
-};
+// Mock providers/registry — all test profiles are API-key based
+vi.mock("../providers/registry.js", () => ({
+  isOAuthProvider: (_provider: string) => false,
+}));
+
+// Mock providers/resolver — delegate to our mock profiles
+vi.mock("../providers/resolver.js", () => ({
+  resolveApiKeyForProfile: (profileId: string) => _profiles[profileId]?.apiKey,
+}));
+
+function setProfiles(profiles: Record<string, { apiKey?: string }>) {
+  _profiles = profiles;
+}
+function setOrder(order: Record<string, string[]>) {
+  _order = order;
+}
 
 beforeEach(() => {
-  mock.__setProfiles({});
-  mock.__setOrder({});
+  _profiles = {};
+  _order = {};
 });
 
 // ============================================================
@@ -46,7 +53,7 @@ beforeEach(() => {
 
 describe("listProfilesForProvider", () => {
   it("returns profiles matching the provider", () => {
-    mock.__setProfiles({
+    setProfiles({
       anthropic: { apiKey: "sk-1" },
       "anthropic:backup": { apiKey: "sk-2" },
       openai: { apiKey: "sk-3" },
@@ -58,7 +65,7 @@ describe("listProfilesForProvider", () => {
   });
 
   it("returns empty array when no profiles match", () => {
-    mock.__setProfiles({ openai: { apiKey: "sk-1" } });
+    setProfiles({ openai: { apiKey: "sk-1" } });
     expect(listProfilesForProvider("anthropic")).toEqual([]);
   });
 });
@@ -71,7 +78,7 @@ describe("resolveAuthProfileOrder", () => {
   const now = 1_000_000;
 
   it("returns round-robin order by lastUsed when no explicit order", () => {
-    mock.__setProfiles({
+    setProfiles({
       "anthropic": { apiKey: "sk-1" },
       "anthropic:b": { apiKey: "sk-2" },
       "anthropic:c": { apiKey: "sk-3" },
@@ -91,12 +98,12 @@ describe("resolveAuthProfileOrder", () => {
   });
 
   it("respects explicit order from config", () => {
-    mock.__setProfiles({
+    setProfiles({
       "anthropic": { apiKey: "sk-1" },
       "anthropic:b": { apiKey: "sk-2" },
       "anthropic:c": { apiKey: "sk-3" },
     });
-    mock.__setOrder({ anthropic: ["anthropic:c", "anthropic", "anthropic:b"] });
+    setOrder({ anthropic: ["anthropic:c", "anthropic", "anthropic:b"] });
 
     const store: AuthProfileStore = { version: 1 };
     const order = resolveAuthProfileOrder("anthropic", store, now);
@@ -104,7 +111,7 @@ describe("resolveAuthProfileOrder", () => {
   });
 
   it("pushes cooldown profiles to the end", () => {
-    mock.__setProfiles({
+    setProfiles({
       "anthropic": { apiKey: "sk-1" },
       "anthropic:b": { apiKey: "sk-2" },
       "anthropic:c": { apiKey: "sk-3" },
@@ -124,7 +131,7 @@ describe("resolveAuthProfileOrder", () => {
   });
 
   it("sorts cooldown profiles by earliest recovery", () => {
-    mock.__setProfiles({
+    setProfiles({
       "anthropic": { apiKey: "sk-1" },
       "anthropic:b": { apiKey: "sk-2" },
       "anthropic:c": { apiKey: "sk-3" },
@@ -144,12 +151,12 @@ describe("resolveAuthProfileOrder", () => {
   });
 
   it("deduplicates profile IDs", () => {
-    mock.__setProfiles({
+    setProfiles({
       "anthropic": { apiKey: "sk-1" },
       "anthropic:b": { apiKey: "sk-2" },
     });
     // Explicit order has duplicate
-    mock.__setOrder({ anthropic: ["anthropic", "anthropic", "anthropic:b"] });
+    setOrder({ anthropic: ["anthropic", "anthropic", "anthropic:b"] });
 
     const store: AuthProfileStore = { version: 1 };
     const order = resolveAuthProfileOrder("anthropic", store, now);
@@ -157,13 +164,13 @@ describe("resolveAuthProfileOrder", () => {
   });
 
   it("appends unlisted profiles to explicit order", () => {
-    mock.__setProfiles({
+    setProfiles({
       "anthropic": { apiKey: "sk-1" },
       "anthropic:b": { apiKey: "sk-2" },
       "anthropic:c": { apiKey: "sk-3" },
     });
     // Only lists one profile in explicit order
-    mock.__setOrder({ anthropic: ["anthropic:b"] });
+    setOrder({ anthropic: ["anthropic:b"] });
 
     const store: AuthProfileStore = { version: 1 };
     const order = resolveAuthProfileOrder("anthropic", store, now);
@@ -172,5 +179,30 @@ describe("resolveAuthProfileOrder", () => {
     expect(order).toHaveLength(3);
     expect(order).toContain("anthropic");
     expect(order).toContain("anthropic:c");
+  });
+
+  it("filters out profiles with no valid API key", () => {
+    setProfiles({
+      "anthropic": { apiKey: "sk-1" },
+      "anthropic:empty": {}, // no apiKey
+      "anthropic:c": { apiKey: "sk-3" },
+    });
+    const store: AuthProfileStore = { version: 1 };
+    const order = resolveAuthProfileOrder("anthropic", store, now);
+    expect(order).toEqual(["anthropic", "anthropic:c"]);
+  });
+
+  it("moves preferredProfile to front", () => {
+    setProfiles({
+      "anthropic": { apiKey: "sk-1" },
+      "anthropic:b": { apiKey: "sk-2" },
+      "anthropic:c": { apiKey: "sk-3" },
+    });
+    const store: AuthProfileStore = { version: 1 };
+    const order = resolveAuthProfileOrder("anthropic", store, now, {
+      preferredProfile: "anthropic:c",
+    });
+    expect(order[0]).toBe("anthropic:c");
+    expect(order).toHaveLength(3);
   });
 });
