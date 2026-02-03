@@ -65,6 +65,12 @@ interface SkillAddResult {
   skills?: string[]
 }
 
+interface ProfileData {
+  profileId: string | undefined
+  name: string | undefined
+  userContent: string | undefined
+}
+
 interface ElectronAPI {
   hub: {
     init: () => Promise<unknown>
@@ -96,6 +102,11 @@ interface ElectronAPI {
   }
   agent: {
     status: () => Promise<unknown>
+  }
+  profile: {
+    get: () => Promise<ProfileData>
+    updateName: (name: string) => Promise<unknown>
+    updateUser: (content: string) => Promise<unknown>
   }
 }
 
