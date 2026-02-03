@@ -112,6 +112,14 @@ describe("output", () => {
       expect(extractResultDetails(result)).toEqual(result);
     });
 
+    it("should prefer details when present", () => {
+      const result = {
+        content: [{ type: "text", text: "not json" }],
+        details: { count: 3, truncated: false },
+      };
+      expect(extractResultDetails(result)).toEqual({ count: 3, truncated: false });
+    });
+
     it("should return direct object if no content array", () => {
       const result = { count: 10, truncated: true };
       expect(extractResultDetails(result)).toEqual({ count: 10, truncated: true });

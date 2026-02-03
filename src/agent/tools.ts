@@ -1,32 +1,84 @@
 import type { AgentOptions } from "./types.js";
-import { getModel } from "@mariozechner/pi-ai";
 import { createCodingTools } from "@mariozechner/pi-coding-agent";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { createExecTool } from "./tools/exec.js";
 import { createProcessTool } from "./tools/process.js";
 import { createGlobTool } from "./tools/glob.js";
 import { createWebFetchTool, createWebSearchTool } from "./tools/web/index.js";
 import { createMemoryTools } from "./tools/memory/index.js";
 import { filterTools } from "./tools/policy.js";
+import { isMulticaError, isRetryableError } from "../shared/errors.js";
 
-export function resolveModel(options: AgentOptions) {
-  if (options.provider && options.model) {
-    // Type assertion needed because provider/model come from dynamic user config
-    return (getModel as (p: string, m: string) => ReturnType<typeof getModel>)(
-      options.provider,
-      options.model,
-    );
-  }
-  return getModel("kimi-coding", "kimi-k2-thinking");
-}
+// Re-export resolveModel from providers for backwards compatibility
+export { resolveModel } from "./providers/index.js";
 
 /** Options for creating tools */
 export interface CreateToolsOptions {
   cwd: string;
   /** Profile ID for memory tools (optional) */
-  profileId?: string;
+  profileId?: string | undefined;
   /** Base directory for profiles (optional) */
-  profileBaseDir?: string;
+  profileBaseDir?: string | undefined;
+}
+
+type ToolErrorPayload = {
+  error: true;
+  message: string;
+  name?: string;
+  code?: string;
+  retryable?: boolean;
+  details?: Record<string, unknown>;
+};
+
+function toToolErrorPayload(error: unknown): ToolErrorPayload {
+  if (isMulticaError(error)) {
+    return {
+      error: true,
+      message: error.message,
+      name: error.name,
+      code: error.code,
+      retryable: error.retryable,
+      details: error.details,
+    };
+  }
+
+  if (error instanceof Error) {
+    return {
+      error: true,
+      message: error.message,
+      name: error.name,
+      retryable: isRetryableError(error),
+    };
+  }
+
+  return {
+    error: true,
+    message: String(error),
+  };
+}
+
+function toolErrorResult(error: unknown): AgentToolResult<ToolErrorPayload> {
+  const payload = toToolErrorPayload(error);
+  return {
+    content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+    details: payload,
+  };
+}
+
+function wrapTool<TParams, TResult>(
+  tool: AgentTool<TParams, TResult>,
+): AgentTool<TParams, TResult> {
+  const execute = tool.execute;
+  return {
+    ...tool,
+    execute: async (...args) => {
+      try {
+        return await execute(...args);
+      } catch (error) {
+        return toolErrorResult(error) as AgentToolResult<TResult>;
+      }
+    },
+  };
 }
 
 /**
@@ -95,7 +147,7 @@ export function resolveTools(options: AgentOptions): AgentTool<any>[] {
     isSubagent: options.isSubagent,
   });
 
-  return filtered;
+  return filtered.map((tool) => wrapTool(tool));
 }
 
 /**

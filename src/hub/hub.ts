@@ -7,7 +7,6 @@ import {
   type RequestPayload,
   type ResponseSuccessPayload,
   type ResponseErrorPayload,
-  type StreamPayload,
 } from "@multica/sdk";
 import { AsyncAgent } from "../agent/async-agent.js";
 import { getHubId } from "./hub-identity.js";
@@ -23,6 +22,8 @@ import { createUpdateGatewayHandler } from "./rpc/handlers/update-gateway.js";
 export class Hub {
   private readonly agents = new Map<string, AsyncAgent>();
   private readonly agentSenders = new Map<string, string>();
+  private readonly agentStreamIds = new Map<string, string>();
+  private readonly agentStreamCounters = new Map<string, number>();
   private readonly rpc: RpcDispatcher;
   private client: GatewayClient;
   url: string;
@@ -145,11 +146,40 @@ export class Hub {
       addAgentRecord({ id: agent.sessionId, createdAt: Date.now() });
     }
 
-    // Internally consume messages produced by agent
+    // Internally consume agent output (AgentEvent stream + error Messages)
     void this.consumeAgent(agent);
 
     console.log(`Agent created: ${agent.sessionId}`);
     return agent;
+  }
+
+  private getMessageIdFromEvent(event: unknown): string | undefined {
+    if (!event || typeof event !== "object") return undefined;
+    const maybeMsg = (event as { message?: unknown }).message;
+    if (!maybeMsg || typeof maybeMsg !== "object") return undefined;
+    const id = (maybeMsg as { id?: unknown }).id;
+    return typeof id === "string" && id.length > 0 ? id : undefined;
+  }
+
+  private beginStream(agentId: string, event: unknown): string {
+    const explicitId = this.getMessageIdFromEvent(event);
+    if (explicitId) {
+      this.agentStreamIds.set(agentId, explicitId);
+      return explicitId;
+    }
+    const next = (this.agentStreamCounters.get(agentId) ?? 0) + 1;
+    this.agentStreamCounters.set(agentId, next);
+    const fallback = `${agentId}:${next}`;
+    this.agentStreamIds.set(agentId, fallback);
+    return fallback;
+  }
+
+  private getActiveStreamId(agentId: string, event: unknown): string {
+    return this.agentStreamIds.get(agentId) ?? this.getMessageIdFromEvent(event) ?? agentId;
+  }
+
+  private endStream(agentId: string): void {
+    this.agentStreamIds.delete(agentId);
   }
 
   /** Internally read agent output and send via Gateway */
@@ -166,11 +196,21 @@ export class Hub {
           content: item.content,
         });
       } else {
+        const maybeMessage = (item as { message?: { role?: string } }).message;
+        const isAssistantMessage = maybeMessage?.role === "assistant";
+        if (item.type === "message_start" && isAssistantMessage) {
+          this.beginStream(agent.sessionId, item);
+        }
+        const streamId = this.getActiveStreamId(agent.sessionId, item);
         // Raw AgentEvent — forward via StreamAction
-        this.client.send<StreamPayload>(targetDeviceId, StreamAction, {
-          streamId: agent.sessionId,
-          data: item,
+        this.client.send(targetDeviceId, StreamAction, {
+          streamId,
+          agentId: agent.sessionId,
+          event: item,
         });
+        if (item.type === "message_end" && isAssistantMessage) {
+          this.endStream(agent.sessionId);
+        }
       }
     }
   }
@@ -213,6 +253,8 @@ export class Hub {
     agent.close();
     this.agents.delete(id);
     this.agentSenders.delete(id);
+    this.agentStreamIds.delete(id);
+    this.agentStreamCounters.delete(id);
     removeAgentRecord(id);
     return true;
   }
@@ -221,6 +263,9 @@ export class Hub {
     for (const [id, agent] of this.agents) {
       agent.close();
       this.agents.delete(id);
+      this.agentSenders.delete(id);
+      this.agentStreamIds.delete(id);
+      this.agentStreamCounters.delete(id);
     }
     this.client.disconnect();
     console.log("Hub shut down");

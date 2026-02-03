@@ -3,6 +3,7 @@ import { v7 as uuidv7 } from "uuid";
 import type { AgentOptions, AgentRunResult } from "./types.js";
 import { createAgentOutput } from "./cli/output.js";
 import { resolveModel, resolveTools } from "./tools.js";
+import { resolveApiKey, resolveBaseUrl, resolveModelId } from "./providers/index.js";
 import { SessionManager } from "./session/session-manager.js";
 import { ProfileManager } from "./profile/index.js";
 import { SkillManager } from "./skills/index.js";
@@ -13,33 +14,6 @@ import {
   type ContextWindowGuardResult,
 } from "./context-window/index.js";
 import { mergeToolsConfig, type ToolsConfig } from "./tools/policy.js";
-
-/**
- * Get API Key based on provider.
- * Priority: explicit key > provider-specific env var > generic env var format.
- */
-function resolveApiKey(provider: string, explicitKey?: string): string | undefined {
-  if (explicitKey) return explicitKey;
-  return credentialManager.getLlmProviderConfig(provider)?.apiKey;
-}
-
-/**
- * Get Base URL based on provider.
- * Priority: explicit URL > provider-specific env var > generic env var format.
- */
-function resolveBaseUrl(provider: string, explicitUrl?: string): string | undefined {
-  if (explicitUrl) return explicitUrl;
-  return credentialManager.getLlmProviderConfig(provider)?.baseUrl;
-}
-
-/**
- * Get Model ID based on provider.
- * Priority: explicit model > provider-specific env var > generic env var format.
- */
-function resolveModelId(provider: string, explicitModel?: string): string | undefined {
-  if (explicitModel) return explicitModel;
-  return credentialManager.getLlmProviderConfig(provider)?.model;
-}
 
 export class Agent {
   private readonly agent: PiAgentCore;
@@ -155,7 +129,9 @@ export class Agent {
     const compactionMode = options.compactionMode ?? "tokens"; // 默认使用 token 模式
 
     // 获取 API Key（用于 summary 模式）
-    const summaryApiKey = compactionMode === "summary" ? resolveApiKey(model.provider, options.apiKey) : undefined;
+    const summaryApiKey = compactionMode === "summary"
+      ? resolveApiKey(resolvedProvider, options.apiKey)
+      : undefined;
 
     // 创建 SessionManager（带 context window 配置）
     this.session = new SessionManager({

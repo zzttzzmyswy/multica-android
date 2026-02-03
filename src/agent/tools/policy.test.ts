@@ -1,32 +1,6 @@
-/**
- * Tests for tool policy system.
- * Run with: npx tsx src/agent/tools/policy.test.ts
- */
-
-import { filterTools, type ToolsConfig } from "./policy.js";
-import { TOOL_GROUPS, TOOL_PROFILES, expandToolGroups } from "./groups.js";
-
-// Simple test helper
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    console.log(`✓ ${name}`);
-  } catch (e) {
-    console.error(`✗ ${name}`);
-    console.error(e);
-    process.exit(1);
-  }
-}
-
-function assertEqual<T>(actual: T, expected: T, msg?: string) {
-  const actualStr = JSON.stringify(actual);
-  const expectedStr = JSON.stringify(expected);
-  if (actualStr !== expectedStr) {
-    throw new Error(
-      `${msg || "Assertion failed"}\n  Expected: ${expectedStr}\n  Actual: ${actualStr}`,
-    );
-  }
-}
+import { describe, it, expect } from "vitest";
+import { filterTools } from "./policy.js";
+import { TOOL_PROFILES, expandToolGroups } from "./groups.js";
 
 // Mock tools for testing
 const mockTools = [
@@ -40,177 +14,171 @@ const mockTools = [
   { name: "web_search" },
 ] as any[];
 
-console.log("=== Tool Groups Tests ===\n");
-
-test("expandToolGroups: group:fs", () => {
-  const expanded = expandToolGroups(["group:fs"]);
-  assertEqual(expanded.sort(), ["edit", "glob", "read", "write"]);
-});
-
-test("expandToolGroups: group:runtime", () => {
-  const expanded = expandToolGroups(["group:runtime"]);
-  assertEqual(expanded.sort(), ["exec", "process"]);
-});
-
-test("expandToolGroups: group:web", () => {
-  const expanded = expandToolGroups(["group:web"]);
-  assertEqual(expanded.sort(), ["web_fetch", "web_search"]);
-});
-
-test("expandToolGroups: mixed groups and tools", () => {
-  const expanded = expandToolGroups(["group:runtime", "web_fetch"]);
-  assertEqual(expanded.sort(), ["exec", "process", "web_fetch"]);
-});
-
-console.log("\n=== Tool Profiles Tests ===\n");
-
-test("TOOL_PROFILES: minimal has empty allow", () => {
-  assertEqual(TOOL_PROFILES.minimal.allow, []);
-});
-
-test("TOOL_PROFILES: coding has fs and runtime", () => {
-  assertEqual(TOOL_PROFILES.coding.allow, ["group:fs", "group:runtime"]);
-});
-
-test("TOOL_PROFILES: full has no restrictions", () => {
-  assertEqual(TOOL_PROFILES.full.allow, undefined);
-  assertEqual(TOOL_PROFILES.full.deny, undefined);
-});
-
-console.log("\n=== Filter Tests ===\n");
-
-test("filterTools: no config returns all tools", () => {
-  const filtered = filterTools(mockTools, {});
-  assertEqual(filtered.length, mockTools.length);
-});
-
-test("filterTools: minimal profile returns no tools", () => {
-  const filtered = filterTools(mockTools, { config: { profile: "minimal" } });
-  assertEqual(filtered.length, 0);
-});
-
-test("filterTools: coding profile returns fs and runtime", () => {
-  const filtered = filterTools(mockTools, { config: { profile: "coding" } });
-  const names = filtered.map((t) => t.name).sort();
-  assertEqual(names, ["edit", "exec", "glob", "process", "read", "write"]);
-});
-
-test("filterTools: web profile returns all", () => {
-  const filtered = filterTools(mockTools, { config: { profile: "web" } });
-  const names = filtered.map((t) => t.name).sort();
-  assertEqual(names, [
-    "edit",
-    "exec",
-    "glob",
-    "process",
-    "read",
-    "web_fetch",
-    "web_search",
-    "write",
-  ]);
-});
-
-test("filterTools: full profile returns all tools", () => {
-  const filtered = filterTools(mockTools, { config: { profile: "full" } });
-  assertEqual(filtered.length, mockTools.length);
-});
-
-test("filterTools: deny specific tool", () => {
-  const filtered = filterTools(mockTools, { config: { deny: ["exec"] } });
-  const names = filtered.map((t) => t.name);
-  assertEqual(names.includes("exec"), false);
-  assertEqual(names.length, mockTools.length - 1);
-});
-
-test("filterTools: allow specific tools", () => {
-  const filtered = filterTools(mockTools, {
-    config: { allow: ["read", "write"] },
+describe("tool groups", () => {
+  it("expandToolGroups: group:fs", () => {
+    const expanded = expandToolGroups(["group:fs"]);
+    expect(expanded.sort()).toEqual(["edit", "glob", "read", "write"]);
   });
-  const names = filtered.map((t) => t.name).sort();
-  assertEqual(names, ["read", "write"]);
-});
 
-test("filterTools: deny takes precedence over allow", () => {
-  const filtered = filterTools(mockTools, {
-    config: { allow: ["read", "write", "exec"], deny: ["exec"] },
+  it("expandToolGroups: group:runtime", () => {
+    const expanded = expandToolGroups(["group:runtime"]);
+    expect(expanded.sort()).toEqual(["exec", "process"]);
   });
-  const names = filtered.map((t) => t.name).sort();
-  assertEqual(names, ["read", "write"]);
+
+  it("expandToolGroups: group:web", () => {
+    const expanded = expandToolGroups(["group:web"]);
+    expect(expanded.sort()).toEqual(["web_fetch", "web_search"]);
+  });
+
+  it("expandToolGroups: mixed groups and tools", () => {
+    const expanded = expandToolGroups(["group:runtime", "web_fetch"]);
+    expect(expanded.sort()).toEqual(["exec", "process", "web_fetch"]);
+  });
 });
 
-console.log("\n=== Provider-specific Tests ===\n");
+describe("tool profiles", () => {
+  it("minimal has empty allow", () => {
+    expect(TOOL_PROFILES.minimal.allow).toEqual([]);
+  });
 
-test("filterTools: provider-specific deny", () => {
-  const filtered = filterTools(mockTools, {
-    config: {
-      byProvider: {
-        google: { deny: ["exec", "process"] },
+  it("coding has fs and runtime", () => {
+    expect(TOOL_PROFILES.coding.allow).toEqual(["group:fs", "group:runtime"]);
+  });
+
+  it("full has no restrictions", () => {
+    expect(TOOL_PROFILES.full.allow).toBeUndefined();
+    expect(TOOL_PROFILES.full.deny).toBeUndefined();
+  });
+});
+
+describe("filterTools", () => {
+  it("no config returns all tools", () => {
+    const filtered = filterTools(mockTools, {});
+    expect(filtered.length).toBe(mockTools.length);
+  });
+
+  it("minimal profile returns no tools", () => {
+    const filtered = filterTools(mockTools, { config: { profile: "minimal" } });
+    expect(filtered.length).toBe(0);
+  });
+
+  it("coding profile returns fs and runtime", () => {
+    const filtered = filterTools(mockTools, { config: { profile: "coding" } });
+    const names = filtered.map((t) => t.name).sort();
+    expect(names).toEqual(["edit", "exec", "glob", "process", "read", "write"]);
+  });
+
+  it("web profile returns all", () => {
+    const filtered = filterTools(mockTools, { config: { profile: "web" } });
+    const names = filtered.map((t) => t.name).sort();
+    expect(names).toEqual([
+      "edit",
+      "exec",
+      "glob",
+      "process",
+      "read",
+      "web_fetch",
+      "web_search",
+      "write",
+    ]);
+  });
+
+  it("full profile returns all tools", () => {
+    const filtered = filterTools(mockTools, { config: { profile: "full" } });
+    expect(filtered.length).toBe(mockTools.length);
+  });
+
+  it("deny specific tool", () => {
+    const filtered = filterTools(mockTools, { config: { deny: ["exec"] } });
+    const names = filtered.map((t) => t.name);
+    expect(names.includes("exec")).toBe(false);
+    expect(names.length).toBe(mockTools.length - 1);
+  });
+
+  it("allow specific tools", () => {
+    const filtered = filterTools(mockTools, {
+      config: { allow: ["read", "write"] },
+    });
+    const names = filtered.map((t) => t.name).sort();
+    expect(names).toEqual(["read", "write"]);
+  });
+
+  it("deny takes precedence over allow", () => {
+    const filtered = filterTools(mockTools, {
+      config: { allow: ["read", "write", "exec"], deny: ["exec"] },
+    });
+    const names = filtered.map((t) => t.name).sort();
+    expect(names).toEqual(["read", "write"]);
+  });
+});
+
+describe("provider-specific filtering", () => {
+  it("provider-specific deny", () => {
+    const filtered = filterTools(mockTools, {
+      config: {
+        byProvider: {
+          google: { deny: ["exec", "process"] },
+        },
       },
-    },
-    provider: "google",
+      provider: "google",
+    });
+    const names = filtered.map((t) => t.name);
+    expect(names.includes("exec")).toBe(false);
+    expect(names.includes("process")).toBe(false);
+    expect(names.length).toBe(mockTools.length - 2);
   });
-  const names = filtered.map((t) => t.name);
-  assertEqual(names.includes("exec"), false);
-  assertEqual(names.includes("process"), false);
-  assertEqual(names.length, mockTools.length - 2);
-});
 
-test("filterTools: provider not matching does not apply", () => {
-  const filtered = filterTools(mockTools, {
-    config: {
-      byProvider: {
-        google: { deny: ["exec", "process"] },
+  it("provider not matching does not apply", () => {
+    const filtered = filterTools(mockTools, {
+      config: {
+        byProvider: {
+          google: { deny: ["exec", "process"] },
+        },
       },
-    },
-    provider: "openai",
+      provider: "openai",
+    });
+    expect(filtered.length).toBe(mockTools.length);
   });
-  assertEqual(filtered.length, mockTools.length);
 });
 
-console.log("\n=== Subagent Tests ===\n");
-
-test("filterTools: subagent restrictions apply", () => {
-  // Currently DEFAULT_SUBAGENT_TOOL_DENY is empty, so no tools are denied
-  const filtered = filterTools(mockTools, { isSubagent: true });
-  // With empty deny list, all tools are allowed
-  assertEqual(filtered.length, mockTools.length);
-});
-
-console.log("\n=== Combined Tests ===\n");
-
-test("filterTools: profile + deny", () => {
-  const filtered = filterTools(mockTools, {
-    config: {
-      profile: "coding",
-      deny: ["exec"],
-    },
+describe("subagent restrictions", () => {
+  it("subagent restrictions apply", () => {
+    const filtered = filterTools(mockTools, { isSubagent: true });
+    expect(filtered.length).toBe(mockTools.length);
   });
-  const names = filtered.map((t) => t.name).sort();
-  // coding = fs + runtime, minus exec
-  assertEqual(names, ["edit", "glob", "process", "read", "write"]);
 });
 
-test("filterTools: profile + provider deny", () => {
-  const filtered = filterTools(mockTools, {
-    config: {
-      profile: "web",
-      byProvider: {
-        google: { deny: ["exec"] },
+describe("combined filtering", () => {
+  it("profile + deny", () => {
+    const filtered = filterTools(mockTools, {
+      config: {
+        profile: "coding",
+        deny: ["exec"],
       },
-    },
-    provider: "google",
+    });
+    const names = filtered.map((t) => t.name).sort();
+    expect(names).toEqual(["edit", "glob", "process", "read", "write"]);
   });
-  const names = filtered.map((t) => t.name).sort();
-  // web profile - exec
-  assertEqual(names, [
-    "edit",
-    "glob",
-    "process",
-    "read",
-    "web_fetch",
-    "web_search",
-    "write",
-  ]);
-});
 
-console.log("\n=== All tests passed! ===\n");
+  it("profile + provider deny", () => {
+    const filtered = filterTools(mockTools, {
+      config: {
+        profile: "web",
+        byProvider: {
+          google: { deny: ["exec"] },
+        },
+      },
+      provider: "google",
+    });
+    const names = filtered.map((t) => t.name).sort();
+    expect(names).toEqual([
+      "edit",
+      "glob",
+      "process",
+      "read",
+      "web_fetch",
+      "web_search",
+      "write",
+    ]);
+  });
+});

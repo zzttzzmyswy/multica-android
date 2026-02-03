@@ -1,5 +1,6 @@
 import type { AgentEvent, AgentMessage } from "@mariozechner/pi-agent-core";
 import { colors, createSpinner } from "./colors.js";
+import { extractText } from "../extract-text.js";
 
 export type AgentOutputState = {
   lastAssistantText: string;
@@ -11,16 +12,6 @@ export type AgentOutput = {
   state: AgentOutputState;
   handleEvent: (event: AgentEvent) => void;
 };
-
-function extractText(message: AgentMessage | undefined): string {
-  if (!message || typeof message !== "object" || !("content" in message)) return "";
-  const content = (message as { content?: Array<{ type: string; text?: string }> }).content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .filter((c) => c.type === "text")
-    .map((c) => c.text ?? "")
-    .join("");
-}
 
 function truncate(s: string, max: number): string {
   return s.length > max ? s.slice(0, max) + "…" : s;
@@ -116,6 +107,11 @@ export function extractResultDetails(result: unknown): Record<string, unknown> |
         }
       }
     }
+  }
+
+  const withDetails = result as { details?: unknown };
+  if (withDetails.details && typeof withDetails.details === "object") {
+    return withDetails.details as Record<string, unknown>;
   }
 
   // Try direct object access
@@ -252,8 +248,18 @@ export function createAgentOutput(params: {
       }
       case "tool_execution_end": {
         // Stop spinner and show final result with summary
-        if (event.isError) {
-          const errorText = extractText(event.result) || "Tool failed";
+        const details = extractResultDetails(event.result);
+        const errorField = details?.error;
+        const hasError =
+          event.isError ||
+          Boolean(errorField) ||
+          details?.success === false;
+        if (hasError) {
+          const errorText =
+            (typeof details?.message === "string" && details.message) ||
+            (typeof errorField === "string" && errorField) ||
+            extractText(event.result) ||
+            "Tool failed";
           const bullet = colors.toolError("✗");
           const title = colors.toolName(toolDisplayName(event.toolName));
           spinner.stop(`${bullet} ${title}: ${colors.toolError(errorText)}`);

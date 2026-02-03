@@ -1,7 +1,12 @@
-import { ComponentExample } from '@multica/ui/components/component-example'
+import { createHashRouter, RouterProvider } from 'react-router-dom'
+import HomePage from './pages/home'
+import ChatPage from './pages/chat'
 
-function App() {
-  return <ComponentExample />
+const router = createHashRouter([
+  { path: '/', element: <HomePage /> },
+  { path: '/chat', element: <ChatPage /> },
+])
+
+export default function App() {
+  return <RouterProvider router={router} />
 }
-
-export default App
