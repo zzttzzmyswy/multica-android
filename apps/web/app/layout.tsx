@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inter, Playfair_Display } from "next/font/google";
 import "@multica/ui/globals.css";
 import { ThemeProvider } from "@multica/ui/components/theme-provider";
+import { ThemeToggle } from "./theme-toggle";
 import { Toaster } from "@multica/ui/components/ui/sonner";
 import { ServiceWorkerRegister } from "./sw-register";
 
@@ -52,6 +53,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <ThemeToggle />
           <div className="flex h-dvh overflow-hidden">{children}</div>
         </ThemeProvider>
         <Toaster />

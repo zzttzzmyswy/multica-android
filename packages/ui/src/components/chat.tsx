@@ -1,14 +1,11 @@
 "use client";
 
 import { useRef, useState, useCallback, useMemo } from "react";
-import { useTheme } from "next-themes";
 import { Button } from "@multica/ui/components/ui/button";
 import { Textarea } from "@multica/ui/components/ui/textarea";
 import { ChatInput } from "@multica/ui/components/chat-input";
 import { MemoizedMarkdown } from "@multica/ui/components/markdown";
 import { StreamingMarkdown } from "@multica/ui/components/markdown/StreamingMarkdown";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { Sun01Icon, Moon01Icon } from "@hugeicons/core-free-icons";
 import { toast } from "@multica/ui/components/ui/sonner";
 import {
   useHubStore,
@@ -27,8 +24,6 @@ import { cn } from "@multica/ui/lib/utils";
 export function Chat() {
   useHubInit()
   const deviceId = useDeviceId()
-  const { theme, setTheme } = useTheme()
-
   const activeAgentId = useHubStore((s) => s.activeAgentId)
   const gwState = useGatewayStore((s) => s.connectionState)
   const hubId = useGatewayStore((s) => s.hubId)
@@ -83,15 +78,6 @@ export function Chat() {
             </span>
           </div>
           <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="size-8 text-muted-foreground"
-            >
-              <HugeiconsIcon icon={Sun01Icon} strokeWidth={1.5} className="size-4 dark:hidden" />
-              <HugeiconsIcon icon={Moon01Icon} strokeWidth={1.5} className="size-4 hidden dark:block" />
-            </Button>
             {isConnected && (
               <Button
                 variant="ghost"
