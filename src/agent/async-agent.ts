@@ -70,6 +70,67 @@ export class AsyncAgent {
     this.channel.close();
   }
 
+  /** Get current active tool names */
+  getActiveTools(): string[] {
+    return this.agent.getActiveTools();
+  }
+
+  /**
+   * Reload tools from credentials config.
+   * Call this after updating tool status to apply changes immediately.
+   */
+  reloadTools(): string[] {
+    return this.agent.reloadTools();
+  }
+
+  /**
+   * Get all skills with their eligibility status.
+   */
+  getSkillsWithStatus(): Array<{
+    id: string;
+    name: string;
+    description: string;
+    source: string;
+    eligible: boolean;
+    reasons?: string[] | undefined;
+  }> {
+    return this.agent.getSkillsWithStatus();
+  }
+
+  /**
+   * Get eligible skills only.
+   */
+  getEligibleSkills(): Array<{
+    id: string;
+    name: string;
+    description: string;
+    source: string;
+  }> {
+    return this.agent.getEligibleSkills();
+  }
+
+  /**
+   * Reload skills from disk.
+   */
+  reloadSkills(): void {
+    this.agent.reloadSkills();
+  }
+
+  /**
+   * Set a tool's enabled status and persist to profile config.
+   * Returns the new tools config, or undefined if no profile is loaded.
+   */
+  setToolStatus(toolName: string, enabled: boolean): { allow?: string[]; deny?: string[] } | undefined {
+    return this.agent.setToolStatus(toolName, enabled);
+  }
+
+  /**
+   * Get current profile ID, if any.
+   */
+  getProfileId(): string | undefined {
+    return this.agent.getProfileId();
+  }
+
   private setupStreamEvents(): void {
     let currentStreamId: string | null = null;
 

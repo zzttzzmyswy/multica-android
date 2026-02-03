@@ -169,4 +169,50 @@ export class ProfileManager {
     const profile = this.getProfile();
     return profile?.config;
   }
+
+  /** 更新 tools 配置 */
+  updateToolsConfig(toolsConfig: ToolsConfig): void {
+    const profile = this.getOrCreateProfile(false);
+    const currentConfig = profile.config ?? {};
+    const newConfig: ProfileConfig = {
+      ...currentConfig,
+      tools: toolsConfig,
+    };
+    profile.config = newConfig;
+    this.profile = profile;
+    saveProfile({ id: this.profileId, config: newConfig }, { baseDir: this.baseDir });
+  }
+
+  /** 设置单个 tool 的启用状态 */
+  setToolEnabled(toolName: string, enabled: boolean): ToolsConfig {
+    const currentConfig = this.getToolsConfig() ?? {};
+    const allow = new Set(currentConfig.allow ?? []);
+    const deny = new Set(currentConfig.deny ?? []);
+
+    if (enabled) {
+      // Enable: add to allow, remove from deny
+      allow.add(toolName);
+      deny.delete(toolName);
+    } else {
+      // Disable: add to deny, remove from allow
+      deny.add(toolName);
+      allow.delete(toolName);
+    }
+
+    // Build new config object, only including non-empty arrays
+    const newConfig: ToolsConfig = { ...currentConfig };
+    if (allow.size > 0) {
+      newConfig.allow = Array.from(allow);
+    } else {
+      delete newConfig.allow;
+    }
+    if (deny.size > 0) {
+      newConfig.deny = Array.from(deny);
+    } else {
+      delete newConfig.deny;
+    }
+
+    this.updateToolsConfig(newConfig);
+    return newConfig;
+  }
 }
