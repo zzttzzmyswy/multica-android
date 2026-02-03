@@ -109,6 +109,15 @@ async function readLockPayload(lockPath: string): Promise<LockFilePayload | null
   }
 }
 
+async function getLockAgeMs(lockPath: string): Promise<number | null> {
+  try {
+    const stat = await fs.stat(lockPath);
+    return Date.now() - stat.mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
 export async function acquireSessionWriteLock(params: {
   sessionFile: string;
   timeoutMs?: number;
@@ -183,12 +192,21 @@ export async function acquireSessionWriteLock(params: {
         throw err;
       }
       const payload = await readLockPayload(lockPath);
-      const createdAt = payload?.createdAt ? Date.parse(payload.createdAt) : NaN;
-      const stale = !Number.isFinite(createdAt) || Date.now() - createdAt > staleMs;
-      const alive = payload?.pid ? isAlive(payload.pid) : false;
-      if (stale || !alive) {
-        await fs.rm(lockPath, { force: true });
-        continue;
+      if (payload) {
+        const createdAt = payload.createdAt ? Date.parse(payload.createdAt) : NaN;
+        const stale = !Number.isFinite(createdAt) || Date.now() - createdAt > staleMs;
+        const alive = payload.pid ? isAlive(payload.pid) : false;
+        if (stale || !alive) {
+          await fs.rm(lockPath, { force: true });
+          continue;
+        }
+      } else {
+        const ageMs = await getLockAgeMs(lockPath);
+        const stale = ageMs !== null && ageMs > staleMs;
+        if (stale) {
+          await fs.rm(lockPath, { force: true });
+          continue;
+        }
       }
 
       const delay = Math.min(1000, 50 * attempt);

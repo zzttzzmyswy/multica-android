@@ -72,6 +72,40 @@ describe("acquireSessionWriteLock", () => {
     }
   });
 
+  it("does not delete recent lock files with invalid payloads", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "multica-lock-"));
+    try {
+      const sessionFile = path.join(root, "sessions.json");
+      const lockPath = `${sessionFile}.lock`;
+      await fs.writeFile(lockPath, "{", "utf8");
+
+      await expect(
+        acquireSessionWriteLock({ sessionFile, timeoutMs: 200, staleMs: 60_000 }),
+      ).rejects.toThrow(/timeout/);
+
+      await expect(fs.access(lockPath)).resolves.toBeUndefined();
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("reclaims invalid lock files when mtime is stale", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "multica-lock-"));
+    try {
+      const sessionFile = path.join(root, "sessions.json");
+      const lockPath = `${sessionFile}.lock`;
+      await fs.writeFile(lockPath, "{", "utf8");
+      const old = new Date(Date.now() - 60_000);
+      await fs.utimes(lockPath, old, old);
+
+      const lock = await acquireSessionWriteLock({ sessionFile, timeoutMs: 500, staleMs: 10 });
+
+      await lock.release();
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("removes held locks on termination signals", async () => {
     const signals = ["SIGINT", "SIGTERM", "SIGQUIT", "SIGABRT"] as const;
     for (const signal of signals) {

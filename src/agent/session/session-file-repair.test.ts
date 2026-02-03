@@ -3,6 +3,17 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { repairSessionFileIfNeeded } from "./session-file-repair.js";
+import { acquireSessionWriteLock } from "./session-write-lock.js";
+
+vi.mock("./session-write-lock.js", async () => {
+  const actual = await vi.importActual<typeof import("./session-write-lock.js")>(
+    "./session-write-lock.js",
+  );
+  return {
+    ...actual,
+    acquireSessionWriteLock: vi.fn(actual.acquireSessionWriteLock),
+  };
+});
 
 describe("repairSessionFileIfNeeded", () => {
   it("rewrites session files that contain malformed lines", async () => {
@@ -76,5 +87,15 @@ describe("repairSessionFileIfNeeded", () => {
     expect(result.repaired).toBe(false);
     expect(result.reason).toContain("failed to read session file");
     expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("acquires a write lock while repairing", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "multica-session-repair-"));
+    const file = path.join(dir, "session.jsonl");
+    await fs.writeFile(file, "{broken\n{also broken\n", "utf-8");
+
+    await repairSessionFileIfNeeded({ sessionFile: file });
+
+    expect(vi.mocked(acquireSessionWriteLock)).toHaveBeenCalledTimes(1);
   });
 });
