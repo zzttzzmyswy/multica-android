@@ -3,9 +3,11 @@ import {
   type ConnectionState,
   RequestAction,
   ResponseAction,
+  StreamAction,
   type RequestPayload,
   type ResponseSuccessPayload,
   type ResponseErrorPayload,
+  type StreamPayload,
 } from "@multica/sdk";
 import { AsyncAgent } from "../agent/async-agent.js";
 import { getHubId } from "./hub-identity.js";
@@ -152,13 +154,22 @@ export class Hub {
 
   /** Internally read agent output and send via Gateway */
   private async consumeAgent(agent: AsyncAgent): Promise<void> {
-    for await (const msg of agent.read()) {
-      console.log(`[${agent.sessionId}] ${msg.content}`);
+    for await (const item of agent.read()) {
       const targetDeviceId = this.agentSenders.get(agent.sessionId);
-      if (targetDeviceId) {
+      if (!targetDeviceId) continue;
+
+      if ("content" in item) {
+        // Legacy Message (error fallback)
+        console.log(`[${agent.sessionId}] ${item.content}`);
         this.client.send(targetDeviceId, "message", {
           agentId: agent.sessionId,
-          content: msg.content,
+          content: item.content,
+        });
+      } else {
+        // Raw AgentEvent — forward via StreamAction
+        this.client.send<StreamPayload>(targetDeviceId, StreamAction, {
+          streamId: agent.sessionId,
+          data: item,
         });
       }
     }

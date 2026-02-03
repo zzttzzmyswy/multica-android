@@ -1,13 +1,17 @@
 import { v7 as uuidv7 } from "uuid";
+import type { AgentEvent } from "@mariozechner/pi-agent-core";
 import { Agent } from "./runner.js";
 import { Channel } from "./channel.js";
 import type { AgentOptions, Message } from "./types.js";
 
 const devNull = { write: () => true } as NodeJS.WritableStream;
 
+/** Discriminated union of legacy Message (error fallback) and raw AgentEvent */
+export type ChannelItem = Message | AgentEvent;
+
 export class AsyncAgent {
   private readonly agent: Agent;
-  private readonly channel = new Channel<Message>();
+  private readonly channel = new Channel<ChannelItem>();
   private _closed = false;
   private queue: Promise<void> = Promise.resolve();
   readonly sessionId: string;
@@ -18,6 +22,11 @@ export class AsyncAgent {
       logger: { stdout: devNull, stderr: devNull },
     });
     this.sessionId = this.agent.sessionId;
+
+    // Forward raw AgentEvent into the channel
+    this.agent.subscribe((event: AgentEvent) => {
+      this.channel.send(event);
+    });
   }
 
   get closed(): boolean {
@@ -32,9 +41,7 @@ export class AsyncAgent {
       .then(async () => {
         if (this._closed) return;
         const result = await this.agent.run(content);
-        if (result.text) {
-          this.channel.send({ id: uuidv7(), content: result.text });
-        }
+        // Normal text is delivered via message_end event; only handle errors here
         if (result.error) {
           this.channel.send({ id: uuidv7(), content: `[error] ${result.error}` });
         }
@@ -45,8 +52,8 @@ export class AsyncAgent {
       });
   }
 
-  /** Continuously read message stream */
-  read(): AsyncIterable<Message> {
+  /** Continuously read channel stream (AgentEvent + error Messages) */
+  read(): AsyncIterable<ChannelItem> {
     return this.channel;
   }
 
