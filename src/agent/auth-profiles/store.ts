@@ -3,30 +3,113 @@
  *
  * Persistence layer for auth profile runtime state.
  * Stores usage stats, cooldowns, and last-good info in ~/.super-multica/auth-profiles.json.
- * Uses proper-lockfile for safe concurrent access across multiple agent processes.
+ * Uses a custom file lock (exclusive-create based) for safe concurrent access.
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  openSync,
+  closeSync,
+  rmSync,
+  statSync,
+  constants as fsConstants,
+} from "node:fs";
 import { join, dirname } from "node:path";
-import lockfile from "proper-lockfile";
 import { DATA_DIR } from "../../shared/paths.js";
 import { AUTH_STORE_VERSION, AUTH_PROFILE_STORE_FILENAME } from "./constants.js";
 import type { AuthProfileStore } from "./types.js";
 
 // ============================================================
-// Lock options (matches OpenClaw's AUTH_STORE_LOCK_OPTIONS)
+// Custom file lock (synchronous, exclusive-create based)
 // ============================================================
 
-const LOCK_OPTIONS = {
-  retries: {
-    retries: 10,
-    factor: 2,
-    minTimeout: 100,
-    maxTimeout: 10_000,
-    randomize: true,
-  },
-  stale: 30_000,
-} as const;
+const LOCK_STALE_MS = 30_000;
+const LOCK_RETRY_COUNT = 10;
+const LOCK_RETRY_BASE_MS = 50;
+const LOCK_RETRY_MAX_MS = 1_000;
+
+type LockPayload = { pid: number; createdAt: string };
+
+function isProcessAlive(pid: number): boolean {
+  if (!Number.isFinite(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function readLockPayloadSync(lockPath: string): LockPayload | null {
+  try {
+    const raw = readFileSync(lockPath, "utf8");
+    const parsed = JSON.parse(raw) as Partial<LockPayload>;
+    if (typeof parsed.pid !== "number" || typeof parsed.createdAt !== "string") return null;
+    return { pid: parsed.pid, createdAt: parsed.createdAt };
+  } catch {
+    return null;
+  }
+}
+
+function isLockStale(lockPath: string): boolean {
+  const payload = readLockPayloadSync(lockPath);
+  if (payload) {
+    const age = Date.now() - Date.parse(payload.createdAt);
+    if (!Number.isFinite(age) || age > LOCK_STALE_MS) return true;
+    return !isProcessAlive(payload.pid);
+  }
+  // No payload readable — check file mtime
+  try {
+    const stat = statSync(lockPath);
+    return Date.now() - stat.mtimeMs > LOCK_STALE_MS;
+  } catch {
+    return true; // Can't stat — treat as stale
+  }
+}
+
+/**
+ * Acquire a synchronous exclusive file lock.
+ * Returns a release function. Throws if lock cannot be acquired after retries.
+ */
+function acquireLockSync(filePath: string): () => void {
+  const lockPath = `${filePath}.lock`;
+  const payload = JSON.stringify(
+    { pid: process.pid, createdAt: new Date().toISOString() },
+    null,
+    2,
+  );
+
+  for (let attempt = 0; attempt < LOCK_RETRY_COUNT; attempt++) {
+    try {
+      // O_WRONLY | O_CREAT | O_EXCL — fails if file already exists
+      const fd = openSync(lockPath, fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL);
+      writeFileSync(fd, payload, "utf8");
+      closeSync(fd);
+      return () => {
+        try { rmSync(lockPath, { force: true }); } catch { /* best effort */ }
+      };
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code !== "EEXIST") throw err;
+
+      // Lock file exists — check if stale
+      if (isLockStale(lockPath)) {
+        try { rmSync(lockPath, { force: true }); } catch { /* ignore */ }
+        continue;
+      }
+
+      // Wait and retry (synchronous busy-wait via Atomics for minimal overhead)
+      const delay = Math.min(LOCK_RETRY_MAX_MS, LOCK_RETRY_BASE_MS * (attempt + 1));
+      const buf = new SharedArrayBuffer(4);
+      Atomics.wait(new Int32Array(buf), 0, 0, delay);
+    }
+  }
+
+  throw new Error(`Failed to acquire lock after ${LOCK_RETRY_COUNT} retries: ${filePath}`);
+}
 
 // ============================================================
 // Paths
@@ -112,8 +195,7 @@ export function updateAuthProfileStore(
   const storePath = ensureAuthStoreFile();
 
   try {
-    // Acquire file lock
-    const release = lockfile.lockSync(storePath, LOCK_OPTIONS);
+    const release = acquireLockSync(storePath);
     try {
       const store = loadAuthProfileStore();
       updater(store);
