@@ -1,6 +1,7 @@
 import type { AgentOptions } from "./types.js";
 import { createCodingTools } from "@mariozechner/pi-coding-agent";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
+import type { TSchema } from "@sinclair/typebox";
 import { createExecTool } from "./tools/exec.js";
 import { createProcessTool } from "./tools/process.js";
 import { createGlobTool } from "./tools/glob.js";
@@ -70,7 +71,7 @@ function toolErrorResult(error: unknown): AgentToolResult<ToolErrorPayload> {
   };
 }
 
-function wrapTool<TParams, TResult>(
+function wrapTool<TParams extends TSchema, TResult>(
   tool: AgentTool<TParams, TResult>,
 ): AgentTool<TParams, TResult> {
   const execute = tool.execute;

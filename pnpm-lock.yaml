@@ -9,9 +9,24 @@ catalogs:
     '@types/node':
       specifier: ^25.0.10
       version: 25.0.10
+    '@types/react':
+      specifier: ^19
+      version: 19.1.17
+    '@types/react-dom':
+      specifier: ^19
+      version: 19.2.3
+    react:
+      specifier: 19.2.3
+      version: 19.2.3
+    react-dom:
+      specifier: 19.2.3
+      version: 19.2.3
     typescript:
       specifier: ^5.9.3
       version: 5.9.3
+    zustand:
+      specifier: ^5.0.0
+      version: 5.0.10
 
 importers:
 
@@ -132,9 +147,21 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@hugeicons/core-free-icons':
+        specifier: ^3.1.1
+        version: 3.1.1
+      '@hugeicons/react':
+        specifier: ^1.1.4
+        version: 1.1.4(react@19.2.3)
+      '@multica/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
       '@multica/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      qrcode.react:
+        specifier: ^4.2.0
+        version: 4.2.0(react@19.2.3)
       react:
         specifier: 'catalog:'
         version: 19.2.3
@@ -144,16 +171,22 @@ importers:
       react-router-dom:
         specifier: ^7.13.0
         version: 7.13.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      socket.io-client:
+        specifier: ^4.8.3
+        version: 4.8.3
+      uuid:
+        specifier: ^13.0.0
+        version: 13.0.0
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.1.18
         version: 4.1.18(vite@5.4.21(@types/node@25.0.10)(lightningcss@1.30.2)(terser@5.46.0))
       '@types/react':
         specifier: 'catalog:'
-        version: 19.2.10
+        version: 19.1.17
       '@types/react-dom':
         specifier: 'catalog:'
-        version: 19.2.3(@types/react@19.2.10)
+        version: 19.2.3(@types/react@19.1.17)
       '@typescript-eslint/eslint-plugin':
         specifier: ^7.1.1
         version: 7.18.0(@typescript-eslint/parser@7.18.0(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1)(typescript@5.9.3)
@@ -355,17 +388,17 @@ importers:
         version: 13.0.0
       zustand:
         specifier: 'catalog:'
-        version: 5.0.10(@types/react@19.2.10)(react@19.2.3)(use-sync-external-store@1.6.0(react@19.2.3))
+        version: 5.0.10(@types/react@19.1.17)(react@19.2.3)(use-sync-external-store@1.6.0(react@19.2.3))
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
         version: 25.0.10
       '@types/react':
         specifier: 'catalog:'
-        version: 19.2.10
+        version: 19.1.17
       '@types/react-dom':
         specifier: 'catalog:'
-        version: 19.2.3(@types/react@19.2.10)
+        version: 19.2.3(@types/react@19.1.17)
       eslint:
         specifier: ^9
         version: 9.39.2(jiti@2.6.1)
@@ -408,11 +441,11 @@ importers:
         version: 13.0.0
       zustand:
         specifier: 'catalog:'
-        version: 5.0.10(@types/react@19.2.10)(react@19.2.3)(use-sync-external-store@1.6.0(react@19.2.3))
+        version: 5.0.10(@types/react@19.1.17)(react@19.2.3)(use-sync-external-store@1.6.0(react@19.2.3))
     devDependencies:
       '@types/react':
         specifier: 'catalog:'
-        version: 19.2.10
+        version: 19.1.17
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -421,7 +454,7 @@ importers:
     dependencies:
       '@base-ui/react':
         specifier: ^1.1.0
-        version: 1.1.0(@types/react@19.2.10)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+        version: 1.1.0(@types/react@19.1.17)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@hugeicons/core-free-icons':
         specifier: ^3.1.1
         version: 3.1.1
@@ -451,7 +484,7 @@ importers:
         version: 19.2.3(react@19.2.3)
       react-markdown:
         specifier: ^10.1.0
-        version: 10.1.0(@types/react@19.2.10)(react@19.2.3)
+        version: 10.1.0(@types/react@19.1.17)(react@19.2.3)
       rehype-raw:
         specifier: ^7.0.0
         version: 7.0.0
@@ -485,10 +518,10 @@ importers:
         version: 5.0.0
       '@types/react':
         specifier: 'catalog:'
-        version: 19.2.10
+        version: 19.1.17
       '@types/react-dom':
         specifier: 'catalog:'
-        version: 19.2.3(@types/react@19.2.10)
+        version: 19.2.3(@types/react@19.1.17)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -3327,9 +3360,6 @@ packages:
 
   '@types/react@19.1.17':
     resolution: {integrity: sha512-Qec1E3mhALmaspIrhWt9jkQMNdw6bReVu64mjvhbhq2NFPftLPVr+l1SZgmw/66WwBNpDh7ao5AT6gF5v41PFA==}
-
-  '@types/react@19.2.10':
-    resolution: {integrity: sha512-WPigyYuGhgZ/cTPRXB2EwUw+XvsRA3GqHlsP4qteqrnnjDrApbS7MxcGr/hke5iUoeB7E/gQtrs9I37zAJ0Vjw==}
 
   '@types/responselike@1.0.3':
     resolution: {integrity: sha512-H/+L+UkTV33uf49PH5pCAUBVPNj2nDBXTN+qS1dOwyyg24l3CcicicCA7ca+HMvJBZcFgl5r8e+RR6elsb4Lyw==}
@@ -7379,6 +7409,11 @@ packages:
     resolution: {integrity: sha512-Uu7ii+FQy4Qf82G4xu7ShHhjhGahEpCWc3x8UavY3CTcWV+ufmmCtwkr7ZKsX42jdL0kr1B5FKUeqJvAn51jzQ==}
     hasBin: true
 
+  qrcode.react@4.2.0:
+    resolution: {integrity: sha512-QpgqWi8rD9DsS9EP3z7BT+5lY5SFhsqGjpgW5DY/i3mK4M9DTBNz3ErMi8BWYEfI3L0d8GIbGmcdFAS1uIRGjA==}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
   qs@6.14.1:
     resolution: {integrity: sha512-4EK3+xJl8Ts67nLYNwqw/dsFVnCf+qR7RgXSK9jEEm9unao3njwMDdmsdvoKBKHzxd7tCYz5e5M+SnMjdtXGQQ==}
     engines: {node: '>=0.6'}
@@ -10219,10 +10254,10 @@ snapshots:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.28.5
 
-  '@base-ui/react@1.1.0(@types/react@19.2.10)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
+  '@base-ui/react@1.1.0(@types/react@19.1.17)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
     dependencies:
       '@babel/runtime': 7.28.6
-      '@base-ui/utils': 0.2.4(@types/react@19.2.10)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      '@base-ui/utils': 0.2.4(@types/react@19.1.17)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@floating-ui/react-dom': 2.1.7(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@floating-ui/utils': 0.2.10
       react: 19.2.3
@@ -10231,9 +10266,9 @@ snapshots:
       tabbable: 6.4.0
       use-sync-external-store: 1.6.0(react@19.2.3)
     optionalDependencies:
-      '@types/react': 19.2.10
+      '@types/react': 19.1.17
 
-  '@base-ui/utils@0.2.4(@types/react@19.2.10)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
+  '@base-ui/utils@0.2.4(@types/react@19.1.17)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
     dependencies:
       '@babel/runtime': 7.28.6
       '@floating-ui/utils': 0.2.10
@@ -10242,7 +10277,7 @@ snapshots:
       reselect: 5.1.1
       use-sync-external-store: 1.6.0(react@19.2.3)
     optionalDependencies:
-      '@types/react': 19.2.10
+      '@types/react': 19.1.17
 
   '@bcoe/v8-coverage@1.0.2': {}
 
@@ -12554,17 +12589,8 @@ snapshots:
   '@types/react-dom@19.2.3(@types/react@19.1.17)':
     dependencies:
       '@types/react': 19.1.17
-    optional: true
-
-  '@types/react-dom@19.2.3(@types/react@19.2.10)':
-    dependencies:
-      '@types/react': 19.2.10
 
   '@types/react@19.1.17':
-    dependencies:
-      csstype: 3.2.3
-
-  '@types/react@19.2.10':
     dependencies:
       csstype: 3.2.3
 
@@ -17520,6 +17546,10 @@ snapshots:
 
   qrcode-terminal@0.11.0: {}
 
+  qrcode.react@4.2.0(react@19.2.3):
+    dependencies:
+      react: 19.2.3
+
   qs@6.14.1:
     dependencies:
       side-channel: 1.1.0
@@ -17587,11 +17617,11 @@ snapshots:
 
   react-is@19.2.4: {}
 
-  react-markdown@10.1.0(@types/react@19.2.10)(react@19.2.3):
+  react-markdown@10.1.0(@types/react@19.1.17)(react@19.2.3):
     dependencies:
       '@types/hast': 3.0.4
       '@types/mdast': 4.0.4
-      '@types/react': 19.2.10
+      '@types/react': 19.1.17
       devlop: 1.1.0
       hast-util-to-jsx-runtime: 2.3.6
       html-url-attributes: 3.0.1
@@ -19459,9 +19489,9 @@ snapshots:
       react: 19.1.0
       use-sync-external-store: 1.6.0(react@19.1.0)
 
-  zustand@5.0.10(@types/react@19.2.10)(react@19.2.3)(use-sync-external-store@1.6.0(react@19.2.3)):
+  zustand@5.0.10(@types/react@19.1.17)(react@19.2.3)(use-sync-external-store@1.6.0(react@19.2.3)):
     optionalDependencies:
-      '@types/react': 19.2.10
+      '@types/react': 19.1.17
       react: 19.2.3
       use-sync-external-store: 1.6.0(react@19.2.3)
 

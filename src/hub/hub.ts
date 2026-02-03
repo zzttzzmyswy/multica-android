@@ -139,7 +139,7 @@ export class Hub {
   }
 
   /** Create new Agent, or rebuild with existing ID */
-  createAgent(id?: string, options?: { persist?: boolean }): AsyncAgent {
+  createAgent(id?: string, options?: { persist?: boolean; profileId?: string }): AsyncAgent {
     if (id) {
       const existing = this.agents.get(id);
       if (existing && !existing.closed) {
@@ -147,7 +147,7 @@ export class Hub {
       }
     }
 
-    const agent = new AsyncAgent({ sessionId: id });
+    const agent = new AsyncAgent({ sessionId: id, profileId: options?.profileId ?? "default" });
     this.agents.set(agent.sessionId, agent);
 
     // Persist to agent store (skip during restore to avoid duplicates)

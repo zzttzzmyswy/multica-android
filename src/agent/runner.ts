@@ -70,6 +70,8 @@ export class Agent {
   private readonly skillManager?: SkillManager;
   private readonly contextWindowGuard: ContextWindowGuardResult;
   private readonly debug: boolean;
+  private toolsOptions: AgentOptions;
+  private readonly originalToolsConfig?: ToolsConfig;
   private readonly stderr: NodeJS.WritableStream;
   private initialized = false;
 
@@ -150,15 +152,18 @@ export class Agent {
     );
 
     // Load Agent Profile (if profileId is specified)
+    // Every Agent should have a Profile for memory, tools config, and other settings
     let systemPrompt: string | undefined;
     if (options.profileId) {
       this.profile = new ProfileManager({
         profileId: options.profileId,
         baseDir: options.profileBaseDir,
       });
+      // Ensure profile directory exists (creates with default templates if new)
+      this.profile.getOrCreateProfile(true);
       systemPrompt = this.profile.buildSystemPrompt();
     } else if (options.systemPrompt) {
-      // Use provided systemPrompt directly
+      // Use provided systemPrompt directly (no profile - memory tools won't work)
       systemPrompt = options.systemPrompt;
     }
 
@@ -262,12 +267,17 @@ export class Agent {
 
     this.agent.setModel(model);
 
+    // Save original tools config from options (for later merging during reload)
+    if (options.tools) {
+      this.originalToolsConfig = options.tools;
+    }
+
     // Merge Profile tools config with options.tools (options takes precedence)
     const profileToolsConfig = this.profile?.getToolsConfig();
     const mergedToolsConfig = mergeToolsConfig(profileToolsConfig, options.tools);
-    const toolsOptions = mergedToolsConfig ? { ...options, tools: mergedToolsConfig } : options;
+    this.toolsOptions = mergedToolsConfig ? { ...options, tools: mergedToolsConfig } : options;
 
-    const tools = resolveTools(toolsOptions);
+    const tools = resolveTools(this.toolsOptions);
     if (this.debug) {
       if (profileToolsConfig) {
         console.error(`[debug] Profile tools config: ${JSON.stringify(profileToolsConfig)}`);
@@ -426,5 +436,100 @@ export class Agent {
     if (result?.kept) {
       this.agent.replaceMessages(result.kept);
     }
+  }
+
+  /**
+   * Reload tools from profile config.
+   * Call this after updating tool status to apply changes
+   * without restarting the agent session.
+   */
+  reloadTools(): string[] {
+    // Re-read profile tools config to get latest changes
+    const profileToolsConfig = this.profile?.getToolsConfig();
+    const mergedToolsConfig = mergeToolsConfig(profileToolsConfig, this.originalToolsConfig);
+    this.toolsOptions = mergedToolsConfig
+      ? { ...this.toolsOptions, tools: mergedToolsConfig }
+      : this.toolsOptions;
+
+    const tools = resolveTools(this.toolsOptions);
+    this.agent.setTools(tools);
+    if (this.debug) {
+      console.error(`[debug] Reloaded ${tools.length} tools: ${tools.map(t => t.name).join(", ") || "(none)"}`);
+    }
+    return tools.map(t => t.name);
+  }
+
+  /** Get current active tool names */
+  getActiveTools(): string[] {
+    return this.agent.state.tools?.map(t => t.name) ?? [];
+  }
+
+  /**
+   * Get all skills with their eligibility status.
+   * Returns empty array if skills are disabled.
+   */
+  getSkillsWithStatus(): Array<{
+    id: string;
+    name: string;
+    description: string;
+    source: string;
+    eligible: boolean;
+    reasons?: string[] | undefined;
+  }> {
+    if (!this.skillManager) {
+      return [];
+    }
+    return this.skillManager.listAllSkillsWithStatus();
+  }
+
+  /**
+   * Get eligible skills only.
+   * Returns empty array if skills are disabled.
+   */
+  getEligibleSkills(): Array<{
+    id: string;
+    name: string;
+    description: string;
+    source: string;
+  }> {
+    if (!this.skillManager) {
+      return [];
+    }
+    return this.skillManager.listSkills();
+  }
+
+  /**
+   * Reload skills from disk.
+   * Call this after adding/removing skills to apply changes.
+   */
+  reloadSkills(): void {
+    if (this.skillManager) {
+      this.skillManager.reload();
+    }
+  }
+
+  /**
+   * Set a tool's enabled status and persist to profile config.
+   * Returns the new tools config, or undefined if no profile is loaded.
+   */
+  setToolStatus(toolName: string, enabled: boolean): { allow?: string[]; deny?: string[] } | undefined {
+    if (!this.profile) {
+      return undefined;
+    }
+    const newConfig = this.profile.setToolEnabled(toolName, enabled);
+    // Reload tools to apply changes
+    this.reloadTools();
+    // Build result object, only including defined properties
+    const result: { allow?: string[]; deny?: string[] } = {};
+    if (newConfig.allow) result.allow = newConfig.allow;
+    if (newConfig.deny) result.deny = newConfig.deny;
+    return result;
+  }
+
+  /**
+   * Get current profile ID, if any.
+   */
+  getProfileId(): string | undefined {
+    return this.profile?.getProfile()?.id;
   }
 }
