@@ -21,7 +21,7 @@ export interface ConnectionQRCodeProps {
   gateway: string
   hubId: string
   agentId: string
-  /** QR code expiry time in seconds (default: 300 = 5 minutes) */
+  /** QR code expiry time in seconds (default: 30) */
   expirySeconds?: number
   /** Size of the QR code in pixels (default: 180) */
   size?: number
@@ -50,7 +50,7 @@ export function ConnectionQRCode({
   gateway,
   hubId,
   agentId,
-  expirySeconds = 300,
+  expirySeconds = 30,
   size = 180,
   onRefresh,
 }: ConnectionQRCodeProps) {
