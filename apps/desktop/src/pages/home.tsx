@@ -357,11 +357,9 @@ export default function HomePage() {
             variant="ghost"
             size="sm"
             className="text-muted-foreground gap-1.5"
-            disabled
           >
             <HugeiconsIcon icon={LinkSquare01Icon} className="size-4" />
             Connect to Remote Agent
-            <span className="text-xs opacity-60">(Coming soon)</span>
           </Button>
         </div>
       </div>
