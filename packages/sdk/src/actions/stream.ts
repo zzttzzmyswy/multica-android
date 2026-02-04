@@ -36,3 +36,16 @@ export interface StreamPayload {
   agentId: string;
   event: AgentEvent;
 }
+
+/** Extract thinking/reasoning content from an AgentEvent that carries a message */
+export function extractThinkingFromEvent(event: AgentEvent): string {
+  if (!("message" in event)) return "";
+  const msg = event.message;
+  if (!msg || !("content" in msg)) return "";
+  const content = msg.content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter((c): c is ThinkingContent => c.type === "thinking")
+    .map((c) => c.thinking ?? "")
+    .join("");
+}

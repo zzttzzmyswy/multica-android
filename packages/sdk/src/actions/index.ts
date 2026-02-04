@@ -39,4 +39,5 @@ export {
   type ThinkingContent,
   type ToolCall,
   type ImageContent,
+  extractThinkingFromEvent,
 } from "./stream";

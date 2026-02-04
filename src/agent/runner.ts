@@ -1,6 +1,6 @@
 import { Agent as PiAgentCore, type AgentEvent, type AgentMessage } from "@mariozechner/pi-agent-core";
 import { v7 as uuidv7 } from "uuid";
-import type { AgentOptions, AgentRunResult } from "./types.js";
+import type { AgentOptions, AgentRunResult, ReasoningMode } from "./types.js";
 import { createAgentOutput } from "./cli/output.js";
 import { resolveModel, resolveTools } from "./tools.js";
 import {
@@ -28,6 +28,11 @@ import {
   markAuthProfileUsed,
   markAuthProfileGood,
 } from "./auth-profiles/index.js";
+import {
+  buildSystemPrompt as buildStructuredSystemPrompt,
+  collectRuntimeInfo,
+  type SystemPromptMode,
+} from "./system-prompt/index.js";
 import type { AuthProfileFailureReason } from "./auth-profiles/index.js";
 
 // ============================================================
@@ -64,12 +69,13 @@ export function isRotatableError(reason: AuthProfileFailureReason): boolean {
 
 export class Agent {
   private readonly agent: PiAgentCore;
-  private readonly output;
+  private output;
   private readonly session: SessionManager;
   private readonly profile?: ProfileManager;
   private readonly skillManager?: SkillManager;
   private readonly contextWindowGuard: ContextWindowGuardResult;
   private readonly debug: boolean;
+  private reasoningMode: ReasoningMode;
   private toolsOptions: AgentOptions;
   private readonly originalToolsConfig?: ToolsConfig;
   private readonly stderr: NodeJS.WritableStream;
@@ -89,8 +95,9 @@ export class Agent {
   constructor(options: AgentOptions = {}) {
     const stdout = options.logger?.stdout ?? process.stdout;
     this.stderr = options.logger?.stderr ?? process.stderr;
-    this.output = createAgentOutput({ stdout, stderr: this.stderr });
     this.debug = options.debug ?? false;
+    this.reasoningMode = options.reasoningMode ?? "stream";
+    this.output = createAgentOutput({ stdout, stderr: this.stderr, reasoningMode: this.reasoningMode });
 
     // Resolve provider and model from options > env vars > defaults
     const defaultProvider = options.provider ?? credentialManager.getLlmProvider() ?? "kimi-coding";
@@ -153,7 +160,6 @@ export class Agent {
 
     // Load Agent Profile (if profileId is specified)
     // Every Agent should have a Profile for memory, tools config, and other settings
-    let systemPrompt: string | undefined;
     if (options.profileId) {
       this.profile = new ProfileManager({
         profileId: options.profileId,
@@ -161,10 +167,6 @@ export class Agent {
       });
       // Ensure profile directory exists (creates with default templates if new)
       this.profile.getOrCreateProfile(true);
-      systemPrompt = this.profile.buildSystemPrompt();
-    } else if (options.systemPrompt) {
-      // Use provided systemPrompt directly (no profile - memory tools won't work)
-      systemPrompt = options.systemPrompt;
     }
 
     // Initialize SkillManager (enabled by default)
@@ -174,17 +176,6 @@ export class Agent {
         profileBaseDir: options.profileBaseDir,
         config: options.skills,
       });
-
-      // Append skills prompt to system prompt
-      const skillsPrompt = this.skillManager.buildSkillsPrompt();
-      if (skillsPrompt) {
-        systemPrompt = systemPrompt ? `${systemPrompt}\n\n${skillsPrompt}` : skillsPrompt;
-      }
-    }
-
-    // Set the combined system prompt
-    if (systemPrompt) {
-      this.agent.setSystemPrompt(systemPrompt);
     }
 
     this.sessionId = options.sessionId ?? uuidv7();
@@ -249,7 +240,7 @@ export class Agent {
       compactionMode,
       // Token 模式参数
       contextWindowTokens: this.contextWindowGuard.tokens,
-      systemPrompt,
+      // systemPrompt is set later via setSystemPrompt() after tools are resolved
       reserveTokens: options.reserveTokens,
       targetRatio: options.compactionTargetRatio,
       minKeepMessages: options.minKeepMessages,
@@ -263,6 +254,18 @@ export class Agent {
       this.agent.setThinkingLevel(storedMeta.thinkingLevel as any);
     } else if (options.thinkingLevel) {
       this.agent.setThinkingLevel(options.thinkingLevel);
+    }
+
+    // Resolve reasoningMode: options > profile config > storedMeta > default "stream"
+    if (!options.reasoningMode) {
+      const profileReasoningMode = this.profile?.getProfile()?.config?.reasoningMode;
+      const metaReasoningMode = storedMeta?.reasoningMode as ReasoningMode | undefined;
+      const resolved = profileReasoningMode ?? metaReasoningMode ?? "stream";
+      if (resolved !== this.reasoningMode) {
+        this.reasoningMode = resolved;
+        // Re-create output with correct reasoningMode
+        this.output = createAgentOutput({ stdout, stderr: this.stderr, reasoningMode: this.reasoningMode });
+      }
     }
 
     this.agent.setModel(model);
@@ -287,10 +290,19 @@ export class Agent {
     }
     this.agent.setTools(tools);
 
+    // Build the system prompt using the structured builder
+    const toolNames = tools.map((t: { name: string }) => t.name);
+    const systemPrompt = this.buildFullSystemPrompt(options, toolNames);
+    if (systemPrompt) {
+      this.agent.setSystemPrompt(systemPrompt);
+      this.session.setSystemPrompt(systemPrompt);
+    }
+
     this.session.saveMeta({
       provider: this.agent.state.model?.provider,
       model: this.agent.state.model?.id,
       thinkingLevel: this.agent.state.thinkingLevel,
+      reasoningMode: this.reasoningMode,
       contextWindowTokens: this.contextWindowGuard.tokens,
     });
 
@@ -387,7 +399,10 @@ export class Agent {
       markAuthProfileGood(this.resolvedProvider, this.currentProfileId);
     }
 
-    return { text: this.output.state.lastAssistantText, error: this.agent.state.error };
+    const thinking = this.reasoningMode !== "off"
+      ? this.output.state.lastAssistantThinking || undefined
+      : undefined;
+    return { text: this.output.state.lastAssistantText, thinking, error: this.agent.state.error };
   }
 
   /**
@@ -465,6 +480,11 @@ export class Agent {
   /** Get current active tool names */
   getActiveTools(): string[] {
     return this.agent.state.tools?.map(t => t.name) ?? [];
+  }
+
+  /** Get all messages from the current session */
+  getMessages(): AgentMessage[] {
+    return this.agent.state.messages.slice();
   }
 
   /**
@@ -579,35 +599,78 @@ export class Agent {
   }
 
   /**
+   * Build the full system prompt using the structured builder.
+   * Combines profile content, tools, skills, and runtime info.
+   */
+  private buildFullSystemPrompt(
+    options: AgentOptions,
+    toolNames: string[],
+  ): string | undefined {
+    const skillsPrompt = this.skillManager?.buildSkillsPrompt();
+
+    // If a raw systemPrompt is provided directly, use it as-is (backward compat)
+    if (!options.profileId && options.systemPrompt) {
+      return skillsPrompt
+        ? `${options.systemPrompt}\n\n${skillsPrompt}`
+        : options.systemPrompt;
+    }
+
+    if (!this.profile?.getProfile() && !options.profileId) {
+      return skillsPrompt || undefined;
+    }
+
+    return this.rebuildSystemPrompt(toolNames);
+  }
+
+  /**
    * Reload profile from disk and rebuild system prompt.
    * Call this after updating profile files to apply changes immediately.
    */
   reloadSystemPrompt(): void {
     if (!this.profile) {
-      console.log('[Agent] reloadSystemPrompt: no profile');
       return;
     }
 
-    // Reload profile from disk
-    console.log('[Agent] Reloading profile from disk...');
     this.profile.reloadProfile();
 
-    // Rebuild system prompt
-    let systemPrompt = this.profile.buildSystemPrompt();
-    console.log('[Agent] Built system prompt, length:', systemPrompt?.length);
+    const toolNames = (this.agent.state.tools ?? []).map((t: { name: string }) => t.name);
+    const systemPrompt = this.rebuildSystemPrompt(toolNames);
 
-    // Re-add skills prompt if skills are enabled
-    if (this.skillManager) {
-      const skillsPrompt = this.skillManager.buildModelSkillsPrompt();
-      if (skillsPrompt) {
-        systemPrompt = systemPrompt ? `${systemPrompt}\n\n${skillsPrompt}` : skillsPrompt;
-      }
-    }
-
-    // Apply new system prompt
     if (systemPrompt) {
-      console.log('[Agent] Applying system prompt, first 200 chars:', systemPrompt.substring(0, 200));
       this.agent.setSystemPrompt(systemPrompt);
+      this.session.setSystemPrompt(systemPrompt);
     }
+  }
+
+  /**
+   * Rebuild system prompt from current state.
+   * Shared by constructor (via buildFullSystemPrompt) and reloadSystemPrompt.
+   */
+  private rebuildSystemPrompt(toolNames: string[]): string | undefined {
+    const profile = this.profile?.getProfile();
+    if (!profile) return undefined;
+
+    const skillsPrompt = this.skillManager?.buildSkillsPrompt();
+
+    const runtime = collectRuntimeInfo({
+      agentName: this.profile?.getName(),
+      provider: this.resolvedProvider,
+      model: this.agent.state.model?.id,
+    });
+
+    return buildStructuredSystemPrompt({
+      mode: "full",
+      profile: {
+        soul: profile.soul,
+        user: profile.user,
+        workspace: profile.workspace,
+        memory: profile.memory,
+        config: profile.config,
+      },
+      profileDir: this.profile!.getProfileDir(),
+      tools: toolNames,
+      skillsPrompt,
+      runtime,
+    });
   }
 }
