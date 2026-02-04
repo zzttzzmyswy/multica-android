@@ -8,17 +8,14 @@ export { createProcessTool } from "./process.js";
 export { createGlobTool } from "./glob.js";
 export { createWebFetchTool, createWebSearchTool } from "./web/index.js";
 
-// Tool groups and profiles
+// Tool groups
 export {
-  type ToolProfileId,
   TOOL_NAME_ALIASES,
   TOOL_GROUPS,
-  TOOL_PROFILES,
   DEFAULT_SUBAGENT_TOOL_DENY,
   normalizeToolName,
   normalizeToolList,
   expandToolGroups,
-  getProfilePolicy,
 } from "./groups.js";
 
 // Tool policy system
