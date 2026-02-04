@@ -25,6 +25,8 @@ export {
   type DeleteAgentResult,
   type UpdateGatewayParams,
   type UpdateGatewayResult,
+  type VerifyParams,
+  type VerifyResult,
 } from "./rpc";
 
 export {

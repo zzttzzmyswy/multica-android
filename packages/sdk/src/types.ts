@@ -89,6 +89,12 @@ export interface GatewayClientOptions {
   autoReconnect?: boolean | undefined;
   /** Reconnect delay (milliseconds), defaults to 1000 */
   reconnectDelay?: number | undefined;
+  /** Hub device ID for verification (optional, enables auto-verify after gateway registration) */
+  hubId?: string | undefined;
+  /** Token for first-time verification (optional, omit for reconnection via device whitelist) */
+  token?: string | undefined;
+  /** Verify timeout in ms (default: 30_000, longer because user confirmation may be needed) */
+  verifyTimeout?: number | undefined;
 }
 
 /** Connection state */
@@ -103,6 +109,7 @@ export interface GatewayClientCallbacks {
   onConnect?: (socketId: string) => void;
   onDisconnect?: (reason: string) => void;
   onRegistered?: (deviceId: string) => void;
+  onVerified?: (result: { hubId: string; agentId: string }) => void;
   onMessage?: (message: RoutedMessage) => void;
   onSendError?: (error: SendErrorResponse) => void;
   onPong?: (data: string) => void;

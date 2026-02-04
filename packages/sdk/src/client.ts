@@ -34,6 +34,9 @@ interface ResolvedOptions {
   deviceType: DeviceType;
   autoReconnect: boolean;
   reconnectDelay: number;
+  hubId: string | undefined;
+  token: string | undefined;
+  verifyTimeout: number;
 }
 
 export class GatewayClient {
@@ -55,6 +58,9 @@ export class GatewayClient {
       deviceType: options.deviceType,
       autoReconnect: options.autoReconnect ?? true,
       reconnectDelay: options.reconnectDelay ?? 1000,
+      hubId: options.hubId,
+      token: options.token,
+      verifyTimeout: options.verifyTimeout ?? 30_000,
     };
   }
 
@@ -227,6 +233,12 @@ export class GatewayClient {
     return this;
   }
 
+  /** Hub 验证成功回调 */
+  onVerified(callback: (result: { hubId: string; agentId: string }) => void): this {
+    this.callbacks.onVerified = callback;
+    return this;
+  }
+
   /** 注册消息回调 */
   onMessage(callback: (message: RoutedMessage) => void): this {
     this.callbacks.onMessage = callback;
@@ -291,11 +303,36 @@ export class GatewayClient {
     this.socket.on(
       GatewayEvents.REGISTERED,
       (response: RegisteredResponse) => {
-        if (response.success) {
+        if (!response.success) {
+          this.callbacks.onError?.(new Error(response.error ?? "Registration failed"));
+          return;
+        }
+
+        // If hubId is configured, auto-verify before exposing "registered" to upper layer
+        if (this.options.hubId) {
+          // Set internal state to allow send/request during verify
+          this._state = "registered";
+          this.request<{ hubId: string; agentId: string }>(
+            this.options.hubId,
+            "verify",
+            { token: this.options.token },
+            this.options.verifyTimeout,
+          )
+            .then((result) => {
+              // Verify succeeded — now expose "registered" to upper layer
+              this.callbacks.onVerified?.(result);
+              this.callbacks.onRegistered?.(response.deviceId);
+              this.callbacks.onStateChange?.("registered");
+            })
+            .catch((err) => {
+              // Verify failed (UNAUTHORIZED, REJECTED, or timeout)
+              this.callbacks.onError?.(err instanceof Error ? err : new Error(String(err)));
+              this.disconnect();
+            });
+        } else {
+          // No hubId — original behavior
           this.setState("registered");
           this.callbacks.onRegistered?.(response.deviceId);
-        } else {
-          this.callbacks.onError?.(new Error(response.error ?? "Registration failed"));
         }
       }
     );

@@ -145,3 +145,14 @@ export interface UpdateGatewayResult {
   url: string;
   connectionState: string;
 }
+
+/** verify - request params */
+export interface VerifyParams {
+  token?: string;
+}
+
+/** verify - response payload */
+export interface VerifyResult {
+  hubId: string;
+  agentId: string;
+}
