@@ -18,7 +18,6 @@ export default function HomePage() {
   const { hubInfo, agents, loading, error } = useHub()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [agentName, setAgentName] = useState<string | undefined>()
-  const [profileId, setProfileId] = useState<string | undefined>()
 
   // Load agent profile info
   useEffect(() => {
@@ -36,7 +35,6 @@ export default function HomePage() {
     try {
       const data = await window.electronAPI.profile.get()
       setAgentName(data.name)
-      setProfileId(data.profileId)
     } catch (err) {
       console.error('Failed to load agent info:', err)
     }
@@ -150,9 +148,6 @@ export default function HomePage() {
                 </Button>
               </div>
               <p className="font-medium">{agentName || 'Unnamed Agent'}</p>
-              <p className="text-xs text-muted-foreground font-mono">
-                Profile: {profileId ?? 'default'}
-              </p>
             </div>
 
             {/* Stats Grid */}
