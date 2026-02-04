@@ -146,9 +146,17 @@ export interface UpdateGatewayResult {
   connectionState: string;
 }
 
+/** Device metadata collected during verify handshake */
+export interface DeviceMeta {
+  userAgent?: string;
+  platform?: string;
+  language?: string;
+}
+
 /** verify - request params */
 export interface VerifyParams {
   token?: string;
+  meta?: DeviceMeta;
 }
 
 /** verify - response payload */

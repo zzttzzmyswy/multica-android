@@ -312,10 +312,15 @@ export class GatewayClient {
         if (this.options.hubId) {
           // Set internal state to allow send/request during verify
           this._state = "registered";
+          const meta = typeof navigator !== "undefined" ? {
+            userAgent: navigator.userAgent,
+            platform: navigator.platform,
+            language: navigator.language,
+          } : undefined;
           this.request<{ hubId: string; agentId: string }>(
             this.options.hubId,
             "verify",
-            { token: this.options.token },
+            { token: this.options.token, meta },
             this.options.verifyTimeout,
           )
             .then((result) => {

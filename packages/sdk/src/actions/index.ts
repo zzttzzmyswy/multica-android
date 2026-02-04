@@ -25,6 +25,7 @@ export {
   type DeleteAgentResult,
   type UpdateGatewayParams,
   type UpdateGatewayResult,
+  type DeviceMeta,
   type VerifyParams,
   type VerifyResult,
 } from "./rpc";
