@@ -583,13 +583,17 @@ export class Agent {
     options: AgentOptions,
     toolNames: string[],
   ): string | undefined {
+    const skillsPrompt = this.skillManager?.buildSkillsPrompt();
+
     // If a raw systemPrompt is provided directly, use it as-is (backward compat)
     if (!options.profileId && options.systemPrompt) {
-      return options.systemPrompt;
+      return skillsPrompt
+        ? `${options.systemPrompt}\n\n${skillsPrompt}`
+        : options.systemPrompt;
     }
 
     if (!this.profile?.getProfile() && !options.profileId) {
-      return undefined;
+      return skillsPrompt || undefined;
     }
 
     return this.rebuildSystemPrompt(toolNames);
