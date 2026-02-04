@@ -23,6 +23,12 @@ import { createDeleteAgentHandler } from "./rpc/handlers/delete-agent.js";
 import { createUpdateGatewayHandler } from "./rpc/handlers/update-gateway.js";
 import { DeviceStore, type DeviceMeta } from "./device-store.js";
 import { createVerifyHandler } from "./rpc/handlers/verify.js";
+import { ExecApprovalManager } from "./exec-approval-manager.js";
+import { createResolveExecApprovalHandler } from "./rpc/handlers/resolve-exec-approval.js";
+import { evaluateCommandSafety, requiresApproval } from "../agent/tools/exec-safety.js";
+import { addAllowlistEntry, recordAllowlistUse, matchAllowlist } from "../agent/tools/exec-allowlist.js";
+import type { ExecApprovalCallback, ExecApprovalConfig, ApprovalResult } from "../agent/tools/exec-approval-types.js";
+import { readProfileConfig, writeProfileConfig } from "../agent/profile/storage.js";
 
 export class Hub {
   private readonly agents = new Map<string, AsyncAgent>();
@@ -30,6 +36,7 @@ export class Hub {
   private readonly agentStreamIds = new Map<string, string>();
   private readonly agentStreamCounters = new Map<string, number>();
   private readonly rpc: RpcDispatcher;
+  private readonly approvalManager: ExecApprovalManager;
   private client: GatewayClient;
   readonly deviceStore: DeviceStore;
   private _onConfirmDevice: ((deviceId: string, agentId: string, meta?: DeviceMeta) => Promise<boolean>) | null = null;
@@ -66,6 +73,16 @@ export class Hub {
     this.rpc.register("createAgent", createCreateAgentHandler(this));
     this.rpc.register("deleteAgent", createDeleteAgentHandler(this));
     this.rpc.register("updateGateway", createUpdateGatewayHandler(this));
+
+    // Initialize exec approval manager
+    this.approvalManager = new ExecApprovalManager((agentId, payload) => {
+      const targetDeviceId = this.agentSenders.get(agentId);
+      if (!targetDeviceId) {
+        throw new Error(`No client device found for agent ${agentId}`);
+      }
+      this.client.send(targetDeviceId, "exec-approval-request", payload);
+    });
+    this.rpc.register("resolveExecApproval", createResolveExecApprovalHandler(this.approvalManager));
 
     // Register as global singleton for cross-module access (subagent tools, announce flow)
     setHub(this);
@@ -198,7 +215,9 @@ export class Hub {
       }
     }
 
-    const agent = new AsyncAgent({ sessionId: id, profileId: options?.profileId ?? "default" });
+    const profileId = options?.profileId ?? "default";
+    const onExecApprovalNeeded = this.createExecApprovalCallback(profileId);
+    const agent = new AsyncAgent({ sessionId: id, profileId, onExecApprovalNeeded });
     this.agents.set(agent.sessionId, agent);
 
     // Persist to agent store (skip during restore to avoid duplicates)
@@ -324,6 +343,94 @@ export class Hub {
     return agent;
   }
 
+  /**
+   * Create an exec approval callback for an agent.
+   * This wires the safety evaluation + Hub approval manager together.
+   */
+  private createExecApprovalCallback(profileId: string): ExecApprovalCallback {
+    return async (command: string, cwd: string | undefined): Promise<ApprovalResult> => {
+      // Load exec approval config from profile
+      let config: ExecApprovalConfig = {};
+      try {
+        const profileConfig = readProfileConfig(profileId);
+        config = profileConfig?.execApproval ?? {};
+      } catch {
+        // No profile config, use defaults
+      }
+
+      const security = config.security ?? "allowlist";
+      const ask = config.ask ?? "on-miss";
+
+      // Security: deny blocks everything
+      if (security === "deny") {
+        return { approved: false, decision: "deny" };
+      }
+
+      // Security: full allows everything
+      if (security === "full") {
+        return { approved: true, decision: "allow-once" };
+      }
+
+      // Evaluate safety
+      const evaluation = evaluateCommandSafety(command, config);
+
+      // Check if approval is needed
+      const needsApproval = requiresApproval({
+        ask,
+        security,
+        analysisOk: evaluation.analysisOk,
+        allowlistSatisfied: evaluation.allowlistSatisfied,
+      });
+
+      if (!needsApproval) {
+        // Record allowlist usage
+        if (evaluation.allowlistSatisfied) {
+          const match = matchAllowlist(config.allowlist ?? [], command);
+          if (match) {
+            try {
+              const profileConfig = readProfileConfig(profileId) ?? {};
+              const updated = recordAllowlistUse(profileConfig.execApproval?.allowlist ?? [], match, command);
+              writeProfileConfig(profileId, { ...profileConfig, execApproval: { ...config, allowlist: updated } });
+            } catch {
+              // Non-critical: don't fail command for usage recording
+            }
+          }
+        }
+        return { approved: true, decision: "allow-once" };
+      }
+
+      // Request approval via Hub → Gateway → Client
+      const result = await this.approvalManager.requestApproval({
+        agentId: profileId,
+        command,
+        cwd,
+        riskLevel: evaluation.riskLevel,
+        riskReasons: evaluation.reasons,
+        timeoutMs: config.timeoutMs,
+      });
+
+      // Handle allow-always: persist to profile allowlist
+      if (result.decision === "allow-always") {
+        try {
+          const profileConfig = readProfileConfig(profileId) ?? {};
+          const currentAllowlist = profileConfig.execApproval?.allowlist ?? [];
+          // Extract binary pattern for allowlist
+          const binary = command.trim().split(/\s+/)[0];
+          const pattern = binary ? `${binary} **` : command;
+          const updated = addAllowlistEntry(currentAllowlist, pattern);
+          writeProfileConfig(profileId, {
+            ...profileConfig,
+            execApproval: { ...config, allowlist: updated },
+          });
+        } catch {
+          // Non-critical: command still allowed even if persistence fails
+        }
+      }
+
+      return result;
+    };
+  }
+
   getAgent(id: string): AsyncAgent | undefined {
     return this.agents.get(id);
   }
@@ -338,6 +445,7 @@ export class Hub {
     const agent = this.agents.get(id);
     if (!agent) return false;
     agent.close();
+    this.approvalManager.cancelPending(id);
     this.agents.delete(id);
     this.agentSenders.delete(id);
     this.agentStreamIds.delete(id);
