@@ -64,7 +64,7 @@ export function isRotatableError(reason: AuthProfileFailureReason): boolean {
 
 export class Agent {
   private readonly agent: PiAgentCore;
-  private readonly output;
+  private output;
   private readonly session: SessionManager;
   private readonly profile?: ProfileManager;
   private readonly skillManager?: SkillManager;
