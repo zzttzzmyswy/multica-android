@@ -1,3 +1,4 @@
+import { v7 as uuidv7 } from "uuid";
 import {
   GatewayClient,
   type ConnectionState,
@@ -216,8 +217,9 @@ export class Hub {
     }
 
     const profileId = options?.profileId ?? "default";
-    const onExecApprovalNeeded = this.createExecApprovalCallback(profileId);
-    const agent = new AsyncAgent({ sessionId: id, profileId, onExecApprovalNeeded });
+    const sessionId = id ?? uuidv7();
+    const onExecApprovalNeeded = this.createExecApprovalCallback(sessionId, profileId);
+    const agent = new AsyncAgent({ sessionId, profileId, onExecApprovalNeeded });
     this.agents.set(agent.sessionId, agent);
 
     // Persist to agent store (skip during restore to avoid duplicates)
@@ -347,7 +349,7 @@ export class Hub {
    * Create an exec approval callback for an agent.
    * This wires the safety evaluation + Hub approval manager together.
    */
-  private createExecApprovalCallback(profileId: string): ExecApprovalCallback {
+  private createExecApprovalCallback(sessionId: string, profileId: string): ExecApprovalCallback {
     return async (command: string, cwd: string | undefined): Promise<ApprovalResult> => {
       // Load exec approval config from profile
       let config: ExecApprovalConfig = {};
@@ -401,7 +403,7 @@ export class Hub {
 
       // Request approval via Hub → Gateway → Client
       const result = await this.approvalManager.requestApproval({
-        agentId: profileId,
+        agentId: sessionId,
         command,
         cwd,
         riskLevel: evaluation.riskLevel,
