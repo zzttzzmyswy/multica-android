@@ -233,6 +233,67 @@ export function registerHubIpcHandlers(): void {
     agent.write(content)
     return { ok: true }
   })
+
+  /**
+   * Register a one-time token for device verification.
+   * Called by the QR code component when a token is generated or refreshed.
+   */
+  ipcMain.handle('hub:registerToken', async (_event, token: string, agentId: string, expiresAt: number) => {
+    const h = getHub()
+    h.registerToken(token, agentId, expiresAt)
+    return { ok: true }
+  })
+
+  /**
+   * List all verified (whitelisted) devices.
+   */
+  ipcMain.handle('hub:listDevices', async () => {
+    const h = getHub()
+    return h.deviceStore.listDevices()
+  })
+
+  /**
+   * Revoke a device from the whitelist.
+   */
+  ipcMain.handle('hub:revokeDevice', async (_event, deviceId: string) => {
+    const h = getHub()
+    return { ok: h.deviceStore.revokeDevice(deviceId) }
+  })
+
+}
+
+/**
+ * Set up device confirmation flow between Hub (main process) and renderer.
+ * Must be called after both Hub initialization and window creation.
+ */
+export function setupDeviceConfirmation(mainWindow: Electron.BrowserWindow): void {
+  const h = getHub()
+  const pendingConfirms = new Map<string, (allowed: boolean) => void>()
+
+  // Listen for renderer responses to device confirm dialogs
+  ipcMain.on('hub:device-confirm-response', (_event, deviceId: string, allowed: boolean) => {
+    const resolve = pendingConfirms.get(deviceId)
+    if (resolve) {
+      pendingConfirms.delete(deviceId)
+      resolve(allowed)
+    }
+  })
+
+  // Register confirm handler on Hub — sends request to renderer, awaits response
+  h.setConfirmHandler((deviceId: string, _agentId: string, meta) => {
+    return new Promise<boolean>((resolve) => {
+      // Auto-reject if user doesn't respond within 60 seconds
+      const timeout = setTimeout(() => {
+        pendingConfirms.delete(deviceId)
+        resolve(false)
+      }, 60_000)
+      pendingConfirms.set(deviceId, (allowed: boolean) => {
+        clearTimeout(timeout)
+        resolve(allowed)
+      })
+      mainWindow.webContents.send('hub:device-confirm-request', deviceId, meta)
+    })
+  })
 }
 
 /**

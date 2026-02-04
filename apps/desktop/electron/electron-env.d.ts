@@ -58,6 +58,19 @@ interface SkillInfo {
   triggers: string[]
 }
 
+interface DeviceMeta {
+  userAgent?: string
+  platform?: string
+  language?: string
+}
+
+interface DeviceEntryInfo {
+  deviceId: string
+  agentId: string
+  addedAt: number
+  meta?: DeviceMeta
+}
+
 interface SkillAddResult {
   ok: boolean
   message: string
@@ -83,6 +96,12 @@ interface ElectronAPI {
     getAgent: (id: string) => Promise<unknown>
     closeAgent: (id: string) => Promise<unknown>
     sendMessage: (agentId: string, content: string) => Promise<unknown>
+    registerToken: (token: string, agentId: string, expiresAt: number) => Promise<unknown>
+    onDeviceConfirmRequest: (callback: (deviceId: string, meta?: DeviceMeta) => void) => void
+    offDeviceConfirmRequest: () => void
+    deviceConfirmResponse: (deviceId: string, allowed: boolean) => void
+    listDevices: () => Promise<DeviceEntryInfo[]>
+    revokeDevice: (deviceId: string) => Promise<{ ok: boolean }>
   }
   tools: {
     list: () => Promise<ToolInfo[]>

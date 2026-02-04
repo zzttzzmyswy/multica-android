@@ -145,3 +145,22 @@ export interface UpdateGatewayResult {
   url: string;
   connectionState: string;
 }
+
+/** Device metadata collected during verify handshake */
+export interface DeviceMeta {
+  userAgent?: string;
+  platform?: string;
+  language?: string;
+}
+
+/** verify - request params */
+export interface VerifyParams {
+  token?: string;
+  meta?: DeviceMeta;
+}
+
+/** verify - response payload */
+export interface VerifyResult {
+  hubId: string;
+  agentId: string;
+}

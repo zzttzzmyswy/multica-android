@@ -47,7 +47,7 @@ process.stderr?.on?.('error', (err: NodeJS.ErrnoException) => {
 import { app, BrowserWindow } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { registerAllIpcHandlers, initializeApp, cleanupAll } from './ipc/index.js'
+import { registerAllIpcHandlers, initializeApp, cleanupAll, setupDeviceConfirmation } from './ipc/index.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -105,4 +105,9 @@ app.whenReady().then(async () => {
   await initializeApp()
 
   createWindow()
+
+  // Set up device confirmation flow (requires both Hub and window)
+  if (win) {
+    setupDeviceConfirmation(win)
+  }
 })

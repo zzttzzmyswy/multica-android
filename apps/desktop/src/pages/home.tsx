@@ -10,6 +10,7 @@ import {
   Edit02Icon,
 } from '@hugeicons/core-free-icons'
 import { ConnectionQRCode } from '../components/qr-code'
+import { DeviceList } from '../components/device-list'
 import { AgentSettingsDialog } from '../components/agent-settings-dialog'
 import { useHub } from '../hooks/use-hub'
 
@@ -183,6 +184,11 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Verified Devices */}
+      <div className="px-4 pb-2">
+        <DeviceList />
       </div>
 
       {/* Agent Settings Dialog */}

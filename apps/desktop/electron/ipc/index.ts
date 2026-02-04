@@ -3,7 +3,7 @@
  */
 export { registerAgentIpcHandlers, cleanupAgent } from './agent.js'
 export { registerSkillsIpcHandlers } from './skills.js'
-export { registerHubIpcHandlers, cleanupHub, initializeHub } from './hub.js'
+export { registerHubIpcHandlers, cleanupHub, initializeHub, setupDeviceConfirmation } from './hub.js'
 export { registerProfileIpcHandlers } from './profile.js'
 
 import { registerAgentIpcHandlers, cleanupAgent } from './agent.js'
