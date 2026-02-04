@@ -88,6 +88,54 @@ describe("ExecApprovalManager", () => {
     expect(result.decision).toBe("deny");
   });
 
+  it("honors askFallback full on timeout", async () => {
+    const promise = manager.requestApproval({
+      agentId: "agent-1",
+      command: "cmd",
+      riskLevel: "needs-review",
+      riskReasons: [],
+      askFallback: "full",
+    });
+
+    vi.advanceTimersByTime(6000);
+
+    const result = await promise;
+    expect(result.approved).toBe(true);
+    expect(result.decision).toBe("allow-once");
+  });
+
+  it("honors askFallback allowlist on timeout", async () => {
+    const allowPromise = manager.requestApproval({
+      agentId: "agent-1",
+      command: "cmd",
+      riskLevel: "needs-review",
+      riskReasons: [],
+      askFallback: "allowlist",
+      allowlistSatisfied: true,
+    });
+
+    vi.advanceTimersByTime(6000);
+
+    const allowResult = await allowPromise;
+    expect(allowResult.approved).toBe(true);
+    expect(allowResult.decision).toBe("allow-once");
+
+    const denyPromise = manager.requestApproval({
+      agentId: "agent-1",
+      command: "cmd",
+      riskLevel: "needs-review",
+      riskReasons: [],
+      askFallback: "allowlist",
+      allowlistSatisfied: false,
+    });
+
+    vi.advanceTimersByTime(6000);
+
+    const denyResult = await denyPromise;
+    expect(denyResult.approved).toBe(false);
+    expect(denyResult.decision).toBe("deny");
+  });
+
   it("returns false when resolving unknown approval", () => {
     const resolved = manager.resolveApproval("unknown-id", "allow-once");
     expect(resolved).toBe(false);

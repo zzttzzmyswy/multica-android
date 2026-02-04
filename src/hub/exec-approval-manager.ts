@@ -47,6 +47,8 @@ export class ExecApprovalManager {
     riskLevel: "safe" | "needs-review" | "dangerous";
     riskReasons: string[];
     timeoutMs?: number;
+    askFallback?: "deny" | "allowlist" | "full";
+    allowlistSatisfied?: boolean;
   }): Promise<ApprovalResult> {
     const approvalId = uuidv7();
     const timeoutMs = params.timeoutMs ?? this.defaultTimeoutMs;
@@ -63,11 +65,17 @@ export class ExecApprovalManager {
     };
 
     return new Promise<ApprovalResult>((resolve) => {
-      // Timeout: auto-deny (fail-closed)
+      // Timeout: follow askFallback (default: fail-closed)
       const timer = setTimeout(() => {
         if (this.pending.has(approvalId)) {
           this.pending.delete(approvalId);
-          resolve({ approved: false, decision: "deny" });
+          const fallback = params.askFallback ?? "deny";
+          const decision =
+            fallback === "full" ||
+            (fallback === "allowlist" && params.allowlistSatisfied)
+              ? "allow-once"
+              : "deny";
+          resolve({ approved: decision !== "deny", decision });
         }
       }, timeoutMs);
 

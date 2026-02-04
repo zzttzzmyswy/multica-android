@@ -409,6 +409,8 @@ export class Hub {
         riskLevel: evaluation.riskLevel,
         riskReasons: evaluation.reasons,
         timeoutMs: config.timeoutMs,
+        askFallback: config.askFallback,
+        allowlistSatisfied: evaluation.allowlistSatisfied,
       });
 
       // Handle allow-always: persist to profile allowlist
