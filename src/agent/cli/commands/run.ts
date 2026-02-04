@@ -7,6 +7,7 @@
  */
 
 import { Agent } from "../../runner.js";
+import type { AgentOptions } from "../../types.js";
 import type { ToolsConfig } from "../../tools/policy.js";
 import { cyan, yellow, dim } from "../colors.js";
 
@@ -198,7 +199,7 @@ export async function runCommand(args: string[]): Promise<void> {
     baseUrl: opts.baseUrl,
     systemPrompt: opts.system,
     thinkingLevel: opts.thinking as any,
-    reasoningMode: (opts.reasoning as any) ?? undefined,
+    reasoningMode: opts.reasoning as AgentOptions["reasoningMode"],
     cwd: opts.cwd,
     sessionId: opts.session,
     debug: opts.debug,

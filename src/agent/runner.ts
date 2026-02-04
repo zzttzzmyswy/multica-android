@@ -70,7 +70,7 @@ export class Agent {
   private readonly skillManager?: SkillManager;
   private readonly contextWindowGuard: ContextWindowGuardResult;
   private readonly debug: boolean;
-  private readonly reasoningMode: ReasoningMode;
+  private reasoningMode: ReasoningMode;
   private toolsOptions: AgentOptions;
   private readonly originalToolsConfig?: ToolsConfig;
   private readonly stderr: NodeJS.WritableStream;
@@ -265,6 +265,18 @@ export class Agent {
       this.agent.setThinkingLevel(storedMeta.thinkingLevel as any);
     } else if (options.thinkingLevel) {
       this.agent.setThinkingLevel(options.thinkingLevel);
+    }
+
+    // Resolve reasoningMode: options > profile config > storedMeta > default "stream"
+    if (!options.reasoningMode) {
+      const profileReasoningMode = this.profile?.getProfile()?.config?.reasoningMode;
+      const metaReasoningMode = storedMeta?.reasoningMode as ReasoningMode | undefined;
+      const resolved = profileReasoningMode ?? metaReasoningMode ?? "stream";
+      if (resolved !== this.reasoningMode) {
+        this.reasoningMode = resolved;
+        // Re-create output with correct reasoningMode
+        this.output = createAgentOutput({ stdout, stderr: this.stderr, reasoningMode: this.reasoningMode });
+      }
     }
 
     this.agent.setModel(model);

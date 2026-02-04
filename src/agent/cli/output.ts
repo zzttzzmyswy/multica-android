@@ -249,8 +249,8 @@ export function createAgentOutput(params: {
           state.streaming = false;
           state.lastAssistantText = text;
 
-          // Extract and store thinking content
-          const thinking = extractThinking(msg);
+          // Extract and store thinking content (skip when off)
+          const thinking = reasoningMode !== "off" ? extractThinking(msg) : "";
           state.lastAssistantThinking = thinking;
 
           // Show thinking at end for "on" mode

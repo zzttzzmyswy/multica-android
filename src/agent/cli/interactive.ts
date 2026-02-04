@@ -349,7 +349,7 @@ class InteractiveCLI {
       model: this.opts.model,
       systemPrompt: this.opts.system,
       thinkingLevel: this.opts.thinking as AgentOptions["thinkingLevel"],
-      reasoningMode: (this.opts.reasoning as AgentOptions["reasoningMode"]) ?? undefined,
+      reasoningMode: this.opts.reasoning as AgentOptions["reasoningMode"],
       cwd: this.opts.cwd,
       sessionId,
     });

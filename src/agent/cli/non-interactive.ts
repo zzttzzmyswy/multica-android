@@ -177,7 +177,7 @@ async function main() {
     baseUrl: opts.baseUrl,
     systemPrompt: opts.system,
     thinkingLevel: opts.thinking as any,
-    reasoningMode: (opts.reasoning as any) ?? undefined,
+    reasoningMode: opts.reasoning as any,
     cwd: opts.cwd,
     sessionId: opts.session,
     debug: opts.debug,
