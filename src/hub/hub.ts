@@ -138,6 +138,11 @@ export class Hub {
       // Non-RPC messages also require verified device
       if (!this.deviceStore.isAllowed(msg.from)) {
         console.warn(`[Hub] Rejected message from unverified device: ${msg.from}`);
+        this.client.send(msg.from, "error", {
+          code: "UNAUTHORIZED",
+          message: "Device not verified. Please complete verification first.",
+          messageId: msg.id,
+        });
         return;
       }
 
