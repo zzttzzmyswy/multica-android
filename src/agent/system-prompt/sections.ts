@@ -47,59 +47,85 @@ const TOOL_ORDER = [
 // ─── Section builders ───────────────────────────────────────────────────────
 
 /**
- * Identity section — soul.md in full mode, single line in none mode, nothing in minimal.
+ * Identity section — brief identity line only.
+ * Full profile content (soul.md) is loaded on-demand by the agent.
  */
 export function buildIdentitySection(
   profile: ProfileContent | undefined,
   mode: SystemPromptMode,
 ): string[] {
-  if (mode === "none") {
-    const name = profile?.config?.name;
+  const name = profile?.config?.name;
+  if (mode === "none" || mode === "minimal") {
     return name
       ? [`You are ${name}, a Super Multica agent.`]
       : ["You are a Super Multica agent."];
   }
-  if (mode === "minimal") {
-    return [];
-  }
-  // full mode
-  if (profile?.soul) {
-    return [profile.soul];
-  }
+  // full mode - just identity line, agent reads soul.md on demand
+  return name
+    ? [`You are ${name}, a Super Multica agent.`]
+    : ["You are a Super Multica agent."];
+}
+
+/**
+ * User section — no longer injected into system prompt.
+ * Agent reads user.md on demand from profile directory.
+ */
+export function buildUserSection(
+  _profile: ProfileContent | undefined,
+  _mode: SystemPromptMode,
+): string[] {
+  // Progressive disclosure: agent reads user.md on demand
   return [];
 }
 
 /**
- * User section — user.md content (full mode only).
- */
-export function buildUserSection(
-  profile: ProfileContent | undefined,
-  mode: SystemPromptMode,
-): string[] {
-  if (mode !== "full" || !profile?.user) return [];
-  return [profile.user];
-}
-
-/**
- * Workspace section — workspace.md content (full mode only).
+ * Workspace section — workspace.md content with profile directory path.
+ * This is the primary profile content injected into system prompt.
+ * Other profile files (soul.md, user.md, memory.md) are read on demand.
  */
 export function buildWorkspaceSection(
   profile: ProfileContent | undefined,
   mode: SystemPromptMode,
+  profileDir?: string,
 ): string[] {
-  if (mode !== "full" || !profile?.workspace) return [];
-  return [profile.workspace];
+  if (mode !== "full") return [];
+
+  const lines: string[] = [];
+
+  // Add profile directory context first
+  if (profileDir) {
+    lines.push(
+      "## Profile",
+      "",
+      `Your profile directory: \`${profileDir}\``,
+      "",
+      "Profile files:",
+      "- `soul.md` — Your identity and values",
+      "- `user.md` — Information about your user",
+      "- `workspace.md` — Guidelines and conventions (below)",
+      "- `memory.md` — Persistent knowledge",
+      "",
+    );
+  }
+
+  // Add workspace.md content
+  if (profile?.workspace) {
+    lines.push(profile.workspace);
+  }
+
+  return lines;
 }
 
 /**
- * Memory section — memory.md content (full mode only).
+ * Memory section — no longer injected into system prompt.
+ * Agent reads memory.md on demand from profile directory.
  */
 export function buildMemoryFileSection(
-  profile: ProfileContent | undefined,
-  mode: SystemPromptMode,
+  _profile: ProfileContent | undefined,
+  _mode: SystemPromptMode,
 ): string[] {
-  if (mode !== "full" || !profile?.memory) return [];
-  return [profile.memory];
+  // Progressive disclosure: agent reads memory.md on demand
+  return [];
 }
 
 /**
@@ -265,21 +291,15 @@ export function buildRuntimeSection(
 }
 
 /**
- * Profile directory section — tells agent where its files live.
- * Full mode only.
+ * Profile directory section — now merged into buildWorkspaceSection.
+ * Kept for backwards compatibility but returns empty.
  */
 export function buildProfileDirSection(
-  profileDir: string | undefined,
-  mode: SystemPromptMode,
+  _profileDir: string | undefined,
+  _mode: SystemPromptMode,
 ): string[] {
-  if (mode !== "full" || !profileDir) return [];
-  return [
-    "## Profile Directory",
-    "",
-    `Your profile files are located at: \`${profileDir}\``,
-    "",
-    "Use `edit` or `write` tools to update these files when needed.",
-  ];
+  // Profile directory info is now part of workspace section
+  return [];
 }
 
 /**
