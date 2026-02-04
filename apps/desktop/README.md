@@ -190,28 +190,6 @@ ipcMain.handle('skills:add', async (_, source: string) => {
 
 ---
 
-## 三、实现优先级
-
-### Phase 1: 基础框架 (MVP)
-
-1. **Layout 组件** - Header + Tabs 导航
-2. **Home 页面** - 二维码显示 + 连接状态
-3. **Gateway 连接** - 复用 @multica/store
-
-### Phase 2: 管理功能
-
-4. **Tools 页面** - 列表展示 + 开关切换
-5. **Skills 页面** - 列表展示 + 基础操作
-6. **Settings** - Gateway URL + Theme
-
-### Phase 3: 完善体验
-
-7. **Agent 页面** - 状态监控 + Provider 切换
-8. **二维码刷新机制**
-9. **错误处理 + Toast 提示**
-
----
-
 ## 四、Hub 集成技术方案
 
 ### 架构概述
@@ -496,9 +474,17 @@ ChatInput → useMessagesStore.sendMessage()
 
 ### 复用层级
 
-| 层级       | 组件/模块                                | 复用情况 |
-| ---------- | ---------------------------------------- | -------- |
-| UI 层      | `MessageList`, `ChatInput`               | ✅ 完全复用 |
-| Store 层   | `useMessagesStore`                       | ✅ 完全复用 |
-| Agent 层   | `AsyncAgent.write()`, `subscribe()`      | ✅ 完全复用 |
-| 传输层     | IPC vs WebSocket                         | ❌ 各自实现 |
+| 层级     | 组件/模块                           | 复用情况    |
+| -------- | ----------------------------------- | ----------- |
+| UI 层    | `MessageList`, `ChatInput`          | ✅ 完全复用 |
+| Store 层 | `useMessagesStore`                  | ✅ 完全复用 |
+| Agent 层 | `AsyncAgent.write()`, `subscribe()` | ✅ 完全复用 |
+| 传输层   | IPC vs WebSocket                    | ❌ 各自实现 |
+
+---
+
+## 九、TODO
+
+-  [ ] **优化 Memory Tool 逻辑**: 当前 memory tool 和 memory.md 没有统一，需要整合
+-  [ ] **优化 Agent Profile 加载逻辑**: 改进 Profile 的加载机制
+-  [ ] **Agent 自我迭代 Profile**: 添加让 Agent 在对话过程中自己修改 Profile 内文件的能力

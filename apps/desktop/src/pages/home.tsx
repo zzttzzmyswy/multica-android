@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@multica/ui/components/ui/button'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -8,17 +8,52 @@ import {
   Loading03Icon,
   AlertCircleIcon,
   Edit02Icon,
+  ArrowDown01Icon,
+  Tick02Icon,
+  Alert02Icon,
 } from '@hugeicons/core-free-icons'
 import { ConnectionQRCode } from '../components/qr-code'
 import { DeviceList } from '../components/device-list'
 import { AgentSettingsDialog } from '../components/agent-settings-dialog'
+import { ApiKeyDialog } from '../components/api-key-dialog'
+import { OAuthDialog } from '../components/oauth-dialog'
 import { useHub } from '../hooks/use-hub'
+import { useProvider } from '../hooks/use-provider'
 
 export default function HomePage() {
   const navigate = useNavigate()
   const { hubInfo, agents, loading, error } = useHub()
+  const { providers, current, setProvider, refresh, loading: providerLoading } = useProvider()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [agentName, setAgentName] = useState<string | undefined>()
+  const [providerDropdownOpen, setProviderDropdownOpen] = useState(false)
+  const [switching, setSwitching] = useState(false)
+  const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false)
+  const [oauthDialogOpen, setOauthDialogOpen] = useState(false)
+  const [selectedProvider, setSelectedProvider] = useState<{
+    id: string
+    name: string
+    authMethod: 'api-key' | 'oauth'
+    loginCommand?: string
+  } | null>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setProviderDropdownOpen(false)
+      }
+    }
+
+    if (providerDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [providerDropdownOpen])
 
   // Load agent profile info
   useEffect(() => {
@@ -151,6 +186,92 @@ export default function HomePage() {
               <p className="font-medium">{agentName || 'Unnamed Agent'}</p>
             </div>
 
+            {/* Provider Selector */}
+            <div className="p-4 rounded-lg bg-muted/50 border border-border/50 relative" ref={dropdownRef}>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
+                LLM Provider
+              </p>
+              <button
+                className="w-full flex items-center justify-between p-3 rounded-md bg-background border border-border hover:bg-accent/50 transition-colors disabled:opacity-50"
+                onClick={() => setProviderDropdownOpen(!providerDropdownOpen)}
+                disabled={providerLoading || switching}
+              >
+                <div className="flex items-center gap-2">
+                  {current?.available ? (
+                    <HugeiconsIcon icon={Tick02Icon} className="size-4 text-green-500" />
+                  ) : (
+                    <HugeiconsIcon icon={Alert02Icon} className="size-4 text-yellow-500" />
+                  )}
+                  <div className="text-left">
+                    <p className="font-medium text-sm">{current?.providerName ?? current?.provider ?? 'Loading...'}</p>
+                    <p className="text-xs text-muted-foreground">{current?.model ?? '-'}</p>
+                  </div>
+                </div>
+                <HugeiconsIcon
+                  icon={ArrowDown01Icon}
+                  className={`size-4 text-muted-foreground transition-transform ${providerDropdownOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              {/* Provider Dropdown - Compact Grid */}
+              {providerDropdownOpen && (
+                <div className="absolute left-0 right-0 top-full mt-1 z-10 bg-background border border-border rounded-md shadow-lg p-2">
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {providers.map((p) => (
+                      <button
+                        key={p.id}
+                        className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-left text-xs transition-colors ${
+                          p.id === current?.provider
+                            ? 'bg-primary/10 border border-primary/30'
+                            : 'hover:bg-accent/50 border border-transparent'
+                        } ${!p.available ? 'opacity-60 hover:opacity-80' : ''}`}
+                        onClick={async () => {
+                          if (!p.available) {
+                            // Show config dialog for unavailable providers
+                            setSelectedProvider({
+                              id: p.id,
+                              name: p.name,
+                              authMethod: p.authMethod,
+                              loginCommand: p.loginCommand,
+                            })
+                            setProviderDropdownOpen(false)
+                            if (p.authMethod === 'oauth') {
+                              setOauthDialogOpen(true)
+                            } else {
+                              setApiKeyDialogOpen(true)
+                            }
+                            return
+                          }
+                          setSwitching(true)
+                          setProviderDropdownOpen(false)
+                          const result = await setProvider(p.id)
+                          setSwitching(false)
+                          if (!result.ok) {
+                            console.error('Failed to switch provider:', result.error)
+                          }
+                        }}
+                        disabled={switching}
+                        title={`${p.name}\n${p.authMethod === 'oauth' ? 'OAuth' : 'API Key'} · ${p.defaultModel}`}
+                      >
+                        <span className={`size-1.5 rounded-full flex-shrink-0 ${
+                          p.available ? 'bg-green-500' : 'bg-muted-foreground/50'
+                        }`} />
+                        <span className="truncate font-medium">
+                          {p.id === 'claude-code' ? 'Claude Code' :
+                           p.id === 'openai-codex' ? 'Codex' :
+                           p.id === 'kimi-coding' ? 'Kimi' :
+                           p.id === 'anthropic' ? 'Anthropic' :
+                           p.id === 'openai' ? 'OpenAI' :
+                           p.id === 'openrouter' ? 'OpenRouter' :
+                           p.name.split(' ')[0]}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Stats Grid */}
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 rounded-lg bg-muted/50 border border-border/50">
@@ -167,20 +288,6 @@ export default function HomePage() {
                 </p>
                 <p className="font-medium capitalize">{connectionState}</p>
               </div>
-              <div className="p-4 rounded-lg bg-muted/50 border border-border/50">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-                  Active Agents
-                </p>
-                <p className="font-medium">{hubInfo?.agentCount ?? 0}</p>
-              </div>
-              <div className="p-4 rounded-lg bg-muted/50 border border-border/50">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-                  Primary Agent
-                </p>
-                <p className="font-medium text-sm font-mono truncate" title={primaryAgent?.id}>
-                  {primaryAgent?.id ?? 'None'}
-                </p>
-              </div>
             </div>
           </div>
         </div>
@@ -193,6 +300,43 @@ export default function HomePage() {
 
       {/* Agent Settings Dialog */}
       <AgentSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+
+      {/* API Key Dialog */}
+      {selectedProvider && selectedProvider.authMethod === 'api-key' && (
+        <ApiKeyDialog
+          open={apiKeyDialogOpen}
+          onOpenChange={setApiKeyDialogOpen}
+          providerId={selectedProvider.id}
+          providerName={selectedProvider.name}
+          onSuccess={async () => {
+            // Refresh provider list and switch to the newly configured provider
+            await refresh()
+            const result = await setProvider(selectedProvider.id)
+            if (!result.ok) {
+              console.error('Failed to switch provider:', result.error)
+            }
+          }}
+        />
+      )}
+
+      {/* OAuth Dialog */}
+      {selectedProvider && selectedProvider.authMethod === 'oauth' && (
+        <OAuthDialog
+          open={oauthDialogOpen}
+          onOpenChange={setOauthDialogOpen}
+          providerId={selectedProvider.id}
+          providerName={selectedProvider.name}
+          loginCommand={selectedProvider.loginCommand}
+          onSuccess={async () => {
+            // Refresh provider list and switch to the newly configured provider
+            await refresh()
+            const result = await setProvider(selectedProvider.id)
+            if (!result.ok) {
+              console.error('Failed to switch provider:', result.error)
+            }
+          }}
+        />
+      )}
 
       {/* Bottom: Actions */}
       <div className="border-t p-4">

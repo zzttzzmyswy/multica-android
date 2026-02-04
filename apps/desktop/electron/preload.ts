@@ -44,6 +44,27 @@ export interface ProfileData {
   userContent: string | undefined
 }
 
+export interface ProviderStatus {
+  id: string
+  name: string
+  authMethod: 'api-key' | 'oauth'
+  available: boolean
+  configured: boolean
+  current: boolean
+  defaultModel: string
+  models: string[]
+  loginUrl?: string
+  loginCommand?: string
+  loginInstructions?: string
+}
+
+export interface CurrentProviderInfo {
+  provider: string
+  model: string | undefined
+  providerName: string | undefined
+  available: boolean
+}
+
 // Local chat event types (for direct IPC communication without Gateway)
 export interface LocalChatEvent {
   agentId: string
@@ -132,6 +153,29 @@ const electronAPI = {
     updateName: (name: string) => ipcRenderer.invoke('profile:updateName', name),
     updateStyle: (style: string) => ipcRenderer.invoke('profile:updateStyle', style),
     updateUser: (content: string) => ipcRenderer.invoke('profile:updateUser', content),
+  },
+
+  // Provider management
+  provider: {
+    /** List all providers with their status */
+    list: (): Promise<ProviderStatus[]> => ipcRenderer.invoke('provider:list'),
+    /** List only available (configured) providers */
+    listAvailable: (): Promise<ProviderStatus[]> => ipcRenderer.invoke('provider:listAvailable'),
+    /** Get current provider and model from the active agent */
+    current: (): Promise<CurrentProviderInfo> => ipcRenderer.invoke('provider:current'),
+    /** Switch the agent to a different provider and/or model */
+    set: (providerId: string, modelId?: string): Promise<{ ok: boolean; provider?: string; model?: string; error?: string }> =>
+      ipcRenderer.invoke('provider:set', providerId, modelId),
+    /** Get metadata for a specific provider */
+    getMeta: (providerId: string) => ipcRenderer.invoke('provider:getMeta', providerId),
+    /** Check if a specific provider is available */
+    isAvailable: (providerId: string): Promise<boolean> => ipcRenderer.invoke('provider:isAvailable', providerId),
+    /** Save API key for a provider */
+    saveApiKey: (providerId: string, apiKey: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('provider:saveApiKey', providerId, apiKey),
+    /** Import OAuth credentials from CLI tools (claude-code, codex) */
+    importOAuth: (providerId: string): Promise<{ ok: boolean; expiresAt?: number; error?: string }> =>
+      ipcRenderer.invoke('provider:importOAuth', providerId),
   },
 
   // Local chat (direct IPC, no Gateway required)

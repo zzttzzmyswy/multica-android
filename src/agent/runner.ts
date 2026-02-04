@@ -9,6 +9,8 @@ import {
   resolveApiKeyForProvider,
   resolveBaseUrl,
   resolveModelId,
+  PROVIDER_ALIAS,
+  getDefaultModel,
 } from "./providers/index.js";
 import { SessionManager } from "./session/session-manager.js";
 import { ProfileManager } from "./profile/index.js";
@@ -82,7 +84,7 @@ export class Agent {
   private initialized = false;
 
   // Auth profile rotation state
-  private readonly resolvedProvider: string;
+  private resolvedProvider: string;
   private currentApiKey: string | undefined;
   private currentProfileId: string | undefined;
   private profileCandidates: string[];
@@ -596,6 +598,72 @@ export class Agent {
    */
   setAgentStyle(style: string): void {
     this.profile?.updateStyle(style);
+  }
+
+  /**
+   * Get current provider and model information.
+   */
+  getProviderInfo(): { provider: string; model: string | undefined } {
+    return {
+      provider: this.resolvedProvider,
+      model: this.agent.state.model?.id,
+    };
+  }
+
+  /**
+   * Switch to a different provider and/or model.
+   * This updates the agent's model without recreating the session.
+   */
+  setProvider(providerId: string, modelId?: string): { provider: string; model: string | undefined } {
+    // Resolve the actual provider (handle aliases like claude-code -> anthropic)
+    const actualProvider = PROVIDER_ALIAS[providerId] ?? providerId;
+
+    // Resolve the model
+    const targetModel = modelId ?? getDefaultModel(providerId) ?? getDefaultModel(actualProvider);
+    const model = resolveModel({ provider: providerId, model: targetModel });
+
+    if (!model) {
+      throw new Error(`Failed to resolve model for provider: ${providerId}, model: ${targetModel}`);
+    }
+
+    // Resolve API key for the new provider
+    // For OAuth providers (claude-code, openai-codex), we need to use the original providerId
+    // because OAuth credentials are resolved by the original provider name, not the alias
+    const resolved = resolveApiKeyForProvider(providerId);
+    if (resolved) {
+      this.currentApiKey = resolved.apiKey;
+      this.currentProfileId = resolved.profileId;
+    } else {
+      // Fallback: try with actual provider (for API key based providers)
+      this.currentApiKey = resolveApiKey(actualProvider);
+      this.currentProfileId = actualProvider;
+    }
+
+    if (!this.currentApiKey) {
+      throw new Error(`No API key configured for provider: ${providerId}`);
+    }
+
+    // Update the agent's model and API key
+    const baseUrl = resolveBaseUrl(actualProvider);
+    const modelWithBaseUrl = baseUrl ? { ...model, baseUrl } : model;
+    this.agent.setModel(modelWithBaseUrl);
+
+    // Update internal state
+    this.resolvedProvider = providerId;
+
+    // Update session metadata
+    this.session.saveMeta({
+      provider: actualProvider,
+      model: model.id,
+      thinkingLevel: this.agent.state.thinkingLevel,
+      reasoningMode: this.reasoningMode,
+      contextWindowTokens: this.contextWindowGuard.tokens,
+    });
+
+    return {
+      provider: providerId,
+      model: model.id,
+    };
   }
 
   /**

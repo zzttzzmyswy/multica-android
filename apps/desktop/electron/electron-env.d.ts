@@ -101,6 +101,27 @@ interface LocalChatEvent {
   }
 }
 
+interface ProviderStatus {
+  id: string
+  name: string
+  authMethod: 'api-key' | 'oauth'
+  available: boolean
+  configured: boolean
+  current: boolean
+  defaultModel: string
+  models: string[]
+  loginUrl?: string
+  loginCommand?: string
+  loginInstructions?: string
+}
+
+interface CurrentProviderInfo {
+  provider: string
+  model: string | undefined
+  providerName: string | undefined
+  available: boolean
+}
+
 interface ElectronAPI {
   hub: {
     init: () => Promise<unknown>
@@ -144,6 +165,16 @@ interface ElectronAPI {
     updateName: (name: string) => Promise<unknown>
     updateStyle: (style: string) => Promise<unknown>
     updateUser: (content: string) => Promise<unknown>
+  }
+  provider: {
+    list: () => Promise<ProviderStatus[]>
+    listAvailable: () => Promise<ProviderStatus[]>
+    current: () => Promise<CurrentProviderInfo>
+    set: (providerId: string, modelId?: string) => Promise<{ ok: boolean; provider?: string; model?: string; error?: string }>
+    getMeta: (providerId: string) => Promise<unknown>
+    isAvailable: (providerId: string) => Promise<boolean>
+    saveApiKey: (providerId: string, apiKey: string) => Promise<{ ok: boolean; error?: string }>
+    importOAuth: (providerId: string) => Promise<{ ok: boolean; expiresAt?: number; error?: string }>
   }
   localChat: {
     subscribe: (agentId: string) => Promise<{ ok?: boolean; error?: string; alreadySubscribed?: boolean }>
