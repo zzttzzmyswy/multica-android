@@ -3,11 +3,11 @@
  */
 export { registerAgentIpcHandlers, cleanupAgent } from './agent.js'
 export { registerSkillsIpcHandlers } from './skills.js'
-export { registerHubIpcHandlers, cleanupHub, initializeHub } from './hub.js'
+export { registerHubIpcHandlers, cleanupHub, initializeHub, setupDeviceConfirmation } from './hub.js'
 
 import { registerAgentIpcHandlers, cleanupAgent } from './agent.js'
 import { registerSkillsIpcHandlers } from './skills.js'
-import { registerHubIpcHandlers, cleanupHub, initializeHub } from './hub.js'
+import { registerHubIpcHandlers, cleanupHub, initializeHub, setupDeviceConfirmation } from './hub.js'
 
 /**
  * Register all IPC handlers.

@@ -221,6 +221,43 @@ export function registerHubIpcHandlers(): void {
     agent.write(content)
     return { ok: true }
   })
+
+  /**
+   * Register a one-time token for device verification.
+   * Called by the QR code component when a token is generated or refreshed.
+   */
+  ipcMain.handle('hub:registerToken', async (_event, token: string, agentId: string, expiresAt: number) => {
+    const h = getHub()
+    h.registerToken(token, agentId, expiresAt)
+    return { ok: true }
+  })
+
+}
+
+/**
+ * Set up device confirmation flow between Hub (main process) and renderer.
+ * Must be called after both Hub initialization and window creation.
+ */
+export function setupDeviceConfirmation(mainWindow: Electron.BrowserWindow): void {
+  const h = getHub()
+  const pendingConfirms = new Map<string, (allowed: boolean) => void>()
+
+  // Listen for renderer responses to device confirm dialogs
+  ipcMain.on('hub:device-confirm-response', (_event, deviceId: string, allowed: boolean) => {
+    const resolve = pendingConfirms.get(deviceId)
+    if (resolve) {
+      pendingConfirms.delete(deviceId)
+      resolve(allowed)
+    }
+  })
+
+  // Register confirm handler on Hub — sends request to renderer, awaits response
+  h.setConfirmHandler((deviceId: string, _agentId: string) => {
+    return new Promise<boolean>((resolve) => {
+      pendingConfirms.set(deviceId, resolve)
+      mainWindow.webContents.send('hub:device-confirm-request', deviceId)
+    })
+  })
 }
 
 /**

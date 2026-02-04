@@ -54,10 +54,16 @@ export function ConnectionQRCode({
   size = 180,
   onRefresh,
 }: ConnectionQRCodeProps) {
-  const [token, setToken] = useState(() => generateToken())
+  const [token, setToken] = useState(generateToken)
   const [expiresAt, setExpiresAt] = useState(() => Date.now() + expirySeconds * 1000)
   const [remainingSeconds, setRemainingSeconds] = useState(expirySeconds)
   const [copied, setCopied] = useState(false)
+
+  // Register initial token with Hub on mount
+  useEffect(() => {
+    window.electronAPI?.hub.registerToken(token, agentId, expiresAt)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on mount
+  }, [])
 
   // QR code data payload
   const qrData: QRCodeData = useMemo(
@@ -92,6 +98,9 @@ export function ConnectionQRCode({
     setToken(newToken)
     setExpiresAt(newExpires)
     setRemainingSeconds(expirySeconds)
+
+    // Register new token with Hub for verification
+    window.electronAPI?.hub.registerToken(newToken, agentId, newExpires)
 
     if (onRefresh) {
       onRefresh({

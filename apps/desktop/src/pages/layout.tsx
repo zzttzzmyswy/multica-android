@@ -10,6 +10,7 @@ import {
   Comment01Icon,
 } from '@hugeicons/core-free-icons'
 import { cn } from '@multica/ui/lib/utils'
+import { DeviceConfirmDialog } from '../components/device-confirm-dialog'
 
 const tabs = [
   { path: '/', label: 'Home', icon: Home01Icon, exact: true },
@@ -62,6 +63,7 @@ export default function Layout() {
         <Outlet />
       </main>
       <Toaster />
+      <DeviceConfirmDialog />
     </div>
   )
 }

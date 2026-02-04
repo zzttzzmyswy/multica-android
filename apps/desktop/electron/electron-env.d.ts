@@ -77,6 +77,9 @@ interface ElectronAPI {
     getAgent: (id: string) => Promise<unknown>
     closeAgent: (id: string) => Promise<unknown>
     sendMessage: (agentId: string, content: string) => Promise<unknown>
+    registerToken: (token: string, agentId: string, expiresAt: number) => Promise<unknown>
+    onDeviceConfirmRequest: (callback: (deviceId: string) => void) => void
+    deviceConfirmResponse: (deviceId: string, allowed: boolean) => void
   }
   tools: {
     list: () => Promise<ToolInfo[]>
