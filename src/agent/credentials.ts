@@ -1,11 +1,17 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import JSON5 from "json5";
 import { DATA_DIR } from "../shared/paths.js";
 
 type ProviderConfig = {
+  // API Key authentication
   apiKey?: string | undefined;
+  // OAuth authentication
+  oauthToken?: string | undefined;
+  oauthRefreshToken?: string | undefined;
+  oauthExpiresAt?: number | undefined;
+  // Common
   baseUrl?: string | undefined;
   model?: string | undefined;
 };
@@ -222,6 +228,132 @@ export class CredentialManager {
     this.coreConfig = null;
     this.skillsConfig = null;
     this.resolvedSkillsEnv = null;
+  }
+
+  /**
+   * Set the API key for a provider and save to credentials.json5.
+   * Creates the file if it doesn't exist.
+   */
+  setLlmProviderApiKey(provider: string, apiKey: string): void {
+    const path = getCredentialsPath();
+
+    // Load existing config or create new one
+    let config: CredentialsConfig = { version: 1 };
+    if (existsSync(path)) {
+      try {
+        const raw = readFileSync(path, "utf8");
+        config = JSON5.parse(raw) as CredentialsConfig;
+      } catch {
+        // If parse fails, start fresh
+        config = { version: 1 };
+      }
+    }
+
+    // Ensure structure exists
+    if (!config.llm) {
+      config.llm = {};
+    }
+    if (!config.llm.providers) {
+      config.llm.providers = {};
+    }
+
+    // Set or update the provider config
+    const existing = config.llm.providers[provider] ?? {};
+    config.llm.providers[provider] = {
+      ...existing,
+      apiKey,
+    };
+
+    // Write back to file
+    mkdirSync(dirname(path), { recursive: true });
+    const content = JSON.stringify(config, null, 2);
+    writeFileSync(path, content, "utf8");
+
+    // Reset cache so next read picks up the change
+    this.reset();
+  }
+
+  /**
+   * Set OAuth token for a provider and save to credentials.json5.
+   * Used for OAuth providers like claude-code and openai-codex.
+   */
+  setLlmProviderOAuthToken(
+    provider: string,
+    token: string,
+    refreshToken?: string,
+    expiresAt?: number,
+  ): void {
+    const path = getCredentialsPath();
+
+    // Load existing config or create new one
+    let config: CredentialsConfig = { version: 1 };
+    if (existsSync(path)) {
+      try {
+        const raw = readFileSync(path, "utf8");
+        config = JSON5.parse(raw) as CredentialsConfig;
+      } catch {
+        config = { version: 1 };
+      }
+    }
+
+    // Ensure structure exists
+    if (!config.llm) {
+      config.llm = {};
+    }
+    if (!config.llm.providers) {
+      config.llm.providers = {};
+    }
+
+    // Set or update the provider config
+    const existing = config.llm.providers[provider] ?? {};
+    config.llm.providers[provider] = {
+      ...existing,
+      oauthToken: token,
+      oauthRefreshToken: refreshToken,
+      oauthExpiresAt: expiresAt,
+    };
+
+    // Write back to file
+    mkdirSync(dirname(path), { recursive: true });
+    const content = JSON.stringify(config, null, 2);
+    writeFileSync(path, content, "utf8");
+
+    // Reset cache
+    this.reset();
+  }
+
+  /**
+   * Set the default LLM provider and save to credentials.json5.
+   */
+  setDefaultLlmProvider(provider: string): void {
+    const path = getCredentialsPath();
+
+    // Load existing config or create new one
+    let config: CredentialsConfig = { version: 1 };
+    if (existsSync(path)) {
+      try {
+        const raw = readFileSync(path, "utf8");
+        config = JSON5.parse(raw) as CredentialsConfig;
+      } catch {
+        config = { version: 1 };
+      }
+    }
+
+    // Ensure structure exists
+    if (!config.llm) {
+      config.llm = {};
+    }
+
+    // Set default provider
+    config.llm.provider = provider;
+
+    // Write back to file
+    mkdirSync(dirname(path), { recursive: true });
+    const content = JSON.stringify(config, null, 2);
+    writeFileSync(path, content, "utf8");
+
+    // Reset cache
+    this.reset();
   }
 }
 
