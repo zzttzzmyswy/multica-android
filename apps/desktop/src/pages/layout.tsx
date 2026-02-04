@@ -1,5 +1,4 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom'
-import { useHubInit, useGatewayStore, useHubStore, clearConnection } from '@multica/store'
 import { Toaster } from '@multica/ui/components/ui/sonner'
 import { Button } from '@multica/ui/components/ui/button'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -20,19 +19,7 @@ const tabs = [
 ]
 
 export default function Layout() {
-  useHubInit()
   const location = useLocation()
-
-  const gwState = useGatewayStore((s) => s.connectionState)
-  const hubId = useGatewayStore((s) => s.hubId)
-  const activeAgentId = useHubStore((s) => s.activeAgentId)
-  const isConnected = gwState === 'registered' && !!hubId && !!activeAgentId
-
-  const handleDisconnect = () => {
-    useGatewayStore.getState().disconnect()
-    useHubStore.getState().reset()
-    clearConnection()
-  }
 
   return (
     <div className="h-dvh flex flex-col bg-background">
@@ -42,16 +29,6 @@ export default function Layout() {
           <span className="text-lg font-semibold">Multica</span>
         </div>
         <div className="flex items-center gap-1">
-          {isConnected && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleDisconnect}
-              className="text-xs text-muted-foreground"
-            >
-              Disconnect
-            </Button>
-          )}
           <Button variant="ghost" size="icon">
             <HugeiconsIcon icon={Settings02Icon} className="size-5" />
           </Button>
