@@ -468,24 +468,32 @@ pnpm --filter @multica/desktop add -D @types/qrcode.react
 
 ## 八、待办事项
 
-### 功能开发
+### 核心功能
 
-#### 设备授权与白名单
+#### Memory 统一
 
--  [ ] Client 连接授权弹窗
--  [ ] 已授权设备白名单管理
--  [ ] 显示当前连接的 Client 数量
+- [ ] 统一 memory tool (key-value JSON) 和 memory.md 的逻辑
+- [ ] 考虑支持 OpenClaw 风格的 MEMORY.md + 语义搜索
+
+#### Profile 加载优化
+
+- [ ] 参考 OpenClaw 的截断策略（超过 20k 字符时保留 head 70% + tail 20%）
+- [ ] 子 Agent 只加载必要的 bootstrap 文件
+
+#### Agent 自我迭代
+
+- [ ] Agent 需要有自己迭代 Profile 的能力（更新 soul.md、user.md 等）
+- [ ] 支持 Agent 主动记忆用户偏好
+
+#### 本地直连模式
+
+- [ ] 增加通过 IPC 的方式与同一 Electron 进程里的 Agent 直接通讯
+- [ ] 本地对话不需要走 Gateway 授权流程
+
+### 体验优化
 
 #### Settings 页面
 
--  [ ] Gateway URL 配置
--  [ ] Theme 切换 (Light / Dark / System)
--  [ ] 打开 credentials.json5 按钮
-
-### 联调测试
-
--  [ ] Tools 开关实时影响 Agent 行为
--  [ ] Skills 启用/禁用影响 Agent
--  [ ] 扫码连接远程 Agent
--  [ ] Token 验证流程
--  [ ] 断开重连、Token 过期处理
+- [ ] Gateway URL 配置
+- [ ] Theme 切换 (Light / Dark / System)
+- [ ] 打开 credentials.json5 按钮
