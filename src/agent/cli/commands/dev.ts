@@ -2,44 +2,46 @@
  * Dev command - Start development servers
  *
  * Usage:
- *   multica dev                Start all services (gateway + console + web)
- *   multica dev gateway        Start gateway only (:3000)
- *   multica dev console        Start console only (:4000)
+ *   multica dev                Start desktop app (with embedded Hub)
+ *   multica dev gateway        Start gateway only (:3000) - for remote clients
  *   multica dev web            Start web app only (:3001)
- *   multica dev desktop        Start desktop app
+ *   multica dev all            Start all services (gateway + web)
  */
 
 import { spawn } from "node:child_process";
 import { cyan, yellow, green, dim, red } from "../colors.js";
 
-type Service = "all" | "gateway" | "console" | "web" | "desktop" | "help";
+type Service = "all" | "gateway" | "web" | "desktop" | "help";
 
 function printHelp() {
   console.log(`
 ${cyan("Usage:")} multica dev [service]
 
 ${cyan("Services:")}
-  ${yellow("(default)")}           Start all services (gateway + console + web)
-  ${yellow("gateway")}             Start Gateway server (:3000)
-  ${yellow("console")}             Start Console server (:4000)
+  ${yellow("(default)")}           Start Desktop app (with embedded Hub)
+  ${yellow("gateway")}             Start Gateway server (:3000) - for remote clients
   ${yellow("web")}                 Start Web app (:3001)
-  ${yellow("desktop")}             Start Desktop app
+  ${yellow("all")}                 Start all services (gateway + web)
   ${yellow("help")}                Show this help
 
 ${cyan("Architecture:")}
-  Frontend (web:3001 / desktop)
+  Desktop App (standalone)
+    └─ Embedded Hub + Agent Engine
+       └─ (Optional) Gateway connection for remote access
+
+  Web App (requires Gateway)
     → Gateway (WebSocket, :3000)
-      → Console Hub (multi-agent coordination, :4000)
-        → Agent Engine
+      → Hub + Agent Engine
 
 ${cyan("Examples:")}
-  ${dim("# Start all services")}
+  ${dim("# Start desktop app (recommended for local development)")}
   multica dev
 
-  ${dim("# Start only the gateway")}
+  ${dim("# Start desktop with remote Gateway for mobile access")}
+  GATEWAY_URL=http://localhost:3000 multica dev &
   multica dev gateway
 
-  ${dim("# Start web and gateway separately")}
+  ${dim("# Start web app with gateway")}
   multica dev gateway &
   multica dev web
 `);
@@ -52,7 +54,7 @@ interface DevOptions {
 
 function parseArgs(argv: string[]): DevOptions {
   const args = [...argv];
-  let service: Service = "all";
+  let service: Service = "desktop";
   let watch = true;
 
   while (args.length > 0) {
@@ -68,7 +70,7 @@ function parseArgs(argv: string[]): DevOptions {
     }
 
     // Service name
-    if (["gateway", "console", "web", "desktop", "all", "help"].includes(arg)) {
+    if (["gateway", "web", "desktop", "all", "help"].includes(arg)) {
       service = arg as Service;
     }
   }
@@ -105,14 +107,6 @@ async function startGateway(watch: boolean) {
   });
 }
 
-async function startConsole(watch: boolean) {
-  const watchFlag = watch ? "--watch" : "";
-  return runCommand("tsx", [watchFlag, "src/console/main.ts"].filter(Boolean), {
-    name: "console",
-    color: "\x1b[33m", // yellow
-  });
-}
-
 async function startWeb() {
   return runCommand("pnpm", ["--filter", "@multica/web", "dev"], {
     name: "web",
@@ -130,20 +124,17 @@ async function startDesktop() {
 async function startAll(watch: boolean) {
   console.log(`\n${cyan("Starting all services...")}\n`);
   console.log(`  ${"\x1b[34m"}Gateway${"\x1b[0m"}  → http://localhost:3000`);
-  console.log(`  ${"\x1b[33m"}Console${"\x1b[0m"}  → http://localhost:4000`);
   console.log(`  ${"\x1b[32m"}Web${"\x1b[0m"}      → http://localhost:3001`);
   console.log("");
 
   // Start all services
   const gateway = await startGateway(watch);
-  const console_ = await startConsole(watch);
   const web = await startWeb();
 
   // Handle Ctrl+C
   const cleanup = () => {
     console.log(`\n${dim("Stopping all services...")}`);
     gateway.kill();
-    console_.kill();
     web.kill();
     process.exit(0);
   };
@@ -154,7 +145,6 @@ async function startAll(watch: boolean) {
   // Wait for all to exit
   await Promise.all([
     new Promise((resolve) => gateway.on("exit", resolve)),
-    new Promise((resolve) => console_.on("exit", resolve)),
     new Promise((resolve) => web.on("exit", resolve)),
   ]);
 }
@@ -166,11 +156,6 @@ export async function devCommand(args: string[]): Promise<void> {
     case "gateway":
       console.log(`\n${cyan("Starting Gateway...")} → http://localhost:3000\n`);
       await startGateway(opts.watch);
-      break;
-
-    case "console":
-      console.log(`\n${cyan("Starting Console...")} → http://localhost:4000\n`);
-      await startConsole(opts.watch);
       break;
 
     case "web":
