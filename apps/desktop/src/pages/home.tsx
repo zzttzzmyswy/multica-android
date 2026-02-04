@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@multica/ui/components/ui/button'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -6,14 +7,39 @@ import {
   LinkSquare01Icon,
   Loading03Icon,
   AlertCircleIcon,
+  Edit02Icon,
 } from '@hugeicons/core-free-icons'
 import { ConnectionQRCode } from '../components/qr-code'
 import { DeviceList } from '../components/device-list'
+import { AgentSettingsDialog } from '../components/agent-settings-dialog'
 import { useHub } from '../hooks/use-hub'
 
 export default function HomePage() {
   const navigate = useNavigate()
   const { hubInfo, agents, loading, error } = useHub()
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [agentName, setAgentName] = useState<string | undefined>()
+
+  // Load agent profile info
+  useEffect(() => {
+    loadAgentInfo()
+  }, [])
+
+  // Reload agent info when settings dialog closes
+  useEffect(() => {
+    if (!settingsOpen) {
+      loadAgentInfo()
+    }
+  }, [settingsOpen])
+
+  const loadAgentInfo = async () => {
+    try {
+      const data = await window.electronAPI.profile.get()
+      setAgentName(data.name)
+    } catch (err) {
+      console.error('Failed to load agent info:', err)
+    }
+  }
 
   // Get the first agent (or create one if none exists)
   const primaryAgent = agents[0]
@@ -108,6 +134,23 @@ export default function HomePage() {
               </p>
             </div>
 
+            {/* Agent Settings */}
+            <div className="p-4 rounded-lg bg-muted/50 border border-border/50">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">
+                  Agent Settings
+                </p>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setSettingsOpen(true)}
+                >
+                  <HugeiconsIcon icon={Edit02Icon} className="size-4" />
+                </Button>
+              </div>
+              <p className="font-medium">{agentName || 'Unnamed Agent'}</p>
+            </div>
+
             {/* Stats Grid */}
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 rounded-lg bg-muted/50 border border-border/50">
@@ -147,6 +190,9 @@ export default function HomePage() {
       <div className="px-4 pb-2">
         <DeviceList />
       </div>
+
+      {/* Agent Settings Dialog */}
+      <AgentSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
 
       {/* Bottom: Actions */}
       <div className="border-t p-4">

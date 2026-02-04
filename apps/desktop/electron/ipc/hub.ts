@@ -14,30 +14,42 @@ let hub: Hub | null = null
 let defaultAgentId: string | null = null
 
 /**
+ * Safe log function that catches EPIPE errors.
+ * Electron main process stdout can be closed unexpectedly.
+ */
+function safeLog(...args: unknown[]): void {
+  try {
+    console.log(...args)
+  } catch {
+    // Ignore EPIPE errors when stdout is closed
+  }
+}
+
+/**
  * Initialize Hub on app startup.
  * Creates Hub and a default Agent automatically.
  */
 export async function initializeHub(): Promise<void> {
   if (hub) {
-    console.log('[Desktop] Hub already initialized')
+    safeLog('[Desktop] Hub already initialized')
     return
   }
 
   const gatewayUrl = process.env['GATEWAY_URL'] ?? 'http://localhost:3000'
-  console.log(`[Desktop] Initializing Hub, connecting to Gateway: ${gatewayUrl}`)
+  safeLog(`[Desktop] Initializing Hub, connecting to Gateway: ${gatewayUrl}`)
 
   hub = new Hub(gatewayUrl)
 
   // Create default agent if none exists
   const agents = hub.listAgents()
   if (agents.length === 0) {
-    console.log('[Desktop] Creating default agent...')
+    safeLog('[Desktop] Creating default agent...')
     const agent = hub.createAgent()
     defaultAgentId = agent.sessionId
-    console.log(`[Desktop] Default agent created: ${defaultAgentId}`)
+    safeLog(`[Desktop] Default agent created: ${defaultAgentId}`)
   } else {
     defaultAgentId = agents[0]
-    console.log(`[Desktop] Using existing agent: ${defaultAgentId}`)
+    safeLog(`[Desktop] Using existing agent: ${defaultAgentId}`)
   }
 }
 
@@ -47,7 +59,7 @@ export async function initializeHub(): Promise<void> {
 function getHub(): Hub {
   if (!hub) {
     const gatewayUrl = process.env['GATEWAY_URL'] ?? 'http://localhost:3000'
-    console.log(`[Desktop] Creating Hub, connecting to Gateway: ${gatewayUrl}`)
+    safeLog(`[Desktop] Creating Hub, connecting to Gateway: ${gatewayUrl}`)
     hub = new Hub(gatewayUrl)
   }
   return hub
@@ -289,7 +301,7 @@ export function setupDeviceConfirmation(mainWindow: Electron.BrowserWindow): voi
  */
 export function cleanupHub(): void {
   if (hub) {
-    console.log('[Desktop] Shutting down Hub')
+    safeLog('[Desktop] Shutting down Hub')
     hub.shutdown()
     hub = null
   }

@@ -446,12 +446,15 @@ export class Agent {
   reloadTools(): string[] {
     // Re-read profile tools config to get latest changes
     const profileToolsConfig = this.profile?.getToolsConfig();
+    console.log(`[Agent] reloadTools: profileToolsConfig =`, JSON.stringify(profileToolsConfig));
     const mergedToolsConfig = mergeToolsConfig(profileToolsConfig, this.originalToolsConfig);
+    console.log(`[Agent] reloadTools: mergedToolsConfig =`, JSON.stringify(mergedToolsConfig));
     this.toolsOptions = mergedToolsConfig
       ? { ...this.toolsOptions, tools: mergedToolsConfig }
       : this.toolsOptions;
 
     const tools = resolveTools(this.toolsOptions);
+    console.log(`[Agent] reloadTools: resolved ${tools.length} tools: ${tools.map(t => t.name).join(", ") || "(none)"}`);
     this.agent.setTools(tools);
     if (this.debug) {
       console.error(`[debug] Reloaded ${tools.length} tools: ${tools.map(t => t.name).join(", ") || "(none)"}`);
@@ -531,5 +534,66 @@ export class Agent {
    */
   getProfileId(): string | undefined {
     return this.profile?.getProfile()?.id;
+  }
+
+  /**
+   * Get agent display name from profile config.
+   */
+  getAgentName(): string | undefined {
+    return this.profile?.getName();
+  }
+
+  /**
+   * Update agent display name in profile config.
+   */
+  setAgentName(name: string): void {
+    this.profile?.updateName(name);
+  }
+
+  /**
+   * Get user.md content from profile.
+   */
+  getUserContent(): string | undefined {
+    return this.profile?.getUserContent();
+  }
+
+  /**
+   * Update user.md content in profile.
+   */
+  setUserContent(content: string): void {
+    this.profile?.updateUserContent(content);
+  }
+
+  /**
+   * Reload profile from disk and rebuild system prompt.
+   * Call this after updating profile files to apply changes immediately.
+   */
+  reloadSystemPrompt(): void {
+    if (!this.profile) {
+      console.log('[Agent] reloadSystemPrompt: no profile');
+      return;
+    }
+
+    // Reload profile from disk
+    console.log('[Agent] Reloading profile from disk...');
+    this.profile.reloadProfile();
+
+    // Rebuild system prompt
+    let systemPrompt = this.profile.buildSystemPrompt();
+    console.log('[Agent] Built system prompt, length:', systemPrompt?.length);
+
+    // Re-add skills prompt if skills are enabled
+    if (this.skillManager) {
+      const skillsPrompt = this.skillManager.buildModelSkillsPrompt();
+      if (skillsPrompt) {
+        systemPrompt = systemPrompt ? `${systemPrompt}\n\n${skillsPrompt}` : skillsPrompt;
+      }
+    }
+
+    // Apply new system prompt
+    if (systemPrompt) {
+      console.log('[Agent] Applying system prompt, first 200 chars:', systemPrompt.substring(0, 200));
+      this.agent.setSystemPrompt(systemPrompt);
+    }
   }
 }

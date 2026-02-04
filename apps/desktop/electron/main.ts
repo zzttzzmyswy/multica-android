@@ -1,3 +1,49 @@
+// Patch console methods to handle EPIPE errors in Electron main process
+// This MUST be done before any other imports that might use console
+// EPIPE happens when stdout/stderr pipes are closed unexpectedly
+const originalConsoleLog = console.log.bind(console)
+const originalConsoleError = console.error.bind(console)
+const originalConsoleWarn = console.warn.bind(console)
+
+const safeLog = (...args: unknown[]) => {
+  try {
+    originalConsoleLog(...args)
+  } catch {
+    // Ignore EPIPE errors silently
+  }
+}
+
+const safeError = (...args: unknown[]) => {
+  try {
+    originalConsoleError(...args)
+  } catch {
+    // Ignore EPIPE errors silently
+  }
+}
+
+const safeWarn = (...args: unknown[]) => {
+  try {
+    originalConsoleWarn(...args)
+  } catch {
+    // Ignore EPIPE errors silently
+  }
+}
+
+// Override global console
+console.log = safeLog
+console.error = safeError
+console.warn = safeWarn
+
+// Also handle process stdout/stderr EPIPE errors
+process.stdout?.on?.('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EPIPE') return // Ignore
+  throw err
+})
+process.stderr?.on?.('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EPIPE') return // Ignore
+  throw err
+})
+
 import { app, BrowserWindow } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'

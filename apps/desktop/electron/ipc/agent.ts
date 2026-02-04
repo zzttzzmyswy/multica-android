@@ -125,8 +125,6 @@ export function registerAgentIpcHandlers(): void {
    * Persists the change to profile config and reloads tools.
    */
   ipcMain.handle('tools:toggle', async (_event, toolName: string) => {
-    console.log(`[IPC] tools:toggle called for: ${toolName}`)
-
     const agent = getDefaultAgent()
     if (!agent) {
       return { error: 'No agent available' }
@@ -145,7 +143,6 @@ export function registerAgentIpcHandlers(): void {
     // Get updated status
     const newActiveTools = agent.getActiveTools()
     const isNowEnabled = newActiveTools.includes(toolName)
-    console.log(`[IPC] Tool ${toolName} toggled: ${isCurrentlyEnabled} -> ${isNowEnabled}`)
 
     return {
       name: toolName,

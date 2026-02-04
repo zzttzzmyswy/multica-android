@@ -37,6 +37,12 @@ export interface SkillInfo {
   triggers: string[]
 }
 
+export interface ProfileData {
+  profileId: string | undefined
+  name: string | undefined
+  userContent: string | undefined
+}
+
 // ============================================================================
 // Expose typed API to Renderer process
 // ============================================================================
@@ -96,6 +102,13 @@ const electronAPI = {
   // Agent management
   agent: {
     status: () => ipcRenderer.invoke('agent:status'),
+  },
+
+  // Profile management
+  profile: {
+    get: (): Promise<ProfileData> => ipcRenderer.invoke('profile:get'),
+    updateName: (name: string) => ipcRenderer.invoke('profile:updateName', name),
+    updateUser: (content: string) => ipcRenderer.invoke('profile:updateUser', content),
   },
 }
 

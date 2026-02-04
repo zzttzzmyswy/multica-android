@@ -13,7 +13,10 @@ import {
   loadProfile,
   profileExists,
   saveProfile,
+  writeProfileConfig,
+  writeProfileFile,
 } from "./storage.js";
+import { PROFILE_FILES } from "./types.js";
 
 export { type AgentProfile, type CreateProfileOptions, type ProfileConfig, type ProfileManagerOptions } from "./types.js";
 export { DEFAULT_TEMPLATES } from "./templates.js";
@@ -110,6 +113,12 @@ export class ProfileManager {
     return this.profile;
   }
 
+  /** 重新从磁盘加载 profile（清除缓存） */
+  reloadProfile(): AgentProfile | undefined {
+    this.profile = loadAgentProfile(this.profileId, { baseDir: this.baseDir });
+    return this.profile;
+  }
+
   /** 获取或创建 profile */
   getOrCreateProfile(useTemplates = true): AgentProfile {
     if (!this.profile) {
@@ -129,6 +138,7 @@ export class ProfileManager {
   /** 构建 system prompt */
   buildSystemPrompt(): string {
     const profile = this.getProfile();
+    console.log('[ProfileManager] buildSystemPrompt called, profile exists:', !!profile);
     if (!profile) {
       return "";
     }
@@ -136,11 +146,15 @@ export class ProfileManager {
     const parts: string[] = [];
 
     if (profile.soul) {
+      console.log('[ProfileManager] Adding soul, length:', profile.soul.length);
       parts.push(profile.soul);
     }
 
     if (profile.user) {
+      console.log('[ProfileManager] Adding user, content:', profile.user.substring(0, 100));
       parts.push(profile.user);
+    } else {
+      console.log('[ProfileManager] No user content in profile');
     }
 
     if (profile.workspace) {
@@ -214,5 +228,73 @@ export class ProfileManager {
 
     this.updateToolsConfig(newConfig);
     return newConfig;
+  }
+
+  /** 获取 Agent 名称 */
+  getName(): string | undefined {
+    const profile = this.getProfile();
+    return profile?.config?.name;
+  }
+
+  /** 更新 Agent 名称 */
+  updateName(name: string): void {
+    const profile = this.getOrCreateProfile(false);
+    const currentConfig = profile.config ?? {};
+    const newConfig: ProfileConfig = {
+      ...currentConfig,
+      name,
+    };
+    profile.config = newConfig;
+    this.profile = profile;
+    writeProfileConfig(this.profileId, newConfig, { baseDir: this.baseDir });
+
+    // Also update soul.md to include the agent name
+    this.updateSoulWithName(name);
+  }
+
+  /** 更新 soul.md，确保包含 Agent 名称 */
+  private updateSoulWithName(name: string): void {
+    const profile = this.getOrCreateProfile(true); // 确保有默认模板
+    let soulContent = profile.soul ?? DEFAULT_TEMPLATES.soul;
+
+    // 替换 soul.md 中的 Name 字段
+    // 匹配 "- **Name:** xxx" 格式
+    const namePattern = /- \*\*Name:\*\* .*/;
+    const newNameLine = `- **Name:** ${name}`;
+
+    if (namePattern.test(soulContent)) {
+      soulContent = soulContent.replace(namePattern, newNameLine);
+    } else {
+      // 如果没有找到 Name 字段，在 Identity 部分后添加
+      const identityPattern = /## Identity\n/;
+      if (identityPattern.test(soulContent)) {
+        soulContent = soulContent.replace(identityPattern, `## Identity\n\n${newNameLine}\n`);
+      } else {
+        // 如果没有 Identity 部分，在开头添加
+        soulContent = `# Soul\n\n## Identity\n\n${newNameLine}\n\n${soulContent}`;
+      }
+    }
+
+    // 保存更新后的 soul.md
+    writeProfileFile(this.profileId, PROFILE_FILES.soul, soulContent, { baseDir: this.baseDir });
+    // 更新缓存
+    if (this.profile) {
+      this.profile.soul = soulContent;
+    }
+  }
+
+  /** 获取 user.md 内容 */
+  getUserContent(): string | undefined {
+    const profile = this.getProfile();
+    return profile?.user;
+  }
+
+  /** 更新 user.md 内容 */
+  updateUserContent(content: string): void {
+    writeProfileFile(this.profileId, PROFILE_FILES.user, content, { baseDir: this.baseDir });
+    // Update cached profile
+    if (this.profile) {
+      this.profile.user = content;
+    }
   }
 }
