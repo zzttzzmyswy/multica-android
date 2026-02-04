@@ -29,6 +29,7 @@ export function buildSubagentSystemPrompt(params: SubagentSystemPromptParams): s
       label: params.label,
       task: params.task,
     },
+    tools: params.tools,
   });
 }
 

@@ -71,4 +71,6 @@ export type SubagentSystemPromptParams = {
   childSessionId: string;
   label?: string | undefined;
   task: string;
+  /** Tool names available to the subagent (for tooling summary in system prompt) */
+  tools?: string[] | undefined;
 };

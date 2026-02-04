@@ -1,11 +1,9 @@
 /**
- * Tool groups and profiles for policy-based filtering.
+ * Tool groups for policy-based filtering.
  *
  * Groups provide shortcuts for allowing/denying multiple tools at once.
- * Profiles are predefined tool sets for common use cases.
+ * Use "group:name" in allow/deny lists.
  */
-
-export type ToolProfileId = "minimal" | "coding" | "web" | "full";
 
 /**
  * Tool name aliases for compatibility.
@@ -52,29 +50,6 @@ export const TOOL_GROUPS: Record<string, string[]> = {
 };
 
 /**
- * Tool profiles - predefined tool sets.
- */
-export const TOOL_PROFILES: Record<ToolProfileId, { allow?: string[]; deny?: string[] }> = {
-  // Minimal: no tools (useful for chat-only agents)
-  minimal: {
-    allow: [],
-  },
-
-  // Coding: file system + execution (default for coding tasks)
-  coding: {
-    allow: ["group:fs", "group:runtime"],
-  },
-
-  // Web: coding + web access
-  web: {
-    allow: ["group:fs", "group:runtime", "group:web"],
-  },
-
-  // Full: no restrictions
-  full: {},
-};
-
-/**
  * Default tools denied for subagents.
  * Subagents should not have access to session management or system tools.
  */
@@ -117,24 +92,4 @@ export function expandToolGroups(list?: string[]): string[] {
   }
 
   return Array.from(new Set(expanded));
-}
-
-/**
- * Get the policy for a profile.
- */
-export function getProfilePolicy(
-  profile?: ToolProfileId,
-): { allow?: string[]; deny?: string[] } | undefined {
-  if (!profile) return undefined;
-  const resolved = TOOL_PROFILES[profile];
-  if (!resolved) return undefined;
-  if (!resolved.allow && !resolved.deny) return undefined;
-  const result: { allow?: string[]; deny?: string[] } = {};
-  if (resolved.allow) {
-    result.allow = [...resolved.allow];
-  }
-  if (resolved.deny) {
-    result.deny = [...resolved.deny];
-  }
-  return result;
 }

@@ -15,12 +15,13 @@ const TOOLS = ["read", "write", "edit", "glob", "exec", "memory_get", "memory_se
 describe("buildSystemPrompt", () => {
   // ── Full mode ─────────────────────────────────────────────────────────
 
-  it("full mode includes all profile sections", () => {
+  it("full mode includes workspace section only (progressive disclosure)", () => {
+    // Soul, user, memory are read on-demand by the agent
     const result = buildSystemPrompt({ mode: "full", profile: PROFILE });
-    expect(result).toContain("# Soul");
-    expect(result).toContain("# User");
+    expect(result).not.toContain("# Soul");
+    expect(result).not.toContain("# User");
     expect(result).toContain("# Workspace");
-    expect(result).toContain("# Memory");
+    expect(result).not.toContain("# Memory");
   });
 
   it("full mode includes safety constitution", () => {
@@ -76,13 +77,17 @@ describe("buildSystemPrompt", () => {
     expect(result).toContain("os=darwin (arm64)");
   });
 
-  it("full mode includes profile directory", () => {
+  it("full mode includes profile info in workspace section", () => {
     const result = buildSystemPrompt({
       mode: "full",
       profileDir: "/home/user/.super-multica/agent-profiles/test",
+      profile: { workspace: "Workspace rules" },
     });
-    expect(result).toContain("## Profile Directory");
+    expect(result).toContain("## Profile");
     expect(result).toContain("/home/user/.super-multica/agent-profiles/test");
+    expect(result).toContain("soul.md");
+    expect(result).toContain("user.md");
+    expect(result).toContain("memory.md");
   });
 
   it("full mode excludes subagent section", () => {
@@ -242,8 +247,13 @@ describe("buildSystemPromptWithReport", () => {
 
   it("report marks excluded sections correctly in minimal mode", () => {
     const { report } = buildSystemPromptWithReport({ mode: "minimal" });
+    // Identity is now included in all modes (just a one-liner)
     const identity = report.sections.find((s) => s.name === "identity");
-    expect(identity?.included).toBe(false);
+    expect(identity?.included).toBe(true);
+
+    // User and memory are excluded (progressive disclosure)
+    const user = report.sections.find((s) => s.name === "user");
+    expect(user?.included).toBe(false);
 
     const safety = report.sections.find((s) => s.name === "safety");
     expect(safety?.included).toBe(true);

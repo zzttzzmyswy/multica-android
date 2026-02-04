@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Super Multica is a distributed AI agent framework with a monorepo architecture. It includes an agent engine with multi-provider LLM support, a WebSocket gateway, a console hub for multi-agent coordination, and frontend apps (Next.js web, Electron desktop).
+Super Multica is a distributed AI agent framework with a monorepo architecture. It includes an agent engine with multi-provider LLM support, an Electron desktop app with embedded Hub, a WebSocket gateway for remote access, and a Next.js web app.
 
 ## Monorepo Structure
 
-- **`src/`** — Core modules (agent engine, gateway, console, client, shared types)
+- **`src/`** — Core modules (agent engine, gateway, hub, shared types)
+- **`apps/desktop`** — Electron + Vite + React desktop app (`@multica/desktop`) — **primary development target**
 - **`apps/web`** — Next.js 16 web app (`@multica/web`, port 3001)
-- **`apps/desktop`** — Electron + Vite + React desktop app (`@multica/desktop`)
 - **`packages/ui`** — Shared UI component library (`@multica/ui`, Shadcn/Tailwind CSS v4)
 - **`packages/sdk`** — Gateway client SDK (`@multica/sdk`, Socket.io)
 - **`packages/store`** — Zustand state management (`@multica/store`)
@@ -31,15 +31,14 @@ multica profile list      # List profiles
 multica skills list       # List skills
 multica tools list        # List tools
 multica credentials init  # Initialize credentials
-multica dev               # Start all dev services
+multica dev               # Start desktop app (default)
 multica help              # Show help
 
 # Development servers
-multica dev               # All services (gateway:3000, console:4000, web:3001)
-multica dev gateway       # WebSocket gateway only
-multica dev console       # NestJS console with agent
+multica dev               # Desktop app (default, recommended)
+multica dev gateway       # WebSocket gateway only (for remote clients)
 multica dev web           # Next.js web app
-multica dev desktop       # Electron desktop app
+multica dev all           # Gateway + web app
 
 # Build (turbo-orchestrated)
 pnpm build
@@ -56,18 +55,22 @@ pnpm test:coverage        # With v8 coverage
 ## Architecture
 
 ```
-Frontend (web:3001 / desktop)
+Desktop App (standalone, recommended)
+  └─ Hub (embedded)
+     └─ Agent Engine (LLM runner, sessions, skills, tools)
+        └─ (Optional) Gateway connection for remote access
+
+Web App (requires Gateway)
   → @multica/sdk (GatewayClient, Socket.io)
     → Gateway (NestJS, WebSocket, port 3000)
-      → Console Hub (multi-agent coordination)
-        → Agent Engine (LLM runner, sessions, skills, tools)
+      → Hub + Agent Engine
 ```
 
 **Agent Engine** (`src/agent/`): Orchestrates LLM interactions with multi-provider support (OpenAI, Anthropic, DeepSeek, Kimi, Groq, Mistral, Google, Together). Features session management (JSONL-based, UUIDv7 IDs), profile system (`~/.super-multica/agent-profiles/`), modular skills with hot-reload, and token-aware context window guards (compaction modes: tokens, count, summary). Unified CLI in `src/agent/cli/index.ts` with subcommands in `src/agent/cli/commands/`.
 
-**Gateway** (`src/gateway/`): NestJS WebSocket server with Socket.io for real-time message passing, RPC request/response, and streaming.
+**Hub** (`src/hub/`): Manages agents and communication channels. Embedded in desktop app, or runs standalone for web clients.
 
-**Console** (`src/console/`): NestJS hub for multi-agent coordination with a web dashboard.
+**Gateway** (`src/gateway/`): NestJS WebSocket server with Socket.io for remote client access, message routing, and device verification.
 
 ## Tech Stack & Config
 
