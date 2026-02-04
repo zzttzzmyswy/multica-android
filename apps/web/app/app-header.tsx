@@ -1,28 +1,9 @@
 "use client";
 
-import {
-  useHubInit,
-  useGatewayStore,
-  useHubStore,
-  clearConnection,
-} from "@multica/store";
 import { Button } from "@multica/ui/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
 
 export function AppHeader({ children }: { children: React.ReactNode }) {
-  useHubInit();
-
-  const gwState = useGatewayStore((s) => s.connectionState);
-  const hubId = useGatewayStore((s) => s.hubId);
-  const activeAgentId = useHubStore((s) => s.activeAgentId);
-  const isConnected = gwState === "registered" && !!hubId && !!activeAgentId;
-
-  const handleDisconnect = () => {
-    useGatewayStore.getState().disconnect();
-    useHubStore.getState().reset();
-    clearConnection();
-  };
-
   return (
     <>
       <header>
@@ -35,16 +16,6 @@ export function AppHeader({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex items-center gap-1">
             <ThemeToggle />
-            {isConnected && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleDisconnect}
-                className="text-xs text-muted-foreground"
-              >
-                Disconnect
-              </Button>
-            )}
           </div>
         </div>
       </header>
