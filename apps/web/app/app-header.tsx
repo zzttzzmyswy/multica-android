@@ -9,7 +9,7 @@ export function AppHeader({ children }: { children: React.ReactNode }) {
       <header>
         <div className="flex items-center justify-between px-4 py-2 max-w-4xl mx-auto">
           <div className="flex items-center gap-2.5">
-            <img src="/icon.png" alt="Multica" className="size-6 rounded-md" />
+            <img src="/logo.svg" alt="Multica" className="size-6 rounded-md" />
             <span className="text-sm tracking-wide font-[family-name:var(--font-brand)]">
               Multica
             </span>

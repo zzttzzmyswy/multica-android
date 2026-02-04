@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     title: "Multica",
   },
   icons: {
-    apple: "/icon-192x192.png",
+    apple: "/logo-192x192.png",
   },
 };
 
