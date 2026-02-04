@@ -139,6 +139,9 @@ function createClient(
             )
             break
           }
+          case "tool_execution_update":
+            // Partial results — not rendered yet, ignored for now
+            break
         }
         return
       }

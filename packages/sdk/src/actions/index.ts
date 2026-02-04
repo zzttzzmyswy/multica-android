@@ -39,9 +39,4 @@ export {
   type ThinkingContent,
   type ToolCall,
   type ImageContent,
-  // Backward-compatible aliases
-  type TextBlock,
-  type ThinkingBlock,
-  type ToolCallBlock,
-  extractTextFromEvent,
 } from "./stream";

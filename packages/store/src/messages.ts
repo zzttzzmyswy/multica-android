@@ -129,11 +129,14 @@ export const useMessagesStore = create<MessagesStore>()((set, get) => ({
     set((s) => {
       const ids = new Set(s.streamingIds)
       ids.delete(streamId)
+      // Find the agentId of the stream being ended to scope tool interruption
+      const streamMsg = s.messages.find((m) => m.id === streamId)
+      const streamAgentId = streamMsg?.agentId
       return {
         messages: s.messages.map((m) => {
           if (m.id === streamId) return { ...m, content, stopReason }
-          // Interrupt any still-running tool executions
-          if (m.role === "toolResult" && m.toolStatus === "running") {
+          // Interrupt running tool executions belonging to the same agent
+          if (m.role === "toolResult" && m.toolStatus === "running" && m.agentId === streamAgentId) {
             return { ...m, toolStatus: "interrupted" as ToolStatus }
           }
           return m
