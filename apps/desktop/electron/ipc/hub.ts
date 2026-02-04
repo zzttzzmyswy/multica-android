@@ -8,7 +8,6 @@ import { ipcMain, type BrowserWindow } from 'electron'
 import { Hub } from '../../../../src/hub/hub.js'
 import type { ConnectionState } from '@multica/sdk'
 import type { AsyncAgent } from '../../../../src/agent/async-agent.js'
-import type { AgentEvent } from '@mariozechner/pi-agent-core'
 
 /**
  * Extract plain text from AgentMessage content (string or content block array).
