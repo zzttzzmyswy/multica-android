@@ -57,12 +57,14 @@ const electronAPI = {
       ipcRenderer.invoke('hub:sendMessage', agentId, content),
     registerToken: (token: string, agentId: string, expiresAt: number) =>
       ipcRenderer.invoke('hub:registerToken', token, agentId, expiresAt),
-    onDeviceConfirmRequest: (callback: (deviceId: string) => void) => {
-      ipcRenderer.on('hub:device-confirm-request', (_event, deviceId: string) => callback(deviceId))
+    onDeviceConfirmRequest: (callback: (deviceId: string, meta?: { userAgent?: string; platform?: string; language?: string }) => void) => {
+      ipcRenderer.on('hub:device-confirm-request', (_event, deviceId: string, meta?: { userAgent?: string; platform?: string; language?: string }) => callback(deviceId, meta))
     },
     deviceConfirmResponse: (deviceId: string, allowed: boolean) => {
       ipcRenderer.send('hub:device-confirm-response', deviceId, allowed)
     },
+    listDevices: () => ipcRenderer.invoke('hub:listDevices'),
+    revokeDevice: (deviceId: string) => ipcRenderer.invoke('hub:revokeDevice', deviceId),
   },
 
   // Tools management

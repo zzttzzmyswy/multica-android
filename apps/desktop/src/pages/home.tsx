@@ -8,6 +8,7 @@ import {
   AlertCircleIcon,
 } from '@hugeicons/core-free-icons'
 import { ConnectionQRCode } from '../components/qr-code'
+import { DeviceList } from '../components/device-list'
 import { useHub } from '../hooks/use-hub'
 
 export default function HomePage() {
@@ -140,6 +141,11 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Verified Devices */}
+      <div className="px-4 pb-2">
+        <DeviceList />
       </div>
 
       {/* Bottom: Actions */}

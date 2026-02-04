@@ -232,6 +232,22 @@ export function registerHubIpcHandlers(): void {
     return { ok: true }
   })
 
+  /**
+   * List all verified (whitelisted) devices.
+   */
+  ipcMain.handle('hub:listDevices', async () => {
+    const h = getHub()
+    return h.deviceStore.listDevices()
+  })
+
+  /**
+   * Revoke a device from the whitelist.
+   */
+  ipcMain.handle('hub:revokeDevice', async (_event, deviceId: string) => {
+    const h = getHub()
+    return { ok: h.deviceStore.revokeDevice(deviceId) }
+  })
+
 }
 
 /**
@@ -252,10 +268,10 @@ export function setupDeviceConfirmation(mainWindow: Electron.BrowserWindow): voi
   })
 
   // Register confirm handler on Hub — sends request to renderer, awaits response
-  h.setConfirmHandler((deviceId: string, _agentId: string) => {
+  h.setConfirmHandler((deviceId: string, _agentId: string, meta) => {
     return new Promise<boolean>((resolve) => {
       pendingConfirms.set(deviceId, resolve)
-      mainWindow.webContents.send('hub:device-confirm-request', deviceId)
+      mainWindow.webContents.send('hub:device-confirm-request', deviceId, meta)
     })
   })
 }

@@ -10,8 +10,37 @@ import {
   AlertDialogTitle,
 } from '@multica/ui/components/ui/alert-dialog'
 
+interface DeviceMeta {
+  userAgent?: string
+  platform?: string
+  language?: string
+}
+
 interface PendingConfirm {
   deviceId: string
+  meta?: DeviceMeta
+}
+
+function parseUserAgent(ua: string): { browser: string; os: string } {
+  let os = 'Unknown'
+  if (/Mac OS X/.test(ua)) os = 'macOS'
+  else if (/Windows/.test(ua)) os = 'Windows'
+  else if (/Android/.test(ua)) os = 'Android'
+  else if (/iPhone|iPad/.test(ua)) os = 'iOS'
+  else if (/Linux/.test(ua)) os = 'Linux'
+
+  let browser = 'Unknown'
+  const edgeMatch = ua.match(/Edg\/(\d+)/)
+  const chromeMatch = ua.match(/Chrome\/(\d+)/)
+  const safariMatch = ua.match(/Version\/(\d+).*Safari/)
+  const firefoxMatch = ua.match(/Firefox\/(\d+)/)
+
+  if (edgeMatch) browser = `Edge ${edgeMatch[1]}`
+  else if (firefoxMatch) browser = `Firefox ${firefoxMatch[1]}`
+  else if (chromeMatch) browser = `Chrome ${chromeMatch[1]}`
+  else if (safariMatch) browser = `Safari ${safariMatch[1]}`
+
+  return { browser, os }
 }
 
 /**
@@ -23,8 +52,8 @@ export function DeviceConfirmDialog() {
   const [pending, setPending] = useState<PendingConfirm | null>(null)
 
   useEffect(() => {
-    window.electronAPI?.hub.onDeviceConfirmRequest((deviceId: string) => {
-      setPending({ deviceId })
+    window.electronAPI?.hub.onDeviceConfirmRequest((deviceId: string, meta?: DeviceMeta) => {
+      setPending({ deviceId, meta })
     })
   }, [])
 
@@ -40,14 +69,31 @@ export function DeviceConfirmDialog() {
     setPending(null)
   }, [pending])
 
+  const parsed = pending?.meta?.userAgent
+    ? parseUserAgent(pending.meta.userAgent)
+    : null
+
+  const deviceLabel = parsed
+    ? `${parsed.browser} on ${parsed.os}`
+    : pending?.deviceId
+
   return (
     <AlertDialog open={pending !== null}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>New Device Connection</AlertDialogTitle>
-          <AlertDialogDescription>
-            Device <span className="font-mono font-medium">{pending?.deviceId}</span> wants to connect.
-            Allow this device?
+          <AlertDialogDescription asChild>
+            <div className="space-y-2">
+              <p>
+                <span className="font-medium">{deviceLabel}</span> wants to connect.
+              </p>
+              {parsed && (
+                <p className="text-xs font-mono text-muted-foreground truncate">
+                  {pending?.deviceId}
+                </p>
+              )}
+              <p>Allow this device?</p>
+            </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
