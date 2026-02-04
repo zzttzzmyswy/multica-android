@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { memo, useState } from "react"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   File01Icon,
@@ -14,9 +14,8 @@ import {
   GitBranchIcon,
   ArrowRight01Icon,
 } from "@hugeicons/core-free-icons"
-import { cn } from "@multica/ui/lib/utils"
+import { cn, getTextContent } from "@multica/ui/lib/utils"
 import type { Message } from "@multica/store"
-import type { ContentBlock } from "@multica/sdk"
 
 // ---------------------------------------------------------------------------
 // Tool display config
@@ -45,14 +44,6 @@ const TOOL_DISPLAY: Record<string, { label: string; icon: typeof File01Icon }> =
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** Extract plain text from ContentBlock[] */
-function getResultText(blocks: ContentBlock[]): string {
-  return blocks
-    .filter((b): b is { type: "text"; text: string } => b.type === "text")
-    .map((b) => b.text)
-    .join("")
-}
 
 /** Extract a short basename from a file path */
 function basename(path: string): string {
@@ -130,13 +121,13 @@ function getStats(toolName: string, toolStatus: string, resultText: string): str
 // Component
 // ---------------------------------------------------------------------------
 
-export function ToolCallItem({ message }: { message: Message }) {
+export const ToolCallItem = memo(function ToolCallItem({ message }: { message: Message }) {
   const [expanded, setExpanded] = useState(false)
   const { toolName = "", toolStatus = "running", toolArgs, content } = message
 
   const display = TOOL_DISPLAY[toolName] ?? { label: toolName, icon: CommandLineIcon }
   const isFinished = toolStatus !== "running"
-  const resultText = getResultText(content)
+  const resultText = getTextContent(content)
   const hasDetails = isFinished && !!resultText
   const subtitle = getSubtitle(toolName, toolArgs)
   const stats = getStats(toolName, toolStatus, resultText)
@@ -219,10 +210,15 @@ export function ToolCallItem({ message }: { message: Message }) {
 
       {/* Expanded result */}
       {expanded && resultText && (
-        <div className="mt-1 ml-7 text-xs bg-muted rounded p-2 max-h-48 overflow-y-auto whitespace-pre-wrap break-all">
+        <div
+          role="region"
+          aria-label={`${display.label} result`}
+          tabIndex={0}
+          className="mt-1 ml-7 text-xs bg-muted rounded p-2 max-h-48 overflow-y-auto whitespace-pre-wrap break-all"
+        >
           {resultText}
         </div>
       )}
     </div>
   )
-}
+})
