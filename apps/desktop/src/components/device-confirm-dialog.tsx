@@ -64,18 +64,14 @@ export function DeviceConfirmDialog() {
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>New Device Connection</AlertDialogTitle>
-          <AlertDialogDescription asChild>
-            <div className="space-y-2">
-              <p>
-                <span className="font-medium">{deviceLabel}</span> wants to connect.
-              </p>
-              {parsed && (
-                <p className="text-xs font-mono text-muted-foreground truncate">
-                  {pending?.deviceId}
-                </p>
-              )}
-              <p>Allow this device?</p>
-            </div>
+          <AlertDialogDescription>
+            <span className="font-medium">{deviceLabel}</span> wants to connect.
+            {parsed && (
+              <span className="block text-xs font-mono text-muted-foreground truncate mt-1">
+                {pending?.deviceId}
+              </span>
+            )}
+            <span className="block mt-1">Allow this device?</span>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
