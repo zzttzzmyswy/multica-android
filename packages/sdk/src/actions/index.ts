@@ -33,9 +33,11 @@ export {
 export {
   StreamAction,
   type StreamPayload,
-  type StreamEvent,
-  type StreamMessageEvent,
-  type StreamToolEvent,
-  extractTextFromEvent,
+  type AgentEvent,
+  type ContentBlock,
+  type TextContent,
+  type ThinkingContent,
+  type ToolCall,
+  type ImageContent,
   extractThinkingFromEvent,
 } from "./stream";
