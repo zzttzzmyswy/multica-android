@@ -25,6 +25,7 @@ function getDefaultAgent() {
 export interface ProfileData {
   profileId: string | undefined
   name: string | undefined
+  style: string | undefined
   userContent: string | undefined
 }
 
@@ -41,6 +42,7 @@ export function registerProfileIpcHandlers(): void {
       return {
         profileId: undefined,
         name: undefined,
+        style: undefined,
         userContent: undefined,
       }
     }
@@ -48,6 +50,7 @@ export function registerProfileIpcHandlers(): void {
     return {
       profileId: agent.getProfileId(),
       name: agent.getAgentName(),
+      style: agent.getAgentStyle(),
       userContent: agent.getUserContent(),
     }
   })
@@ -87,5 +90,21 @@ export function registerProfileIpcHandlers(): void {
     console.log('[Profile IPC] New user content:', newUserContent?.substring(0, 50) + '...')
 
     return { ok: true }
+  })
+
+  /**
+   * Update agent communication style.
+   */
+  ipcMain.handle('profile:updateStyle', async (_event, style: string) => {
+    const agent = getDefaultAgent()
+    if (!agent) {
+      return { error: 'No agent available' }
+    }
+
+    agent.setAgentStyle(style)
+    // Reload system prompt to apply changes immediately
+    agent.reloadSystemPrompt()
+
+    return { ok: true, style }
   })
 }
