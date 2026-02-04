@@ -73,6 +73,8 @@ let client: GatewayClient | null = null
 function createClient(
   url: string,
   deviceId: string,
+  hubId: string,
+  token: string,
   set: (s: Partial<ConnectionStoreState>) => void,
   getState: () => ConnectionStoreState,
 ): GatewayClient {
@@ -80,6 +82,8 @@ function createClient(
     url,
     deviceId,
     deviceType: "client",
+    hubId,
+    token,
   })
     // Sync connection state changes to the store
     .onStateChange((connectionState) => {
@@ -192,7 +196,7 @@ export const useConnectionStore = create<ConnectionStore>()(
           agentId: code.agentId,
         })
 
-        client = createClient(code.gateway, get().deviceId, set, get)
+        client = createClient(code.gateway, get().deviceId, code.hubId, code.token, set, get)
         client.connect()
       },
 
