@@ -159,9 +159,6 @@ const electronAPI = {
 // Expose to renderer
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)
 
-// Re-export LocalChatEvent type for use in renderer
-export type { LocalChatEvent }
-
 // Also expose ipcRenderer for backward compatibility
 contextBridge.exposeInMainWorld('ipcRenderer', {
   on(...args: Parameters<typeof ipcRenderer.on>) {

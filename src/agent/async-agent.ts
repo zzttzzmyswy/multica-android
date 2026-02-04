@@ -1,5 +1,5 @@
 import { v7 as uuidv7 } from "uuid";
-import type { AgentEvent } from "@mariozechner/pi-agent-core";
+import type { AgentEvent, AgentMessage } from "@mariozechner/pi-agent-core";
 import { Agent } from "./runner.js";
 import { Channel } from "./channel.js";
 import type { AgentOptions, Message } from "./types.js";
@@ -213,5 +213,12 @@ export class AsyncAgent {
    */
   reloadSystemPrompt(): void {
     this.agent.reloadSystemPrompt();
+  }
+
+  /**
+   * Get all messages from the current session.
+   */
+  getMessages(): AgentMessage[] {
+    return this.agent.getMessages();
   }
 }

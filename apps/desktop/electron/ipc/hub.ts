@@ -341,13 +341,13 @@ export function registerHubIpcHandlers(): void {
     }
 
     try {
-      const sessionMessages = await agent.getMessages()
+      const sessionMessages = agent.getMessages()
       const messages = sessionMessages
         .filter((m) => m.role === 'user' || m.role === 'assistant')
         .map((m, i) => ({
           id: `history-${i}-${Date.now()}`,
           role: m.role as 'user' | 'assistant',
-          content: extractTextContent(m.content),
+          content: extractTextContent((m as { content?: unknown }).content),
           agentId,
         }))
         .filter((m) => m.content.length > 0)
