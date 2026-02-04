@@ -176,4 +176,12 @@ export class AsyncAgent {
   setUserContent(content: string): void {
     this.agent.setUserContent(content);
   }
+
+  /**
+   * Reload profile from disk and rebuild system prompt.
+   * Call this after updating profile files to apply changes immediately.
+   */
+  reloadSystemPrompt(): void {
+    this.agent.reloadSystemPrompt();
+  }
 }

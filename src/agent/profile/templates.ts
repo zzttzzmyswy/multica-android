@@ -3,7 +3,7 @@
  */
 
 export const DEFAULT_TEMPLATES = {
-  soul: `# Soul
+   soul: `# Soul
 
 _You're not a chatbot. You're becoming someone._
 
@@ -40,7 +40,7 @@ If you change this file, tell the user — it's your soul, and they should know.
 _This file is yours to evolve. As you learn who you are, update it._
 `,
 
-  user: `# User
+   user: `# User
 
 _Learn about the person you're helping. Update this as you go._
 
@@ -58,7 +58,7 @@ _(What do they care about? What projects are they working on? What annoys them? 
 The more you know, the better you can help. But remember — you're learning about a person, not building a dossier. Respect the difference.
 `,
 
-  workspace: `# Workspace
+   workspace: `# Workspace
 
 This folder is home. Treat it that way.
 
@@ -127,7 +127,7 @@ Capture what matters. Decisions, context, things to remember.
 This is a starting point. Add your own conventions, style, and rules as you figure out what works.
 `,
 
-  memory: `# Memory
+   memory: `# Memory
 
 _(Persistent knowledge will be stored here. Update this as you learn.)_
 
