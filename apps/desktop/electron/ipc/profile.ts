@@ -71,10 +71,21 @@ export function registerProfileIpcHandlers(): void {
   ipcMain.handle('profile:updateUser', async (_event, content: string) => {
     const agent = getDefaultAgent()
     if (!agent) {
+      console.error('[Profile IPC] No agent available for updateUser')
       return { error: 'No agent available' }
     }
 
+    console.log('[Profile IPC] Updating user content:', content.substring(0, 50) + '...')
     agent.setUserContent(content)
+
+    // Reload system prompt to apply changes immediately
+    console.log('[Profile IPC] Reloading system prompt...')
+    agent.reloadSystemPrompt()
+
+    // Verify the change
+    const newUserContent = agent.getUserContent()
+    console.log('[Profile IPC] New user content:', newUserContent?.substring(0, 50) + '...')
+
     return { ok: true }
   })
 }
