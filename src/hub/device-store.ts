@@ -25,7 +25,12 @@ export interface DeviceEntry {
 
 // ============ Persistence ============
 
-const DEVICES_DIR = join(DATA_DIR, "devices");
+interface WhitelistFile {
+  version: number;
+  devices: DeviceEntry[];
+}
+
+const DEVICES_DIR = join(DATA_DIR, "client-devices");
 const DEVICES_FILE = join(DEVICES_DIR, "whitelist.json");
 
 function ensureDir(): void {
@@ -37,7 +42,10 @@ function ensureDir(): void {
 function loadDevices(): DeviceEntry[] {
   if (!existsSync(DEVICES_FILE)) return [];
   try {
-    return JSON.parse(readFileSync(DEVICES_FILE, "utf-8")) as DeviceEntry[];
+    const raw = JSON.parse(readFileSync(DEVICES_FILE, "utf-8"));
+    // Migrate legacy array format
+    if (Array.isArray(raw)) return raw as DeviceEntry[];
+    return (raw as WhitelistFile).devices ?? [];
   } catch {
     return [];
   }
@@ -45,7 +53,8 @@ function loadDevices(): DeviceEntry[] {
 
 function saveDevices(devices: DeviceEntry[]): void {
   ensureDir();
-  writeFileSync(DEVICES_FILE, JSON.stringify(devices, null, 2), "utf-8");
+  const data: WhitelistFile = { version: 1, devices };
+  writeFileSync(DEVICES_FILE, JSON.stringify(data, null, 2), "utf-8");
 }
 
 // ============ DeviceStore ============
