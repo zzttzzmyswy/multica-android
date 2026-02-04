@@ -79,7 +79,7 @@ export function buildSystemPromptWithReport(options: SystemPromptOptions): {
     reportSections.push({
       name,
       chars: content.length,
-      lines: lines.length,
+      lines: included ? content.split("\n").length : 0,
       included,
     });
     if (included) {

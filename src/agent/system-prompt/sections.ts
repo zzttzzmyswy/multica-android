@@ -113,6 +113,7 @@ export function buildSafetySection(includeSafety: boolean): string[] {
 /**
  * Tooling summary — lists active tools with descriptions.
  * Included in full and minimal modes.
+ * Preserves original tool casing while deduplicating by lowercase.
  */
 export function buildToolingSummary(
   tools: string[] | undefined,
@@ -120,7 +121,18 @@ export function buildToolingSummary(
 ): string[] {
   if (mode === "none" || !tools || tools.length === 0) return [];
 
-  const toolSet = new Set(tools.map((t) => t.toLowerCase()));
+  // Preserve original casing: first occurrence wins per normalized name
+  const canonicalByNormalized = new Map<string, string>();
+  for (const name of tools) {
+    const normalized = name.toLowerCase();
+    if (!canonicalByNormalized.has(normalized)) {
+      canonicalByNormalized.set(normalized, name);
+    }
+  }
+  const resolveToolName = (normalized: string) =>
+    canonicalByNormalized.get(normalized) ?? normalized;
+
+  const normalizedTools = new Set(canonicalByNormalized.keys());
 
   // Build ordered tool lines
   const toolLines: string[] = [];
@@ -128,17 +140,19 @@ export function buildToolingSummary(
 
   // Core tools in preferred order
   for (const tool of TOOL_ORDER) {
-    if (toolSet.has(tool) && !seen.has(tool)) {
+    if (normalizedTools.has(tool) && !seen.has(tool)) {
       seen.add(tool);
+      const displayName = resolveToolName(tool);
       const summary = CORE_TOOL_SUMMARIES[tool];
-      toolLines.push(summary ? `- ${tool}: ${summary}` : `- ${tool}`);
+      toolLines.push(summary ? `- ${displayName}: ${summary}` : `- ${displayName}`);
     }
   }
 
   // External/unknown tools alphabetically
-  const extraTools = [...toolSet].filter((t) => !seen.has(t)).sort();
+  const extraTools = [...normalizedTools].filter((t) => !seen.has(t)).sort();
   for (const tool of extraTools) {
-    toolLines.push(`- ${tool}`);
+    const displayName = resolveToolName(tool);
+    toolLines.push(`- ${displayName}`);
   }
 
   return [

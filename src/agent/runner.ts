@@ -588,36 +588,11 @@ export class Agent {
       return options.systemPrompt;
     }
 
-    const profile = this.profile?.getProfile();
-    if (!profile && !options.profileId) {
+    if (!this.profile?.getProfile() && !options.profileId) {
       return undefined;
     }
 
-    const mode: SystemPromptMode = options.isSubagent ? "minimal" : "full";
-    const skillsPrompt = this.skillManager?.buildSkillsPrompt();
-
-    const runtime = collectRuntimeInfo({
-      agentName: this.profile?.getName(),
-      provider: this.resolvedProvider,
-      model: this.agent.state.model?.id,
-    });
-
-    return buildStructuredSystemPrompt({
-      mode,
-      profile: profile
-        ? {
-            soul: profile.soul,
-            user: profile.user,
-            workspace: profile.workspace,
-            memory: profile.memory,
-            config: profile.config,
-          }
-        : undefined,
-      profileDir: this.profile?.getProfileDir(),
-      tools: toolNames,
-      skillsPrompt,
-      runtime,
-    });
+    return this.rebuildSystemPrompt(toolNames);
   }
 
   /**
@@ -631,36 +606,44 @@ export class Agent {
 
     this.profile.reloadProfile();
 
-    // Rebuild using current tool names
     const toolNames = (this.agent.state.tools ?? []).map((t: { name: string }) => t.name);
-    const skillsPrompt = this.skillManager?.buildModelSkillsPrompt();
+    const systemPrompt = this.rebuildSystemPrompt(toolNames);
+
+    if (systemPrompt) {
+      this.agent.setSystemPrompt(systemPrompt);
+      this.session.setSystemPrompt(systemPrompt);
+    }
+  }
+
+  /**
+   * Rebuild system prompt from current state.
+   * Shared by constructor (via buildFullSystemPrompt) and reloadSystemPrompt.
+   */
+  private rebuildSystemPrompt(toolNames: string[]): string | undefined {
+    const profile = this.profile?.getProfile();
+    if (!profile) return undefined;
+
+    const skillsPrompt = this.skillManager?.buildSkillsPrompt();
 
     const runtime = collectRuntimeInfo({
-      agentName: this.profile.getName(),
+      agentName: this.profile?.getName(),
       provider: this.resolvedProvider,
       model: this.agent.state.model?.id,
     });
 
-    const profile = this.profile.getProfile();
-    const systemPrompt = buildStructuredSystemPrompt({
+    return buildStructuredSystemPrompt({
       mode: "full",
-      profile: profile
-        ? {
-            soul: profile.soul,
-            user: profile.user,
-            workspace: profile.workspace,
-            memory: profile.memory,
-            config: profile.config,
-          }
-        : undefined,
-      profileDir: this.profile.getProfileDir(),
+      profile: {
+        soul: profile.soul,
+        user: profile.user,
+        workspace: profile.workspace,
+        memory: profile.memory,
+        config: profile.config,
+      },
+      profileDir: this.profile!.getProfileDir(),
       tools: toolNames,
       skillsPrompt,
       runtime,
     });
-
-    if (systemPrompt) {
-      this.agent.setSystemPrompt(systemPrompt);
-    }
   }
 }

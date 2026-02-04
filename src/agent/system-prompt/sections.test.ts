@@ -120,6 +120,24 @@ describe("buildToolingSummary", () => {
     const result = buildToolingSummary(["read"], "minimal");
     expect(result.join("\n")).toContain("## Tooling");
   });
+
+  it("preserves original tool casing", () => {
+    const result = buildToolingSummary(["Read", "MyCustomTool", "EXEC"], "full");
+    const text = result.join("\n");
+    // Core tools: first-seen casing preserved
+    expect(text).toContain("- Read: Read file contents");
+    expect(text).toContain("- EXEC: Run shell commands");
+    // Unknown tools: original casing preserved
+    expect(text).toContain("- MyCustomTool");
+  });
+
+  it("deduplicates tools by lowercase", () => {
+    const result = buildToolingSummary(["read", "Read", "READ"], "full");
+    const text = result.join("\n");
+    // Should appear only once (first occurrence)
+    const matches = text.match(/- read/gi);
+    expect(matches).toHaveLength(1);
+  });
 });
 
 describe("buildToolCallStyleSection", () => {
