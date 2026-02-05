@@ -477,9 +477,11 @@ export class Agent {
     const messages = this.agent.state.messages.slice();
     if (!this.session.needsCompaction(messages)) return;
 
-    this.emitMulticaEvent({ type: "compaction_start" });
     try {
       const result = await this.session.maybeCompact(messages);
+      if (!result) return;
+
+      this.emitMulticaEvent({ type: "compaction_start" });
       if (result?.kept) {
         this.agent.replaceMessages(result.kept);
       }
@@ -492,12 +494,6 @@ export class Agent {
         reason: result?.reason ?? "tokens",
       });
     } catch (err) {
-      this.emitMulticaEvent({
-        type: "compaction_end",
-        removed: 0,
-        kept: messages.length,
-        reason: "tokens",
-      });
       throw err;
     }
   }
