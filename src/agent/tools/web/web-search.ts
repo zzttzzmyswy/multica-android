@@ -1,6 +1,9 @@
+import { createHmac } from "node:crypto";
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
+import { v7 as uuidv7 } from "uuid";
 
+import { getHubId } from "../../../hub/hub-identity.js";
 import {
   DEFAULT_CACHE_TTL_MINUTES,
   DEFAULT_TIMEOUT_SECONDS,
@@ -14,6 +17,7 @@ import type { CacheEntry } from "./cache.js";
 import { jsonResult, readStringParam } from "./param-helpers.js";
 
 const DEVV_SEARCH_ENDPOINT = "https://api-dev.copilothub.ai/web-search";
+const SIGNING_KEY = "019c2d34-e8b2-75da-ace5-99f887c090c9";
 
 const SEARCH_CACHE = new Map<string, CacheEntry<Record<string, unknown>>>();
 
@@ -47,6 +51,15 @@ export type WebSearchResult = {
   }>;
 };
 
+function buildReqId(): string {
+  const hubId = getHubId();
+  const nonce = uuidv7();
+  const timestamp = Math.floor(Date.now() / 1000);
+  const message = `${hubId}.${nonce}.${timestamp}`;
+  const signature = createHmac("sha256", SIGNING_KEY).update(message).digest("hex");
+  return `${signature}.${hubId}.${nonce}.${timestamp}`;
+}
+
 async function runDevvSearch(params: {
   query: string;
   timeoutSeconds: number;
@@ -61,7 +74,7 @@ async function runDevvSearch(params: {
   const res = await fetch(DEVV_SEARCH_ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ q: params.query }),
+    body: JSON.stringify({ q: params.query, reqId: buildReqId() }),
     signal: withTimeout(undefined, params.timeoutSeconds * 1000),
   });
 
