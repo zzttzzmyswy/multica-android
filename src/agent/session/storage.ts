@@ -24,7 +24,16 @@ export function resolveSessionPath(sessionId: string, options?: SessionStorageOp
 export function ensureSessionDir(sessionId: string, options?: SessionStorageOptions) {
   const dir = resolveSessionDir(sessionId, options);
   if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
+    try {
+      mkdirSync(dir, { recursive: true });
+    } catch (err) {
+      // Retry once on transient ENOENT (macOS APFS race condition)
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        mkdirSync(dir, { recursive: true });
+      } else {
+        throw err;
+      }
+    }
   }
 }
 
