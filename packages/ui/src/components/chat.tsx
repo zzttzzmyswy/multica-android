@@ -59,7 +59,7 @@ export function Chat() {
           <ConnectPrompt />
         ) : messages.length === 0 ? (
           <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-            Send a message to start the conversation
+            Your Agent is ready
           </div>
         ) : (
           <MessageList messages={messages} streamingIds={streamingIds} />
@@ -88,7 +88,7 @@ export function Chat() {
         <ChatInput
           onSubmit={handleSend}
           disabled={!isConnected}
-          placeholder={!isConnected ? "Connect first..." : "Type a message..."}
+          placeholder={!isConnected ? "Scan QR code to get started" : "Ask your Agent..."}
         />
       </footer>
     </div>

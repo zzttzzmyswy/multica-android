@@ -1,163 +1,187 @@
 "use client";
 
-import { useState, useEffect, useCallback, lazy, Suspense, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
 import { Button } from "@multica/ui/components/ui/button";
 import { Textarea } from "@multica/ui/components/ui/textarea";
-import { toast } from "@multica/ui/components/ui/sonner";
 import {
   useConnectionStore,
   parseConnectionCode,
   saveConnection,
 } from "@multica/store";
+import { useIsMobile } from "@multica/ui/hooks/use-mobile";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Camera01Icon, TextIcon } from "@hugeicons/core-free-icons";
-
-const LazyQrScannerView = lazy(() =>
-  import("@multica/ui/components/qr-scanner-view").then((m) => ({
-    default: m.QrScannerView,
-  })),
-);
+import {
+  Camera01Icon,
+  TextIcon,
+  CheckmarkCircle02Icon,
+  Alert02Icon,
+} from "@hugeicons/core-free-icons";
+import { QrScannerView } from "@multica/ui/components/qr-scanner-view";
 
 type Mode = "scan" | "paste";
+type PasteState = "idle" | "success" | "error";
 
 export function ConnectPrompt() {
   const gwState = useConnectionStore((s) => s.connectionState);
+  const [mode, setMode] = useState<Mode>("scan");
   const [codeInput, setCodeInput] = useState("");
-  const [mode, setMode] = useState<Mode>("paste"); // SSR-safe default
-  const [canScan, setCanScan] = useState(false);
-  const scannedRef = useRef(false);
+  const [pasteState, setPasteState] = useState<PasteState>("idle");
+  const [pasteError, setPasteError] = useState<string | null>(null);
+  const isMobile = useIsMobile();
+  const validatingRef = useRef(false);
 
-  // Detect mobile + camera capability, auto-switch to scan mode
-  useEffect(() => {
-    const isTouchDevice =
-      "ontouchstart" in window || navigator.maxTouchPoints > 0;
-    const isNarrow = window.innerWidth < 768;
-    const hasGetUserMedia = !!navigator.mediaDevices?.getUserMedia;
-
-    if (hasGetUserMedia) {
-      setCanScan(true);
-      if (isTouchDevice && isNarrow) {
-        setMode("scan");
-      }
-    }
-  }, []);
-
-  // Handle paste-mode connect
-  const handleConnect = useCallback(() => {
-    const trimmed = codeInput.trim();
-    if (!trimmed) return;
+  const tryConnect = useCallback((raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed || validatingRef.current) return;
+    validatingRef.current = true;
     try {
       const info = parseConnectionCode(trimmed);
-      saveConnection(info);
-      useConnectionStore.getState().connect(info);
-      setCodeInput("");
+      setPasteState("success");
+      navigator.vibrate?.(50);
+      // Let the user see the success state before connecting
+      setTimeout(() => {
+        saveConnection(info);
+        useConnectionStore.getState().connect(info);
+      }, 600);
     } catch (e) {
-      toast.error((e as Error).message);
-    }
-  }, [codeInput]);
-
-  // Handle QR scan result — auto-connect, no button needed
-  const handleQrScan = useCallback((data: string) => {
-    // Prevent duplicate connects from rapid successive scans
-    if (scannedRef.current) return;
-    scannedRef.current = true;
-
-    try {
-      const info = parseConnectionCode(data);
-      saveConnection(info);
-      useConnectionStore.getState().connect(info);
-    } catch (e) {
-      toast.error((e as Error).message);
-      // Allow re-scan on error (invalid/expired code)
-      scannedRef.current = false;
+      setPasteState("error");
+      setPasteError((e as Error).message || "Invalid code");
+      navigator.vibrate?.([30, 50, 30]);
+      setTimeout(() => {
+        setPasteState("idle");
+        setPasteError(null);
+        setCodeInput("");
+      }, 2000);
+    } finally {
+      validatingRef.current = false;
     }
   }, []);
 
-  const handleScanError = useCallback((msg: string) => {
-    toast.error(msg);
-    setMode("paste");
+  // Auto-validate on paste
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      const text = e.clipboardData.getData("text");
+      if (!text.trim()) return;
+      // Let the textarea update visually first, then validate
+      setTimeout(() => tryConnect(text), 50);
+    },
+    [tryConnect],
+  );
+
+  // Promise-based handler for QrScannerView
+  const handleScanResult = useCallback(async (data: string) => {
+    const info = parseConnectionCode(data);
+    saveConnection(info);
+    useConnectionStore.getState().connect(info);
   }, []);
 
   const isConnecting = gwState === "connecting" || gwState === "connected";
 
+  // Mobile: scanner only, no tabs, no paste
+  if (isMobile) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4 px-4">
+        <div className="text-center space-y-1">
+          <p className="text-base font-medium">Scan to start</p>
+          <p className="text-xs text-muted-foreground">
+            Scan a Multica QR code to start chatting
+          </p>
+          {isConnecting && (
+            <p className="text-sm text-foreground/70 animate-pulse">
+              Connecting to Agent...
+            </p>
+          )}
+        </div>
+        <QrScannerView onResult={handleScanResult} fullscreen />
+      </div>
+    );
+  }
+
+  // Desktop: tab toggle (scan / paste), same-size panels
   return (
     <div className="flex flex-col items-center justify-center h-full gap-4 px-4">
       <div className="text-center space-y-1">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base font-medium">
+          {mode === "scan" ? "Scan to start" : "Paste to start"}
+        </p>
+        <p className="text-xs text-muted-foreground">
           {mode === "scan"
-            ? "Scan QR code to connect"
-            : "Paste a connection code to start"}
+            ? "Scan a Multica QR code to start chatting"
+            : "Paste a Multica connection code to start chatting"}
         </p>
         {isConnecting && (
-          <p className="text-xs text-muted-foreground/60 animate-pulse">
-            Connecting...
+          <p className="text-sm text-foreground/70 animate-pulse">
+            Connecting to Agent...
           </p>
         )}
       </div>
 
-      {/* Mode toggle — only show if camera is available */}
-      {canScan && (
-        <div className="flex gap-1 bg-muted rounded-lg p-1">
-          <Button
-            variant={mode === "scan" ? "default" : "ghost"}
-            size="sm"
-            className="text-xs gap-1.5 h-7 px-3"
-            onClick={() => {
-              scannedRef.current = false;
-              setMode("scan");
-            }}
-          >
-            <HugeiconsIcon icon={Camera01Icon} className="size-3.5" />
-            Scan
-          </Button>
-          <Button
-            variant={mode === "paste" ? "default" : "ghost"}
-            size="sm"
-            className="text-xs gap-1.5 h-7 px-3"
-            onClick={() => setMode("paste")}
-          >
-            <HugeiconsIcon icon={TextIcon} className="size-3.5" />
-            Paste
-          </Button>
-        </div>
-      )}
+      {/* Mode toggle */}
+      <div className="flex gap-1 bg-muted rounded-lg p-1">
+        <Button
+          variant={mode === "scan" ? "default" : "ghost"}
+          size="sm"
+          className="text-xs gap-1.5 h-7 px-3"
+          onClick={() => setMode("scan")}
+        >
+          <HugeiconsIcon icon={Camera01Icon} className="size-3.5" />
+          Scan
+        </Button>
+        <Button
+          variant={mode === "paste" ? "default" : "ghost"}
+          size="sm"
+          className="text-xs gap-1.5 h-7 px-3"
+          onClick={() => setMode("paste")}
+        >
+          <HugeiconsIcon icon={TextIcon} className="size-3.5" />
+          Paste
+        </Button>
+      </div>
 
-      {/* Content */}
-      <div className="w-full max-w-sm space-y-3">
+      {/* Content — same max-width for both modes */}
+      <div className="w-full max-w-[320px]">
         {mode === "scan" ? (
-          <Suspense
-            fallback={
-              <div className="h-[280px] animate-pulse bg-muted rounded-xl" />
-            }
-          >
-            <LazyQrScannerView
-              onScan={handleQrScan}
-              onError={handleScanError}
-            />
-          </Suspense>
+          <QrScannerView onResult={handleScanResult} />
         ) : (
-          <>
-            <Textarea
-              value={codeInput}
-              onChange={(e) => setCodeInput(e.target.value)}
-              placeholder="Paste connection code here..."
-              className="text-xs font-mono min-h-[100px] resize-none"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                  e.preventDefault();
-                  handleConnect();
-                }
-              }}
-            />
-            <Button
-              size="sm"
-              onClick={handleConnect}
-              disabled={!codeInput.trim() || gwState === "connecting"}
-              className="w-full text-xs"
-            >
-              Connect
-            </Button>
-          </>
+          <div className="aspect-square rounded-xl bg-muted flex flex-col items-center justify-center p-4">
+            {pasteState === "idle" && (
+              <Textarea
+                value={codeInput}
+                onChange={(e) => setCodeInput(e.target.value)}
+                onPaste={handlePaste}
+                autoFocus={true}
+                placeholder="Paste connection code here..."
+                className="text-xs font-mono flex-1 resize-none bg-transparent! border-0 focus-visible:ring-0 shadow-none"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    tryConnect(codeInput);
+                  }
+                }}
+              />
+            )}
+
+            {pasteState === "success" && (
+              <HugeiconsIcon
+                icon={CheckmarkCircle02Icon}
+                className="size-14 text-(--tool-success) animate-in zoom-in duration-300"
+              />
+            )}
+
+            {pasteState === "error" && (
+              <div className="flex flex-col items-center justify-center gap-2">
+                <HugeiconsIcon
+                  icon={Alert02Icon}
+                  className="size-12 text-(--tool-error)"
+                />
+                {pasteError && (
+                  <p className="text-xs text-destructive bg-destructive/10 px-3 py-1.5 rounded-full">
+                    {pasteError}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
