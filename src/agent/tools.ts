@@ -8,6 +8,7 @@ import { createGlobTool } from "./tools/glob.js";
 import { createWebFetchTool, createWebSearchTool } from "./tools/web/index.js";
 import { createSessionsSpawnTool } from "./tools/sessions-spawn.js";
 import { createMemorySearchTool } from "./tools/memory-search.js";
+import { createCronTool } from "./tools/cron/index.js";
 import { filterTools } from "./tools/policy.js";
 import { isMulticaError, isRetryableError } from "../shared/errors.js";
 import type { ExecApprovalCallback } from "./tools/exec-approval-types.js";
@@ -107,6 +108,8 @@ export function createAllTools(options: CreateToolsOptions | string): AgentTool<
   const webFetchTool = createWebFetchTool();
   const webSearchTool = createWebSearchTool();
 
+  const cronTool = createCronTool();
+
   const tools: AgentTool<any>[] = [
     ...baseTools,
     execTool as AgentTool<any>,
@@ -114,6 +117,7 @@ export function createAllTools(options: CreateToolsOptions | string): AgentTool<
     globTool as AgentTool<any>,
     webFetchTool as AgentTool<any>,
     webSearchTool as AgentTool<any>,
+    cronTool as AgentTool<any>,
   ];
 
   // Add memory_search tool if profileDir is provided
