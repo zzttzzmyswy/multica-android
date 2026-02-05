@@ -14,6 +14,7 @@ const TOOL_GROUPS: Record<string, string[]> = {
   'group:web': ['web_search', 'web_fetch'],
   'group:memory': ['memory_search'],
   'group:subagent': ['sessions_spawn'],
+  'group:cron': ['cron'],
 }
 
 // All known tool names (for display when agent not available)
@@ -23,6 +24,7 @@ const ALL_KNOWN_TOOLS = [
   ...TOOL_GROUPS['group:web'],
   ...TOOL_GROUPS['group:memory'],
   ...TOOL_GROUPS['group:subagent'],
+  ...TOOL_GROUPS['group:cron'],
 ]
 
 /**
