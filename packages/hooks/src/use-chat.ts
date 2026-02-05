@@ -49,6 +49,7 @@ export interface UseChatReturn {
   messages: Message[];
   streamingIds: Set<string>;
   isLoading: boolean;
+  isLoadingHistory: boolean;
   error: ChatError | null;
   pendingApprovals: PendingApproval[];
   sendMessage: (text: string) => void;
@@ -75,6 +76,7 @@ export function useChat({ client, hubId, agentId }: UseChatOptions): UseChatRetu
   const [messages, setMessages] = useState<Message[]>([]);
   const [streamingIds, setStreamingIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [error, setError] = useState<ChatError | null>(null);
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   // Keep a ref for use inside callbacks (avoids stale closures)
@@ -141,6 +143,8 @@ export function useChat({ client, hubId, agentId }: UseChatOptions): UseChatRetu
         }
       } catch {
         // History fetch is best-effort
+      } finally {
+        setIsLoadingHistory(false);
       }
     }
 
@@ -321,5 +325,5 @@ export function useChat({ client, hubId, agentId }: UseChatOptions): UseChatRetu
     [client, hubId, agentId],
   );
 
-  return { messages, streamingIds, isLoading, error, pendingApprovals, sendMessage, resolveApproval };
+  return { messages, streamingIds, isLoading, isLoadingHistory, error, pendingApprovals, sendMessage, resolveApproval };
 }

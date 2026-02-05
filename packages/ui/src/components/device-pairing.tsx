@@ -13,8 +13,14 @@ import {
   Alert02Icon,
 } from "@hugeicons/core-free-icons";
 import { QrScannerView } from "@multica/ui/components/qr-scanner-view";
+import { MulticaIcon } from "@multica/ui/components/multica-icon";
 import { parseConnectionCode } from "@multica/store";
-import type { ConnectionIdentity } from "@/hooks/use-gateway-connection";
+
+export interface ConnectionIdentity {
+  gateway: string;
+  hubId: string;
+  agentId: string;
+}
 
 export interface DevicePairingProps {
   connectionState: string;
@@ -202,7 +208,10 @@ export function DevicePairing({
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4 px-4">
         <div className="text-center space-y-1">
-          <p className="text-base font-medium">Scan to connect</p>
+          <div className="flex items-center justify-center gap-2">
+            <MulticaIcon className="size-4.5 text-muted-foreground/50" />
+            <p className="text-base font-medium">Scan to connect</p>
+          </div>
           <p className="text-xs text-muted-foreground">
             Scan a Multica QR code to connect to your agent
           </p>
@@ -216,9 +225,12 @@ export function DevicePairing({
   return (
     <div className="flex flex-col items-center justify-center h-full gap-4 px-4 mb-28">
       <div className="text-center space-y-1">
-        <p className="text-base font-medium">
-          {mode === "scan" ? "Scan to connect" : "Paste to connect"}
-        </p>
+        <div className="flex items-center justify-center gap-2">
+          <MulticaIcon className="size-4.5 text-muted-foreground/50" />
+          <p className="text-base font-medium">
+            {mode === "scan" ? "Scan to connect" : "Paste to connect"}
+          </p>
+        </div>
         <p className="text-xs text-muted-foreground">
           {mode === "scan"
             ? "Scan a Multica QR code to connect to your agent"
