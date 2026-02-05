@@ -143,6 +143,21 @@ function createClient(
           case "tool_execution_update":
             // Partial results — not rendered yet, ignored for now
             break
+          case "compaction_start": {
+            store.startCompaction()
+            break
+          }
+          case "compaction_end": {
+            const evt = event as { removed: number; kept: number; tokensRemoved?: number; tokensKept?: number; reason: string }
+            store.endCompaction({
+              removed: evt.removed,
+              kept: evt.kept,
+              tokensRemoved: evt.tokensRemoved,
+              tokensKept: evt.tokensKept,
+              reason: evt.reason,
+            })
+            break
+          }
         }
         return
       }
