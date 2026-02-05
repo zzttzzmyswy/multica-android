@@ -130,7 +130,19 @@ export async function acquireSessionWriteLock(params: {
   const staleMs = params.staleMs ?? 30 * 60 * 1000;
   const sessionFile = path.resolve(params.sessionFile);
   const sessionDir = path.dirname(sessionFile);
-  await fs.mkdir(sessionDir, { recursive: true });
+  // Retry mkdir to handle transient ENOENT on macOS APFS race conditions
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await fs.mkdir(sessionDir, { recursive: true });
+      break;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT" && attempt < 2) {
+        await new Promise((r) => setTimeout(r, 50));
+        continue;
+      }
+      throw err;
+    }
+  }
   let normalizedDir = sessionDir;
   try {
     normalizedDir = await fs.realpath(sessionDir);

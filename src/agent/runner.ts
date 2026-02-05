@@ -456,6 +456,13 @@ export class Agent {
   }
 
   /**
+   * Wait for all pending session storage writes to complete.
+   */
+  async flushSession(): Promise<void> {
+    await this.session.flush();
+  }
+
+  /**
    * Reload tools from profile config.
    * Call this after updating tool status to apply changes
    * without restarting the agent session.

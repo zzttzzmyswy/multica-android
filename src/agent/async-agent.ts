@@ -42,6 +42,9 @@ export class AsyncAgent {
       .then(async () => {
         if (this._closed) return;
         const result = await this.agent.run(content);
+        // Flush pending session writes so waitForIdle() callers
+        // can safely read session data from disk.
+        await this.agent.flushSession();
         // Normal text is delivered via message_end event; only handle errors here
         if (result.error) {
           this.channel.send({ id: uuidv7(), content: `[error] ${result.error}` });

@@ -272,8 +272,19 @@ export class SessionManager {
     return result;
   }
 
+  /**
+   * Wait for all pending storage writes to complete.
+   */
+  async flush(): Promise<void> {
+    await this.queue;
+  }
+
   private enqueue(task: () => Promise<void>) {
-    this.queue = this.queue.then(task, task);
+    this.queue = this.queue.then(task, task).catch((err) => {
+      // Log for debuggability, but preserve failure for awaiters.
+      console.error("[SessionManager] storage write failed:", err);
+      throw err;
+    });
     return this.queue;
   }
 }
