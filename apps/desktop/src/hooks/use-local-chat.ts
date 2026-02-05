@@ -6,7 +6,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useMessagesStore } from '@multica/store'
-import type { ContentBlock } from '@multica/sdk'
+import type { ContentBlock, CompactionEndEvent } from '@multica/sdk'
 
 interface UseLocalChatOptions {
   agentId: string
@@ -86,7 +86,7 @@ export function useLocalChat({ agentId }: UseLocalChatOptions): UseLocalChatRetu
         return
       }
       if (agentEvent.type === 'compaction_end') {
-        const evt = agentEvent as { removed: number; kept: number; tokensRemoved?: number; tokensKept?: number; reason: string }
+        const evt = agentEvent as CompactionEndEvent
         store.endCompaction({
           removed: evt.removed,
           kept: evt.kept,

@@ -85,7 +85,8 @@ export class Agent {
   private initialized = false;
 
   // MulticaEvent subscribers (parallel to PiAgentCore's subscriber list)
-  private multicaListeners: Array<(event: MulticaEvent) => void> = [];
+  // Typed as AgentEvent | MulticaEvent to match subscribeAll() callback signature
+  private multicaListeners: Array<(event: AgentEvent | MulticaEvent) => void> = [];
 
   // Auth profile rotation state
   private resolvedProvider: string;
@@ -477,18 +478,28 @@ export class Agent {
     if (!this.session.needsCompaction(messages)) return;
 
     this.emitMulticaEvent({ type: "compaction_start" });
-    const result = await this.session.maybeCompact(messages);
-    if (result?.kept) {
-      this.agent.replaceMessages(result.kept);
+    try {
+      const result = await this.session.maybeCompact(messages);
+      if (result?.kept) {
+        this.agent.replaceMessages(result.kept);
+      }
+      this.emitMulticaEvent({
+        type: "compaction_end",
+        removed: result?.removedCount ?? 0,
+        kept: result?.kept.length ?? messages.length,
+        tokensRemoved: result?.tokensRemoved,
+        tokensKept: result?.tokensKept,
+        reason: result?.reason ?? "tokens",
+      });
+    } catch (err) {
+      this.emitMulticaEvent({
+        type: "compaction_end",
+        removed: 0,
+        kept: messages.length,
+        reason: "tokens",
+      });
+      throw err;
     }
-    this.emitMulticaEvent({
-      type: "compaction_end",
-      removed: result?.removedCount ?? 0,
-      kept: result?.kept.length ?? messages.length,
-      tokensRemoved: result?.tokensRemoved,
-      tokensKept: result?.tokensKept,
-      reason: result?.reason ?? "tokens",
-    });
   }
 
   /**

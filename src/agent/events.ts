@@ -10,7 +10,13 @@ export type CompactionStartEvent = {
   type: "compaction_start";
 };
 
-/** Emitted when context compaction completes */
+/**
+ * Emitted when context compaction completes.
+ *
+ * Note: `reason` uses a narrow union here for type safety within the agent.
+ * The SDK's `CompactionEndEvent` uses `string` to allow future extensions
+ * without requiring SDK version bumps.
+ */
 export type CompactionEndEvent = {
   type: "compaction_end";
   removed: number;

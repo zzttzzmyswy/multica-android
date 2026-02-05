@@ -22,6 +22,7 @@ import {
   type ConnectionState,
   type StreamPayload,
   type AgentEvent,
+  type CompactionEndEvent,
   type GetAgentMessagesResult,
   type ContentBlock,
 } from "@multica/sdk"
@@ -148,7 +149,7 @@ function createClient(
             break
           }
           case "compaction_end": {
-            const evt = event as { removed: number; kept: number; tokensRemoved?: number; tokensKept?: number; reason: string }
+            const evt = event as CompactionEndEvent
             store.endCompaction({
               removed: evt.removed,
               kept: evt.kept,
