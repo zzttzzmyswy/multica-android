@@ -2,7 +2,7 @@ import { Agent as PiAgentCore, type AgentEvent, type AgentMessage } from "@mario
 import { v7 as uuidv7 } from "uuid";
 import type { AgentOptions, AgentRunResult, ReasoningMode } from "./types.js";
 import { createAgentOutput } from "./cli/output.js";
-import { resolveModel, resolveTools } from "./tools.js";
+import { resolveModel, resolveTools, type ResolveToolsOptions } from "./tools.js";
 import {
   resolveApiKey,
   resolveApiKeyForProfile,
@@ -78,7 +78,7 @@ export class Agent {
   private readonly contextWindowGuard: ContextWindowGuardResult;
   private readonly debug: boolean;
   private reasoningMode: ReasoningMode;
-  private toolsOptions: AgentOptions;
+  private toolsOptions: ResolveToolsOptions;
   private readonly originalToolsConfig?: ToolsConfig;
   private readonly stderr: NodeJS.WritableStream;
   private initialized = false;
@@ -280,7 +280,10 @@ export class Agent {
     // Merge Profile tools config with options.tools (options takes precedence)
     const profileToolsConfig = this.profile?.getToolsConfig();
     const mergedToolsConfig = mergeToolsConfig(profileToolsConfig, options.tools);
-    this.toolsOptions = mergedToolsConfig ? { ...options, tools: mergedToolsConfig } : options;
+    const profileDir = this.profile?.getProfileDir();
+    this.toolsOptions = mergedToolsConfig
+      ? { ...options, tools: mergedToolsConfig, profileDir }
+      : { ...options, profileDir };
 
     const tools = resolveTools(this.toolsOptions);
     if (this.debug) {

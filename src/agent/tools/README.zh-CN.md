@@ -49,19 +49,20 @@
 
 ## 可用工具
 
-| 工具           | 名称             | 描述                     |
-| -------------- | ---------------- | ------------------------ |
-| Read           | `read`           | 读取文件内容             |
-| Write          | `write`          | 写入文件内容             |
-| Edit           | `edit`           | 编辑现有文件             |
-| Glob           | `glob`           | 按模式查找文件           |
-| Exec           | `exec`           | 执行 Shell 命令          |
-| Process        | `process`        | 管理长时间运行的进程     |
-| Web Fetch      | `web_fetch`      | 从 URL 获取并提取内容    |
-| Web Search     | `web_search`     | 搜索网络（需要 API Key） |
-| Sessions Spawn | `sessions_spawn` | 创建子 Agent 会话        |
+| 工具           | 名称             | 描述                           |
+| -------------- | ---------------- | ------------------------------ |
+| Read           | `read`           | 读取文件内容                   |
+| Write          | `write`          | 写入文件内容                   |
+| Edit           | `edit`           | 编辑现有文件                   |
+| Glob           | `glob`           | 按模式查找文件                 |
+| Exec           | `exec`           | 执行 Shell 命令                |
+| Process        | `process`        | 管理长时间运行的进程           |
+| Web Fetch      | `web_fetch`      | 从 URL 获取并提取内容          |
+| Web Search     | `web_search`     | 搜索网络（需要 API Key）       |
+| Memory Search  | `memory_search`  | 搜索 memory 文件（需要 Profile）|
+| Sessions Spawn | `sessions_spawn` | 创建子 Agent 会话              |
 
-> **注意**: Agent 使用基于文件的 memory（`memory.md`、`memory/*.md`），通过 `read` 和 `edit` 工具操作，而非专门的 memory 工具。
+> **注意**: `memory_search` 工具通过关键词搜索 `memory.md` 和 `memory/*.md` 文件。Agent 通过 `read` 和 `edit` 工具操作 memory 文件内容。
 
 ## 工具组
 
@@ -72,6 +73,7 @@
 | `group:fs`       | read, write, edit, glob        |
 | `group:runtime`  | exec, process                  |
 | `group:web`      | web_search, web_fetch          |
+| `group:memory`   | memory_search                  |
 | `group:subagent` | sessions_spawn                 |
 | `group:core`     | 所有 fs、runtime 和 web 工具   |
 

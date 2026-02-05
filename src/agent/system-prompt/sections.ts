@@ -20,6 +20,7 @@ const CORE_TOOL_SUMMARIES: Record<string, string> = {
   process: "Manage background exec sessions",
   web_search: "Search the web",
   web_fetch: "Fetch and extract readable content from a URL",
+  memory_search: "Search memory files by keyword",
   sessions_spawn: "Spawn a sub-agent session",
 };
 
@@ -33,6 +34,7 @@ const TOOL_ORDER = [
   "process",
   "web_search",
   "web_fetch",
+  "memory_search",
   "sessions_spawn",
 ];
 
@@ -207,6 +209,21 @@ export function buildConditionalToolSections(
 
   const toolSet = new Set(tools.map((t) => t.toLowerCase()));
   const lines: string[] = [];
+
+  // Memory tools
+  if (toolSet.has("memory_search")) {
+    lines.push(
+      "## Memory",
+      "Before answering questions about prior work, decisions, dates, people, preferences, or todos:",
+      "1. Use `memory_search` to find relevant entries in memory files",
+      "2. Use `read` to get full context from matching files",
+      "",
+      "To update memory, use `edit` on the appropriate file:",
+      "- `memory.md` — Long-term knowledge (decisions, preferences, important context)",
+      "- `memory/YYYY-MM-DD.md` — Daily logs and session notes",
+      "",
+    );
+  }
 
   // Subagent tools (full mode only — minimal agents cannot spawn)
   if (mode === "full" && toolSet.has("sessions_spawn")) {
