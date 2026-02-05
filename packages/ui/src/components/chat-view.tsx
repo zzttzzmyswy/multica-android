@@ -233,7 +233,7 @@ export function ChatView({
         </div>
       )}
 
-      <footer className="container px-4 pb-2 pt-1">
+      <footer className="container px-4 pb-3 pt-1">
         <ChatInput
           onSubmit={sendMessage}
           disabled={isLoading || !!error}
