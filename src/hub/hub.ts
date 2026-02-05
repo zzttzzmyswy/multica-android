@@ -28,7 +28,7 @@ import { ExecApprovalManager } from "./exec-approval-manager.js";
 import { createResolveExecApprovalHandler } from "./rpc/handlers/resolve-exec-approval.js";
 import { evaluateCommandSafety, requiresApproval } from "../agent/tools/exec-safety.js";
 import { addAllowlistEntry, recordAllowlistUse, matchAllowlist } from "../agent/tools/exec-allowlist.js";
-import type { ExecApprovalCallback, ExecApprovalConfig, ApprovalResult } from "../agent/tools/exec-approval-types.js";
+import type { ExecApprovalCallback, ExecApprovalConfig, ApprovalResult, ExecApprovalRequest } from "../agent/tools/exec-approval-types.js";
 import { readProfileConfig, writeProfileConfig } from "../agent/profile/storage.js";
 
 export class Hub {
@@ -36,11 +36,13 @@ export class Hub {
   private readonly agentSenders = new Map<string, string>();
   private readonly agentStreamIds = new Map<string, string>();
   private readonly agentStreamCounters = new Map<string, number>();
+  private readonly localApprovalHandlers = new Map<string, (payload: ExecApprovalRequest) => void>();
   private readonly rpc: RpcDispatcher;
   private readonly approvalManager: ExecApprovalManager;
   private client: GatewayClient;
   readonly deviceStore: DeviceStore;
   private _onConfirmDevice: ((deviceId: string, agentId: string, meta?: DeviceMeta) => Promise<boolean>) | null = null;
+  private _stateChangeListeners: ((state: ConnectionState) => void)[] = [];
   url: string;
   readonly path: string;
   readonly hubId: string;
@@ -77,6 +79,13 @@ export class Hub {
 
     // Initialize exec approval manager
     this.approvalManager = new ExecApprovalManager((agentId, payload) => {
+      // Check local IPC handler first (for desktop direct chat)
+      const localHandler = this.localApprovalHandlers.get(agentId);
+      if (localHandler) {
+        localHandler(payload);
+        return;
+      }
+      // Remote: send via Gateway
       const targetDeviceId = this.agentSenders.get(agentId);
       if (!targetDeviceId) {
         throw new Error(`No client device found for agent ${agentId}`);
@@ -119,6 +128,9 @@ export class Hub {
 
     client.onStateChange((state) => {
       console.log(`[Hub] Connection state: ${state}`);
+      for (const listener of this._stateChangeListeners) {
+        listener(state);
+      }
     });
 
     client.onRegistered((deviceId) => {
@@ -193,6 +205,15 @@ export class Hub {
     this._onConfirmDevice = handler;
   }
 
+  /** Subscribe to connection state changes. Returns unsubscribe function. */
+  onConnectionStateChange(callback: (state: ConnectionState) => void): () => void {
+    this._stateChangeListeners.push(callback);
+    return () => {
+      const idx = this._stateChangeListeners.indexOf(callback);
+      if (idx >= 0) this._stateChangeListeners.splice(idx, 1);
+    };
+  }
+
   /** Register a one-time token for device verification (called when QR code is generated) */
   registerToken(token: string, agentId: string, expiresAt: number): void {
     this.deviceStore.registerToken(token, agentId, expiresAt);
@@ -205,6 +226,21 @@ export class Hub {
     this.url = url;
     this.client = this.createClient(url);
     this.client.connect();
+  }
+
+  /** Register a local IPC handler for exec approval requests (desktop direct chat). */
+  setLocalApprovalHandler(agentId: string, handler: (payload: ExecApprovalRequest) => void): void {
+    this.localApprovalHandlers.set(agentId, handler);
+  }
+
+  /** Remove local approval handler for an agent. */
+  removeLocalApprovalHandler(agentId: string): void {
+    this.localApprovalHandlers.delete(agentId);
+  }
+
+  /** Resolve a pending exec approval (used by local IPC). */
+  resolveExecApproval(approvalId: string, decision: "allow-once" | "allow-always" | "deny"): boolean {
+    return this.approvalManager.resolveApproval(approvalId, decision);
   }
 
   /** Create new Agent, or rebuild with existing ID */
@@ -454,6 +490,7 @@ export class Hub {
     this.agentSenders.delete(id);
     this.agentStreamIds.delete(id);
     this.agentStreamCounters.delete(id);
+    this.localApprovalHandlers.delete(id);
     removeAgentRecord(id);
     return true;
   }
@@ -468,6 +505,7 @@ export class Hub {
       this.agentSenders.delete(id);
       this.agentStreamIds.delete(id);
       this.agentStreamCounters.delete(id);
+      this.localApprovalHandlers.delete(id);
     }
     this.client.disconnect();
     console.log("Hub shut down");
