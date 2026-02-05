@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Button } from "@multica/ui/components/ui/button";
 import { Textarea } from "@multica/ui/components/ui/textarea";
-import { Loading } from "@multica/ui/components/ui/loading";
+import { Spinner } from "@multica/ui/components/spinner";
 import { useIsMobile } from "@multica/ui/hooks/use-mobile";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -50,7 +50,7 @@ function ConnectionStatus({
 
   return (
     <div className={wrapper}>
-      <Loading className="text-muted-foreground text-sm" />
+      <Spinner className="text-muted-foreground text-sm" />
       <div className="text-center space-y-1.5">
         <p className="text-base font-medium">
           {isVerifying ? "Waiting for approval" : "Connecting..."}
