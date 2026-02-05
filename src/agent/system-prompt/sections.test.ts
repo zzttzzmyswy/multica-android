@@ -15,9 +15,15 @@ import {
 } from "./sections.js";
 
 describe("buildIdentitySection", () => {
-  it("returns soul content in full mode", () => {
+  it("returns identity line in full mode (progressive disclosure)", () => {
+    // Soul content is no longer injected - agent reads soul.md on demand
+    const result = buildIdentitySection({ soul: "You are helpful.", config: { name: "Cleo" } }, "full");
+    expect(result).toEqual(["You are Cleo, a Super Multica agent."]);
+  });
+
+  it("returns generic identity line in full mode without name", () => {
     const result = buildIdentitySection({ soul: "You are helpful." }, "full");
-    expect(result).toEqual(["You are helpful."]);
+    expect(result).toEqual(["You are a Super Multica agent."]);
   });
 
   it("returns identity line with name in none mode", () => {
@@ -30,47 +36,48 @@ describe("buildIdentitySection", () => {
     expect(result).toEqual(["You are a Super Multica agent."]);
   });
 
-  it("returns empty in minimal mode", () => {
-    const result = buildIdentitySection({ soul: "data" }, "minimal");
-    expect(result).toEqual([]);
+  it("returns identity line in minimal mode", () => {
+    const result = buildIdentitySection({ soul: "data", config: { name: "Cleo" } }, "minimal");
+    expect(result).toEqual(["You are Cleo, a Super Multica agent."]);
   });
 });
 
 describe("buildUserSection", () => {
-  it("returns user content in full mode", () => {
-    const result = buildUserSection({ user: "Name: Bob" }, "full");
-    expect(result).toEqual(["Name: Bob"]);
-  });
-
-  it("returns empty in minimal mode", () => {
-    const result = buildUserSection({ user: "data" }, "minimal");
-    expect(result).toEqual([]);
-  });
-
-  it("returns empty when no user content", () => {
-    const result = buildUserSection({}, "full");
-    expect(result).toEqual([]);
+  it("returns empty in all modes (progressive disclosure)", () => {
+    // User content is no longer injected - agent reads user.md on demand
+    expect(buildUserSection({ user: "Name: Bob" }, "full")).toEqual([]);
+    expect(buildUserSection({ user: "data" }, "minimal")).toEqual([]);
+    expect(buildUserSection({}, "full")).toEqual([]);
   });
 });
 
 describe("buildWorkspaceSection", () => {
-  it("returns workspace content in full mode", () => {
+  it("returns workspace content with profile info in full mode", () => {
+    const result = buildWorkspaceSection({ workspace: "Rules here" }, "full", "/path/to/profile");
+    const text = result.join("\n");
+    expect(text).toContain("## Profile");
+    expect(text).toContain("/path/to/profile");
+    expect(text).toContain("soul.md");
+    expect(text).toContain("user.md");
+    expect(text).toContain("memory.md");
+    expect(text).toContain("Rules here");
+  });
+
+  it("returns workspace content without profile dir", () => {
     const result = buildWorkspaceSection({ workspace: "Rules here" }, "full");
     expect(result).toEqual(["Rules here"]);
   });
 
   it("returns empty in minimal mode", () => {
     expect(buildWorkspaceSection({ workspace: "data" }, "minimal")).toEqual([]);
+    expect(buildWorkspaceSection({ workspace: "data" }, "minimal", "/path")).toEqual([]);
   });
 });
 
 describe("buildMemoryFileSection", () => {
-  it("returns memory content in full mode", () => {
-    const result = buildMemoryFileSection({ memory: "Key facts" }, "full");
-    expect(result).toEqual(["Key facts"]);
-  });
-
-  it("returns empty in minimal mode", () => {
+  it("returns empty in all modes (progressive disclosure)", () => {
+    // Memory content is no longer injected - agent reads memory.md on demand
+    expect(buildMemoryFileSection({ memory: "Key facts" }, "full")).toEqual([]);
     expect(buildMemoryFileSection({ memory: "data" }, "minimal")).toEqual([]);
   });
 });
@@ -227,12 +234,9 @@ describe("buildRuntimeSection", () => {
 });
 
 describe("buildProfileDirSection", () => {
-  it("includes path in full mode", () => {
-    const result = buildProfileDirSection("/path/to/profile", "full");
-    expect(result.join("\n")).toContain("/path/to/profile");
-  });
-
-  it("returns empty in minimal mode", () => {
+  it("returns empty in all modes (merged into workspace section)", () => {
+    // Profile directory info is now part of buildWorkspaceSection
+    expect(buildProfileDirSection("/path/to/profile", "full")).toEqual([]);
     expect(buildProfileDirSection("/path", "minimal")).toEqual([]);
   });
 });

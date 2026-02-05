@@ -268,7 +268,7 @@ export function Markdown({
   const processedContent = React.useMemo(() => preprocessLinks(children), [children])
 
   return (
-    <div className={cn('markdown-content text-sm', className)}>
+    <div className={cn('markdown-content', className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw]}

@@ -1,18 +1,15 @@
 /**
  * Tool policy system for filtering tools based on configuration.
  *
- * Supports 4 layers of filtering:
- * 1. Profile - base tool set (minimal/coding/web/full)
- * 2. Global allow/deny - user customization
- * 3. Provider-specific - different rules for different LLM providers
- * 4. Subagent restrictions - limited tools for spawned agents
+ * Supports 3 layers of filtering:
+ * 1. Global allow/deny - user customization
+ * 2. Provider-specific - different rules for different LLM providers
+ * 3. Subagent restrictions - limited tools for spawned agents
  */
 
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import {
-  type ToolProfileId,
   expandToolGroups,
-  getProfilePolicy,
   normalizeToolName,
   DEFAULT_SUBAGENT_TOOL_DENY,
 } from "./groups.js";
@@ -31,11 +28,9 @@ export interface ToolPolicy {
  * Full tool configuration from config file.
  */
 export interface ToolsConfig {
-  /** Base profile (minimal/coding/web/full) */
-  profile?: ToolProfileId;
-  /** Additional tools to allow */
+  /** Tools to allow (supports group:* syntax) */
   allow?: string[];
-  /** Tools to deny */
+  /** Tools to deny (takes precedence over allow) */
   deny?: string[];
   /** Provider-specific overrides */
   byProvider?: Record<string, ToolPolicy>;
@@ -191,12 +186,11 @@ export interface FilterToolsOptions {
 }
 
 /**
- * Filter tools through the 4-layer policy system.
+ * Filter tools through the 3-layer policy system.
  *
- * Layer 1: Profile (base tool set)
- * Layer 2: Global allow/deny
- * Layer 3: Provider-specific
- * Layer 4: Subagent restrictions
+ * Layer 1: Global allow/deny
+ * Layer 2: Provider-specific
+ * Layer 3: Subagent restrictions
  */
 export function filterTools(
   tools: AgentTool<any>[],
@@ -206,15 +200,7 @@ export function filterTools(
 
   let filtered = tools;
 
-  // Layer 1: Profile
-  if (config?.profile) {
-    const profilePolicy = getProfilePolicy(config.profile);
-    if (profilePolicy) {
-      filtered = filterToolsByPolicy(filtered, profilePolicy);
-    }
-  }
-
-  // Layer 2: Global allow/deny
+  // Layer 1: Global allow/deny
   if (config?.allow || config?.deny) {
     const globalPolicy: ToolPolicy = {};
     if (config.allow) {
@@ -226,7 +212,7 @@ export function filterTools(
     filtered = filterToolsByPolicy(filtered, globalPolicy);
   }
 
-  // Layer 3: Provider-specific
+  // Layer 2: Provider-specific
   if (provider && config?.byProvider) {
     const providerPolicy = resolveProviderPolicy(config.byProvider, provider);
     if (providerPolicy) {
@@ -234,7 +220,7 @@ export function filterTools(
     }
   }
 
-  // Layer 4: Subagent restrictions
+  // Layer 3: Subagent restrictions
   if (isSubagent) {
     const subagentPolicy = getSubagentPolicy();
     filtered = filterToolsByPolicy(filtered, subagentPolicy);
@@ -246,7 +232,6 @@ export function filterTools(
 /**
  * Merge two ToolsConfig objects.
  * The override config takes precedence:
- * - profile: override wins if set
  * - allow: union of both
  * - deny: union of both
  * - byProvider: deep merge with override taking precedence
@@ -260,12 +245,6 @@ export function mergeToolsConfig(
   if (!override) return base;
 
   const result: ToolsConfig = {};
-
-  // profile: override wins
-  const profile = override.profile ?? base.profile;
-  if (profile) {
-    result.profile = profile;
-  }
 
   // allow: union
   const allow = mergeAllow(base.allow, override.allow);
@@ -321,15 +300,7 @@ export function wouldToolBeAllowed(
 ): boolean {
   const { config, provider, isSubagent } = options;
 
-  // Layer 1: Profile
-  if (config?.profile) {
-    const profilePolicy = getProfilePolicy(config.profile);
-    if (profilePolicy && !isToolAllowed(toolName, profilePolicy)) {
-      return false;
-    }
-  }
-
-  // Layer 2: Global allow/deny
+  // Layer 1: Global allow/deny
   if (config?.allow || config?.deny) {
     const globalPolicy: ToolPolicy = {};
     if (config.allow) {
@@ -343,7 +314,7 @@ export function wouldToolBeAllowed(
     }
   }
 
-  // Layer 3: Provider-specific
+  // Layer 2: Provider-specific
   if (provider && config?.byProvider) {
     const providerPolicy = resolveProviderPolicy(config.byProvider, provider);
     if (providerPolicy && !isToolAllowed(toolName, providerPolicy)) {
@@ -351,7 +322,7 @@ export function wouldToolBeAllowed(
     }
   }
 
-  // Layer 4: Subagent restrictions
+  // Layer 3: Subagent restrictions
   if (isSubagent) {
     const subagentPolicy = getSubagentPolicy();
     if (!isToolAllowed(toolName, subagentPolicy)) {

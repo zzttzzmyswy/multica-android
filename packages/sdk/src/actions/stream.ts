@@ -1,59 +1,51 @@
-/** Stream Action - 流式消息传输 */
+/** Stream Action */
 
 export const StreamAction = "stream" as const;
 
+// --- Content block types (re-exported from pi-ai, the single source of truth) ---
+
+import type {
+  TextContent,
+  ThinkingContent,
+  ToolCall,
+  ImageContent,
+} from "@mariozechner/pi-ai";
+import type { AgentEvent } from "@mariozechner/pi-agent-core";
+
+export type { TextContent, ThinkingContent, ToolCall, ImageContent };
+export type { AgentEvent };
+
 /**
- * AgentEvent types forwarded by the Hub to frontend clients.
- * These mirror the subset of AgentEvent from @mariozechner/pi-agent-core
- * that the Hub forwards (filtered at the Hub layer).
+ * Convenience union of all content block types across message roles.
+ *
+ * NOTE: This is a deliberate simplification. The backend uses narrower unions
+ * per role (e.g. AssistantMessage.content excludes ImageContent, UserMessage
+ * excludes ThinkingContent/ToolCall). We accept the wider union on the frontend
+ * for simpler handling — the backend already guarantees correctness.
  */
-export interface StreamMessageEvent {
-  type: "message_start" | "message_update" | "message_end";
-  message: {
-    id?: string;
-    role: string;
-    content?: Array<{ type: string; text?: string; thinking?: string }>;
-  };
-  assistantMessageEvent?: unknown;
-}
+export type ContentBlock = TextContent | ThinkingContent | ToolCall | ImageContent;
 
-export interface StreamToolEvent {
-  type: "tool_execution_start" | "tool_execution_end";
-  toolCallId: string;
-  toolName: string;
-  args?: unknown;
-  result?: unknown;
-  isError?: boolean;
-}
+// --- Stream event types ---
 
-export type StreamEvent = StreamMessageEvent | StreamToolEvent;
-
-/** 流消息 payload — wraps a raw AgentEvent with stream/agent identifiers */
+/**
+ * Hub forwards AgentEvent from pi-agent-core as-is.
+ * StreamPayload wraps it with routing metadata.
+ */
 export interface StreamPayload {
-  /** 流 ID，关联同一个流的所有消息 */
   streamId: string;
-  /** 所属 agent ID */
   agentId: string;
-  /** Raw agent event from the engine */
-  event: StreamEvent;
+  event: AgentEvent;
 }
 
-/** Extract plain text from an AgentMessage content array */
-export function extractTextFromEvent(event: StreamMessageEvent): string {
-  const content = event.message?.content;
+/** Extract thinking/reasoning content from an AgentEvent that carries a message */
+export function extractThinkingFromEvent(event: AgentEvent): string {
+  if (!("message" in event)) return "";
+  const msg = event.message;
+  if (!msg || !("content" in msg)) return "";
+  const content = msg.content;
   if (!Array.isArray(content)) return "";
   return content
-    .filter((c) => c.type === "text")
-    .map((c) => c.text ?? "")
-    .join("");
-}
-
-/** Extract thinking/reasoning content from an AgentMessage content array */
-export function extractThinkingFromEvent(event: StreamMessageEvent): string {
-  const content = event.message?.content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .filter((c) => c.type === "thinking")
+    .filter((c): c is ThinkingContent => c.type === "thinking")
     .map((c) => c.thinking ?? "")
     .join("");
 }

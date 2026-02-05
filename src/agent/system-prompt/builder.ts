@@ -56,7 +56,7 @@ export function buildSystemPromptWithReport(options: SystemPromptOptions): {
   const candidates: Array<{ name: string; lines: string[] }> = [
     { name: "identity", lines: buildIdentitySection(profile, mode) },
     { name: "user", lines: buildUserSection(profile, mode) },
-    { name: "workspace", lines: buildWorkspaceSection(profile, mode) },
+    { name: "workspace", lines: buildWorkspaceSection(profile, mode, profileDir) },
     { name: "memory", lines: buildMemoryFileSection(profile, mode) },
     { name: "safety", lines: buildSafetySection(includeSafety) },
     { name: "tooling", lines: buildToolingSummary(tools, mode) },

@@ -19,28 +19,22 @@ The tools system provides LLM agents with capabilities to interact with the exte
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    4-Layer Policy Filter                        │
+│                    3-Layer Policy Filter                        │
 │                                                                 │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │ Layer 1: Profile                                         │  │
-│  │ Base tool set: minimal | coding | web | full             │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                              │                                  │
-│                              ▼                                  │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │ Layer 2: Global Allow/Deny                               │  │
+│  │ Layer 1: Global Allow/Deny                               │  │
 │  │ User customization via CLI or config                     │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                              │                                  │
 │                              ▼                                  │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │ Layer 3: Provider-Specific                               │  │
+│  │ Layer 2: Provider-Specific                               │  │
 │  │ Different rules for different LLM providers              │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                              │                                  │
 │                              ▼                                  │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │ Layer 4: Subagent Restrictions                           │  │
+│  │ Layer 3: Subagent Restrictions                           │  │
 │  │ Limited tools for spawned child agents                   │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                                                                 │
@@ -55,20 +49,20 @@ The tools system provides LLM agents with capabilities to interact with the exte
 
 ## Available Tools
 
-| Tool          | Name            | Description                                   |
-| ------------- | --------------- | --------------------------------------------- |
-| Read          | `read`          | Read file contents                            |
-| Write         | `write`         | Write content to files                        |
-| Edit          | `edit`          | Edit existing files                           |
-| Glob          | `glob`          | Find files by pattern                         |
-| Exec          | `exec`          | Execute shell commands                        |
-| Process       | `process`       | Manage long-running processes                 |
-| Web Fetch     | `web_fetch`     | Fetch and extract content from URLs           |
-| Web Search    | `web_search`    | Search the web (requires API key)             |
-| Memory Get    | `memory_get`    | Retrieve a value from persistent memory       |
-| Memory Set    | `memory_set`    | Store a value in persistent memory            |
-| Memory Delete | `memory_delete` | Delete a value from persistent memory         |
-| Memory List   | `memory_list`   | List all keys in persistent memory            |
+| Tool          | Name            | Description                             |
+| ------------- | --------------- | --------------------------------------- |
+| Read          | `read`          | Read file contents                      |
+| Write         | `write`         | Write content to files                  |
+| Edit          | `edit`          | Edit existing files                     |
+| Glob          | `glob`          | Find files by pattern                   |
+| Exec          | `exec`          | Execute shell commands                  |
+| Process       | `process`       | Manage long-running processes           |
+| Web Fetch     | `web_fetch`     | Fetch and extract content from URLs     |
+| Web Search    | `web_search`    | Search the web (requires API key)       |
+| Memory Get    | `memory_get`    | Retrieve a value from persistent memory |
+| Memory Set    | `memory_set`    | Store a value in persistent memory      |
+| Memory Delete | `memory_delete` | Delete a value from persistent memory   |
+| Memory List   | `memory_list`   | List all keys in persistent memory      |
 
 > **Note**: Memory tools require a `profileId` to be specified. They store data in the profile's memory directory.
 
@@ -76,24 +70,13 @@ The tools system provides LLM agents with capabilities to interact with the exte
 
 Groups provide shortcuts for allowing/denying multiple tools at once:
 
-| Group           | Tools                                             |
-| --------------- | ------------------------------------------------- |
-| `group:fs`      | read, write, edit, glob                           |
-| `group:runtime` | exec, process                                     |
-| `group:web`     | web_search, web_fetch                             |
-| `group:memory`  | memory_get, memory_set, memory_delete, memory_list|
-| `group:core`    | All of the above (excluding memory)               |
-
-## Tool Profiles
-
-Profiles are predefined tool sets for common use cases:
-
-| Profile   | Description             | Tools                              |
-| --------- | ----------------------- | ---------------------------------- |
-| `minimal` | No tools (chat-only)    | None                               |
-| `coding`  | File system + execution | group:fs, group:runtime            |
-| `web`     | Coding + web access     | group:fs, group:runtime, group:web |
-| `full`    | No restrictions         | All tools                          |
+| Group           | Tools                                              |
+| --------------- | -------------------------------------------------- |
+| `group:fs`      | read, write, edit, glob                            |
+| `group:runtime` | exec, process                                      |
+| `group:web`     | web_search, web_fetch                              |
+| `group:memory`  | memory_get, memory_set, memory_delete, memory_list |
+| `group:core`    | All of the above (excluding memory)                |
 
 ## Usage
 
@@ -102,11 +85,8 @@ Profiles are predefined tool sets for common use cases:
 All commands use the unified `multica` CLI (or `pnpm multica` during development).
 
 ```bash
-# Use a specific profile
-multica run --tools-profile coding "list files"
-
-# Minimal profile with specific tools allowed
-multica run --tools-profile minimal --tools-allow exec "run ls"
+# Allow only specific tools
+multica run --tools-allow group:fs,group:runtime "list files"
 
 # Deny specific tools
 multica run --tools-deny exec,process "read file.txt"
@@ -122,14 +102,11 @@ import { Agent } from './runner.js';
 
 const agent = new Agent({
    tools: {
-      // Layer 1: Base profile
-      profile: 'coding',
+      // Layer 1: Global allow/deny
+      allow: ['group:fs', 'group:runtime', 'web_fetch'],
+      deny: ['exec'],
 
-      // Layer 2: Global customization
-      allow: ['web_fetch'], // Add web_fetch to coding profile
-      deny: ['exec'], // But deny exec
-
-      // Layer 3: Provider-specific rules
+      // Layer 2: Provider-specific rules
       byProvider: {
          google: {
             deny: ['exec', 'process'], // Google models can't use runtime tools
@@ -137,7 +114,7 @@ const agent = new Agent({
       },
    },
 
-   // Layer 4: Subagent mode
+   // Layer 3: Subagent mode
    isSubagent: false,
 });
 ```
@@ -150,43 +127,28 @@ Use the tools CLI to inspect and test configurations:
 # List all available tools
 multica tools list
 
-# List tools after applying a profile
-multica tools list --profile coding
+# List tools with allow rules
+multica tools list --allow group:fs,group:runtime
 
 # List tools with deny rules
-multica tools list --profile coding --deny exec
+multica tools list --deny exec
 
 # Show all tool groups
 multica tools groups
-
-# Show all profiles
-multica tools profiles
 ```
 
 ## Policy System Details
 
-### Layer 1: Profile
+### Layer 1: Global Allow/Deny
 
-The profile determines the base set of available tools. If not specified, all tools are available.
+User-specified allow/deny lists:
 
-```typescript
-// In groups.ts
-export const TOOL_PROFILES = {
-   minimal: { allow: [] }, // No tools
-   coding: { allow: ['group:fs', 'group:runtime'] }, // FS + execution
-   web: { allow: ['group:fs', 'group:runtime', 'group:web'] }, // + web
-   full: {}, // No restrictions
-};
-```
+- `allow`: Only these tools are available (supports group:\* syntax)
+- `deny`: These tools are blocked (takes precedence over allow)
 
-### Layer 2: Global Allow/Deny
+If no `allow` list is specified, all tools are available by default.
 
-User-specified allow/deny lists that modify the profile's tool set:
-
--  `allow`: Only these tools are available (additive to profile)
--  `deny`: These tools are blocked (takes precedence over allow)
-
-### Layer 3: Provider-Specific
+### Layer 2: Provider-Specific
 
 Different LLM providers may have different capabilities or restrictions:
 
@@ -199,7 +161,7 @@ Different LLM providers may have different capabilities or restrictions:
 }
 ```
 
-### Layer 4: Subagent Restrictions
+### Layer 3: Subagent Restrictions
 
 When `isSubagent: true`, additional restrictions are applied to prevent spawned agents from accessing sensitive tools like session management.
 
@@ -280,7 +242,7 @@ Tools configuration can be defined in Agent Profile's `config.json`, allowing di
 │   │  coder    │    │  reviewer │    │  devops   │              │
 │   │           │    │           │    │           │              │
 │   │  tools:   │    │  tools:   │    │  tools:   │              │
-│   │  coding   │    │  minimal  │    │  full     │              │
+│   │  allow:fs │    │  deny:*   │    │  allow:*  │              │
 │   └─────┬─────┘    └─────┬─────┘    └─────┬─────┘              │
 │         │                │                │                     │
 └─────────┼────────────────┼────────────────┼─────────────────────┘
@@ -296,7 +258,7 @@ Each Agent's Profile can define its own tools configuration in `config.json`:
 ```json
 {
    "tools": {
-      "profile": "coding",
+      "allow": ["group:fs", "group:runtime"],
       "deny": ["exec"]
    },
    "provider": "anthropic",
@@ -305,28 +267,3 @@ Each Agent's Profile can define its own tools configuration in `config.json`:
 ```
 
 See [Profile README](../profile/README.md) for full documentation.
-
-### Config Priority
-
-When both Profile config and CLI options are provided:
-
-1. **Profile `config.json`** - Base configuration
-2. **CLI options** - Override/extend profile settings
-
-```bash
-# Profile has tools.profile = "coding"
-# CLI adds --tools-deny exec
-# Result: coding profile without exec tool
-multica run --profile my-agent --tools-deny exec "list files"
-```
-
-## Future Tools
-
-The following tools are planned for future implementation:
-
-- **Browser** - Simplified web automation (screenshot, click, type)
-- **Session Management** - `sessions_list`, `sessions_history`, `sessions_send`, `sessions_spawn`, `session_status`
-- **Image** - Image generation and manipulation
-- **Cron** - Scheduled task execution
-- **Message** - Inter-agent communication
-- **Canvas** - Visual output generation

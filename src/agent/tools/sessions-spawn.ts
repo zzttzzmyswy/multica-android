@@ -11,6 +11,7 @@ import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getHub } from "../../hub/hub-singleton.js";
 import { buildSubagentSystemPrompt } from "../subagent/announce.js";
 import { registerSubagentRun } from "../subagent/registry.js";
+import { resolveTools } from "../tools.js";
 
 const SessionsSpawnSchema = Type.Object({
   task: Type.String({ description: "The task for the subagent to perform.", minLength: 1 }),
@@ -84,12 +85,17 @@ export function createSessionsSpawnTool(
       const runId = uuidv7();
       const childSessionId = uuidv7();
 
+      // Resolve tools for the subagent (with isSubagent=true for policy filtering)
+      const subagentTools = resolveTools({ isSubagent: true });
+      const toolNames = subagentTools.map((t) => t.name);
+
       // Build system prompt for the child
       const systemPrompt = buildSubagentSystemPrompt({
         requesterSessionId,
         childSessionId,
         label,
         task,
+        tools: toolNames,
       });
 
       // Spawn child agent via Hub

@@ -21,7 +21,7 @@ export function createVerifyHandler(ctx: VerifyContext): RpcHandler {
     // 1. Already in whitelist → pass through (reconnection, no confirmation needed)
     const allowed = ctx.deviceStore.isAllowed(from);
     if (allowed) {
-      return { hubId: ctx.hubId, agentId: allowed.agentId };
+      return { hubId: ctx.hubId, agentId: allowed.agentId, isNewDevice: false };
     }
 
     // 2. Validate token
@@ -42,6 +42,6 @@ export function createVerifyHandler(ctx: VerifyContext): RpcHandler {
 
     // 4. User confirmed → add to whitelist (with device metadata)
     ctx.deviceStore.allowDevice(from, result.agentId, meta);
-    return { hubId: ctx.hubId, agentId: result.agentId };
+    return { hubId: ctx.hubId, agentId: result.agentId, isNewDevice: true };
   };
 }

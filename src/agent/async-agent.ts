@@ -221,4 +221,19 @@ export class AsyncAgent {
   getMessages(): AgentMessage[] {
     return this.agent.getMessages();
   }
+
+  /**
+   * Get current provider and model information.
+   */
+  getProviderInfo(): { provider: string; model: string | undefined } {
+    return this.agent.getProviderInfo();
+  }
+
+  /**
+   * Switch to a different provider and/or model.
+   * This updates the agent's model without recreating the session.
+   */
+  setProvider(providerId: string, modelId?: string): { provider: string; model: string | undefined } {
+    return this.agent.setProvider(providerId, modelId);
+  }
 }

@@ -1,11 +1,14 @@
 "use client";
 
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useState, useEffect } from "react";
 import { Button } from "@multica/ui/components/ui/button";
 import { ChatInput } from "@multica/ui/components/chat-input";
 import { useConnectionStore, useMessagesStore, useAutoConnect } from "@multica/store";
 import { useScrollFade } from "@multica/ui/hooks/use-scroll-fade";
 import { useAutoScroll } from "@multica/ui/hooks/use-auto-scroll";
+import { useIsMobile } from "@multica/ui/hooks/use-mobile";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
 import { ConnectPrompt } from "./connect-prompt";
 import { MessageList } from "./message-list";
 import { ChatSkeleton } from "./chat-skeleton";
@@ -16,9 +19,25 @@ export function Chat() {
   const agentId = useConnectionStore((s) => s.agentId)
   const gwState = useConnectionStore((s) => s.connectionState)
   const hubId = useConnectionStore((s) => s.hubId)
+  const lastError = useConnectionStore((s) => s.lastError)
+  const isNewDevice = useConnectionStore((s) => s.isNewDevice)
+  const isMobile = useIsMobile()
 
   const messages = useMessagesStore((s) => s.messages)
   const streamingIds = useMessagesStore((s) => s.streamingIds)
+
+  // Show success overlay for 2s when a new device is approved by Owner
+  const [showVerifySuccess, setShowVerifySuccess] = useState(false)
+  useEffect(() => {
+    if (gwState === "registered" && isNewDevice === true) {
+      setShowVerifySuccess(true)
+      const timer = setTimeout(() => {
+        setShowVerifySuccess(false)
+        useConnectionStore.setState({ isNewDevice: null })
+      }, 2000)
+      return () => clearTimeout(timer)
+    }
+  }, [gwState, isNewDevice])
 
   const isConnected = gwState === "registered" && !!hubId && !!agentId
 
@@ -38,6 +57,26 @@ export function Chat() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden w-full">
+      {/* Verify success overlay — shown for 2s when new device approved */}
+      {showVerifySuccess && (
+        <div className={
+          isMobile
+            ? "fixed inset-0 z-50 bg-background flex flex-col items-center justify-center gap-5 px-6 animate-in fade-in duration-300"
+            : "absolute inset-0 z-50 bg-background flex flex-col items-center justify-center gap-5 px-6 animate-in fade-in duration-300"
+        }>
+          <HugeiconsIcon
+            icon={CheckmarkCircle02Icon}
+            className="size-14 text-(--tool-success) animate-in zoom-in duration-300"
+          />
+          <div className="text-center space-y-1.5">
+            <p className="text-base font-medium">Connected</p>
+            <p className="text-xs text-muted-foreground">
+              Your device has been approved
+            </p>
+          </div>
+        </div>
+      )}
+
       {isConnected && (
         <div className="flex items-center justify-end px-4 py-1 max-w-4xl mx-auto w-full">
           <Button
@@ -58,19 +97,36 @@ export function Chat() {
           <ConnectPrompt />
         ) : messages.length === 0 ? (
           <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-            Send a message to start the conversation
+            Your Agent is ready
           </div>
         ) : (
           <MessageList messages={messages} streamingIds={streamingIds} />
         )}
       </main>
 
+      {/* Error banner */}
+      {lastError && (
+        <div className="px-4 py-2 max-w-4xl mx-auto w-full" role="alert" aria-live="polite">
+          <div className="rounded-md bg-destructive/10 text-destructive text-sm px-3 py-2 flex items-center justify-between">
+            <span>{lastError.message} ({lastError.code})</span>
+            <button
+              type="button"
+              aria-label="Dismiss error"
+              onClick={() => useConnectionStore.setState({ lastError: null })}
+              className="text-destructive/60 hover:text-destructive ml-2 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 rounded outline-none"
+            >
+              &times;
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Footer */}
       <footer className="w-full p-2 pt-1 max-w-4xl mx-auto">
         <ChatInput
           onSubmit={handleSend}
           disabled={!isConnected}
-          placeholder={!isConnected ? "Connect first..." : "Type a message..."}
+          placeholder={!isConnected ? "Scan QR code to get started" : "Ask your Agent..."}
         />
       </footer>
     </div>

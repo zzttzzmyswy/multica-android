@@ -13,18 +13,18 @@ src/
 │   ├── skills/         # Modular skill system
 │   └── tools/          # Agent tools
 │       └── web/        # Web fetch and search tools
-├── gateway/            # WebSocket gateway for distributed communication
-├── hub/                # Multi-agent coordination hub
-├── client/             # Client library
-├── console/            # NestJS console application
-└── shared/             # Shared types and gateway SDK
-    └── gateway-sdk/    # Gateway client SDK
+├── gateway/            # WebSocket gateway for remote access
+├── hub/                # Agent coordination hub
+└── shared/             # Shared types
 
 apps/
+├── desktop/            # Electron desktop app (recommended)
 └── web/                # Next.js web application
 
 packages/
-└── sdk/                # SDK package for external use
+├── sdk/                # Gateway client SDK
+├── store/              # Zustand state management
+└── ui/                 # Shared UI components
 
 skills/                 # Bundled skills (commit, code-review)
 ```
@@ -85,9 +85,8 @@ Example `skills.env.json5` (dynamic keys):
 Start services directly (no `source .env`):
 
 ```bash
-multica dev console
-multica run "hello"
-multica dev gateway
+multica dev           # Start desktop app
+multica run "hello"   # Run CLI mode
 ```
 
 Optional overrides:
@@ -194,10 +193,10 @@ multica chat --profile my-agent
 multica run --thinking high "solve this complex problem"
 
 # Development servers
-multica dev                # Start all services
-multica dev gateway        # Gateway only (:3000)
-multica dev console        # Console only (:4000)
+multica dev                # Start desktop app (default)
+multica dev gateway        # Gateway only (:3000) - for remote clients
 multica dev web            # Web app only (:3001)
+multica dev all            # Start gateway + web
 
 # Help
 multica help
@@ -383,23 +382,33 @@ web_search({
 })
 ```
 
-## Distributed Architecture
+## Architecture
+
+### Desktop App (Recommended)
+
+The Electron desktop app runs a standalone Hub with embedded Agent Engine:
+
+- **No Gateway required** for local development
+- Direct IPC communication for optimal performance
+- QR code pairing for mobile remote access
+- Optional Gateway connection for web/remote clients
 
 ### Gateway
 
-The WebSocket gateway enables distributed multi-agent communication:
+The WebSocket gateway enables remote client access:
 
-- Real-time message passing between agents
+- Real-time message routing between clients and Hub
 - Streaming support for long-running operations
 - RPC-style request/response patterns
+- Device verification and authentication
 
 ### Hub
 
-The Hub manages multiple agents and gateway connections:
+The Hub manages agents and communication:
 
 - Agent lifecycle management
-- Communication channel coordination
-- Device identification and tracking
+- Multi-subscriber event distribution
+- Device whitelist and token-based verification
 
 ## Scripts
 
@@ -418,11 +427,11 @@ The Hub manages multiple agents and gateway connections:
 
 ### Development (shortcuts)
 
-- `pnpm dev` - Run full stack (gateway + console + web)
-- `pnpm dev:gateway` - Run gateway only
-- `pnpm dev:console` - Run console only
-- `pnpm dev:web` - Run web app only
+- `pnpm dev` - Run desktop app (default, recommended)
 - `pnpm dev:desktop` - Run desktop app
+- `pnpm dev:gateway` - Run gateway only (for remote clients)
+- `pnpm dev:web` - Run web app only
+- `pnpm dev:all` - Run gateway + web
 
 ### Build & Test
 
