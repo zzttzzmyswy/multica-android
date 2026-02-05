@@ -34,13 +34,13 @@ importers:
     dependencies:
       '@mariozechner/pi-agent-core':
         specifier: ^0.50.3
-        version: 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@3.25.76))(ws@8.18.3)(zod@3.25.76)
+        version: 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@4.3.6))(ws@8.18.3)(zod@4.3.6)
       '@mariozechner/pi-ai':
         specifier: ^0.50.3
-        version: 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@3.25.76))(ws@8.18.3)(zod@3.25.76)
+        version: 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@4.3.6))(ws@8.18.3)(zod@4.3.6)
       '@mariozechner/pi-coding-agent':
         specifier: ^0.50.3
-        version: 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@3.25.76))(ws@8.18.3)(zod@3.25.76)
+        version: 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@4.3.6))(ws@8.18.3)(zod@4.3.6)
       '@mozilla/readability':
         specifier: ^0.6.0
         version: 0.6.0
@@ -153,6 +153,9 @@ importers:
       '@hugeicons/react':
         specifier: ^1.1.4
         version: 1.1.4(react@19.2.3)
+      '@multica/hooks':
+        specifier: workspace:*
+        version: link:../../packages/hooks
       '@multica/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
@@ -454,10 +457,10 @@ importers:
     devDependencies:
       '@mariozechner/pi-agent-core':
         specifier: ^0.50.3
-        version: 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@4.3.6))(ws@8.18.3)(zod@4.3.6)
+        version: 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@3.25.76))(ws@8.18.3)(zod@3.25.76)
       '@mariozechner/pi-ai':
         specifier: ^0.50.3
-        version: 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@4.3.6))(ws@8.18.3)(zod@4.3.6)
+        version: 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@3.25.76))(ws@8.18.3)(zod@3.25.76)
       '@types/uuid':
         specifier: ^11.0.0
         version: 11.0.0
@@ -11593,12 +11596,12 @@ snapshots:
       - ws
       - zod
 
-  '@mariozechner/pi-coding-agent@0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@3.25.76))(ws@8.18.3)(zod@3.25.76)':
+  '@mariozechner/pi-coding-agent@0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@4.3.6))(ws@8.18.3)(zod@4.3.6)':
     dependencies:
       '@mariozechner/clipboard': 0.3.0
       '@mariozechner/jiti': 2.6.5
-      '@mariozechner/pi-agent-core': 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@3.25.76))(ws@8.18.3)(zod@3.25.76)
-      '@mariozechner/pi-ai': 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@3.25.76))(ws@8.18.3)(zod@3.25.76)
+      '@mariozechner/pi-agent-core': 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@4.3.6))(ws@8.18.3)(zod@4.3.6)
+      '@mariozechner/pi-ai': 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@4.3.6))(ws@8.18.3)(zod@4.3.6)
       '@mariozechner/pi-tui': 0.50.3
       '@silvia-odwyer/photon-node': 0.3.4
       chalk: 5.6.2
