@@ -8,6 +8,8 @@ import type {
 
 export function useLocalChat() {
   const chat = useChat()
+  const chatRef = useRef(chat)
+  chatRef.current = chat
   const [agentId, setAgentId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingHistory, setIsLoadingHistory] = useState(true)
@@ -49,14 +51,14 @@ export function useLocalChat() {
       const payload = data as unknown as StreamPayload
       if (!payload.event) return
 
-      chat.handleStream(payload)
+      chatRef.current.handleStream(payload)
       if (payload.event.type === 'message_start') setIsLoading(true)
       if (payload.event.type === 'message_end') setIsLoading(false)
     })
 
     // Listen for exec approval requests
     window.electronAPI.localChat.onApproval((approval) => {
-      chat.addApproval(approval as ExecApprovalRequestPayload)
+      chatRef.current.addApproval(approval as ExecApprovalRequestPayload)
     })
 
     // Fetch history
@@ -64,7 +66,7 @@ export function useLocalChat() {
       .then((result) => {
         console.log('[LocalChat] getHistory result:', result.messages?.length, 'messages, sample:', result.messages?.[0])
         if (result.messages?.length) {
-          chat.setHistory(result.messages as never[], agentId)
+          chatRef.current.setHistory(result.messages as never[], agentId)
         }
       })
       .catch(() => {})
@@ -81,8 +83,8 @@ export function useLocalChat() {
     (text: string) => {
       const trimmed = text.trim()
       if (!trimmed || !agentId) return
-      chat.addUserMessage(trimmed, agentId)
-      chat.setError(null)
+      chatRef.current.addUserMessage(trimmed, agentId)
+      chatRef.current.setError(null)
       window.electronAPI.localChat.send(agentId, trimmed).catch(() => {})
       setIsLoading(true)
     },
@@ -91,7 +93,7 @@ export function useLocalChat() {
 
   const resolveApproval = useCallback(
     (approvalId: string, decision: ApprovalDecision) => {
-      chat.removeApproval(approvalId)
+      chatRef.current.removeApproval(approvalId)
       window.electronAPI.localChat.resolveExecApproval(approvalId, decision).catch(() => {})
     },
     [],
