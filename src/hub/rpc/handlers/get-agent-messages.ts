@@ -4,7 +4,7 @@ import { resolveSessionPath } from "../../../agent/session/storage.js";
 import { RpcError, type RpcHandler } from "../dispatcher.js";
 
 // Must match DEFAULT_MESSAGES_LIMIT from @multica/sdk/actions/rpc
-const DEFAULT_LIMIT = 10;
+const DEFAULT_LIMIT = 200;
 
 interface GetAgentMessagesParams {
   agentId: string;

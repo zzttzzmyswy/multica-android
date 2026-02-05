@@ -356,7 +356,7 @@ export function registerHubIpcHandlers(): void {
       const allMessages = agent.getMessages()
       const total = allMessages.length
       // Must match DEFAULT_MESSAGES_LIMIT from @multica/sdk/actions/rpc
-      const limit = options?.limit ?? 10
+      const limit = options?.limit ?? 200
       const offset = options?.offset ?? Math.max(0, total - limit)
       const sliced = allMessages.slice(offset, offset + limit)
       return { messages: sliced, total, offset, limit }
