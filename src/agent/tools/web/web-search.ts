@@ -7,15 +7,13 @@ import {
   normalizeCacheKey,
   readCache,
   readResponseText,
-  resolveCacheTtlMs,
-  resolveTimeoutSeconds,
   withTimeout,
   writeCache,
 } from "./cache.js";
 import type { CacheEntry } from "./cache.js";
 import { jsonResult, readStringParam } from "./param-helpers.js";
 
-const COPILOTHUB_SEARCH_ENDPOINT = "https://api-dev.copilothub.ai/web-search";
+const DEVV_SEARCH_ENDPOINT = "https://api-dev.copilothub.ai/web-search";
 
 const SEARCH_CACHE = new Map<string, CacheEntry<Record<string, unknown>>>();
 
@@ -27,7 +25,7 @@ type WebSearchArgs = {
   query: string;
 };
 
-type CopilotHubSearchResponse = {
+type DevvSearchResponse = {
   items: Array<{
     title: string;
     link: string;
@@ -49,7 +47,7 @@ export type WebSearchResult = {
   }>;
 };
 
-async function runCopilotHubSearch(params: {
+async function runDevvSearch(params: {
   query: string;
   timeoutSeconds: number;
 }): Promise<{
@@ -60,7 +58,7 @@ async function runCopilotHubSearch(params: {
     snippet: string;
   }>;
 }> {
-  const res = await fetch(COPILOTHUB_SEARCH_ENDPOINT, {
+  const res = await fetch(DEVV_SEARCH_ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ q: params.query }),
@@ -69,10 +67,10 @@ async function runCopilotHubSearch(params: {
 
   if (!res.ok) {
     const detail = await readResponseText(res);
-    throw new Error(`CopilotHub search API error (${res.status}): ${detail || res.statusText}`);
+    throw new Error(`Devv Search API error (${res.status}): ${detail || res.statusText}`);
   }
 
-  const data = (await res.json()) as CopilotHubSearchResponse;
+  const data = (await res.json()) as DevvSearchResponse;
   const items = Array.isArray(data.items) ? data.items : [];
 
   return {
@@ -96,7 +94,7 @@ async function runWebSearch(params: {
 
   const start = Date.now();
 
-  const { results } = await runCopilotHubSearch({
+  const { results } = await runDevvSearch({
     query: params.query,
     timeoutSeconds: params.timeoutSeconds,
   });
@@ -125,8 +123,8 @@ export function createWebSearchTool(): AgentTool<typeof WebSearchSchema, unknown
       try {
         const result = await runWebSearch({
           query,
-          timeoutSeconds: resolveTimeoutSeconds(DEFAULT_TIMEOUT_SECONDS, DEFAULT_TIMEOUT_SECONDS),
-          cacheTtlMs: resolveCacheTtlMs(DEFAULT_CACHE_TTL_MINUTES, DEFAULT_CACHE_TTL_MINUTES),
+          timeoutSeconds: DEFAULT_TIMEOUT_SECONDS,
+          cacheTtlMs: DEFAULT_CACHE_TTL_MINUTES * 60_000,
         });
         return jsonResult(result);
       } catch (error) {
