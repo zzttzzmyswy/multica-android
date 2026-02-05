@@ -2,7 +2,7 @@ import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import { getModel, type Model } from "@mariozechner/pi-ai";
 import type { SessionEntry, SessionMeta } from "./types.js";
 import { appendEntry, readEntries, resolveSessionPath, writeEntries } from "./storage.js";
-import { compactMessages, compactMessagesAsync } from "./compaction.js";
+import { compactMessages, compactMessagesAsync, type CompactionResult } from "./compaction.js";
 import { credentialManager } from "../credentials.js";
 import { repairSessionFileIfNeeded, type RepairReport } from "./session-file-repair.js";
 import { sanitizeToolCallInputs, sanitizeToolUseResultPairing } from "./session-transcript-repair.js";
@@ -212,7 +212,7 @@ export class SessionManager {
     );
   }
 
-  async maybeCompact(messages: AgentMessage[]) {
+  async maybeCompact(messages: AgentMessage[]): Promise<CompactionResult | null> {
     let workingMessages = messages;
     let toolResultPruningApplied = false;
 
