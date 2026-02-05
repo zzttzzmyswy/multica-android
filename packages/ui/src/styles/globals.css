@@ -154,6 +154,10 @@
   -webkit-mask-image: linear-gradient(to bottom, black 0%, black calc(100% - 32px), transparent 100%);
 }
 
+@utility container {
+  @apply w-full max-w-4xl mx-auto;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
