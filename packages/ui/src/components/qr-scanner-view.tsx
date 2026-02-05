@@ -243,20 +243,6 @@ export function QrScannerView({
         </div>
       )}
 
-      {/* Center crosshair */}
-      {state === "scanning" && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            className="text-white/30"
-          >
-            <line x1="12" y1="4" x2="12" y2="20" stroke="currentColor" strokeWidth="1" />
-            <line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" strokeWidth="1" />
-          </svg>
-        </div>
-      )}
 
       {/* Close button */}
       {(state === "scanning" || state === "detected") && (

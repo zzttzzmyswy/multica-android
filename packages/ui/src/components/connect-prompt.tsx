@@ -3,7 +3,6 @@
 import { useState, useCallback, useRef } from "react";
 import { Button } from "@multica/ui/components/ui/button";
 import { Textarea } from "@multica/ui/components/ui/textarea";
-import { toast } from "@multica/ui/components/ui/sonner";
 import {
   useConnectionStore,
   parseConnectionCode,
@@ -11,15 +10,23 @@ import {
 } from "@multica/store";
 import { useIsMobile } from "@multica/ui/hooks/use-mobile";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Camera01Icon, TextIcon } from "@hugeicons/core-free-icons";
+import {
+  Camera01Icon,
+  TextIcon,
+  CheckmarkCircle02Icon,
+  Alert02Icon,
+} from "@hugeicons/core-free-icons";
 import { QrScannerView } from "@multica/ui/components/qr-scanner-view";
 
 type Mode = "scan" | "paste";
+type PasteState = "idle" | "success" | "error";
 
 export function ConnectPrompt() {
   const gwState = useConnectionStore((s) => s.connectionState);
   const [mode, setMode] = useState<Mode>("scan");
   const [codeInput, setCodeInput] = useState("");
+  const [pasteState, setPasteState] = useState<PasteState>("idle");
+  const [pasteError, setPasteError] = useState<string | null>(null);
   const isMobile = useIsMobile();
   const validatingRef = useRef(false);
 
@@ -29,10 +36,22 @@ export function ConnectPrompt() {
     validatingRef.current = true;
     try {
       const info = parseConnectionCode(trimmed);
-      saveConnection(info);
-      useConnectionStore.getState().connect(info);
+      setPasteState("success");
+      navigator.vibrate?.(50);
+      // Let the user see the success state before connecting
+      setTimeout(() => {
+        saveConnection(info);
+        useConnectionStore.getState().connect(info);
+      }, 600);
     } catch (e) {
-      toast.error((e as Error).message);
+      setPasteState("error");
+      setPasteError((e as Error).message || "Invalid code");
+      navigator.vibrate?.([30, 50, 30]);
+      setTimeout(() => {
+        setPasteState("idle");
+        setPasteError(null);
+        setCodeInput("");
+      }, 2000);
     } finally {
       validatingRef.current = false;
     }
@@ -65,10 +84,10 @@ export function ConnectPrompt() {
         <div className="text-center space-y-1">
           <p className="text-base font-medium">Scan to start</p>
           <p className="text-xs text-muted-foreground">
-            Scan a QR code to use an Agent
+            Scan a Multica QR code to start chatting
           </p>
           {isConnecting && (
-            <p className="text-xs text-muted-foreground/60 animate-pulse">
+            <p className="text-sm text-foreground/70 animate-pulse">
               Connecting to Agent...
             </p>
           )}
@@ -87,11 +106,11 @@ export function ConnectPrompt() {
         </p>
         <p className="text-xs text-muted-foreground">
           {mode === "scan"
-            ? "Scan a QR code to use an Agent"
-            : "Paste a connection code to use an Agent"}
+            ? "Scan a Multica QR code to start chatting"
+            : "Paste a Multica connection code to start chatting"}
         </p>
         {isConnecting && (
-          <p className="text-xs text-muted-foreground/60 animate-pulse">
+          <p className="text-sm text-foreground/70 animate-pulse">
             Connecting to Agent...
           </p>
         )}
@@ -124,20 +143,44 @@ export function ConnectPrompt() {
         {mode === "scan" ? (
           <QrScannerView onResult={handleScanResult} />
         ) : (
-          <div className="aspect-square rounded-xl bg-muted flex flex-col items-center justify-center p-6">
-            <Textarea
-              value={codeInput}
-              onChange={(e) => setCodeInput(e.target.value)}
-              onPaste={handlePaste}
-              placeholder="Paste connection code here..."
-              className="text-xs font-mono flex-1 resize-none bg-transparent border-0 focus-visible:ring-0 shadow-none"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                  e.preventDefault();
-                  tryConnect(codeInput);
-                }
-              }}
-            />
+          <div className="aspect-square rounded-xl bg-muted flex flex-col items-center justify-center p-4">
+            {pasteState === "idle" && (
+              <Textarea
+                value={codeInput}
+                onChange={(e) => setCodeInput(e.target.value)}
+                onPaste={handlePaste}
+                autoFocus={true}
+                placeholder="Paste connection code here..."
+                className="text-xs font-mono flex-1 resize-none bg-transparent! border-0 focus-visible:ring-0 shadow-none"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    tryConnect(codeInput);
+                  }
+                }}
+              />
+            )}
+
+            {pasteState === "success" && (
+              <HugeiconsIcon
+                icon={CheckmarkCircle02Icon}
+                className="size-14 text-(--tool-success) animate-in zoom-in duration-300"
+              />
+            )}
+
+            {pasteState === "error" && (
+              <div className="flex flex-col items-center justify-center gap-2">
+                <HugeiconsIcon
+                  icon={Alert02Icon}
+                  className="size-12 text-(--tool-error)"
+                />
+                {pasteError && (
+                  <p className="text-xs text-destructive bg-destructive/10 px-3 py-1.5 rounded-full">
+                    {pasteError}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
