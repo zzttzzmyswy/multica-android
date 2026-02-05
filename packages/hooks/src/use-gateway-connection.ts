@@ -72,50 +72,58 @@ export function useGatewayConnection(): UseGatewayConnectionReturn {
 
   const connectToGateway = useCallback(
     (id: ConnectionIdentity, token?: string) => {
+      const doConnect = () => {
+        disconnectingRef.current = false;
+        setPageState("connecting");
+        setError(null);
+
+        const deviceId = getDeviceId();
+
+        const client = new GatewayClient({
+          url: id.gateway,
+          deviceId,
+          deviceType: "client",
+          hubId: id.hubId,
+          ...(token ? { token } : {}),
+        })
+          .onStateChange((state: ConnectionState) => {
+            console.log("[GatewayConnection] state:", state);
+            if (disconnectingRef.current) return;
+            setConnectionState(state);
+            if (state === "registered") {
+              saveIdentity(id);
+              setIdentity(id);
+              setPageState("connected");
+            }
+          })
+          .onError((err: Error) => {
+            console.log("[GatewayConnection] error:", err.message);
+            if (disconnectingRef.current) return;
+            pairingKeyRef.current += 1;
+            clearIdentity();
+            setIdentity(null);
+            setError(err.message);
+            setPageState("not-connected");
+            clientRef.current?.disconnect();
+            clientRef.current = null;
+          })
+          .onSendError((err) => {
+            if (disconnectingRef.current) return;
+            setError(err.error);
+          });
+
+        clientRef.current = client;
+        client.connect();
+      };
+
+      // If there's an existing client, disconnect first and wait for Gateway to process
       if (clientRef.current) {
         clientRef.current.disconnect();
         clientRef.current = null;
+        setTimeout(doConnect, 300);
+      } else {
+        doConnect();
       }
-
-      disconnectingRef.current = false;
-      setPageState("connecting");
-      setError(null);
-
-      const deviceId = getDeviceId();
-
-      const client = new GatewayClient({
-        url: id.gateway,
-        deviceId,
-        deviceType: "client",
-        hubId: id.hubId,
-        ...(token ? { token } : {}),
-      })
-        .onStateChange((state: ConnectionState) => {
-          if (disconnectingRef.current) return;
-          setConnectionState(state);
-          if (state === "registered") {
-            saveIdentity(id);
-            setIdentity(id);
-            setPageState("connected");
-          }
-        })
-        .onError((err: Error) => {
-          if (disconnectingRef.current) return;
-          pairingKeyRef.current += 1;
-          clearIdentity();
-          setIdentity(null);
-          setError(err.message);
-          setPageState("not-connected");
-          clientRef.current?.disconnect();
-          clientRef.current = null;
-        })
-        .onSendError((err) => {
-          if (disconnectingRef.current) return;
-          setError(err.error);
-        });
-
-      clientRef.current = client;
-      client.connect();
     },
     [],
   );
@@ -123,15 +131,19 @@ export function useGatewayConnection(): UseGatewayConnectionReturn {
   // Try to reconnect with saved identity on mount
   useEffect(() => {
     const saved = loadIdentity();
+    console.log("[GatewayConnection] mount, saved identity:", saved);
     if (!saved) {
       setPageState("not-connected");
       return;
     }
 
     setIdentity(saved);
-    connectToGateway(saved);
+    // Delay reconnection — if a previous socket just disconnected (e.g. StrictMode
+    // cleanup or page navigation), the Gateway needs time to process it
+    const timer = setTimeout(() => connectToGateway(saved), 300);
 
     return () => {
+      clearTimeout(timer);
       clientRef.current?.disconnect();
       clientRef.current = null;
     };

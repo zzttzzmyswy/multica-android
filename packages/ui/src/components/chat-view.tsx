@@ -34,7 +34,7 @@ export interface ChatViewProps {
   pendingApprovals: ChatViewApproval[];
   sendMessage: (text: string) => void;
   resolveApproval: (approvalId: string, decision: "allow-once" | "allow-always" | "deny") => void;
-  onDisconnect: () => void;
+  onDisconnect?: () => void;
 }
 
 export function ChatView({
@@ -54,14 +54,16 @@ export function ChatView({
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className="container flex items-center justify-end px-4 py-2">
-        <button
-          onClick={onDisconnect}
-          className="text-xs text-muted-foreground hover:text-foreground"
-        >
-          Disconnect
-        </button>
-      </div>
+      {onDisconnect && (
+        <div className="container flex items-center justify-end px-4 py-2">
+          <button
+            onClick={onDisconnect}
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            Disconnect
+          </button>
+        </div>
+      )}
 
       <main ref={mainRef} className="flex-1 overflow-y-auto min-h-0" style={fadeStyle}>
         {isLoadingHistory && messages.length === 0 ? (
@@ -144,14 +146,16 @@ export function ChatView({
         <div className="container px-4" role="alert" aria-live="polite">
           <div className="rounded-lg bg-destructive/5 border border-destructive/15 text-xs px-3 py-2 flex items-center justify-between gap-3">
             <span className="text-foreground leading-snug">{error.message}</span>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={onDisconnect}
-              className="shrink-0 text-xs h-7 px-2.5"
-            >
-              Disconnect
-            </Button>
+            {onDisconnect && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={onDisconnect}
+                className="shrink-0 text-xs h-7 px-2.5"
+              >
+                Disconnect
+              </Button>
+            )}
           </div>
         </div>
       )}

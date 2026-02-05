@@ -221,7 +221,7 @@ export function DevicePairing({
   // Mobile: scanner only
   if (isMobile) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 px-4">
+      <div className="flex flex-col items-center justify-center h-full gap-4 px-4 mb-28">
         <PairingHeader
           title="Scan to connect"
           description="Scan a Multica QR code to connect to your agent"
@@ -233,7 +233,7 @@ export function DevicePairing({
 
   // Desktop: tab toggle (scan / paste)
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-4 px-4 mb-14 sm:mb-28">
+    <div className="flex flex-col items-center justify-center h-full gap-4 px-4 mb-28">
       <PairingHeader
         title={mode === "scan" ? "Scan to connect" : "Paste to connect"}
         description={mode === "scan"

@@ -13,3 +13,5 @@ export type {
   PendingApproval,
   UseChatReturn,
 } from "./use-chat";
+
+export { useGatewayChat } from "./use-gateway-chat";
