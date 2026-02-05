@@ -49,34 +49,31 @@
 
 ## 可用工具
 
-| 工具          | 名称            | 描述                     |
-| ------------- | --------------- | ------------------------ |
-| Read          | `read`          | 读取文件内容             |
-| Write         | `write`         | 写入文件内容             |
-| Edit          | `edit`          | 编辑现有文件             |
-| Glob          | `glob`          | 按模式查找文件           |
-| Exec          | `exec`          | 执行 Shell 命令          |
-| Process       | `process`       | 管理长时间运行的进程     |
-| Web Fetch     | `web_fetch`     | 从 URL 获取并提取内容    |
-| Web Search    | `web_search`    | 搜索网络（需要 API Key） |
-| Memory Get    | `memory_get`    | 从持久化内存中获取值     |
-| Memory Set    | `memory_set`    | 向持久化内存中存储值     |
-| Memory Delete | `memory_delete` | 从持久化内存中删除值     |
-| Memory List   | `memory_list`   | 列出持久化内存中的所有键 |
+| 工具           | 名称             | 描述                     |
+| -------------- | ---------------- | ------------------------ |
+| Read           | `read`           | 读取文件内容             |
+| Write          | `write`          | 写入文件内容             |
+| Edit           | `edit`           | 编辑现有文件             |
+| Glob           | `glob`           | 按模式查找文件           |
+| Exec           | `exec`           | 执行 Shell 命令          |
+| Process        | `process`        | 管理长时间运行的进程     |
+| Web Fetch      | `web_fetch`      | 从 URL 获取并提取内容    |
+| Web Search     | `web_search`     | 搜索网络（需要 API Key） |
+| Sessions Spawn | `sessions_spawn` | 创建子 Agent 会话        |
 
-> **注意**: Memory 工具需要指定 `profileId`。数据存储在 Profile 的 memory 目录中。
+> **注意**: Agent 使用基于文件的 memory（`memory.md`、`memory/*.md`），通过 `read` 和 `edit` 工具操作，而非专门的 memory 工具。
 
 ## 工具组
 
 工具组提供了一次性允许/禁止多个工具的快捷方式：
 
-| 组              | 工具                                               |
-| --------------- | -------------------------------------------------- |
-| `group:fs`      | read, write, edit, glob                            |
-| `group:runtime` | exec, process                                      |
-| `group:web`     | web_search, web_fetch                              |
-| `group:memory`  | memory_get, memory_set, memory_delete, memory_list |
-| `group:core`    | 以上所有（不包括 memory）                          |
+| 组               | 工具                           |
+| ---------------- | ------------------------------ |
+| `group:fs`       | read, write, edit, glob        |
+| `group:runtime`  | exec, process                  |
+| `group:web`      | web_search, web_fetch          |
+| `group:subagent` | sessions_spawn                 |
+| `group:core`     | 所有 fs、runtime 和 web 工具   |
 
 ## 使用方法
 

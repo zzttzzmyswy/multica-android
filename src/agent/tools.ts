@@ -6,7 +6,6 @@ import { createExecTool } from "./tools/exec.js";
 import { createProcessTool } from "./tools/process.js";
 import { createGlobTool } from "./tools/glob.js";
 import { createWebFetchTool, createWebSearchTool } from "./tools/web/index.js";
-import { createMemoryTools } from "./tools/memory/index.js";
 import { createSessionsSpawnTool } from "./tools/sessions-spawn.js";
 import { filterTools } from "./tools/policy.js";
 import { isMulticaError, isRetryableError } from "../shared/errors.js";
@@ -17,10 +16,6 @@ export { resolveModel } from "./providers/index.js";
 /** Options for creating tools */
 export interface CreateToolsOptions {
   cwd: string;
-  /** Profile ID for memory tools (optional) */
-  profileId?: string | undefined;
-  /** Base directory for profiles (optional) */
-  profileBaseDir?: string | undefined;
   /** Whether this agent is a subagent (passed to sessions_spawn tool) */
   isSubagent?: boolean | undefined;
   /** Session ID of the agent (passed to sessions_spawn tool) */
@@ -94,7 +89,7 @@ function wrapTool<TParams extends TSchema, TResult>(
 export function createAllTools(options: CreateToolsOptions | string): AgentTool<any>[] {
   // Support legacy string argument for backwards compatibility
   const opts: CreateToolsOptions = typeof options === "string" ? { cwd: options } : options;
-  const { cwd, profileId, profileBaseDir, isSubagent, sessionId } = opts;
+  const { cwd, isSubagent, sessionId } = opts;
 
   const baseTools = createCodingTools(cwd).filter(
     (tool) => tool.name !== "bash",
@@ -114,15 +109,6 @@ export function createAllTools(options: CreateToolsOptions | string): AgentTool<
     webFetchTool as AgentTool<any>,
     webSearchTool as AgentTool<any>,
   ];
-
-  // Add memory tools if profileId is provided
-  if (profileId) {
-    const memoryTools = createMemoryTools({
-      profileId,
-      baseDir: profileBaseDir,
-    });
-    tools.push(...memoryTools);
-  }
 
   // Add sessions_spawn tool (will be filtered by policy for subagents)
   const sessionsSpawnTool = createSessionsSpawnTool({
@@ -146,11 +132,9 @@ export function createAllTools(options: CreateToolsOptions | string): AgentTool<
 export function resolveTools(options: AgentOptions): AgentTool<any>[] {
   const cwd = options.cwd ?? process.cwd();
 
-  // Create all tools (including memory tools if profileId is provided)
+  // Create all tools
   const allTools = createAllTools({
     cwd,
-    profileId: options.profileId,
-    profileBaseDir: options.profileBaseDir,
     isSubagent: options.isSubagent,
     sessionId: options.sessionId,
   });
@@ -167,20 +151,8 @@ export function resolveTools(options: AgentOptions): AgentTool<any>[] {
 
 /**
  * Get all available tool names (for debugging/listing).
- * Note: Memory tools require profileId, so they are not included by default.
  */
 export function getAllToolNames(cwd?: string): string[] {
   const tools = createAllTools({ cwd: cwd ?? process.cwd() });
-  return tools.map((t) => t.name);
-}
-
-/**
- * Get all available tool names including memory tools (for debugging/listing).
- */
-export function getAllToolNamesWithMemory(cwd?: string, profileId?: string): string[] {
-  const tools = createAllTools({
-    cwd: cwd ?? process.cwd(),
-    profileId: profileId ?? "test-profile",
-  });
   return tools.map((t) => t.name);
 }

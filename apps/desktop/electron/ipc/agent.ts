@@ -12,7 +12,6 @@ const TOOL_GROUPS: Record<string, string[]> = {
   'group:fs': ['read', 'write', 'edit', 'glob'],
   'group:runtime': ['exec', 'process'],
   'group:web': ['web_search', 'web_fetch'],
-  'group:memory': ['memory_get', 'memory_set', 'memory_delete', 'memory_list'],
   'group:subagent': ['sessions_spawn'],
 }
 
@@ -21,7 +20,6 @@ const ALL_KNOWN_TOOLS = [
   ...TOOL_GROUPS['group:fs'],
   ...TOOL_GROUPS['group:runtime'],
   ...TOOL_GROUPS['group:web'],
-  ...TOOL_GROUPS['group:memory'],
   ...TOOL_GROUPS['group:subagent'],
 ]
 

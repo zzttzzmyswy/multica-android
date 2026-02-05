@@ -10,7 +10,7 @@ const PROFILE = {
   config: { name: "TestAgent" },
 };
 
-const TOOLS = ["read", "write", "edit", "glob", "exec", "memory_get", "memory_set", "sessions_spawn", "web_search"];
+const TOOLS = ["read", "write", "edit", "glob", "exec", "sessions_spawn", "web_search"];
 
 describe("buildSystemPrompt", () => {
   // ── Full mode ─────────────────────────────────────────────────────────
@@ -40,12 +40,6 @@ describe("buildSystemPrompt", () => {
   it("full mode includes tool call style section", () => {
     const result = buildSystemPrompt({ mode: "full", tools: TOOLS });
     expect(result).toContain("## Tool Call Style");
-  });
-
-  it("full mode includes memory section when memory tools present", () => {
-    const result = buildSystemPrompt({ mode: "full", tools: ["memory_get", "memory_set"] });
-    expect(result).toContain("## Memory");
-    expect(result).toContain("search memory first");
   });
 
   it("full mode includes sub-agents section when sessions_spawn present", () => {

@@ -49,34 +49,31 @@ The tools system provides LLM agents with capabilities to interact with the exte
 
 ## Available Tools
 
-| Tool          | Name            | Description                             |
-| ------------- | --------------- | --------------------------------------- |
-| Read          | `read`          | Read file contents                      |
-| Write         | `write`         | Write content to files                  |
-| Edit          | `edit`          | Edit existing files                     |
-| Glob          | `glob`          | Find files by pattern                   |
-| Exec          | `exec`          | Execute shell commands                  |
-| Process       | `process`       | Manage long-running processes           |
-| Web Fetch     | `web_fetch`     | Fetch and extract content from URLs     |
-| Web Search    | `web_search`    | Search the web (requires API key)       |
-| Memory Get    | `memory_get`    | Retrieve a value from persistent memory |
-| Memory Set    | `memory_set`    | Store a value in persistent memory      |
-| Memory Delete | `memory_delete` | Delete a value from persistent memory   |
-| Memory List   | `memory_list`   | List all keys in persistent memory      |
+| Tool           | Name             | Description                         |
+| -------------- | ---------------- | ----------------------------------- |
+| Read           | `read`           | Read file contents                  |
+| Write          | `write`          | Write content to files              |
+| Edit           | `edit`           | Edit existing files                 |
+| Glob           | `glob`           | Find files by pattern               |
+| Exec           | `exec`           | Execute shell commands              |
+| Process        | `process`        | Manage long-running processes       |
+| Web Fetch      | `web_fetch`      | Fetch and extract content from URLs |
+| Web Search     | `web_search`     | Search the web (requires API key)   |
+| Sessions Spawn | `sessions_spawn` | Spawn a sub-agent session           |
 
-> **Note**: Memory tools require a `profileId` to be specified. They store data in the profile's memory directory.
+> **Note**: Agents use file-based memory (`memory.md`, `memory/*.md`) via `read` and `edit` tools instead of dedicated memory tools.
 
 ## Tool Groups
 
 Groups provide shortcuts for allowing/denying multiple tools at once:
 
-| Group           | Tools                                              |
-| --------------- | -------------------------------------------------- |
-| `group:fs`      | read, write, edit, glob                            |
-| `group:runtime` | exec, process                                      |
-| `group:web`     | web_search, web_fetch                              |
-| `group:memory`  | memory_get, memory_set, memory_delete, memory_list |
-| `group:core`    | All of the above (excluding memory)                |
+| Group            | Tools                                |
+| ---------------- | ------------------------------------ |
+| `group:fs`       | read, write, edit, glob              |
+| `group:runtime`  | exec, process                        |
+| `group:web`      | web_search, web_fetch                |
+| `group:subagent` | sessions_spawn                       |
+| `group:core`     | All fs, runtime, and web tools       |
 
 ## Usage
 
