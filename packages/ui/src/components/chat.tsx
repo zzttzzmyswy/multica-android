@@ -1,11 +1,14 @@
 "use client";
 
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useState, useEffect } from "react";
 import { Button } from "@multica/ui/components/ui/button";
 import { ChatInput } from "@multica/ui/components/chat-input";
 import { useConnectionStore, useMessagesStore, useAutoConnect } from "@multica/store";
 import { useScrollFade } from "@multica/ui/hooks/use-scroll-fade";
 import { useAutoScroll } from "@multica/ui/hooks/use-auto-scroll";
+import { useIsMobile } from "@multica/ui/hooks/use-mobile";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
 import { ConnectPrompt } from "./connect-prompt";
 import { MessageList } from "./message-list";
 import { ChatSkeleton } from "./chat-skeleton";
@@ -17,9 +20,24 @@ export function Chat() {
   const gwState = useConnectionStore((s) => s.connectionState)
   const hubId = useConnectionStore((s) => s.hubId)
   const lastError = useConnectionStore((s) => s.lastError)
+  const isNewDevice = useConnectionStore((s) => s.isNewDevice)
+  const isMobile = useIsMobile()
 
   const messages = useMessagesStore((s) => s.messages)
   const streamingIds = useMessagesStore((s) => s.streamingIds)
+
+  // Show success overlay for 2s when a new device is approved by Owner
+  const [showVerifySuccess, setShowVerifySuccess] = useState(false)
+  useEffect(() => {
+    if (gwState === "registered" && isNewDevice === true) {
+      setShowVerifySuccess(true)
+      const timer = setTimeout(() => {
+        setShowVerifySuccess(false)
+        useConnectionStore.setState({ isNewDevice: null })
+      }, 2000)
+      return () => clearTimeout(timer)
+    }
+  }, [gwState, isNewDevice])
 
   const isConnected = gwState === "registered" && !!hubId && !!agentId
 
@@ -39,6 +57,26 @@ export function Chat() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden w-full">
+      {/* Verify success overlay — shown for 2s when new device approved */}
+      {showVerifySuccess && (
+        <div className={
+          isMobile
+            ? "fixed inset-0 z-50 bg-background flex flex-col items-center justify-center gap-5 px-6 animate-in fade-in duration-300"
+            : "absolute inset-0 z-50 bg-background flex flex-col items-center justify-center gap-5 px-6 animate-in fade-in duration-300"
+        }>
+          <HugeiconsIcon
+            icon={CheckmarkCircle02Icon}
+            className="size-14 text-(--tool-success) animate-in zoom-in duration-300"
+          />
+          <div className="text-center space-y-1.5">
+            <p className="text-base font-medium">Connected</p>
+            <p className="text-xs text-muted-foreground">
+              Your device has been approved
+            </p>
+          </div>
+        </div>
+      )}
+
       {isConnected && (
         <div className="flex items-center justify-end px-4 py-1 max-w-4xl mx-auto w-full">
           <Button

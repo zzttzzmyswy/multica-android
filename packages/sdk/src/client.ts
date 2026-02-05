@@ -234,7 +234,7 @@ export class GatewayClient {
   }
 
   /** Hub 验证成功回调 */
-  onVerified(callback: (result: { hubId: string; agentId: string }) => void): this {
+  onVerified(callback: (result: { hubId: string; agentId: string; isNewDevice?: boolean }) => void): this {
     this.callbacks.onVerified = callback;
     return this;
   }
@@ -312,12 +312,13 @@ export class GatewayClient {
         if (this.options.hubId) {
           // Set internal state to allow send/request during verify
           this._state = "registered";
+          this.callbacks.onStateChange?.("verifying");
           const meta = typeof navigator !== "undefined" ? {
             userAgent: navigator.userAgent,
             platform: navigator.platform,
             language: navigator.language,
           } : undefined;
-          this.request<{ hubId: string; agentId: string }>(
+          this.request<{ hubId: string; agentId: string; isNewDevice?: boolean }>(
             this.options.hubId,
             "verify",
             { token: this.options.token, meta },
