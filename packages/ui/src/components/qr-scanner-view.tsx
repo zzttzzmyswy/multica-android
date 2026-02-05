@@ -3,11 +3,12 @@
 import "./qr-scanner.css"
 
 import { useState, useCallback, useRef, useEffect } from "react"
-import { useQrScanner, type Point } from "@multica/ui/hooks/use-qr-scanner"
+import { useQrScanner } from "@multica/ui/hooks/use-qr-scanner"
 import { Spinner } from "@multica/ui/components/spinner"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Camera01Icon,
+  Cancel01Icon,
   CheckmarkCircle02Icon,
   Alert02Icon,
   FlashlightIcon,
@@ -25,20 +26,25 @@ export interface QrScannerProps {
   onResult: (data: string) => Promise<void>
   onClose?: () => void
   open?: boolean
+  /** When true, scanning state renders as a fullscreen overlay (mobile). */
+  fullscreen?: boolean
 }
 
-/**
- * Standalone QR scanner with full state machine.
- *
- * States: idle → requesting → scanning → detected → success → (auto-close)
- *                                ↑           ↓
- *                                └── error ──┘
- */
-export function QrScannerView({ onResult, onClose, open }: QrScannerProps) {
+const ACTIVE_STATES: ScannerState[] = [
+  "scanning",
+  "detected",
+  "success",
+  "error",
+]
+
+export function QrScannerView({
+  onResult,
+  onClose,
+  open,
+  fullscreen = false,
+}: QrScannerProps) {
   const [state, setState] = useState<ScannerState>("idle")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [mappedPoints, setMappedPoints] = useState<Point[] | null>(null)
-  const containerRef = useRef<HTMLDivElement | null>(null)
   const stateRef = useRef(state)
   stateRef.current = state
   const startRef = useRef<(() => Promise<void>) | null>(null)
@@ -50,34 +56,29 @@ export function QrScannerView({ onResult, onClose, open }: QrScannerProps) {
       setState("detected")
       navigator.vibrate?.(50)
 
-      // Brief detected state then validate
       setTimeout(async () => {
         try {
           await onResult(data)
           setState("success")
           navigator.vibrate?.(50)
-          // Auto-close after success
-          setTimeout(() => onClose?.(), 800)
         } catch (e) {
           setErrorMessage((e as Error).message || "Invalid code")
           setState("error")
           navigator.vibrate?.([30, 50, 30])
-          // Auto-retry after error
           setTimeout(() => {
             setErrorMessage(null)
             setState("scanning")
             startRef.current?.()
-          }, 1500)
+          }, 3000)
         }
       }, 200)
     },
-    [onResult, onClose],
+    [onResult],
   )
 
   const {
     videoRef,
     hasCamera,
-    cornerPoints,
     hasFlash,
     toggleFlash,
     start: scannerStart,
@@ -90,73 +91,63 @@ export function QrScannerView({ onResult, onClose, open }: QrScannerProps) {
 
   startRef.current = scannerStart
 
-  // Map corner points from video coordinates to container coordinates
-  useEffect(() => {
-    if (!cornerPoints || !containerRef.current || !videoRef.current) {
-      setMappedPoints(null)
-      return
-    }
-
-    const video = videoRef.current
-    const container = containerRef.current
-    const containerRect = container.getBoundingClientRect()
-
-    const videoWidth = video.videoWidth || 1
-    const videoHeight = video.videoHeight || 1
-    const scaleX = containerRect.width / videoWidth
-    const scaleY = containerRect.height / videoHeight
-
-    setMappedPoints(
-      cornerPoints.map((p) => ({
-        x: p.x * scaleX,
-        y: p.y * scaleY,
-      })),
-    )
-  }, [cornerPoints, videoRef])
-
-  // Pause video on detected state
   useEffect(() => {
     if (state === "detected" || state === "success") {
       scannerPause()
     }
   }, [state, scannerPause])
 
-  // Reset state when `open` toggles
   useEffect(() => {
     if (open === false) {
       scannerStop()
       setState("idle")
       setErrorMessage(null)
-      setMappedPoints(null)
     }
   }, [open, scannerStop])
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => scannerStop()
   }, [scannerStop])
 
-  const handleStart = useCallback(async () => {
-    setState("requesting")
+  // Double-rAF: wait for video element to mount before starting scanner
+  useEffect(() => {
+    if (state !== "requesting") return
+    const raf = requestAnimationFrame(() => {
+      requestAnimationFrame(async () => {
+        try {
+          await scannerStart()
+          setState("scanning")
+        } catch {
+          setState("idle")
+        }
+      })
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [state, scannerStart])
 
-    // Check camera permission (try/catch for Safari which doesn't support camera query)
+  const handleStart = useCallback(async () => {
     try {
       const perm = await navigator.permissions?.query({
         name: "camera" as PermissionName,
       })
       if (perm?.state === "denied") {
-        setState("idle")
-        setErrorMessage("Camera access denied. Please enable it in your browser settings.")
+        setErrorMessage(
+          "Camera access denied. Please enable it in your browser settings.",
+        )
         onClose?.()
         return
       }
     } catch {
-      // Safari doesn't support camera permission query — proceed anyway
+      // Safari doesn't support camera permission query
     }
+    setState("requesting")
+  }, [onClose])
 
-    await scannerStart()
-    setState("scanning")
-  }, [scannerStart, onClose])
+  const handleClose = useCallback(() => {
+    scannerStop()
+    setState("idle")
+    setErrorMessage(null)
+  }, [scannerStop])
 
   if (!hasCamera) {
     return (
@@ -166,15 +157,7 @@ export function QrScannerView({ onResult, onClose, open }: QrScannerProps) {
     )
   }
 
-  // Compute bounding box from corner points for detected/success/error bracket positioning
-  const bracketBounds = mappedPoints
-    ? {
-        left: Math.min(...mappedPoints.map((p) => p.x)),
-        top: Math.min(...mappedPoints.map((p) => p.y)),
-        right: Math.max(...mappedPoints.map((p) => p.x)),
-        bottom: Math.max(...mappedPoints.map((p) => p.y)),
-      }
-    : null
+  const isActive = ACTIVE_STATES.includes(state)
 
   const bracketColor =
     state === "success"
@@ -192,148 +175,169 @@ export function QrScannerView({ onResult, onClose, open }: QrScannerProps) {
         ? "animate-scan-shake"
         : ""
 
-  return (
-    <div className="relative w-full max-w-[320px] mx-auto">
-      <div
-        ref={containerRef}
-        className="relative aspect-square rounded-xl overflow-hidden bg-muted"
-      >
-        {/* Camera feed (always rendered for ref stability) */}
+  const viewfinder = (
+    <div
+      className={
+        fullscreen && isActive
+          ? "relative w-full h-full"
+          : "relative aspect-square rounded-xl overflow-hidden bg-muted"
+      }
+    >
+      {/* Video — only mounted after idle */}
+      {state !== "idle" && (
         <video
           ref={videoRef}
           autoPlay
           playsInline
           muted
-          className={`absolute inset-0 w-full h-full object-cover ${
-            state === "idle" || state === "requesting" ? "invisible" : ""
-          }`}
+          className="absolute inset-0 w-full h-full object-cover"
         />
+      )}
 
-        {/* Idle state */}
-        {state === "idle" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-            <button
-              type="button"
-              onClick={handleStart}
-              className="flex items-center justify-center size-16 rounded-full bg-foreground/10 hover:bg-foreground/20 transition-colors"
-            >
-              <HugeiconsIcon
-                icon={Camera01Icon}
-                className="size-7 text-muted-foreground"
-              />
-            </button>
-            <p className="text-xs text-muted-foreground">Tap to scan</p>
-          </div>
-        )}
-
-        {/* Requesting state */}
-        {state === "requesting" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-            <Spinner className="text-muted-foreground" />
-            <p className="text-xs text-muted-foreground">
-              Requesting camera...
-            </p>
-          </div>
-        )}
-
-        {/* Corner brackets overlay */}
-        {(state === "scanning" ||
-          state === "detected" ||
-          state === "success" ||
-          state === "error") && (
-          <div className="absolute inset-0 pointer-events-none">
-            {bracketBounds ? (
-              // Position brackets around detected QR code
-              <div
-                className={`absolute ${bracketAnimation}`}
-                style={{
-                  left: bracketBounds.left - 8,
-                  top: bracketBounds.top - 8,
-                  width: bracketBounds.right - bracketBounds.left + 16,
-                  height: bracketBounds.bottom - bracketBounds.top + 16,
-                }}
-              >
-                <div
-                  className={`absolute -top-1 -left-1 w-5 h-5 border-t-2 border-l-2 ${bracketColor} rounded-tl-md transition-colors duration-200`}
-                />
-                <div
-                  className={`absolute -top-1 -right-1 w-5 h-5 border-t-2 border-r-2 ${bracketColor} rounded-tr-md transition-colors duration-200`}
-                />
-                <div
-                  className={`absolute -bottom-1 -left-1 w-5 h-5 border-b-2 border-l-2 ${bracketColor} rounded-bl-md transition-colors duration-200`}
-                />
-                <div
-                  className={`absolute -bottom-1 -right-1 w-5 h-5 border-b-2 border-r-2 ${bracketColor} rounded-br-md transition-colors duration-200`}
-                />
-              </div>
-            ) : (
-              // Default centered brackets
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div
-                  className={`relative w-3/4 h-3/4 ${bracketAnimation}`}
-                >
-                  <div
-                    className={`absolute -top-1 -left-1 w-5 h-5 border-t-2 border-l-2 ${bracketColor} rounded-tl-md transition-colors duration-200`}
-                  />
-                  <div
-                    className={`absolute -top-1 -right-1 w-5 h-5 border-t-2 border-r-2 ${bracketColor} rounded-tr-md transition-colors duration-200`}
-                  />
-                  <div
-                    className={`absolute -bottom-1 -left-1 w-5 h-5 border-b-2 border-l-2 ${bracketColor} rounded-bl-md transition-colors duration-200`}
-                  />
-                  <div
-                    className={`absolute -bottom-1 -right-1 w-5 h-5 border-b-2 border-r-2 ${bracketColor} rounded-br-md transition-colors duration-200`}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Flash toggle */}
-        {state === "scanning" && hasFlash && (
+      {/* Idle */}
+      {state === "idle" && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
           <button
             type="button"
-            onClick={toggleFlash}
-            className="absolute top-3 right-3 flex items-center justify-center size-8 rounded-full bg-black/40 hover:bg-black/60 transition-colors pointer-events-auto"
+            onClick={handleStart}
+            className="flex items-center justify-center size-16 rounded-full bg-foreground/10 hover:bg-foreground/20 transition-colors"
           >
             <HugeiconsIcon
-              icon={FlashlightIcon}
-              className="size-4 text-white"
+              icon={Camera01Icon}
+              className="size-7 text-muted-foreground"
             />
           </button>
-        )}
+          <p className="text-xs text-muted-foreground">Tap to open camera</p>
+        </div>
+      )}
 
-        {/* Success overlay */}
-        {state === "success" && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <HugeiconsIcon
-              icon={CheckmarkCircle02Icon}
-              className="size-12 text-[color:var(--tool-success)] animate-in fade-in zoom-in duration-300"
+      {/* Requesting */}
+      {state === "requesting" && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+          <Spinner className="text-muted-foreground" />
+          <p className="text-xs text-muted-foreground">
+            Requesting camera...
+          </p>
+        </div>
+      )}
+
+      {/* Fixed centered brackets — always same position, color changes per state */}
+      {isActive && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div
+            className={`relative w-3/4 h-3/4 max-w-[280px] max-h-[280px] ${bracketAnimation}`}
+          >
+            <div
+              className={`absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 ${bracketColor} rounded-tl-md transition-colors duration-200`}
+            />
+            <div
+              className={`absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 ${bracketColor} rounded-tr-md transition-colors duration-200`}
+            />
+            <div
+              className={`absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 ${bracketColor} rounded-bl-md transition-colors duration-200`}
+            />
+            <div
+              className={`absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 ${bracketColor} rounded-br-md transition-colors duration-200`}
             />
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Error overlay */}
-        {state === "error" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-            <HugeiconsIcon
-              icon={Alert02Icon}
-              className="size-10 text-[color:var(--tool-error)]"
-            />
-            {errorMessage && (
-              <p className="text-xs text-white bg-black/60 px-3 py-1 rounded-full">
-                {errorMessage}
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Hint text */}
+      {/* Center crosshair */}
       {state === "scanning" && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            className="text-white/30"
+          >
+            <line x1="12" y1="4" x2="12" y2="20" stroke="currentColor" strokeWidth="1" />
+            <line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" strokeWidth="1" />
+          </svg>
+        </div>
+      )}
+
+      {/* Close button */}
+      {(state === "scanning" || state === "detected") && (
+        <button
+          type="button"
+          onClick={handleClose}
+          className="absolute top-3 left-3 flex items-center justify-center size-8 rounded-full bg-black/40 hover:bg-black/60 transition-colors z-10"
+        >
+          <HugeiconsIcon
+            icon={Cancel01Icon}
+            className="size-4 text-white"
+            strokeWidth={2}
+          />
+        </button>
+      )}
+
+      {/* Flash toggle */}
+      {state === "scanning" && hasFlash && (
+        <button
+          type="button"
+          onClick={toggleFlash}
+          className="absolute top-3 right-3 flex items-center justify-center size-8 rounded-full bg-black/40 hover:bg-black/60 transition-colors"
+        >
+          <HugeiconsIcon
+            icon={FlashlightIcon}
+            className="size-4 text-white"
+          />
+        </button>
+      )}
+
+      {/* Success — full overlay */}
+      {state === "success" && (
+        <div className="absolute inset-0 flex items-center justify-center bg-[color:var(--tool-success)]/15 animate-in fade-in duration-200">
+          <HugeiconsIcon
+            icon={CheckmarkCircle02Icon}
+            className="size-14 text-[color:var(--tool-success)] animate-in zoom-in duration-300"
+          />
+        </div>
+      )}
+
+      {/* Error — full overlay */}
+      {state === "error" && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[color:var(--tool-error)]/15 animate-in fade-in duration-200">
+          <HugeiconsIcon
+            icon={Alert02Icon}
+            className="size-12 text-[color:var(--tool-error)]"
+          />
+          {errorMessage && (
+            <p className="text-xs text-white bg-black/60 px-3 py-1.5 rounded-full">
+              {errorMessage}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Fullscreen hint */}
+      {state === "scanning" && fullscreen && (
+        <p className="absolute bottom-8 inset-x-0 text-xs text-white/60 text-center">
+          Align QR code within the frame
+        </p>
+      )}
+    </div>
+  )
+
+  if (fullscreen && isActive) {
+    return (
+      <>
+        <div className="relative w-full max-w-[320px] mx-auto">
+          <div className="aspect-square rounded-xl bg-muted" />
+        </div>
+        <div className="fixed inset-0 z-50 bg-black">{viewfinder}</div>
+      </>
+    )
+  }
+
+  return (
+    <div className="relative w-full max-w-[320px] mx-auto">
+      {viewfinder}
+      {state === "scanning" && !fullscreen && (
         <p className="text-xs text-muted-foreground text-center mt-3">
-          Point at QR code on desktop
+          Point at a Multica QR code
         </p>
       )}
     </div>
