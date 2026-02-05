@@ -6,7 +6,12 @@
 
 import { SAFETY_CONSTITUTION } from "./constitution.js";
 import { formatRuntimeLine } from "./runtime-info.js";
-import type { ProfileContent, RuntimeInfo, SubagentContext, SystemPromptMode } from "./types.js";
+import type {
+  ProfileContent,
+  RuntimeInfo,
+  SubagentContext,
+  SystemPromptMode,
+} from "./types.js";
 
 // ─── Core tool summaries ────────────────────────────────────────────────────
 
@@ -91,8 +96,14 @@ export function buildWorkspaceSection(
     lines.push(
       "## Profile",
       "",
-      `Your profile directory is: ${profileDir}`,
+      `Your profile directory: \`${profileDir}\``,
       "Use this as the base path for profile files (soul.md, user.md, memory.md, memory/*.md).",
+      "",
+      "Profile files:",
+      "- `soul.md` — Your identity and values",
+      "- `user.md` — Information about your user",
+      "- `workspace.md` — Guidelines and conventions (below)",
+      "- `memory.md` — Persistent knowledge",
       "",
     );
   }
@@ -159,7 +170,9 @@ export function buildToolingSummary(
       seen.add(tool);
       const displayName = resolveToolName(tool);
       const summary = CORE_TOOL_SUMMARIES[tool];
-      toolLines.push(summary ? `- ${displayName}: ${summary}` : `- ${displayName}`);
+      toolLines.push(
+        summary ? `- ${displayName}: ${summary}` : `- ${displayName}`,
+      );
     }
   }
 
@@ -209,7 +222,13 @@ export function buildConditionalToolSections(
   if (toolSet.has("memory_search")) {
     lines.push(
       "## Memory Recall",
-      "Before answering anything about prior work, decisions, dates, people, preferences, or todos: run memory_search on memory.md + memory/*.md; then use read to pull needed context. If low confidence after search, say you checked.",
+      "Before answering anything about prior work, decisions, dates, people, preferences, or todos:",
+      "1. Run `memory_search` to find relevant entries in memory files",
+      "2. Use `read` to pull needed context",
+      "",
+      "To update memory, use `edit` on the appropriate file:",
+      "- `memory.md` — Long-term knowledge (decisions, preferences, important context)",
+      "- `memory/YYYY-MM-DD.md` — Daily logs and session notes",
       "",
     );
   }
@@ -328,6 +347,7 @@ export function buildExtraPromptSection(
   const trimmed = extraSystemPrompt?.trim();
   if (!trimmed) return [];
 
-  const header = mode === "minimal" ? "## Subagent Context" : "## Additional Context";
+  const header =
+    mode === "minimal" ? "## Subagent Context" : "## Additional Context";
   return [header, trimmed];
 }
