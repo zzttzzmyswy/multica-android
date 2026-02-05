@@ -35,6 +35,8 @@ interface ConnectionStoreState {
   agentId: string | null
   connectionState: ConnectionState
   lastError: { code: string; message: string } | null
+  /** Whether the current connection required Owner approval (new device) */
+  isNewDevice: boolean | null
 }
 
 interface ConnectionStoreActions {
@@ -158,6 +160,8 @@ function createClient(
         useMessagesStore.getState().addAssistantMessage(payload.content, payload.agentId)
       }
     })
+    .onVerified((result) => set({ isNewDevice: result.isNewDevice ?? false }))
+    .onError((error) => set({ lastError: { code: "VERIFY_ERROR", message: error.message } }))
     .onSendError((error) => set({ lastError: { code: error.code, message: error.error } }))
 }
 
@@ -252,6 +256,7 @@ export const useConnectionStore = create<ConnectionStore>()(
       agentId: null,
       connectionState: "disconnected",
       lastError: null,
+      isNewDevice: null,
 
       // Connect using a connection code (disconnect existing connection first)
       connect: (code) => {
@@ -284,6 +289,7 @@ export const useConnectionStore = create<ConnectionStore>()(
           hubId: null,
           agentId: null,
           lastError: null,
+          isNewDevice: null,
         })
       },
 

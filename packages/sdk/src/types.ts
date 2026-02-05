@@ -102,6 +102,7 @@ export type ConnectionState =
   | "disconnected"
   | "connecting"
   | "connected"
+  | "verifying"
   | "registered";
 
 /** Event callback types */
@@ -109,7 +110,7 @@ export interface GatewayClientCallbacks {
   onConnect?: (socketId: string) => void;
   onDisconnect?: (reason: string) => void;
   onRegistered?: (deviceId: string) => void;
-  onVerified?: (result: { hubId: string; agentId: string }) => void;
+  onVerified?: (result: { hubId: string; agentId: string; isNewDevice?: boolean }) => void;
   onMessage?: (message: RoutedMessage) => void;
   onSendError?: (error: SendErrorResponse) => void;
   onPong?: (data: string) => void;
