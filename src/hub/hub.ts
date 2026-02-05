@@ -30,6 +30,7 @@ import { evaluateCommandSafety, requiresApproval } from "../agent/tools/exec-saf
 import { addAllowlistEntry, recordAllowlistUse, matchAllowlist } from "../agent/tools/exec-allowlist.js";
 import type { ExecApprovalCallback, ExecApprovalConfig, ApprovalResult, ExecApprovalRequest } from "../agent/tools/exec-approval-types.js";
 import { readProfileConfig, writeProfileConfig } from "../agent/profile/storage.js";
+import { getCronService, shutdownCronService, executeCronJob } from "../cron/index.js";
 
 export class Hub {
   private readonly agents = new Map<string, AsyncAgent>();
@@ -100,9 +101,22 @@ export class Hub {
     // Restore subagent registry from persistent state
     initSubagentRegistry();
 
+    // Initialize and start cron service
+    this.initCronService();
+
     this.client = this.createClient(this.url);
     this.client.connect();
     this.restoreAgents();
+  }
+
+  /** Initialize cron service with executor */
+  private initCronService(): void {
+    const cronService = getCronService();
+    cronService.setExecutor(executeCronJob);
+    cronService.start().catch((err) => {
+      console.error("[Hub] Failed to start cron service:", err);
+    });
+    console.log("[Hub] Cron service initialized");
   }
 
   /** Restore agents from persistent storage */
@@ -508,6 +522,9 @@ export class Hub {
   }
 
   shutdown(): void {
+    // Stop cron service
+    shutdownCronService();
+
     // Finalize subagent registry before closing agents
     shutdownSubagentRegistry();
 
