@@ -35,22 +35,31 @@ skills/                 # Bundled skills (commit, code-review)
 pnpm install
 ```
 
-### Credentials Configuration
+### Development
 
-The Agent reads credentials from JSON5 files (no `.env` required).
+```bash
+# Desktop app (recommended for local development)
+pnpm dev
 
-Create empty templates:
+# Gateway + Web app (for remote/mobile clients)
+pnpm dev:gateway     # Start Gateway on :3000
+pnpm dev:web         # Start Web app on :3001
+pnpm dev:all         # Start both Gateway and Web app
+```
+
+The Desktop app runs a standalone Hub with embedded Agent Engine - no Gateway required for local use.
+
+### Credentials
 
 ```bash
 multica credentials init
 ```
 
-This creates:
+Creates:
+- `~/.super-multica/credentials.json5` — LLM providers + tools
+- `~/.super-multica/skills.env.json5` — skill/plugin API keys
 
-- `~/.super-multica/credentials.json5` — core config (LLM providers + built-in tools)
-- `~/.super-multica/skills.env.json5` — dynamic keys (skills / plugins / integrations)
-
-Example `credentials.json5` (OpenAI):
+Example `credentials.json5`:
 
 ```json5
 {
@@ -58,11 +67,7 @@ Example `credentials.json5` (OpenAI):
   llm: {
     provider: "openai",
     providers: {
-      openai: {
-        apiKey: "sk-xxx",
-        baseUrl: "https://api.openai.com/v1",
-        model: "gpt-4o"
-      }
+      openai: { apiKey: "sk-xxx", model: "gpt-4o" }
     }
   },
   tools: {
@@ -71,372 +76,92 @@ Example `credentials.json5` (OpenAI):
 }
 ```
 
-Example `skills.env.json5` (dynamic keys):
-
-```json5
-{
-  env: {
-    LINEAR_API_KEY: "lin-...",
-    SLACK_BOT_TOKEN: "xoxb-..."
-  }
-}
-```
-
-Start services directly (no `source .env`):
-
-```bash
-multica dev           # Start desktop app
-multica run "hello"   # Run CLI mode
-```
-
-Optional overrides:
-
-- `SMC_CREDENTIALS_PATH` — custom path for `credentials.json5`
-- `SMC_SKILLS_ENV_PATH` — custom path for `skills.env.json5`
-
 ### LLM Providers
 
-Super Multica supports multiple LLM providers with two authentication methods:
-
-**OAuth Providers** (use external CLI login):
-- `claude-code` — Claude Code OAuth (requires `claude login`)
-- `openai-codex` — OpenAI Codex OAuth (requires `codex login`)
+**OAuth Providers** (external CLI login):
+- `claude-code` — requires `claude login`
+- `openai-codex` — requires `codex login`
 
 **API Key Providers** (configure in `credentials.json5`):
 - `anthropic`, `openai`, `kimi-coding`, `google`, `groq`, `mistral`, `xai`, `openrouter`
 
-#### Check Provider Status
+Check status: `/provider` in interactive mode
+
+## CLI
 
 ```bash
-# In interactive mode
-/provider
-
-# Output shows all providers with status
-🔌 Provider Status
-
-Current: kimi-coding
-
-Available Providers:
-  ID               Name                 Auth         Status
-  ──────────────────────────────────────────────────────────────────────
-  ✓ claude-code    Claude Code (OAuth)  OAuth        ready
-  ✗ openai-codex   Codex (OAuth)        OAuth        not logged in
-  ✓ kimi-coding    Kimi Code            API Key      configured (current)
-  ...
+multica                              # Interactive mode
+multica run "prompt"                 # Single prompt
+multica chat --profile my-agent      # Use profile
+multica --session abc123             # Continue session
+multica session list                 # List sessions
+multica profile list                 # List profiles
+multica skills list                  # List skills
+multica help                         # Show help
 ```
 
-#### Using OAuth Providers
-
-```bash
-# 1. Install and login to Claude Code
-npm install -g @anthropic-ai/claude-code
-claude login
-
-# 2. Start multica with claude-code provider
-multica --provider claude-code
-```
-
-#### Using API Key Providers
-
-Add your API key to `~/.super-multica/credentials.json5`:
-
-```json5
-{
-  llm: {
-    provider: "openai",
-    providers: {
-      openai: { apiKey: "sk-xxx" }
-    }
-  }
-}
-```
-
-### Configuration Priority
-
-Each setting is resolved in order (first match wins):
-
-1. **CLI argument** — `--provider`, `--model`, `--api-key`, `--base-url`
-2. **Credentials file** — `credentials.json5` (`llm.provider` + `llm.providers[provider]`)
-3. **Session metadata** — restored from previous session
-4. **Default** — `kimi-coding` provider with `kimi-k2-thinking` model
-
-## Multica CLI
-
-The unified CLI provides access to all agent features through a single command.
-
-```bash
-# Interactive mode (default)
-multica
-multica chat
-multica chat --profile my-agent
-
-# Run a single prompt
-multica run "hello"
-multica run --session demo "remember my name is Alice"
-
-# Session management
-multica session list
-multica session show abc12345
-multica session delete abc12345
-
-# Continue a session
-multica --session abc12345
-multica run --session abc12345 "what did I say?"
-
-# Override provider/model
-multica run --provider openai --model gpt-4o-mini "hi"
-
-# Use an agent profile
-multica chat --profile my-agent
-
-# Set thinking level
-multica run --thinking high "solve this complex problem"
-
-# Development servers
-multica dev                # Start desktop app (default)
-multica dev gateway        # Gateway only (:3000) - for remote clients
-multica dev web            # Web app only (:3001)
-multica dev all            # Start gateway + web
-
-# Help
-multica help
-multica run --help
-multica session --help
-```
-
-Short alias: `mu` (same as `multica`)
+Short alias: `mu`
 
 ## Sessions
 
-Sessions persist conversation history to `~/.super-multica/sessions/<id>/`. Each session includes:
+Sessions persist to `~/.super-multica/sessions/<id>/` with JSONL message history and JSON metadata. Context windows are automatically managed with token-aware compaction.
 
-- `session.jsonl` - Message history in JSONL format
-- `meta.json` - Session metadata (provider, model, thinking level)
+## Profiles
 
-Sessions use UUIDv7 for IDs by default, providing time-ordered unique identifiers.
-
-### Context Window Management
-
-The agent automatically manages context windows to prevent token overflow:
-
-- **Token-aware compaction** - Tracks token usage and compacts when approaching limits
-- **Compaction modes**: `tokens` (default), `count` (legacy), `summary` (LLM-generated)
-- **Configurable safety margins** - Ensures space for responses
-- **Minimum message preservation** - Keeps recent context intact
-
-## Agent Profiles
-
-Agent profiles define identity, personality, tools, and memory for an agent. Profiles are stored as markdown files in `~/.super-multica/agent-profiles/<id>/`.
-
-### Profile CLI
+Profiles define agent identity, personality, and memory in `~/.super-multica/agent-profiles/<id>/`.
 
 ```bash
-# Create a new profile with default templates
-multica profile new my-agent
-
-# List all profiles
-multica profile list
-
-# Show profile contents
-multica profile show my-agent
-
-# Open profile directory in file manager
-multica profile edit my-agent
-
-# Delete a profile
-multica profile delete my-agent
+multica profile new my-agent    # Create profile
+multica profile list            # List all
+multica profile edit my-agent   # Open in file manager
 ```
 
-### Profile Structure
-
-Each profile contains:
-
-- `identity.md` - Agent name and role
-- `soul.md` - Personality and behavioral constraints
-- `tools.md` - Tool usage instructions
-- `memory.md` - Persistent knowledge
-- `bootstrap.md` - Initial conversation context
+Profile files: `soul.md`, `user.md`, `workspace.md`, `memory.md`, `memory/*.md`
 
 ## Skills
 
-Skills are modular capabilities that extend agent functionality through `SKILL.md` definition files. For complete documentation, see [Skills System Documentation](./src/agent/skills/README.md).
-
-### Key Features
-
-- **Two-source loading** - Global skills (`~/.super-multica/skills/`) and profile-specific skills
-- **GitHub installation** - `pnpm skills:cli add owner/repo` to install from GitHub
-- **Slash command invocation** - `/skill-name args` in interactive mode
-- **Eligibility filtering** - Auto-filter by platform, binaries, and environment
-- **Hot reload** - File watcher for development
-
-### Quick Start
+Skills extend agent functionality via `SKILL.md` files. See [Skills Documentation](./src/agent/skills/README.md).
 
 ```bash
-# List all skills
-multica skills list
-
-# Install skills from GitHub
-multica skills add anthropics/skills
-
-# Check skill status with diagnostics
-multica skills status
-multica skills status pdf -v
-
-# Install skill dependencies
-multica skills install nano-pdf
-
-# Remove installed skills
-multica skills remove skills
+multica skills list              # List skills
+multica skills add owner/repo    # Install from GitHub
+multica skills status            # Check status
 ```
 
-### Built-in Skills
+Built-in: `commit`, `code-review`, `skill-creator`
 
-Located in `/skills/`:
+## Tools
 
-- **commit** - Git commit helper following conventional commits
-- **code-review** - Code review assistance
-- **skill-creator** - Create and manage custom skills (meta-skill for self-extension)
+Available tools: `read`, `write`, `edit`, `glob`, `exec`, `process`, `web_fetch`, `web_search`, `memory_search`, `sessions_spawn`
 
-### Creating Custom Skills
-
-The agent can create new skills to extend its own capabilities. Simply ask the agent to create a skill:
-
-```
-User: Create a skill that helps me format JSON
-Agent: [Creates ~/.super-multica/skills/json-formatter/SKILL.md]
-```
-
-Skills are automatically loaded via hot-reload. See the [skill-creator SKILL.md](./skills/skill-creator/SKILL.md) for the complete guide.
-
-## Agent Tools
-
-### exec
-
-Execute short-lived shell commands and return output. Commands running longer than the timeout are automatically backgrounded.
-
-```
-exec({ command: "ls -la", cwd: "/path/to/dir", timeoutMs: 30000 })
-```
-
-### process
-
-Manage long-running background processes (servers, watchers, daemons). Output is buffered (up to 64KB) and terminated processes are automatically cleaned up after 1 hour.
-
-```
-# Start a background process (returns immediately with process ID)
-process({ action: "start", command: "npm run dev" })
-
-# Check process status
-process({ action: "status", id: "<process-id>" })
-
-# Read process output
-process({ action: "output", id: "<process-id>" })
-
-# Stop a process
-process({ action: "stop", id: "<process-id>" })
-
-# Clean up terminated processes
-process({ action: "cleanup" })
-```
-
-### glob
-
-Pattern-based file discovery using fast-glob.
-
-```
-glob({ pattern: "**/*.ts", cwd: "/path/to/dir" })
-```
-
-### web_fetch
-
-Fetch and extract content from URLs with intelligent content extraction.
-
-```
-# Basic fetch (returns markdown)
-web_fetch({ url: "https://example.com" })
-
-# With options
-web_fetch({
-  url: "https://example.com",
-  outputFormat: "markdown",  # or "text"
-  extractor: "readability"   # or "turndown" for full page
-})
-```
-
-Features: SSRF protection, response caching, max 50KB output.
-
-### web_search
-
-Search the web using Brave or Perplexity AI.
-
-```
-# Basic search
-web_search({ query: "typescript best practices" })
-
-# With provider options
-web_search({
-  query: "latest AI news",
-  provider: "brave",     # or "perplexity"
-  count: 5,
-  freshness: "pw"        # past week (Brave: pd/pw/pm/py)
-})
-```
+See [Tools Documentation](./src/agent/tools/README.md) for details.
 
 ## Architecture
 
-### Desktop App (Recommended)
+```
+Desktop App (standalone, recommended)
+  └─ Hub (embedded)
+     └─ Agent Engine
 
-The Electron desktop app runs a standalone Hub with embedded Agent Engine:
+Web/Mobile Clients
+  → Gateway (WebSocket, :3000)
+    → Hub
+      → Agent Engine
+```
 
-- **No Gateway required** for local development
-- Direct IPC communication for optimal performance
-- QR code pairing for mobile remote access
-- Optional Gateway connection for web/remote clients
-
-### Gateway
-
-The WebSocket gateway enables remote client access:
-
-- Real-time message routing between clients and Hub
-- Streaming support for long-running operations
-- RPC-style request/response patterns
-- Device verification and authentication
-
-### Hub
-
-The Hub manages agents and communication:
-
-- Agent lifecycle management
-- Multi-subscriber event distribution
-- Device whitelist and token-based verification
+- **Desktop App**: Electron app with embedded Hub, no Gateway needed
+- **Gateway**: WebSocket server for remote clients
+- **Hub**: Agent lifecycle and event distribution
 
 ## Scripts
 
-### Multica CLI Commands
+```bash
+pnpm dev              # Desktop app (recommended)
+pnpm dev:gateway      # Gateway only
+pnpm dev:web          # Web app only
+pnpm dev:all          # Gateway + Web
 
-- `multica` / `mu` - Unified CLI entry point
-- `multica run <prompt>` - Run a single prompt
-- `multica chat` - Interactive REPL mode
-- `multica session <cmd>` - Session management
-- `multica profile <cmd>` - Profile management
-- `multica skills <cmd>` - Skills management
-- `multica tools <cmd>` - Tool policy inspection
-- `multica credentials <cmd>` - Credentials management
-- `multica dev [service]` - Development servers
-- `multica help` - Show help
-
-### Development (shortcuts)
-
-- `pnpm dev` - Run desktop app (default, recommended)
-- `pnpm dev:desktop` - Run desktop app
-- `pnpm dev:gateway` - Run gateway only (for remote clients)
-- `pnpm dev:web` - Run web app only
-- `pnpm dev:all` - Run gateway + web
-
-### Build & Test
-
-- `pnpm build` - Build for production
-- `pnpm build:sdk` - Build SDK package
-- `pnpm build:cli` - Build CLI binary
-- `pnpm start` - Run production build
-- `pnpm typecheck` - Type check without emitting
+pnpm build            # Production build
+pnpm typecheck        # Type check
+pnpm test             # Run tests
+```
