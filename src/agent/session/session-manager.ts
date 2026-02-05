@@ -281,9 +281,9 @@ export class SessionManager {
 
   private enqueue(task: () => Promise<void>) {
     this.queue = this.queue.then(task, task).catch((err) => {
-      // Swallow to keep the queue settled so subsequent writes can proceed,
-      // but log for debuggability.
+      // Log for debuggability, but preserve failure for awaiters.
       console.error("[SessionManager] storage write failed:", err);
+      throw err;
     });
     return this.queue;
   }
