@@ -50,7 +50,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
       editorProps: {
         attributes: {
           class:
-            "w-full resize-none bg-transparent px-1 py-1 text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed",
+            "w-full resize-none bg-transparent px-1 py-1 text-base text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed",
         },
         handleKeyDown(_view, event) {
           // Guard for IME composition (Chinese/Japanese input)
