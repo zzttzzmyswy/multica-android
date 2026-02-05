@@ -272,6 +272,13 @@ export class SessionManager {
     return result;
   }
 
+  /**
+   * Wait for all pending storage writes to complete.
+   */
+  async flush(): Promise<void> {
+    await this.queue;
+  }
+
   private enqueue(task: () => Promise<void>) {
     this.queue = this.queue.then(task, task).catch(() => {
       // Swallow storage errors to prevent unhandled rejections.
