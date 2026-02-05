@@ -6,7 +6,12 @@
 
 import { SAFETY_CONSTITUTION } from "./constitution.js";
 import { formatRuntimeLine } from "./runtime-info.js";
-import type { ProfileContent, RuntimeInfo, SubagentContext, SystemPromptMode } from "./types.js";
+import type {
+  ProfileContent,
+  RuntimeInfo,
+  SubagentContext,
+  SystemPromptMode,
+} from "./types.js";
 
 // ─── Core tool summaries ────────────────────────────────────────────────────
 
@@ -20,10 +25,7 @@ const CORE_TOOL_SUMMARIES: Record<string, string> = {
   process: "Manage background exec sessions",
   web_search: "Search the web",
   web_fetch: "Fetch and extract readable content from a URL",
-  memory_get: "Read from agent memory",
-  memory_set: "Write to agent memory",
-  memory_list: "List memory entries",
-  memory_delete: "Delete memory entries",
+  memory_search: "Search memory files by keyword",
   sessions_spawn: "Spawn a sub-agent session",
 };
 
@@ -37,10 +39,7 @@ const TOOL_ORDER = [
   "process",
   "web_search",
   "web_fetch",
-  "memory_get",
-  "memory_set",
-  "memory_list",
-  "memory_delete",
+  "memory_search",
   "sessions_spawn",
 ];
 
@@ -98,6 +97,7 @@ export function buildWorkspaceSection(
       "## Profile",
       "",
       `Your profile directory: \`${profileDir}\``,
+      "Use this as the base path for profile files (soul.md, user.md, memory.md, memory/*.md).",
       "",
       "Profile files:",
       "- `soul.md` — Your identity and values",
@@ -170,7 +170,9 @@ export function buildToolingSummary(
       seen.add(tool);
       const displayName = resolveToolName(tool);
       const summary = CORE_TOOL_SUMMARIES[tool];
-      toolLines.push(summary ? `- ${displayName}: ${summary}` : `- ${displayName}`);
+      toolLines.push(
+        summary ? `- ${displayName}: ${summary}` : `- ${displayName}`,
+      );
     }
   }
 
@@ -217,16 +219,16 @@ export function buildConditionalToolSections(
   const lines: string[] = [];
 
   // Memory tools
-  const hasMemory =
-    toolSet.has("memory_get") ||
-    toolSet.has("memory_set") ||
-    toolSet.has("memory_list") ||
-    toolSet.has("memory_delete");
-  if (hasMemory) {
+  if (toolSet.has("memory_search")) {
     lines.push(
-      "## Memory",
-      "Before answering anything about prior work, decisions, dates, people, preferences, or todos: search memory first, then pull only the needed entries.",
-      "Update memory when the user shares important information, decisions, or preferences.",
+      "## Memory Recall",
+      "Before answering anything about prior work, decisions, dates, people, preferences, or todos:",
+      "1. Run `memory_search` to find relevant entries in memory files",
+      "2. Use `read` to pull needed context",
+      "",
+      "To update memory, use `edit` on the appropriate file:",
+      "- `memory.md` — Long-term knowledge (decisions, preferences, important context)",
+      "- `memory/YYYY-MM-DD.md` — Daily logs and session notes",
       "",
     );
   }
@@ -345,6 +347,7 @@ export function buildExtraPromptSection(
   const trimmed = extraSystemPrompt?.trim();
   if (!trimmed) return [];
 
-  const header = mode === "minimal" ? "## Subagent Context" : "## Additional Context";
+  const header =
+    mode === "minimal" ? "## Subagent Context" : "## Additional Context";
   return [header, trimmed];
 }

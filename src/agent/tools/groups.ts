@@ -30,8 +30,8 @@ export const TOOL_GROUPS: Record<string, string[]> = {
   // Web tools
   "group:web": ["web_search", "web_fetch"],
 
-  // Memory tools (requires profileId)
-  "group:memory": ["memory_get", "memory_set", "memory_delete", "memory_list"],
+  // Memory tools (requires profile)
+  "group:memory": ["memory_search"],
 
   // Subagent tools
   "group:subagent": ["sessions_spawn"],

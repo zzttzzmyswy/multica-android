@@ -12,7 +12,7 @@ const TOOL_GROUPS: Record<string, string[]> = {
   'group:fs': ['read', 'write', 'edit', 'glob'],
   'group:runtime': ['exec', 'process'],
   'group:web': ['web_search', 'web_fetch'],
-  'group:memory': ['memory_get', 'memory_set', 'memory_delete', 'memory_list'],
+  'group:memory': ['memory_search'],
   'group:subagent': ['sessions_spawn'],
 }
 

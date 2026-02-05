@@ -163,11 +163,6 @@ describe("buildToolCallStyleSection", () => {
 });
 
 describe("buildConditionalToolSections", () => {
-  it("includes memory section when memory tools present", () => {
-    const result = buildConditionalToolSections(["memory_get", "read"], "full");
-    expect(result.join("\n")).toContain("## Memory");
-  });
-
   it("includes sub-agents section when sessions_spawn present in full mode", () => {
     const result = buildConditionalToolSections(["sessions_spawn"], "full");
     expect(result.join("\n")).toContain("## Sub-Agents");
@@ -189,7 +184,7 @@ describe("buildConditionalToolSections", () => {
   });
 
   it("returns empty in none mode", () => {
-    expect(buildConditionalToolSections(["memory_get"], "none")).toEqual([]);
+    expect(buildConditionalToolSections(["read"], "none")).toEqual([]);
   });
 });
 

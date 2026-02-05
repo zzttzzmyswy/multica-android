@@ -1,8 +1,9 @@
 import { Agent as PiAgentCore, type AgentEvent, type AgentMessage } from "@mariozechner/pi-agent-core";
 import { v7 as uuidv7 } from "uuid";
 import type { AgentOptions, AgentRunResult, ReasoningMode } from "./types.js";
+import type { MulticaEvent } from "./events.js";
 import { createAgentOutput } from "./cli/output.js";
-import { resolveModel, resolveTools } from "./tools.js";
+import { resolveModel, resolveTools, type ResolveToolsOptions } from "./tools.js";
 import {
   resolveApiKey,
   resolveApiKeyForProfile,
@@ -78,10 +79,14 @@ export class Agent {
   private readonly contextWindowGuard: ContextWindowGuardResult;
   private readonly debug: boolean;
   private reasoningMode: ReasoningMode;
-  private toolsOptions: AgentOptions;
+  private toolsOptions: ResolveToolsOptions;
   private readonly originalToolsConfig?: ToolsConfig;
   private readonly stderr: NodeJS.WritableStream;
   private initialized = false;
+
+  // MulticaEvent subscribers (parallel to PiAgentCore's subscriber list)
+  // Typed as AgentEvent | MulticaEvent to match subscribeAll() callback signature
+  private multicaListeners: Array<(event: AgentEvent | MulticaEvent) => void> = [];
 
   // Auth profile rotation state
   private resolvedProvider: string;
@@ -280,7 +285,10 @@ export class Agent {
     // Merge Profile tools config with options.tools (options takes precedence)
     const profileToolsConfig = this.profile?.getToolsConfig();
     const mergedToolsConfig = mergeToolsConfig(profileToolsConfig, options.tools);
-    this.toolsOptions = mergedToolsConfig ? { ...options, tools: mergedToolsConfig } : options;
+    const profileDir = this.profile?.getProfileDir();
+    this.toolsOptions = mergedToolsConfig
+      ? { ...options, tools: mergedToolsConfig, profileDir }
+      : { ...options, profileDir };
 
     const tools = resolveTools(this.toolsOptions);
     if (this.debug) {
@@ -321,6 +329,27 @@ export class Agent {
   /** Subscribe to raw AgentEvent from the underlying engine */
   subscribe(fn: (event: AgentEvent) => void): () => void {
     return this.agent.subscribe(fn);
+  }
+
+  /** Subscribe to both AgentEvent and MulticaEvent streams */
+  subscribeAll(fn: (event: AgentEvent | MulticaEvent) => void): () => void {
+    const unsubCore = this.agent.subscribe(fn);
+    this.multicaListeners.push(fn);
+    return () => {
+      unsubCore();
+      const idx = this.multicaListeners.indexOf(fn);
+      if (idx >= 0) this.multicaListeners.splice(idx, 1);
+    };
+  }
+
+  private emitMulticaEvent(event: MulticaEvent): void {
+    for (const fn of this.multicaListeners) {
+      try {
+        fn(event);
+      } catch {
+        // Don't let listener errors break the agent loop
+      }
+    }
   }
 
   async run(prompt: string): Promise<AgentRunResult> {
@@ -422,10 +451,34 @@ export class Agent {
 
   private async maybeCompact() {
     const messages = this.agent.state.messages.slice();
-    const result = await this.session.maybeCompact(messages);
-    if (result?.kept) {
-      this.agent.replaceMessages(result.kept);
+    if (!this.session.needsCompaction(messages)) return;
+
+    try {
+      const result = await this.session.maybeCompact(messages);
+      if (!result) return;
+
+      this.emitMulticaEvent({ type: "compaction_start" });
+      if (result?.kept) {
+        this.agent.replaceMessages(result.kept);
+      }
+      this.emitMulticaEvent({
+        type: "compaction_end",
+        removed: result?.removedCount ?? 0,
+        kept: result?.kept.length ?? messages.length,
+        tokensRemoved: result?.tokensRemoved,
+        tokensKept: result?.tokensKept,
+        reason: result?.reason ?? "tokens",
+      });
+    } catch (err) {
+      throw err;
     }
+  }
+
+  /**
+   * Wait for all pending session storage writes to complete.
+   */
+  async flushSession(): Promise<void> {
+    await this.session.flush();
   }
 
   /**
