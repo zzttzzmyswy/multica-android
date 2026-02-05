@@ -91,13 +91,8 @@ export function buildWorkspaceSection(
     lines.push(
       "## Profile",
       "",
-      `Your profile directory: \`${profileDir}\``,
-      "",
-      "Profile files:",
-      "- `soul.md` — Your identity and values",
-      "- `user.md` — Information about your user",
-      "- `workspace.md` — Guidelines and conventions (below)",
-      "- `memory.md` — Persistent knowledge",
+      `Your profile directory is: ${profileDir}`,
+      "Use this as the base path for profile files (soul.md, user.md, memory.md, memory/*.md).",
       "",
     );
   }
@@ -213,14 +208,8 @@ export function buildConditionalToolSections(
   // Memory tools
   if (toolSet.has("memory_search")) {
     lines.push(
-      "## Memory",
-      "Before answering questions about prior work, decisions, dates, people, preferences, or todos:",
-      "1. Use `memory_search` to find relevant entries in memory files",
-      "2. Use `read` to get full context from matching files",
-      "",
-      "To update memory, use `edit` on the appropriate file:",
-      "- `memory.md` — Long-term knowledge (decisions, preferences, important context)",
-      "- `memory/YYYY-MM-DD.md` — Daily logs and session notes",
+      "## Memory Recall",
+      "Before answering anything about prior work, decisions, dates, people, preferences, or todos: run memory_search on memory.md + memory/*.md; then use read to pull needed context. If low confidence after search, say you checked.",
       "",
     );
   }
