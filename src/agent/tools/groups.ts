@@ -36,6 +36,9 @@ export const TOOL_GROUPS: Record<string, string[]> = {
   // Subagent tools
   "group:subagent": ["sessions_spawn"],
 
+  // Cron/scheduling tools
+  "group:cron": ["cron"],
+
   // All core tools
   "group:core": [
     "read",
