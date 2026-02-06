@@ -54,6 +54,7 @@ export class Hub {
   private readonly agentStreamIds = new Map<string, string>();
   private readonly agentStreamCounters = new Map<string, number>();
   private readonly pendingAssistantStarts = new Map<string, { agentId: string; event: unknown }>();
+  private readonly suppressedStreamAgents = new Set<string>();
   private readonly localApprovalHandlers = new Map<string, (payload: ExecApprovalRequest) => void>();
   private readonly rpc: RpcDispatcher;
   private readonly approvalManager: ExecApprovalManager;
@@ -386,6 +387,20 @@ export class Hub {
           content: item.content,
         });
       } else {
+        const suppressForAgent = this.suppressedStreamAgents.has(agent.sessionId);
+
+        // Suppress all user-visible stream events during silent heartbeat runs.
+        if (suppressForAgent) {
+          if (item.type === "message_start") {
+            this.beginStream(agent.sessionId, item);
+          } else if (item.type === "message_end") {
+            const streamId = this.getActiveStreamId(agent.sessionId, item);
+            this.pendingAssistantStarts.delete(streamId);
+            this.endStream(agent.sessionId);
+          }
+          continue;
+        }
+
         // Compaction events: forward with synthetic streamId (no stream tracking)
         const isCompactionEvent =
           item.type === "compaction_start" || item.type === "compaction_end";
@@ -629,15 +644,28 @@ export class Hub {
 
   /** Run heartbeat immediately using the current default agent. */
   async runHeartbeatOnce(opts?: { reason?: string }): Promise<HeartbeatRunResult> {
-    if (opts?.reason) {
-      return runHeartbeatOnce({
-        agent: this.getDefaultAgent(),
-        reason: opts.reason,
-      });
+    const agent = this.getDefaultAgent();
+    const reason = opts?.reason;
+    const shouldSuppressStreams = reason === "manual";
+    if (shouldSuppressStreams && agent) {
+      this.suppressedStreamAgents.add(agent.sessionId);
     }
-    return runHeartbeatOnce({
-      agent: this.getDefaultAgent(),
-    });
+
+    try {
+      if (reason) {
+        return runHeartbeatOnce({
+          agent,
+          reason,
+        });
+      }
+      return runHeartbeatOnce({
+        agent,
+      });
+    } finally {
+      if (shouldSuppressStreams && agent) {
+        this.suppressedStreamAgents.delete(agent.sessionId);
+      }
+    }
   }
 
   /** Enqueue a system event for a specific agent or the default agent. */
@@ -657,6 +685,7 @@ export class Hub {
     this.agentStreamIds.delete(id);
     this.agentStreamCounters.delete(id);
     this.clearPendingAssistantStarts(id);
+    this.suppressedStreamAgents.delete(id);
     this.localApprovalHandlers.delete(id);
     removeAgentRecord(id);
     this.heartbeatRunner?.updateConfig();
@@ -682,6 +711,7 @@ export class Hub {
       this.agentStreamIds.delete(id);
       this.agentStreamCounters.delete(id);
       this.clearPendingAssistantStarts(id);
+      this.suppressedStreamAgents.delete(id);
       this.localApprovalHandlers.delete(id);
     }
     this.client.disconnect();
