@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@multica/ui/components/ui/button'
-import { Switch } from '@multica/ui/components/ui/switch'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Comment01Icon,
@@ -20,13 +19,11 @@ import { ApiKeyDialog } from '../components/api-key-dialog'
 import { OAuthDialog } from '../components/oauth-dialog'
 import { useHub } from '../hooks/use-hub'
 import { useProvider } from '../hooks/use-provider'
-import { useHeartbeat } from '../hooks/use-heartbeat'
 
 export default function HomePage() {
   const navigate = useNavigate()
   const { hubInfo, agents, loading, error } = useHub()
   const { providers, current, setProvider, refresh, loading: providerLoading } = useProvider()
-  const heartbeat = useHeartbeat()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [agentName, setAgentName] = useState<string | undefined>()
   const [providerDropdownOpen, setProviderDropdownOpen] = useState(false)
@@ -273,41 +270,6 @@ export default function HomePage() {
                   </div>
                 </div>
               )}
-            </div>
-
-            {/* Heartbeat Status */}
-            <div className="p-4 rounded-lg bg-muted/50 border border-border/50">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider">
-                  Heartbeat
-                </p>
-                <Switch checked={heartbeat.enabled} onCheckedChange={() => void heartbeat.toggleEnabled()} />
-              </div>
-              <p className="text-sm font-medium">
-                {heartbeat.lastEvent
-                  ? `Last: ${heartbeat.lastEvent.status}`
-                  : heartbeat.loading
-                  ? 'Loading...'
-                  : 'No heartbeat yet'}
-              </p>
-              {heartbeat.lastEvent?.reason && (
-                <p className="text-xs text-muted-foreground mt-1 truncate">
-                  {heartbeat.lastEvent.reason}
-                </p>
-              )}
-              {heartbeat.error && (
-                <p className="text-xs text-destructive mt-1 truncate">{heartbeat.error}</p>
-              )}
-              <div className="mt-3">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void heartbeat.wakeNow()}
-                  disabled={heartbeat.loading}
-                >
-                  Trigger Now
-                </Button>
-              </div>
             </div>
 
             {/* Stats Grid */}
