@@ -26,5 +26,11 @@ export type CompactionEndEvent = {
   reason: "count" | "tokens" | "summary" | "pruning";
 };
 
+/** Emitted when the agent encounters an error (LLM failure, quota exceeded, etc.) */
+export type AgentErrorEvent = {
+  type: "agent_error";
+  error: string;
+};
+
 /** Union of all Multica-specific events */
-export type MulticaEvent = CompactionStartEvent | CompactionEndEvent;
+export type MulticaEvent = CompactionStartEvent | CompactionEndEvent | AgentErrorEvent;

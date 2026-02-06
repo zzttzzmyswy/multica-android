@@ -342,7 +342,7 @@ export class Agent {
     };
   }
 
-  private emitMulticaEvent(event: MulticaEvent): void {
+  emitMulticaEvent(event: MulticaEvent): void {
     for (const fn of this.multicaListeners) {
       try {
         fn(event);

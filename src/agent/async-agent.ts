@@ -48,12 +48,16 @@ export class AsyncAgent {
         await this.agent.flushSession();
         // Normal text is delivered via message_end event; only handle errors here
         if (result.error) {
+          console.error(`[AsyncAgent] Agent run error: ${result.error}`);
           this.channel.send({ id: uuidv7(), content: `[error] ${result.error}` });
+          this.agent.emitMulticaEvent({ type: "agent_error", error: result.error });
         }
       })
       .catch((err) => {
         const message = err instanceof Error ? err.message : String(err);
+        console.error(`[AsyncAgent] Agent run exception: ${message}`);
         this.channel.send({ id: uuidv7(), content: `[error] ${message}` });
+        this.agent.emitMulticaEvent({ type: "agent_error", error: message });
       });
   }
 
