@@ -13,6 +13,7 @@ import { buildSystemPrompt } from "../system-prompt/index.js";
 import type {
   SubagentAnnounceParams,
   SubagentRunOutcome,
+  SubagentRunRecord,
   SubagentSystemPromptParams,
 } from "./types.js";
 
@@ -168,10 +169,113 @@ export function formatAnnouncementMessage(params: FormatAnnouncementParams): str
 }
 
 /**
+ * Format a coalesced announcement message from multiple completed subagent runs.
+ * When only one record is provided, delegates to formatAnnouncementMessage.
+ */
+export function formatCoalescedAnnouncementMessage(
+  records: SubagentRunRecord[],
+): string {
+  // Single record: delegate to existing format for backward-compatible behavior
+  if (records.length === 1) {
+    const r = records[0]!;
+    return formatAnnouncementMessage({
+      runId: r.runId,
+      childSessionId: r.childSessionId,
+      requesterSessionId: r.requesterSessionId,
+      task: r.task,
+      label: r.label,
+      cleanup: r.cleanup,
+      outcome: r.outcome,
+      startedAt: r.startedAt,
+      endedAt: r.endedAt,
+      findings: r.findings,
+    });
+  }
+
+  // Multiple records: build combined message
+  const parts: string[] = [
+    `All ${records.length} background tasks have completed. Here are the combined results:`,
+    "",
+  ];
+
+  for (let i = 0; i < records.length; i++) {
+    const r = records[i]!;
+    const displayName = r.label || r.task.slice(0, 60);
+    const statusLabel = formatStatusLabel(r.outcome);
+    const durationStr = (r.startedAt && r.endedAt)
+      ? ` (${formatDuration(r.startedAt, r.endedAt)})`
+      : "";
+
+    parts.push(
+      `### Task ${i + 1}: "${displayName}"`,
+      `Status: ${statusLabel}${durationStr}`,
+      "",
+      "Findings:",
+      r.findings || "(no output)",
+      "",
+    );
+  }
+
+  // Overall stats
+  const allStartTimes = records.map(r => r.startedAt).filter(Boolean) as number[];
+  const allEndTimes = records.map(r => r.endedAt).filter(Boolean) as number[];
+  if (allStartTimes.length > 0 && allEndTimes.length > 0) {
+    const wallTime = formatDuration(Math.min(...allStartTimes), Math.max(...allEndTimes));
+    parts.push(`Total wall time: ${wallTime}`);
+  }
+
+  const okCount = records.filter(r => r.outcome?.status === "ok").length;
+  const failCount = records.length - okCount;
+  parts.push(`Results: ${okCount} succeeded, ${failCount} failed/timed out`);
+
+  parts.push(
+    "",
+    "Summarize these results naturally for the user.",
+    "Present the combined findings as a coherent summary, not a list of separate reports.",
+    "Keep it concise but cover the key findings from each task.",
+    "Do not mention technical details like session IDs or that these were background tasks.",
+    "You can respond with NO_REPLY if no announcement is needed.",
+  );
+
+  return parts.join("\n");
+}
+
+/**
+ * Run the coalesced announcement flow for all completed runs of a requester.
+ * Formats a single combined message and delivers it to the parent agent.
+ */
+export function runCoalescedAnnounceFlow(
+  requesterSessionId: string,
+  records: SubagentRunRecord[],
+): boolean {
+  const message = formatCoalescedAnnouncementMessage(records);
+
+  try {
+    const hub = getHub();
+    const parentAgent = hub.getAgent(requesterSessionId);
+    if (!parentAgent || parentAgent.closed) {
+      console.warn(
+        `[SubagentAnnounce] Parent agent not found or closed: ${requesterSessionId}`,
+      );
+      return false;
+    }
+
+    parentAgent.write(message);
+    return true;
+  } catch (err) {
+    console.error(`[SubagentAnnounce] Failed to coalesced-announce to parent:`, err);
+    return false;
+  }
+}
+
+/**
  * Run the full subagent announcement flow:
  * 1. Read child's last assistant reply
  * 2. Format announcement message
  * 3. Send to parent agent via Hub
+ *
+ * @deprecated Use runCoalescedAnnounceFlow instead, which supports
+ * batching multiple completed runs into a single announcement.
  */
 export function runSubagentAnnounceFlow(params: SubagentAnnounceParams): boolean {
   const { requesterSessionId, childSessionId } = params;

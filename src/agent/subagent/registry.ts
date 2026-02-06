@@ -7,7 +7,7 @@
 
 import { getHub, isHubInitialized } from "../../hub/hub-singleton.js";
 import { loadSubagentRuns, saveSubagentRuns } from "./registry-store.js";
-import { runSubagentAnnounceFlow } from "./announce.js";
+import { readLatestAssistantReply, runCoalescedAnnounceFlow } from "./announce.js";
 import type {
   RegisterSubagentRunParams,
   SubagentRunRecord,
@@ -27,7 +27,7 @@ const SWEEP_INTERVAL_MS = 60 * 1000;
 
 const subagentRuns = new Map<string, SubagentRunRecord>();
 let sweepTimer: ReturnType<typeof setInterval> | undefined;
-const resumedRuns = new Set<string>();
+const resumedRequesters = new Set<string>();
 
 // ============================================================================
 // Public API
@@ -39,25 +39,42 @@ export function initSubagentRegistry(): void {
   for (const [runId, record] of persisted) {
     subagentRuns.set(runId, record);
 
-    // Resume incomplete runs
-    if (!record.cleanupHandled) {
-      if (record.endedAt) {
-        // Completed but cleanup not done — run announce flow
-        if (!resumedRuns.has(runId)) {
-          resumedRuns.add(runId);
-          handleRunCompletion(record);
-        }
-      } else {
-        // If not ended, the child agent session is lost on restart —
-        // mark as ended with unknown outcome
-        record.endedAt = Date.now();
-        record.outcome = { status: "unknown" };
-        persist();
-        if (!resumedRuns.has(runId)) {
-          resumedRuns.add(runId);
-          handleRunCompletion(record);
-        }
+    // Backward compat: old records with cleanupHandled but no announced field
+    if (record.cleanupHandled && record.announced === undefined) {
+      record.announced = true;
+      record.findingsCaptured = true;
+    }
+  }
+
+  // Process incomplete runs
+  const affectedRequesters = new Set<string>();
+
+  for (const record of subagentRuns.values()) {
+    if (record.announced && record.cleanupHandled) continue; // Already fully done
+
+    if (!record.endedAt) {
+      // Child was running when process crashed — mark as ended/unknown
+      record.endedAt = Date.now();
+      record.outcome = { status: "unknown" };
+    }
+
+    if (!record.findingsCaptured) {
+      captureFindings(record);
+      if (record.cleanup === "delete") {
+        deleteChildSession(record.childSessionId);
       }
+    }
+
+    affectedRequesters.add(record.requesterSessionId);
+  }
+
+  persist();
+
+  // For each affected requester, check if coalesced announcement is needed
+  for (const requesterId of affectedRequesters) {
+    if (!resumedRequesters.has(requesterId)) {
+      resumedRequesters.add(requesterId);
+      checkAndAnnounce(requesterId);
     }
   }
 
@@ -138,11 +155,17 @@ export function shutdownSubagentRegistry(): void {
       record.outcome = { status: "unknown" };
       updated++;
     }
+
+    // Opportunistically capture findings for ended-but-uncaptured runs
+    if (record.endedAt && !record.findingsCaptured) {
+      captureFindings(record);
+      updated++;
+    }
   }
 
   if (updated > 0) {
     persist();
-    console.log(`[SubagentRegistry] Marked ${updated} active run(s) as ended during shutdown`);
+    console.log(`[SubagentRegistry] Processed ${updated} run(s) during shutdown`);
   }
 
   stopSweeper();
@@ -151,7 +174,7 @@ export function shutdownSubagentRegistry(): void {
 /** Reset all state (for testing). */
 export function resetSubagentRegistryForTests(): void {
   subagentRuns.clear();
-  resumedRuns.clear();
+  resumedRequesters.clear();
   stopSweeper();
 }
 
@@ -222,44 +245,73 @@ function watchChildAgent(record: SubagentRunRecord, timeoutSeconds?: number): vo
 }
 
 // ============================================================================
-// Cleanup + Announce
+// Cleanup + Announce (two-phase: capture findings, then coalesced announce)
 // ============================================================================
 
-function handleRunCompletion(record: SubagentRunRecord): void {
-  if (record.cleanupHandled) return;
-  record.cleanupHandled = true;
+/** Phase 1: Capture child's findings before session deletion. */
+function captureFindings(record: SubagentRunRecord): void {
+  try {
+    const findings = readLatestAssistantReply(record.childSessionId);
+    record.findings = findings ?? undefined;
+  } catch {
+    record.findings = "(failed to read findings)";
+  }
+  record.findingsCaptured = true;
   persist();
+}
 
-  // Run announce flow
-  const announced = runSubagentAnnounceFlow({
-    runId: record.runId,
-    childSessionId: record.childSessionId,
-    requesterSessionId: record.requesterSessionId,
-    task: record.task,
-    label: record.label,
-    cleanup: record.cleanup,
-    outcome: record.outcome,
-    startedAt: record.startedAt,
-    endedAt: record.endedAt,
-  });
+/**
+ * Phase 2: Check if all unannounced runs for this requester have completed.
+ * If so, send a single coalesced announcement to the parent.
+ */
+function checkAndAnnounce(requesterSessionId: string): void {
+  const allRuns = listSubagentRuns(requesterSessionId);
 
-  if (!announced) {
-    console.warn(`[SubagentRegistry] Announce flow failed for run ${record.runId}`);
-    // Allow retry on next restart if announce failed.
-    record.cleanupHandled = false;
+  // Only consider unannounced runs
+  const pending = allRuns.filter(r => !r.announced);
+  if (pending.length === 0) return;
+
+  // Are all unannounced runs done?
+  const allDone = pending.every(r => r.endedAt !== undefined);
+  if (!allDone) return;
+
+  // Have all had findings captured?
+  const allCaptured = pending.every(r => r.findingsCaptured);
+  if (!allCaptured) return;
+
+  // All done — send coalesced announcement
+  const announced = runCoalescedAnnounceFlow(requesterSessionId, pending);
+
+  if (announced) {
+    for (const r of pending) {
+      r.announced = true;
+      r.cleanupHandled = true;
+      r.archiveAtMs = Date.now() + DEFAULT_ARCHIVE_AFTER_MS;
+      r.cleanupCompletedAt = Date.now();
+    }
     persist();
-    return;
+  } else {
+    console.warn(
+      `[SubagentRegistry] Coalesced announce failed for requester ${requesterSessionId}`,
+    );
+    // Leave announced=false so initSubagentRegistry() can retry on restart
+  }
+}
+
+/** Entry point: called when a child completes. */
+function handleRunCompletion(record: SubagentRunRecord): void {
+  // Phase 1: capture findings (before session deletion)
+  if (!record.findingsCaptured) {
+    captureFindings(record);
+
+    // Session cleanup (safe now that findings are persisted)
+    if (record.cleanup === "delete") {
+      deleteChildSession(record.childSessionId);
+    }
   }
 
-  // Handle session cleanup
-  if (record.cleanup === "delete") {
-    deleteChildSession(record.childSessionId);
-  }
-
-  // Schedule archive
-  record.archiveAtMs = Date.now() + DEFAULT_ARCHIVE_AFTER_MS;
-  record.cleanupCompletedAt = Date.now();
-  persist();
+  // Phase 2: coalesced announce check
+  checkAndAnnounce(record.requesterSessionId);
 }
 
 function deleteChildSession(sessionId: string): void {
@@ -305,7 +357,6 @@ function sweep(): void {
   for (const [runId, record] of subagentRuns) {
     if (record.archiveAtMs !== undefined && record.archiveAtMs <= now) {
       subagentRuns.delete(runId);
-      resumedRuns.delete(runId);
       removed++;
     }
   }
