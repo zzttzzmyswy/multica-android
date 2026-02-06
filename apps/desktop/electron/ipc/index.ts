@@ -7,6 +7,7 @@ export { registerHubIpcHandlers, cleanupHub, initializeHub, setupDeviceConfirmat
 export { registerProfileIpcHandlers } from './profile.js'
 export { registerProviderIpcHandlers } from './provider.js'
 export { registerCronIpcHandlers } from './cron.js'
+export { registerHeartbeatIpcHandlers } from './heartbeat.js'
 
 import { registerAgentIpcHandlers, cleanupAgent } from './agent.js'
 import { registerSkillsIpcHandlers } from './skills.js'
@@ -14,6 +15,7 @@ import { registerHubIpcHandlers, cleanupHub, initializeHub } from './hub.js'
 import { registerProfileIpcHandlers } from './profile.js'
 import { registerProviderIpcHandlers } from './provider.js'
 import { registerCronIpcHandlers } from './cron.js'
+import { registerHeartbeatIpcHandlers } from './heartbeat.js'
 
 /**
  * Register all IPC handlers.
@@ -26,6 +28,7 @@ export function registerAllIpcHandlers(): void {
   registerProfileIpcHandlers()
   registerProviderIpcHandlers()
   registerCronIpcHandlers()
+  registerHeartbeatIpcHandlers()
 }
 
 /**
