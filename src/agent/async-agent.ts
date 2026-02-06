@@ -74,12 +74,14 @@ export class AsyncAgent {
         const result = await this.agent.runInternal(content);
         await this.agent.flushSession();
         if (result.error) {
-          this.channel.send({ id: uuidv7(), content: `[error] ${result.error}` });
+          // Internal run errors are for diagnostics only; do not leak to user stream.
+          console.error(`[AsyncAgent] Internal run error: ${result.error}`);
         }
       })
       .catch((err) => {
         const message = err instanceof Error ? err.message : String(err);
-        this.channel.send({ id: uuidv7(), content: `[error] ${message}` });
+        // Internal run exceptions are for diagnostics only; do not leak to user stream.
+        console.error(`[AsyncAgent] Internal run failed: ${message}`);
       });
   }
 
@@ -96,6 +98,7 @@ export class AsyncAgent {
   subscribe(callback: (event: AgentEvent | MulticaEvent) => void): () => void {
     console.log(`[AsyncAgent] Adding subscriber for agent: ${this.sessionId}`);
     const unsubscribe = this.agent.subscribeAll((event) => {
+      if (this.agent.isInternalRun) return;
       console.log(`[AsyncAgent] Event received: ${event.type}`);
       callback(event);
     });
