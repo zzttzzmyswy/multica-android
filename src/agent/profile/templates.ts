@@ -72,6 +72,7 @@ Your profile directory contains these files (use \`edit\` or \`write\` to update
 | \`user.md\` | About your human | As you learn about them |
 | \`workspace.md\` | This file — your rules | When you discover better conventions |
 | \`memory.md\` | Long-term knowledge | Regularly — capture what matters |
+| \`heartbeat.md\` | Background check instructions | When heartbeat behavior should change |
 
 ## Every Session
 
@@ -89,6 +90,7 @@ You wake up fresh each session. These files are your continuity:
 
 - **Long-term:** \`MEMORY.md\` — your curated memories, lessons learned
 - **Daily notes:** \`memory/YYYY-MM-DD.md\` — raw logs of what happened (optional)
+- **Heartbeat:** \`heartbeat.md\` — periodic check loop instructions
 
 Capture what matters. Decisions, context, things to remember.
 
@@ -101,6 +103,7 @@ Capture what matters. Decisions, context, things to remember.
 - \`memory.md\` — Your learnings: decisions made, lessons learned, important context
 - \`workspace.md\` — Your rules: conventions, workflows, how you should operate
 - \`soul.md\` — Your identity: only change if user wants to reshape who you are
+- \`heartbeat.md\` — Periodic background checks and alert rules
 
 **Rules:**
 - **DO NOT** say "I'll remember that" without ACTUALLY calling \`edit\` or \`write\` on a file
@@ -148,5 +151,11 @@ _(Persistent knowledge will be stored here. Update this as you learn.)_
 ## Lessons Learned
 
 ## Important Context
+`,
+
+   heartbeat: `# heartbeat.md
+
+# Keep this file empty (or with only comments) to skip heartbeat API calls.
+# Add tasks below when you want the agent to check something periodically.
 `,
 } as const;

@@ -22,6 +22,7 @@ export class AsyncAgent {
   private readonly channel = new Channel<ChannelItem>();
   private _closed = false;
   private queue: Promise<void> = Promise.resolve();
+  private pendingWrites = 0;
   private closeCallbacks: Array<() => void> = [];
   private forwardInternalAssistant = false;
   readonly sessionId: string;
@@ -49,6 +50,7 @@ export class AsyncAgent {
   /** Write message to agent (non-blocking, serialized queue) */
   write(content: string): void {
     if (this._closed) throw new Error("Agent is closed");
+    this.pendingWrites += 1;
 
     this.queue = this.queue
       .then(async () => {
@@ -65,6 +67,9 @@ export class AsyncAgent {
       .catch((err) => {
         const message = err instanceof Error ? err.message : String(err);
         this.channel.send({ id: uuidv7(), content: `[error] ${message}` });
+      })
+      .finally(() => {
+        this.pendingWrites = Math.max(0, this.pendingWrites - 1);
       });
   }
 
@@ -230,6 +235,34 @@ export class AsyncAgent {
    */
   getProfileId(): string | undefined {
     return this.agent.getProfileId();
+  }
+
+  /**
+   * Get profile directory path, if profile is enabled.
+   */
+  getProfileDir(): string | undefined {
+    return this.agent.getProfileDir();
+  }
+
+  /**
+   * Get heartbeat configuration from profile config.
+   */
+  getHeartbeatConfig():
+    | {
+        enabled?: boolean | undefined;
+        every?: string | undefined;
+        prompt?: string | undefined;
+        ackMaxChars?: number | undefined;
+      }
+    | undefined {
+    return this.agent.getHeartbeatConfig();
+  }
+
+  /**
+   * Number of queued/in-flight writes.
+   */
+  getPendingWrites(): number {
+    return this.pendingWrites;
   }
 
   /**

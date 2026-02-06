@@ -88,6 +88,27 @@ describe("ExecApprovalManager", () => {
     expect(result.decision).toBe("deny");
   });
 
+  it("keeps approval pending indefinitely when timeoutMs is -1", async () => {
+    const promise = manager.requestApproval({
+      agentId: "agent-1",
+      command: "cmd",
+      riskLevel: "needs-review",
+      riskReasons: [],
+      timeoutMs: -1,
+    });
+
+    const request = sendToClient.mock.calls[0]![1];
+    expect(request.expiresAtMs).toBe(-1);
+
+    vi.advanceTimersByTime(60_000);
+    expect(manager.pendingCount).toBe(1);
+
+    manager.resolveApproval(request.approvalId, "allow-once");
+    const result = await promise;
+    expect(result.approved).toBe(true);
+    expect(result.decision).toBe("allow-once");
+  });
+
   it("honors askFallback full on timeout", async () => {
     const promise = manager.requestApproval({
       agentId: "agent-1",

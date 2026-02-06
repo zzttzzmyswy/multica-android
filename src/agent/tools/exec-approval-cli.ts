@@ -50,8 +50,8 @@ export function createCliApprovalCallback(
   const runtimeConfig = { ...config, allowlist: [...(config.allowlist ?? [])] };
 
   return async (command: string, cwd: string | undefined): Promise<ApprovalResult> => {
-    const security = runtimeConfig.security ?? "allowlist";
-    const ask = runtimeConfig.ask ?? "on-miss";
+    const security = runtimeConfig.security ?? "full";
+    const ask = runtimeConfig.ask ?? "off";
     const timeoutMs = runtimeConfig.timeoutMs ?? DEFAULT_APPROVAL_TIMEOUT_MS;
 
     // Security: deny blocks everything
@@ -137,13 +137,15 @@ function promptTerminal(
       rl.close();
     };
 
-    // Timeout: auto-deny
-    const timer = setTimeout(() => {
-      if (resolved) return;
-      process.stderr.write(dim(`\n  Approval timed out (${timeoutMs / 1000}s). Denying.\n\n`));
-      cleanup();
-      resolve("deny");
-    }, timeoutMs);
+    // Timeout: auto-deny (skip if timeoutMs is -1 for no timeout)
+    const timer = timeoutMs >= 0
+      ? setTimeout(() => {
+          if (resolved) return;
+          process.stderr.write(dim(`\n  Approval timed out (${timeoutMs / 1000}s). Denying.\n\n`));
+          cleanup();
+          resolve("deny");
+        }, timeoutMs)
+      : null;
 
     // Display approval prompt
     process.stderr.write("\n");
@@ -161,7 +163,7 @@ function promptTerminal(
     rl.question(
       `  ${bold("[a]")}llow once / ${bold("[A]")}llow always / ${bold("[d]")}eny (default: deny): `,
       (answer) => {
-        clearTimeout(timer);
+        if (timer) clearTimeout(timer);
         cleanup();
 
         const trimmed = answer.trim();
@@ -177,7 +179,7 @@ function promptTerminal(
 
     // Handle Ctrl+C gracefully
     rl.on("close", () => {
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       if (!resolved) {
         resolved = true;
         resolve("deny");

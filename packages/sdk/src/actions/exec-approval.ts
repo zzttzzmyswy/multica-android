@@ -22,7 +22,7 @@ export interface ExecApprovalRequestPayload {
   riskLevel: "safe" | "needs-review" | "dangerous";
   /** Reasons for the risk assessment */
   riskReasons: string[];
-  /** When this approval expires (ms since epoch) */
+  /** When this approval expires (ms since epoch). -1 means no timeout. */
   expiresAtMs: number;
 }
 

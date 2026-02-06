@@ -53,6 +53,7 @@ export interface ProfileContent {
   user?: string | undefined;
   workspace?: string | undefined;
   memory?: string | undefined;
+  heartbeat?: string | undefined;
   config?: ProfileConfig | undefined;
 }
 

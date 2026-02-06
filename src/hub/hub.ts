@@ -22,6 +22,9 @@ import { createListAgentsHandler } from "./rpc/handlers/list-agents.js";
 import { createCreateAgentHandler } from "./rpc/handlers/create-agent.js";
 import { createDeleteAgentHandler } from "./rpc/handlers/delete-agent.js";
 import { createUpdateGatewayHandler } from "./rpc/handlers/update-gateway.js";
+import { createGetLastHeartbeatHandler } from "./rpc/handlers/get-last-heartbeat.js";
+import { createSetHeartbeatsHandler } from "./rpc/handlers/set-heartbeats.js";
+import { createWakeHeartbeatHandler } from "./rpc/handlers/wake-heartbeat.js";
 import { DeviceStore, type DeviceMeta } from "./device-store.js";
 import { createVerifyHandler } from "./rpc/handlers/verify.js";
 import { ExecApprovalManager } from "./exec-approval-manager.js";
@@ -31,15 +34,33 @@ import { addAllowlistEntry, recordAllowlistUse, matchAllowlist } from "../agent/
 import type { ExecApprovalCallback, ExecApprovalConfig, ApprovalResult, ExecApprovalRequest } from "../agent/tools/exec-approval-types.js";
 import { readProfileConfig, writeProfileConfig } from "../agent/profile/storage.js";
 import { getCronService, shutdownCronService, executeCronJob } from "../cron/index.js";
+import {
+  getLastHeartbeatEvent,
+  onHeartbeatEvent,
+  requestHeartbeatNow,
+  runHeartbeatOnce,
+  setHeartbeatsEnabled,
+  startHeartbeatRunner,
+  type HeartbeatEventPayload,
+  type HeartbeatRunResult,
+  type HeartbeatRunner,
+} from "../heartbeat/index.js";
+import { enqueueSystemEvent } from "../heartbeat/system-events.js";
+import { isHeartbeatAckEvent } from "./heartbeat-filter.js";
 
 export class Hub {
   private readonly agents = new Map<string, AsyncAgent>();
   private readonly agentSenders = new Map<string, string>();
   private readonly agentStreamIds = new Map<string, string>();
   private readonly agentStreamCounters = new Map<string, number>();
+  private readonly pendingAssistantStarts = new Map<string, { agentId: string; event: unknown }>();
+  private readonly suppressedStreamAgents = new Set<string>();
   private readonly localApprovalHandlers = new Map<string, (payload: ExecApprovalRequest) => void>();
   private readonly rpc: RpcDispatcher;
   private readonly approvalManager: ExecApprovalManager;
+  private readonly heartbeatListeners = new Set<(event: HeartbeatEventPayload) => void>();
+  private heartbeatRunner: HeartbeatRunner | null = null;
+  private heartbeatUnsubscribe: (() => void) | null = null;
   private client: GatewayClient;
   readonly deviceStore: DeviceStore;
   private _onConfirmDevice: ((deviceId: string, agentId: string, meta?: DeviceMeta) => Promise<boolean>) | null = null;
@@ -77,6 +98,9 @@ export class Hub {
     this.rpc.register("createAgent", createCreateAgentHandler(this));
     this.rpc.register("deleteAgent", createDeleteAgentHandler(this));
     this.rpc.register("updateGateway", createUpdateGatewayHandler(this));
+    this.rpc.register("last-heartbeat", createGetLastHeartbeatHandler(this));
+    this.rpc.register("set-heartbeats", createSetHeartbeatsHandler(this));
+    this.rpc.register("wake-heartbeat", createWakeHeartbeatHandler(this));
 
     // Initialize exec approval manager
     this.approvalManager = new ExecApprovalManager((agentId, payload) => {
@@ -103,6 +127,7 @@ export class Hub {
 
     // Initialize and start cron service
     this.initCronService();
+    this.initHeartbeatService();
 
     this.client = this.createClient(this.url);
     this.client.connect();
@@ -117,6 +142,32 @@ export class Hub {
       console.error("[Hub] Failed to start cron service:", err);
     });
     console.log("[Hub] Cron service initialized");
+  }
+
+  /** Initialize heartbeat runner + event fanout. */
+  private initHeartbeatService(): void {
+    this.heartbeatRunner = startHeartbeatRunner({
+      getAgent: () => this.getDefaultAgent(),
+      logger: console,
+    });
+
+    this.heartbeatUnsubscribe = onHeartbeatEvent((event) => {
+      for (const listener of this.heartbeatListeners) {
+        try {
+          listener(event);
+        } catch {
+          // Keep fanout resilient against listener errors.
+        }
+      }
+    });
+
+    console.log("[Hub] Heartbeat service initialized");
+  }
+
+  private getDefaultAgent(): AsyncAgent | null {
+    const first = this.listAgents()[0];
+    if (!first) return null;
+    return this.getAgent(first) ?? null;
   }
 
   /** Restore agents from persistent storage */
@@ -279,6 +330,7 @@ export class Hub {
 
     // Internally consume agent output (AgentEvent stream + error Messages)
     void this.consumeAgent(agent);
+    this.heartbeatRunner?.updateConfig();
 
     console.log(`Agent created: ${agent.sessionId}`);
     return agent;
@@ -313,6 +365,14 @@ export class Hub {
     this.agentStreamIds.delete(agentId);
   }
 
+  private clearPendingAssistantStarts(agentId: string): void {
+    for (const [streamId, pending] of this.pendingAssistantStarts) {
+      if (pending.agentId === agentId) {
+        this.pendingAssistantStarts.delete(streamId);
+      }
+    }
+  }
+
   /** Internally read agent output and send via Gateway */
   private async consumeAgent(agent: AsyncAgent): Promise<void> {
     for await (const item of agent.read()) {
@@ -327,6 +387,20 @@ export class Hub {
           content: item.content,
         });
       } else {
+        const suppressForAgent = this.suppressedStreamAgents.has(agent.sessionId);
+
+        // Suppress all user-visible stream events during silent heartbeat runs.
+        if (suppressForAgent) {
+          if (item.type === "message_start") {
+            this.beginStream(agent.sessionId, item);
+          } else if (item.type === "message_end") {
+            const streamId = this.getActiveStreamId(agent.sessionId, item);
+            this.pendingAssistantStarts.delete(streamId);
+            this.endStream(agent.sessionId);
+          }
+          continue;
+        }
+
         // Compaction events: forward with synthetic streamId (no stream tracking)
         const isCompactionEvent =
           item.type === "compaction_start" || item.type === "compaction_end";
@@ -348,18 +422,55 @@ export class Hub {
           || item.type === "tool_execution_end";
         if (!shouldForward) continue;
 
-        if (item.type === "message_start") {
-          this.beginStream(agent.sessionId, item);
+        const isAssistantMessageEvent =
+          item.type === "message_start" || item.type === "message_update" || item.type === "message_end";
+
+        // Delay assistant message_start forwarding until we see content.
+        // This lets us suppress pure HEARTBEAT_OK acknowledgements end-to-end.
+        if (isAssistantMessageEvent && isAssistantMessage) {
+          if (item.type === "message_start") {
+            const streamId = this.beginStream(agent.sessionId, item);
+            this.pendingAssistantStarts.set(streamId, { agentId: agent.sessionId, event: item });
+            continue;
+          }
+
+          const streamId = this.getActiveStreamId(agent.sessionId, item);
+          const isHeartbeatAck = isHeartbeatAckEvent(item);
+          if (isHeartbeatAck) {
+            if (item.type === "message_end") {
+              this.pendingAssistantStarts.delete(streamId);
+              this.endStream(agent.sessionId);
+            }
+            continue;
+          }
+
+          const pendingStart = this.pendingAssistantStarts.get(streamId);
+          if (pendingStart) {
+            this.client.send(targetDeviceId, StreamAction, {
+              streamId,
+              agentId: agent.sessionId,
+              event: pendingStart.event,
+            });
+            this.pendingAssistantStarts.delete(streamId);
+          }
+
+          this.client.send(targetDeviceId, StreamAction, {
+            streamId,
+            agentId: agent.sessionId,
+            event: item,
+          });
+          if (item.type === "message_end") {
+            this.endStream(agent.sessionId);
+          }
+          continue;
         }
+
         const streamId = this.getActiveStreamId(agent.sessionId, item);
         this.client.send(targetDeviceId, StreamAction, {
           streamId,
           agentId: agent.sessionId,
           event: item,
         });
-        if (item.type === "message_end") {
-          this.endStream(agent.sessionId);
-        }
       }
     }
   }
@@ -422,8 +533,8 @@ export class Hub {
         // No profile config, use defaults
       }
 
-      const security = config.security ?? "allowlist";
-      const ask = config.ask ?? "on-miss";
+      const security = config.security ?? "full";
+      const ask = config.ask ?? "off";
 
       // Security: deny blocks everything
       if (security === "deny") {
@@ -507,6 +618,63 @@ export class Hub {
       .map(([id]) => id);
   }
 
+  /** Subscribe heartbeat state updates. Returns unsubscribe callback. */
+  onHeartbeatEvent(callback: (event: HeartbeatEventPayload) => void): () => void {
+    this.heartbeatListeners.add(callback);
+    return () => {
+      this.heartbeatListeners.delete(callback);
+    };
+  }
+
+  /** Get latest heartbeat event payload. */
+  getLastHeartbeat(): HeartbeatEventPayload | null {
+    return getLastHeartbeatEvent();
+  }
+
+  /** Enable/disable heartbeat runner globally. */
+  setHeartbeatsEnabled(enabled: boolean): void {
+    setHeartbeatsEnabled(enabled);
+    this.heartbeatRunner?.updateConfig();
+  }
+
+  /** Enqueue a heartbeat wake request. */
+  requestHeartbeatNow(opts?: { reason?: string }): void {
+    requestHeartbeatNow(opts);
+  }
+
+  /** Run heartbeat immediately using the current default agent. */
+  async runHeartbeatOnce(opts?: { reason?: string }): Promise<HeartbeatRunResult> {
+    const agent = this.getDefaultAgent();
+    const reason = opts?.reason;
+    const shouldSuppressStreams = reason === "manual";
+    if (shouldSuppressStreams && agent) {
+      this.suppressedStreamAgents.add(agent.sessionId);
+    }
+
+    try {
+      if (reason) {
+        return runHeartbeatOnce({
+          agent,
+          reason,
+        });
+      }
+      return runHeartbeatOnce({
+        agent,
+      });
+    } finally {
+      if (shouldSuppressStreams && agent) {
+        this.suppressedStreamAgents.delete(agent.sessionId);
+      }
+    }
+  }
+
+  /** Enqueue a system event for a specific agent or the default agent. */
+  enqueueSystemEvent(text: string, opts?: { agentId?: string }): void {
+    const agentId = opts?.agentId ?? this.listAgents()[0];
+    if (!agentId) return;
+    enqueueSystemEvent(text, { sessionKey: agentId });
+  }
+
   closeAgent(id: string): boolean {
     const agent = this.agents.get(id);
     if (!agent) return false;
@@ -516,14 +684,22 @@ export class Hub {
     this.agentSenders.delete(id);
     this.agentStreamIds.delete(id);
     this.agentStreamCounters.delete(id);
+    this.clearPendingAssistantStarts(id);
+    this.suppressedStreamAgents.delete(id);
     this.localApprovalHandlers.delete(id);
     removeAgentRecord(id);
+    this.heartbeatRunner?.updateConfig();
     return true;
   }
 
   shutdown(): void {
     // Stop cron service
     shutdownCronService();
+    this.heartbeatRunner?.stop();
+    this.heartbeatRunner = null;
+    this.heartbeatUnsubscribe?.();
+    this.heartbeatUnsubscribe = null;
+    this.heartbeatListeners.clear();
 
     // Finalize subagent registry before closing agents
     shutdownSubagentRegistry();
@@ -534,6 +710,8 @@ export class Hub {
       this.agentSenders.delete(id);
       this.agentStreamIds.delete(id);
       this.agentStreamCounters.delete(id);
+      this.clearPendingAssistantStarts(id);
+      this.suppressedStreamAgents.delete(id);
       this.localApprovalHandlers.delete(id);
     }
     this.client.disconnect();

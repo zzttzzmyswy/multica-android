@@ -208,6 +208,12 @@ const electronAPI = {
     remove: (jobId: string) => ipcRenderer.invoke('cron:remove', jobId),
   },
 
+  heartbeat: {
+    last: () => ipcRenderer.invoke('heartbeat:last'),
+    setEnabled: (enabled: boolean) => ipcRenderer.invoke('heartbeat:setEnabled', enabled),
+    wake: (reason?: string) => ipcRenderer.invoke('heartbeat:wake', reason),
+  },
+
   // Local chat (direct IPC, no Gateway required)
   localChat: {
     /** Subscribe to agent events for local direct chat */
