@@ -11,7 +11,7 @@ export function MulticaIcon({
 }: React.ComponentProps<"span">) {
   return (
     <span
-      className={cn("inline-block size-[1em]", className)}
+      className={cn("inline-block size-[1em] hover:animate-spin", className)}
       aria-hidden="true"
       {...props}
     >

@@ -34,13 +34,13 @@ importers:
     dependencies:
       '@mariozechner/pi-agent-core':
         specifier: ^0.50.3
-        version: 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@4.3.6))(ws@8.18.3)(zod@4.3.6)
+        version: 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@3.25.76))(ws@8.18.3)(zod@3.25.76)
       '@mariozechner/pi-ai':
         specifier: ^0.50.3
-        version: 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@4.3.6))(ws@8.18.3)(zod@4.3.6)
+        version: 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@3.25.76))(ws@8.18.3)(zod@3.25.76)
       '@mariozechner/pi-coding-agent':
         specifier: ^0.50.3
-        version: 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@4.3.6))(ws@8.18.3)(zod@4.3.6)
+        version: 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@3.25.76))(ws@8.18.3)(zod@3.25.76)
       '@mozilla/readability':
         specifier: ^0.6.0
         version: 0.6.0
@@ -457,10 +457,10 @@ importers:
     devDependencies:
       '@mariozechner/pi-agent-core':
         specifier: ^0.50.3
-        version: 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@3.25.76))(ws@8.18.3)(zod@3.25.76)
+        version: 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@4.3.6))(ws@8.18.3)(zod@4.3.6)
       '@mariozechner/pi-ai':
         specifier: ^0.50.3
-        version: 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@3.25.76))(ws@8.18.3)(zod@3.25.76)
+        version: 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@4.3.6))(ws@8.18.3)(zod@4.3.6)
       '@types/uuid':
         specifier: ^11.0.0
         version: 11.0.0
@@ -473,19 +473,7 @@ importers:
       '@multica/sdk':
         specifier: workspace:*
         version: link:../sdk
-      react:
-        specifier: 'catalog:'
-        version: 19.2.3
-      uuid:
-        specifier: ^13.0.0
-        version: 13.0.0
-      zustand:
-        specifier: 'catalog:'
-        version: 5.0.10(@types/react@19.1.17)(react@19.2.3)(use-sync-external-store@1.6.0(react@19.2.3))
     devDependencies:
-      '@types/react':
-        specifier: 'catalog:'
-        version: 19.1.17
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -11596,12 +11584,12 @@ snapshots:
       - ws
       - zod
 
-  '@mariozechner/pi-coding-agent@0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@4.3.6))(ws@8.18.3)(zod@4.3.6)':
+  '@mariozechner/pi-coding-agent@0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@3.25.76))(ws@8.18.3)(zod@3.25.76)':
     dependencies:
       '@mariozechner/clipboard': 0.3.0
       '@mariozechner/jiti': 2.6.5
-      '@mariozechner/pi-agent-core': 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@4.3.6))(ws@8.18.3)(zod@4.3.6)
-      '@mariozechner/pi-ai': 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@4.3.6))(ws@8.18.3)(zod@4.3.6)
+      '@mariozechner/pi-agent-core': 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@3.25.76))(ws@8.18.3)(zod@3.25.76)
+      '@mariozechner/pi-ai': 0.50.3(@modelcontextprotocol/sdk@1.25.3(hono@4.11.7)(zod@3.25.76))(ws@8.18.3)(zod@3.25.76)
       '@mariozechner/pi-tui': 0.50.3
       '@silvia-odwyer/photon-node': 0.3.4
       chalk: 5.6.2
