@@ -39,19 +39,29 @@ export function buildSubagentSystemPrompt(params: SubagentSystemPromptParams): s
  */
 export function readLatestAssistantReply(sessionId: string): string | undefined {
   const entries = readEntries(sessionId);
+  let latestToolResultText: string | undefined;
 
-  // Walk backwards to find last assistant message
+  // Walk backwards to find the last non-empty assistant reply.
+  // If no assistant text exists (e.g. run ended after tool execution),
+  // fall back to the latest non-empty toolResult content.
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i]!;
     if (entry.type !== "message") continue;
 
     const message = entry.message;
-    if (message.role !== "assistant") continue;
+    if (message.role === "assistant") {
+      const text = extractAssistantText(message);
+      if (text) return text;
+      continue;
+    }
 
-    return extractAssistantText(message);
+    if (message.role === "toolResult" && !latestToolResultText) {
+      const text = extractToolResultText(message);
+      if (text) latestToolResultText = text;
+    }
   }
 
-  return undefined;
+  return latestToolResultText;
 }
 
 /**
@@ -59,7 +69,17 @@ export function readLatestAssistantReply(sessionId: string): string | undefined 
  * AgentMessage.content for assistant is (TextContent | ThinkingContent | ToolCall)[].
  */
 function extractAssistantText(message: { role: string; content: unknown }): string {
-  const content = message.content;
+  return extractTextLikeContent(message.content);
+}
+
+/**
+ * Extract text content from a toolResult message.
+ */
+function extractToolResultText(message: { role: string; content: unknown }): string {
+  return extractTextLikeContent(message.content);
+}
+
+function extractTextLikeContent(content: unknown): string {
   if (typeof content === "string") {
     return sanitizeText(content);
   }
@@ -68,8 +88,9 @@ function extractAssistantText(message: { role: string; content: unknown }): stri
 
   const textParts: string[] = [];
   for (const block of content) {
-    if (block && typeof block === "object" && "type" in block && block.type === "text" && "text" in block) {
-      textParts.push(String(block.text));
+    if (!block || typeof block !== "object") continue;
+    if ("text" in block) {
+      textParts.push(String((block as { text: unknown }).text));
     }
   }
 
