@@ -143,4 +143,46 @@ describe("AsyncAgent internal flow", () => {
 
     agent.close();
   });
+
+  it("forwards only assistant message_end events when writeInternal opts in", async () => {
+    let resolveRunInternal: ((value: { text: string; thinking: undefined; error: undefined }) => void) | undefined;
+    runInternalMock.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        resolveRunInternal = resolve as typeof resolveRunInternal;
+      }),
+    );
+
+    const agent = new AsyncAgent();
+    const iter = agent.read()[Symbol.asyncIterator]();
+    const streamCallback = subscribeCallbacks[0];
+    expect(streamCallback).toBeDefined();
+
+    agent.writeInternal("announce", { forwardAssistant: true });
+    await Promise.resolve();
+
+    internalRunState.value = true;
+    streamCallback!({
+      type: "message_end",
+      message: { role: "user", content: [{ type: "text", text: "hidden internal prompt" }] },
+    });
+    streamCallback!({
+      type: "message_end",
+      message: { role: "assistant", content: [{ type: "text", text: "visible summary" }] },
+    });
+
+    const first = await nextWithTimeout(iter);
+    expect(first).not.toBe("timeout");
+    if (first !== "timeout") {
+      expect((first as { type: string }).type).toBe("message_end");
+      expect((first as { message: { role: string } }).message.role).toBe("assistant");
+    }
+
+    const second = await nextWithTimeout(iter);
+    expect(second).toBe("timeout");
+
+    resolveRunInternal!({ text: "", thinking: undefined, error: undefined });
+    await agent.waitForIdle();
+    internalRunState.value = false;
+    agent.close();
+  });
 });

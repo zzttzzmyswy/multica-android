@@ -10,12 +10,18 @@ const devNull = { write: () => true } as unknown as NodeJS.WritableStream;
 /** Discriminated union of legacy Message, raw AgentEvent, and MulticaEvent */
 export type ChannelItem = Message | AgentEvent | MulticaEvent;
 
+export interface WriteInternalOptions {
+  /** Forward assistant message_end events to realtime stream during internal runs */
+  forwardAssistant?: boolean | undefined;
+}
+
 export class AsyncAgent {
   private readonly agent: Agent;
   private readonly channel = new Channel<ChannelItem>();
   private _closed = false;
   private queue: Promise<void> = Promise.resolve();
   private closeCallbacks: Array<() => void> = [];
+  private forwardInternalAssistant = false;
   readonly sessionId: string;
 
   constructor(options?: AgentOptions) {
@@ -29,7 +35,7 @@ export class AsyncAgent {
     // Suppress forwarding during internal runs to avoid leaking
     // orchestration messages to the frontend/real-time stream.
     this.agent.subscribeAll((event: AgentEvent | MulticaEvent) => {
-      if (this.agent.isInternalRun) return;
+      if (!this.shouldForwardEvent(event)) return;
       this.channel.send(event);
     });
   }
@@ -63,19 +69,26 @@ export class AsyncAgent {
   /**
    * Write an internal message to agent (non-blocking, serialized queue).
    * Messages are persisted with `internal: true` and rolled back from
-   * in-memory state. Events are suppressed from the real-time stream.
+   * in-memory state. Events are suppressed from the real-time stream by default.
    */
-  writeInternal(content: string): void {
+  writeInternal(content: string, options?: WriteInternalOptions): void {
     if (this._closed) throw new Error("Agent is closed");
+    const forwardAssistant = options?.forwardAssistant === true;
 
     this.queue = this.queue
       .then(async () => {
         if (this._closed) return;
-        const result = await this.agent.runInternal(content);
-        await this.agent.flushSession();
-        if (result.error) {
-          // Internal run errors are for diagnostics only; do not leak to user stream.
-          console.error(`[AsyncAgent] Internal run error: ${result.error}`);
+        const prevForward = this.forwardInternalAssistant;
+        this.forwardInternalAssistant = forwardAssistant;
+        try {
+          const result = await this.agent.runInternal(content);
+          await this.agent.flushSession();
+          if (result.error) {
+            // Internal run errors are for diagnostics only; do not leak to user stream.
+            console.error(`[AsyncAgent] Internal run error: ${result.error}`);
+          }
+        } finally {
+          this.forwardInternalAssistant = prevForward;
         }
       })
       .catch((err) => {
@@ -98,7 +111,7 @@ export class AsyncAgent {
   subscribe(callback: (event: AgentEvent | MulticaEvent) => void): () => void {
     console.log(`[AsyncAgent] Adding subscriber for agent: ${this.sessionId}`);
     const unsubscribe = this.agent.subscribeAll((event) => {
-      if (this.agent.isInternalRun) return;
+      if (!this.shouldForwardEvent(event)) return;
       console.log(`[AsyncAgent] Event received: ${event.type}`);
       callback(event);
     });
@@ -111,6 +124,16 @@ export class AsyncAgent {
   /** Returns a promise that resolves when the current message queue is drained */
   waitForIdle(): Promise<void> {
     return this.queue;
+  }
+
+  private shouldForwardEvent(event: AgentEvent | MulticaEvent): boolean {
+    if (!this.agent.isInternalRun) return true;
+    if (!this.forwardInternalAssistant) return false;
+    if (event.type !== "message_end") return false;
+
+    const maybeMessage = (event as { message?: unknown }).message;
+    if (!maybeMessage || typeof maybeMessage !== "object") return false;
+    return (maybeMessage as { role?: unknown }).role === "assistant";
   }
 
   /** Register a callback to be invoked when the agent is closed */
