@@ -422,8 +422,8 @@ export class Hub {
         // No profile config, use defaults
       }
 
-      const security = config.security ?? "allowlist";
-      const ask = config.ask ?? "on-miss";
+      const security = config.security ?? "full";
+      const ask = config.ask ?? "off";
 
       // Security: deny blocks everything
       if (security === "deny") {

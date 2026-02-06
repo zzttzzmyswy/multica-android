@@ -50,7 +50,7 @@ export interface ExecApprovalConfig {
   security?: ExecSecurity;
   /** Ask mode: "off" never asks, "on-miss" asks when allowlist misses, "always" always asks */
   ask?: ExecAsk;
-  /** Timeout before auto-deny in milliseconds (default: 60_000) */
+  /** Timeout before auto-deny in milliseconds (default: 60_000). Set to -1 for no timeout. */
   timeoutMs?: number;
   /** Fallback security level on timeout (default: "deny" — fail-closed) */
   askFallback?: ExecSecurity;
@@ -58,8 +58,8 @@ export interface ExecApprovalConfig {
   allowlist?: ExecAllowlistEntry[];
 }
 
-/** Default timeout for approval requests (60 seconds) */
-export const DEFAULT_APPROVAL_TIMEOUT_MS = 60_000;
+/** Default timeout for approval requests (-1 = no timeout, wait indefinitely) */
+export const DEFAULT_APPROVAL_TIMEOUT_MS = -1;
 
 // ============ Allowlist ============
 
