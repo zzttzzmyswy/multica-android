@@ -18,54 +18,39 @@ import {
   type CronJobInput,
 } from "../../../cron/index.js";
 
+// NOTE: Avoid Type.Union([Type.Literal(...)]) which compiles to anyOf.
+// Some providers reject anyOf in tool schemas; a flat string enum is safer.
+function stringEnum<T extends readonly string[]>(values: T, options: { description?: string } = {}) {
+  return Type.Unsafe<T[number]>({ type: "string", enum: [...values], ...options });
+}
+
+const CRON_ACTIONS = ["status", "list", "add", "update", "remove", "run", "logs"] as const;
+
+// Flattened schema: runtime validates per-action requirements.
 const CronSchema = Type.Object({
-  action: Type.Union([
-    Type.Literal("status"),
-    Type.Literal("list"),
-    Type.Literal("add"),
-    Type.Literal("update"),
-    Type.Literal("remove"),
-    Type.Literal("run"),
-    Type.Literal("logs"),
-  ], { description: "The action to perform. Must be one of: status, list, add, update, remove, run, logs" }),
-
-  // list filter
-  enabled: Type.Optional(Type.Boolean({ description: "Filter by enabled status (for list)" })),
-
-  // add
-  name: Type.Optional(Type.String({ description: "Job name" })),
-  description: Type.Optional(Type.String({ description: "Job description" })),
+  action: stringEnum(CRON_ACTIONS),
+  enabled: Type.Optional(Type.Boolean({ description: "Filter by enabled status (for list action)" })),
+  name: Type.Optional(Type.String({ description: "Job name (for add action)" })),
+  description: Type.Optional(Type.String({ description: "Job description (for add action)" })),
   schedule: Type.Optional(Type.Object({
-    kind: Type.Union([Type.Literal("at"), Type.Literal("every"), Type.Literal("cron")]),
+    kind: stringEnum(["at", "every", "cron"] as const),
     at: Type.Optional(Type.String({ description: "Time for one-shot (ISO 8601 or relative like '10m')" })),
     every: Type.Optional(Type.String({ description: "Interval (e.g., '30m', '2h')" })),
     expr: Type.Optional(Type.String({ description: "Cron expression (5-field)" })),
     tz: Type.Optional(Type.String({ description: "Timezone for cron expression" })),
   })),
-  sessionTarget: Type.Optional(Type.Union([
-    Type.Literal("main"),
-    Type.Literal("isolated"),
-  ], { description: "Where to run the job (main session or isolated)" })),
+  sessionTarget: stringEnum(["main", "isolated"] as const, { description: "Where to run: main session or isolated" }),
   payload: Type.Optional(Type.Object({
-    kind: Type.Union([Type.Literal("system-event"), Type.Literal("agent-turn")]),
+    kind: stringEnum(["system-event", "agent-turn"] as const),
     text: Type.Optional(Type.String({ description: "Text for system-event" })),
     message: Type.Optional(Type.String({ description: "Prompt for agent-turn" })),
     timeoutSeconds: Type.Optional(Type.Number({ description: "Timeout for agent-turn" })),
   })),
   deleteAfterRun: Type.Optional(Type.Boolean({ description: "Delete after one-time run" })),
-  wakeMode: Type.Optional(Type.Union([
-    Type.Literal("next-heartbeat"),
-    Type.Literal("now"),
-  ], { description: "When to wake after job execution" })),
-
-  // update/remove/run/logs
-  jobId: Type.Optional(Type.String({ description: "Job ID" })),
-
-  // run
-  force: Type.Optional(Type.Boolean({ description: "Force run even if disabled" })),
-
-  // logs
-  limit: Type.Optional(Type.Number({ description: "Number of log entries to return" })),
+  wakeMode: stringEnum(["next-heartbeat", "now"] as const, { description: "When to wake after job execution" }),
+  jobId: Type.Optional(Type.String({ description: "Job ID (for update/remove/run/logs actions)" })),
+  force: Type.Optional(Type.Boolean({ description: "Force run even if disabled (for run action)" })),
+  limit: Type.Optional(Type.Number({ description: "Number of log entries to return (for logs action)" })),
 });
 
 type CronArgs = {
@@ -152,70 +137,35 @@ function parseSchedule(schedule: CronArgs["schedule"]): CronSchedule | { error: 
   }
 }
 
-const TOOL_DESCRIPTION = `Create, manage, and execute scheduled tasks (cron jobs).
+const TOOL_DESCRIPTION = `Manage cron jobs (status/list/add/update/remove/run/logs).
 
-IMPORTANT: The "action" parameter must be exactly one of these values: "status", "list", "add", "update", "remove", "run", "logs"
+ACTIONS:
+- status: Check cron scheduler status
+- list: List jobs (use enabled:true/false to filter)
+- add: Create job (requires name, schedule, payload, sessionTarget)
+- update: Modify job (requires jobId, plus fields to update)
+- remove: Delete job (requires jobId)
+- run: Trigger job immediately (requires jobId, optional force:true)
+- logs: Get job run history (requires jobId, optional limit)
 
-## Actions
+SCHEDULE TYPES (schedule.kind):
+- "at": One-shot at time
+  { "kind": "at", "at": "10m" } or { "kind": "at", "at": "2024-12-31T23:59:00Z" }
+- "every": Recurring interval
+  { "kind": "every", "every": "30m" }
+- "cron": Cron expression
+  { "kind": "cron", "expr": "0 9 * * *", "tz": "Asia/Shanghai" }
 
-### status
-Get cron service status.
-\`\`\`json
-{ "action": "status" }
-\`\`\`
+PAYLOAD TYPES (payload.kind):
+- "system-event": Injects text as system event into session
+  { "kind": "system-event", "text": "<message>" }
+- "agent-turn": Runs agent with message (isolated sessions only)
+  { "kind": "agent-turn", "message": "<prompt>", "timeoutSeconds": 300 }
 
-### list
-List all cron jobs.
-\`\`\`json
-{ "action": "list", "enabled": true }
-\`\`\`
-
-### add
-Create a new cron job.
-\`\`\`json
-{
-  "action": "add",
-  "name": "Daily reminder",
-  "schedule": { "kind": "cron", "expr": "0 9 * * *", "tz": "Asia/Shanghai" },
-  "sessionTarget": "main",
-  "payload": { "kind": "system-event", "text": "Check your todos!" }
-}
-\`\`\`
-
-Schedule types:
-- \`{ "kind": "at", "at": "10m" }\` - One-time, relative (10 minutes from now)
-- \`{ "kind": "at", "at": "2024-12-31T23:59:00Z" }\` - One-time, absolute ISO time
-- \`{ "kind": "every", "every": "30m" }\` - Every 30 minutes
-- \`{ "kind": "cron", "expr": "0 9 * * *", "tz": "Asia/Shanghai" }\` - Cron expression
-
-Payload types:
-- \`{ "kind": "system-event", "text": "..." }\` - Inject text into main session
-- \`{ "kind": "agent-turn", "message": "...", "timeoutSeconds": 300 }\` - Run isolated agent turn
-
-### update
-Update an existing job.
-\`\`\`json
-{ "action": "update", "jobId": "xxx", "enabled": false }
-\`\`\`
-
-### remove
-Delete a job.
-\`\`\`json
-{ "action": "remove", "jobId": "xxx" }
-\`\`\`
-
-### run
-Execute a job immediately.
-\`\`\`json
-{ "action": "run", "jobId": "xxx", "force": true }
-\`\`\`
-
-### logs
-Get run logs for a job.
-\`\`\`json
-{ "action": "logs", "jobId": "xxx", "limit": 10 }
-\`\`\`
-`;
+CRITICAL CONSTRAINTS:
+- sessionTarget="main" REQUIRES payload.kind="system-event"
+- sessionTarget="isolated" REQUIRES payload.kind="agent-turn"
+- Default sessionTarget is "main", default wakeMode is "now"`;
 
 /** Create the cron tool */
 export function createCronTool(): AgentTool<typeof CronSchema, CronResult> {
