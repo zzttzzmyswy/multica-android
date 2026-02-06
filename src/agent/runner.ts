@@ -84,6 +84,10 @@ export class Agent {
   private readonly stderr: NodeJS.WritableStream;
   private initialized = false;
 
+  // Internal run state
+  private _internalRun = false;
+  private _runMutex: Promise<void> = Promise.resolve();
+
   // MulticaEvent subscribers (parallel to PiAgentCore's subscriber list)
   // Typed as AgentEvent | MulticaEvent to match subscribeAll() callback signature
   private multicaListeners: Array<(event: AgentEvent | MulticaEvent) => void> = [];
@@ -353,6 +357,48 @@ export class Agent {
   }
 
   async run(prompt: string): Promise<AgentRunResult> {
+    // Run-level mutex: prevents concurrent run/runInternal from mis-tagging messages
+    return this.withRunMutex(() => this._run(prompt));
+  }
+
+  /**
+   * Run a prompt as an internal turn.
+   * Messages are persisted with `internal: true` and rolled back from
+   * in-memory state after the turn completes, so they do not pollute
+   * the main conversation context.
+   */
+  async runInternal(prompt: string): Promise<AgentRunResult> {
+    return this.withRunMutex(async () => {
+      const messageCountBefore = this.agent.state.messages.length;
+      this._internalRun = true;
+      try {
+        const result = await this._run(prompt);
+        return result;
+      } finally {
+        this._internalRun = false;
+        // Roll back internal messages from in-memory state
+        const current = this.agent.state.messages;
+        if (current.length > messageCountBefore) {
+          this.agent.replaceMessages(current.slice(0, messageCountBefore));
+        }
+      }
+    });
+  }
+
+  private async withRunMutex<T>(fn: () => Promise<T>): Promise<T> {
+    // Chain on the mutex so only one run executes at a time
+    const prev = this._runMutex;
+    let resolve: () => void;
+    this._runMutex = new Promise<void>((r) => { resolve = r; });
+    await prev;
+    try {
+      return await fn();
+    } finally {
+      resolve!();
+    }
+  }
+
+  private async _run(prompt: string): Promise<AgentRunResult> {
     await this.ensureInitialized();
     this.output.state.lastAssistantText = "";
 
@@ -442,8 +488,10 @@ export class Agent {
   private handleSessionEvent(event: AgentEvent) {
     if (event.type === "message_end") {
       const message = event.message as AgentMessage;
-      this.session.saveMessage(message);
-      if (message.role === "assistant") {
+      this.session.saveMessage(message, this._internalRun ? { internal: true } : undefined);
+      // Skip compaction during internal runs — internal messages will be
+      // rolled back from memory afterwards, so compacting now would be incorrect.
+      if (message.role === "assistant" && !this._internalRun) {
         void this.maybeCompact();
       }
     }
@@ -510,6 +558,40 @@ export class Agent {
     return this.agent.state.tools?.map(t => t.name) ?? [];
   }
 
+  /** Whether the agent is currently executing an internal run */
+  get isInternalRun(): boolean {
+    return this._internalRun;
+  }
+
+  /**
+   * Persist a synthetic assistant message into both in-memory state and session JSONL.
+   * Used after an internal run to keep the LLM summary visible in future turns
+   * while the internal prompt stays hidden.
+   */
+  persistAssistantSummary(text: string): void {
+    const model = this.agent.state.model;
+    const message = {
+      role: "assistant" as const,
+      content: [{ type: "text" as const, text }],
+      api: model?.api ?? "openai-completions",
+      provider: model?.provider ?? "internal",
+      model: model?.id ?? "unknown",
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: "stop" as const,
+      timestamp: Date.now(),
+    };
+
+    this.agent.appendMessage(message);
+    this.session.saveMessage(message);
+  }
+
   /** Ensure session messages are loaded from disk (idempotent) */
   async ensureInitialized(): Promise<void> {
     if (this.initialized) return;
@@ -521,9 +603,17 @@ export class Agent {
     this.initialized = true;
   }
 
-  /** Get all messages from the current session */
+  /** Get all messages from the current session (in-memory state) */
   getMessages(): AgentMessage[] {
     return this.agent.state.messages.slice();
+  }
+
+  /**
+   * Load messages from session storage with filtering.
+   * By default, internal messages are excluded.
+   */
+  loadSessionMessages(options?: { includeInternal?: boolean }): AgentMessage[] {
+    return this.session.loadMessages(options);
   }
 
   /**

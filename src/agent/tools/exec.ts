@@ -164,9 +164,22 @@ export function createExecTool(
           // Don't reject, let close event handle
         });
 
+        // Signal handling: don't kill if already backgrounded
+        const onAbort = signal ? () => {
+          if (yielded) return; // Already backgrounded, ignore abort
+          if (timeout) clearTimeout(timeout);
+          if (yieldTimer) clearTimeout(yieldTimer);
+          child.kill("SIGTERM");
+        } : undefined;
+
+        if (signal && onAbort) {
+          signal.addEventListener("abort", onAbort, { once: true });
+        }
+
         child.on("close", (code) => {
           if (timeout) clearTimeout(timeout);
           if (yieldTimer) clearTimeout(yieldTimer);
+          if (signal && onAbort) signal.removeEventListener("abort", onAbort);
 
           // If already backgrounded, don't resolve again
           if (yielded) return;
@@ -202,16 +215,6 @@ export function createExecTool(
             },
           });
         });
-
-        // Signal handling: don't kill if already backgrounded
-        if (signal) {
-          signal.addEventListener("abort", () => {
-            if (yielded) return; // Already backgrounded, ignore abort
-            if (timeout) clearTimeout(timeout);
-            if (yieldTimer) clearTimeout(yieldTimer);
-            child.kill("SIGTERM");
-          });
-        }
       });
     },
   };

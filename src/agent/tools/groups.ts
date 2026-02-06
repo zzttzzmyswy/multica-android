@@ -34,7 +34,7 @@ export const TOOL_GROUPS: Record<string, string[]> = {
   "group:memory": ["memory_search"],
 
   // Subagent tools
-  "group:subagent": ["sessions_spawn"],
+  "group:subagent": ["sessions_spawn", "sessions_list"],
 
   // Cron/scheduling tools
   "group:cron": ["cron"],
