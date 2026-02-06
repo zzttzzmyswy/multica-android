@@ -5,7 +5,7 @@
  * Based on OpenClaw's implementation (MIT License)
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, renameSync } from "fs";
 import path from "path";
 import type { CronJob, CronRunLogEntry } from "./types.js";
 
@@ -98,8 +98,7 @@ export class CronStore {
       }
 
       // Rename temp to actual (atomic on most filesystems)
-      const fs = require("fs");
-      fs.renameSync(tmpPath, this.jobsPath);
+      renameSync(tmpPath, this.jobsPath);
     } catch (error) {
       console.error("[CronStore] Failed to save jobs:", error);
       throw error;
