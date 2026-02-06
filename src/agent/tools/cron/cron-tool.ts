@@ -27,7 +27,7 @@ const CronSchema = Type.Object({
     Type.Literal("remove"),
     Type.Literal("run"),
     Type.Literal("logs"),
-  ], { description: "The action to perform" }),
+  ], { description: "The action to perform. Must be one of: status, list, add, update, remove, run, logs" }),
 
   // list filter
   enabled: Type.Optional(Type.Boolean({ description: "Filter by enabled status (for list)" })),
@@ -153,6 +153,8 @@ function parseSchedule(schedule: CronArgs["schedule"]): CronSchedule | { error: 
 }
 
 const TOOL_DESCRIPTION = `Create, manage, and execute scheduled tasks (cron jobs).
+
+IMPORTANT: The "action" parameter must be exactly one of these values: "status", "list", "add", "update", "remove", "run", "logs"
 
 ## Actions
 
