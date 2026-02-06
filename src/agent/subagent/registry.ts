@@ -289,10 +289,13 @@ function checkAndAnnounce(requesterSessionId: string): void {
     for (const r of pending) {
       r.announced = true;
       r.cleanupHandled = true;
-      r.archiveAtMs = Date.now() + DEFAULT_ARCHIVE_AFTER_MS;
-      r.cleanupCompletedAt = Date.now();
+      // Remove from registry immediately — findings already delivered to parent
+      subagentRuns.delete(r.runId);
     }
     persist();
+    if (subagentRuns.size === 0) {
+      stopSweeper();
+    }
   } else {
     console.warn(
       `[SubagentRegistry] Coalesced announce failed for requester ${requesterSessionId}`,

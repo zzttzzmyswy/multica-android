@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   registerSubagentRun,
   listSubagentRuns,
@@ -242,5 +242,35 @@ describe("subagent registry — coalescing", () => {
     shutdownSubagentRegistry();
 
     expect(record?.findingsCaptured).toBe(true);
+  });
+});
+
+describe("subagent registry — post-announce cleanup", () => {
+  it("removes runs from registry after successful announcement", async () => {
+    // Mock runCoalescedAnnounceFlow to succeed
+    const announceModule = await import("./announce.js");
+    const spy = vi.spyOn(announceModule, "runCoalescedAnnounceFlow").mockReturnValue(true);
+
+    // Register two runs for the same parent — both end immediately (no Hub)
+    registerSubagentRun({
+      runId: "run-a",
+      childSessionId: "child-a",
+      requesterSessionId: "parent-1",
+      task: "Task A",
+    });
+    registerSubagentRun({
+      runId: "run-b",
+      childSessionId: "child-b",
+      requesterSessionId: "parent-1",
+      task: "Task B",
+    });
+
+    // Both runs should have been announced and removed from registry
+    expect(spy).toHaveBeenCalled();
+    expect(getSubagentRun("run-a")).toBeUndefined();
+    expect(getSubagentRun("run-b")).toBeUndefined();
+    expect(listSubagentRuns("parent-1")).toHaveLength(0);
+
+    spy.mockRestore();
   });
 });
