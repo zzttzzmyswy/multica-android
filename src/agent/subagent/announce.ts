@@ -260,7 +260,7 @@ export function runCoalescedAnnounceFlow(
       return false;
     }
 
-    parentAgent.write(message);
+    parentAgent.writeInternal(message);
     return true;
   } catch (err) {
     console.error(`[SubagentAnnounce] Failed to coalesced-announce to parent:`, err);
@@ -308,7 +308,7 @@ export function runSubagentAnnounceFlow(params: SubagentAnnounceParams): boolean
       return false;
     }
 
-    parentAgent.write(message);
+    parentAgent.writeInternal(message);
     return true;
   } catch (err) {
     console.error(`[SubagentAnnounce] Failed to announce to parent:`, err);

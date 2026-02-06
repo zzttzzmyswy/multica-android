@@ -25,8 +25,11 @@ export class AsyncAgent {
     });
     this.sessionId = this.agent.sessionId;
 
-    // Forward raw AgentEvent and MulticaEvent into the channel
+    // Forward raw AgentEvent and MulticaEvent into the channel.
+    // Suppress forwarding during internal runs to avoid leaking
+    // orchestration messages to the frontend/real-time stream.
     this.agent.subscribeAll((event: AgentEvent | MulticaEvent) => {
+      if (this.agent.isInternalRun) return;
       this.channel.send(event);
     });
   }
@@ -47,6 +50,29 @@ export class AsyncAgent {
         // can safely read session data from disk.
         await this.agent.flushSession();
         // Normal text is delivered via message_end event; only handle errors here
+        if (result.error) {
+          this.channel.send({ id: uuidv7(), content: `[error] ${result.error}` });
+        }
+      })
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        this.channel.send({ id: uuidv7(), content: `[error] ${message}` });
+      });
+  }
+
+  /**
+   * Write an internal message to agent (non-blocking, serialized queue).
+   * Messages are persisted with `internal: true` and rolled back from
+   * in-memory state. Events are suppressed from the real-time stream.
+   */
+  writeInternal(content: string): void {
+    if (this._closed) throw new Error("Agent is closed");
+
+    this.queue = this.queue
+      .then(async () => {
+        if (this._closed) return;
+        const result = await this.agent.runInternal(content);
+        await this.agent.flushSession();
         if (result.error) {
           this.channel.send({ id: uuidv7(), content: `[error] ${result.error}` });
         }
@@ -226,10 +252,18 @@ export class AsyncAgent {
   }
 
   /**
-   * Get all messages from the current session.
+   * Get all messages from the current session (in-memory state).
    */
   getMessages(): AgentMessage[] {
     return this.agent.getMessages();
+  }
+
+  /**
+   * Load messages from session storage with filtering.
+   * By default, internal messages are excluded.
+   */
+  loadSessionMessages(options?: { includeInternal?: boolean }): AgentMessage[] {
+    return this.agent.loadSessionMessages(options);
   }
 
   /**

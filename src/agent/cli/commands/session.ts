@@ -22,7 +22,7 @@ ${cyan("Usage:")} multica session <command> [options]
 
 ${cyan("Commands:")}
   ${yellow("list")}                List all sessions
-  ${yellow("show")} <id>           Show session details
+  ${yellow("show")} <id>           Show session details (use --show-internal to include internal messages)
   ${yellow("delete")} <id>         Delete a session
   ${yellow("help")}                Show this help
 
@@ -122,7 +122,7 @@ function cmdList() {
   console.log(`${dim("Resume with:")} multica --session <id>`);
 }
 
-function cmdShow(sessionId: string | undefined) {
+function cmdShow(sessionId: string | undefined, showInternal = false) {
   if (!sessionId) {
     console.error("Error: Session ID is required");
     console.error("Usage: multica session show <id>");
@@ -160,14 +160,25 @@ function cmdShow(sessionId: string | undefined) {
   console.log(cyan("─".repeat(60)));
   console.log("");
 
-  // Parse and display messages
+  // Parse and display messages as SessionEntry objects
   for (const line of lines) {
     try {
-      const msg = JSON.parse(line);
+      const entry = JSON.parse(line);
+
+      // Only display message entries
+      if (entry.type !== "message") continue;
+
+      // Skip internal messages unless --show-internal
+      if (entry.internal && !showInternal) continue;
+
+      const msg = entry.message;
+      if (!msg) continue;
+
       const role = msg.role || "unknown";
       const roleColor = role === "user" ? green : role === "assistant" ? cyan : dim;
+      const internalTag = entry.internal ? dim(" [internal]") : "";
 
-      console.log(`${roleColor(`[${role}]`)}`);
+      console.log(`${roleColor(`[${role}]`)}${internalTag}`);
 
       if (typeof msg.content === "string") {
         // Truncate long content
@@ -238,6 +249,7 @@ function cmdDelete(sessionId: string | undefined) {
 export async function sessionCommand(args: string[]): Promise<void> {
   const command = (args[0] || "help") as Command;
   const arg1 = args[1];
+  const showInternal = args.includes("--show-internal");
 
   if (args.includes("--help") || args.includes("-h")) {
     printHelp();
@@ -249,7 +261,7 @@ export async function sessionCommand(args: string[]): Promise<void> {
       cmdList();
       break;
     case "show":
-      cmdShow(arg1);
+      cmdShow(arg1, showInternal);
       break;
     case "delete":
       cmdDelete(arg1);
