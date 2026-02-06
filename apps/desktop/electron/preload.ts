@@ -201,6 +201,13 @@ const electronAPI = {
       ipcRenderer.invoke('provider:importOAuth', providerId),
   },
 
+  // Cron jobs management
+  cron: {
+    list: () => ipcRenderer.invoke('cron:list'),
+    toggle: (jobId: string) => ipcRenderer.invoke('cron:toggle', jobId),
+    remove: (jobId: string) => ipcRenderer.invoke('cron:remove', jobId),
+  },
+
   // Local chat (direct IPC, no Gateway required)
   localChat: {
     /** Subscribe to agent events for local direct chat */

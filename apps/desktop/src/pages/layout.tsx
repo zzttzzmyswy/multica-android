@@ -8,6 +8,7 @@ import {
   CodeIcon,
   PlugIcon,
   Comment01Icon,
+  Time04Icon,
 } from '@hugeicons/core-free-icons'
 import { cn } from '@multica/ui/lib/utils'
 import { DeviceConfirmDialog } from '../components/device-confirm-dialog'
@@ -18,6 +19,7 @@ const tabs = [
   { path: '/chat', label: 'Chat', icon: Comment01Icon },
   { path: '/tools', label: 'Tools', icon: CodeIcon },
   { path: '/skills', label: 'Skills', icon: PlugIcon },
+  { path: '/crons', label: 'Cron', icon: Time04Icon },
 ]
 
 export default function Layout() {

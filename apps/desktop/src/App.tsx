@@ -3,6 +3,7 @@ import Layout from './pages/layout'
 import HomePage from './pages/home'
 import ToolsPage from './pages/tools'
 import SkillsPage from './pages/skills'
+import CronsPage from './pages/crons'
 
 const router = createHashRouter([
   {
@@ -13,6 +14,7 @@ const router = createHashRouter([
       { path: 'chat' },
       { path: 'tools', element: <ToolsPage /> },
       { path: 'skills', element: <SkillsPage /> },
+      { path: 'crons', element: <CronsPage /> },
     ],
   },
 ])
