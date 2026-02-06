@@ -95,13 +95,14 @@ export function loadProfile(profileId: string, options?: StorageOptions): AgentP
     user: readProfileFile(profileId, PROFILE_FILES.user, options),
     workspace: readProfileFile(profileId, PROFILE_FILES.workspace, options),
     memory: readProfileFile(profileId, PROFILE_FILES.memory, options),
+    heartbeat: readProfileFile(profileId, PROFILE_FILES.heartbeat, options),
     config: readProfileConfig(profileId, options),
   };
 }
 
 /** 保存 AgentProfile（只写入非空字段） */
 export function saveProfile(profile: AgentProfile, options?: StorageOptions): void {
-  const { id, soul, user, workspace, memory, config } = profile;
+  const { id, soul, user, workspace, memory, heartbeat, config } = profile;
 
   if (soul !== undefined) {
     writeProfileFile(id, PROFILE_FILES.soul, soul, options);
@@ -114,6 +115,9 @@ export function saveProfile(profile: AgentProfile, options?: StorageOptions): vo
   }
   if (memory !== undefined) {
     writeProfileFile(id, PROFILE_FILES.memory, memory, options);
+  }
+  if (heartbeat !== undefined) {
+    writeProfileFile(id, PROFILE_FILES.heartbeat, heartbeat, options);
   }
   if (config !== undefined) {
     writeProfileConfig(id, config, options);

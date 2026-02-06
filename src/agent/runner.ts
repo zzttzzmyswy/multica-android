@@ -596,6 +596,27 @@ export class Agent {
   }
 
   /**
+   * Get profile directory path, if profile is enabled.
+   */
+  getProfileDir(): string | undefined {
+    return this.profile?.getProfileDir();
+  }
+
+  /**
+   * Get heartbeat configuration from profile config.
+   */
+  getHeartbeatConfig():
+    | {
+        enabled?: boolean | undefined;
+        every?: string | undefined;
+        prompt?: string | undefined;
+        ackMaxChars?: number | undefined;
+      }
+    | undefined {
+    return this.profile?.getHeartbeatConfig();
+  }
+
+  /**
    * Get agent display name from profile config.
    */
   getAgentName(): string | undefined {
@@ -770,6 +791,7 @@ export class Agent {
         user: profile.user,
         workspace: profile.workspace,
         memory: profile.memory,
+        heartbeat: profile.heartbeat,
         config: profile.config,
       },
       profileDir: this.profile!.getProfileDir(),

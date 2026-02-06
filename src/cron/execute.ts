@@ -44,6 +44,10 @@ async function executeSystemEvent(job: CronJob): Promise<ExecutionResult> {
   const hub = getHub();
 
   const payload = job.payload as { kind: "system-event"; text: string };
+  const text = payload.text.trim();
+  if (!text) {
+    return { error: "system-event payload requires non-empty text" };
+  }
 
   // Get the list of active agents
   const agentIds = hub.listAgents();
@@ -54,25 +58,29 @@ async function executeSystemEvent(job: CronJob): Promise<ExecutionResult> {
   // For now, inject into the first (main) agent
   // TODO: Support targeting specific agent by ID
   const agentId = agentIds[0]!;
-  const agent = hub.getAgent(agentId);
-  if (!agent || agent.closed) {
-    return { error: `Agent ${agentId} not found or closed` };
+  const cronMessage = `[CRON] ${job.name}: ${text}`;
+
+  hub.enqueueSystemEvent(cronMessage, { agentId });
+
+  if (job.wakeMode === "now") {
+    const result = await hub.runHeartbeatOnce({ reason: `cron:${job.id}` });
+    if (result.status === "failed") {
+      return { error: result.reason };
+    }
+    if (result.status === "skipped") {
+      return {
+        summary: `Enqueued cron event for agent ${agentId.slice(0, 8)} (wake skipped: ${result.reason})`,
+      };
+    }
+    return {
+      summary: `Enqueued cron event and triggered immediate heartbeat for agent ${agentId.slice(0, 8)}`,
+    };
   }
 
-  // Format the cron message with metadata
-  const cronMessage = `[CRON] ${job.name}: ${payload.text}`;
-
-  try {
-    // Write to agent (non-blocking, will be processed in queue)
-    agent.write(cronMessage);
-
-    // Wait for the agent to process the message
-    await agent.waitForIdle();
-
-    return { summary: `Injected message into agent ${agentId.slice(0, 8)}` };
-  } catch (err) {
-    return { error: err instanceof Error ? err.message : String(err) };
-  }
+  hub.requestHeartbeatNow({ reason: `cron:${job.id}` });
+  return {
+    summary: `Enqueued cron event for agent ${agentId.slice(0, 8)} (wakeMode: next-heartbeat)`,
+  };
 }
 
 /**
