@@ -213,7 +213,8 @@ export function formatCoalescedAnnouncementMessage(
     });
   }
 
-  // Multiple records: build combined message
+  // Multiple records: build combined message.
+  // Include a strict raw-findings section so parent can reliably cover every task result.
   const parts: string[] = [
     `All ${records.length} background tasks have completed. Here are the combined results:`,
     "",
@@ -249,11 +250,22 @@ export function formatCoalescedAnnouncementMessage(
   const failCount = records.length - okCount;
   parts.push(`Results: ${okCount} succeeded, ${failCount} failed/timed out`);
 
+  parts.push("", "Raw findings from each task (MUST cover all items):", "");
+  for (let i = 0; i < records.length; i++) {
+    const r = records[i]!;
+    const displayName = r.label || r.task.slice(0, 60);
+    parts.push(
+      `[${i + 1}] ${displayName}:`,
+      r.findings || "(no output)",
+      "",
+    );
+  }
+
   parts.push(
     "",
     "Summarize these results naturally for the user.",
-    "Present the combined findings as a coherent summary, not a list of separate reports.",
-    "Keep it concise but cover the key findings from each task.",
+    "You MUST include findings from every task item above, without omission.",
+    "Keep it concise, but preserve concrete findings from each task.",
     "Do not mention technical details like session IDs or that these were background tasks.",
     "You can respond with NO_REPLY if no announcement is needed.",
   );

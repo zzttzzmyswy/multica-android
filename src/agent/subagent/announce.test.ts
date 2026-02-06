@@ -232,7 +232,23 @@ describe("formatCoalescedAnnouncementMessage", () => {
 
     const msg = formatCoalescedAnnouncementMessage(records);
 
-    expect(msg).toContain("combined findings");
+    expect(msg).toContain("MUST include findings from every task item above");
     expect(msg).toContain("NO_REPLY");
+  });
+
+  it("includes raw findings for every task in coalesced payload", () => {
+    const records = [
+      makeRecord({ runId: "run-1", label: "南京天气", findings: "南京：晴，12°C" }),
+      makeRecord({ runId: "run-2", label: "上海天气", findings: "上海：多云，9°C" }),
+    ];
+
+    const msg = formatCoalescedAnnouncementMessage(records);
+
+    expect(msg).toContain("Raw findings from each task (MUST cover all items):");
+    expect(msg).toContain("[1] 南京天气:");
+    expect(msg).toContain("南京：晴，12°C");
+    expect(msg).toContain("[2] 上海天气:");
+    expect(msg).toContain("上海：多云，9°C");
+    expect(msg).toContain("MUST include findings from every task item above");
   });
 });
