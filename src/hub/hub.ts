@@ -46,12 +46,14 @@ import {
   type HeartbeatRunner,
 } from "../heartbeat/index.js";
 import { enqueueSystemEvent } from "../heartbeat/system-events.js";
+import { isHeartbeatAckEvent } from "./heartbeat-filter.js";
 
 export class Hub {
   private readonly agents = new Map<string, AsyncAgent>();
   private readonly agentSenders = new Map<string, string>();
   private readonly agentStreamIds = new Map<string, string>();
   private readonly agentStreamCounters = new Map<string, number>();
+  private readonly pendingAssistantStarts = new Map<string, { agentId: string; event: unknown }>();
   private readonly localApprovalHandlers = new Map<string, (payload: ExecApprovalRequest) => void>();
   private readonly rpc: RpcDispatcher;
   private readonly approvalManager: ExecApprovalManager;
@@ -362,6 +364,14 @@ export class Hub {
     this.agentStreamIds.delete(agentId);
   }
 
+  private clearPendingAssistantStarts(agentId: string): void {
+    for (const [streamId, pending] of this.pendingAssistantStarts) {
+      if (pending.agentId === agentId) {
+        this.pendingAssistantStarts.delete(streamId);
+      }
+    }
+  }
+
   /** Internally read agent output and send via Gateway */
   private async consumeAgent(agent: AsyncAgent): Promise<void> {
     for await (const item of agent.read()) {
@@ -397,18 +407,55 @@ export class Hub {
           || item.type === "tool_execution_end";
         if (!shouldForward) continue;
 
-        if (item.type === "message_start") {
-          this.beginStream(agent.sessionId, item);
+        const isAssistantMessageEvent =
+          item.type === "message_start" || item.type === "message_update" || item.type === "message_end";
+
+        // Delay assistant message_start forwarding until we see content.
+        // This lets us suppress pure HEARTBEAT_OK acknowledgements end-to-end.
+        if (isAssistantMessageEvent && isAssistantMessage) {
+          if (item.type === "message_start") {
+            const streamId = this.beginStream(agent.sessionId, item);
+            this.pendingAssistantStarts.set(streamId, { agentId: agent.sessionId, event: item });
+            continue;
+          }
+
+          const streamId = this.getActiveStreamId(agent.sessionId, item);
+          const isHeartbeatAck = isHeartbeatAckEvent(item);
+          if (isHeartbeatAck) {
+            if (item.type === "message_end") {
+              this.pendingAssistantStarts.delete(streamId);
+              this.endStream(agent.sessionId);
+            }
+            continue;
+          }
+
+          const pendingStart = this.pendingAssistantStarts.get(streamId);
+          if (pendingStart) {
+            this.client.send(targetDeviceId, StreamAction, {
+              streamId,
+              agentId: agent.sessionId,
+              event: pendingStart.event,
+            });
+            this.pendingAssistantStarts.delete(streamId);
+          }
+
+          this.client.send(targetDeviceId, StreamAction, {
+            streamId,
+            agentId: agent.sessionId,
+            event: item,
+          });
+          if (item.type === "message_end") {
+            this.endStream(agent.sessionId);
+          }
+          continue;
         }
+
         const streamId = this.getActiveStreamId(agent.sessionId, item);
         this.client.send(targetDeviceId, StreamAction, {
           streamId,
           agentId: agent.sessionId,
           event: item,
         });
-        if (item.type === "message_end") {
-          this.endStream(agent.sessionId);
-        }
       }
     }
   }
@@ -609,6 +656,7 @@ export class Hub {
     this.agentSenders.delete(id);
     this.agentStreamIds.delete(id);
     this.agentStreamCounters.delete(id);
+    this.clearPendingAssistantStarts(id);
     this.localApprovalHandlers.delete(id);
     removeAgentRecord(id);
     this.heartbeatRunner?.updateConfig();
@@ -633,6 +681,7 @@ export class Hub {
       this.agentSenders.delete(id);
       this.agentStreamIds.delete(id);
       this.agentStreamCounters.delete(id);
+      this.clearPendingAssistantStarts(id);
       this.localApprovalHandlers.delete(id);
     }
     this.client.disconnect();
