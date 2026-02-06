@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { buildSubagentSystemPrompt, formatAnnouncementMessage } from "./announce.js";
+import { buildSubagentSystemPrompt, formatAnnouncementMessage, formatCoalescedAnnouncementMessage } from "./announce.js";
 import type { FormatAnnouncementParams } from "./announce.js";
+import type { SubagentRunRecord } from "./types.js";
 
 describe("buildSubagentSystemPrompt", () => {
   it("includes task and session context", () => {
@@ -123,6 +124,115 @@ describe("formatAnnouncementMessage", () => {
     const msg = formatAnnouncementMessage(baseParams);
 
     expect(msg).toContain("Summarize this naturally for the user");
+    expect(msg).toContain("NO_REPLY");
+  });
+});
+
+describe("formatCoalescedAnnouncementMessage", () => {
+  function makeRecord(overrides: Partial<SubagentRunRecord> = {}): SubagentRunRecord {
+    return {
+      runId: "run-1",
+      childSessionId: "child-1",
+      requesterSessionId: "parent-1",
+      task: "Default task",
+      cleanup: "delete",
+      createdAt: 1000000,
+      startedAt: 1000000,
+      endedAt: 1030000,
+      outcome: { status: "ok" },
+      findings: "Some findings",
+      findingsCaptured: true,
+      announced: false,
+      ...overrides,
+    };
+  }
+
+  it("delegates to formatAnnouncementMessage for a single record", () => {
+    const record = makeRecord({ label: "Code Analysis" });
+    const coalesced = formatCoalescedAnnouncementMessage([record]);
+    const direct = formatAnnouncementMessage({
+      runId: record.runId,
+      childSessionId: record.childSessionId,
+      requesterSessionId: record.requesterSessionId,
+      task: record.task,
+      label: record.label,
+      cleanup: record.cleanup,
+      outcome: record.outcome,
+      startedAt: record.startedAt,
+      endedAt: record.endedAt,
+      findings: record.findings,
+    });
+
+    expect(coalesced).toBe(direct);
+  });
+
+  it("formats multiple records with all task findings and stats", () => {
+    const records = [
+      makeRecord({
+        runId: "run-1",
+        childSessionId: "child-1",
+        label: "Task A",
+        findings: "Found issue A",
+        startedAt: 1000000,
+        endedAt: 1030000,
+      }),
+      makeRecord({
+        runId: "run-2",
+        childSessionId: "child-2",
+        label: "Task B",
+        findings: "Found issue B",
+        startedAt: 1000000,
+        endedAt: 1045000, // 45 seconds
+      }),
+    ];
+
+    const msg = formatCoalescedAnnouncementMessage(records);
+
+    expect(msg).toContain("All 2 background tasks have completed");
+    expect(msg).toContain('Task 1: "Task A"');
+    expect(msg).toContain("Found issue A");
+    expect(msg).toContain('Task 2: "Task B"');
+    expect(msg).toContain("Found issue B");
+    expect(msg).toContain("Total wall time: 45s");
+    expect(msg).toContain("2 succeeded, 0 failed");
+  });
+
+  it("reports mixed outcomes correctly", () => {
+    const records = [
+      makeRecord({ runId: "run-1", label: "OK Task", outcome: { status: "ok" } }),
+      makeRecord({ runId: "run-2", label: "Failed Task", outcome: { status: "error", error: "crash" } }),
+      makeRecord({ runId: "run-3", label: "Timeout Task", outcome: { status: "timeout" } }),
+    ];
+
+    const msg = formatCoalescedAnnouncementMessage(records);
+
+    expect(msg).toContain("completed successfully");
+    expect(msg).toContain("failed: crash");
+    expect(msg).toContain("timed out");
+    expect(msg).toContain("1 succeeded, 2 failed");
+  });
+
+  it("shows (no output) for missing findings", () => {
+    const records = [
+      makeRecord({ runId: "run-1", findings: undefined }),
+      makeRecord({ runId: "run-2", findings: "Has output" }),
+    ];
+
+    const msg = formatCoalescedAnnouncementMessage(records);
+
+    expect(msg).toContain("(no output)");
+    expect(msg).toContain("Has output");
+  });
+
+  it("includes combined summary instruction for multi-record", () => {
+    const records = [
+      makeRecord({ runId: "run-1" }),
+      makeRecord({ runId: "run-2" }),
+    ];
+
+    const msg = formatCoalescedAnnouncementMessage(records);
+
+    expect(msg).toContain("combined findings");
     expect(msg).toContain("NO_REPLY");
   });
 });

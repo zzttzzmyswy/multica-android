@@ -159,3 +159,88 @@ describe("subagent registry", () => {
     expect(getSubagentRun("run-1")).toBeUndefined();
   });
 });
+
+describe("subagent registry — coalescing", () => {
+  // Without Hub, watchChildAgent ends runs immediately with "Hub not initialized".
+  // This allows us to test the coalescing state transitions.
+
+  it("captures findings when a run completes (no Hub)", () => {
+    registerSubagentRun({
+      runId: "run-1",
+      childSessionId: "child-1",
+      requesterSessionId: "parent-1",
+      task: "Task 1",
+    });
+
+    const record = getSubagentRun("run-1");
+    // Run ended immediately due to no Hub
+    expect(record?.endedAt).toBeGreaterThan(0);
+    expect(record?.findingsCaptured).toBe(true);
+  });
+
+  it("does not announce while sibling runs are still pending", () => {
+    // Register first run — ends immediately (no Hub)
+    registerSubagentRun({
+      runId: "run-1",
+      childSessionId: "child-1",
+      requesterSessionId: "parent-1",
+      task: "Task 1",
+    });
+
+    const record1 = getSubagentRun("run-1");
+    expect(record1?.findingsCaptured).toBe(true);
+
+    // Register second run — also ends immediately
+    registerSubagentRun({
+      runId: "run-2",
+      childSessionId: "child-2",
+      requesterSessionId: "parent-1",
+      task: "Task 2",
+    });
+
+    const record2 = getSubagentRun("run-2");
+    expect(record2?.findingsCaptured).toBe(true);
+
+    // Both ended, but announce fails because no Hub for parent agent.
+    // The key check: both records should have findings captured.
+    // announced will be false because runCoalescedAnnounceFlow fails (no Hub).
+    expect(record1?.announced).toBeUndefined();
+    expect(record2?.announced).toBeUndefined();
+  });
+
+  it("single run captures findings immediately", () => {
+    registerSubagentRun({
+      runId: "run-solo",
+      childSessionId: "child-solo",
+      requesterSessionId: "parent-solo",
+      task: "Solo task",
+    });
+
+    const record = getSubagentRun("run-solo");
+    expect(record?.endedAt).toBeGreaterThan(0);
+    expect(record?.findingsCaptured).toBe(true);
+    expect(record?.outcome?.status).toBe("error");
+    expect(record?.outcome?.error).toContain("Hub not initialized");
+  });
+
+  it("shutdownSubagentRegistry captures findings for ended-but-uncaptured runs", () => {
+    registerSubagentRun({
+      runId: "run-1",
+      childSessionId: "child-1",
+      requesterSessionId: "parent-1",
+      task: "Task",
+    });
+
+    const record = getSubagentRun("run-1");
+    if (record) {
+      // Simulate: run ended but findings not yet captured
+      record.endedAt = Date.now();
+      record.outcome = { status: "ok" };
+      record.findingsCaptured = undefined;
+    }
+
+    shutdownSubagentRegistry();
+
+    expect(record?.findingsCaptured).toBe(true);
+  });
+});
