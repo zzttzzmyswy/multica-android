@@ -10,6 +10,7 @@ import type {
   SystemPromptReport,
 } from "./types.js";
 import {
+  buildHeartbeatSection,
   buildConditionalToolSections,
   buildExtraPromptSection,
   buildIdentitySection,
@@ -58,6 +59,7 @@ export function buildSystemPromptWithReport(options: SystemPromptOptions): {
     { name: "user", lines: buildUserSection(profile, mode) },
     { name: "workspace", lines: buildWorkspaceSection(profile, mode, profileDir) },
     { name: "memory", lines: buildMemoryFileSection(profile, mode) },
+    { name: "heartbeat", lines: buildHeartbeatSection(profile, mode) },
     { name: "safety", lines: buildSafetySection(includeSafety) },
     { name: "tooling", lines: buildToolingSummary(tools, mode) },
     { name: "tool-call-style", lines: buildToolCallStyleSection(mode) },
