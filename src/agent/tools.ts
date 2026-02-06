@@ -7,6 +7,7 @@ import { createProcessTool } from "./tools/process.js";
 import { createGlobTool } from "./tools/glob.js";
 import { createWebFetchTool, createWebSearchTool } from "./tools/web/index.js";
 import { createSessionsSpawnTool } from "./tools/sessions-spawn.js";
+import { createSessionsListTool } from "./tools/sessions-list.js";
 import { createMemorySearchTool } from "./tools/memory-search.js";
 import { createCronTool } from "./tools/cron/index.js";
 import { filterTools } from "./tools/policy.js";
@@ -132,6 +133,10 @@ export function createAllTools(options: CreateToolsOptions | string): AgentTool<
     sessionId,
   });
   tools.push(sessionsSpawnTool as AgentTool<any>);
+
+  // Add sessions_list tool
+  const sessionsListTool = createSessionsListTool({ sessionId });
+  tools.push(sessionsListTool as AgentTool<any>);
 
   return tools;
 }
