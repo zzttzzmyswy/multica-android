@@ -213,7 +213,7 @@ export default function HomePage() {
                 />
               </button>
 
-              {/* Provider Dropdown - Compact Grid */}
+              {/* Provider Dropdown - Compact Grid + Model List */}
               {providerDropdownOpen && (
                 <div className="absolute left-0 right-0 top-full mt-1 z-10 bg-background border border-border rounded-md shadow-lg p-2">
                   <div className="grid grid-cols-3 gap-1.5">
@@ -268,6 +268,47 @@ export default function HomePage() {
                       </button>
                     ))}
                   </div>
+
+                  {/* Model List for current provider */}
+                  {(() => {
+                    const currentProvider = providers.find(p => p.id === current?.provider)
+                    if (!currentProvider || currentProvider.models.length <= 1) return null
+                    return (
+                      <div className="border-t border-border mt-2 pt-2">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider px-1 mb-1">
+                          Models — {currentProvider.name}
+                        </p>
+                        <div className="space-y-0.5">
+                          {currentProvider.models.map((model) => (
+                            <button
+                              key={model}
+                              className={`w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs transition-colors ${
+                                model === current?.model
+                                  ? 'bg-primary/10 text-foreground'
+                                  : 'hover:bg-accent/50 text-muted-foreground'
+                              }`}
+                              onClick={async () => {
+                                if (model === current?.model) return
+                                setSwitching(true)
+                                setProviderDropdownOpen(false)
+                                const result = await setProvider(currentProvider.id, model)
+                                setSwitching(false)
+                                if (!result.ok) {
+                                  console.error('Failed to switch model:', result.error)
+                                }
+                              }}
+                              disabled={switching}
+                            >
+                              <span className={`size-1.5 rounded-full flex-shrink-0 ${
+                                model === current?.model ? 'bg-primary' : 'bg-muted-foreground/30'
+                              }`} />
+                              <span className="font-mono truncate">{model}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })()}
                 </div>
               )}
             </div>
