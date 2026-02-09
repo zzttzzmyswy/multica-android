@@ -4,8 +4,8 @@ import { AsyncAgent } from "./async-agent.js";
 const subscribeCallbacks: Array<(event: any) => void> = [];
 const internalRunState = { value: false };
 
-const runMock = vi.fn(async () => ({ text: "", thinking: undefined, error: undefined }));
-const runInternalMock = vi.fn(async () => ({ text: "", thinking: undefined, error: undefined }));
+const runMock = vi.fn(async (_prompt: string) => ({ text: "", thinking: undefined, error: undefined as string | undefined }));
+const runInternalMock = vi.fn(async (_prompt: string) => ({ text: "", thinking: undefined, error: undefined as string | undefined }));
 const flushSessionMock = vi.fn(async () => {});
 const persistAssistantSummaryMock = vi.fn();
 const subscribeAllMock = vi.fn((fn: (event: any) => void) => {
@@ -80,6 +80,8 @@ async function nextWithTimeout<T>(iter: AsyncIterator<T>, timeoutMs = 40): Promi
 }
 
 describe("AsyncAgent internal flow", () => {
+  const originalTz = process.env.TZ;
+
   afterEach(() => {
     subscribeCallbacks.length = 0;
     internalRunState.value = false;
@@ -91,6 +93,35 @@ describe("AsyncAgent internal flow", () => {
     runMock.mockResolvedValue({ text: "", thinking: undefined, error: undefined });
     runInternalMock.mockResolvedValue({ text: "", thinking: undefined, error: undefined });
     flushSessionMock.mockResolvedValue(undefined);
+    vi.useRealTimers();
+    process.env.TZ = originalTz;
+  });
+
+  it("injects a timestamp prefix into external user writes", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-29T01:30:00.000Z"));
+    process.env.TZ = "America/New_York";
+    const agent = new AsyncAgent();
+
+    agent.write("recent news");
+    await agent.waitForIdle();
+
+    expect(runMock).toHaveBeenCalledTimes(1);
+    const [message] = runMock.mock.calls[0] ?? [];
+    expect(message).toMatch(/^\[Wed 2026-01-28 20:30 EST\] recent news$/);
+
+    agent.close();
+  });
+
+  it("allows disabling timestamp injection per write", async () => {
+    const agent = new AsyncAgent();
+
+    agent.write("raw heartbeat prompt", { injectTimestamp: false });
+    await agent.waitForIdle();
+
+    expect(runMock).toHaveBeenCalledWith("raw heartbeat prompt");
+
+    agent.close();
   });
 
   it("filters internal events in direct subscribe stream", () => {

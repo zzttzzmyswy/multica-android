@@ -8,6 +8,7 @@ import {
   buildSafetySection,
   buildSkillsSection,
   buildSubagentSection,
+  buildTimeAwarenessSection,
   buildToolCallStyleSection,
   buildToolingSummary,
   buildUserSection,
@@ -209,7 +210,7 @@ describe("buildSkillsSection", () => {
 describe("buildRuntimeSection", () => {
   it("formats runtime info in full mode", () => {
     const result = buildRuntimeSection(
-      { agentName: "test", os: "darwin", arch: "arm64", nodeVersion: "v22.0.0", model: "claude", provider: "anthropic" },
+      { agentName: "test", os: "darwin", arch: "arm64", nodeVersion: "v22.0.0", timezone: "UTC", model: "claude", provider: "anthropic" },
       "full",
     );
     const text = result.join("\n");
@@ -225,6 +226,25 @@ describe("buildRuntimeSection", () => {
 
   it("returns empty when no runtime provided", () => {
     expect(buildRuntimeSection(undefined, "full")).toEqual([]);
+  });
+});
+
+describe("buildTimeAwarenessSection", () => {
+  it("includes time awareness in full mode", () => {
+    const result = buildTimeAwarenessSection(["exec"], "full");
+    const text = result.join("\n");
+    expect(text).toContain("## Time Awareness");
+    expect(text).toContain("latest prefixed timestamp");
+    expect(text).toContain("`exec`");
+  });
+
+  it("includes time awareness in minimal mode", () => {
+    const result = buildTimeAwarenessSection(undefined, "minimal");
+    expect(result.join("\n")).toContain("## Time Awareness");
+  });
+
+  it("omits time awareness in none mode", () => {
+    expect(buildTimeAwarenessSection(["exec"], "none")).toEqual([]);
   });
 });
 

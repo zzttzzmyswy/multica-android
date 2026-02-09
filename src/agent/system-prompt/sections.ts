@@ -315,6 +315,30 @@ export function buildRuntimeSection(
 }
 
 /**
+ * Time awareness section — helps the agent reason about "now" safely.
+ * Included in full and minimal modes.
+ */
+export function buildTimeAwarenessSection(
+  tools: string[] | undefined,
+  mode: SystemPromptMode,
+): string[] {
+  if (mode === "none") return [];
+
+  const hasExecTool = (tools ?? []).some((tool) => tool.toLowerCase() === "exec");
+  const fallbackLine = hasExecTool
+    ? "If a turn lacks a timestamp and exact current time matters, use `exec` with `date`."
+    : "If a turn lacks a timestamp and exact current time matters, ask for clarification.";
+
+  return [
+    "## Time Awareness",
+    "Incoming user messages may include a prefix like `[Wed 2026-02-09 21:15 PST]`.",
+    "Treat the latest prefixed timestamp as your reference for relative time requests (today, recent, last month).",
+    fallbackLine,
+    "",
+  ];
+}
+
+/**
  * Profile directory section — now merged into buildWorkspaceSection.
  * Kept for backwards compatibility but returns empty.
  */
