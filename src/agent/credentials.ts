@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import JSON5 from "json5";
@@ -31,6 +31,8 @@ export type CredentialsConfig = {
     order?: Record<string, string[]> | undefined;
   } | undefined;
   tools?: Record<string, ToolConfig> | undefined;
+  /** Channel plugin configs (telegram, discord, etc.) */
+  channels?: Record<string, Record<string, Record<string, unknown>> | undefined> | undefined;
 };
 
 type SkillsEnvConfig = {
@@ -90,6 +92,8 @@ export class CredentialManager {
   private coreConfig: CredentialsConfig | null = null;
   private skillsConfig: SkillsEnvConfig | null = null;
   private resolvedSkillsEnv: Record<string, string> | null = null;
+  private coreMtimeMs: number | null = null;
+  private skillsMtimeMs: number | null = null;
 
   private isDisabled(): boolean {
     if (process.env.SMC_CREDENTIALS_DISABLE === "1") return true;
@@ -99,17 +103,32 @@ export class CredentialManager {
   private loadCore(): void {
     const path = getCredentialsPath();
     const disabled = this.isDisabled();
+    let mtimeMs: number | null = null;
 
-    if (this.corePath === path && this.disabledState === disabled && this.coreConfig) {
+    if (!disabled && existsSync(path)) {
+      try {
+        mtimeMs = statSync(path).mtimeMs;
+      } catch {
+        mtimeMs = null;
+      }
+    }
+
+    if (
+      this.corePath === path
+      && this.disabledState === disabled
+      && this.coreConfig
+      && this.coreMtimeMs === mtimeMs
+    ) {
       return;
     }
 
     this.corePath = path;
     this.disabledState = disabled;
     this.coreConfig = null;
+    this.coreMtimeMs = mtimeMs;
 
     if (disabled) return;
-    if (!existsSync(path)) return;
+    if (mtimeMs === null) return;
 
     const raw = readFileSync(path, "utf8");
     try {
@@ -123,8 +142,22 @@ export class CredentialManager {
   private loadSkillsEnv(): void {
     const path = getSkillsEnvPath();
     const disabled = this.isDisabled();
+    let mtimeMs: number | null = null;
 
-    if (this.skillsPath === path && this.disabledState === disabled && this.resolvedSkillsEnv) {
+    if (!disabled && existsSync(path)) {
+      try {
+        mtimeMs = statSync(path).mtimeMs;
+      } catch {
+        mtimeMs = null;
+      }
+    }
+
+    if (
+      this.skillsPath === path
+      && this.disabledState === disabled
+      && this.resolvedSkillsEnv
+      && this.skillsMtimeMs === mtimeMs
+    ) {
       return;
     }
 
@@ -132,9 +165,10 @@ export class CredentialManager {
     this.disabledState = disabled;
     this.skillsConfig = null;
     this.resolvedSkillsEnv = null;
+    this.skillsMtimeMs = mtimeMs;
 
     if (disabled) return;
-    if (!existsSync(path)) return;
+    if (mtimeMs === null) return;
 
     const raw = readFileSync(path, "utf8");
     try {
@@ -217,6 +251,12 @@ export class CredentialManager {
     );
   }
 
+  /** Get channel plugin configs from credentials.json5 `channels` section. */
+  getChannelsConfig(): Record<string, Record<string, Record<string, unknown>> | undefined> {
+    this.loadCore();
+    return this.coreConfig?.channels ?? {};
+  }
+
   getResolvedEnvSnapshot(): Record<string, string> {
     return { ...this.getResolvedSkillsEnv() };
   }
@@ -228,6 +268,8 @@ export class CredentialManager {
     this.coreConfig = null;
     this.skillsConfig = null;
     this.resolvedSkillsEnv = null;
+    this.coreMtimeMs = null;
+    this.skillsMtimeMs = null;
   }
 
   /**
@@ -319,6 +361,75 @@ export class CredentialManager {
     writeFileSync(path, content, "utf8");
 
     // Reset cache
+    this.reset();
+  }
+
+  /**
+   * Set a channel account config and save to credentials.json5.
+   * Creates the channels section if it doesn't exist.
+   * Used by the desktop Channels page to persist bot tokens.
+   */
+  setChannelAccountConfig(channelId: string, accountId: string, accountConfig: Record<string, unknown>): void {
+    const path = getCredentialsPath();
+
+    let config: CredentialsConfig = { version: 1 };
+    if (existsSync(path)) {
+      try {
+        const raw = readFileSync(path, "utf8");
+        config = JSON5.parse(raw) as CredentialsConfig;
+      } catch {
+        config = { version: 1 };
+      }
+    }
+
+    // Ensure channels.[channelId] structure exists
+    if (!config.channels) {
+      config.channels = {};
+    }
+    if (!config.channels[channelId]) {
+      config.channels[channelId] = {};
+    }
+
+    // Set or update the account config
+    config.channels[channelId]![accountId] = accountConfig;
+
+    mkdirSync(dirname(path), { recursive: true });
+    const content = JSON.stringify(config, null, 2);
+    writeFileSync(path, content, "utf8");
+
+    this.reset();
+  }
+
+  /**
+   * Remove a channel account config from credentials.json5.
+   * Cleans up the parent channel section if no accounts remain.
+   */
+  removeChannelAccountConfig(channelId: string, accountId: string): void {
+    const path = getCredentialsPath();
+    if (!existsSync(path)) return;
+
+    let config: CredentialsConfig;
+    try {
+      const raw = readFileSync(path, "utf8");
+      config = JSON5.parse(raw) as CredentialsConfig;
+    } catch {
+      return;
+    }
+
+    const channelSection = config.channels?.[channelId];
+    if (!channelSection) return;
+
+    delete channelSection[accountId];
+
+    // Clean up empty channel section
+    if (Object.keys(channelSection).length === 0) {
+      delete config.channels![channelId];
+    }
+
+    mkdirSync(dirname(path), { recursive: true });
+    const content = JSON.stringify(config, null, 2);
+    writeFileSync(path, content, "utf8");
+
     this.reset();
   }
 

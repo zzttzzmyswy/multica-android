@@ -99,6 +99,7 @@ export class Agent {
   private profileCandidates: string[];
   private profileIndex: number;
   private readonly pinnedProfile: boolean;
+  private readonly explicitApiKey: boolean;
 
   /** Current session ID */
   readonly sessionId: string;
@@ -130,6 +131,7 @@ export class Agent {
 
     // === Auth profile resolution ===
     this.pinnedProfile = !!(options.authProfileId || options.apiKey);
+    this.explicitApiKey = !!options.apiKey;
 
     if (options.apiKey) {
       // Explicit API key — no rotation
@@ -349,7 +351,7 @@ export class Agent {
     };
   }
 
-  private emitMulticaEvent(event: MulticaEvent): void {
+  emitMulticaEvent(event: MulticaEvent): void {
     for (const fn of this.multicaListeners) {
       try {
         fn(event);
@@ -408,6 +410,7 @@ export class Agent {
 
   private async _run(prompt: string): Promise<AgentRunResult> {
     await this.ensureInitialized();
+    this.refreshAuthState();
     this.output.state.lastAssistantText = "";
 
     // Early validation: check API key before calling PiAgentCore.prompt(),
@@ -495,10 +498,65 @@ export class Agent {
       this.currentApiKey = apiKey;
       this.currentProfileId = candidateId;
       this.profileIndex = nextIndex;
+      this.updateSessionApiKey();
       return true;
     }
 
     return false;
+  }
+
+  private refreshAuthState(): void {
+    if (this.explicitApiKey) {
+      return;
+    }
+
+    const store = loadAuthProfileStore();
+
+    if (this.pinnedProfile) {
+      const profileId = this.currentProfileId ?? this.resolvedProvider;
+      this.currentApiKey = resolveApiKeyForProfile(profileId) ?? resolveApiKey(this.resolvedProvider);
+      this.currentProfileId = profileId;
+      this.profileCandidates = [];
+      this.profileIndex = 0;
+      this.updateSessionApiKey();
+      return;
+    }
+
+    const candidates = resolveAuthProfileOrder(this.resolvedProvider, store);
+    this.profileCandidates = candidates;
+
+    if (this.currentProfileId) {
+      const currentIndex = candidates.indexOf(this.currentProfileId);
+      if (currentIndex >= 0) {
+        const stats = store.usageStats?.[this.currentProfileId];
+        if (!stats || !isProfileInCooldown(stats)) {
+          const apiKey = resolveApiKeyForProfile(this.currentProfileId);
+          if (apiKey) {
+            this.currentApiKey = apiKey;
+            this.profileIndex = currentIndex;
+            this.updateSessionApiKey();
+            return;
+          }
+        }
+      }
+    }
+
+    const resolved = resolveApiKeyForProvider(this.resolvedProvider);
+    if (resolved) {
+      this.currentApiKey = resolved.apiKey;
+      this.currentProfileId = resolved.profileId;
+      this.profileIndex = Math.max(0, candidates.indexOf(resolved.profileId));
+    } else {
+      this.currentApiKey = undefined;
+      this.currentProfileId = undefined;
+      this.profileIndex = 0;
+    }
+    this.updateSessionApiKey();
+  }
+
+  private updateSessionApiKey(): void {
+    if (this.session.getCompactionMode() !== "summary") return;
+    this.session.setApiKey(this.currentApiKey);
   }
 
   private handleSessionEvent(event: AgentEvent) {
@@ -793,6 +851,8 @@ export class Agent {
     if (!this.currentApiKey) {
       throw new Error(`No API key configured for provider: ${providerId}`);
     }
+
+    this.updateSessionApiKey();
 
     // Update the agent's model and API key
     const baseUrl = resolveBaseUrl(actualProvider);

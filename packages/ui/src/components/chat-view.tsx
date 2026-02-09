@@ -5,6 +5,7 @@ import { Button } from "@multica/ui/components/ui/button";
 import { Skeleton } from "@multica/ui/components/ui/skeleton";
 import { ChatInput } from "@multica/ui/components/chat-input";
 import { MessageList } from "@multica/ui/components/message-list";
+import { MemoizedMarkdown } from "@multica/ui/components/markdown";
 import { MulticaIcon } from "@multica/ui/components/multica-icon";
 import { ExecApprovalItem } from "@multica/ui/components/exec-approval-item";
 import { useScrollFade } from "@multica/ui/hooks/use-scroll-fade";
@@ -221,7 +222,11 @@ export function ChatView({
       {error && (
         <div className="container px-4" role="alert" aria-live="polite">
           <div className="rounded-lg bg-destructive/5 border border-destructive/15 text-xs px-3 py-2 flex items-center justify-between gap-3">
-            <span className="text-foreground leading-snug">{error.message}</span>
+            <span className="text-foreground leading-snug">
+              <MemoizedMarkdown mode="minimal" id={`error-${error.code}`}>
+                {error.message}
+              </MemoizedMarkdown>
+            </span>
             <div className="flex items-center gap-2 shrink-0">
               {errorAction && (
                 <Button

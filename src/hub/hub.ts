@@ -33,6 +33,7 @@ import { evaluateCommandSafety, requiresApproval } from "../agent/tools/exec-saf
 import { addAllowlistEntry, recordAllowlistUse, matchAllowlist } from "../agent/tools/exec-allowlist.js";
 import type { ExecApprovalCallback, ExecApprovalConfig, ApprovalResult, ExecApprovalRequest } from "../agent/tools/exec-approval-types.js";
 import { readProfileConfig, writeProfileConfig } from "../agent/profile/storage.js";
+import { ChannelManager, initChannels } from "../channels/index.js";
 import { getCronService, shutdownCronService, executeCronJob } from "../cron/index.js";
 import {
   getLastHeartbeatEvent,
@@ -65,6 +66,7 @@ export class Hub {
   readonly deviceStore: DeviceStore;
   private _onConfirmDevice: ((deviceId: string, agentId: string, meta?: DeviceMeta) => Promise<boolean>) | null = null;
   private _stateChangeListeners: ((state: ConnectionState) => void)[] = [];
+  readonly channelManager: ChannelManager;
   url: string;
   readonly path: string;
   readonly hubId: string;
@@ -132,6 +134,17 @@ export class Hub {
     this.client = this.createClient(this.url);
     this.client.connect();
     this.restoreAgents();
+
+    // Initialize channel plugin system
+    console.log("[Hub] Initializing channel system...");
+    initChannels();
+    this.channelManager = new ChannelManager(this);
+    void this.channelManager.startAll().then(() => {
+      console.log("[Hub] Channel system started");
+    }).catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[Hub] Channel system failed to start: ${msg}`);
+    });
   }
 
   /** Initialize cron service with executor */
@@ -252,6 +265,7 @@ export class Hub {
       const agent = this.agents.get(agentId);
       if (agent && !agent.closed) {
         this.agentSenders.set(agentId, msg.from);
+        this.channelManager.clearLastRoute();
         agent.write(content);
       } else {
         console.warn(`[Hub] Agent not found or closed: ${agentId}`);
@@ -401,12 +415,12 @@ export class Hub {
           continue;
         }
 
-        // Compaction events: forward with synthetic streamId (no stream tracking)
-        const isCompactionEvent =
-          item.type === "compaction_start" || item.type === "compaction_end";
-        if (isCompactionEvent) {
+        // Passthrough events: forward with synthetic streamId (no stream tracking)
+        const isPassthroughEvent =
+          item.type === "compaction_start" || item.type === "compaction_end" || item.type === "agent_error";
+        if (isPassthroughEvent) {
           this.client.send(targetDeviceId, StreamAction, {
-            streamId: `compaction:${agent.sessionId}`,
+            streamId: `system:${agent.sessionId}`,
             agentId: agent.sessionId,
             event: item,
           });
@@ -693,6 +707,9 @@ export class Hub {
   }
 
   shutdown(): void {
+    // Stop all channel connections
+    this.channelManager.stopAll();
+
     // Stop cron service
     shutdownCronService();
     this.heartbeatRunner?.stop();

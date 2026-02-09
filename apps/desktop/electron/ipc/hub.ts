@@ -236,6 +236,7 @@ export function registerHubIpcHandlers(): void {
     if (agent.closed) {
       return { error: `Agent is closed: ${agentId}` }
     }
+    h.channelManager.clearLastRoute()
     agent.write(content)
     return { ok: true }
   })
@@ -268,11 +269,11 @@ export function registerHubIpcHandlers(): void {
         return
       }
 
-      // Compaction events: forward with no stream tracking
-      const isCompactionEvent =
-        event.type === 'compaction_start' || event.type === 'compaction_end'
-      if (isCompactionEvent) {
-        safeLog(`[IPC] Sending compaction event to renderer: ${event.type}`)
+      // Compaction and error events: forward with no stream tracking
+      const isPassthroughEvent =
+        event.type === 'compaction_start' || event.type === 'compaction_end' || event.type === 'agent_error'
+      if (isPassthroughEvent) {
+        safeLog(`[IPC] Sending ${event.type} event to renderer`)
         mainWindowRef.webContents.send('localChat:event', {
           agentId,
           streamId: null,
@@ -281,16 +282,6 @@ export function registerHubIpcHandlers(): void {
         return
       }
 
-      // Agent error events: forward so the UI can display them
-      if (event.type === 'agent_error') {
-        safeLog(`[IPC] Sending agent_error event to renderer: ${(event as { message: string }).message}`)
-        mainWindowRef.webContents.send('localChat:event', {
-          agentId,
-          streamId: null,
-          event,
-        })
-        return
-      }
 
       // Filter events same as Hub.consumeAgent()
       const maybeMessage = (event as { message?: { role?: string } }).message
@@ -398,6 +389,7 @@ export function registerHubIpcHandlers(): void {
       return { error: 'Not subscribed to agent events. Call subscribe first.' }
     }
 
+    h.channelManager.clearLastRoute()
     agent.write(content)
     safeLog(`[IPC] Local chat message sent to agent: ${agentId}`)
     return { ok: true }

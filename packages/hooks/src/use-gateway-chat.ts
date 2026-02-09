@@ -50,6 +50,12 @@ export function useGatewayChat({ client, hubId, agentId }: UseGatewayChatOptions
     client.onMessage((msg) => {
       if (msg.action === StreamAction) {
         const payload = msg.payload as StreamPayload;
+        if (payload.event.type === "agent_error") {
+          const errorMsg = (payload.event as { message?: string }).message ?? "Unknown error";
+          chat.setError({ code: "AGENT_ERROR", message: errorMsg });
+          setIsLoading(false);
+          return;
+        }
         chat.handleStream(payload);
         if (payload.event.type === "message_start") setIsLoading(true);
         if (payload.event.type === "message_end") setIsLoading(false);

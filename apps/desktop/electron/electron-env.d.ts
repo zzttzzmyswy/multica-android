@@ -131,6 +131,13 @@ interface CurrentProviderInfo {
   available: boolean
 }
 
+interface ChannelAccountStateInfo {
+  channelId: string
+  accountId: string
+  status: 'stopped' | 'starting' | 'running' | 'error'
+  error?: string
+}
+
 interface ElectronAPI {
   hub: {
     init: () => Promise<unknown>
@@ -187,6 +194,14 @@ interface ElectronAPI {
     isAvailable: (providerId: string) => Promise<boolean>
     saveApiKey: (providerId: string, apiKey: string) => Promise<{ ok: boolean; error?: string }>
     importOAuth: (providerId: string) => Promise<{ ok: boolean; expiresAt?: number; error?: string }>
+  }
+  channels: {
+    listStates: () => Promise<ChannelAccountStateInfo[]>
+    getConfig: () => Promise<Record<string, Record<string, Record<string, unknown>> | undefined>>
+    saveToken: (channelId: string, accountId: string, token: string) => Promise<{ ok: boolean; error?: string }>
+    removeToken: (channelId: string, accountId: string) => Promise<{ ok: boolean; error?: string }>
+    stop: (channelId: string, accountId: string) => Promise<{ ok: boolean; error?: string }>
+    start: (channelId: string, accountId: string) => Promise<{ ok: boolean; error?: string }>
   }
   cron: {
     list: () => Promise<unknown[]>
