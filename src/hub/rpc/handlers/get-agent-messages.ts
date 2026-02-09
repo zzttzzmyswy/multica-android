@@ -29,7 +29,7 @@ export function createGetAgentMessagesHandler(): RpcHandler {
     }
 
     const session = new SessionManager({ sessionId: agentId });
-    const allMessages = session.loadMessages();
+    const allMessages = session.loadMessagesForDisplay();
     const total = allMessages.length;
 
     // When offset is not provided, return the latest messages

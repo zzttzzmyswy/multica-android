@@ -11,7 +11,17 @@ export type SessionMeta = {
 };
 
 export type SessionEntry =
-  | { type: "message"; message: AgentMessage; timestamp: number; internal?: boolean }
+  | {
+      type: "message";
+      message: AgentMessage;
+      timestamp: number;
+      internal?: boolean;
+      /**
+       * User-visible content preserved for UI/history rendering.
+       * When omitted, consumers should fall back to message.content.
+       */
+      displayContent?: AgentMessage["content"];
+    }
   | { type: "meta"; meta: SessionMeta; timestamp: number }
   | {
       type: "compaction";

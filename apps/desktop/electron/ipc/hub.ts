@@ -358,7 +358,7 @@ export function registerHubIpcHandlers(): void {
 
     try {
       await agent.ensureInitialized()
-      const allMessages = agent.loadSessionMessages()
+      const allMessages = agent.loadSessionMessagesForDisplay()
       const total = allMessages.length
       // Must match DEFAULT_MESSAGES_LIMIT from @multica/sdk/actions/rpc
       const limit = options?.limit ?? 200

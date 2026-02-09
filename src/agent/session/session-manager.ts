@@ -168,6 +168,17 @@ export class SessionManager {
   }
 
   loadMessages(options?: { includeInternal?: boolean }): AgentMessage[] {
+    return this.loadMessagesFromEntries(options, false);
+  }
+
+  loadMessagesForDisplay(options?: { includeInternal?: boolean }): AgentMessage[] {
+    return this.loadMessagesFromEntries(options, true);
+  }
+
+  private loadMessagesFromEntries(
+    options: { includeInternal?: boolean } | undefined,
+    preferDisplayContent: boolean,
+  ): AgentMessage[] {
     const entries = this.loadEntries();
     let messages = entries
       .filter((entry) => {
@@ -175,7 +186,17 @@ export class SessionManager {
         if (!options?.includeInternal && entry.internal) return false;
         return true;
       })
-      .map((entry) => (entry as { type: "message"; message: AgentMessage }).message);
+      .map((entry) => {
+        const messageEntry = entry as Extract<SessionEntry, { type: "message" }>;
+        if (
+          preferDisplayContent
+          && messageEntry.message.role === "user"
+          && messageEntry.displayContent !== undefined
+        ) {
+          return { ...messageEntry.message, content: messageEntry.displayContent };
+        }
+        return messageEntry.message;
+      });
     messages = sanitizeToolCallInputs(messages);
     messages = sanitizeToolUseResultPairing(messages);
     return messages;
@@ -207,7 +228,10 @@ export class SessionManager {
     );
   }
 
-  saveMessage(message: AgentMessage, options?: { internal?: boolean }) {
+  saveMessage(
+    message: AgentMessage,
+    options?: { internal?: boolean; displayContent?: AgentMessage["content"] },
+  ) {
     void this.enqueue(() =>
       appendEntry(
         this.sessionId,
@@ -216,6 +240,9 @@ export class SessionManager {
           message,
           timestamp: Date.now(),
           ...(options?.internal ? { internal: true } : {}),
+          ...(options?.displayContent !== undefined
+            ? { displayContent: options.displayContent }
+            : {}),
         },
         { baseDir: this.baseDir },
       ),

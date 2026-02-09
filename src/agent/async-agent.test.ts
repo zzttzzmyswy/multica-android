@@ -4,7 +4,11 @@ import { AsyncAgent } from "./async-agent.js";
 const subscribeCallbacks: Array<(event: any) => void> = [];
 const internalRunState = { value: false };
 
-const runMock = vi.fn(async (_prompt: string) => ({ text: "", thinking: undefined, error: undefined as string | undefined }));
+const runMock = vi.fn(async (_prompt: string, _options?: { displayPrompt?: string }) => ({
+  text: "",
+  thinking: undefined,
+  error: undefined as string | undefined,
+}));
 const runInternalMock = vi.fn(async (_prompt: string) => ({ text: "", thinking: undefined, error: undefined as string | undefined }));
 const flushSessionMock = vi.fn(async () => {});
 const persistAssistantSummaryMock = vi.fn();
@@ -103,8 +107,9 @@ describe("AsyncAgent internal flow", () => {
     await agent.waitForIdle();
 
     expect(runMock).toHaveBeenCalledTimes(1);
-    const [message] = runMock.mock.calls[0] ?? [];
+    const [message, runOptions] = runMock.mock.calls[0] ?? [];
     expect(message).toMatch(/^\[Wed 2026-01-28 20:30 EST\] recent news$/);
+    expect(runOptions).toEqual({ displayPrompt: "recent news" });
 
     agent.close();
   });
@@ -115,7 +120,9 @@ describe("AsyncAgent internal flow", () => {
     agent.write("raw heartbeat prompt", { injectTimestamp: false });
     await agent.waitForIdle();
 
-    expect(runMock).toHaveBeenCalledWith("raw heartbeat prompt");
+    expect(runMock).toHaveBeenCalledWith("raw heartbeat prompt", {
+      displayPrompt: "raw heartbeat prompt",
+    });
 
     agent.close();
   });

@@ -65,7 +65,7 @@ export class AsyncAgent {
     this.queue = this.queue
       .then(async () => {
         if (this._closed) return;
-        const result = await this.agent.run(message);
+        const result = await this.agent.run(message, { displayPrompt: content });
         // Flush pending session writes so waitForIdle() callers
         // can safely read session data from disk.
         await this.agent.flushSession();
@@ -334,6 +334,14 @@ export class AsyncAgent {
    */
   loadSessionMessages(options?: { includeInternal?: boolean }): AgentMessage[] {
     return this.agent.loadSessionMessages(options);
+  }
+
+  /**
+   * Load session messages for UI rendering.
+   * User messages prefer displayContent when present.
+   */
+  loadSessionMessagesForDisplay(options?: { includeInternal?: boolean }): AgentMessage[] {
+    return this.agent.loadSessionMessagesForDisplay(options);
   }
 
   /**
