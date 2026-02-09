@@ -20,12 +20,17 @@ export interface ExecApprovalItemProps {
   onDecision: (decision: "allow-once" | "allow-always" | "deny") => void
 }
 
-function useCountdown(expiresAtMs: number): number {
-  const [remaining, setRemaining] = useState(() =>
-    Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 1000)),
+function useCountdown(expiresAtMs: number): number | null {
+  const [remaining, setRemaining] = useState<number | null>(() =>
+    expiresAtMs < 0 ? null : Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 1000)),
   )
 
   useEffect(() => {
+    if (expiresAtMs < 0) {
+      setRemaining(null)
+      return
+    }
+
     const id = setInterval(() => {
       const next = Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 1000))
       setRemaining(next)
@@ -73,7 +78,7 @@ export const ExecApprovalItem = memo(function ExecApprovalItem({
             <HugeiconsIcon icon={CommandLineIcon} strokeWidth={2} className="size-3.5 shrink-0" />
             <span className="font-medium text-foreground">{riskLabel}</span>
           </div>
-          {remaining > 0 && !decided && (
+          {remaining !== null && remaining > 0 && !decided && (
             <span className="text-xs text-muted-foreground/60 font-[tabular-nums]">
               {remaining}s
             </span>
@@ -100,7 +105,7 @@ export const ExecApprovalItem = memo(function ExecApprovalItem({
         )}
 
         {/* Actions */}
-        {!decided && remaining > 0 ? (
+        {!decided && (remaining === null || remaining > 0) ? (
           <div className="flex items-center gap-2">
             <Button
               variant="outline"

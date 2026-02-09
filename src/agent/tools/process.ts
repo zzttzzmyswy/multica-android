@@ -112,7 +112,7 @@ export function createProcessTool(defaultCwd?: string): AgentTool<typeof Process
               if (signal) {
                 signal.addEventListener("abort", () => {
                   child.kill("SIGTERM");
-                });
+                }, { once: true });
               }
 
               resolve({ success: true });

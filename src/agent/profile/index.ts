@@ -50,6 +50,7 @@ export function createAgentProfile(
     profile.user = DEFAULT_TEMPLATES.user;
     profile.workspace = DEFAULT_TEMPLATES.workspace;
     profile.memory = DEFAULT_TEMPLATES.memory;
+    profile.heartbeat = DEFAULT_TEMPLATES.heartbeat;
 
     // 保存到文件
     saveProfile(profile, { baseDir });
@@ -150,6 +151,7 @@ export class ProfileManager {
         user: profile.user,
         workspace: profile.workspace,
         memory: profile.memory,
+        heartbeat: profile.heartbeat,
         config: profile.config,
       },
       profileDir: this.getProfileDir(),
@@ -166,6 +168,19 @@ export class ProfileManager {
   getProfileConfig(): ProfileConfig | undefined {
     const profile = this.getProfile();
     return profile?.config;
+  }
+
+  /** Get heartbeat configuration from profile config */
+  getHeartbeatConfig():
+    | {
+        enabled?: boolean | undefined;
+        every?: string | undefined;
+        prompt?: string | undefined;
+        ackMaxChars?: number | undefined;
+      }
+    | undefined {
+    const profile = this.getProfile();
+    return profile?.config?.heartbeat;
   }
 
   /** 更新 tools 配置 */

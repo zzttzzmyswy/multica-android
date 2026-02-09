@@ -190,6 +190,16 @@ interface ElectronAPI {
     saveApiKey: (providerId: string, apiKey: string) => Promise<{ ok: boolean; error?: string }>
     importOAuth: (providerId: string) => Promise<{ ok: boolean; expiresAt?: number; error?: string }>
   }
+  cron: {
+    list: () => Promise<unknown[]>
+    toggle: (jobId: string) => Promise<{ ok: boolean }>
+    remove: (jobId: string) => Promise<{ ok: boolean }>
+  }
+  heartbeat: {
+    last: () => Promise<unknown>
+    setEnabled: (enabled: boolean) => Promise<{ ok: boolean; enabled?: boolean; error?: string }>
+    wake: (reason?: string) => Promise<{ ok: boolean; result?: unknown; error?: string }>
+  }
   localChat: {
     subscribe: (agentId: string) => Promise<{ ok?: boolean; error?: string; alreadySubscribed?: boolean }>
     unsubscribe: (agentId: string) => Promise<{ ok: boolean }>

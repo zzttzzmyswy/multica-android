@@ -1,7 +1,7 @@
 import { Agent as PiAgentCore, type AgentEvent, type AgentMessage } from "@mariozechner/pi-agent-core";
 import { v7 as uuidv7 } from "uuid";
 import type { AgentOptions, AgentRunResult, ReasoningMode } from "./types.js";
-import type { MulticaEvent } from "./events.js";
+import type { MulticaEvent, CompactionEndEvent } from "./events.js";
 import { createAgentOutput } from "./cli/output.js";
 import { resolveModel, resolveTools, type ResolveToolsOptions } from "./tools.js";
 import {
@@ -84,6 +84,10 @@ export class Agent {
   private readonly stderr: NodeJS.WritableStream;
   private initialized = false;
 
+  // Internal run state
+  private _internalRun = false;
+  private _runMutex: Promise<void> = Promise.resolve();
+
   // MulticaEvent subscribers (parallel to PiAgentCore's subscriber list)
   // Typed as AgentEvent | MulticaEvent to match subscribeAll() callback signature
   private multicaListeners: Array<(event: AgentEvent | MulticaEvent) => void> = [];
@@ -162,7 +166,12 @@ export class Agent {
     }
 
     this.agent = new PiAgentCore({
-      getApiKey: (_provider: string) => this.currentApiKey ?? "",
+      getApiKey: (_provider: string) => {
+        if (!this.currentApiKey) {
+          throw new Error(`No API key configured for provider: ${this.resolvedProvider}`);
+        }
+        return this.currentApiKey;
+      },
     });
 
     // Load Agent Profile (if profileId is specified)
@@ -352,13 +361,65 @@ export class Agent {
     }
   }
 
+  /** Emit an error event through the subscriber mechanism */
+  emitError(message: string): void {
+    this.emitMulticaEvent({ type: "agent_error", message });
+  }
+
   async run(prompt: string): Promise<AgentRunResult> {
+    // Run-level mutex: prevents concurrent run/runInternal from mis-tagging messages
+    return this.withRunMutex(() => this._run(prompt));
+  }
+
+  /**
+   * Run a prompt as an internal turn.
+   * Messages are persisted with `internal: true` and rolled back from
+   * in-memory state after the turn completes, so they do not pollute
+   * the main conversation context.
+   */
+  async runInternal(prompt: string): Promise<AgentRunResult> {
+    return this.withRunMutex(async () => {
+      const messageCountBefore = this.agent.state.messages.length;
+      this._internalRun = true;
+      try {
+        const result = await this._run(prompt);
+        return result;
+      } finally {
+        this._internalRun = false;
+        // Roll back internal messages from in-memory state
+        const current = this.agent.state.messages;
+        if (current.length > messageCountBefore) {
+          this.agent.replaceMessages(current.slice(0, messageCountBefore));
+        }
+      }
+    });
+  }
+
+  private async withRunMutex<T>(fn: () => Promise<T>): Promise<T> {
+    // Chain on the mutex so only one run executes at a time
+    const prev = this._runMutex;
+    let resolve: () => void;
+    this._runMutex = new Promise<void>((r) => { resolve = r; });
+    await prev;
+    try {
+      return await fn();
+    } finally {
+      resolve!();
+    }
+  }
+
+  private async _run(prompt: string): Promise<AgentRunResult> {
     await this.ensureInitialized();
     this.refreshAuthState();
-    if (!this.currentApiKey) {
-      throw new Error(`No API key configured for provider: ${this.resolvedProvider}`);
-    }
     this.output.state.lastAssistantText = "";
+
+    // Early validation: check API key before calling PiAgentCore.prompt(),
+    // because getApiKey errors thrown inside PiAgentCore's internal async
+    // context result in UnhandledPromiseRejection instead of propagating.
+    if (!this.currentApiKey) {
+      const errorMsg = `No API key configured for provider: ${this.resolvedProvider}. Please configure a provider in Agent Settings.`;
+      return { text: "", error: errorMsg };
+    }
 
     const canRotate = !this.pinnedProfile && this.profileCandidates.length > 1;
     let lastError: unknown;
@@ -501,8 +562,10 @@ export class Agent {
   private handleSessionEvent(event: AgentEvent) {
     if (event.type === "message_end") {
       const message = event.message as AgentMessage;
-      this.session.saveMessage(message);
-      if (message.role === "assistant") {
+      this.session.saveMessage(message, this._internalRun ? { internal: true } : undefined);
+      // Skip compaction during internal runs — internal messages will be
+      // rolled back from memory afterwards, so compacting now would be incorrect.
+      if (message.role === "assistant" && !this._internalRun) {
         void this.maybeCompact();
       }
     }
@@ -520,14 +583,15 @@ export class Agent {
       if (result?.kept) {
         this.agent.replaceMessages(result.kept);
       }
-      this.emitMulticaEvent({
+      const endEvent: CompactionEndEvent = {
         type: "compaction_end",
         removed: result?.removedCount ?? 0,
         kept: result?.kept.length ?? messages.length,
         tokensRemoved: result?.tokensRemoved,
         tokensKept: result?.tokensKept,
         reason: result?.reason ?? "tokens",
-      });
+      };
+      this.emitMulticaEvent(endEvent);
     } catch (err) {
       throw err;
     }
@@ -569,6 +633,40 @@ export class Agent {
     return this.agent.state.tools?.map(t => t.name) ?? [];
   }
 
+  /** Whether the agent is currently executing an internal run */
+  get isInternalRun(): boolean {
+    return this._internalRun;
+  }
+
+  /**
+   * Persist a synthetic assistant message into both in-memory state and session JSONL.
+   * Used after an internal run to keep the LLM summary visible in future turns
+   * while the internal prompt stays hidden.
+   */
+  persistAssistantSummary(text: string): void {
+    const model = this.agent.state.model;
+    const message = {
+      role: "assistant" as const,
+      content: [{ type: "text" as const, text }],
+      api: model?.api ?? "openai-completions",
+      provider: model?.provider ?? "internal",
+      model: model?.id ?? "unknown",
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: "stop" as const,
+      timestamp: Date.now(),
+    };
+
+    this.agent.appendMessage(message);
+    this.session.saveMessage(message);
+  }
+
   /** Ensure session messages are loaded from disk (idempotent) */
   async ensureInitialized(): Promise<void> {
     if (this.initialized) return;
@@ -580,9 +678,17 @@ export class Agent {
     this.initialized = true;
   }
 
-  /** Get all messages from the current session */
+  /** Get all messages from the current session (in-memory state) */
   getMessages(): AgentMessage[] {
     return this.agent.state.messages.slice();
+  }
+
+  /**
+   * Load messages from session storage with filtering.
+   * By default, internal messages are excluded.
+   */
+  loadSessionMessages(options?: { includeInternal?: boolean }): AgentMessage[] {
+    return this.session.loadMessages(options);
   }
 
   /**
@@ -652,6 +758,27 @@ export class Agent {
    */
   getProfileId(): string | undefined {
     return this.profile?.getProfile()?.id;
+  }
+
+  /**
+   * Get profile directory path, if profile is enabled.
+   */
+  getProfileDir(): string | undefined {
+    return this.profile?.getProfileDir();
+  }
+
+  /**
+   * Get heartbeat configuration from profile config.
+   */
+  getHeartbeatConfig():
+    | {
+        enabled?: boolean | undefined;
+        every?: string | undefined;
+        prompt?: string | undefined;
+        ackMaxChars?: number | undefined;
+      }
+    | undefined {
+    return this.profile?.getHeartbeatConfig();
   }
 
   /**
@@ -831,6 +958,7 @@ export class Agent {
         user: profile.user,
         workspace: profile.workspace,
         memory: profile.memory,
+        heartbeat: profile.heartbeat,
         config: profile.config,
       },
       profileDir: this.profile!.getProfileDir(),

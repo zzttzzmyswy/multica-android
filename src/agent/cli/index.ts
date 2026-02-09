@@ -11,6 +11,7 @@
  *   multica skills <cmd>       Skills management
  *   multica tools <cmd>        Tool policy inspection
  *   multica credentials <cmd>  Credentials management
+ *   multica cron <cmd>         Scheduled task management
  *   multica dev [service]      Development servers
  *   multica help               Show help
  */
@@ -29,6 +30,7 @@ const subcommands: Record<string, () => Promise<SubcommandHandler>> = {
   tools: async () => (await import("./commands/tools.js")).toolsCommand,
   credentials: async () => (await import("./commands/credentials.js")).credentialsCommand,
   dev: async () => (await import("./commands/dev.js")).devCommand,
+  cron: async () => (await import("./commands/cron.js")).cronCommand,
 };
 
 function printHelp() {
@@ -44,6 +46,7 @@ ${cyan("Usage:")}
   ${yellow("multica skills")} <command>        Manage skills
   ${yellow("multica tools")} <command>         Inspect tool policies
   ${yellow("multica credentials")} <command>   Manage credentials
+  ${yellow("multica cron")} <command>          Manage scheduled tasks
   ${yellow("multica dev")} [service]           Start development servers
   ${yellow("multica help")}                    Show this help
 
@@ -84,6 +87,16 @@ ${cyan("Commands:")}
     init [--force]          Create credential files
     show                    Show credential paths
     edit                    Open credentials in editor
+
+  ${green("cron")}
+    status                  Show cron service status
+    list                    List all scheduled jobs
+    add [options]           Create a new scheduled job
+    run <id>                Run a job immediately
+    enable <id>             Enable a job
+    disable <id>            Disable a job
+    remove <id>             Delete a job
+    logs <id>               Show job run logs
 
   ${green("dev")}
     ${dim("(default)")}              Start all services (gateway + console + web)

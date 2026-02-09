@@ -6,6 +6,7 @@
 
 import { SAFETY_CONSTITUTION } from "./constitution.js";
 import { formatRuntimeLine } from "./runtime-info.js";
+import { resolveHeartbeatPrompt } from "../../heartbeat/heartbeat-text.js";
 import type {
   ProfileContent,
   RuntimeInfo,
@@ -97,13 +98,14 @@ export function buildWorkspaceSection(
       "## Profile",
       "",
       `Your profile directory: \`${profileDir}\``,
-      "Use this as the base path for profile files (soul.md, user.md, memory.md, memory/*.md).",
+      "Use this as the base path for profile files (soul.md, user.md, memory.md, heartbeat.md, memory/*.md).",
       "",
       "Profile files:",
       "- `soul.md` — Your identity and values",
       "- `user.md` — Information about your user",
       "- `workspace.md` — Guidelines and conventions (below)",
       "- `memory.md` — Persistent knowledge",
+      "- `heartbeat.md` — Background heartbeat loop instructions",
       "",
     );
   }
@@ -126,6 +128,26 @@ export function buildMemoryFileSection(
 ): string[] {
   // Progressive disclosure: agent reads memory.md on demand
   return [];
+}
+
+/**
+ * Heartbeat section — full mode only.
+ * Keeps heartbeat protocol explicit in the agent instructions.
+ */
+export function buildHeartbeatSection(
+  profile: ProfileContent | undefined,
+  mode: SystemPromptMode,
+): string[] {
+  if (mode !== "full") return [];
+  const prompt = resolveHeartbeatPrompt(profile?.config?.heartbeat?.prompt);
+  return [
+    "## Heartbeats",
+    `Heartbeat prompt: ${prompt}`,
+    'If you receive a heartbeat poll (a user message matching the heartbeat prompt above), and there is nothing that needs attention, reply exactly:',
+    "HEARTBEAT_OK",
+    'If something needs attention, do NOT include "HEARTBEAT_OK"; reply with the alert text instead.',
+    "",
+  ];
 }
 
 /**
@@ -290,6 +312,30 @@ export function buildRuntimeSection(
 ): string[] {
   if (mode === "none" || !runtime) return [];
   return ["## Runtime", formatRuntimeLine(runtime)];
+}
+
+/**
+ * Time awareness section — helps the agent reason about "now" safely.
+ * Included in full and minimal modes.
+ */
+export function buildTimeAwarenessSection(
+  tools: string[] | undefined,
+  mode: SystemPromptMode,
+): string[] {
+  if (mode === "none") return [];
+
+  const hasExecTool = (tools ?? []).some((tool) => tool.toLowerCase() === "exec");
+  const fallbackLine = hasExecTool
+    ? "If a turn lacks a timestamp and exact current time matters, use `exec` with `date`."
+    : "If a turn lacks a timestamp and exact current time matters, ask for clarification.";
+
+  return [
+    "## Time Awareness",
+    "Incoming user messages may include a prefix like `[Wed 2026-02-09 21:15 PST]`.",
+    "Treat the latest prefixed timestamp as your reference for relative time requests (today, recent, last month).",
+    fallbackLine,
+    "",
+  ];
 }
 
 /**

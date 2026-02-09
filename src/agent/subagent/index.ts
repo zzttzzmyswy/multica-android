@@ -28,6 +28,8 @@ export {
   readLatestAssistantReply,
   formatAnnouncementMessage,
   runSubagentAnnounceFlow,
+  formatCoalescedAnnouncementMessage,
+  runCoalescedAnnounceFlow,
 } from "./announce.js";
 export type { FormatAnnouncementParams } from "./announce.js";
 

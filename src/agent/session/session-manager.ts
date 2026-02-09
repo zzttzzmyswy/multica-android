@@ -167,11 +167,15 @@ export class SessionManager {
     return repairSessionFileIfNeeded({ sessionFile: filePath, warn });
   }
 
-  loadMessages(): AgentMessage[] {
+  loadMessages(options?: { includeInternal?: boolean }): AgentMessage[] {
     const entries = this.loadEntries();
     let messages = entries
-      .filter((entry) => entry.type === "message")
-      .map((entry) => entry.message);
+      .filter((entry) => {
+        if (entry.type !== "message") return false;
+        if (!options?.includeInternal && entry.internal) return false;
+        return true;
+      })
+      .map((entry) => (entry as { type: "message"; message: AgentMessage }).message);
     messages = sanitizeToolCallInputs(messages);
     messages = sanitizeToolUseResultPairing(messages);
     return messages;
@@ -203,11 +207,16 @@ export class SessionManager {
     );
   }
 
-  saveMessage(message: AgentMessage) {
+  saveMessage(message: AgentMessage, options?: { internal?: boolean }) {
     void this.enqueue(() =>
       appendEntry(
         this.sessionId,
-        { type: "message", message, timestamp: Date.now() },
+        {
+          type: "message",
+          message,
+          timestamp: Date.now(),
+          ...(options?.internal ? { internal: true } : {}),
+        },
         { baseDir: this.baseDir },
       ),
     );
