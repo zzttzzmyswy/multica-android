@@ -1,4 +1,5 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
+import type { UserMessage } from "@mariozechner/pi-ai";
 
 export type SessionMeta = {
   provider?: string;
@@ -20,7 +21,7 @@ export type SessionEntry =
        * User-visible content preserved for UI/history rendering.
        * When omitted, consumers should fall back to message.content.
        */
-      displayContent?: AgentMessage["content"];
+      displayContent?: UserMessage["content"];
     }
   | { type: "meta"; meta: SessionMeta; timestamp: number }
   | {

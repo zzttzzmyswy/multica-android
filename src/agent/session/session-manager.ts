@@ -1,5 +1,5 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
-import { getModel, type Model } from "@mariozechner/pi-ai";
+import { getModel, type Model, type UserMessage } from "@mariozechner/pi-ai";
 import type { SessionEntry, SessionMeta } from "./types.js";
 import { appendEntry, readEntries, resolveSessionPath, writeEntries } from "./storage.js";
 import { compactMessages, compactMessagesAsync, type CompactionResult } from "./compaction.js";
@@ -230,7 +230,7 @@ export class SessionManager {
 
   saveMessage(
     message: AgentMessage,
-    options?: { internal?: boolean; displayContent?: AgentMessage["content"] },
+    options?: { internal?: boolean; displayContent?: UserMessage["content"] },
   ) {
     void this.enqueue(() =>
       appendEntry(

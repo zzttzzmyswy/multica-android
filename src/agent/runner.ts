@@ -1,4 +1,5 @@
 import { Agent as PiAgentCore, type AgentEvent, type AgentMessage } from "@mariozechner/pi-agent-core";
+import type { UserMessage } from "@mariozechner/pi-ai";
 import { v7 as uuidv7 } from "uuid";
 import type { AgentOptions, AgentRunResult, ReasoningMode } from "./types.js";
 import type { MulticaEvent, CompactionEndEvent } from "./events.js";
@@ -572,7 +573,7 @@ export class Agent {
   private handleSessionEvent(event: AgentEvent) {
     if (event.type === "message_end") {
       const message = event.message as AgentMessage;
-      const saveOptions: { internal?: boolean; displayContent?: AgentMessage["content"] } = {};
+      const saveOptions: { internal?: boolean; displayContent?: UserMessage["content"] } = {};
       if (this._internalRun) {
         saveOptions.internal = true;
       }
