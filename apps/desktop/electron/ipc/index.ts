@@ -6,6 +6,7 @@ export { registerSkillsIpcHandlers } from './skills.js'
 export { registerHubIpcHandlers, cleanupHub, initializeHub, setupDeviceConfirmation } from './hub.js'
 export { registerProfileIpcHandlers } from './profile.js'
 export { registerProviderIpcHandlers } from './provider.js'
+export { registerChannelsIpcHandlers } from './channels.js'
 export { registerCronIpcHandlers } from './cron.js'
 export { registerHeartbeatIpcHandlers } from './heartbeat.js'
 
@@ -14,6 +15,7 @@ import { registerSkillsIpcHandlers } from './skills.js'
 import { registerHubIpcHandlers, cleanupHub, initializeHub } from './hub.js'
 import { registerProfileIpcHandlers } from './profile.js'
 import { registerProviderIpcHandlers } from './provider.js'
+import { registerChannelsIpcHandlers } from './channels.js'
 import { registerCronIpcHandlers } from './cron.js'
 import { registerHeartbeatIpcHandlers } from './heartbeat.js'
 
@@ -27,6 +29,7 @@ export function registerAllIpcHandlers(): void {
   registerSkillsIpcHandlers()
   registerProfileIpcHandlers()
   registerProviderIpcHandlers()
+  registerChannelsIpcHandlers()
   registerCronIpcHandlers()
   registerHeartbeatIpcHandlers()
 }

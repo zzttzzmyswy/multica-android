@@ -68,6 +68,36 @@ function isInsideFence(text: string, position: number): boolean {
   return detectFenceAt(text, position) !== null;
 }
 
+/** A line that looks like a Markdown table row (starts with |) */
+function isTableRow(line: string): boolean {
+  return line.startsWith("|");
+}
+
+/**
+ * Check if position falls between two Markdown table rows.
+ * Prevents breaking a table in the middle — table rows lose their header
+ * context when split across messages.
+ */
+function isInsideTable(text: string, position: number): boolean {
+  // Find the last non-empty line before position
+  let i = position - 1;
+  while (i >= 0 && text[i] === "\n") i--;
+  if (i < 0) return false;
+  let lineStart = i;
+  while (lineStart > 0 && text[lineStart - 1] !== "\n") lineStart--;
+  const prevLine = text.slice(lineStart, i + 1).trim();
+
+  // Find the first non-empty line at/after position
+  let j = position;
+  while (j < text.length && text[j] === "\n") j++;
+  if (j >= text.length) return false;
+  let lineEnd = j;
+  while (lineEnd < text.length && text[lineEnd] !== "\n") lineEnd++;
+  const nextLine = text.slice(j, lineEnd).trim();
+
+  return isTableRow(prevLine) && isTableRow(nextLine);
+}
+
 /**
  * If a chunk ends inside an open fence, close it in the chunk
  * and reopen it in the remainder.
@@ -152,7 +182,7 @@ export class BlockChunker {
 
     for (const breaker of breakers) {
       const index = breaker(buffer, searchStart, searchEnd, bufLen);
-      if (index !== -1 && !isInsideFence(buffer, index)) {
+      if (index !== -1 && !isInsideFence(buffer, index) && !isInsideTable(buffer, index)) {
         return index;
       }
     }
