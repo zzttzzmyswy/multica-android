@@ -33,10 +33,10 @@ export interface CreateToolsOptions {
 type ToolErrorPayload = {
   error: true;
   message: string;
-  name?: string;
-  code?: string;
-  retryable?: boolean;
-  details?: Record<string, unknown>;
+  name?: string | undefined;
+  code?: string | undefined;
+  retryable?: boolean | undefined;
+  details?: Record<string, unknown> | undefined;
 };
 
 function toToolErrorPayload(error: unknown): ToolErrorPayload {
@@ -130,12 +130,12 @@ export function createAllTools(options: CreateToolsOptions | string): AgentTool<
   // Add sessions_spawn tool (will be filtered by policy for subagents)
   const sessionsSpawnTool = createSessionsSpawnTool({
     isSubagent: isSubagent ?? false,
-    sessionId,
+    ...(sessionId !== undefined ? { sessionId } : {}),
   });
   tools.push(sessionsSpawnTool as AgentTool<any>);
 
   // Add sessions_list tool
-  const sessionsListTool = createSessionsListTool({ sessionId });
+  const sessionsListTool = createSessionsListTool({ ...(sessionId !== undefined ? { sessionId } : {}) });
   tools.push(sessionsListTool as AgentTool<any>);
 
   return tools;

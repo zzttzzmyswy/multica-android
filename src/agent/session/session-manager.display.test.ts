@@ -28,13 +28,13 @@ describe("SessionManager display content view", () => {
     const entries: SessionEntry[] = [
       {
         type: "message",
-        message: { role: "user", content: "[Mon 2026-02-09 14:37 GMT+8] hi" },
+        message: { role: "user", content: "[Mon 2026-02-09 14:37 GMT+8] hi" } as any,
         displayContent: "hi",
         timestamp: 1,
       },
       {
         type: "message",
-        message: { role: "assistant", content: "hello there" },
+        message: { role: "assistant", content: "hello there" } as any,
         timestamp: 2,
       },
     ];
@@ -43,9 +43,9 @@ describe("SessionManager display content view", () => {
     const raw = session.loadMessages();
     const display = session.loadMessagesForDisplay();
 
-    expect(raw[0]?.content).toBe("[Mon 2026-02-09 14:37 GMT+8] hi");
-    expect(display[0]?.content).toBe("hi");
-    expect(display[1]?.content).toBe("hello there");
+    expect((raw[0] as any)?.content).toBe("[Mon 2026-02-09 14:37 GMT+8] hi");
+    expect((display[0] as any)?.content).toBe("hi");
+    expect((display[1] as any)?.content).toBe("hello there");
   });
 
   it("keeps internal filtering behavior in display view", async () => {
@@ -54,14 +54,14 @@ describe("SessionManager display content view", () => {
     const entries: SessionEntry[] = [
       {
         type: "message",
-        message: { role: "user", content: "[Mon 2026-02-09 14:37 GMT+8] hidden" },
+        message: { role: "user", content: "[Mon 2026-02-09 14:37 GMT+8] hidden" } as any,
         displayContent: "hidden",
         internal: true,
         timestamp: 1,
       },
       {
         type: "message",
-        message: { role: "user", content: "[Mon 2026-02-09 14:38 GMT+8] visible" },
+        message: { role: "user", content: "[Mon 2026-02-09 14:38 GMT+8] visible" } as any,
         displayContent: "visible",
         timestamp: 2,
       },
@@ -72,9 +72,9 @@ describe("SessionManager display content view", () => {
     const includeInternalView = session.loadMessagesForDisplay({ includeInternal: true });
 
     expect(defaultView).toHaveLength(1);
-    expect(defaultView[0]?.content).toBe("visible");
+    expect((defaultView[0] as any)?.content).toBe("visible");
     expect(includeInternalView).toHaveLength(2);
-    expect(includeInternalView[0]?.content).toBe("hidden");
+    expect((includeInternalView[0] as any)?.content).toBe("hidden");
   });
 
   it("persists displayContent on saveMessage", async () => {
@@ -82,7 +82,7 @@ describe("SessionManager display content view", () => {
     const session = new SessionManager({ sessionId, baseDir: testBaseDir });
 
     session.saveMessage(
-      { role: "user", content: "[Mon 2026-02-09 14:39 GMT+8] save me" },
+      { role: "user", content: "[Mon 2026-02-09 14:39 GMT+8] save me" } as any,
       { displayContent: "save me" },
     );
     await session.flush();

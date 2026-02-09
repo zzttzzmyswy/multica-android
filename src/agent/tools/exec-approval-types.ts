@@ -27,7 +27,7 @@ export interface ExecApprovalRequest {
   /** Shell command to execute */
   command: string;
   /** Working directory */
-  cwd?: string;
+  cwd?: string | undefined;
   /** Evaluated risk level */
   riskLevel: "safe" | "needs-review" | "dangerous";
   /** Reasons for the risk assessment */

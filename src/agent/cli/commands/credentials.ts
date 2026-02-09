@@ -19,8 +19,8 @@ interface CredentialsOptions {
   force: boolean;
   coreOnly: boolean;
   skillsOnly: boolean;
-  pathOverride?: string;
-  skillsPathOverride?: string;
+  pathOverride?: string | undefined;
+  skillsPathOverride?: string | undefined;
 }
 
 function printHelp() {

@@ -2,7 +2,7 @@ import type { AgentMessage } from "@mariozechner/pi-agent-core";
 
 type ToolCallLike = {
   id: string;
-  name?: string;
+  name?: string | undefined;
 };
 
 const TOOL_CALL_TYPES = new Set(["toolCall", "toolUse", "functionCall"]);
@@ -72,7 +72,7 @@ function extractToolResultId(msg: Extract<AgentMessage, { role: "toolResult" }>)
 
 function makeMissingToolResult(params: {
   toolCallId: string;
-  toolName?: string;
+  toolName?: string | undefined;
 }): Extract<AgentMessage, { role: "toolResult" }> {
   return {
     role: "toolResult",
@@ -188,7 +188,6 @@ export function repairToolUseResultPairing(messages: AgentMessage[]): ToolUseRep
   for (let i = 0; i < messages.length; i += 1) {
     const msg = messages[i];
     if (!msg || typeof msg !== "object") {
-      out.push(msg);
       continue;
     }
 
@@ -219,7 +218,6 @@ export function repairToolUseResultPairing(messages: AgentMessage[]): ToolUseRep
     for (; j < messages.length; j += 1) {
       const next = messages[j];
       if (!next || typeof next !== "object") {
-        remainder.push(next);
         continue;
       }
 

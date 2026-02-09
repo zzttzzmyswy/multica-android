@@ -29,7 +29,7 @@ interface ParsedArgs {
   args: string[];
   verbose: boolean;
   force: boolean;
-  profile?: string;
+  profile?: string | undefined;
 }
 
 function printHelp() {

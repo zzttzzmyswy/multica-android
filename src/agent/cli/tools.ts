@@ -4,24 +4,22 @@
  *
  * Usage:
  *   pnpm tools:cli list                           # List all available tools
- *   pnpm tools:cli list --profile coding          # List tools after applying profile
+ *   pnpm tools:cli list --allow group:fs           # List tools after allowing fs group
  *   pnpm tools:cli list --deny exec               # List tools after denying exec
  *   pnpm tools:cli groups                         # Show all tool groups
- *   pnpm tools:cli profiles                       # Show all profiles
  */
 
 import { createAllTools } from "../tools.js";
 import { filterTools, type ToolsConfig } from "../tools/policy.js";
-import { TOOL_GROUPS, TOOL_PROFILES, expandToolGroups } from "../tools/groups.js";
+import { TOOL_GROUPS, expandToolGroups } from "../tools/groups.js";
 
-type Command = "list" | "groups" | "profiles" | "help";
+type Command = "list" | "groups" | "help";
 
 interface CliOptions {
   command: Command;
-  profile?: string;
   allow?: string[];
   deny?: string[];
-  provider?: string;
+  provider?: string | undefined;
   isSubagent?: boolean;
 }
 
@@ -31,11 +29,9 @@ function printUsage() {
   console.log("Commands:");
   console.log("  list       List available tools (with optional filtering)");
   console.log("  groups     Show all tool groups");
-  console.log("  profiles   Show all profiles");
   console.log("  help       Show this help");
   console.log("");
   console.log("Options for 'list':");
-  console.log("  --profile PROFILE    Apply profile filter (minimal, coding, web, full)");
   console.log("  --allow TOOLS        Allow specific tools (comma-separated)");
   console.log("  --deny TOOLS         Deny specific tools (comma-separated)");
   console.log("  --provider NAME      Apply provider-specific rules");
@@ -43,8 +39,7 @@ function printUsage() {
   console.log("");
   console.log("Examples:");
   console.log("  pnpm tools:cli list");
-  console.log("  pnpm tools:cli list --profile coding");
-  console.log("  pnpm tools:cli list --profile coding --deny exec");
+  console.log("  pnpm tools:cli list --deny exec");
   console.log("  pnpm tools:cli list --allow group:fs,web_fetch");
   console.log("  pnpm tools:cli groups");
 }
@@ -59,11 +54,6 @@ function parseArgs(argv: string[]): CliOptions {
     const arg = args.shift();
     if (!arg) break;
 
-    if (arg === "--profile") {
-      const value = args.shift();
-      if (value) opts.profile = value;
-      continue;
-    }
     if (arg === "--allow") {
       const value = args.shift();
       opts.allow = value?.split(",").map((s) => s.trim()) ?? [];
@@ -75,8 +65,7 @@ function parseArgs(argv: string[]): CliOptions {
       continue;
     }
     if (arg === "--provider") {
-      const value = args.shift();
-      if (value) opts.provider = value;
+      opts.provider = args.shift();
       continue;
     }
     if (arg === "--subagent") {
@@ -96,11 +85,8 @@ function listTools(opts: CliOptions) {
 
   // Build config
   let config: ToolsConfig | undefined;
-  if (opts.profile || opts.allow || opts.deny) {
+  if (opts.allow || opts.deny) {
     config = {};
-    if (opts.profile) {
-      config.profile = opts.profile as any;
-    }
     if (opts.allow) {
       config.allow = opts.allow;
     }
@@ -124,7 +110,6 @@ function listTools(opts: CliOptions) {
 
   if (config || opts.provider || opts.isSubagent) {
     console.log("Applied filters:");
-    if (opts.profile) console.log(`  Profile: ${opts.profile}`);
     if (opts.allow) console.log(`  Allow: ${opts.allow.join(", ")}`);
     if (opts.deny) console.log(`  Deny: ${opts.deny.join(", ")}`);
     if (opts.provider) console.log(`  Provider: ${opts.provider}`);
@@ -160,25 +145,6 @@ function showGroups() {
   }
 }
 
-function showProfiles() {
-  console.log("Tool Profiles:");
-  console.log("");
-  for (const [name, policy] of Object.entries(TOOL_PROFILES)) {
-    console.log(`  ${name}:`);
-    if (policy.allow) {
-      const expanded = expandToolGroups(policy.allow);
-      console.log(`    Allow: ${policy.allow.join(", ")}`);
-      console.log(`    Expands to: ${expanded.join(", ")}`);
-    } else {
-      console.log(`    Allow: (all tools)`);
-    }
-    if (policy.deny) {
-      console.log(`    Deny: ${policy.deny.join(", ")}`);
-    }
-    console.log("");
-  }
-}
-
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
 
@@ -188,9 +154,6 @@ async function main() {
       break;
     case "groups":
       showGroups();
-      break;
-    case "profiles":
-      showProfiles();
       break;
     case "help":
     default:

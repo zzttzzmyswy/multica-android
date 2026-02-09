@@ -12,18 +12,17 @@ import type { ToolsConfig } from "../../tools/policy.js";
 import { cyan, yellow, dim } from "../colors.js";
 
 type RunOptions = {
-  profile?: string;
-  provider?: string;
-  model?: string;
-  apiKey?: string;
-  baseUrl?: string;
-  system?: string;
-  thinking?: string;
-  reasoning?: string;
-  cwd?: string;
-  session?: string;
+  profile?: string | undefined;
+  provider?: string | undefined;
+  model?: string | undefined;
+  apiKey?: string | undefined;
+  baseUrl?: string | undefined;
+  system?: string | undefined;
+  thinking?: string | undefined;
+  reasoning?: string | undefined;
+  cwd?: string | undefined;
+  session?: string | undefined;
   debug?: boolean;
-  toolsProfile?: string;
   toolsAllow?: string[];
   toolsDeny?: string[];
   help?: boolean;
@@ -49,7 +48,6 @@ ${cyan("Options:")}
   ${yellow("--help")}, -h          Show this help
 
 ${cyan("Tools Configuration:")}
-  ${yellow("--tools-profile")} P   Tool profile (minimal, coding, web, full)
   ${yellow("--tools-allow")} T     Allow specific tools (comma-separated)
   ${yellow("--tools-deny")} T      Deny specific tools (comma-separated)
 
@@ -125,10 +123,6 @@ function parseArgs(argv: string[]): { opts: RunOptions; prompt: string } {
       opts.debug = true;
       continue;
     }
-    if (arg === "--tools-profile") {
-      opts.toolsProfile = args.shift();
-      continue;
-    }
     if (arg === "--tools-allow") {
       const value = args.shift();
       opts.toolsAllow = value?.split(",").map((s) => s.trim()) ?? [];
@@ -178,11 +172,8 @@ export async function runCommand(args: string[]): Promise<void> {
 
   // Build tools config if any tools options are set
   let toolsConfig: ToolsConfig | undefined;
-  if (opts.toolsProfile || opts.toolsAllow || opts.toolsDeny) {
+  if (opts.toolsAllow || opts.toolsDeny) {
     toolsConfig = {};
-    if (opts.toolsProfile) {
-      toolsConfig.profile = opts.toolsProfile as ToolsConfig["profile"];
-    }
     if (opts.toolsAllow) {
       toolsConfig.allow = opts.toolsAllow;
     }

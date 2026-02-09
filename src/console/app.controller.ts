@@ -44,7 +44,7 @@ export class AppController {
   @Post("agents")
   createAgent(@Body() body?: { id?: string }) {
     const agent = this.hub.createAgent(body?.id);
-    return { id: agent.id };
+    return { id: agent.sessionId };
   }
 
   @Delete("agents/:id")
