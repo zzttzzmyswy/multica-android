@@ -22,6 +22,18 @@ function getThinkingText(blocks: ContentBlock[]): string {
     .join("")
 }
 
+/** Strip LLM-facing metadata prefixes from user messages for clean display */
+function stripUserMetadata(text: string): string {
+  // Strip timestamp envelope: [Mon 2026-02-09 14:38 GMT+8]
+  let cleaned = text.replace(/^\[(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}[^\]]*\]\s*/, "")
+  // Strip media type labels injected by channel media processing
+  cleaned = cleaned
+    .replace(/^\[Voice Message\]\n?Transcript:\s*/i, "")
+    .replace(/^\[Image\]\n?Description:\s*/i, "")
+    .replace(/^\[Video\]\n?Description:\s*/i, "")
+  return cleaned
+}
+
 /** Build a synthetic "running" toolResult Message from a ToolCall block */
 function toRunningMessage(tc: ToolCall, agentId: string): Message {
   return {
@@ -62,7 +74,8 @@ export const MessageList = memo(function MessageList({ messages, streamingIds }:
           return <ToolCallItem key={msg.id} message={msg} />
         }
 
-        const text = getTextContent(msg.content)
+        const rawText = getTextContent(msg.content)
+        const text = msg.role === "user" ? stripUserMetadata(rawText) : rawText
         const toolCalls = msg.role === "assistant" ? getToolCalls(msg.content) : []
         const thinking = msg.role === "assistant" ? getThinkingText(msg.content) : ""
         const hasThinkingBlocks = msg.role === "assistant" && msg.content.some((b) => b.type === "thinking")
