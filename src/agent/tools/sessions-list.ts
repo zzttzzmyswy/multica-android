@@ -23,12 +23,12 @@ type SessionsListArgs = {
 export type SessionsListResult = {
   runs: Array<{
     runId: string;
-    label?: string;
+    label?: string | undefined;
     task: string;
     status: "running" | "ok" | "error" | "timeout" | "unknown";
-    startedAt?: number;
-    endedAt?: number;
-    findings?: string;
+    startedAt?: number | undefined;
+    endedAt?: number | undefined;
+    findings?: string | undefined;
   }>;
 };
 

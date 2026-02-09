@@ -66,7 +66,7 @@ describe("compaction", () => {
     return Array.from({ length: count }, (_, i) => ({
       role: (i % 2 === 0 ? "user" : "assistant") as "user" | "assistant",
       content: `${prefix} ${i}`,
-    }));
+    })) as AgentMessage[];
   }
 
   function createMessagesWithToolUse(): AgentMessage[] {

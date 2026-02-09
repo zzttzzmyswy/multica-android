@@ -108,12 +108,12 @@ describe("session/storage", () => {
 
       const entry1: SessionEntry = {
         type: "message",
-        message: { role: "user", content: "Hello" },
+        message: { role: "user", content: "Hello" } as any,
         timestamp: 1000,
       };
       const entry2: SessionEntry = {
         type: "message",
-        message: { role: "assistant", content: "Hi there" },
+        message: { role: "assistant", content: "Hi there" } as any,
         timestamp: 2000,
       };
 
@@ -135,7 +135,7 @@ describe("session/storage", () => {
 
       const validEntry: SessionEntry = {
         type: "message",
-        message: { role: "user", content: "Valid" },
+        message: { role: "user", content: "Valid" } as any,
         timestamp: 1000,
       };
 
@@ -195,7 +195,7 @@ describe("session/storage", () => {
       const sessionId = "append-session";
       const entry: SessionEntry = {
         type: "message",
-        message: { role: "user", content: "Hello" },
+        message: { role: "user", content: "Hello" } as any,
         timestamp: 1000,
       };
 
@@ -212,12 +212,12 @@ describe("session/storage", () => {
       const sessionId = "append-existing";
       const entry1: SessionEntry = {
         type: "message",
-        message: { role: "user", content: "First" },
+        message: { role: "user", content: "First" } as any,
         timestamp: 1000,
       };
       const entry2: SessionEntry = {
         type: "message",
-        message: { role: "assistant", content: "Second" },
+        message: { role: "assistant", content: "Second" } as any,
         timestamp: 2000,
       };
 
@@ -235,8 +235,8 @@ describe("session/storage", () => {
     it("should write all entries to file", async () => {
       const sessionId = "write-session";
       const entries: SessionEntry[] = [
-        { type: "message", message: { role: "user", content: "One" }, timestamp: 1000 },
-        { type: "message", message: { role: "assistant", content: "Two" }, timestamp: 2000 },
+        { type: "message", message: { role: "user", content: "One" } as any, timestamp: 1000 },
+        { type: "message", message: { role: "assistant", content: "Two" } as any, timestamp: 2000 },
       ];
 
       await writeEntries(sessionId, entries, { baseDir: testBaseDir });
@@ -251,12 +251,12 @@ describe("session/storage", () => {
 
       await writeEntries(
         sessionId,
-        [{ type: "message", message: { role: "user", content: "Old" }, timestamp: 1000 }],
+        [{ type: "message", message: { role: "user", content: "Old" } as any, timestamp: 1000 }],
         { baseDir: testBaseDir }
       );
 
       const newEntries: SessionEntry[] = [
-        { type: "message", message: { role: "user", content: "New" }, timestamp: 2000 },
+        { type: "message", message: { role: "user", content: "New" } as any, timestamp: 2000 },
       ];
       await writeEntries(sessionId, newEntries, { baseDir: testBaseDir });
 

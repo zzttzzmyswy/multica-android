@@ -85,8 +85,8 @@ function smallConfig(overrides?: Partial<BlockChunkerConfig>): BlockChunkerConfi
 describe("MessageAggregator", () => {
   let blocks: BlockReply[];
   let passedThrough: Array<AgentEvent | MulticaEvent>;
-  let onBlock: ReturnType<typeof vi.fn>;
-  let onPassthrough: ReturnType<typeof vi.fn>;
+  let onBlock: any;
+  let onPassthrough: any;
 
   beforeEach(() => {
     blocks = [];
@@ -154,8 +154,8 @@ describe("MessageAggregator", () => {
       agg.handleEvent(endEvent);
 
       expect(blocks).toHaveLength(1);
-      expect(blocks[0].text).toBe("Hello world");
-      expect(blocks[0].isFinal).toBe(true);
+      expect(blocks[0]!.text).toBe("Hello world");
+      expect(blocks[0]!.isFinal).toBe(true);
 
       // message_start + message_end both passed through
       const passthroughTypes = passedThrough.map((e) => e.type);
@@ -178,7 +178,7 @@ describe("MessageAggregator", () => {
       agg.handleEvent(makeMessageEnd("Hello world"));
 
       expect(blocks).toHaveLength(1);
-      expect(blocks[0].text).toBe("Hello world");
+      expect(blocks[0]!.text).toBe("Hello world");
     });
 
     it("ignores ThinkingContent blocks, only extracts text", () => {
@@ -190,8 +190,8 @@ describe("MessageAggregator", () => {
       agg.handleEvent(makeMessageEnd("visible text"));
 
       expect(blocks).toHaveLength(1);
-      expect(blocks[0].text).toBe("visible text");
-      expect(blocks[0].text).not.toContain("internal thinking");
+      expect(blocks[0]!.text).toBe("visible text");
+      expect(blocks[0]!.text).not.toContain("internal thinking");
     });
 
     it("handles empty delta (duplicate event) gracefully", () => {
@@ -205,7 +205,7 @@ describe("MessageAggregator", () => {
       agg.handleEvent(makeMessageEnd("Hello"));
 
       expect(blocks).toHaveLength(1);
-      expect(blocks[0].text).toBe("Hello");
+      expect(blocks[0]!.text).toBe("Hello");
     });
 
     it("handles monotonically growing text correctly", () => {
@@ -221,7 +221,7 @@ describe("MessageAggregator", () => {
       agg.handleEvent(makeMessageEnd("Hello"));
 
       expect(blocks).toHaveLength(1);
-      expect(blocks[0].text).toBe("Hello");
+      expect(blocks[0]!.text).toBe("Hello");
     });
   });
 
@@ -241,8 +241,8 @@ describe("MessageAggregator", () => {
       agg.handleEvent(makeMessageUpdate(text));
 
       expect(blocks.length).toBeGreaterThanOrEqual(1);
-      expect(blocks[0].text).toContain("first paragraph");
-      expect(blocks[0].isFinal).toBe(false);
+      expect(blocks[0]!.text).toContain("first paragraph");
+      expect(blocks[0]!.isFinal).toBe(false);
     });
 
     it("emits multiple blocks for very long text", () => {
@@ -255,7 +255,7 @@ describe("MessageAggregator", () => {
       expect(blocks.length).toBeGreaterThanOrEqual(2);
       // All blocks except the last should have isFinal=false
       for (let i = 0; i < blocks.length; i++) {
-        expect(blocks[i].isFinal).toBe(false);
+        expect(blocks[i]!.isFinal).toBe(false);
       }
     });
 
@@ -268,7 +268,7 @@ describe("MessageAggregator", () => {
       agg.handleEvent(makeMessageEnd(text));
 
       const finalBlock = blocks[blocks.length - 1];
-      expect(finalBlock.isFinal).toBe(true);
+      expect(finalBlock!.isFinal).toBe(true);
     });
 
     it("increments block index for each emitted block", () => {
@@ -280,7 +280,7 @@ describe("MessageAggregator", () => {
       agg.handleEvent(makeMessageEnd(text));
 
       for (let i = 0; i < blocks.length; i++) {
-        expect(blocks[i].index).toBe(i);
+        expect(blocks[i]!.index).toBe(i);
       }
     });
 
@@ -293,7 +293,7 @@ describe("MessageAggregator", () => {
       agg.handleEvent(makeMessageEnd("First message text."));
 
       expect(blocks).toHaveLength(1);
-      expect(blocks[0].index).toBe(0);
+      expect(blocks[0]!.index).toBe(0);
 
       // Second message cycle — index should reset
       agg.handleEvent(makeMessageStart("msg-2"));
@@ -301,7 +301,7 @@ describe("MessageAggregator", () => {
       agg.handleEvent(makeMessageEnd("Second message text."));
 
       expect(blocks).toHaveLength(2);
-      expect(blocks[1].index).toBe(0); // Reset after new message_start
+      expect(blocks[1]!.index).toBe(0); // Reset after new message_start
     });
 
     it("does not emit empty block on message_end with no content", () => {
@@ -335,7 +335,7 @@ describe("MessageAggregator", () => {
 
       // Final block should contain all text
       expect(blocks).toHaveLength(1);
-      expect(blocks[0].text).toBe("Before tool call. After tool result.");
+      expect(blocks[0]!.text).toBe("Before tool call. After tool result.");
     });
 
     it("handles multiple message cycles (reset between)", () => {
@@ -352,11 +352,11 @@ describe("MessageAggregator", () => {
       agg.handleEvent(makeMessageEnd("Second response."));
 
       expect(blocks).toHaveLength(2);
-      expect(blocks[0].text).toBe("First response.");
-      expect(blocks[1].text).toBe("Second response.");
+      expect(blocks[0]!.text).toBe("First response.");
+      expect(blocks[1]!.text).toBe("Second response.");
       // Both should be final (flushed on message_end)
-      expect(blocks[0].isFinal).toBe(true);
-      expect(blocks[1].isFinal).toBe(true);
+      expect(blocks[0]!.isFinal).toBe(true);
+      expect(blocks[1]!.isFinal).toBe(true);
     });
 
     it("handles compaction events between messages", () => {

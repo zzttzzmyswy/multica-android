@@ -164,7 +164,7 @@ export class SessionManager {
 
   async repairIfNeeded(warn?: (message: string) => void): Promise<RepairReport> {
     const filePath = resolveSessionPath(this.sessionId, { baseDir: this.baseDir });
-    return repairSessionFileIfNeeded({ sessionFile: filePath, warn });
+    return repairSessionFileIfNeeded({ sessionFile: filePath, ...(warn !== undefined ? { warn } : {}) });
   }
 
   loadMessages(options?: { includeInternal?: boolean }): AgentMessage[] {
@@ -274,7 +274,7 @@ export class SessionManager {
       const pruneResult = pruneToolResults({
         messages: workingMessages,
         contextWindowTokens: this.contextWindowTokens,
-        settings: this.toolResultPruning,
+        ...(this.toolResultPruning !== undefined ? { settings: this.toolResultPruning } : {}),
       });
 
       if (pruneResult.changed) {

@@ -44,9 +44,9 @@ function detectFenceAt(text: string, upTo: number): FenceInfo | null {
   for (const line of lines) {
     const match = line.match(/^(`{3,}|~{3,})(\S*)\s*$/);
     if (!match) continue;
-    const marker = match[1];
+    const marker = match[1]!;
     const lang = match[2] ?? "";
-    const markerChar = marker[0];
+    const markerChar = marker[0]!;
 
     if (openFence === null) {
       // Opening a new fence
@@ -242,7 +242,7 @@ function findSentenceBreak(buffer: string, start: number, end: number, bufLen: n
     const ch = buffer[i];
     if (ch === "." || ch === "!" || ch === "?") {
       const next = i + 1;
-      if (next < bufLen && /\s/.test(buffer[next])) {
+      if (next < bufLen && /\s/.test(buffer[next]!)) {
         // Break after the whitespace
         const idx = next + 1;
         if (idx < bufLen) return idx;
@@ -261,7 +261,7 @@ function findSentenceBreak(buffer: string, start: number, end: number, bufLen: n
  */
 function findWordBreak(buffer: string, start: number, end: number, bufLen: number): number {
   for (let i = end - 1; i >= start; i--) {
-    if (/\s/.test(buffer[i])) {
+    if (/\s/.test(buffer[i]!)) {
       const idx = i + 1;
       if (idx < bufLen) return idx;
     }

@@ -8,7 +8,7 @@ describe("ExecApprovalManager", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     sendToClient = vi.fn();
-    manager = new ExecApprovalManager(sendToClient, 5000); // 5s timeout for tests
+    manager = new ExecApprovalManager(sendToClient as any, 5000); // 5s timeout for tests
   });
 
   afterEach(() => {

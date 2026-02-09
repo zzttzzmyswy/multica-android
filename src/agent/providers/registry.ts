@@ -50,8 +50,8 @@ const PROVIDER_REGISTRY: Record<string, ProviderMeta> = {
     id: "claude-code",
     name: "Claude Code (OAuth)",
     authMethod: "oauth",
-    defaultModel: "claude-opus-4-5",
-    models: ["claude-opus-4-5", "claude-opus-4-1", "claude-sonnet-4-5", "claude-sonnet-4-0", "claude-haiku-4-5"],
+    defaultModel: "claude-opus-4-6",
+    models: ["claude-opus-4-6", "claude-opus-4-5", "claude-sonnet-4-5", "claude-sonnet-4-0", "claude-haiku-4-5"],
     loginCommand: "claude login",
   },
   "openai-codex": {
@@ -67,7 +67,7 @@ const PROVIDER_REGISTRY: Record<string, ProviderMeta> = {
     name: "Anthropic (API Key)",
     authMethod: "api-key",
     defaultModel: "claude-sonnet-4-5",
-    models: ["claude-opus-4-5", "claude-opus-4-1", "claude-sonnet-4-5", "claude-sonnet-4-0", "claude-haiku-4-5"],
+    models: ["claude-opus-4-6", "claude-opus-4-5", "claude-sonnet-4-5", "claude-sonnet-4-0", "claude-haiku-4-5"],
     loginUrl: "https://console.anthropic.com/",
   },
   "openai": {
@@ -75,7 +75,7 @@ const PROVIDER_REGISTRY: Record<string, ProviderMeta> = {
     name: "OpenAI",
     authMethod: "api-key",
     defaultModel: "gpt-4o",
-    models: ["gpt-5.2", "gpt-5-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini"],
+    models: ["gpt-5.2", "gpt-5-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini", "o3", "o3-mini"],
     loginUrl: "https://platform.openai.com/api-keys",
   },
   "kimi-coding": {

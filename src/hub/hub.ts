@@ -2,6 +2,8 @@ import { v7 as uuidv7 } from "uuid";
 import {
   GatewayClient,
   type ConnectionState,
+  type RoutedMessage,
+  type SendErrorResponse,
   RequestAction,
   ResponseAction,
   StreamAction,
@@ -204,22 +206,22 @@ export class Hub {
       reconnectDelay: 1000,
     });
 
-    client.onStateChange((state) => {
+    client.onStateChange((state: ConnectionState) => {
       console.log(`[Hub] Connection state: ${state}`);
       for (const listener of this._stateChangeListeners) {
         listener(state);
       }
     });
 
-    client.onRegistered((deviceId) => {
+    client.onRegistered((deviceId: string) => {
       console.log(`[Hub] Registered as: ${deviceId}`);
     });
 
-    client.onError((err) => {
+    client.onError((err: Error) => {
       console.error(`[Hub] Connection error:`, err.message);
     });
 
-    client.onMessage((msg) => {
+    client.onMessage((msg: RoutedMessage) => {
       console.log(`[Hub] Received message: id=${msg.id} from=${msg.from} to=${msg.to} action=${msg.action} payload=${JSON.stringify(msg.payload)}`);
 
       // RPC request
@@ -272,7 +274,7 @@ export class Hub {
       }
     });
 
-    client.onSendError((err) => {
+    client.onSendError((err: SendErrorResponse) => {
       console.error(`[Hub] Send error: messageId=${err.messageId} code=${err.code} error=${err.error}`);
     });
 
@@ -592,12 +594,12 @@ export class Hub {
       const result = await this.approvalManager.requestApproval({
         agentId: sessionId,
         command,
-        cwd,
+        ...(cwd !== undefined ? { cwd } : {}),
         riskLevel: evaluation.riskLevel,
         riskReasons: evaluation.reasons,
-        timeoutMs: config.timeoutMs,
-        askFallback: config.askFallback,
-        allowlistSatisfied: evaluation.allowlistSatisfied,
+        ...(config.timeoutMs !== undefined ? { timeoutMs: config.timeoutMs } : {}),
+        ...(config.askFallback !== undefined ? { askFallback: config.askFallback } : {}),
+        ...(evaluation.allowlistSatisfied !== undefined ? { allowlistSatisfied: evaluation.allowlistSatisfied } : {}),
       });
 
       // Handle allow-always: persist to profile allowlist

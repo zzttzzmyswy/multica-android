@@ -82,10 +82,10 @@ describe("token-estimation", () => {
 
   describe("estimateTokenUsage", () => {
     it("should calculate token usage correctly", () => {
-      const messages: AgentMessage[] = [
+      const messages = [
         { role: "user", content: "Hello world" }, // ~3 tokens
         { role: "assistant", content: "Hi there!" }, // ~3 tokens
-      ];
+      ] as AgentMessage[];
 
       const result = estimateTokenUsage({
         messages,
@@ -130,9 +130,9 @@ describe("token-estimation", () => {
     });
 
     it("should calculate utilization ratio with safety margin", () => {
-      const messages: AgentMessage[] = [
+      const messages = [
         { role: "user", content: "a".repeat(400) }, // ~100 tokens
-      ];
+      ] as AgentMessage[];
 
       const result = estimateTokenUsage({
         messages,
@@ -184,7 +184,7 @@ describe("token-estimation", () => {
       return Array.from({ length: count }, (_, i) => ({
         role: "user" as const,
         content: `Message ${i}: ${"x".repeat(100)}`, // Each ~28 tokens
-      }));
+      })) as AgentMessage[];
     }
 
     it("should return null if too few messages", () => {
@@ -228,7 +228,7 @@ describe("token-estimation", () => {
     });
 
     it("should keep newest messages (from the end)", () => {
-      const messages: AgentMessage[] = [
+      const messages = [
         { role: "user", content: "Old message 1" },
         { role: "user", content: "Old message 2" },
         { role: "user", content: "Old message 3" },
@@ -242,7 +242,7 @@ describe("token-estimation", () => {
         { role: "user", content: "Old message 11" },
         { role: "user", content: "Newer message 12" },
         { role: "user", content: "Newest message 13" },
-      ];
+      ] as AgentMessage[];
 
       const result = compactMessagesTokenAware(messages, 50, {
         targetRatio: 0.5,
@@ -268,29 +268,29 @@ describe("token-estimation", () => {
 
   describe("isMessageOversized", () => {
     it("should return true for oversized message", () => {
-      const message: AgentMessage = {
+      const message = {
         role: "user",
         content: "x".repeat(4000), // ~1000 tokens
-      };
+      } as AgentMessage;
 
       // With default maxRatio 0.5, 1000 tokens in 1000 context = 100% > 50%
       expect(isMessageOversized(message, 1000)).toBe(true);
     });
 
     it("should return false for small message", () => {
-      const message: AgentMessage = {
+      const message = {
         role: "user",
         content: "Hello", // ~2 tokens
-      };
+      } as AgentMessage;
 
       expect(isMessageOversized(message, 10000)).toBe(false);
     });
 
     it("should use custom maxRatio", () => {
-      const message: AgentMessage = {
+      const message = {
         role: "user",
         content: "x".repeat(400), // ~100 tokens
-      };
+      } as AgentMessage;
 
       // With safety margin 1.2, 100 * 1.2 = 120 tokens
       // 120 > 1000 * 0.1 = 100, so oversized
@@ -301,10 +301,10 @@ describe("token-estimation", () => {
     });
 
     it("should apply safety margin to token count", () => {
-      const message: AgentMessage = {
+      const message = {
         role: "user",
         content: "x".repeat(400), // ~100 tokens, with margin ~120
-      };
+      } as AgentMessage;
 
       // Without margin: 100 < 250 (50% of 500)
       // With margin: 120 < 250, still ok

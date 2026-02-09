@@ -21,13 +21,13 @@ import {
 } from "../../providers/index.js";
 
 type ChatOptions = {
-  profile?: string;
-  provider?: string;
-  model?: string;
-  system?: string;
-  thinking?: string;
-  cwd?: string;
-  session?: string;
+  profile?: string | undefined;
+  provider?: string | undefined;
+  model?: string | undefined;
+  system?: string | undefined;
+  thinking?: string | undefined;
+  cwd?: string | undefined;
+  session?: string | undefined;
   help?: boolean;
 };
 

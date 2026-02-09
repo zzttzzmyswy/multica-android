@@ -23,7 +23,7 @@ describe("sanitizeToolUseResultPairing", () => {
         content: [{ type: "text", text: "ok" }],
         isError: false,
       },
-    ] satisfies AgentMessage[];
+    ] as AgentMessage[];
 
     const out = sanitizeToolUseResultPairing(input);
     expect(out[0]?.role).toBe("assistant");
@@ -55,7 +55,7 @@ describe("sanitizeToolUseResultPairing", () => {
         isError: false,
       },
       { role: "user", content: "ok" },
-    ] satisfies AgentMessage[];
+    ] as AgentMessage[];
 
     const out = sanitizeToolUseResultPairing(input);
     expect(out.filter((m) => m.role === "toolResult")).toHaveLength(1);
@@ -82,7 +82,7 @@ describe("sanitizeToolUseResultPairing", () => {
         content: [{ type: "text", text: "second (duplicate)" }],
         isError: false,
       },
-    ] satisfies AgentMessage[];
+    ] as AgentMessage[];
 
     const out = sanitizeToolUseResultPairing(input);
     const results = out.filter((m) => m.role === "toolResult") as Array<{
@@ -106,7 +106,7 @@ describe("sanitizeToolUseResultPairing", () => {
         role: "assistant",
         content: [{ type: "text", text: "ok" }],
       },
-    ] satisfies AgentMessage[];
+    ] as AgentMessage[];
 
     const out = sanitizeToolUseResultPairing(input);
     expect(out.some((m) => m.role === "toolResult")).toBe(false);
@@ -116,20 +116,20 @@ describe("sanitizeToolUseResultPairing", () => {
 
 describe("sanitizeToolCallInputs", () => {
   it("drops tool calls missing input or arguments", () => {
-    const input: AgentMessage[] = [
+    const input = [
       {
         role: "assistant",
         content: [{ type: "toolCall", id: "call_1", name: "read" }],
       },
       { role: "user", content: "hello" },
-    ];
+    ] as AgentMessage[];
 
     const out = sanitizeToolCallInputs(input);
     expect(out.map((m) => m.role)).toEqual(["user"]);
   });
 
   it("keeps valid tool calls and preserves text blocks", () => {
-    const input: AgentMessage[] = [
+    const input = [
       {
         role: "assistant",
         content: [
@@ -138,7 +138,7 @@ describe("sanitizeToolCallInputs", () => {
           { type: "toolCall", id: "call_drop", name: "read" },
         ],
       },
-    ];
+    ] as AgentMessage[];
 
     const out = sanitizeToolCallInputs(input);
     const assistant = out[0] as Extract<AgentMessage, { role: "assistant" }>;

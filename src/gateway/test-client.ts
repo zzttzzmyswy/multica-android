@@ -1,10 +1,14 @@
 import {
   GatewayClient,
-  HelloAction,
-  HelloResponseAction,
-  type HelloPayload,
-  type HelloResponsePayload,
+  type ConnectionState,
+  type RoutedMessage,
+  type SendErrorResponse,
 } from "@multica/sdk";
+
+const HelloAction = "hello";
+const HelloResponseAction = "hello:response";
+type HelloPayload = { greeting: string };
+type HelloResponsePayload = { reply: string };
 
 // 模拟一个 Client
 const client = new GatewayClient({
@@ -22,11 +26,11 @@ const agent = new GatewayClient({
 
 // Agent 监听消息
 agent
-  .onStateChange((state) => console.log("[Agent] State:", state))
-  .onRegistered((deviceId) => {
+  .onStateChange((state: ConnectionState) => console.log("[Agent] State:", state))
+  .onRegistered((deviceId: string) => {
     console.log("[Agent] Registered as:", deviceId);
   })
-  .onMessage((message) => {
+  .onMessage((message: RoutedMessage) => {
     console.log("[Agent] Received message:", message);
 
     // 回复消息
@@ -38,13 +42,13 @@ agent
       });
     }
   })
-  .onSendError((error) => console.error("[Agent] Send error:", error))
+  .onSendError((error: SendErrorResponse) => console.error("[Agent] Send error:", error))
   .connect();
 
 // Client 监听消息
 client
-  .onStateChange((state) => console.log("[Client] State:", state))
-  .onRegistered((deviceId) => {
+  .onStateChange((state: ConnectionState) => console.log("[Client] State:", state))
+  .onRegistered((deviceId: string) => {
     console.log("[Client] Registered as:", deviceId);
 
     // 注册后发送消息给 Agent
@@ -55,10 +59,10 @@ client
       });
     }, 500);
   })
-  .onMessage((message) => {
+  .onMessage((message: RoutedMessage) => {
     console.log("[Client] Received message:", message);
   })
-  .onSendError((error) => console.error("[Client] Send error:", error))
+  .onSendError((error: SendErrorResponse) => console.error("[Client] Send error:", error))
   .connect();
 
 // 5秒后断开

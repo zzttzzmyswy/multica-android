@@ -20,7 +20,7 @@ export interface DeviceEntry {
   deviceId: string;
   agentId: string;
   addedAt: number;
-  meta?: DeviceMeta;
+  meta?: DeviceMeta | undefined;
 }
 
 // ============ Persistence ============

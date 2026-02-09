@@ -147,7 +147,7 @@ function cmdShow(sessionId: string | undefined, showInternal = false) {
     process.exit(1);
   }
 
-  const session = matches[0];
+  const session = matches[0]!;
   const content = readFileSync(session.path, "utf8");
   const lines = content.trim().split("\n").filter(Boolean);
 
@@ -235,7 +235,7 @@ function cmdDelete(sessionId: string | undefined) {
     process.exit(1);
   }
 
-  const session = matches[0];
+  const session = matches[0]!;
 
   try {
     unlinkSync(session.path);

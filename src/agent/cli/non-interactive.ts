@@ -156,11 +156,8 @@ async function main() {
 
   // Build tools config if any tools options are set
   let toolsConfig: import("../tools/policy.js").ToolsConfig | undefined;
-  if (opts.toolsProfile || opts.toolsAllow || opts.toolsDeny) {
+  if (opts.toolsAllow || opts.toolsDeny) {
     toolsConfig = {};
-    if (opts.toolsProfile) {
-      toolsConfig.profile = opts.toolsProfile as any;
-    }
     if (opts.toolsAllow) {
       toolsConfig.allow = opts.toolsAllow;
     }
