@@ -201,6 +201,26 @@ const electronAPI = {
       ipcRenderer.invoke('provider:importOAuth', providerId),
   },
 
+  // Channel management (Telegram, Discord, etc.)
+  channels: {
+    /** List all channel account states */
+    listStates: () => ipcRenderer.invoke('channels:listStates'),
+    /** Get channels config from credentials.json5 */
+    getConfig: () => ipcRenderer.invoke('channels:getConfig'),
+    /** Save a channel token and start the bot immediately */
+    saveToken: (channelId: string, accountId: string, token: string) =>
+      ipcRenderer.invoke('channels:saveToken', channelId, accountId, token),
+    /** Remove a channel token and stop the bot */
+    removeToken: (channelId: string, accountId: string) =>
+      ipcRenderer.invoke('channels:removeToken', channelId, accountId),
+    /** Stop a channel account */
+    stop: (channelId: string, accountId: string) =>
+      ipcRenderer.invoke('channels:stop', channelId, accountId),
+    /** Start a channel account from saved config */
+    start: (channelId: string, accountId: string) =>
+      ipcRenderer.invoke('channels:start', channelId, accountId),
+  },
+
   // Local chat (direct IPC, no Gateway required)
   localChat: {
     /** Subscribe to agent events for local direct chat */

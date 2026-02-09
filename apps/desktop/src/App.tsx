@@ -4,6 +4,7 @@ import HomePage from './pages/home'
 import ChatPage from './pages/chat'
 import ToolsPage from './pages/tools'
 import SkillsPage from './pages/skills'
+import ChannelsPage from './pages/channels'
 
 const router = createHashRouter([
   {
@@ -14,6 +15,7 @@ const router = createHashRouter([
       { path: 'chat', element: <ChatPage /> },
       { path: 'tools', element: <ToolsPage /> },
       { path: 'skills', element: <SkillsPage /> },
+      { path: 'channels', element: <ChannelsPage /> },
     ],
   },
 ])
