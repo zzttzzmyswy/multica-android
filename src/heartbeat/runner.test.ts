@@ -65,6 +65,18 @@ describe("heartbeat runner", () => {
     }
   });
 
+  it("bypasses empty-heartbeat-file check for cron-triggered wakes", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "heartbeat-test-"));
+    try {
+      await writeFile(path.join(dir, "heartbeat.md"), "# keep empty\n", "utf-8");
+      const agent = createStubAgent({ profileDir: dir, replyText: "HEARTBEAT_OK" });
+      const result = await runHeartbeatOnce({ agent: agent as any, reason: "cron:test-job-id" });
+      expect(result.status).toBe("ran");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("runs and returns ran for heartbeat acknowledgements", async () => {
     const agent = createStubAgent({ replyText: "HEARTBEAT_OK" });
     const result = await runHeartbeatOnce({ agent: agent as any, reason: "manual" });
