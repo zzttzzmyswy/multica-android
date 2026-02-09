@@ -1,4 +1,5 @@
 import { Agent as PiAgentCore, type AgentEvent, type AgentMessage } from "@mariozechner/pi-agent-core";
+import type { UserMessage } from "@mariozechner/pi-ai";
 import { v7 as uuidv7 } from "uuid";
 import type { AgentOptions, AgentRunResult, ReasoningMode } from "./types.js";
 import type { MulticaEvent, CompactionEndEvent } from "./events.js";
@@ -87,6 +88,7 @@ export class Agent {
   // Internal run state
   private _internalRun = false;
   private _runMutex: Promise<void> = Promise.resolve();
+  private currentUserDisplayPrompt: string | undefined;
 
   // MulticaEvent subscribers (parallel to PiAgentCore's subscriber list)
   // Typed as AgentEvent | MulticaEvent to match subscribeAll() callback signature
@@ -364,9 +366,12 @@ export class Agent {
     this.emitMulticaEvent({ type: "agent_error", message });
   }
 
-  async run(prompt: string): Promise<AgentRunResult> {
+  async run(
+    prompt: string,
+    options?: { displayPrompt?: string },
+  ): Promise<AgentRunResult> {
     // Run-level mutex: prevents concurrent run/runInternal from mis-tagging messages
-    return this.withRunMutex(() => this._run(prompt));
+    return this.withRunMutex(() => this._run(prompt, options));
   }
 
   /**
@@ -406,70 +411,78 @@ export class Agent {
     }
   }
 
-  private async _run(prompt: string): Promise<AgentRunResult> {
+  private async _run(
+    prompt: string,
+    options?: { displayPrompt?: string },
+  ): Promise<AgentRunResult> {
     await this.ensureInitialized();
     this.refreshAuthState();
     this.output.state.lastAssistantText = "";
+    this.currentUserDisplayPrompt = options?.displayPrompt;
 
-    // Early validation: check API key before calling PiAgentCore.prompt(),
-    // because getApiKey errors thrown inside PiAgentCore's internal async
-    // context result in UnhandledPromiseRejection instead of propagating.
-    if (!this.currentApiKey) {
-      const errorMsg = `No API key configured for provider: ${this.resolvedProvider}. Please configure a provider in Agent Settings.`;
-      return { text: "", error: errorMsg };
-    }
-
-    const canRotate = !this.pinnedProfile && this.profileCandidates.length > 1;
-    let lastError: unknown;
-
-    // Loop to exhaust all candidate profiles on rotatable errors
-    while (true) {
-      try {
-        await this.agent.prompt(prompt);
-        break; // success — exit loop
-      } catch (error) {
-        lastError = error;
-
-        const reason = classifyError(error);
-        if (this.currentProfileId && isRotatableError(reason)) {
-          markAuthProfileFailure(this.currentProfileId, reason);
-        }
-
-        if (!canRotate || !this.currentProfileId) throw error;
-        if (!isRotatableError(reason)) throw error;
-
-        if (this.debug) {
-          this.stderr.write(
-            `[auth-profile] Profile "${this.currentProfileId}" failed (${reason}), attempting rotation...\n`,
-          );
-        }
-
-        if (!this.advanceAuthProfile()) {
-          throw lastError; // All profiles exhausted
-        }
-
-        if (this.debug) {
-          this.stderr.write(
-            `[auth-profile] Rotated to profile "${this.currentProfileId}"\n`,
-          );
-        }
-
-        // Reset output for retry
-        this.output.state.lastAssistantText = "";
-        // continue loop with new profile
+    try {
+      // Early validation: check API key before calling PiAgentCore.prompt(),
+      // because getApiKey errors thrown inside PiAgentCore's internal async
+      // context result in UnhandledPromiseRejection instead of propagating.
+      if (!this.currentApiKey) {
+        const errorMsg = `No API key configured for provider: ${this.resolvedProvider}. Please configure a provider in Agent Settings.`;
+        return { text: "", error: errorMsg };
       }
-    }
 
-    // Mark success
-    if (this.currentProfileId) {
-      markAuthProfileUsed(this.currentProfileId);
-      markAuthProfileGood(this.resolvedProvider, this.currentProfileId);
-    }
+      const canRotate = !this.pinnedProfile && this.profileCandidates.length > 1;
+      let lastError: unknown;
 
-    const thinking = this.reasoningMode !== "off"
-      ? this.output.state.lastAssistantThinking || undefined
-      : undefined;
-    return { text: this.output.state.lastAssistantText, thinking, error: this.agent.state.error };
+      // Loop to exhaust all candidate profiles on rotatable errors
+      while (true) {
+        try {
+          await this.agent.prompt(prompt);
+          break; // success — exit loop
+        } catch (error) {
+          lastError = error;
+
+          const reason = classifyError(error);
+          if (this.currentProfileId && isRotatableError(reason)) {
+            markAuthProfileFailure(this.currentProfileId, reason);
+          }
+
+          if (!canRotate || !this.currentProfileId) throw error;
+          if (!isRotatableError(reason)) throw error;
+
+          if (this.debug) {
+            this.stderr.write(
+              `[auth-profile] Profile "${this.currentProfileId}" failed (${reason}), attempting rotation...\n`,
+            );
+          }
+
+          if (!this.advanceAuthProfile()) {
+            throw lastError; // All profiles exhausted
+          }
+
+          if (this.debug) {
+            this.stderr.write(
+              `[auth-profile] Rotated to profile "${this.currentProfileId}"\n`,
+            );
+          }
+
+          // Reset output for retry
+          this.output.state.lastAssistantText = "";
+          // continue loop with new profile
+        }
+      }
+
+      // Mark success
+      if (this.currentProfileId) {
+        markAuthProfileUsed(this.currentProfileId);
+        markAuthProfileGood(this.resolvedProvider, this.currentProfileId);
+      }
+
+      const thinking = this.reasoningMode !== "off"
+        ? this.output.state.lastAssistantThinking || undefined
+        : undefined;
+      return { text: this.output.state.lastAssistantText, thinking, error: this.agent.state.error };
+    } finally {
+      this.currentUserDisplayPrompt = undefined;
+    }
   }
 
   /**
@@ -560,7 +573,14 @@ export class Agent {
   private handleSessionEvent(event: AgentEvent) {
     if (event.type === "message_end") {
       const message = event.message as AgentMessage;
-      this.session.saveMessage(message, this._internalRun ? { internal: true } : undefined);
+      const saveOptions: { internal?: boolean; displayContent?: UserMessage["content"] } = {};
+      if (this._internalRun) {
+        saveOptions.internal = true;
+      }
+      if (message.role === "user" && this.currentUserDisplayPrompt !== undefined) {
+        saveOptions.displayContent = this.currentUserDisplayPrompt;
+      }
+      this.session.saveMessage(message, Object.keys(saveOptions).length > 0 ? saveOptions : undefined);
       // Skip compaction during internal runs — internal messages will be
       // rolled back from memory afterwards, so compacting now would be incorrect.
       if (message.role === "assistant" && !this._internalRun) {
@@ -690,6 +710,14 @@ export class Agent {
   }
 
   /**
+   * Load messages from session storage for UI rendering.
+   * User messages prefer stored displayContent when present.
+   */
+  loadSessionMessagesForDisplay(options?: { includeInternal?: boolean }): AgentMessage[] {
+    return this.session.loadMessagesForDisplay(options);
+  }
+
+  /**
    * Get all skills with their eligibility status.
    * Returns empty array if skills are disabled.
    */
@@ -805,20 +833,6 @@ export class Agent {
    */
   setUserContent(content: string): void {
     this.profile?.updateUserContent(content);
-  }
-
-  /**
-   * Get agent communication style from profile config.
-   */
-  getAgentStyle(): string | undefined {
-    return this.profile?.getStyle();
-  }
-
-  /**
-   * Update agent communication style in profile config.
-   */
-  setAgentStyle(style: string): void {
-    this.profile?.updateStyle(style);
   }
 
   /**

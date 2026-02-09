@@ -65,7 +65,7 @@ export class AsyncAgent {
     this.queue = this.queue
       .then(async () => {
         if (this._closed) return;
-        const result = await this.agent.run(message);
+        const result = await this.agent.run(message, { displayPrompt: content });
         // Flush pending session writes so waitForIdle() callers
         // can safely read session data from disk.
         await this.agent.flushSession();
@@ -319,20 +319,6 @@ export class AsyncAgent {
   }
 
   /**
-   * Get agent communication style from profile config.
-   */
-  getAgentStyle(): string | undefined {
-    return this.agent.getAgentStyle();
-  }
-
-  /**
-   * Update agent communication style in profile config.
-   */
-  setAgentStyle(style: string): void {
-    this.agent.setAgentStyle(style);
-  }
-
-  /**
    * Reload profile from disk and rebuild system prompt.
    * Call this after updating profile files to apply changes immediately.
    */
@@ -358,6 +344,14 @@ export class AsyncAgent {
    */
   loadSessionMessages(options?: { includeInternal?: boolean }): AgentMessage[] {
     return this.agent.loadSessionMessages(options);
+  }
+
+  /**
+   * Load session messages for UI rendering.
+   * User messages prefer displayContent when present.
+   */
+  loadSessionMessagesForDisplay(options?: { includeInternal?: boolean }): AgentMessage[] {
+    return this.agent.loadSessionMessagesForDisplay(options);
   }
 
   /**
