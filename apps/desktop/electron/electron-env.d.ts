@@ -202,7 +202,7 @@ interface ElectronAPI {
     getConfig: () => Promise<Record<string, Record<string, Record<string, unknown>> | undefined>>
     saveToken: (channelId: string, accountId: string, token: string) => Promise<{ ok: boolean; error?: string }>
     removeToken: (channelId: string, accountId: string) => Promise<{ ok: boolean; error?: string }>
-    stop: (channelId: string, accountId: string) => Promise<{ ok: boolean }>
+    stop: (channelId: string, accountId: string) => Promise<{ ok: boolean; error?: string }>
     start: (channelId: string, accountId: string) => Promise<{ ok: boolean; error?: string }>
   }
   localChat: {

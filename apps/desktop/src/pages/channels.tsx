@@ -9,7 +9,7 @@ import {
 import { Button } from '@multica/ui/components/ui/button'
 import { Input } from '@multica/ui/components/ui/input'
 import { Badge } from '@multica/ui/components/ui/badge'
-import { useChannels } from '../hooks/use-channels'
+import { useChannels, type UseChannelsReturn } from '../hooks/use-channels'
 
 /** Status badge color mapping */
 function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
@@ -21,8 +21,8 @@ function statusVariant(status: string): 'default' | 'secondary' | 'destructive' 
   }
 }
 
-function TelegramCard() {
-  const { states, config, saveToken, removeToken, startChannel, stopChannel } = useChannels()
+function TelegramCard({ channels }: { channels: UseChannelsReturn }) {
+  const { states, config, saveToken, removeToken, startChannel, stopChannel } = channels
   const [token, setToken] = useState('')
   const [saving, setSaving] = useState(false)
   const [localError, setLocalError] = useState<string | null>(null)
@@ -118,6 +118,7 @@ function TelegramCard() {
                 size="sm"
                 onClick={handleRemove}
                 disabled={saving || isRunning}
+                title={isRunning ? 'Stop the bot before removing' : undefined}
               >
                 Remove
               </Button>
@@ -152,7 +153,8 @@ function TelegramCard() {
 }
 
 export default function ChannelsPage() {
-  const { loading, error } = useChannels()
+  const channels = useChannels()
+  const { loading, error } = channels
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">
@@ -168,7 +170,7 @@ export default function ChannelsPage() {
       ) : error ? (
         <p className="text-sm text-destructive">{error}</p>
       ) : (
-        <TelegramCard />
+        <TelegramCard channels={channels} />
       )}
     </div>
   )

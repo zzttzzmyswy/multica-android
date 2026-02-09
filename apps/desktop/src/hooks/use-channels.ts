@@ -8,7 +8,7 @@
  */
 import { useState, useEffect, useCallback } from 'react'
 
-interface UseChannelsReturn {
+export interface UseChannelsReturn {
   /** Runtime states of all channel accounts */
   states: ChannelAccountStateInfo[]
   /** Raw channel config from credentials.json5 */
@@ -94,17 +94,31 @@ export function useChannels(): UseChannelsReturn {
   }, [refresh])
 
   const stopChannel = useCallback(async (channelId: string, accountId: string) => {
-    await window.electronAPI.channels.stop(channelId, accountId)
-    await refresh()
+    setError(null)
+    try {
+      const result = await window.electronAPI.channels.stop(channelId, accountId)
+      if (!result.ok) {
+        setError(result.error ?? 'Failed to stop channel')
+      }
+      await refresh()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setError(message)
+    }
   }, [refresh])
 
   const startChannel = useCallback(async (channelId: string, accountId: string) => {
     setError(null)
-    const result = await window.electronAPI.channels.start(channelId, accountId)
-    if (!result.ok) {
-      setError(result.error ?? 'Failed to start channel')
+    try {
+      const result = await window.electronAPI.channels.start(channelId, accountId)
+      if (!result.ok) {
+        setError(result.error ?? 'Failed to start channel')
+      }
+      await refresh()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setError(message)
     }
-    await refresh()
   }, [refresh])
 
   return {

@@ -439,15 +439,31 @@ export class ChannelManager {
   /**
    * Stop a specific channel account.
    * Public so the desktop IPC layer can call it when removing config.
+   * Cleans up typing timer, debouncer, aggregator, and lastRoute if they
+   * belong to this account.
    */
   stopAccount(channelId: string, accountId: string): void {
     const key = `${channelId}:${accountId}`;
     const handle = this.accounts.get(key);
     if (!handle) return;
 
+    // Clean up shared resources if they target this account
+    if (this.lastRoute && this.lastRoute.plugin.id === channelId && this.lastRoute.deliveryCtx.accountId === accountId) {
+      this.stopTyping();
+      this.lastRoute = null;
+      this.aggregator = null;
+    }
+
     handle.abortController.abort();
     handle.state = { ...handle.state, status: "stopped" };
     this.accounts.delete(key);
+
+    // Dispose debouncer if no accounts remain
+    if (this.accounts.size === 0 && this.debouncer) {
+      this.debouncer.dispose();
+      this.debouncer = null;
+    }
+
     console.log(`[Channels] Stopped ${key}`);
   }
 
