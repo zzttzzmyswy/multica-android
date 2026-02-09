@@ -51,7 +51,7 @@ const PROVIDER_REGISTRY: Record<string, ProviderMeta> = {
     name: "Claude Code (OAuth)",
     authMethod: "oauth",
     defaultModel: "claude-opus-4-5",
-    models: ["claude-opus-4-5", "claude-sonnet-4-5", "claude-haiku-4-5"],
+    models: ["claude-opus-4-5", "claude-opus-4-1", "claude-sonnet-4-5", "claude-sonnet-4-0", "claude-haiku-4-5"],
     loginCommand: "claude login",
   },
   "openai-codex": {
@@ -59,7 +59,7 @@ const PROVIDER_REGISTRY: Record<string, ProviderMeta> = {
     name: "Codex (OAuth)",
     authMethod: "oauth",
     defaultModel: "gpt-5.2",
-    models: ["gpt-5.2", "gpt-5.2-codex", "gpt-5.1-codex", "gpt-5.1-codex-mini", "gpt-5.1-codex-max"],
+    models: ["gpt-5.2", "gpt-5.2-codex", "gpt-5.1-codex", "gpt-5.1-codex-mini", "gpt-5.1-codex-max", "gpt-5-mini"],
     loginCommand: "codex login",
   },
   "anthropic": {
@@ -67,7 +67,7 @@ const PROVIDER_REGISTRY: Record<string, ProviderMeta> = {
     name: "Anthropic (API Key)",
     authMethod: "api-key",
     defaultModel: "claude-sonnet-4-5",
-    models: ["claude-opus-4-5", "claude-sonnet-4-5", "claude-haiku-4-5"],
+    models: ["claude-opus-4-5", "claude-opus-4-1", "claude-sonnet-4-5", "claude-sonnet-4-0", "claude-haiku-4-5"],
     loginUrl: "https://console.anthropic.com/",
   },
   "openai": {
@@ -75,7 +75,7 @@ const PROVIDER_REGISTRY: Record<string, ProviderMeta> = {
     name: "OpenAI",
     authMethod: "api-key",
     defaultModel: "gpt-4o",
-    models: ["gpt-4o", "gpt-4o-mini", "o1", "o1-mini"],
+    models: ["gpt-5.2", "gpt-5-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini"],
     loginUrl: "https://platform.openai.com/api-keys",
   },
   "kimi-coding": {
@@ -90,8 +90,8 @@ const PROVIDER_REGISTRY: Record<string, ProviderMeta> = {
     id: "google",
     name: "Google AI",
     authMethod: "api-key",
-    defaultModel: "gemini-2.0-flash",
-    models: ["gemini-2.0-flash", "gemini-1.5-pro"],
+    defaultModel: "gemini-2.5-flash",
+    models: ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"],
     loginUrl: "https://aistudio.google.com/apikey",
   },
   "groq": {
@@ -99,7 +99,7 @@ const PROVIDER_REGISTRY: Record<string, ProviderMeta> = {
     name: "Groq",
     authMethod: "api-key",
     defaultModel: "llama-3.3-70b-versatile",
-    models: ["llama-3.3-70b-versatile", "mixtral-8x7b-32768"],
+    models: ["llama-3.3-70b-versatile"],
     loginUrl: "https://console.groq.com/keys",
   },
   "mistral": {
@@ -114,16 +114,16 @@ const PROVIDER_REGISTRY: Record<string, ProviderMeta> = {
     id: "xai",
     name: "xAI (Grok)",
     authMethod: "api-key",
-    defaultModel: "grok-beta",
-    models: ["grok-beta", "grok-vision-beta"],
+    defaultModel: "grok-4",
+    models: ["grok-4", "grok-beta"],
     loginUrl: "https://console.x.ai/",
   },
   "openrouter": {
     id: "openrouter",
     name: "OpenRouter",
     authMethod: "api-key",
-    defaultModel: "anthropic/claude-3.5-sonnet",
-    models: ["anthropic/claude-3.5-sonnet", "openai/gpt-4o"],
+    defaultModel: "anthropic/claude-sonnet-4-5",
+    models: ["anthropic/claude-sonnet-4-5", "anthropic/claude-opus-4-5", "openai/gpt-4o"],
     loginUrl: "https://openrouter.ai/keys",
   },
 };
