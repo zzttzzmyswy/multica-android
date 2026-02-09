@@ -1,7 +1,7 @@
 ---
 name: Audio Transcription
-description: Transcribe audio files using local Whisper CLI (fallback when API is unavailable)
-version: 1.0.0
+description: Transcribe audio files using local Whisper CLI when automatic pre-processing is unavailable
+version: 1.1.0
 metadata:
   emoji: "🎙️"
   requires:
@@ -23,14 +23,33 @@ userInvocable: false
 disableModelInvocation: false
 ---
 
-## Audio Transcription (Local Fallback)
+## Audio Transcription (Agent Fallback)
 
-Voice messages from channels are normally transcribed automatically via the OpenAI Whisper API before reaching you. This skill is only needed when the API is unavailable.
+Voice messages from channels are pre-processed before reaching you. The transcription
+priority is:
 
-If you receive `[audio message received]` with a `File:` path (instead of `[Voice Message]` with a transcript), it means the API transcription was not available. Use local whisper to transcribe:
+1. **Local whisper CLI** (free, offline) — requires `whisper` or `whisper-cli` in PATH
+2. **OpenAI Whisper API** — requires an OpenAI API key in credentials
+3. **No provider available** — you receive a raw file path instead of a transcript
+
+When both providers are unavailable, you will receive `[audio message received]` with a
+`File:` path instead of `[Voice Message]` with a transcript. Use local whisper to
+transcribe manually:
 
 ```
 whisper "<file_path>" --model base --output_format txt --output_dir /tmp
 ```
 
 Then read the `.txt` file from `/tmp/` and respond based on the transcribed content.
+
+### Setup
+
+To enable automatic local transcription (recommended):
+
+```bash
+brew install openai-whisper
+```
+
+The first run will download the `base` model (~139MB) to `~/.cache/whisper/`.
+No app restart is required — the binary is detected automatically on the next
+voice message.

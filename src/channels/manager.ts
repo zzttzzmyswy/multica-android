@@ -46,8 +46,19 @@ export class ChannelManager {
   private readonly hub: Hub;
   /** Running accounts keyed by "channelId:accountId" */
   private readonly accounts = new Map<string, AccountHandle>();
-  /** Where the last channel message came from (reply target) */
+  /** Where the last channel message came from (used for typing/reactions/errors) */
   private lastRoute: LastRoute | null = null;
+  /**
+   * FIFO queue of route snapshots + their ack targets, captured at each debouncer flush.
+   * Each agent.write() gets its own entry; dequeued on agent_start.
+   */
+  private pendingRoutes: { route: LastRoute; acks: LastRoute[] }[] = [];
+  /** Route for the currently active agent run (set on agent_start, cleared on agent_end). */
+  private activeRoute: LastRoute | null = null;
+  /** All messages in the current run's batch that have 👀 (cleared on agent_end). */
+  private activeAcks: LastRoute[] = [];
+  /** Accumulates message routes for 👀 removal between debouncer flushes. */
+  private ackBuffer: LastRoute[] = [];
   /** Unsubscribe function for the agent subscriber */
   private agentUnsubscribe: (() => void) | null = null;
   /** Session ID of the currently subscribed agent (for stale detection) */
@@ -188,13 +199,50 @@ export class ChannelManager {
     this.subscribedAgentId = agent.sessionId;
 
     this.agentUnsubscribe = agent.subscribe((event) => {
+      const maybeMessage = (event as { message?: { role?: string } }).message;
+      const role = maybeMessage?.role;
+
+      // Activate the next pending route + acks when a new agent run starts.
+      if (event.type === "agent_start") {
+        const entry = this.pendingRoutes.shift();
+        if (entry) {
+          this.activeRoute = entry.route;
+          this.activeAcks = entry.acks;
+          console.log(`[Channels] agent_start: activeRoute replyTo=${entry.route.deliveryCtx.replyToMessageId}, acks=${entry.acks.length}`);
+        }
+      }
+
+      // Agent run complete — remove 👀 from all batch messages, conditionally stop typing.
+      if (event.type === "agent_end") {
+        for (const ack of this.activeAcks) {
+          if (ack.plugin.outbound.removeReaction) {
+            console.log(`[Channels] agent_end: removing 👀 from replyTo=${ack.deliveryCtx.replyToMessageId}`);
+            void ack.plugin.outbound.removeReaction(ack.deliveryCtx).catch(() => {});
+          }
+        }
+        this.activeRoute = null;
+        this.activeAcks = [];
+        if (this.pendingRoutes.length === 0) {
+          console.log("[Channels] agent_end: no more pending, stopping typing");
+          this.stopTyping();
+        } else {
+          console.log(`[Channels] agent_end: ${this.pendingRoutes.length} pending run(s), keeping typing`);
+        }
+      }
+
       // No active channel route — skip (reply goes to desktop/gateway only)
       if (!this.lastRoute) return;
 
       // Handle agent errors — notify the channel user
       if (event.type === "agent_error") {
         this.stopTyping();
-        this.removeAckReaction();
+        for (const ack of this.activeAcks) {
+          if (ack.plugin.outbound.removeReaction) {
+            void ack.plugin.outbound.removeReaction(ack.deliveryCtx).catch(() => {});
+          }
+        }
+        this.activeRoute = null;
+        this.activeAcks = [];
         const errorMsg = (event as { message?: string }).message ?? "Unknown error";
         console.error(`[Channels] Agent error: ${errorMsg}`);
         const route = this.lastRoute;
@@ -205,9 +253,6 @@ export class ChannelManager {
         }
         return;
       }
-
-      const maybeMessage = (event as { message?: { role?: string } }).message;
-      const role = maybeMessage?.role;
 
       // Only forward assistant message events
       if (event.type === "message_start" || event.type === "message_update" || event.type === "message_end") {
@@ -220,8 +265,6 @@ export class ChannelManager {
       // Keep heartbeat acknowledgements internal (same behavior as desktop/gateway stream path).
       if (isHeartbeatAckEvent(event)) {
         if (event.type === "message_end") {
-          this.stopTyping();
-          this.removeAckReaction();
           this.aggregator = null;
         }
         return;
@@ -236,28 +279,31 @@ export class ChannelManager {
         this.aggregator.handleEvent(event);
       }
 
-      // Clean up after response complete
+      // Finalize aggregator per assistant message (may fire multiple times in multi-turn runs).
+      // Typing and ack removal are handled at agent_end, not here.
       if (event.type === "message_end" && role === "assistant") {
-        this.stopTyping();
-        this.removeAckReaction();
         this.aggregator = null;
       }
     });
   }
 
-  /** Create a fresh aggregator wired to the current lastRoute */
+  /**
+   * Create a fresh aggregator wired to the activeRoute (snapshotted at flush time).
+   * Falls back to lastRoute for non-debounced paths (e.g. direct writes).
+   */
   private createAggregator(): void {
-    const route = this.lastRoute;
+    const route = this.activeRoute ?? this.lastRoute;
     if (!route) return;
 
     const { plugin, deliveryCtx } = route;
+    console.log(`[Channels] createAggregator: replyTo=${deliveryCtx.replyToMessageId} (source=${this.activeRoute ? "activeRoute" : "lastRoute"})`);
     const chunkerConfig = plugin.chunkerConfig ?? DEFAULT_CHUNKER_CONFIG;
 
     this.aggregator = new MessageAggregator(
       chunkerConfig,
       async (block) => {
         try {
-          console.log(`[Channels] Sending block ${block.index} (${block.text.length} chars${block.isFinal ? ", final" : ""}) → ${deliveryCtx.channel}:${deliveryCtx.conversationId}`);
+          console.log(`[Channels] Sending block ${block.index} (${block.text.length} chars${block.isFinal ? ", final" : ""}) → ${deliveryCtx.channel}:${deliveryCtx.conversationId} replyTo=${deliveryCtx.replyToMessageId}`);
           if (block.index === 0) {
             await plugin.outbound.replyText(deliveryCtx, block.text);
           } else {
@@ -303,12 +349,17 @@ export class ChannelManager {
         replyToMessageId: messageId,
       },
     };
-    console.log(`[Channels] lastRoute updated → ${plugin.id}:${conversationId}`);
+    console.log(`[Channels] lastRoute updated → ${plugin.id}:${conversationId} replyTo=${messageId}`);
     console.log(`[Channels] Forwarding to agent ${agent.sessionId}`);
 
-    // Show typing indicator and ACK reaction while agent processes
+    // Show typing indicator and 👀 ack on this message
     this.startTyping();
-    this.addAckReaction();
+    const ackRoute: LastRoute = { ...this.lastRoute };
+    if (ackRoute.plugin.outbound.addReaction) {
+      console.log(`[Channels] Adding 👀 to replyTo=${messageId}`);
+      void ackRoute.plugin.outbound.addReaction(ackRoute.deliveryCtx, "👀").catch(() => {});
+    }
+    this.ackBuffer.push(ackRoute);
 
     // Handle media messages (processed async, then fed through debouncer)
     if (message.media && plugin.downloadMedia) {
@@ -406,26 +457,20 @@ export class ChannelManager {
     if (!this.debouncer) {
       this.debouncer = new InboundDebouncer(
         (_conversationId, combinedText) => {
-          console.log(`[Channels] Debouncer flushing ${combinedText.length} chars to agent`);
+          // Snapshot the current route + pending acks for this batch.
+          const route = this.lastRoute ? { ...this.lastRoute } : null;
+          const acks = [...this.ackBuffer];
+          this.ackBuffer = [];
+          if (route) {
+            this.pendingRoutes.push({ route, acks });
+          }
+          const replyTo = route?.deliveryCtx.replyToMessageId ?? "?";
+          console.log(`[Channels] Debouncer flushing ${combinedText.length} chars to agent (queued route replyTo=${replyTo}, acks=${acks.length})`);
           agent.write(combinedText);
         },
       );
     }
     return this.debouncer;
-  }
-
-  /** Add 👀 reaction to acknowledge message receipt */
-  private addAckReaction(): void {
-    const route = this.lastRoute;
-    if (!route?.plugin.outbound.addReaction) return;
-    void route.plugin.outbound.addReaction(route.deliveryCtx, "👀").catch(() => {});
-  }
-
-  /** Remove ACK reaction when processing completes */
-  private removeAckReaction(): void {
-    const route = this.lastRoute;
-    if (!route?.plugin.outbound.removeReaction) return;
-    void route.plugin.outbound.removeReaction(route.deliveryCtx).catch(() => {});
   }
 
   /** Start sending typing indicators (repeats every 5s until stopped) */
@@ -462,6 +507,10 @@ export class ChannelManager {
     if (this.lastRoute && this.lastRoute.plugin.id === channelId && this.lastRoute.deliveryCtx.accountId === accountId) {
       this.stopTyping();
       this.lastRoute = null;
+      this.activeRoute = null;
+      this.activeAcks = [];
+      this.ackBuffer = [];
+      this.pendingRoutes = [];
       this.aggregator = null;
     }
 
@@ -495,6 +544,10 @@ export class ChannelManager {
     }
     this.accounts.clear();
     this.lastRoute = null;
+    this.activeRoute = null;
+    this.activeAcks = [];
+    this.ackBuffer = [];
+    this.pendingRoutes = [];
     this.aggregator = null;
   }
 
