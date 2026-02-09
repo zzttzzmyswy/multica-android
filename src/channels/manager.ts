@@ -8,6 +8,7 @@
  * Uses "last route" pattern: whoever sent the last message gets the reply.
  */
 
+import { readFile } from "node:fs/promises";
 import type { Hub } from "../hub/hub.js";
 import type {
   ChannelPlugin,
@@ -266,8 +267,49 @@ export class ChannelManager {
     // Show typing indicator while agent processes
     this.startTyping();
 
-    // Same as typing in the desktop chat
-    agent.write(text);
+    // Handle media messages
+    if (message.media && plugin.downloadMedia) {
+      void this.routeMedia(plugin, accountId, message, agent);
+    } else {
+      agent.write(text);
+    }
+  }
+
+  /** Download media file and forward to agent */
+  private async routeMedia(
+    plugin: ChannelPlugin,
+    accountId: string,
+    message: ChannelMessage,
+    agent: AsyncAgent,
+  ): Promise<void> {
+    const media = message.media!;
+
+    try {
+      const filePath = await plugin.downloadMedia!(media.fileId, accountId);
+
+      if (media.type === "image") {
+        // Images: pass directly to LLM as ImageContent
+        const buffer = await readFile(filePath);
+        const base64 = buffer.toString("base64");
+        const mimeType = media.mimeType ?? "image/jpeg";
+        const caption = media.caption || "User sent an image.";
+        agent.writeWithImages(caption, [{ type: "image", data: base64, mimeType }]);
+      } else {
+        // Audio/video/document: tell agent the file path, let it handle via skills
+        const parts: string[] = [];
+        parts.push(`[${media.type} message received]`);
+        parts.push(`File: ${filePath}`);
+        if (media.mimeType) parts.push(`Type: ${media.mimeType}`);
+        if (media.duration) parts.push(`Duration: ${media.duration}s`);
+        if (media.caption) parts.push(`Caption: ${media.caption}`);
+        agent.write(parts.join("\n"));
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[Channels] Failed to download media: ${msg}`);
+      // Fallback: send text-only if download fails
+      agent.write(message.text || `[Failed to download ${media.type}]`);
+    }
   }
 
   /** Start sending typing indicators (repeats every 5s until stopped) */

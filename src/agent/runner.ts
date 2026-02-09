@@ -1,4 +1,5 @@
 import { Agent as PiAgentCore, type AgentEvent, type AgentMessage } from "@mariozechner/pi-agent-core";
+import type { ImageContent } from "@mariozechner/pi-ai";
 import { v7 as uuidv7 } from "uuid";
 import type { AgentOptions, AgentRunResult, ReasoningMode } from "./types.js";
 import type { MulticaEvent } from "./events.js";
@@ -352,7 +353,7 @@ export class Agent {
     }
   }
 
-  async run(prompt: string): Promise<AgentRunResult> {
+  async run(prompt: string, images?: ImageContent[]): Promise<AgentRunResult> {
     await this.ensureInitialized();
     this.output.state.lastAssistantText = "";
 
@@ -362,7 +363,7 @@ export class Agent {
     // Loop to exhaust all candidate profiles on rotatable errors
     while (true) {
       try {
-        await this.agent.prompt(prompt);
+        await this.agent.prompt(prompt, images);
         break; // success — exit loop
       } catch (error) {
         lastError = error;
