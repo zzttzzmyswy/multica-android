@@ -5,3 +5,6 @@ export { createListAgentsHandler } from "./handlers/list-agents.js";
 export { createCreateAgentHandler } from "./handlers/create-agent.js";
 export { createDeleteAgentHandler } from "./handlers/delete-agent.js";
 export { createUpdateGatewayHandler } from "./handlers/update-gateway.js";
+export { createGetLastHeartbeatHandler } from "./handlers/get-last-heartbeat.js";
+export { createSetHeartbeatsHandler } from "./handlers/set-heartbeats.js";
+export { createWakeHeartbeatHandler } from "./handlers/wake-heartbeat.js";

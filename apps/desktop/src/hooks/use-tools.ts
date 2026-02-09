@@ -31,6 +31,8 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
   memory_set: 'Store a memory value',
   memory_delete: 'Delete a memory value',
   memory_list: 'List all memory keys',
+  memory_search: 'Search memory files for keywords',
+  cron: 'Create and manage scheduled tasks',
 }
 
 // Group display names
@@ -39,6 +41,8 @@ const GROUP_NAMES: Record<string, string> = {
   runtime: 'Runtime',
   web: 'Web',
   memory: 'Memory',
+  subagent: 'Subagent',
+  cron: 'Cron',
   other: 'Other',
 }
 

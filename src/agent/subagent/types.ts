@@ -39,6 +39,12 @@ export type SubagentRunRecord = {
   cleanupHandled?: boolean | undefined;
   /** Timestamp when cleanup completed */
   cleanupCompletedAt?: number | undefined;
+  /** Captured findings from the child session's last assistant reply */
+  findings?: string | undefined;
+  /** Whether findings have been captured (safe to delete session after this) */
+  findingsCaptured?: boolean | undefined;
+  /** Whether the coalesced announcement has been sent to parent */
+  announced?: boolean | undefined;
 };
 
 /** Parameters for registering a new subagent run */

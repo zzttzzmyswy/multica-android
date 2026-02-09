@@ -11,7 +11,7 @@ export type SessionMeta = {
 };
 
 export type SessionEntry =
-  | { type: "message"; message: AgentMessage; timestamp: number }
+  | { type: "message"; message: AgentMessage; timestamp: number; internal?: boolean }
   | { type: "meta"; meta: SessionMeta; timestamp: number }
   | {
       type: "compaction";

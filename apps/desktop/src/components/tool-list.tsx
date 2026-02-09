@@ -11,6 +11,8 @@ import {
   ArrowDown01Icon,
   ArrowUp01Icon,
   Loading03Icon,
+  Time04Icon,
+  UserMultipleIcon,
 } from '@hugeicons/core-free-icons'
 import type { ToolInfo, ToolGroup } from '../hooks/use-tools'
 
@@ -20,6 +22,8 @@ const GROUP_ICONS: Record<string, typeof FolderOpenIcon> = {
   runtime: CodeIcon,
   web: GlobalIcon,
   memory: AiBrainIcon,
+  subagent: UserMultipleIcon,
+  cron: Time04Icon,
   other: CodeIcon,
 }
 

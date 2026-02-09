@@ -78,4 +78,50 @@ describe("registry-store serialization", () => {
     expect(parsed.outcome?.status).toBe("error");
     expect(parsed.outcome?.error).toBe("Something went wrong");
   });
+
+  it("round-trips coalescing fields (findings, findingsCaptured, announced)", () => {
+    const record: SubagentRunRecord = {
+      runId: "run-coalesce",
+      childSessionId: "child-1",
+      requesterSessionId: "parent-1",
+      task: "Coalesce test",
+      cleanup: "delete",
+      createdAt: Date.now(),
+      endedAt: Date.now() + 5000,
+      outcome: { status: "ok" },
+      findings: "Found 3 issues in auth module.",
+      findingsCaptured: true,
+      announced: true,
+    };
+
+    const json = JSON.stringify({ version: 1, runs: { "run-coalesce": record } });
+    const parsed = JSON.parse(json);
+    const restored = parsed.runs["run-coalesce"] as SubagentRunRecord;
+
+    expect(restored.findings).toBe("Found 3 issues in auth module.");
+    expect(restored.findingsCaptured).toBe(true);
+    expect(restored.announced).toBe(true);
+  });
+
+  it("round-trips record with undefined coalescing fields", () => {
+    const record: SubagentRunRecord = {
+      runId: "run-old",
+      childSessionId: "child-1",
+      requesterSessionId: "parent-1",
+      task: "Old record",
+      cleanup: "delete",
+      createdAt: Date.now(),
+      cleanupHandled: true,
+      // No findings, findingsCaptured, or announced fields (old format)
+    };
+
+    const json = JSON.stringify({ version: 1, runs: { "run-old": record } });
+    const parsed = JSON.parse(json);
+    const restored = parsed.runs["run-old"] as SubagentRunRecord;
+
+    expect(restored.findings).toBeUndefined();
+    expect(restored.findingsCaptured).toBeUndefined();
+    expect(restored.announced).toBeUndefined();
+    expect(restored.cleanupHandled).toBe(true);
+  });
 });

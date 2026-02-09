@@ -60,6 +60,7 @@
     "@nestjs/serve-static": "^5.0.4",
     "@nestjs/websockets": "^11.1.12",
     "@sinclair/typebox": "^0.34.41",
+    "croner": "^10.0.1",
     "fast-glob": "^3.3.3",
     "grammy": "^1.39.3",
     "json5": "^2.2.3",

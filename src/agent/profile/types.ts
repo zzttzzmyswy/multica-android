@@ -11,6 +11,7 @@ export const PROFILE_FILES = {
   user: "user.md",
   workspace: "workspace.md",
   memory: "memory.md",
+  heartbeat: "heartbeat.md",
   config: "config.json",
 } as const;
 
@@ -42,6 +43,17 @@ export interface ProfileConfig {
   reasoningMode?: "off" | "on" | "stream" | undefined;
   /** Exec approval configuration (security level, ask mode, allowlist) */
   execApproval?: ExecApprovalConfig | undefined;
+  /** Heartbeat configuration */
+  heartbeat?: {
+    /** Global heartbeat enable switch */
+    enabled?: boolean | undefined;
+    /** Interval, e.g. "30m", "1h" */
+    every?: string | undefined;
+    /** Optional prompt override */
+    prompt?: string | undefined;
+    /** Max chars after HEARTBEAT_OK to still treat as ack */
+    ackMaxChars?: number | undefined;
+  } | undefined;
 }
 
 /** Agent Profile configuration */
@@ -56,6 +68,8 @@ export interface AgentProfile {
   workspace?: string | undefined;
   /** Persistent memory - long-term knowledge base */
   memory?: string | undefined;
+  /** Periodic heartbeat instructions */
+  heartbeat?: string | undefined;
   /** Profile configuration (from config.json) */
   config?: ProfileConfig | undefined;
 }

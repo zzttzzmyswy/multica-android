@@ -205,6 +205,16 @@ interface ElectronAPI {
     stop: (channelId: string, accountId: string) => Promise<{ ok: boolean; error?: string }>
     start: (channelId: string, accountId: string) => Promise<{ ok: boolean; error?: string }>
   }
+  cron: {
+    list: () => Promise<unknown[]>
+    toggle: (jobId: string) => Promise<{ ok: boolean }>
+    remove: (jobId: string) => Promise<{ ok: boolean }>
+  }
+  heartbeat: {
+    last: () => Promise<unknown>
+    setEnabled: (enabled: boolean) => Promise<{ ok: boolean; enabled?: boolean; error?: string }>
+    wake: (reason?: string) => Promise<{ ok: boolean; result?: unknown; error?: string }>
+  }
   localChat: {
     subscribe: (agentId: string) => Promise<{ ok?: boolean; error?: string; alreadySubscribed?: boolean }>
     unsubscribe: (agentId: string) => Promise<{ ok: boolean }>

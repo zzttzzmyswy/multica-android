@@ -344,6 +344,9 @@ export function registerHubIpcHandlers(): void {
    * Get message history for local chat with pagination.
    * Returns raw AgentMessageItem[] so the renderer can render content blocks,
    * tool results, thinking blocks, etc. — same format as the Gateway RPC.
+   *
+   * Reads from session storage (not in-memory state) so that internal
+   * orchestration messages are excluded by default.
    */
   ipcMain.handle('localChat:getHistory', async (_event, agentId: string, options?: { offset?: number; limit?: number }) => {
     const h = getHub()
@@ -354,7 +357,7 @@ export function registerHubIpcHandlers(): void {
 
     try {
       await agent.ensureInitialized()
-      const allMessages = agent.getMessages()
+      const allMessages = agent.loadSessionMessages()
       const total = allMessages.length
       // Must match DEFAULT_MESSAGES_LIMIT from @multica/sdk/actions/rpc
       const limit = options?.limit ?? 200

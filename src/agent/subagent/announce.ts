@@ -13,6 +13,7 @@ import { buildSystemPrompt } from "../system-prompt/index.js";
 import type {
   SubagentAnnounceParams,
   SubagentRunOutcome,
+  SubagentRunRecord,
   SubagentSystemPromptParams,
 } from "./types.js";
 
@@ -38,19 +39,29 @@ export function buildSubagentSystemPrompt(params: SubagentSystemPromptParams): s
  */
 export function readLatestAssistantReply(sessionId: string): string | undefined {
   const entries = readEntries(sessionId);
+  let latestToolResultText: string | undefined;
 
-  // Walk backwards to find last assistant message
+  // Walk backwards to find the last non-empty assistant reply.
+  // If no assistant text exists (e.g. run ended after tool execution),
+  // fall back to the latest non-empty toolResult content.
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i]!;
     if (entry.type !== "message") continue;
 
     const message = entry.message;
-    if (message.role !== "assistant") continue;
+    if (message.role === "assistant") {
+      const text = extractAssistantText(message);
+      if (text) return text;
+      continue;
+    }
 
-    return extractAssistantText(message);
+    if (message.role === "toolResult" && !latestToolResultText) {
+      const text = extractToolResultText(message);
+      if (text) latestToolResultText = text;
+    }
   }
 
-  return undefined;
+  return latestToolResultText;
 }
 
 /**
@@ -58,7 +69,17 @@ export function readLatestAssistantReply(sessionId: string): string | undefined 
  * AgentMessage.content for assistant is (TextContent | ThinkingContent | ToolCall)[].
  */
 function extractAssistantText(message: { role: string; content: unknown }): string {
-  const content = message.content;
+  return extractTextLikeContent(message.content);
+}
+
+/**
+ * Extract text content from a toolResult message.
+ */
+function extractToolResultText(message: { role: string; content: unknown }): string {
+  return extractTextLikeContent(message.content);
+}
+
+function extractTextLikeContent(content: unknown): string {
   if (typeof content === "string") {
     return sanitizeText(content);
   }
@@ -67,8 +88,9 @@ function extractAssistantText(message: { role: string; content: unknown }): stri
 
   const textParts: string[] = [];
   for (const block of content) {
-    if (block && typeof block === "object" && "type" in block && block.type === "text" && "text" in block) {
-      textParts.push(String(block.text));
+    if (!block || typeof block !== "object") continue;
+    if ("text" in block) {
+      textParts.push(String((block as { text: unknown }).text));
     }
   }
 
@@ -168,10 +190,125 @@ export function formatAnnouncementMessage(params: FormatAnnouncementParams): str
 }
 
 /**
+ * Format a coalesced announcement message from multiple completed subagent runs.
+ * When only one record is provided, delegates to formatAnnouncementMessage.
+ */
+export function formatCoalescedAnnouncementMessage(
+  records: SubagentRunRecord[],
+): string {
+  // Single record: delegate to existing format for backward-compatible behavior
+  if (records.length === 1) {
+    const r = records[0]!;
+    return formatAnnouncementMessage({
+      runId: r.runId,
+      childSessionId: r.childSessionId,
+      requesterSessionId: r.requesterSessionId,
+      task: r.task,
+      label: r.label,
+      cleanup: r.cleanup,
+      outcome: r.outcome,
+      startedAt: r.startedAt,
+      endedAt: r.endedAt,
+      findings: r.findings,
+    });
+  }
+
+  // Multiple records: build combined message.
+  // Include a strict raw-findings section so parent can reliably cover every task result.
+  const parts: string[] = [
+    `All ${records.length} background tasks have completed. Here are the combined results:`,
+    "",
+  ];
+
+  for (let i = 0; i < records.length; i++) {
+    const r = records[i]!;
+    const displayName = r.label || r.task.slice(0, 60);
+    const statusLabel = formatStatusLabel(r.outcome);
+    const durationStr = (r.startedAt && r.endedAt)
+      ? ` (${formatDuration(r.startedAt, r.endedAt)})`
+      : "";
+
+    parts.push(
+      `### Task ${i + 1}: "${displayName}"`,
+      `Status: ${statusLabel}${durationStr}`,
+      "",
+      "Findings:",
+      r.findings || "(no output)",
+      "",
+    );
+  }
+
+  // Overall stats
+  const allStartTimes = records.map(r => r.startedAt).filter(Boolean) as number[];
+  const allEndTimes = records.map(r => r.endedAt).filter(Boolean) as number[];
+  if (allStartTimes.length > 0 && allEndTimes.length > 0) {
+    const wallTime = formatDuration(Math.min(...allStartTimes), Math.max(...allEndTimes));
+    parts.push(`Total wall time: ${wallTime}`);
+  }
+
+  const okCount = records.filter(r => r.outcome?.status === "ok").length;
+  const failCount = records.length - okCount;
+  parts.push(`Results: ${okCount} succeeded, ${failCount} failed/timed out`);
+
+  parts.push("", "Raw findings from each task (MUST cover all items):", "");
+  for (let i = 0; i < records.length; i++) {
+    const r = records[i]!;
+    const displayName = r.label || r.task.slice(0, 60);
+    parts.push(
+      `[${i + 1}] ${displayName}:`,
+      r.findings || "(no output)",
+      "",
+    );
+  }
+
+  parts.push(
+    "",
+    "Summarize these results naturally for the user.",
+    "You MUST include findings from every task item above, without omission.",
+    "Keep it concise, but preserve concrete findings from each task.",
+    "Do not mention technical details like session IDs or that these were background tasks.",
+    "You can respond with NO_REPLY if no announcement is needed.",
+  );
+
+  return parts.join("\n");
+}
+
+/**
+ * Run the coalesced announcement flow for all completed runs of a requester.
+ * Formats a single combined message and delivers it to the parent agent.
+ */
+export function runCoalescedAnnounceFlow(
+  requesterSessionId: string,
+  records: SubagentRunRecord[],
+): boolean {
+  const message = formatCoalescedAnnouncementMessage(records);
+
+  try {
+    const hub = getHub();
+    const parentAgent = hub.getAgent(requesterSessionId);
+    if (!parentAgent || parentAgent.closed) {
+      console.warn(
+        `[SubagentAnnounce] Parent agent not found or closed: ${requesterSessionId}`,
+      );
+      return false;
+    }
+
+    parentAgent.writeInternal(message, { forwardAssistant: true, persistResponse: true });
+    return true;
+  } catch (err) {
+    console.error(`[SubagentAnnounce] Failed to coalesced-announce to parent:`, err);
+    return false;
+  }
+}
+
+/**
  * Run the full subagent announcement flow:
  * 1. Read child's last assistant reply
  * 2. Format announcement message
  * 3. Send to parent agent via Hub
+ *
+ * @deprecated Use runCoalescedAnnounceFlow instead, which supports
+ * batching multiple completed runs into a single announcement.
  */
 export function runSubagentAnnounceFlow(params: SubagentAnnounceParams): boolean {
   const { requesterSessionId, childSessionId } = params;
@@ -204,7 +341,7 @@ export function runSubagentAnnounceFlow(params: SubagentAnnounceParams): boolean
       return false;
     }
 
-    parentAgent.write(message);
+    parentAgent.writeInternal(message, { forwardAssistant: true, persistResponse: true });
     return true;
   } catch (err) {
     console.error(`[SubagentAnnounce] Failed to announce to parent:`, err);

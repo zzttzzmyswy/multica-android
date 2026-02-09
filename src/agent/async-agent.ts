@@ -10,12 +10,21 @@ const devNull = { write: () => true } as unknown as NodeJS.WritableStream;
 /** Discriminated union of legacy Message, raw AgentEvent, and MulticaEvent */
 export type ChannelItem = Message | AgentEvent | MulticaEvent;
 
+export interface WriteInternalOptions {
+  /** Forward assistant message_end events to realtime stream during internal runs */
+  forwardAssistant?: boolean | undefined;
+  /** After internal run completes, persist the LLM's summary as a non-internal assistant message */
+  persistResponse?: boolean | undefined;
+}
+
 export class AsyncAgent {
   private readonly agent: Agent;
   private readonly channel = new Channel<ChannelItem>();
   private _closed = false;
   private queue: Promise<void> = Promise.resolve();
+  private pendingWrites = 0;
   private closeCallbacks: Array<() => void> = [];
+  private forwardInternalAssistant = false;
   readonly sessionId: string;
 
   constructor(options?: AgentOptions) {
@@ -25,8 +34,11 @@ export class AsyncAgent {
     });
     this.sessionId = this.agent.sessionId;
 
-    // Forward raw AgentEvent and MulticaEvent into the channel
+    // Forward raw AgentEvent and MulticaEvent into the channel.
+    // Suppress forwarding during internal runs to avoid leaking
+    // orchestration messages to the frontend/real-time stream.
     this.agent.subscribeAll((event: AgentEvent | MulticaEvent) => {
+      if (!this.shouldForwardEvent(event)) return;
       this.channel.send(event);
     });
   }
@@ -43,6 +55,7 @@ export class AsyncAgent {
   /** Enqueue an agent run, handling errors and session flush */
   private enqueue(runFn: () => ReturnType<Agent["run"]>): void {
     if (this._closed) throw new Error("Agent is closed");
+    this.pendingWrites += 1;
 
     this.queue = this.queue
       .then(async () => {
@@ -63,6 +76,47 @@ export class AsyncAgent {
         console.error(`[AsyncAgent] Agent run exception: ${message}`);
         this.channel.send({ id: uuidv7(), content: `[error] ${message}` });
         this.agent.emitMulticaEvent({ type: "agent_error", error: message });
+      })
+      .finally(() => {
+        this.pendingWrites = Math.max(0, this.pendingWrites - 1);
+      });
+  }
+
+  /**
+   * Write an internal message to agent (non-blocking, serialized queue).
+   * Messages are persisted with `internal: true` and rolled back from
+   * in-memory state. Events are suppressed from the real-time stream by default.
+   */
+  writeInternal(content: string, options?: WriteInternalOptions): void {
+    if (this._closed) throw new Error("Agent is closed");
+    const forwardAssistant = options?.forwardAssistant === true;
+    const persistResponse = options?.persistResponse === true;
+
+    this.queue = this.queue
+      .then(async () => {
+        if (this._closed) return;
+        const prevForward = this.forwardInternalAssistant;
+        this.forwardInternalAssistant = forwardAssistant;
+        try {
+          const result = await this.agent.runInternal(content);
+          await this.agent.flushSession();
+          if (result.error) {
+            // Internal run errors are for diagnostics only; do not leak to user stream.
+            console.error(`[AsyncAgent] Internal run error: ${result.error}`);
+          }
+          // Persist the LLM summary so it remains in parent context for future turns
+          if (persistResponse && result.text?.trim() && result.text.trim() !== "NO_REPLY") {
+            this.agent.persistAssistantSummary(result.text.trim());
+            await this.agent.flushSession();
+          }
+        } finally {
+          this.forwardInternalAssistant = prevForward;
+        }
+      })
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        // Internal run exceptions are for diagnostics only; do not leak to user stream.
+        console.error(`[AsyncAgent] Internal run failed: ${message}`);
       });
   }
 
@@ -79,6 +133,7 @@ export class AsyncAgent {
   subscribe(callback: (event: AgentEvent | MulticaEvent) => void): () => void {
     console.log(`[AsyncAgent] Adding subscriber for agent: ${this.sessionId}`);
     const unsubscribe = this.agent.subscribeAll((event) => {
+      if (!this.shouldForwardEvent(event)) return;
       console.log(`[AsyncAgent] Event received: ${event.type}`);
       callback(event);
     });
@@ -91,6 +146,18 @@ export class AsyncAgent {
   /** Returns a promise that resolves when the current message queue is drained */
   waitForIdle(): Promise<void> {
     return this.queue;
+  }
+
+  private shouldForwardEvent(event: AgentEvent | MulticaEvent): boolean {
+    if (!this.agent.isInternalRun) return true;
+    if (!this.forwardInternalAssistant) return false;
+    if (event.type !== "message_start" && event.type !== "message_update" && event.type !== "message_end") {
+      return false;
+    }
+
+    const maybeMessage = (event as { message?: unknown }).message;
+    if (!maybeMessage || typeof maybeMessage !== "object") return false;
+    return (maybeMessage as { role?: unknown }).role === "assistant";
   }
 
   /** Register a callback to be invoked when the agent is closed */
@@ -180,6 +247,34 @@ export class AsyncAgent {
   }
 
   /**
+   * Get profile directory path, if profile is enabled.
+   */
+  getProfileDir(): string | undefined {
+    return this.agent.getProfileDir();
+  }
+
+  /**
+   * Get heartbeat configuration from profile config.
+   */
+  getHeartbeatConfig():
+    | {
+        enabled?: boolean | undefined;
+        every?: string | undefined;
+        prompt?: string | undefined;
+        ackMaxChars?: number | undefined;
+      }
+    | undefined {
+    return this.agent.getHeartbeatConfig();
+  }
+
+  /**
+   * Number of queued/in-flight writes.
+   */
+  getPendingWrites(): number {
+    return this.pendingWrites;
+  }
+
+  /**
    * Get agent display name from profile config.
    */
   getAgentName(): string | undefined {
@@ -235,10 +330,18 @@ export class AsyncAgent {
   }
 
   /**
-   * Get all messages from the current session.
+   * Get all messages from the current session (in-memory state).
    */
   getMessages(): AgentMessage[] {
     return this.agent.getMessages();
+  }
+
+  /**
+   * Load messages from session storage with filtering.
+   * By default, internal messages are excluded.
+   */
+  loadSessionMessages(options?: { includeInternal?: boolean }): AgentMessage[] {
+    return this.agent.loadSessionMessages(options);
   }
 
   /**
