@@ -4,6 +4,9 @@
  * Uses grammy to connect to Telegram Bot API via long polling.
  * - Private chats: all messages are processed
  * - Group chats: only messages that @mention the bot or reply to the bot
+ *
+ * @see docs/channels/README.md — Channel system overview
+ * @see docs/channels/media-handling.md — Media processing pipeline
  */
 
 import { writeFile, mkdir } from "node:fs/promises";
@@ -52,6 +55,11 @@ export const telegramChannel: ChannelPlugin = {
   meta: {
     name: "Telegram",
     description: "Telegram bot integration via long polling",
+  },
+  chunkerConfig: {
+    minChars: 200,
+    maxChars: 4000, // Telegram API limit: 4096; leave room for HTML formatting overhead
+    breakPreference: "paragraph",
   },
 
   config: {
