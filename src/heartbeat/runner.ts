@@ -156,8 +156,8 @@ export async function runHeartbeatOnce(opts: {
   }
 
   try {
-    const isExecEvent = opts.reason === "exec-event";
-    if (!isExecEvent && (await isHeartbeatFileEmpty(agent))) {
+    const isForcedWake = opts.reason === "exec-event" || opts.reason?.startsWith("cron:");
+    if (!isForcedWake && (await isHeartbeatFileEmpty(agent))) {
       emitHeartbeatEvent({
         status: "skipped",
         reason: "empty-heartbeat-file",

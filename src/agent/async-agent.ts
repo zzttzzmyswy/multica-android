@@ -73,15 +73,25 @@ export class AsyncAgent {
         if (result.error) {
           console.error(`[AsyncAgent] Agent run error: ${result.error}`);
           this.channel.send({ id: uuidv7(), content: `[error] ${result.error}` });
-          this.agent.emitError(result.error);
+          // Only emit agent_error for HTTP 401 from the LLM provider so the
+          // UI shows the "Configure" banner. All other errors (400, tool errors,
+          // etc.) should flow back to the agent for self-recovery.
+          if (/\b401\b/.test(result.error)) {
+            this.agent.emitError(result.error);
+          }
         }
       })
       .catch((err) => {
         const message = err instanceof Error ? err.message : String(err);
         console.error(`[AsyncAgent] Agent run exception: ${message}`);
         this.channel.send({ id: uuidv7(), content: `[error] ${message}` });
-        // Also emit through subscriber mechanism so IPC listeners receive the error
-        this.agent.emitError(message);
+        // Only emit agent_error for HTTP 401 from the LLM provider so the
+        // UI shows the "Configure" banner. All other errors (400, tool errors,
+        // etc.) should flow back to the agent for self-recovery.
+        const errMsg = err instanceof Error ? err.message : String(err);
+        if (/\b401\b/.test(errMsg)) {
+          this.agent.emitError(message);
+        }
       })
       .finally(() => {
         this.pendingWrites = Math.max(0, this.pendingWrites - 1);
