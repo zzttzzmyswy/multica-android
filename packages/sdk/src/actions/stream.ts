@@ -45,17 +45,17 @@ export type CompactionEndEvent = {
 /** Union of all compaction events */
 export type CompactionEvent = CompactionStartEvent | CompactionEndEvent;
 
-/** Emitted when the agent encounters an error (LLM failure, quota exceeded, etc.) */
+/** Emitted when an agent encounters an error during execution */
 export type AgentErrorEvent = {
   type: "agent_error";
-  error: string;
+  message: string;
 };
 
 // --- Stream event types ---
 
 /**
- * Hub forwards AgentEvent from pi-agent-core, CompactionEvent,
- * and AgentErrorEvent as-is. StreamPayload wraps them with routing metadata.
+ * Hub forwards AgentEvent from pi-agent-core, CompactionEvent, and AgentErrorEvent as-is.
+ * StreamPayload wraps them with routing metadata.
  */
 export interface StreamPayload {
   streamId: string;

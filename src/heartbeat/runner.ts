@@ -176,7 +176,7 @@ export async function runHeartbeatOnce(opts: {
       ? `${basePrompt}\n\nSystem events:\n${pendingEvents.map((line) => `- ${line}`).join("\n")}`
       : basePrompt;
 
-    agent.write(prompt);
+    agent.write(prompt, { injectTimestamp: false });
     await agent.waitForIdle();
 
     const afterMessages = agent.getMessages();

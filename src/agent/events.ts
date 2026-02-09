@@ -21,15 +21,15 @@ export type CompactionEndEvent = {
   type: "compaction_end";
   removed: number;
   kept: number;
-  tokensRemoved?: number;
-  tokensKept?: number;
+  tokensRemoved?: number | undefined;
+  tokensKept?: number | undefined;
   reason: "count" | "tokens" | "summary" | "pruning";
 };
 
-/** Emitted when the agent encounters an error (LLM failure, quota exceeded, etc.) */
+/** Emitted when an agent encounters an error during execution */
 export type AgentErrorEvent = {
   type: "agent_error";
-  error: string;
+  message: string;
 };
 
 /** Union of all Multica-specific events */

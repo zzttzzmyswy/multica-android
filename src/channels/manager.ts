@@ -194,7 +194,7 @@ export class ChannelManager {
       if (event.type === "agent_error") {
         this.stopTyping();
         this.removeAckReaction();
-        const errorMsg = (event as { error?: string }).error ?? "Unknown error";
+        const errorMsg = (event as { message?: string }).message ?? "Unknown error";
         console.error(`[Channels] Agent error: ${errorMsg}`);
         const route = this.lastRoute;
         if (route) {

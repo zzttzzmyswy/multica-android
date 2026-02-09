@@ -5,6 +5,7 @@ import type {
   ExecApprovalRequestPayload,
   ApprovalDecision,
   AgentMessageItem,
+  AgentErrorEvent,
 } from '@multica/sdk'
 import { DEFAULT_MESSAGES_LIMIT } from '@multica/sdk'
 
@@ -56,10 +57,10 @@ export function useLocalChat() {
       const payload = data as unknown as StreamPayload
       if (!payload.event) return
 
-      // Handle agent errors as transient UI feedback (not persisted to history)
+      // Handle agent error events
       if (payload.event.type === 'agent_error') {
-        const errorMsg = (payload.event as { error?: string }).error ?? 'Unknown error'
-        chatRef.current.setError({ code: 'AGENT_ERROR', message: errorMsg })
+        const errorEvent = payload.event as AgentErrorEvent
+        chatRef.current.setError({ code: 'AGENT_ERROR', message: errorEvent.message })
         setIsLoading(false)
         return
       }
@@ -141,6 +142,10 @@ export function useLocalChat() {
     [],
   )
 
+  const clearError = useCallback(() => {
+    chatRef.current.setError(null)
+  }, [])
+
   return {
     agentId,
     initError,
@@ -155,5 +160,6 @@ export function useLocalChat() {
     sendMessage,
     loadMore,
     resolveApproval,
+    clearError,
   }
 }

@@ -282,6 +282,7 @@ export function registerHubIpcHandlers(): void {
         return
       }
 
+
       // Filter events same as Hub.consumeAgent()
       const maybeMessage = (event as { message?: { role?: string } }).message
       const isAssistantMessage = maybeMessage?.role === 'assistant'

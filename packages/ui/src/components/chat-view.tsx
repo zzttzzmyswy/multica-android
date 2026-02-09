@@ -39,6 +39,8 @@ export interface ChatViewProps {
   loadMore?: () => void;
   resolveApproval: (approvalId: string, decision: "allow-once" | "allow-always" | "deny") => void;
   onDisconnect?: () => void;
+  /** Optional action button in the error banner (e.g. "Configure Provider") */
+  errorAction?: { label: string; onClick: () => void };
 }
 
 export function ChatView({
@@ -54,6 +56,7 @@ export function ChatView({
   loadMore,
   resolveApproval,
   onDisconnect,
+  errorAction,
 }: ChatViewProps) {
   const mainRef = useRef<HTMLElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -224,16 +227,28 @@ export function ChatView({
                 {error.message}
               </MemoizedMarkdown>
             </span>
-            {onDisconnect && (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={onDisconnect}
-                className="shrink-0 text-xs h-7 px-2.5"
-              >
-                Disconnect
-              </Button>
-            )}
+            <div className="flex items-center gap-2 shrink-0">
+              {errorAction && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={errorAction.onClick}
+                  className="shrink-0 text-xs h-7 px-2.5"
+                >
+                  {errorAction.label}
+                </Button>
+              )}
+              {onDisconnect && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={onDisconnect}
+                  className="shrink-0 text-xs h-7 px-2.5"
+                >
+                  Disconnect
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -241,8 +256,8 @@ export function ChatView({
       <footer className="container px-4 pb-3 pt-1">
         <ChatInput
           onSubmit={sendMessage}
-          disabled={isLoading || !!error}
-          placeholder={error ? "Connection error" : "Ask your Agent..."}
+          disabled={isLoading || (!!error && error.code !== 'AGENT_ERROR')}
+          placeholder={error && error.code !== 'AGENT_ERROR' ? "Connection error" : "Ask your Agent..."}
         />
       </footer>
     </div>

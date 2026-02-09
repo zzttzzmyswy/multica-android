@@ -9,7 +9,7 @@ type StubAgent = {
   sessionId: string;
   ensureInitialized: () => Promise<void>;
   getMessages: () => Array<any>;
-  write: (content: string) => void;
+  write: (content: string, options?: { injectTimestamp?: boolean }) => void;
   waitForIdle: () => Promise<void>;
   getHeartbeatConfig: () => { prompt?: string; ackMaxChars?: number; enabled?: boolean };
   getPendingWrites: () => number;
@@ -70,5 +70,20 @@ describe("heartbeat runner", () => {
     const result = await runHeartbeatOnce({ agent: agent as any, reason: "manual" });
 
     expect(result.status).toBe("ran");
+  });
+
+  it("disables timestamp injection for heartbeat prompt writes", async () => {
+    const writes: Array<{ content: string; options?: { injectTimestamp?: boolean } }> = [];
+    const agent = createStubAgent({ replyText: "HEARTBEAT_OK" });
+    const originalWrite = agent.write;
+    agent.write = (content, options) => {
+      writes.push(options ? { content, options } : { content });
+      originalWrite(content, options);
+    };
+
+    await runHeartbeatOnce({ agent: agent as any, reason: "manual" });
+
+    expect(writes.length).toBeGreaterThan(0);
+    expect(writes[0]?.options?.injectTimestamp).toBe(false);
   });
 });

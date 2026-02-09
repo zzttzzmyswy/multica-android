@@ -4,6 +4,7 @@ import { Agent } from "./runner.js";
 import { Channel } from "./channel.js";
 import type { AgentOptions, Message } from "./types.js";
 import type { MulticaEvent } from "./events.js";
+import { injectMessageTimestamp } from "./message-timestamp.js";
 
 const devNull = { write: () => true } as unknown as NodeJS.WritableStream;
 
@@ -15,6 +16,11 @@ export interface WriteInternalOptions {
   forwardAssistant?: boolean | undefined;
   /** After internal run completes, persist the LLM's summary as a non-internal assistant message */
   persistResponse?: boolean | undefined;
+}
+
+export interface WriteOptions {
+  /** Disable automatic message timestamp injection */
+  injectTimestamp?: boolean | undefined;
 }
 
 export class AsyncAgent {
@@ -48,19 +54,18 @@ export class AsyncAgent {
   }
 
   /** Write message to agent (non-blocking, serialized queue) */
-  write(content: string): void {
-    this.enqueue(() => this.agent.run(content));
-  }
-
-  /** Enqueue an agent run, handling errors and session flush */
-  private enqueue(runFn: () => ReturnType<Agent["run"]>): void {
+  write(content: string, options?: WriteOptions): void {
     if (this._closed) throw new Error("Agent is closed");
     this.pendingWrites += 1;
+    const message =
+      options?.injectTimestamp === false
+        ? content
+        : injectMessageTimestamp(content);
 
     this.queue = this.queue
       .then(async () => {
         if (this._closed) return;
-        const result = await runFn();
+        const result = await this.agent.run(message);
         // Flush pending session writes so waitForIdle() callers
         // can safely read session data from disk.
         await this.agent.flushSession();
@@ -68,14 +73,15 @@ export class AsyncAgent {
         if (result.error) {
           console.error(`[AsyncAgent] Agent run error: ${result.error}`);
           this.channel.send({ id: uuidv7(), content: `[error] ${result.error}` });
-          this.agent.emitMulticaEvent({ type: "agent_error", error: result.error });
+          this.agent.emitError(result.error);
         }
       })
       .catch((err) => {
         const message = err instanceof Error ? err.message : String(err);
         console.error(`[AsyncAgent] Agent run exception: ${message}`);
         this.channel.send({ id: uuidv7(), content: `[error] ${message}` });
-        this.agent.emitMulticaEvent({ type: "agent_error", error: message });
+        // Also emit through subscriber mechanism so IPC listeners receive the error
+        this.agent.emitError(message);
       })
       .finally(() => {
         this.pendingWrites = Math.max(0, this.pendingWrites - 1);
