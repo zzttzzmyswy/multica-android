@@ -1,6 +1,10 @@
 # Super Multica
 
-A multi-component architecture for distributed agent systems.
+**Multiplexed Information & Computing Agent**
+
+An always-on AI agent that pulls real data, runs real computation, and takes real action — monitoring, analyzing, and acting within user-defined authorization boundaries.
+
+See [Memo](./docs/memo.md) for product vision, architecture, and roadmap.
 
 ## Project Structure
 
