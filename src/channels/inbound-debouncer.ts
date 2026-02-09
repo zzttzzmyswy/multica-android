@@ -10,12 +10,9 @@
  *    fire immediately regardless of timer
  * 4. When timer fires, call the flush callback with all accumulated text
  *
- * This prevents rapid-fire messages from triggering multiple separate Agent
- * runs. Instead, messages sent within a short window are concatenated with
- * newlines and dispatched as one combined prompt.
- *
- * Inspired by OpenClaw's createInboundDebouncer pattern.
- * @see docs/channel/openclaw-research.md — Section 7.3 message preprocessing
+ * Each flush produces an independent agent.write() call with its own reply
+ * target. Messages arriving while the agent is busy are NOT accumulated —
+ * they get their own debounce window and independent processing.
  */
 
 interface PendingBatch {
@@ -24,7 +21,7 @@ interface PendingBatch {
   /** Timestamp of the first message in this batch */
   firstArrival: number;
   /** Idle timer — fires when no new message arrives within delayMs */
-  timer: ReturnType<typeof setTimeout>;
+  timer: ReturnType<typeof setTimeout> | null;
 }
 
 export class InboundDebouncer {
@@ -44,11 +41,12 @@ export class InboundDebouncer {
   /** Add a message to the buffer. May trigger an immediate flush if maxWaitMs exceeded. */
   push(conversationId: string, text: string): void {
     const existing = this.pending.get(conversationId);
+    const preview = text.slice(0, 40) + (text.length > 40 ? "..." : "");
 
     if (existing) {
-      // Append to existing batch, reset idle timer
+      // Append to existing batch, clear any running timer
       existing.texts.push(text);
-      clearTimeout(existing.timer);
+      if (existing.timer !== null) clearTimeout(existing.timer);
 
       // Check hard cap: if we've been buffering too long, flush now
       const elapsed = Date.now() - existing.firstArrival;
@@ -58,9 +56,11 @@ export class InboundDebouncer {
       }
 
       // Reset idle timer
+      console.log(`[Debouncer] push (appending #${existing.texts.length}): "${preview}"`);
       existing.timer = setTimeout(() => this.flush(conversationId), this.delayMs);
     } else {
-      // Start a new batch
+      // Start a new batch with idle timer
+      console.log(`[Debouncer] push (new batch, timer=${this.delayMs}ms): "${preview}"`);
       const timer = setTimeout(() => this.flush(conversationId), this.delayMs);
       this.pending.set(conversationId, {
         texts: [text],
@@ -75,18 +75,19 @@ export class InboundDebouncer {
     const batch = this.pending.get(conversationId);
     if (!batch) return;
 
-    clearTimeout(batch.timer);
+    if (batch.timer !== null) clearTimeout(batch.timer);
     this.pending.delete(conversationId);
 
     // Join multiple messages with newlines so the Agent sees them as one prompt
     const combined = batch.texts.join("\n");
+    console.log(`[Debouncer] flush: ${batch.texts.length} message(s), ${combined.length} chars`);
     this.flushFn(conversationId, combined);
   }
 
   /** Clean up all pending timers (call on shutdown) */
   dispose(): void {
     for (const batch of this.pending.values()) {
-      clearTimeout(batch.timer);
+      if (batch.timer !== null) clearTimeout(batch.timer);
     }
     this.pending.clear();
   }
