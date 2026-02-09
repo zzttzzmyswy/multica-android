@@ -6,9 +6,13 @@
  * - Group chats: only messages that @mention the bot or reply to the bot
  */
 
+import { writeFile, mkdir } from "node:fs/promises";
+import { join, extname } from "node:path";
+import { v7 as uuidv7 } from "uuid";
 import { Bot, GrammyError } from "grammy";
 import type { ChannelPlugin, ChannelMessage, ChannelConfigAdapter, ChannelsConfig, DeliveryContext } from "../types.js";
 import { markdownToTelegramHtml } from "./telegram-format.js";
+import { MEDIA_CACHE_DIR } from "../../shared/paths.js";
 
 /** Telegram account config shape */
 interface TelegramAccountConfig {
@@ -120,6 +124,74 @@ export const telegramChannel: ChannelPlugin = {
         });
       });
 
+      // Handle media messages (voice, audio, photo, video, document)
+      const mediaTypes = [
+        { filter: "message:voice" as const, getMedia: (msg: any) => ({
+          type: "audio" as const,
+          fileId: msg.voice.file_id as string,
+          mimeType: msg.voice.mime_type as string | undefined,
+          duration: msg.voice.duration as number | undefined,
+        })},
+        { filter: "message:audio" as const, getMedia: (msg: any) => ({
+          type: "audio" as const,
+          fileId: msg.audio.file_id as string,
+          mimeType: msg.audio.mime_type as string | undefined,
+          duration: msg.audio.duration as number | undefined,
+        })},
+        { filter: "message:photo" as const, getMedia: (msg: any) => {
+          // Pick the largest photo size (last in array)
+          const photos = msg.photo as Array<{ file_id: string }>;
+          const largest = photos[photos.length - 1]!;
+          return {
+            type: "image" as const,
+            fileId: largest.file_id,
+            mimeType: "image/jpeg",
+          };
+        }},
+        { filter: "message:video" as const, getMedia: (msg: any) => ({
+          type: "video" as const,
+          fileId: msg.video.file_id as string,
+          mimeType: msg.video.mime_type as string | undefined,
+          duration: msg.video.duration as number | undefined,
+        })},
+        { filter: "message:document" as const, getMedia: (msg: any) => ({
+          type: "document" as const,
+          fileId: msg.document.file_id as string,
+          mimeType: msg.document.mime_type as string | undefined,
+        })},
+      ] as const;
+
+      for (const { filter, getMedia } of mediaTypes) {
+        bot.on(filter, (ctx) => {
+          const msg = ctx.message;
+          const isGroup = msg.chat.type === "group" || msg.chat.type === "supergroup";
+
+          if (isGroup) {
+            const isReplyToBot = msg.reply_to_message?.from?.is_bot === true;
+            if (!isReplyToBot) return;
+          }
+
+          const media = getMedia(msg);
+          const caption = (msg as any).caption as string | undefined;
+          console.log(`[Telegram] Received ${media.type}: chatId=${msg.chat.id} from=${msg.from?.id} fileId=${media.fileId}`);
+
+          onMessage({
+            messageId: String(msg.message_id),
+            conversationId: String(msg.chat.id),
+            senderId: String(msg.from?.id ?? "unknown"),
+            text: caption ?? "",
+            chatType: isGroup ? "group" : "direct",
+            media: {
+              type: media.type,
+              fileId: media.fileId,
+              mimeType: media.mimeType,
+              duration: (media as any).duration,
+              caption,
+            },
+          });
+        });
+      }
+
       // Graceful shutdown on abort
       signal.addEventListener("abort", () => {
         console.log("[Telegram] Bot stopped");
@@ -178,5 +250,28 @@ export const telegramChannel: ChannelPlugin = {
         // Best-effort — typing indicator failure is not critical
       }
     },
+  },
+
+  async downloadMedia(fileId: string, accountId: string): Promise<string> {
+    const bot = bots.get(accountId);
+    if (!bot) throw new Error(`No Telegram bot for account ${accountId}`);
+
+    const file = await bot.api.getFile(fileId);
+    const filePath = file.file_path;
+    if (!filePath) throw new Error(`Telegram returned no file_path for fileId=${fileId}`);
+
+    const url = `https://api.telegram.org/file/bot${bot.token}/${filePath}`;
+    const ext = extname(filePath) || ".bin";
+    const localPath = join(MEDIA_CACHE_DIR, `${uuidv7()}${ext}`);
+
+    await mkdir(MEDIA_CACHE_DIR, { recursive: true });
+
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Failed to download file: HTTP ${res.status}`);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    await writeFile(localPath, buffer);
+
+    console.log(`[Telegram] Downloaded media: ${filePath} → ${localPath}`);
+    return localPath;
   },
 };
