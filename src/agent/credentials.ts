@@ -331,6 +331,75 @@ export class CredentialManager {
   }
 
   /**
+   * Set a channel account config and save to credentials.json5.
+   * Creates the channels section if it doesn't exist.
+   * Used by the desktop Channels page to persist bot tokens.
+   */
+  setChannelAccountConfig(channelId: string, accountId: string, accountConfig: Record<string, unknown>): void {
+    const path = getCredentialsPath();
+
+    let config: CredentialsConfig = { version: 1 };
+    if (existsSync(path)) {
+      try {
+        const raw = readFileSync(path, "utf8");
+        config = JSON5.parse(raw) as CredentialsConfig;
+      } catch {
+        config = { version: 1 };
+      }
+    }
+
+    // Ensure channels.[channelId] structure exists
+    if (!config.channels) {
+      config.channels = {};
+    }
+    if (!config.channels[channelId]) {
+      config.channels[channelId] = {};
+    }
+
+    // Set or update the account config
+    config.channels[channelId]![accountId] = accountConfig;
+
+    mkdirSync(dirname(path), { recursive: true });
+    const content = JSON.stringify(config, null, 2);
+    writeFileSync(path, content, "utf8");
+
+    this.reset();
+  }
+
+  /**
+   * Remove a channel account config from credentials.json5.
+   * Cleans up the parent channel section if no accounts remain.
+   */
+  removeChannelAccountConfig(channelId: string, accountId: string): void {
+    const path = getCredentialsPath();
+    if (!existsSync(path)) return;
+
+    let config: CredentialsConfig;
+    try {
+      const raw = readFileSync(path, "utf8");
+      config = JSON5.parse(raw) as CredentialsConfig;
+    } catch {
+      return;
+    }
+
+    const channelSection = config.channels?.[channelId];
+    if (!channelSection) return;
+
+    delete channelSection[accountId];
+
+    // Clean up empty channel section
+    if (Object.keys(channelSection).length === 0) {
+      delete config.channels![channelId];
+    }
+
+    mkdirSync(dirname(path), { recursive: true });
+    const content = JSON.stringify(config, null, 2);
+    writeFileSync(path, content, "utf8");
+
+    this.reset();
+  }
+
+  /**
    * Set the default LLM provider and save to credentials.json5.
    */
   setDefaultLlmProvider(provider: string): void {

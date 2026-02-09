@@ -98,8 +98,11 @@ export class ChannelManager {
     this.ensureSubscribed();
   }
 
-  /** Start a specific channel account */
-  private async startAccount(
+  /**
+   * Start a specific channel account.
+   * Public so the desktop IPC layer can call it after saving config.
+   */
+  async startAccount(
     channelId: string,
     accountId: string,
     accountConfig: Record<string, unknown>,
@@ -431,6 +434,21 @@ export class ChannelManager {
       clearInterval(this.typingTimer);
       this.typingTimer = null;
     }
+  }
+
+  /**
+   * Stop a specific channel account.
+   * Public so the desktop IPC layer can call it when removing config.
+   */
+  stopAccount(channelId: string, accountId: string): void {
+    const key = `${channelId}:${accountId}`;
+    const handle = this.accounts.get(key);
+    if (!handle) return;
+
+    handle.abortController.abort();
+    handle.state = { ...handle.state, status: "stopped" };
+    this.accounts.delete(key);
+    console.log(`[Channels] Stopped ${key}`);
   }
 
   /** Stop all running channel accounts */
