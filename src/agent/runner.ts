@@ -316,7 +316,7 @@ export class Agent {
     }
 
     this.session.saveMeta({
-      provider: this.agent.state.model?.provider,
+      provider: this.resolvedProvider,
       model: this.agent.state.model?.id,
       thinkingLevel: this.agent.state.thinkingLevel,
       reasoningMode: this.reasoningMode,
@@ -874,9 +874,9 @@ export class Agent {
     // Update internal state
     this.resolvedProvider = providerId;
 
-    // Update session metadata
+    // Update session metadata (save original providerId, not alias-resolved)
     this.session.saveMeta({
-      provider: actualProvider,
+      provider: providerId,
       model: model.id,
       thinkingLevel: this.agent.state.thinkingLevel,
       reasoningMode: this.reasoningMode,
