@@ -7,6 +7,25 @@
 
 import type { BlockChunkerConfig } from "../hub/block-chunker.js";
 
+// ─── Media Attachment ───
+
+/** Media type for incoming channel attachments */
+export type ChannelMediaType = "audio" | "image" | "video" | "document";
+
+/** Media attachment from a channel message */
+export interface ChannelMediaAttachment {
+  /** Media type */
+  type: ChannelMediaType;
+  /** Platform-specific file ID (used for download) */
+  fileId: string;
+  /** MIME type if known (e.g. "audio/ogg", "image/jpeg") */
+  mimeType?: string | undefined;
+  /** Duration in seconds (for audio/video) */
+  duration?: number | undefined;
+  /** Caption text attached to the media */
+  caption?: string | undefined;
+}
+
 // ─── Normalized Incoming Message ───
 
 /** Platform-agnostic incoming message */
@@ -21,6 +40,8 @@ export interface ChannelMessage {
   text: string;
   /** Chat type: "direct" (1:1) or "group" */
   chatType: "direct" | "group";
+  /** Optional media attachment (voice, image, video, document) */
+  media?: ChannelMediaAttachment | undefined;
 }
 
 // ─── Delivery Context ───
@@ -96,6 +117,8 @@ export interface ChannelPlugin {
   readonly gateway: ChannelGatewayAdapter;
   /** Message sending adapter */
   readonly outbound: ChannelOutboundAdapter;
+  /** Download a media file to local disk (optional, platform-specific) */
+  downloadMedia?(fileId: string, accountId: string): Promise<string>;
 }
 
 // ─── Channels Config File Shape ───
