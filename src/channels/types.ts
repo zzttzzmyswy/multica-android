@@ -3,6 +3,8 @@
  *
  * Each messaging platform (Telegram, Discord, Feishu, etc.) implements the
  * ChannelPlugin interface with three adapters: config, gateway, outbound.
+ *
+ * @see docs/channels/README.md — Channel system overview and plugin guide
  */
 
 import type { BlockChunkerConfig } from "../hub/block-chunker.js";
