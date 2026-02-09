@@ -31,6 +31,8 @@ export interface RuntimeInfo {
   arch?: string | undefined;
   /** Node.js version (e.g. "v22.0.0") */
   nodeVersion?: string | undefined;
+  /** User-facing timezone for temporal reasoning (e.g. "America/Los_Angeles") */
+  timezone?: string | undefined;
   /** Current working directory */
   cwd?: string | undefined;
 }

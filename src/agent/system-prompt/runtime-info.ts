@@ -4,6 +4,7 @@
 
 import os from "node:os";
 import type { RuntimeInfo } from "./types.js";
+import { resolveMessageTimezone } from "../message-timestamp.js";
 
 /**
  * Collect runtime environment information.
@@ -16,6 +17,7 @@ export function collectRuntimeInfo(overrides?: Partial<RuntimeInfo>): RuntimeInf
     os: overrides?.os ?? process.platform,
     arch: overrides?.arch ?? process.arch,
     nodeVersion: overrides?.nodeVersion ?? process.version,
+    timezone: overrides?.timezone ?? resolveMessageTimezone(),
     provider: overrides?.provider,
     model: overrides?.model,
     cwd: overrides?.cwd ?? process.cwd(),
@@ -38,6 +40,7 @@ export function formatRuntimeLine(info: RuntimeInfo): string {
     parts.push(`arch=${info.arch}`);
   }
   if (info.nodeVersion) parts.push(`node=${info.nodeVersion}`);
+  if (info.timezone) parts.push(`tz=${info.timezone}`);
   if (info.model) {
     const modelStr = info.provider ? `${info.provider}/${info.model}` : info.model;
     parts.push(`model=${modelStr}`);
