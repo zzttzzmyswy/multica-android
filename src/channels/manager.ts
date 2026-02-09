@@ -22,6 +22,7 @@ import type {
 import { listChannels } from "./registry.js";
 import { loadChannelsConfig } from "./config.js";
 import { MessageAggregator, DEFAULT_CHUNKER_CONFIG } from "../hub/message-aggregator.js";
+import { isHeartbeatAckEvent } from "../hub/heartbeat-filter.js";
 import type { AsyncAgent } from "../agent/async-agent.js";
 import { transcribeAudio } from "../media/transcribe.js";
 import { describeImage } from "../media/describe-image.js";
@@ -213,6 +214,16 @@ export class ChannelManager {
         if (role !== "assistant") return;
       } else {
         // Non-message events (tool_execution etc.) — skip for channels
+        return;
+      }
+
+      // Keep heartbeat acknowledgements internal (same behavior as desktop/gateway stream path).
+      if (isHeartbeatAckEvent(event)) {
+        if (event.type === "message_end") {
+          this.stopTyping();
+          this.removeAckReaction();
+          this.aggregator = null;
+        }
         return;
       }
 
