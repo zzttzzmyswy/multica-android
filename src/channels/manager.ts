@@ -265,8 +265,6 @@ export class ChannelManager {
       // Keep heartbeat acknowledgements internal (same behavior as desktop/gateway stream path).
       if (isHeartbeatAckEvent(event)) {
         if (event.type === "message_end") {
-          this.stopTyping();
-          this.removeAckReaction();
           this.aggregator = null;
         }
         return;
