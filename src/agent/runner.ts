@@ -111,8 +111,15 @@ export class Agent {
     this.reasoningMode = options.reasoningMode ?? "stream";
     this.output = createAgentOutput({ stdout, stderr: this.stderr, reasoningMode: this.reasoningMode });
 
-    // Resolve provider and model from options > env vars > defaults
-    const defaultProvider = options.provider ?? credentialManager.getLlmProvider() ?? "kimi-coding";
+    // Load session metadata early so stored provider/model can inform defaults
+    this.sessionId = options.sessionId ?? uuidv7();
+    const storedMeta = (() => {
+      const tempSession = new SessionManager({ sessionId: this.sessionId });
+      return tempSession.getMeta();
+    })();
+
+    // Resolve provider and model from options > session meta > env vars > defaults
+    const defaultProvider = options.provider ?? storedMeta?.provider ?? credentialManager.getLlmProvider() ?? "kimi-coding";
     if (options.authProfileId) {
       const profileProvider = options.authProfileId.includes(":")
         ? options.authProfileId.split(":")[0]!
@@ -194,16 +201,7 @@ export class Agent {
       });
     }
 
-    this.sessionId = options.sessionId ?? uuidv7();
-
-    // 解析 model（用于获取 context window）
-    const storedMeta = (() => {
-      // 临时创建 session 获取 meta，避免循环依赖
-      const tempSession = new SessionManager({ sessionId: this.sessionId });
-      return tempSession.getMeta();
-    })();
-
-    const effectiveProvider = resolvedModel ? this.resolvedProvider : (options.provider ?? storedMeta?.provider);
+    const effectiveProvider = this.resolvedProvider;
     const effectiveModel = resolvedModel ?? options.model ?? storedMeta?.model;
     let model = resolveModel({ ...options, provider: effectiveProvider, model: effectiveModel });
 
