@@ -364,6 +364,14 @@ export class Agent {
     await this.ensureInitialized();
     this.output.state.lastAssistantText = "";
 
+    // Early validation: check API key before calling PiAgentCore.prompt(),
+    // because getApiKey errors thrown inside PiAgentCore's internal async
+    // context result in UnhandledPromiseRejection instead of propagating.
+    if (!this.currentApiKey) {
+      const errorMsg = `No API key configured for provider: ${this.resolvedProvider}. Please configure a provider in Agent Settings.`;
+      return { text: "", error: errorMsg };
+    }
+
     const canRotate = !this.pinnedProfile && this.profileCandidates.length > 1;
     let lastError: unknown;
 
