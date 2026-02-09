@@ -43,6 +43,8 @@ export class ChannelManager {
   private agentUnsubscribe: (() => void) | null = null;
   /** Current aggregator for buffering streaming responses */
   private aggregator: MessageAggregator | null = null;
+  /** Typing indicator interval (repeats every 5s to keep Telegram typing visible) */
+  private typingTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(hub: Hub) {
     this.hub = hub;
@@ -163,6 +165,7 @@ export class ChannelManager {
 
       // Handle agent errors — notify the channel user
       if (event.type === "agent_error") {
+        this.stopTyping();
         const errorMsg = (event as { error?: string }).error ?? "Unknown error";
         console.error(`[Channels] Agent error: ${errorMsg}`);
         const route = this.lastRoute;
@@ -196,6 +199,7 @@ export class ChannelManager {
 
       // Clean up after response complete
       if (event.type === "message_end" && role === "assistant") {
+        this.stopTyping();
         this.aggregator = null;
       }
     });
@@ -259,13 +263,36 @@ export class ChannelManager {
     console.log(`[Channels] lastRoute updated → ${plugin.id}:${conversationId}`);
     console.log(`[Channels] Forwarding to agent ${agent.sessionId}`);
 
+    // Show typing indicator while agent processes
+    this.startTyping();
+
     // Same as typing in the desktop chat
     agent.write(text);
+  }
+
+  /** Start sending typing indicators (repeats every 5s until stopped) */
+  private startTyping(): void {
+    this.stopTyping();
+    const route = this.lastRoute;
+    if (!route?.plugin.outbound.sendTyping) return;
+
+    const send = () => route.plugin.outbound.sendTyping!(route.deliveryCtx).catch(() => {});
+    void send();
+    this.typingTimer = setInterval(send, 5000);
+  }
+
+  /** Stop typing indicator interval */
+  private stopTyping(): void {
+    if (this.typingTimer) {
+      clearInterval(this.typingTimer);
+      this.typingTimer = null;
+    }
   }
 
   /** Stop all running channel accounts */
   stopAll(): void {
     console.log("[Channels] Stopping all channels...");
+    this.stopTyping();
     if (this.agentUnsubscribe) {
       this.agentUnsubscribe();
       this.agentUnsubscribe = null;
@@ -283,6 +310,7 @@ export class ChannelManager {
   /** Clear the last route (e.g. when desktop user sends a message) */
   clearLastRoute(): void {
     if (this.lastRoute) {
+      this.stopTyping();
       console.log("[Channels] lastRoute cleared (non-channel message received)");
       this.lastRoute = null;
     }

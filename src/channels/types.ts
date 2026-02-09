@@ -73,6 +73,8 @@ export interface ChannelOutboundAdapter {
   sendText(ctx: DeliveryContext, text: string): Promise<void>;
   /** Reply to a specific message */
   replyText(ctx: DeliveryContext, text: string): Promise<void>;
+  /** Send "typing" indicator (optional, not all platforms support it) */
+  sendTyping?(ctx: DeliveryContext): Promise<void>;
 }
 
 // ─── Channel Plugin ───

@@ -6,8 +6,9 @@
  * - Group chats: only messages that @mention the bot or reply to the bot
  */
 
-import { Bot } from "grammy";
+import { Bot, GrammyError } from "grammy";
 import type { ChannelPlugin, ChannelMessage, ChannelConfigAdapter, ChannelsConfig, DeliveryContext } from "../types.js";
+import { markdownToTelegramHtml } from "./telegram-format.js";
 
 /** Telegram account config shape */
 interface TelegramAccountConfig {
@@ -16,6 +17,31 @@ interface TelegramAccountConfig {
 
 /** Keep bot instances per account for outbound use */
 const bots = new Map<string, Bot>();
+
+/** Check if a GrammyError is an HTML parse failure */
+function isParseError(err: unknown): boolean {
+  return err instanceof GrammyError && err.description.includes("can't parse entities");
+}
+
+/** Send a message with HTML formatting, fallback to plain text on parse error */
+async function sendFormatted(
+  bot: Bot,
+  chatId: number,
+  text: string,
+  extra?: Record<string, unknown>,
+): Promise<void> {
+  const html = markdownToTelegramHtml(text);
+  try {
+    await bot.api.sendMessage(chatId, html, { ...extra, parse_mode: "HTML" });
+  } catch (err) {
+    if (isParseError(err)) {
+      console.warn("[Telegram] HTML parse failed, retrying as plain text");
+      await bot.api.sendMessage(chatId, text, extra);
+    } else {
+      throw err;
+    }
+  }
+}
 
 export const telegramChannel: ChannelPlugin = {
   id: "telegram",
@@ -125,7 +151,7 @@ export const telegramChannel: ChannelPlugin = {
       if (!bot) throw new Error(`No Telegram bot for account ${ctx.accountId}`);
 
       console.log(`[Telegram] Sending message to chatId=${ctx.conversationId}`);
-      await bot.api.sendMessage(Number(ctx.conversationId), text);
+      await sendFormatted(bot, Number(ctx.conversationId), text);
     },
 
     async replyText(ctx: DeliveryContext, text: string): Promise<void> {
@@ -134,11 +160,22 @@ export const telegramChannel: ChannelPlugin = {
 
       if (ctx.replyToMessageId) {
         console.log(`[Telegram] Sending reply to chatId=${ctx.conversationId} (replyTo=${ctx.replyToMessageId})`);
-        await bot.api.sendMessage(Number(ctx.conversationId), text, {
+        await sendFormatted(bot, Number(ctx.conversationId), text, {
           reply_to_message_id: Number(ctx.replyToMessageId),
         });
       } else {
         await telegramChannel.outbound.sendText(ctx, text);
+      }
+    },
+
+    async sendTyping(ctx: DeliveryContext): Promise<void> {
+      const bot = bots.get(ctx.accountId);
+      if (!bot) return;
+
+      try {
+        await bot.api.sendChatAction(Number(ctx.conversationId), "typing");
+      } catch {
+        // Best-effort — typing indicator failure is not critical
       }
     },
   },
