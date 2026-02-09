@@ -215,7 +215,7 @@ export default function HomePage() {
 
               {/* Provider Dropdown - Compact Grid + Model List */}
               {providerDropdownOpen && (
-                <div className="absolute left-0 right-0 top-full mt-1 z-10 bg-background border border-border rounded-md shadow-lg p-2">
+                <div className="absolute left-0 right-0 top-full mt-1 z-10 bg-background border border-border rounded-md shadow-lg p-2 max-h-[60vh] overflow-y-auto">
                   <div className="grid grid-cols-3 gap-1.5">
                     {providers.map((p) => (
                       <button
