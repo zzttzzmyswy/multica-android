@@ -98,6 +98,16 @@ export interface ChannelOutboundAdapter {
   replyText(ctx: DeliveryContext, text: string): Promise<void>;
   /** Send "typing" indicator (optional, not all platforms support it) */
   sendTyping?(ctx: DeliveryContext): Promise<void>;
+  /**
+   * Add a reaction emoji to the incoming message (optional).
+   * Used for ACK feedback — e.g. 👀 to signal "processing started".
+   */
+  addReaction?(ctx: DeliveryContext, emoji: string): Promise<void>;
+  /**
+   * Remove reaction from the incoming message (optional).
+   * Called when processing completes to clear the ACK indicator.
+   */
+  removeReaction?(ctx: DeliveryContext): Promise<void>;
 }
 
 // ─── Channel Plugin ───

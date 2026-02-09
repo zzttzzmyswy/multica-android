@@ -95,6 +95,32 @@ export const telegramChannel: ChannelPlugin = {
       const botUsername = botInfo.username;
       console.log(`[Telegram] Starting bot: @${botUsername} (id=${botId})`);
 
+      // ── Sequentialize middleware ──
+      // Ensures updates from the same chat are processed one at a time,
+      // preventing race conditions on shared state (e.g. ChannelManager.lastRoute).
+      // Grammy processes updates concurrently by default — without this,
+      // two messages arriving near-simultaneously could interleave.
+      // Lightweight alternative to @grammyjs/runner's sequentialize().
+      // @see docs/channel/openclaw-research.md — Grammy middleware pipeline
+      const chatQueues = new Map<string, Promise<void>>();
+      bot.use(async (ctx, next) => {
+        const chatId = ctx.chat?.id;
+        if (!chatId) return next();
+
+        const key = String(chatId);
+        const prev = chatQueues.get(key) ?? Promise.resolve();
+
+        // Chain this handler onto the per-chat queue
+        const current = prev.then(() => next()).catch(() => {});
+        chatQueues.set(key, current);
+        await current;
+
+        // Clean up resolved entries to prevent memory leak
+        if (chatQueues.get(key) === current) {
+          chatQueues.delete(key);
+        }
+      });
+
       // Handle text messages
       bot.on("message:text", (ctx) => {
         const msg = ctx.message;
@@ -261,6 +287,38 @@ export const telegramChannel: ChannelPlugin = {
         await bot.api.sendChatAction(Number(ctx.conversationId), "typing");
       } catch {
         // Best-effort — typing indicator failure is not critical
+      }
+    },
+
+    async addReaction(ctx: DeliveryContext, emoji: string): Promise<void> {
+      const bot = bots.get(ctx.accountId);
+      if (!bot || !ctx.replyToMessageId) return;
+
+      try {
+        await bot.api.setMessageReaction(
+          Number(ctx.conversationId),
+          Number(ctx.replyToMessageId),
+          // Grammy expects a specific emoji union type; cast since our interface accepts any string
+          [{ type: "emoji", emoji } as unknown as { type: "emoji"; emoji: "👀" }],
+        );
+      } catch {
+        // Best-effort — reaction failure is not critical
+        // (e.g. bot may lack permission in some groups)
+      }
+    },
+
+    async removeReaction(ctx: DeliveryContext): Promise<void> {
+      const bot = bots.get(ctx.accountId);
+      if (!bot || !ctx.replyToMessageId) return;
+
+      try {
+        await bot.api.setMessageReaction(
+          Number(ctx.conversationId),
+          Number(ctx.replyToMessageId),
+          [], // Empty array clears all bot reactions
+        );
+      } catch {
+        // Best-effort
       }
     },
   },

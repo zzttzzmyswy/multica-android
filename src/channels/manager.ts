@@ -26,6 +26,7 @@ import type { AsyncAgent } from "../agent/async-agent.js";
 import { transcribeAudio } from "../media/transcribe.js";
 import { describeImage } from "../media/describe-image.js";
 import { describeVideo } from "../media/describe-video.js";
+import { InboundDebouncer } from "./inbound-debouncer.js";
 
 interface AccountHandle {
   channelId: string;
@@ -54,6 +55,12 @@ export class ChannelManager {
   private aggregator: MessageAggregator | null = null;
   /** Typing indicator interval (repeats every 5s to keep Telegram typing visible) */
   private typingTimer: ReturnType<typeof setInterval> | null = null;
+  /**
+   * Inbound message debouncer — batches rapid-fire messages from the same
+   * conversation into a single agent.write() call.
+   * Initialized lazily on first message; uses the current agent reference.
+   */
+  private debouncer: InboundDebouncer | null = null;
 
   constructor(hub: Hub) {
     this.hub = hub;
@@ -183,6 +190,7 @@ export class ChannelManager {
       // Handle agent errors — notify the channel user
       if (event.type === "agent_error") {
         this.stopTyping();
+        this.removeAckReaction();
         const errorMsg = (event as { error?: string }).error ?? "Unknown error";
         console.error(`[Channels] Agent error: ${errorMsg}`);
         const route = this.lastRoute;
@@ -217,6 +225,7 @@ export class ChannelManager {
       // Clean up after response complete
       if (event.type === "message_end" && role === "assistant") {
         this.stopTyping();
+        this.removeAckReaction();
         this.aggregator = null;
       }
     });
@@ -283,18 +292,25 @@ export class ChannelManager {
     console.log(`[Channels] lastRoute updated → ${plugin.id}:${conversationId}`);
     console.log(`[Channels] Forwarding to agent ${agent.sessionId}`);
 
-    // Show typing indicator while agent processes
+    // Show typing indicator and ACK reaction while agent processes
     this.startTyping();
+    this.addAckReaction();
 
-    // Handle media messages
+    // Handle media messages (processed async, then fed through debouncer)
     if (message.media && plugin.downloadMedia) {
       void this.routeMedia(plugin, accountId, message, agent);
     } else {
-      agent.write(text);
+      // Text messages go through debouncer to batch rapid-fire sends
+      this.getDebouncer(agent).push(conversationId, text);
     }
   }
 
-  /** Download media file, process it, and forward result to agent */
+  /**
+   * Download media file, process it (transcribe/describe), and forward
+   * the resulting text through the debouncer to the agent.
+   * Media results are also debounced so that a rapid "photo + text" combo
+   * from the same conversation gets batched into one agent prompt.
+   */
   private async routeMedia(
     plugin: ChannelPlugin,
     accountId: string,
@@ -302,6 +318,7 @@ export class ChannelManager {
     agent: AsyncAgent,
   ): Promise<void> {
     const media = message.media!;
+    const debouncer = this.getDebouncer(agent);
 
     try {
       const filePath = await plugin.downloadMedia!(media.fileId, accountId);
@@ -312,12 +329,12 @@ export class ChannelManager {
         if (description) {
           const parts = ["[Image]", `Description: ${description}`];
           if (media.caption) parts.push(`Caption: ${media.caption}`);
-          agent.write(parts.join("\n"));
+          debouncer.push(message.conversationId, parts.join("\n"));
         } else {
           // No API key — fall back to file path
           const parts = ["[image message received]", `File: ${filePath}`];
           if (media.caption) parts.push(`Caption: ${media.caption}`);
-          agent.write(parts.join("\n"));
+          debouncer.push(message.conversationId, parts.join("\n"));
         }
       } else if (media.type === "audio") {
         // Audio: transcribe via Whisper API before reaching agent
@@ -325,14 +342,14 @@ export class ChannelManager {
         if (transcript) {
           const parts = ["[Voice Message]", `Transcript: ${transcript}`];
           if (media.caption) parts.push(`Caption: ${media.caption}`);
-          agent.write(parts.join("\n"));
+          debouncer.push(message.conversationId, parts.join("\n"));
         } else {
           // No API key configured — fall back to file path
           const parts = ["[audio message received]", `File: ${filePath}`];
           if (media.mimeType) parts.push(`Type: ${media.mimeType}`);
           if (media.duration) parts.push(`Duration: ${media.duration}s`);
           if (media.caption) parts.push(`Caption: ${media.caption}`);
-          agent.write(parts.join("\n"));
+          debouncer.push(message.conversationId, parts.join("\n"));
         }
       } else if (media.type === "video") {
         // Video: extract frame + describe via Vision API
@@ -341,14 +358,14 @@ export class ChannelManager {
           const parts = ["[Video]", `Description: ${description}`];
           if (media.duration) parts.push(`Duration: ${media.duration}s`);
           if (media.caption) parts.push(`Caption: ${media.caption}`);
-          agent.write(parts.join("\n"));
+          debouncer.push(message.conversationId, parts.join("\n"));
         } else {
           // ffmpeg unavailable or no API key — fall back to file path
           const parts = ["[video message received]", `File: ${filePath}`];
           if (media.mimeType) parts.push(`Type: ${media.mimeType}`);
           if (media.duration) parts.push(`Duration: ${media.duration}s`);
           if (media.caption) parts.push(`Caption: ${media.caption}`);
-          agent.write(parts.join("\n"));
+          debouncer.push(message.conversationId, parts.join("\n"));
         }
       } else {
         // Document: tell agent the file path
@@ -357,13 +374,44 @@ export class ChannelManager {
         parts.push(`File: ${filePath}`);
         if (media.mimeType) parts.push(`Type: ${media.mimeType}`);
         if (media.caption) parts.push(`Caption: ${media.caption}`);
-        agent.write(parts.join("\n"));
+        debouncer.push(message.conversationId, parts.join("\n"));
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[Channels] Failed to process media: ${msg}`);
-      agent.write(message.text || `[Failed to process ${media.type}]`);
+      debouncer.push(message.conversationId, message.text || `[Failed to process ${media.type}]`);
     }
+  }
+
+  /**
+   * Get or create the inbound debouncer, wired to the given agent.
+   * The debouncer batches rapid-fire messages by conversationId, then
+   * calls agent.write() once with the combined text.
+   */
+  private getDebouncer(agent: AsyncAgent): InboundDebouncer {
+    if (!this.debouncer) {
+      this.debouncer = new InboundDebouncer(
+        (_conversationId, combinedText) => {
+          console.log(`[Channels] Debouncer flushing ${combinedText.length} chars to agent`);
+          agent.write(combinedText);
+        },
+      );
+    }
+    return this.debouncer;
+  }
+
+  /** Add 👀 reaction to acknowledge message receipt */
+  private addAckReaction(): void {
+    const route = this.lastRoute;
+    if (!route?.plugin.outbound.addReaction) return;
+    void route.plugin.outbound.addReaction(route.deliveryCtx, "👀").catch(() => {});
+  }
+
+  /** Remove ACK reaction when processing completes */
+  private removeAckReaction(): void {
+    const route = this.lastRoute;
+    if (!route?.plugin.outbound.removeReaction) return;
+    void route.plugin.outbound.removeReaction(route.deliveryCtx).catch(() => {});
   }
 
   /** Start sending typing indicators (repeats every 5s until stopped) */
@@ -389,6 +437,8 @@ export class ChannelManager {
   stopAll(): void {
     console.log("[Channels] Stopping all channels...");
     this.stopTyping();
+    this.debouncer?.dispose();
+    this.debouncer = null;
     if (this.agentUnsubscribe) {
       this.agentUnsubscribe();
       this.agentUnsubscribe = null;
