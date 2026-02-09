@@ -112,6 +112,9 @@ export class Hub {
     this.channelManager = new ChannelManager(this);
     void this.channelManager.startAll().then(() => {
       console.log("[Hub] Channel system started");
+    }).catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[Hub] Channel system failed to start: ${msg}`);
     });
   }
 

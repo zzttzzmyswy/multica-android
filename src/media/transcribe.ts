@@ -138,7 +138,12 @@ export async function transcribeAudio(filePath: string): Promise<string | null> 
   const config = credentialManager.getLlmProviderConfig("openai");
   const apiKey = config?.apiKey;
   if (apiKey) {
-    return await transcribeApi(apiKey, filePath);
+    try {
+      return await transcribeApi(apiKey, filePath);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[Transcribe] Whisper API failed: ${msg}`);
+    }
   }
 
   // 3. No provider available

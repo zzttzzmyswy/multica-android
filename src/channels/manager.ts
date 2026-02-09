@@ -48,6 +48,8 @@ export class ChannelManager {
   private lastRoute: LastRoute | null = null;
   /** Unsubscribe function for the agent subscriber */
   private agentUnsubscribe: (() => void) | null = null;
+  /** Session ID of the currently subscribed agent (for stale detection) */
+  private subscribedAgentId: string | null = null;
   /** Current aggregator for buffering streaming responses */
   private aggregator: MessageAggregator | null = null;
   /** Typing indicator interval (repeats every 5s to keep Telegram typing visible) */
@@ -85,8 +87,8 @@ export class ChannelManager {
       }
     }
 
-    // Subscribe to the Hub's agent for outbound routing
-    this.subscribeToAgent();
+    // Try to subscribe eagerly; if no agent yet, routeIncoming will retry lazily
+    this.ensureSubscribed();
   }
 
   /** Start a specific channel account */
@@ -154,17 +156,25 @@ export class ChannelManager {
   }
 
   /**
-   * Subscribe to the Hub's agent events (once, persistent).
-   * When AI replies and lastRoute points to a channel, forward the reply there.
+   * Ensure we're subscribed to the current Hub agent for outbound routing.
+   * Lazily called from routeIncoming — handles agent not yet available at
+   * startup and re-subscribes if the agent has changed.
    */
-  private subscribeToAgent(): void {
+  private ensureSubscribed(): void {
     const agent = this.getHubAgent();
-    if (!agent) {
-      console.warn("[Channels] No agent to subscribe to, channel replies will not be routed");
-      return;
+    if (!agent) return;
+
+    // Already subscribed to the current agent
+    if (this.subscribedAgentId === agent.sessionId) return;
+
+    // Unsubscribe from stale agent
+    if (this.agentUnsubscribe) {
+      console.log(`[Channels] Agent changed, re-subscribing (${this.subscribedAgentId} → ${agent.sessionId})`);
+      this.agentUnsubscribe();
     }
 
     console.log(`[Channels] Subscribing to agent ${agent.sessionId} for outbound routing`);
+    this.subscribedAgentId = agent.sessionId;
 
     this.agentUnsubscribe = agent.subscribe((event) => {
       // No active channel route — skip (reply goes to desktop/gateway only)
@@ -256,6 +266,9 @@ export class ChannelManager {
       console.error("[Channels] No agent available, dropping message");
       return;
     }
+
+    // Ensure we're subscribed to this agent (handles late startup / agent change)
+    this.ensureSubscribed();
 
     // Update last route — replies will go back here
     this.lastRoute = {

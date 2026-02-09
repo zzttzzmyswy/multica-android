@@ -1,6 +1,5 @@
 import { v7 as uuidv7 } from "uuid";
 import type { AgentEvent, AgentMessage } from "@mariozechner/pi-agent-core";
-import type { ImageContent } from "@mariozechner/pi-ai";
 import { Agent } from "./runner.js";
 import { Channel } from "./channel.js";
 import type { AgentOptions, Message } from "./types.js";
@@ -38,39 +37,21 @@ export class AsyncAgent {
 
   /** Write message to agent (non-blocking, serialized queue) */
   write(content: string): void {
+    this.enqueue(() => this.agent.run(content));
+  }
+
+  /** Enqueue an agent run, handling errors and session flush */
+  private enqueue(runFn: () => ReturnType<Agent["run"]>): void {
     if (this._closed) throw new Error("Agent is closed");
 
     this.queue = this.queue
       .then(async () => {
         if (this._closed) return;
-        const result = await this.agent.run(content);
+        const result = await runFn();
         // Flush pending session writes so waitForIdle() callers
         // can safely read session data from disk.
         await this.agent.flushSession();
         // Normal text is delivered via message_end event; only handle errors here
-        if (result.error) {
-          console.error(`[AsyncAgent] Agent run error: ${result.error}`);
-          this.channel.send({ id: uuidv7(), content: `[error] ${result.error}` });
-          this.agent.emitMulticaEvent({ type: "agent_error", error: result.error });
-        }
-      })
-      .catch((err) => {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error(`[AsyncAgent] Agent run exception: ${message}`);
-        this.channel.send({ id: uuidv7(), content: `[error] ${message}` });
-        this.agent.emitMulticaEvent({ type: "agent_error", error: message });
-      });
-  }
-
-  /** Write message with images to agent (non-blocking, serialized queue) */
-  writeWithImages(content: string, images: ImageContent[]): void {
-    if (this._closed) throw new Error("Agent is closed");
-
-    this.queue = this.queue
-      .then(async () => {
-        if (this._closed) return;
-        const result = await this.agent.run(content, images);
-        await this.agent.flushSession();
         if (result.error) {
           console.error(`[AsyncAgent] Agent run error: ${result.error}`);
           this.channel.send({ id: uuidv7(), content: `[error] ${result.error}` });

@@ -7,9 +7,12 @@
  * @see docs/channels/media-handling.md — Media processing pipeline
  */
 
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { extname } from "node:path";
 import { credentialManager } from "../agent/credentials.js";
+
+/** Max image file size: 20MB (OpenAI API limit) */
+const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
 
 /** Map file extension to MIME type for common image formats */
 function mimeFromExt(filePath: string): string {
@@ -32,6 +35,13 @@ export async function describeImage(filePath: string): Promise<string | null> {
   const config = credentialManager.getLlmProviderConfig("openai");
   const apiKey = config?.apiKey;
   if (!apiKey) return null;
+
+  // Check file size to avoid OOM and API payload limits
+  const fileStat = await stat(filePath);
+  if (fileStat.size > MAX_IMAGE_SIZE) {
+    console.warn(`[DescribeImage] File too large (${(fileStat.size / 1024 / 1024).toFixed(1)}MB), skipping`);
+    return null;
+  }
 
   const buffer = await readFile(filePath);
   const base64 = buffer.toString("base64");

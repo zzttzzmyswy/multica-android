@@ -57,7 +57,7 @@ export const telegramChannel: ChannelPlugin = {
     description: "Telegram bot integration via long polling",
   },
   chunkerConfig: {
-    minChars: 200,
+    minChars: 3800, // Buffer the full response; only chunk when approaching platform limit
     maxChars: 4000, // Telegram API limit: 4096; leave room for HTML formatting overhead
     breakPreference: "paragraph",
   },
@@ -89,10 +89,11 @@ export const telegramChannel: ChannelPlugin = {
       const bot = new Bot(botToken);
       bots.set(accountId, bot);
 
-      // Get bot info for mention detection
+      // Get bot info for mention/reply detection
       const botInfo = await bot.api.getMe();
+      const botId = botInfo.id;
       const botUsername = botInfo.username;
-      console.log(`[Telegram] Starting bot: @${botUsername}`);
+      console.log(`[Telegram] Starting bot: @${botUsername} (id=${botId})`);
 
       // Handle text messages
       bot.on("message:text", (ctx) => {
@@ -106,7 +107,7 @@ export const telegramChannel: ChannelPlugin = {
               e.type === "mention" &&
               msg.text.substring(e.offset, e.offset + e.length).toLowerCase() === `@${botUsername?.toLowerCase()}`,
           );
-          const isReplyToBot = msg.reply_to_message?.from?.is_bot === true;
+          const isReplyToBot = msg.reply_to_message?.from?.id === botId;
 
           if (!isMentioned && !isReplyToBot) {
             return; // Ignore group messages not directed at bot
@@ -175,8 +176,12 @@ export const telegramChannel: ChannelPlugin = {
           const isGroup = msg.chat.type === "group" || msg.chat.type === "supergroup";
 
           if (isGroup) {
-            const isReplyToBot = msg.reply_to_message?.from?.is_bot === true;
-            if (!isReplyToBot) return;
+            const isReplyToBot = msg.reply_to_message?.from?.id === botId;
+            const caption = (msg as any).caption as string | undefined;
+            const isMentionedInCaption = caption && botUsername
+              ? caption.toLowerCase().includes(`@${botUsername.toLowerCase()}`)
+              : false;
+            if (!isReplyToBot && !isMentionedInCaption) return;
           }
 
           const media = getMedia(msg);

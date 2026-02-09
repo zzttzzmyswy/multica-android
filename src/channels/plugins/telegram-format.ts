@@ -50,8 +50,10 @@ export function markdownToTelegramHtml(markdown: string): string {
   // 3. Escape HTML in remaining text
   text = escapeHtml(text);
 
-  // 4. Links: [text](url)
-  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+  // 4. Links: [text](url) — escape quotes in URL to prevent attribute breakout
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label: string, url: string) =>
+    `<a href="${url.replace(/"/g, "&quot;")}">${label}</a>`,
+  );
 
   // 5. Bold: **text** or __text__
   text = text.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");

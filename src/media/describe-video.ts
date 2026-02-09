@@ -9,7 +9,7 @@
 
 import { join } from "node:path";
 import { execFile } from "node:child_process";
-import { unlink } from "node:fs/promises";
+import { mkdir, unlink } from "node:fs/promises";
 import { v7 as uuidv7 } from "uuid";
 import { MEDIA_CACHE_DIR } from "../shared/paths.js";
 import { describeImage } from "./describe-image.js";
@@ -24,6 +24,9 @@ export async function describeVideo(filePath: string): Promise<string | null> {
   const framePath = join(MEDIA_CACHE_DIR, `${uuidv7()}.jpg`);
 
   try {
+    // Ensure output directory exists
+    await mkdir(MEDIA_CACHE_DIR, { recursive: true });
+
     // Extract first frame with ffmpeg
     await new Promise<void>((resolve, reject) => {
       execFile(
