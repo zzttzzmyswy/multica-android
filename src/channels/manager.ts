@@ -6,9 +6,12 @@
  * - Outgoing: agent reply → check lastRoute → forward to originating channel
  *
  * Uses "last route" pattern: whoever sent the last message gets the reply.
+ *
+ * @see docs/channels/README.md — Channel system overview
+ * @see docs/channels/media-handling.md — Media processing pipeline
+ * @see docs/message-paths.md — All three message paths (Desktop / Web / Channel)
  */
 
-import { readFile } from "node:fs/promises";
 import type { Hub } from "../hub/hub.js";
 import type {
   ChannelPlugin,
@@ -21,6 +24,8 @@ import { loadChannelsConfig } from "./config.js";
 import { MessageAggregator, DEFAULT_CHUNKER_CONFIG } from "../hub/message-aggregator.js";
 import type { AsyncAgent } from "../agent/async-agent.js";
 import { transcribeAudio } from "../media/transcribe.js";
+import { describeImage } from "../media/describe-image.js";
+import { describeVideo } from "../media/describe-video.js";
 
 interface AccountHandle {
   channelId: string;
@@ -289,12 +294,18 @@ export class ChannelManager {
       const filePath = await plugin.downloadMedia!(media.fileId, accountId);
 
       if (media.type === "image") {
-        // Images: pass directly to LLM as ImageContent
-        const buffer = await readFile(filePath);
-        const base64 = buffer.toString("base64");
-        const mimeType = media.mimeType ?? "image/jpeg";
-        const caption = media.caption || "User sent an image.";
-        agent.writeWithImages(caption, [{ type: "image", data: base64, mimeType }]);
+        // Images: describe via Vision API before reaching agent
+        const description = await describeImage(filePath);
+        if (description) {
+          const parts = ["[Image]", `Description: ${description}`];
+          if (media.caption) parts.push(`Caption: ${media.caption}`);
+          agent.write(parts.join("\n"));
+        } else {
+          // No API key — fall back to file path
+          const parts = ["[image message received]", `File: ${filePath}`];
+          if (media.caption) parts.push(`Caption: ${media.caption}`);
+          agent.write(parts.join("\n"));
+        }
       } else if (media.type === "audio") {
         // Audio: transcribe via Whisper API before reaching agent
         const transcript = await transcribeAudio(filePath);
@@ -310,13 +321,28 @@ export class ChannelManager {
           if (media.caption) parts.push(`Caption: ${media.caption}`);
           agent.write(parts.join("\n"));
         }
+      } else if (media.type === "video") {
+        // Video: extract frame + describe via Vision API
+        const description = await describeVideo(filePath);
+        if (description) {
+          const parts = ["[Video]", `Description: ${description}`];
+          if (media.duration) parts.push(`Duration: ${media.duration}s`);
+          if (media.caption) parts.push(`Caption: ${media.caption}`);
+          agent.write(parts.join("\n"));
+        } else {
+          // ffmpeg unavailable or no API key — fall back to file path
+          const parts = ["[video message received]", `File: ${filePath}`];
+          if (media.mimeType) parts.push(`Type: ${media.mimeType}`);
+          if (media.duration) parts.push(`Duration: ${media.duration}s`);
+          if (media.caption) parts.push(`Caption: ${media.caption}`);
+          agent.write(parts.join("\n"));
+        }
       } else {
-        // Video/document: tell agent the file path
+        // Document: tell agent the file path
         const parts: string[] = [];
-        parts.push(`[${media.type} message received]`);
+        parts.push(`[document message received]`);
         parts.push(`File: ${filePath}`);
         if (media.mimeType) parts.push(`Type: ${media.mimeType}`);
-        if (media.duration) parts.push(`Duration: ${media.duration}s`);
         if (media.caption) parts.push(`Caption: ${media.caption}`);
         agent.write(parts.join("\n"));
       }
