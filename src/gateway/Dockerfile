@@ -14,10 +14,13 @@ COPY packages/store/package.json ./packages/store/
 # Install all dependencies (including devDependencies for build)
 RUN pnpm install --frozen-lockfile
 
-# Copy workspace packages and build them
+# Copy workspace packages and bundle them with esbuild (resolves extensionless imports)
 COPY packages/sdk/ ./packages/sdk/
 COPY packages/store/ ./packages/store/
-RUN pnpm --filter @multica/sdk build && cd packages/store && ../../node_modules/.bin/tsc
+RUN ./node_modules/.bin/esbuild packages/sdk/src/index.ts \
+      --bundle --platform=node --format=esm --outfile=packages/sdk/dist/index.js --packages=external && \
+    ./node_modules/.bin/esbuild packages/store/src/index.ts packages/store/src/connection.ts \
+      --bundle --splitting --platform=node --format=esm --outdir=packages/store/dist --packages=external
 
 # Copy source code
 COPY tsconfig.json ./
