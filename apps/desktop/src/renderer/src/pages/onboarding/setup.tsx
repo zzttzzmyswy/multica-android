@@ -12,7 +12,7 @@ import { useOnboardingStore } from '../../stores/onboarding'
 
 export default function SetupStep() {
   const navigate = useNavigate()
-  const { providers, availableProviders, current, loading, error, refresh, setProvider } =
+  const { providers, current, loading, error, refresh, setProvider } =
     useProvider()
   const { setProviderConfigured } = useOnboardingStore()
 
