@@ -13,7 +13,7 @@ export function SamplePrompt({ title, prompt, onClick }: SamplePromptProps) {
       onClick={onClick}
       className="w-full text-left p-4 rounded-xl border border-border bg-card hover:bg-accent/50 transition-colors group flex items-center justify-between"
     >
-      <div className="space-y-0.5 pr-4">
+      <div className="space-y-0.5 pr-4 min-w-0">
         <p className="font-medium text-sm">{title}</p>
         <p className="text-xs text-muted-foreground truncate">{prompt}</p>
       </div>

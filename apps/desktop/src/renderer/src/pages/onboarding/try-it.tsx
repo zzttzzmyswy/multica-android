@@ -54,8 +54,6 @@ export default function TryItStep() {
     navigate('/onboarding/connect')
   }
 
-  const hasMessages = messages.length > 0
-
   return (
     <div className="h-full flex">
       {/* Left column — prompts */}
@@ -109,19 +107,7 @@ export default function TryItStep() {
             <Loading />
             Initializing agent...
           </div>
-        ) : !hasMessages && !isLoading ? (
-          <div className="flex-1 flex items-center justify-center px-12">
-            <div className="max-w-sm text-center space-y-3">
-              <h3 className="text-lg font-medium">Agent ready</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Click a prompt on the left to start a conversation, or type
-                your own message below.
-              </p>
-            </div>
-          </div>
-        ) : null}
-
-        {agentId && (hasMessages || isLoading) && (
+        ) : (
           <ChatView
             messages={messages}
             streamingIds={streamingIds}
