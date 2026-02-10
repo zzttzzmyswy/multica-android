@@ -51,7 +51,7 @@ function splitIntoBlocks(content: string): Block[] {
   let inCodeBlock = false
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
+    const line = lines[i] ?? ''
 
     // Check for code fence (``` at start of line, optionally followed by language)
     if (line.startsWith('```')) {

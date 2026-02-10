@@ -108,8 +108,9 @@ export function ChatView({
     if (!sentinel || isLoadingHistory) return;
 
     const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && hasMore && !isLoadingMore) {
+      (entries) => {
+        const entry = entries[0];
+        if (entry?.isIntersecting && hasMore && !isLoadingMore) {
           onLoadMore();
         }
       },
