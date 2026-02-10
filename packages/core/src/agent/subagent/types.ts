@@ -56,6 +56,8 @@ export type RegisterSubagentRunParams = {
   label?: string | undefined;
   cleanup?: "delete" | "keep" | undefined;
   timeoutSeconds?: number | undefined;
+  /** Callback invoked when the queue slot is acquired (used to defer childAgent.write). */
+  start?: (() => void) | undefined;
 };
 
 /** Parameters for the announce flow */

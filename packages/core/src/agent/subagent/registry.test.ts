@@ -7,16 +7,21 @@ import {
   resetSubagentRegistryForTests,
   shutdownSubagentRegistry,
 } from "./registry.js";
+import { resetLanesForTests } from "./command-queue.js";
 
 // Note: These tests exercise the registry's in-memory state management.
 // They do NOT test the full lifecycle (which requires a live Hub + AsyncAgent).
 
+/** Wait for the command queue to process enqueued tasks. */
+const flushQueue = () => new Promise<void>((r) => setTimeout(r, 0));
+
 beforeEach(() => {
   resetSubagentRegistryForTests();
+  resetLanesForTests();
 });
 
 describe("subagent registry", () => {
-  it("registers a run and retrieves it by ID", () => {
+  it("registers a run and retrieves it by ID", async () => {
     const record = registerSubagentRun({
       runId: "run-1",
       childSessionId: "child-1",
@@ -32,7 +37,9 @@ describe("subagent registry", () => {
     expect(record.label).toBe("Code Analysis");
     expect(record.cleanup).toBe("delete"); // default
     expect(record.createdAt).toBeGreaterThan(0);
-    expect(record.startedAt).toBeGreaterThan(0); // set by watchChildAgent
+
+    await flushQueue();
+    expect(record.startedAt).toBeGreaterThan(0); // set by watchChildAgent (async via queue)
 
     const retrieved = getSubagentRun("run-1");
     expect(retrieved).toBe(record);
@@ -101,7 +108,7 @@ describe("subagent registry", () => {
     expect(record.cleanup).toBe("keep");
   });
 
-  it("registers a run and ends it with error when Hub is not available", () => {
+  it("registers a run and ends it with error when Hub is not available", async () => {
     // Without Hub initialized, watchChildAgent detects missing Hub
     // and immediately ends the run with an error
     registerSubagentRun({
@@ -111,6 +118,8 @@ describe("subagent registry", () => {
       task: "Running task",
     });
 
+    await flushQueue();
+
     const record = getSubagentRun("run-no-hub");
     expect(record?.startedAt).toBeGreaterThan(0);
     expect(record?.endedAt).toBeGreaterThan(0);
@@ -118,7 +127,7 @@ describe("subagent registry", () => {
     expect(record?.outcome?.error).toContain("Hub not initialized");
   });
 
-  it("shutdownSubagentRegistry marks unfinished runs as ended", () => {
+  it("shutdownSubagentRegistry marks unfinished runs as ended", async () => {
     // Directly set up a record without going through watchChildAgent
     // to simulate a run that is still active
     registerSubagentRun({
@@ -127,6 +136,8 @@ describe("subagent registry", () => {
       requesterSessionId: "parent-1",
       task: "Running task",
     });
+
+    await flushQueue();
 
     // The above run already ended due to no Hub; reset its endedAt
     // to simulate a truly active run
@@ -164,13 +175,15 @@ describe("subagent registry — coalescing", () => {
   // Without Hub, watchChildAgent ends runs immediately with "Hub not initialized".
   // This allows us to test the coalescing state transitions.
 
-  it("captures findings when a run completes (no Hub)", () => {
+  it("captures findings when a run completes (no Hub)", async () => {
     registerSubagentRun({
       runId: "run-1",
       childSessionId: "child-1",
       requesterSessionId: "parent-1",
       task: "Task 1",
     });
+
+    await flushQueue();
 
     const record = getSubagentRun("run-1");
     // Run ended immediately due to no Hub
@@ -178,7 +191,7 @@ describe("subagent registry — coalescing", () => {
     expect(record?.findingsCaptured).toBe(true);
   });
 
-  it("does not announce while sibling runs are still pending", () => {
+  it("does not announce while sibling runs are still pending", async () => {
     // Register first run — ends immediately (no Hub)
     registerSubagentRun({
       runId: "run-1",
@@ -186,6 +199,8 @@ describe("subagent registry — coalescing", () => {
       requesterSessionId: "parent-1",
       task: "Task 1",
     });
+
+    await flushQueue();
 
     const record1 = getSubagentRun("run-1");
     expect(record1?.findingsCaptured).toBe(true);
@@ -198,6 +213,8 @@ describe("subagent registry — coalescing", () => {
       task: "Task 2",
     });
 
+    await flushQueue();
+
     const record2 = getSubagentRun("run-2");
     expect(record2?.findingsCaptured).toBe(true);
 
@@ -208,13 +225,15 @@ describe("subagent registry — coalescing", () => {
     expect(record2?.announced).toBeUndefined();
   });
 
-  it("single run captures findings immediately", () => {
+  it("single run captures findings immediately", async () => {
     registerSubagentRun({
       runId: "run-solo",
       childSessionId: "child-solo",
       requesterSessionId: "parent-solo",
       task: "Solo task",
     });
+
+    await flushQueue();
 
     const record = getSubagentRun("run-solo");
     expect(record?.endedAt).toBeGreaterThan(0);
@@ -223,13 +242,15 @@ describe("subagent registry — coalescing", () => {
     expect(record?.outcome?.error).toContain("Hub not initialized");
   });
 
-  it("shutdownSubagentRegistry captures findings for ended-but-uncaptured runs", () => {
+  it("shutdownSubagentRegistry captures findings for ended-but-uncaptured runs", async () => {
     registerSubagentRun({
       runId: "run-1",
       childSessionId: "child-1",
       requesterSessionId: "parent-1",
       task: "Task",
     });
+
+    await flushQueue();
 
     const record = getSubagentRun("run-1");
     if (record) {
@@ -264,6 +285,8 @@ describe("subagent registry — post-announce cleanup", () => {
       requesterSessionId: "parent-1",
       task: "Task B",
     });
+
+    await flushQueue();
 
     // Both runs should have been announced and removed from registry
     expect(spy).toHaveBeenCalled();
