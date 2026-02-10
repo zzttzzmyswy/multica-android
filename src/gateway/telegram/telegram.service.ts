@@ -204,7 +204,9 @@ export class TelegramService implements OnModuleInit {
         connectionInfo.token,
         {
           platform: "telegram",
-          userAgent: `Telegram ${telegramUserId} @${msg?.from?.username ?? ""} ${msg?.from?.first_name ?? ""}`.trim(),
+          clientName: msg?.from?.username
+            ? `Telegram @${msg.from.username}`
+            : `Telegram ${msg?.from?.first_name ?? telegramUserId}`,
         }
       );
 
