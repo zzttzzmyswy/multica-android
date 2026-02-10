@@ -114,8 +114,8 @@ const PROVIDER_REGISTRY: Record<string, ProviderMeta> = {
     id: "openrouter",
     name: "OpenRouter",
     authMethod: "api-key",
-    defaultModel: "anthropic/claude-sonnet-4-5",
-    models: ["anthropic/claude-sonnet-4-5", "anthropic/claude-opus-4-5", "openai/gpt-4o"],
+    defaultModel: "anthropic/claude-sonnet-4.5",
+    models: ["anthropic/claude-sonnet-4.5", "anthropic/claude-opus-4.5", "openai/gpt-4o"],
     loginUrl: "https://openrouter.ai/keys",
   },
 };

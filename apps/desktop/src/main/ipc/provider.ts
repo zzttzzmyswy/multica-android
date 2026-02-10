@@ -164,14 +164,6 @@ export function registerProviderIpcHandlers(): void {
         }
       }
 
-      // Validate model if specified
-      if (modelId && !meta.models.includes(modelId)) {
-        return {
-          ok: false,
-          error: `Model "${modelId}" is not available for provider "${providerId}". Available: ${meta.models.join(', ')}`,
-        }
-      }
-
       try {
         const result = agent.setProvider(providerId, modelId)
         console.log(`[IPC] Provider switched to: ${result.provider}, model: ${result.model}`)
@@ -305,6 +297,31 @@ export function registerProviderIpcHandlers(): void {
         console.error(`[IPC] Failed to import OAuth credentials: ${message}`)
         return { ok: false, error: message }
       }
+    }
+  )
+
+  /**
+   * Test a provider connection by sending a minimal prompt.
+   * Temporarily switches to the target provider, runs a test, then restores.
+   */
+  ipcMain.handle(
+    'provider:test',
+    async (_event, providerId: string, modelId?: string): Promise<{ ok: boolean; error?: string }> => {
+      const agent = getDefaultAgent()
+      if (!agent) {
+        return { ok: false, error: 'No agent available. Please wait for initialization.' }
+      }
+
+      const meta = getProviderMeta(providerId)
+      if (!meta) {
+        return { ok: false, error: `Unknown provider: ${providerId}` }
+      }
+
+      if (!isProviderAvailable(providerId)) {
+        return { ok: false, error: `Provider "${meta.name}" is not configured.` }
+      }
+
+      return agent.testProvider(providerId, modelId)
     }
   )
 }

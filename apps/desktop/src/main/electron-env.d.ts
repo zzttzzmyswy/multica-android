@@ -139,6 +139,9 @@ interface ChannelAccountStateInfo {
 }
 
 interface ElectronAPI {
+  app: {
+    getFlags: () => Promise<{ forceOnboarding: boolean }>
+  }
   hub: {
     init: () => Promise<unknown>
     getStatus: () => Promise<HubStatus>
@@ -194,6 +197,7 @@ interface ElectronAPI {
     isAvailable: (providerId: string) => Promise<boolean>
     saveApiKey: (providerId: string, apiKey: string) => Promise<{ ok: boolean; error?: string }>
     importOAuth: (providerId: string) => Promise<{ ok: boolean; expiresAt?: number; error?: string }>
+    test: (providerId: string, modelId?: string) => Promise<{ ok: boolean; error?: string }>
   }
   channels: {
     listStates: () => Promise<ChannelAccountStateInfo[]>

@@ -368,4 +368,37 @@ export class AsyncAgent {
   setProvider(providerId: string, modelId?: string): { provider: string; model: string | undefined } {
     return this.agent.setProvider(providerId, modelId);
   }
+
+  /**
+   * Test a provider connection by temporarily switching, sending a minimal prompt,
+   * and restoring the previous provider. Queued through the serialization queue.
+   */
+  async testProvider(providerId: string, modelId?: string): Promise<{ ok: boolean; error?: string }> {
+    return new Promise((resolve) => {
+      this.queue = this.queue
+        .then(async () => {
+          const prev = this.agent.getProviderInfo();
+          try {
+            this.agent.setProvider(providerId, modelId);
+            const result = await this.agent.runInternal('Reply with just the word "OK". No other text.');
+            if (result.error) {
+              resolve({ ok: false, error: result.error });
+            } else {
+              resolve({ ok: true });
+            }
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            resolve({ ok: false, error: message });
+          } finally {
+            try {
+              this.agent.setProvider(prev.provider, prev.model);
+            } catch { /* best effort */ }
+          }
+        })
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          resolve({ ok: false, error: message });
+        });
+    });
+  }
 }

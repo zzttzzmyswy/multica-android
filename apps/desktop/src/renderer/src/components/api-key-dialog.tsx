@@ -11,14 +11,17 @@ import { Button } from '@multica/ui/components/ui/button'
 import { Input } from '@multica/ui/components/ui/input'
 import { Label } from '@multica/ui/components/ui/label'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { Loading03Icon, Key01Icon } from '@hugeicons/core-free-icons'
+import { Loading03Icon, Key01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
+
+type Phase = 'input' | 'saving' | 'testing' | 'success' | 'error'
 
 interface ApiKeyDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   providerId: string
   providerName: string
-  onSuccess?: () => void
+  showModelInput?: boolean
+  onSuccess?: (modelId?: string) => void
 }
 
 export function ApiKeyDialog({
@@ -26,11 +29,15 @@ export function ApiKeyDialog({
   onOpenChange,
   providerId,
   providerName,
+  showModelInput,
   onSuccess,
 }: ApiKeyDialogProps) {
   const [apiKey, setApiKey] = useState('')
-  const [saving, setSaving] = useState(false)
+  const [modelId, setModelId] = useState('')
+  const [phase, setPhase] = useState<Phase>('input')
   const [error, setError] = useState<string | null>(null)
+
+  const busy = phase === 'saving' || phase === 'testing'
 
   const handleSave = async () => {
     if (!apiKey.trim()) {
@@ -38,32 +45,65 @@ export function ApiKeyDialog({
       return
     }
 
-    setSaving(true)
+    if (showModelInput && !modelId.trim()) {
+      setError('Please enter a model name')
+      return
+    }
+
     setError(null)
+    setPhase('saving')
 
     try {
       const result = await window.electronAPI.provider.saveApiKey(providerId, apiKey.trim())
-      if (result.ok) {
-        setApiKey('')
-        onOpenChange(false)
-        onSuccess?.()
-      } else {
+      if (!result.ok) {
         setError(result.error ?? 'Failed to save API key')
+        setPhase('error')
+        return
       }
+
+      // Test the connection
+      setPhase('testing')
+      const effectiveModel = showModelInput && modelId.trim() ? modelId.trim() : undefined
+      const testResult = await window.electronAPI.provider.test(providerId, effectiveModel)
+
+      if (!testResult.ok) {
+        setError(testResult.error ?? 'Connection test failed')
+        setPhase('error')
+        return
+      }
+
+      setPhase('success')
+      // Auto-close after brief success display
+      setTimeout(() => {
+        setApiKey('')
+        setModelId('')
+        setPhase('input')
+        setError(null)
+        onOpenChange(false)
+        onSuccess?.(effectiveModel)
+      }, 1000)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setError(message)
-    } finally {
-      setSaving(false)
+      setPhase('error')
     }
   }
 
+  const handleRetry = () => {
+    setError(null)
+    setPhase('input')
+  }
+
   const handleClose = (isOpen: boolean) => {
-    if (!isOpen) {
+    if (!isOpen && !busy) {
       setApiKey('')
+      setModelId('')
+      setPhase('input')
       setError(null)
     }
-    onOpenChange(isOpen)
+    if (!busy) {
+      onOpenChange(isOpen)
+    }
   }
 
   return (
@@ -75,7 +115,7 @@ export function ApiKeyDialog({
             Configure {providerName}
           </DialogTitle>
           <DialogDescription>
-            Enter your API key to enable {providerName}. The key will be saved securely in your credentials file.
+            Enter your API key to enable {providerName}. The key will be saved and tested automatically.
           </DialogDescription>
         </DialogHeader>
 
@@ -88,16 +128,53 @@ export function ApiKeyDialog({
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="sk-..."
+              disabled={busy || phase === 'success'}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !saving) {
+                if (e.key === 'Enter' && !busy) {
                   handleSave()
                 }
               }}
             />
-            {error && (
-              <p className="text-sm text-destructive">{error}</p>
-            )}
           </div>
+
+          {showModelInput && (
+            <div className="space-y-2">
+              <Label htmlFor="model-id">Model</Label>
+              <Input
+                id="model-id"
+                value={modelId}
+                onChange={(e) => setModelId(e.target.value)}
+                placeholder="e.g. anthropic/claude-sonnet-4-5"
+                disabled={busy || phase === 'success'}
+              />
+            </div>
+          )}
+
+          {/* Status messages */}
+          {phase === 'saving' && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <HugeiconsIcon icon={Loading03Icon} className="size-4 animate-spin" />
+              Saving API key...
+            </div>
+          )}
+
+          {phase === 'testing' && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <HugeiconsIcon icon={Loading03Icon} className="size-4 animate-spin" />
+              Testing connection...
+            </div>
+          )}
+
+          {phase === 'success' && (
+            <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+              <HugeiconsIcon icon={Tick02Icon} className="size-4" />
+              Connected successfully!
+            </div>
+          )}
+
+          {error && (
+            <p className="text-sm text-destructive">{error}</p>
+          )}
 
           <p className="text-xs text-muted-foreground">
             Your API key is stored locally in <code className="bg-muted px-1 rounded">~/.super-multica/credentials.json5</code>
@@ -105,13 +182,28 @@ export function ApiKeyDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => handleClose(false)} disabled={saving}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={saving || !apiKey.trim()}>
-            {saving && <HugeiconsIcon icon={Loading03Icon} className="size-4 animate-spin mr-2" />}
-            Save
-          </Button>
+          {phase === 'error' ? (
+            <>
+              <Button variant="outline" onClick={() => handleClose(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleRetry}>
+                Try again
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => handleClose(false)} disabled={busy || phase === 'success'}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSave}
+                disabled={busy || phase === 'success' || !apiKey.trim() || (showModelInput && !modelId.trim())}
+              >
+                Save & Test
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

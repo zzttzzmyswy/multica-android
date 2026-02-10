@@ -204,6 +204,25 @@ export function resolveApiKeyForProvider(
 // ============================================================
 
 /**
+ * Create a fallback OpenRouter model config for models not in pi-ai's registry.
+ * OpenRouter supports thousands of models; we can't have all of them pre-registered.
+ */
+function createOpenRouterFallbackModel(modelId: string) {
+  return {
+    id: modelId,
+    name: modelId,
+    api: "openai-completions" as const,
+    provider: "openrouter" as const,
+    baseUrl: "https://openrouter.ai/api/v1",
+    reasoning: false,
+    input: ["text" as const],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 128000,
+    maxTokens: 16384,
+  };
+}
+
+/**
  * Resolve model for pi-ai based on provider and options.
  */
 export function resolveModel(options: AgentOptions) {
@@ -212,10 +231,17 @@ export function resolveModel(options: AgentOptions) {
     const actualProvider = PROVIDER_ALIAS[options.provider] ?? options.provider;
 
     // Type assertion needed because provider/model come from dynamic user config
-    return (getModel as (p: string, m: string) => ReturnType<typeof getModel>)(
+    const model = (getModel as (p: string, m: string) => ReturnType<typeof getModel> | undefined)(
       actualProvider,
       options.model,
     );
+
+    // Fallback for OpenRouter: allow any model ID even if not in pi-ai registry
+    if (!model && actualProvider === "openrouter") {
+      return createOpenRouterFallbackModel(options.model);
+    }
+
+    return model;
   }
 
   // If only provider specified, use default model for that provider
@@ -223,10 +249,16 @@ export function resolveModel(options: AgentOptions) {
     const actualProvider = PROVIDER_ALIAS[options.provider] ?? options.provider;
     const defaultModel = getDefaultModel(options.provider) ?? getDefaultModel(actualProvider);
     if (defaultModel) {
-      return (getModel as (p: string, m: string) => ReturnType<typeof getModel>)(
+      const model = (getModel as (p: string, m: string) => ReturnType<typeof getModel> | undefined)(
         actualProvider,
         defaultModel,
       );
+
+      if (!model && actualProvider === "openrouter") {
+        return createOpenRouterFallbackModel(defaultModel);
+      }
+
+      return model;
     }
   }
 

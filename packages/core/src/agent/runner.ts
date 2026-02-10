@@ -905,6 +905,14 @@ export class Agent {
       contextWindowTokens: this.contextWindowGuard.tokens,
     });
 
+    // Rebuild system prompt so runtime info reflects the new provider/model
+    const toolNames = (this.agent.state.tools ?? []).map((t: { name: string }) => t.name);
+    const systemPrompt = this.rebuildSystemPrompt(toolNames);
+    if (systemPrompt) {
+      this.agent.setSystemPrompt(systemPrompt);
+      this.session.setSystemPrompt(systemPrompt);
+    }
+
     return {
       provider: providerId,
       model: model.id,

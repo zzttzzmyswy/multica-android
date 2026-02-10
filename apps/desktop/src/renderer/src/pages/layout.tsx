@@ -29,12 +29,18 @@ export default function Layout() {
 
   return (
     <div className="h-dvh flex flex-col bg-background">
-      {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 border-b">
+      {/* Header with drag region for macOS */}
+      <header
+        className="flex items-center justify-between px-4 py-3 border-b pl-20"
+        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      >
         <div className="flex items-center gap-2">
           <span className="text-lg font-semibold">Multica</span>
         </div>
-        <div className="flex items-center gap-1">
+        <div
+          className="flex items-center gap-1"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        >
           <Button variant="ghost" size="icon">
             <HugeiconsIcon icon={Settings02Icon} className="size-5" />
           </Button>
