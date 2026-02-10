@@ -23,7 +23,7 @@ export default function SetupStep() {
   const [focusedProvider, setFocusedProvider] =
     useState<ProviderStatus | null>(null)
 
-  const hasConfiguredProvider = availableProviders.length > 0
+  const hasActiveProvider = current?.available === true
 
   const handleConfigure = (provider: ProviderStatus) => {
     setSelectedProvider(provider)
@@ -91,7 +91,7 @@ export default function SetupStep() {
             <Button
               size="lg"
               onClick={handleContinue}
-              disabled={!hasConfiguredProvider}
+              disabled={!hasActiveProvider}
             >
               Continue
             </Button>
