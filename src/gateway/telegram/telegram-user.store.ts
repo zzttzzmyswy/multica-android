@@ -3,7 +3,6 @@
  */
 
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import type { OnModuleInit } from "@nestjs/common";
 import { v7 as uuidv7 } from "uuid";
 import type { RowDataPacket } from "mysql2/promise";
 import { DatabaseService } from "../database/database.service.js";
@@ -22,43 +21,10 @@ interface TelegramUserRow extends RowDataPacket {
 }
 
 @Injectable()
-export class TelegramUserStore implements OnModuleInit {
+export class TelegramUserStore {
   private readonly logger = new Logger(TelegramUserStore.name);
 
   constructor(@Inject(DatabaseService) private readonly db: DatabaseService) {}
-
-  async onModuleInit(): Promise<void> {
-    console.log("[TelegramUserStore] onModuleInit starting...");
-    if (!this.db.isAvailable()) {
-      console.log("[TelegramUserStore] Database not available");
-      this.logger.warn("Database not available, TelegramUserStore disabled");
-      return;
-    }
-    console.log("[TelegramUserStore] Ensuring table...");
-    await this.ensureTable();
-    console.log("[TelegramUserStore] Done");
-  }
-
-  /** Drop and recreate telegram_users table (schema changed: hub_url -> hub_id + agent_id) */
-  private async ensureTable(): Promise<void> {
-    await this.db.execute("DROP TABLE IF EXISTS telegram_users");
-    const sql = `
-      CREATE TABLE telegram_users (
-        telegram_user_id VARCHAR(64) PRIMARY KEY,
-        hub_id VARCHAR(64) NOT NULL,
-        agent_id VARCHAR(64) NOT NULL,
-        device_id VARCHAR(64) NOT NULL UNIQUE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        telegram_username VARCHAR(255),
-        telegram_first_name VARCHAR(255),
-        telegram_last_name VARCHAR(255),
-        INDEX idx_device_id (device_id)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    `;
-    await this.db.execute(sql);
-    this.logger.log("telegram_users table ensured");
-  }
 
   /** Find user by Telegram user ID */
   async findByTelegramUserId(telegramUserId: string): Promise<TelegramUser | null> {
