@@ -69,6 +69,8 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1200,
     height: 800,
+    titleBarStyle: 'hiddenInset',
+    trafficLightPosition: { x: 16, y: 12 },
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.cjs'),
       // Enable node integration for IPC
