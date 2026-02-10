@@ -1,4 +1,5 @@
 import { create } from "zustand"
+import { persist } from "zustand/middleware"
 
 interface AcknowledgementsState {
   fileSystem: boolean
@@ -9,6 +10,7 @@ interface AcknowledgementsState {
 
 interface OnboardingStore {
   completed: boolean
+  forceOnboarding: boolean
   acknowledgements: AcknowledgementsState
   allAcknowledged: boolean
   providerConfigured: boolean
@@ -17,30 +19,47 @@ interface OnboardingStore {
   setProviderConfigured: (configured: boolean) => void
   setClientConnected: (connected: boolean) => void
   completeOnboarding: () => void
+  initForceFlag: () => Promise<void>
 }
 
-export const useOnboardingStore = create<OnboardingStore>((set, get) => ({
-  completed: false,
+export const useOnboardingStore = create<OnboardingStore>()(
+  persist(
+    (set, get) => ({
+      completed: false,
+      forceOnboarding: false,
 
-  acknowledgements: {
-    fileSystem: false,
-    shellExecution: false,
-    llmRequests: false,
-    localStorage: false,
-  },
-  allAcknowledged: false,
-  providerConfigured: false,
-  clientConnected: false,
+      acknowledgements: {
+        fileSystem: false,
+        shellExecution: false,
+        llmRequests: false,
+        localStorage: false,
+      },
+      allAcknowledged: false,
+      providerConfigured: false,
+      clientConnected: false,
 
-  setAcknowledgement: (key, value) => {
-    const acknowledgements = { ...get().acknowledgements, [key]: value }
-    const allAcknowledged = Object.values(acknowledgements).every(Boolean)
-    set({ acknowledgements, allAcknowledged })
-  },
+      setAcknowledgement: (key, value) => {
+        const acknowledgements = { ...get().acknowledgements, [key]: value }
+        const allAcknowledged = Object.values(acknowledgements).every(Boolean)
+        set({ acknowledgements, allAcknowledged })
+      },
 
-  setProviderConfigured: (configured) => set({ providerConfigured: configured }),
+      setProviderConfigured: (configured) => set({ providerConfigured: configured }),
 
-  setClientConnected: (connected) => set({ clientConnected: connected }),
+      setClientConnected: (connected) => set({ clientConnected: connected }),
 
-  completeOnboarding: () => set({ completed: true }),
-}))
+      completeOnboarding: () => set({ completed: true }),
+
+      initForceFlag: async () => {
+        const flags = await window.electronAPI.app.getFlags()
+        if (flags.forceOnboarding) {
+          set({ forceOnboarding: true })
+        }
+      },
+    }),
+    {
+      name: 'multica-onboarding',
+      partialize: (state) => ({ completed: state.completed }),
+    }
+  )
+)

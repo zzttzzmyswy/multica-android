@@ -139,6 +139,9 @@ interface ChannelAccountStateInfo {
 }
 
 interface ElectronAPI {
+  app: {
+    getFlags: () => Promise<{ forceOnboarding: boolean }>
+  }
   hub: {
     init: () => Promise<unknown>
     getStatus: () => Promise<HubStatus>

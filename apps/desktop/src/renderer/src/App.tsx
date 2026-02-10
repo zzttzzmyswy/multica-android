@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { createHashRouter, Navigate, RouterProvider } from 'react-router-dom'
 import Layout from './pages/layout'
 import HomePage from './pages/home'
@@ -15,7 +16,8 @@ import { useOnboardingStore } from './stores/onboarding'
 
 function OnboardingGuard({ children }: { children: React.ReactNode }) {
   const completed = useOnboardingStore((s) => s.completed)
-  if (!completed) return <Navigate to="/onboarding" replace />
+  const forceOnboarding = useOnboardingStore((s) => s.forceOnboarding)
+  if (!completed || forceOnboarding) return <Navigate to="/onboarding" replace />
   return <>{children}</>
 }
 
@@ -52,5 +54,9 @@ const router = createHashRouter([
 ])
 
 export default function App() {
+  useEffect(() => {
+    useOnboardingStore.getState().initForceFlag()
+  }, [])
+
   return <RouterProvider router={router} />
 }

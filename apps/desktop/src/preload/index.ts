@@ -97,6 +97,12 @@ export interface LocalChatApproval {
 // ============================================================================
 
 const electronAPI = {
+  // App-level
+  app: {
+    /** Get CLI flags passed to the app */
+    getFlags: (): Promise<{ forceOnboarding: boolean }> => ipcRenderer.invoke('app:getFlags'),
+  },
+
   // Hub management
   hub: {
     init: () => ipcRenderer.invoke('hub:init'),

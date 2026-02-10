@@ -44,7 +44,7 @@ process.stderr?.on?.('error', (err: NodeJS.ErrnoException) => {
   throw err
 })
 
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, shell, ipcMain } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { registerAllIpcHandlers, initializeApp, cleanupAll, setupDeviceConfirmation } from './ipc/index.js'
@@ -62,6 +62,9 @@ export const MAIN_DIST = path.join(__dirname)
 export const RENDERER_DIST = path.join(__dirname, '../renderer')
 
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
+
+// CLI flags
+const forceOnboarding = process.argv.includes('--force-onboarding')
 
 let win: BrowserWindow | null
 
@@ -110,6 +113,9 @@ app.on('before-quit', () => {
 })
 
 app.whenReady().then(async () => {
+  // App-level IPC handlers
+  ipcMain.handle('app:getFlags', () => ({ forceOnboarding }))
+
   // Register all IPC handlers before creating window
   registerAllIpcHandlers()
 
