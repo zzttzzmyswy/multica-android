@@ -10,6 +10,14 @@ import {
 import { Button } from '@multica/ui/components/ui/button'
 import { Input } from '@multica/ui/components/ui/input'
 import { Label } from '@multica/ui/components/ui/label'
+import {
+  Combobox,
+  ComboboxInput,
+  ComboboxContent,
+  ComboboxList,
+  ComboboxItem,
+  ComboboxEmpty,
+} from '@multica/ui/components/ui/combobox'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Loading03Icon, Key01Icon } from '@hugeicons/core-free-icons'
 
@@ -19,6 +27,7 @@ interface ApiKeyDialogProps {
   providerId: string
   providerName: string
   showModelInput?: boolean
+  models?: string[]
   onSuccess?: (modelId?: string) => void
 }
 
@@ -28,10 +37,11 @@ export function ApiKeyDialog({
   providerId,
   providerName,
   showModelInput,
+  models,
   onSuccess,
 }: ApiKeyDialogProps) {
   const [apiKey, setApiKey] = useState('')
-  const [modelId, setModelId] = useState('')
+  const [modelId, setModelId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -41,8 +51,8 @@ export function ApiKeyDialog({
       return
     }
 
-    if (showModelInput && !modelId.trim()) {
-      setError('Model name is required')
+    if (showModelInput && !modelId) {
+      setError('Please select a model')
       return
     }
 
@@ -53,9 +63,9 @@ export function ApiKeyDialog({
       const result = await window.electronAPI.provider.saveApiKey(providerId, apiKey.trim())
       if (result.ok) {
         setApiKey('')
-        setModelId('')
+        setModelId(null)
         onOpenChange(false)
-        onSuccess?.(showModelInput ? modelId.trim() : undefined)
+        onSuccess?.(showModelInput && modelId ? modelId : undefined)
       } else {
         setError(result.error ?? 'Failed to save API key')
       }
@@ -70,7 +80,7 @@ export function ApiKeyDialog({
   const handleClose = (isOpen: boolean) => {
     if (!isOpen) {
       setApiKey('')
-      setModelId('')
+      setModelId(null)
       setError(null)
     }
     onOpenChange(isOpen)
@@ -106,23 +116,25 @@ export function ApiKeyDialog({
             />
           </div>
 
-          {showModelInput && (
+          {showModelInput && models && models.length > 0 && (
             <div className="space-y-2">
-              <Label htmlFor="model-id">Model</Label>
-              <Input
-                id="model-id"
+              <Label>Model</Label>
+              <Combobox
                 value={modelId}
-                onChange={(e) => setModelId(e.target.value)}
-                placeholder="anthropic/claude-sonnet-4"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !saving) {
-                    handleSave()
-                  }
-                }}
-              />
-              <p className="text-xs text-muted-foreground">
-                Enter the model identifier from your provider (e.g. anthropic/claude-sonnet-4)
-              </p>
+                onValueChange={(value) => setModelId(value)}
+              >
+                <ComboboxInput placeholder="Search models..." showClear />
+                <ComboboxContent>
+                  <ComboboxList>
+                    {models.map((model) => (
+                      <ComboboxItem key={model} value={model} textValue={model}>
+                        {model}
+                      </ComboboxItem>
+                    ))}
+                  </ComboboxList>
+                  <ComboboxEmpty>No models found</ComboboxEmpty>
+                </ComboboxContent>
+              </Combobox>
             </div>
           )}
 
@@ -139,7 +151,7 @@ export function ApiKeyDialog({
           <Button variant="outline" onClick={() => handleClose(false)} disabled={saving}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={saving || !apiKey.trim() || (showModelInput && !modelId.trim())}>
+          <Button onClick={handleSave} disabled={saving || !apiKey.trim() || (showModelInput && !modelId)}>
             {saving && <HugeiconsIcon icon={Loading03Icon} className="size-4 animate-spin mr-2" />}
             Save
           </Button>
