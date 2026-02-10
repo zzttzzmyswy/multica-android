@@ -28,8 +28,11 @@ const SessionsSpawnSchema = Type.Object({
   ),
   timeoutSeconds: Type.Optional(
     Type.Number({
-      description: "Execution timeout in seconds. The subagent will be terminated if it exceeds this.",
-      minimum: 1,
+      description:
+        "Execution timeout in seconds. Default: 600 (10 min). " +
+        "Set to 0 for no timeout (useful for complex, long-running tasks). " +
+        "The subagent will be terminated if it exceeds this limit.",
+      minimum: 0,
     }),
   ),
 });
@@ -106,11 +109,9 @@ export function createSessionsSpawnTool(
           model,
         });
 
-        // Write the task to the child (non-blocking) before registering,
-        // so waitForIdle() observes the queued work.
-        childAgent.write(task);
-
-        // Register the run for lifecycle tracking
+        // Register the run for lifecycle tracking.
+        // The write is deferred via the start callback so the child only
+        // begins work once a concurrency slot is available in the queue.
         registerSubagentRun({
           runId,
           childSessionId,
@@ -119,6 +120,7 @@ export function createSessionsSpawnTool(
           label,
           cleanup,
           timeoutSeconds,
+          start: () => childAgent.write(task),
         });
 
         return {

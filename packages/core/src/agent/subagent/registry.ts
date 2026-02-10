@@ -14,6 +14,8 @@ import type {
 } from "./types.js";
 import { resolveSessionDir } from "../session/storage.js";
 import { rmSync } from "node:fs";
+import { enqueueInLane, setLaneConcurrency } from "./command-queue.js";
+import { SubagentLane, DEFAULT_SUBAGENT_MAX_CONCURRENT, resolveSubagentTimeoutMs } from "./lanes.js";
 
 /** Default archive retention: 60 minutes after completion */
 const DEFAULT_ARCHIVE_AFTER_MS = 60 * 60 * 1000;
@@ -35,6 +37,8 @@ const resumedRequesters = new Set<string>();
 
 /** Initialize registry from persisted state. Call once at startup. */
 export function initSubagentRegistry(): void {
+  setLaneConcurrency(SubagentLane.Subagent, DEFAULT_SUBAGENT_MAX_CONCURRENT);
+
   const persisted = loadSubagentRuns();
   for (const [runId, record] of persisted) {
     subagentRuns.set(runId, record);
@@ -97,6 +101,7 @@ export function registerSubagentRun(params: RegisterSubagentRunParams): Subagent
     label,
     cleanup = "delete",
     timeoutSeconds,
+    start,
   } = params;
 
   const record: SubagentRunRecord = {
@@ -113,8 +118,12 @@ export function registerSubagentRun(params: RegisterSubagentRunParams): Subagent
   persist();
   startSweeper();
 
-  // Start watching the child agent for completion
-  watchChildAgent(record, timeoutSeconds);
+  // Enqueue in the subagent lane — the start callback and watchChildAgent
+  // only execute once a concurrency slot is available.
+  void enqueueInLane(SubagentLane.Subagent, async () => {
+    start?.();
+    return watchChildAgent(record, timeoutSeconds);
+  });
 
   return record;
 }
@@ -185,26 +194,33 @@ export function resetSubagentRegistryForTests(): void {
 // Lifecycle watching
 // ============================================================================
 
-function watchChildAgent(record: SubagentRunRecord, timeoutSeconds?: number): void {
+/**
+ * Watch a child agent for completion.
+ * Returns a promise that resolves when the child finishes (or errors/times out),
+ * keeping the command-queue lane slot occupied until then.
+ */
+function watchChildAgent(record: SubagentRunRecord, timeoutSeconds?: number): Promise<void> {
   const { childSessionId } = record;
 
   // Mark as started
   record.startedAt = Date.now();
   persist();
 
-  const cleanup = (outcome: { status: "ok" | "error" | "timeout" | "unknown"; error?: string | undefined }) => {
-    if (record.endedAt) return; // Already finalized
-    if (timeoutTimer) clearTimeout(timeoutTimer);
-    record.endedAt = Date.now();
-    record.outcome = outcome;
-    persist();
-    handleRunCompletion(record);
-  };
+  const timeoutMs = resolveSubagentTimeoutMs(timeoutSeconds);
 
-  // Set up timeout if specified
-  let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
-  if (timeoutSeconds && timeoutSeconds > 0) {
-    timeoutTimer = setTimeout(() => {
+  return new Promise<void>((resolveSlot) => {
+    const cleanup = (outcome: { status: "ok" | "error" | "timeout" | "unknown"; error?: string | undefined }) => {
+      if (record.endedAt) return; // Already finalized
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      record.endedAt = Date.now();
+      record.outcome = outcome;
+      persist();
+      handleRunCompletion(record);
+      resolveSlot(); // Release the queue slot
+    };
+
+    // Always set a timeout (default 10 min, 0 = ~24 days via resolveSubagentTimeoutMs)
+    const timeoutTimer = setTimeout(() => {
       cleanup({ status: "timeout" });
 
       // Try to close the child agent
@@ -214,36 +230,36 @@ function watchChildAgent(record: SubagentRunRecord, timeoutSeconds?: number): vo
       } catch {
         // Hub may not be available
       }
-    }, timeoutSeconds * 1000);
-  }
+    }, timeoutMs);
 
-  // Get child agent reference (Hub may not be available in tests)
-  if (!isHubInitialized()) {
-    cleanup({ status: "error", error: "Hub not initialized" });
-    return;
-  }
+    // Get child agent reference (Hub may not be available in tests)
+    if (!isHubInitialized()) {
+      cleanup({ status: "error", error: "Hub not initialized" });
+      return;
+    }
 
-  const hub = getHub();
-  const childAgent = hub.getAgent(childSessionId);
-  if (!childAgent) {
-    cleanup({ status: "error", error: "Child agent not found" });
-    return;
-  }
+    const hub = getHub();
+    const childAgent = hub.getAgent(childSessionId);
+    if (!childAgent) {
+      cleanup({ status: "error", error: "Child agent not found" });
+      return;
+    }
 
-  // Wait for the child agent's task queue to drain (task completion),
-  // then trigger announce flow. Uses waitForIdle() instead of consuming
-  // the stream (which would conflict with Hub.consumeAgent).
-  childAgent.waitForIdle().then(
-    () => cleanup({ status: "ok" }),
-    (err) => cleanup({
-      status: "error",
-      error: err instanceof Error ? err.message : String(err),
-    }),
-  );
+    // Wait for the child agent's task queue to drain (task completion),
+    // then trigger announce flow. Uses waitForIdle() instead of consuming
+    // the stream (which would conflict with Hub.consumeAgent).
+    childAgent.waitForIdle().then(
+      () => cleanup({ status: "ok" }),
+      (err) => cleanup({
+        status: "error",
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
 
-  // Also handle explicit close (e.g., timeout kill, Hub shutdown)
-  childAgent.onClose(() => {
-    cleanup({ status: record.outcome?.status ?? "unknown" });
+    // Also handle explicit close (e.g., timeout kill, Hub shutdown)
+    childAgent.onClose(() => {
+      cleanup({ status: record.outcome?.status ?? "unknown" });
+    });
   });
 }
 
