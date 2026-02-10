@@ -1,28 +1,46 @@
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@multica/ui/components/ui/button'
+import { Loading } from '@multica/ui/components/ui/loading'
+import { ChatView } from '@multica/ui/components/chat-view'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ArrowLeft02Icon } from '@hugeicons/core-free-icons'
 import { SamplePrompt } from '../../components/onboarding/sample-prompt'
 import { useOnboardingStore } from '../../stores/onboarding'
+import { useLocalChat } from '../../hooks/use-local-chat'
 
 const samplePrompts = [
   {
-    title: 'Summarize a webpage',
-    prompt: 'Summarize the key points from this article for me',
+    title: 'Say hello',
+    prompt: 'Say hello and briefly introduce yourself in 2-3 sentences.',
   },
   {
-    title: 'Write a script',
-    prompt: 'Write a Python script that converts CSV files to JSON',
+    title: 'Write a haiku',
+    prompt: 'Write a haiku about coding.',
   },
   {
-    title: 'Explain code',
-    prompt: 'Explain how React hooks work with a simple example',
+    title: 'Quick math',
+    prompt: "What's 123 × 456? Show your reasoning.",
   },
 ]
 
 export default function TryItStep() {
   const navigate = useNavigate()
   const { completeOnboarding } = useOnboardingStore()
+  const {
+    agentId,
+    initError,
+    messages,
+    streamingIds,
+    isLoading,
+    isLoadingHistory,
+    isLoadingMore,
+    hasMore,
+    error,
+    pendingApprovals,
+    sendMessage,
+    loadMore,
+    resolveApproval,
+  } = useLocalChat()
 
   const handleComplete = () => {
     completeOnboarding()
@@ -33,9 +51,11 @@ export default function TryItStep() {
     navigate('/onboarding/connect')
   }
 
+  const hasMessages = messages.length > 0
+
   return (
     <div className="h-full flex">
-      {/* Left column — main content, centered both axes */}
+      {/* Left column — prompts */}
       <div className="flex-1 flex items-center justify-center px-12 py-8">
         <div className="max-w-md w-full space-y-6">
           <button
@@ -48,11 +68,11 @@ export default function TryItStep() {
 
           <div className="space-y-2">
             <h1 className="text-2xl font-semibold tracking-tight">
-              You're all set
+              Try it out
             </h1>
             <p className="text-sm text-muted-foreground">
-              Multica is ready. Start a conversation with your AI agent,
-              or try one of these prompts to get started.
+              Click a prompt below to send it to your agent, or type your own
+              message in the chat.
             </p>
           </div>
 
@@ -62,7 +82,7 @@ export default function TryItStep() {
                 key={sp.title}
                 title={sp.title}
                 prompt={sp.prompt}
-                onClick={handleComplete}
+                onClick={() => sendMessage(sp.prompt)}
               />
             ))}
           </div>
@@ -75,16 +95,44 @@ export default function TryItStep() {
         </div>
       </div>
 
-      {/* Right column — visual */}
-      <div className="flex-1 flex items-center justify-center bg-muted/30 px-12 py-8">
-        <div className="max-w-sm text-center space-y-4">
-          <p className="text-4xl">&#x2728;</p>
-          <h3 className="text-lg font-medium">Now, experience the magic</h3>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            Chat with your agent, automate tasks, run shell commands
-            with approval, and connect to Telegram or Discord channels.
-          </p>
-        </div>
+      {/* Right column — live chat */}
+      <div className="flex-1 flex flex-col min-h-0 bg-muted/30">
+        {initError ? (
+          <div className="flex-1 flex items-center justify-center text-sm text-destructive px-8 text-center">
+            {initError}
+          </div>
+        ) : !agentId ? (
+          <div className="flex-1 flex items-center justify-center gap-2 text-muted-foreground text-sm">
+            <Loading />
+            Initializing agent...
+          </div>
+        ) : !hasMessages && !isLoading ? (
+          <div className="flex-1 flex items-center justify-center px-12">
+            <div className="max-w-sm text-center space-y-3">
+              <h3 className="text-lg font-medium">Agent ready</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Click a prompt on the left to start a conversation, or type
+                your own message below.
+              </p>
+            </div>
+          </div>
+        ) : null}
+
+        {agentId && (hasMessages || isLoading) && (
+          <ChatView
+            messages={messages}
+            streamingIds={streamingIds}
+            isLoading={isLoading}
+            isLoadingHistory={isLoadingHistory}
+            isLoadingMore={isLoadingMore}
+            hasMore={hasMore}
+            error={error}
+            pendingApprovals={pendingApprovals}
+            sendMessage={sendMessage}
+            loadMore={loadMore}
+            resolveApproval={resolveApproval}
+          />
+        )}
       </div>
     </div>
   )
