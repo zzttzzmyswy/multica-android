@@ -164,14 +164,6 @@ export function registerProviderIpcHandlers(): void {
         }
       }
 
-      // Validate model if specified
-      if (modelId && !meta.models.includes(modelId)) {
-        return {
-          ok: false,
-          error: `Model "${modelId}" is not available for provider "${providerId}". Available: ${meta.models.join(', ')}`,
-        }
-      }
-
       try {
         const result = agent.setProvider(providerId, modelId)
         console.log(`[IPC] Provider switched to: ${result.provider}, model: ${result.model}`)

@@ -12,7 +12,7 @@ import { useOnboardingStore } from '../../stores/onboarding'
 
 export default function SetupStep() {
   const navigate = useNavigate()
-  const { providers, availableProviders, current, loading, refresh, setProvider } =
+  const { providers, availableProviders, current, loading, error, refresh, setProvider } =
     useProvider()
   const { setProviderConfigured } = useOnboardingStore()
 
@@ -86,6 +86,10 @@ export default function SetupStep() {
             onSelect={handleSelect}
             onFocus={setFocusedProvider}
           />
+
+          {error && (
+            <p className="text-sm text-destructive">{error}</p>
+          )}
 
           <div className="flex justify-end">
             <Button
