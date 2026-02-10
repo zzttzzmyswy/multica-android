@@ -53,6 +53,7 @@
     "@mariozechner/pi-coding-agent": "^0.52.9",
     "@mozilla/readability": "^0.6.0",
     "@multica/sdk": "workspace:*",
+    "@multica/store": "workspace:*",
     "@nestjs/common": "^11.1.12",
     "@nestjs/core": "^11.1.12",
     "@nestjs/platform-express": "^11.1.12",

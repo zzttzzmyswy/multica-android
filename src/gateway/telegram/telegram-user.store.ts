@@ -11,7 +11,8 @@ import type { TelegramUser, TelegramUserCreate } from "./types.js";
 
 interface TelegramUserRow extends RowDataPacket {
   telegram_user_id: string;
-  hub_url: string;
+  hub_id: string;
+  agent_id: string;
   device_id: string;
   created_at: Date;
   updated_at: Date;
@@ -43,7 +44,8 @@ export class TelegramUserStore implements OnModuleInit {
     const sql = `
       CREATE TABLE IF NOT EXISTS telegram_users (
         telegram_user_id VARCHAR(64) PRIMARY KEY,
-        hub_url VARCHAR(512) NOT NULL,
+        hub_id VARCHAR(64) NOT NULL,
+        agent_id VARCHAR(64) NOT NULL,
         device_id VARCHAR(64) NOT NULL UNIQUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -93,16 +95,20 @@ export class TelegramUserStore implements OnModuleInit {
     const existing = await this.findByTelegramUserId(data.telegramUserId);
 
     if (existing) {
-      // Update existing user
+      // Update existing user — also update device_id if provided
       await this.db.execute(
         `UPDATE telegram_users SET
-          hub_url = ?,
+          hub_id = ?,
+          agent_id = ?,
+          device_id = ?,
           telegram_username = ?,
           telegram_first_name = ?,
           telegram_last_name = ?
         WHERE telegram_user_id = ?`,
         [
-          data.hubUrl,
+          data.hubId,
+          data.agentId,
+          data.deviceId ?? existing.deviceId,
           data.telegramUsername ?? null,
           data.telegramFirstName ?? null,
           data.telegramLastName ?? null,
@@ -114,17 +120,18 @@ export class TelegramUserStore implements OnModuleInit {
       return updated!;
     }
 
-    // Create new user with generated device ID
-    const deviceId = `tg-${uuidv7()}`;
+    // Create new user with provided or generated device ID
+    const deviceId = data.deviceId ?? `tg-${uuidv7()}`;
 
     await this.db.execute(
       `INSERT INTO telegram_users (
-        telegram_user_id, hub_url, device_id,
+        telegram_user_id, hub_id, agent_id, device_id,
         telegram_username, telegram_first_name, telegram_last_name
-      ) VALUES (?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         data.telegramUserId,
-        data.hubUrl,
+        data.hubId,
+        data.agentId,
         deviceId,
         data.telegramUsername ?? null,
         data.telegramFirstName ?? null,
@@ -140,7 +147,8 @@ export class TelegramUserStore implements OnModuleInit {
   private rowToUser(row: TelegramUserRow): TelegramUser {
     return {
       telegramUserId: row.telegram_user_id,
-      hubUrl: row.hub_url,
+      hubId: row.hub_id,
+      agentId: row.agent_id,
       deviceId: row.device_id,
       createdAt: row.created_at,
       updatedAt: row.updated_at,

@@ -2,14 +2,30 @@
  * Telegram service for Gateway.
  *
  * Handles Telegram bot interactions via webhook.
- * - New users: prompts for Hub URL
- * - Bound users: routes messages to their Hub
+ * - New users: prompts to paste a multica://connect link
+ * - Connection link: verifies with Hub via RPC, persists to DB
+ * - Bound users: routes messages to their Hub agent
  */
 
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import type { OnModuleInit } from "@nestjs/common";
 import { Bot, webhookCallback } from "grammy";
 import type { Context } from "grammy";
+import { v7 as uuidv7 } from "uuid";
+import { parseConnectionCode } from "@multica/store/connection";
+import type { ConnectionInfo } from "@multica/store/connection";
+import {
+  GatewayEvents,
+  RequestAction,
+  ResponseAction,
+  StreamAction,
+  type RoutedMessage,
+  type RequestPayload,
+  type ResponsePayload,
+  type VerifyParams,
+  type VerifyResult,
+} from "@multica/sdk";
+import type { StreamPayload } from "@multica/sdk";
 import { EventsGateway } from "../events.gateway.js";
 import { TelegramUserStore } from "./telegram-user.store.js";
 import type { TelegramUser } from "./types.js";
@@ -26,18 +42,18 @@ interface ExpressResponse {
   headersSent: boolean;
 }
 
-// Users in the process of binding Hub URL
-interface PendingBinding {
-  awaitingUrl: boolean;
-  telegramUsername?: string | undefined;
-  telegramFirstName?: string | undefined;
-  telegramLastName?: string | undefined;
+interface PendingRequest<T = unknown> {
+  resolve: (value: T) => void;
+  reject: (reason: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
 }
+
+const VERIFY_TIMEOUT_MS = 30_000;
 
 @Injectable()
 export class TelegramService implements OnModuleInit {
   private bot: Bot | null = null;
-  private pendingBindings = new Map<string, PendingBinding>();
+  private pendingRequests = new Map<string, PendingRequest>();
 
   private readonly logger = new Logger(TelegramService.name);
 
@@ -121,153 +137,265 @@ export class TelegramService implements OnModuleInit {
 
     this.logger.debug(`Received Telegram message: telegramUserId=${telegramUserId}, text=${text.slice(0, 50)}`);
 
+    // Connection link — always handle, even for already-bound users (re-binding)
+    if (text.startsWith("multica://connect?")) {
+      await this.handleConnectionLink(ctx, telegramUserId, text);
+      return;
+    }
+
     // Check if user is bound
     const user = await this.userStore.findByTelegramUserId(telegramUserId);
 
     if (user) {
-      // User is bound, route message to Hub
       await this.routeToHub(user, text, ctx);
       return;
     }
 
-    // Check if user is in binding process
-    const pending = this.pendingBindings.get(telegramUserId);
-
-    if (pending?.awaitingUrl) {
-      // User is providing Hub URL
-      await this.handleHubUrlInput(ctx, telegramUserId, text, pending);
-      return;
-    }
-
-    // New user, start binding process
-    await this.startBindingProcess(ctx, telegramUserId);
-  }
-
-  /** Start the Hub binding process for a new user */
-  private async startBindingProcess(ctx: Context, telegramUserId: string): Promise<void> {
-    const msg = ctx.message;
-
-    this.pendingBindings.set(telegramUserId, {
-      awaitingUrl: true,
-      telegramUsername: msg?.from?.username,
-      telegramFirstName: msg?.from?.first_name,
-      telegramLastName: msg?.from?.last_name,
-    });
-
+    // New user without connection link
     await ctx.reply(
-      "👋 Welcome to Multica!\n\n" +
-      "Please enter your Hub URL to get started.\n\n" +
-      "Example: https://your-hub.example.com"
+      "Welcome to Multica!\n\n" +
+      "To get started, open the Multica Desktop app, generate a Connection Link, " +
+      "and paste it here.\n\n" +
+      "The link looks like:\nmultica://connect?gateway=...&hub=...&agent=...&token=...&exp=..."
     );
   }
 
-  /** Handle Hub URL input from user */
-  private async handleHubUrlInput(
-    ctx: Context,
-    telegramUserId: string,
-    url: string,
-    pending: PendingBinding
-  ): Promise<void> {
-    // Validate URL format
-    if (!this.isValidUrl(url)) {
-      await ctx.reply(
-        "❌ Invalid URL format.\n\n" +
-        "Please enter a valid Hub URL.\n" +
-        "Example: https://your-hub.example.com"
-      );
-      return;
-    }
+  /** Handle a multica://connect? connection link */
+  private async handleConnectionLink(ctx: Context, telegramUserId: string, text: string): Promise<void> {
+    const msg = ctx.message;
 
-    // Validate Hub connectivity
-    const isValid = await this.validateHubUrl(url);
-    if (!isValid) {
-      await ctx.reply(
-        "❌ Cannot connect to this Hub.\n\n" +
-        "Please check the URL and make sure your Hub is online.\n" +
-        "Then try again with the correct URL."
-      );
-      return;
-    }
-
-    // Create user record
+    // 1. Parse and validate the connection link
+    let connectionInfo: ConnectionInfo;
     try {
-      const user = await this.userStore.upsert({
+      connectionInfo = parseConnectionCode(text);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Invalid connection link";
+      await ctx.reply(`Connection failed: ${message}\n\nPlease generate a new link and try again.`);
+      return;
+    }
+
+    // 2. Check Hub is online
+    if (!this.eventsGateway.isDeviceRegistered(connectionInfo.hubId)) {
+      await ctx.reply(
+        "Connection failed: Hub is not online.\n\n" +
+        "Make sure the Multica Desktop app is running and connected to the Gateway, then try again."
+      );
+      return;
+    }
+
+    // 3. Unregister old virtual device if user is re-binding
+    const existingUser = await this.userStore.findByTelegramUserId(telegramUserId);
+    if (existingUser && this.eventsGateway.isDeviceRegistered(existingUser.deviceId)) {
+      this.eventsGateway.unregisterVirtualDevice(existingUser.deviceId);
+    }
+
+    // 4. Generate device ID and register virtual device
+    const deviceId = `tg-${uuidv7()}`;
+    this.registerVirtualDeviceForUser(deviceId, telegramUserId);
+
+    // 5. Send verify RPC
+    try {
+      await ctx.reply("Connecting... Please approve the connection on your Desktop app.");
+
+      const result = await this.sendVerifyRpc(
+        deviceId,
+        connectionInfo.hubId,
+        connectionInfo.token,
+        {
+          platform: "telegram",
+          telegramUserId,
+          telegramUsername: msg?.from?.username,
+          telegramFirstName: msg?.from?.first_name,
+        }
+      );
+
+      // 6. Save to DB
+      await this.userStore.upsert({
         telegramUserId,
-        hubUrl: url,
-        telegramUsername: pending.telegramUsername,
-        telegramFirstName: pending.telegramFirstName,
-        telegramLastName: pending.telegramLastName,
+        hubId: connectionInfo.hubId,
+        agentId: connectionInfo.agentId,
+        deviceId,
+        telegramUsername: msg?.from?.username,
+        telegramFirstName: msg?.from?.first_name,
+        telegramLastName: msg?.from?.last_name,
       });
-
-      // Register as virtual device
-      this.eventsGateway.registerVirtualDevice(user.deviceId, {
-        sendCallback: (_event, data) => {
-          const payload = data as { text?: string };
-          if (payload.text) {
-            this.sendToTelegram(user.deviceId, payload.text);
-          }
-        },
-      });
-
-      this.pendingBindings.delete(telegramUserId);
 
       await ctx.reply(
-        "✅ Hub connected successfully!\n\n" +
-        `Your Device ID: ${user.deviceId}\n\n` +
+        "Connected successfully!\n\n" +
+        `Hub: ${result.hubId}\n` +
+        `Agent: ${result.agentId}\n\n` +
         "You can now send messages to interact with your agent."
       );
 
-      this.logger.log(`Telegram user bound to Hub: telegramUserId=${telegramUserId}, hubUrl=${url}, deviceId=${user.deviceId}`);
+      this.logger.log(`Telegram user verified: telegramUserId=${telegramUserId}, hubId=${connectionInfo.hubId}, deviceId=${deviceId}`);
     } catch (error) {
+      // Cleanup virtual device on failure
+      this.eventsGateway.unregisterVirtualDevice(deviceId);
+      // Reject all pending requests for this device
+      this.cleanupPendingRequests();
+
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Failed to bind Telegram user: telegramUserId=${telegramUserId}, error=${message}`);
-      await ctx.reply("❌ An error occurred. Please try again later.");
+      if (message.includes("REJECTED")) {
+        await ctx.reply("Connection rejected.\n\nThe connection was declined on the Desktop app.");
+      } else if (message.includes("timed out")) {
+        await ctx.reply("Connection timed out.\n\nPlease try again and approve the connection on your Desktop app within 30 seconds.");
+      } else {
+        await ctx.reply(`Connection failed: ${message}\n\nPlease try again.`);
+      }
+
+      this.logger.warn(`Telegram verify failed: telegramUserId=${telegramUserId}, error=${message}`);
     }
   }
 
-  /** Validate URL format */
-  private isValidUrl(url: string): boolean {
-    try {
-      const parsed = new URL(url);
-      return parsed.protocol === "http:" || parsed.protocol === "https:";
-    } catch {
-      return false;
-    }
-  }
+  /** Send a verify RPC to Hub via the virtual device */
+  private sendVerifyRpc(
+    deviceId: string,
+    hubId: string,
+    token: string,
+    meta: Record<string, string | undefined>,
+  ): Promise<VerifyResult> {
+    return new Promise<VerifyResult>((resolve, reject) => {
+      const requestId = uuidv7();
 
-  /** Validate Hub URL connectivity */
-  private async validateHubUrl(url: string): Promise<boolean> {
-    try {
-      // Try to connect to the Hub's health endpoint
-      const response = await fetch(`${url}/`, {
-        method: "GET",
-        signal: AbortSignal.timeout(5000),
+      const timer = setTimeout(() => {
+        this.pendingRequests.delete(requestId);
+        reject(new Error("Verify request timed out"));
+      }, VERIFY_TIMEOUT_MS);
+
+      this.pendingRequests.set(requestId, {
+        resolve: resolve as (v: unknown) => void,
+        reject,
+        timer,
       });
-      return response.ok;
-    } catch {
-      return false;
-    }
+
+      const payload: RequestPayload<VerifyParams> = {
+        requestId,
+        method: "verify",
+        params: { token, meta },
+      };
+
+      const message: RoutedMessage<RequestPayload<VerifyParams>> = {
+        id: uuidv7(),
+        uid: null,
+        from: deviceId,
+        to: hubId,
+        action: RequestAction,
+        payload,
+      };
+
+      const sent = this.eventsGateway.routeFromVirtualDevice(message);
+      if (!sent) {
+        this.pendingRequests.delete(requestId);
+        clearTimeout(timer);
+        reject(new Error("Failed to route verify request to Hub"));
+      }
+    });
   }
 
-  /** Route message to user's Hub */
+  /** Route a regular chat message to the user's Hub agent */
   private async routeToHub(user: TelegramUser, text: string, ctx: Context): Promise<void> {
-    // Ensure virtual device is registered
-    if (!this.eventsGateway.isDeviceRegistered(user.deviceId)) {
-      this.eventsGateway.registerVirtualDevice(user.deviceId, {
-        sendCallback: (_event, data) => {
-          const payload = data as { text?: string };
-          if (payload.text) {
-            this.sendToTelegram(user.deviceId, payload.text);
-          }
-        },
-      });
+    // Ensure Hub is online
+    if (!this.eventsGateway.isDeviceRegistered(user.hubId)) {
+      await ctx.reply(
+        "Your Hub is currently offline.\n\n" +
+        "Make sure the Multica Desktop app is running and connected to the Gateway."
+      );
+      return;
     }
 
-    // TODO: Route message to Hub via EventsGateway
-    // For now, just acknowledge receipt
-    this.logger.log(`Routing message to Hub: deviceId=${user.deviceId}, hubUrl=${user.hubUrl}`);
+    // Ensure virtual device is registered (may have been lost on gateway restart)
+    if (!this.eventsGateway.isDeviceRegistered(user.deviceId)) {
+      this.registerVirtualDeviceForUser(user.deviceId, user.telegramUserId);
+    }
 
-    // Placeholder: In full implementation, this would send to Hub
-    await ctx.reply(`📨 Message received. Routing to your Hub...`);
+    // Send message to Hub
+    const message: RoutedMessage = {
+      id: uuidv7(),
+      uid: null,
+      from: user.deviceId,
+      to: user.hubId,
+      action: "message",
+      payload: { agentId: user.agentId, content: text },
+    };
+
+    const sent = this.eventsGateway.routeFromVirtualDevice(message);
+    if (!sent) {
+      await ctx.reply("Failed to send message. Please try again.");
+      return;
+    }
+
+    this.logger.debug(`Routed message to Hub: deviceId=${user.deviceId}, hubId=${user.hubId}, agentId=${user.agentId}`);
+  }
+
+  /** Register a virtual device with a sendCallback that handles RPC responses, stream events, and messages */
+  private registerVirtualDeviceForUser(deviceId: string, telegramUserId: string): void {
+    this.eventsGateway.registerVirtualDevice(deviceId, {
+      sendCallback: (_event: string, data: unknown) => {
+        const msg = data as RoutedMessage;
+        if (!msg || !msg.action) return;
+
+        // RPC response — resolve/reject pending request
+        if (msg.action === ResponseAction) {
+          const response = msg.payload as ResponsePayload;
+          const pending = this.pendingRequests.get(response.requestId);
+          if (pending) {
+            this.pendingRequests.delete(response.requestId);
+            clearTimeout(pending.timer);
+            if (response.ok) {
+              pending.resolve(response.payload);
+            } else {
+              pending.reject(new Error(`RPC error [${response.error.code}]: ${response.error.message}`));
+            }
+          }
+          return;
+        }
+
+        // Stream event — extract text content for Telegram
+        if (msg.action === StreamAction) {
+          const streamPayload = msg.payload as StreamPayload;
+          const event = streamPayload?.event;
+          if (event && "type" in event && event.type === "message_end") {
+            // Extract final text from the message
+            const agentMsg = (event as { message?: { content?: Array<{ type: string; text?: string }> } }).message;
+            if (agentMsg?.content) {
+              const textContent = agentMsg.content
+                .filter((c) => c.type === "text" && c.text)
+                .map((c) => c.text!)
+                .join("");
+              if (textContent) {
+                this.sendToTelegram(deviceId, textContent);
+              }
+            }
+          }
+          return;
+        }
+
+        // Regular message (e.g., "message" action from Hub)
+        if (msg.action === "message") {
+          const payload = msg.payload as { content?: string; agentId?: string };
+          if (payload?.content) {
+            this.sendToTelegram(deviceId, payload.content);
+          }
+          return;
+        }
+
+        // Error messages
+        if (msg.action === "error") {
+          const payload = msg.payload as { message?: string; code?: string };
+          if (payload?.message) {
+            this.sendToTelegram(deviceId, `Error: ${payload.message}`);
+          }
+        }
+      },
+    });
+  }
+
+  /** Cleanup all pending requests (used on verify failure) */
+  private cleanupPendingRequests(): void {
+    for (const [id, pending] of this.pendingRequests) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error("Cleaned up"));
+      this.pendingRequests.delete(id);
+    }
   }
 }

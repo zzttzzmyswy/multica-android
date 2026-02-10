@@ -5,7 +5,8 @@
 /** Telegram user record stored in database */
 export interface TelegramUser {
   telegramUserId: string;
-  hubUrl: string;
+  hubId: string;
+  agentId: string;
   deviceId: string;
   createdAt: Date;
   updatedAt: Date;
@@ -17,7 +18,9 @@ export interface TelegramUser {
 /** Data required to create/update a Telegram user */
 export interface TelegramUserCreate {
   telegramUserId: string;
-  hubUrl: string;
+  hubId: string;
+  agentId: string;
+  deviceId?: string;
   telegramUsername?: string | undefined;
   telegramFirstName?: string | undefined;
   telegramLastName?: string | undefined;
