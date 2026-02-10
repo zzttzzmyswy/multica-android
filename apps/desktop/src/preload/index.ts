@@ -193,6 +193,9 @@ const electronAPI = {
     /** Import OAuth credentials from CLI tools (claude-code, codex) */
     importOAuth: (providerId: string): Promise<{ ok: boolean; expiresAt?: number; error?: string }> =>
       ipcRenderer.invoke('provider:importOAuth', providerId),
+    /** Test a provider connection with a minimal prompt */
+    test: (providerId: string, modelId?: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('provider:test', providerId, modelId),
   },
 
   // Channel management (Telegram, Discord, etc.)

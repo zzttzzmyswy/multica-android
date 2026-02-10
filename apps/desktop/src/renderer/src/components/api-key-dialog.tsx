@@ -19,7 +19,9 @@ import {
   ComboboxEmpty,
 } from '@multica/ui/components/ui/combobox'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { Loading03Icon, Key01Icon } from '@hugeicons/core-free-icons'
+import { Loading03Icon, Key01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
+
+type Phase = 'input' | 'saving' | 'testing' | 'success' | 'error'
 
 interface ApiKeyDialogProps {
   open: boolean
@@ -42,8 +44,10 @@ export function ApiKeyDialog({
 }: ApiKeyDialogProps) {
   const [apiKey, setApiKey] = useState('')
   const [modelId, setModelId] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
+  const [phase, setPhase] = useState<Phase>('input')
   const [error, setError] = useState<string | null>(null)
+
+  const busy = phase === 'saving' || phase === 'testing'
 
   const handleSave = async () => {
     if (!apiKey.trim()) {
@@ -56,34 +60,60 @@ export function ApiKeyDialog({
       return
     }
 
-    setSaving(true)
     setError(null)
+    setPhase('saving')
 
     try {
       const result = await window.electronAPI.provider.saveApiKey(providerId, apiKey.trim())
-      if (result.ok) {
+      if (!result.ok) {
+        setError(result.error ?? 'Failed to save API key')
+        setPhase('error')
+        return
+      }
+
+      // Test the connection
+      setPhase('testing')
+      const effectiveModel = showModelInput && modelId ? modelId : undefined
+      const testResult = await window.electronAPI.provider.test(providerId, effectiveModel)
+
+      if (!testResult.ok) {
+        setError(testResult.error ?? 'Connection test failed')
+        setPhase('error')
+        return
+      }
+
+      setPhase('success')
+      // Auto-close after brief success display
+      setTimeout(() => {
         setApiKey('')
         setModelId(null)
+        setPhase('input')
+        setError(null)
         onOpenChange(false)
-        onSuccess?.(showModelInput && modelId ? modelId : undefined)
-      } else {
-        setError(result.error ?? 'Failed to save API key')
-      }
+        onSuccess?.(effectiveModel)
+      }, 1000)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setError(message)
-    } finally {
-      setSaving(false)
+      setPhase('error')
     }
   }
 
+  const handleRetry = () => {
+    setError(null)
+    setPhase('input')
+  }
+
   const handleClose = (isOpen: boolean) => {
-    if (!isOpen) {
+    if (!isOpen && !busy) {
       setApiKey('')
       setModelId(null)
+      setPhase('input')
       setError(null)
     }
-    onOpenChange(isOpen)
+    if (!busy) {
+      onOpenChange(isOpen)
+    }
   }
 
   return (
@@ -95,7 +125,7 @@ export function ApiKeyDialog({
             Configure {providerName}
           </DialogTitle>
           <DialogDescription>
-            Enter your API key to enable {providerName}. The key will be saved securely in your credentials file.
+            Enter your API key to enable {providerName}. The key will be saved and tested automatically.
           </DialogDescription>
         </DialogHeader>
 
@@ -108,8 +138,9 @@ export function ApiKeyDialog({
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="sk-..."
+              disabled={busy || phase === 'success'}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !saving) {
+                if (e.key === 'Enter' && !busy) {
                   handleSave()
                 }
               }}
@@ -123,11 +154,15 @@ export function ApiKeyDialog({
                 value={modelId}
                 onValueChange={(value) => setModelId(value)}
               >
-                <ComboboxInput placeholder="Search models..." showClear />
+                <ComboboxInput
+                  placeholder="Search models..."
+                  showClear
+                  disabled={busy || phase === 'success'}
+                />
                 <ComboboxContent>
                   <ComboboxList>
                     {models.map((model) => (
-                      <ComboboxItem key={model} value={model} textValue={model}>
+                      <ComboboxItem key={model} value={model}>
                         {model}
                       </ComboboxItem>
                     ))}
@@ -135,6 +170,28 @@ export function ApiKeyDialog({
                   <ComboboxEmpty>No models found</ComboboxEmpty>
                 </ComboboxContent>
               </Combobox>
+            </div>
+          )}
+
+          {/* Status messages */}
+          {phase === 'saving' && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <HugeiconsIcon icon={Loading03Icon} className="size-4 animate-spin" />
+              Saving API key...
+            </div>
+          )}
+
+          {phase === 'testing' && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <HugeiconsIcon icon={Loading03Icon} className="size-4 animate-spin" />
+              Testing connection...
+            </div>
+          )}
+
+          {phase === 'success' && (
+            <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+              <HugeiconsIcon icon={Tick02Icon} className="size-4" />
+              Connected successfully!
             </div>
           )}
 
@@ -148,13 +205,28 @@ export function ApiKeyDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => handleClose(false)} disabled={saving}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={saving || !apiKey.trim() || (showModelInput && !modelId)}>
-            {saving && <HugeiconsIcon icon={Loading03Icon} className="size-4 animate-spin mr-2" />}
-            Save
-          </Button>
+          {phase === 'error' ? (
+            <>
+              <Button variant="outline" onClick={() => handleClose(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleRetry}>
+                Try again
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => handleClose(false)} disabled={busy || phase === 'success'}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSave}
+                disabled={busy || phase === 'success' || !apiKey.trim() || (showModelInput && !modelId)}
+              >
+                Save & Test
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
