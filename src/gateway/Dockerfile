@@ -8,9 +8,16 @@ WORKDIR /app
 
 # Copy package files (pnpm-workspace.yaml needed for catalog resolution)
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/sdk/package.json ./packages/sdk/
+COPY packages/store/package.json ./packages/store/
 
 # Install all dependencies (including devDependencies for build)
 RUN pnpm install --frozen-lockfile
+
+# Copy workspace packages and build them
+COPY packages/sdk/ ./packages/sdk/
+COPY packages/store/ ./packages/store/
+RUN pnpm --filter @multica/sdk build && cd packages/store && ../../node_modules/.bin/tsc
 
 # Copy source code
 COPY tsconfig.json ./
@@ -29,9 +36,28 @@ WORKDIR /app
 
 # Copy package files (pnpm-workspace.yaml needed for catalog resolution)
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/sdk/package.json ./packages/sdk/
+COPY packages/store/package.json ./packages/store/
 
 # Install production dependencies only
 RUN pnpm install --frozen-lockfile --prod
+
+# Copy built workspace packages and patch exports to point to compiled JS
+COPY --from=builder /app/packages/sdk/dist ./packages/sdk/dist
+COPY --from=builder /app/packages/store/dist ./packages/store/dist
+RUN node -e " \
+  const fs = require('fs'); \
+  ['packages/sdk/package.json', 'packages/store/package.json'].forEach(p => { \
+    const pkg = JSON.parse(fs.readFileSync(p, 'utf8')); \
+    if (pkg.exports) { \
+      for (const [key, val] of Object.entries(pkg.exports)) { \
+        if (typeof val === 'string') { \
+          pkg.exports[key] = val.replace('./src/', './dist/').replace('.ts', '.js'); \
+        } \
+      } \
+    } \
+    fs.writeFileSync(p, JSON.stringify(pkg, null, 2)); \
+  });"
 
 # Copy built files from builder stage
 COPY --from=builder /app/dist ./dist
