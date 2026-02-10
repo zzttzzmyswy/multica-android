@@ -63,7 +63,20 @@ function ProviderCard({
       </div>
 
       {provider.available ? (
-        <HugeiconsIcon icon={Tick02Icon} className="size-4 text-primary" />
+        <div className="flex items-center gap-2">
+          <HugeiconsIcon icon={Tick02Icon} className="size-4 text-primary" />
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-xs text-muted-foreground h-auto py-1 px-2"
+            onClick={(e) => {
+              e.stopPropagation()
+              onConfigure(provider)
+            }}
+          >
+            Reconfigure
+          </Button>
+        </div>
       ) : (
         <Button
           size="sm"
