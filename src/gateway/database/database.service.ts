@@ -40,7 +40,11 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       const message = error instanceof Error ? error.message : String(error);
       console.log("[DatabaseService] Error:", message);
       this.logger.error(`Failed to connect to MySQL: ${message}`);
-      throw error;
+      // Graceful degradation: close broken pool, keep this.pool = null
+      if (this.pool) {
+        await this.pool.end().catch(() => {});
+        this.pool = null;
+      }
     }
   }
 
