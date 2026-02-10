@@ -2,12 +2,12 @@
 FROM node:22-alpine AS builder
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@10.16.1 --activate
+RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json pnpm-lock.yaml ./
+# Copy package files (pnpm-workspace.yaml needed for catalog resolution)
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
 # Install all dependencies (including devDependencies for build)
 RUN pnpm install --frozen-lockfile
@@ -23,12 +23,12 @@ RUN ./node_modules/.bin/tsc || true
 FROM node:22-alpine AS production
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@10.16.1 --activate
+RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json pnpm-lock.yaml ./
+# Copy package files (pnpm-workspace.yaml needed for catalog resolution)
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
 # Install production dependencies only
 RUN pnpm install --frozen-lockfile --prod
