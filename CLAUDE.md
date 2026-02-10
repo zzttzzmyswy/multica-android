@@ -157,3 +157,18 @@ git commit -m "refactor(utils): simplify date formatting"
 git add README.md
 git commit -m "docs: update API documentation"
 ```
+
+## Pre-push Checks
+
+Before pushing, always run:
+
+```bash
+pnpm typecheck          # Type check all packages
+pnpm test               # Run tests
+```
+
+This ensures CI will pass. For a clean check (no cache):
+
+```bash
+pnpm turbo typecheck --force
+```
