@@ -118,7 +118,6 @@ export default function SetupStep() {
           providerId={selectedProvider.id}
           providerName={selectedProvider.name}
           showModelInput={selectedProvider.id === 'openrouter'}
-          models={selectedProvider.models}
           onSuccess={handleProviderSuccess}
         />
       )}

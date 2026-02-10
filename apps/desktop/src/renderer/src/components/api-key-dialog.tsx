@@ -10,14 +10,6 @@ import {
 import { Button } from '@multica/ui/components/ui/button'
 import { Input } from '@multica/ui/components/ui/input'
 import { Label } from '@multica/ui/components/ui/label'
-import {
-  Combobox,
-  ComboboxInput,
-  ComboboxContent,
-  ComboboxList,
-  ComboboxItem,
-  ComboboxEmpty,
-} from '@multica/ui/components/ui/combobox'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Loading03Icon, Key01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 
@@ -29,7 +21,6 @@ interface ApiKeyDialogProps {
   providerId: string
   providerName: string
   showModelInput?: boolean
-  models?: string[]
   onSuccess?: (modelId?: string) => void
 }
 
@@ -39,11 +30,10 @@ export function ApiKeyDialog({
   providerId,
   providerName,
   showModelInput,
-  models,
   onSuccess,
 }: ApiKeyDialogProps) {
   const [apiKey, setApiKey] = useState('')
-  const [modelId, setModelId] = useState<string | null>(null)
+  const [modelId, setModelId] = useState('')
   const [phase, setPhase] = useState<Phase>('input')
   const [error, setError] = useState<string | null>(null)
 
@@ -55,8 +45,8 @@ export function ApiKeyDialog({
       return
     }
 
-    if (showModelInput && !modelId) {
-      setError('Please select a model')
+    if (showModelInput && !modelId.trim()) {
+      setError('Please enter a model name')
       return
     }
 
@@ -73,7 +63,7 @@ export function ApiKeyDialog({
 
       // Test the connection
       setPhase('testing')
-      const effectiveModel = showModelInput && modelId ? modelId : undefined
+      const effectiveModel = showModelInput && modelId.trim() ? modelId.trim() : undefined
       const testResult = await window.electronAPI.provider.test(providerId, effectiveModel)
 
       if (!testResult.ok) {
@@ -86,7 +76,7 @@ export function ApiKeyDialog({
       // Auto-close after brief success display
       setTimeout(() => {
         setApiKey('')
-        setModelId(null)
+        setModelId('')
         setPhase('input')
         setError(null)
         onOpenChange(false)
@@ -107,7 +97,7 @@ export function ApiKeyDialog({
   const handleClose = (isOpen: boolean) => {
     if (!isOpen && !busy) {
       setApiKey('')
-      setModelId(null)
+      setModelId('')
       setPhase('input')
       setError(null)
     }
@@ -147,29 +137,16 @@ export function ApiKeyDialog({
             />
           </div>
 
-          {showModelInput && models && models.length > 0 && (
+          {showModelInput && (
             <div className="space-y-2">
-              <Label>Model</Label>
-              <Combobox
+              <Label htmlFor="model-id">Model</Label>
+              <Input
+                id="model-id"
                 value={modelId}
-                onValueChange={(value) => setModelId(value)}
-              >
-                <ComboboxInput
-                  placeholder="Search models..."
-                  showClear
-                  disabled={busy || phase === 'success'}
-                />
-                <ComboboxContent>
-                  <ComboboxList>
-                    {models.map((model) => (
-                      <ComboboxItem key={model} value={model}>
-                        {model}
-                      </ComboboxItem>
-                    ))}
-                  </ComboboxList>
-                  <ComboboxEmpty>No models found</ComboboxEmpty>
-                </ComboboxContent>
-              </Combobox>
+                onChange={(e) => setModelId(e.target.value)}
+                placeholder="e.g. anthropic/claude-sonnet-4-5"
+                disabled={busy || phase === 'success'}
+              />
             </div>
           )}
 
@@ -221,7 +198,7 @@ export function ApiKeyDialog({
               </Button>
               <Button
                 onClick={handleSave}
-                disabled={busy || phase === 'success' || !apiKey.trim() || (showModelInput && !modelId)}
+                disabled={busy || phase === 'success' || !apiKey.trim() || (showModelInput && !modelId.trim())}
               >
                 Save & Test
               </Button>
