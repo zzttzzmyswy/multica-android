@@ -10,16 +10,19 @@ import { useLocalChat } from '../../hooks/use-local-chat'
 
 const samplePrompts = [
   {
-    title: 'Say hello',
-    prompt: 'Say hello and briefly introduce yourself in 2-3 sentences.',
+    title: 'Latest AI news',
+    prompt:
+      "Search the web for today's top AI news and give me a 3-bullet summary with sources.",
   },
   {
-    title: 'Write a haiku',
-    prompt: 'Write a haiku about coding.',
+    title: 'Analyze this project',
+    prompt:
+      'Look at the files in my current directory and give me a brief summary of what this project is about.',
   },
   {
-    title: 'Quick math',
-    prompt: "What's 123 × 456? Show your reasoning.",
+    title: 'Quick task',
+    prompt:
+      'Write a one-liner shell command that shows my system info (OS, CPU cores, memory) and run it.',
   },
 ]
 
@@ -71,8 +74,8 @@ export default function TryItStep() {
               Try it out
             </h1>
             <p className="text-sm text-muted-foreground">
-              Click a prompt below to send it to your agent, or type your own
-              message in the chat.
+              Your agent can search the web, read files, and run commands.
+              Click a prompt to see it in action.
             </p>
           </div>
 
