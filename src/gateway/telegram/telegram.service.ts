@@ -24,6 +24,7 @@ import {
   type ResponsePayload,
   type VerifyParams,
   type VerifyResult,
+  type DeviceMeta,
 } from "@multica/sdk";
 import type { StreamPayload } from "@multica/sdk";
 import { EventsGateway } from "../events.gateway.js";
@@ -203,9 +204,7 @@ export class TelegramService implements OnModuleInit {
         connectionInfo.token,
         {
           platform: "telegram",
-          telegramUserId,
-          telegramUsername: msg?.from?.username,
-          telegramFirstName: msg?.from?.first_name,
+          userAgent: `Telegram ${telegramUserId} @${msg?.from?.username ?? ""} ${msg?.from?.first_name ?? ""}`.trim(),
         }
       );
 
@@ -252,7 +251,7 @@ export class TelegramService implements OnModuleInit {
     deviceId: string,
     hubId: string,
     token: string,
-    meta: Record<string, string | undefined>,
+    meta: DeviceMeta,
   ): Promise<VerifyResult> {
     return new Promise<VerifyResult>((resolve, reject) => {
       const requestId = uuidv7();
