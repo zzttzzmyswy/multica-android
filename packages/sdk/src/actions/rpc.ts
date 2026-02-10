@@ -133,6 +133,7 @@ export interface DeviceMeta {
   userAgent?: string;
   platform?: string;
   language?: string;
+  clientName?: string;
 }
 
 /** verify - request params */

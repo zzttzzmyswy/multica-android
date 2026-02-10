@@ -44,9 +44,11 @@ function DeviceItem({
     ? parseUserAgent(device.meta.userAgent)
     : null
 
-  const displayName = parsed
-    ? `${parsed.browser} on ${parsed.os}`
-    : device.deviceId
+  const displayName = device.meta?.clientName
+    ? device.meta.clientName
+    : parsed
+      ? `${parsed.browser} on ${parsed.os}`
+      : device.deviceId
 
   const handleRevoke = async () => {
     setRevoking(true)

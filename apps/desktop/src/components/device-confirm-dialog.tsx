@@ -15,6 +15,7 @@ interface DeviceMeta {
   userAgent?: string
   platform?: string
   language?: string
+  clientName?: string
 }
 
 interface PendingConfirm {
@@ -55,9 +56,11 @@ export function DeviceConfirmDialog() {
     ? parseUserAgent(pending.meta.userAgent)
     : null
 
-  const deviceLabel = parsed
-    ? `${parsed.browser} on ${parsed.os}`
-    : pending?.deviceId
+  const deviceLabel = pending?.meta?.clientName
+    ? pending.meta.clientName
+    : parsed
+      ? `${parsed.browser} on ${parsed.os}`
+      : pending?.deviceId
 
   return (
     <AlertDialog open={pending !== null}>

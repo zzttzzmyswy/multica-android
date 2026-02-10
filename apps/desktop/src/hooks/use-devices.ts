@@ -4,6 +4,7 @@ export interface DeviceMeta {
   userAgent?: string
   platform?: string
   language?: string
+  clientName?: string
 }
 
 export interface DeviceEntry {

@@ -3,8 +3,10 @@ import { ServeStaticModule } from "@nestjs/serve-static";
 import { LoggerModule } from "nestjs-pino";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { EventsGateway } from "./events.gateway.js";
 import { AppController } from "./app.controller.js";
+import { DatabaseModule } from "./database/database.module.js";
+import { GatewayModule } from "./gateway.module.js";
+import { TelegramModule } from "./telegram/telegram.module.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const isDev = process.env.NODE_ENV !== "production";
@@ -31,8 +33,10 @@ const isDev = process.env.NODE_ENV !== "production";
             level: process.env.LOG_LEVEL ?? "info",
           },
     }),
+    DatabaseModule,
+    GatewayModule,
+    TelegramModule,
   ],
-  providers: [EventsGateway],
   controllers: [AppController],
 })
 export class AppModule {}
