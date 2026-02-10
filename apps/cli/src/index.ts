@@ -130,7 +130,8 @@ function printVersion() {
 }
 
 async function main() {
-  const args = process.argv.slice(2);
+  // Filter out standalone "--" (used by pnpm to pass args)
+  const args = process.argv.slice(2).filter((arg) => arg !== "--");
 
   // Handle global flags
   if (args.includes("--help") || args.includes("-h")) {
