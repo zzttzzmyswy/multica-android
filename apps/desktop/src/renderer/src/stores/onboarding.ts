@@ -48,7 +48,7 @@ export const useOnboardingStore = create<OnboardingStore>()(
 
       setClientConnected: (connected) => set({ clientConnected: connected }),
 
-      completeOnboarding: () => set({ completed: true }),
+      completeOnboarding: () => set({ completed: true, forceOnboarding: false }),
 
       initForceFlag: async () => {
         const flags = await window.electronAPI.app.getFlags()
