@@ -38,10 +38,10 @@ export default function SetupStep() {
     await setProvider(provider.id)
   }
 
-  const handleProviderSuccess = async () => {
+  const handleProviderSuccess = async (modelId?: string) => {
     await refresh()
     if (selectedProvider) {
-      await setProvider(selectedProvider.id)
+      await setProvider(selectedProvider.id, modelId)
       setFocusedProvider(selectedProvider)
     }
     setProviderConfigured(true)
@@ -81,7 +81,7 @@ export default function SetupStep() {
           <ProviderSetup
             providers={providers}
             loading={loading}
-            activeProviderId={current?.provider}
+            activeProviderId={current?.available ? current.provider : undefined}
             onConfigure={handleConfigure}
             onSelect={handleSelect}
             onFocus={setFocusedProvider}
@@ -117,6 +117,7 @@ export default function SetupStep() {
           onOpenChange={setApiKeyDialogOpen}
           providerId={selectedProvider.id}
           providerName={selectedProvider.name}
+          showModelInput={selectedProvider.id === 'openrouter'}
           onSuccess={handleProviderSuccess}
         />
       )}
