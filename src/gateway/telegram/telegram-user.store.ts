@@ -39,10 +39,11 @@ export class TelegramUserStore implements OnModuleInit {
     console.log("[TelegramUserStore] Done");
   }
 
-  /** Create telegram_users table if not exists */
+  /** Drop and recreate telegram_users table (schema changed: hub_url -> hub_id + agent_id) */
   private async ensureTable(): Promise<void> {
+    await this.db.execute("DROP TABLE IF EXISTS telegram_users");
     const sql = `
-      CREATE TABLE IF NOT EXISTS telegram_users (
+      CREATE TABLE telegram_users (
         telegram_user_id VARCHAR(64) PRIMARY KEY,
         hub_id VARCHAR(64) NOT NULL,
         agent_id VARCHAR(64) NOT NULL,
