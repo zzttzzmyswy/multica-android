@@ -12,14 +12,19 @@ const BASE_URL = "https://api.financialdatasets.ai";
 const TIMEOUT_MS = 30_000;
 
 function getApiKey(): string {
-  const key = credentialManager.getEnv("FINANCIAL_DATASETS_API_KEY");
-  if (!key) {
-    throw new Error(
-      "FINANCIAL_DATASETS_API_KEY not configured. " +
-        "Set it in ~/.super-multica/skills.env.json5 under env, or as an environment variable.",
-    );
-  }
-  return key;
+  // 1. credentials.json5 → tools.data.apiKey (preferred)
+  const toolConfig = credentialManager.getToolConfig("data");
+  if (toolConfig?.apiKey) return toolConfig.apiKey;
+
+  // 2. Fallback: env var (skills.env.json5 or process.env)
+  const envKey = credentialManager.getEnv("FINANCIAL_DATASETS_API_KEY");
+  if (envKey) return envKey;
+
+  throw new Error(
+    "Financial Datasets API key not configured. " +
+      'Set it in ~/.super-multica/credentials.json5 under tools.data.apiKey, ' +
+      "or set FINANCIAL_DATASETS_API_KEY in ~/.super-multica/skills.env.json5.",
+  );
 }
 
 /**

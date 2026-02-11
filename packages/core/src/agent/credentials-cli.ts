@@ -44,7 +44,8 @@ function buildCoreTemplate(): string {
   },
   tools: {
     // brave: { apiKey: "brv-..." },
-    // perplexity: { apiKey: "pplx-...", baseUrl: "https://api.perplexity.ai", model: "perplexity/sonar-pro" }
+    // perplexity: { apiKey: "pplx-...", baseUrl: "https://api.perplexity.ai", model: "perplexity/sonar-pro" },
+    // data: { apiKey: "your-financial-datasets-api-key" }
   }
 }
 `;
