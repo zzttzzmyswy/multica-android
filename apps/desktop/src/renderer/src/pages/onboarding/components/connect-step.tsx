@@ -85,10 +85,10 @@ export default function ConnectStep({ onNext, onBack }: ConnectStepProps) {
         {/* Header */}
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">
-            Your agent, everywhere
+            Connect a channel
           </h1>
           <p className="text-sm text-muted-foreground">
-            Create bots on messaging platforms that talk to your local agent.
+            Create bots that talk to your local agent from anywhere.
           </p>
         </div>
 

@@ -62,10 +62,10 @@ export default function TryItStep({ onComplete, onBack }: TryItStepProps) {
         {/* Header */}
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight">
-            You're all set 🎉
+            Ready to go
           </h1>
           <p className="text-sm text-muted-foreground">
-            Your agent is ready to help. Try a sample task, or dive right in.
+            Your agent is ready. Try a sample task or dive right in.
           </p>
         </div>
 

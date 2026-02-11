@@ -8,7 +8,7 @@ import SetupStep from "./components/setup-step";
 import ConnectStep from "./components/connect-step";
 import TryItStep from "./components/try-it-step";
 
-const steps = ["Privacy", "Provider", "Connect", "Try it"];
+const steps = ["Privacy", "Provider", "Channels", "Start"];
 
 export default function OnboardingPage() {
   const navigate = useNavigate();
