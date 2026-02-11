@@ -1,14 +1,11 @@
 /**
  * Hook for managing LLM providers in the Desktop App.
  *
- * Provides functionality similar to CLI `/provider` command:
- * - List all providers with status
- * - Get current provider/model
- * - Switch provider/model
+ * Uses the global ProviderStore for state management.
+ * Data is fetched once at app startup and shared across all components.
  */
-import { useState, useEffect, useCallback } from 'react'
-
-// Types are defined in electron-env.d.ts and available globally
+import { useCallback } from 'react'
+import { useProviderStore } from '../stores/provider'
 
 interface UseProviderReturn {
   /** All providers with their status */
@@ -30,63 +27,23 @@ interface UseProviderReturn {
 }
 
 export function useProvider(): UseProviderReturn {
-  const [providers, setProviders] = useState<ProviderStatus[]>([])
-  const [current, setCurrent] = useState<CurrentProviderInfo | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const refresh = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      const [providerList, currentInfo] = await Promise.all([
-        window.electronAPI.provider.list(),
-        window.electronAPI.provider.current(),
-      ])
-
-      setProviders(providerList)
-      setCurrent(currentInfo)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      setError(message)
-      console.error('[useProvider] Failed to load providers:', message)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  // Load providers on mount
-  useEffect(() => {
-    refresh()
-  }, [refresh])
-
-  const setProvider = useCallback(async (providerId: string, modelId?: string) => {
-    setError(null)
-
-    try {
-      const result = await window.electronAPI.provider.set(providerId, modelId)
-
-      if (result.ok) {
-        // Refresh to update current status
-        await refresh()
-        return { ok: true }
-      } else {
-        setError(result.error ?? 'Unknown error')
-        return { ok: false, error: result.error }
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      setError(message)
-      return { ok: false, error: message }
-    }
-  }, [refresh])
-
-  const getProviderMeta = useCallback((providerId: string) => {
-    return providers.find((p) => p.id === providerId)
-  }, [providers])
+  const {
+    providers,
+    current,
+    loading,
+    error,
+    refresh,
+    setProvider,
+  } = useProviderStore()
 
   const availableProviders = providers.filter((p) => p.available)
+
+  const getProviderMeta = useCallback(
+    (providerId: string) => {
+      return providers.find((p) => p.id === providerId)
+    },
+    [providers]
+  )
 
   return {
     providers,
