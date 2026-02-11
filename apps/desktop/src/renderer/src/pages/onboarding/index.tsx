@@ -31,7 +31,7 @@ export default function OnboardingPage() {
         />
         <main
           key={currentStep}
-          className="flex-1 overflow-auto animate-in fade-in duration-300"
+          className="flex-1 overflow-auto"
         >
           <WelcomeStep onStart={nextStep} />
         </main>
@@ -73,7 +73,7 @@ export default function OnboardingPage() {
       {/* Step content */}
       <main
         key={currentStep}
-        className="flex-1 overflow-auto animate-in fade-in duration-300"
+        className="flex-1 overflow-auto"
       >
         {currentStep === 1 && <PermissionsStep onNext={nextStep} />}
         {currentStep === 2 && <SetupStep onNext={nextStep} onBack={prevStep} />}

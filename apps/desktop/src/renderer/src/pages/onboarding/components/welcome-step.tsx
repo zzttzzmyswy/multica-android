@@ -22,7 +22,7 @@ interface WelcomeStepProps {
 
 export default function WelcomeStep({ onStart }: WelcomeStepProps) {
   return (
-    <div className="h-full flex items-center justify-center px-12 py-8">
+    <div className="h-full flex items-center justify-center px-12 py-8 animate-in fade-in duration-300">
       <div className="max-w-md w-full flex flex-col items-center text-center space-y-6">
         {/* Brand Title */}
         <div className="flex items-center gap-2.5">

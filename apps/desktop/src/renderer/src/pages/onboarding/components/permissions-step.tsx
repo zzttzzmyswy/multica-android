@@ -42,7 +42,7 @@ export default function PermissionsStep({ onNext }: PermissionsStepProps) {
   const [agreed, setAgreed] = useState(false)
 
   return (
-    <div className="h-full flex items-center justify-center px-6 py-8">
+    <div className="h-full flex items-center justify-center px-6 py-8 animate-in fade-in duration-300">
       <div className="w-full max-w-md space-y-6">
         {/* Header */}
         <div className="space-y-2">
