@@ -1,23 +1,40 @@
 // @see - https://www.electron.build/configuration/configuration
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "YourAppID",
+  "appId": "com.multica.app",
   "asar": true,
-  "productName": "YourAppName",
-  "electronVersion": "30.5.1",
+  "productName": "Multica",
   "directories": {
+    "buildResources": "build",
     "output": "release/${version}"
   },
   "files": [
-    "out"
+    "out",
+    "!**/.vscode/*",
+    "!src/*",
+    "!electron.vite.config.{js,ts,mjs,cjs}",
+    "!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml}",
+    "!{.env,.env.*,.npmrc}",
+    "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}"
   ],
-  "mac": {
+    "mac": {
+    "hardenedRuntime": false,
     "target": [
       "dmg"
     ],
-    "artifactName": "${productName}-Mac-${version}-Installer.${ext}"
+    "artifactName": "${productName}-${version}-${arch}-mac.${ext}",
+    "extendInfo": {
+      "NSCameraUsageDescription": "Application requests access to the device's camera.",
+      "NSMicrophoneUsageDescription": "Application requests access to the device's microphone.",
+      "NSDocumentsFolderUsageDescription": "Application requests access to the user's Documents folder.",
+      "NSDownloadsFolderUsageDescription": "Application requests access to the user's Downloads folder."
+    }
+  },
+  "dmg": {
+    "artifactName": "${productName}-${version}-${arch}.${ext}"
   },
   "win": {
+    "executableName": "multica",
     "target": [
       {
         "target": "nsis",
@@ -32,12 +49,19 @@
     "oneClick": false,
     "perMachine": false,
     "allowToChangeInstallationDirectory": true,
-    "deleteAppDataOnUninstall": false
+    "deleteAppDataOnUninstall": false,
+    "shortcutName": "${productName}",
+    "uninstallDisplayName": "${productName}",
+    "createDesktopShortcut": "always"
   },
   "linux": {
     "target": [
-      "AppImage"
+      "AppImage",
+      "deb"
     ],
+    "maintainer": "multica.ai",
+    "category": "Utility",
     "artifactName": "${productName}-Linux-${version}.${ext}"
-  }
+  },
+  "npmRebuild": false
 }
