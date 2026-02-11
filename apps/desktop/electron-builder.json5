@@ -63,5 +63,10 @@
     "category": "Utility",
     "artifactName": "${productName}-Linux-${version}.${ext}"
   },
-  "npmRebuild": false
+  "npmRebuild": false,
+  "publish": {
+    "provider": "github",
+    "owner": "multica-ai",
+    "repo": "multica"
+  }
 }

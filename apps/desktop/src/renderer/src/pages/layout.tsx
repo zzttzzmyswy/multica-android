@@ -13,6 +13,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { cn } from '@multica/ui/lib/utils'
 import { DeviceConfirmDialog } from '../components/device-confirm-dialog'
+import { UpdateNotification } from '../components/update-notification'
 import ChatPage from './chat'
 
 const tabs = [
@@ -85,6 +86,7 @@ export default function Layout() {
       </main>
       <Toaster />
       <DeviceConfirmDialog />
+      <UpdateNotification />
     </div>
   )
 }

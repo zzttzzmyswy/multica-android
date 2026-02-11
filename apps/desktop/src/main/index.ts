@@ -48,6 +48,7 @@ import { app, BrowserWindow, shell, ipcMain } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { registerAllIpcHandlers, initializeApp, cleanupAll, setupDeviceConfirmation } from './ipc/index.js'
+import { createUpdater, AutoUpdater } from './updater/index.js'
 
 // CJS output will have __dirname natively, but TypeScript source needs this for type checking
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -67,6 +68,7 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 const forceOnboarding = process.argv.includes('--force-onboarding')
 
 let win: BrowserWindow | null
+let updater: AutoUpdater
 
 function createWindow() {
   win = new BrowserWindow({
@@ -128,4 +130,30 @@ app.whenReady().then(async () => {
   if (win) {
     setupDeviceConfirmation(win)
   }
+
+  // Initialize auto-updater
+  const forceDevUpdate = process.env.FORCE_DEV_UPDATE === 'true'
+  updater = createUpdater(forceDevUpdate)
+  updater.setMainWindow(() => win)
+
+  // Auto-check for updates in production (or when forced in dev)
+  const isDev = !!VITE_DEV_SERVER_URL
+  if (!isDev || forceDevUpdate) {
+    win?.once('ready-to-show', () => {
+      updater.checkForUpdates()
+    })
+  }
+
+  // Update IPC handlers
+  ipcMain.handle('update:check', async () => {
+    await updater.checkForUpdates()
+  })
+
+  ipcMain.handle('update:download', async () => {
+    await updater.downloadUpdate()
+  })
+
+  ipcMain.handle('update:install', () => {
+    updater.quitAndInstall()
+  })
 })
