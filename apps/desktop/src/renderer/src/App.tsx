@@ -7,11 +7,7 @@ import ToolsPage from './pages/tools'
 import SkillsPage from './pages/skills'
 import ChannelsPage from './pages/channels'
 import CronsPage from './pages/crons'
-import OnboardingLayout from './pages/onboarding/layout'
-import PermissionsStep from './pages/onboarding/permissions'
-import SetupStep from './pages/onboarding/setup'
-import TryItStep from './pages/onboarding/try-it'
-import ConnectStep from './pages/onboarding/connect'
+import OnboardingPage from './pages/onboarding'
 import { useOnboardingStore } from './stores/onboarding'
 
 function OnboardingGuard({ children }: { children: React.ReactNode }) {
@@ -24,13 +20,7 @@ function OnboardingGuard({ children }: { children: React.ReactNode }) {
 const router = createHashRouter([
   {
     path: '/onboarding',
-    element: <OnboardingLayout />,
-    children: [
-      { index: true, element: <PermissionsStep /> },
-      { path: 'setup', element: <SetupStep /> },
-      { path: 'connect', element: <ConnectStep /> },
-      { path: 'try-it', element: <TryItStep /> },
-    ],
+    element: <OnboardingPage />,
   },
   {
     path: '/',
