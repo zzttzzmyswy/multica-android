@@ -28,6 +28,7 @@ const CORE_TOOL_SUMMARIES: Record<string, string> = {
   web_fetch: "Fetch and extract readable content from a URL",
   memory_search: "Search memory files by keyword",
   sessions_spawn: "Spawn a sub-agent session",
+  data: "Query structured financial and market data",
 };
 
 /** Preferred display order for tools */
@@ -42,6 +43,7 @@ const TOOL_ORDER = [
   "web_fetch",
   "memory_search",
   "sessions_spawn",
+  "data",
 ];
 
 // ─── Section builders ───────────────────────────────────────────────────────
@@ -262,6 +264,17 @@ export function buildConditionalToolSections(
       "If a task is complex or long-running, spawn a sub-agent. It will do the work and report back when done.",
       "You can check on running sub-agents at any time.",
       "Sub-agents cannot spawn nested sub-agents.",
+      "",
+    );
+  }
+
+  // Data tools
+  if (toolSet.has("data")) {
+    lines.push(
+      "## Data Access",
+      "You have access to structured financial and market data via the `data` tool.",
+      'Use domain="finance" with specific actions to retrieve stock prices, financial statements, SEC filings, metrics, and more.',
+      "Always specify dates in YYYY-MM-DD format. Use period='annual' or 'quarterly' or 'ttm' for financial statements.",
       "",
     );
   }
