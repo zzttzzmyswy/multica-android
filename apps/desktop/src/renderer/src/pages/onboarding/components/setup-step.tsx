@@ -1,14 +1,22 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { Button } from '@multica/ui/components/ui/button'
+import { Separator } from '@multica/ui/components/ui/separator'
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from '@multica/ui/components/ui/hover-card'
+import { Link } from '@multica/ui/components/ui/link'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { ArrowLeft02Icon } from '@hugeicons/core-free-icons'
+import { ArrowLeft02Icon, HelpCircleIcon } from '@hugeicons/core-free-icons'
+import { cn } from '@multica/ui/lib/utils'
 import { useProvider } from '../../../hooks/use-provider'
 import { ApiKeyDialog } from '../../../components/api-key-dialog'
 import { OAuthDialog } from '../../../components/oauth-dialog'
-import { ProviderSetup } from '../../../components/onboarding/provider-setup'
-import { TutorialStep } from '../../../components/onboarding/tutorial-step'
 import { StepDots } from './step-dots'
 import { useOnboardingStore } from '../../../stores/onboarding'
+
+const SUPPORTED_PROVIDERS = ['kimi-coding', 'claude-code', 'openai-codex', 'openrouter']
 
 interface SetupStepProps {
   onNext: () => void
@@ -24,10 +32,12 @@ export default function SetupStep({ onNext, onBack }: SetupStepProps) {
   const [oauthDialogOpen, setOauthDialogOpen] = useState(false)
   const [selectedProvider, setSelectedProvider] =
     useState<ProviderStatus | null>(null)
-  const [focusedProvider, setFocusedProvider] =
-    useState<ProviderStatus | null>(null)
 
   const hasActiveProvider = current?.available === true
+
+  const filteredProviders = SUPPORTED_PROVIDERS
+    .map((id) => providers.find((p) => p.id === id))
+    .filter((p): p is ProviderStatus => p != null)
 
   const handleConfigure = (provider: ProviderStatus) => {
     setSelectedProvider(provider)
@@ -39,75 +49,81 @@ export default function SetupStep({ onNext, onBack }: SetupStepProps) {
   }
 
   const handleSelect = async (provider: ProviderStatus) => {
-    await setProvider(provider.id)
+    if (provider.available) {
+      await setProvider(provider.id)
+    }
   }
 
   const handleProviderSuccess = async (modelId?: string) => {
     await refresh()
     if (selectedProvider) {
       await setProvider(selectedProvider.id, modelId)
-      setFocusedProvider(selectedProvider)
     }
     setProviderConfigured(true)
   }
 
   return (
-    <div className="h-full flex">
-      {/* Left column — main content, centered both axes */}
-      <div className="flex-1 flex items-center justify-center px-12 py-8">
-        <div className="max-w-md w-full space-y-6">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <HugeiconsIcon icon={ArrowLeft02Icon} className="size-4" />
-            Back
-          </button>
+    <div className="h-full flex items-center justify-center px-6 py-8 animate-in fade-in duration-300">
+      <div className="w-full max-w-md space-y-6">
+        {/* Back button */}
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <HugeiconsIcon icon={ArrowLeft02Icon} className="size-4" />
+          Back
+        </button>
 
-          <div className="space-y-2">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Connect an LLM provider
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Multica needs at least one LLM provider to power your AI agent.
-              Add your API key below.
-            </p>
-          </div>
-
-          <ProviderSetup
-            providers={providers}
-            loading={loading}
-            activeProviderId={current?.available ? current.provider : undefined}
-            onConfigure={handleConfigure}
-            onSelect={handleSelect}
-            onFocus={setFocusedProvider}
-          />
-
-          {error && (
-            <p className="text-sm text-destructive">{error}</p>
-          )}
-
-          <div className="flex items-center justify-between">
-            <StepDots />
-            <Button
-              size="lg"
-              onClick={onNext}
-              disabled={!hasActiveProvider}
-            >
-              Continue
-            </Button>
-          </div>
+        {/* Header */}
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Connect a provider
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Multica needs an LLM provider to work. Add your API key.
+          </p>
         </div>
-      </div>
 
-      {/* Right column — provider tutorial */}
-      <div className="flex-1 flex items-center justify-center bg-muted/30 px-12 py-8">
-        <div className="max-w-sm space-y-6">
-          {focusedProvider ? (
-            <ProviderTutorial provider={focusedProvider} />
+        {/* Provider cards */}
+        <div className="rounded-xl border border-border bg-card divide-y divide-border">
+          {loading && filteredProviders.length === 0 ? (
+            [1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-14 animate-pulse bg-muted/30" />
+            ))
           ) : (
-            <DefaultProviderInfo />
+            filteredProviders.map((provider) => (
+              <ProviderRow
+                key={provider.id}
+                provider={provider}
+                isActive={Boolean(current?.available && current.provider === provider.id)}
+                onSelect={() => handleSelect(provider)}
+                onConfigure={() => handleConfigure(provider)}
+              />
+            ))
           )}
+        </div>
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+
+        {/* Trust note */}
+        <div className="rounded-lg bg-muted/50 px-4 py-3">
+          <p className="text-sm text-muted-foreground">
+            API keys stay local. Stored in{' '}
+            <code className="text-xs bg-muted px-1 py-0.5 rounded">
+              ~/.super-multica/
+            </code>{' '}
+            and never leave your device.
+          </p>
+        </div>
+
+        <Separator />
+
+        {/* Footer */}
+        <div className="flex items-center justify-between">
+          <StepDots />
+          <Button size="sm" onClick={onNext} disabled={!hasActiveProvider}>
+            Continue
+          </Button>
         </div>
       </div>
 
@@ -136,84 +152,95 @@ export default function SetupStep({ onNext, onBack }: SetupStepProps) {
   )
 }
 
-function ProviderTutorial({ provider }: { provider: ProviderStatus }) {
+function ProviderRow({
+  provider,
+  isActive,
+  onSelect,
+  onConfigure,
+}: {
+  provider: ProviderStatus
+  isActive: boolean
+  onSelect: () => void
+  onConfigure: () => void
+}) {
+  const getTutorialSteps = (): React.ReactNode[] => {
+    if (provider.authMethod === 'oauth') {
+      return [
+        <span key="1">Run: <code className="bg-muted px-1 py-0.5 rounded text-xs">{provider.loginCommand}</code></span>,
+        'Complete login in browser',
+        'Click Configure → Refresh',
+      ]
+    }
+    return [
+      provider.loginUrl ? (
+        <span key="1">Go to <Link href={provider.loginUrl}>{new URL(provider.loginUrl).hostname}</Link></span>
+      ) : (
+        'Go to provider dashboard'
+      ),
+      'Create a new API key',
+      'Click Configure and paste',
+    ]
+  }
+
   return (
-    <div className="space-y-5">
-      <div className="space-y-2">
-        <h3 className="text-lg font-medium">Set up {provider.name}</h3>
-        <p className="text-sm text-muted-foreground">
-          Follow these steps to get started:
-        </p>
+    <div
+      onClick={provider.available ? onSelect : undefined}
+      className={cn(
+        'flex items-center justify-between px-4 py-3 transition-colors',
+        provider.available && 'cursor-pointer hover:bg-accent/50'
+      )}
+    >
+      <div className="flex items-center gap-3">
+        {/* Radio indicator */}
+        <div
+          className={cn(
+            'size-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors',
+            isActive ? 'border-primary' : 'border-muted-foreground/40'
+          )}
+        >
+          {isActive && <div className="size-2 rounded-full bg-primary" />}
+        </div>
+
+        <div>
+          <p className="text-sm font-medium">{provider.name}</p>
+          <p className="text-xs text-muted-foreground">{provider.defaultModel}</p>
+        </div>
       </div>
 
-      <div className="space-y-4">
-        {provider.authMethod === 'api-key' ? (
-          <>
-            <TutorialStep
-              number={1}
-              text={`Go to ${provider.loginUrl ?? 'the provider dashboard'}`}
-              link={provider.loginUrl}
-            />
-            <TutorialStep number={2} text="Create a new API key" />
-            <TutorialStep
-              number={3}
-              text='Click "Configure" and paste your key'
-            />
-          </>
-        ) : (
-          <>
-            <TutorialStep
-              number={1}
-              text={`Open terminal and run: ${provider.loginCommand}`}
-            />
-            <TutorialStep
-              number={2}
-              text="Complete login in your browser"
-            />
-            <TutorialStep
-              number={3}
-              text='Click "Configure" then "Refresh"'
-            />
-          </>
-        )}
-      </div>
+      <div className="flex items-center gap-2">
+        {/* Help hover card */}
+        <HoverCard>
+          <HoverCardTrigger
+            onClick={(e) => e.stopPropagation()}
+            className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <HugeiconsIcon icon={HelpCircleIcon} className="size-4" />
+          </HoverCardTrigger>
+          <HoverCardContent align="end" side="top" className="w-56">
+            <p className="font-medium text-sm mb-2">Setup {provider.name}</p>
+            <ol className="space-y-1.5">
+              {getTutorialSteps().map((step, i) => (
+                <li key={i} className="text-xs text-muted-foreground flex gap-2">
+                  <span className="text-foreground/50 shrink-0">{i + 1}.</span>
+                  <span>{step}</span>
+                </li>
+              ))}
+            </ol>
+          </HoverCardContent>
+        </HoverCard>
 
-      <div className="space-y-2">
-        <h4 className="text-sm font-medium text-muted-foreground">
-          API keys stay local
-        </h4>
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          Your API keys are stored securely in{' '}
-          <code className="bg-muted px-1.5 py-0.5 rounded text-xs">
-            ~/.super-multica/credentials.json5
-          </code>{' '}
-          and never leave your device.
-        </p>
-      </div>
-    </div>
-  )
-}
-
-function DefaultProviderInfo() {
-  return (
-    <div className="space-y-6">
-      <div className="space-y-3">
-        <h3 className="text-lg font-medium">Supported providers</h3>
-        <p className="text-sm text-muted-foreground leading-relaxed">
-          Multica supports multiple LLM providers including OpenAI,
-          Anthropic, DeepSeek, and more. You can configure additional
-          providers later in settings.
-        </p>
-      </div>
-      <div className="space-y-3">
-        <h3 className="text-lg font-medium">API keys stay local</h3>
-        <p className="text-sm text-muted-foreground leading-relaxed">
-          Your API keys are stored securely in{' '}
-          <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-            ~/.super-multica/credentials.json5
-          </code>{' '}
-          and never leave your device.
-        </p>
+        {/* Configure button */}
+        <Button
+          size="sm"
+          variant="outline"
+          className={provider.available ? 'text-green-600 hover:text-green-600 dark:text-green-500 dark:hover:text-green-500' : ''}
+          onClick={(e) => {
+            e.stopPropagation()
+            onConfigure()
+          }}
+        >
+          {provider.available ? 'Configured' : 'Configure'}
+        </Button>
       </div>
     </div>
   )
