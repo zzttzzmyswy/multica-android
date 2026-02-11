@@ -13,6 +13,7 @@
     "mu": "pnpm --filter @multica/cli dev",
     "dev": "pnpm --filter @multica/desktop dev",
     "dev:desktop": "pnpm --filter @multica/desktop dev",
+    "dev:reset": "bash scripts/reset-user-data.sh && pnpm --filter @multica/desktop dev -- --reset",
     "dev:gateway": "pnpm --filter @multica/gateway dev",
     "dev:web": "pnpm --filter @multica/web dev",
     "dev:all": "concurrently \"pnpm dev:gateway\" \"pnpm dev:web\"",

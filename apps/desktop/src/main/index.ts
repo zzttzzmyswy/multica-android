@@ -44,7 +44,7 @@ process.stderr?.on?.('error', (err: NodeJS.ErrnoException) => {
   throw err
 })
 
-import { app, BrowserWindow, shell, ipcMain } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, session } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { registerAllIpcHandlers, initializeApp, cleanupAll, setupDeviceConfirmation } from './ipc/index.js'
@@ -65,6 +65,7 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 
 // CLI flags
 const forceOnboarding = process.argv.includes('--force-onboarding')
+const resetUserData = process.argv.includes('--reset')
 
 let win: BrowserWindow | null
 
@@ -113,6 +114,15 @@ app.on('before-quit', () => {
 })
 
 app.whenReady().then(async () => {
+  // Reset user data if --reset flag is passed (for development testing)
+  if (resetUserData) {
+    console.log('[reset] Clearing localStorage...')
+    await session.defaultSession.clearStorageData({
+      storages: ['localstorage']
+    })
+    console.log('[reset] localStorage cleared')
+  }
+
   // App-level IPC handlers
   ipcMain.handle('app:getFlags', () => ({ forceOnboarding }))
 
