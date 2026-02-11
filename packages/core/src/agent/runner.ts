@@ -935,6 +935,11 @@ export class Agent {
     // Keep toolsOptions.provider in sync so sessions_spawn inherits the current provider
     this.toolsOptions = { ...this.toolsOptions, provider: providerId };
 
+    // Reload tools so sessions_spawn picks up the new provider in its closure.
+    // Without this, the existing tool instance still captures the old provider.
+    const tools = resolveTools(this.toolsOptions);
+    this.agent.setTools(tools);
+
     // Update session metadata (save original providerId, not alias-resolved)
     this.session.saveMeta({
       provider: providerId,
@@ -945,7 +950,7 @@ export class Agent {
     });
 
     // Rebuild system prompt so runtime info reflects the new provider/model
-    const toolNames = (this.agent.state.tools ?? []).map((t: { name: string }) => t.name);
+    const toolNames = tools.map((t) => t.name);
     const systemPrompt = this.rebuildSystemPrompt(toolNames);
     if (systemPrompt) {
       this.agent.setSystemPrompt(systemPrompt);
