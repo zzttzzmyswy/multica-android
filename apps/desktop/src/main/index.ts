@@ -73,6 +73,8 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1200,
     height: 800,
+    minWidth: 500,
+    minHeight: 520,
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 17 },  // Vertically centered in 48px header
     webPreferences: {
