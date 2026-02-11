@@ -35,12 +35,8 @@ import {
 import {
   buildSystemPrompt as buildStructuredSystemPrompt,
   collectRuntimeInfo,
+  type SystemPromptMode,
 } from "./system-prompt/index.js";
-import {
-  buildInternalFinanceGuidance,
-  decideFinanceEvidencePlan,
-  type FinanceDecision,
-} from "./research/finance-decisioner.js";
 import type { AuthProfileFailureReason } from "./auth-profiles/index.js";
 import {
   sanitizeToolCallInputs,
@@ -429,7 +425,6 @@ export class Agent {
   ): Promise<AgentRunResult> {
     await this.ensureInitialized();
     this.refreshAuthState();
-    this.applyFinanceResearchGuidance(prompt);
     this.output.state.lastAssistantText = "";
     this.currentUserDisplayPrompt = options?.displayPrompt;
 
@@ -973,13 +968,6 @@ export class Agent {
    * Shared by constructor (via buildFullSystemPrompt) and reloadSystemPrompt.
    */
   private rebuildSystemPrompt(toolNames: string[]): string | undefined {
-    return this.rebuildSystemPromptWithExtra(toolNames);
-  }
-
-  private rebuildSystemPromptWithExtra(
-    toolNames: string[],
-    extraSystemPrompt?: string | undefined,
-  ): string | undefined {
     const profile = this.profile?.getProfile();
     if (!profile) return undefined;
 
@@ -1005,40 +993,6 @@ export class Agent {
       tools: toolNames,
       skillsPrompt,
       runtime,
-      extraSystemPrompt,
-    });
-  }
-
-  private applyFinanceResearchGuidance(prompt: string): void {
-    const toolNames = (this.agent.state.tools ?? []).map((t: { name: string }) => t.name);
-    const decision = decideFinanceEvidencePlan({ prompt, tools: toolNames });
-
-    const guidance = decision ? buildInternalFinanceGuidance(decision) : undefined;
-    const systemPrompt = this.rebuildSystemPromptWithExtra(toolNames, guidance);
-    if (systemPrompt) {
-      this.agent.setSystemPrompt(systemPrompt);
-      this.session.setSystemPrompt(systemPrompt);
-    }
-
-    this.saveFinanceDecisionMeta(decision);
-  }
-
-  private saveFinanceDecisionMeta(decision: FinanceDecision | undefined): void {
-    const currentMeta = this.session.getMeta() ?? {};
-    if (!decision) {
-      // Keep previously saved decisions for non-finance turns.
-      return;
-    }
-    this.session.saveMeta({
-      ...currentMeta,
-      researchDecision: {
-        domain: "finance",
-        plan: decision.plan,
-        marketRoute: decision.marketRoute,
-        confidencePenalty: decision.confidencePenalty,
-        reasons: decision.reasons,
-        timestamp: Date.now(),
-      },
     });
   }
 }
