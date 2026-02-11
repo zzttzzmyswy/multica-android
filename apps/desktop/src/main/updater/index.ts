@@ -2,7 +2,10 @@
  * Auto-updater module using electron-updater
  * Checks for updates from GitHub releases and handles download/install
  */
-import { autoUpdater, UpdateInfo, ProgressInfo } from 'electron-updater'
+import pkg from 'electron-updater'
+import type { UpdateInfo, ProgressInfo } from 'electron-updater'
+
+const { autoUpdater } = pkg
 import { BrowserWindow } from 'electron'
 
 export interface UpdateStatus {
