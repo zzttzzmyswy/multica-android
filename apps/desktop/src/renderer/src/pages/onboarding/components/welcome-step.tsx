@@ -27,7 +27,7 @@ export default function WelcomeStep({ onStart }: WelcomeStepProps) {
         {/* Brand Title */}
         <div className="flex items-center gap-2.5">
           <MulticaIcon animate className="size-4 text-muted-foreground/70" />
-          <h1 className="text-2xl tracking-wide font-[family-name:var(--font-brand)]">
+          <h1 className="text-2xl tracking-wide font-brand">
             Welcome to Multica
           </h1>
         </div>

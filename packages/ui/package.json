@@ -3,12 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "sideEffects": ["**/*.css"],
+  "sideEffects": [
+    "**/*.css",
+    "./src/styles/fonts.ts"
+  ],
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint src"
   },
   "exports": {
+    "./fonts": "./src/styles/fonts.ts",
     "./globals.css": "./src/styles/globals.css",
     "./postcss.config": "./postcss.config.mjs",
     "./lib/*": "./src/lib/*.ts",
@@ -20,6 +24,9 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.1.0",
+    "@fontsource-variable/playfair-display": "^5.2.8",
+    "@fontsource/geist-mono": "^5.2.7",
+    "@fontsource/geist-sans": "^5.2.5",
     "@hugeicons/core-free-icons": "catalog:",
     "@hugeicons/react": "catalog:",
     "@multica/store": "workspace:*",
