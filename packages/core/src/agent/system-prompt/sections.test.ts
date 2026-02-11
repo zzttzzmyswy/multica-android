@@ -179,6 +179,14 @@ describe("buildConditionalToolSections", () => {
     expect(result.join("\n")).toContain("## Web Access");
   });
 
+  it("adds data-web fusion guidance when both data and web tools are present", () => {
+    const result = buildConditionalToolSections(["data", "web_search"], "full");
+    const text = result.join("\n");
+    expect(text).toContain("## Data Access");
+    expect(text).toContain("combine them");
+    expect(text).toContain("macro, policy, and breaking-news context");
+  });
+
   it("returns empty when no conditional tools match", () => {
     const result = buildConditionalToolSections(["read", "write"], "full");
     expect(result).toEqual([]);

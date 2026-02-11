@@ -240,6 +240,7 @@ export function buildConditionalToolSections(
   if (mode === "none" || !tools || tools.length === 0) return [];
 
   const toolSet = new Set(tools.map((t) => t.toLowerCase()));
+  const hasWebTools = toolSet.has("web_search") || toolSet.has("web_fetch");
   const lines: string[] = [];
 
   // Memory tools
@@ -275,12 +276,15 @@ export function buildConditionalToolSections(
       "You have access to structured financial and market data via the `data` tool.",
       'Use domain="finance" with specific actions to retrieve stock prices, financial statements, SEC filings, metrics, and more.',
       "Always specify dates in YYYY-MM-DD format. Use period='annual' or 'quarterly' or 'ttm' for financial statements.",
+      hasWebTools
+        ? "When both data and web tools are available, combine them: use `data` for structured fundamentals, and web sources for macro, policy, and breaking-news context."
+        : "Use tool outputs as evidence, and clearly state assumptions when data is incomplete.",
       "",
     );
   }
 
   // Web tools
-  if (toolSet.has("web_search") || toolSet.has("web_fetch")) {
+  if (hasWebTools) {
     lines.push(
       "## Web Access",
       "You have web access. Use it when the user asks about current events, needs up-to-date information, or requests content from URLs.",
