@@ -58,17 +58,11 @@ Actions:
 - `get_filings` — List filings metadata. Params: `{ ticker, filing_type?, limit? }`
 - `get_filing_items` — Read filing sections. Params: `{ ticker, filing_type, accession_number?, item? }`
 
-### Evidence Sufficiency Gate (Dynamic Tool Decision)
+### Evidence Sufficiency Gate (Internal Decision)
 
-Before deep analysis, output a short `Tool Decision` block:
+Before deep analysis, make an internal evidence decision. Do not output a technical decision block by default.
 
-```text
-Tool Decision
-- plan: data_only | hybrid | web_first
-- reason: why this plan is sufficient
-- missing_evidence: what is still unknown
-- confidence_impact: low | medium | high
-```
+If the user explicitly asks for methodology or reasoning transparency, provide a concise plain-language explanation of your research approach.
 
 Decision policy:
 
@@ -88,7 +82,7 @@ Decision policy:
 - Pull statements (`get_all_financial_statements`) and estimates as needed.
 
 3. **Macro & Policy Context (Conditional)**
-- Use `web_search` / `web_fetch` only if required by your `Tool Decision`.
+- Use `web_search` / `web_fetch` only if required by your internal evidence decision.
 - If used, prefer high-signal primary sources (central bank, regulator, official releases).
 - For time-sensitive conclusions, include source dates explicitly.
 
@@ -146,16 +140,15 @@ When asked about listed equities:
 
 Always include:
 
-1. **Tool Decision** (plan + reason + evidence gap impact)
-2. **Executive Summary** (thesis + stance + confidence)
-3. **Evidence Table** with columns:
+1. **Executive Summary** (thesis + stance + confidence)
+2. **Evidence Table** with columns:
 - Signal
 - Direction (Bull/Bear/Neutral)
 - Why it matters
 - Source
 - Date
-4. **Scenario Table** (bull/base/bear with probabilities or relative weights)
-5. **Key Monitoring Triggers** (what would invalidate current thesis)
+3. **Scenario Table** (bull/base/bear with probabilities or relative weights)
+4. **Key Monitoring Triggers** (what would invalidate current thesis)
 
 ### Guardrails
 
@@ -165,7 +158,7 @@ Always include:
 - For event-driven conclusions, if you skip web validation, explicitly explain why structured evidence is still sufficient.
 
 
-### Example: Secondary Market Analysis (Tool Decision = `hybrid`)
+### Example: Secondary Market Analysis
 
 For "Analyze Apple's investment outlook":
 
@@ -175,7 +168,7 @@ For "Analyze Apple's investment outlook":
 4. `data(domain="finance", action="get_financial_metrics", params={ticker: "AAPL", period: "quarterly", limit: 8})`
 5. `data(domain="finance", action="get_analyst_estimates", params={ticker: "AAPL", period: "annual"})`
 6. `data(domain="finance", action="get_news", params={ticker: "AAPL", limit: 10})`
-7. `web_search(query="latest Fed policy decision impact on US mega-cap tech valuations")` (only because plan=`hybrid`)
-8. `web_search(query="Apple supply chain or regulatory news latest quarter")` (only because plan=`hybrid`)
+7. `web_search(query="latest Fed policy decision impact on US mega-cap tech valuations")`
+8. `web_search(query="Apple supply chain or regulatory news latest quarter")`
 
 Then synthesize fundamental trend, macro regime, and event sentiment into a scenario-based conclusion.
