@@ -281,10 +281,10 @@ export function formatCoalescedAnnouncementMessage(
  *      later drain via writeInternal (with debounce to batch nearby completions)
  *   2. Direct — if parent is idle, send immediately via writeInternal
  *
- * All delivery uses writeInternal() which marks entries as `internal: true`,
- * preventing announcement messages from showing as user bubbles in the UI.
- * We avoid steer() (cancels unrelated tool calls) and followUp() (doesn't
- * mark entries as internal, polluting the chat UI).
+ * All delivery uses writeInternal() which marks the announcement prompt as
+ * `internal: true` (hidden from UI). The assistant's summary response is
+ * forwarded to the real-time stream (`forwardAssistant: true`) so the user
+ * sees the result, and persisted to JSONL for future session loads.
  */
 export function runCoalescedAnnounceFlow(
   requesterSessionId: string,
@@ -345,7 +345,7 @@ function sendAnnounceDirect(requesterSessionId: string, message: string): void {
       );
       return;
     }
-    parentAgent.writeInternal(message, { forwardAssistant: false, persistResponse: true });
+    parentAgent.writeInternal(message, { forwardAssistant: true, persistResponse: true });
   } catch (err) {
     console.error(`[SubagentAnnounce] Failed direct announce to parent:`, err);
   }
@@ -391,7 +391,7 @@ export function runSubagentAnnounceFlow(params: SubagentAnnounceParams): boolean
       return false;
     }
 
-    parentAgent.writeInternal(message, { forwardAssistant: false, persistResponse: true });
+    parentAgent.writeInternal(message, { forwardAssistant: true, persistResponse: true });
     return true;
   } catch (err) {
     console.error(`[SubagentAnnounce] Failed to announce to parent:`, err);
