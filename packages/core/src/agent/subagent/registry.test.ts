@@ -267,7 +267,7 @@ describe("subagent registry — coalescing", () => {
 });
 
 describe("subagent registry — post-announce cleanup", () => {
-  it("removes runs from registry after successful announcement", async () => {
+  it("keeps runs in registry after successful announcement with archiveAtMs", async () => {
     // Mock runCoalescedAnnounceFlow to succeed
     const announceModule = await import("./announce.js");
     const spy = vi.spyOn(announceModule, "runCoalescedAnnounceFlow").mockReturnValue(true);
@@ -288,11 +288,20 @@ describe("subagent registry — post-announce cleanup", () => {
 
     await flushQueue();
 
-    // Both runs should have been announced and removed from registry
+    // Both runs should have been announced but kept in registry with archiveAtMs
     expect(spy).toHaveBeenCalled();
-    expect(getSubagentRun("run-a")).toBeUndefined();
-    expect(getSubagentRun("run-b")).toBeUndefined();
-    expect(listSubagentRuns("parent-1")).toHaveLength(0);
+
+    const runA = getSubagentRun("run-a");
+    const runB = getSubagentRun("run-b");
+    expect(runA).toBeDefined();
+    expect(runB).toBeDefined();
+    expect(runA!.announced).toBe(true);
+    expect(runB!.announced).toBe(true);
+    expect(runA!.archiveAtMs).toBeGreaterThan(Date.now());
+    expect(runB!.archiveAtMs).toBeGreaterThan(Date.now());
+
+    // Records are still queryable
+    expect(listSubagentRuns("parent-1")).toHaveLength(2);
 
     spy.mockRestore();
   });
