@@ -1,8 +1,9 @@
+import { useState, useEffect } from "react";
 import { cn } from "@multica/ui/lib/utils";
 
 interface MulticaIconProps extends React.ComponentProps<"span"> {
   /**
-   * If true, play a one-time entrance spin animation (2 seconds).
+   * If true, play a one-time entrance spin animation.
    */
   animate?: boolean;
 }
@@ -17,11 +18,20 @@ export function MulticaIcon({
   animate = false,
   ...props
 }: MulticaIconProps) {
+  const [entranceDone, setEntranceDone] = useState(!animate);
+
+  useEffect(() => {
+    if (!animate) return;
+    const timer = setTimeout(() => setEntranceDone(true), 600);
+    return () => clearTimeout(timer);
+  }, [animate]);
+
   return (
     <span
       className={cn(
-        "inline-block size-[1em] hover:animate-spin",
-        animate && "animate-welcome-spin",
+        "inline-block size-[1em]",
+        !entranceDone && "animate-entrance-spin",
+        entranceDone && "hover:animate-spin",
         className
       )}
       aria-hidden="true"
