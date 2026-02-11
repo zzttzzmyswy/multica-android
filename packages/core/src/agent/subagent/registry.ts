@@ -101,6 +101,7 @@ export function registerSubagentRun(params: RegisterSubagentRunParams): Subagent
     label,
     cleanup = "delete",
     timeoutSeconds,
+    announce,
     start,
   } = params;
 
@@ -111,6 +112,7 @@ export function registerSubagentRun(params: RegisterSubagentRunParams): Subagent
     task,
     label,
     cleanup,
+    announce,
     createdAt: Date.now(),
   };
 
@@ -296,28 +298,42 @@ function captureFindings(record: SubagentRunRecord): void {
 }
 
 /**
- * Phase 2: Announce completed-but-unannounced runs immediately.
+ * Phase 2: Announce completed-but-unannounced runs.
  *
- * Does NOT wait for all runs to finish — each completed run is announced
- * as soon as its findings are captured. The three-tier delivery in
- * announce.ts (steer → queue → direct) handles batching via the
- * announce-queue debounce/collect mechanism when multiple runs complete
- * close together.
+ * Runs with announce="silent" are held back until ALL silent runs from the
+ * same requester have completed. All other runs (immediate / undefined) are
+ * announced per-completion as before.
  */
 function checkAndAnnounce(requesterSessionId: string): void {
   const allRuns = listSubagentRuns(requesterSessionId);
 
-  // Only consider unannounced runs that are done with findings captured
-  const ready = allRuns.filter(
-    r => !r.announced && r.endedAt !== undefined && r.findingsCaptured,
+  // ── Immediate runs: announce per-completion (default behavior) ──
+  const immediateReady = allRuns.filter(
+    r => !r.announced && r.endedAt !== undefined && r.findingsCaptured && r.announce !== "silent",
   );
-  if (ready.length === 0) return;
+  if (immediateReady.length > 0) {
+    announceGroup(requesterSessionId, immediateReady);
+  }
 
-  // Announce all ready runs
-  const announced = runCoalescedAnnounceFlow(requesterSessionId, ready);
+  // ── Silent runs: announce only when ALL silent runs are done ──
+  const silentRuns = allRuns.filter(r => r.announce === "silent");
+  const unannouncedSilent = silentRuns.filter(r => !r.announced);
+  const silentReady = unannouncedSilent.filter(
+    r => r.endedAt !== undefined && r.findingsCaptured,
+  );
+
+  // All unannounced silent runs must be ready (ended + findings captured)
+  if (silentReady.length > 0 && silentReady.length === unannouncedSilent.length) {
+    announceGroup(requesterSessionId, silentReady);
+  }
+}
+
+/** Announce a group of runs and mark them as announced. */
+function announceGroup(requesterSessionId: string, runs: SubagentRunRecord[]): void {
+  const announced = runCoalescedAnnounceFlow(requesterSessionId, runs);
 
   if (announced) {
-    for (const r of ready) {
+    for (const r of runs) {
       r.announced = true;
       r.cleanupHandled = true;
       // Keep records for querying via sessions_list; let sweeper archive later
@@ -326,7 +342,7 @@ function checkAndAnnounce(requesterSessionId: string): void {
     persist();
   } else {
     // Allow retry — mark cleanupHandled false so initSubagentRegistry() retries
-    for (const r of ready) {
+    for (const r of runs) {
       r.cleanupHandled = false;
     }
     persist();

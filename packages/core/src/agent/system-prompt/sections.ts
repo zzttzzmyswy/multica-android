@@ -273,6 +273,11 @@ export function buildConditionalToolSections(
       "- Complex tasks (code generation, PDF creation, multi-file operations): 1200–1800 (20–30 min)",
       "When in doubt, use a longer timeout. It is always better to wait longer than to lose completed work.",
       "",
+      "### Announce Modes",
+      "- `announce: \"immediate\"` (default): Each sub-agent's findings are delivered to you as soon as it completes.",
+      "- `announce: \"silent\"`: All findings are held back until every silent sub-agent finishes, then delivered as ONE combined report.",
+      "Use \"silent\" when you want to collect data from multiple sub-agents first, then summarize everything at once.",
+      "",
     );
   }
 

@@ -35,6 +35,15 @@ const SessionsSpawnSchema = Type.Object({
       minimum: 0,
     }),
   ),
+  announce: Type.Optional(
+    Type.Union([Type.Literal("immediate"), Type.Literal("silent")], {
+      description:
+        "Announcement mode. 'immediate' (default): findings delivered as each subagent completes. " +
+        "'silent': defer all announcements until every silent subagent from this session finishes, " +
+        "then deliver one combined report. Use 'silent' when spawning multiple subagents to collect " +
+        "data in parallel and you want to summarize everything at once.",
+    }),
+  ),
 });
 
 type SessionsSpawnArgs = {
@@ -43,6 +52,7 @@ type SessionsSpawnArgs = {
   model?: string;
   cleanup?: "delete" | "keep";
   timeoutSeconds?: number;
+  announce?: "immediate" | "silent";
 };
 
 export type SessionsSpawnResult = {
@@ -75,7 +85,7 @@ export function createSessionsSpawnTool(
       "Use this for parallelizable work, long-running analysis, or tasks that benefit from isolation.",
     parameters: SessionsSpawnSchema,
     execute: async (_toolCallId, args) => {
-      const { task, label, model, cleanup = "delete", timeoutSeconds } = args as SessionsSpawnArgs;
+      const { task, label, model, cleanup = "delete", timeoutSeconds, announce } = args as SessionsSpawnArgs;
 
       // Guard: subagents cannot spawn subagents
       if (options.isSubagent) {
@@ -125,6 +135,7 @@ export function createSessionsSpawnTool(
           label,
           cleanup,
           timeoutSeconds,
+          announce,
           start: () => childAgent.write(task),
         });
 
