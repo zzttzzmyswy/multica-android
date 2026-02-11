@@ -26,6 +26,8 @@ export interface CreateToolsOptions {
   isSubagent?: boolean | undefined;
   /** Session ID of the agent (passed to sessions_spawn tool) */
   sessionId?: string | undefined;
+  /** Resolved provider ID of the parent agent (passed to sessions_spawn for subagent inheritance) */
+  provider?: string | undefined;
   /** Callback invoked when exec tool needs approval before running a command */
   onExecApprovalNeeded?: ExecApprovalCallback | undefined;
 }
@@ -131,6 +133,7 @@ export function createAllTools(options: CreateToolsOptions | string): AgentTool<
   const sessionsSpawnTool = createSessionsSpawnTool({
     isSubagent: isSubagent ?? false,
     ...(sessionId !== undefined ? { sessionId } : {}),
+    ...(opts.provider !== undefined ? { provider: opts.provider } : {}),
   });
   tools.push(sessionsSpawnTool as AgentTool<any>);
 
@@ -165,6 +168,7 @@ export function resolveTools(options: ResolveToolsOptions): AgentTool<any>[] {
     profileDir: options.profileDir,
     isSubagent: options.isSubagent,
     sessionId: options.sessionId,
+    provider: options.provider,
     onExecApprovalNeeded: options.onExecApprovalNeeded,
   });
 
