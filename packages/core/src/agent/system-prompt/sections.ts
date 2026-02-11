@@ -281,7 +281,7 @@ export function buildConditionalToolSections(
         : "Use tool outputs as evidence, and clearly state assumptions when data is incomplete.",
       ...(hasWebTools
         ? [
-            "Before final conclusions, include a short `Tool Decision` summary with: plan (`data_only` | `hybrid` | `web_first`), reason, and missing evidence impact.",
+            "Make this evidence decision internally. In final answers, present concise user-facing research rationale instead of technical decision labels unless the user asks for methodology details.",
           ]
         : []),
       "",

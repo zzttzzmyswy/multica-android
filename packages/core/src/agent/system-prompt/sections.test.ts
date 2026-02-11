@@ -186,8 +186,8 @@ describe("buildConditionalToolSections", () => {
     const text = result.join("\n");
     expect(text).toContain("## Data Access");
     expect(text).toContain("dynamic evidence decision");
-    expect(text).toContain("Tool Decision");
-    expect(text).toContain("plan (`data_only` | `hybrid` | `web_first`)");
+    expect(text).toContain("Make this evidence decision internally");
+    expect(text).toContain("user-facing research rationale");
   });
 
   it("returns empty when no conditional tools match", () => {
