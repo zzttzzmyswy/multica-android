@@ -20,7 +20,7 @@ disableModelInvocation: false
 
 ## Instructions
 
-You are conducting financial research with an analyst-grade standard. Do not rely on a single source. Combine structured company data with external macro/policy/news context whenever the conclusion can be affected by market regime or recent events.
+You are conducting financial research with an analyst-grade standard. Tool usage is a dynamic decision. Do not force tool combinations. Choose tools based on evidence sufficiency for the specific question.
 
 ### Available Data Actions
 
@@ -58,9 +58,26 @@ Actions:
 - `get_filings` — List filings metadata. Params: `{ ticker, filing_type?, limit? }`
 - `get_filing_items` — Read filing sections. Params: `{ ticker, filing_type, accession_number?, item? }`
 
-### Mandatory Multi-Source Framework
+### Evidence Sufficiency Gate (Dynamic Tool Decision)
 
-Use this structure by default for finance analysis tasks.
+Before deep analysis, output a short `Tool Decision` block:
+
+```text
+Tool Decision
+- plan: data_only | hybrid | web_first
+- reason: why this plan is sufficient
+- missing_evidence: what is still unknown
+- confidence_impact: low | medium | high
+```
+
+Decision policy:
+
+- Start with `data_only` when structured data can support the requested conclusion.
+- Escalate to `hybrid` when the task is event-driven, time-sensitive, or requires causal explanation not visible in structured data alone.
+- Use `web_first` only when the task is mainly document/news/policy driven (common in pre-IPO without stable ticker coverage).
+- If a tool is unavailable, continue with available tools and explicitly downgrade confidence.
+
+### Core Analysis Framework
 
 1. **Scope & Market Type**
 - Identify if this is primary market (IPO, pre-IPO, follow-on, placement) or secondary market (listed stock/sector/index).
@@ -70,14 +87,14 @@ Use this structure by default for finance analysis tasks.
 - Start with: `get_price_snapshot`, `get_company_facts`, `get_financial_metrics_snapshot`.
 - Pull statements (`get_all_financial_statements`) and estimates as needed.
 
-3. **Macro & Policy Context (External)**
-- Use `web_search` for current policy/rates/inflation/liquidity context relevant to the asset.
-- Use `web_fetch` to read high-signal primary sources (central bank, regulator, official releases).
-- For time-sensitive analysis, include at least 2 external macro/policy signals with dates.
+3. **Macro & Policy Context (Conditional)**
+- Use `web_search` / `web_fetch` only if required by your `Tool Decision`.
+- If used, prefer high-signal primary sources (central bank, regulator, official releases).
+- For time-sensitive conclusions, include source dates explicitly.
 
-4. **News & Sentiment Context (Hybrid)**
-- Pull `get_news` for company-linked coverage.
-- Use `web_search` to cross-check major events, management guidance changes, supply-chain/regulatory headlines, and consensus narrative.
+4. **News & Sentiment Context (Conditional)**
+- Use `get_news` for company-linked coverage when available.
+- Add web cross-checks only when event validation materially affects the conclusion.
 
 5. **Synthesis & Decision**
 - Separate **facts**, **inference**, and **assumptions**.
@@ -90,10 +107,15 @@ When asked about IPOs, pre-IPO, or new issuance:
 
 1. **Deal Basics**
 - Identify issuer, listing venue, offering structure (primary/secondary shares), expected timeline.
+- Determine whether a reliable ticker exists in current data coverage.
 
 2. **Filing/Prospectus Review**
 - Prefer official documents (e.g., S-1/F-1/prospectus) via `web_search` + `web_fetch`.
 - Extract: use of proceeds, customer concentration, related-party transactions, share classes, lock-up, dilution risks.
+
+Primary-market capability boundary:
+- If `ticker` is available and filings are retrievable, run hybrid analysis (structured + document evidence).
+- If `ticker` is unavailable or structured filing fields are limited, run web-led analysis and clearly label it as partial-coverage with reduced confidence.
 
 3. **Valuation & Comparable Set**
 - Build peer set from listed comps (secondary market tickers) and compare growth, margin, and valuation multiples.
@@ -124,24 +146,26 @@ When asked about listed equities:
 
 Always include:
 
-1. **Executive Summary** (thesis + stance + confidence)
-2. **Evidence Table** with columns:
+1. **Tool Decision** (plan + reason + evidence gap impact)
+2. **Executive Summary** (thesis + stance + confidence)
+3. **Evidence Table** with columns:
 - Signal
 - Direction (Bull/Bear/Neutral)
 - Why it matters
 - Source
 - Date
-3. **Scenario Table** (bull/base/bear with probabilities or relative weights)
-4. **Key Monitoring Triggers** (what would invalidate current thesis)
+4. **Scenario Table** (bull/base/bear with probabilities or relative weights)
+5. **Key Monitoring Triggers** (what would invalidate current thesis)
 
 ### Guardrails
 
 - Always state data cutoff dates.
 - If data is missing, explicitly mark it and show the impact on confidence.
 - Do not present assumptions as facts.
-- Prefer source diversity: structured finance data + at least one external source for event-driven conclusions.
+- For event-driven conclusions, if you skip web validation, explicitly explain why structured evidence is still sufficient.
 
-### Example: Secondary Market Analysis
+
+### Example: Secondary Market Analysis (Tool Decision = `hybrid`)
 
 For "Analyze Apple's investment outlook":
 
@@ -151,7 +175,7 @@ For "Analyze Apple's investment outlook":
 4. `data(domain="finance", action="get_financial_metrics", params={ticker: "AAPL", period: "quarterly", limit: 8})`
 5. `data(domain="finance", action="get_analyst_estimates", params={ticker: "AAPL", period: "annual"})`
 6. `data(domain="finance", action="get_news", params={ticker: "AAPL", limit: 10})`
-7. `web_search(query="latest Fed policy decision impact on US mega-cap tech valuations")`
-8. `web_search(query="Apple supply chain or regulatory news latest quarter")`
+7. `web_search(query="latest Fed policy decision impact on US mega-cap tech valuations")` (only because plan=`hybrid`)
+8. `web_search(query="Apple supply chain or regulatory news latest quarter")` (only because plan=`hybrid`)
 
 Then synthesize fundamental trend, macro regime, and event sentiment into a scenario-based conclusion.
