@@ -176,15 +176,18 @@ describe("buildConditionalToolSections", () => {
 
   it("includes web access section when web tools present", () => {
     const result = buildConditionalToolSections(["web_search"], "full");
-    expect(result.join("\n")).toContain("## Web Access");
+    const text = result.join("\n");
+    expect(text).toContain("## Web Access");
+    expect(text).toContain("Web usage is conditional, not mandatory");
   });
 
-  it("adds data-web fusion guidance when both data and web tools are present", () => {
+  it("adds dynamic evidence decision guidance when both data and web tools are present", () => {
     const result = buildConditionalToolSections(["data", "web_search"], "full");
     const text = result.join("\n");
     expect(text).toContain("## Data Access");
-    expect(text).toContain("combine them");
-    expect(text).toContain("macro, policy, and breaking-news context");
+    expect(text).toContain("dynamic evidence decision");
+    expect(text).toContain("Tool Decision");
+    expect(text).toContain("plan (`data_only` | `hybrid` | `web_first`)");
   });
 
   it("returns empty when no conditional tools match", () => {
