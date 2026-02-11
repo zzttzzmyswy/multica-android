@@ -240,7 +240,6 @@ export function buildConditionalToolSections(
   if (mode === "none" || !tools || tools.length === 0) return [];
 
   const toolSet = new Set(tools.map((t) => t.toLowerCase()));
-  const hasWebTools = toolSet.has("web_search") || toolSet.has("web_fetch");
   const lines: string[] = [];
 
   // Memory tools
@@ -271,28 +270,19 @@ export function buildConditionalToolSections(
 
   // Data tools
   if (toolSet.has("data")) {
-    const dataLines = [
+    lines.push(
       "## Data Access",
       "You have access to structured financial and market data via the `data` tool.",
       'Use domain="finance" with specific actions to retrieve stock prices, financial statements, SEC filings, metrics, and more.',
       "Always specify dates in YYYY-MM-DD format. Use period='annual' or 'quarterly' or 'ttm' for financial statements.",
-      hasWebTools
-        ? "When both data and web tools are available, make a dynamic evidence decision: start from structured data, and use web tools only when external validation is needed (for example: event-driven, time-sensitive, or conflicting/incomplete evidence)."
-        : "Use tool outputs as evidence, and clearly state assumptions when data is incomplete.",
-      ...(hasWebTools
-        ? [
-            "Make this evidence decision internally. In final answers, present concise user-facing research rationale instead of technical decision labels unless the user asks for methodology details.",
-          ]
-        : []),
+      "When both data and web tools are available, make a dynamic evidence decision: start from structured data, and use web tools only when external validation is needed (for example: event-driven, time-sensitive, or conflicting/incomplete evidence).",
+      "Make this evidence decision internally. In final answers, present concise user-facing research rationale instead of technical decision labels unless the user asks for methodology details.",
       "",
-    ];
-    lines.push(
-      ...dataLines,
     );
   }
 
   // Web tools
-  if (hasWebTools) {
+  if (toolSet.has("web_search") || toolSet.has("web_fetch")) {
     lines.push(
       "## Web Access",
       "You have web access. Use it when the user asks about current events, needs up-to-date information, or requests content from URLs.",
