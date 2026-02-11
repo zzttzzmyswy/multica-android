@@ -2,12 +2,23 @@ import { useState } from 'react'
 import { Button } from '@multica/ui/components/ui/button'
 import { Input } from '@multica/ui/components/ui/input'
 import { Badge } from '@multica/ui/components/ui/badge'
+import { Separator } from '@multica/ui/components/ui/separator'
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from '@multica/ui/components/ui/hover-card'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { ArrowLeft02Icon, Loading03Icon } from '@hugeicons/core-free-icons'
+import {
+  ArrowLeft02Icon,
+  Loading03Icon,
+  HelpCircleIcon,
+  Share08Icon,
+  Tick02Icon,
+  InformationCircleIcon,
+} from '@hugeicons/core-free-icons'
 import { useChannels } from '../../../hooks/use-channels'
-import { TutorialStep } from '../../../components/onboarding/tutorial-step'
 import { StepDots } from './step-dots'
-import { useOnboardingStore } from '../../../stores/onboarding'
 
 function statusVariant(
   status: string
@@ -30,8 +41,7 @@ interface ConnectStepProps {
 }
 
 export default function ConnectStep({ onNext, onBack }: ConnectStepProps) {
-  const { states, config, saveToken, loading: channelLoading } = useChannels()
-  const { setClientConnected } = useOnboardingStore()
+  const { states, config, saveToken } = useChannels()
 
   const [token, setToken] = useState('')
   const [saving, setSaving] = useState(false)
@@ -56,141 +66,161 @@ export default function ConnectStep({ onNext, onBack }: ConnectStepProps) {
       setLocalError(result.error ?? 'Failed to connect')
     } else {
       setToken('')
-      setClientConnected(true)
     }
     setSaving(false)
   }
 
   return (
-    <div className="h-full flex">
-      {/* Left column */}
-      <div className="flex-1 flex items-center justify-center px-12 py-8">
-        <div className="max-w-md w-full space-y-6">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <HugeiconsIcon icon={ArrowLeft02Icon} className="size-4" />
-            Back
-          </button>
+    <div className="h-full flex items-center justify-center px-6 py-8 animate-in fade-in duration-300">
+      <div className="w-full max-w-md space-y-6">
+        {/* Back button */}
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <HugeiconsIcon icon={ArrowLeft02Icon} className="size-4" />
+          Back
+        </button>
 
-          <div className="space-y-2">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Connect a client
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Connect a Telegram bot so you can chat with your agent from
-              anywhere. You can always set this up later in settings.
-            </p>
+        {/* Header */}
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Your agent, everywhere
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Create bots on messaging platforms that talk to your local agent.
+          </p>
+        </div>
+
+        {/* Info box */}
+        <div className="rounded-lg bg-muted/50 px-4 py-3 space-y-2">
+          <p className="text-sm text-muted-foreground">
+            Your bot connects directly to this machine —
+            chat from your phone, tablet, or any device.
+          </p>
+          <p className="text-xs text-muted-foreground/70 flex items-center gap-1.5">
+            <HugeiconsIcon icon={InformationCircleIcon} className="size-3.5 shrink-0" />
+            Telegram now. Discord, Slack, Mobile app coming soon.
+          </p>
+        </div>
+
+        {/* Telegram card */}
+        <div className="rounded-xl border border-border bg-card">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center size-8 rounded-lg bg-muted shrink-0">
+                <HugeiconsIcon
+                  icon={Share08Icon}
+                  className="size-4 text-muted-foreground"
+                />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Telegram</p>
+                <p className="text-xs text-muted-foreground">
+                  Bot API long polling
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Status badge */}
+              {state && (
+                <Badge variant={statusVariant(state.status)}>
+                  {state.status}
+                </Badge>
+              )}
+
+              {/* Help hover card */}
+              <HoverCard>
+                <HoverCardTrigger className="p-1 text-muted-foreground hover:text-foreground transition-colors">
+                  <HugeiconsIcon icon={HelpCircleIcon} className="size-4" />
+                </HoverCardTrigger>
+                <HoverCardContent align="end" side="top" className="w-56">
+                  <p className="font-medium text-sm mb-2">
+                    Get a bot token
+                  </p>
+                  <ol className="space-y-1.5">
+                    <li className="text-xs text-muted-foreground flex gap-2">
+                      <span className="text-foreground/50 shrink-0">1.</span>
+                      <span>Open @BotFather in Telegram</span>
+                    </li>
+                    <li className="text-xs text-muted-foreground flex gap-2">
+                      <span className="text-foreground/50 shrink-0">2.</span>
+                      <span>Send /newbot and name your bot</span>
+                    </li>
+                    <li className="text-xs text-muted-foreground flex gap-2">
+                      <span className="text-foreground/50 shrink-0">3.</span>
+                      <span>Copy the token and paste below</span>
+                    </li>
+                  </ol>
+                </HoverCardContent>
+              </HoverCard>
+            </div>
           </div>
 
-          {channelLoading ? (
-            <div className="h-24 rounded-xl border border-border bg-card animate-pulse" />
-          ) : hasToken ? (
-            <div className="p-4 rounded-xl border border-primary/30 bg-card space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="font-medium text-sm">Telegram Bot</p>
-                {state && (
-                  <Badge variant={statusVariant(state.status)}>
-                    {state.status}
-                  </Badge>
-                )}
+          <div className="p-4">
+            {hasToken ? (
+              <div className="flex items-center gap-2">
+                <HugeiconsIcon
+                  icon={Tick02Icon}
+                  className="size-4 text-green-600 dark:text-green-500 shrink-0"
+                />
+                <p className="text-sm text-muted-foreground">
+                  {isRunning
+                    ? 'Bot is running. Send it a message to test.'
+                    : isStarting
+                      ? 'Starting bot...'
+                      : 'Bot configured.'}
+                </p>
               </div>
-              {state?.status === 'error' && state.error && (
-                <p className="text-sm text-destructive">{state.error}</p>
-              )}
-              {isRunning && (
-                <p className="text-sm text-muted-foreground">
-                  Your bot is running. Send it a message on Telegram to test.
-                </p>
-              )}
-              {isStarting && (
-                <p className="text-sm text-muted-foreground">
-                  Starting your bot...
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <Input
-                type="password"
-                placeholder="Paste your bot token from @BotFather"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
-              />
-              {localError && (
-                <p className="text-sm text-destructive">{localError}</p>
-              )}
-              <Button
-                size="sm"
-                onClick={handleConnect}
-                disabled={saving || !token.trim()}
-              >
-                {saving && (
-                  <HugeiconsIcon
-                    icon={Loading03Icon}
-                    className="size-4 animate-spin mr-2"
-                  />
-                )}
-                Connect
-              </Button>
-            </div>
-          )}
-
-          <div className="flex items-center justify-between">
-            <StepDots />
-            <div className="flex gap-2">
-              {!hasToken && (
-                <Button size="lg" variant="ghost" onClick={onNext}>
-                  Skip
+            ) : (
+              <div className="flex gap-2">
+                <Input
+                  type="password"
+                  placeholder="Bot token from @BotFather"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
+                  className="flex-1"
+                />
+                <Button
+                  size="sm"
+                  variant='ghost'
+                  onClick={handleConnect}
+                  disabled={saving || !token.trim()}
+                >
+                  {saving && (
+                    <HugeiconsIcon
+                      icon={Loading03Icon}
+                      className="size-4 animate-spin mr-1.5"
+                    />
+                  )}
+                  Connect
                 </Button>
-              )}
-              <Button size="lg" onClick={onNext} disabled={!isRunning}>
-                Continue
-              </Button>
-            </div>
+              </div>
+            )}
+
+            {localError && (
+              <p className="text-sm text-destructive mt-2">{localError}</p>
+            )}
+            {state?.status === 'error' && state.error && (
+              <p className="text-sm text-destructive mt-2">{state.error}</p>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* Right column — BotFather tutorial */}
-      <div className="flex-1 flex items-center justify-center bg-muted/30 px-12 py-8">
-        <div className="max-w-sm space-y-6">
-          <div className="space-y-2">
-            <h3 className="text-lg font-medium">Create a Telegram bot</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Follow these steps to create your bot:
-            </p>
-          </div>
+        <Separator />
 
-          <div className="space-y-4">
-            <TutorialStep
-              number={1}
-              text="Open Telegram and search for @BotFather"
-            />
-            <TutorialStep
-              number={2}
-              text="Send /newbot and follow the prompts to name your bot"
-            />
-            <TutorialStep
-              number={3}
-              text="BotFather will give you a token like 123456:ABC-DEF..."
-            />
-            <TutorialStep
-              number={4}
-              text='Paste the token on the left and click "Connect"'
-            />
-          </div>
-
-          <div className="space-y-2">
-            <h4 className="text-sm font-medium text-muted-foreground">
-              Why connect Telegram?
-            </h4>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Once connected, you can chat with your Multica agent directly
-              from Telegram on any device — phone, tablet, or desktop.
-            </p>
+        {/* Footer */}
+        <div className="flex items-center justify-between">
+          <StepDots />
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={onNext}>
+              Skip
+            </Button>
+            <Button size="sm" onClick={onNext} disabled={!hasToken}>
+              Continue
+            </Button>
           </div>
         </div>
       </div>
