@@ -1,6 +1,5 @@
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Sun03Icon, Moon02Icon, ComputerIcon } from "@hugeicons/core-free-icons"
-import { Button } from "@multica/ui/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,22 +9,15 @@ import {
 import { useTheme } from "./theme-provider"
 
 export function ModeToggle() {
-  const { setTheme } = useTheme()
+  const { theme, setTheme } = useTheme()
+
+  const icon = theme === "light" ? Sun03Icon : theme === "dark" ? Moon02Icon : ComputerIcon
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="size-8">
-          <HugeiconsIcon
-            icon={Sun03Icon}
-            className="size-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0"
-          />
-          <HugeiconsIcon
-            icon={Moon02Icon}
-            className="absolute size-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100"
-          />
-          <span className="sr-only">Toggle theme</span>
-        </Button>
+      <DropdownMenuTrigger className="inline-flex items-center justify-center size-8 rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <HugeiconsIcon icon={icon} className="size-4" />
+        <span className="sr-only">Toggle theme</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={() => setTheme("light")}>
