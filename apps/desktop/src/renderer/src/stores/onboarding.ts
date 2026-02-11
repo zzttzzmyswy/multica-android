@@ -10,7 +10,6 @@ interface AcknowledgementsState {
 
 interface OnboardingStore {
   completed: boolean
-  forceOnboarding: boolean
   currentStep: number
   acknowledgements: AcknowledgementsState
   allAcknowledged: boolean
@@ -23,14 +22,12 @@ interface OnboardingStore {
   setProviderConfigured: (configured: boolean) => void
   setClientConnected: (connected: boolean) => void
   completeOnboarding: () => void
-  initForceFlag: () => Promise<void>
 }
 
 export const useOnboardingStore = create<OnboardingStore>()(
   persist(
     (set, get) => ({
       completed: false,
-      forceOnboarding: false,
       currentStep: 0,
 
       acknowledgements: {
@@ -57,14 +54,7 @@ export const useOnboardingStore = create<OnboardingStore>()(
 
       setClientConnected: (connected) => set({ clientConnected: connected }),
 
-      completeOnboarding: () => set({ completed: true, forceOnboarding: false, currentStep: 0 }),
-
-      initForceFlag: async () => {
-        const flags = await window.electronAPI.app.getFlags()
-        if (flags.forceOnboarding) {
-          set({ forceOnboarding: true })
-        }
-      },
+      completeOnboarding: () => set({ completed: true, currentStep: 0 }),
     }),
     {
       name: 'multica-onboarding',

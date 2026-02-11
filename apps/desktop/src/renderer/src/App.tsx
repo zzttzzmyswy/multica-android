@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { createHashRouter, Navigate, RouterProvider } from 'react-router-dom'
 import { ThemeProvider } from './components/theme-provider'
+import { TooltipProvider } from '@multica/ui/components/ui/tooltip'
 import Layout from './pages/layout'
 import HomePage from './pages/home'
 import ChatPage from './pages/chat'
@@ -15,8 +16,7 @@ import { useChannelsStore } from './stores/channels'
 
 function OnboardingGuard({ children }: { children: React.ReactNode }) {
   const completed = useOnboardingStore((s) => s.completed)
-  const forceOnboarding = useOnboardingStore((s) => s.forceOnboarding)
-  if (!completed || forceOnboarding) return <Navigate to="/onboarding" replace />
+  if (!completed) return <Navigate to="/onboarding" replace />
   return <>{children}</>
 }
 
@@ -48,7 +48,6 @@ const router = createHashRouter([
 
 export default function App() {
   useEffect(() => {
-    useOnboardingStore.getState().initForceFlag()
     // Prefetch global data at app startup
     useProviderStore.getState().fetch()
     useChannelsStore.getState().fetch()
@@ -56,7 +55,9 @@ export default function App() {
 
   return (
     <ThemeProvider defaultTheme="system" storageKey="multica-theme">
-      <RouterProvider router={router} />
+      <TooltipProvider>
+        <RouterProvider router={router} />
+      </TooltipProvider>
     </ThemeProvider>
   )
 }
