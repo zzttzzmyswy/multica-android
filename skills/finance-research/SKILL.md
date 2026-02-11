@@ -1,7 +1,7 @@
 ---
 name: Finance Research
-description: Conduct financial research and analysis including stock analysis, company fundamentals, SEC filings review, and market data retrieval. Use when the user asks about stocks, financial statements, company performance, market data, or investment analysis.
-version: 1.0.0
+description: Conduct analyst-grade financial research across primary and secondary markets using structured financial data plus macro and public-information cross-checks.
+version: 1.1.0
 metadata:
   emoji: "\U0001F4CA"
   requires:
@@ -12,13 +12,15 @@ metadata:
     - research
     - stocks
     - data
+    - macro
+    - sentiment
 userInvocable: true
 disableModelInvocation: false
 ---
 
 ## Instructions
 
-You are conducting financial research using real market data. Use the `data` tool with `domain="finance"` and the appropriate action.
+You are conducting financial research with an analyst-grade standard. Tool usage is a dynamic decision. Do not force tool combinations. Choose tools based on evidence sufficiency for the specific question.
 
 ### Available Data Actions
 
@@ -48,44 +50,125 @@ Actions:
 
 #### Company Info
 - `get_company_facts` — Sector, industry, employees, exchange, website. Params: `{ ticker }`
-- `get_news` — Recent news articles. Params: `{ ticker, start_date?, end_date?, limit? }`
+- `get_news` — Recent company news articles. Params: `{ ticker, start_date?, end_date?, limit? }`
 - `get_insider_trades` — Insider buying/selling (SEC Form 4). Params: `{ ticker, limit?, filing_date*? }`
 - `get_segmented_revenues` — Revenue by segment/geography. Params: `{ ticker, period, limit? }`
 
 #### SEC Filings
 - `get_filings` — List filings metadata. Params: `{ ticker, filing_type?, limit? }`
-  - filing_type: "10-K", "10-Q", "8-K"
-- `get_filing_items` — Read specific filing sections. Params: `{ ticker, filing_type, accession_number?, item? }`
-  - item: array of section names (e.g. ["Item-1A", "Item-7"] for 10-K)
+- `get_filing_items` — Read filing sections. Params: `{ ticker, filing_type, accession_number?, item? }`
 
-### Research Workflow
+### Evidence Sufficiency Gate (Internal Decision)
 
-1. **Understand** what financial data is needed
-2. **Get context** — start with `get_price_snapshot` and `get_company_facts` for orientation
-3. **Gather data** — use the appropriate actions for the analysis
-4. **Analyze** — interpret data with proper financial reasoning
-5. **Present** — clear findings with data tables and key takeaways
+Before deep analysis, make an internal evidence decision. Do not output a technical decision block by default.
 
-### Best Practices
+If the user explicitly asks for methodology or reasoning transparency, provide a concise plain-language explanation of your research approach.
 
-- Use `get_all_financial_statements` when you need multiple statement types (saves API calls)
-- Use annual data for trend analysis, quarterly for recent performance, TTM for current state
-- Cross-reference metrics: revenue growth vs cash flow growth, margins vs peers
-- Always note the time period and currency when presenting financial data
-- For SEC filing analysis: first `get_filings` to find relevant filings, then `get_filing_items` to read specific sections
-- Common 10-K items: Item-1 (Business), Item-1A (Risk Factors), Item-7 (MD&A), Item-8 (Financial Statements)
-- Common 10-Q items: Part-1,Item-1 (Financial Statements), Part-1,Item-2 (MD&A)
+Decision policy:
 
-### Example: Company Analysis
+- Start with `data_only` when structured data can support the requested conclusion.
+- Escalate to `hybrid` when the task is event-driven, time-sensitive, or requires causal explanation not visible in structured data alone.
+- Use `web_first` only when the task is mainly document/news/policy driven (common in pre-IPO without stable ticker coverage).
+- If a tool is unavailable, continue with available tools and explicitly downgrade confidence.
 
-For "Analyze Apple's financial health":
+### Core Analysis Framework
 
-```
-1. data(domain="finance", action="get_price_snapshot", params={ticker: "AAPL"})
-2. data(domain="finance", action="get_company_facts", params={ticker: "AAPL"})
-3. data(domain="finance", action="get_all_financial_statements", params={ticker: "AAPL", period: "annual", limit: 3})
-4. data(domain="finance", action="get_financial_metrics_snapshot", params={ticker: "AAPL"})
-5. data(domain="finance", action="get_analyst_estimates", params={ticker: "AAPL"})
-```
+1. **Scope & Market Type**
+- Identify if this is primary market (IPO, pre-IPO, follow-on, placement) or secondary market (listed stock/sector/index).
+- State region and analysis horizon (event-driven, 3-6 months, 1-3 years).
 
-Then analyze trends, margins, growth rates, and present findings.
+2. **Core Company Data (Structured)**
+- Start with: `get_price_snapshot`, `get_company_facts`, `get_financial_metrics_snapshot`.
+- Pull statements (`get_all_financial_statements`) and estimates as needed.
+
+3. **Macro & Policy Context (Conditional)**
+- Use `web_search` / `web_fetch` only if required by your internal evidence decision.
+- If used, prefer high-signal primary sources (central bank, regulator, official releases).
+- For time-sensitive conclusions, include source dates explicitly.
+
+4. **News & Sentiment Context (Conditional)**
+- Use `get_news` for company-linked coverage when available.
+- Add web cross-checks only when event validation materially affects the conclusion.
+
+5. **Synthesis & Decision**
+- Separate **facts**, **inference**, and **assumptions**.
+- Build bull/base/bear scenarios with explicit trigger conditions.
+- Provide confidence level and explain the main uncertainty drivers.
+
+### Primary Market (一级市场) Workflow
+
+When asked about IPOs, pre-IPO, or new issuance:
+
+1. **Deal Basics**
+- Identify issuer, listing venue, offering structure (primary/secondary shares), expected timeline.
+- Determine whether a reliable ticker exists in current data coverage.
+
+2. **Filing/Prospectus Review**
+- Prefer official documents (e.g., S-1/F-1/prospectus) via `web_search` + `web_fetch`.
+- Extract: use of proceeds, customer concentration, related-party transactions, share classes, lock-up, dilution risks.
+
+Primary-market capability boundary:
+- If `ticker` is available and filings are retrievable, run hybrid analysis (structured + document evidence).
+- If `ticker` is unavailable or structured filing fields are limited, run web-led analysis and clearly label it as partial-coverage with reduced confidence.
+
+3. **Valuation & Comparable Set**
+- Build peer set from listed comps (secondary market tickers) and compare growth, margin, and valuation multiples.
+- Flag gaps between issuer narrative and peer reality.
+
+4. **Deal Risk Map**
+- Highlight red flags: weak FCF quality, aggressive non-GAAP adjustments, concentrated revenue, regulatory overhang.
+- Provide post-listing watch items: lock-up expiry, first earnings, guidance revisions.
+
+### Secondary Market (二级市场) Workflow
+
+When asked about listed equities:
+
+1. **Trend & Positioning**
+- Pull 1y price history (`get_prices`) and identify regime (uptrend/range/downtrend) with volatility context.
+
+2. **Fundamentals**
+- Analyze growth quality (revenue vs FCF), margin durability, leverage, and capital allocation.
+
+3. **Valuation**
+- Compare current multiples to historical bands and peers (when peer data is available).
+- Connect valuation premium/discount to expected growth and risk profile.
+
+4. **Catalysts & Risks**
+- Earnings, guidance, product cycle, policy changes, rates/FX/commodity sensitivity, insider activity.
+
+### Output Standard
+
+Always include:
+
+1. **Executive Summary** (thesis + stance + confidence)
+2. **Evidence Table** with columns:
+- Signal
+- Direction (Bull/Bear/Neutral)
+- Why it matters
+- Source
+- Date
+3. **Scenario Table** (bull/base/bear with probabilities or relative weights)
+4. **Key Monitoring Triggers** (what would invalidate current thesis)
+
+### Guardrails
+
+- Always state data cutoff dates.
+- If data is missing, explicitly mark it and show the impact on confidence.
+- Do not present assumptions as facts.
+- For event-driven conclusions, if you skip web validation, explicitly explain why structured evidence is still sufficient.
+
+
+### Example: Secondary Market Analysis
+
+For "Analyze Apple's investment outlook":
+
+1. `data(domain="finance", action="get_price_snapshot", params={ticker: "AAPL"})`
+2. `data(domain="finance", action="get_company_facts", params={ticker: "AAPL"})`
+3. `data(domain="finance", action="get_all_financial_statements", params={ticker: "AAPL", period: "annual", limit: 3})`
+4. `data(domain="finance", action="get_financial_metrics", params={ticker: "AAPL", period: "quarterly", limit: 8})`
+5. `data(domain="finance", action="get_analyst_estimates", params={ticker: "AAPL", period: "annual"})`
+6. `data(domain="finance", action="get_news", params={ticker: "AAPL", limit: 10})`
+7. `web_search(query="latest Fed policy decision impact on US mega-cap tech valuations")`
+8. `web_search(query="Apple supply chain or regulatory news latest quarter")`
+
+Then synthesize fundamental trend, macro regime, and event sentiment into a scenario-based conclusion.

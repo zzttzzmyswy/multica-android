@@ -290,6 +290,8 @@ export function buildConditionalToolSections(
       "You have access to structured financial and market data via the `data` tool.",
       'Use domain="finance" with specific actions to retrieve stock prices, financial statements, SEC filings, metrics, and more.',
       "Always specify dates in YYYY-MM-DD format. Use period='annual' or 'quarterly' or 'ttm' for financial statements.",
+      "When both data and web tools are available, make a dynamic evidence decision: start from structured data, and use web tools only when external validation is needed (for example: event-driven, time-sensitive, or conflicting/incomplete evidence).",
+      "Make this evidence decision internally. In final answers, present concise user-facing research rationale instead of technical decision labels unless the user asks for methodology details.",
       "",
     );
   }
@@ -300,6 +302,7 @@ export function buildConditionalToolSections(
       "## Web Access",
       "You have web access. Use it when the user asks about current events, needs up-to-date information, or requests content from URLs.",
       "Prefer web_search for discovery and web_fetch for specific URLs.",
+      "Web usage is conditional, not mandatory: call web tools when they materially improve evidence quality.",
       "",
     );
   }
