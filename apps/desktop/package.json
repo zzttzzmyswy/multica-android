@@ -20,6 +20,7 @@
     "@multica/sdk": "workspace:*",
     "@multica/store": "workspace:*",
     "@multica/ui": "workspace:*",
+    "electron-updater": "^6.7.3",
     "qrcode.react": "^4.2.0",
     "react": "catalog:",
     "react-dom": "catalog:",

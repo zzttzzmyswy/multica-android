@@ -237,6 +237,26 @@ const electronAPI = {
     wake: (reason?: string) => ipcRenderer.invoke('heartbeat:wake', reason),
   },
 
+  // Auto-update
+  update: {
+    /** Check for updates */
+    check: () => ipcRenderer.invoke('update:check'),
+    /** Download the available update */
+    download: () => ipcRenderer.invoke('update:download'),
+    /** Quit and install the downloaded update */
+    install: () => ipcRenderer.invoke('update:install'),
+    /** Listen for update status changes (returns unsubscribe function) */
+    onStatus: (callback: (status: { status: string; info?: unknown; progress?: unknown; error?: string }) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, status: Parameters<typeof callback>[0]): void => {
+        callback(status)
+      }
+      ipcRenderer.on('update:status', listener)
+      return (): void => {
+        ipcRenderer.removeListener('update:status', listener)
+      }
+    },
+  },
+
   // Local chat (direct IPC, no Gateway required)
   localChat: {
     /** Subscribe to agent events for local direct chat */
