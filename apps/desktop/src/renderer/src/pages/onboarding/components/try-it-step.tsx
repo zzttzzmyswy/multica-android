@@ -4,6 +4,7 @@ import { ChatView } from '@multica/ui/components/chat-view'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ArrowLeft02Icon } from '@hugeicons/core-free-icons'
 import { SamplePrompt } from '../../../components/onboarding/sample-prompt'
+import { StepDots } from './step-dots'
 import { useLocalChat } from '../../../hooks/use-local-chat'
 
 const samplePrompts = [
@@ -80,7 +81,8 @@ export default function TryItStep({ onComplete, onBack }: TryItStepProps) {
             ))}
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between">
+            <StepDots />
             <Button size="lg" onClick={onComplete}>
               Open Multica
             </Button>

@@ -7,6 +7,7 @@ import { ApiKeyDialog } from '../../../components/api-key-dialog'
 import { OAuthDialog } from '../../../components/oauth-dialog'
 import { ProviderSetup } from '../../../components/onboarding/provider-setup'
 import { TutorialStep } from '../../../components/onboarding/tutorial-step'
+import { StepDots } from './step-dots'
 import { useOnboardingStore } from '../../../stores/onboarding'
 
 interface SetupStepProps {
@@ -86,7 +87,8 @@ export default function SetupStep({ onNext, onBack }: SetupStepProps) {
             <p className="text-sm text-destructive">{error}</p>
           )}
 
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between">
+            <StepDots />
             <Button
               size="lg"
               onClick={onNext}

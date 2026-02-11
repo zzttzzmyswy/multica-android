@@ -74,7 +74,7 @@ function createWindow() {
     width: 1200,
     height: 800,
     titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 16, y: 12 },
+    trafficLightPosition: { x: 16, y: 17 },  // Vertically centered in 48px header
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.cjs'),
       // Enable node integration for IPC

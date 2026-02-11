@@ -6,6 +6,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { ArrowLeft02Icon, Loading03Icon } from '@hugeicons/core-free-icons'
 import { useChannels } from '../../../hooks/use-channels'
 import { TutorialStep } from '../../../components/onboarding/tutorial-step'
+import { StepDots } from './step-dots'
 import { useOnboardingStore } from '../../../stores/onboarding'
 
 function statusVariant(
@@ -137,15 +138,18 @@ export default function ConnectStep({ onNext, onBack }: ConnectStepProps) {
             </div>
           )}
 
-          <div className="flex justify-end gap-2">
-            {!hasToken && (
-              <Button size="lg" variant="ghost" onClick={onNext}>
-                Skip
+          <div className="flex items-center justify-between">
+            <StepDots />
+            <div className="flex gap-2">
+              {!hasToken && (
+                <Button size="lg" variant="ghost" onClick={onNext}>
+                  Skip
+                </Button>
+              )}
+              <Button size="lg" onClick={onNext} disabled={!isRunning}>
+                Continue
               </Button>
-            )}
-            <Button size="lg" onClick={onNext} disabled={!isRunning}>
-              Continue
-            </Button>
+            </div>
           </div>
         </div>
       </div>

@@ -3,7 +3,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { Tick02Icon } from '@hugeicons/core-free-icons'
 
 const steps = [
-  { label: 'Permissions' },
+  { label: 'Privacy' },
   { label: 'Provider' },
   { label: 'Connect' },
   { label: 'Try it' },

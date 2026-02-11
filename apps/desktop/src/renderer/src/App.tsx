@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { createHashRouter, Navigate, RouterProvider } from 'react-router-dom'
+import { ThemeProvider } from './components/theme-provider'
 import Layout from './pages/layout'
 import HomePage from './pages/home'
 import ChatPage from './pages/chat'
@@ -48,5 +49,9 @@ export default function App() {
     useOnboardingStore.getState().initForceFlag()
   }, [])
 
-  return <RouterProvider router={router} />
+  return (
+    <ThemeProvider defaultTheme="system" storageKey="multica-theme">
+      <RouterProvider router={router} />
+    </ThemeProvider>
+  )
 }
