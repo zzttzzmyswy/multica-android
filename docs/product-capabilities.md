@@ -6,15 +6,21 @@
 
 ## 1. Product Definition
 
-**Super Multica** is a distributed AI Agent framework. Users can create, customize, and deploy AI Agents with persistent memory, fine-grained capability control, and multi-provider LLM support. Agents run locally on the user's machine; remote access is optional.
+**Super Multica** is your personal AI Agent that runs entirely on your machine. It can read files, execute commands, search the web, and remember everything you tell it—all while keeping your data local and under your control.
+
+> **Core narrative**: "A personal AI Agent running on your computer. Your data, your API keys, your control."
+
+**Product Focus (Current Version)**:
+- **Primary**: Personal use — one user, one agent, local-first
+- **Secondary**: Remote access via phone/web (optional, for power users)
 
 **Core architecture**:
 
 ```
-Desktop App (standalone, recommended)
-  └─ Hub (embedded, manages agents)
+Desktop App (standalone, primary)
+  └─ Hub (embedded, manages agent)
      └─ Agent Engine (LLM execution, sessions, skills, tools)
-        └─ (Optional) Gateway connection → remote clients (web/mobile)
+        └─ (Optional) Gateway → remote access (web/mobile)
 ```
 
 ---
@@ -25,16 +31,30 @@ Desktop App (standalone, recommended)
 
 ### 2.1 Primary Differentiators
 
-These are the core values that distinguish Super Multica. They should be communicated prominently in onboarding, landing pages, and marketing materials.
+These are the core values that distinguish Super Multica. Communicate them in order of priority.
 
-| Value | User-Facing Message | Technical Basis | Trust Level |
-|-------|---------------------|-----------------|-------------|
-| **Local-First** | "Your data never leaves your computer" | Hub embedded in Desktop, all data stored in `~/.super-multica/` | Core trust point |
-| **Your Keys, Your Control** | "Use your own API keys, switch models anytime" | 10 LLM providers, user-owned credentials | Core trust point |
-| **Safe Execution** | "Every command requires your explicit approval" | 4-layer security assessment + user approval protocol | Core trust point |
-| **Persistent Memory** | "Your agent remembers everything you tell it" | Profile system + Memory tools | Key feature |
-| **Extensible Skills** | "Teach your agent new abilities" | Modular skill system with hot-reload | Key feature |
-| **Multi-Device Access** | "Access from phone, web, anywhere" | Gateway + Device pairing + Telegram integration | Key feature |
+**Tier 1 — Core Identity (Always communicate)**
+
+| Value | User-Facing Message | Technical Basis |
+|-------|---------------------|-----------------|
+| **Personal AI Agent** | "Your own AI assistant, running on your machine" | Desktop-first, embedded Hub, single-user focus |
+| **Capable** | "Read files, run commands, search the web, remember things" | 12 built-in tools across file/runtime/web/memory |
+| **Local-First** | "Your data never leaves your computer" | All data stored in `~/.super-multica/`, no cloud dependency |
+
+**Tier 2 — Trust & Control (Reinforce throughout)**
+
+| Value | User-Facing Message | Technical Basis |
+|-------|---------------------|-----------------|
+| **Your Keys, Your Control** | "Use your own API keys, switch models anytime" | 10 LLM providers, user-owned credentials |
+| **Safe Execution** | "Every command requires your approval" | 4-layer security assessment + approval protocol |
+| **Persistent Memory** | "Your agent remembers what you tell it" | Profile system + Memory tools |
+
+**Tier 3 — Power Features (Available, not prominent)**
+
+| Value | User-Facing Message | Technical Basis |
+|-------|---------------------|-----------------|
+| **Extensible Skills** | "Teach your agent new abilities" | Modular skill system with hot-reload |
+| **Remote Access** | "Access from phone or web when needed" | Gateway + Device pairing (optional) |
 
 ### 2.2 Trust-Building Points
 
@@ -54,10 +74,13 @@ Use this when designing interfaces to determine information hierarchy and featur
 
 | Priority | Features | Where to Expose | Design Guidance |
 |----------|----------|-----------------|-----------------|
-| **P0 - Always Visible** | Chat, Provider status, Approval dialogs | Main UI, always accessible | Cannot be hidden or collapsed |
-| **P1 - Primary Features** | Profile selection, Skills list, Session history | Main navigation, 1 click away | Prominent placement |
-| **P2 - Power Features** | Tool policy config, Memory inspection, Multi-provider rotation | Settings or advanced sections | Available but not prominent |
-| **P3 - Developer Features** | Gateway setup, CLI commands, Session JSONL format | Documentation or dev tools | Hidden from casual users |
+| **P0 - Always Visible** | Chat, Agent status (running/idle), Approval dialogs | Main UI, always accessible | Cannot be hidden or collapsed |
+| **P1 - Dashboard** | Current provider/model, Available tools, Session info | Home/Dashboard, 1 click away | Show what agent can do |
+| **P2 - Configuration** | Provider selection, Profile/Skills management, Tool policy | Settings or sidebar sections | Available but not prominent |
+| **P3 - Power Features** | Remote access (QR/Gateway), Device management, Memory inspection | Settings → Advanced | Hidden from casual users |
+| **P4 - Developer** | CLI commands, Session JSONL format, Gateway config | Documentation only | Not exposed in UI |
+
+**Key Change**: QR code and remote access moved from P0 to P3. Dashboard (agent capabilities) moved up to P1.
 
 ### 2.4 Messaging Tone Guidelines
 
@@ -71,16 +94,19 @@ Use this when designing interfaces to determine information hierarchy and featur
 
 ---
 
-## 3. User Roles
+## 3. User Model
 
-| Role | Definition | Platform | Authority |
-|------|-----------|----------|-----------|
-| **Owner** | Runs the Desktop app, owns Hub and Agents | Desktop (Electron) | Full: create/delete agents, approve devices, configure providers, manage profiles/skills |
-| **Collaborator** | Connects to Owner's Agent via Gateway | Web / Mobile | Limited: chat with agent, view message history. No agent management. |
+**Current Version**: Single-user, personal agent.
 
-There is no formal role/permission system. The Owner is implicit admin by virtue of running the Hub.
+| Role | Definition | Platform |
+|------|-----------|----------|
+| **You** | The person running the Desktop app | Desktop (Electron) |
 
-**User-Facing Value**: "You own your agent. Share access with others while keeping full control."
+You own your agent. You control what it can do, which LLM it uses, and what it remembers.
+
+**Future Consideration**: Remote access allows you to chat with your agent from other devices (phone, web). This is an optional power feature, not the primary use case.
+
+**User-Facing Value**: "Your personal AI agent. Runs on your machine, works for you."
 
 ---
 
@@ -88,9 +114,9 @@ There is no formal role/permission system. The Owner is implicit admin by virtue
 
 ### 4.1 Agent Engine
 
-> **User-Facing Value**: "Your personal AI assistant that can read files, run commands, search the web, and remember what you tell it."
+> **User-Facing Value**: "Your personal AI that lives on your computer. It can read your files, run commands, search the web, and remember everything you tell it."
 
-The core execution unit. An Agent receives user messages, calls an LLM, executes tools, and returns responses.
+The core execution unit. Your Agent receives messages, calls an LLM, executes tools, and returns responses.
 
 #### 4.1.1 Agent Lifecycle
 
@@ -543,7 +569,7 @@ Messages follow the LLM API format:
 
 ### 4.8 Hub
 
-The Hub is the central coordinator. It manages agent lifecycle, routes messages, and handles device verification.
+The Hub manages your agent. It runs embedded in the Desktop app—you don't need to think about it.
 
 #### 4.8.1 Responsibilities
 
@@ -573,11 +599,13 @@ One Hub per ecosystem. In Desktop mode, it's embedded in the Electron main proce
 
 ### 4.9 Gateway
 
-NestJS WebSocket server that enables remote client access to the Hub.
+NestJS WebSocket server that enables remote client access to your agent.
+
+**Note**: Optional component. Most users don't need this for personal use.
 
 #### 4.9.1 Purpose
 
-Bridges remote clients (web/mobile) to the Hub. Not needed for local Desktop use.
+Bridges remote clients (web/mobile) to your agent. **Not needed for local Desktop use** — the primary use case.
 
 #### 4.9.2 Connection Protocol
 
@@ -613,9 +641,11 @@ Bridges remote clients (web/mobile) to the Hub. Not needed for local Desktop use
 
 ### 4.10 Device Pairing & Verification
 
-> **User-Facing Value**: "Scan a QR code to connect from your phone. Approve which devices can access your agent."
+> **User-Facing Value**: "Access your agent from your phone when you need it."
 
-How remote devices (web/mobile) connect to the Owner's Hub.
+**Note**: This is a power feature for users who want remote access. Not part of core onboarding or primary UI.
+
+How remote devices (web/mobile) connect to your agent.
 
 #### 4.10.1 QR Code Generation (Desktop)
 
@@ -764,7 +794,9 @@ Format: JSON5 (supports comments, trailing commas, unquoted keys).
 
 ### 4.12 Channel Integration
 
-> **User-Facing Value**: "Chat with your agent from Telegram, anywhere, anytime. Your agent is always accessible."
+> **User-Facing Value**: "Chat with your agent from Telegram when you're away from your desk."
+
+**Note**: Power feature for users who want additional access methods. Not part of core experience.
 
 Channels enable external messaging platforms to communicate with the Agent. Currently supported: Telegram.
 
@@ -852,24 +884,31 @@ The channel architecture is designed to support additional platforms:
 
 | Route | Page | Purpose |
 |-------|------|---------|
-| `/` | Home | Hub status, QR code, provider selector, agent settings, device list |
-| `/chat` | Chat | Message history, chat input, mode switcher (local/remote) |
+| `/` | Dashboard | Agent status, current provider/model, quick actions |
+| `/chat` | Chat | Message history, chat input |
 | `/tools` | Tools | Tool listing and inspection |
 | `/skills` | Skills | Skill listing and management |
+| `/settings` | Settings | Provider config, remote access, advanced options |
 
-**Navigation**: Tab bar at top (Home, Chat, Tools, Skills)
+**Navigation**: Sidebar (planned) — Dashboard, Chat, Tools, Skills, Settings
 
-#### 5.1.2 Home Page Components
+**Dashboard Focus**: Show what your agent can do and its current state, not "how to connect devices".
 
-| Component | Description |
-|-----------|-------------|
-| QR Code | Left side. Shows connection code with 30s countdown. Refresh/copy link buttons. |
-| Hub Status | Right side. Hub ID, connection state indicator (green/yellow/red). |
-| Agent Settings | Agent name (editable). |
-| Provider Selector | Dropdown showing all providers with availability status. API Key dialog or OAuth dialog based on provider type. |
-| Device List | Verified devices with name, platform, revoke button. |
-| Open Chat | Button. Disabled if Hub not connected. |
-| Connect to Remote Agent | Button. Navigate to remote agent connection. |
+#### 5.1.2 Dashboard Components (Planned)
+
+| Component | Description | Priority |
+|-----------|-------------|----------|
+| Agent Status | Running/Idle indicator, current task if any | P0 |
+| Provider Info | Current provider + model, token usage if available | P1 |
+| Quick Actions | "Start Chat", "New Session" | P1 |
+| Capabilities Overview | Available tools and skills summary | P1 |
+| Session History | Recent conversations, quick resume | P2 |
+| Settings Access | Link to provider config, advanced settings | P2 |
+
+**Moved to Settings → Remote Access**:
+- QR Code for device pairing
+- Connected devices list
+- Gateway configuration
 
 #### 5.1.3 Chat Page Modes
 
@@ -1043,4 +1082,6 @@ button, input, textarea, card, dialog, alert-dialog, dropdown-menu, select, comb
 
 *Document generated: 2026-02-11*
 *Source: codebase analysis on branch feat/onboarding-check*
-*Updates: Added Core Value Propositions (Section 2), Exec Approval Protocol (4.3.5), Channel Integration (4.12), user-facing value descriptions for all major modules*
+*Updates:*
+- *Added Core Value Propositions (Section 2), Exec Approval Protocol (4.3.5), Channel Integration (4.12)*
+- *2026-02-11: **Product positioning shift** — from "distributed framework" to "personal AI agent". Remote access demoted to power feature. Dashboard replaces connection-focused home page.*
