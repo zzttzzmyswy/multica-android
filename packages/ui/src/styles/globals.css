@@ -143,6 +143,19 @@
   color: var(--shiki-dark) !important;
 }
 
+/* KaTeX math: inherit text color for light/dark theme support */
+.katex {
+  color: inherit;
+  font-size: 1em;
+}
+
+.katex-display {
+  margin: 1em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.5em 0;
+}
+
 /* Scroll fade hint utilities — mask content edges to hint at scrollable overflow */
 .mask-fade-y {
   mask-image: linear-gradient(to bottom, transparent 0%, black 32px, black calc(100% - 32px), transparent 100%);
