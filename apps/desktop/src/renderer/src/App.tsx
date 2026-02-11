@@ -10,6 +10,8 @@ import ChannelsPage from './pages/channels'
 import CronsPage from './pages/crons'
 import OnboardingPage from './pages/onboarding'
 import { useOnboardingStore } from './stores/onboarding'
+import { useProviderStore } from './stores/provider'
+import { useChannelsStore } from './stores/channels'
 
 function OnboardingGuard({ children }: { children: React.ReactNode }) {
   const completed = useOnboardingStore((s) => s.completed)
@@ -47,6 +49,9 @@ const router = createHashRouter([
 export default function App() {
   useEffect(() => {
     useOnboardingStore.getState().initForceFlag()
+    // Prefetch global data at app startup
+    useProviderStore.getState().fetch()
+    useChannelsStore.getState().fetch()
   }, [])
 
   return (
