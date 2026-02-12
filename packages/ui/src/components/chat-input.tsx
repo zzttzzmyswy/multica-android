@@ -4,7 +4,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Button } from "@multica/ui/components/ui/button";
-import { ArrowUp02Icon } from "@hugeicons/core-free-icons";
+import { ArrowUp02Icon, StopIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { cn } from "@multica/ui/lib/utils";
 import "./chat-input.css";
@@ -18,12 +18,14 @@ export interface ChatInputRef {
 
 interface ChatInputProps {
   onSubmit?: (value: string) => void;
+  onAbort?: () => void;
+  isLoading?: boolean;
   disabled?: boolean;
   placeholder?: string;
 }
 
 export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
-  function ChatInput({ onSubmit, disabled, placeholder = "Type a message..." }, ref) {
+  function ChatInput({ onSubmit, onAbort, isLoading, disabled, placeholder = "Type a message..." }, ref) {
     // Use ref to avoid stale closure in Tiptap keydown handler
     const onSubmitRef = useRef(onSubmit);
     onSubmitRef.current = onSubmit;
@@ -109,6 +111,16 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
       editor.commands.clearContent();
     };
 
+    const handleButtonClick = () => {
+      if (isLoading && onAbort) {
+        onAbort();
+      } else {
+        handleSubmit();
+      }
+    };
+
+    const showStop = isLoading && !!onAbort;
+
     return (
       <div className={cn(
         "chat-input-editor bg-card rounded-xl p-2 border border-border transition-colors",
@@ -116,8 +128,8 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
       )}>
         <EditorContent className="min-h-12" editor={editor} />
         <div className="flex items-center justify-end pt-2">
-          <Button size="icon" onClick={handleSubmit} disabled={disabled}>
-            <HugeiconsIcon strokeWidth={2.5} icon={ArrowUp02Icon} />
+          <Button size="icon" onClick={handleButtonClick} disabled={disabled && !showStop}>
+            <HugeiconsIcon strokeWidth={2.5} icon={showStop ? StopIcon : ArrowUp02Icon} />
           </Button>
         </div>
       </div>

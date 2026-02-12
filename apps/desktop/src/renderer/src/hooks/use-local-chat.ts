@@ -109,6 +109,12 @@ export function useLocalChat() {
     [agentId],
   )
 
+  const abortGeneration = useCallback(() => {
+    if (!agentId) return
+    window.electronAPI.localChat.abort(agentId).catch(() => {})
+    setIsLoading(false)
+  }, [agentId])
+
   const loadMore = useCallback(async () => {
     const currentOffset = offsetRef.current
     if (!agentId || currentOffset == null || currentOffset <= 0 || isLoadingMoreRef.current) return
@@ -158,6 +164,7 @@ export function useLocalChat() {
     error: chat.error,
     pendingApprovals: chat.pendingApprovals,
     sendMessage,
+    abortGeneration,
     loadMore,
     resolveApproval,
     clearError,

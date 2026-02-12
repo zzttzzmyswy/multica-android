@@ -19,6 +19,7 @@ export function LocalChat() {
     error,
     pendingApprovals,
     sendMessage,
+    abortGeneration,
     loadMore,
     resolveApproval,
     clearError,
@@ -90,6 +91,7 @@ export function LocalChat() {
         error={error}
         pendingApprovals={pendingApprovals}
         sendMessage={sendMessage}
+        onAbort={abortGeneration}
         loadMore={loadMore}
         resolveApproval={resolveApproval}
         errorAction={errorAction}

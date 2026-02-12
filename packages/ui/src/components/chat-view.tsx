@@ -36,6 +36,7 @@ export interface ChatViewProps {
   error: ChatViewError | null;
   pendingApprovals: ChatViewApproval[];
   sendMessage: (text: string) => void;
+  onAbort?: () => void;
   loadMore?: () => void;
   resolveApproval: (approvalId: string, decision: "allow-once" | "allow-always" | "deny") => void;
   onDisconnect?: () => void;
@@ -53,6 +54,7 @@ export function ChatView({
   error,
   pendingApprovals,
   sendMessage,
+  onAbort,
   loadMore,
   resolveApproval,
   onDisconnect,
@@ -257,7 +259,9 @@ export function ChatView({
       <footer className="container px-4 pb-3 pt-1">
         <ChatInput
           onSubmit={sendMessage}
-          disabled={isLoading || (!!error && error.code !== 'AGENT_ERROR')}
+          onAbort={onAbort}
+          isLoading={isLoading}
+          disabled={!!error && error.code !== 'AGENT_ERROR'}
           placeholder={error && error.code !== 'AGENT_ERROR' ? "Connection error" : "Ask your Agent..."}
         />
       </footer>

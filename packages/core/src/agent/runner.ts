@@ -92,6 +92,7 @@ export class Agent {
   // Internal run state
   private _internalRun = false;
   private _isRunning = false;
+  private _aborted = false;
   private _runMutex: Promise<void> = Promise.resolve();
   private currentUserDisplayPrompt: string | undefined;
 
@@ -429,6 +430,7 @@ export class Agent {
     this.output.state.lastAssistantText = "";
     this.currentUserDisplayPrompt = options?.displayPrompt;
     this._isRunning = true;
+    this._aborted = false;
 
     try {
       // Early validation: check API key before calling PiAgentCore.prompt(),
@@ -489,9 +491,27 @@ export class Agent {
       const thinking = this.reasoningMode !== "off"
         ? this.output.state.lastAssistantThinking || undefined
         : undefined;
+
+      // On abort: clear the error so it doesn't propagate as an agent error,
+      // and return partial text without an error flag.
+      if (this._aborted) {
+        this.agent.state.error = undefined;
+        return { text: this.output.state.lastAssistantText, thinking, error: undefined };
+      }
+
       return { text: this.output.state.lastAssistantText, thinking, error: this.agent.state.error };
     } finally {
+      // On abort, persist any partial messages that pi-agent-core appended
+      // via appendMessage() (no message_end event fires for those).
+      if (this._aborted) {
+        const messages = this.agent.state.messages;
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg?.role === "assistant") {
+          this.session.saveMessage(lastMsg);
+        }
+      }
       this._isRunning = false;
+      this._aborted = false;
       this.currentUserDisplayPrompt = undefined;
     }
   }
@@ -699,6 +719,17 @@ export class Agent {
   /** Whether the underlying PiAgentCore has queued steer/followUp messages. */
   hasQueuedMessages(): boolean {
     return this.agent.hasQueuedMessages();
+  }
+
+  /**
+   * Abort the currently running prompt.
+   * Triggers PiAgentCore's internal AbortController. The running prompt()
+   * will resolve (not throw), partial content stays in state.messages.
+   * Safe to call when no run is active (no-op).
+   */
+  abort(): void {
+    this._aborted = true;
+    this.agent.abort();
   }
 
   /**

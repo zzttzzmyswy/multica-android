@@ -242,6 +242,15 @@ export class AsyncAgent {
     return this.agent.hasQueuedMessages();
   }
 
+  /**
+   * Abort the currently running prompt.
+   * Bypasses the serial queue — directly interrupts the running PiAgentCore prompt.
+   * Partial content is preserved in agent context. Safe to call when idle (no-op).
+   */
+  abort(): void {
+    this.agent.abort();
+  }
+
   private shouldForwardEvent(event: AgentEvent | MulticaEvent): boolean {
     if (!this.agent.isInternalRun) return true;
     if (!this.forwardInternalAssistant) return false;
