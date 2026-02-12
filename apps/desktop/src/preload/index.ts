@@ -276,6 +276,8 @@ const electronAPI = {
       ipcRenderer.invoke('localChat:getHistory', agentId, options),
     /** Send message to agent via direct IPC (no Gateway) */
     send: (agentId: string, content: string) => ipcRenderer.invoke('localChat:send', agentId, content),
+    /** Abort the current agent run */
+    abort: (agentId: string) => ipcRenderer.invoke('localChat:abort', agentId),
     /** Resolve an exec approval request */
     resolveExecApproval: (approvalId: string, decision: string) =>
       ipcRenderer.invoke('localChat:resolveExecApproval', approvalId, decision),

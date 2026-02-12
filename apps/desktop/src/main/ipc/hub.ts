@@ -395,6 +395,20 @@ export function registerHubIpcHandlers(): void {
   })
 
   /**
+   * Abort the current agent run for local chat.
+   */
+  ipcMain.handle('localChat:abort', async (_event, agentId: string) => {
+    const h = getHub()
+    const agent = h.getAgent(agentId)
+    if (!agent) {
+      return { error: `Agent not found: ${agentId}` }
+    }
+    agent.abort()
+    safeLog(`[IPC] Abort sent to agent: ${agentId}`)
+    return { ok: true }
+  })
+
+  /**
    * Resolve an exec approval request for local chat.
    */
   ipcMain.handle('localChat:resolveExecApproval', async (_event, approvalId: string, decision: string) => {

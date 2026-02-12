@@ -4,7 +4,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Button } from "@multica/ui/components/ui/button";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Square } from "lucide-react";
 import { cn } from "@multica/ui/lib/utils";
 import "./chat-input.css";
 
@@ -17,6 +17,8 @@ export interface ChatInputRef {
 
 interface ChatInputProps {
   onSubmit?: (value: string) => void;
+  onAbort?: () => void;
+  isLoading?: boolean;
   disabled?: boolean;
   placeholder?: string;
   /** Initial value to pre-fill the input */
@@ -24,7 +26,7 @@ interface ChatInputProps {
 }
 
 export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
-  function ChatInput({ onSubmit, disabled, placeholder = "Type a message...", defaultValue }, ref) {
+  function ChatInput({ onSubmit, onAbort, isLoading, disabled, placeholder = "Type a message...", defaultValue }, ref) {
     // Use ref to avoid stale closure in Tiptap keydown handler
     const onSubmitRef = useRef(onSubmit);
     onSubmitRef.current = onSubmit;
@@ -118,6 +120,16 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
       editor.commands.clearContent();
     };
 
+    const handleButtonClick = () => {
+      if (isLoading && onAbort) {
+        onAbort();
+      } else {
+        handleSubmit();
+      }
+    };
+
+    const showStop = isLoading && !!onAbort;
+
     return (
       <div className={cn(
         "chat-input-editor bg-card rounded-xl p-2 border border-border transition-colors",
@@ -125,8 +137,8 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
       )}>
         <EditorContent className="min-h-12" editor={editor} />
         <div className="flex items-center justify-end pt-2">
-          <Button size="icon" onClick={handleSubmit} disabled={disabled}>
-            <ArrowUp />
+          <Button size="icon" onClick={handleButtonClick} disabled={disabled && !showStop}>
+            {showStop ? <Square className="size-4 fill-current" /> : <ArrowUp />}
           </Button>
         </div>
       </div>
