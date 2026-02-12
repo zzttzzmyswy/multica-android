@@ -26,6 +26,8 @@ disableModelInvocation: false
 
 You are performing a structured financial statement analysis. Follow all steps in order and show your work. Output language must match the user's input language.
 
+**IMPORTANT: This analysis requires BOTH structured data AND external context.** You MUST use `web_search` to gather earnings call insights, industry context, and explanations for data anomalies. An analysis based only on API data without any web research is incomplete. Expect to make 3-6 web searches throughout the analysis.
+
 ### Progress Checklist
 
 ```
@@ -86,29 +88,31 @@ Use `data` tool with `domain="finance"` for all structured data calls.
    ```
    Scan headlines for material events (earnings surprises, guidance changes, M&A, restructuring).
 
-#### 1b. External Context (Web Search)
+#### 1b. External Context (Web Search) — MANDATORY
 
-After reviewing the structured data, run targeted web searches to establish context:
+You MUST run the following two web searches after gathering structured data. These are not optional.
 
-1. **Latest earnings call highlights**:
+1. **Latest earnings call highlights** (REQUIRED):
    ```
-   web_search("[COMPANY] latest earnings call highlights key takeaways")
+   web_search("[COMPANY] latest earnings call highlights key takeaways [CURRENT_YEAR]")
    ```
-   Extract: management guidance, segment commentary, strategic priorities.
+   Extract: management guidance, segment commentary, strategic priorities, forward outlook.
+   This provides the "why" behind the numbers that structured data cannot explain.
 
-2. **Industry/macro backdrop**:
+2. **Industry/macro backdrop** (REQUIRED):
    ```
-   web_search("[INDUSTRY] industry outlook [CURRENT_YEAR]")
+   web_search("[INDUSTRY] industry outlook trends [CURRENT_YEAR]")
    ```
-   Extract: industry growth trends, regulatory changes, competitive dynamics.
+   Extract: industry growth rate, tailwinds/headwinds, regulatory changes, competitive dynamics.
+   This is needed to assess whether the company's performance is company-specific or industry-wide.
 
-3. **Company-specific events** (only if news headlines or data suggest a material event):
+3. **Company-specific events** (conditional — run if news headlines or data show a material event):
    ```
    web_search("[COMPANY] [EVENT_KEYWORD] impact analysis")
    ```
    Examples: acquisition, restructuring, product launch, lawsuit, management change.
 
-Keep web searches targeted. Do not search broadly — only search when structured data raises a question that numbers alone cannot answer.
+**Checkpoint:** Before proceeding to Step 2, verify that you have completed at least 2 web searches above. If you have not, go back and run them now.
 
 ### Step 2: Income Statement Analysis
 
@@ -138,12 +142,13 @@ Analyze the income statement across all 5 annual periods. Calculate and present:
    - R&D as % of revenue (trend, if applicable)
    - Flag any expense category growing faster than revenue
 
-6. **Contextual explanation** (web search):
-   - If revenue growth changed direction significantly (acceleration or deceleration > 10pp), search for the cause:
+6. **Contextual explanation** (REQUIRED — use web search results from Step 1b):
+   - For each significant trend or inflection point in the data above, provide a **why** explanation using the earnings call and industry context gathered in Step 1b.
+   - If revenue growth changed direction significantly (acceleration or deceleration > 10pp), run an additional search:
      `web_search("[COMPANY] revenue [growth/decline] reason [YEAR]")`
-   - If margins shifted by more than 5pp year-over-year, search for explanation:
+   - If margins shifted by more than 5pp year-over-year, run an additional search:
      `web_search("[COMPANY] margin [expansion/compression] [YEAR]")`
-   - Use earnings call context from Step 1b to explain trends. Cite sources.
+   - **Do not present a data table without narrative.** Every major trend must have a "why" attached, citing the source (earnings call, industry report, or company announcement).
 
 Present as a table:
 
@@ -179,10 +184,11 @@ Analyze the balance sheet across all 5 annual periods:
    - Net Working Capital = Current Assets - Current Liabilities
    - Direction of change over 5 years
 
-6. **Contextual explanation** (web search):
-   - If total debt changed significantly (> 30% YoY), search for the reason:
+6. **Contextual explanation** (use web search results from Step 1b + additional searches as needed):
+   - Explain major balance sheet changes using earnings call context from Step 1b.
+   - If total debt changed significantly (> 30% YoY), you MUST search for the reason:
      `web_search("[COMPANY] debt [issuance/repayment] [YEAR]")`
-   - If goodwill jumped, search for acquisition context:
+   - If goodwill jumped, you MUST search for acquisition context:
      `web_search("[COMPANY] acquisition [YEAR]")`
    - Large treasury stock changes → confirm buyback program details:
      `web_search("[COMPANY] share buyback program")`
@@ -219,10 +225,11 @@ Analyze cash flow statements across all 5 annual periods:
    - Total payout ratio = (Dividends + Buybacks) / Net Income
    - Is the company returning cash while maintaining growth?
 
-6. **Contextual explanation** (web search):
-   - If CapEx spiked significantly in a particular year, search for what was built:
+6. **Contextual explanation** (use web search results from Step 1b + additional searches as needed):
+   - Explain cash flow patterns using earnings call context from Step 1b.
+   - If CapEx spiked significantly in a particular year, you MUST search for what was built:
      `web_search("[COMPANY] capital expenditure investment [YEAR]")`
-   - If FCF diverged sharply from net income, check for restructuring or working capital events.
+   - If FCF diverged sharply from net income, search for restructuring or working capital events.
 
 Present a summary table:
 
@@ -317,12 +324,13 @@ Pull and analyze the most recent annual or quarterly filing:
    - Cross-validate: Does management narrative align with the quantitative data from Steps 2-4?
    - Flag contradictions between management tone and actual numbers
 
-5. **Supplement with earnings call context** (web search/fetch):
-   - Search for the most recent earnings call transcript or summary:
-     `web_search("[COMPANY] [QUARTER] [YEAR] earnings call transcript key points")`
-   - If a useful transcript URL is found, use `web_fetch` to read key sections (CEO/CFO prepared remarks, Q&A highlights).
-   - Extract: forward guidance, segment-level commentary, management tone on competitive position.
-   - Cross-reference earnings call statements with MD&A disclosures for consistency.
+5. **Supplement with earnings call transcript** (REQUIRED — web search/fetch):
+   You MUST search for and incorporate the most recent earnings call. This is critical for understanding management's forward-looking view.
+   - Search for the transcript:
+     `web_search("[COMPANY] [QUARTER] [YEAR] earnings call transcript")`
+   - If a transcript URL is found, use `web_fetch` to read key sections (CEO/CFO prepared remarks, Q&A highlights).
+   - Extract: forward guidance, segment-level commentary, management tone on competitive position, key analyst concerns.
+   - Cross-reference earnings call statements with MD&A disclosures — flag any inconsistencies.
 
 6. **Summarize key insights**:
    - What management says about the business trajectory
@@ -435,11 +443,21 @@ Common red flags to watch for:
 - For non-US companies or companies not filing with the SEC, skip Step 7 and note the limitation.
 - Output language must match the user's input language (Chinese input → Chinese output, English input → English output).
 
-### Web Search Guidelines
+### Web Search Requirements
 
-- **Structured data first**: Always complete the quantitative analysis before turning to web searches. Numbers are the foundation; web context is the explanation layer.
-- **Targeted searches only**: Every web search should answer a specific question raised by the data (e.g., "Why did margins drop 8pp in 2023?"). Do not run broad or exploratory searches.
-- **Source quality hierarchy**: Prefer primary sources (SEC filings, company press releases, earnings call transcripts) over secondary sources (analyst blogs, news aggregators).
-- **Cite with dates**: When referencing external information, always include the source name and date. Stale information can be misleading.
-- **Do not over-search**: Aim for 3-6 targeted web searches total across the entire analysis. If the structured data tells a clear story with no anomalies, fewer searches are needed.
-- **Separate fact from opinion**: When citing analyst or media commentary, explicitly label it as external opinion, not established fact.
+**Minimum mandatory searches (you MUST perform these):**
+1. Earnings call highlights (Step 1b) — for management's own explanation of results
+2. Industry outlook (Step 1b) — for macro/sector context
+3. Earnings call transcript (Step 7) — for forward guidance and analyst Q&A
+
+**Additional searches (trigger when data shows anomalies):**
+- Revenue or margin inflection points (Steps 2-4)
+- Major debt changes or acquisitions (Step 3)
+- CapEx spikes (Step 4)
+- Quality-of-earnings red flags (Step 6)
+
+**Search principles:**
+- **Source quality**: Prefer primary sources (SEC filings, company press releases, earnings call transcripts) over secondary sources (analyst blogs, news aggregators).
+- **Cite with dates**: Always include source name and date when referencing external information.
+- **Separate fact from opinion**: Label analyst or media commentary as external opinion, not fact.
+- **Total budget**: Expect 3-8 web searches per analysis. Fewer than 3 means you are likely missing critical context.
