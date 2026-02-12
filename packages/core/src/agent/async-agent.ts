@@ -10,6 +10,23 @@ import { isHeartbeatAckEvent } from "../hub/heartbeat-filter.js";
 
 const devNull = { write: () => true } as unknown as NodeJS.WritableStream;
 
+const WRITEINTERNAL_RETRY_DELAY_MS = 5000;
+
+/** Check if a runInternal error string indicates a transient failure worth retrying. */
+function isTransientRunError(errorMsg: string): boolean {
+  const lower = errorMsg.toLowerCase();
+  if (lower.includes("terminated")) return true;
+  if (lower.includes("aborted")) return true;
+  if (lower.includes("econnreset")) return true;
+  if (lower.includes("etimedout")) return true;
+  if (lower.includes("socket hang up")) return true;
+  if (lower.includes("fetch failed")) return true;
+  if (lower.includes("timeout") || lower.includes("timed out")) return true;
+  if (/\b(429|502|503|504)\b/.test(lower)) return true;
+  if (lower.includes("overloaded")) return true;
+  return false;
+}
+
 /** Discriminated union of legacy Message, raw AgentEvent, and MulticaEvent */
 export type ChannelItem = Message | AgentEvent | MulticaEvent;
 
@@ -122,30 +139,54 @@ export class AsyncAgent {
       .then(async () => {
         if (this._closed) return;
         const prevForward = this.forwardInternalAssistant;
-        this.forwardInternalAssistant = forwardAssistant;
-        try {
-          const result = await this.agent.runInternal(content);
-          await this.agent.flushSession();
-          if (result.error) {
-            // Internal run errors are for diagnostics only; do not leak to user stream.
-            console.error(`[AsyncAgent] Internal run error: ${result.error}`);
-          }
-          // Stop forwarding BEFORE persist to avoid double-emitting the same
-          // assistant message (once from runInternal streaming, once from appendMessage).
-          this.forwardInternalAssistant = prevForward;
-          // Persist the LLM summary so it remains in parent context for future turns
-          if (persistResponse && result.text?.trim() && !isSilentReplyText(result.text)) {
-            this.agent.persistAssistantSummary(result.text.trim());
+
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          this.forwardInternalAssistant = forwardAssistant;
+          try {
+            const result = await this.agent.runInternal(content);
             await this.agent.flushSession();
+
+            if (result.error) {
+              if (attempt === 1 && isTransientRunError(result.error)) {
+                console.warn(
+                  `[AsyncAgent] Internal run transient error: ${result.error}. Retrying in ${WRITEINTERNAL_RETRY_DELAY_MS}ms...`,
+                );
+                this.forwardInternalAssistant = prevForward;
+                await new Promise((r) => setTimeout(r, WRITEINTERNAL_RETRY_DELAY_MS));
+                continue;
+              }
+              // Final attempt or non-transient: log and give up
+              console.error(`[AsyncAgent] Internal run error: ${result.error}`);
+              this.forwardInternalAssistant = prevForward;
+              return;
+            }
+
+            // Success — stop forwarding BEFORE persist to avoid double-emitting
+            this.forwardInternalAssistant = prevForward;
+            if (persistResponse && result.text?.trim() && !isSilentReplyText(result.text)) {
+              this.agent.persistAssistantSummary(result.text.trim());
+              await this.agent.flushSession();
+            }
+            return;
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            if (attempt === 1 && isTransientRunError(message)) {
+              console.warn(
+                `[AsyncAgent] Internal run exception: ${message}. Retrying in ${WRITEINTERNAL_RETRY_DELAY_MS}ms...`,
+              );
+              this.forwardInternalAssistant = prevForward;
+              await new Promise((r) => setTimeout(r, WRITEINTERNAL_RETRY_DELAY_MS));
+              continue;
+            }
+            console.error(`[AsyncAgent] Internal run failed: ${message}`);
+            this.forwardInternalAssistant = prevForward;
+            return;
           }
-        } finally {
-          this.forwardInternalAssistant = prevForward;
         }
       })
       .catch((err) => {
         const message = err instanceof Error ? err.message : String(err);
-        // Internal run exceptions are for diagnostics only; do not leak to user stream.
-        console.error(`[AsyncAgent] Internal run failed: ${message}`);
+        console.error(`[AsyncAgent] Internal run failed (outer): ${message}`);
       });
   }
 
