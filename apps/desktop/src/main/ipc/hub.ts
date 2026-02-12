@@ -17,6 +17,10 @@ let mainWindowRef: BrowserWindow | null = null
 // Value is the unsubscribe function returned by agent.subscribe()
 const ipcAgentSubscriptions = new Map<string, () => void>()
 
+// Resolve gateway URL: GATEWAY_URL env > MAIN_VITE_GATEWAY_URL (.env file)
+const gatewayUrl =
+  process.env.GATEWAY_URL || import.meta.env.MAIN_VITE_GATEWAY_URL
+
 /**
  * Safe log function that catches EPIPE errors.
  * Electron main process stdout can be closed unexpectedly.
@@ -39,7 +43,6 @@ export async function initializeHub(): Promise<void> {
     return
   }
 
-  const gatewayUrl = import.meta.env.MAIN_VITE_GATEWAY_URL
   safeLog(`[Desktop] Initializing Hub, connecting to Gateway: ${gatewayUrl}`)
 
   hub = new Hub(gatewayUrl)
@@ -62,7 +65,6 @@ export async function initializeHub(): Promise<void> {
  */
 function getHub(): Hub {
   if (!hub) {
-    const gatewayUrl = import.meta.env.MAIN_VITE_GATEWAY_URL
     safeLog(`[Desktop] Creating Hub, connecting to Gateway: ${gatewayUrl}`)
     hub = new Hub(gatewayUrl)
   }
