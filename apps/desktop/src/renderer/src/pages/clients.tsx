@@ -15,7 +15,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@multica/ui/components/ui/tabs'
-import { QrCode, Radio, Smartphone } from 'lucide-react'
+import { QrCode, Radio, Smartphone, WifiOff, Loader2 } from 'lucide-react'
 import { useChannelsStore } from '../stores/channels'
 import { useHubStore, selectPrimaryAgent } from '../stores/hub'
 import { ConnectionQRCode } from '../components/qr-code'
@@ -183,10 +183,65 @@ function ChannelsTab() {
   )
 }
 
+/** QR Code card with show/hide toggle */
+function QRCodeCard({
+  gateway,
+  hubId,
+  agentId,
+}: {
+  gateway: string
+  hubId: string
+  agentId: string
+}) {
+  const [expanded, setExpanded] = useState(true)
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-base">Scan to Connect</CardTitle>
+            <CardDescription>Open Multica on your phone and scan.</CardDescription>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setExpanded(!expanded)}>
+            <QrCode className="size-4 mr-1.5" />
+            {expanded ? 'Hide' : 'Show'}
+          </Button>
+        </div>
+      </CardHeader>
+      {expanded && (
+        <CardContent className="flex justify-center">
+          <ConnectionQRCode
+            gateway={gateway}
+            hubId={hubId}
+            agentId={agentId}
+            expirySeconds={30}
+            size={200}
+          />
+        </CardContent>
+      )}
+    </Card>
+  )
+}
+
+/** Authorized devices card */
+function DevicesCard() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Authorized Devices</CardTitle>
+        <CardDescription>Devices you've approved to access your agent.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <DeviceList />
+      </CardContent>
+    </Card>
+  )
+}
+
 function MulticaAppTab() {
   const { hubInfo, agents } = useHubStore()
   const primaryAgent = selectPrimaryAgent(agents)
-  const [qrCodeExpanded, setQrCodeExpanded] = useState(false)
 
   return (
     <div className="space-y-6">
@@ -194,63 +249,45 @@ function MulticaAppTab() {
         Scan to connect from your phone. Manage authorized devices.
       </p>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* QR Code Section */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base">Scan to Connect</CardTitle>
-                <CardDescription>
-                  Open Multica on your phone and scan.
-                </CardDescription>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setQrCodeExpanded(!qrCodeExpanded)}
-              >
-                <QrCode className="size-4 mr-1.5" />
-                {qrCodeExpanded ? 'Hide' : 'Show'}
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-center py-4">
-              {qrCodeExpanded ? (
-                <ConnectionQRCode
-                  gateway={hubInfo?.url ?? 'http://localhost:3000'}
-                  hubId={hubInfo?.hubId ?? 'unknown'}
-                  agentId={primaryAgent?.id}
-                  expirySeconds={30}
-                  size={160}
-                />
-              ) : (
-                <button
-                  onClick={() => setQrCodeExpanded(true)}
-                  className="flex flex-col items-center justify-center gap-3 p-8 rounded-xl border-2 border-dashed border-muted-foreground/25 hover:border-muted-foreground/50 transition-colors cursor-pointer"
-                >
-                  <QrCode className="size-12 text-muted-foreground/40" />
-                  <span className="text-sm text-muted-foreground">Click to show QR code</span>
-                </button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Device List Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Authorized Devices</CardTitle>
-            <CardDescription>
-              Devices you've approved to access your agent.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DeviceList />
-          </CardContent>
-        </Card>
+      <div className="space-y-6">
+        <QRCodeCard
+          gateway={hubInfo?.url ?? 'http://localhost:3000'}
+          hubId={hubInfo?.hubId ?? 'unknown'}
+          agentId={primaryAgent?.id ?? 'unknown'}
+        />
+        <DevicesCard />
       </div>
+    </div>
+  )
+}
+
+/** Gateway status indicator - only shows when disconnected/error */
+function GatewayStatus() {
+  const { hubInfo } = useHubStore()
+  const state = hubInfo?.connectionState ?? 'disconnected'
+  const url = hubInfo?.url ?? 'Unknown'
+
+  // Only show when not connected
+  const isConnected = state === 'connected' || state === 'registered'
+  if (isConnected) return null
+
+  const isConnecting = state === 'connecting' || state === 'reconnecting'
+
+  return (
+    <div className="flex items-center gap-2 text-sm rounded-md bg-destructive/10 text-destructive px-3 py-2">
+      {isConnecting ? (
+        <Loader2 className="size-4 animate-spin" />
+      ) : (
+        <WifiOff className="size-4" />
+      )}
+      <span>
+        {state === 'connecting' && 'Connecting to gateway...'}
+        {state === 'reconnecting' && 'Reconnecting to gateway...'}
+        {state === 'disconnected' && 'Gateway disconnected'}
+      </span>
+      <span className="text-destructive/60 font-mono text-xs truncate max-w-[200px]" title={url}>
+        {url}
+      </span>
     </div>
   )
 }
@@ -265,6 +302,9 @@ export default function ClientsPage() {
           <p className="text-sm text-muted-foreground">
             Access your agent from anywhere. Connect via third-party platforms or the Multica mobile app.
           </p>
+          <div className="mt-2">
+            <GatewayStatus />
+          </div>
         </div>
 
         {/* Tabs */}
