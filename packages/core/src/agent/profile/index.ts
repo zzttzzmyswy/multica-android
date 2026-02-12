@@ -51,6 +51,7 @@ export function createAgentProfile(
     profile.workspace = DEFAULT_TEMPLATES.workspace;
     profile.memory = DEFAULT_TEMPLATES.memory;
     profile.heartbeat = DEFAULT_TEMPLATES.heartbeat;
+    profile.config = { name: "Multica" };
 
     // 保存到文件
     saveProfile(profile, { baseDir });
