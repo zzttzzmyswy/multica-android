@@ -7,8 +7,7 @@ import {
   HoverCardTrigger,
 } from '@multica/ui/components/ui/hover-card'
 import { Link } from '@multica/ui/components/ui/link'
-import { HugeiconsIcon } from '@hugeicons/react'
-import { ArrowLeft02Icon, HelpCircleIcon } from '@hugeicons/core-free-icons'
+import { ChevronLeft, HelpCircle } from 'lucide-react'
 import { cn } from '@multica/ui/lib/utils'
 import { useProviderStore } from '../../../stores/provider'
 import { ApiKeyDialog } from '../../../components/api-key-dialog'
@@ -70,7 +69,7 @@ export default function SetupStep({ onNext, onBack }: SetupStepProps) {
           onClick={onBack}
           className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
-          <HugeiconsIcon icon={ArrowLeft02Icon} className="size-4" />
+          <ChevronLeft className="size-4" />
           Back
         </button>
 
@@ -214,7 +213,7 @@ function ProviderRow({
             onClick={(e) => e.stopPropagation()}
             className="p-1 text-muted-foreground hover:text-foreground transition-colors"
           >
-            <HugeiconsIcon icon={HelpCircleIcon} className="size-4" />
+            <HelpCircle className="size-4" />
           </HoverCardTrigger>
           <HoverCardContent align="end" side="top" className="w-56">
             <p className="font-medium text-sm mb-2">Setup {provider.name}</p>

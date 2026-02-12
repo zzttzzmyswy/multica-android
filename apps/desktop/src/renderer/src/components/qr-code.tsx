@@ -1,12 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { Button } from '@multica/ui/components/ui/button'
-import { HugeiconsIcon } from '@hugeicons/react'
-import {
-  RefreshIcon,
-  CheckmarkCircle02Icon,
-  Copy01Icon,
-} from '@hugeicons/core-free-icons'
+import { RefreshCw, CheckCircle, Copy } from 'lucide-react'
 
 export interface QRCodeData {
   type: 'multica-connect'
@@ -177,7 +172,7 @@ export function ConnectionQRCode({
         {isExpired && (
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm rounded-xl flex items-center justify-center">
             <Button variant="outline" size="sm" onClick={handleRefresh}>
-              <HugeiconsIcon icon={RefreshIcon} className="size-4 mr-2" />
+              <RefreshCw className="size-4 mr-2" />
               Refresh
             </Button>
           </div>
@@ -204,10 +199,13 @@ export function ConnectionQRCode({
             size="sm"
             onClick={isExpired ? handleRefresh : handleCopyLink}
           >
-            <HugeiconsIcon
-              icon={isExpired ? RefreshIcon : (copied ? CheckmarkCircle02Icon : Copy01Icon)}
-              className="size-3.5 mr-1"
-            />
+            {isExpired ? (
+              <RefreshCw className="size-3.5 mr-1" />
+            ) : copied ? (
+              <CheckCircle className="size-3.5 mr-1" />
+            ) : (
+              <Copy className="size-3.5 mr-1" />
+            )}
             {isExpired ? 'Refresh' : (copied ? 'Copied!' : 'Copy Link')}
           </Button>
         </div>

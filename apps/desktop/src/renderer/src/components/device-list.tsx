@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import { Button } from '@multica/ui/components/ui/button'
-import { HugeiconsIcon } from '@hugeicons/react'
 import {
-  SmartPhone01Icon,
-  Delete02Icon,
-  Loading03Icon,
-  RotateClockwiseIcon,
-} from '@hugeicons/core-free-icons'
+  Smartphone,
+  Trash2,
+  Loader2,
+  RotateCw,
+} from 'lucide-react'
 import { useDevices, type DeviceEntry } from '../hooks/use-devices'
 import { parseUserAgent } from '../lib/parse-user-agent'
 
@@ -62,7 +61,7 @@ function DeviceItem({
   return (
     <div className="flex items-center justify-between px-4 py-3 hover:bg-muted/20 transition-colors">
       <div className="flex items-center gap-3 min-w-0 flex-1">
-        <HugeiconsIcon icon={SmartPhone01Icon} className="size-4 text-muted-foreground shrink-0" />
+        <Smartphone className="size-4 text-muted-foreground shrink-0" />
         <div className="min-w-0">
           <div className="text-sm font-medium truncate">{displayName}</div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -80,9 +79,9 @@ function DeviceItem({
         disabled={revoking}
       >
         {revoking ? (
-          <HugeiconsIcon icon={Loading03Icon} className="size-4 animate-spin" />
+          <Loader2 className="size-4 animate-spin" />
         ) : (
-          <HugeiconsIcon icon={Delete02Icon} className="size-4" />
+          <Trash2 className="size-4" />
         )}
       </Button>
     </div>
@@ -112,7 +111,7 @@ export function DeviceList() {
           className="h-7 px-2 text-xs gap-1"
           onClick={refresh}
         >
-          <HugeiconsIcon icon={RotateClockwiseIcon} className="size-3" />
+          <RotateCw className="size-3" />
           Refresh
         </Button>
       </div>

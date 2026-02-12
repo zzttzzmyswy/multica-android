@@ -8,15 +8,14 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from '@multica/ui/components/ui/hover-card'
-import { HugeiconsIcon } from '@hugeicons/react'
 import {
-  ArrowLeft02Icon,
-  Loading03Icon,
-  HelpCircleIcon,
-  Share08Icon,
-  Tick02Icon,
-  InformationCircleIcon,
-} from '@hugeicons/core-free-icons'
+  ChevronLeft,
+  Loader2,
+  HelpCircle,
+  Share2,
+  Check,
+  Info,
+} from 'lucide-react'
 import { useChannelsStore } from '../../../stores/channels'
 import { StepDots } from './step-dots'
 
@@ -78,7 +77,7 @@ export default function ConnectStep({ onNext, onBack }: ConnectStepProps) {
           onClick={onBack}
           className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
-          <HugeiconsIcon icon={ArrowLeft02Icon} className="size-4" />
+          <ChevronLeft className="size-4" />
           Back
         </button>
 
@@ -99,7 +98,7 @@ export default function ConnectStep({ onNext, onBack }: ConnectStepProps) {
             chat from your phone, tablet, or any device.
           </p>
           <p className="text-xs text-muted-foreground/70 flex items-center gap-1.5">
-            <HugeiconsIcon icon={InformationCircleIcon} className="size-3.5 shrink-0" />
+            <Info className="size-3.5 shrink-0" />
             Telegram now. Discord, Slack, Mobile app coming soon.
           </p>
         </div>
@@ -109,10 +108,7 @@ export default function ConnectStep({ onNext, onBack }: ConnectStepProps) {
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <div className="flex items-center gap-3">
               <div className="flex items-center justify-center size-8 rounded-lg bg-muted shrink-0">
-                <HugeiconsIcon
-                  icon={Share08Icon}
-                  className="size-4 text-muted-foreground"
-                />
+                <Share2 className="size-4 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-sm font-medium">Telegram</p>
@@ -133,7 +129,7 @@ export default function ConnectStep({ onNext, onBack }: ConnectStepProps) {
               {/* Help hover card */}
               <HoverCard>
                 <HoverCardTrigger className="p-1 text-muted-foreground hover:text-foreground transition-colors">
-                  <HugeiconsIcon icon={HelpCircleIcon} className="size-4" />
+                  <HelpCircle className="size-4" />
                 </HoverCardTrigger>
                 <HoverCardContent align="end" side="top" className="w-56">
                   <p className="font-medium text-sm mb-2">
@@ -161,10 +157,7 @@ export default function ConnectStep({ onNext, onBack }: ConnectStepProps) {
           <div className="p-4">
             {hasToken ? (
               <div className="flex items-center gap-2">
-                <HugeiconsIcon
-                  icon={Tick02Icon}
-                  className="size-4 text-green-600 dark:text-green-500 shrink-0"
-                />
+                <Check className="size-4 text-green-600 dark:text-green-500 shrink-0" />
                 <p className="text-sm text-muted-foreground">
                   {isRunning
                     ? 'Bot is running. Send it a message to test.'
@@ -190,10 +183,7 @@ export default function ConnectStep({ onNext, onBack }: ConnectStepProps) {
                   disabled={saving || !token.trim()}
                 >
                   {saving && (
-                    <HugeiconsIcon
-                      icon={Loading03Icon}
-                      className="size-4 animate-spin mr-1.5"
-                    />
+                    <Loader2 className="size-4 animate-spin mr-1.5" />
                   )}
                   Connect
                 </Button>

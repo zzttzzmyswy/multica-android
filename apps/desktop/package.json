@@ -13,13 +13,12 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
-    "@hugeicons/core-free-icons": "catalog:",
-    "@hugeicons/react": "catalog:",
     "@multica/core": "workspace:*",
     "@multica/hooks": "workspace:*",
     "@multica/sdk": "workspace:*",
     "@multica/store": "workspace:*",
     "@multica/ui": "workspace:*",
+    "lucide-react": "^0.563.0",
     "qrcode.react": "^4.2.0",
     "react": "catalog:",
     "react-dom": "catalog:",

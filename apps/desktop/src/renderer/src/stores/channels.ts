@@ -14,7 +14,7 @@ interface ChannelsStore {
 
   // Actions
   fetch: () => Promise<void>
-  refresh: () => Promise<void>
+  refresh: (options?: { silent?: boolean }) => Promise<void>
   saveToken: (channelId: string, accountId: string, token: string) => Promise<{ ok: boolean; error?: string }>
   removeToken: (channelId: string, accountId: string) => Promise<{ ok: boolean; error?: string }>
   stopChannel: (channelId: string, accountId: string) => Promise<{ ok: boolean; error?: string }>
@@ -54,7 +54,7 @@ export const useChannelsStore = create<ChannelsStore>()((set, get) => ({
     }
   },
 
-  refresh: async () => {
+  refresh: async (options?: { silent?: boolean }) => {
     set({ loading: true, error: null })
 
     const startTime = Date.now()
@@ -75,6 +75,7 @@ export const useChannelsStore = create<ChannelsStore>()((set, get) => ({
         states: stateList,
         config: channelConfig,
       })
+      if (!options?.silent) toast.success('Channels refreshed')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       set({ error: message })

@@ -26,7 +26,7 @@ interface SkillsStore {
 
   // Actions
   fetch: () => Promise<void>
-  refresh: () => Promise<void>
+  refresh: (options?: { silent?: boolean }) => Promise<void>
   toggleSkill: (skillId: string) => Promise<void>
   setSkillStatus: (skillId: string, enabled: boolean) => Promise<void>
 }
@@ -63,7 +63,7 @@ export const useSkillsStore = create<SkillsStore>()((set, get) => ({
     }
   },
 
-  refresh: async () => {
+  refresh: async (options?: { silent?: boolean }) => {
     set({ loading: true, error: null })
 
     const startTime = Date.now()
@@ -79,6 +79,7 @@ export const useSkillsStore = create<SkillsStore>()((set, get) => ({
 
       if (Array.isArray(result)) {
         set({ skills: result })
+        if (!options?.silent) toast.success('Skills refreshed')
       } else {
         set({ error: 'Invalid response from skills:list' })
       }

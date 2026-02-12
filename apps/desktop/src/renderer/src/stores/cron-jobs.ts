@@ -28,7 +28,7 @@ interface CronJobsStore {
 
   // Actions
   fetch: () => Promise<void>
-  refresh: () => Promise<void>
+  refresh: (options?: { silent?: boolean }) => Promise<void>
   toggleJob: (jobId: string) => Promise<void>
   removeJob: (jobId: string) => Promise<void>
 }
@@ -65,7 +65,7 @@ export const useCronJobsStore = create<CronJobsStore>()((set, get) => ({
     }
   },
 
-  refresh: async () => {
+  refresh: async (options?: { silent?: boolean }) => {
     set({ loading: true, error: null })
 
     const startTime = Date.now()
@@ -81,6 +81,7 @@ export const useCronJobsStore = create<CronJobsStore>()((set, get) => ({
 
       if (Array.isArray(result)) {
         set({ jobs: result as CronJobInfo[] })
+        if (!options?.silent) toast.success('Tasks refreshed')
       } else {
         set({ error: 'Invalid response from cron:list' })
       }

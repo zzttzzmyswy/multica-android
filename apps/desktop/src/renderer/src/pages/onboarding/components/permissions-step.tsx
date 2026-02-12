@@ -2,33 +2,32 @@ import { useState } from 'react'
 import { Button } from '@multica/ui/components/ui/button'
 import { Checkbox } from '@multica/ui/components/ui/checkbox'
 import { Separator } from '@multica/ui/components/ui/separator'
-import { HugeiconsIcon } from '@hugeicons/react'
 import {
-  FolderOpenIcon,
-  CommandLineIcon,
-  AiBrainIcon,
-  Database01Icon,
-} from '@hugeicons/core-free-icons'
+  FolderOpen,
+  Terminal,
+  Brain,
+  Database,
+} from 'lucide-react'
 import { StepDots } from './step-dots'
 
 const capabilities = [
   {
-    icon: FolderOpenIcon,
+    icon: FolderOpen,
     title: 'File access',
     description: 'Read & write files to complete tasks you assign',
   },
   {
-    icon: CommandLineIcon,
+    icon: Terminal,
     title: 'Shell commands',
     description: 'Run commands — every one requires your approval',
   },
   {
-    icon: AiBrainIcon,
+    icon: Brain,
     title: 'LLM requests',
     description: 'Send prompts using your API key directly',
   },
   {
-    icon: Database01Icon,
+    icon: Database,
     title: 'Local storage',
     description: 'Sessions & credentials saved in ~/.super-multica/',
   },
@@ -59,10 +58,7 @@ export default function PermissionsStep({ onNext }: PermissionsStepProps) {
           {capabilities.map((item) => (
             <div key={item.title} className="flex items-start gap-3 p-4">
               <div className="mt-0.5 flex items-center justify-center size-8 rounded-lg bg-muted shrink-0">
-                <HugeiconsIcon
-                  icon={item.icon}
-                  className="size-4 text-muted-foreground"
-                />
+                <item.icon className="size-4 text-muted-foreground" />
               </div>
               <div className="space-y-0.5">
                 <p className="text-sm font-medium">{item.title}</p>

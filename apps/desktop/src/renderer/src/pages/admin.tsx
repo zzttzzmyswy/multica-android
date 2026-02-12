@@ -1,17 +1,16 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@multica/ui/components/ui/button'
-import { HugeiconsIcon } from '@hugeicons/react'
 import {
-  Comment01Icon,
-  LinkSquare01Icon,
-  Loading03Icon,
-  AlertCircleIcon,
-  Edit02Icon,
-  ArrowDown01Icon,
-  Tick02Icon,
-  Alert02Icon,
-} from '@hugeicons/core-free-icons'
+  MessageSquare,
+  Link2,
+  Loader2,
+  AlertCircle,
+  Pencil,
+  ChevronDown,
+  Check,
+  AlertTriangle,
+} from 'lucide-react'
 import { ConnectionQRCode } from '../components/qr-code'
 import { DeviceList } from '../components/device-list'
 import { AgentSettingsDialog } from '../components/agent-settings-dialog'
@@ -89,7 +88,7 @@ export default function HomePage() {
     return (
       <div className="h-full flex items-center justify-center">
         <div className="flex items-center gap-3 text-muted-foreground">
-          <HugeiconsIcon icon={Loading03Icon} className="size-5 animate-spin" />
+          <Loader2 className="size-5 animate-spin" />
           <span>Connecting to Hub...</span>
         </div>
       </div>
@@ -101,7 +100,7 @@ export default function HomePage() {
     return (
       <div className="h-full flex items-center justify-center">
         <div className="flex flex-col items-center gap-3 text-destructive">
-          <HugeiconsIcon icon={AlertCircleIcon} className="size-8" />
+          <AlertCircle className="size-8" />
           <span className="font-medium">Connection Error</span>
           <span className="text-sm text-muted-foreground">{error}</span>
         </div>
@@ -180,7 +179,7 @@ export default function HomePage() {
                   size="icon-sm"
                   onClick={() => setSettingsOpen(true)}
                 >
-                  <HugeiconsIcon icon={Edit02Icon} className="size-4" />
+                  <Pencil className="size-4" />
                 </Button>
               </div>
               <p className="font-medium">{agentName || 'Unnamed Agent'}</p>
@@ -198,17 +197,16 @@ export default function HomePage() {
               >
                 <div className="flex items-center gap-2">
                   {current?.available ? (
-                    <HugeiconsIcon icon={Tick02Icon} className="size-4 text-green-500" />
+                    <Check className="size-4 text-green-500" />
                   ) : (
-                    <HugeiconsIcon icon={Alert02Icon} className="size-4 text-yellow-500" />
+                    <AlertTriangle className="size-4 text-yellow-500" />
                   )}
                   <div className="text-left">
                     <p className="font-medium text-sm">{current?.providerName ?? current?.provider ?? 'Loading...'}</p>
                     <p className="text-xs text-muted-foreground">{current?.model ?? '-'}</p>
                   </div>
                 </div>
-                <HugeiconsIcon
-                  icon={ArrowDown01Icon}
+                <ChevronDown
                   className={`size-4 text-muted-foreground transition-transform ${providerDropdownOpen ? 'rotate-180' : ''}`}
                 />
               </button>
@@ -389,7 +387,7 @@ export default function HomePage() {
             onClick={() => navigate('/chat')}
             disabled={!isConnected}
           >
-            <HugeiconsIcon icon={Comment01Icon} className="size-5" />
+            <MessageSquare className="size-5" />
             Open Chat
           </Button>
 
@@ -399,7 +397,7 @@ export default function HomePage() {
             size="sm"
             className="text-muted-foreground gap-1.5"
           >
-            <HugeiconsIcon icon={LinkSquare01Icon} className="size-4" />
+            <Link2 className="size-4" />
             Connect to Remote Agent
           </Button>
         </div>

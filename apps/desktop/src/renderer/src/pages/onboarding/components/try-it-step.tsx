@@ -1,31 +1,30 @@
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@multica/ui/components/ui/button'
 import { Separator } from '@multica/ui/components/ui/separator'
-import { HugeiconsIcon } from '@hugeicons/react'
 import {
-  ArrowLeft02Icon,
-  ArrowRight01Icon,
-  Search01Icon,
-  FolderOpenIcon,
-  CommandLineIcon,
-} from '@hugeicons/core-free-icons'
+  ChevronLeft,
+  ArrowRight,
+  Search,
+  FolderOpen,
+  Terminal,
+} from 'lucide-react'
 import { StepDots } from './step-dots'
 
 const tryPrompts = [
   {
-    icon: Search01Icon,
+    icon: Search,
     title: 'Search the web',
     description: "Get today's AI news",
     prompt: "Search the web for today's top AI news and give me a 3-bullet summary with sources.",
   },
   {
-    icon: FolderOpenIcon,
+    icon: FolderOpen,
     title: 'Read your files',
     description: 'Summarize this directory',
     prompt: 'Look at the files in my current directory and give me a brief summary of what this project is about.',
   },
   {
-    icon: CommandLineIcon,
+    icon: Terminal,
     title: 'Run a command',
     description: 'Show system info',
     prompt: 'Write a one-liner shell command that shows my system info (OS, CPU cores, memory) and run it.',
@@ -55,7 +54,7 @@ export default function TryItStep({ onComplete, onBack }: TryItStepProps) {
           onClick={onBack}
           className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
-          <HugeiconsIcon icon={ArrowLeft02Icon} className="size-4" />
+          <ChevronLeft className="size-4" />
           Back
         </button>
 
@@ -83,10 +82,7 @@ export default function TryItStep({ onComplete, onBack }: TryItStepProps) {
               >
                 <div className="flex items-center gap-3">
                   <div className="flex items-center justify-center size-8 rounded-lg bg-muted shrink-0">
-                    <HugeiconsIcon
-                      icon={item.icon}
-                      className="size-4 text-muted-foreground"
-                    />
+                    <item.icon className="size-4 text-muted-foreground" />
                   </div>
                   <div>
                     <p className="text-sm font-medium">{item.title}</p>
@@ -95,10 +91,7 @@ export default function TryItStep({ onComplete, onBack }: TryItStepProps) {
                     </p>
                   </div>
                 </div>
-                <HugeiconsIcon
-                  icon={ArrowRight01Icon}
-                  className="size-4 text-muted-foreground"
-                />
+                <ArrowRight className="size-4 text-muted-foreground" />
               </button>
             ))}
           </div>

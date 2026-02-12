@@ -1,6 +1,5 @@
 import { cn } from '@multica/ui/lib/utils'
-import { HugeiconsIcon } from '@hugeicons/react'
-import { Tick02Icon } from '@hugeicons/core-free-icons'
+import { Check } from 'lucide-react'
 
 const steps = [
   { label: 'Privacy' },
@@ -49,10 +48,7 @@ export function Stepper({ currentStep }: StepperProps) {
                 )}
               >
                 {isCompleted && (
-                  <HugeiconsIcon
-                    icon={Tick02Icon}
-                    className="size-3.5 text-foreground"
-                  />
+                  <Check className="size-3.5 text-foreground" />
                 )}
                 {step.label}
               </span>

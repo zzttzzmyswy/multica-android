@@ -6,12 +6,6 @@ settings:
 
 catalogs:
   default:
-    '@hugeicons/core-free-icons':
-      specifier: ^3.1.1
-      version: 3.1.1
-    '@hugeicons/react':
-      specifier: ^1.1.4
-      version: 1.1.5
     '@mariozechner/pi-agent-core':
       specifier: ^0.52.9
       version: 0.52.9
@@ -135,6 +129,9 @@ importers:
       linkedom:
         specifier: ^0.18.12
         version: 0.18.12
+      lucide-react:
+        specifier: ^0.563.0
+        version: 0.563.0(react@19.2.3)
       mysql2:
         specifier: ^3.14.1
         version: 3.16.3
@@ -230,12 +227,6 @@ importers:
 
   apps/desktop:
     dependencies:
-      '@hugeicons/core-free-icons':
-        specifier: 'catalog:'
-        version: 3.1.1
-      '@hugeicons/react':
-        specifier: 'catalog:'
-        version: 1.1.5(react@19.2.3)
       '@multica/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -251,6 +242,9 @@ importers:
       '@multica/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      lucide-react:
+        specifier: ^0.563.0
+        version: 0.563.0(react@19.2.3)
       qrcode.react:
         specifier: ^4.2.0
         version: 4.2.0(react@19.2.3)
@@ -370,12 +364,6 @@ importers:
       '@expo/vector-icons':
         specifier: ^15.0.3
         version: 15.0.3(expo-font@14.0.11(expo@54.0.33)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
-      '@hugeicons/core-free-icons':
-        specifier: ^3.1.1
-        version: 3.1.1
-      '@hugeicons/react-native':
-        specifier: ^1.0.11
-        version: 1.0.11(react-native-svg@15.15.3(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
       '@react-navigation/bottom-tabs':
         specifier: ^7.4.0
         version: 7.12.0(@react-navigation/native@7.1.28(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0))(react-native-safe-area-context@5.6.2(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0))(react-native-screens@4.16.0(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
@@ -537,12 +525,6 @@ importers:
 
   apps/web:
     dependencies:
-      '@hugeicons/core-free-icons':
-        specifier: 'catalog:'
-        version: 3.1.1
-      '@hugeicons/react':
-        specifier: 'catalog:'
-        version: 1.1.5(react@19.2.3)
       '@multica/hooks':
         specifier: workspace:*
         version: link:../../packages/hooks
@@ -740,12 +722,6 @@ importers:
       '@fontsource/geist-sans':
         specifier: ^5.2.5
         version: 5.2.5
-      '@hugeicons/core-free-icons':
-        specifier: 'catalog:'
-        version: 3.1.1
-      '@hugeicons/react':
-        specifier: 'catalog:'
-        version: 1.1.5(react@19.2.3)
       '@multica/store':
         specifier: workspace:*
         version: link:../store
@@ -770,6 +746,9 @@ importers:
       linkify-it:
         specifier: ^5.0.0
         version: 5.0.0
+      lucide-react:
+        specifier: ^0.563.0
+        version: 0.563.0(react@19.2.3)
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -2269,21 +2248,6 @@ packages:
     engines: {node: '>=18.14.1'}
     peerDependencies:
       hono: ^4
-
-  '@hugeicons/core-free-icons@3.1.1':
-    resolution: {integrity: sha512-UpS2lUQFi5sKyJSWwM6rO+BnPLvVz1gsyCpPHeZyVuZqi89YH8ksliza4cwaODqKOZyeXmG8juo1ty4QtQofkg==}
-
-  '@hugeicons/react-native@1.0.11':
-    resolution: {integrity: sha512-HCUhHrFbL30ArN7tWV7+udnd1Qotu/eKcys63PELui3XVxP0DPPEvgFJqgbdig2afrLltroP7QCAdBNWOorWSg==}
-    peerDependencies:
-      react: '>=16.0.0'
-      react-native: '>=0.60.0'
-      react-native-svg: '>=12.0.0'
-
-  '@hugeicons/react@1.1.5':
-    resolution: {integrity: sha512-JX/iDz3oO7hWdVqbjwFwRrAjHk8h2vI+mBkNzp4JcXG3t4idoupfjon73nLOA7cr27m0M8hrRC1Q2h6nEBGKVA==}
-    peerDependencies:
-      react: '>=16.0.0'
 
   '@humanfs/core@0.19.1':
     resolution: {integrity: sha512-5DyQ4+1JEUzejeK1JGICcideyfUbGixgS9jNgex5nqkW+cY7WZhxBigmieN5Qnw9ZosSNVC9KQKyb+GUaGyKUA==}
@@ -7243,6 +7207,11 @@ packages:
       react-native: '*'
       react-native-svg: ^12.0.0 || ^13.0.0 || ^14.0.0 || ^15.0.0
 
+  lucide-react@0.563.0:
+    resolution: {integrity: sha512-8dXPB2GI4dI8jV4MgUDGBeLdGk8ekfqVZ0BdLcrRzocGgG75ltNEmWS+gE7uokKF/0oSUuczNDT+g9hFJ23FkA==}
+    peerDependencies:
+      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
 
@@ -12083,18 +12052,6 @@ snapshots:
     dependencies:
       hono: 4.11.9
 
-  '@hugeicons/core-free-icons@3.1.1': {}
-
-  '@hugeicons/react-native@1.0.11(react-native-svg@15.15.3(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)':
-    dependencies:
-      react: 19.1.0
-      react-native: 0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)
-      react-native-svg: 15.15.3(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
-
-  '@hugeicons/react@1.1.5(react@19.2.3)':
-    dependencies:
-      react: 19.2.3
-
   '@humanfs/core@0.19.1': {}
 
   '@humanfs/node@0.16.7':
@@ -15957,7 +15914,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-module-utils@2.12.1(@typescript-eslint/parser@8.55.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1)):
+  eslint-module-utils@2.12.1(@typescript-eslint/parser@8.55.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.2(jiti@2.6.1)):
     dependencies:
       debug: 3.2.7
     optionalDependencies:
@@ -15988,7 +15945,7 @@ snapshots:
       doctrine: 2.1.0
       eslint: 9.39.2(jiti@2.6.1)
       eslint-import-resolver-node: 0.3.9
-      eslint-module-utils: 2.12.1(@typescript-eslint/parser@8.55.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1))
+      eslint-module-utils: 2.12.1(@typescript-eslint/parser@8.55.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.2(jiti@2.6.1))
       hasown: 2.0.2
       is-core-module: 2.16.1
       is-glob: 4.0.3
@@ -17851,6 +17808,10 @@ snapshots:
       react: 19.1.0
       react-native: 0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)
       react-native-svg: 15.15.3(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
+
+  lucide-react@0.563.0(react@19.2.3):
+    dependencies:
+      react: 19.2.3
 
   magic-string@0.30.21:
     dependencies:

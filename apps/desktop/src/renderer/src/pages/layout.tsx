@@ -1,17 +1,15 @@
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Toaster } from '@multica/ui/components/ui/sonner'
 import { Button } from '@multica/ui/components/ui/button'
-import { HugeiconsIcon } from '@hugeicons/react'
 import {
-  Home01Icon,
-  Comment01Icon,
-  PuzzleIcon,
-  Wrench01Icon,
-  Message01Icon,
-  RepeatIcon,
-  ArrowLeft02Icon,
-  ArrowRight02Icon,
-} from '@hugeicons/core-free-icons'
+  Home,
+  MessageSquare,
+  Puzzle,
+  Wrench,
+  Mail,
+  Repeat,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react'
 import {
   Sidebar,
   SidebarContent,
@@ -31,15 +29,15 @@ import { ModeToggle } from '../components/mode-toggle'
 import { DeviceConfirmDialog } from '../components/device-confirm-dialog'
 
 const mainNavItems = [
-  { path: '/', label: 'Home', icon: Home01Icon },
-  { path: '/chat', label: 'Chat', icon: Comment01Icon },
+  { path: '/', label: 'Home', icon: Home },
+  { path: '/chat', label: 'Chat', icon: MessageSquare },
 ]
 
 const configNavItems = [
-  { path: '/skills', label: 'Skills', icon: PuzzleIcon },
-  { path: '/tools', label: 'Tools', icon: Wrench01Icon },
-  { path: '/channels', label: 'Channels', icon: Message01Icon },
-  { path: '/crons', label: 'Crons', icon: RepeatIcon },
+  { path: '/skills', label: 'Skills', icon: Puzzle },
+  { path: '/tools', label: 'Tools', icon: Wrench },
+  { path: '/channels', label: 'Channels', icon: Mail },
+  { path: '/crons', label: 'Crons', icon: Repeat },
 ]
 
 // All nav items for header lookup
@@ -65,7 +63,7 @@ function NavigationButtons() {
         onClick={() => navigate(-1)}
         disabled={!canGoBack}
       >
-        <HugeiconsIcon icon={ArrowLeft02Icon} />
+        <ChevronLeft />
       </Button>
       <Button
         variant="ghost"
@@ -73,7 +71,7 @@ function NavigationButtons() {
         onClick={() => navigate(1)}
         disabled={!canGoForward}
       >
-        <HugeiconsIcon icon={ArrowRight02Icon} />
+        <ChevronRight />
       </Button>
     </div>
   )
@@ -108,7 +106,7 @@ function MainHeader() {
       <div className="flex-1 flex justify-center">
         {currentPage && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <HugeiconsIcon icon={currentPage.icon} className="size-4" />
+            <currentPage.icon className="size-4" />
             <span>{currentPage.label}</span>
           </div>
         )}
@@ -147,8 +145,7 @@ export default function Layout() {
                   <SidebarMenuItem key={item.path}>
                     <NavLink to={item.path}>
                       <SidebarMenuButton isActive={isActive}>
-                        <HugeiconsIcon
-                          icon={item.icon}
+                        <item.icon
                           className={cn(
                             'size-4 transition-colors',
                             !isActive && 'text-muted-foreground/50 group-hover/menu-button:text-foreground'
@@ -173,8 +170,7 @@ export default function Layout() {
                   <SidebarMenuItem key={item.path}>
                     <NavLink to={item.path}>
                       <SidebarMenuButton isActive={isActive}>
-                        <HugeiconsIcon
-                          icon={item.icon}
+                        <item.icon
                           className={cn(
                             'size-4 transition-colors',
                             !isActive && 'text-muted-foreground/50 group-hover/menu-button:text-foreground'
@@ -200,7 +196,6 @@ export default function Layout() {
         </main>
       </SidebarInset>
 
-        <Toaster />
         <DeviceConfirmDialog />
       </SidebarProvider>
     </div>

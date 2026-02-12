@@ -11,23 +11,21 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from '@multica/ui/components/ui/tooltip'
-import { HugeiconsIcon } from '@hugeicons/react'
 import {
-  Comment01Icon,
-  Loading03Icon,
-  ArrowDown01Icon,
-  Tick02Icon,
-  Alert02Icon,
-  ArrowRight01Icon,
-  QrCodeIcon,
-  Edit02Icon,
-  PlugIcon,
-  CodeIcon,
-  Share08Icon,
-  Time04Icon,
-  AiBrain01Icon,
-  ArrowReloadHorizontalIcon,
-} from '@hugeicons/core-free-icons'
+  Loader2,
+  ChevronDown,
+  Check,
+  AlertCircle,
+  ArrowRight,
+  QrCode,
+  Pencil,
+  Plug,
+  Code,
+  Share,
+  Clock,
+  Brain,
+  RefreshCw,
+} from 'lucide-react'
 import { ConnectionQRCode } from '../components/qr-code'
 import { DeviceList } from '../components/device-list'
 import { AgentSettingsDialog } from '../components/agent-settings-dialog'
@@ -127,7 +125,7 @@ export default function HomePage() {
     return (
       <div className="h-full flex items-center justify-center">
         <div className="flex items-center gap-3 text-muted-foreground">
-          <HugeiconsIcon icon={Loading03Icon} className="size-5 animate-spin" />
+          <Loader2 className="size-5 animate-spin" />
           <span>Starting agent...</span>
         </div>
       </div>
@@ -139,10 +137,10 @@ export default function HomePage() {
     setCapabilitiesRefreshing(true)
     try {
       await Promise.all([
-        useSkillsStore.getState().refresh(),
-        useToolsStore.getState().refresh(),
-        useChannelsStore.getState().refresh(),
-        useCronJobsStore.getState().refresh(),
+        useSkillsStore.getState().refresh({ silent: true }),
+        useToolsStore.getState().refresh({ silent: true }),
+        useChannelsStore.getState().refresh({ silent: true }),
+        useCronJobsStore.getState().refresh({ silent: true }),
       ])
       toast.success('Status refreshed')
     } catch (err) {
@@ -153,7 +151,7 @@ export default function HomePage() {
     }
   }
 
-  // Build capability summary (always show all, even if zero)
+  // Build capability summary
   const capabilitySummary = `${skillStats.enabled} skills, ${enabledTools} tools, ${connectedChannels} channels, ${cronCount} scheduled tasks`
 
   return (
@@ -202,13 +200,14 @@ export default function HomePage() {
           </p>
 
           <Button
+            variant="outline"
             size="lg"
             className="gap-2"
             onClick={() => navigate('/chat')}
             disabled={!agentReady}
           >
-            <HugeiconsIcon icon={Comment01Icon} className="size-5" />
             Start Chat
+            <ArrowRight className="size-4" />
           </Button>
         </div>
 
@@ -226,7 +225,7 @@ export default function HomePage() {
               onClick={() => setSettingsOpen(true)}
             >
               <span>{agentName || 'Unnamed Agent'}</span>
-              <HugeiconsIcon icon={Edit02Icon} className="size-4 text-muted-foreground" />
+              <Pencil className="size-4 text-muted-foreground" />
             </Button>
           </div>
 
@@ -241,16 +240,15 @@ export default function HomePage() {
             >
               <span className="flex items-center gap-2">
                 {current?.available ? (
-                  <HugeiconsIcon icon={Tick02Icon} className="size-4 text-green-500" />
+                  <Check className="size-4 text-green-500" />
                 ) : (
-                  <HugeiconsIcon icon={Alert02Icon} className="size-4 text-yellow-500" />
+                  <AlertCircle className="size-4 text-yellow-500" />
                 )}
                 <span>{current?.providerName ?? 'Loading...'}</span>
                 <span className="text-muted-foreground">·</span>
                 <span className="text-muted-foreground text-xs font-mono">{current?.model ?? '-'}</span>
               </span>
-              <HugeiconsIcon
-                icon={ArrowDown01Icon}
+              <ChevronDown
                 className={cn(
                   'size-4 text-muted-foreground transition-transform',
                   providerDropdownOpen && 'rotate-180'
@@ -368,45 +366,42 @@ export default function HomePage() {
 
       {/* Section 3: Capabilities (Collapsible) */}
       <Collapsible open={capabilitiesOpen} onOpenChange={setCapabilitiesOpen} className="mb-6">
-        <CollapsibleTrigger className="group flex items-center justify-between w-full text-left py-2">
+        <div className="flex items-center justify-between py-2">
           <span className="flex items-center gap-2 text-sm">
-            <HugeiconsIcon icon={AiBrain01Icon} className="size-4 text-muted-foreground" />
+            <Brain className="size-4 text-muted-foreground" />
             Your agent has {capabilitySummary}
             <Tooltip>
               <TooltipTrigger
-                onClick={(e) => {
-                  e.stopPropagation()
-                  refreshCapabilities()
-                }}
+                onClick={refreshCapabilities}
                 disabled={capabilitiesRefreshing}
                 className="p-1 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
               >
-                <HugeiconsIcon
-                  icon={capabilitiesRefreshing ? Loading03Icon : ArrowReloadHorizontalIcon}
-                  className={cn('size-4', capabilitiesRefreshing && 'animate-spin')}
-                />
+                {capabilitiesRefreshing ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="size-4" />
+                )}
               </TooltipTrigger>
               <TooltipContent>Refresh status</TooltipContent>
             </Tooltip>
           </span>
-          <span className="flex items-center gap-1 text-sm text-muted-foreground group-hover:text-foreground transition-colors">
+          <CollapsibleTrigger className="group flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
             {capabilitiesOpen ? 'Hide' : 'Details'}
-            <HugeiconsIcon
-              icon={ArrowDown01Icon}
+            <ChevronDown
               className={cn(
                 'size-4 transition-transform',
                 capabilitiesOpen && 'rotate-180'
               )}
             />
-          </span>
-        </CollapsibleTrigger>
+          </CollapsibleTrigger>
+        </div>
 
         <CollapsibleContent className="pt-4 space-y-4">
           {/* Skills */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm font-medium">
-                <HugeiconsIcon icon={PlugIcon} className="size-4 text-muted-foreground" />
+                <Plug className="size-4 text-muted-foreground" />
                 <span>Skills ({skillStats.enabled})</span>
               </div>
               <Button
@@ -416,7 +411,7 @@ export default function HomePage() {
                 onClick={() => navigate('/skills')}
               >
                 View all
-                <HugeiconsIcon icon={ArrowRight01Icon} className="size-3" />
+                <ArrowRight className="size-3" />
               </Button>
             </div>
             {skillStats.enabled > 0 ? (
@@ -445,7 +440,7 @@ export default function HomePage() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm font-medium">
-                <HugeiconsIcon icon={CodeIcon} className="size-4 text-muted-foreground" />
+                <Code className="size-4 text-muted-foreground" />
                 <span>Tools ({enabledTools})</span>
               </div>
               <Button
@@ -455,7 +450,7 @@ export default function HomePage() {
                 onClick={() => navigate('/tools')}
               >
                 View all
-                <HugeiconsIcon icon={ArrowRight01Icon} className="size-3" />
+                <ArrowRight className="size-3" />
               </Button>
             </div>
             {enabledTools > 0 ? (
@@ -484,7 +479,7 @@ export default function HomePage() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm font-medium">
-                <HugeiconsIcon icon={Share08Icon} className="size-4 text-muted-foreground" />
+                <Share className="size-4 text-muted-foreground" />
                 <span>Channels ({connectedChannels})</span>
               </div>
               <Button
@@ -494,7 +489,7 @@ export default function HomePage() {
                 onClick={() => navigate('/channels')}
               >
                 View all
-                <HugeiconsIcon icon={ArrowRight01Icon} className="size-3" />
+                <ArrowRight className="size-3" />
               </Button>
             </div>
             {connectedChannels > 0 ? (
@@ -522,7 +517,7 @@ export default function HomePage() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm font-medium">
-                <HugeiconsIcon icon={Time04Icon} className="size-4 text-muted-foreground" />
+                <Clock className="size-4 text-muted-foreground" />
                 <span>Scheduled Tasks ({cronCount})</span>
               </div>
               <Button
@@ -532,7 +527,7 @@ export default function HomePage() {
                 onClick={() => navigate('/crons')}
               >
                 View all
-                <HugeiconsIcon icon={ArrowRight01Icon} className="size-3" />
+                <ArrowRight className="size-3" />
               </Button>
             </div>
             {cronCount > 0 ? (
@@ -574,7 +569,7 @@ export default function HomePage() {
                 size="sm"
                 onClick={() => setQrCodeExpanded(!qrCodeExpanded)}
               >
-                <HugeiconsIcon icon={QrCodeIcon} className="size-4 mr-1.5" />
+                <QrCode className="size-4 mr-1.5" />
                 {qrCodeExpanded ? 'Hide' : 'Show'}
               </Button>
             </div>
@@ -597,7 +592,7 @@ export default function HomePage() {
                   onClick={() => setQrCodeExpanded(true)}
                   className="flex flex-col items-center justify-center gap-3 p-8 rounded-xl border-2 border-dashed border-muted-foreground/25 hover:border-muted-foreground/50 transition-colors cursor-pointer"
                 >
-                  <HugeiconsIcon icon={QrCodeIcon} className="size-12 text-muted-foreground/40" />
+                  <QrCode className="size-12 text-muted-foreground/40" />
                   <span className="text-sm text-muted-foreground">Click to show QR code</span>
                 </button>
               )}

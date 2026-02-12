@@ -39,7 +39,7 @@ interface ToolsStore {
 
   // Actions
   fetch: () => Promise<void>
-  refresh: () => Promise<void>
+  refresh: (options?: { silent?: boolean }) => Promise<void>
   toggleTool: (toolName: string) => Promise<void>
   setToolStatus: (toolName: string, enabled: boolean) => Promise<void>
 }
@@ -81,7 +81,7 @@ export const useToolsStore = create<ToolsStore>()((set, get) => ({
     }
   },
 
-  refresh: async () => {
+  refresh: async (options?: { silent?: boolean }) => {
     set({ loading: true, error: null })
 
     const startTime = Date.now()
@@ -101,6 +101,7 @@ export const useToolsStore = create<ToolsStore>()((set, get) => ({
           description: TOOL_DESCRIPTIONS[tool.name],
         }))
         set({ tools: toolsWithDesc })
+        if (!options?.silent) toast.success('Tools refreshed')
       } else {
         set({ error: 'Invalid response from tools:list' })
       }

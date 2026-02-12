@@ -4,8 +4,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Button } from "@multica/ui/components/ui/button";
-import { ArrowUp02Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowUp } from "lucide-react";
 import { cn } from "@multica/ui/lib/utils";
 import "./chat-input.css";
 
@@ -124,7 +123,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
         <EditorContent className="min-h-12" editor={editor} />
         <div className="flex items-center justify-end pt-2">
           <Button size="icon" onClick={handleSubmit} disabled={disabled}>
-            <HugeiconsIcon strokeWidth={2.5} icon={ArrowUp02Icon} />
+            <ArrowUp />
           </Button>
         </div>
       </div>
