@@ -1192,6 +1192,7 @@ export class Agent {
       tools: toolNames,
       skillsPrompt,
       runtime,
+      channels: this.toolsOptions.channels,
     });
   }
 }

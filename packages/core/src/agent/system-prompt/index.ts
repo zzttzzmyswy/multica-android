@@ -8,6 +8,7 @@ export { formatPromptReport } from "./report.js";
 export { SAFETY_CONSTITUTION } from "./constitution.js";
 
 export type {
+  ChannelInfo,
   ProfileContent,
   PromptSection,
   RuntimeInfo,

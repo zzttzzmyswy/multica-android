@@ -10,6 +10,7 @@ import type {
   SystemPromptReport,
 } from "./types.js";
 import {
+  buildChannelsSection,
   buildHeartbeatSection,
   buildConditionalToolSections,
   buildExtraPromptSection,
@@ -51,6 +52,7 @@ export function buildSystemPromptWithReport(options: SystemPromptOptions): {
     skillsPrompt,
     runtime,
     subagent,
+    channels,
     extraSystemPrompt,
     includeSafety = true,
   } = options;
@@ -70,6 +72,7 @@ export function buildSystemPromptWithReport(options: SystemPromptOptions): {
     { name: "runtime", lines: buildRuntimeSection(runtime, mode) },
     { name: "time-awareness", lines: buildTimeAwarenessSection(tools, mode) },
     { name: "profile-dir", lines: buildProfileDirSection(profileDir, mode) },
+    { name: "channels", lines: buildChannelsSection(channels, mode) },
     { name: "subagent", lines: buildSubagentSection(subagent, mode) },
     { name: "extra", lines: buildExtraPromptSection(extraSystemPrompt, mode) },
   ];
