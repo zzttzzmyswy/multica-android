@@ -4,9 +4,6 @@ description: Conduct analyst-grade financial research across primary and seconda
 version: 1.1.0
 metadata:
   emoji: "\U0001F4CA"
-  requires:
-    env:
-      - FINANCIAL_DATASETS_API_KEY
   tags:
     - finance
     - research

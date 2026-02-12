@@ -4,9 +4,6 @@ description: Perform Discounted Cash Flow (DCF) valuation analysis for public co
 version: 1.1.0
 metadata:
   emoji: "\U0001F9EE"
-  requires:
-    env:
-      - FINANCIAL_DATASETS_API_KEY
   tags:
     - finance
     - valuation
