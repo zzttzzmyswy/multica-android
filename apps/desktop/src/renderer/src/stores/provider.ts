@@ -14,7 +14,7 @@ interface ProviderStore {
 
   // Actions
   fetch: () => Promise<void>
-  setProvider: (providerId: string, modelId?: string) => Promise<{ ok: boolean; error?: string }>
+  setProvider: (providerId: string, modelId?: string, options?: { silent?: boolean }) => Promise<{ ok: boolean; error?: string }>
   refresh: () => Promise<void>
 }
 
@@ -82,28 +82,39 @@ export const useProviderStore = create<ProviderStore>()((set, get) => ({
     }
   },
 
-  setProvider: async (providerId: string, modelId?: string) => {
+  setProvider: async (providerId: string, modelId?: string, options?: { silent?: boolean }) => {
     set({ error: null })
 
     try {
       const result = await window.electronAPI.provider.set(providerId, modelId)
 
       if (result.ok) {
-        // Refresh to update current status
-        await get().refresh()
+        // Quick refresh without minimum delay for setProvider
+        const [providerList, currentInfo] = await Promise.all([
+          window.electronAPI.provider.list(),
+          window.electronAPI.provider.current(),
+        ])
+        set({ providers: providerList, current: currentInfo })
+
         // Find provider name for toast
-        const provider = get().providers.find(p => p.id === providerId)
-        toast.success(`Switched to ${provider?.name ?? providerId}`)
+        if (!options?.silent) {
+          const provider = providerList.find(p => p.id === providerId)
+          toast.success(`Switched to ${provider?.name ?? providerId}`)
+        }
         return { ok: true }
       } else {
         set({ error: result.error ?? 'Unknown error' })
-        toast.error('Failed to switch provider', { description: result.error })
+        if (!options?.silent) {
+          toast.error('Failed to switch provider', { description: result.error })
+        }
         return { ok: false, error: result.error }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       set({ error: message })
-      toast.error('Failed to switch provider', { description: message })
+      if (!options?.silent) {
+        toast.error('Failed to switch provider', { description: message })
+      }
       return { ok: false, error: message }
     }
   },

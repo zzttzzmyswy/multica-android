@@ -7,7 +7,7 @@ import {
   HoverCardTrigger,
 } from '@multica/ui/components/ui/hover-card'
 import { Link } from '@multica/ui/components/ui/link'
-import { ChevronLeft, HelpCircle } from 'lucide-react'
+import { ChevronLeft, HelpCircle, Loader2 } from 'lucide-react'
 import { cn } from '@multica/ui/lib/utils'
 import { useProviderStore } from '../../../stores/provider'
 import { ApiKeyDialog } from '../../../components/api-key-dialog'
@@ -31,6 +31,7 @@ export default function SetupStep({ onNext, onBack }: SetupStepProps) {
   const [oauthDialogOpen, setOauthDialogOpen] = useState(false)
   const [selectedProvider, setSelectedProvider] =
     useState<ProviderStatus | null>(null)
+  const [switchingId, setSwitchingId] = useState<string | null>(null)
 
   const hasActiveProvider = current?.available === true
 
@@ -48,8 +49,10 @@ export default function SetupStep({ onNext, onBack }: SetupStepProps) {
   }
 
   const handleSelect = async (provider: ProviderStatus) => {
-    if (provider.available) {
-      await setProvider(provider.id)
+    if (provider.available && !switchingId) {
+      setSwitchingId(provider.id)
+      await setProvider(provider.id, undefined, { silent: true })
+      setSwitchingId(null)
     }
   }
 
@@ -95,6 +98,7 @@ export default function SetupStep({ onNext, onBack }: SetupStepProps) {
                 key={provider.id}
                 provider={provider}
                 isActive={Boolean(current?.available && current.provider === provider.id)}
+                isSwitching={switchingId === provider.id}
                 onSelect={() => handleSelect(provider)}
                 onConfigure={() => handleConfigure(provider)}
               />
@@ -154,11 +158,13 @@ export default function SetupStep({ onNext, onBack }: SetupStepProps) {
 function ProviderRow({
   provider,
   isActive,
+  isSwitching,
   onSelect,
   onConfigure,
 }: {
   provider: ProviderStatus
   isActive: boolean
+  isSwitching: boolean
   onSelect: () => void
   onConfigure: () => void
 }) {
@@ -193,11 +199,16 @@ function ProviderRow({
         {/* Radio indicator */}
         <div
           className={cn(
-            'size-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors',
+            'size-4 rounded-full flex items-center justify-center shrink-0 transition-colors',
+            isSwitching ? '' : 'border-2',
             isActive ? 'border-primary' : 'border-muted-foreground/40'
           )}
         >
-          {isActive && <div className="size-2 rounded-full bg-primary" />}
+          {isSwitching ? (
+            <Loader2 className="size-4 animate-spin text-primary" />
+          ) : isActive ? (
+            <div className="size-2 rounded-full bg-primary" />
+          ) : null}
         </div>
 
         <div>

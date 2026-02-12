@@ -89,7 +89,7 @@ function DeviceItem({
 }
 
 export function DeviceList() {
-  const { devices, loading, refresh, revokeDevice } = useDevices()
+  const { devices, loading, refreshing, refresh, revokeDevice } = useDevices()
 
   if (loading) {
     return null
@@ -117,8 +117,13 @@ export function DeviceList() {
           size="sm"
           className="h-7 px-2 text-xs gap-1"
           onClick={refresh}
+          disabled={refreshing}
         >
-          <RotateCw className="size-3" />
+          {refreshing ? (
+            <Loader2 className="size-3 animate-spin" />
+          ) : (
+            <RotateCw className="size-3" />
+          )}
           Refresh
         </Button>
       </div>

@@ -169,7 +169,7 @@ export default function Layout() {
 
           {/* Configuration */}
           <SidebarGroup>
-            <SidebarGroupLabel>Configuration</SidebarGroupLabel>
+            <SidebarGroupLabel>Agent Configuration</SidebarGroupLabel>
             <SidebarMenu className="space-y-0.5">
               {configNavItems.map((item) => {
                 const isActive = location.pathname.startsWith(item.path)

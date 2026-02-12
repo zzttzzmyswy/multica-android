@@ -12,6 +12,7 @@ import ChannelsPage from './pages/channels'
 import CronsPage from './pages/crons'
 import OnboardingPage from './pages/onboarding'
 import { useOnboardingStore } from './stores/onboarding'
+import { useHubStore } from './stores/hub'
 import { useProviderStore } from './stores/provider'
 import { useChannelsStore } from './stores/channels'
 import { useSkillsStore } from './stores/skills'
@@ -71,7 +72,8 @@ export default function App() {
 
     hydrateOnboardingState()
 
-    // Prefetch global data at app startup
+    // Initialize hub and prefetch global data at app startup
+    useHubStore.getState().init()
     useProviderStore.getState().fetch()
     useChannelsStore.getState().fetch()
     useSkillsStore.getState().fetch()
