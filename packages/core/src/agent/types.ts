@@ -2,6 +2,8 @@ import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { SkillsConfig } from "./skills/types.js";
 import type { ToolsConfig } from "./tools/policy.js";
 import type { ExecApprovalCallback, ExecApprovalConfig } from "./tools/exec-approval-types.js";
+import type { SendFileCallback } from "./tools/send-file.js";
+import type { ChannelInfo } from "./system-prompt/types.js";
 
 /** Controls how reasoning/thinking content blocks are handled */
 export type ReasoningMode = "off" | "on" | "stream";
@@ -82,6 +84,12 @@ export type AgentOptions = {
   onExecApprovalNeeded?: ExecApprovalCallback | undefined;
   /** Exec approval configuration (security level, ask mode, allowlist) */
   execApproval?: ExecApprovalConfig | undefined;
+
+  // === Channel Configuration ===
+  /** Connected messaging channels (for system prompt awareness) */
+  channels?: ChannelInfo[] | undefined;
+  /** Callback for sending files through messaging channels (Telegram, etc.) */
+  onChannelSendFile?: SendFileCallback | undefined;
 };
 
 export interface Message {
