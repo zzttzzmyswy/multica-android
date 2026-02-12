@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { basename } from "node:path";
 import { v7 as uuidv7 } from "uuid";
 import {
   GatewayClient,
@@ -375,7 +377,9 @@ export class Hub {
     const profileId = options?.profileId ?? "default";
     const sessionId = id ?? uuidv7();
     const onExecApprovalNeeded = this.createExecApprovalCallback(sessionId, profileId);
-    const agent = new AsyncAgent({ sessionId, profileId, onExecApprovalNeeded });
+    const onChannelSendFile = this.createChannelSendFileCallback(sessionId);
+    const channels = this.channelManager.listChannelInfos();
+    const agent = new AsyncAgent({ sessionId, profileId, onExecApprovalNeeded, onChannelSendFile, channels });
     this.agents.set(agent.sessionId, agent);
 
     // Persist to agent store (skip during restore to avoid duplicates)
@@ -660,6 +664,39 @@ export class Hub {
       }
 
       return result;
+    };
+  }
+
+  /**
+   * Create a callback for the send_file tool that routes files through
+   * the channel plugin (local) or gateway (remote) path.
+   */
+  private createChannelSendFileCallback(sessionId: string): (filePath: string, caption: string | undefined, type: string) => Promise<boolean> {
+    return async (filePath: string, caption: string | undefined, type: string): Promise<boolean> => {
+      // Path 1: Channel plugin (local bot — file on same machine)
+      const sentViaChannel = await this.channelManager.sendFile(filePath, caption, type);
+      if (sentViaChannel) return true;
+
+      // Path 2: Gateway (remote bot — read file, base64 encode, send via RoutedMessage)
+      const deviceId = this.agentSenders.get(sessionId);
+      if (deviceId) {
+        try {
+          const fileBuffer = await readFile(filePath);
+          this.client.send(deviceId, "send_file", {
+            data: fileBuffer.toString("base64"),
+            type,
+            caption,
+            filename: basename(filePath),
+          });
+          console.log(`[Hub] Sent file via gateway: ${basename(filePath)} → ${deviceId}`);
+          return true;
+        } catch (err) {
+          console.error(`[Hub] Failed to send file via gateway: ${err}`);
+          return false;
+        }
+      }
+
+      return false;
     };
   }
 
