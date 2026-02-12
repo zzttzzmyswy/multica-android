@@ -89,10 +89,22 @@ export function buildWorkspaceSection(
   profile: ProfileContent | undefined,
   mode: SystemPromptMode,
   profileDir?: string,
+  workspaceDir?: string,
 ): string[] {
   if (mode !== "full") return [];
 
   const lines: string[] = [];
+
+  // Working directory info
+  if (workspaceDir) {
+    lines.push(
+      "## Working Directory",
+      "",
+      `Your working directory is: \`${workspaceDir}\``,
+      "Use this as the default location for file operations unless the user specifies a different path.",
+      "",
+    );
+  }
 
   // Add profile directory context first
   if (profileDir) {

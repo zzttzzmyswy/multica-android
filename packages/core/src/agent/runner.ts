@@ -50,6 +50,7 @@ import {
   sanitizeToolUseResultPairing,
 } from "./session/session-transcript-repair.js";
 import { isContextOverflowError } from "./errors.js";
+import { resolveWorkspaceDir, ensureWorkspaceDir } from "./workspace.js";
 
 // ============================================================
 // Error classification for auth profile rotation
@@ -120,6 +121,9 @@ export class Agent {
   private profileIndex: number;
   private readonly pinnedProfile: boolean;
   private readonly explicitApiKey: boolean;
+
+  /** Resolved workspace directory */
+  readonly workspaceDir: string;
 
   /** Current session ID */
   readonly sessionId: string;
@@ -318,13 +322,22 @@ export class Agent {
       this.originalToolsConfig = options.tools;
     }
 
+    // Resolve workspace directory
+    const profileConfig = this.profile?.getProfile()?.config;
+    this.workspaceDir = resolveWorkspaceDir({
+      profileId: options.profileId,
+      configWorkspaceDir: profileConfig?.workspaceDir,
+    });
+    ensureWorkspaceDir(this.workspaceDir);
+    const effectiveCwd = options.cwd ?? this.workspaceDir;
+
     // Merge Profile tools config with options.tools (options takes precedence)
     const profileToolsConfig = this.profile?.getToolsConfig();
     const mergedToolsConfig = mergeToolsConfig(profileToolsConfig, options.tools);
     const profileDir = this.profile?.getProfileDir();
     this.toolsOptions = mergedToolsConfig
-      ? { ...options, tools: mergedToolsConfig, profileDir, provider: this.resolvedProvider }
-      : { ...options, profileDir, provider: this.resolvedProvider };
+      ? { ...options, cwd: effectiveCwd, tools: mergedToolsConfig, profileDir, provider: this.resolvedProvider }
+      : { ...options, cwd: effectiveCwd, profileDir, provider: this.resolvedProvider };
 
     const tools = resolveTools(this.toolsOptions);
     if (this.debug) {
@@ -1155,6 +1168,7 @@ export class Agent {
       agentName: this.profile?.getName(),
       provider: this.resolvedProvider,
       model: this.agent.state.model?.id,
+      cwd: this.toolsOptions.cwd,
     });
 
     return buildStructuredSystemPrompt({
@@ -1168,6 +1182,7 @@ export class Agent {
         config: profile.config,
       },
       profileDir: this.profile!.getProfileDir(),
+      workspaceDir: this.workspaceDir,
       tools: toolNames,
       skillsPrompt,
       runtime,
