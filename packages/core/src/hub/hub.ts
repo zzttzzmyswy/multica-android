@@ -152,14 +152,16 @@ export class Hub {
     this.initCronService();
     this.initHeartbeatService();
 
+    // Initialize channel plugin system (before restoreAgents so channelManager is available)
+    console.log("[Hub] Initializing channel system...");
+    initChannels();
+    this.channelManager = new ChannelManager(this);
+
     this.client = this.createClient(this.url);
     this.client.connect();
     this.restoreAgents();
 
-    // Initialize channel plugin system
-    console.log("[Hub] Initializing channel system...");
-    initChannels();
-    this.channelManager = new ChannelManager(this);
+    // Start channel accounts (async — bot connections happen in background)
     void this.channelManager.startAll().then(() => {
       console.log("[Hub] Channel system started");
     }).catch((err) => {
