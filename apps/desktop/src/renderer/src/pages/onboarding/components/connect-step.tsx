@@ -17,7 +17,7 @@ import {
   Tick02Icon,
   InformationCircleIcon,
 } from '@hugeicons/core-free-icons'
-import { useChannels } from '../../../hooks/use-channels'
+import { useChannelsStore } from '../../../stores/channels'
 import { StepDots } from './step-dots'
 
 function statusVariant(
@@ -41,7 +41,7 @@ interface ConnectStepProps {
 }
 
 export default function ConnectStep({ onNext, onBack }: ConnectStepProps) {
-  const { states, config, saveToken } = useChannels()
+  const { states, config, saveToken } = useChannelsStore()
 
   const [token, setToken] = useState('')
   const [saving, setSaving] = useState(false)

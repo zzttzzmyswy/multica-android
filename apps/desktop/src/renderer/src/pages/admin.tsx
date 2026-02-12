@@ -17,13 +17,13 @@ import { DeviceList } from '../components/device-list'
 import { AgentSettingsDialog } from '../components/agent-settings-dialog'
 import { ApiKeyDialog } from '../components/api-key-dialog'
 import { OAuthDialog } from '../components/oauth-dialog'
-import { useHub } from '../hooks/use-hub'
-import { useProvider } from '../hooks/use-provider'
+import { useHubStore } from '../stores/hub'
+import { useProviderStore } from '../stores/provider'
 
 export default function HomePage() {
   const navigate = useNavigate()
-  const { hubInfo, agents, loading, error } = useHub()
-  const { providers, current, setProvider, refresh, loading: providerLoading } = useProvider()
+  const { hubInfo, agents, loading, error } = useHubStore()
+  const { providers, current, setProvider, refresh, loading: providerLoading } = useProviderStore()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [agentName, setAgentName] = useState<string | undefined>()
   const [providerDropdownOpen, setProviderDropdownOpen] = useState(false)

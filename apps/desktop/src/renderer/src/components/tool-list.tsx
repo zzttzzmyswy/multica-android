@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Switch } from '@multica/ui/components/ui/switch'
 import { Button } from '@multica/ui/components/ui/button'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -14,7 +14,18 @@ import {
   Time04Icon,
   UserMultipleIcon,
 } from '@hugeicons/core-free-icons'
-import type { ToolInfo, ToolGroup } from '../hooks/use-tools'
+import type { ToolInfo } from '../stores/tools'
+
+// Group display names
+const GROUP_NAMES: Record<string, string> = {
+  fs: 'File System',
+  runtime: 'Runtime',
+  web: 'Web',
+  memory: 'Memory',
+  subagent: 'Subagent',
+  cron: 'Cron',
+  other: 'Other',
+}
 
 // Group icons
 const GROUP_ICONS: Record<string, typeof FolderOpenIcon> = {
@@ -29,7 +40,6 @@ const GROUP_ICONS: Record<string, typeof FolderOpenIcon> = {
 
 interface ToolListProps {
   tools: ToolInfo[]
-  groups: ToolGroup[]
   loading: boolean
   error: string | null
   onToggleTool: (toolName: string) => Promise<void>
@@ -38,12 +48,23 @@ interface ToolListProps {
 
 export function ToolList({
   tools,
-  groups,
   loading,
   error,
   onToggleTool,
   onRefresh,
 }: ToolListProps) {
+  // Compute groups from tools
+  const groups = useMemo(() => {
+    const groupIds = [...new Set(tools.map(t => t.group))]
+    return groupIds.map(id => ({
+      id,
+      name: GROUP_NAMES[id] || id,
+      tools: tools.filter(t => t.group === id),
+      enabledCount: tools.filter(t => t.group === id && t.enabled).length,
+      totalCount: tools.filter(t => t.group === id).length,
+    }))
+  }, [tools])
+
   // Track which groups are expanded
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
     () => new Set(groups.map((g) => g.id))
@@ -76,14 +97,6 @@ export function ToolList({
       })
     }
   }
-
-  // Group tools by their group
-  const toolsByGroup = groups.map((group) => ({
-    ...group,
-    tools: tools.filter((t) => t.group === group.id),
-    enabledCount: tools.filter((t) => t.group === group.id && t.enabled).length,
-    totalCount: tools.filter((t) => t.group === group.id).length,
-  }))
 
   if (loading && tools.length === 0) {
     return (
@@ -126,7 +139,7 @@ export function ToolList({
 
       {/* Tool groups */}
       <div className="space-y-2">
-        {toolsByGroup.map((group) => {
+        {groups.map((group) => {
           const isExpanded = expandedGroups.has(group.id)
           const GroupIcon = GROUP_ICONS[group.id] || CodeIcon
 

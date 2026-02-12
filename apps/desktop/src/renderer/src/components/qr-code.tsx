@@ -185,13 +185,9 @@ export function ConnectionQRCode({
       </div>
 
       {/* Info section */}
-      <div className="mt-6 text-center space-y-3">
-        <p className="text-sm text-muted-foreground">
-          Scan with your phone to connect
-        </p>
-
+      <div className="mt-4 space-y-2">
         {/* Expiry timer */}
-        <div className="flex items-center gap-3 justify-center">
+        <div className="flex items-center gap-2">
           <span
             className={`text-xs font-mono ${
               isExpiringSoon
@@ -203,32 +199,18 @@ export function ConnectionQRCode({
           >
             {isExpired ? 'Expired' : `Expires in ${formatTime(remainingSeconds)}`}
           </span>
-          {!isExpired && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-xs gap-1"
-              onClick={handleRefresh}
-            >
-              <HugeiconsIcon icon={RefreshIcon} className="size-3" />
-              Refresh
-            </Button>
-          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={isExpired ? handleRefresh : handleCopyLink}
+          >
+            <HugeiconsIcon
+              icon={isExpired ? RefreshIcon : (copied ? CheckmarkCircle02Icon : Copy01Icon)}
+              className="size-3.5 mr-1"
+            />
+            {isExpired ? 'Refresh' : (copied ? 'Copied!' : 'Copy Link')}
+          </Button>
         </div>
-
-        {/* Copy link button */}
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-xs gap-1.5"
-          onClick={handleCopyLink}
-        >
-          <HugeiconsIcon
-            icon={copied ? CheckmarkCircle02Icon : Copy01Icon}
-            className="size-3.5"
-          />
-          {copied ? 'Copied!' : 'Copy Link'}
-        </Button>
       </div>
     </div>
   )

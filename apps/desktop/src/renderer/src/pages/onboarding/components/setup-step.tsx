@@ -10,7 +10,7 @@ import { Link } from '@multica/ui/components/ui/link'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ArrowLeft02Icon, HelpCircleIcon } from '@hugeicons/core-free-icons'
 import { cn } from '@multica/ui/lib/utils'
-import { useProvider } from '../../../hooks/use-provider'
+import { useProviderStore } from '../../../stores/provider'
 import { ApiKeyDialog } from '../../../components/api-key-dialog'
 import { OAuthDialog } from '../../../components/oauth-dialog'
 import { StepDots } from './step-dots'
@@ -25,7 +25,7 @@ interface SetupStepProps {
 
 export default function SetupStep({ onNext, onBack }: SetupStepProps) {
   const { providers, current, loading, error, refresh, setProvider } =
-    useProvider()
+    useProviderStore()
   const { setProviderConfigured } = useOnboardingStore()
 
   const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false)

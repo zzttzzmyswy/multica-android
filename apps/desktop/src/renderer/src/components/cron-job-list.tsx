@@ -11,7 +11,7 @@ import {
   CancelCircleIcon,
   AlertCircleIcon,
 } from '@hugeicons/core-free-icons'
-import type { CronJobInfo } from '../hooks/use-cron-jobs'
+import type { CronJobInfo } from '../stores/cron-jobs'
 
 interface CronJobListProps {
   jobs: CronJobInfo[]

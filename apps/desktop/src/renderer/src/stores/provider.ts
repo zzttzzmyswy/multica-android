@@ -1,4 +1,8 @@
 import { create } from 'zustand'
+import { toast } from '@multica/ui/components/ui/sonner'
+
+// Minimum loading time for user perception (ms)
+const MIN_LOADING_TIME = 800
 
 interface ProviderStore {
   // State
@@ -50,11 +54,19 @@ export const useProviderStore = create<ProviderStore>()((set, get) => ({
   refresh: async () => {
     set({ loading: true, error: null })
 
+    const startTime = Date.now()
+
     try {
       const [providerList, currentInfo] = await Promise.all([
         window.electronAPI.provider.list(),
         window.electronAPI.provider.current(),
       ])
+
+      // Ensure minimum loading time for user perception
+      const elapsed = Date.now() - startTime
+      if (elapsed < MIN_LOADING_TIME) {
+        await new Promise(resolve => setTimeout(resolve, MIN_LOADING_TIME - elapsed))
+      }
 
       set({
         providers: providerList,
@@ -63,6 +75,7 @@ export const useProviderStore = create<ProviderStore>()((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       set({ error: message })
+      toast.error('Failed to refresh providers', { description: message })
       console.error('[ProviderStore] Failed to refresh providers:', message)
     } finally {
       set({ loading: false })
@@ -78,15 +91,27 @@ export const useProviderStore = create<ProviderStore>()((set, get) => ({
       if (result.ok) {
         // Refresh to update current status
         await get().refresh()
+        // Find provider name for toast
+        const provider = get().providers.find(p => p.id === providerId)
+        toast.success(`Switched to ${provider?.name ?? providerId}`)
         return { ok: true }
       } else {
         set({ error: result.error ?? 'Unknown error' })
+        toast.error('Failed to switch provider', { description: result.error })
         return { ok: false, error: result.error }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       set({ error: message })
+      toast.error('Failed to switch provider', { description: message })
       return { ok: false, error: message }
     }
   },
 }))
+
+// Selector helpers
+export const selectAvailableProviders = (providers: ProviderStatus[]) =>
+  providers.filter(p => p.available)
+
+export const selectProviderById = (providers: ProviderStatus[], id: string) =>
+  providers.find(p => p.id === id)

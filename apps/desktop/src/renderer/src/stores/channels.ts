@@ -1,4 +1,8 @@
 import { create } from 'zustand'
+import { toast } from '@multica/ui/components/ui/sonner'
+
+// Minimum loading time for user perception (ms)
+const MIN_LOADING_TIME = 800
 
 interface ChannelsStore {
   // State
@@ -53,11 +57,19 @@ export const useChannelsStore = create<ChannelsStore>()((set, get) => ({
   refresh: async () => {
     set({ loading: true, error: null })
 
+    const startTime = Date.now()
+
     try {
       const [stateList, channelConfig] = await Promise.all([
         window.electronAPI.channels.listStates(),
         window.electronAPI.channels.getConfig(),
       ])
+
+      // Ensure minimum loading time for user perception
+      const elapsed = Date.now() - startTime
+      if (elapsed < MIN_LOADING_TIME) {
+        await new Promise(resolve => setTimeout(resolve, MIN_LOADING_TIME - elapsed))
+      }
 
       set({
         states: stateList,
@@ -66,6 +78,7 @@ export const useChannelsStore = create<ChannelsStore>()((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       set({ error: message })
+      toast.error('Failed to refresh channels', { description: message })
       console.error('[ChannelsStore] Failed to refresh:', message)
     } finally {
       set({ loading: false })
@@ -80,14 +93,17 @@ export const useChannelsStore = create<ChannelsStore>()((set, get) => ({
 
       if (result.ok) {
         await get().refresh()
+        toast.success('Channel connected')
         return { ok: true }
       } else {
         set({ error: result.error ?? 'Failed to save token' })
+        toast.error('Failed to connect channel', { description: result.error })
         return { ok: false, error: result.error }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       set({ error: message })
+      toast.error('Failed to connect channel', { description: message })
       return { ok: false, error: message }
     }
   },
@@ -100,14 +116,17 @@ export const useChannelsStore = create<ChannelsStore>()((set, get) => ({
 
       if (result.ok) {
         await get().refresh()
+        toast.success('Channel removed')
         return { ok: true }
       } else {
         set({ error: result.error ?? 'Failed to remove token' })
+        toast.error('Failed to remove channel', { description: result.error })
         return { ok: false, error: result.error }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       set({ error: message })
+      toast.error('Failed to remove channel', { description: message })
       return { ok: false, error: message }
     }
   },
@@ -120,14 +139,17 @@ export const useChannelsStore = create<ChannelsStore>()((set, get) => ({
 
       if (result.ok) {
         await get().refresh()
+        toast.success('Channel stopped')
         return { ok: true }
       } else {
         set({ error: result.error ?? 'Failed to stop channel' })
+        toast.error('Failed to stop channel', { description: result.error })
         return { ok: false, error: result.error }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       set({ error: message })
+      toast.error('Failed to stop channel', { description: message })
       return { ok: false, error: message }
     }
   },
@@ -140,14 +162,17 @@ export const useChannelsStore = create<ChannelsStore>()((set, get) => ({
 
       if (result.ok) {
         await get().refresh()
+        toast.success('Channel started')
         return { ok: true }
       } else {
         set({ error: result.error ?? 'Failed to start channel' })
+        toast.error('Failed to start channel', { description: result.error })
         return { ok: false, error: result.error }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       set({ error: message })
+      toast.error('Failed to start channel', { description: message })
       return { ok: false, error: message }
     }
   },

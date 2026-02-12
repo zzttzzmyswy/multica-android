@@ -9,7 +9,7 @@ import {
   CheckmarkCircle02Icon,
   Cancel01Icon,
 } from '@hugeicons/core-free-icons'
-import type { SkillInfo, SkillSource } from '../hooks/use-skills'
+import type { SkillInfo, SkillSource } from '../stores/skills'
 
 // Source badge colors
 const SOURCE_COLORS: Record<SkillSource, string> = {

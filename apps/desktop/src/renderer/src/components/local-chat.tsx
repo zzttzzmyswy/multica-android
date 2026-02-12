@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import { Loading } from '@multica/ui/components/ui/loading'
 import { ChatView } from '@multica/ui/components/chat-view'
 import { useLocalChat } from '../hooks/use-local-chat'
-import { useProvider } from '../hooks/use-provider'
+import { useProviderStore } from '../stores/provider'
 import { ApiKeyDialog } from './api-key-dialog'
 import { OAuthDialog } from './oauth-dialog'
 
@@ -24,7 +24,7 @@ export function LocalChat() {
     clearError,
   } = useLocalChat()
 
-  const { providers, current, setProvider: switchProvider, refresh: refreshProviders } = useProvider()
+  const { providers, current, setProvider: switchProvider, refresh: refreshProviders } = useProviderStore()
 
   // Provider config dialog state
   const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false)
