@@ -47,11 +47,18 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
         Placeholder.configure({ placeholder }),
       ],
       immediatelyRender: false,
+      // Scroll cursor into view on every content change (e.g., Shift+Enter newlines)
+      onUpdate({ editor }) {
+        editor.commands.scrollIntoView();
+      },
       editorProps: {
         attributes: {
           class:
             "w-full resize-none bg-transparent px-1 py-1 text-base text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed",
         },
+        // Ensure cursor scrolls into view when typing near container edges
+        scrollThreshold: 20,
+        scrollMargin: 20,
         handleKeyDown(_view, event) {
           // Guard for IME composition (Chinese/Japanese input)
           if (event.isComposing) return false;
