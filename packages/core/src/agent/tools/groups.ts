@@ -39,6 +39,9 @@ export const TOOL_GROUPS: Record<string, string[]> = {
   // Cron/scheduling tools
   "group:cron": ["cron"],
 
+  // Data tools (finance, etc.)
+  "group:data": ["data"],
+
   // All core tools
   "group:core": [
     "read",
@@ -49,6 +52,7 @@ export const TOOL_GROUPS: Record<string, string[]> = {
     "process",
     "web_search",
     "web_fetch",
+    "data",
   ],
 };
 

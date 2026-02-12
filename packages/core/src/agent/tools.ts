@@ -10,6 +10,7 @@ import { createSessionsSpawnTool } from "./tools/sessions-spawn.js";
 import { createSessionsListTool } from "./tools/sessions-list.js";
 import { createMemorySearchTool } from "./tools/memory-search.js";
 import { createCronTool } from "./tools/cron/index.js";
+import { createDataTool } from "./tools/data/index.js";
 import { filterTools } from "./tools/policy.js";
 import { isMulticaError, isRetryableError } from "@multica/utils";
 import type { ExecApprovalCallback } from "./tools/exec-approval-types.js";
@@ -26,6 +27,8 @@ export interface CreateToolsOptions {
   isSubagent?: boolean | undefined;
   /** Session ID of the agent (passed to sessions_spawn tool) */
   sessionId?: string | undefined;
+  /** Resolved provider ID of the parent agent (passed to sessions_spawn for subagent inheritance) */
+  provider?: string | undefined;
   /** Callback invoked when exec tool needs approval before running a command */
   onExecApprovalNeeded?: ExecApprovalCallback | undefined;
 }
@@ -110,6 +113,7 @@ export function createAllTools(options: CreateToolsOptions | string): AgentTool<
   const webSearchTool = createWebSearchTool();
 
   const cronTool = createCronTool();
+  const dataTool = createDataTool();
 
   const tools: AgentTool<any>[] = [
     ...baseTools,
@@ -119,6 +123,7 @@ export function createAllTools(options: CreateToolsOptions | string): AgentTool<
     webFetchTool as AgentTool<any>,
     webSearchTool as AgentTool<any>,
     cronTool as AgentTool<any>,
+    dataTool as AgentTool<any>,
   ];
 
   // Add memory_search tool if profileDir is provided
@@ -131,6 +136,7 @@ export function createAllTools(options: CreateToolsOptions | string): AgentTool<
   const sessionsSpawnTool = createSessionsSpawnTool({
     isSubagent: isSubagent ?? false,
     ...(sessionId !== undefined ? { sessionId } : {}),
+    ...(opts.provider !== undefined ? { provider: opts.provider } : {}),
   });
   tools.push(sessionsSpawnTool as AgentTool<any>);
 
@@ -165,6 +171,7 @@ export function resolveTools(options: ResolveToolsOptions): AgentTool<any>[] {
     profileDir: options.profileDir,
     isSubagent: options.isSubagent,
     sessionId: options.sessionId,
+    provider: options.provider,
     onExecApprovalNeeded: options.onExecApprovalNeeded,
   });
 

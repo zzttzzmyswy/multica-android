@@ -11,6 +11,7 @@ import {
   Globe,
   Database,
   GitBranch,
+  BarChart3,
   ChevronRight,
   type LucideIcon,
 } from "lucide-react"
@@ -39,6 +40,7 @@ const TOOL_DISPLAY: Record<string, { label: string; icon: LucideIcon }> = {
   memory_delete:   { label: "MemoryDelete",  icon: Database },
   memory_list:     { label: "MemoryList",    icon: Database },
   sessions_spawn:  { label: "SpawnSession",  icon: GitBranch },
+  data:            { label: "Data",          icon: BarChart3 },
 }
 
 // ---------------------------------------------------------------------------
@@ -73,6 +75,18 @@ function getSubtitle(toolName: string, args?: Record<string, unknown>): string {
       return args.query ? String(args.query) : ""
     case "web_fetch":
       try { return new URL(String(args.url)).hostname } catch { return String(args.url ?? "") }
+    case "data": {
+      const action = String(args.action ?? "").replace(/^get_/, "")
+      const params = args.params as Record<string, unknown> | undefined
+      const ticker = params?.ticker ? String(params.ticker).toUpperCase() : ""
+      return ticker ? `${action} ${ticker}` : action
+    }
+    case "sessions_spawn": {
+      const label = args.label ? String(args.label) : ""
+      if (label) return label.length > 60 ? label.slice(0, 57) + "…" : label
+      const task = String(args.task ?? "")
+      return task.length > 60 ? task.slice(0, 57) + "…" : task
+    }
     default:
       return ""
   }
@@ -91,6 +105,8 @@ const RUNNING_LABELS: Record<string, string> = {
   glob: "searching…",
   web_search: "searching…",
   web_fetch: "fetching…",
+  data: "fetching…",
+  sessions_spawn: "spawning…",
 }
 
 /** Stats derived from tool result content */
