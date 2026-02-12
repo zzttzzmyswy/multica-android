@@ -48,11 +48,14 @@ pnpm multica credentials init  # Initialize credentials
 pnpm multica help              # Show help
 
 # Development servers
-pnpm dev                       # Desktop app (default, recommended)
-pnpm dev:desktop               # Desktop app
+pnpm dev                       # Desktop app (connects to dev gateway by default)
+pnpm dev:desktop               # Same as above
 pnpm dev:gateway               # WebSocket gateway only
 pnpm dev:web                   # Next.js web app
 pnpm dev:all                   # Gateway + web app
+
+# Override gateway URL (e.g. local gateway)
+GATEWAY_URL=http://localhost:3000 pnpm dev
 
 # Build
 pnpm build                     # Build all (turbo-orchestrated)
