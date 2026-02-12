@@ -22,7 +22,14 @@ import {
   checkContextWindow,
   DEFAULT_CONTEXT_TOKENS,
   type ContextWindowGuardResult,
+  estimateTokenUsage,
+  COMPACTION_TRIGGER_RATIO,
+  compactMessagesTokenAware,
+  MIN_KEEP_MESSAGES,
 } from "./context-window/index.js";
+import {
+  pruneToolResults,
+} from "./context-window/tool-result-pruning.js";
 import { mergeToolsConfig, type ToolsConfig } from "./tools/policy.js";
 import {
   loadAuthProfileStore,
@@ -42,6 +49,7 @@ import {
   sanitizeToolCallInputs,
   sanitizeToolUseResultPairing,
 } from "./session/session-transcript-repair.js";
+import { isContextOverflowError } from "./errors.js";
 
 // ============================================================
 // Error classification for auth profile rotation
@@ -89,11 +97,15 @@ export class Agent {
   private readonly stderr: NodeJS.WritableStream;
   private initialized = false;
 
+  // Context window settings (for pre-flight compaction)
+  private readonly reserveTokens: number;
+
   // Internal run state
   private _internalRun = false;
   private _isRunning = false;
   private _aborted = false;
   private _runMutex: Promise<void> = Promise.resolve();
+  private _compactionPromise: Promise<void> = Promise.resolve();
   private currentUserDisplayPrompt: string | undefined;
 
   // MulticaEvent subscribers (parallel to PiAgentCore's subscriber list)
@@ -188,8 +200,10 @@ export class Agent {
         return this.currentApiKey;
       },
       transformContext: async (messages) => {
-        const sanitizedInputs = sanitizeToolCallInputs(messages);
-        return sanitizeToolUseResultPairing(sanitizedInputs);
+        let result = sanitizeToolCallInputs(messages);
+        result = sanitizeToolUseResultPairing(result);
+        result = this.preflightCompact(result);
+        return result;
       },
     });
 
@@ -259,6 +273,9 @@ export class Agent {
     const summaryApiKey = compactionMode === "summary"
       ? resolveApiKey(this.resolvedProvider, options.apiKey)
       : undefined;
+
+    // Store reserveTokens for pre-flight compaction
+    this.reserveTokens = options.reserveTokens ?? 1024;
 
     // 创建 SessionManager（带 context window 配置）
     this.session = new SessionManager({
@@ -425,6 +442,8 @@ export class Agent {
     prompt: string,
     options?: { displayPrompt?: string },
   ): Promise<AgentRunResult> {
+    // Wait for any in-flight compaction from the previous run
+    await this._compactionPromise;
     await this.ensureInitialized();
     this.refreshAuthState();
     this.output.state.lastAssistantText = "";
@@ -444,6 +463,9 @@ export class Agent {
       const canRotate = !this.pinnedProfile && this.profileCandidates.length > 1;
       let lastError: unknown;
 
+      const MAX_OVERFLOW_COMPACTION_ATTEMPTS = 2;
+      let overflowAttempts = 0;
+
       // Loop to exhaust all candidate profiles on rotatable errors
       while (true) {
         try {
@@ -451,6 +473,34 @@ export class Agent {
           break; // success — exit loop
         } catch (error) {
           lastError = error;
+
+          // Context overflow recovery: auto-compact and retry before trying auth rotation
+          if (isContextOverflowError(error) && overflowAttempts < MAX_OVERFLOW_COMPACTION_ATTEMPTS) {
+            overflowAttempts++;
+            this.stderr.write(
+              `[context-overflow] Overflow detected (attempt ${overflowAttempts}/${MAX_OVERFLOW_COMPACTION_ATTEMPTS}), compacting...\n`,
+            );
+            const messages = this.agent.state.messages.slice();
+            const result = await this.session.maybeCompact(messages);
+            if (result?.kept) {
+              this.agent.replaceMessages(result.kept);
+              this.output.state.lastAssistantText = "";
+              continue; // retry with compacted messages
+            }
+            // Forced fallback: estimation may diverge from reality (the LLM
+            // already told us the context is too large), so drop the oldest
+            // half of messages even when maybeCompact thinks no compaction is needed.
+            if (messages.length > MIN_KEEP_MESSAGES) {
+              const keepCount = Math.max(MIN_KEEP_MESSAGES, Math.floor(messages.length / 2));
+              const forcedKept = messages.slice(-keepCount);
+              this.stderr.write(
+                `[context-overflow] Forced compaction: ${messages.length} → ${forcedKept.length} messages\n`,
+              );
+              this.agent.replaceMessages(forcedKept);
+              this.output.state.lastAssistantText = "";
+              continue;
+            }
+          }
 
           const reason = classifyError(error);
           if (this.currentProfileId && isRotatableError(reason)) {
@@ -615,35 +665,88 @@ export class Agent {
       // Skip compaction during internal runs — internal messages will be
       // rolled back from memory afterwards, so compacting now would be incorrect.
       if (message.role === "assistant" && !this._internalRun) {
-        void this.maybeCompact();
+        this._compactionPromise = this.maybeCompact().catch((err) => {
+          console.error("[Agent] Compaction failed:", err);
+        });
       }
     }
+  }
+
+  /**
+   * Pre-flight context compaction — runs inside transformContext before every LLM call.
+   * Pure in-memory, no disk writes. Prunes tool results and drops oldest messages
+   * when the estimated token utilization exceeds the compaction trigger threshold.
+   */
+  private preflightCompact(messages: AgentMessage[]): AgentMessage[] {
+    const estimation = estimateTokenUsage({
+      messages,
+      systemPrompt: this.agent.state.systemPrompt,
+      contextWindowTokens: this.contextWindowGuard.tokens,
+      reserveTokens: this.reserveTokens,
+    });
+
+    if (estimation.utilizationRatio < COMPACTION_TRIGGER_RATIO) {
+      return messages; // fast path
+    }
+
+    const originalCount = messages.length;
+    let result = messages;
+
+    // Phase 1: Prune tool results (soft trim + hard clear)
+    const pruneResult = pruneToolResults({
+      messages: result,
+      contextWindowTokens: this.contextWindowGuard.tokens,
+    });
+    if (pruneResult.changed) {
+      result = pruneResult.messages;
+    }
+
+    // Re-estimate after pruning
+    const afterPrune = estimateTokenUsage({
+      messages: result,
+      systemPrompt: this.agent.state.systemPrompt,
+      contextWindowTokens: this.contextWindowGuard.tokens,
+      reserveTokens: this.reserveTokens,
+    });
+
+    // Phase 2: Drop oldest messages if still over threshold
+    if (afterPrune.utilizationRatio >= COMPACTION_TRIGGER_RATIO) {
+      const compacted = compactMessagesTokenAware(result, afterPrune.availableTokens);
+      if (compacted) {
+        result = compacted.kept;
+      }
+    }
+
+    if (result.length < originalCount) {
+      const saved = originalCount - result.length;
+      this.stderr.write(
+        `[pre-flight compaction] pruned ${saved} messages (${originalCount} → ${result.length})\n`,
+      );
+    }
+
+    return result;
   }
 
   private async maybeCompact() {
     const messages = this.agent.state.messages.slice();
     if (!this.session.needsCompaction(messages)) return;
 
-    try {
-      const result = await this.session.maybeCompact(messages);
-      if (!result) return;
+    const result = await this.session.maybeCompact(messages);
+    if (!result) return;
 
-      this.emitMulticaEvent({ type: "compaction_start" });
-      if (result?.kept) {
-        this.agent.replaceMessages(result.kept);
-      }
-      const endEvent: CompactionEndEvent = {
-        type: "compaction_end",
-        removed: result?.removedCount ?? 0,
-        kept: result?.kept.length ?? messages.length,
-        tokensRemoved: result?.tokensRemoved,
-        tokensKept: result?.tokensKept,
-        reason: result?.reason ?? "tokens",
-      };
-      this.emitMulticaEvent(endEvent);
-    } catch (err) {
-      throw err;
+    this.emitMulticaEvent({ type: "compaction_start" });
+    if (result.kept) {
+      this.agent.replaceMessages(result.kept);
     }
+    const endEvent: CompactionEndEvent = {
+      type: "compaction_end",
+      removed: result.removedCount ?? 0,
+      kept: result.kept.length ?? messages.length,
+      tokensRemoved: result.tokensRemoved,
+      tokensKept: result.tokensKept,
+      reason: result.reason ?? "tokens",
+    };
+    this.emitMulticaEvent(endEvent);
   }
 
   /**
