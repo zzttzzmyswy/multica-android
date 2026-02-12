@@ -102,10 +102,10 @@ export function registerSkillsIpcHandlers(): void {
         id: skill.id,
         name: skill.name,
         description: skill.description,
-        version: '1.0.0', // Skills don't have version in current implementation
+        version: '1.0.0',
         enabled: skill.eligible,
         source: skill.source as 'bundled' | 'global' | 'profile',
-        triggers: [`/${skill.id}`], // Default trigger is /<skill-id>
+        triggers: [`/${skill.id}`],
       }))
 
       console.log(`[IPC] skills:list - Returning ${skills.length} skills from agent`)

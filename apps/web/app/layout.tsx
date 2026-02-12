@@ -1,9 +1,22 @@
 import type { Metadata } from "next";
-import "@multica/ui/fonts";
+import { Geist_Mono, Inter, Playfair_Display } from "next/font/google";
 import "@multica/ui/globals.css";
 import { ThemeProvider } from "@multica/ui/components/theme-provider";
 import { Toaster } from "@multica/ui/components/ui/sonner";
 import { ServiceWorkerRegister } from "./sw-register";
+
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+const playfair = Playfair_Display({
+  variable: "--font-brand",
+  subsets: ["latin"],
+  weight: ["400"],
+});
 
 export const metadata: Metadata = {
   title: "Multica",
@@ -24,8 +37,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="font-sans antialiased h-dvh flex flex-col">
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
+      <body
+        className={`${geistMono.variable} ${playfair.variable} font-sans antialiased h-dvh flex flex-col`}
+      >
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

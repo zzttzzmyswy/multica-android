@@ -6,9 +6,10 @@ import { Toaster } from './components/toaster'
 import Layout from './pages/layout'
 import HomePage from './pages/home'
 import ChatPage from './pages/chat'
-import ToolsPage from './pages/tools'
-import SkillsPage from './pages/skills'
-import ChannelsPage from './pages/channels'
+import ProfilePage from './pages/agent/profile'
+import SkillsPage from './pages/agent/skills'
+import ToolsPage from './pages/agent/tools'
+import ClientsPage from './pages/clients'
 import CronsPage from './pages/crons'
 import OnboardingPage from './pages/onboarding'
 import { useOnboardingStore } from './stores/onboarding'
@@ -43,9 +44,10 @@ const router = createHashRouter([
         ),
       },
       { path: 'chat', element: <ChatPage /> },
-      { path: 'tools', element: <ToolsPage /> },
-      { path: 'skills', element: <SkillsPage /> },
-      { path: 'channels', element: <ChannelsPage /> },
+      { path: 'agent/profile', element: <ProfilePage /> },
+      { path: 'agent/skills', element: <SkillsPage /> },
+      { path: 'agent/tools', element: <ToolsPage /> },
+      { path: 'clients', element: <ClientsPage /> },
       { path: 'crons', element: <CronsPage /> },
     ],
   },
@@ -56,14 +58,12 @@ export default function App() {
   const setCompleted = useOnboardingStore((s) => s.setCompleted)
 
   useEffect(() => {
-    // Load onboarding state from file system
     async function hydrateOnboardingState() {
       try {
         const completed = await window.electronAPI.appState.getOnboardingCompleted()
         setCompleted(completed)
       } catch (err) {
         console.error('[App] Failed to load onboarding state:', err)
-        // Default to false if load fails
         setCompleted(false)
       } finally {
         setIsHydrated(true)
@@ -72,7 +72,6 @@ export default function App() {
 
     hydrateOnboardingState()
 
-    // Initialize hub and prefetch global data at app startup
     useHubStore.getState().init()
     useProviderStore.getState().fetch()
     useChannelsStore.getState().fetch()
@@ -81,7 +80,6 @@ export default function App() {
     useCronJobsStore.getState().fetch()
   }, [setCompleted])
 
-  // Show nothing while loading onboarding state to prevent flash
   if (!isHydrated) {
     return (
       <ThemeProvider defaultTheme="system" storageKey="multica-theme">

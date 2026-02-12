@@ -1,21 +1,13 @@
 import { useState } from 'react'
 import { Button } from '@multica/ui/components/ui/button'
-import { Badge } from '@multica/ui/components/ui/badge'
-import { Switch } from '@multica/ui/components/ui/switch'
 import {
-  RotateCw,
-  Loader2,
-  CheckCircle,
-  X,
-} from 'lucide-react'
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from '@multica/ui/components/ui/collapsible'
+import { RotateCw, Loader2, ChevronRight } from 'lucide-react'
+import { cn } from '@multica/ui/lib/utils'
 import type { SkillInfo, SkillSource } from '../stores/skills'
-
-// Source badge colors
-const SOURCE_COLORS: Record<SkillSource, string> = {
-  bundled: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  global: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
-  profile: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
-}
 
 // Source section titles
 const SOURCE_TITLES: Record<SkillSource, string> = {
@@ -36,23 +28,21 @@ export function SkillList({
   skills,
   loading,
   error,
-  onToggleSkill,
   onRefresh,
 }: SkillListProps) {
-  // Track toggling state for individual skills
-  const [togglingSkills, setTogglingSkills] = useState<Set<string>>(new Set())
+  // Track which skills are expanded
+  const [expandedSkills, setExpandedSkills] = useState<Set<string>>(new Set())
 
-  const handleToggleSkill = async (skillId: string) => {
-    setTogglingSkills((prev) => new Set(prev).add(skillId))
-    try {
-      await onToggleSkill(skillId)
-    } finally {
-      setTogglingSkills((prev) => {
-        const next = new Set(prev)
+  const toggleSkill = (skillId: string) => {
+    setExpandedSkills((prev) => {
+      const next = new Set(prev)
+      if (next.has(skillId)) {
         next.delete(skillId)
-        return next
-      })
-    }
+      } else {
+        next.add(skillId)
+      }
+      return next
+    })
   }
 
   // Group skills by source
@@ -68,8 +58,7 @@ export function SkillList({
   if (loading && skills.length === 0) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
-        <span className="ml-2 text-muted-foreground">Loading skills...</span>
+        <Loader2 className="size-5 animate-spin text-muted-foreground" />
       </div>
     )
   }
@@ -78,20 +67,20 @@ export function SkillList({
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">
-          {skills.filter((s) => s.enabled).length} of {skills.length} skills enabled
-        </div>
+        <p className="text-sm text-muted-foreground">
+          {skills.length} skill{skills.length !== 1 && 's'} available
+        </p>
         <Button
           variant="ghost"
           size="sm"
           onClick={onRefresh}
           disabled={loading}
-          className="gap-1.5"
+          className="gap-1.5 h-8"
         >
           {loading ? (
-            <Loader2 className="size-4 animate-spin" />
+            <Loader2 className="size-3.5 animate-spin" />
           ) : (
-            <RotateCw className="size-4" />
+            <RotateCw className="size-3.5" />
           )}
           Refresh
         </Button>
@@ -110,94 +99,53 @@ export function SkillList({
         if (sourceSkills.length === 0) return null
 
         return (
-          <div key={source} className="space-y-2">
-            <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <span
-                className={`inline-block w-2 h-2 rounded-full ${
-                  source === 'bundled'
-                    ? 'bg-blue-500'
-                    : source === 'global'
-                    ? 'bg-green-500'
-                    : 'bg-purple-500'
-                }`}
-              />
-              {SOURCE_TITLES[source]}
-              <span className="text-xs">({sourceSkills.length})</span>
-            </h3>
-            <div className="space-y-1">
-              {sourceSkills.map((skill) => {
-                const isToggling = togglingSkills.has(skill.id)
+          <div key={source}>
+            {/* Section header */}
+            <h3 className="text-sm font-medium mb-3">{SOURCE_TITLES[source]}</h3>
+
+            {/* Skills card */}
+            <div className="rounded-lg border bg-card">
+              {sourceSkills.map((skill, index) => {
+                const isExpanded = expandedSkills.has(skill.id)
+                const isLast = index === sourceSkills.length - 1
 
                 return (
-                  <div
+                  <Collapsible
                     key={skill.id}
-                    className="flex items-center justify-between px-4 py-3 rounded-lg border hover:bg-muted/30 transition-colors"
+                    open={isExpanded}
+                    onOpenChange={() => toggleSkill(skill.id)}
                   >
-                    {/* Left: Name + Description */}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{skill.name}</span>
-                        <code className="text-xs text-muted-foreground font-mono">
-                          /{skill.id}
-                        </code>
-                        <Badge variant="secondary" className={`text-xs ${SOURCE_COLORS[skill.source]}`}>
-                          {skill.source}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground truncate mt-0.5">
-                        {skill.description}
-                      </p>
-                      {skill.triggers.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {skill.triggers.slice(0, 3).map((trigger) => (
-                            <code
-                              key={trigger}
-                              className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
-                            >
-                              {trigger}
-                            </code>
-                          ))}
-                          {skill.triggers.length > 3 && (
-                            <span className="text-xs text-muted-foreground">
-                              +{skill.triggers.length - 3} more
-                            </span>
-                          )}
-                        </div>
+                    <CollapsibleTrigger
+                      className={cn(
+                        'w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors text-left',
+                        !isLast && !isExpanded && 'border-b'
                       )}
-                    </div>
-
-                    {/* Center: Status */}
-                    <div className="flex items-center gap-2 px-4">
-                      <div
-                        className={`flex items-center gap-1 ${
-                          skill.enabled
-                            ? 'text-green-600 dark:text-green-400'
-                            : 'text-muted-foreground'
-                        }`}
-                      >
-                        {skill.enabled ? (
-                          <CheckCircle className="size-4" />
-                        ) : (
-                          <X className="size-4" />
+                    >
+                      <span className="text-sm font-medium flex-1">{skill.name}</span>
+                      <code className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">
+                        {skill.triggers[0] || `/${skill.id}`}
+                      </code>
+                      <span className="text-xs text-muted-foreground">
+                        {skill.version}
+                      </span>
+                      <ChevronRight
+                        className={cn(
+                          'size-4 text-muted-foreground transition-transform flex-shrink-0',
+                          isExpanded && 'rotate-90'
                         )}
-                        <span className="text-xs font-medium">
-                          {skill.enabled ? 'Enabled' : 'Disabled'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Right: Toggle */}
-                    <div className="flex items-center gap-2">
-                      {isToggling && (
-                        <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                      )}
-                      <Switch
-                        checked={skill.enabled}
-                        onCheckedChange={() => handleToggleSkill(skill.id)}
-                        disabled={isToggling}
                       />
-                    </div>
-                  </div>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div
+                        className={cn(
+                          'text-sm text-muted-foreground p-4',
+                          !isLast && 'border-b'
+                        )}
+                      >
+                        {skill.description || 'No description'}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 )
               })}
             </div>
@@ -207,15 +155,10 @@ export function SkillList({
 
       {/* Empty state */}
       {skills.length === 0 && !loading && (
-        <div className="text-center py-12 text-muted-foreground">
-          <p>No skills found.</p>
+        <div className="text-center py-12 text-muted-foreground text-sm">
+          No skills found.
         </div>
       )}
-
-      {/* Note about persistence */}
-      <p className="text-xs text-muted-foreground text-center">
-        Changes are saved automatically. Restart Agent session to apply skill changes.
-      </p>
     </div>
   )
 }

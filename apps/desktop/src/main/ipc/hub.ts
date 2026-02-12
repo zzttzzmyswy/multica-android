@@ -39,7 +39,7 @@ export async function initializeHub(): Promise<void> {
     return
   }
 
-  const gatewayUrl = process.env['GATEWAY_URL'] ?? 'http://localhost:3000'
+  const gatewayUrl = import.meta.env.MAIN_VITE_GATEWAY_URL
   safeLog(`[Desktop] Initializing Hub, connecting to Gateway: ${gatewayUrl}`)
 
   hub = new Hub(gatewayUrl)
@@ -62,7 +62,7 @@ export async function initializeHub(): Promise<void> {
  */
 function getHub(): Hub {
   if (!hub) {
-    const gatewayUrl = process.env['GATEWAY_URL'] ?? 'http://localhost:3000'
+    const gatewayUrl = import.meta.env.MAIN_VITE_GATEWAY_URL
     safeLog(`[Desktop] Creating Hub, connecting to Gateway: ${gatewayUrl}`)
     hub = new Hub(gatewayUrl)
   }
