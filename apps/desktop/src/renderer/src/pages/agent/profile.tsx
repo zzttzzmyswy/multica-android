@@ -26,7 +26,6 @@ export default function ProfilePage() {
   const { providers, current, setProvider, refresh, loading: providerLoading } = useProviderStore()
 
   const [profileLoading, setProfileLoading] = useState(true)
-  const [_saving, setSaving] = useState(false)
   const [name, setName] = useState('')
   const [userContent, setUserContent] = useState('')
   const [hasChanges, setHasChanges] = useState(false)
@@ -85,7 +84,6 @@ export default function ProfilePage() {
   }
 
   const handleSaveProfile = useCallback(async () => {
-    setSaving(true)
     try {
       await window.electronAPI.profile.updateName(name)
       await window.electronAPI.profile.updateUser(userContent)
@@ -96,8 +94,6 @@ export default function ProfilePage() {
     } catch (err) {
       console.error('Failed to save profile:', err)
       toast.error('Failed to save profile')
-    } finally {
-      setSaving(false)
     }
   }, [name, userContent])
 
