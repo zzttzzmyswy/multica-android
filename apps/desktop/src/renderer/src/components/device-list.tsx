@@ -97,11 +97,9 @@ export function DeviceList() {
 
   if (devices.length === 0) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-center">
+      <div className="flex flex-col items-center justify-center text-center py-8">
         <Smartphone className="size-8 text-muted-foreground/40 mb-3" />
-        <p className="text-sm text-muted-foreground">
-          No devices connected yet.
-        </p>
+        <p className="text-sm text-muted-foreground">No devices connected yet.</p>
       </div>
     )
   }

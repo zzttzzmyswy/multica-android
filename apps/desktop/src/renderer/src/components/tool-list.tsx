@@ -2,17 +2,22 @@ import { useState, useMemo } from 'react'
 import { Switch } from '@multica/ui/components/ui/switch'
 import { Button } from '@multica/ui/components/ui/button'
 import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from '@multica/ui/components/ui/collapsible'
+import {
   RotateCw,
   FolderOpen,
   Code,
   Globe,
   Brain,
-  ChevronDown,
-  ChevronUp,
+  ChevronRight,
   Loader2,
   Clock,
   Users,
 } from 'lucide-react'
+import { cn } from '@multica/ui/lib/utils'
 import type { ToolInfo } from '../stores/tools'
 
 // Group display names
@@ -24,6 +29,17 @@ const GROUP_NAMES: Record<string, string> = {
   subagent: 'Subagent',
   cron: 'Cron',
   other: 'Other',
+}
+
+// Group descriptions
+const GROUP_DESCRIPTIONS: Record<string, string> = {
+  fs: 'Read, write, and manage files',
+  runtime: 'Execute code and commands',
+  web: 'Fetch and interact with web content',
+  memory: 'Store and recall information',
+  subagent: 'Delegate tasks to sub-agents',
+  cron: 'Schedule recurring tasks',
+  other: 'Miscellaneous tools',
 }
 
 // Group icons
@@ -54,13 +70,14 @@ export function ToolList({
 }: ToolListProps) {
   // Compute groups from tools
   const groups = useMemo(() => {
-    const groupIds = [...new Set(tools.map(t => t.group))]
-    return groupIds.map(id => ({
+    const groupIds = [...new Set(tools.map((t) => t.group))]
+    return groupIds.map((id) => ({
       id,
       name: GROUP_NAMES[id] || id,
-      tools: tools.filter(t => t.group === id),
-      enabledCount: tools.filter(t => t.group === id && t.enabled).length,
-      totalCount: tools.filter(t => t.group === id).length,
+      description: GROUP_DESCRIPTIONS[id] || '',
+      tools: tools.filter((t) => t.group === id),
+      enabledCount: tools.filter((t) => t.group === id && t.enabled).length,
+      totalCount: tools.filter((t) => t.group === id).length,
     }))
   }, [tools])
 
@@ -100,31 +117,29 @@ export function ToolList({
   if (loading && tools.length === 0) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
-        <span className="ml-2 text-muted-foreground">Loading tools...</span>
+        <Loader2 className="size-5 animate-spin text-muted-foreground" />
       </div>
     )
   }
 
   return (
     <div className="space-y-6">
-      {/* Header: Refresh button */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="text-sm text-muted-foreground">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
           {tools.filter((t) => t.enabled).length} of {tools.length} tools enabled
-        </div>
-
+        </p>
         <Button
           variant="ghost"
           size="sm"
           onClick={onRefresh}
-          className="gap-1.5"
           disabled={loading}
+          className="gap-1.5 h-8"
         >
           {loading ? (
-            <Loader2 className="size-4 animate-spin" />
+            <Loader2 className="size-3.5 animate-spin" />
           ) : (
-            <RotateCw className="size-4" />
+            <RotateCw className="size-3.5" />
           )}
           Refresh
         </Button>
@@ -138,86 +153,83 @@ export function ToolList({
       )}
 
       {/* Tool groups */}
-      <div className="space-y-2">
-        {groups.map((group) => {
-          const isExpanded = expandedGroups.has(group.id)
-          const GroupIcon = GROUP_ICONS[group.id] || Code
+      {groups.map((group) => {
+        const isExpanded = expandedGroups.has(group.id)
+        const GroupIcon = GROUP_ICONS[group.id] || Code
 
-          return (
-            <div
-              key={group.id}
-              className="border rounded-lg overflow-hidden"
-            >
-              {/* Group header */}
-              <button
-                onClick={() => toggleGroup(group.id)}
-                className="w-full flex items-center justify-between px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <GroupIcon className="size-5 text-muted-foreground" />
-                  <span className="font-medium">{group.name}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {group.enabledCount}/{group.totalCount} enabled
+        return (
+          <div key={group.id}>
+            {/* Section header */}
+            <div className="mb-3 flex items-start gap-2">
+              <GroupIcon className="size-4 text-muted-foreground mt-0.5" />
+              <div>
+                <h3 className="text-sm font-medium">{group.name}</h3>
+                <p className="text-xs text-muted-foreground">
+                  {group.enabledCount}/{group.totalCount} enabled
+                </p>
+              </div>
+            </div>
+
+            {/* Tools card */}
+            <Collapsible open={isExpanded} onOpenChange={() => toggleGroup(group.id)}>
+              <div className="rounded-lg border bg-card">
+                <CollapsibleTrigger className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors text-left">
+                  <span className="text-sm text-muted-foreground">
+                    {group.description}
                   </span>
-                </div>
-                {isExpanded ? (
-                  <ChevronUp className="size-4 text-muted-foreground" />
-                ) : (
-                  <ChevronDown className="size-4 text-muted-foreground" />
-                )}
-              </button>
+                  <ChevronRight
+                    className={cn(
+                      'size-4 text-muted-foreground transition-transform flex-shrink-0',
+                      isExpanded && 'rotate-90'
+                    )}
+                  />
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="border-t">
+                    {group.tools.map((tool, index) => {
+                      const isToggling = togglingTools.has(tool.name)
+                      const isLast = index === group.tools.length - 1
 
-              {/* Group tools */}
-              {isExpanded && (
-                <div className="divide-y">
-                  {group.tools.map((tool) => {
-                    const isToggling = togglingTools.has(tool.name)
-
-                    return (
-                      <div
-                        key={tool.name}
-                        className="flex items-center justify-between px-4 py-3 hover:bg-muted/20 transition-colors"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <code className="text-sm font-mono font-medium">
-                              {tool.name}
-                            </code>
-                            {!tool.enabled && (
-                              <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                                disabled
-                              </span>
+                      return (
+                        <div
+                          key={tool.name}
+                          className={cn(
+                            'flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors',
+                            !isLast && 'border-b'
+                          )}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <code className="text-sm font-mono">{tool.name}</code>
+                            {tool.description && (
+                              <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                                {tool.description}
+                              </p>
                             )}
                           </div>
-                          {tool.description && (
-                            <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                              {tool.description}
-                            </p>
-                          )}
+                          <div className="flex items-center gap-2 ml-4">
+                            {isToggling && (
+                              <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+                            )}
+                            <Switch
+                              checked={tool.enabled}
+                              onCheckedChange={() => handleToggleTool(tool.name)}
+                              disabled={isToggling}
+                            />
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {isToggling && (
-                            <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                          )}
-                          <Switch
-                            checked={tool.enabled}
-                            onCheckedChange={() => handleToggleTool(tool.name)}
-                            disabled={isToggling}
-                          />
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+                      )
+                    })}
+                  </div>
+                </CollapsibleContent>
+              </div>
+            </Collapsible>
+          </div>
+        )
+      })}
 
-      {/* Note about persistence */}
-      <p className="text-xs text-muted-foreground text-center">
-        Changes are saved automatically and apply to the running Agent immediately.
+      {/* Note */}
+      <p className="text-xs text-muted-foreground">
+        Changes apply immediately to the running Agent.
       </p>
     </div>
   )

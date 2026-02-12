@@ -18,24 +18,14 @@
  * TYPOGRAPHY
  * =============================================================================
  *
- * Font Stack (loaded via @fontsource, works across Web + Desktop):
+ * Fonts are loaded via CSS variables injected by each app:
+ * - Web (Next.js): Uses next/font/google in layout.tsx
+ * - Desktop (Electron): Uses @fontsource packages
  *
- * | Font                      | Variable      | Usage                        |
- * |---------------------------|---------------|------------------------------|
- * | Geist Sans                | font-sans     | Primary UI text, body copy   |
- * | Geist Mono                | font-mono     | Code, technical values       |
- * | Playfair Display Variable | font-brand    | Brand name "Multica" only    |
- *
- * Why Geist?
- * - Created by Vercel, optimized for UI/developer tools
- * - Excellent legibility at small sizes (12-14px)
- * - Neutral, professional appearance — not "AI-ish" or trendy
- * - Variable font = smaller bundle, flexible weights
- *
- * Why Playfair Display for brand?
- * - Contrast with Geist creates clear hierarchy
- * - Serif adds warmth/personality to otherwise minimal UI
- * - Used ONLY for "Multica" text — nowhere else
+ * Variables used:
+ * - --font-sans: Primary UI text (Inter/system font)
+ * - --font-geist-mono: Code and technical values
+ * - --font-brand: Brand name "Multica" only (Playfair Display)
  *
  * =============================================================================
  * COLOR SYSTEM
@@ -93,9 +83,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: 'Geist Sans', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, monospace;
-  --font-brand: 'Playfair Display Variable', serif;
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-brand: var(--font-brand);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -135,14 +125,6 @@
 }
 
 :root {
-  /* =========================================================================
-   * FONTS — unified across Web (Next.js) and Desktop (Electron/Vite)
-   * Loaded via @fontsource packages in packages/ui/src/styles/fonts.ts
-   * ========================================================================= */
-  --font-sans: 'Geist Sans', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, monospace;
-  --font-brand: 'Playfair Display Variable', serif;
-
   /* =========================================================================
    * COLORS — Light mode
    * Using OKLCH for perceptual uniformity across the palette
@@ -275,7 +257,7 @@
 }
 
 @utility container {
-  @apply w-full max-w-4xl mx-auto;
+  @apply w-full max-w-5xl mx-auto;
 }
 
 @layer base {

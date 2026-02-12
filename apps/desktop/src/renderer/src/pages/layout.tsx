@@ -2,25 +2,32 @@ import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '@multica/ui/components/ui/button'
 import { MulticaIcon } from '@multica/ui/components/multica-icon'
 import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from '@multica/ui/components/ui/collapsible'
+import {
   Home,
   MessageSquare,
-  Puzzle,
-  Wrench,
-  Radio,
+  Users,
   Clock,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  Bot,
 } from 'lucide-react'
 import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarProvider,
   SidebarTrigger,
   useSidebar,
@@ -31,23 +38,30 @@ import { DeviceConfirmDialog } from '../components/device-confirm-dialog'
 import { UpdateNotification } from '../components/update-notification'
 
 const mainNavItems = [
-  { path: '/', label: 'Home', icon: Home },
+  { path: '/', label: 'Home', icon: Home, exact: true },
   { path: '/chat', label: 'Chat', icon: MessageSquare },
 ]
 
-const configNavItems = [
-  { path: '/skills', label: 'Skills', icon: Puzzle },
-  { path: '/tools', label: 'Tools', icon: Wrench },
-  { path: '/channels', label: 'Channels', icon: Radio },
-  { path: '/crons', label: 'Crons', icon: Clock },
+const agentSubItems = [
+  { path: '/agent/profile', label: 'Profile' },
+  { path: '/agent/skills', label: 'Skills' },
+  { path: '/agent/tools', label: 'Tools' },
+]
+
+const bottomNavItems = [
+  { path: '/clients', label: 'Clients', icon: Users },
+  { path: '/crons', label: 'Scheduled Tasks', icon: Clock },
 ]
 
 // All nav items for header lookup
-const allNavItems = [...mainNavItems, ...configNavItems]
+const allNavItems: Array<{ path: string; label: string; icon: typeof Home; exact?: boolean }> = [
+  ...mainNavItems,
+  { path: '/agent', label: 'Agent', icon: Bot },
+  ...bottomNavItems,
+]
 
 function NavigationButtons() {
   const navigate = useNavigate()
-  // useLocation() triggers re-render on route change so we can re-evaluate history state
   useLocation()
 
   const historyIdx = window.history.state?.idx ?? 0
@@ -84,27 +98,29 @@ function MainHeader() {
   const location = useLocation()
   const needsTrafficLightSpace = state === 'collapsed' || isMobile
 
-  // Find current page info
-  const currentPage = allNavItems.find((item) =>
-    item.path === '/'
-      ? location.pathname === '/'
-      : location.pathname.startsWith(item.path)
-  )
+  const currentPage = allNavItems.find((item) => {
+    if (item.exact) return location.pathname === item.path
+    return location.pathname.startsWith(item.path)
+  })
 
   return (
-    <header className="h-12 shrink-0 flex items-center px-4">
-      {/* Drag placeholder for traffic lights when sidebar is collapsed */}
+    <header
+      className="h-12 shrink-0 flex items-center px-4"
+      style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+    >
       <div
         className={cn(
           'h-full shrink-0 transition-[width] duration-200 ease-linear',
           needsTrafficLightSpace ? 'w-16' : 'w-0'
         )}
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       />
 
-      <SidebarTrigger />
+      <div style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        <SidebarTrigger
+          className={cn(needsTrafficLightSpace && 'text-muted-foreground')}
+        />
+      </div>
 
-      {/* Center: Current page */}
       <div className="flex-1 flex justify-center">
         {currentPage && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -114,95 +130,120 @@ function MainHeader() {
         )}
       </div>
 
-      {/* Right: Theme toggle */}
-      <ModeToggle />
+      <div style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        <ModeToggle />
+      </div>
     </header>
   )
 }
 
 export default function Layout() {
   const location = useLocation()
+  const isAgentActive = location.pathname.startsWith('/agent')
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
       <SidebarProvider className="flex-1 overflow-hidden">
         <Sidebar>
-        {/* Traffic light area with navigation */}
-        <SidebarHeader
-          className="h-12 shrink-0 flex items-center"
-          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-        >
-          <NavigationButtons />
-        </SidebarHeader>
+          <SidebarHeader
+            className="h-12 shrink-0 flex items-center"
+            style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+          >
+            <NavigationButtons />
+          </SidebarHeader>
 
-        <SidebarContent>
-          {/* Brand */}
-          <div className="flex items-center gap-2 px-3 py-2">
-            <MulticaIcon bordered noSpin />
-            <span className="text-sm font-brand">Multica</span>
-          </div>
+          <SidebarContent>
+            <div className="flex items-center gap-2 px-3 py-2">
+              <MulticaIcon bordered noSpin />
+              <span className="text-sm font-brand">Multica</span>
+            </div>
 
-          {/* Main navigation */}
-          <SidebarGroup>
-            <SidebarMenu className="space-y-0.5">
-              {mainNavItems.map((item) => {
-                const isActive = item.path === '/'
-                  ? location.pathname === '/'
-                  : location.pathname.startsWith(item.path)
-                return (
-                  <SidebarMenuItem key={item.path}>
-                    <NavLink to={item.path}>
-                      <SidebarMenuButton isActive={isActive}>
-                        <item.icon
-                          className={cn(
-                            'size-4 transition-colors',
-                            !isActive && 'text-muted-foreground/50 group-hover/menu-button:text-foreground'
-                          )}
-                        />
-                        <span>{item.label}</span>
-                      </SidebarMenuButton>
-                    </NavLink>
+            <SidebarGroup>
+              <SidebarMenu className="space-y-0.5">
+                {/* Main nav items */}
+                {mainNavItems.map((item) => {
+                  const isActive = item.exact
+                    ? location.pathname === item.path
+                    : location.pathname.startsWith(item.path)
+                  return (
+                    <SidebarMenuItem key={item.path}>
+                      <NavLink to={item.path}>
+                        <SidebarMenuButton isActive={isActive}>
+                          <item.icon
+                            className={cn(
+                              'size-4 transition-colors',
+                              !isActive && 'text-muted-foreground/50 group-hover/menu-button:text-foreground'
+                            )}
+                          />
+                          <span>{item.label}</span>
+                        </SidebarMenuButton>
+                      </NavLink>
+                    </SidebarMenuItem>
+                  )
+                })}
+
+                {/* Agent collapsible */}
+                <Collapsible defaultOpen className="group/collapsible">
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger
+                      render={<SidebarMenuButton isActive={isAgentActive} />}
+                    >
+                      <Bot
+                        className={cn(
+                          'size-4 transition-colors',
+                          !isAgentActive && 'text-muted-foreground/50 group-hover/menu-button:text-foreground'
+                        )}
+                      />
+                      <span>Agent</span>
+                      <ChevronDown className="ml-auto size-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {agentSubItems.map((item) => (
+                          <SidebarMenuSubItem key={item.path}>
+                            <SidebarMenuSubButton
+                              render={<NavLink to={item.path} />}
+                              isActive={location.pathname === item.path}
+                            >
+                              {item.label}
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
                   </SidebarMenuItem>
-                )
-              })}
-            </SidebarMenu>
-          </SidebarGroup>
+                </Collapsible>
 
-          {/* Configuration */}
-          <SidebarGroup>
-            <SidebarGroupLabel>Agent Configuration</SidebarGroupLabel>
-            <SidebarMenu className="space-y-0.5">
-              {configNavItems.map((item) => {
-                const isActive = location.pathname.startsWith(item.path)
-                return (
-                  <SidebarMenuItem key={item.path}>
-                    <NavLink to={item.path}>
-                      <SidebarMenuButton isActive={isActive}>
-                        <item.icon
-                          className={cn(
-                            'size-4 transition-colors',
-                            !isActive && 'text-muted-foreground/50 group-hover/menu-button:text-foreground'
-                          )}
-                        />
-                        <span>{item.label}</span>
-                      </SidebarMenuButton>
-                    </NavLink>
-                  </SidebarMenuItem>
-                )
-              })}
-            </SidebarMenu>
-          </SidebarGroup>
-        </SidebarContent>
-      </Sidebar>
+                {/* Bottom nav items */}
+                {bottomNavItems.map((item) => {
+                  const isActive = location.pathname.startsWith(item.path)
+                  return (
+                    <SidebarMenuItem key={item.path}>
+                      <NavLink to={item.path}>
+                        <SidebarMenuButton isActive={isActive}>
+                          <item.icon
+                            className={cn(
+                              'size-4 transition-colors',
+                              !isActive && 'text-muted-foreground/50 group-hover/menu-button:text-foreground'
+                            )}
+                          />
+                          <span>{item.label}</span>
+                        </SidebarMenuButton>
+                      </NavLink>
+                    </SidebarMenuItem>
+                  )
+                })}
+              </SidebarMenu>
+            </SidebarGroup>
+          </SidebarContent>
+        </Sidebar>
 
-      <SidebarInset className="overflow-hidden">
-        <MainHeader />
-
-        {/* Main Content */}
-        <main className="flex-1 overflow-hidden min-h-1">
-          <Outlet />
-        </main>
-      </SidebarInset>
+        <SidebarInset className="overflow-hidden">
+          <MainHeader />
+          <main className="flex-1 overflow-hidden min-h-1">
+            <Outlet />
+          </main>
+        </SidebarInset>
 
         <DeviceConfirmDialog />
         <UpdateNotification />
