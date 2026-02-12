@@ -28,6 +28,7 @@ import {
 import { cn } from '@multica/ui/lib/utils'
 import { ModeToggle } from '../components/mode-toggle'
 import { DeviceConfirmDialog } from '../components/device-confirm-dialog'
+import { UpdateNotification } from '../components/update-notification'
 
 const mainNavItems = [
   { path: '/', label: 'Home', icon: Home },
@@ -204,6 +205,7 @@ export default function Layout() {
       </SidebarInset>
 
         <DeviceConfirmDialog />
+        <UpdateNotification />
       </SidebarProvider>
     </div>
   )
