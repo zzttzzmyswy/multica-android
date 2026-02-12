@@ -1,7 +1,7 @@
 ---
 name: Finance Research
 description: Conduct analyst-grade financial research across primary and secondary markets using structured financial data plus macro and public-information cross-checks.
-version: 1.1.0
+version: 1.1.1
 metadata:
   emoji: "\U0001F4CA"
   tags:
