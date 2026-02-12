@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { resolveWorkspaceDir, ensureWorkspaceDir } from "./workspace.js";
-import { DATA_DIR, DEFAULT_WORKSPACE_DIR } from "@multica/utils";
+import { DEFAULT_WORKSPACE_DIR } from "@multica/utils";
 
 describe("resolveWorkspaceDir", () => {
   const originalEnv = process.env.MULTICA_WORKSPACE_DIR;
@@ -16,13 +16,13 @@ describe("resolveWorkspaceDir", () => {
     }
   });
 
-  it("returns ~/.super-multica/workspace/default for default profile", () => {
+  it("returns ~/Documents/Multica/default for default profile", () => {
     delete process.env.MULTICA_WORKSPACE_DIR;
     expect(resolveWorkspaceDir()).toBe(path.join(DEFAULT_WORKSPACE_DIR, "default"));
     expect(resolveWorkspaceDir({ profileId: "default" })).toBe(path.join(DEFAULT_WORKSPACE_DIR, "default"));
   });
 
-  it("returns ~/.super-multica/workspace/{id} for named profile", () => {
+  it("returns ~/Documents/Multica/{id} for named profile", () => {
     delete process.env.MULTICA_WORKSPACE_DIR;
     const result = resolveWorkspaceDir({ profileId: "research" });
     expect(result).toBe(path.join(DEFAULT_WORKSPACE_DIR, "research"));
