@@ -4,8 +4,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Button } from "@multica/ui/components/ui/button";
-import { ArrowUp02Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowUp } from "lucide-react";
 import { cn } from "@multica/ui/lib/utils";
 import "./chat-input.css";
 
@@ -20,10 +19,12 @@ interface ChatInputProps {
   onSubmit?: (value: string) => void;
   disabled?: boolean;
   placeholder?: string;
+  /** Initial value to pre-fill the input */
+  defaultValue?: string;
 }
 
 export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
-  function ChatInput({ onSubmit, disabled, placeholder = "Type a message..." }, ref) {
+  function ChatInput({ onSubmit, disabled, placeholder = "Type a message...", defaultValue }, ref) {
     // Use ref to avoid stale closure in Tiptap keydown handler
     const onSubmitRef = useRef(onSubmit);
     onSubmitRef.current = onSubmit;
@@ -46,12 +47,20 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
         }),
         Placeholder.configure({ placeholder }),
       ],
+      content: defaultValue ? `<p>${defaultValue}</p>` : "",
       immediatelyRender: false,
+      // Scroll cursor into view on every content change (e.g., Shift+Enter newlines)
+      onUpdate({ editor }) {
+        editor.commands.scrollIntoView();
+      },
       editorProps: {
         attributes: {
           class:
             "w-full resize-none bg-transparent px-1 py-1 text-base text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed",
         },
+        // Ensure cursor scrolls into view when typing near container edges
+        scrollThreshold: 20,
+        scrollMargin: 20,
         handleKeyDown(_view, event) {
           // Guard for IME composition (Chinese/Japanese input)
           if (event.isComposing) return false;
@@ -117,7 +126,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
         <EditorContent className="min-h-12" editor={editor} />
         <div className="flex items-center justify-end pt-2">
           <Button size="icon" onClick={handleSubmit} disabled={disabled}>
-            <HugeiconsIcon strokeWidth={2.5} icon={ArrowUp02Icon} />
+            <ArrowUp />
           </Button>
         </div>
       </div>
