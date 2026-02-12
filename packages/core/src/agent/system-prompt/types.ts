@@ -37,6 +37,14 @@ export interface RuntimeInfo {
   cwd?: string | undefined;
 }
 
+/** Describes a connected messaging channel and its capabilities */
+export interface ChannelInfo {
+  /** Human-readable channel name (e.g. "Telegram") */
+  name: string;
+  /** Whether the channel supports outbound media via send_file */
+  canSendMedia: boolean;
+}
+
 /** Subagent context for minimal/none modes */
 export interface SubagentContext {
   /** Parent session that spawned this subagent */
@@ -77,6 +85,8 @@ export interface SystemPromptOptions {
   subagent?: SubagentContext | undefined;
   /** Workspace directory path (for agent working directory info) */
   workspaceDir?: string | undefined;
+  /** Connected messaging channels (for channel awareness section) */
+  channels?: ChannelInfo[] | undefined;
   /** Extra system prompt to append */
   extraSystemPrompt?: string | undefined;
   /** Whether to include the safety constitution (default: true) */

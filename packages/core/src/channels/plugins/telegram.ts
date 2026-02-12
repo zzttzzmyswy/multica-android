@@ -12,8 +12,8 @@
 import { writeFile, mkdir } from "node:fs/promises";
 import { join, extname } from "node:path";
 import { v7 as uuidv7 } from "uuid";
-import { Bot, GrammyError } from "grammy";
-import type { ChannelPlugin, ChannelMessage, ChannelConfigAdapter, ChannelsConfig, DeliveryContext } from "../types.js";
+import { Bot, GrammyError, InputFile } from "grammy";
+import type { ChannelPlugin, ChannelMessage, ChannelConfigAdapter, ChannelsConfig, DeliveryContext, OutboundMedia } from "../types.js";
 import { markdownToTelegramHtml } from "./telegram-format.js";
 import { MEDIA_CACHE_DIR } from "@multica/utils";
 
@@ -319,6 +319,67 @@ export const telegramChannel: ChannelPlugin = {
         );
       } catch {
         // Best-effort
+      }
+    },
+
+    async sendMedia(ctx: DeliveryContext, media: OutboundMedia): Promise<void> {
+      const bot = bots.get(ctx.accountId);
+      if (!bot) throw new Error(`No Telegram bot for account ${ctx.accountId}`);
+
+      const chatId = Number(ctx.conversationId);
+      const inputFile = new InputFile(media.source);
+      // Telegram caption limit: 1024 chars. Truncate if needed.
+      const caption = media.caption?.slice(0, 1024);
+      const captionHtml = caption ? markdownToTelegramHtml(caption) : undefined;
+      const extra = captionHtml ? { caption: captionHtml, parse_mode: "HTML" as const } : {};
+
+      console.log(`[Telegram] Sending ${media.type} to chatId=${chatId}`);
+
+      try {
+        switch (media.type) {
+          case "photo":
+            await bot.api.sendPhoto(chatId, inputFile, extra);
+            break;
+          case "video":
+            await bot.api.sendVideo(chatId, inputFile, extra);
+            break;
+          case "audio":
+            await bot.api.sendAudio(chatId, inputFile, extra);
+            break;
+          case "voice":
+            await bot.api.sendVoice(chatId, inputFile, extra);
+            break;
+          case "document":
+          default:
+            await bot.api.sendDocument(chatId, inputFile, extra);
+            break;
+        }
+      } catch (err) {
+        // If HTML caption fails, retry without formatting
+        if (isParseError(err) && caption) {
+          console.warn("[Telegram] Media caption HTML parse failed, retrying as plain text");
+          const plainExtra = { caption };
+          switch (media.type) {
+            case "photo":
+              await bot.api.sendPhoto(chatId, inputFile, plainExtra);
+              break;
+            case "video":
+              await bot.api.sendVideo(chatId, inputFile, plainExtra);
+              break;
+            case "audio":
+              await bot.api.sendAudio(chatId, inputFile, plainExtra);
+              break;
+            case "voice":
+              await bot.api.sendVoice(chatId, inputFile, plainExtra);
+              break;
+            case "document":
+            default:
+              await bot.api.sendDocument(chatId, inputFile, plainExtra);
+              break;
+          }
+        } else {
+          throw err;
+        }
       }
     },
   },

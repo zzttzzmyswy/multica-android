@@ -8,6 +8,7 @@ import { SAFETY_CONSTITUTION } from "./constitution.js";
 import { formatRuntimeLine } from "./runtime-info.js";
 import { resolveHeartbeatPrompt } from "../../heartbeat/heartbeat-text.js";
 import type {
+  ChannelInfo,
   ProfileContent,
   RuntimeInfo,
   SubagentContext,
@@ -457,6 +458,40 @@ export function buildSubagentSection(
   }
 
   lines.push("", "## Task", subagent.task);
+
+  return lines;
+}
+
+/**
+ * Connected channels section — tells the agent which messaging channels are active
+ * and what capabilities they have (e.g. send files). Full mode only.
+ */
+export function buildChannelsSection(
+  channels: ChannelInfo[] | undefined,
+  mode: SystemPromptMode,
+): string[] {
+  if (mode !== "full" || !channels || channels.length === 0) return [];
+
+  const lines: string[] = ["## Connected Channels", ""];
+
+  for (const ch of channels) {
+    lines.push(`- **${ch.name}**`);
+    if (ch.canSendMedia) {
+      lines.push(
+        "  Capabilities: receive text/voice/image/video/document, send text, send files (photo, document, video, audio)",
+      );
+      lines.push("  Use the `send_file` tool to send files to channel users.");
+    } else {
+      lines.push("  Capabilities: receive text, send text");
+    }
+  }
+
+  lines.push(
+    "",
+    "Messages from channels are prefixed with `[ChannelName · private]` or `[ChannelName · group]`.",
+    "When responding to channel messages, adapt your formatting for messaging platforms (shorter paragraphs, no complex markdown).",
+    "",
+  );
 
   return lines;
 }

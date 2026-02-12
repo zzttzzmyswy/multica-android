@@ -11,6 +11,8 @@ import { createSessionsListTool } from "./tools/sessions-list.js";
 import { createMemorySearchTool } from "./tools/memory-search.js";
 import { createCronTool } from "./tools/cron/index.js";
 import { createDataTool } from "./tools/data/index.js";
+import { createSendFileTool } from "./tools/send-file.js";
+import type { SendFileCallback } from "./tools/send-file.js";
 import { filterTools } from "./tools/policy.js";
 import { isMulticaError, isRetryableError } from "@multica/utils";
 import type { ExecApprovalCallback } from "./tools/exec-approval-types.js";
@@ -31,6 +33,8 @@ export interface CreateToolsOptions {
   provider?: string | undefined;
   /** Callback invoked when exec tool needs approval before running a command */
   onExecApprovalNeeded?: ExecApprovalCallback | undefined;
+  /** Callback for sending files through messaging channels */
+  onChannelSendFile?: SendFileCallback | undefined;
 }
 
 type ToolErrorPayload = {
@@ -132,6 +136,12 @@ export function createAllTools(options: CreateToolsOptions | string): AgentTool<
     tools.push(memorySearchTool as AgentTool<any>);
   }
 
+  // Add send_file tool if channel send callback is provided
+  if (opts.onChannelSendFile) {
+    const sendFileTool = createSendFileTool(opts.onChannelSendFile);
+    tools.push(sendFileTool as AgentTool<any>);
+  }
+
   // Add sessions_spawn tool (will be filtered by policy for subagents)
   const sessionsSpawnTool = createSessionsSpawnTool({
     isSubagent: isSubagent ?? false,
@@ -173,6 +183,7 @@ export function resolveTools(options: ResolveToolsOptions): AgentTool<any>[] {
     sessionId: options.sessionId,
     provider: options.provider,
     onExecApprovalNeeded: options.onExecApprovalNeeded,
+    onChannelSendFile: options.onChannelSendFile,
   });
 
   // Apply policy filtering
