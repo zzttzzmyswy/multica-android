@@ -75,6 +75,8 @@ export interface SystemPromptOptions {
   runtime?: RuntimeInfo | undefined;
   /** Subagent context (for minimal/none modes) */
   subagent?: SubagentContext | undefined;
+  /** Workspace directory path (for agent working directory info) */
+  workspaceDir?: string | undefined;
   /** Extra system prompt to append */
   extraSystemPrompt?: string | undefined;
   /** Whether to include the safety constitution (default: true) */

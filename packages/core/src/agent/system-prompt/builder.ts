@@ -46,6 +46,7 @@ export function buildSystemPromptWithReport(options: SystemPromptOptions): {
     mode,
     profile,
     profileDir,
+    workspaceDir,
     tools,
     skillsPrompt,
     runtime,
@@ -58,7 +59,7 @@ export function buildSystemPromptWithReport(options: SystemPromptOptions): {
   const candidates: Array<{ name: string; lines: string[] }> = [
     { name: "identity", lines: buildIdentitySection(profile, mode) },
     { name: "user", lines: buildUserSection(profile, mode) },
-    { name: "workspace", lines: buildWorkspaceSection(profile, mode, profileDir) },
+    { name: "workspace", lines: buildWorkspaceSection(profile, mode, profileDir, workspaceDir) },
     { name: "memory", lines: buildMemoryFileSection(profile, mode) },
     { name: "heartbeat", lines: buildHeartbeatSection(profile, mode) },
     { name: "safety", lines: buildSafetySection(includeSafety) },

@@ -31,6 +31,8 @@ export interface ProfileConfig {
   reasoningMode?: "off" | "on" | "stream" | undefined;
   /** Exec approval configuration (security level, ask mode, allowlist) */
   execApproval?: ExecApprovalConfig | undefined;
+  /** Custom workspace directory path (overrides default) */
+  workspaceDir?: string | undefined;
   /** Heartbeat configuration */
   heartbeat?: {
     /** Global heartbeat enable switch */

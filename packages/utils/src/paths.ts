@@ -6,3 +6,6 @@ export const DATA_DIR = join(homedir(), ".super-multica");
 
 /** Cache directory for downloaded media files */
 export const MEDIA_CACHE_DIR = join(DATA_DIR, "cache", "media");
+
+/** Default workspace directory for the default profile */
+export const DEFAULT_WORKSPACE_DIR = join(DATA_DIR, "workspace");
