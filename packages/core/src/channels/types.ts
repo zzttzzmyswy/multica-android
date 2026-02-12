@@ -88,6 +88,23 @@ export interface ChannelGatewayAdapter {
   ): Promise<void>;
 }
 
+// ─── Outbound Media ───
+
+/** Media type for outbound messages */
+export type OutboundMediaType = "photo" | "document" | "video" | "audio" | "voice";
+
+/** Media payload for sending files back to the platform */
+export interface OutboundMedia {
+  /** Media type (determines which API method to use) */
+  type: OutboundMediaType;
+  /** Local file path */
+  source: string;
+  /** Caption text (optional, may be truncated per platform limits) */
+  caption?: string | undefined;
+  /** Filename hint (optional, used for documents) */
+  filename?: string | undefined;
+}
+
 // ─── Outbound Adapter ───
 
 /** Sends messages back to the platform */
@@ -96,6 +113,8 @@ export interface ChannelOutboundAdapter {
   sendText(ctx: DeliveryContext, text: string): Promise<void>;
   /** Reply to a specific message */
   replyText(ctx: DeliveryContext, text: string): Promise<void>;
+  /** Send a media file (photo, document, video, audio, voice) to a conversation (optional) */
+  sendMedia?(ctx: DeliveryContext, media: OutboundMedia): Promise<void>;
   /** Send "typing" indicator (optional, not all platforms support it) */
   sendTyping?(ctx: DeliveryContext): Promise<void>;
   /**
