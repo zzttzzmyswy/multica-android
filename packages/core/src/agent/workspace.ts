@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { DATA_DIR, DEFAULT_WORKSPACE_DIR } from "@multica/utils";
+import { DEFAULT_WORKSPACE_DIR } from "@multica/utils";
 
 /**
  * Resolve the workspace directory for a given profile.
@@ -20,7 +20,7 @@ export function resolveWorkspaceDir(options?: {
     return path.resolve(options.configWorkspaceDir.replace(/^~/, os.homedir()));
   }
 
-  // 3. Profile-based default: ~/.super-multica/workspace/{profileId}
+  // 3. Profile-based default: ~/Documents/Multica/{profileId}
   const profileId = options?.profileId ?? "default";
   return path.join(DEFAULT_WORKSPACE_DIR, profileId);
 }
