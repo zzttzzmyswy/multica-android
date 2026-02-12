@@ -340,6 +340,13 @@ export function buildConditionalToolSections(
       "Prefer web_search for discovery and web_fetch for specific URLs.",
       "Web usage is conditional, not mandatory: call web tools when they materially improve evidence quality.",
       "",
+      "### Search-then-Fetch",
+      "After web_search, evaluate whether the snippets contain enough detail to answer accurately.",
+      "If not, use web_fetch on the 1-3 most relevant URLs to get full content before answering.",
+      "Always fetch when the user asks for detailed explanations, comparisons, or analysis;",
+      "when snippets are vague or contradictory; or when the question requires specific data points.",
+      "Skip fetch when the answer is a simple fact clearly stated in the snippet or the user only wants a quick overview.",
+      "",
     );
   }
 
