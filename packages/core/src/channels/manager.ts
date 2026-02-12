@@ -24,10 +24,12 @@ import { loadChannelsConfig } from "./config.js";
 import { MessageAggregator, DEFAULT_CHUNKER_CONFIG } from "../hub/message-aggregator.js";
 import { isHeartbeatAckEvent } from "../hub/heartbeat-filter.js";
 import type { AsyncAgent } from "../agent/async-agent.js";
+import type { ChannelInfo } from "../agent/system-prompt/types.js";
 import { transcribeAudio } from "../media/transcribe.js";
 import { describeImage } from "../media/describe-image.js";
 import { describeVideo } from "../media/describe-video.js";
 import { InboundDebouncer } from "./inbound-debouncer.js";
+import { extname } from "node:path";
 
 interface AccountHandle {
   channelId: string;
@@ -40,6 +42,8 @@ interface AccountHandle {
 interface LastRoute {
   plugin: ChannelPlugin;
   deliveryCtx: DeliveryContext;
+  /** Chat type of the originating message (for source prefix) */
+  chatType?: "direct" | "group" | undefined;
 }
 
 export class ChannelManager {
@@ -348,6 +352,7 @@ export class ChannelManager {
         conversationId,
         replyToMessageId: messageId,
       },
+      chatType: message.chatType,
     };
     console.log(`[Channels] lastRoute updated → ${plugin.id}:${conversationId} replyTo=${messageId}`);
     console.log(`[Channels] Forwarding to agent ${agent.sessionId}`);
@@ -477,13 +482,56 @@ export class ChannelManager {
               timestamp: Date.now(),
             });
           }
+          // Prepend source context so the LLM knows which platform/chat type the message came from
+          const channelName = route?.plugin.meta.name ?? "Channel";
+          const chatLabel = route?.chatType === "group" ? "group" : "private";
+          const prefixedText = `[${channelName} · ${chatLabel}]\n${combinedText}`;
+
           const replyTo = route?.deliveryCtx.replyToMessageId ?? "?";
           console.log(`[Channels] Debouncer flushing ${combinedText.length} chars to agent (queued route replyTo=${replyTo}, acks=${acks.length})`);
-          agent.write(combinedText, { source });
+          agent.write(prefixedText, { source });
         },
       );
     }
     return this.debouncer;
+  }
+
+  /**
+   * Send a file to the active channel conversation.
+   * Returns true if the file was sent, false if no active route or plugin doesn't support media.
+   */
+  async sendFile(filePath: string, caption?: string, type?: string): Promise<boolean> {
+    const route = this.activeRoute ?? this.lastRoute;
+    if (!route) return false;
+
+    const { plugin, deliveryCtx } = route;
+    if (!plugin.outbound.sendMedia) return false;
+
+    const mediaType = type || this.detectMediaType(filePath);
+    try {
+      await plugin.outbound.sendMedia(deliveryCtx, {
+        type: mediaType as import("./types.js").OutboundMediaType,
+        source: filePath,
+        caption,
+      });
+      console.log(`[Channels] Sent ${mediaType} to ${deliveryCtx.channel}:${deliveryCtx.conversationId}`);
+      return true;
+    } catch (err) {
+      console.error(`[Channels] Failed to send file: ${err}`);
+      return false;
+    }
+  }
+
+  /** Detect outbound media type from file extension */
+  private detectMediaType(filePath: string): string {
+    const ext = extname(filePath).toLowerCase();
+    const photoExts = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"]);
+    const videoExts = new Set([".mp4", ".webm", ".mov", ".avi", ".mkv"]);
+    const audioExts = new Set([".mp3", ".ogg", ".wav", ".m4a", ".flac", ".aac"]);
+    if (photoExts.has(ext)) return "photo";
+    if (videoExts.has(ext)) return "video";
+    if (audioExts.has(ext)) return "audio";
+    return "document";
   }
 
   /** Start sending typing indicators (repeats every 5s until stopped) */
@@ -576,5 +624,22 @@ export class ChannelManager {
   /** Get status of all accounts */
   listAccountStates(): ChannelAccountState[] {
     return Array.from(this.accounts.values()).map((h) => ({ ...h.state }));
+  }
+
+  /** Get channel info for connected channels (for system prompt awareness) */
+  listChannelInfos(): ChannelInfo[] {
+    const seen = new Set<string>();
+    const infos: ChannelInfo[] = [];
+    for (const handle of this.accounts.values()) {
+      if (handle.state.status !== "running" || seen.has(handle.channelId)) continue;
+      seen.add(handle.channelId);
+      const plugin = listChannels().find((p) => p.id === handle.channelId);
+      if (!plugin) continue;
+      infos.push({
+        name: plugin.meta.name,
+        canSendMedia: typeof plugin.outbound.sendMedia === "function",
+      });
+    }
+    return infos;
   }
 }
