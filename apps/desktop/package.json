@@ -9,9 +9,9 @@
   "scripts": {
     "dev": "electron-vite dev",
     "dev:onboarding": "electron-vite dev -- --force-onboarding",
-    "build": "electron-vite build && electron-builder",
-    "build:staging": "electron-vite build --mode staging && electron-builder",
-    "build:production": "electron-vite build --mode production && electron-builder",
+    "build": "electron-vite build && electron-builder --publish never",
+    "build:staging": "electron-vite build --mode staging && electron-builder --publish never",
+    "build:production": "electron-vite build --mode production && electron-builder --publish never"
     "preview": "electron-vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },

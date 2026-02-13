@@ -58,8 +58,8 @@ const PROVIDER_REGISTRY: Record<string, ProviderMeta> = {
     id: "openai-codex",
     name: "Codex (OAuth)",
     authMethod: "oauth",
-    defaultModel: "gpt-5.2",
-    models: ["gpt-5.2", "gpt-5.2-codex", "gpt-5.1-codex", "gpt-5.1-codex-mini", "gpt-5.1-codex-max", "gpt-5-mini"],
+    defaultModel: "gpt-5.3-codex",
+    models: ["gpt-5.3-codex", "gpt-5.2-codex", "gpt-5.2", "gpt-5.1-codex-max", "gpt-5.1-codex-mini"],
     loginCommand: "codex login",
   },
   "anthropic": {
@@ -75,7 +75,7 @@ const PROVIDER_REGISTRY: Record<string, ProviderMeta> = {
     name: "OpenAI",
     authMethod: "api-key",
     defaultModel: "gpt-4o",
-    models: ["gpt-5.2", "gpt-5-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini", "o3", "o3-mini"],
+    models: ["gpt-5.3-codex", "gpt-5.2", "gpt-5-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini", "o3", "o3-mini"],
     loginUrl: "https://platform.openai.com/api-keys",
   },
   "kimi-coding": {
