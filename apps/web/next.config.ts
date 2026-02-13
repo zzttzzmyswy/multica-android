@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   rewrites: async () => [
     {
       source: "/api/:path*",
-      destination: `${process.env.API_URL || "https://api-dev.copilothub.ai"}/api/:path*`,
+      destination: `${process.env.API_URL || "https://api.multica.ai"}/api/:path*`,
     },
   ],
   headers: async () => [
