@@ -47,13 +47,6 @@ interface AuthFileData {
 const AUTH_FILE_PATH = join(DATA_DIR, "auth.json");
 
 /**
- * Generate a UUID v4 for device identification.
- */
-function generateUUID(): string {
-  return crypto.randomUUID();
-}
-
-/**
  * SHA-256 hash function.
  */
 function sha256(text: string): string {
@@ -61,22 +54,27 @@ function sha256(text: string): string {
 }
 
 /**
- * Generate encrypted Device-Id header value.
- * Algorithm (consistent with Web):
- * 1. SHA-256 hash of deviceId, take first 32 chars
- * 2. SHA-256 hash of step 1 result, take first 8 chars
- * 3. Return: step2[0:8] + step1[0:32] = 40 chars
+ * Generate encrypted Device ID.
+ * Algorithm (consistent with devv-sdk and Web):
+ * 1. Generate UUID
+ * 2. SHA-256 hash of UUID, take first 32 chars
+ * 3. SHA-256 hash of step 2 result, take first 8 chars
+ * 4. Return: step3[0:8] + step2[0:32] = 40 chars
+ *
+ * This encrypted format is stored directly (not the raw UUID).
  */
-export function generateDeviceIdHeader(deviceId: string): string {
-  if (!deviceId || typeof deviceId !== "string") {
-    throw new Error("[Auth] Invalid deviceId for header generation");
-  }
+function generateEncryptedDeviceId(): string {
+  const uuid = crypto.randomUUID();
+  const firstHash = sha256(uuid).slice(0, 32);
+  const finalId = sha256(firstHash).slice(0, 8) + firstHash;
+  return finalId;
+}
 
-  const hash1 = sha256(deviceId);
-  const hashedDeviceId = hash1.slice(0, 32);
-
-  const hash2 = sha256(hashedDeviceId);
-  return hash2.slice(0, 8) + hashedDeviceId;
+/**
+ * Validate device ID format (40 hex characters).
+ */
+function isValidDeviceId(deviceId: string): boolean {
+  return typeof deviceId === "string" && /^[a-f0-9]{40}$/i.test(deviceId);
 }
 
 /**
@@ -125,20 +123,26 @@ function writeAuthFile(data: Partial<AuthFileData>): boolean {
 /**
  * Get or create a persistent Device ID.
  * Device ID persists across logins/logouts - it represents the device, not the user.
+ * The stored value is already encrypted (40 hex chars), not the raw UUID.
  */
 export function getOrCreateDeviceId(): string {
   const existing = readAuthFile();
 
-  // If we have a valid deviceId, return it
-  if (existing?.deviceId && typeof existing.deviceId === "string") {
+  // If we have a valid encrypted deviceId (40 hex chars), return it
+  if (existing?.deviceId && isValidDeviceId(existing.deviceId)) {
     return existing.deviceId;
   }
 
-  // Generate new deviceId and persist it
-  const newDeviceId = generateUUID();
+  // Generate new encrypted deviceId
+  const newDeviceId = generateEncryptedDeviceId();
   console.log("[Auth] Generated new Device ID:", newDeviceId.slice(0, 8) + "...");
 
-  // Preserve any existing auth data while adding deviceId
+  // If there was an old-format deviceId (UUID), we'll replace it
+  if (existing?.deviceId && !isValidDeviceId(existing.deviceId)) {
+    console.log("[Auth] Migrating old-format Device ID to encrypted format");
+  }
+
+  // Preserve any existing auth data while adding/updating deviceId
   const dataToSave: Partial<AuthFileData> = existing
     ? { ...existing, deviceId: newDeviceId }
     : { deviceId: newDeviceId };
@@ -487,14 +491,13 @@ export function registerAuthHandlers(): void {
     return startLogin();
   });
 
-  // 获取 Device ID（原始值）
+  // 获取 Device ID（已加密的 40 字符格式）
   ipcMain.handle("auth:getDeviceId", () => {
     return getOrCreateDeviceId();
   });
 
-  // 获取加密后的 Device-Id header 值
+  // 获取 Device-Id header 值（与 getDeviceId 相同，已加密）
   ipcMain.handle("auth:getDeviceIdHeader", () => {
-    const deviceId = getOrCreateDeviceId();
-    return generateDeviceIdHeader(deviceId);
+    return getOrCreateDeviceId();
   });
 }
