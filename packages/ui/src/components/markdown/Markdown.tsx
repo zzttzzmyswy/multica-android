@@ -1,13 +1,10 @@
 import * as React from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
-import rehypeKatex from 'rehype-katex'
 import rehypeRaw from 'rehype-raw'
 import remarkGfm from 'remark-gfm'
-import remarkMath from 'remark-math'
 import { cn } from '@multica/ui/lib/utils'
 import { CodeBlock, InlineCode } from './CodeBlock'
 import { preprocessLinks } from './linkify'
-import 'katex/dist/katex.min.css'
 
 /**
  * Render modes for markdown content:
@@ -273,8 +270,8 @@ export function Markdown({
   return (
     <div className={cn('markdown-content break-words', className)}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex, rehypeRaw]}
+        remarkPlugins={[[remarkGfm, { singleTilde: false }]]}
+        rehypePlugins={[rehypeRaw]}
         components={components}
       >
         {processedContent}
