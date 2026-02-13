@@ -1,7 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 
-import { getLocalAuth } from "../../../hub/auth-store.js";
+import { API_BASE_URL, getAuthHeaders } from "../../../hub/api-client.js";
 import {
   DEFAULT_CACHE_TTL_MINUTES,
   DEFAULT_TIMEOUT_SECONDS,
@@ -14,7 +14,7 @@ import {
 import type { CacheEntry } from "./cache.js";
 import { jsonResult, readStringParam } from "./param-helpers.js";
 
-const WEB_SEARCH_ENDPOINT = "https://api-dev.copilothub.ai/api/v1/web-search";
+const WEB_SEARCH_PATH = "/api/v1/web-search";
 
 const SEARCH_CACHE = new Map<string, CacheEntry<Record<string, unknown>>>();
 
@@ -59,18 +59,13 @@ async function runDevvSearch(params: {
     snippet: string;
   }>;
 }> {
-  const auth = getLocalAuth();
-  if (!auth) {
-    throw new Error("Not logged in. Please sign in via the Desktop app to use web search.");
-  }
+  const authHeaders = getAuthHeaders();
 
-  const res = await fetch(WEB_SEARCH_ENDPOINT, {
+  const res = await fetch(`${API_BASE_URL}${WEB_SEARCH_PATH}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      sid: auth.sid,
-      "device-id": auth.deviceId,
-      "os-type": "3",
+      ...authHeaders,
     },
     body: JSON.stringify({ q: params.query }),
     signal: withTimeout(undefined, params.timeoutSeconds * 1000),

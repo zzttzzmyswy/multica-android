@@ -5,9 +5,8 @@
  * All endpoints use GET with query parameters.
  */
 
-import { getLocalAuth } from "../../../../hub/auth-store.js";
+import { API_BASE_URL, getAuthHeaders } from "../../../../hub/api-client.js";
 
-const BASE_URL = "https://api-dev.copilothub.ai";
 const PATH_PREFIX = "/api/v1/financial";
 const TIMEOUT_MS = 30_000;
 
@@ -23,14 +22,9 @@ export async function financeFetch<T = Record<string, unknown>>(
   params: Record<string, string | string[] | number | boolean | undefined>,
   signal?: AbortSignal,
 ): Promise<{ data: T; url: string }> {
-  const auth = getLocalAuth();
-  if (!auth) {
-    throw new Error(
-      "Not logged in. Please sign in via the Desktop app to use financial data tools.",
-    );
-  }
+  const authHeaders = getAuthHeaders();
 
-  const url = new URL(PATH_PREFIX + path, BASE_URL);
+  const url = new URL(PATH_PREFIX + path, API_BASE_URL);
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === null) continue;
     if (Array.isArray(value)) {
@@ -51,9 +45,7 @@ export async function financeFetch<T = Record<string, unknown>>(
     method: "GET",
     headers: {
       Accept: "application/json",
-      sid: auth.sid,
-      "device-id": auth.deviceId,
-      "os-type": "3",
+      ...authHeaders,
     },
     signal: combinedSignal,
   });
