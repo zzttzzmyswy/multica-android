@@ -1,7 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 
-import { API_BASE_URL, getAuthHeaders } from "../../../hub/api-client.js";
+import { getApiBaseUrl, getAuthHeaders } from "../../../hub/api-client.js";
 import {
   DEFAULT_CACHE_TTL_MINUTES,
   DEFAULT_TIMEOUT_SECONDS,
@@ -61,7 +61,7 @@ async function runDevvSearch(params: {
 }> {
   const authHeaders = getAuthHeaders("to use web search");
 
-  const res = await fetch(`${API_BASE_URL}${WEB_SEARCH_PATH}`, {
+  const res = await fetch(`${getApiBaseUrl()}${WEB_SEARCH_PATH}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
