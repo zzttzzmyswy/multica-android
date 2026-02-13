@@ -23,7 +23,7 @@ Desktop 保存到 ~/.super-multica/auth.json
 ### Web 端
 
 - 端口：**3000**
-- 登录 API：`/api/v1/auth/login`（通过 devd 代理到后端）
+- 登录 API：`/api/v1/auth/login`（通过 Next.js rewrites 代理到后端）
 - 登录成功后回调：`http://127.0.0.1:{port}/callback?sid=xxx&user=xxx`
 
 ### Desktop 端
@@ -61,17 +61,14 @@ Desktop 登录成功后，SID 和用户信息存储在本地文件：
 ## 本地调试
 
 ```bash
-# 1. 启动代理 (devd)
-devd -l /=http://127.0.0.1:3000 /api/=https://api-dev.copilothub.ai/api
-
-# 2. 启动 Web
+# 1. 启动 Web（Next.js rewrites 自动代理 /api/* 到 api-dev.copilothub.ai）
 pnpm dev:web
 
-# 3. 启动 Desktop
+# 2. 启动 Desktop
 pnpm dev:desktop
 ```
 
-本地调试时，通过 devd 将 `/api/` 请求代理到 `api-dev.copilothub.ai`。
+本地调试时，Next.js rewrites（配置在 `apps/web/next.config.ts`）自动将 `/api/*` 请求代理到 `api-dev.copilothub.ai`。
 
 ## 参考
 
