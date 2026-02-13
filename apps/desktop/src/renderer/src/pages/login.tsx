@@ -33,15 +33,14 @@ export default function LoginPage() {
     <div className="flex h-screen flex-col items-center justify-center bg-background p-8 animate-in fade-in duration-300">
       <div className="w-full max-w-sm flex flex-col items-center text-center space-y-6">
         {/* Brand */}
-        <div className="flex items-center gap-2.5">
-          <MulticaIcon animate className="size-5 text-muted-foreground/70" />
-          <h1 className="text-2xl tracking-wide font-brand">Multica</h1>
+        <div className="flex items-center gap-2">
+          <MulticaIcon bordered animate size="md" />
+          <h1 className="text-lg tracking-wide font-brand">Multica</h1>
         </div>
 
         {/* Tagline */}
         <p className="text-sm text-muted-foreground leading-relaxed">
-          An AI assistant that gets things done — pulling data, running analysis,
-          and taking action. Talk to it like a team member.
+          An AI assistant that gets things done.
         </p>
 
         {/* Sign In */}

@@ -202,14 +202,11 @@ export function LoginForm() {
       <div className="flex flex-col items-center text-center space-y-4">
         <div className="flex items-center gap-2">
           <MulticaIcon bordered noSpin size="md" />
-          <span className="text-base font-brand">Multica</span>
+          <h1 className="text-lg font-semibold tracking-tight">Sign In</h1>
         </div>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            Enter your email to continue
-          </p>
-        </div>
+        <p className="text-sm text-muted-foreground">
+          Enter your email to continue
+        </p>
       </div>
 
       {/* Error message */}
