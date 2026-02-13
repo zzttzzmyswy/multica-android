@@ -3,6 +3,7 @@
  */
 
 import { create } from 'zustand'
+import { toast } from '@multica/ui/components/ui/sonner'
 import type { AuthUser } from '@multica/types'
 
 export type { AuthUser }
@@ -87,6 +88,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         user: null,
         isAuthenticated: false,
       })
+      toast('Signed out')
       console.log('[AuthStore] Auth cleared')
     } catch (error) {
       console.error('[AuthStore] Failed to clear auth:', error)
@@ -113,6 +115,7 @@ export function setupAuthCallbackListener(): () => void {
         user: data.user,
         isAuthenticated: true,
       })
+      toast.success(`Welcome back, ${data.user.name}`)
     }
   })
 

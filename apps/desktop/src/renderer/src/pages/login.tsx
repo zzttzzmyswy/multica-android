@@ -30,24 +30,27 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex h-screen flex-col items-center justify-center bg-background p-8">
-      <div className="w-full max-w-xs space-y-6">
-        {/* Logo */}
-        <div className="flex items-center justify-center gap-2">
-          <MulticaIcon bordered noSpin size="md" />
-          <span className="text-base font-brand">Multica</span>
+    <div className="flex h-screen flex-col items-center justify-center bg-background p-8 animate-in fade-in duration-300">
+      <div className="w-full max-w-sm flex flex-col items-center text-center space-y-6">
+        {/* Brand */}
+        <div className="flex items-center gap-2.5">
+          <MulticaIcon animate className="size-5 text-muted-foreground/70" />
+          <h1 className="text-2xl tracking-wide font-brand">Multica</h1>
         </div>
+
+        {/* Tagline */}
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          An AI assistant that gets things done — pulling data, running analysis,
+          and taking action. Talk to it like a team member.
+        </p>
 
         {/* Sign In */}
-        <div className="space-y-4 text-center">
-          <p className="text-base text-muted-foreground">Sign in to continue</p>
-          <Button onClick={startLogin} className="w-full" size="lg">
-            Sign In
-          </Button>
-        </div>
+        <Button onClick={startLogin} size="lg" className="px-8">
+          Sign In to Continue
+        </Button>
 
         {/* Helper */}
-        <p className="text-center text-xs text-muted-foreground/60">
+        <p className="text-xs text-muted-foreground/60">
           Opens browser for authentication
         </p>
       </div>
