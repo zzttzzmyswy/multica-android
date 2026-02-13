@@ -4,6 +4,7 @@ import {
   markdownToText,
   truncateText,
   convertWithTurndown,
+  extractMarkdownTitle,
 } from "./html-utils.js";
 
 describe("html-utils", () => {
@@ -187,6 +188,32 @@ describe("html-utils", () => {
       const result = truncateText("Hello", 0);
       expect(result.text).toBe("");
       expect(result.truncated).toBe(true);
+    });
+  });
+
+  describe("extractMarkdownTitle", () => {
+    it("should extract title from YAML frontmatter", () => {
+      const md = "---\ntitle: My Page Title\ndescription: Some desc\n---\n\n# Heading\n\nContent";
+      expect(extractMarkdownTitle(md)).toBe("My Page Title");
+    });
+
+    it("should fall back to first # heading when no frontmatter", () => {
+      const md = "# My Heading\n\nSome content here";
+      expect(extractMarkdownTitle(md)).toBe("My Heading");
+    });
+
+    it("should prefer frontmatter title over heading", () => {
+      const md = "---\ntitle: Frontmatter Title\n---\n\n# Heading Title";
+      expect(extractMarkdownTitle(md)).toBe("Frontmatter Title");
+    });
+
+    it("should return undefined when no title found", () => {
+      const md = "Just some text without a title or heading";
+      expect(extractMarkdownTitle(md)).toBeUndefined();
+    });
+
+    it("should handle empty string", () => {
+      expect(extractMarkdownTitle("")).toBeUndefined();
     });
   });
 

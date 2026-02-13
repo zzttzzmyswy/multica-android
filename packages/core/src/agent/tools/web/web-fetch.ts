@@ -20,7 +20,7 @@ import {
   writeCache,
 } from "./cache.js";
 import type { CacheEntry } from "./cache.js";
-import { extractContent, markdownToText, truncateText, type ExtractMode, type ExtractorType } from "./html-utils.js";
+import { extractContent, extractMarkdownTitle, markdownToText, truncateText, type ExtractMode, type ExtractorType } from "./html-utils.js";
 import { jsonResult, readNumberParam, readStringParam } from "./param-helpers.js";
 
 const EXTRACT_MODES = ["markdown", "text"] as const;
@@ -69,13 +69,14 @@ export type WebFetchResult = {
   contentType: string;
   title?: string;
   extractMode: ExtractMode;
-  extractor: ExtractorType | "raw" | "json";
+  extractor: ExtractorType | "raw" | "json" | "markdown-native";
   truncated: boolean;
   length: number;
   fetchedAt: string;
   tookMs: number;
   text: string;
   cached?: boolean;
+  markdownTokens?: number;
 };
 
 function resolveMaxChars(value: unknown, fallback: number): number {
@@ -129,7 +130,7 @@ async function fetchWithRedirects(params: {
       res = await fetch(parsedUrl.toString(), {
         method: "GET",
         headers: {
-          Accept: "*/*",
+          Accept: "text/markdown, text/html;q=0.9, */*;q=0.8",
           "User-Agent": params.userAgent,
           "Accept-Language": "en-US,en;q=0.9",
         },
@@ -241,10 +242,28 @@ async function runWebFetch(params: {
     const body = await readResponseText(res);
 
     let title: string | undefined;
-    let extractor: ExtractorType | "raw" | "json" = "raw";
+    let extractor: ExtractorType | "raw" | "json" | "markdown-native" = "raw";
     let text = body;
+    let markdownTokens: number | undefined;
 
-    if (contentType.includes("text/html")) {
+    // Capture x-markdown-tokens header when present (Cloudflare Markdown for Agents)
+    const markdownTokensHeader = res.headers.get("x-markdown-tokens");
+    if (markdownTokensHeader) {
+      const parsed = Number.parseInt(markdownTokensHeader, 10);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        markdownTokens = parsed;
+      }
+    }
+
+    if (contentType.includes("text/markdown")) {
+      // Server returned markdown directly (e.g. Cloudflare Markdown for Agents) — skip HTML parsing
+      text = body;
+      extractor = "markdown-native";
+      title = extractMarkdownTitle(body);
+      if (params.extractMode === "text") {
+        text = markdownToText(body);
+      }
+    } else if (contentType.includes("text/html")) {
       const extracted = await extractContent({
         html: body,
         url: finalUrl,
@@ -280,6 +299,9 @@ async function runWebFetch(params: {
     };
     if (title) {
       payload.title = title;
+    }
+    if (markdownTokens !== undefined) {
+      payload.markdownTokens = markdownTokens;
     }
     writeCache(FETCH_CACHE, cacheKey, payload, params.cacheTtlMs);
     return payload;
