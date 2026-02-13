@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { v7 as uuidv7 } from "uuid";
 import {
   GatewayClient,
   type ConnectionState,
@@ -37,13 +36,43 @@ function clearIdentity(): void {
   localStorage.removeItem(STORAGE_KEY);
 }
 
-function getDeviceId(): string {
-  let id = localStorage.getItem(DEVICE_KEY);
-  if (!id) {
-    id = uuidv7();
-    localStorage.setItem(DEVICE_KEY, id);
+// SHA-256 hash (Web Crypto API)
+async function sha256(text: string): Promise<string> {
+  const buffer = new TextEncoder().encode(text);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Generate encrypted device ID (40 hex chars, consistent with copilot-search)
+async function generateEncryptedDeviceId(): Promise<string> {
+  const uuid = crypto.randomUUID();
+  const firstHash = (await sha256(uuid)).slice(0, 32);
+  return (await sha256(firstHash)).slice(0, 8) + firstHash;
+}
+
+// Validate encrypted ID format (40 hex characters)
+function isValidEncryptedId(id: string): boolean {
+  return typeof id === "string" && /^[a-f0-9]{40}$/i.test(id);
+}
+
+// Cached promise for device ID generation
+let deviceIdPromise: Promise<string> | null = null;
+
+async function getDeviceId(): Promise<string> {
+  const existing = localStorage.getItem(DEVICE_KEY);
+  // If already encrypted format, return as-is
+  if (existing && isValidEncryptedId(existing)) {
+    return existing;
   }
-  return id;
+  // Generate new encrypted ID (or migrate old UUID)
+  if (!deviceIdPromise) {
+    deviceIdPromise = generateEncryptedDeviceId().then((id) => {
+      localStorage.setItem(DEVICE_KEY, id);
+      return id;
+    });
+  }
+  return deviceIdPromise;
 }
 
 export type PageState = "loading" | "not-connected" | "connecting" | "connected";
@@ -72,12 +101,12 @@ export function useGatewayConnection(): UseGatewayConnectionReturn {
 
   const connectToGateway = useCallback(
     (id: ConnectionIdentity, token?: string) => {
-      const doConnect = () => {
+      const doConnect = async () => {
         disconnectingRef.current = false;
         setPageState("connecting");
         setError(null);
 
-        const deviceId = getDeviceId();
+        const deviceId = await getDeviceId();
 
         const client = new GatewayClient({
           url: id.gateway,

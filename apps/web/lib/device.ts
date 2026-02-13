@@ -1,6 +1,6 @@
 /**
  * Device ID management for Multica Web
- * Consistent with copilot-search: stores raw UUID, encrypts when transmitting
+ * Stores encrypted format directly (40 hex chars)
  */
 
 const DEVICE_ID_KEY = 'MULTICA_DEVICE_ID'
@@ -13,30 +13,43 @@ async function sha256(text: string): Promise<string> {
   return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
+// Generate encrypted device ID (40 hex chars)
+async function generateEncryptedDeviceId(): Promise<string> {
+  const uuid = crypto.randomUUID()
+  const firstHash = (await sha256(uuid)).slice(0, 32)
+  return (await sha256(firstHash)).slice(0, 8) + firstHash
+}
+
+// Validate encrypted ID format (40 hex characters)
+function isValidEncryptedId(id: string): boolean {
+  return typeof id === 'string' && /^[a-f0-9]{40}$/i.test(id)
+}
+
+// Cached promise for async generation
+let deviceIdPromise: Promise<string> | null = null
+
 /**
- * Get or create Device ID (raw UUID format)
- * Stored in localStorage, encrypted only when transmitting
+ * Get or create Device ID (encrypted 40-char format)
+ * Stored in localStorage, ready to use directly
  */
-export function getOrCreateDeviceId(): string {
+export async function getOrCreateDeviceId(): Promise<string> {
   if (typeof window === 'undefined') return ''
 
-  let deviceId = localStorage.getItem(DEVICE_ID_KEY)
+  const existing = localStorage.getItem(DEVICE_ID_KEY)
 
-  if (!deviceId) {
-    deviceId = crypto.randomUUID()
-    localStorage.setItem(DEVICE_ID_KEY, deviceId)
+  // If already encrypted format, return as-is
+  if (existing && isValidEncryptedId(existing)) {
+    return existing
   }
 
-  return deviceId
+  // Generate new encrypted ID
+  if (!deviceIdPromise) {
+    deviceIdPromise = generateEncryptedDeviceId().then((id) => {
+      localStorage.setItem(DEVICE_ID_KEY, id)
+      return id
+    })
+  }
+
+  return deviceIdPromise
 }
 
-/**
- * Generate encrypted Device-Id header value
- * Algorithm (consistent with copilot-search):
- * 1. sha256(uuid).slice(0, 32) = hashedDeviceId
- * 2. sha256(hashedDeviceId).slice(0, 8) + hashedDeviceId = 40 chars
- */
-export async function generateDeviceIdHeader(deviceId: string): Promise<string> {
-  const hashedDeviceId = (await sha256(deviceId)).slice(0, 32)
-  return (await sha256(hashedDeviceId)).slice(0, 8) + hashedDeviceId
-}

@@ -12,6 +12,7 @@ import type { OnModuleInit } from "@nestjs/common";
 import { Bot, InputFile, webhookCallback } from "grammy";
 import type { Context } from "grammy";
 import { v7 as uuidv7 } from "uuid";
+import { generateEncryptedId } from "@multica/utils";
 import { parseConnectionCode } from "@multica/store/connection";
 import type { ConnectionInfo } from "@multica/store/connection";
 import {
@@ -233,7 +234,7 @@ export class TelegramService implements OnModuleInit {
     }
 
     // 4. Generate device ID and register virtual device
-    const deviceId = `tg-${uuidv7()}`;
+    const deviceId = `tg-${generateEncryptedId()}`;
     this.registerVirtualDeviceForUser(deviceId, telegramUserId);
 
     // 5. Send verify RPC

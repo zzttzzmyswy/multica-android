@@ -9,7 +9,6 @@
  */
 
 import http from "node:http";
-import crypto from "node:crypto";
 import { ipcMain, shell, BrowserWindow } from "electron";
 import {
   existsSync,
@@ -18,7 +17,7 @@ import {
   mkdirSync,
 } from "node:fs";
 import { join, dirname } from "node:path";
-import { DATA_DIR } from "@multica/utils";
+import { DATA_DIR, generateEncryptedId, isValidEncryptedId } from "@multica/utils";
 import type { AuthUser } from "@multica/types";
 
 // ============================================================================
@@ -45,37 +44,6 @@ interface AuthFileData {
 // ============================================================================
 
 const AUTH_FILE_PATH = join(DATA_DIR, "auth.json");
-
-/**
- * SHA-256 hash function.
- */
-function sha256(text: string): string {
-  return crypto.createHash("sha256").update(text, "utf8").digest("hex");
-}
-
-/**
- * Generate encrypted Device ID.
- * Algorithm (consistent with devv-sdk and Web):
- * 1. Generate UUID
- * 2. SHA-256 hash of UUID, take first 32 chars
- * 3. SHA-256 hash of step 2 result, take first 8 chars
- * 4. Return: step3[0:8] + step2[0:32] = 40 chars
- *
- * This encrypted format is stored directly (not the raw UUID).
- */
-function generateEncryptedDeviceId(): string {
-  const uuid = crypto.randomUUID();
-  const firstHash = sha256(uuid).slice(0, 32);
-  const finalId = sha256(firstHash).slice(0, 8) + firstHash;
-  return finalId;
-}
-
-/**
- * Validate device ID format (40 hex characters).
- */
-function isValidDeviceId(deviceId: string): boolean {
-  return typeof deviceId === "string" && /^[a-f0-9]{40}$/i.test(deviceId);
-}
 
 /**
  * Read raw auth file data, handling all edge cases.
@@ -123,32 +91,26 @@ function writeAuthFile(data: Partial<AuthFileData>): boolean {
 /**
  * Get or create a persistent Device ID.
  * Device ID persists across logins/logouts - it represents the device, not the user.
- * The stored value is already encrypted (40 hex chars), not the raw UUID.
+ * The stored value is encrypted (40 hex chars).
  */
 export function getOrCreateDeviceId(): string {
   const existing = readAuthFile();
 
-  // If we have a valid encrypted deviceId (40 hex chars), return it
-  if (existing?.deviceId && isValidDeviceId(existing.deviceId)) {
+  // If we have a valid encrypted deviceId, return it
+  if (existing?.deviceId && isValidEncryptedId(existing.deviceId)) {
     return existing.deviceId;
   }
 
   // Generate new encrypted deviceId
-  const newDeviceId = generateEncryptedDeviceId();
+  const newDeviceId = generateEncryptedId();
   console.log("[Auth] Generated new Device ID:", newDeviceId.slice(0, 8) + "...");
 
-  // If there was an old-format deviceId (UUID), we'll replace it
-  if (existing?.deviceId && !isValidDeviceId(existing.deviceId)) {
-    console.log("[Auth] Migrating old-format Device ID to encrypted format");
-  }
-
-  // Preserve any existing auth data while adding/updating deviceId
+  // Preserve any existing auth data while adding deviceId
   const dataToSave: Partial<AuthFileData> = existing
     ? { ...existing, deviceId: newDeviceId }
     : { deviceId: newDeviceId };
 
   if (!writeAuthFile(dataToSave)) {
-    // Write failed, but we can still return the generated ID for this session
     console.error("[Auth] Failed to persist new Device ID");
   }
 
@@ -189,7 +151,7 @@ function saveAuthData(sid: string, user: AuthUser, passedDeviceId?: string): boo
   try {
     // Use passed deviceId from Web if valid, otherwise use local one
     let deviceId: string;
-    if (passedDeviceId && isValidDeviceId(passedDeviceId)) {
+    if (passedDeviceId && isValidEncryptedId(passedDeviceId)) {
       deviceId = passedDeviceId;
       console.log("[Auth] Using Device ID from Web browser:", deviceId.slice(0, 8) + "...");
     } else {
