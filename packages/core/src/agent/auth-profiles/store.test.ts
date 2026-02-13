@@ -1,20 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { coerceStore, loadAuthProfileStore, saveAuthProfileStore, updateAuthProfileStore } from "./store.js";
-import { AUTH_STORE_VERSION } from "./constants.js";
+import { AUTH_STORE_VERSION, AUTH_PROFILE_STORE_FILENAME } from "./constants.js";
 import type { AuthProfileStore } from "./types.js";
 
-// Use a temp directory for tests to avoid touching real store
-const TEST_DIR = join(import.meta.dirname ?? ".", "__test_store_tmp__");
-const TEST_STORE_PATH = join(TEST_DIR, "auth-profiles.json");
-
-// We need to mock resolveAuthStorePath to point to our test dir
-import { vi } from "vitest";
-
-vi.mock("../../shared/paths.js", () => ({
-  DATA_DIR: join(import.meta.dirname ?? ".", "__test_store_tmp__"),
-}));
+const TEST_DIR = join(tmpdir(), `multica-store-test-${process.pid}`);
+const TEST_STORE_PATH = join(TEST_DIR, AUTH_PROFILE_STORE_FILENAME);
+const storeOptions = { baseDir: TEST_DIR };
 
 beforeEach(() => {
   if (!existsSync(TEST_DIR)) {
@@ -72,7 +66,7 @@ describe("coerceStore", () => {
 
 describe("loadAuthProfileStore / saveAuthProfileStore", () => {
   it("returns empty store when file does not exist", () => {
-    const store = loadAuthProfileStore();
+    const store = loadAuthProfileStore(storeOptions);
     expect(store.version).toBe(AUTH_STORE_VERSION);
   });
 
@@ -84,14 +78,14 @@ describe("loadAuthProfileStore / saveAuthProfileStore", () => {
         "anthropic:main": { lastUsed: 5000, errorCount: 1 },
       },
     };
-    saveAuthProfileStore(original);
-    const loaded = loadAuthProfileStore();
+    saveAuthProfileStore(original, storeOptions);
+    const loaded = loadAuthProfileStore(storeOptions);
     expect(loaded).toEqual(original);
   });
 
   it("handles corrupted JSON gracefully", () => {
     writeFileSync(TEST_STORE_PATH, "not valid json{{{", "utf8");
-    const store = loadAuthProfileStore();
+    const store = loadAuthProfileStore(storeOptions);
     expect(store.version).toBe(AUTH_STORE_VERSION);
   });
 });
@@ -105,11 +99,11 @@ describe("updateAuthProfileStore", () => {
     const result = updateAuthProfileStore((store) => {
       if (!store.lastGood) store.lastGood = {};
       store.lastGood.openai = "openai:primary";
-    });
+    }, storeOptions);
     expect(result.lastGood?.openai).toBe("openai:primary");
 
     // Verify persisted
-    const loaded = loadAuthProfileStore();
+    const loaded = loadAuthProfileStore(storeOptions);
     expect(loaded.lastGood?.openai).toBe("openai:primary");
   });
 
@@ -117,14 +111,14 @@ describe("updateAuthProfileStore", () => {
     saveAuthProfileStore({
       version: 1,
       lastGood: { anthropic: "anthropic" },
-    });
+    }, storeOptions);
 
     updateAuthProfileStore((store) => {
       if (!store.usageStats) store.usageStats = {};
       store.usageStats["anthropic"] = { lastUsed: 9999 };
-    });
+    }, storeOptions);
 
-    const loaded = loadAuthProfileStore();
+    const loaded = loadAuthProfileStore(storeOptions);
     expect(loaded.lastGood?.anthropic).toBe("anthropic");
     expect(loaded.usageStats?.anthropic?.lastUsed).toBe(9999);
   });
