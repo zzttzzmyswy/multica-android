@@ -627,7 +627,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       await this.bot.api.sendMessage(chatId, html, extra);
     } catch (err) {
       if (isParseError(err)) {
-        this.logger.warn("HTML parse failed, retrying as plain text");
+        this.logger.warn(`HTML parse failed, retrying as plain text`);
         const plainExtra: Record<string, unknown> = {};
         if (replyToMessageId) plainExtra["reply_to_message_id"] = replyToMessageId;
         await this.bot.api.sendMessage(chatId, text, plainExtra);
@@ -1063,14 +1063,20 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
             // Tool narration: if the message contains tool_use blocks,
             // it's intermediate text (e.g. "Let me search...") before a tool call.
             // Send/edit an editable status message and keep typing.
-            const hasToolUse = agentMsg?.content?.some((c) => c.type === "tool_use") ?? false;
+            const hasToolUse = agentMsg?.content?.some((c) => c.type === "tool_use" || c.type === "toolCall") ?? false;
             if (hasToolUse) {
               const narration = agentMsg?.content
                 ?.filter((c) => c.type === "text" && c.text)
                 .map((c) => c.text!)
                 .join("") ?? "";
               if (narration) {
-                void this.sendOrEditStatus(deviceId, narration);
+                void this.sendOrEditStatus(deviceId, narration).then(() => {
+                  // Re-send typing indicator — Telegram clears it when a message is sent/edited
+                  const ctx = this.messageContexts.get(deviceId);
+                  if (ctx) {
+                    void this.bot?.api.sendChatAction(ctx.telegramChatId, "typing").catch(() => {});
+                  }
+                });
               }
               return;
             }
