@@ -45,6 +45,7 @@ import { EventsGateway } from "../events.gateway.js";
 import { TelegramUserStore } from "./telegram-user.store.js";
 import type { TelegramUser } from "./types.js";
 import { markdownToTelegramHtml } from "./telegram-format.js";
+import { ShortCodeStore } from "./short-code-store.js";
 
 // ── Types ──
 
@@ -135,6 +136,8 @@ function chunkText(text: string, maxChars = MAX_CHARS_PER_MESSAGE): string[] {
 export class TelegramService implements OnModuleInit, OnModuleDestroy {
   private bot: Bot | null = null;
   private pollingMode = false;
+  private botUsername: string | null = null;
+  private readonly shortCodeStore = new ShortCodeStore();
 
   private pendingRequests = new Map<string, PendingRequest>();
   /** Typing indicator timers, keyed by deviceId */
@@ -159,7 +162,18 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.bot = new Bot(token);
+
+    // Fetch bot info (username) before setting up handlers
+    try {
+      const me = await this.bot.api.getMe();
+      this.botUsername = me.username ?? null;
+      this.logger.log(`Telegram bot: @${this.botUsername}`);
+    } catch (err) {
+      this.logger.warn(`Failed to fetch bot info: ${err instanceof Error ? err.message : err}`);
+    }
+
     this.setupHandlers();
+    await this.setupBotCommands();
 
     const webhookUrl = process.env["TELEGRAM_WEBHOOK_URL"];
     if (webhookUrl) {
@@ -177,6 +191,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
+    this.shortCodeStore.destroy();
     if (this.bot && this.pollingMode) {
       await this.bot.stop();
       this.logger.log("Telegram bot stopped");
@@ -205,6 +220,16 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     return this.bot !== null;
   }
 
+  /** Get the bot's Telegram username (e.g. "multica_bot") */
+  getBotUsername(): string | null {
+    return this.botUsername;
+  }
+
+  /** Create a short code for a connection info (for Telegram deep link QR flow) */
+  createConnectCode(connectionInfo: ConnectionInfo): string {
+    return this.shortCodeStore.store(connectionInfo);
+  }
+
   // ── Handler setup ──
 
   private setupHandlers(): void {
@@ -228,6 +253,59 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       if (chatQueues.get(key) === current) {
         chatQueues.delete(key);
       }
+    });
+
+    // Bot commands (must be registered before message:text)
+    this.bot.command("start", async (ctx) => {
+      if (!this.isPrivateChat(ctx)) return;
+      const payload = ctx.match?.trim();
+      if (payload) {
+        // Deep link: /start <short_code>
+        await this.handleShortCode(ctx, String(ctx.from?.id), payload);
+      } else {
+        await ctx.reply(
+          "Welcome to Multica!\n\n" +
+            "To connect, scan a QR code from the Multica Desktop app " +
+            "(Clients \u2192 Channels tab), or paste a connection link here.\n\n" +
+            "The link looks like:\nmultica://connect?gateway=...&hub=...&agent=...&token=...&exp=...",
+        );
+      }
+    });
+
+    this.bot.command("status", async (ctx) => {
+      if (!this.isPrivateChat(ctx)) return;
+      const telegramUserId = String(ctx.from?.id);
+      const user = await this.userStore.findByTelegramUserId(telegramUserId);
+      if (!user) {
+        await ctx.reply("Not connected.\n\nUse /start or scan a QR code to connect.");
+        return;
+      }
+      const online = this.eventsGateway.isDeviceRegistered(user.hubId);
+      await ctx.reply(
+        `Connected to Multica\n\n` +
+          `Hub: ${user.hubId}\n` +
+          `Agent: ${user.agentId}\n` +
+          `Status: ${online ? "Online" : "Offline"}\n\n` +
+          (online
+            ? "Your Hub is online and ready to receive messages."
+            : "Your Hub is offline. Make sure the Multica Desktop app is running."),
+      );
+    });
+
+    this.bot.command("help", async (ctx) => {
+      if (!this.isPrivateChat(ctx)) return;
+      await ctx.reply(
+        "Multica Telegram Bot\n\n" +
+          "Commands:\n" +
+          "/start - Connect your account\n" +
+          "/status - Check connection status\n" +
+          "/help - Show this message\n\n" +
+          "To connect:\n" +
+          "1. Open Multica Desktop app\n" +
+          "2. Go to Clients \u2192 Channels\n" +
+          "3. Scan the Telegram QR code with your phone camera\n\n" +
+          "Or paste a connection link starting with:\nmultica://connect?...",
+      );
     });
 
     // Text messages (private chats only)
@@ -299,6 +377,35 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
   /** Only process private (direct) messages; silently ignore group chats. */
   private isPrivateChat(ctx: Context): boolean {
     return ctx.chat?.type === "private";
+  }
+
+  /** Register bot commands with Telegram (shown in the menu) */
+  private async setupBotCommands(): Promise<void> {
+    if (!this.bot) return;
+    try {
+      await this.bot.api.setMyCommands([
+        { command: "start", description: "Connect your Multica account" },
+        { command: "status", description: "Check connection status" },
+        { command: "help", description: "Show help" },
+      ]);
+      this.logger.log("Telegram bot commands registered");
+    } catch (err) {
+      this.logger.warn(`Failed to set bot commands: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
+  /** Handle a short code from /start deep link */
+  private async handleShortCode(ctx: Context, telegramUserId: string, code: string): Promise<void> {
+    const connectionInfo = this.shortCodeStore.consume(code);
+    if (!connectionInfo) {
+      await ctx.reply(
+        "Connection code expired or invalid.\n\n" +
+          "QR codes are valid for 30 seconds. Please scan again from the Desktop app.",
+      );
+      return;
+    }
+
+    await this.connectUser(ctx, telegramUserId, connectionInfo);
   }
 
   // ── Inbound: text messages ──
@@ -677,11 +784,8 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
 
   // ── Connection & routing ──
 
-  /** Handle a multica://connect? connection link */
+  /** Handle a multica://connect? connection link pasted as text */
   private async handleConnectionLink(ctx: Context, telegramUserId: string, text: string): Promise<void> {
-    const msg = ctx.message;
-
-    // 1. Parse and validate the connection link
     let connectionInfo: ConnectionInfo;
     try {
       connectionInfo = parseConnectionCode(text);
@@ -691,7 +795,17 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    // 2. Check Hub is online
+    await this.connectUser(ctx, telegramUserId, connectionInfo);
+  }
+
+  /**
+   * Shared connection flow used by both paste-link and /start deep link.
+   * Checks Hub online → registers virtual device → sends verify RPC → saves to DB.
+   */
+  private async connectUser(ctx: Context, telegramUserId: string, connectionInfo: ConnectionInfo): Promise<void> {
+    const msg = ctx.message;
+
+    // 1. Check Hub is online
     if (!this.eventsGateway.isDeviceRegistered(connectionInfo.hubId)) {
       await ctx.reply(
         "Connection failed: Hub is not online.\n\n" +
@@ -700,17 +814,17 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    // 3. Unregister old virtual device if user is re-binding
+    // 2. Unregister old virtual device if user is re-binding
     const existingUser = await this.userStore.findByTelegramUserId(telegramUserId);
     if (existingUser && this.eventsGateway.isDeviceRegistered(existingUser.deviceId)) {
       this.eventsGateway.unregisterVirtualDevice(existingUser.deviceId);
     }
 
-    // 4. Generate device ID and register virtual device
+    // 3. Generate device ID and register virtual device
     const deviceId = `tg-${generateEncryptedId()}`;
     this.registerVirtualDeviceForUser(deviceId, telegramUserId);
 
-    // 5. Send verify RPC
+    // 4. Send verify RPC
     try {
       await ctx.reply("Connecting... Please approve the connection on your Desktop app.");
 
@@ -721,7 +835,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
           : `Telegram ${msg?.from?.first_name ?? telegramUserId}`,
       });
 
-      // 6. Save to DB
+      // 5. Save to DB
       await this.userStore.upsert({
         telegramUserId,
         hubId: connectionInfo.hubId,
