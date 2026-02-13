@@ -1,11 +1,13 @@
 /**
- * Telegram webhook controller.
+ * Telegram controller.
  *
- * Receives webhook requests from Telegram Bot API.
+ * - POST /telegram/webhook — Receives webhook requests from Telegram Bot API
+ * - POST /telegram/connect-code — Creates a short code for QR deep link flow
  */
 
-import { Controller, Inject, Logger, Post, Req, Res, Headers } from "@nestjs/common";
+import { Body, Controller, HttpException, HttpStatus, Inject, Logger, Post, Req, Res, Headers } from "@nestjs/common";
 import { TelegramService } from "./telegram.service.js";
+import type { ConnectionInfo } from "@multica/store/connection";
 
 // Minimal Express types for webhook handling
 interface ExpressRequest {
@@ -24,6 +26,34 @@ export class TelegramController {
   private readonly logger = new Logger(TelegramController.name);
 
   constructor(@Inject(TelegramService) private readonly telegramService: TelegramService) {}
+
+  @Post("connect-code")
+  async createConnectCode(
+    @Body() body: { gateway: string; hubId: string; agentId: string; token: string; expires: number },
+  ): Promise<{ code: string; botUsername: string }> {
+    if (!this.telegramService.isConfigured()) {
+      throw new HttpException("Telegram bot not configured", HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+    const botUsername = this.telegramService.getBotUsername();
+    if (!botUsername) {
+      throw new HttpException("Bot username not available", HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    const connectionInfo: ConnectionInfo = {
+      type: "multica-connect",
+      gateway: body.gateway,
+      hubId: body.hubId,
+      agentId: body.agentId,
+      token: body.token,
+      expires: body.expires,
+    };
+
+    const code = this.telegramService.createConnectCode(connectionInfo);
+    this.logger.debug(`Created connect code: ${code}`);
+
+    return { code, botUsername };
+  }
 
   @Post("webhook")
   async handleWebhook(
