@@ -15,8 +15,7 @@ export type {
 
 /** Register all built-in channel plugins. Call once at startup. */
 export function initChannels(): void {
-  // Telegram: use official bot via Gateway webhook instead of user-created bots.
-  // The long-polling plugin is kept in plugins/telegram.ts but not registered.
+  // Telegram is handled by the Gateway (apps/gateway/telegram/).
   // Future: registerChannel(discordChannel);
   // Future: registerChannel(feishuChannel);
 }
