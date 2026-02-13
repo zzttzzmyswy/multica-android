@@ -68,8 +68,9 @@ function convertTableBlock(tableLines: string[]): string {
     if (cells.length === 0) continue;
 
     const parts: string[] = [];
-    // First column as bold title
-    parts.push(`**${cells[0]}**`);
+    // First column as bold title — strip existing ** to avoid double-wrapping
+    const title = cells[0]!.replace(/^\*+|\*+$/g, "");
+    parts.push(`**${title}**`);
     // Remaining columns as "Header: Value"
     for (let j = 1; j < Math.min(headers.length, cells.length); j++) {
       const val = cells[j]?.trim();
