@@ -127,6 +127,15 @@ export interface ChannelOutboundAdapter {
    * Called when processing completes to clear the ACK indicator.
    */
   removeReaction?(ctx: DeliveryContext): Promise<void>;
+  /**
+   * Reply with an editable status message, returning its platform message ID.
+   * Used for tool narration: the message is updated in-place as the agent works.
+   */
+  replyTextEditable?(ctx: DeliveryContext, text: string): Promise<string>;
+  /**
+   * Edit a previously sent message by its platform message ID.
+   */
+  editText?(ctx: DeliveryContext, messageId: string, text: string): Promise<void>;
 }
 
 // ─── Channel Plugin ───

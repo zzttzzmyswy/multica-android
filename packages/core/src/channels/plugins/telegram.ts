@@ -30,20 +30,42 @@ function isParseError(err: unknown): boolean {
   return err instanceof GrammyError && err.description.includes("can't parse entities");
 }
 
-/** Send a message with HTML formatting, fallback to plain text on parse error */
+/** Send a message with HTML formatting, fallback to plain text on parse error. Returns message ID. */
 async function sendFormatted(
   bot: Bot,
   chatId: number,
   text: string,
   extra?: Record<string, unknown>,
-): Promise<void> {
+): Promise<number> {
   const html = markdownToTelegramHtml(text);
   try {
-    await bot.api.sendMessage(chatId, html, { ...extra, parse_mode: "HTML" });
+    const msg = await bot.api.sendMessage(chatId, html, { ...extra, parse_mode: "HTML" });
+    return msg.message_id;
   } catch (err) {
     if (isParseError(err)) {
       console.warn("[Telegram] HTML parse failed, retrying as plain text");
-      await bot.api.sendMessage(chatId, text, extra);
+      const msg = await bot.api.sendMessage(chatId, text, extra);
+      return msg.message_id;
+    } else {
+      throw err;
+    }
+  }
+}
+
+/** Edit an existing message with HTML formatting, fallback to plain text on parse error */
+async function editFormatted(
+  bot: Bot,
+  chatId: number,
+  messageId: number,
+  text: string,
+): Promise<void> {
+  const html = markdownToTelegramHtml(text);
+  try {
+    await bot.api.editMessageText(chatId, messageId, html, { parse_mode: "HTML" });
+  } catch (err) {
+    if (isParseError(err)) {
+      console.warn("[Telegram] HTML parse failed on edit, retrying as plain text");
+      await bot.api.editMessageText(chatId, messageId, text);
     } else {
       throw err;
     }
@@ -320,6 +342,29 @@ export const telegramChannel: ChannelPlugin = {
       } catch {
         // Best-effort
       }
+    },
+
+    async replyTextEditable(ctx: DeliveryContext, text: string): Promise<string> {
+      const bot = bots.get(ctx.accountId);
+      if (!bot) throw new Error(`No Telegram bot for account ${ctx.accountId}`);
+
+      const chatId = Number(ctx.conversationId);
+      const extra: Record<string, unknown> = {};
+      if (ctx.replyToMessageId) {
+        extra["reply_to_message_id"] = Number(ctx.replyToMessageId);
+      }
+
+      console.log(`[Telegram] Sending editable status to chatId=${chatId}`);
+      const msgId = await sendFormatted(bot, chatId, text, extra);
+      return String(msgId);
+    },
+
+    async editText(ctx: DeliveryContext, messageId: string, text: string): Promise<void> {
+      const bot = bots.get(ctx.accountId);
+      if (!bot) throw new Error(`No Telegram bot for account ${ctx.accountId}`);
+
+      console.log(`[Telegram] Editing message ${messageId} in chatId=${ctx.conversationId}`);
+      await editFormatted(bot, Number(ctx.conversationId), Number(messageId), text);
     },
 
     async sendMedia(ctx: DeliveryContext, media: OutboundMedia): Promise<void> {
