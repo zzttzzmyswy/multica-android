@@ -1,9 +1,7 @@
-import { createHmac } from "node:crypto";
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import { v7 as uuidv7 } from "uuid";
 
-import { getHubId } from "../../../hub/hub-identity.js";
+import { getLocalAuth } from "../../../hub/auth-store.js";
 import {
   DEFAULT_CACHE_TTL_MINUTES,
   DEFAULT_TIMEOUT_SECONDS,
@@ -16,8 +14,7 @@ import {
 import type { CacheEntry } from "./cache.js";
 import { jsonResult, readStringParam } from "./param-helpers.js";
 
-const DEVV_SEARCH_ENDPOINT = "https://api-dev.copilothub.ai/web-search";
-const SIGNING_KEY = "019c2d34-e8b2-75da-ace5-99f887c090c9";
+const WEB_SEARCH_ENDPOINT = "https://api-dev.copilothub.ai/api/v1/web-search";
 
 const SEARCH_CACHE = new Map<string, CacheEntry<Record<string, unknown>>>();
 
@@ -51,15 +48,6 @@ export type WebSearchResult = {
   }>;
 };
 
-function buildReqId(): string {
-  const hubId = getHubId();
-  const nonce = uuidv7();
-  const timestamp = Math.floor(Date.now() / 1000);
-  const message = `${hubId}.${nonce}.${timestamp}`;
-  const signature = createHmac("sha256", SIGNING_KEY).update(message).digest("hex");
-  return `${signature}.${hubId}.${nonce}.${timestamp}`;
-}
-
 async function runDevvSearch(params: {
   query: string;
   timeoutSeconds: number;
@@ -71,16 +59,26 @@ async function runDevvSearch(params: {
     snippet: string;
   }>;
 }> {
-  const res = await fetch(DEVV_SEARCH_ENDPOINT, {
+  const auth = getLocalAuth();
+  if (!auth) {
+    throw new Error("Not logged in. Please sign in via the Desktop app to use web search.");
+  }
+
+  const res = await fetch(WEB_SEARCH_ENDPOINT, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ q: params.query, reqId: buildReqId() }),
+    headers: {
+      "Content-Type": "application/json",
+      sid: auth.sid,
+      "device-id": auth.deviceId,
+      "os-type": "3",
+    },
+    body: JSON.stringify({ q: params.query }),
     signal: withTimeout(undefined, params.timeoutSeconds * 1000),
   });
 
   if (!res.ok) {
     const detail = await readResponseText(res);
-    throw new Error(`Devv Search API error (${res.status}): ${detail || res.statusText}`);
+    throw new Error(`Web Search API error (${res.status}): ${detail || res.statusText}`);
   }
 
   const data = (await res.json()) as DevvSearchResponse;
