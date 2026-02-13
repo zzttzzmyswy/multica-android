@@ -1003,8 +1003,17 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
 
           // Stop typing + send formatted text on message_end
           if (event.type === "message_end") {
-            this.stopTyping(deviceId);
             const agentMsg = (event as { message?: { content?: Array<{ type: string; text?: string }> } }).message;
+
+            // Skip tool narration: if the message contains tool_use blocks,
+            // it's intermediate text (e.g. "Let me search...") before a tool call.
+            // Keep typing and wait for the final answer.
+            const hasToolUse = agentMsg?.content?.some((c) => c.type === "tool_use") ?? false;
+            if (hasToolUse) {
+              return;
+            }
+
+            this.stopTyping(deviceId);
             if (agentMsg?.content) {
               const textContent = agentMsg.content
                 .filter((c) => c.type === "text" && c.text)

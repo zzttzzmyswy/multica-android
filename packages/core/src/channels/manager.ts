@@ -23,6 +23,7 @@ import { listChannels } from "./registry.js";
 import { loadChannelsConfig } from "./config.js";
 import { MessageAggregator, DEFAULT_CHUNKER_CONFIG } from "../hub/message-aggregator.js";
 import { isHeartbeatAckEvent } from "../hub/heartbeat-filter.js";
+import { hasToolUse } from "../agent/extract-text.js";
 import type { AsyncAgent } from "../agent/async-agent.js";
 import type { ChannelInfo } from "../agent/system-prompt/types.js";
 import { transcribeAudio } from "../media/transcribe.js";
@@ -277,6 +278,19 @@ export class ChannelManager {
       // Ensure aggregator exists for this response
       if (event.type === "message_start") {
         this.createAggregator();
+      }
+
+      // Skip tool narration: if the assistant message contains tool_use blocks,
+      // it's intermediate narration (e.g. "Let me search...") before a tool call,
+      // not the final answer. Discard the buffered text instead of sending it.
+      if (event.type === "message_end" && role === "assistant") {
+        const message = (event as { message?: Parameters<typeof hasToolUse>[0] }).message;
+        if (hasToolUse(message)) {
+          console.log("[Channels] Skipping tool narration message (has tool_use blocks)");
+          this.aggregator?.reset();
+          this.aggregator = null;
+          return;
+        }
       }
 
       if (this.aggregator) {
