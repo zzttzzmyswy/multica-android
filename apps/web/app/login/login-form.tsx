@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { useGoogleLogin } from '@react-oauth/google'
 import { Button } from '@multica/ui/components/ui/button'
 import { Input } from '@multica/ui/components/ui/input'
 import { Label } from '@multica/ui/components/ui/label'
 import { MulticaIcon } from '@multica/ui/components/multica-icon'
 import { LoginAuthType, UserInfo } from '@/lib/interface'
+import { saveSession, isAuthenticated } from '@/lib/auth'
 import { userLogin } from '@/service/user'
 
 type LoginStep = 'email' | 'code'
@@ -37,7 +38,15 @@ function GoogleIcon() {
 
 export function LoginForm() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const next = searchParams.get('next')
+
+  // Redirect if already authenticated (and not desktop flow)
+  useEffect(() => {
+    if (!next && isAuthenticated()) {
+      router.replace('/')
+    }
+  }, [next, router])
 
   // Form state
   const [email, setEmail] = useState('')
@@ -95,6 +104,9 @@ export function LoginForm() {
 
   // Handle login success
   const handleLoginSuccess = (sid: string, user: UserInfo) => {
+    // Save session to cookie for web app
+    saveSession(sid, user)
+
     if (next) {
       // Desktop flow - parse next URL to get port, then redirect directly to callback
       try {
