@@ -113,6 +113,29 @@ export function truncateText(
 }
 
 /**
+ * Extract a title from a native markdown response.
+ * Checks YAML frontmatter `title:` first, then falls back to the first `# heading`.
+ */
+export function extractMarkdownTitle(markdown: string): string | undefined {
+  // Check YAML frontmatter
+  const frontmatterMatch = markdown.match(/^---\s*\n([\s\S]*?)\n---/);
+  if (frontmatterMatch?.[1]) {
+    const titleMatch = frontmatterMatch[1].match(/^title:\s*(.+)$/m);
+    if (titleMatch?.[1]) {
+      const title = titleMatch[1].trim();
+      if (title) return title;
+    }
+  }
+  // Fall back to first # heading
+  const headingMatch = markdown.match(/^#\s+(.+)$/m);
+  if (headingMatch?.[1]) {
+    const title = headingMatch[1].trim();
+    if (title) return title;
+  }
+  return undefined;
+}
+
+/**
  * Convert HTML to markdown using TurndownService (simpler, converts whole page)
  */
 export function convertWithTurndown(html: string): ExtractResult {
