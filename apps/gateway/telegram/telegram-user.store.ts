@@ -1,5 +1,8 @@
 /**
- * Telegram user store - MySQL persistence layer.
+ * Telegram user store.
+ *
+ * Uses MySQL when MYSQL_DSN is set (production).
+ * Falls back to in-memory storage when database is unavailable (local development).
  */
 
 import { Inject, Injectable, Logger } from "@nestjs/common";
@@ -23,12 +26,16 @@ interface TelegramUserRow extends RowDataPacket {
 @Injectable()
 export class TelegramUserStore {
   private readonly logger = new Logger(TelegramUserStore.name);
+  /** In-memory fallback, keyed by telegramUserId */
+  private readonly memoryStore = new Map<string, TelegramUser>();
 
   constructor(@Inject(DatabaseService) private readonly db: DatabaseService) {}
 
   /** Find user by Telegram user ID */
   async findByTelegramUserId(telegramUserId: string): Promise<TelegramUser | null> {
-    if (!this.db.isAvailable()) return null;
+    if (!this.db.isAvailable()) {
+      return this.memoryStore.get(telegramUserId) ?? null;
+    }
 
     const rows = await this.db.query<TelegramUserRow[]>(
       "SELECT * FROM telegram_users WHERE telegram_user_id = ?",
@@ -41,7 +48,12 @@ export class TelegramUserStore {
 
   /** Find user by device ID */
   async findByDeviceId(deviceId: string): Promise<TelegramUser | null> {
-    if (!this.db.isAvailable()) return null;
+    if (!this.db.isAvailable()) {
+      for (const user of this.memoryStore.values()) {
+        if (user.deviceId === deviceId) return user;
+      }
+      return null;
+    }
 
     const rows = await this.db.query<TelegramUserRow[]>(
       "SELECT * FROM telegram_users WHERE device_id = ?",
@@ -55,7 +67,7 @@ export class TelegramUserStore {
   /** Create or update a Telegram user */
   async upsert(data: TelegramUserCreate): Promise<TelegramUser> {
     if (!this.db.isAvailable()) {
-      throw new Error("Database not available");
+      return this.upsertMemory(data);
     }
 
     // Check if user exists
@@ -108,6 +120,28 @@ export class TelegramUserStore {
 
     const created = await this.findByTelegramUserId(data.telegramUserId);
     return created!;
+  }
+
+  /** In-memory upsert for local development */
+  private upsertMemory(data: TelegramUserCreate): TelegramUser {
+    const existing = this.memoryStore.get(data.telegramUserId);
+    const now = new Date();
+
+    const user: TelegramUser = {
+      telegramUserId: data.telegramUserId,
+      hubId: data.hubId,
+      agentId: data.agentId,
+      deviceId: data.deviceId ?? existing?.deviceId ?? `tg-${generateEncryptedId()}`,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      telegramUsername: data.telegramUsername,
+      telegramFirstName: data.telegramFirstName,
+      telegramLastName: data.telegramLastName,
+    };
+
+    this.memoryStore.set(data.telegramUserId, user);
+    this.logger.debug(`In-memory upsert: telegramUserId=${data.telegramUserId}`);
+    return user;
   }
 
   /** Convert database row to TelegramUser object */
