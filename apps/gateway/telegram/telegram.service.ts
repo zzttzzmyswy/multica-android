@@ -1,7 +1,10 @@
 /**
  * Telegram service for Gateway.
  *
- * Handles Telegram bot interactions via webhook.
+ * Handles Telegram bot interactions via webhook or long-polling.
+ * - Webhook mode: when TELEGRAM_WEBHOOK_URL is set (production / ngrok)
+ * - Long-polling mode: when TELEGRAM_WEBHOOK_URL is NOT set (local development)
+ *
  * - New users: prompts to paste a multica://connect link
  * - Connection link: verifies with Hub via RPC, persists to DB
  * - Bound users: routes messages to their Hub agent
@@ -10,13 +13,12 @@
  * - Markdown → Telegram HTML formatting with parse-error fallback
  * - Text chunking for messages >4096 chars (paragraph-boundary split)
  * - Reply-to original message + 👀 ack reaction
- * - Group chat support (mention/reply filtering)
  * - Per-chat message serialization (prevents race conditions)
  * - Inbound media handling (voice, photo, video, document)
  */
 
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import type { OnModuleInit } from "@nestjs/common";
+import type { OnModuleInit, OnModuleDestroy } from "@nestjs/common";
 import { Bot, GrammyError, InputFile, webhookCallback } from "grammy";
 import type { Context } from "grammy";
 import { v7 as uuidv7 } from "uuid";
@@ -130,8 +132,9 @@ function chunkText(text: string, maxChars = MAX_CHARS_PER_MESSAGE): string[] {
 // ── Service ──
 
 @Injectable()
-export class TelegramService implements OnModuleInit {
+export class TelegramService implements OnModuleInit, OnModuleDestroy {
   private bot: Bot | null = null;
+  private pollingMode = false;
 
   private pendingRequests = new Map<string, PendingRequest>();
   /** Typing indicator timers, keyed by deviceId */
@@ -151,14 +154,33 @@ export class TelegramService implements OnModuleInit {
   async onModuleInit(): Promise<void> {
     const token = process.env["TELEGRAM_BOT_TOKEN"];
     if (!token) {
-      this.logger.warn("TELEGRAM_BOT_TOKEN not set, Telegram webhook disabled");
+      this.logger.warn("TELEGRAM_BOT_TOKEN not set, Telegram disabled");
       return;
     }
 
     this.bot = new Bot(token);
-
     this.setupHandlers();
-    this.logger.log("Telegram bot initialized");
+
+    const webhookUrl = process.env["TELEGRAM_WEBHOOK_URL"];
+    if (webhookUrl) {
+      // Webhook mode — Telegram sends updates to our /telegram/webhook endpoint
+      this.logger.log(`Telegram bot initialized (webhook mode: ${webhookUrl})`);
+    } else {
+      // Long-polling mode — pull updates from Telegram (local development)
+      this.pollingMode = true;
+      this.bot.start({
+        onStart: () => {
+          this.logger.log("Telegram bot initialized (long-polling mode)");
+        },
+      });
+    }
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    if (this.bot && this.pollingMode) {
+      await this.bot.stop();
+      this.logger.log("Telegram bot stopped");
+    }
   }
 
   /** Get grammY webhook callback for Express/NestJS */
