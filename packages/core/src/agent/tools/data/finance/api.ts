@@ -5,7 +5,7 @@
  * All endpoints use GET with query parameters.
  */
 
-import { API_BASE_URL, getAuthHeaders } from "../../../../hub/api-client.js";
+import { getApiBaseUrl, getAuthHeaders } from "../../../../hub/api-client.js";
 
 const PATH_PREFIX = "/api/v1/financial";
 const TIMEOUT_MS = 30_000;
@@ -24,7 +24,7 @@ export async function financeFetch<T = Record<string, unknown>>(
 ): Promise<{ data: T; url: string }> {
   const authHeaders = getAuthHeaders("to use financial data tools");
 
-  const url = new URL(PATH_PREFIX + path, API_BASE_URL);
+  const url = new URL(PATH_PREFIX + path, getApiBaseUrl());
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === null) continue;
     if (Array.isArray(value)) {

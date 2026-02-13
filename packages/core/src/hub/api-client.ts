@@ -1,6 +1,8 @@
 import { getLocalAuth } from "./auth-store.js";
 
-export const API_BASE_URL = "https://api.multica.ai";
+export function getApiBaseUrl(): string {
+  return process.env.MULTICA_API_URL || "https://api.multica.ai";
+}
 
 /**
  * Return auth headers for the proxy API.

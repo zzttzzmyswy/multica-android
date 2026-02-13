@@ -44,6 +44,13 @@ process.stderr?.on?.('error', (err: NodeJS.ErrnoException) => {
   throw err
 })
 
+// Bridge Vite build-time env to process.env for externalized @multica/core
+// In dev mode, electron-vite already loads .env into process.env;
+// In packaged builds, only import.meta.env has the value (injected at build time).
+if (import.meta.env.MAIN_VITE_API_URL) {
+  process.env.MULTICA_API_URL ??= import.meta.env.MAIN_VITE_API_URL
+}
+
 import { app, BrowserWindow, shell, ipcMain } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
