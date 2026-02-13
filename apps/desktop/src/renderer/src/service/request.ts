@@ -1,7 +1,7 @@
 import { useAuthStore } from '../stores/auth'
 
 // Backend API host — change this when switching environments
-const API_HOST = 'https://api-dev.copilothub.ai'
+const API_HOST = 'https://api.multica.ai'
 
 /**
  * Fetch request wrapper for desktop app.

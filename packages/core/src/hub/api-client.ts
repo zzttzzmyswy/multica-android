@@ -1,6 +1,6 @@
 import { getLocalAuth } from "./auth-store.js";
 
-export const API_BASE_URL = "https://api-dev.copilothub.ai";
+export const API_BASE_URL = "https://api.multica.ai";
 
 /**
  * Return auth headers for the proxy API.
