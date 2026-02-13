@@ -28,7 +28,13 @@
       "NSMicrophoneUsageDescription": "Application requests access to the device's microphone.",
       "NSDocumentsFolderUsageDescription": "Application requests access to the user's Documents folder.",
       "NSDownloadsFolderUsageDescription": "Application requests access to the user's Downloads folder."
-    }
+    },
+    "protocols": [
+      {
+        "name": "Multica",
+        "schemes": ["multica"]
+      }
+    ]
   },
   "dmg": {
     "artifactName": "${productName}-${version}-${arch}.${ext}"
@@ -54,6 +60,12 @@
     "uninstallDisplayName": "${productName}",
     "createDesktopShortcut": "always"
   },
+  "protocols": [
+    {
+      "name": "Multica",
+      "schemes": ["multica"]
+    }
+  ],
   "linux": {
     "target": [
       "AppImage",
