@@ -49,6 +49,6 @@ exec pnpm concurrently \
   "pnpm --filter @multica/types dev" \
   "pnpm --filter @multica/utils dev" \
   "pnpm --filter @multica/core dev" \
-  "PORT=4000 pnpm --filter @multica/gateway dev" \
+  "PORT=4000 MULTICA_RUN_LOG=1 pnpm --filter @multica/gateway dev" \
   "pnpm --filter @multica/web dev" \
-  "GATEWAY_URL=http://localhost:4000 MAIN_VITE_WEB_URL=http://localhost:3000 pnpm --filter @multica/desktop dev"
+  "GATEWAY_URL=http://localhost:4000 MAIN_VITE_WEB_URL=http://localhost:3000 MULTICA_RUN_LOG=1 pnpm --filter @multica/desktop dev"
