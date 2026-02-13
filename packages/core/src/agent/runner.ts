@@ -51,6 +51,7 @@ import {
 } from "./session/session-transcript-repair.js";
 import { isContextOverflowError } from "./errors.js";
 import { resolveWorkspaceDir, ensureWorkspaceDir } from "./workspace.js";
+import { createRunLog, type RunLog } from "./run-log.js";
 
 // ============================================================
 // Error classification for auth profile rotation
@@ -96,6 +97,8 @@ export class Agent {
   private toolsOptions: ResolveToolsOptions;
   private readonly originalToolsConfig?: ToolsConfig;
   private readonly stderr: NodeJS.WritableStream;
+  private readonly runLog: RunLog;
+  private readonly toolStartTimes = new Map<string, number>();
   private initialized = false;
 
   // Context window settings (for pre-flight compaction)
@@ -138,6 +141,10 @@ export class Agent {
 
     // Load session metadata early so stored provider/model can inform defaults
     this.sessionId = options.sessionId ?? uuidv7();
+    this.runLog = createRunLog(
+      options.enableRunLog ?? !!process.env.MULTICA_RUN_LOG,
+      this.sessionId,
+    );
     const storedMeta = (() => {
       const tempSession = new SessionManager({ sessionId: this.sessionId });
       return tempSession.getMeta();
@@ -369,6 +376,7 @@ export class Agent {
     this.agent.subscribe((event: AgentEvent) => {
       this.output.handleEvent(event);
       this.handleSessionEvent(event);
+      this.handleRunLogEvent(event);
     });
 
     if (this.debug && this.currentProfileId) {
@@ -466,12 +474,22 @@ export class Agent {
     this._isRunning = true;
     this._aborted = false;
 
+    const runStart = Date.now();
+    this.runLog.log("run_start", {
+      prompt: prompt.slice(0, 200),
+      internal: this._internalRun,
+      provider: this.resolvedProvider,
+      model: this.agent.state.model?.id,
+      messages: this.agent.state.messages.length,
+    });
+
     try {
       // Early validation: check API key before calling PiAgentCore.prompt(),
       // because getApiKey errors thrown inside PiAgentCore's internal async
       // context result in UnhandledPromiseRejection instead of propagating.
       if (!this.currentApiKey) {
         const errorMsg = `No API key configured for provider: ${this.resolvedProvider}. Please configure a provider in Agent Settings.`;
+        this.runLog.log("run_end", { duration_ms: Date.now() - runStart, error: errorMsg });
         return { text: "", error: errorMsg };
       }
 
@@ -484,10 +502,21 @@ export class Agent {
       // Loop to exhaust all candidate profiles on rotatable errors
       while (true) {
         try {
+          const llmStart = Date.now();
+          this.runLog.log("llm_call", {
+            provider: this.resolvedProvider,
+            model: this.agent.state.model?.id,
+            profile: this.currentProfileId,
+            messages: this.agent.state.messages.length,
+          });
           await this.agent.prompt(prompt);
+          this.runLog.log("llm_result", {
+            duration_ms: Date.now() - llmStart,
+          });
           break; // success — exit loop
         } catch (error) {
           lastError = error;
+          const errorMsg = error instanceof Error ? error.message : String(error);
 
           // Context overflow recovery: auto-compact and retry before trying auth rotation
           if (isContextOverflowError(error) && overflowAttempts < MAX_OVERFLOW_COMPACTION_ATTEMPTS) {
@@ -496,8 +525,16 @@ export class Agent {
               `[context-overflow] Overflow detected (attempt ${overflowAttempts}/${MAX_OVERFLOW_COMPACTION_ATTEMPTS}), compacting...\n`,
             );
             const messages = this.agent.state.messages.slice();
+            this.runLog.log("context_overflow", {
+              attempt: overflowAttempts,
+              messages_before: messages.length,
+            });
             const result = await this.session.maybeCompact(messages);
             if (result?.kept) {
+              this.runLog.log("context_overflow_compacted", {
+                messages_after: result.kept.length,
+                tokens_removed: result.tokensRemoved,
+              });
               this.agent.replaceMessages(result.kept);
               this.output.state.lastAssistantText = "";
               continue; // retry with compacted messages
@@ -511,6 +548,10 @@ export class Agent {
               this.stderr.write(
                 `[context-overflow] Forced compaction: ${messages.length} → ${forcedKept.length} messages\n`,
               );
+              this.runLog.log("context_overflow_forced", {
+                messages_before: messages.length,
+                messages_after: forcedKept.length,
+              });
               this.agent.replaceMessages(forcedKept);
               this.output.state.lastAssistantText = "";
               continue;
@@ -518,6 +559,11 @@ export class Agent {
           }
 
           const reason = classifyError(error);
+          this.runLog.log("error_classify", {
+            error: errorMsg.slice(0, 200),
+            reason,
+            rotatable: isRotatableError(reason),
+          });
           if (this.currentProfileId && isRotatableError(reason)) {
             markAuthProfileFailure(this.currentProfileId, reason);
           }
@@ -531,9 +577,16 @@ export class Agent {
             );
           }
 
+          const fromProfile = this.currentProfileId;
           if (!this.advanceAuthProfile()) {
             throw lastError; // All profiles exhausted
           }
+
+          this.runLog.log("auth_rotate", {
+            from: fromProfile,
+            to: this.currentProfileId,
+            reason,
+          });
 
           if (this.debug) {
             this.stderr.write(
@@ -561,10 +614,17 @@ export class Agent {
       // and return partial text without an error flag.
       if (this._aborted) {
         this.agent.state.error = undefined;
+        this.runLog.log("run_end", { duration_ms: Date.now() - runStart, aborted: true });
         return { text: this.output.state.lastAssistantText, thinking, error: undefined };
       }
 
-      return { text: this.output.state.lastAssistantText, thinking, error: this.agent.state.error };
+      const error = this.agent.state.error;
+      this.runLog.log("run_end", {
+        duration_ms: Date.now() - runStart,
+        error: error ?? null,
+        text: this.output.state.lastAssistantText.slice(0, 200),
+      });
+      return { text: this.output.state.lastAssistantText, thinking, error };
     } finally {
       // On abort, persist any partial messages that pi-agent-core appended
       // via appendMessage() (no message_end event fires for those).
@@ -579,6 +639,7 @@ export class Agent {
       this._aborted = false;
       this.currentUserDisplayPrompt = undefined;
       this.currentUserSource = undefined;
+      this.runLog.flush().catch(() => {});
     }
   }
 
@@ -667,6 +728,27 @@ export class Agent {
     this.session.setApiKey(this.currentApiKey);
   }
 
+  private handleRunLogEvent(event: AgentEvent) {
+    if (event.type === "tool_execution_start") {
+      const toolName = (event as any).toolName ?? "unknown";
+      this.toolStartTimes.set(toolName, Date.now());
+      this.runLog.log("tool_start", {
+        tool: toolName,
+        args: JSON.stringify((event as any).args ?? {}).slice(0, 500),
+      });
+    } else if (event.type === "tool_execution_end") {
+      const toolName = (event as any).toolName ?? "unknown";
+      const startTime = this.toolStartTimes.get(toolName);
+      const duration_ms = startTime ? Date.now() - startTime : undefined;
+      this.toolStartTimes.delete(toolName);
+      this.runLog.log("tool_end", {
+        tool: toolName,
+        duration_ms,
+        is_error: (event as any).isError ?? false,
+      });
+    }
+  }
+
   private handleSessionEvent(event: AgentEvent) {
     if (event.type === "message_end") {
       const message = event.message as AgentMessage;
@@ -708,6 +790,13 @@ export class Agent {
       return messages; // fast path
     }
 
+    this.runLog.log("preflight_compact_start", {
+      utilization: estimation.utilizationRatio,
+      trigger: COMPACTION_TRIGGER_RATIO,
+      messages: messages.length,
+      est_tokens: estimation.messageTokens,
+    });
+
     const originalCount = messages.length;
     let result = messages;
 
@@ -741,6 +830,11 @@ export class Agent {
       this.stderr.write(
         `[pre-flight compaction] pruned ${saved} messages (${originalCount} → ${result.length})\n`,
       );
+      this.runLog.log("preflight_compact_end", {
+        messages_before: originalCount,
+        messages_after: result.length,
+        pruned: saved,
+      });
     }
 
     return result;
@@ -767,6 +861,13 @@ export class Agent {
       summary: result.summary,
     };
     this.emitMulticaEvent(endEvent);
+    this.runLog.log("compaction", {
+      removed: endEvent.removed,
+      kept: endEvent.kept,
+      tokens_removed: endEvent.tokensRemoved,
+      tokens_kept: endEvent.tokensKept,
+      reason: endEvent.reason,
+    });
   }
 
   /**
