@@ -176,7 +176,9 @@ export function readClaudeCliCredentials(): ClaudeCliCredential | null {
 export function hasValidClaudeCliCredentials(): boolean {
   const creds = readClaudeCliCredentials();
   if (!creds) return false;
-  // Check if not expired (with 5 minute buffer)
+  // OAuth with refresh_token can auto-renew; always valid
+  if (creds.type === "oauth" && creds.refresh) return true;
+  // Token-only: check if not expired (with 5 minute buffer)
   return creds.expires > Date.now() + 5 * 60 * 1000;
 }
 
@@ -214,14 +216,8 @@ function readCodexKeychainCredentials(): CodexCliCredential | null {
     if (typeof accessToken !== "string" || !accessToken) return null;
     if (typeof refreshToken !== "string" || !refreshToken) return null;
 
-    const lastRefreshRaw = parsed.last_refresh;
-    const lastRefresh =
-      typeof lastRefreshRaw === "string" || typeof lastRefreshRaw === "number"
-        ? new Date(lastRefreshRaw).getTime()
-        : Date.now();
-    const expires = Number.isFinite(lastRefresh)
-      ? lastRefresh + 60 * 60 * 1000
-      : Date.now() + 60 * 60 * 1000;
+    // OAuth with refresh_token can auto-renew; don't expire based on last_refresh
+    const expires = Infinity;
 
     return {
       type: "oauth",
@@ -252,13 +248,8 @@ function readCodexFileCredentials(): CodexCliCredential | null {
     if (typeof accessToken !== "string" || !accessToken) return null;
     if (typeof refreshToken !== "string" || !refreshToken) return null;
 
-    let expires: number;
-    try {
-      const stat = fs.statSync(authPath);
-      expires = stat.mtimeMs + 60 * 60 * 1000;
-    } catch {
-      expires = Date.now() + 60 * 60 * 1000;
-    }
+    // OAuth with refresh_token can auto-renew; don't expire based on file mtime
+    const expires = Infinity;
 
     return {
       type: "oauth",
@@ -292,6 +283,8 @@ export function readCodexCliCredentials(): CodexCliCredential | null {
 export function hasValidCodexCliCredentials(): boolean {
   const creds = readCodexCliCredentials();
   if (!creds) return false;
+  // With refresh_token, credentials are always valid (auto-renew)
+  if (creds.refresh) return true;
   return creds.expires > Date.now() + 5 * 60 * 1000;
 }
 
@@ -356,6 +349,7 @@ export function getCliCredentialStatus(): CliCredentialStatus[] {
 
 function formatDuration(ms: number): string {
   if (ms <= 0) return "expired";
+  if (!Number.isFinite(ms)) return "never";
   const hours = Math.floor(ms / (60 * 60 * 1000));
   const minutes = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
   if (hours > 0) return `${hours}h ${minutes}m`;
