@@ -178,10 +178,26 @@ function loadAuthData(): AuthData | null {
   }
 }
 
-function saveAuthData(sid: string, user: AuthUser): boolean {
+/**
+ * Save auth data to disk.
+ * @param sid Session ID
+ * @param user User info
+ * @param passedDeviceId Optional Device ID from Web browser (encrypted 40-char format).
+ *                       If provided and valid, use it; otherwise fall back to local Device ID.
+ */
+function saveAuthData(sid: string, user: AuthUser, passedDeviceId?: string): boolean {
   try {
-    // Ensure we have a deviceId (get existing or create new)
-    const deviceId = getOrCreateDeviceId();
+    // Use passed deviceId from Web if valid, otherwise use local one
+    let deviceId: string;
+    if (passedDeviceId && isValidDeviceId(passedDeviceId)) {
+      deviceId = passedDeviceId;
+      console.log("[Auth] Using Device ID from Web browser:", deviceId.slice(0, 8) + "...");
+    } else {
+      deviceId = getOrCreateDeviceId();
+      if (passedDeviceId) {
+        console.warn("[Auth] Invalid Device ID from Web, using local:", passedDeviceId);
+      }
+    }
 
     const data: AuthFileData = { sid, user, deviceId };
 
@@ -309,6 +325,7 @@ async function createLocalServerSession(): Promise<number> {
         if (url.pathname === "/callback") {
           const sid = url.searchParams.get("sid");
           const userJson = url.searchParams.get("user");
+          const deviceId = url.searchParams.get("deviceId");
 
           // 返回成功页面
           res.writeHead(200, {
@@ -317,7 +334,7 @@ async function createLocalServerSession(): Promise<number> {
           });
           res.end(callbackHtml);
 
-          console.log("[Auth] Parsed params:", { sid, userJson });
+          console.log("[Auth] Parsed params:", { sid, userJson, deviceId: deviceId?.slice(0, 8) + "..." });
 
           if (sid && userJson) {
             try {
@@ -326,17 +343,15 @@ async function createLocalServerSession(): Promise<number> {
               console.log("[Auth] Received auth callback:", {
                 sid: sid.substring(0, 8) + "...",
                 user: user.name,
+                deviceId: deviceId ? deviceId.slice(0, 8) + "..." : "not provided",
               });
 
-              // 保存认证数据
-              saveAuthData(sid, user);
+              // 保存认证数据（使用 Web 传递的 deviceId）
+              saveAuthData(sid, user, deviceId || undefined);
 
               // 通知渲染进程
-              console.log("[Auth] mainWindowRef:", mainWindowRef ? "exists" : "null");
               if (mainWindowRef && !mainWindowRef.isDestroyed()) {
-                console.log("[Auth] Sending auth:callback to renderer...");
-                mainWindowRef.webContents.send("auth:callback", { sid, user });
-                console.log("[Auth] auth:callback sent!");
+                mainWindowRef.webContents.send("auth:callback", { sid, user, deviceId });
                 // 聚焦窗口
                 if (mainWindowRef.isMinimized()) mainWindowRef.restore();
                 mainWindowRef.focus();
@@ -434,7 +449,7 @@ export function handleAuthDeepLink(url: string): void {
       return;
     }
 
-    // multica://auth?sid=xxx&user=xxx
+    // multica://auth?sid=xxx&user=xxx&deviceId=xxx
     if (
       parsedUrl.host === "auth" ||
       parsedUrl.pathname === "//auth" ||
@@ -442,20 +457,22 @@ export function handleAuthDeepLink(url: string): void {
     ) {
       const sid = parsedUrl.searchParams.get("sid");
       const userJson = parsedUrl.searchParams.get("user");
+      const deviceId = parsedUrl.searchParams.get("deviceId");
 
       if (sid && userJson) {
         const user = JSON.parse(decodeURIComponent(userJson)) as AuthUser;
         console.log("[Auth] Deep link auth received:", {
           sid: sid.substring(0, 8) + "...",
           user: user.name,
+          deviceId: deviceId ? deviceId.slice(0, 8) + "..." : "not provided",
         });
 
-        // 保存认证数据
-        saveAuthData(sid, user);
+        // 保存认证数据（使用 Web 传递的 deviceId）
+        saveAuthData(sid, user, deviceId || undefined);
 
         // 通知渲染进程
         if (mainWindowRef && !mainWindowRef.isDestroyed()) {
-          mainWindowRef.webContents.send("auth:callback", { sid, user });
+          mainWindowRef.webContents.send("auth:callback", { sid, user, deviceId });
           if (mainWindowRef.isMinimized()) mainWindowRef.restore();
           mainWindowRef.focus();
         }
@@ -476,9 +493,9 @@ export function registerAuthHandlers(): void {
     return loadAuthData();
   });
 
-  // 保存认证数据
-  ipcMain.handle("auth:save", (_, sid: string, user: AuthUser) => {
-    return saveAuthData(sid, user);
+  // 保存认证数据（支持传入 deviceId）
+  ipcMain.handle("auth:save", (_, sid: string, user: AuthUser, deviceId?: string) => {
+    return saveAuthData(sid, user, deviceId);
   });
 
   // 清除认证数据（登出）
