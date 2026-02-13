@@ -132,8 +132,6 @@ function chunkText(text: string, maxChars = MAX_CHARS_PER_MESSAGE): string[] {
 @Injectable()
 export class TelegramService implements OnModuleInit {
   private bot: Bot | null = null;
-  private botId: number | null = null;
-  private botUsername: string | null = null;
 
   private pendingRequests = new Map<string, PendingRequest>();
   /** Typing indicator timers, keyed by deviceId */
@@ -159,18 +157,8 @@ export class TelegramService implements OnModuleInit {
 
     this.bot = new Bot(token);
 
-    // Fetch bot identity for group-chat mention detection
-    try {
-      const botInfo = await this.bot.api.getMe();
-      this.botId = botInfo.id;
-      this.botUsername = botInfo.username ?? null;
-      this.logger.log(`Telegram bot initialized: @${this.botUsername} (id=${this.botId})`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Failed to get bot info: ${msg}`);
-    }
-
     this.setupHandlers();
+    this.logger.log("Telegram bot initialized");
   }
 
   /** Get grammY webhook callback for Express/NestJS */
@@ -220,9 +208,9 @@ export class TelegramService implements OnModuleInit {
       }
     });
 
-    // Text messages
+    // Text messages (private chats only)
     this.bot.on("message:text", async (ctx) => {
-      if (!this.shouldProcessMessage(ctx)) return;
+      if (!this.isPrivateChat(ctx)) return;
       await this.handleTextMessage(ctx);
     });
 
@@ -280,49 +268,15 @@ export class TelegramService implements OnModuleInit {
 
     for (const { filter, getMedia } of mediaTypes) {
       this.bot.on(filter, async (ctx) => {
-        if (!this.shouldProcessMessage(ctx)) return;
+        if (!this.isPrivateChat(ctx)) return;
         await this.handleMediaMessage(ctx, getMedia(ctx.message));
       });
     }
   }
 
-  // ── Group chat filtering ──
-
-  /**
-   * Decide whether this message should be processed.
-   * Private chats: always. Groups: only @mentions or replies to bot.
-   */
-  private shouldProcessMessage(ctx: Context): boolean {
-    const msg = ctx.message;
-    if (!msg) return false;
-
-    const isGroup = msg.chat.type === "group" || msg.chat.type === "supergroup";
-    if (!isGroup) return true;
-
-    // Check text entities for @mention
-    if (this.botUsername) {
-      const text = (msg as any).text || "";
-      const isMentionedInText = msg.entities?.some(
-        (e) =>
-          e.type === "mention" &&
-          text.substring(e.offset, e.offset + e.length).toLowerCase() === `@${this.botUsername!.toLowerCase()}`,
-      );
-      if (isMentionedInText) return true;
-
-      // Check caption entities for @mention (media messages)
-      const caption = (msg as any).caption || "";
-      const captionEntities = (msg as any).caption_entities as typeof msg.entities | undefined;
-      const isMentionedInCaption = captionEntities?.some(
-        (e: any) =>
-          e.type === "mention" &&
-          caption.substring(e.offset, e.offset + e.length).toLowerCase() === `@${this.botUsername!.toLowerCase()}`,
-      );
-      if (isMentionedInCaption) return true;
-    }
-
-    // Check if reply to bot
-    const isReplyToBot = msg.reply_to_message?.from?.id === this.botId;
-    return isReplyToBot;
+  /** Only process private (direct) messages; silently ignore group chats. */
+  private isPrivateChat(ctx: Context): boolean {
+    return ctx.chat?.type === "private";
   }
 
   // ── Inbound: text messages ──
@@ -332,7 +286,7 @@ export class TelegramService implements OnModuleInit {
     if (!msg || !msg.text) return;
 
     const telegramUserId = String(msg.from?.id);
-    let text = msg.text.trim();
+    const text = msg.text.trim();
 
     this.logger.debug(`Received message: chatId=${msg.chat.id} from=${telegramUserId} text="${text.slice(0, 50)}"`);
 
@@ -342,10 +296,6 @@ export class TelegramService implements OnModuleInit {
       return;
     }
 
-    // Strip @mention from text for cleaner agent input
-    if (this.botUsername) {
-      text = text.replace(new RegExp(`@${this.botUsername}\\s*`, "gi"), "").trim();
-    }
     if (!text) return;
 
     // Check if user is bound
