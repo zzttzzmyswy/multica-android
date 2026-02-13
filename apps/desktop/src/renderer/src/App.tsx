@@ -5,7 +5,6 @@ import { TooltipProvider } from '@multica/ui/components/ui/tooltip'
 import { Toaster } from './components/toaster'
 import Layout from './pages/layout'
 import HomePage from './pages/home'
-import ChatPage from './pages/chat'
 import ProfilePage from './pages/agent/profile'
 import SkillsPage from './pages/agent/skills'
 import ToolsPage from './pages/agent/tools'
@@ -73,7 +72,7 @@ const router = createHashRouter([
           </OnboardingGuard>
         ),
       },
-      { path: 'chat', element: <ChatPage /> },
+      { path: 'chat', element: null },
       { path: 'agent/profile', element: <ProfilePage /> },
       { path: 'agent/skills', element: <SkillsPage /> },
       { path: 'agent/tools', element: <ToolsPage /> },

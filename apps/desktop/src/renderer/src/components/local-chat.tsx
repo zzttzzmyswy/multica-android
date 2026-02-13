@@ -73,12 +73,13 @@ export function LocalChat({ initialPrompt }: LocalChatProps) {
   const currentMeta = current ? providers.find((p) => p.id === current.provider) : null
 
   // Auto-send initial prompt after a short delay
-  const hasSentInitialPrompt = useRef(false)
+  const lastPromptRef = useRef<string | undefined>(undefined)
   useEffect(() => {
-    if (!agentId || !initialPrompt || hasSentInitialPrompt.current) return
+    if (!agentId || !initialPrompt) return
+    if (initialPrompt === lastPromptRef.current) return
 
     const timer = setTimeout(() => {
-      hasSentInitialPrompt.current = true
+      lastPromptRef.current = initialPrompt
       sendMessage(initialPrompt)
       // Remove prompt from URL to prevent re-sending on back navigation
       navigate('/chat', { replace: true })
