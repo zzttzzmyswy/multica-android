@@ -12,6 +12,7 @@ async function bootstrap(): Promise<void> {
     console.log("[Gateway] NestFactory created");
 
     app.useLogger(app.get(Logger));
+    app.enableCors();
 
     const port = process.env["PORT"] ?? 3000;
     console.log(`[Gateway] Listening on port ${port}...`);
