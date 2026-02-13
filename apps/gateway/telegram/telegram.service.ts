@@ -144,6 +144,8 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
   private typingTimers = new Map<string, ReturnType<typeof setInterval>>();
   /** Tracks the originating message for reply_to & reaction cleanup, keyed by deviceId */
   private messageContexts = new Map<string, MessageContext>();
+  /** Editable status message IDs for tool narration, keyed by deviceId */
+  private statusMessages = new Map<string, { chatId: number; messageId: number }>();
 
   private readonly logger = new Logger(TelegramService.name);
 
@@ -625,13 +627,65 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       await this.bot.api.sendMessage(chatId, html, extra);
     } catch (err) {
       if (isParseError(err)) {
-        this.logger.warn("HTML parse failed, retrying as plain text");
+        this.logger.warn(`HTML parse failed, retrying as plain text`);
         const plainExtra: Record<string, unknown> = {};
         if (replyToMessageId) plainExtra["reply_to_message_id"] = replyToMessageId;
         await this.bot.api.sendMessage(chatId, text, plainExtra);
       } else {
         throw err;
       }
+    }
+  }
+
+  /**
+   * Edit an existing message with HTML formatting, fallback to plain text.
+   */
+  private async editFormatted(
+    chatId: number,
+    messageId: number,
+    text: string,
+  ): Promise<void> {
+    if (!this.bot) return;
+
+    const html = markdownToTelegramHtml(text);
+    try {
+      await this.bot.api.editMessageText(chatId, messageId, html, { parse_mode: "HTML" });
+    } catch (err) {
+      if (isParseError(err)) {
+        this.logger.warn("HTML parse failed on edit, retrying as plain text");
+        await this.bot.api.editMessageText(chatId, messageId, text);
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  /**
+   * Send or edit a status message for tool narration.
+   * First call sends a new reply; subsequent calls edit the same message.
+   */
+  private async sendOrEditStatus(deviceId: string, text: string): Promise<void> {
+    if (!this.bot) return;
+
+    const user = await this.userStore.findByDeviceId(deviceId);
+    if (!user) return;
+
+    const context = this.messageContexts.get(deviceId);
+    const chatId = context?.telegramChatId ?? Number(user.telegramUserId);
+    const existing = this.statusMessages.get(deviceId);
+
+    try {
+      if (existing) {
+        await this.editFormatted(existing.chatId, existing.messageId, text);
+      } else {
+        const html = markdownToTelegramHtml(text);
+        const extra: Record<string, unknown> = { parse_mode: "HTML" };
+        if (context) extra["reply_to_message_id"] = context.telegramMessageId;
+        const msg = await this.bot.api.sendMessage(chatId, html, extra);
+        this.statusMessages.set(deviceId, { chatId, messageId: msg.message_id });
+      }
+    } catch (err) {
+      this.logger.warn(`Failed to send/edit status: ${err}`);
     }
   }
 
@@ -780,6 +834,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       await this.removeReaction(context.telegramChatId, context.telegramMessageId);
       this.messageContexts.delete(deviceId);
     }
+    this.statusMessages.delete(deviceId);
   }
 
   // ── Connection & routing ──
@@ -1003,8 +1058,30 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
 
           // Stop typing + send formatted text on message_end
           if (event.type === "message_end") {
-            this.stopTyping(deviceId);
             const agentMsg = (event as { message?: { content?: Array<{ type: string; text?: string }> } }).message;
+
+            // Tool narration: if the message contains tool_use blocks,
+            // it's intermediate text (e.g. "Let me search...") before a tool call.
+            // Send/edit an editable status message and keep typing.
+            const hasToolUse = agentMsg?.content?.some((c) => c.type === "tool_use" || c.type === "toolCall") ?? false;
+            if (hasToolUse) {
+              const narration = agentMsg?.content
+                ?.filter((c) => c.type === "text" && c.text)
+                .map((c) => c.text!)
+                .join("") ?? "";
+              if (narration) {
+                void this.sendOrEditStatus(deviceId, narration).then(() => {
+                  // Re-send typing indicator — Telegram clears it when a message is sent/edited
+                  const ctx = this.messageContexts.get(deviceId);
+                  if (ctx) {
+                    void this.bot?.api.sendChatAction(ctx.telegramChatId, "typing").catch(() => {});
+                  }
+                });
+              }
+              return;
+            }
+
+            this.stopTyping(deviceId);
             if (agentMsg?.content) {
               const textContent = agentMsg.content
                 .filter((c) => c.type === "text" && c.text)

@@ -23,6 +23,7 @@ import { listChannels } from "./registry.js";
 import { loadChannelsConfig } from "./config.js";
 import { MessageAggregator, DEFAULT_CHUNKER_CONFIG } from "../hub/message-aggregator.js";
 import { isHeartbeatAckEvent } from "../hub/heartbeat-filter.js";
+import { extractText, hasToolUse } from "../agent/extract-text.js";
 import type { AsyncAgent } from "../agent/async-agent.js";
 import type { ChannelInfo } from "../agent/system-prompt/types.js";
 import { transcribeAudio } from "../media/transcribe.js";
@@ -71,6 +72,8 @@ export class ChannelManager {
   private aggregator: MessageAggregator | null = null;
   /** Typing indicator interval (repeats every 5s to keep Telegram typing visible) */
   private typingTimer: ReturnType<typeof setInterval> | null = null;
+  /** Platform message ID of the editable status message (for tool narration updates) */
+  private statusMessageId: string | null = null;
   /**
    * Inbound message debouncer — batches rapid-fire messages from the same
    * conversation into a single agent.write() call.
@@ -226,6 +229,7 @@ export class ChannelManager {
         }
         this.activeRoute = null;
         this.activeAcks = [];
+        this.statusMessageId = null;
         if (this.pendingRoutes.length === 0) {
           console.log("[Channels] agent_end: no more pending, stopping typing");
           this.stopTyping();
@@ -247,6 +251,7 @@ export class ChannelManager {
         }
         this.activeRoute = null;
         this.activeAcks = [];
+        this.statusMessageId = null;
         const errorMsg = (event as { message?: string }).message ?? "Unknown error";
         console.error(`[Channels] Agent error: ${errorMsg}`);
         const route = this.lastRoute;
@@ -277,6 +282,25 @@ export class ChannelManager {
       // Ensure aggregator exists for this response
       if (event.type === "message_start") {
         this.createAggregator();
+      }
+
+      // Tool narration: if the assistant message contains tool_use blocks,
+      // it's intermediate narration (e.g. "Let me search...") before a tool call.
+      // Send/edit an editable status message instead of the normal reply flow.
+      if (event.type === "message_end" && role === "assistant") {
+        const message = (event as { message?: Parameters<typeof hasToolUse>[0] }).message;
+        if (hasToolUse(message)) {
+          this.aggregator?.reset();
+          this.aggregator = null;
+
+          const route = this.activeRoute ?? this.lastRoute;
+          const narration = extractText(message);
+          if (route && narration) {
+            const { plugin, deliveryCtx } = route;
+            void this.sendOrEditStatus(plugin, deliveryCtx, narration);
+          }
+          return;
+        }
       }
 
       if (this.aggregator) {
@@ -319,6 +343,31 @@ export class ChannelManager {
       },
       () => {},
     );
+  }
+
+  /**
+   * Send or edit a status message for tool narration.
+   * First call sends a new editable reply; subsequent calls edit the same message.
+   * Falls back to no-op if the plugin doesn't support editable messages.
+   */
+  private async sendOrEditStatus(
+    plugin: ChannelPlugin,
+    deliveryCtx: DeliveryContext,
+    text: string,
+  ): Promise<void> {
+    try {
+      if (this.statusMessageId && plugin.outbound.editText) {
+        console.log(`[Channels] Editing status message ${this.statusMessageId}`);
+        await plugin.outbound.editText(deliveryCtx, this.statusMessageId, text);
+      } else if (plugin.outbound.replyTextEditable) {
+        const msgId = await plugin.outbound.replyTextEditable(deliveryCtx, text);
+        this.statusMessageId = msgId;
+        console.log(`[Channels] Sent editable status message ${msgId}`);
+      }
+      // If plugin doesn't support editable messages, silently skip (typing indicator still active)
+    } catch (err) {
+      console.error(`[Channels] Failed to send/edit status: ${err}`);
+    }
   }
 
   /**
@@ -573,6 +622,7 @@ export class ChannelManager {
       this.ackBuffer = [];
       this.pendingRoutes = [];
       this.aggregator = null;
+      this.statusMessageId = null;
     }
 
     handle.abortController.abort();
@@ -610,6 +660,7 @@ export class ChannelManager {
     this.ackBuffer = [];
     this.pendingRoutes = [];
     this.aggregator = null;
+    this.statusMessageId = null;
   }
 
   /** Clear the last route (e.g. when desktop user sends a message) */
