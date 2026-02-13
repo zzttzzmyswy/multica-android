@@ -5,11 +5,110 @@
  *   <b>, <i>, <u>, <s>, <code>, <pre>, <a href="...">, <blockquote>
  *
  * Strategy:
- * 1. Extract code blocks and inline code (protect from further processing)
- * 2. Escape HTML entities in remaining text
- * 3. Convert Markdown syntax to HTML tags
- * 4. Restore code blocks
+ * 1. Extract code blocks (protect from further processing)
+ * 2. Convert Markdown tables to vertical list format
+ * 3. Extract inline code
+ * 4. Escape HTML entities in remaining text
+ * 5. Convert Markdown syntax to HTML tags
+ * 6. Restore code blocks
  */
+
+/**
+ * Parse a Markdown table row into trimmed cell values.
+ * e.g. "| A | B | C |" → ["A", "B", "C"]
+ */
+function parseTableRow(line: string): string[] {
+  const cells = line.split("|").map((c) => c.trim());
+  // Remove empty first/last elements from leading/trailing |
+  if (cells.length >= 2 && cells[0] === "") cells.shift();
+  if (cells.length >= 1 && cells[cells.length - 1] === "") cells.pop();
+  return cells;
+}
+
+/** Check if a line is a Markdown table separator (|---|---|) */
+function isTableSeparator(line: string): boolean {
+  return /^\s*\|[\s\-:]+(\|[\s\-:]+)*\|\s*$/.test(line);
+}
+
+/**
+ * Convert a block of Markdown table lines into a vertical list format.
+ *
+ * Input:
+ *   | Name   | Code | Type       |
+ *   |--------|------|------------|
+ *   | Slack  | WORK | Messaging  |
+ *   | Notion | 私有 | Docs       |
+ *
+ * Output:
+ *   • **Slack**
+ *     Code: WORK
+ *     Type: Messaging
+ *
+ *   • **Notion**
+ *     Code: 私有
+ *     Type: Docs
+ */
+function convertTableBlock(tableLines: string[]): string {
+  if (tableLines.length < 2) return tableLines.join("\n");
+
+  const headers = parseTableRow(tableLines[0]!);
+  if (headers.length === 0) return tableLines.join("\n");
+
+  // Skip separator row if present
+  let dataStart = 1;
+  if (tableLines[1] && isTableSeparator(tableLines[1])) {
+    dataStart = 2;
+  }
+
+  if (dataStart >= tableLines.length) return tableLines.join("\n");
+
+  const rows: string[] = [];
+  for (let i = dataStart; i < tableLines.length; i++) {
+    const cells = parseTableRow(tableLines[i]!);
+    if (cells.length === 0) continue;
+
+    const parts: string[] = [];
+    // First column as bold title
+    parts.push(`**${cells[0]}**`);
+    // Remaining columns as "Header: Value"
+    for (let j = 1; j < Math.min(headers.length, cells.length); j++) {
+      const val = cells[j]?.trim();
+      if (val) {
+        parts.push(`  ${headers[j]}: ${val}`);
+      }
+    }
+    rows.push(parts.join("\n"));
+  }
+
+  return rows.join("\n\n");
+}
+
+/**
+ * Convert all Markdown tables in text to vertical list format.
+ * Tables are detected as consecutive lines starting with |.
+ */
+function convertMarkdownTables(text: string): string {
+  const lines = text.split("\n");
+  const result: string[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    if (lines[i]!.trimStart().startsWith("|")) {
+      // Collect consecutive table lines
+      const tableLines: string[] = [];
+      while (i < lines.length && lines[i]!.trimStart().startsWith("|")) {
+        tableLines.push(lines[i]!);
+        i++;
+      }
+      result.push(convertTableBlock(tableLines));
+    } else {
+      result.push(lines[i]!);
+      i++;
+    }
+  }
+
+  return result.join("\n");
+}
 
 /** Escape HTML special characters */
 function escapeHtml(text: string): string {
@@ -42,36 +141,39 @@ export function markdownToTelegramHtml(markdown: string): string {
     return placeholder(`<pre><code${langAttr}>${escaped}</code></pre>`);
   });
 
-  // 2. Inline code: `...`
+  // 2. Convert Markdown tables to vertical list format (before further processing)
+  text = convertMarkdownTables(text);
+
+  // 3. Inline code: `...`
   text = text.replace(/`([^`\n]+)`/g, (_match, code: string) => {
     return placeholder(`<code>${escapeHtml(code)}</code>`);
   });
 
-  // 3. Escape HTML in remaining text
+  // 4. Escape HTML in remaining text
   text = escapeHtml(text);
 
-  // 4. Links: [text](url) — escape quotes in URL to prevent attribute breakout
+  // 5. Links: [text](url) — escape quotes in URL to prevent attribute breakout
   text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label: string, url: string) =>
     `<a href="${url.replace(/"/g, "&quot;")}">${label}</a>`,
   );
 
-  // 5. Bold: **text** or __text__
+  // 6. Bold: **text** or __text__
   text = text.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
   text = text.replace(/__(.+?)__/g, "<b>$1</b>");
 
-  // 6. Italic: *text* or _text_ (but not inside words with underscores)
+  // 7. Italic: *text* or _text_ (but not inside words with underscores)
   text = text.replace(/(?<!\w)\*(?!\s)(.+?)(?<!\s)\*(?!\w)/g, "<i>$1</i>");
   text = text.replace(/(?<!\w)_(?!\s)(.+?)(?<!\s)_(?!\w)/g, "<i>$1</i>");
 
-  // 7. Strikethrough: ~~text~~
+  // 8. Strikethrough: ~~text~~
   text = text.replace(/~~(.+?)~~/g, "<s>$1</s>");
 
-  // 8. Blockquotes: > text (at line start)
+  // 9. Blockquotes: > text (at line start)
   text = text.replace(/^&gt; (.+)$/gm, "<blockquote>$1</blockquote>");
   // Merge adjacent blockquotes
   text = text.replace(/<\/blockquote>\n<blockquote>/g, "\n");
 
-  // 9. Headings: strip # markers, make bold
+  // 10. Headings: strip # markers, make bold
   text = text.replace(/^#{1,6}\s+(.+)$/gm, "<b>$1</b>");
 
   // Restore placeholders
