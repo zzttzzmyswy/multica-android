@@ -5,9 +5,10 @@ import { ModeToggle } from "../../components/mode-toggle";
 import WelcomeStep from "./components/welcome-step";
 import PermissionsStep from "./components/permissions-step";
 import SetupStep from "./components/setup-step";
+import ConnectStep from "./components/connect-step";
 import TryItStep from "./components/try-it-step";
 
-const steps = ["Privacy", "Provider", "Start"];
+const steps = ["Privacy", "Provider", "Channels", "Start"];
 
 export default function OnboardingPage() {
   const navigate = useNavigate();
@@ -77,6 +78,9 @@ export default function OnboardingPage() {
         {currentStep === 1 && <PermissionsStep onNext={nextStep} />}
         {currentStep === 2 && <SetupStep onNext={nextStep} onBack={prevStep} />}
         {currentStep === 3 && (
+          <ConnectStep onNext={nextStep} onBack={prevStep} />
+        )}
+        {currentStep === 4 && (
           <TryItStep onComplete={handleComplete} onBack={prevStep} />
         )}
       </main>

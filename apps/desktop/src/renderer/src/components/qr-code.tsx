@@ -35,7 +35,7 @@ function generateToken(): string {
  * - Auto-refreshes when expired
  * - Registers token with Hub
  */
-function useQRToken(agentId: string, expirySeconds: number) {
+export function useQRToken(agentId: string, expirySeconds: number) {
   const [token, setToken] = useState(generateToken)
   const [expiresAt, setExpiresAt] = useState(() => Date.now() + expirySeconds * 1000)
 
@@ -59,7 +59,7 @@ function useQRToken(agentId: string, expirySeconds: number) {
  * Hook for countdown timer
  * Returns remaining seconds, auto-updates every second
  */
-function useCountdown(expiresAt: number, onExpire: () => void) {
+export function useCountdown(expiresAt: number, onExpire: () => void) {
   const [remaining, setRemaining] = useState(() =>
     Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000))
   )
@@ -121,7 +121,7 @@ function CornerAccent({ position }: { position: 'tl' | 'tr' | 'bl' | 'br' }) {
 }
 
 /** QR code frame with corner accents */
-function QRCodeFrame({ children }: { children: React.ReactNode }) {
+export function QRCodeFrame({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative inline-block">
       <CornerAccent position="tl" />
@@ -141,7 +141,7 @@ function formatTime(seconds: number): string {
 }
 
 /** Expiry timer display */
-function ExpiryTimer({ remaining }: { remaining: number }) {
+export function ExpiryTimer({ remaining }: { remaining: number }) {
   // Derive display state from remaining seconds (no extra state needed)
   const isWarning = remaining > 0 && remaining < 10
 

@@ -16,17 +16,40 @@ import {
 import { QrCode, Radio, Smartphone, WifiOff, Loader2 } from 'lucide-react'
 import { useHubStore, selectPrimaryAgent } from '../stores/hub'
 import { ConnectionQRCode } from '../components/qr-code'
+import { TelegramConnectQR } from '../components/telegram-qr'
 import { DeviceList } from '../components/device-list'
 
-
 function ChannelsTab() {
+  const { hubInfo, agents } = useHubStore()
+  const primaryAgent = selectPrimaryAgent(agents)
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <p className="text-sm text-muted-foreground">
         Connect messaging platforms to chat with your agent.
       </p>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base">Telegram</CardTitle>
+              <CardDescription>Scan with your phone camera to connect on Telegram.</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="flex justify-center">
+          <TelegramConnectQR
+            gateway={hubInfo?.url ?? 'http://localhost:3000'}
+            hubId={hubInfo?.hubId ?? 'unknown'}
+            agentId={primaryAgent?.id ?? 'unknown'}
+            expirySeconds={30}
+            size={200}
+          />
+        </CardContent>
+      </Card>
+
       <p className="text-sm text-muted-foreground">
-        Message <span className="font-medium text-foreground">@multica_bot</span> on Telegram to get started.
         Discord and Slack coming soon.
       </p>
     </div>
