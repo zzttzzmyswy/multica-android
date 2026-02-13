@@ -18,6 +18,7 @@
     "dev:desktop:onboarding": "pnpm --filter @multica/desktop dev:onboarding",
     "dev:gateway": "pnpm --filter @multica/gateway dev",
     "dev:web": "pnpm --filter @multica/web dev",
+    "dev:local": "bash scripts/dev-local.sh",
     "dev:all": "concurrently \"pnpm dev:gateway\" \"pnpm dev:web\"",
     "build": "turbo build",
     "build:desktop": "pnpm --filter @multica/desktop build",
