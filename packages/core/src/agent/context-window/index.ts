@@ -41,9 +41,23 @@ export {
 export type { SummaryCompactionResult, SummaryCompactionParams } from "./summarization.js";
 export {
   splitMessagesForSummary,
+  detectSplitTurn,
+  computeAdaptiveChunkRatio,
   compactMessagesWithSummary,
   compactMessagesWithChunkedSummary,
 } from "./summarization.js";
+
+// Summary fallback
+export { summarizeWithFallback } from "./summary-fallback.js";
+
+// Compaction metadata
+export {
+  collectToolFailures,
+  collectFileOperations,
+  formatToolFailuresSection,
+  formatFileOperationsSection,
+} from "./compaction-metadata.js";
+export type { ToolFailure, FileOperations } from "./compaction-metadata.js";
 
 // Tool result pruning
 export type {

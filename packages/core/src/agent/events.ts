@@ -24,6 +24,8 @@ export type CompactionEndEvent = {
   tokensRemoved?: number | undefined;
   tokensKept?: number | undefined;
   reason: "count" | "tokens" | "summary" | "pruning";
+  /** Generated summary text (only present when reason is "summary") */
+  summary?: string | undefined;
 };
 
 /** Emitted when an agent encounters an error during execution */

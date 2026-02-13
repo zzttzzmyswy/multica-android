@@ -19,6 +19,10 @@ export type CompactionResult = {
   tokensKept?: number | undefined;
   /** Summary generated in summary mode */
   summary?: string | undefined;
+  /** File operations extracted from compacted messages */
+  fileOperations?: { readFiles: string[]; modifiedFiles: string[] } | undefined;
+  /** Tool failures extracted from compacted messages */
+  toolFailures?: Array<{ toolName: string; summary: string }> | undefined;
   /** Reason for compaction: count, tokens, summary, or pruning (tool result trimming only) */
   reason: "count" | "tokens" | "summary" | "pruning";
 };
@@ -249,6 +253,8 @@ export async function compactMessagesAsync(
     tokensRemoved: result.tokensRemoved,
     tokensKept: result.tokensKept,
     summary: result.summary,
+    fileOperations: result.fileOperations,
+    toolFailures: result.toolFailures,
     reason: "summary",
   };
 }

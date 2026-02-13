@@ -271,12 +271,12 @@ export class Agent {
       );
     }
 
-    // 确定 compaction 模式
-    const compactionMode = options.compactionMode ?? "tokens"; // 默认使用 token 模式
+    // Determine compaction mode (default: summary with LLM-based summarization)
+    const compactionMode = options.compactionMode ?? "summary";
 
-    // 获取 API Key（用于 summary 模式）
+    // Resolve API key for summary mode (reuse the agent's own key)
     const summaryApiKey = compactionMode === "summary"
-      ? resolveApiKey(this.resolvedProvider, options.apiKey)
+      ? (resolveApiKey(this.resolvedProvider, options.apiKey) ?? this.currentApiKey)
       : undefined;
 
     // Store reserveTokens for pre-flight compaction
@@ -292,7 +292,7 @@ export class Agent {
       reserveTokens: options.reserveTokens,
       targetRatio: options.compactionTargetRatio,
       minKeepMessages: options.minKeepMessages,
-      // Summary 模式参数
+      // Summary mode parameters
       model: compactionMode === "summary" ? model : undefined,
       apiKey: summaryApiKey,
       customInstructions: options.summaryInstructions,
@@ -764,6 +764,7 @@ export class Agent {
       tokensRemoved: result.tokensRemoved,
       tokensKept: result.tokensKept,
       reason: result.reason ?? "tokens",
+      summary: result.summary,
     };
     this.emitMulticaEvent(endEvent);
   }
