@@ -59,7 +59,7 @@ async function runDevvSearch(params: {
     snippet: string;
   }>;
 }> {
-  const authHeaders = getAuthHeaders();
+  const authHeaders = getAuthHeaders("to use web search");
 
   const res = await fetch(`${API_BASE_URL}${WEB_SEARCH_PATH}`, {
     method: "POST",

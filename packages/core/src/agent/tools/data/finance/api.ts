@@ -22,7 +22,7 @@ export async function financeFetch<T = Record<string, unknown>>(
   params: Record<string, string | string[] | number | boolean | undefined>,
   signal?: AbortSignal,
 ): Promise<{ data: T; url: string }> {
-  const authHeaders = getAuthHeaders();
+  const authHeaders = getAuthHeaders("to use financial data tools");
 
   const url = new URL(PATH_PREFIX + path, API_BASE_URL);
   for (const [key, value] of Object.entries(params)) {
