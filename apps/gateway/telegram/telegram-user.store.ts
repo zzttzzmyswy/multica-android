@@ -3,7 +3,7 @@
  */
 
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { v7 as uuidv7 } from "uuid";
+import { generateEncryptedId } from "@multica/utils";
 import type { RowDataPacket } from "mysql2/promise";
 import { DatabaseService } from "../database/database.service.js";
 import type { TelegramUser, TelegramUserCreate } from "./types.js";
@@ -88,7 +88,7 @@ export class TelegramUserStore {
     }
 
     // Create new user with provided or generated device ID
-    const deviceId = data.deviceId ?? `tg-${uuidv7()}`;
+    const deviceId = data.deviceId ?? `tg-${generateEncryptedId()}`;
 
     await this.db.execute(
       `INSERT INTO telegram_users (

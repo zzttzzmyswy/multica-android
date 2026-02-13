@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '@multica/ui/components/ui/button'
 import { MulticaIcon } from '@multica/ui/components/multica-icon'
@@ -43,6 +44,7 @@ import {
 } from '@multica/ui/components/ui/sidebar'
 import { cn } from '@multica/ui/lib/utils'
 import { ModeToggle } from '../components/mode-toggle'
+import { LocalChat } from '../components/local-chat'
 import { DeviceConfirmDialog } from '../components/device-confirm-dialog'
 import { UpdateNotification } from '../components/update-notification'
 import { useAuthStore } from '../stores/auth'
@@ -151,7 +153,19 @@ export default function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
   const isAgentActive = location.pathname.startsWith('/agent')
+  const isOnChat = location.pathname === '/chat'
   const { user, clearAuth } = useAuthStore()
+
+  // Lazy mount: only mount Chat on first visit, then keep it mounted forever
+  const [chatMounted, setChatMounted] = useState(false)
+  useEffect(() => {
+    if (isOnChat && !chatMounted) setChatMounted(true)
+  }, [isOnChat, chatMounted])
+
+  // Extract initialPrompt from URL search params when navigating to /chat?prompt=...
+  const initialPrompt = isOnChat
+    ? new URLSearchParams(location.search).get('prompt') ?? undefined
+    : undefined
 
   const handleLogout = async () => {
     await clearAuth()
@@ -285,7 +299,14 @@ export default function Layout() {
         <SidebarInset className="overflow-hidden">
           <MainHeader />
           <main className="flex-1 overflow-hidden min-h-1">
-            <Outlet />
+            <div className={cn('h-full', isOnChat && 'hidden')}>
+              <Outlet />
+            </div>
+            {chatMounted && (
+              <div className={cn('h-full flex flex-col overflow-hidden', !isOnChat && 'hidden')}>
+                <LocalChat initialPrompt={initialPrompt} />
+              </div>
+            )}
           </main>
         </SidebarInset>
 

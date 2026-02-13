@@ -10,7 +10,7 @@ import { MulticaIcon } from '@multica/ui/components/multica-icon'
 import { LoginAuthType, UserInfo } from '@/lib/interface'
 import { saveSession, isAuthenticated } from '@/lib/auth'
 import { userLogin } from '@/service/user'
-import { getOrCreateDeviceId, generateDeviceIdHeader } from '@/lib/device'
+import { getOrCreateDeviceId } from '@/lib/device'
 
 type LoginStep = 'email' | 'code'
 
@@ -115,9 +115,8 @@ export function LoginForm() {
         const port = nextUrl.searchParams.get('port')
         const platform = nextUrl.searchParams.get('platform') || 'web'
 
-        // Get Device ID and encrypt for Desktop
-        const rawDeviceId = getOrCreateDeviceId()
-        const deviceId = await generateDeviceIdHeader(rawDeviceId)
+        // Get Device ID (already encrypted 40-char format)
+        const deviceId = await getOrCreateDeviceId()
 
         const params = new URLSearchParams({
           sid,

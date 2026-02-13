@@ -1,15 +1,14 @@
 import { API_HOST } from '@/lib/constant';
-import { getOrCreateDeviceId, generateDeviceIdHeader } from '@/lib/device';
+import { getOrCreateDeviceId } from '@/lib/device';
 import { getSid } from '@/lib/auth';
 
 // Fetch request wrapper
 export async function request<T = unknown>(url: string, options: RequestInit = {}): Promise<T> {
-  // Get or generate Device ID, encrypt for header
-  let deviceIdHeader = '';
+  // Get or generate Device ID (already encrypted 40-char format)
+  let deviceId = '';
   let sid: string | null = null;
   if (typeof window !== 'undefined') {
-    const deviceId = getOrCreateDeviceId();
-    deviceIdHeader = await generateDeviceIdHeader(deviceId);
+    deviceId = await getOrCreateDeviceId();
     sid = getSid();
   }
 
@@ -18,7 +17,7 @@ export async function request<T = unknown>(url: string, options: RequestInit = {
     headers: {
       'Content-Type': 'application/json',
       'os-type': '3',
-      ...(deviceIdHeader && { 'Device-Id': deviceIdHeader }),
+      ...(deviceId && { 'Device-Id': deviceId }),
       ...(sid && { 'Authorization': `Bearer ${sid}` }),
       ...options.headers,
     },
