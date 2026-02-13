@@ -67,6 +67,9 @@ export type AgentOptions = {
   /** Enable debug logging */
   debug?: boolean | undefined;
 
+  /** Enable structured run logging to session directory (run-log.jsonl) */
+  enableRunLog?: boolean | undefined;
+
   // === Skills Configuration ===
   /** Enable skills system (default: true) */
   enableSkills?: boolean | undefined;
