@@ -1,10 +1,10 @@
 /// <reference types="vite-plugin-electron/electron-env" />
 
 // Environment variables loaded from .env files
-// See: .env.example, .env.development, .env.staging, .env.production
+// See: .env.example, .env.staging, .env.production
 interface ImportMetaEnv {
   readonly MAIN_VITE_GATEWAY_URL: string
-  readonly MAIN_VITE_MULTICA_URL: string
+  readonly MAIN_VITE_WEB_URL: string
 }
 
 interface ImportMeta {

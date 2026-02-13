@@ -15,7 +15,7 @@ super-multica/
 │   ├── desktop/       ← Electron + Vite + React (`@multica/desktop`) — primary target
 │   ├── gateway/       ← NestJS WebSocket gateway (`@multica/gateway`)
 │   ├── server/        ← NestJS REST API server (`@multica/server`)
-│   ├── web/           ← Next.js 16 web app (`@multica/web`, port 3001)
+│   ├── web/           ← Next.js 16 web app (`@multica/web`, port 3000)
 │   └── mobile/        ← React Native mobile app (`@multica/mobile`)
 │
 ├── packages/

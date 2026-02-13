@@ -10,6 +10,8 @@
     "dev": "electron-vite dev",
     "dev:onboarding": "electron-vite dev -- --force-onboarding",
     "build": "electron-vite build && electron-builder --publish never",
+    "build:staging": "electron-vite build --mode staging && electron-builder --publish never",
+    "build:production": "electron-vite build --mode production && electron-builder --publish never",
     "preview": "electron-vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
@@ -19,6 +21,7 @@
     "@multica/sdk": "workspace:*",
     "@multica/store": "workspace:*",
     "@multica/ui": "workspace:*",
+    "@multica/utils": "workspace:*",
 "electron-updater": "^6.7.3",
     "lucide-react": "^0.563.0",
     "qrcode.react": "^4.2.0",

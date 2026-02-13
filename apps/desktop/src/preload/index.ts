@@ -138,6 +138,28 @@ const electronAPI = {
     setOnboardingCompleted: (completed: boolean): Promise<void> => ipcRenderer.invoke('appState:setOnboardingCompleted', completed),
   },
 
+  // Auth management
+  auth: {
+    /** Load auth data from local file */
+    load: (): Promise<{ sid: string; user: { uid: string; name: string; email?: string; icon?: string; vip?: number } } | null> =>
+      ipcRenderer.invoke('auth:load'),
+    /** Save auth data to local file */
+    save: (sid: string, user: { uid: string; name: string; email?: string; icon?: string; vip?: number }): Promise<boolean> =>
+      ipcRenderer.invoke('auth:save', sid, user),
+    /** Clear auth data (logout) */
+    clear: (): Promise<boolean> => ipcRenderer.invoke('auth:clear'),
+    /** Start login flow (opens browser) */
+    startLogin: (): Promise<void> => ipcRenderer.invoke('auth:startLogin'),
+    /** Listen for auth callback */
+    onAuthCallback: (callback: (data: { sid: string; user: { uid: string; name: string; email?: string; icon?: string; vip?: number } }) => void) => {
+      ipcRenderer.on('auth:callback', (_event, data) => callback(data))
+    },
+    /** Remove auth callback listener */
+    offAuthCallback: () => {
+      ipcRenderer.removeAllListeners('auth:callback')
+    },
+  },
+
   // Hub management
   hub: {
     init: () => ipcRenderer.invoke('hub:init'),

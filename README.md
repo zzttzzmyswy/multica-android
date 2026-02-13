@@ -45,13 +45,43 @@ pnpm install
 # Desktop app (recommended for local development)
 pnpm dev
 
-# Gateway + Web app (for remote/mobile clients)
+# Web app (for browser-based access)
+pnpm dev:web         # Start Web app on :3000
+
+# Gateway (for remote/mobile clients)
 pnpm dev:gateway     # Start Gateway on :3000
-pnpm dev:web         # Start Web app on :3001
 pnpm dev:all         # Start both Gateway and Web app
 ```
 
 The Desktop app runs a standalone Hub with embedded Agent Engine - no Gateway required for local use.
+
+### Environment Configuration
+
+**Desktop** (`apps/desktop/.env.*`):
+
+| Variable | Description |
+|----------|-------------|
+| `MAIN_VITE_GATEWAY_URL` | WebSocket Gateway URL for remote device pairing |
+| `MAIN_VITE_WEB_URL` | Web app URL for OAuth login redirect |
+
+**Web** (`apps/web/next.config.ts`):
+
+| Variable | Description |
+|----------|-------------|
+| `API_URL` | Backend API URL (default: `https://api-dev.copilothub.ai`) |
+
+**Build for different environments:**
+
+```bash
+# Desktop
+pnpm --filter @multica/desktop build              # Production (.env.production)
+pnpm --filter @multica/desktop build:staging      # Staging (.env.staging)
+
+# Web (Vercel)
+# Set API_URL in Vercel Dashboard → Settings → Environment Variables
+```
+
+See `apps/desktop/.env.example` and `apps/web/.env.example` for details.
 
 ### Monorepo Development
 
