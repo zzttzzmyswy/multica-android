@@ -14,11 +14,20 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  ChevronsUpDown,
   Bot,
+  LogOut,
 } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@multica/ui/components/ui/dropdown-menu'
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarHeader,
   SidebarInset,
@@ -36,6 +45,7 @@ import { cn } from '@multica/ui/lib/utils'
 import { ModeToggle } from '../components/mode-toggle'
 import { DeviceConfirmDialog } from '../components/device-confirm-dialog'
 import { UpdateNotification } from '../components/update-notification'
+import { useAuthStore } from '../stores/auth'
 
 const mainNavItems = [
   { path: '/', label: 'Home', icon: Home, exact: true },
@@ -139,7 +149,14 @@ function MainHeader() {
 
 export default function Layout() {
   const location = useLocation()
+  const navigate = useNavigate()
   const isAgentActive = location.pathname.startsWith('/agent')
+  const { user, clearAuth } = useAuthStore()
+
+  const handleLogout = async () => {
+    await clearAuth()
+    navigate('/login')
+  }
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
@@ -236,6 +253,33 @@ export default function Layout() {
               </SidebarMenu>
             </SidebarGroup>
           </SidebarContent>
+
+          <SidebarFooter>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={<SidebarMenuButton size="lg" />}
+                  >
+                    <div className="size-8 rounded-lg bg-muted flex items-center justify-center text-sm font-medium">
+                      {user?.name?.charAt(0)?.toUpperCase() || '?'}
+                    </div>
+                    <div className="grid flex-1 text-left text-sm leading-tight">
+                      <span className="truncate font-medium">{user?.name || 'User'}</span>
+                      <span className="truncate text-xs text-muted-foreground">{user?.email || ''}</span>
+                    </div>
+                    <ChevronsUpDown className="ml-auto size-4" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent side="top">
+                    <DropdownMenuItem onClick={handleLogout}>
+                      <LogOut className="size-4" />
+                      Log out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarFooter>
         </Sidebar>
 
         <SidebarInset className="overflow-hidden">

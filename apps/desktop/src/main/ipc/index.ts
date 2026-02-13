@@ -10,8 +10,10 @@ export { registerChannelsIpcHandlers } from './channels.js'
 export { registerCronIpcHandlers } from './cron.js'
 export { registerHeartbeatIpcHandlers } from './heartbeat.js'
 export { registerAppStateIpcHandlers } from './app-state.js'
+export { registerAuthHandlers, setMainWindow as setAuthMainWindow, handleAuthDeepLink } from './auth.js'
 
 import { registerAgentIpcHandlers, cleanupAgent } from './agent.js'
+import { registerAuthHandlers } from './auth.js'
 import { registerSkillsIpcHandlers } from './skills.js'
 import { registerHubIpcHandlers, cleanupHub, initializeHub } from './hub.js'
 import { registerProfileIpcHandlers } from './profile.js'
@@ -35,6 +37,7 @@ export function registerAllIpcHandlers(): void {
   registerCronIpcHandlers()
   registerHeartbeatIpcHandlers()
   registerAppStateIpcHandlers()
+  registerAuthHandlers()
 }
 
 /**

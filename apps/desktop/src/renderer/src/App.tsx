@@ -12,6 +12,7 @@ import ToolsPage from './pages/agent/tools'
 import ClientsPage from './pages/clients'
 import CronsPage from './pages/crons'
 import OnboardingPage from './pages/onboarding'
+import LoginPage from './pages/login'
 import { useOnboardingStore } from './stores/onboarding'
 import { useHubStore } from './stores/hub'
 import { useProviderStore } from './stores/provider'
@@ -19,6 +20,23 @@ import { useChannelsStore } from './stores/channels'
 import { useSkillsStore } from './stores/skills'
 import { useToolsStore } from './stores/tools'
 import { useCronJobsStore } from './stores/cron-jobs'
+import { useAuthStore, setupAuthCallbackListener } from './stores/auth'
+
+// Auth guard - redirects to login if not authenticated
+function AuthGuard({ children }: { children: React.ReactNode }) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const isLoading = useAuthStore((s) => s.isLoading)
+
+  if (isLoading) {
+    return <div className="flex h-screen items-center justify-center bg-background" />
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
+
+  return <>{children}</>
+}
 
 function OnboardingGuard({ children }: { children: React.ReactNode }) {
   const completed = useOnboardingStore((s) => s.completed)
@@ -28,12 +46,24 @@ function OnboardingGuard({ children }: { children: React.ReactNode }) {
 
 const router = createHashRouter([
   {
+    path: '/login',
+    element: <LoginPage />,
+  },
+  {
     path: '/onboarding',
-    element: <OnboardingPage />,
+    element: (
+      <AuthGuard>
+        <OnboardingPage />
+      </AuthGuard>
+    ),
   },
   {
     path: '/',
-    element: <Layout />,
+    element: (
+      <AuthGuard>
+        <Layout />
+      </AuthGuard>
+    ),
     children: [
       {
         index: true,
@@ -58,19 +88,28 @@ export default function App() {
   const setCompleted = useOnboardingStore((s) => s.setCompleted)
 
   useEffect(() => {
-    async function hydrateOnboardingState() {
+    let cleanupAuth: (() => void) | undefined
+
+    async function hydrateState() {
       try {
+        // Load auth state first
+        await useAuthStore.getState().loadAuth()
+
+        // Setup auth callback listener
+        cleanupAuth = setupAuthCallbackListener()
+
+        // Load onboarding state
         const completed = await window.electronAPI.appState.getOnboardingCompleted()
         setCompleted(completed)
       } catch (err) {
-        console.error('[App] Failed to load onboarding state:', err)
+        console.error('[App] Failed to hydrate state:', err)
         setCompleted(false)
       } finally {
         setIsHydrated(true)
       }
     }
 
-    hydrateOnboardingState()
+    hydrateState()
 
     useHubStore.getState().init()
     useProviderStore.getState().fetch()
@@ -78,6 +117,10 @@ export default function App() {
     useSkillsStore.getState().fetch()
     useToolsStore.getState().fetch()
     useCronJobsStore.getState().fetch()
+
+    return () => {
+      cleanupAuth?.()
+    }
   }, [setCompleted])
 
   if (!isHydrated) {

@@ -47,7 +47,7 @@ process.stderr?.on?.('error', (err: NodeJS.ErrnoException) => {
 import { app, BrowserWindow, shell, ipcMain } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { registerAllIpcHandlers, initializeApp, cleanupAll, setupDeviceConfirmation } from './ipc/index.js'
+import { registerAllIpcHandlers, initializeApp, cleanupAll, setupDeviceConfirmation, setAuthMainWindow, handleAuthDeepLink } from './ipc/index.js'
 import { appStateManager } from '@multica/core'
 import { createUpdater, AutoUpdater } from './updater/index.js'
 
@@ -70,6 +70,50 @@ const forceOnboarding = process.argv.includes('--force-onboarding')
 
 let win: BrowserWindow | null
 let updater: AutoUpdater
+
+// ============================================================================
+// Custom Protocol for Auth (multica://)
+// ============================================================================
+
+// Register custom protocol - must be called before app.whenReady()
+if (process.defaultApp) {
+  // Development: need to pass the script path
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('multica', process.execPath, [path.resolve(process.argv[1])])
+  }
+} else {
+  // Production
+  app.setAsDefaultProtocolClient('multica')
+}
+
+// Handle protocol URL on macOS (when app is already running)
+app.on('open-url', (event, url) => {
+  event.preventDefault()
+  console.log('[Auth] Received open-url:', url)
+  if (url.startsWith('multica://')) {
+    handleAuthDeepLink(url)
+  }
+})
+
+// Handle second instance (Windows/Linux - when app is already running)
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+  app.quit()
+} else {
+  app.on('second-instance', (_event, commandLine) => {
+    // Focus window
+    if (win) {
+      if (win.isMinimized()) win.restore()
+      win.focus()
+    }
+    // Handle protocol URL from command line (Windows)
+    const url = commandLine.find(arg => arg.startsWith('multica://'))
+    if (url) {
+      console.log('[Auth] Received second-instance URL:', url)
+      handleAuthDeepLink(url)
+    }
+  })
+}
 
 function createWindow() {
   win = new BrowserWindow({
@@ -136,9 +180,10 @@ app.whenReady().then(async () => {
 
   createWindow()
 
-  // Set up device confirmation flow (requires both Hub and window)
+  // Set up device confirmation flow and auth (requires window)
   if (win) {
     setupDeviceConfirmation(win)
+    setAuthMainWindow(win)
   }
 
   // Initialize auto-updater
