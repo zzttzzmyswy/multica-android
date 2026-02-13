@@ -14,6 +14,7 @@ import { createDataTool } from "./tools/data/index.js";
 import { createSendFileTool } from "./tools/send-file.js";
 import type { SendFileCallback } from "./tools/send-file.js";
 import { filterTools } from "./tools/policy.js";
+import { wrapReadToolWithImageResize } from "./tools/image-resize.js";
 import { isMulticaError, isRetryableError } from "@multica/utils";
 import type { ExecApprovalCallback } from "./tools/exec-approval-types.js";
 
@@ -106,9 +107,9 @@ export function createAllTools(options: CreateToolsOptions | string): AgentTool<
   const opts: CreateToolsOptions = typeof options === "string" ? { cwd: options } : options;
   const { cwd, profileDir, isSubagent, sessionId } = opts;
 
-  const baseTools = createCodingTools(cwd).filter(
-    (tool) => tool.name !== "bash",
-  ) as AgentTool<any>[];
+  const baseTools = createCodingTools(cwd)
+    .filter((tool) => tool.name !== "bash")
+    .map((tool) => tool.name === "read" ? wrapReadToolWithImageResize(tool) : tool) as AgentTool<any>[];
 
   const execTool = createExecTool(cwd, opts.onExecApprovalNeeded);
   const processTool = createProcessTool(cwd);
