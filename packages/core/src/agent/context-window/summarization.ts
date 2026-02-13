@@ -133,17 +133,20 @@ export function splitMessagesForSummary(
  * Detect and fix a "split turn" — when the first kept message is a user message
  * containing tool_result blocks without the corresponding assistant tool_use.
  *
- * When detected, moves the orphaned tool_result (and its preceding assistant
- * tool_use) from toKeep back to toSummarize so they can be summarized together.
+ * When detected, separates the orphaned turn (assistant tool_use + user tool_result)
+ * into a `splitPrefix` for separate summarization, and returns adjusted arrays
+ * where `toSummarize` no longer contains those messages.
  *
- * Returns { splitPrefix } containing the separated turn prefix messages,
- * or null if no split turn was detected. The caller should summarize the
- * prefix separately and prepend it.
+ * Returns null if no split turn was detected.
  */
 export function detectSplitTurn(
   toSummarize: AgentMessage[],
   toKeep: AgentMessage[],
-): { splitPrefix: AgentMessage[]; adjustedToKeep: AgentMessage[] } | null {
+): {
+  splitPrefix: AgentMessage[];
+  adjustedToSummarize: AgentMessage[];
+  adjustedToKeep: AgentMessage[];
+} | null {
   if (toKeep.length === 0) return null;
 
   const firstKept = toKeep[0]!;
@@ -157,7 +160,6 @@ export function detectSplitTurn(
   if (!hasToolResult) return null;
 
   // This is an orphaned tool_result — look back in toSummarize for the assistant tool_use
-  // Find the last assistant message in toSummarize that has matching tool_use
   const toolResultIds = new Set(
     content
       .filter((b: any) => b.type === "tool_result")
@@ -185,14 +187,16 @@ export function detectSplitTurn(
 
   if (assistantIndex < 0) return null;
 
-  // Separate the split prefix: assistant tool_use + orphaned user tool_result
+  // Split prefix: messages from assistantIndex to end of toSummarize + orphaned firstKept
   const splitPrefix = [
     ...toSummarize.slice(assistantIndex),
     firstKept,
   ];
+  // Truncate toSummarize so the split prefix messages are NOT double-counted
+  const adjustedToSummarize = toSummarize.slice(0, assistantIndex);
   const adjustedToKeep = toKeep.slice(1);
 
-  return { splitPrefix, adjustedToKeep };
+  return { splitPrefix, adjustedToSummarize, adjustedToKeep };
 }
 
 // ── Adaptive Chunk Ratio ───────────────────────────────────────────────────
@@ -201,13 +205,12 @@ const ADAPTIVE_CHUNK_MIN = 0.15;
 const ADAPTIVE_CHUNK_MAX = 0.4;
 
 /**
- * Compute adaptive chunk size based on average message token count.
- * Larger average messages → smaller chunks (to avoid exceeding limits).
- * Range: [0.15, 0.4] × contextWindow
+ * Compute adaptive chunk ratio based on average message token count.
+ * Larger average messages → smaller ratio (to avoid exceeding limits).
+ * Return value range: [0.15, 0.4] — multiply by availableTokens to get chunk size.
  */
 export function computeAdaptiveChunkRatio(
   messages: AgentMessage[],
-  contextWindow: number,
 ): number {
   if (messages.length === 0) return ADAPTIVE_CHUNK_MAX;
 
@@ -273,6 +276,7 @@ export async function compactMessagesWithSummary(
   let splitPrefixSummary = "";
 
   if (splitTurn) {
+    toSummarize = splitTurn.adjustedToSummarize;
     toKeep = splitTurn.adjustedToKeep;
 
     // Summarize the split prefix separately
@@ -290,26 +294,30 @@ export async function compactMessagesWithSummary(
     splitPrefixSummary = prefixResult.summary;
   }
 
-  // Generate summary with fallback
+  // Generate summary with fallback (toSummarize no longer contains split prefix messages)
   const instructions = customInstructions || DEFAULT_SUMMARY_INSTRUCTIONS;
-  const { summary } = await summarizeWithFallback({
-    messages: toSummarize,
-    model,
-    reserveTokens,
-    apiKey,
-    signal,
-    instructions,
-    previousSummary,
-    availableTokens,
-  });
+  let finalSummary = "";
 
-  // Append split prefix summary if present
-  let finalSummary = summary;
-  if (splitPrefixSummary) {
-    finalSummary += `\n\n## Split Turn Context\n${splitPrefixSummary}`;
+  if (toSummarize.length > 0) {
+    const { summary } = await summarizeWithFallback({
+      messages: toSummarize,
+      model,
+      reserveTokens,
+      apiKey,
+      signal,
+      instructions,
+      previousSummary,
+      availableTokens,
+    });
+    finalSummary = summary;
   }
 
-  // Append metadata sections
+  // Append split prefix summary if present
+  if (splitPrefixSummary) {
+    finalSummary += (finalSummary ? "\n\n" : "") + `## Split Turn Context\n${splitPrefixSummary}`;
+  }
+
+  // Append metadata sections (all compacted = adjusted toSummarize + splitPrefix)
   const allCompactedMessages = splitTurn
     ? [...toSummarize, ...splitTurn.splitPrefix]
     : toSummarize;
@@ -381,6 +389,7 @@ export async function compactMessagesWithChunkedSummary(
   let splitPrefixSummary = "";
 
   if (splitTurn) {
+    toSummarize = splitTurn.adjustedToSummarize;
     toKeep = splitTurn.adjustedToKeep;
 
     // Summarize the split prefix separately
@@ -399,57 +408,10 @@ export async function compactMessagesWithChunkedSummary(
   }
 
   // Compute adaptive chunk size
-  const chunkRatio = computeAdaptiveChunkRatio(toSummarize, availableTokens);
+  const chunkRatio = computeAdaptiveChunkRatio(toSummarize);
   const maxChunkTokens = params.maxChunkTokens ?? Math.floor(availableTokens * chunkRatio);
 
-  // If messages to summarize fit in one chunk, delegate to single-pass compaction
-  const toSummarizeTokens = estimateMessagesTokens(toSummarize);
-  if (toSummarizeTokens <= maxChunkTokens) {
-    // For single-chunk, use the non-chunked path but still handle split turn
-    const instructions = customInstructions || DEFAULT_SUMMARY_INSTRUCTIONS;
-    const { summary } = await summarizeWithFallback({
-      messages: toSummarize,
-      model,
-      reserveTokens,
-      apiKey,
-      signal,
-      instructions,
-      previousSummary,
-      availableTokens,
-    });
-
-    let finalSummary = summary;
-    if (splitPrefixSummary) {
-      finalSummary += `\n\n## Split Turn Context\n${splitPrefixSummary}`;
-    }
-
-    // Append metadata
-    const allCompactedMessages = splitTurn
-      ? [...toSummarize, ...splitTurn.splitPrefix]
-      : toSummarize;
-    const failures = collectToolFailures(allCompactedMessages);
-    const fileOps = collectFileOperations(allCompactedMessages);
-    finalSummary += formatToolFailuresSection(failures);
-    finalSummary += formatFileOperationsSection(fileOps);
-
-    const summaryMessage = createSummaryMessage(finalSummary);
-    const kept = [summaryMessage, ...toKeep];
-    const tokensRemoved = estimateMessagesTokens(allCompactedMessages);
-    const tokensKept = estimateMessagesTokens(kept);
-
-    return {
-      kept,
-      removedCount: allCompactedMessages.length,
-      tokensRemoved,
-      tokensKept,
-      summary: finalSummary,
-      reason: "summary",
-      fileOperations: (fileOps.readFiles.length > 0 || fileOps.modifiedFiles.length > 0) ? fileOps : undefined,
-      toolFailures: failures.length > 0 ? failures : undefined,
-    };
-  }
-
-  // Process in chunks
+  // Process in chunks (works naturally for single-chunk case too)
   const chunks: AgentMessage[][] = [];
   let currentChunk: AgentMessage[] = [];
   let currentTokens = 0;
@@ -496,10 +458,10 @@ export async function compactMessagesWithChunkedSummary(
 
   // Append split prefix summary if present
   if (splitPrefixSummary) {
-    finalSummary += `\n\n## Split Turn Context\n${splitPrefixSummary}`;
+    finalSummary += (finalSummary ? "\n\n" : "") + `## Split Turn Context\n${splitPrefixSummary}`;
   }
 
-  // Append metadata sections
+  // Append metadata sections (all compacted = adjusted toSummarize + splitPrefix)
   const allCompactedMessages = splitTurn
     ? [...toSummarize, ...splitTurn.splitPrefix]
     : toSummarize;

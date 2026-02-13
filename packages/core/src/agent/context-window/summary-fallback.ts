@@ -115,14 +115,14 @@ function buildPlainTextFallback(
     `Below is automatically extracted metadata from the removed messages.`,
   );
 
-  // Extract and append metadata
+  // Extract and append metadata (format functions return strings with leading \n,
+  // designed for direct concatenation — so we concatenate rather than join)
   const failures = collectToolFailures(messages);
   const fileOps = collectFileOperations(messages);
-  const failureSection = formatToolFailuresSection(failures);
-  const fileOpsSection = formatFileOperationsSection(fileOps);
 
-  if (failureSection) parts.push(failureSection);
-  if (fileOpsSection) parts.push(fileOpsSection);
+  let result = parts.join("\n\n");
+  result += formatToolFailuresSection(failures);
+  result += formatFileOperationsSection(fileOps);
 
-  return parts.join("\n\n");
+  return result;
 }
