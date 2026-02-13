@@ -859,7 +859,6 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       // Cleanup virtual device on failure
       this.eventsGateway.unregisterVirtualDevice(deviceId);
-      this.cleanupPendingRequests();
 
       const message = error instanceof Error ? error.message : String(error);
       if (message.includes("REJECTED")) {
@@ -1072,14 +1071,4 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  // ── Cleanup ──
-
-  /** Cleanup all pending requests (used on verify failure) */
-  private cleanupPendingRequests(): void {
-    for (const [id, pending] of this.pendingRequests) {
-      clearTimeout(pending.timer);
-      pending.reject(new Error("Cleaned up"));
-      this.pendingRequests.delete(id);
-    }
-  }
 }
