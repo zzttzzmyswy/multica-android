@@ -126,7 +126,8 @@ const PROVIDER_REGISTRY: Record<string, ProviderMeta> = {
  */
 export const PROVIDER_ALIAS: Record<string, string> = {
   "claude-code": "anthropic", // Claude Code OAuth uses anthropic API
-  "openai-codex": "openai", // Codex OAuth uses OpenAI API
+  // Note: openai-codex is NOT aliased — pi-ai has a dedicated openai-codex provider
+  // that uses the Codex-specific API (openai-codex-responses) and base URL (chatgpt.com)
 };
 
 // ============================================================
