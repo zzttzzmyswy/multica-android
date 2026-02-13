@@ -23,7 +23,7 @@ Desktop 保存到 ~/.super-multica/auth.json
 ### Web 端
 
 - 端口：**3000**
-- 登录 API：`/api/v1/auth/login`（通过 Next.js rewrites 代理到后端）
+- 登录 API：`/api/v1/auth/login`（通过 devd 代理到后端）
 - 登录成功后回调：`http://127.0.0.1:{port}/callback?sid=xxx&user=xxx`
 
 ### Desktop 端
@@ -33,20 +33,22 @@ Desktop 保存到 ~/.super-multica/auth.json
 
 ## 存储
 
-```
-~/.super-multica/auth.json
-```
+**路径：** `~/.super-multica/auth.json`
+
+Desktop 登录成功后，SID 和用户信息存储在本地文件：
 
 ```json
 {
-  "sid": "xxx",
+  "sid": "session-id-from-backend",
   "user": {
-    "uid": "xxx",
-    "name": "xxx",
-    "email": "xxx"
+    "uid": "user-id",
+    "name": "User Name",
+    "email": "user@example.com"
   }
 }
 ```
+
+后续请求可从此文件读取 `sid` 进行认证。
 
 ## 退出登录
 
