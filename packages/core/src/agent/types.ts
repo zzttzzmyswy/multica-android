@@ -51,8 +51,8 @@ export type AgentOptions = {
   /**
    * Compaction mode:
    * - "count": uses legacy message count
-   * - "tokens": uses token awareness (default)
-   * - "summary": uses LLM to generate summary
+   * - "tokens": uses token awareness
+   * - "summary": uses LLM to generate summary (default)
    */
   compactionMode?: "count" | "tokens" | "summary" | undefined;
   /** Compaction target utilization ratio (0-1), defaults to 0.5 */

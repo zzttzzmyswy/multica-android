@@ -95,8 +95,8 @@ export class SessionManager {
     this.sessionId = options.sessionId;
     this.baseDir = options.baseDir;
 
-    // Compaction mode
-    this.compactionMode = options.compactionMode ?? "count";
+    // Compaction mode (default: summary with LLM-based summarization)
+    this.compactionMode = options.compactionMode ?? "summary";
 
     // Count mode parameters
     this.maxMessages = options.maxMessages ?? 80;
@@ -312,22 +312,37 @@ export class SessionManager {
           minKeepMessages: this.minKeepMessages,
         });
       } else {
-        result = await compactMessagesAsync(workingMessages, {
-          mode: "summary",
-          model,
-          apiKey,
-          contextWindowTokens: this.contextWindowTokens,
-          systemPrompt: this.systemPrompt,
-          reserveTokens: this.reserveTokens,
-          targetRatio: this.targetRatio,
-          minKeepMessages: this.minKeepMessages,
-          customInstructions: this.customInstructions,
-          previousSummary: this.previousSummary,
-        });
+        try {
+          result = await compactMessagesAsync(workingMessages, {
+            mode: "summary",
+            model,
+            apiKey,
+            contextWindowTokens: this.contextWindowTokens,
+            systemPrompt: this.systemPrompt,
+            reserveTokens: this.reserveTokens,
+            targetRatio: this.targetRatio,
+            minKeepMessages: this.minKeepMessages,
+            customInstructions: this.customInstructions,
+            previousSummary: this.previousSummary,
+          });
 
-        // Save summary for next incremental update
-        if (result?.summary) {
-          this.previousSummary = result.summary;
+          // Save summary for next incremental update
+          if (result?.summary) {
+            this.previousSummary = result.summary;
+          }
+        } catch (err) {
+          // Summary compaction failed entirely — fall back to tokens mode
+          console.error(
+            `[SessionManager] Summary compaction failed, falling back to tokens mode: ${err}`,
+          );
+          result = compactMessages(workingMessages, {
+            mode: "tokens",
+            contextWindowTokens: this.contextWindowTokens,
+            systemPrompt: this.systemPrompt,
+            reserveTokens: this.reserveTokens,
+            targetRatio: this.targetRatio,
+            minKeepMessages: this.minKeepMessages,
+          });
         }
       }
     } else {
