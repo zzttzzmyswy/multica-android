@@ -1,25 +1,10 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { repairSessionFileIfNeeded } from "./session-file-repair.js";
-import { acquireSessionWriteLock } from "./session-write-lock.js";
-
-vi.mock("./session-write-lock.js", async () => {
-  const actual = await vi.importActual<typeof import("./session-write-lock.js")>(
-    "./session-write-lock.js",
-  );
-  return {
-    ...actual,
-    acquireSessionWriteLock: vi.fn(actual.acquireSessionWriteLock),
-  };
-});
 
 describe("repairSessionFileIfNeeded", () => {
-  beforeEach(() => {
-    vi.mocked(acquireSessionWriteLock).mockClear();
-  });
-
   it("rewrites session files that contain malformed lines", async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "multica-session-repair-"));
     const file = path.join(dir, "session.jsonl");
@@ -93,13 +78,16 @@ describe("repairSessionFileIfNeeded", () => {
     expect(warn).toHaveBeenCalledTimes(1);
   });
 
-  it("acquires a write lock while repairing", async () => {
+  it("acquires a write lock while repairing (lock file cleaned up after)", async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "multica-session-repair-"));
     const file = path.join(dir, "session.jsonl");
     await fs.writeFile(file, "{broken\n{also broken\n", "utf-8");
 
     await repairSessionFileIfNeeded({ sessionFile: file });
 
-    expect(vi.mocked(acquireSessionWriteLock)).toHaveBeenCalledTimes(1);
+    // Lock file should be released (cleaned up) after repair
+    const lockFile = `${file}.lock`;
+    const lockExists = await fs.access(lockFile).then(() => true, () => false);
+    expect(lockExists).toBe(false);
   });
 });

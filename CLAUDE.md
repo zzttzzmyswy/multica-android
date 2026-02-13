@@ -220,6 +220,74 @@ git add README.md
 git commit -m "docs: update API documentation"
 ```
 
+## Testing Guidelines
+
+### Mock Policy: External Only
+
+**CRITICAL RULE**: Only mock third-party/external dependencies. NEVER mock internal modules.
+
+| Type | Examples | Can Mock? |
+|------|----------|-----------|
+| Internal modules | `./runner.js`, `../utils/format.js` | NO |
+| Monorepo packages | `@multica/core`, `@multica/utils` | NO |
+| Third-party packages | `openai`, `@anthropic-ai/sdk`, `@mariozechner/*` | YES |
+| System/time APIs | `vi.useFakeTimers()`, `vi.setSystemTime()` | YES |
+| Network calls | External HTTP requests, WebSocket connections | YES |
+
+When AI writes code, tests become more valuable than the code itself. Mocking internal modules creates brittle tests that don't verify real integration between modules, hides bugs, and requires maintaining parallel mock implementations.
+
+### Preferred Patterns
+
+**Temp directories for I/O tests** (no filesystem mocking):
+```typescript
+const testDir = join(tmpdir(), `multica-test-${Date.now()}`);
+beforeEach(() => mkdirSync(testDir, { recursive: true }));
+afterEach(() => rmSync(testDir, { recursive: true, force: true }));
+```
+
+**Test reset functions for stateful modules**:
+```typescript
+// In the module itself:
+export function resetForTests() { /* clear in-memory state */ }
+
+// In tests:
+beforeEach(() => resetForTests());
+```
+
+**Pure function tests** — no mocking needed:
+```typescript
+const result = resolveContextWindowInfo({ modelContextWindow: 100_000 });
+expect(result.tokens).toBe(100_000);
+```
+
+**Constructor/parameter injection** over module mocking:
+```typescript
+// Good: pass baseDir as parameter
+const session = new SessionManager({ sessionId: "test", baseDir: testDir });
+
+// Bad: mock the paths module
+vi.mock("../../shared/paths.js", () => ({ DATA_DIR: "/tmp/test" }));
+```
+
+### Anti-Patterns
+
+- `vi.mock("./internal-module.js")` — NEVER mock internal modules
+- Mock objects with 10+ method stubs — sign you should use the real implementation
+- `vi.mock("../context-window/index.js")` with simplified logic — hides real behavior
+- Tests that pass but don't exercise any real code paths ("fake green")
+
+### Reference Tests
+
+Good patterns to follow:
+- `packages/core/src/agent/session/session-manager.display.test.ts` — real SessionManager + temp dirs
+- `packages/core/src/agent/skills/loader.test.ts` — real skill loading + temp filesystem
+- `packages/core/src/agent/context-window/guard.test.ts` — pure function tests
+- `packages/core/src/agent/subagent/registry.test.ts` — real registry + `resetSubagentRegistryForTests()`
+
+Known violations (to be migrated):
+- `packages/core/src/agent/async-agent.test.ts` — mocks internal `./runner.js`
+- `packages/core/src/agent/session/compaction.test.ts` — mocks internal `../context-window/index.js`
+
 ## Pre-push Checks
 
 Before pushing, always run:

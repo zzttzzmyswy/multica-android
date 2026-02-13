@@ -7,59 +7,17 @@ import {
 } from "./compaction.js";
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 
-// Mock the token estimation functions
-vi.mock("../context-window/index.js", async () => {
-  const actual = await vi.importActual("../context-window/index.js");
-  return {
-    ...(actual as object),
-    estimateMessagesTokens: (messages: AgentMessage[]) => {
-      // Simple mock: 10 tokens per message
-      return messages.length * 10;
-    },
-    compactMessagesTokenAware: (
-      messages: AgentMessage[],
-      availableTokens: number,
-      options?: { targetRatio?: number; minKeepMessages?: number },
-    ) => {
-      const minKeep = options?.minKeepMessages ?? 10;
-      if (messages.length <= minKeep) return null;
-
-      const targetTokens = availableTokens * (options?.targetRatio ?? 0.5);
-      const currentTokens = messages.length * 10;
-      if (currentTokens <= targetTokens) return null;
-
-      // Keep enough messages to be under target
-      const keepCount = Math.max(minKeep, Math.floor(targetTokens / 10));
-      const kept = messages.slice(-keepCount);
-
-      return {
-        kept,
-        removedCount: messages.length - kept.length,
-        tokensRemoved: (messages.length - kept.length) * 10,
-        tokensKept: kept.length * 10,
-      };
-    },
-    estimateTokenUsage: (params: any) => {
-      const messageTokens = params.messages.length * 10;
-      const systemPromptTokens = params.systemPrompt ? 100 : 0;
-      const reserve = params.reserveTokens ?? 1024;
-      const availableTokens = Math.max(0, params.contextWindowTokens - systemPromptTokens - reserve);
-      const utilizationRatio = availableTokens > 0 ? (messageTokens * 1.5) / availableTokens : 1;
-
-      return {
-        messageTokens,
-        systemPromptTokens,
-        availableTokens,
-        utilizationRatio,
-      };
-    },
-    shouldCompact: (estimation: any) => estimation.utilizationRatio >= 0.8,
-    compactMessagesWithSummary: vi.fn(),
-    compactMessagesWithChunkedSummary: vi.fn(),
-    COMPACTION_TARGET_RATIO: 0.5,
-    MIN_KEEP_MESSAGES: 10,
-  };
-});
+// Mock only the third-party dependency (allowed by mock policy).
+// The internal context-window module uses real logic.
+vi.mock("@mariozechner/pi-coding-agent", () => ({
+  estimateTokens: (message: AgentMessage) => {
+    const msg = message as any;
+    if (typeof msg.content === "string") {
+      return Math.ceil(msg.content.length / 4);
+    }
+    return 50;
+  },
+}));
 
 describe("compaction", () => {
   function createMessages(count: number, prefix = "Message"): AgentMessage[] {
@@ -162,14 +120,14 @@ describe("compaction", () => {
   describe("compactMessagesByTokens", () => {
     it("should return null when under token limit", () => {
       const messages = createMessages(5);
-      // 5 messages * 10 tokens = 50 tokens, target = 1000 * 0.5 = 500
+      // ~15 tokens total, target = 1000 * 0.5 = 500 → no compact needed
       const result = compactMessagesByTokens(messages, 1000);
       expect(result).toBeNull();
     });
 
     it("should compact when over token limit", () => {
       const messages = createMessages(100);
-      // 100 messages * 10 tokens = 1000 tokens, target = 200 * 0.5 = 100
+      // ~300 tokens total, target = 200 * 0.5 = 100 → needs compact
       const result = compactMessagesByTokens(messages, 200, {
         targetRatio: 0.5,
         minKeepMessages: 5,
@@ -231,14 +189,15 @@ describe("compaction", () => {
     describe("tokens mode", () => {
       it("should use token-based compaction when utilization is high", () => {
         const messages = createMessages(100);
-        // 100 * 10 = 1000 message tokens
-        // System: 100 tokens, Reserve: 1024
-        // Available: 2000 - 100 - 1024 = 876
-        // Utilization: (1000 * 1.5) / 876 = 1.71 > 0.8
+        // ~300 message tokens (real estimator: ~3 tokens/msg)
+        // systemPromptTokens ≈ 7, reserveTokens = 0
+        // available = 500 - 7 = 493
+        // utilization = (300 * 1.5) / 493 ≈ 0.91 > 0.8 → should compact
         const result = compactMessages(messages, {
           mode: "tokens",
-          contextWindowTokens: 2000,
+          contextWindowTokens: 500,
           systemPrompt: "System prompt",
+          reserveTokens: 0,
         });
 
         expect(result).not.toBeNull();
@@ -247,9 +206,9 @@ describe("compaction", () => {
 
       it("should return null when utilization is low", () => {
         const messages = createMessages(5);
-        // 5 * 10 = 50 message tokens
-        // Available: 10000 - 100 - 1024 = 8876
-        // Utilization: (50 * 1.5) / 8876 = 0.008 < 0.8
+        // ~15 message tokens
+        // available = 10000 - 7 - 1024 = 8969
+        // utilization = (15 * 1.5) / 8969 ≈ 0.003 < 0.8
         const result = compactMessages(messages, {
           mode: "tokens",
           contextWindowTokens: 10000,
