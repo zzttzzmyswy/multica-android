@@ -192,16 +192,21 @@ export function StreamingMarkdown({
     )
   }
 
+  if (blocks.length === 0) {
+    return (
+      <div className="flex items-center gap-2 py-1 text-muted-foreground">
+        <Spinner className="text-xs" />
+        <span className="text-xs">Generating...</span>
+      </div>
+    )
+  }
+
   const indicator = (
     <div className="absolute bottom-1 left-6 flex items-center gap-2 py-1 text-muted-foreground">
       <Spinner className="text-xs" />
       <span className="text-xs">Generating...</span>
     </div>
   )
-
-  if (blocks.length === 0) {
-    return indicator
-  }
 
   return (
     <>
