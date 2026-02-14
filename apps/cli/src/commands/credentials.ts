@@ -9,7 +9,7 @@
 
 import { existsSync, mkdirSync, writeFileSync, chmodSync } from "node:fs";
 import { dirname } from "node:path";
-import { getCredentialsPath, getSkillsEnvPath } from "@multica/core";
+import { getCredentialsPath } from "@multica/core";
 import { cyan, yellow, green, dim, red } from "../colors.js";
 
 type Command = "init" | "show" | "edit" | "help";
@@ -17,10 +17,7 @@ type Command = "init" | "show" | "edit" | "help";
 interface CredentialsOptions {
   command: Command;
   force: boolean;
-  coreOnly: boolean;
-  skillsOnly: boolean;
   pathOverride?: string | undefined;
-  skillsPathOverride?: string | undefined;
 }
 
 function printHelp() {
@@ -28,21 +25,20 @@ function printHelp() {
 ${cyan("Usage:")} multica credentials <command> [options]
 
 ${cyan("Commands:")}
-  ${yellow("init")}                Create credentials.json5 and skills.env.json5
+  ${yellow("init")}                Create credentials.json5
   ${yellow("show")}                Show credential file paths
   ${yellow("edit")}                Open credentials directory in file manager
   ${yellow("help")}                Show this help
 
 ${cyan("Options for 'init':")}
   ${yellow("--force")}             Overwrite existing files
-  ${yellow("--core-only")}         Only create credentials.json5
-  ${yellow("--skills-only")}       Only create skills.env.json5
   ${yellow("--path")} PATH         Override credentials path
-  ${yellow("--skills-path")} PATH  Override skills env path
 
 ${cyan("Files Created:")}
   ~/.super-multica/credentials.json5     LLM providers + tools config
-  ~/.super-multica/skills.env.json5      Skills/plugins/integrations env vars
+
+${dim("Skill-specific API keys are stored in .env files within each skill's directory.")}
+${dim("Example: ~/.super-multica/skills/<skill-id>/.env")}
 
 ${cyan("Examples:")}
   ${dim("# Initialize credentials")}
@@ -50,9 +46,6 @@ ${cyan("Examples:")}
 
   ${dim("# Force overwrite")}
   multica credentials init --force
-
-  ${dim("# Only create core credentials")}
-  multica credentials init --core-only
 `);
 }
 
@@ -61,8 +54,6 @@ function parseArgs(argv: string[]): CredentialsOptions {
   const opts: CredentialsOptions = {
     command: "help",
     force: false,
-    coreOnly: false,
-    skillsOnly: false,
   };
 
   const positional: string[] = [];
@@ -79,20 +70,8 @@ function parseArgs(argv: string[]): CredentialsOptions {
       opts.force = true;
       continue;
     }
-    if (arg === "--core-only") {
-      opts.coreOnly = true;
-      continue;
-    }
-    if (arg === "--skills-only") {
-      opts.skillsOnly = true;
-      continue;
-    }
     if (arg === "--path") {
       opts.pathOverride = args.shift();
-      continue;
-    }
-    if (arg === "--skills-path") {
-      opts.skillsPathOverride = args.shift();
       continue;
     }
     positional.push(arg);
@@ -119,58 +98,25 @@ function buildCoreTemplate(): string {
 `;
 }
 
-function buildSkillsTemplate(): string {
-  return `{
-  env: {
-    // Dynamic keys (skills, plugins, integrations)
-    // LINEAR_API_KEY: "lin-..."
-  }
-}
-`;
-}
-
 function cmdInit(opts: CredentialsOptions): void {
-  const createCore = !opts.skillsOnly;
-  const createSkills = !opts.coreOnly;
-
-  if (!createCore && !createSkills) {
-    console.error(`${red("Error:")} Both --core-only and --skills-only were provided.`);
+  const path = opts.pathOverride ?? getCredentialsPath();
+  if (existsSync(path) && !opts.force) {
+    console.error(`${red("Error:")} Credentials file already exists at ${path}`);
+    console.error("Use --force to overwrite.");
     process.exit(1);
   }
-
-  if (createCore) {
-    const path = opts.pathOverride ?? getCredentialsPath();
-    if (existsSync(path) && !opts.force) {
-      console.error(`${red("Error:")} Credentials file already exists at ${path}`);
-      console.error("Use --force to overwrite.");
-      process.exit(1);
-    }
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, buildCoreTemplate(), "utf8");
-    chmodSync(path, 0o600);
-    console.log(`${green("Created:")} ${path}`);
-  }
-
-  if (createSkills) {
-    const skillsPath = opts.skillsPathOverride ?? getSkillsEnvPath();
-    if (existsSync(skillsPath) && !opts.force) {
-      console.error(`${red("Error:")} Skills env file already exists at ${skillsPath}`);
-      console.error("Use --force to overwrite.");
-      process.exit(1);
-    }
-    mkdirSync(dirname(skillsPath), { recursive: true });
-    writeFileSync(skillsPath, buildSkillsTemplate(), "utf8");
-    chmodSync(skillsPath, 0o600);
-    console.log(`${green("Created:")} ${skillsPath}`);
-  }
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, buildCoreTemplate(), "utf8");
+  chmodSync(path, 0o600);
+  console.log(`${green("Created:")} ${path}`);
 
   console.log("");
-  console.log("Edit these files to add your credentials.");
+  console.log("Edit this file to add your LLM provider credentials.");
+  console.log(`${dim("Skill-specific API keys go in .env files within each skill's directory.")}`);
 }
 
 function cmdShow(): void {
   const credentialsPath = getCredentialsPath();
-  const skillsEnvPath = getSkillsEnvPath();
 
   console.log(`\n${cyan("Credential Files:")}\n`);
 
@@ -179,12 +125,10 @@ function cmdShow(): void {
   console.log(`  Exists: ${existsSync(credentialsPath) ? green("Yes") : red("No")}`);
   console.log("");
 
-  console.log(`${yellow("skills.env.json5")}`);
-  console.log(`  Path: ${skillsEnvPath}`);
-  console.log(`  Exists: ${existsSync(skillsEnvPath) ? green("Yes") : red("No")}`);
+  console.log(`${dim("Skill-specific API keys are stored in .env files within each skill's directory.")}`);
   console.log("");
 
-  if (!existsSync(credentialsPath) || !existsSync(skillsEnvPath)) {
+  if (!existsSync(credentialsPath)) {
     console.log(`${dim("Run 'multica credentials init' to create missing files.")}`);
   }
 }

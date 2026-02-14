@@ -22,7 +22,6 @@ import {
   checkEligibilityDetailed,
   type DiagnosticItem,
 } from "@multica/core";
-import { credentialManager } from "@multica/core";
 
 // ============================================================================
 // Types
@@ -268,7 +267,7 @@ function cmdStatusDetail(manager: SkillManager, skillId: string, verbose?: boole
 
     if (hasEnvs > 0) {
       const envs = requirements?.env ?? metadata?.requiresEnv ?? [];
-      printRequirementStatus("Environment vars", envs, checkEnvVars);
+      printRequirementStatus("Environment vars", envs, (e) => checkEnvVars(e, skill.env));
     }
   }
 
@@ -363,10 +362,11 @@ function checkBinaries(bins: string[]): Map<string, boolean> {
   return result;
 }
 
-function checkEnvVars(envs: string[]): Map<string, boolean> {
+function checkEnvVars(envs: string[], skillEnv: Record<string, string>): Map<string, boolean> {
   const result = new Map<string, boolean>();
   for (const env of envs) {
-    result.set(env, credentialManager.hasEnv(env));
+    const found = Object.prototype.hasOwnProperty.call(skillEnv, env) || env in process.env;
+    result.set(env, found);
   }
   return result;
 }
