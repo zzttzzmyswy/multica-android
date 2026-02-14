@@ -744,7 +744,7 @@ Whitelisted devices reconnect without needing a new token or user confirmation. 
 | File | Purpose | Permissions |
 |------|---------|-------------|
 | `~/.super-multica/credentials.json5` | LLM providers + tool API keys | 0o600 |
-| `~/.super-multica/skills.env.json5` | Skill/plugin environment variables | 0o600 |
+| `~/.super-multica/skills/<id>/.env` | Per-skill environment variables | 0o600 |
 
 Format: JSON5 (supports comments, trailing commas, unquoted keys).
 
@@ -771,23 +771,22 @@ Format: JSON5 (supports comments, trailing commas, unquoted keys).
 }
 ```
 
-#### 4.11.3 skills.env.json5 Structure
+#### 4.11.3 Per-Skill .env Files
 
-```json5
-{
-  env: {
-    LINEAR_API_KEY: "lin-...",
-    GITHUB_TOKEN: "ghp_...",
-  },
-}
+Each skill can have a `.env` file in its directory for API keys:
+
+```bash
+# ~/.super-multica/skills/earnings-analysis/.env
+FINANCIAL_DATASETS_API_KEY=your-key-here
 ```
+
+Skills declare required env vars in `SKILL.md` frontmatter under `metadata.requires.env`.
 
 #### 4.11.4 Environment Variable Overrides
 
 | Variable | Purpose |
 |----------|---------|
 | `SMC_CREDENTIALS_PATH` | Override credentials.json5 path |
-| `SMC_SKILLS_ENV_PATH` | Override skills.env.json5 path |
 | `SMC_CREDENTIALS_DISABLE=1` | Disable credentials loading |
 
 ---
@@ -1051,7 +1050,7 @@ button, input, textarea, card, dialog, alert-dialog, dropdown-menu, select, comb
 | Data | Location | Format | Lifetime |
 |------|----------|--------|----------|
 | Credentials | `~/.super-multica/credentials.json5` | JSON5 | User-managed |
-| Skills env | `~/.super-multica/skills.env.json5` | JSON5 | User-managed |
+| Skill API keys | `~/.super-multica/skills/<id>/.env` | dotenv | User-managed |
 | Agent profiles | `~/.super-multica/agent-profiles/{id}/` | MD + JSON | User-managed |
 | Agent memory | `~/.super-multica/agent-profiles/{id}/memory/` | JSON per key | Agent-managed |
 | Sessions | `~/.super-multica/sessions/{id}/session.jsonl` | JSONL | Until deleted |

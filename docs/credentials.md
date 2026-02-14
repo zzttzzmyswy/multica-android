@@ -8,7 +8,6 @@ multica credentials init
 
 Creates:
 - `~/.super-multica/credentials.json5` — LLM providers + tools
-- `~/.super-multica/skills.env.json5` — skill/plugin API keys
 
 Example `credentials.json5`:
 
@@ -26,6 +25,32 @@ Example `credentials.json5`:
   }
 }
 ```
+
+## Skill API Keys
+
+Skill-specific API keys are stored in `.env` files within each skill's directory:
+
+```
+~/.super-multica/skills/<skill-id>/.env
+```
+
+Example for the `earnings-analysis` skill:
+
+```bash
+# ~/.super-multica/skills/earnings-analysis/.env
+FINANCIAL_DATASETS_API_KEY=your-key-here
+```
+
+Skills declare their required environment variables in `SKILL.md` frontmatter:
+
+```yaml
+metadata:
+  requires:
+    env:
+      - FINANCIAL_DATASETS_API_KEY
+```
+
+The `.env` file is preserved across skill upgrades and is never committed to version control.
 
 ## LLM Providers
 
