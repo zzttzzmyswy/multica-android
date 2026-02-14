@@ -116,7 +116,18 @@ def write_field_info(pdf_path: str, json_output_path: str):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
+    if len(sys.argv) >= 2 and sys.argv[1] == "--check":
+        if len(sys.argv) != 3:
+            print("Usage: extract_form_field_info.py --check <input.pdf>")
+            sys.exit(1)
+        reader = PdfReader(sys.argv[2])
+        if reader.get_fields():
+            print("This PDF has fillable form fields")
+        else:
+            print("This PDF does not have fillable form fields; you will need to visually determine where to enter data")
+    elif len(sys.argv) == 3:
+        write_field_info(sys.argv[1], sys.argv[2])
+    else:
         print("Usage: extract_form_field_info.py [input pdf] [output json]")
+        print("       extract_form_field_info.py --check <input.pdf>")
         sys.exit(1)
-    write_field_info(sys.argv[1], sys.argv[2])
