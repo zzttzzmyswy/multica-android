@@ -1,17 +1,17 @@
 import type { NextConfig } from "next";
 
-if (!process.env.MULTICA_API_URL) {
-  throw new Error("MULTICA_API_URL is required");
-}
-
 const nextConfig: NextConfig = {
   transpilePackages: ["@multica/ui", "@multica/store", "@multica/hooks", "@multica/sdk"],
-  rewrites: async () => [
-    {
-      source: "/api/:path*",
-      destination: `${process.env.MULTICA_API_URL}/api/:path*`,
-    },
-  ],
+  rewrites: async () => {
+    const apiUrl = process.env.MULTICA_API_URL;
+    if (!apiUrl) return [];
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${apiUrl}/api/:path*`,
+      },
+    ];
+  },
   headers: async () => [
     {
       source: "/sw.js",
