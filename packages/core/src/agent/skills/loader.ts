@@ -185,8 +185,8 @@ export function initializeManagedSkills(): void {
   try {
     const entries = readdirSync(BUNDLED_DIR);
     for (const skillName of entries) {
-      // Skip hidden directories
-      if (skillName.startsWith(".")) continue;
+      // Skip hidden directories and shared/internal directories
+      if (skillName.startsWith(".") || skillName.startsWith("_")) continue;
 
       const src = join(BUNDLED_DIR, skillName);
       const dest = join(MANAGED_DIR, skillName);
@@ -199,7 +199,7 @@ export function initializeManagedSkills(): void {
       // Check if skill exists in managed
       if (!existsSync(dest)) {
         // Skill doesn't exist, copy it
-        cpSync(src, dest, { recursive: true });
+        cpSync(src, dest, { recursive: true, dereference: true });
         continue;
       }
 
@@ -216,7 +216,7 @@ export function initializeManagedSkills(): void {
       if (compareVersions(bundledVersion, managedVersion) > 0) {
         // Remove old and copy new
         rmSync(dest, { recursive: true });
-        cpSync(src, dest, { recursive: true });
+        cpSync(src, dest, { recursive: true, dereference: true });
       }
     }
 
