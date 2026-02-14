@@ -19,7 +19,7 @@
 
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import type { OnModuleInit, OnModuleDestroy } from "@nestjs/common";
-import { Bot, GrammyError, InputFile, webhookCallback } from "grammy";
+import { Bot, GrammyError, InlineKeyboard, InputFile, webhookCallback } from "grammy";
 import type { Context } from "grammy";
 import { v7 as uuidv7 } from "uuid";
 import { writeFile, mkdir } from "node:fs/promises";
@@ -87,6 +87,14 @@ interface MediaAttachment {
 const VERIFY_TIMEOUT_MS = 30_000;
 const TYPING_TIMEOUT_MS = 60_000;
 const MAX_CHARS_PER_MESSAGE = 4000; // Telegram limit is 4096; leave room for HTML overhead
+
+// ── Callback data identifiers ──
+
+const CB_HOW_TO_CONNECT = "onboard:how";
+const CB_WHAT_IS_MULTICA = "onboard:what";
+const CB_CHECK_STATUS = "action:status";
+const CB_SHOW_HELP = "action:help";
+const CB_RECONNECT = "action:reconnect";
 
 // ── Helpers ──
 
@@ -264,13 +272,19 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       if (payload) {
         // Deep link: /start <short_code>
         await this.handleShortCode(ctx, String(ctx.from?.id), payload);
+        return;
+      }
+
+      const telegramUserId = String(ctx.from?.id);
+      const user = await this.userStore.findByTelegramUserId(telegramUserId);
+
+      if (user) {
+        const online = this.eventsGateway.isDeviceRegistered(user.hubId);
+        const { text, keyboard } = this.buildConnectedWelcome(user, online);
+        await ctx.reply(text, { parse_mode: "HTML", reply_markup: keyboard });
       } else {
-        await ctx.reply(
-          "Welcome to Multica!\n\n" +
-            "To connect, scan a QR code from the Multica Desktop app " +
-            "(Clients \u2192 Channels tab), or paste a connection link here.\n\n" +
-            "The link looks like:\nmultica://connect?gateway=...&hub=...&agent=...&token=...&exp=...",
-        );
+        const { text, keyboard } = this.buildWelcomeMessage();
+        await ctx.reply(text, { parse_mode: "HTML", reply_markup: keyboard });
       }
     });
 
@@ -278,36 +292,57 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       if (!this.isPrivateChat(ctx)) return;
       const telegramUserId = String(ctx.from?.id);
       const user = await this.userStore.findByTelegramUserId(telegramUserId);
-      if (!user) {
-        await ctx.reply("Not connected.\n\nUse /start or scan a QR code to connect.");
-        return;
-      }
-      const online = this.eventsGateway.isDeviceRegistered(user.hubId);
-      await ctx.reply(
-        `Connected to Multica\n\n` +
-          `Hub: ${user.hubId}\n` +
-          `Agent: ${user.agentId}\n` +
-          `Status: ${online ? "Online" : "Offline"}\n\n` +
-          (online
-            ? "Your Hub is online and ready to receive messages."
-            : "Your Hub is offline. Make sure the Multica Desktop app is running."),
-      );
+      const online = user ? this.eventsGateway.isDeviceRegistered(user.hubId) : false;
+      const { text, keyboard } = this.buildStatusMessage(user, online);
+      await ctx.reply(text, { parse_mode: "HTML", reply_markup: keyboard });
     });
 
     this.bot.command("help", async (ctx) => {
       if (!this.isPrivateChat(ctx)) return;
-      await ctx.reply(
-        "Multica Telegram Bot\n\n" +
-          "Commands:\n" +
-          "/start - Connect your account\n" +
-          "/status - Check connection status\n" +
-          "/help - Show this message\n\n" +
-          "To connect:\n" +
-          "1. Open Multica Desktop app\n" +
-          "2. Go to Clients \u2192 Channels\n" +
-          "3. Scan the Telegram QR code with your phone camera\n\n" +
-          "Or paste a connection link starting with:\nmultica://connect?...",
-      );
+      const telegramUserId = String(ctx.from?.id);
+      const user = await this.userStore.findByTelegramUserId(telegramUserId);
+      const { text, keyboard } = this.buildHelpMessage(!!user);
+      await ctx.reply(text, { parse_mode: "HTML", reply_markup: keyboard });
+    });
+
+    // Inline button callback queries
+    this.bot.callbackQuery(CB_HOW_TO_CONNECT, async (ctx) => {
+      await ctx.answerCallbackQuery();
+      const { text, keyboard } = this.buildConnectionGuide();
+      await ctx.editMessageText(text, { parse_mode: "HTML", reply_markup: keyboard });
+    });
+
+    this.bot.callbackQuery(CB_WHAT_IS_MULTICA, async (ctx) => {
+      await ctx.answerCallbackQuery();
+      const { text, keyboard } = this.buildWhatIsMultica();
+      await ctx.editMessageText(text, { parse_mode: "HTML", reply_markup: keyboard });
+    });
+
+    this.bot.callbackQuery(CB_CHECK_STATUS, async (ctx) => {
+      await ctx.answerCallbackQuery();
+      const telegramUserId = String(ctx.from?.id);
+      const user = await this.userStore.findByTelegramUserId(telegramUserId);
+      const online = user ? this.eventsGateway.isDeviceRegistered(user.hubId) : false;
+      const { text, keyboard } = this.buildStatusMessage(user, online);
+      try {
+        await ctx.editMessageText(text, { parse_mode: "HTML", reply_markup: keyboard });
+      } catch {
+        // editMessageText throws if content is unchanged (rapid refresh)
+      }
+    });
+
+    this.bot.callbackQuery(CB_SHOW_HELP, async (ctx) => {
+      await ctx.answerCallbackQuery();
+      const telegramUserId = String(ctx.from?.id);
+      const user = await this.userStore.findByTelegramUserId(telegramUserId);
+      const { text, keyboard } = this.buildHelpMessage(!!user);
+      await ctx.editMessageText(text, { parse_mode: "HTML", reply_markup: keyboard });
+    });
+
+    this.bot.callbackQuery(CB_RECONNECT, async (ctx) => {
+      await ctx.answerCallbackQuery({ text: "Scan a new QR code from Desktop to reconnect." });
+      const { text, keyboard } = this.buildConnectionGuide();
+      await ctx.editMessageText(text, { parse_mode: "HTML", reply_markup: keyboard });
     });
 
     // Text messages (private chats only)
@@ -381,16 +416,159 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     return ctx.chat?.type === "private";
   }
 
+  // ── Message builders ──
+
+  private buildWelcomeMessage(): { text: string; keyboard: InlineKeyboard } {
+    const text =
+      `<b>Welcome to Multica</b>\n\n` +
+      `Multica connects your AI agent to Telegram so you can chat with it from anywhere.\n\n` +
+      `To get started, connect your Multica Desktop app to this bot. ` +
+      `Tap the button below for step-by-step instructions.`;
+
+    const keyboard = new InlineKeyboard()
+      .text("How to connect", CB_HOW_TO_CONNECT)
+      .row()
+      .text("What is Multica?", CB_WHAT_IS_MULTICA);
+
+    return { text, keyboard };
+  }
+
+  private buildConnectionGuide(): { text: string; keyboard: InlineKeyboard } {
+    const text =
+      `<b>How to Connect</b>\n\n` +
+      `Follow these steps:\n\n` +
+      `<b>1.</b>  Open the <b>Multica Desktop</b> app\n` +
+      `<b>2.</b>  Go to <b>Clients</b> \u2192 <b>Channels</b>\n` +
+      `<b>3.</b>  Click the <b>Telegram</b> channel\n` +
+      `<b>4.</b>  Scan the <b>QR code</b> with your phone camera\n` +
+      `       <i>(this opens a deep link that connects automatically)</i>\n\n` +
+      `<b>Alternative:</b> Copy the connection link from Desktop and paste it here. ` +
+      `The link looks like:\n` +
+      `<code>multica://connect?gateway=...&amp;hub=...&amp;token=...</code>`;
+
+    const keyboard = new InlineKeyboard()
+      .text("Check connection status", CB_CHECK_STATUS);
+
+    return { text, keyboard };
+  }
+
+  private buildWhatIsMultica(): { text: string; keyboard: InlineKeyboard } {
+    const text =
+      `<b>What is Multica?</b>\n\n` +
+      `Multica is an AI agent framework that runs on your desktop. ` +
+      `It connects to multiple LLM providers (OpenAI, Anthropic, Google, and more) ` +
+      `and gives you a personal AI assistant with skills, tools, and memory.\n\n` +
+      `This Telegram bot acts as a remote channel: once connected, ` +
+      `every message you send here goes to your agent, and every response comes back.\n\n` +
+      `<b>Features:</b>\n` +
+      `  \u2022 Voice messages (auto-transcribed)\n` +
+      `  \u2022 Image and video understanding\n` +
+      `  \u2022 File sharing\n` +
+      `  \u2022 Rich formatted responses`;
+
+    const keyboard = new InlineKeyboard()
+      .text("How to connect", CB_HOW_TO_CONNECT);
+
+    return { text, keyboard };
+  }
+
+  private buildConnectedWelcome(user: TelegramUser, online: boolean): { text: string; keyboard: InlineKeyboard } {
+    const statusEmoji = online ? "\u2705" : "\u26a0\ufe0f";
+    const statusText = online ? "Online" : "Offline";
+
+    const text =
+      `<b>Welcome back!</b>\n\n` +
+      `${statusEmoji} Status: <b>${statusText}</b>\n` +
+      `Agent: <code>${user.agentId}</code>\n\n` +
+      (online
+        ? `Your agent is ready. Just send a message to start chatting.`
+        : `Your Hub is offline. Make sure the Multica Desktop app is running.`);
+
+    const keyboard = new InlineKeyboard()
+      .text("Check status", CB_CHECK_STATUS)
+      .text("Help", CB_SHOW_HELP)
+      .row()
+      .text("Reconnect", CB_RECONNECT);
+
+    return { text, keyboard };
+  }
+
+  private buildStatusMessage(user: TelegramUser | null, online: boolean): { text: string; keyboard: InlineKeyboard } {
+    if (!user) {
+      const text =
+        `<b>Connection Status</b>\n\n` +
+        `\u274c <b>Not connected</b>\n\n` +
+        `You haven't linked a Multica account yet.`;
+
+      const keyboard = new InlineKeyboard()
+        .text("How to connect", CB_HOW_TO_CONNECT);
+
+      return { text, keyboard };
+    }
+
+    const statusEmoji = online ? "\u2705" : "\u26a0\ufe0f";
+    const statusLabel = online ? "Online" : "Offline";
+
+    const text =
+      `<b>Connection Status</b>\n\n` +
+      `${statusEmoji} <b>${statusLabel}</b>\n\n` +
+      `Hub: <code>${user.hubId}</code>\n` +
+      `Agent: <code>${user.agentId}</code>\n\n` +
+      (online
+        ? `Your Hub is online and ready to receive messages.`
+        : `Your Hub is offline. Make sure the Multica Desktop app is running.`);
+
+    const keyboard = new InlineKeyboard()
+      .text("Refresh", CB_CHECK_STATUS)
+      .text("Help", CB_SHOW_HELP);
+
+    if (!online) {
+      keyboard.row().text("Reconnect", CB_RECONNECT);
+    }
+
+    return { text, keyboard };
+  }
+
+  private buildHelpMessage(isConnected: boolean): { text: string; keyboard: InlineKeyboard } {
+    const text =
+      `<b>Multica Telegram Bot</b>\n\n` +
+      `<b>Commands</b>\n` +
+      `  /start \u2014 Connect your account or see welcome\n` +
+      `  /status \u2014 Check connection status\n` +
+      `  /help \u2014 Show this message\n\n` +
+      `<b>How to connect</b>\n` +
+      `  <b>1.</b> Open Multica Desktop app\n` +
+      `  <b>2.</b> Go to <b>Clients</b> \u2192 <b>Channels</b>\n` +
+      `  <b>3.</b> Scan the Telegram QR code\n\n` +
+      `<b>What you can send</b>\n` +
+      `  \u2022 Text messages\n` +
+      `  \u2022 Voice messages (auto-transcribed)\n` +
+      `  \u2022 Photos and videos (auto-described)\n` +
+      `  \u2022 Documents`;
+
+    const keyboard = isConnected
+      ? new InlineKeyboard().text("Check status", CB_CHECK_STATUS)
+      : new InlineKeyboard().text("How to connect", CB_HOW_TO_CONNECT);
+
+    return { text, keyboard };
+  }
+
   /** Register bot commands with Telegram (shown in the menu) */
   private async setupBotCommands(): Promise<void> {
     if (!this.bot) return;
     try {
       await this.bot.api.setMyCommands([
-        { command: "start", description: "Connect your Multica account" },
+        { command: "start", description: "Connect or show welcome" },
         { command: "status", description: "Check connection status" },
-        { command: "help", description: "Show help" },
+        { command: "help", description: "Show help and instructions" },
       ]);
-      this.logger.log("Telegram bot commands registered");
+
+      // Set menu button to open the commands list
+      await this.bot.api.setChatMenuButton({
+        menu_button: { type: "commands" },
+      });
+
+      this.logger.log("Telegram bot commands and menu button registered");
     } catch (err) {
       this.logger.warn(`Failed to set bot commands: ${err instanceof Error ? err.message : err}`);
     }
@@ -401,8 +579,9 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     const connectionInfo = this.shortCodeStore.consume(code);
     if (!connectionInfo) {
       await ctx.reply(
-        "Connection code expired or invalid.\n\n" +
-          "QR codes are valid for 30 seconds. Please scan again from the Desktop app.",
+        `<b>\u26a0\ufe0f Connection code expired or invalid</b>\n\n` +
+          `QR codes are valid for 30 seconds. Please scan again from the Desktop app.`,
+        { parse_mode: "HTML" },
       );
       return;
     }
@@ -441,12 +620,8 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     }
 
     // New user without connection link
-    await ctx.reply(
-      "Welcome to Multica!\n\n" +
-        "To get started, open the Multica Desktop app, generate a Connection Link, " +
-        "and paste it here.\n\n" +
-        "The link looks like:\nmultica://connect?gateway=...&hub=...&agent=...&token=...&exp=...",
-    );
+    const welcome = this.buildWelcomeMessage();
+    await ctx.reply(welcome.text, { parse_mode: "HTML", reply_markup: welcome.keyboard });
   }
 
   // ── Inbound: media messages ──
@@ -469,11 +644,8 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     // Check if user is bound
     const user = await this.userStore.findByTelegramUserId(telegramUserId);
     if (!user) {
-      await ctx.reply(
-        "Welcome to Multica!\n\n" +
-          "To get started, open the Multica Desktop app, generate a Connection Link, " +
-          "and paste it here.",
-      );
+      const { text, keyboard } = this.buildWelcomeMessage();
+      await ctx.reply(text, { parse_mode: "HTML", reply_markup: keyboard });
       return;
     }
 
@@ -863,8 +1035,10 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     // 1. Check Hub is online
     if (!this.eventsGateway.isDeviceRegistered(connectionInfo.hubId)) {
       await ctx.reply(
-        "Connection failed: Hub is not online.\n\n" +
-          "Make sure the Multica Desktop app is running and connected to the Gateway, then try again.",
+        `<b>\u26a0\ufe0f Connection failed</b>\n\n` +
+          `Hub is not online.\n\n` +
+          `Make sure the Multica Desktop app is running and connected to the Gateway, then try again.`,
+        { parse_mode: "HTML" },
       );
       return;
     }
@@ -881,7 +1055,10 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
 
     // 4. Send verify RPC
     try {
-      await ctx.reply("Connecting... Please approve the connection on your Desktop app.");
+      await ctx.reply(
+        `<b>\u23f3 Connecting...</b>\n\nPlease approve the connection on your Desktop app.`,
+        { parse_mode: "HTML" },
+      );
 
       const result = await this.sendVerifyRpc(deviceId, connectionInfo.hubId, connectionInfo.token, {
         platform: "telegram",
@@ -901,11 +1078,16 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
         telegramLastName: msg?.from?.last_name,
       });
 
+      const successKeyboard = new InlineKeyboard()
+        .text("Check status", CB_CHECK_STATUS)
+        .text("Help", CB_SHOW_HELP);
+
       await ctx.reply(
-        "Connected successfully!\n\n" +
-          `Hub: ${result.hubId}\n` +
-          `Agent: ${result.agentId}\n\n` +
-          "You can now send messages to interact with your agent.",
+        `<b>\u2705 Connected successfully!</b>\n\n` +
+          `Hub: <code>${result.hubId}</code>\n` +
+          `Agent: <code>${result.agentId}</code>\n\n` +
+          `You can now send messages to interact with your agent.`,
+        { parse_mode: "HTML", reply_markup: successKeyboard },
       );
 
       this.logger.log(
@@ -917,13 +1099,20 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
 
       const message = error instanceof Error ? error.message : String(error);
       if (message.includes("REJECTED")) {
-        await ctx.reply("Connection rejected.\n\nThe connection was declined on the Desktop app.");
+        await ctx.reply(
+          `<b>\u274c Connection rejected</b>\n\nThe connection was declined on the Desktop app.`,
+          { parse_mode: "HTML" },
+        );
       } else if (message.includes("timed out")) {
         await ctx.reply(
-          "Connection timed out.\n\nPlease try again and approve the connection on your Desktop app within 30 seconds.",
+          `<b>\u274c Connection timed out</b>\n\nPlease try again and approve the connection on your Desktop app within 30 seconds.`,
+          { parse_mode: "HTML" },
         );
       } else {
-        await ctx.reply(`Connection failed: ${message}\n\nPlease try again.`);
+        await ctx.reply(
+          `<b>\u274c Connection failed</b>\n\n${message}\n\nPlease try again.`,
+          { parse_mode: "HTML" },
+        );
       }
 
       this.logger.warn(`Telegram verify failed: telegramUserId=${telegramUserId}, error=${message}`);
