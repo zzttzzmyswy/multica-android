@@ -19,6 +19,7 @@
     "dev:gateway": "pnpm --filter @multica/gateway dev",
     "dev:web": "pnpm --filter @multica/web dev",
     "dev:local": "bash scripts/dev-local.sh",
+    "dev:local:archive": "bash scripts/archive-dev-data.sh",
     "dev:all": "concurrently \"pnpm dev:gateway\" \"pnpm dev:web\"",
     "build": "turbo build",
     "build:desktop": "pnpm --filter @multica/desktop build",
