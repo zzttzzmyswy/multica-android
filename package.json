@@ -25,6 +25,7 @@
     "build:desktop": "pnpm --filter @multica/desktop build",
     "build:sdk": "pnpm --filter @multica/sdk build",
     "build:cli": "node scripts/build-cli.js",
+    "report:code-stats": "bash scripts/generate-code-stats-report.sh",
     "start": "node dist/index.js",
     "typecheck": "turbo typecheck",
     "test": "vitest run",
