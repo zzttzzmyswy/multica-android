@@ -26,5 +26,8 @@ release
 *.ipa
 monorepo.md
 
+# python
+__pycache__
+
 # test coverage
 coverage
