@@ -52,5 +52,5 @@ exec pnpm concurrently \
   "pnpm --filter @multica/utils dev" \
   "pnpm --filter @multica/core dev" \
   "PORT=4000 SMC_DATA_DIR=~/.super-multica-dev MULTICA_WORKSPACE_DIR=~/Documents/Multica-dev MULTICA_RUN_LOG=1 pnpm --filter @multica/gateway dev" \
-  "pnpm --filter @multica/web dev" \
+  "MULTICA_API_URL=https://api-dev.copilothub.ai pnpm --filter @multica/web dev" \
   "GATEWAY_URL=http://localhost:4000 MAIN_VITE_WEB_URL=http://localhost:3000 SMC_DATA_DIR=~/.super-multica-dev MULTICA_WORKSPACE_DIR=~/Documents/Multica-dev MULTICA_RUN_LOG=1 pnpm --filter @multica/desktop dev"

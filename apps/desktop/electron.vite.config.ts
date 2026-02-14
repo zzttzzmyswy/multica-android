@@ -6,6 +6,7 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
+    envPrefix: ['MAIN_VITE_', 'MULTICA_'],
   },
   preload: {
     plugins: [externalizeDepsPlugin()],

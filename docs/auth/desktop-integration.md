@@ -68,7 +68,7 @@ pnpm dev:web
 pnpm dev:desktop
 ```
 
-本地调试时，Next.js rewrites（配置在 `apps/web/next.config.ts`）自动将 `/api/*` 请求代理到 `api-dev.copilothub.ai`。
+本地调试时，Next.js rewrites（配置在 `apps/web/next.config.ts`）自动将 `/api/*` 请求代理到 `MULTICA_API_URL` 指定的后端。
 
 ## 参考
 

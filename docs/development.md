@@ -51,7 +51,7 @@ pnpm dev:local:archive    # Archive dev data and start fresh
 
 | Variable | Description |
 |----------|-------------|
-| `API_URL` | Backend API URL (default: `https://api-dev.copilothub.ai`) |
+| `MULTICA_API_URL` | Backend API URL (required, no default) |
 
 **Build for different environments:**
 
@@ -61,7 +61,7 @@ pnpm --filter @multica/desktop build              # Production (.env.production)
 pnpm --filter @multica/desktop build:staging      # Staging (.env.staging)
 
 # Web (Vercel)
-# Set API_URL in Vercel Dashboard → Settings → Environment Variables
+# Set MULTICA_API_URL in Vercel Dashboard → Settings → Environment Variables
 ```
 
 See `apps/desktop/.env.example` for the full variable reference.
