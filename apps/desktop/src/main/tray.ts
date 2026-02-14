@@ -18,19 +18,14 @@ let statusInterval: ReturnType<typeof setInterval> | null = null
 export function createTray(window: BrowserWindow): void {
   mainWindowRef = window
 
-  const iconPath = path.join(process.env.APP_ROOT!, 'build', 'icon.png')
+  // Use dedicated tray icon (asterisk shape matching MulticaIcon).
+  // On macOS, Electron auto-picks trayTemplate.png / trayTemplate@2x.png
+  // and treats "Template" suffix as a template image (adapts to dark/light menu bar).
+  const iconPath = path.join(process.env.APP_ROOT!, 'build', 'trayTemplate.png')
   const icon = nativeImage.createFromPath(iconPath)
-  const trayIcon = icon.resize({ width: 16, height: 16 })
 
-  if (process.platform === 'darwin') {
-    trayIcon.setTemplateImage(true)
-  }
-
-  tray = new Tray(trayIcon)
+  tray = new Tray(icon)
   tray.setToolTip('Multica')
-
-  // Click to toggle window visibility
-  tray.on('click', toggleWindowVisibility)
 
   // Initial menu
   updateTrayMenu()
@@ -54,15 +49,10 @@ export function destroyTray(): void {
   mainWindowRef = null
 }
 
-function toggleWindowVisibility(): void {
+function showMainWindow(): void {
   if (!mainWindowRef || mainWindowRef.isDestroyed()) return
-
-  if (mainWindowRef.isVisible()) {
-    mainWindowRef.hide()
-  } else {
-    mainWindowRef.show()
-    mainWindowRef.focus()
-  }
+  mainWindowRef.show()
+  mainWindowRef.focus()
 }
 
 function updateTrayMenu(): void {
@@ -90,15 +80,13 @@ function updateTrayMenu(): void {
 
   tray.setToolTip(`Multica - Agent: ${agentStatus}`)
 
-  const windowVisible = mainWindowRef && !mainWindowRef.isDestroyed() && mainWindowRef.isVisible()
-
   const menu = Menu.buildFromTemplate([
     { label: `Agent: ${agentStatus}`, enabled: false },
     { label: `Hub: ${hubStatus}`, enabled: false },
     { type: 'separator' },
     {
-      label: windowVisible ? 'Hide Window' : 'Show Window',
-      click: toggleWindowVisibility,
+      label: 'Show Main Window',
+      click: showMainWindow,
     },
     { type: 'separator' },
     {
