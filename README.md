@@ -89,11 +89,35 @@ Web/Mobile Clients
 
 ## Documentation
 
+**Getting Started**
+
 | Topic | Link |
 |-------|------|
 | Development guide | [docs/development.md](./docs/development.md) |
 | Credentials & LLM providers | [docs/credentials.md](./docs/credentials.md) |
 | CLI usage | [docs/cli.md](./docs/cli.md) |
 | Skills & tools | [docs/skills-and-tools.md](./docs/skills-and-tools.md) |
-| Time injection design | [docs/time-injection.md](./docs/time-injection.md) |
 | Package management | [docs/package-management.md](./docs/package-management.md) |
+| Mobile development | [docs/mobile/guide.md](./docs/mobile/guide.md) |
+
+**Architecture & Protocols**
+
+| Topic | Link |
+|-------|------|
+| Product capabilities | [docs/product-capabilities.md](./docs/product-capabilities.md) |
+| Message paths (Desktop/Web/Channel) | [docs/message-paths.md](./docs/message-paths.md) |
+| Client streaming protocol | [docs/client-streaming-protocol.md](./docs/client-streaming-protocol.md) |
+| Hub RPC protocol | [docs/rpc.md](./docs/rpc.md) |
+| Exec approval protocol | [docs/exec-approval.md](./docs/exec-approval.md) |
+| Time injection design | [docs/time-injection.md](./docs/time-injection.md) |
+| Channel system | [docs/channels/README.md](./docs/channels/README.md) |
+| Channel media handling | [docs/channels/media-handling.md](./docs/channels/media-handling.md) |
+| Desktop login integration | [docs/auth/desktop-integration.md](./docs/auth/desktop-integration.md) |
+
+**Design Proposals** (not yet implemented)
+
+| Topic | Link |
+|-------|------|
+| Auto memory refresh | [docs/design/auto-memory-refresh.md](./docs/design/auto-memory-refresh.md) |
+| Cron job tool | [docs/design/cron-job-tool.md](./docs/design/cron-job-tool.md) |
+| Dashboard design | [docs/plans/2026-02-12-dashboard-design.md](./docs/plans/2026-02-12-dashboard-design.md) |
