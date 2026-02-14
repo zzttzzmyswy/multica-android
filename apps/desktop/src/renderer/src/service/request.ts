@@ -1,7 +1,10 @@
 import { useAuthStore } from '../stores/auth'
 
-// Backend API host — driven by RENDERER_VITE_API_URL env var (set in .env.production / .env.development)
-const API_HOST = import.meta.env.RENDERER_VITE_API_URL || 'https://api.multica.ai'
+// Backend API host — driven by RENDERER_VITE_MULTICA_API_URL env var (set in .env.production / .env.development)
+const API_HOST = import.meta.env.RENDERER_VITE_MULTICA_API_URL
+if (!API_HOST) {
+  throw new Error('RENDERER_VITE_MULTICA_API_URL is required')
+}
 
 /**
  * Fetch request wrapper for desktop app.

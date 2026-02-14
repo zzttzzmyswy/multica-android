@@ -1,7 +1,10 @@
 import { getLocalAuth } from "./auth-store.js";
 
 export function getApiBaseUrl(): string {
-  return process.env.MULTICA_API_URL || "https://api.multica.ai";
+  if (!process.env.MULTICA_API_URL) {
+    throw new Error("MULTICA_API_URL is required");
+  }
+  return process.env.MULTICA_API_URL;
 }
 
 /**
