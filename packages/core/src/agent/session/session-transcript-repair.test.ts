@@ -113,6 +113,78 @@ describe("sanitizeToolUseResultPairing", () => {
     expect(out.map((m) => m.role)).toEqual(["user", "assistant"]);
   });
 
+  it("drops duplicate assistant messages from abort double-save", () => {
+    // Reproduces the bug: session abort saves the same assistant message twice,
+    // leaving the second copy with a tool call that has no matching tool result.
+    const input = [
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: "Let me write a file" },
+          { type: "toolCall", id: "tool_ABC", name: "write", arguments: { path: "/tmp/test.txt", content: "hello" } },
+        ],
+      },
+      // Duplicate from abort handler saving the same message again
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: "Let me write a file" },
+          { type: "toolCall", id: "tool_ABC", name: "write", arguments: { path: "/tmp/test.txt", content: "hello" } },
+        ],
+      },
+      // User sends a new message after the abort
+      { role: "user", content: "hello" },
+    ] as AgentMessage[];
+
+    const out = sanitizeToolUseResultPairing(input);
+
+    // Should have: assistant, synthetic toolResult, user
+    // The duplicate assistant should be removed
+    const assistants = out.filter((m) => m.role === "assistant");
+    expect(assistants).toHaveLength(1);
+
+    const toolResults = out.filter((m) => m.role === "toolResult") as Array<{ toolCallId?: string }>;
+    expect(toolResults).toHaveLength(1);
+    expect(toolResults[0]?.toolCallId).toBe("tool_ABC");
+
+    const users = out.filter((m) => m.role === "user");
+    expect(users).toHaveLength(1);
+
+    // Verify ordering: assistant, toolResult, user
+    expect(out.map((m) => m.role)).toEqual(["assistant", "toolResult", "user"]);
+  });
+
+  it("drops duplicate assistant followed by error assistant", () => {
+    // Full reproduction: duplicate assistant + user + error assistant
+    const input = [
+      {
+        role: "assistant",
+        content: [
+          { type: "toolCall", id: "tool_ABC", name: "write", arguments: { path: "/tmp/test.txt", content: "hello" } },
+        ],
+      },
+      {
+        role: "assistant",
+        content: [
+          { type: "toolCall", id: "tool_ABC", name: "write", arguments: { path: "/tmp/test.txt", content: "hello" } },
+        ],
+      },
+      { role: "user", content: "continue" },
+      { role: "assistant", content: [] },
+      { role: "user", content: "how are you" },
+      { role: "assistant", content: [] },
+    ] as AgentMessage[];
+
+    const out = sanitizeToolUseResultPairing(input);
+
+    // The duplicate assistant should be removed; error assistants are kept (no tool calls)
+    const assistants = out.filter((m) => m.role === "assistant");
+    expect(assistants).toHaveLength(3); // original + 2 error assistants
+
+    const toolResults = out.filter((m) => m.role === "toolResult");
+    expect(toolResults).toHaveLength(1);
+  });
+
   it("drops tool results with empty tool call id", () => {
     const input = [
       {
