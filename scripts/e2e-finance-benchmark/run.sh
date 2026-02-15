@@ -12,6 +12,11 @@ SMC_DATA_DIR="${SMC_DATA_DIR:-$HOME/.super-multica-e2e}"
 MULTICA_API_URL="${MULTICA_API_URL:-https://api-dev.copilothub.ai}"
 PROVIDERS_RAW="${PROVIDERS:-kimi-coding claude-code}"
 CASE_GLOB="${CASE_GLOB:-case-*.txt}"
+CASE_TIMEOUT_SEC="${CASE_TIMEOUT_SEC:-900}"
+TIMEOUT_ENABLED="true"
+if [[ "${CASE_TIMEOUT_SEC}" =~ ^[0-9]+$ ]] && (( CASE_TIMEOUT_SEC <= 0 )); then
+  TIMEOUT_ENABLED="false"
+fi
 
 read -r -a PROVIDERS <<< "${PROVIDERS_RAW}"
 
@@ -19,7 +24,11 @@ mkdir -p "${OUT_DIR}"
 MANIFEST="${OUT_DIR}/manifest.tsv"
 printf "timestamp\tprovider\tcase_id\tstatus\tsession_id\tsession_dir\tlog_file\n" > "${MANIFEST}"
 
-mapfile -t CASE_FILES < <(find "${CASES_DIR}" -maxdepth 1 -type f -name "${CASE_GLOB}" | sort)
+CASE_FILES=()
+while IFS= read -r line; do
+  CASE_FILES+=("${line}")
+done < <(find "${CASES_DIR}" -maxdepth 1 -type f -name "${CASE_GLOB}" | sort)
+
 if [[ ${#CASE_FILES[@]} -eq 0 ]]; then
   echo "No case files matched ${CASE_GLOB} in ${CASES_DIR}" >&2
   exit 1
@@ -30,6 +39,11 @@ echo "Using SMC_DATA_DIR=${SMC_DATA_DIR}"
 echo "Using MULTICA_API_URL=${MULTICA_API_URL}"
 echo "Providers: ${PROVIDERS[*]}"
 echo "Cases: ${#CASE_FILES[@]}"
+if [[ "${TIMEOUT_ENABLED}" == "true" ]]; then
+  echo "Case timeout: ${CASE_TIMEOUT_SEC}s"
+else
+  echo "Case timeout: disabled"
+fi
 
 total=0
 for provider in "${PROVIDERS[@]}"; do
@@ -45,9 +59,41 @@ for provider in "${PROVIDERS[@]}"; do
     echo "[${total}] Running ${case_id} with provider=${provider}"
 
     status="success"
-    if ! SMC_DATA_DIR="${SMC_DATA_DIR}" \
-      MULTICA_API_URL="${MULTICA_API_URL}" \
-      pnpm multica run --run-log --provider "${provider}" "${prompt}" > "${log_file}" 2>&1; then
+    timed_out="false"
+    started_at="$(date +%s)"
+
+    (
+      SMC_DATA_DIR="${SMC_DATA_DIR}" \
+        MULTICA_API_URL="${MULTICA_API_URL}" \
+        pnpm multica run --run-log --provider "${provider}" "${prompt}" > "${log_file}" 2>&1
+    ) &
+    cmd_pid=$!
+
+    while kill -0 "${cmd_pid}" 2>/dev/null; do
+      if [[ "${TIMEOUT_ENABLED}" == "true" ]]; then
+        now="$(date +%s)"
+        elapsed="$((now - started_at))"
+        if (( elapsed >= CASE_TIMEOUT_SEC )); then
+          timed_out="true"
+          kill "${cmd_pid}" 2>/dev/null || true
+          sleep 1
+          kill -9 "${cmd_pid}" 2>/dev/null || true
+          break
+        fi
+      fi
+      sleep 2
+    done
+
+    exit_code=0
+    wait "${cmd_pid}" || exit_code=$?
+    if [[ "${timed_out}" == "true" ]]; then
+      status="timeout"
+      printf "\n[runner] timed out after %ss\n" "${CASE_TIMEOUT_SEC}" >> "${log_file}"
+    elif (( exit_code != 0 )); then
+      status="failed"
+    elif [[ ! -s "${log_file}" ]]; then
+      status="failed"
+    elif ! rg -q "\[session: " "${log_file}"; then
       status="failed"
     fi
 
