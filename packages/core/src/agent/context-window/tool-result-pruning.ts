@@ -278,6 +278,16 @@ function takeTail(text: string, maxChars: number): string {
 }
 
 /**
+ * Extract artifact reference from text that was previously truncated
+ * by pre-emptive truncation (tool-result-truncation.ts).
+ * Returns the artifact relative path, or null if not found.
+ */
+function extractArtifactRef(text: string): string | null {
+  const match = text.match(/Full result saved to (artifacts\/[^\s.]+\.txt)/);
+  return match?.[1] ?? null;
+}
+
+/**
  * Soft trim a tool result text.
  */
 function softTrimText(
@@ -291,7 +301,14 @@ function softTrimText(
 
   const head = takeHead(text, headChars);
   const tail = takeTail(text, tailChars);
-  const note = `\n\n[Tool result trimmed: kept first ${headChars} chars and last ${tailChars} chars of ${text.length} chars.]`;
+
+  // Check for existing artifact reference from pre-emptive truncation
+  const artifactRef = extractArtifactRef(text);
+  const artifactNote = artifactRef
+    ? ` Full result available at ${artifactRef}.`
+    : "";
+
+  const note = `\n\n[Tool result trimmed: kept first ${headChars} chars and last ${tailChars} chars of ${text.length} chars.${artifactNote}]`;
   const trimmed = `${head}\n...\n${tail}${note}`;
 
   return {
@@ -355,13 +372,17 @@ function processUserMessageToolResults(
         newContent.push(block);
       }
     } else {
-      // Hard clear
+      // Hard clear — preserve artifact reference if available
+      const artifactRef = extractArtifactRef(originalText);
+      const placeholder = artifactRef
+        ? `${settings.hardClear.placeholder} Full result available at ${artifactRef}.`
+        : settings.hardClear.placeholder;
       newContent.push({
         ...block,
-        content: [{ type: "text", text: settings.hardClear.placeholder }],
+        content: [{ type: "text", text: placeholder }],
       });
       changed = true;
-      charsSaved += originalText.length - settings.hardClear.placeholder.length;
+      charsSaved += originalText.length - placeholder.length;
     }
   }
 

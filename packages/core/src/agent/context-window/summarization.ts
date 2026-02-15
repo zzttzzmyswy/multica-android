@@ -68,6 +68,7 @@ const DEFAULT_SUMMARY_INSTRUCTIONS = `Summarize the conversation history concise
 - Important context and constraints
 - Open questions or TODOs
 - Technical details that may be needed later
+- If any tool results reference saved artifacts (e.g. "artifacts/..."), note the artifact path so the data can be re-read later if needed
 
 Keep the summary concise but complete. Use bullet points for clarity.`;
 

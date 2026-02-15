@@ -98,6 +98,44 @@ export async function summarizeWithFallback(
 }
 
 /**
+ * Extract artifact references from messages that contain truncated tool results.
+ */
+function extractArtifactRefs(messages: AgentMessage[]): string[] {
+  const refs: string[] = [];
+  const pattern = /Full result (?:saved to|available at) (artifacts\/[^\s.]+\.txt)/g;
+
+  for (const msg of messages) {
+    if (msg.role !== "user") continue;
+    const content = (msg as any).content;
+    if (typeof content === "string") {
+      for (const match of content.matchAll(pattern)) {
+        if (match[1] && !refs.includes(match[1])) refs.push(match[1]);
+      }
+    } else if (Array.isArray(content)) {
+      for (const block of content) {
+        const text =
+          typeof block === "string"
+            ? block
+            : block?.type === "tool_result" && typeof block.content === "string"
+              ? block.content
+              : block?.type === "tool_result" && Array.isArray(block.content)
+                ? block.content
+                    .filter((b: any) => b?.type === "text")
+                    .map((b: any) => b.text)
+                    .join("")
+                : block?.type === "text"
+                  ? block.text ?? ""
+                  : "";
+        for (const match of text.matchAll(pattern)) {
+          if (match[1] && !refs.includes(match[1])) refs.push(match[1]);
+        }
+      }
+    }
+  }
+  return refs;
+}
+
+/**
  * Build a plain-text fallback summary from metadata extraction only (no LLM).
  */
 function buildPlainTextFallback(
@@ -123,6 +161,15 @@ function buildPlainTextFallback(
   let result = parts.join("\n\n");
   result += formatToolFailuresSection(failures);
   result += formatFileOperationsSection(fileOps);
+
+  // Extract artifact references from truncated tool results
+  const artifactRefs = extractArtifactRefs(messages);
+  if (artifactRefs.length > 0) {
+    result += `\n\n## Saved Artifacts\nThe following tool results were saved as artifacts and can be re-read:\n`;
+    for (const ref of artifactRefs) {
+      result += `- ${ref}\n`;
+    }
+  }
 
   return result;
 }
