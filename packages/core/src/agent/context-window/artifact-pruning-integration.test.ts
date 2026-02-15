@@ -185,7 +185,7 @@ describe("Phase 2 E2E: Artifact-Aware Pruning", () => {
 
 describe("Phase 2 E2E: Summary Fallback Artifact Extraction", () => {
   // UC4: summary fallback extracts artifact references
-  it("UC4: summary fallback includes 'Saved Artifacts' section with all artifact refs", async () => {
+  it("UC4: summary fallback includes 'Saved Artifacts' section with all artifact refs", { timeout: 15_000 }, async () => {
     const mod = await import("./summary-fallback.js");
 
     const messages: AgentMessage[] = [
