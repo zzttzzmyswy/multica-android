@@ -23,46 +23,51 @@ export default function LoginPage() {
 
   if (isLoading) {
     return (
-      <div
-        className="flex h-screen items-center justify-center bg-background"
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-      >
-        <Loading className="size-6" />
+      <div className="flex h-screen flex-col bg-background">
+        <header
+          className="shrink-0 h-12"
+          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+        />
+        <div className="flex flex-1 items-center justify-center">
+          <Loading className="size-6" />
+        </div>
       </div>
     )
   }
 
   return (
-    <div
-      className="flex h-screen flex-col items-center justify-center bg-background p-8 animate-in fade-in duration-300"
-      style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-    >
-      <div className="w-full max-w-sm flex flex-col items-center text-center space-y-6">
-        {/* Brand */}
-        <div className="flex items-center gap-2">
-          <MulticaIcon bordered animate size="md" />
-          <h1 className="text-lg tracking-wide font-brand">Multica</h1>
+    <div className="flex h-screen flex-col bg-background">
+      <header
+        className="shrink-0 h-12"
+        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      />
+      <div className="flex flex-1 flex-col items-center justify-center p-8 animate-in fade-in duration-300">
+        <div className="w-full max-w-sm flex flex-col items-center text-center space-y-6">
+          {/* Brand */}
+          <div className="flex items-center gap-2">
+            <MulticaIcon bordered animate size="md" />
+            <h1 className="text-lg tracking-wide font-brand">Multica</h1>
+          </div>
+
+          {/* Tagline */}
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            An AI assistant that gets things done.
+          </p>
+
+          {/* Sign In */}
+          <Button
+            onClick={startLogin}
+            size="lg"
+            className="px-8"
+          >
+            Sign In to Continue
+          </Button>
+
+          {/* Helper */}
+          <p className="text-xs text-muted-foreground/60">
+            Opens browser for authentication
+          </p>
         </div>
-
-        {/* Tagline */}
-        <p className="text-sm text-muted-foreground leading-relaxed">
-          An AI assistant that gets things done.
-        </p>
-
-        {/* Sign In */}
-        <Button
-          onClick={startLogin}
-          size="lg"
-          className="px-8"
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        >
-          Sign In to Continue
-        </Button>
-
-        {/* Helper */}
-        <p className="text-xs text-muted-foreground/60">
-          Opens browser for authentication
-        </p>
       </div>
     </div>
   )

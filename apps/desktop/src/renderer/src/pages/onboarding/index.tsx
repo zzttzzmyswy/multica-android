@@ -44,12 +44,12 @@ export default function OnboardingPage() {
 
   return (
     <div className="h-dvh flex flex-col bg-background">
-      <header className="shrink-0 h-12 flex items-center pr-4">
-        {/* Left: Draggable area for traffic lights */}
-        <div
-          className="w-20 h-full shrink-0"
-          style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
-        />
+      <header
+        className="shrink-0 h-12 flex items-center pr-4"
+        style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+      >
+        {/* Left: Traffic light spacing */}
+        <div className="w-20 h-full shrink-0" />
 
         {/* Brand */}
         <div className="flex items-center gap-2 shrink-0">
@@ -65,7 +65,10 @@ export default function OnboardingPage() {
         </div>
 
         {/* Right: Theme toggle */}
-        <div className="shrink-0">
+        <div
+          className="shrink-0"
+          style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+        >
           <ModeToggle />
         </div>
       </header>
