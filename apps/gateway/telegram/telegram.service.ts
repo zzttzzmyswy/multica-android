@@ -87,6 +87,7 @@ interface MediaAttachment {
 const VERIFY_TIMEOUT_MS = 30_000;
 const TYPING_TIMEOUT_MS = 60_000;
 const MAX_CHARS_PER_MESSAGE = 4000; // Telegram limit is 4096; leave room for HTML overhead
+const REPLY_CONTEXT_MAX_CHARS = 300; // Max chars of quoted text when user replies to a message
 
 // ── Callback data identifiers ──
 
@@ -101,6 +102,23 @@ const CB_RECONNECT = "action:reconnect";
 /** Check if a GrammyError is an HTML parse failure */
 function isParseError(err: unknown): boolean {
   return err instanceof GrammyError && err.description.includes("can't parse entities");
+}
+
+/**
+ * Extract reply context when a user replies to a specific message in Telegram.
+ * Returns a formatted annotation like `[Replying to: "original text..."]` or null.
+ */
+function extractReplyContext(ctx: Context): string | null {
+  const replyMsg = ctx.message?.reply_to_message;
+  if (!replyMsg) return null;
+
+  const text = replyMsg.text || replyMsg.caption;
+  if (!text) return null;
+
+  const truncated = text.length > REPLY_CONTEXT_MAX_CHARS
+    ? text.slice(0, REPLY_CONTEXT_MAX_CHARS) + "..."
+    : text;
+  return `[Replying to: "${truncated}"]`;
 }
 
 /**
@@ -152,8 +170,6 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
   private typingTimers = new Map<string, ReturnType<typeof setInterval>>();
   /** Tracks the originating message for reply_to & reaction cleanup, keyed by deviceId */
   private messageContexts = new Map<string, MessageContext>();
-  /** Editable status message IDs for tool narration, keyed by deviceId */
-  private statusMessages = new Map<string, { chatId: number; messageId: number }>();
 
   private readonly logger = new Logger(TelegramService.name);
 
@@ -632,7 +648,10 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       // ACK: 👀 reaction on the original message
       await this.addReaction(msg.chat.id, msg.message_id, "👀");
       this.storeMessageContext(user.deviceId, msg.chat.id, msg.message_id);
-      await this.routeToHub(user, text, ctx);
+      // Prepend reply context if user is replying to a specific message
+      const replyContext = extractReplyContext(ctx);
+      const content = replyContext ? `${replyContext}\n${text}` : text;
+      await this.routeToHub(user, content, ctx);
       return;
     }
 
@@ -673,7 +692,10 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     // Process media → text description (async, may take a few seconds)
     const processedText = await this.processMedia({ ...media, caption: caption ?? undefined });
 
-    await this.routeToHub(user, processedText, ctx);
+    // Prepend reply context if user is replying to a specific message
+    const replyContext = extractReplyContext(ctx);
+    const content = replyContext ? `${replyContext}\n${processedText}` : processedText;
+    await this.routeToHub(user, content, ctx);
   }
 
   // ── Media processing ──
@@ -826,58 +848,6 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /**
-   * Edit an existing message with HTML formatting, fallback to plain text.
-   */
-  private async editFormatted(
-    chatId: number,
-    messageId: number,
-    text: string,
-  ): Promise<void> {
-    if (!this.bot) return;
-
-    const html = markdownToTelegramHtml(text);
-    try {
-      await this.bot.api.editMessageText(chatId, messageId, html, { parse_mode: "HTML" });
-    } catch (err) {
-      if (isParseError(err)) {
-        this.logger.warn("HTML parse failed on edit, retrying as plain text");
-        await this.bot.api.editMessageText(chatId, messageId, text);
-      } else {
-        throw err;
-      }
-    }
-  }
-
-  /**
-   * Send or edit a status message for tool narration.
-   * First call sends a new reply; subsequent calls edit the same message.
-   */
-  private async sendOrEditStatus(deviceId: string, text: string): Promise<void> {
-    if (!this.bot) return;
-
-    const user = await this.userStore.findByDeviceId(deviceId);
-    if (!user) return;
-
-    const context = this.messageContexts.get(deviceId);
-    const chatId = context?.telegramChatId ?? Number(user.telegramUserId);
-    const existing = this.statusMessages.get(deviceId);
-
-    try {
-      if (existing) {
-        await this.editFormatted(existing.chatId, existing.messageId, text);
-      } else {
-        const html = markdownToTelegramHtml(text);
-        const extra: Record<string, unknown> = { parse_mode: "HTML" };
-        if (context) extra["reply_to_message_id"] = context.telegramMessageId;
-        const msg = await this.bot.api.sendMessage(chatId, html, extra);
-        this.statusMessages.set(deviceId, { chatId, messageId: msg.message_id });
-      }
-    } catch (err) {
-      this.logger.warn(`Failed to send/edit status: ${err}`);
-    }
-  }
-
   /** Send a file (photo/document/video/audio) to a Telegram user */
   private async sendFileToTelegram(
     deviceId: string,
@@ -1023,7 +993,6 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       await this.removeReaction(context.telegramChatId, context.telegramMessageId);
       this.messageContexts.delete(deviceId);
     }
-    this.statusMessages.delete(deviceId);
   }
 
   // ── Connection & routing ──
@@ -1276,8 +1245,8 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
                 .map((c) => c.text!)
                 .join("") ?? "";
               if (narration) {
-                void this.sendOrEditStatus(deviceId, narration).then(() => {
-                  // Re-send typing indicator — Telegram clears it when a message is sent/edited
+                void this.sendToTelegram(deviceId, narration).then(() => {
+                  // Re-send typing indicator — Telegram clears it when a message is sent
                   const ctx = this.messageContexts.get(deviceId);
                   if (ctx) {
                     void this.bot?.api.sendChatAction(ctx.telegramChatId, "typing").catch(() => {});
