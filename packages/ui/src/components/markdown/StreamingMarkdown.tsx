@@ -1,6 +1,5 @@
 import * as React from 'react'
 import { Markdown, type RenderMode } from './Markdown'
-import { Spinner } from '@multica/ui/components/spinner'
 
 export interface StreamingMarkdownProps {
   content: string
@@ -196,21 +195,10 @@ export function StreamingMarkdown({
     )
   }
 
+  // Empty content - return null, let parent handle loading indicator
   if (blocks.length === 0) {
-    return (
-      <div className="flex items-center gap-2 py-1 text-muted-foreground">
-        <Spinner className="text-xs" />
-        <span className="text-xs">Generating...</span>
-      </div>
-    )
+    return <></>
   }
-
-  const indicator = (
-    <div className="absolute bottom-1 left-6 flex items-center gap-2 py-1 text-muted-foreground">
-      <Spinner className="text-xs" />
-      <span className="text-xs">Generating...</span>
-    </div>
-  )
 
   return (
     <>
@@ -232,7 +220,6 @@ export function StreamingMarkdown({
           />
         )
       })}
-      {indicator}
     </>
   )
 }
