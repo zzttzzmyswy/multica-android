@@ -13,6 +13,9 @@ import {
   buildToolingSummary,
   buildUserSection,
   buildWorkspaceSection,
+  DEFAULT_BOOTSTRAP_MAX_CHARS,
+  DEFAULT_SKILLS_MAX_CHARS,
+  truncateWithBudget,
 } from "./sections.js";
 
 describe("buildIdentitySection", () => {
@@ -271,6 +274,96 @@ describe("buildProfileDirSection", () => {
     // Profile directory info is now part of buildWorkspaceSection
     expect(buildProfileDirSection("/path/to/profile", "full")).toEqual([]);
     expect(buildProfileDirSection("/path", "minimal")).toEqual([]);
+  });
+});
+
+describe("truncateWithBudget", () => {
+  it("returns text unchanged when within budget", () => {
+    const result = truncateWithBudget("short text", 100);
+    expect(result).toEqual({ text: "short text", truncated: false });
+  });
+
+  it("truncates text exceeding budget with head + marker + tail", () => {
+    const text = "A".repeat(1000);
+    const result = truncateWithBudget(text, 200);
+    expect(result.truncated).toBe(true);
+    expect(result.text).toContain("characters omitted");
+    expect(result.text).toContain("content truncated to fit system prompt budget");
+    // Head should be ~70% of budget = 140 chars of "A"
+    expect(result.text.startsWith("A".repeat(100))).toBe(true);
+    // Tail should be ~20% of budget = 40 chars of "A"
+    expect(result.text.endsWith("A".repeat(40))).toBe(true);
+  });
+
+  it("snaps head boundary to newline when possible", () => {
+    // Build text with a newline at ~85% of head budget (within the 80-100% snap range)
+    const budget = 200;
+    // Place a newline at position 120 (> 140*0.8=112, so within snap range)
+    const text = "A".repeat(120) + "\n" + "B".repeat(900);
+    const result = truncateWithBudget(text, budget);
+    expect(result.truncated).toBe(true);
+    // Head should snap to the newline at position 120 (not continue to 140)
+    const headPortion = result.text.split("characters omitted")[0]!;
+    // The head portion should end at the newline, so no "B" chars before the marker
+    expect(headPortion).not.toContain("B");
+    expect(result.text.startsWith("A".repeat(120))).toBe(true);
+  });
+
+  it("reports correct omitted character count", () => {
+    const text = "X".repeat(500);
+    const result = truncateWithBudget(text, 100);
+    expect(result.truncated).toBe(true);
+    // head = floor(100*0.7) = 70, tail = floor(100*0.2) = 20, omitted = 500 - 70 - 20 = 410
+    expect(result.text).toContain("410 characters omitted");
+  });
+
+  it("handles exact budget boundary", () => {
+    const text = "A".repeat(100);
+    const result = truncateWithBudget(text, 100);
+    expect(result).toEqual({ text: text, truncated: false });
+  });
+});
+
+describe("buildWorkspaceSection budget control", () => {
+  it("truncates oversized workspace.md content", () => {
+    const oversized = "Line " + "X".repeat(DEFAULT_BOOTSTRAP_MAX_CHARS + 5000);
+    const result = buildWorkspaceSection({ workspace: oversized }, "full");
+    const text = result.join("\n");
+    expect(text).toContain("characters omitted");
+    expect(text.length).toBeLessThan(oversized.length);
+  });
+
+  it("preserves small workspace.md without truncation", () => {
+    const small = "Small workspace rules.";
+    const result = buildWorkspaceSection({ workspace: small }, "full");
+    const text = result.join("\n");
+    expect(text).toContain("Small workspace rules.");
+    expect(text).not.toContain("characters omitted");
+  });
+});
+
+describe("buildSkillsSection budget control", () => {
+  it("truncates oversized skills prompt", () => {
+    const oversized = "## skill1\n" + "Z".repeat(DEFAULT_SKILLS_MAX_CHARS + 3000);
+    const result = buildSkillsSection(oversized, "full");
+    const text = result.join("\n");
+    expect(text).toContain("characters omitted");
+    expect(text).toContain("## Skills (mandatory)");
+  });
+
+  it("preserves small skills prompt without truncation", () => {
+    const small = "## commit\nDo commits.";
+    const result = buildSkillsSection(small, "full");
+    const text = result.join("\n");
+    expect(text).toContain("## commit");
+    expect(text).not.toContain("characters omitted");
+  });
+});
+
+describe("budget constants", () => {
+  it("exports expected default values", () => {
+    expect(DEFAULT_BOOTSTRAP_MAX_CHARS).toBe(20_000);
+    expect(DEFAULT_SKILLS_MAX_CHARS).toBe(12_000);
   });
 });
 

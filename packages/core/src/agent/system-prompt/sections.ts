@@ -47,6 +47,48 @@ const TOOL_ORDER = [
   "data",
 ];
 
+// ─── Bootstrap budget constants ──────────────────────────────────────────────
+
+/** Max characters per injected file (workspace.md, etc.) */
+export const DEFAULT_BOOTSTRAP_MAX_CHARS = 20_000;
+
+/** Max characters for the skills prompt total */
+export const DEFAULT_SKILLS_MAX_CHARS = 12_000;
+
+/**
+ * Truncate text to fit within a character budget.
+ *
+ * When text exceeds budget, keeps head (70%) + truncation marker + tail (20%).
+ * Returns { text, truncated } so callers can log/report the truncation.
+ */
+export function truncateWithBudget(
+  text: string,
+  budget: number,
+): { text: string; truncated: boolean } {
+  if (text.length <= budget) return { text, truncated: false };
+
+  const headChars = Math.floor(budget * 0.7);
+  const tailChars = Math.floor(budget * 0.2);
+
+  // Try to break head at a newline boundary (within last 20% of head budget)
+  let headEnd = headChars;
+  const lastNewline = text.lastIndexOf("\n", headChars);
+  if (lastNewline > headChars * 0.8) {
+    headEnd = lastNewline;
+  }
+
+  const head = text.slice(0, headEnd);
+  const tail = text.slice(text.length - tailChars);
+  const omitted = text.length - headEnd - tailChars;
+
+  const marker = `\n\n... [${omitted} characters omitted — content truncated to fit system prompt budget] ...\n\n`;
+
+  return {
+    text: head + marker + tail,
+    truncated: true,
+  };
+}
+
 // ─── Section builders ───────────────────────────────────────────────────────
 
 /**
@@ -125,9 +167,10 @@ export function buildWorkspaceSection(
     );
   }
 
-  // Add workspace.md content
+  // Add workspace.md content (with budget control)
   if (profile?.workspace) {
-    lines.push(profile.workspace);
+    const { text } = truncateWithBudget(profile.workspace, DEFAULT_BOOTSTRAP_MAX_CHARS);
+    lines.push(text);
   }
 
   return lines;
@@ -366,6 +409,8 @@ export function buildSkillsSection(
   const trimmed = skillsPrompt?.trim();
   if (!trimmed) return [];
 
+  const { text: budgeted } = truncateWithBudget(trimmed, DEFAULT_SKILLS_MAX_CHARS);
+
   return [
     "## Skills (mandatory)",
     "Before replying: scan the available skills below.",
@@ -374,7 +419,7 @@ export function buildSkillsSection(
     "- If none clearly apply but an **inactive skill** matches the user's intent: suggest activating it.",
     "- If no skill matches at all: skip skill invocation.",
     "",
-    trimmed,
+    budgeted,
     "",
   ];
 }
