@@ -13,6 +13,8 @@ export * from "./tools.js";
 export * from "./tools/policy.js";
 export * from "./tools/groups.js";
 export * from "./extract-text.js";
+// @deprecated — Old subagent registry. Use `delegate` tool instead.
+// Kept temporarily for desktop app compatibility.
 export {
   listSubagentRuns,
   getSubagentRun,
@@ -23,6 +25,7 @@ export type {
   SubagentRunOutcome,
   SubagentGroup,
 } from "./subagent/types.js";
+
 export {
   readClaudeCliCredentials,
   readCodexCliCredentials,

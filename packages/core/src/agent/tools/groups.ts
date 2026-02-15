@@ -34,7 +34,7 @@ export const TOOL_GROUPS: Record<string, string[]> = {
   "group:memory": ["memory_search"],
 
   // Subagent tools
-  "group:subagent": ["sessions_spawn", "sessions_list"],
+  "group:subagent": ["delegate"],
 
   // Cron/scheduling tools
   "group:cron": ["cron"],
@@ -61,8 +61,8 @@ export const TOOL_GROUPS: Record<string, string[]> = {
  * Subagents should not have access to session management or system tools.
  */
 export const DEFAULT_SUBAGENT_TOOL_DENY: string[] = [
-  // Subagents cannot spawn subagents (no nested spawning)
-  "sessions_spawn",
+  // Subagents cannot delegate (no nested delegation)
+  "delegate",
 ];
 
 /**

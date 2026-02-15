@@ -9,7 +9,7 @@ export { createGlobTool } from "./glob.js";
 export { createWebFetchTool, createWebSearchTool } from "./web/index.js";
 export { createCronTool } from "./cron/index.js";
 export { createDataTool } from "./data/index.js";
-export { createSessionsListTool } from "./sessions-list.js";
+export { createDelegateTool } from "./delegate.js";
 
 // Tool groups
 export {

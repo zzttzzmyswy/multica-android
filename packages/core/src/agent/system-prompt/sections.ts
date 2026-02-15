@@ -28,7 +28,7 @@ const CORE_TOOL_SUMMARIES: Record<string, string> = {
   web_search: "Search the web via Devv Search",
   web_fetch: "Fetch and extract readable content from a URL",
   memory_search: "Search memory files by keyword",
-  sessions_spawn: "Spawn a sub-agent session",
+  delegate: "Run tasks in parallel via sub-agents",
   data: "Query structured financial and market data",
 };
 
@@ -43,7 +43,7 @@ const TOOL_ORDER = [
   "web_search",
   "web_fetch",
   "memory_search",
-  "sessions_spawn",
+  "delegate",
   "data",
 ];
 
@@ -313,52 +313,34 @@ export function buildConditionalToolSections(
     );
   }
 
-  // Subagent tools (full mode only — minimal agents cannot spawn)
-  if (mode === "full" && toolSet.has("sessions_spawn")) {
+  // Delegate tool (full mode only — sub-agents cannot delegate)
+  if (mode === "full" && toolSet.has("delegate")) {
     lines.push(
-      "## Sub-Agents",
-      "If a task is complex or long-running, spawn a sub-agent. It will do the work and report back when done.",
+      "## Delegation (Sub-Agents)",
+      "Use `delegate` to run tasks in parallel via isolated sub-agents. " +
+        "Each task gets its own agent with full tool access. Results are returned directly when all tasks complete.",
       "",
-      "### Critical Rules",
-      "- **NEVER fabricate, guess, or make up data that a sub-agent has not yet returned.** " +
-        "This includes completion status — do NOT claim tasks are done until you receive actual results.",
-      "- After spawning, do NOT proceed with work that depends on the sub-agent results. " +
-        "You can still chat with the user, do unrelated tasks, or explain what the sub-agents are working on.",
-      "- Sub-agents cannot spawn nested sub-agents.",
-      "- You can use `sessions_list` to check sub-agent status if needed.",
+      "### When to Use",
+      "- Collecting data from multiple independent sources (e.g. research 3 stocks simultaneously)",
+      "- Comparative analysis that can be parallelized (e.g. analyze 5 error logs in parallel)",
+      "- Any task where independent sub-tasks would benefit from parallel execution",
       "",
-      "### Groups and Continuation (`next`) — ALWAYS use for multi-agent tasks",
-      "When spawning multiple sub-agents, **always** use `next` to define the follow-up work. " +
-        "This is the standard pattern — do NOT use bare `announce: \"silent\"` for multi-agent collect-then-act workflows.",
-      "",
+      "### Example",
       "```",
-      "// First spawn — creates a group automatically, returns groupId",
-      'sessions_spawn({ task: "Get AAPL financials", next: "Summarize all data and write a PDF report", label: "AAPL" })',
-      "// → { groupId: \"grp-abc\", runId: \"...\" }",
-      "",
-      "// Subsequent spawns — join the same group",
-      'sessions_spawn({ task: "Get MSFT financials", groupId: "grp-abc", label: "MSFT" })',
-      'sessions_spawn({ task: "Get GOOG financials", groupId: "grp-abc", label: "GOOG" })',
+      "delegate({",
+      '  tasks: [',
+      '    { task: "Research AAPL financials: revenue, net income, stock price", label: "AAPL" },',
+      '    { task: "Research MSFT financials: revenue, net income, stock price", label: "MSFT" },',
+      '    { task: "Research GOOG financials: revenue, net income, stock price", label: "GOOG" }',
+      "  ]",
+      "})",
       "```",
       "",
-      "The system waits for ALL runs in the group to complete, then delivers the combined findings " +
-        "plus the `next` continuation prompt back to you. You can then use tools (write files, call APIs, etc.) " +
-        "to complete the follow-up work. The user is NOT blocked during this process — they can keep chatting.",
-      "",
-      "Use `next` whenever the user's request involves: collect data → then act on it (summarize, analyze, generate files).",
-      "Without `next`, findings are summarized but no further action is taken.",
-      "",
-      "### Announce Modes (when not using groups)",
-      "- `announce: \"immediate\"` (default): findings delivered per sub-agent as each completes.",
-      "- `announce: \"silent\"`: all findings held until every silent sub-agent finishes, then delivered together.",
-      "Groups always use silent collection internally — you don't need to set announce when using groupId.",
-      "",
-      "### Timeout Guidelines",
-      "Set timeoutSeconds generously — a sub-agent that times out loses all its work.",
-      "- Simple tasks (search, read, summarize): 1800 (30 min, the default)",
-      "- Moderate tasks (multi-step research, file downloads + analysis): 1800–2400 (30–40 min)",
-      "- Complex tasks (code generation, PDF creation, multi-file operations): 2400–3600 (40–60 min)",
-      "When in doubt, use a longer timeout.",
+      "### Rules",
+      "- Each sub-agent task should be self-contained — include all context needed in the task description.",
+      "- Sub-agents cannot delegate further (no nesting).",
+      "- The tool blocks until all tasks complete — plan your workflow accordingly.",
+      "- Set `timeoutSeconds` generously for complex tasks (default: 1800 = 30 min).",
       "",
     );
   }

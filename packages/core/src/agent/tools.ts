@@ -6,8 +6,7 @@ import { createExecTool } from "./tools/exec.js";
 import { createProcessTool } from "./tools/process.js";
 import { createGlobTool } from "./tools/glob.js";
 import { createWebFetchTool, createWebSearchTool } from "./tools/web/index.js";
-import { createSessionsSpawnTool } from "./tools/sessions-spawn.js";
-import { createSessionsListTool } from "./tools/sessions-list.js";
+import { createDelegateTool } from "./tools/delegate.js";
 import { createMemorySearchTool } from "./tools/memory-search.js";
 import { createCronTool } from "./tools/cron/index.js";
 import { createDataTool } from "./tools/data/index.js";
@@ -26,12 +25,20 @@ export interface CreateToolsOptions {
   cwd: string;
   /** Profile directory for memory_search tool (optional) */
   profileDir?: string | undefined;
-  /** Whether this agent is a subagent (passed to sessions_spawn tool) */
+  /** Whether this agent is a subagent (passed to delegate tool) */
   isSubagent?: boolean | undefined;
-  /** Session ID of the agent (passed to sessions_spawn tool) */
+  /** Session ID of the agent (passed to delegate tool) */
   sessionId?: string | undefined;
-  /** Resolved provider ID of the parent agent (passed to sessions_spawn for subagent inheritance) */
+  /** Resolved provider ID of the parent agent (inherited by sub-agents) */
   provider?: string | undefined;
+  /** Model name (inherited by sub-agents) */
+  model?: string | undefined;
+  /** API key (inherited by sub-agents) */
+  apiKey?: string | undefined;
+  /** Whether run-log is enabled (passed to child agents) */
+  enableRunLog?: boolean | undefined;
+  /** Run-log instance for delegate events */
+  runLog?: import("./run-log.js").RunLog | undefined;
   /** Callback invoked when exec tool needs approval before running a command */
   onExecApprovalNeeded?: ExecApprovalCallback | undefined;
   /** Callback for sending files through messaging channels */
@@ -143,17 +150,18 @@ export function createAllTools(options: CreateToolsOptions | string): AgentTool<
     tools.push(sendFileTool as AgentTool<any>);
   }
 
-  // Add sessions_spawn tool (will be filtered by policy for subagents)
-  const sessionsSpawnTool = createSessionsSpawnTool({
+  // Add delegate tool (will be filtered by policy for subagents)
+  const delegateTool = createDelegateTool({
     isSubagent: isSubagent ?? false,
-    ...(sessionId !== undefined ? { sessionId } : {}),
-    ...(opts.provider !== undefined ? { provider: opts.provider } : {}),
+    sessionId,
+    provider: opts.provider,
+    model: opts.model,
+    apiKey: opts.apiKey,
+    cwd,
+    runLog: opts.runLog,
+    enableRunLog: opts.enableRunLog,
   });
-  tools.push(sessionsSpawnTool as AgentTool<any>);
-
-  // Add sessions_list tool
-  const sessionsListTool = createSessionsListTool({ ...(sessionId !== undefined ? { sessionId } : {}) });
-  tools.push(sessionsListTool as AgentTool<any>);
+  tools.push(delegateTool as AgentTool<any>);
 
   return tools;
 }
@@ -162,6 +170,8 @@ export function createAllTools(options: CreateToolsOptions | string): AgentTool<
 export interface ResolveToolsOptions extends AgentOptions {
   /** Profile directory for memory_search tool (computed from profileId if not provided) */
   profileDir?: string | undefined;
+  /** Run-log instance (forwarded to delegate tool) */
+  runLog?: import("./run-log.js").RunLog | undefined;
 }
 
 /**
@@ -183,6 +193,10 @@ export function resolveTools(options: ResolveToolsOptions): AgentTool<any>[] {
     isSubagent: options.isSubagent,
     sessionId: options.sessionId,
     provider: options.provider,
+    model: options.model,
+    apiKey: options.apiKey,
+    enableRunLog: options.enableRunLog,
+    runLog: options.runLog,
     onExecApprovalNeeded: options.onExecApprovalNeeded,
     onChannelSendFile: options.onChannelSendFile,
   });
