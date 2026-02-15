@@ -45,30 +45,24 @@ export default function OnboardingPage() {
   return (
     <div className="h-dvh flex flex-col bg-background">
       <header
-        className="shrink-0 h-12 flex items-center pr-4"
+        className="relative shrink-0 h-12 flex items-center justify-between px-4"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       >
-        {/* Left: Traffic light spacing */}
-        <div className="w-20 h-full shrink-0" />
-
-        {/* Brand */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Left: Brand */}
+        <div className="flex items-center gap-2 pl-16">
           <MulticaIcon bordered noSpin />
           <span className="text-sm tracking-wide font-brand">Multica</span>
         </div>
 
-        {/* Center: Step indicator */}
-        <div className="flex-1 flex justify-center">
+        {/* Center: Step indicator (absolute for true centering) */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <span className="text-sm text-muted-foreground">
             {stepLabel} ({currentStep}/{totalSteps})
           </span>
         </div>
 
         {/* Right: Theme toggle */}
-        <div
-          className="shrink-0"
-          style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
-        >
+        <div style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
           <ModeToggle />
         </div>
       </header>
