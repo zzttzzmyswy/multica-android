@@ -1,7 +1,21 @@
 /**
  * E2E Integration Test: Phase 1 — Artifact Storage + Pre-emptive Truncation
  *
- * Tests the full flow: SessionManager → truncateOversizedToolResults → artifact-store
+ * Tests the full flow: SessionManager.saveMessage() → truncateOversizedToolResults → artifact-store
+ *
+ * Test Matrix:
+ * ┌─────────────────────────────────────────┬──────────────────────┐
+ * │ Use Case                                │ Expected Outcome     │
+ * ├─────────────────────────────────────────┼──────────────────────┤
+ * │ UC1: Oversized tool result              │ Truncated + artifact │
+ * │ UC2: Small tool result                  │ Pass-through, no art │
+ * │ UC3: Head/tail preservation             │ Markers preserved    │
+ * │ UC4: Multiple results (mixed sizes)     │ Selective truncation │
+ * │ UC5: Feature toggle disabled            │ No truncation        │
+ * │ UC6: Session reload after truncation    │ Truncated content    │
+ * │ UC7: Truncation marker format           │ Correct format       │
+ * │ UC8: Artifact readable after reload     │ Full content intact  │
+ * └─────────────────────────────────────────┴──────────────────────┘
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdirSync, rmSync, existsSync } from "node:fs";
@@ -45,7 +59,8 @@ describe("Phase 1 E2E: Artifact Storage + Pre-emptive Truncation", () => {
     rmSync(testDir, { recursive: true, force: true });
   });
 
-  it("saves oversized tool result to artifact and truncates in session", async () => {
+  // UC1: Oversized tool result → truncated in session + artifact saved
+  it("UC1: oversized tool result is truncated and artifact is saved with full content", async () => {
     const sm = new SessionManager({
       sessionId,
       baseDir: testDir,
@@ -55,24 +70,15 @@ describe("Phase 1 E2E: Artifact Storage + Pre-emptive Truncation", () => {
       enableToolResultPruning: false,
     });
 
-    // Create an oversized tool result (> 30% of 100k * 4 chars = 120k chars)
     const bigContent = "X".repeat(200_000);
-    const userMessage = {
-      role: "user" as const,
-      content: [
-        {
-          type: "tool_result" as const,
-          tool_use_id: "call_abc123",
-          content: bigContent,
-        },
-      ],
+    sm.saveMessage({
+      role: "user",
+      content: [{ type: "tool_result", tool_use_id: "call_abc123", content: bigContent }],
       timestamp: Date.now(),
-    };
-
-    sm.saveMessage(userMessage);
+    } as any);
     await sm.flush();
 
-    // Verify: session file has truncated content
+    // Session file: truncated
     const entries = readEntries(sessionId, { baseDir: testDir });
     const msgEntries = entries.filter((e) => e.type === "message");
     expect(msgEntries.length).toBe(1);
@@ -83,12 +89,14 @@ describe("Phase 1 E2E: Artifact Storage + Pre-emptive Truncation", () => {
     expect(savedText).toContain("Tool result truncated");
     expect(savedText).toContain("artifacts/");
 
-    // Verify: artifact file exists with full content
+    // Artifact: full content preserved
     const artifactContent = readToolResultArtifact(sessionId, "call_abc123", { baseDir: testDir });
     expect(artifactContent).toBe(bigContent);
+    expect(artifactContent!.length).toBe(200_000);
   });
 
-  it("does NOT create artifact for small tool results", async () => {
+  // UC2: Small tool result → pass-through, no artifact
+  it("UC2: small tool result passes through without truncation or artifact", async () => {
     const sm = new SessionManager({
       sessionId,
       baseDir: testDir,
@@ -99,76 +107,60 @@ describe("Phase 1 E2E: Artifact Storage + Pre-emptive Truncation", () => {
     });
 
     const smallContent = "Small result data";
-    const userMessage = {
-      role: "user" as const,
-      content: [
-        {
-          type: "tool_result" as const,
-          tool_use_id: "call_small",
-          content: smallContent,
-        },
-      ],
+    sm.saveMessage({
+      role: "user",
+      content: [{ type: "tool_result", tool_use_id: "call_small", content: smallContent }],
       timestamp: Date.now(),
-    };
-
-    sm.saveMessage(userMessage);
+    } as any);
     await sm.flush();
 
-    // Verify: session file has full content (no truncation)
+    // Session file: unchanged content
     const entries = readEntries(sessionId, { baseDir: testDir });
     const saved = (entries.find((e) => e.type === "message") as any).message;
     const savedText = extractContentText(saved.content[0].content);
     expect(savedText).toBe(smallContent);
 
-    // Verify: no artifacts directory created
-    const artifactsDir = join(testDir, "sessions", sessionId, "artifacts");
+    // No artifacts directory
+    const artifactsDir = join(testDir, sessionId, "artifacts");
     expect(existsSync(artifactsDir)).toBe(false);
   });
 
-  it("truncated message preserves head and tail of original content", async () => {
+  // UC3: Head/tail preservation
+  it("UC3: truncated content preserves identifiable head and tail markers", async () => {
     const sm = new SessionManager({
       sessionId,
       baseDir: testDir,
       compactionMode: "tokens",
-      contextWindowTokens: 50_000, // smaller window → lower threshold
+      contextWindowTokens: 50_000,
       enableToolResultTruncation: true,
       enableToolResultPruning: false,
     });
 
-    // Create content with identifiable head and tail
-    const head = "HEAD_MARKER_" + "A".repeat(10_000);
+    const head = "HEAD_MARKER_START" + "A".repeat(10_000);
     const middle = "B".repeat(100_000);
-    const tail = "C".repeat(10_000) + "_TAIL_MARKER";
+    const tail = "C".repeat(10_000) + "TAIL_MARKER_END";
     const bigContent = head + middle + tail;
 
-    const userMessage = {
-      role: "user" as const,
-      content: [
-        {
-          type: "tool_result" as const,
-          tool_use_id: "call_headtail",
-          content: bigContent,
-        },
-      ],
+    sm.saveMessage({
+      role: "user",
+      content: [{ type: "tool_result", tool_use_id: "call_ht", content: bigContent }],
       timestamp: Date.now(),
-    };
-
-    sm.saveMessage(userMessage);
+    } as any);
     await sm.flush();
 
     const entries = readEntries(sessionId, { baseDir: testDir });
     const saved = (entries.find((e) => e.type === "message") as any).message;
     const savedText = extractContentText(saved.content[0].content);
 
-    // Head should be preserved
-    expect(savedText).toContain("HEAD_MARKER_");
-    // Tail should be preserved
-    expect(savedText).toContain("_TAIL_MARKER");
-    // Middle should be truncated
+    expect(savedText).toContain("HEAD_MARKER_START");
+    expect(savedText).toContain("TAIL_MARKER_END");
     expect(savedText.length).toBeLessThan(bigContent.length);
+    // Must also have the truncation marker
+    expect(savedText).toContain("Tool result truncated");
   });
 
-  it("handles multiple tool results in same message", async () => {
+  // UC4: Multiple tool results — selective truncation
+  it("UC4: message with mixed-size tool results truncates only oversized ones", async () => {
     const sm = new SessionManager({
       sessionId,
       baseDir: testDir,
@@ -178,69 +170,160 @@ describe("Phase 1 E2E: Artifact Storage + Pre-emptive Truncation", () => {
       enableToolResultPruning: false,
     });
 
-    const bigContent1 = "RESULT1_" + "X".repeat(200_000);
-    const smallContent = "small result";
-    const bigContent2 = "RESULT2_" + "Y".repeat(200_000);
+    const big1 = "BIG1_" + "X".repeat(200_000);
+    const small = "SMALL_RESULT_INTACT";
+    const big2 = "BIG2_" + "Y".repeat(200_000);
 
-    const userMessage = {
-      role: "user" as const,
+    sm.saveMessage({
+      role: "user",
       content: [
-        { type: "tool_result" as const, tool_use_id: "call_big1", content: bigContent1 },
-        { type: "tool_result" as const, tool_use_id: "call_small", content: smallContent },
-        { type: "tool_result" as const, tool_use_id: "call_big2", content: bigContent2 },
+        { type: "tool_result", tool_use_id: "call_big1", content: big1 },
+        { type: "tool_result", tool_use_id: "call_sm", content: small },
+        { type: "tool_result", tool_use_id: "call_big2", content: big2 },
       ],
       timestamp: Date.now(),
-    };
-
-    sm.saveMessage(userMessage);
+    } as any);
     await sm.flush();
 
     const entries = readEntries(sessionId, { baseDir: testDir });
     const saved = (entries.find((e) => e.type === "message") as any).message;
 
-    // Big results should be truncated
-    const text0 = extractContentText(saved.content[0].content);
-    const text2 = extractContentText(saved.content[2].content);
-    expect(text0).toContain("Tool result truncated");
-    expect(text2).toContain("Tool result truncated");
+    // Big results: truncated
+    const t0 = extractContentText(saved.content[0].content);
+    const t2 = extractContentText(saved.content[2].content);
+    expect(t0).toContain("Tool result truncated");
+    expect(t2).toContain("Tool result truncated");
+    expect(t0.length).toBeLessThan(big1.length);
+    expect(t2.length).toBeLessThan(big2.length);
 
-    // Small result should be unchanged
-    const text1 = extractContentText(saved.content[1].content);
-    expect(text1).toBe(smallContent);
+    // Small result: intact
+    const t1 = extractContentText(saved.content[1].content);
+    expect(t1).toBe(small);
 
-    // Both artifacts should exist
+    // Both artifacts saved with full content
     const art1 = readToolResultArtifact(sessionId, "call_big1", { baseDir: testDir });
-    expect(art1).toContain("RESULT1_");
+    expect(art1).toBe(big1);
     const art2 = readToolResultArtifact(sessionId, "call_big2", { baseDir: testDir });
-    expect(art2).toContain("RESULT2_");
+    expect(art2).toBe(big2);
   });
 
-  it("respects enableToolResultTruncation=false", async () => {
+  // UC5: Feature disabled → no truncation
+  it("UC5: enableToolResultTruncation=false skips all truncation", async () => {
     const sm = new SessionManager({
       sessionId,
       baseDir: testDir,
       compactionMode: "tokens",
       contextWindowTokens: 50_000,
-      enableToolResultTruncation: false, // Disabled
+      enableToolResultTruncation: false,
       enableToolResultPruning: false,
     });
 
     const bigContent = "Z".repeat(200_000);
-    const userMessage = {
-      role: "user" as const,
-      content: [
-        { type: "tool_result" as const, tool_use_id: "call_noop", content: bigContent },
-      ],
+    sm.saveMessage({
+      role: "user",
+      content: [{ type: "tool_result", tool_use_id: "call_noop", content: bigContent }],
       timestamp: Date.now(),
-    };
-
-    sm.saveMessage(userMessage);
+    } as any);
     await sm.flush();
 
     const entries = readEntries(sessionId, { baseDir: testDir });
     const saved = (entries.find((e) => e.type === "message") as any).message;
-    // Should NOT be truncated since feature is disabled
     const savedText = extractContentText(saved.content[0].content);
     expect(savedText).toBe(bigContent);
+    expect(savedText).not.toContain("Tool result truncated");
+  });
+
+  // UC6: Session reload after truncation
+  it("UC6: loadMessages() returns truncated content after save+reload", async () => {
+    const sm = new SessionManager({
+      sessionId,
+      baseDir: testDir,
+      compactionMode: "tokens",
+      contextWindowTokens: 100_000,
+      enableToolResultTruncation: true,
+      enableToolResultPruning: false,
+    });
+
+    const bigContent = "RELOAD_TEST_" + "R".repeat(200_000);
+    sm.saveMessage({
+      role: "user",
+      content: [{ type: "tool_result", tool_use_id: "call_reload", content: bigContent }],
+      timestamp: Date.now(),
+    } as any);
+    await sm.flush();
+
+    // Create a fresh SessionManager to reload
+    const sm2 = new SessionManager({
+      sessionId,
+      baseDir: testDir,
+      compactionMode: "tokens",
+      contextWindowTokens: 100_000,
+    });
+    const messages = sm2.loadMessages();
+    expect(messages.length).toBe(1);
+
+    const loaded = messages[0] as any;
+    const loadedText = extractContentText(loaded.content[0].content);
+    // Loaded messages should show truncated content (not full)
+    expect(loadedText).toContain("Tool result truncated");
+    expect(loadedText).toContain("artifacts/");
+    expect(loadedText.length).toBeLessThan(bigContent.length);
+  });
+
+  // UC7: Truncation marker format
+  it("UC7: truncation marker contains original size and artifact path", async () => {
+    const sm = new SessionManager({
+      sessionId,
+      baseDir: testDir,
+      compactionMode: "tokens",
+      contextWindowTokens: 100_000,
+      enableToolResultTruncation: true,
+      enableToolResultPruning: false,
+    });
+
+    const bigContent = "M".repeat(200_000);
+    sm.saveMessage({
+      role: "user",
+      content: [{ type: "tool_result", tool_use_id: "call_fmt", content: bigContent }],
+      timestamp: Date.now(),
+    } as any);
+    await sm.flush();
+
+    const entries = readEntries(sessionId, { baseDir: testDir });
+    const saved = (entries.find((e) => e.type === "message") as any).message;
+    const savedText = extractContentText(saved.content[0].content);
+
+    // Marker should include: original size, artifact path, and "read tool" hint
+    expect(savedText).toMatch(/original 200000 chars/);
+    expect(savedText).toMatch(/Full result saved to artifacts\/call_fmt\.txt/);
+    expect(savedText).toContain("read tool");
+  });
+
+  // UC8: Artifact readable via readToolResultArtifact after session operations
+  it("UC8: artifact is readable by toolCallId and contains exact original content", async () => {
+    const sm = new SessionManager({
+      sessionId,
+      baseDir: testDir,
+      compactionMode: "tokens",
+      contextWindowTokens: 100_000,
+      enableToolResultTruncation: true,
+      enableToolResultPruning: false,
+    });
+
+    // Use content with specific patterns to verify exact preservation
+    const specialContent = "START|" + "αβγδ".repeat(50_000) + "|END";
+    sm.saveMessage({
+      role: "user",
+      content: [{ type: "tool_result", tool_use_id: "call_exact", content: specialContent }],
+      timestamp: Date.now(),
+    } as any);
+    await sm.flush();
+
+    const artifact = readToolResultArtifact(sessionId, "call_exact", { baseDir: testDir });
+    expect(artifact).toBe(specialContent);
+
+    // Also verify the artifacts directory exists
+    const artifactsDir = join(testDir, sessionId, "artifacts");
+    expect(existsSync(artifactsDir)).toBe(true);
   });
 });

@@ -1,26 +1,26 @@
 /**
  * E2E Integration Test: Phase 2 — Artifact-Aware Pruning + Summary Fallback
  *
- * Tests that tool result pruning preserves artifact references
- * and that summary fallback extracts artifact paths.
+ * Test Matrix:
+ * ┌──────────────────────────────────────────────┬──────────────────────────────┐
+ * │ Use Case                                     │ Expected Outcome             │
+ * ├──────────────────────────────────────────────┼──────────────────────────────┤
+ * │ UC1: Soft trim with artifact ref             │ Artifact ref in trim note    │
+ * │ UC2: Hard clear with artifact ref            │ Artifact ref in placeholder  │
+ * │ UC3: Soft trim without artifact ref          │ Normal trim (no artifact)    │
+ * │ UC4: Summary fallback extracts artifact refs │ "Saved Artifacts" section    │
+ * │ UC5: Cross-phase: Phase1 output → Phase2     │ Ref survives full pipeline   │
+ * └──────────────────────────────────────────────┴──────────────────────────────┘
  */
 import { describe, it, expect } from "vitest";
 import { pruneToolResults } from "./tool-result-pruning.js";
+import { truncateOversizedToolResults } from "./tool-result-truncation.js";
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 
-/**
- * Helper: build a user message with a single tool_result containing the given text.
- */
 function makeToolResultMessage(text: string, toolUseId = "call_1"): AgentMessage {
   return {
     role: "user",
-    content: [
-      {
-        type: "tool_result",
-        tool_use_id: toolUseId,
-        content: text,
-      },
-    ],
+    content: [{ type: "tool_result", tool_use_id: toolUseId, content: text }],
     timestamp: Date.now(),
   } as any;
 }
@@ -33,17 +33,37 @@ function makeAssistantMessage(text = "OK"): AgentMessage {
   } as any;
 }
 
+/** A real user message (not tool_result) — needed for bootstrap protection in pruneToolResults */
+function makeUserMessage(text = "Hello"): AgentMessage {
+  return {
+    role: "user",
+    content: text,
+    timestamp: Date.now(),
+  } as any;
+}
+
+function extractContentText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((b: any) => b?.type === "text")
+      .map((b: any) => b.text)
+      .join("");
+  }
+  return "";
+}
+
 describe("Phase 2 E2E: Artifact-Aware Pruning", () => {
-  it("soft trim preserves artifact reference from pre-emptive truncation", () => {
-    // Simulate a tool result that was previously truncated by Phase 1 and contains an artifact ref
+  // UC1: Soft trim preserves artifact reference
+  it("UC1: soft trim preserves artifact reference in trimmed note", () => {
+    // Tool result with an artifact reference from Phase 1 truncation
     const truncatedContent =
       "A".repeat(3000) +
       "\n\n[Tool result truncated: original 200000 chars. Full result saved to artifacts/call_abc123.txt. Use the read tool to access the complete data if needed.]\n\n" +
       "B".repeat(3000);
 
-    // Build conversation that should trigger soft trimming
-    // Put older messages first (these get pruned), recent ones are protected
     const messages: AgentMessage[] = [
+      makeUserMessage("start"),
       makeAssistantMessage("Calling tool..."),
       makeToolResultMessage(truncatedContent),
       makeAssistantMessage("Processing..."),
@@ -58,43 +78,38 @@ describe("Phase 2 E2E: Artifact-Aware Pruning", () => {
 
     const result = pruneToolResults({
       messages,
-      contextWindowTokens: 5_000, // Small window to trigger pruning
+      contextWindowTokens: 5_000,
       settings: {
-        softTrimRatio: 0.0, // Always trigger soft trim
+        softTrimRatio: 0.0, // Always trigger
         hardClearRatio: 1.0, // Never hard clear
         minPrunableToolChars: 100,
         keepLastAssistants: 3,
-        softTrim: {
-          maxChars: 2_000, // Trigger on the large result
-          headChars: 500,
-          tailChars: 500,
-        },
-        hardClear: {
-          enabled: false,
-          placeholder: "[Content removed]",
-        },
+        softTrim: { maxChars: 2_000, headChars: 500, tailChars: 500 },
+        hardClear: { enabled: false, placeholder: "[Content removed]" },
       },
     });
 
-    // Find the soft-trimmed message
-    if (result.changed && result.softTrimmed > 0) {
-      const trimmedMsg = result.messages[1] as any;
-      const text = trimmedMsg.content[0]?.text ?? trimmedMsg.content[0]?.content ?? "";
-      // The artifact reference should be preserved in the trim note
-      expect(text).toContain("artifacts/call_abc123.txt");
-    }
+    // Must actually trigger soft trimming
+    expect(result.changed).toBe(true);
+    expect(result.softTrimmed).toBeGreaterThan(0);
+
+    // The trimmed message should preserve the artifact reference (index 2 due to prepended user msg)
+    const trimmedMsg = result.messages[2] as any;
+    const text = extractContentText(trimmedMsg.content[0]?.content ?? trimmedMsg.content[0]);
+    expect(text).toContain("artifacts/call_abc123.txt");
   });
 
-  it("hard clear preserves artifact reference", () => {
+  // UC2: Hard clear preserves artifact reference
+  it("UC2: hard clear preserves artifact reference in placeholder", () => {
     const truncatedContent =
       "X".repeat(80_000) +
       "\n\n[Tool result truncated: Full result saved to artifacts/call_xyz.txt.]\n\n" +
       "Y".repeat(20_000);
 
     const messages: AgentMessage[] = [
+      makeUserMessage("start"),
       makeAssistantMessage("old"),
       makeToolResultMessage(truncatedContent),
-      // Add enough recent messages to push the old one into hard-clear range
       makeAssistantMessage("a1"),
       makeToolResultMessage("r1"),
       makeAssistantMessage("a2"),
@@ -110,45 +125,69 @@ describe("Phase 2 E2E: Artifact-Aware Pruning", () => {
       contextWindowTokens: 2_000,
       settings: {
         softTrimRatio: 0.0,
-        hardClearRatio: 0.0, // Always trigger hard clear
+        hardClearRatio: 0.0, // Always trigger
         minPrunableToolChars: 100,
         keepLastAssistants: 3,
-        softTrim: {
-          maxChars: 50, // Everything over 50 gets soft trimmed first
-          headChars: 20,
-          tailChars: 20,
-        },
-        hardClear: {
-          enabled: true,
-          placeholder: "[Content removed]",
-        },
+        softTrim: { maxChars: 50, headChars: 20, tailChars: 20 },
+        hardClear: { enabled: true, placeholder: "[Content removed]" },
       },
     });
 
-    if (result.changed && result.hardCleared > 0) {
-      // Find the hard-cleared message (should be messages[1])
-      const clearedMsg = result.messages[1] as any;
-      const text = clearedMsg.content[0]?.text ?? "";
-      expect(text).toContain("[Content removed]");
-      expect(text).toContain("artifacts/call_xyz.txt");
-    }
+    expect(result.changed).toBe(true);
+    expect(result.hardCleared).toBeGreaterThan(0);
+
+    // The hard-cleared message should contain both the placeholder AND the artifact ref
+    const clearedMsg = result.messages[2] as any;
+    const text = extractContentText(clearedMsg.content[0]?.content ?? clearedMsg.content[0]);
+    expect(text).toContain("[Content removed]");
+    expect(text).toContain("artifacts/call_xyz.txt");
+  });
+
+  // UC3: Soft trim without artifact ref (baseline behavior unchanged)
+  it("UC3: soft trim without artifact reference works normally", () => {
+    const plainContent = "D".repeat(6_000); // No artifact reference
+
+    const messages: AgentMessage[] = [
+      makeUserMessage("start"),
+      makeAssistantMessage("call"),
+      makeToolResultMessage(plainContent),
+      makeAssistantMessage("r1"),
+      makeToolResultMessage("s"),
+      makeAssistantMessage("r2"),
+      makeToolResultMessage("s"),
+      makeAssistantMessage("r3"),
+      makeToolResultMessage("s"),
+    ];
+
+    const result = pruneToolResults({
+      messages,
+      contextWindowTokens: 5_000,
+      settings: {
+        softTrimRatio: 0.0,
+        hardClearRatio: 1.0,
+        minPrunableToolChars: 100,
+        keepLastAssistants: 3,
+        softTrim: { maxChars: 2_000, headChars: 500, tailChars: 500 },
+        hardClear: { enabled: false, placeholder: "" },
+      },
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.softTrimmed).toBeGreaterThan(0);
+
+    const trimmedMsg = result.messages[2] as any;
+    const text = extractContentText(trimmedMsg.content[0]?.content ?? trimmedMsg.content[0]);
+    // Should have trim note but no artifact reference
+    expect(text).toContain("Tool result trimmed");
+    expect(text).not.toContain("artifacts/");
   });
 });
 
 describe("Phase 2 E2E: Summary Fallback Artifact Extraction", () => {
-  it("DEFAULT_SUMMARY_INSTRUCTIONS mentions artifacts", async () => {
-    // Read the summarization module to verify instructions include artifact guidance
-    const { DEFAULT_SUMMARY_INSTRUCTIONS } = await import("./summarization.js") as any;
-    // The instructions are a module-level const, but not exported. Let's verify via
-    // the splitMessagesForSummary path that exercises the flow indirectly.
-    // Instead, let's verify the artifact detection in summary-fallback.
-  });
-
-  it("summary fallback includes artifact references section", async () => {
-    // Import the module to access the plain text fallback
+  // UC4: summary fallback extracts artifact references
+  it("UC4: summary fallback includes 'Saved Artifacts' section with all artifact refs", async () => {
     const mod = await import("./summary-fallback.js");
 
-    // Create messages with artifact references embedded in tool results
     const messages: AgentMessage[] = [
       makeAssistantMessage("Let me read the file"),
       {
@@ -181,33 +220,140 @@ describe("Phase 2 E2E: Summary Fallback Artifact Extraction", () => {
       } as any,
     ];
 
-    // Use summarizeWithFallback to exercise the full flow — but this requires
-    // an LLM model. Instead, we can test the behavior by causing all levels to fail.
-    // The summarizeWithFallback will fall through to Level 3 (plain text) if the model fails.
-    // Let's create a mock model that always throws.
+    // Force Level 3 fallback (plain text) by using a model that always throws
     const failingModel = {
-      complete: () => { throw new Error("Test: no LLM available"); },
+      complete: () => { throw new Error("Test: no LLM"); },
     };
 
-    try {
-      const result = await mod.summarizeWithFallback({
-        messages,
-        model: failingModel as any,
-        reserveTokens: 1024,
-        apiKey: "test-key",
-        instructions: "summarize",
-        availableTokens: 100_000,
-      });
+    const result = await mod.summarizeWithFallback({
+      messages,
+      model: failingModel as any,
+      reserveTokens: 1024,
+      apiKey: "test-key",
+      instructions: "summarize",
+      availableTokens: 100_000,
+    });
 
-      // Should fall through to Level 3 (plain-text fallback)
-      expect(result.level).toBe(3);
-      // The summary should contain artifact references
-      expect(result.summary).toContain("## Saved Artifacts");
-      expect(result.summary).toContain("artifacts/call_1.txt");
-      expect(result.summary).toContain("artifacts/call_2.txt");
-    } catch {
-      // If generateSummary isn't available as expected, at least verify
-      // the artifact extraction pattern works at the module level
-    }
+    // Must fall through to Level 3
+    expect(result.level).toBe(3);
+    // Summary must contain artifact references
+    expect(result.summary).toContain("## Saved Artifacts");
+    expect(result.summary).toContain("artifacts/call_1.txt");
+    expect(result.summary).toContain("artifacts/call_2.txt");
+  });
+});
+
+describe("Cross-Phase E2E: Phase 1 → Phase 2 Pipeline", () => {
+  // UC5: Phase 1 truncation output → Phase 2 pruning — artifact ref survives
+  it("UC5: artifact ref from Phase 1 truncation survives Phase 2 soft trim", () => {
+    // Phase 1: truncate an oversized tool result
+    const bigContent = "ORIGINAL_DATA_" + "Q".repeat(200_000);
+    let artifactPath = "";
+
+    const phase1Result = truncateOversizedToolResults({
+      message: {
+        role: "user",
+        content: [{ type: "tool_result", tool_use_id: "call_cross", content: bigContent }],
+        timestamp: Date.now(),
+      } as any,
+      contextWindowTokens: 50_000,
+      saveArtifact: (_id, _content) => {
+        artifactPath = `artifacts/call_cross.txt`;
+        return artifactPath;
+      },
+    });
+
+    // Phase 1 must have truncated
+    expect(phase1Result.truncated).toBe(true);
+    expect(phase1Result.artifacts.length).toBe(1);
+    expect(phase1Result.artifacts[0]!.toolCallId).toBe("call_cross");
+
+    // Extract the truncated text from Phase 1 output
+    const phase1Msg = phase1Result.message as any;
+    const phase1Text = extractContentText(phase1Msg.content[0].content);
+    expect(phase1Text).toContain("artifacts/call_cross.txt");
+
+    // Phase 2: feed Phase 1 output into pruneToolResults
+    const messages: AgentMessage[] = [
+      makeUserMessage("start"),
+      makeAssistantMessage("calling"),
+      phase1Result.message, // This is the Phase 1 truncated message
+      makeAssistantMessage("a1"),
+      makeToolResultMessage("s1"),
+      makeAssistantMessage("a2"),
+      makeToolResultMessage("s2"),
+      makeAssistantMessage("a3"),
+      makeToolResultMessage("s3"),
+    ];
+
+    const phase2Result = pruneToolResults({
+      messages,
+      contextWindowTokens: 3_000,
+      settings: {
+        softTrimRatio: 0.0, // Always trigger
+        hardClearRatio: 1.0, // No hard clear
+        minPrunableToolChars: 100,
+        keepLastAssistants: 3,
+        softTrim: { maxChars: 2_000, headChars: 500, tailChars: 500 },
+        hardClear: { enabled: false, placeholder: "" },
+      },
+    });
+
+    expect(phase2Result.changed).toBe(true);
+
+    // The artifact reference must survive the Phase 2 soft trim (index 2 due to prepended user msg)
+    const finalMsg = phase2Result.messages[2] as any;
+    const finalText = extractContentText(finalMsg.content[0]?.content ?? finalMsg.content[0]);
+    expect(finalText).toContain("artifacts/call_cross.txt");
+  });
+
+  // UC5b: Phase 1 → Phase 2 hard clear also preserves
+  it("UC5b: artifact ref from Phase 1 truncation survives Phase 2 hard clear", () => {
+    const bigContent = "HC_DATA_" + "W".repeat(200_000);
+
+    const phase1Result = truncateOversizedToolResults({
+      message: {
+        role: "user",
+        content: [{ type: "tool_result", tool_use_id: "call_hc", content: bigContent }],
+        timestamp: Date.now(),
+      } as any,
+      contextWindowTokens: 50_000,
+      saveArtifact: () => "artifacts/call_hc.txt",
+    });
+
+    expect(phase1Result.truncated).toBe(true);
+
+    const messages: AgentMessage[] = [
+      makeUserMessage("start"),
+      makeAssistantMessage("calling"),
+      phase1Result.message,
+      makeAssistantMessage("a1"),
+      makeToolResultMessage("s1"),
+      makeAssistantMessage("a2"),
+      makeToolResultMessage("s2"),
+      makeAssistantMessage("a3"),
+      makeToolResultMessage("s3"),
+    ];
+
+    const phase2Result = pruneToolResults({
+      messages,
+      contextWindowTokens: 1_000,
+      settings: {
+        softTrimRatio: 0.0,
+        hardClearRatio: 0.0, // Always hard clear
+        minPrunableToolChars: 100,
+        keepLastAssistants: 3,
+        softTrim: { maxChars: 50, headChars: 20, tailChars: 20 },
+        hardClear: { enabled: true, placeholder: "[Cleared]" },
+      },
+    });
+
+    expect(phase2Result.changed).toBe(true);
+    expect(phase2Result.hardCleared).toBeGreaterThan(0);
+
+    const finalMsg = phase2Result.messages[2] as any;
+    const finalText = extractContentText(finalMsg.content[0]?.content ?? finalMsg.content[0]);
+    expect(finalText).toContain("[Cleared]");
+    expect(finalText).toContain("artifacts/call_hc.txt");
   });
 });
