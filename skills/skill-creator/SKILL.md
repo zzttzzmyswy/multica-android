@@ -21,7 +21,7 @@ When a user's request matches an **inactive skill** (listed under "Installed But
 
 1. **Inform the user**: Tell them the skill exists but needs setup
 2. **Explain what's missing**: Reference the diagnostic info (e.g., "The Gmail skill requires a GMAIL_API_KEY")
-3. **Guide them to get the key**: Provide the setup URL from the diagnostic hints
+3. **Guide them to get the key**: Use `web_search` or `web_fetch` to find how to obtain the required API key, then provide clear step-by-step instructions to the user
 4. **Accept the key in chat**: Ask the user to paste the API key directly in the conversation
 5. **Write the `.env` file**: Use the `write` tool to create the skill's `.env` file:
    ```
@@ -36,17 +36,27 @@ When a user's request matches an **inactive skill** (listed under "Installed But
 
 **IMPORTANT**: The user's API key is written to a local file only. Never log, echo, or transmit the key anywhere else.
 
-### Example Conversation
+### Example (hypothetical — only act on skills that actually appear in your system prompt)
 
+Suppose the system prompt contains an inactive skill entry like:
 ```
-User: "Help me check my latest emails"
-Agent: "I have a Gmail skill installed, but it needs an API key to work.
-        You can get one from: console.cloud.google.com (enable the Gmail API).
-        Once you have the key, paste it here and I'll configure it for you."
-User: "AIzaSyB..."
-Agent: *writes ~/.super-multica/skills/gmail/.env*
-Agent: "Done! Gmail is now active. Let me check your emails..."
+- **Stock Tracker** (`stock-tracker`): Track stock prices
+  - Missing environment variables: STOCK_API_KEY
+  - Fix: Set STOCK_API_KEY in ~/.super-multica/skills/stock-tracker/.env
 ```
+
+Then the conversation would be:
+```
+User: "What's AAPL trading at?"
+Agent: *sees stock-tracker in inactive skills list*
+Agent: *uses web_search to find how to get a Stock API key*
+Agent: "I have a Stock Tracker skill but it needs a STOCK_API_KEY. Here's how to get one: ..."
+User: "sk-abc123..."
+Agent: *writes ~/.super-multica/skills/stock-tracker/.env*
+Agent: "Done! Stock Tracker is active. Let me check AAPL for you..."
+```
+
+**CRITICAL**: Only reference skills that are actually listed in your system prompt under "Installed But Inactive Skills". Never assume a skill exists without seeing it there.
 
 ## Creating New Skills When No Match Exists
 

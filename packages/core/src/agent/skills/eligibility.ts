@@ -470,7 +470,6 @@ function generateEnvHint(envVars: string[], skill: Skill): string {
  */
 function getApiKeyHint(envVar: string): string | null {
   const keyHints: Record<string, string> = {
-    // LLM providers
     OPENAI_API_KEY: "Get from: platform.openai.com/api-keys",
     ANTHROPIC_API_KEY: "Get from: console.anthropic.com",
     GOOGLE_API_KEY: "Get from: console.cloud.google.com",
@@ -479,17 +478,6 @@ function getApiKeyHint(envVar: string): string | null {
     GROQ_API_KEY: "Get from: console.groq.com",
     MISTRAL_API_KEY: "Get from: console.mistral.ai",
     TOGETHER_API_KEY: "Get from: api.together.xyz",
-    // Common service APIs
-    GMAIL_API_KEY: "Get from: console.cloud.google.com (enable Gmail API)",
-    GITHUB_TOKEN: "Get from: github.com/settings/tokens",
-    SLACK_BOT_TOKEN: "Get from: api.slack.com/apps",
-    NOTION_API_KEY: "Get from: notion.so/my-integrations",
-    LINEAR_API_KEY: "Get from: linear.app/settings/api",
-    JIRA_API_TOKEN: "Get from: id.atlassian.com/manage-profile/security/api-tokens",
-    SENDGRID_API_KEY: "Get from: app.sendgrid.com/settings/api_keys",
-    STRIPE_API_KEY: "Get from: dashboard.stripe.com/apikeys",
-    TWILIO_API_KEY: "Get from: console.twilio.com",
-    FINANCIAL_DATASETS_API_KEY: "Get from: financialdatasets.ai",
   };
 
   return keyHints[envVar] ?? null;
