@@ -150,9 +150,34 @@ export function truncateOversizedToolResults(params: {
   };
 
   const msgAny = params.message as any;
+  const role = params.message.role as string;
 
-  // Only process user messages with array content (tool results come as user messages)
-  if (params.message.role !== "user" || !Array.isArray(msgAny.content)) {
+  // Handle pi-agent-core "toolResult" format:
+  //   { role: "toolResult", content: [{ type: "text", text: "..." }], toolCallId, toolName }
+  if (role === "toolResult" && Array.isArray(msgAny.content)) {
+    const maxChars = computeMaxChars(params.contextWindowTokens, settings);
+    if (hasImages(msgAny.content)) {
+      return { message: params.message, truncated: false, artifacts: [] };
+    }
+    const text = extractText(msgAny.content);
+    const effectiveMax = Math.max(maxChars, settings.minKeepChars);
+    if (text.length <= effectiveMax) {
+      return { message: params.message, truncated: false, artifacts: [] };
+    }
+    const toolCallId = msgAny.toolCallId ?? "unknown";
+    const toolName = msgAny.toolName ?? "unknown";
+    const artifactRelPath = params.saveArtifact(toolCallId, text);
+    const truncatedText = truncateText(text, maxChars, artifactRelPath, settings);
+    return {
+      message: { ...params.message, content: [{ type: "text", text: truncatedText }] } as AgentMessage,
+      truncated: true,
+      artifacts: [{ toolCallId, toolName, originalChars: text.length, artifactRelPath }],
+    };
+  }
+
+  // Handle Anthropic-style "user" format with tool_result blocks:
+  //   { role: "user", content: [{ type: "tool_result", tool_use_id, content: "..." }] }
+  if (role !== "user" || !Array.isArray(msgAny.content)) {
     return { message: params.message, truncated: false, artifacts: [] };
   }
 

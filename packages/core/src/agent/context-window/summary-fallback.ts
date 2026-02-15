@@ -105,7 +105,8 @@ function extractArtifactRefs(messages: AgentMessage[]): string[] {
   const pattern = /Full result (?:saved to|available at) (artifacts\/[^\s.]+\.txt)/g;
 
   for (const msg of messages) {
-    if (msg.role !== "user") continue;
+    const role = msg.role as string;
+    if (role !== "user" && role !== "toolResult") continue;
     const content = (msg as any).content;
     if (typeof content === "string") {
       for (const match of content.matchAll(pattern)) {

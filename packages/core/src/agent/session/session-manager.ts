@@ -252,7 +252,7 @@ export class SessionManager {
     // Pre-emptive truncation: save oversized tool results as artifacts
     // and persist a truncated version in the JSONL session file.
     let persistMessage = message;
-    if (this.enableToolResultTruncation && message.role === "user") {
+    if (this.enableToolResultTruncation && (message.role === "user" || message.role === "toolResult")) {
       const result = truncateOversizedToolResults({
         message,
         contextWindowTokens: this.contextWindowTokens,
