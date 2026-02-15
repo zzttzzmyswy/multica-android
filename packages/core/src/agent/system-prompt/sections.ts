@@ -492,6 +492,12 @@ export function buildChannelsSection(
     "Messages from channels are prefixed with `[ChannelName · private]` or `[ChannelName · group]`.",
     "When responding to channel messages, adapt your formatting for messaging platforms (shorter paragraphs, no complex markdown).",
     "",
+    "### Reply Context",
+    "When a user replies to a specific previous message, the incoming message is prefixed with `[Replying to: \"...\"]`. Use the quoted text as context to understand which message the user is referring to.",
+    "",
+    "### Responsiveness",
+    "When a message comes from a channel and your task requires tool calls or lengthy processing, always send a brief acknowledgment first (e.g. what you understood, what you plan to do) before invoking tools. This gives the user immediate feedback that their message was received and is being handled. Keep the acknowledgment short and natural.",
+    "",
   );
 
   return lines;
