@@ -196,15 +196,20 @@ E2E tests are executed and analyzed by the Coding Agent (Claude Code), not by vi
 
 ### How to Run
 
+E2E tests use an isolated data directory (`~/.super-multica-e2e`) to avoid polluting dev or production session data.
+
 ```bash
 # Basic E2E test (web_search/data tools require MULTICA_API_URL)
-MULTICA_API_URL=https://api-dev.copilothub.ai pnpm multica run --run-log "your test prompt"
+SMC_DATA_DIR=~/.super-multica-e2e MULTICA_API_URL=https://api-dev.copilothub.ai pnpm multica run --run-log "your test prompt"
 
 # With specific provider
-MULTICA_API_URL=https://api-dev.copilothub.ai pnpm multica run --run-log --provider kimi-coding "your test prompt"
+SMC_DATA_DIR=~/.super-multica-e2e MULTICA_API_URL=https://api-dev.copilothub.ai pnpm multica run --run-log --provider kimi-coding "your test prompt"
 
 # Multi-turn test (reuse session)
-MULTICA_API_URL=https://api-dev.copilothub.ai pnpm multica run --run-log --session <session-id> "follow-up prompt"
+SMC_DATA_DIR=~/.super-multica-e2e MULTICA_API_URL=https://api-dev.copilothub.ai pnpm multica run --run-log --session <session-id> "follow-up prompt"
+
+# Clean up all E2E test data
+rm -rf ~/.super-multica-e2e
 ```
 
 ### Analysis Workflow
@@ -225,8 +230,10 @@ After running, the Coding Agent should:
 
 ### Important
 
+- **`SMC_DATA_DIR=~/.super-multica-e2e`** isolates E2E test sessions from dev (`~/.super-multica-dev`) and production (`~/.super-multica`) data. Always set this.
 - **`MULTICA_API_URL=https://api-dev.copilothub.ai`** is required for `web_search` and `data` tools. Without it, these tools fail with `MULTICA_API_URL is required`.
 - Default provider is `kimi-coding`. Override with `--provider`.
+- Run-log and session data are at `~/.super-multica-e2e/sessions/{sessionId}/`
 - Detailed guide with feature-specific test playbooks: `docs/e2e-testing-guide.md`
 
 ## Credentials Setup

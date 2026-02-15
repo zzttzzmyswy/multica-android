@@ -22,36 +22,54 @@ This approach is superior to static assertions because:
 2. **Available providers**: Check with `pnpm multica profile list` or inspect credentials file
 3. **Default provider**: `kimi-coding` (Kimi Code, free tier available). Can override with `--provider`
 4. **`MULTICA_API_URL`**: Required for `web_search` and `data` tools. Set to `https://api-dev.copilothub.ai` for dev environment. Without this, web search and financial data tools will fail with `MULTICA_API_URL is required`
+5. **`SMC_DATA_DIR`**: Set to `~/.super-multica-e2e` to isolate E2E test sessions from dev (`~/.super-multica-dev`) and production (`~/.super-multica`) data. Without this, test sessions pollute the production sessions directory
 
 ## Running a Test
+
+### Environment variables
+
+All E2E test commands should include these env vars:
+
+```bash
+# SMC_DATA_DIR — isolates test sessions from dev/production
+# MULTICA_API_URL — enables web_search and data tools
+export SMC_DATA_DIR=~/.super-multica-e2e
+export MULTICA_API_URL=https://api-dev.copilothub.ai
+```
 
 ### Basic command
 
 ```bash
 # For prompts that only need exec/read/write tools:
-pnpm multica run --run-log "your test prompt here"
+SMC_DATA_DIR=~/.super-multica-e2e pnpm multica run --run-log "your test prompt here"
 
-# For prompts that need web_search or data tools (requires API URL):
-MULTICA_API_URL=https://api-dev.copilothub.ai pnpm multica run --run-log "your test prompt here"
+# For prompts that need web_search or data tools:
+SMC_DATA_DIR=~/.super-multica-e2e MULTICA_API_URL=https://api-dev.copilothub.ai pnpm multica run --run-log "your test prompt here"
 ```
 
 ### With provider override
 
 ```bash
-MULTICA_API_URL=https://api-dev.copilothub.ai pnpm multica run --run-log --provider claude-code "your test prompt"
-MULTICA_API_URL=https://api-dev.copilothub.ai pnpm multica run --run-log --provider kimi-coding "your test prompt"
-MULTICA_API_URL=https://api-dev.copilothub.ai pnpm multica run --run-log --provider anthropic --api-key sk-ant-... "your test prompt"
+SMC_DATA_DIR=~/.super-multica-e2e MULTICA_API_URL=https://api-dev.copilothub.ai pnpm multica run --run-log --provider claude-code "your test prompt"
+SMC_DATA_DIR=~/.super-multica-e2e MULTICA_API_URL=https://api-dev.copilothub.ai pnpm multica run --run-log --provider kimi-coding "your test prompt"
 ```
 
 ### Resume a session (multi-turn testing)
 
 ```bash
 # First turn
-MULTICA_API_URL=https://api-dev.copilothub.ai pnpm multica run --run-log "Create a file called test.txt with content 'hello'"
+SMC_DATA_DIR=~/.super-multica-e2e MULTICA_API_URL=https://api-dev.copilothub.ai pnpm multica run --run-log "Create a file called test.txt with content 'hello'"
 # Note the session ID from stderr output: [session: 019c584a-...]
 
 # Second turn (same session)
-MULTICA_API_URL=https://api-dev.copilothub.ai pnpm multica run --run-log --session 019c584a-... "Read the file test.txt and tell me its content"
+SMC_DATA_DIR=~/.super-multica-e2e MULTICA_API_URL=https://api-dev.copilothub.ai pnpm multica run --run-log --session 019c584a-... "Read the file test.txt and tell me its content"
+```
+
+### Cleanup
+
+```bash
+# Remove all E2E test sessions
+rm -rf ~/.super-multica-e2e
 ```
 
 ### Output
