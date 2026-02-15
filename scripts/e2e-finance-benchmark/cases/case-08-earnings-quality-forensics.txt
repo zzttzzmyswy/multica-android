@@ -1,0 +1,14 @@
+请做“财报质量法证分析”（中文输出）。
+
+样本：AAPL、MSFT、GOOGL、AMZN、META、NVDA、TSLA、BRK.B、UNH、JPM。
+时间范围：2023-01-01 到 2025-12-31。
+
+任务要求：
+1. 建立财报质量检查框架，至少包含：应计项目质量、经营现金流与净利润匹配度、股权激励稀释、回购与债务关系、一次性项目影响。
+2. 对每家公司给出 Red/Yellow/Green 评级，并给出可追踪的证据。
+3. 生成 Excel（.xlsx）：`quality_raw`、`forensic_flags`、`rating_summary`、`watchlist_2026`。
+4. 生成 `forensic_report.md`，总结最值得警惕的 5 个红旗。
+5. 生成 `sources.md`。
+6. 输出目录：`~/Desktop/multica-fin-bench/case-08/`。
+
+执行要求：必须在报告中明确“哪些结论是事实、哪些是推断”。

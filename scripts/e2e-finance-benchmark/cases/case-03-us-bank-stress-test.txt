@@ -1,0 +1,16 @@
+请做“美国大型银行 2026 压力测试”任务（中文输出）。
+
+样本：JPM、BAC、C、WFC、GS、MS。
+
+任务要求：
+1. 基于最近三个完整财年（优先 2023-2025）整理关键指标：净息差(NIM)、CET1、贷款损失准备、商业地产敞口、存款成本变化、未实现损失等。
+2. 构建两套压力情景：
+   - Mild Recession：失业率上行 +150bp，联邦基金利率下行 100bp
+   - Severe Recession：失业率上行 +300bp，联邦基金利率下行 200bp，CRE 违约率显著上行
+3. 估算各银行在两种情景下的利润与资本充足率变化方向，并给出脆弱点排序。
+4. 生成 Excel（.xlsx）：`bank_raw`、`stress_assumptions`、`impact_estimate`、`ranking`。
+5. 生成 `risk_brief.md`，包含“最需要警惕的 5 个风险信号”。
+6. 生成 `sources.md`。
+7. 输出到：`~/Desktop/multica-fin-bench/case-03/`。
+
+执行要求：先给方法论，再给结果；最后列出你最不确定的 3 个假设。
