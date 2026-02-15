@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Super Multica 代码贡献统计</title>
+  <style>
+    :root {
+      --bg: #0b0d10;
+      --panel: #14181d;
+      --panel-2: #1a2027;
+      --line: #2a3440;
+      --text: #e8edf3;
+      --muted: #98a7b7;
+      --ok: #2fbf71;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background: radial-gradient(circle at 20% -10%, #1a2430 0%, #0b0d10 45%) fixed;
+      color: var(--text);
+      line-height: 1.4;
+    }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    .sub { color: var(--muted); margin-bottom: 20px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .card {
+      background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .k { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+    .v { font-size: 24px; font-weight: 700; letter-spacing: 0.3px; }
+    .section { margin-top: 14px; }
+    .section h2 { margin: 0 0 10px; font-size: 16px; color: #d4dde7; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 9px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
+    th { background: #11161c; text-align: left; color: #c5d0db; position: sticky; top: 0; }
+    tr:last-child td { border-bottom: 0; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .bar-wrap { background: #0f1318; border-radius: 999px; height: 8px; width: 180px; border: 1px solid #273241; }
+    .bar { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #3f7ef7, #58a6ff); }
+    .ok { color: var(--ok); }
+    .danger { color: var(--danger); }
+    .foot { margin-top: 16px; color: var(--muted); font-size: 12px; }
+    .scroll { max-height: 420px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Super Multica 代码贡献统计</h1>
+    <div class="sub" id="subtitle"></div>
+
+    <div class="grid" id="summary"></div>
+
+    <div class="section">
+      <h2>代码量分布（按扩展名）</h2>
+      <div class="panel scroll"><table id="extTable"></table></div>
+    </div>
+
+    <div class="section">
+      <h2>人员贡献（人工口径）</h2>
+      <div class="panel scroll"><table id="authorTable"></table></div>
+    </div>
+
+    <div class="section">
+      <h2>每日贡献（人工口径）</h2>
+      <div class="panel scroll"><table id="dayTable"></table></div>
+    </div>
+
+    <div class="section">
+      <h2>小时段贡献（人工口径）</h2>
+      <div class="panel scroll"><table id="hourTable"></table></div>
+    </div>
+
+    <div class="foot">数据来源：git log --numstat 与当前工作树文件统计。人工口径排除 checkpointer / dependabot。</div>
+  </div>
+
+  <script>
+    const RAW = {
+      locTotals: String.raw`
+files	669
+lines	137510
+source_files	500
+source_lines	75894
+doc_files	47
+doc_lines	11701
+config_files	82
+config_lines	42562
+`,
+      locByExt: String.raw`
+mjs	3	25
+js	8	357
+production	1	11
+dockerignore	1	45
+xml	5	15
+gitignore	4	126
+tsx	109	12206
+ts	337	55198
+json	38	1025
+yaml	2	21654
+yml	2	66
+css	4	412
+sh	5	259
+icns	1	1992
+example	2	115
+json5	1	87
+svg	1	75
+sql	1	17
+html	5	2363
+md	47	11701
+development	1	10
+npmrc	1	1
+xsd	39	19730
+ico	2	315
+[noext]	1	44
+cjs	1	19
+py	28	5055
+png	18	4154
+drawio	1	433
+`,
+      authorHuman: String.raw`
+Jiayuan Zhang <forrestchang7@gmail.com>	233	110606	55597	55009	49.11%	27.67%
+Naiyuan Qing <145280634+NevilleQingNY@users.noreply.github.com>	253	61422	24246	37176	27.27%	30.05%
+Jiang Bohan <bhjiang@outlook.com>	203	30764	4944	25820	13.66%	24.11%
+yushen <ldnvnbl@gmail.com>	128	21171	2185	18986	9.40%	15.20%
+yushen <linyushen@proton.me>	25	1279	341	938	0.57%	2.97%
+`,
+      dayHuman: String.raw`
+2026-01-28	4	3403	13	3390	14	17
+2026-01-29	2	9990	676	9314	16	16
+2026-01-30	173	39220	4907	34313	01	23
+2026-01-31	28	3353	1117	2236	01	21
+2026-02-01	17	4093	539	3554	02	23
+2026-02-02	42	3993	2331	1662	00	17
+2026-02-03	52	22784	6410	16374	02	21
+2026-02-04	64	8893	1733	7160	03	20
+2026-02-05	78	12776	5203	7573	02	22
+2026-02-06	42	6074	521	5553	12	22
+2026-02-09	44	4458	941	3517	07	19
+2026-02-10	50	9474	4410	5064	02	23
+2026-02-11	58	7069	3222	3847	00	20
+2026-02-12	60	79852	4003	75849	09	23
+2026-02-13	66	6194	1427	4767	01	23
+2026-02-14	30	1479	1049	430	00	23
+2026-02-15	32	2137	48811	-46674	00	04
+`,
+      hourHuman: String.raw`
+00	18	1236	248	988
+01	32	5718	45407	-39689
+02	34	4449	2948	1501
+03	27	3861	3587	274
+04	24	4591	1047	3544
+05	7	2752	69	2683
+06	0	0	0	0
+07	7	809	54	755
+08	17	3605	2099	1506
+09	19	5612	1801	3811
+10	17	2907	1784	1123
+11	22	1673	530	1143
+12	12	1974	72	1902
+13	49	8470	1911	6559
+14	67	8581	2303	6278
+15	64	10866	2467	8399
+16	84	35691	6756	28935
+17	111	97435	7908	89527
+18	73	8936	2276	6660
+19	36	2716	723	1993
+20	22	3916	1223	2693
+21	24	2296	497	1799
+22	48	3545	1016	2529
+23	28	3603	587	3016
+`,
+      dayPeak: String.raw`
+2026-01-28	16	1	2237	5
+2026-01-29	16	2	9990	676
+2026-01-30	13	16	4675	55
+2026-01-31	02	9	1277	144
+2026-02-01	23	7	3036	270
+2026-02-02	16	13	1218	280
+2026-02-03	16	7	14253	4890
+2026-02-04	17	10	2766	143
+2026-02-05	17	17	4345	1657
+2026-02-06	17	8	2300	120
+2026-02-09	19	3	1095	335
+2026-02-10	17	5	5778	3625
+2026-02-11	17	17	2520	1018
+2026-02-12	17	13	73452	132
+2026-02-13	12	7	1378	56
+2026-02-14	00	8	601	212
+2026-02-15	04	4	657	364
+`
+    };
+
+    const fmt = (n) => Number(n).toLocaleString("en-US");
+    const tsv = (txt) => txt.trim().split(/\n+/).map((line) => line.split("\t"));
+    const toNum = (v) => Number(v || 0);
+
+    const locTotalsRows = tsv(RAW.locTotals);
+    const locTotals = Object.fromEntries(locTotalsRows.map(([k, v]) => [k, toNum(v)]));
+
+    const extRows = tsv(RAW.locByExt).map(([ext, files, lines]) => ({
+      ext,
+      files: toNum(files),
+      lines: toNum(lines),
+    })).sort((a, b) => b.lines - a.lines);
+
+    const authors = tsv(RAW.authorHuman).map(([name, commits, add, del, net, addPct, commitPct]) => ({
+      name,
+      commits: toNum(commits),
+      add: toNum(add),
+      del: toNum(del),
+      net: toNum(net),
+      addPct,
+      commitPct,
+    })).sort((a, b) => b.add - a.add);
+
+    const dayPeaks = Object.fromEntries(tsv(RAW.dayPeak).map(([d, h, c, a, del]) => [d, {
+      hour: h,
+      commits: toNum(c),
+      add: toNum(a),
+      del: toNum(del),
+    }]));
+
+    const days = tsv(RAW.dayHuman).map(([date, commits, add, del, net, startHour, endHour]) => ({
+      date,
+      commits: toNum(commits),
+      add: toNum(add),
+      del: toNum(del),
+      net: toNum(net),
+      startHour,
+      endHour,
+      peak: dayPeaks[date] || null,
+    })).sort((a, b) => a.date.localeCompare(b.date));
+
+    const hours = tsv(RAW.hourHuman).map(([hour, commits, add, del, net]) => ({
+      hour,
+      commits: toNum(commits),
+      add: toNum(add),
+      del: toNum(del),
+      net: toNum(net),
+    })).sort((a, b) => a.hour.localeCompare(b.hour));
+
+    const totalHumanCommits = authors.reduce((sum, x) => sum + x.commits, 0);
+    const totalHumanAdd = authors.reduce((sum, x) => sum + x.add, 0);
+    const totalHumanDel = authors.reduce((sum, x) => sum + x.del, 0);
+    const topHour = [...hours].sort((a, b) => b.add - a.add)[0] || { hour: "--", add: 0 };
+    const startDate = days[0]?.date || "--";
+    const endDate = days[days.length - 1]?.date || "--";
+
+    document.getElementById("subtitle").textContent = `${startDate} ~ ${endDate}`;
+
+    const summaryItems = [
+      ["总文件数", fmt(locTotals.files || 0)],
+      ["总行数", fmt(locTotals.lines || 0)],
+      ["源码行数", fmt(locTotals.source_lines || 0)],
+      ["贡献人数", fmt(authors.length)],
+      ["人工提交数", fmt(totalHumanCommits)],
+      ["人工新增", fmt(totalHumanAdd)],
+      ["人工删除", fmt(totalHumanDel)],
+      ["最高产小时", `${topHour.hour}:00 (${fmt(topHour.add)})`],
+    ];
+
+    document.getElementById("summary").innerHTML = summaryItems.map(([k, v]) => (
+      `<div class="card"><div class="k">${k}</div><div class="v">${v}</div></div>`
+    )).join("");
+
+    const maxExtLines = Math.max(...extRows.map((x) => x.lines), 1);
+    document.getElementById("extTable").innerHTML = `
+      <thead><tr><th>扩展名</th><th class="num">文件数</th><th class="num">行数</th><th>占比</th><th>可视化</th></tr></thead>
+      <tbody>
+        ${extRows.map((r) => {
+          const pct = ((r.lines / (locTotals.lines || 1)) * 100).toFixed(2);
+          const w = ((r.lines / maxExtLines) * 100).toFixed(1);
+          return `<tr>
+            <td class="mono">${r.ext}</td>
+            <td class="num">${fmt(r.files)}</td>
+            <td class="num">${fmt(r.lines)}</td>
+            <td class="num">${pct}%</td>
+            <td><div class="bar-wrap"><div class="bar" style="width:${w}%"></div></div></td>
+          </tr>`;
+        }).join("")}
+      </tbody>`;
+
+    document.getElementById("authorTable").innerHTML = `
+      <thead><tr><th>作者</th><th class="num">提交</th><th class="num">新增</th><th class="num">删除</th><th class="num">净新增</th><th class="num">新增占比</th><th class="num">提交占比</th></tr></thead>
+      <tbody>
+        ${authors.map((a) => `<tr>
+          <td>${a.name}</td>
+          <td class="num">${fmt(a.commits)}</td>
+          <td class="num">${fmt(a.add)}</td>
+          <td class="num">${fmt(a.del)}</td>
+          <td class="num ${a.net >= 0 ? "ok" : "danger"}">${fmt(a.net)}</td>
+          <td class="num">${a.addPct}</td>
+          <td class="num">${a.commitPct}</td>
+        </tr>`).join("")}
+      </tbody>`;
+
+    document.getElementById("dayTable").innerHTML = `
+      <thead><tr><th>日期</th><th class="num">提交</th><th class="num">新增</th><th class="num">删除</th><th class="num">净新增</th><th>活跃时段</th><th>峰值小时</th></tr></thead>
+      <tbody>
+        ${days.map((d) => `<tr>
+          <td class="mono">${d.date}</td>
+          <td class="num">${fmt(d.commits)}</td>
+          <td class="num">${fmt(d.add)}</td>
+          <td class="num">${fmt(d.del)}</td>
+          <td class="num ${d.net >= 0 ? "ok" : "danger"}">${fmt(d.net)}</td>
+          <td class="mono">${d.startHour}:00 - ${d.endHour}:59</td>
+          <td class="mono">${d.peak ? `${d.peak.hour}:00 (${fmt(d.peak.add)})` : "--"}</td>
+        </tr>`).join("")}
+      </tbody>`;
+
+    const maxHourAdd = Math.max(...hours.map((h) => h.add), 1);
+    document.getElementById("hourTable").innerHTML = `
+      <thead><tr><th>小时</th><th class="num">提交</th><th class="num">新增</th><th class="num">删除</th><th class="num">净新增</th><th>可视化</th></tr></thead>
+      <tbody>
+        ${hours.map((h) => {
+          const w = ((h.add / maxHourAdd) * 100).toFixed(1);
+          return `<tr>
+            <td class="mono">${h.hour}:00</td>
+            <td class="num">${fmt(h.commits)}</td>
+            <td class="num">${fmt(h.add)}</td>
+            <td class="num">${fmt(h.del)}</td>
+            <td class="num ${h.net >= 0 ? "ok" : "danger"}">${fmt(h.net)}</td>
+            <td><div class="bar-wrap"><div class="bar" style="width:${w}%"></div></div></td>
+          </tr>`;
+        }).join("")}
+      </tbody>`;
+  </script>
+</body>
+</html>
