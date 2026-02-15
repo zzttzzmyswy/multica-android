@@ -50,11 +50,10 @@ export type AgentOptions = {
   reserveTokens?: number | undefined;
   /**
    * Compaction mode:
-   * - "count": uses legacy message count
    * - "tokens": uses token awareness
    * - "summary": uses LLM to generate summary (default)
    */
-  compactionMode?: "count" | "tokens" | "summary" | undefined;
+  compactionMode?: "tokens" | "summary" | undefined;
   /** Compaction target utilization ratio (0-1), defaults to 0.5 */
   compactionTargetRatio?: number | undefined;
   /** Minimum messages to keep, defaults to 10 */

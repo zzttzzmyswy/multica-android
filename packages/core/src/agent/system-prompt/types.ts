@@ -107,6 +107,10 @@ export interface SectionReport {
   chars: number;
   lines: number;
   included: boolean;
+  /** Whether this section's content was truncated by budget control */
+  truncated?: boolean | undefined;
+  /** Original character count before truncation (only present when truncated) */
+  originalChars?: number | undefined;
 }
 
 /** Telemetry report about a generated system prompt */

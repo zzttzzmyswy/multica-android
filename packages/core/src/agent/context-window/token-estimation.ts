@@ -9,7 +9,7 @@ import { estimateTokens } from "@mariozechner/pi-coding-agent";
 import type { TokenEstimation, TokenAwareCompactionResult } from "./types.js";
 
 /** Safety margin coefficient to compensate for estimation inaccuracy */
-export const ESTIMATION_SAFETY_MARGIN = 1.5; // 50% buffer (covers CJK and mixed content)
+export const ESTIMATION_SAFETY_MARGIN = 1.2; // 20% buffer (estimateTokens is already reasonably accurate)
 
 /** Utilization threshold for triggering compaction */
 export const COMPACTION_TRIGGER_RATIO = 0.8; // 80%
@@ -29,13 +29,13 @@ export function estimateMessagesTokens(messages: AgentMessage[]): number {
 
 /**
  * Estimate tokens for system prompt
+ *
+ * Uses the same estimateTokens() function as messages for consistency.
+ * The ESTIMATION_SAFETY_MARGIN already covers CJK/mixed content variance.
  */
 export function estimateSystemPromptTokens(systemPrompt: string | undefined): number {
   if (!systemPrompt) return 0;
-  // Conservative estimation: ~2 chars = 1 token
-  // English/code averages ~4 chars/token but CJK averages ~1-2 chars/token.
-  // Using /2 as a safe default to prevent underestimation on mixed content.
-  return Math.ceil(systemPrompt.length / 2);
+  return estimateTokens({ role: "user", content: systemPrompt } as AgentMessage);
 }
 
 /**

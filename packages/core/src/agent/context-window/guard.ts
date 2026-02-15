@@ -27,26 +27,27 @@ function normalizePositiveInt(value: unknown): number | null {
 /**
  * Resolve context window information
  *
- * Priority: model > config > default
+ * Priority: config > model > default
+ * (Explicit config override always wins — allows capping context for testing/cost control)
  */
 export function resolveContextWindowInfo(params: {
   /** Model's contextWindow property */
   modelContextWindow?: number | undefined;
-  /** Context tokens specified in config */
+  /** Context tokens specified in config (explicit override, highest priority) */
   configContextTokens?: number | undefined;
   /** Default value */
   defaultTokens?: number | undefined;
 }): ContextWindowInfo {
-  // 1. Try getting from model
-  const fromModel = normalizePositiveInt(params.modelContextWindow);
-  if (fromModel) {
-    return { tokens: fromModel, source: "model" };
-  }
-
-  // 2. Try getting from config
+  // 1. Explicit config override always wins
   const fromConfig = normalizePositiveInt(params.configContextTokens);
   if (fromConfig) {
     return { tokens: fromConfig, source: "config" };
+  }
+
+  // 2. Try getting from model
+  const fromModel = normalizePositiveInt(params.modelContextWindow);
+  if (fromModel) {
+    return { tokens: fromModel, source: "model" };
   }
 
   // 3. Use default value

@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 import {
-  compactMessagesByCount,
   compactMessagesByTokens,
   compactMessages,
   type CompactionResult,
@@ -26,96 +25,6 @@ describe("compaction", () => {
       content: `${prefix} ${i}`,
     })) as AgentMessage[];
   }
-
-  function createMessagesWithToolUse(): AgentMessage[] {
-    return [
-      { role: "user", content: "Start" },
-      {
-        role: "assistant",
-        content: [{ type: "tool_use", id: "tool-1", name: "test", input: {} }],
-      } as any,
-      {
-        role: "user",
-        content: [{ type: "tool_result", tool_use_id: "tool-1", content: "Result" }],
-      } as any,
-      { role: "assistant", content: "Done" },
-      { role: "user", content: "Next message" },
-    ];
-  }
-
-  describe("compactMessagesByCount", () => {
-    it("should return null when under max messages", () => {
-      const messages = createMessages(50);
-      const result = compactMessagesByCount(messages, 80, 60);
-      expect(result).toBeNull();
-    });
-
-    it("should compact when over max messages", () => {
-      const messages = createMessages(100);
-      const result = compactMessagesByCount(messages, 80, 60);
-
-      expect(result).not.toBeNull();
-      expect(result!.reason).toBe("count");
-      expect(result!.kept.length).toBeLessThanOrEqual(100);
-      expect(result!.removedCount).toBeGreaterThan(0);
-    });
-
-    it("should keep the specified number of last messages", () => {
-      const messages = createMessages(100);
-      const result = compactMessagesByCount(messages, 80, 50);
-
-      if (result) {
-        // Should keep approximately keepLast messages
-        expect(result.kept.length).toBeGreaterThanOrEqual(40);
-        expect(result.kept.length).toBeLessThanOrEqual(60);
-      }
-    });
-
-    it("should return null when exact at max messages", () => {
-      const messages = createMessages(80);
-      const result = compactMessagesByCount(messages, 80, 60);
-      expect(result).toBeNull();
-    });
-
-    it("should not break tool_use/tool_result pairs", () => {
-      // Create many messages followed by a tool pair
-      const regularMessages = createMessages(70);
-      const toolMessages = createMessagesWithToolUse();
-      const messages = [...regularMessages, ...toolMessages];
-
-      const result = compactMessagesByCount(messages, 80, 20);
-
-      if (result) {
-        // Check that we didn't end up with orphaned tool_result
-        let hasOrphanedToolResult = false;
-        for (let i = 0; i < result.kept.length; i++) {
-          const msg = result.kept[i] as any;
-          if (Array.isArray(msg.content)) {
-            const hasToolResult = msg.content.some((b: any) => b.type === "tool_result");
-            if (hasToolResult) {
-              // Check if previous message has corresponding tool_use
-              const prevMsg = result.kept[i - 1] as any;
-              if (!prevMsg || !Array.isArray(prevMsg.content)) {
-                hasOrphanedToolResult = true;
-              }
-            }
-          }
-        }
-        // This test verifies the safe compaction point logic
-        // The exact behavior depends on findSafeCompactionPoint implementation
-      }
-    });
-
-    it("should return null when would keep almost all messages", () => {
-      const messages = createMessages(85);
-      const result = compactMessagesByCount(messages, 80, 82);
-
-      // If we'd only remove 2-3 messages, should return null
-      if (result) {
-        expect(result.removedCount).toBeGreaterThan(2);
-      }
-    });
-  });
 
   describe("compactMessagesByTokens", () => {
     it("should return null when under token limit", () => {
@@ -161,41 +70,16 @@ describe("compaction", () => {
   });
 
   describe("compactMessages (unified entry point)", () => {
-    describe("count mode", () => {
-      it("should use count-based compaction", () => {
-        const messages = createMessages(100);
-        const result = compactMessages(messages, {
-          mode: "count",
-          maxMessages: 80,
-          keepLast: 60,
-        });
-
-        expect(result).not.toBeNull();
-        expect(result!.reason).toBe("count");
-      });
-
-      it("should use default max and keep values", () => {
-        const messages = createMessages(100);
-        const result = compactMessages(messages, {
-          mode: "count",
-        });
-
-        // Default: maxMessages: 80, keepLast: 60
-        expect(result).not.toBeNull();
-        expect(result!.reason).toBe("count");
-      });
-    });
-
     describe("tokens mode", () => {
       it("should use token-based compaction when utilization is high", () => {
         const messages = createMessages(100);
         // ~300 message tokens (real estimator: ~3 tokens/msg)
-        // systemPromptTokens ≈ 7, reserveTokens = 0
-        // available = 500 - 7 = 493
-        // utilization = (300 * 1.5) / 493 ≈ 0.91 > 0.8 → should compact
+        // systemPromptTokens ≈ 4, reserveTokens = 0
+        // available = 400 - 4 = 396
+        // utilization = (300 * 1.2) / 396 ≈ 0.91 > 0.8 → should compact
         const result = compactMessages(messages, {
           mode: "tokens",
-          contextWindowTokens: 500,
+          contextWindowTokens: 400,
           systemPrompt: "System prompt",
           reserveTokens: 0,
         });
@@ -207,8 +91,8 @@ describe("compaction", () => {
       it("should return null when utilization is low", () => {
         const messages = createMessages(5);
         // ~15 message tokens
-        // available = 10000 - 7 - 1024 = 8969
-        // utilization = (15 * 1.5) / 8969 ≈ 0.003 < 0.8
+        // available = 10000 - 4 - 1024 = 8972
+        // utilization = (15 * 1.2) / 8972 ≈ 0.002 < 0.8
         const result = compactMessages(messages, {
           mode: "tokens",
           contextWindowTokens: 10000,

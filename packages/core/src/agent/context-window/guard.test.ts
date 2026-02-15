@@ -24,15 +24,15 @@ describe("guard", () => {
   });
 
   describe("resolveContextWindowInfo", () => {
-    it("should prioritize model context window", () => {
+    it("should prioritize config over model (explicit override wins)", () => {
       const result = resolveContextWindowInfo({
         modelContextWindow: 100_000,
         configContextTokens: 50_000,
         defaultTokens: 200_000,
       });
 
-      expect(result.tokens).toBe(100_000);
-      expect(result.source).toBe("model");
+      expect(result.tokens).toBe(50_000);
+      expect(result.source).toBe("config");
     });
 
     it("should fall back to config when model is undefined", () => {
@@ -105,12 +105,22 @@ describe("guard", () => {
       expect(result.source).toBe("config");
     });
 
-    it("should floor decimal values", () => {
+    it("should floor decimal values from model", () => {
       const result = resolveContextWindowInfo({
         modelContextWindow: 100_000.9,
       });
 
       expect(result.tokens).toBe(100_000);
+    });
+
+    it("should use model when config is not provided", () => {
+      const result = resolveContextWindowInfo({
+        modelContextWindow: 100_000,
+        defaultTokens: 200_000,
+      });
+
+      expect(result.tokens).toBe(100_000);
+      expect(result.source).toBe("model");
     });
   });
 

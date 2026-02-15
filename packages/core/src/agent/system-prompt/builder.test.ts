@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildSystemPrompt, buildSystemPromptWithReport } from "./builder.js";
+import { formatPromptReport } from "./report.js";
 import type { SystemPromptOptions } from "./types.js";
 
 const PROFILE = {
@@ -251,5 +252,73 @@ describe("buildSystemPromptWithReport", () => {
 
     const safety = report.sections.find((s) => s.name === "safety");
     expect(safety?.included).toBe(true);
+  });
+
+  it("report includes truncation info for oversized workspace", () => {
+    const oversizedWorkspace = "X".repeat(25_000);
+    const { report } = buildSystemPromptWithReport({
+      mode: "full",
+      profile: { workspace: oversizedWorkspace },
+    });
+    const ws = report.sections.find((s) => s.name === "workspace");
+    expect(ws?.included).toBe(true);
+    expect(ws?.truncated).toBe(true);
+    expect(ws?.originalChars).toBe(25_000);
+    expect(ws!.chars).toBeLessThan(25_000);
+  });
+
+  it("report includes truncation info for oversized skills", () => {
+    const oversizedSkills = "## skill\n" + "Y".repeat(15_000);
+    const { report } = buildSystemPromptWithReport({
+      mode: "full",
+      skillsPrompt: oversizedSkills,
+    });
+    const sk = report.sections.find((s) => s.name === "skills");
+    expect(sk?.included).toBe(true);
+    expect(sk?.truncated).toBe(true);
+    expect(sk?.originalChars).toBe(oversizedSkills.trim().length);
+  });
+
+  it("report does not flag truncation for small content", () => {
+    const { report } = buildSystemPromptWithReport({
+      mode: "full",
+      profile: { workspace: "Small rules" },
+      skillsPrompt: "## commit\nDo commits.",
+    });
+    const ws = report.sections.find((s) => s.name === "workspace");
+    expect(ws?.truncated).toBeUndefined();
+    expect(ws?.originalChars).toBeUndefined();
+
+    const sk = report.sections.find((s) => s.name === "skills");
+    expect(sk?.truncated).toBeUndefined();
+  });
+});
+
+describe("formatPromptReport", () => {
+  it("includes estimated token count", () => {
+    const { report } = buildSystemPromptWithReport({ mode: "full", tools: TOOLS });
+    const formatted = formatPromptReport(report);
+    expect(formatted).toContain("tokens)");
+    // Estimated tokens = chars / 4
+    const expectedTokens = Math.ceil(report.totalChars / 4);
+    expect(formatted).toContain(`~${expectedTokens} tokens`);
+  });
+
+  it("shows truncation info in formatted output", () => {
+    const { report } = buildSystemPromptWithReport({
+      mode: "full",
+      profile: { workspace: "X".repeat(25_000) },
+    });
+    const formatted = formatPromptReport(report);
+    expect(formatted).toContain("truncated from 25000 chars");
+  });
+
+  it("does not show truncation for non-truncated sections", () => {
+    const { report } = buildSystemPromptWithReport({
+      mode: "full",
+      profile: { workspace: "Small" },
+    });
+    const formatted = formatPromptReport(report);
+    expect(formatted).not.toContain("truncated from");
   });
 });

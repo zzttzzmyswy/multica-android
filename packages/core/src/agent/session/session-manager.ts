@@ -11,6 +11,11 @@ import {
   pruneToolResults,
   type ToolResultPruningSettings,
 } from "../context-window/tool-result-pruning.js";
+import {
+  truncateOversizedToolResults,
+  type ToolResultTruncationSettings,
+} from "../context-window/tool-result-truncation.js";
+import { saveToolResultArtifact } from "./artifact-store.js";
 import type { RunLog } from "../run-log.js";
 
 /** Get Kimi model for summarization (use a cheaper model than k2-thinking) */
@@ -33,12 +38,8 @@ export type SessionManagerOptions = {
   baseDir?: string | undefined;
 
   // Compaction mode configuration
-  /** Compaction mode: "count" uses message count, "tokens" uses token awareness, "summary" uses LLM summary */
-  compactionMode?: "count" | "tokens" | "summary" | undefined;
-
-  // Count mode parameters
-  maxMessages?: number | undefined;
-  keepLast?: number | undefined;
+  /** Compaction mode: "tokens" uses token awareness, "summary" uses LLM summary (default) */
+  compactionMode?: "tokens" | "summary" | undefined;
 
   // Token mode parameters
   /** Context window token count */
@@ -61,10 +62,16 @@ export type SessionManagerOptions = {
   customInstructions?: string | undefined;
 
   // Tool result pruning
-  /** Whether to enable tool result pruning before compaction (default: true in tokens/summary mode) */
+  /** Whether to enable tool result pruning before compaction (default: true) */
   enableToolResultPruning?: boolean | undefined;
   /** Tool result pruning settings */
   toolResultPruning?: Partial<ToolResultPruningSettings> | undefined;
+
+  // Pre-emptive tool result truncation
+  /** Whether to enable pre-emptive truncation of oversized tool results (default: true) */
+  enableToolResultTruncation?: boolean | undefined;
+  /** Pre-emptive truncation settings */
+  toolResultTruncation?: Partial<ToolResultTruncationSettings> | undefined;
 
   // Observability
   /** RunLog instance for structured logging */
@@ -74,10 +81,7 @@ export type SessionManagerOptions = {
 export class SessionManager {
   private readonly sessionId: string;
   private readonly baseDir: string | undefined;
-  private readonly compactionMode: "count" | "tokens" | "summary";
-  // Count mode
-  private readonly maxMessages: number;
-  private readonly keepLast: number;
+  private readonly compactionMode: "tokens" | "summary";
   // Token mode
   private readonly contextWindowTokens: number;
   private systemPrompt: string | undefined;
@@ -92,6 +96,9 @@ export class SessionManager {
   // Tool result pruning
   private readonly enableToolResultPruning: boolean;
   private readonly toolResultPruning: Partial<ToolResultPruningSettings> | undefined;
+  // Pre-emptive truncation
+  private readonly enableToolResultTruncation: boolean;
+  private readonly toolResultTruncation: Partial<ToolResultTruncationSettings> | undefined;
   // Observability
   private readonly runLog: RunLog;
 
@@ -105,10 +112,6 @@ export class SessionManager {
     // Compaction mode (default: summary with LLM-based summarization)
     this.compactionMode = options.compactionMode ?? "summary";
 
-    // Count mode parameters
-    this.maxMessages = options.maxMessages ?? 80;
-    this.keepLast = options.keepLast ?? 60;
-
     // Token mode parameters
     this.contextWindowTokens = options.contextWindowTokens ?? 200_000;
     this.systemPrompt = options.systemPrompt;
@@ -121,11 +124,13 @@ export class SessionManager {
     this.apiKey = options.apiKey;
     this.customInstructions = options.customInstructions;
 
-    // Tool result pruning (enabled by default in tokens/summary mode)
-    this.enableToolResultPruning =
-      options.enableToolResultPruning ??
-      (this.compactionMode === "tokens" || this.compactionMode === "summary");
+    // Tool result pruning (enabled by default)
+    this.enableToolResultPruning = options.enableToolResultPruning ?? true;
     this.toolResultPruning = options.toolResultPruning;
+
+    // Pre-emptive truncation (enabled by default)
+    this.enableToolResultTruncation = options.enableToolResultTruncation ?? true;
+    this.toolResultTruncation = options.toolResultTruncation;
 
     // Observability
     this.runLog = options.runLog ?? { log() {}, async flush() {} };
@@ -164,7 +169,7 @@ export class SessionManager {
   /**
    * Get current compaction mode
    */
-  getCompactionMode(): "count" | "tokens" | "summary" {
+  getCompactionMode(): "tokens" | "summary" {
     return this.compactionMode;
   }
 
@@ -244,12 +249,36 @@ export class SessionManager {
     message: AgentMessage,
     options?: { internal?: boolean; displayContent?: UserMessage["content"]; source?: import("./types.js").MessageSource },
   ) {
+    // Pre-emptive truncation: save oversized tool results as artifacts
+    // and persist a truncated version in the JSONL session file.
+    let persistMessage = message;
+    if (this.enableToolResultTruncation && (message.role === "user" || message.role === "toolResult")) {
+      const result = truncateOversizedToolResults({
+        message,
+        contextWindowTokens: this.contextWindowTokens,
+        settings: this.toolResultTruncation,
+        saveArtifact: (toolCallId, content) =>
+          saveToolResultArtifact(this.sessionId, toolCallId, content, { baseDir: this.baseDir }),
+      });
+      if (result.truncated) {
+        persistMessage = result.message;
+        for (const art of result.artifacts) {
+          this.runLog.log("tool_result_truncation", {
+            tool_call_id: art.toolCallId,
+            tool_name: art.toolName,
+            original_chars: art.originalChars,
+            artifact_path: art.artifactRelPath,
+          });
+        }
+      }
+    }
+
     void this.enqueue(() =>
       appendEntry(
         this.sessionId,
         {
           type: "message",
-          message,
+          message: persistMessage,
           timestamp: Date.now(),
           ...(options?.internal ? { internal: true } : {}),
           ...(options?.displayContent !== undefined
@@ -264,10 +293,6 @@ export class SessionManager {
 
   /** Check whether compaction would trigger for the given messages (without executing it) */
   needsCompaction(messages: AgentMessage[]): boolean {
-    if (this.compactionMode === "count") {
-      return messages.length > this.maxMessages;
-    }
-    // Token and summary modes use the same token-based threshold
     const estimation = estimateTokenUsage({
       messages,
       systemPrompt: this.systemPrompt,
@@ -376,12 +401,9 @@ export class SessionManager {
         }
       }
     } else {
+      // tokens mode
       result = compactMessages(workingMessages, {
-        mode: this.compactionMode,
-        // Count mode parameters
-        maxMessages: this.maxMessages,
-        keepLast: this.keepLast,
-        // Token mode parameters
+        mode: "tokens",
         contextWindowTokens: this.contextWindowTokens,
         systemPrompt: this.systemPrompt,
         reserveTokens: this.reserveTokens,

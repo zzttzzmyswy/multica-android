@@ -28,6 +28,7 @@ type RunOptions = {
   runLog?: boolean;
   toolsAllow?: string[];
   toolsDeny?: string[];
+  contextWindow?: number;
   help?: boolean;
 };
 
@@ -49,6 +50,7 @@ ${cyan("Options:")}
   ${yellow("--session")} ID        Session ID for persistence
   ${yellow("--debug")}             Enable debug logging
   ${yellow("--run-log")}           Enable structured run logging (run-log.jsonl)
+  ${yellow("--context-window")} N  Override context window token count
   ${yellow("--help")}, -h          Show this help
 
 ${cyan("Tools Configuration:")}
@@ -141,6 +143,11 @@ function parseArgs(argv: string[]): { opts: RunOptions; prompt: string } {
       opts.toolsDeny = value?.split(",").map((s) => s.trim()) ?? [];
       continue;
     }
+    if (arg === "--context-window") {
+      const value = args.shift();
+      opts.contextWindow = value ? parseInt(value, 10) : undefined;
+      continue;
+    }
     if (arg === "--") {
       promptParts.push(...args);
       break;
@@ -213,6 +220,7 @@ export async function runCommand(args: string[]): Promise<void> {
       debug: opts.debug,
       enableRunLog,
       tools: toolsConfig,
+      contextWindowTokens: opts.contextWindow,
     });
 
     const sessionDir = join(DATA_DIR, "sessions", agent.sessionId);

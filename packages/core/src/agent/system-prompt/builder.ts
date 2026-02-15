@@ -26,6 +26,9 @@ import {
   buildToolingSummary,
   buildUserSection,
   buildWorkspaceSection,
+  truncateWithBudget,
+  DEFAULT_BOOTSTRAP_MAX_CHARS,
+  DEFAULT_SKILLS_MAX_CHARS,
 } from "./sections.js";
 
 /**
@@ -57,18 +60,29 @@ export function buildSystemPromptWithReport(options: SystemPromptOptions): {
     includeSafety = true,
   } = options;
 
+  // Pre-compute truncation info for budget-controlled sections
+  const workspaceOriginalChars = profile?.workspace?.length ?? 0;
+  const workspaceTruncated = workspaceOriginalChars > DEFAULT_BOOTSTRAP_MAX_CHARS;
+  const skillsTrimmed = skillsPrompt?.trim() ?? "";
+  const skillsOriginalChars = skillsTrimmed.length;
+  const skillsTruncated = skillsOriginalChars > DEFAULT_SKILLS_MAX_CHARS;
+
   // Collect all candidate sections in order
-  const candidates: Array<{ name: string; lines: string[] }> = [
+  const candidates: Array<{ name: string; lines: string[]; truncated?: boolean; originalChars?: number }> = [
     { name: "identity", lines: buildIdentitySection(profile, mode) },
     { name: "user", lines: buildUserSection(profile, mode) },
-    { name: "workspace", lines: buildWorkspaceSection(profile, mode, profileDir, workspaceDir) },
+    { name: "workspace", lines: buildWorkspaceSection(profile, mode, profileDir, workspaceDir),
+      ...(workspaceTruncated ? { truncated: true, originalChars: workspaceOriginalChars } : {}),
+    },
     { name: "memory", lines: buildMemoryFileSection(profile, mode) },
     { name: "heartbeat", lines: buildHeartbeatSection(profile, mode) },
     { name: "safety", lines: buildSafetySection(includeSafety) },
     { name: "tooling", lines: buildToolingSummary(tools, mode) },
     { name: "tool-call-style", lines: buildToolCallStyleSection(mode) },
     { name: "conditional-tools", lines: buildConditionalToolSections(tools, mode) },
-    { name: "skills", lines: buildSkillsSection(skillsPrompt, mode) },
+    { name: "skills", lines: buildSkillsSection(skillsPrompt, mode),
+      ...(skillsTruncated ? { truncated: true, originalChars: skillsOriginalChars } : {}),
+    },
     { name: "runtime", lines: buildRuntimeSection(runtime, mode) },
     { name: "time-awareness", lines: buildTimeAwarenessSection(tools, mode) },
     { name: "profile-dir", lines: buildProfileDirSection(profileDir, mode) },
@@ -81,7 +95,7 @@ export function buildSystemPromptWithReport(options: SystemPromptOptions): {
   const sections: PromptSection[] = [];
   const reportSections: SystemPromptReport["sections"] = [];
 
-  for (const { name, lines } of candidates) {
+  for (const { name, lines, truncated, originalChars } of candidates) {
     const included = lines.length > 0;
     const content = lines.join("\n");
     reportSections.push({
@@ -89,6 +103,7 @@ export function buildSystemPromptWithReport(options: SystemPromptOptions): {
       chars: content.length,
       lines: included ? content.split("\n").length : 0,
       included,
+      ...(truncated && included ? { truncated: true, originalChars } : {}),
     });
     if (included) {
       sections.push({ name, content });

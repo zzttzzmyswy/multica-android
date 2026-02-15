@@ -278,6 +278,16 @@ function takeTail(text: string, maxChars: number): string {
 }
 
 /**
+ * Extract artifact reference from text that was previously truncated
+ * by pre-emptive truncation (tool-result-truncation.ts).
+ * Returns the artifact relative path, or null if not found.
+ */
+function extractArtifactRef(text: string): string | null {
+  const match = text.match(/Full result (?:saved to|available at) (artifacts\/[^\s.]+\.txt)/);
+  return match?.[1] ?? null;
+}
+
+/**
  * Soft trim a tool result text.
  */
 function softTrimText(
@@ -291,7 +301,14 @@ function softTrimText(
 
   const head = takeHead(text, headChars);
   const tail = takeTail(text, tailChars);
-  const note = `\n\n[Tool result trimmed: kept first ${headChars} chars and last ${tailChars} chars of ${text.length} chars.]`;
+
+  // Check for existing artifact reference from pre-emptive truncation
+  const artifactRef = extractArtifactRef(text);
+  const artifactNote = artifactRef
+    ? ` Full result available at ${artifactRef}.`
+    : "";
+
+  const note = `\n\n[Tool result trimmed: kept first ${headChars} chars and last ${tailChars} chars of ${text.length} chars.${artifactNote}]`;
   const trimmed = `${head}\n...\n${tail}${note}`;
 
   return {
@@ -301,7 +318,51 @@ function softTrimText(
 }
 
 /**
- * Process a user message containing tool results.
+ * Process a pi-agent-core "toolResult" message.
+ * These have role="toolResult" with content as text blocks and toolCallId/toolName on the message.
+ */
+function processToolResultMessage(
+  message: AgentMessage,
+  settings: ToolResultPruningSettings,
+  mode: "soft" | "hard",
+): { message: AgentMessage; changed: boolean; charsSaved: number } {
+  const msgAny = message as any;
+  const toolName = msgAny.toolName ?? "unknown";
+
+  if (!isToolPrunable(toolName, settings)) {
+    return { message, changed: false, charsSaved: 0 };
+  }
+
+  if (hasImageContent(msgAny.content)) {
+    return { message, changed: false, charsSaved: 0 };
+  }
+
+  const originalText = extractToolResultText(msgAny.content);
+
+  if (mode === "soft") {
+    const result = softTrimText(originalText, settings);
+    if (!result) return { message, changed: false, charsSaved: 0 };
+    return {
+      message: { ...message, content: [{ type: "text", text: result.trimmed }] } as AgentMessage,
+      changed: true,
+      charsSaved: result.saved,
+    };
+  }
+
+  // Hard clear
+  const artifactRef = extractArtifactRef(originalText);
+  const placeholder = artifactRef
+    ? `${settings.hardClear.placeholder} Full result available at ${artifactRef}.`
+    : settings.hardClear.placeholder;
+  return {
+    message: { ...message, content: [{ type: "text", text: placeholder }] } as AgentMessage,
+    changed: true,
+    charsSaved: originalText.length - placeholder.length,
+  };
+}
+
+/**
+ * Process a user message containing tool results (Anthropic format).
  * Returns modified message if any tool results were trimmed/cleared.
  */
 function processUserMessageToolResults(
@@ -355,13 +416,17 @@ function processUserMessageToolResults(
         newContent.push(block);
       }
     } else {
-      // Hard clear
+      // Hard clear — preserve artifact reference if available
+      const artifactRef = extractArtifactRef(originalText);
+      const placeholder = artifactRef
+        ? `${settings.hardClear.placeholder} Full result available at ${artifactRef}.`
+        : settings.hardClear.placeholder;
       newContent.push({
         ...block,
-        content: [{ type: "text", text: settings.hardClear.placeholder }],
+        content: [{ type: "text", text: placeholder }],
       });
       changed = true;
-      charsSaved += originalText.length - settings.hardClear.placeholder.length;
+      charsSaved += originalText.length - placeholder.length;
     }
   }
 
@@ -446,7 +511,26 @@ export function pruneToolResults(params: {
   // Phase 1: Soft Trim
   for (let i = pruneStartIndex; i < cutoffIndex; i++) {
     const msg = result[i];
-    if (!msg || msg.role !== "user") continue;
+    if (!msg) continue;
+
+    const msgRole = msg.role as string;
+
+    // pi-agent-core "toolResult" format
+    if (msgRole === "toolResult") {
+      prunableIndexes.push(i);
+      const processed = processToolResultMessage(msg, settings, "soft");
+      if (processed.changed) {
+        result[i] = processed.message;
+        changed = true;
+        softTrimmed++;
+        charsSaved += processed.charsSaved;
+        totalChars -= processed.charsSaved;
+      }
+      continue;
+    }
+
+    // Anthropic-style "user" format with tool_result blocks
+    if (msgRole !== "user") continue;
 
     const msgAny = msg as any;
     if (!Array.isArray(msgAny.content)) continue;
@@ -485,9 +569,10 @@ export function pruneToolResults(params: {
         if (ratio < settings.hardClearRatio) break;
 
         const msg = result[i]!;
-        const beforeChars = estimateMessageChars(msg);
 
-        const processed = processUserMessageToolResults(msg, settings, "hard");
+        const processed = (msg.role as string) === "toolResult"
+          ? processToolResultMessage(msg, settings, "hard")
+          : processUserMessageToolResults(msg, settings, "hard");
         if (processed.changed) {
           result[i] = processed.message;
           changed = true;

@@ -37,7 +37,7 @@ vi.mock("@mariozechner/pi-coding-agent", () => ({
 describe("token-estimation", () => {
   describe("constants", () => {
     it("should have correct safety margin", () => {
-      expect(ESTIMATION_SAFETY_MARGIN).toBe(1.5);
+      expect(ESTIMATION_SAFETY_MARGIN).toBe(1.2);
     });
 
     it("should have correct compaction trigger ratio", () => {
@@ -62,21 +62,22 @@ describe("token-estimation", () => {
       expect(estimateSystemPromptTokens("")).toBe(0);
     });
 
-    it("should estimate tokens based on character count", () => {
-      // ~2 chars per token (conservative for CJK/mixed content)
-      expect(estimateSystemPromptTokens("ab")).toBe(1);
-      expect(estimateSystemPromptTokens("abcd")).toBe(2);
-      expect(estimateSystemPromptTokens("abcdef")).toBe(3);
+    it("should estimate tokens using the same estimator as messages", () => {
+      // The mock uses Math.ceil(content.length / 4) for user messages
+      expect(estimateSystemPromptTokens("abcd")).toBe(1);
+      expect(estimateSystemPromptTokens("abcdefgh")).toBe(2);
+      expect(estimateSystemPromptTokens("abcdefghijkl")).toBe(3);
     });
 
     it("should ceil the result", () => {
-      // 3 chars / 2 = 1.5, should ceil to 2
-      expect(estimateSystemPromptTokens("abc")).toBe(2);
+      // 5 chars / 4 = 1.25, should ceil to 2
+      expect(estimateSystemPromptTokens("abcde")).toBe(2);
     });
 
     it("should handle long prompts", () => {
       const longPrompt = "a".repeat(3000);
-      expect(estimateSystemPromptTokens(longPrompt)).toBe(1500);
+      // 3000 / 4 = 750
+      expect(estimateSystemPromptTokens(longPrompt)).toBe(750);
     });
   });
 
@@ -140,7 +141,7 @@ describe("token-estimation", () => {
         reserveTokens: 0,
       });
 
-      // Utilization = (tokens * 1.5) / available
+      // Utilization = (tokens * 1.2) / available
       expect(result.utilizationRatio).toBeGreaterThan(0);
     });
   });
@@ -292,26 +293,26 @@ describe("token-estimation", () => {
         content: "x".repeat(400), // ~100 tokens
       } as AgentMessage;
 
-      // With safety margin 1.5, 100 * 1.5 = 150 tokens
-      // 150 > 1000 * 0.1 = 100, so oversized
+      // With safety margin 1.2, 100 * 1.2 = 120 tokens
+      // 120 > 1000 * 0.1 = 100, so oversized
       expect(isMessageOversized(message, 1000, 0.1)).toBe(true);
 
-      // 150 < 1000 * 0.2 = 200, so not oversized
+      // 120 < 1000 * 0.2 = 200, so not oversized
       expect(isMessageOversized(message, 1000, 0.2)).toBe(false);
     });
 
     it("should apply safety margin to token count", () => {
       const message = {
         role: "user",
-        content: "x".repeat(400), // ~100 tokens, with margin ~150
+        content: "x".repeat(400), // ~100 tokens, with margin ~120
       } as AgentMessage;
 
       // Without margin: 100 < 250 (50% of 500)
-      // With margin: 150 < 250, still ok
+      // With margin: 120 < 250, still ok
       expect(isMessageOversized(message, 500, 0.5)).toBe(false);
 
       // Without margin: 100 < 100 would be false
-      // With margin: 150 > 100, should be true
+      // With margin: 120 > 100, should be true
       expect(isMessageOversized(message, 200, 0.5)).toBe(true);
     });
   });

@@ -27,9 +27,6 @@ import {
   compactMessagesTokenAware,
   MIN_KEEP_MESSAGES,
 } from "./context-window/index.js";
-import {
-  pruneToolResults,
-} from "./context-window/tool-result-pruning.js";
 import { mergeToolsConfig, type ToolsConfig } from "./tools/policy.js";
 import {
   loadAuthProfileStore,
@@ -873,37 +870,12 @@ export class Agent {
     const originalCount = messages.length;
     let result = messages;
 
-    // Phase 1: Prune tool results (soft trim + hard clear)
-    const pruneResult = pruneToolResults({
-      messages: result,
-      contextWindowTokens: this.contextWindowGuard.tokens,
-    });
-    if (pruneResult.changed) {
-      result = pruneResult.messages;
-      if (pruneResult.softTrimmed > 0 || pruneResult.hardCleared > 0) {
-        this.runLog.log("tool_result_pruning", {
-          soft_trimmed: pruneResult.softTrimmed,
-          hard_cleared: pruneResult.hardCleared,
-          chars_saved: pruneResult.charsSaved,
-          phase: "preflight",
-        });
-      }
-    }
-
-    // Re-estimate after pruning
-    const afterPrune = estimateTokenUsage({
-      messages: result,
-      systemPrompt: this.agent.state.systemPrompt,
-      contextWindowTokens: this.contextWindowGuard.tokens,
-      reserveTokens: this.reserveTokens,
-    });
-
-    // Phase 2: Drop oldest messages if still over threshold
-    if (afterPrune.utilizationRatio >= COMPACTION_TRIGGER_RATIO) {
-      const compacted = compactMessagesTokenAware(result, afterPrune.availableTokens);
-      if (compacted) {
-        result = compacted.kept;
-      }
+    // Drop oldest messages if over threshold (emergency safety net).
+    // Tool result pruning is skipped here — it's handled by post-turn
+    // compaction which actually persists the results.
+    const compacted = compactMessagesTokenAware(result, estimation.availableTokens);
+    if (compacted) {
+      result = compacted.kept;
     }
 
     if (result.length < originalCount) {
