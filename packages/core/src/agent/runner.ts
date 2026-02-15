@@ -393,9 +393,12 @@ export class Agent {
     const profileToolsConfig = this.profile?.getToolsConfig();
     const mergedToolsConfig = mergeToolsConfig(profileToolsConfig, options.tools);
     const profileDir = this.profile?.getProfileDir();
+    // Use this.sessionId (which may be auto-generated) instead of options.sessionId
+    // (which may be undefined). Without this, sessions_list and sessions_spawn
+    // can't find sub-agent runs because they have no session context.
     this.toolsOptions = mergedToolsConfig
-      ? { ...options, cwd: effectiveCwd, tools: mergedToolsConfig, profileDir, provider: this.resolvedProvider }
-      : { ...options, cwd: effectiveCwd, profileDir, provider: this.resolvedProvider };
+      ? { ...options, sessionId: this.sessionId, cwd: effectiveCwd, tools: mergedToolsConfig, profileDir, provider: this.resolvedProvider }
+      : { ...options, sessionId: this.sessionId, cwd: effectiveCwd, profileDir, provider: this.resolvedProvider };
 
     const tools = resolveTools(this.toolsOptions);
     if (this.debug) {
