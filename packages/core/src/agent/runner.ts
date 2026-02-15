@@ -85,6 +85,51 @@ export function isRotatableError(reason: AuthProfileFailureReason): boolean {
   return reason === "auth" || reason === "rate_limit" || reason === "billing" || reason === "timeout";
 }
 
+// ── Run-log result extraction helpers ──────────────────────────────────────
+// Lightweight extractors for tool_end metadata. These mirror the patterns in
+// cli/output.ts but are kept separate to avoid CLI-specific dependencies.
+
+function extractRunLogResultText(result: unknown): string | undefined {
+  if (!result || typeof result !== "object") return undefined;
+  const msg = result as { content?: Array<{ type: string; text?: string }> };
+  if (Array.isArray(msg.content)) {
+    for (const c of msg.content) {
+      if (c.type === "text" && c.text) return c.text;
+    }
+  }
+  return undefined;
+}
+
+function extractRunLogResultDetails(result: unknown): Record<string, unknown> | null {
+  const text = extractRunLogResultText(result);
+  if (text) {
+    try { return JSON.parse(text) as Record<string, unknown>; } catch { /* non-JSON result */ }
+  }
+  const withDetails = result as { details?: unknown };
+  if (withDetails?.details && typeof withDetails.details === "object") {
+    return withDetails.details as Record<string, unknown>;
+  }
+  return null;
+}
+
+function formatRunLogToolSummary(tool: string, details: Record<string, unknown> | null): string | undefined {
+  if (!details) return undefined;
+  if (details.error) return `error: ${details.message || details.error}`;
+  switch (tool) {
+    case "web_search": return `${details.count ?? 0} results`;
+    case "web_fetch": {
+      const parts: string[] = [];
+      if (typeof details.length === "number") parts.push(`${(details.length as number / 1024).toFixed(1)}KB`);
+      if (details.cached) parts.push("cached");
+      return parts.join(", ") || undefined;
+    }
+    case "data": return `${details.domain}/${details.action}`;
+    case "glob": return `${details.count ?? 0} files`;
+    case "exec": return details.exitCode !== undefined ? `exit ${details.exitCode}` : undefined;
+    default: return undefined;
+  }
+}
+
 export class Agent {
   private readonly agent: PiAgentCore;
   private output;
@@ -746,11 +791,24 @@ export class Agent {
       const startTime = this.toolStartTimes.get(toolName);
       const duration_ms = startTime ? Date.now() - startTime : undefined;
       this.toolStartTimes.delete(toolName);
-      this.runLog.log("tool_end", {
+
+      // Extract result metadata for run-log persistence (survives session compaction)
+      const result = (event as any).result;
+      const resultText = extractRunLogResultText(result);
+      const resultChars = resultText?.length ?? 0;
+      const details = extractRunLogResultDetails(result);
+
+      const toolEndData: Record<string, unknown> = {
         tool: toolName,
         duration_ms,
         is_error: (event as any).isError ?? false,
-      });
+        result_chars: resultChars,
+        result_summary: formatRunLogToolSummary(toolName, details),
+      };
+      if (details?.error) {
+        toolEndData.error_type = String(details.error);
+      }
+      this.runLog.log("tool_end", toolEndData);
     }
   }
 
