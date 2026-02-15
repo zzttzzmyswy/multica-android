@@ -7,7 +7,7 @@
  */
 
 import { join } from "node:path";
-import { Agent } from "@multica/core";
+import { Agent, Hub } from "@multica/core";
 import type { AgentOptions } from "@multica/core";
 import type { ToolsConfig } from "@multica/core";
 import { DATA_DIR } from "@multica/utils";
@@ -192,35 +192,45 @@ export async function runCommand(args: string[]): Promise<void> {
 
   const enableRunLog = opts.runLog || !!process.env.MULTICA_RUN_LOG;
 
-  const agent = new Agent({
-    profileId: opts.profile,
-    provider: opts.provider,
-    model: opts.model,
-    apiKey: opts.apiKey,
-    baseUrl: opts.baseUrl,
-    systemPrompt: opts.system,
-    thinkingLevel: opts.thinking as any,
-    reasoningMode: opts.reasoning as AgentOptions["reasoningMode"],
-    cwd: opts.cwd,
-    sessionId: opts.session,
-    debug: opts.debug,
-    enableRunLog,
-    tools: toolsConfig,
-  });
+  // Initialize Hub to enable full agent capabilities (sub-agents, channels, cron).
+  // Matches Desktop environment where Hub is always active.
+  // Gateway connection failures are non-blocking (auto-reconnect with backoff).
+  const gatewayUrl = process.env.GATEWAY_URL || "http://localhost:3000";
+  const hub = new Hub(gatewayUrl);
 
-  const sessionDir = join(DATA_DIR, "sessions", agent.sessionId);
+  try {
+    const agent = new Agent({
+      profileId: opts.profile,
+      provider: opts.provider,
+      model: opts.model,
+      apiKey: opts.apiKey,
+      baseUrl: opts.baseUrl,
+      systemPrompt: opts.system,
+      thinkingLevel: opts.thinking as any,
+      reasoningMode: opts.reasoning as AgentOptions["reasoningMode"],
+      cwd: opts.cwd,
+      sessionId: opts.session,
+      debug: opts.debug,
+      enableRunLog,
+      tools: toolsConfig,
+    });
 
-  // If it's a newly created session, notify user of sessionId
-  if (!opts.session) {
-    console.error(`[session: ${agent.sessionId}]`);
-  }
-  if (enableRunLog) {
-    console.error(`[session-dir: ${sessionDir}]`);
-  }
+    const sessionDir = join(DATA_DIR, "sessions", agent.sessionId);
 
-  const result = await agent.run(finalPrompt);
-  if (result.error) {
-    console.error(`Error: ${result.error}`);
-    process.exitCode = 1;
+    // If it's a newly created session, notify user of sessionId
+    if (!opts.session) {
+      console.error(`[session: ${agent.sessionId}]`);
+    }
+    if (enableRunLog) {
+      console.error(`[session-dir: ${sessionDir}]`);
+    }
+
+    const result = await agent.run(finalPrompt);
+    if (result.error) {
+      console.error(`Error: ${result.error}`);
+      process.exitCode = 1;
+    }
+  } finally {
+    hub.shutdown();
   }
 }
