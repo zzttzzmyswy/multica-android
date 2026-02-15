@@ -1,15 +1,15 @@
-请做“美国消费板块与宏观变量联动分析”（中文输出）。
+Perform a "US Consumer Sector & Macro Variable Linkage Analysis."
 
-样本公司：WMT、COST、TGT、HD、LOW、MCD、SBUX、NKE、DIS、AMZN。
-时间范围：2023-01-01 到 2025-12-31。
+Sample companies: WMT, COST, TGT, HD, LOW, MCD, SBUX, NKE, DIS, AMZN.
+Time range: 2023-01-01 to 2025-12-31.
 
-任务要求：
-1. 将公司分为“必需消费/可选消费”两组，比较收入增速、利润率、库存变化、同店销售（如可得）与现金流质量。
-2. 结合宏观变量（CPI、实际工资、失业率、利率）分析各组盈利弹性。
-3. 构建“2026 三情景”盈利弹性矩阵：软着陆/再通胀/衰退。
-4. 生成 Excel（.xlsx）：`company_metrics`、`macro_series`、`elasticity_matrix`、`portfolio_actions`。
-5. 生成 `strategy_note.md`，给出 2026 年行业配置建议与再平衡触发条件。
-6. 生成 `sources.md`。
-7. 输出目录：`~/Desktop/multica-fin-bench/case-04/`。
+Requirements:
+1. Split companies into "consumer staples" and "consumer discretionary" groups; compare revenue growth, margins, inventory changes, same-store sales (if available), and cash flow quality.
+2. Analyze each group's earnings elasticity relative to macro variables (CPI, real wages, unemployment, interest rates).
+3. Build a "2026 three-scenario" earnings elasticity matrix: soft landing / reflation / recession.
+4. Generate an Excel file (.xlsx) with sheets: `company_metrics`, `macro_series`, `elasticity_matrix`, `portfolio_actions`.
+5. Generate `strategy_note.md` with 2026 sector allocation recommendations and rebalancing trigger conditions.
+6. Generate `sources.md`.
+7. Output directory: `~/Desktop/multica-fin-bench/case-04/`.
 
-执行要求：必须明确写出每个配置建议背后的可验证指标。
+Execution requirements: Each allocation recommendation must explicitly state the verifiable metrics behind it.

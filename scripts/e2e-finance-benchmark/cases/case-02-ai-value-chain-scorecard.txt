@@ -1,15 +1,15 @@
-请构建“AI 产业链基本面与估值评分”项目（中文输出）。
+Build an "AI Value Chain Fundamentals & Valuation Scorecard" project.
 
-股票池：NVDA、AMD、AVGO、MSFT、GOOGL、AMZN、META、TSM、ASML、ANET。
-时间范围：2023-01-01 到 2025-12-31（不足处用最近可得数据补齐并标记）。
+Stock universe: NVDA, AMD, AVGO, MSFT, GOOGL, AMZN, META, TSM, ASML, ANET.
+Time range: 2023-01-01 to 2025-12-31 (fill gaps with most recent available data and flag accordingly).
 
-任务要求：
-1. 构建一个 100 分制评分模型，至少包含 6 个维度：增长、盈利能力、资本效率、研发强度、现金流质量、估值安全边际。
-2. 给出每个维度的权重与打分逻辑，必须可复现。
-3. 生成 Excel（.xlsx）：`input_data`、`factor_scores`、`weighted_rank`、`scenario_2026`。
-4. 在 `scenario_2026` 中给出三种情景（乐观/基准/保守）下的目标区间与触发信号。
-5. 产出 `investment_memo.md`（含前 3 名的建仓逻辑和后 3 名的回避逻辑）。
-6. 产出 `sources.md`（来源链接 + 日期）。
-7. 输出目录：`~/Desktop/multica-fin-bench/case-02/`。
+Requirements:
+1. Construct a 100-point scoring model with at least 6 dimensions: growth, profitability, capital efficiency, R&D intensity, cash flow quality, and valuation margin of safety.
+2. Provide weights and scoring logic for each dimension; must be reproducible.
+3. Generate an Excel file (.xlsx) with sheets: `input_data`, `factor_scores`, `weighted_rank`, `scenario_2026`.
+4. In `scenario_2026`, provide target ranges and trigger signals under three scenarios (optimistic / base / conservative).
+5. Produce `investment_memo.md` (including entry logic for the top 3 and avoidance logic for the bottom 3).
+6. Produce `sources.md` (source links + dates).
+7. Output directory: `~/Desktop/multica-fin-bench/case-02/`.
 
-执行要求：先计划后执行；最后输出“可复现性检查”（别人按你的步骤是否能复现）。
+Execution requirements: Plan before executing; conclude with a "reproducibility check" (can someone else reproduce your results following your steps).

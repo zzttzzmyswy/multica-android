@@ -1,16 +1,16 @@
-请做“美国大型银行 2026 压力测试”任务（中文输出）。
+Perform a "US Major Bank 2026 Stress Test" task.
 
-样本：JPM、BAC、C、WFC、GS、MS。
+Sample: JPM, BAC, C, WFC, GS, MS.
 
-任务要求：
-1. 基于最近三个完整财年（优先 2023-2025）整理关键指标：净息差(NIM)、CET1、贷款损失准备、商业地产敞口、存款成本变化、未实现损失等。
-2. 构建两套压力情景：
-   - Mild Recession：失业率上行 +150bp，联邦基金利率下行 100bp
-   - Severe Recession：失业率上行 +300bp，联邦基金利率下行 200bp，CRE 违约率显著上行
-3. 估算各银行在两种情景下的利润与资本充足率变化方向，并给出脆弱点排序。
-4. 生成 Excel（.xlsx）：`bank_raw`、`stress_assumptions`、`impact_estimate`、`ranking`。
-5. 生成 `risk_brief.md`，包含“最需要警惕的 5 个风险信号”。
-6. 生成 `sources.md`。
-7. 输出到：`~/Desktop/multica-fin-bench/case-03/`。
+Requirements:
+1. Compile key metrics from the most recent three complete fiscal years (preferably 2023-2025): net interest margin (NIM), CET1, loan loss provisions, commercial real estate (CRE) exposure, deposit cost changes, unrealized losses, etc.
+2. Construct two stress scenarios:
+   - Mild Recession: unemployment +150bp, federal funds rate -100bp
+   - Severe Recession: unemployment +300bp, federal funds rate -200bp, CRE default rate significantly higher
+3. Estimate directional changes in profit and capital adequacy for each bank under both scenarios, and rank vulnerability.
+4. Generate an Excel file (.xlsx) with sheets: `bank_raw`, `stress_assumptions`, `impact_estimate`, `ranking`.
+5. Generate `risk_brief.md` containing "top 5 risk signals to watch."
+6. Generate `sources.md`.
+7. Output to: `~/Desktop/multica-fin-bench/case-03/`.
 
-执行要求：先给方法论，再给结果；最后列出你最不确定的 3 个假设。
+Execution requirements: Present methodology first, then results; conclude by listing the 3 assumptions you are least confident about.

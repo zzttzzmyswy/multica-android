@@ -1,14 +1,14 @@
-请完成一个高复杂度投研任务（中文输出）：
+Complete a high-complexity investment research task:
 
-目标：分析美股市值排名前十公司在最近三个完整财年的财报与经营质量，并给出 2026 年（2026-01-01 到 2026-12-31）的投资建议。
+Objective: Analyze the top 10 US stocks by market capitalization across their most recent three complete fiscal years and provide investment recommendations for 2026 (2026-01-01 to 2026-12-31).
 
-硬性要求：
-1. 以“截至 2026-02-01 的美股市值前十”为样本；如果个别公司数据窗口不完整，请注明并用“最近可得完整财年”替代。
-2. 每家公司生成 1 份详细分析，至少包含：收入与利润结构、毛利率/营业利润率趋势、现金流质量、资本开支与回购分红、估值区间、主要风险。
-3. 生成一个 Excel 文件（.xlsx），至少包含：`raw_data`、`company_scorecard`、`valuation`、`risk_matrix` 四个工作表。
-4. 生成一份综合报告，对十家公司做横向比较与分层（核心持仓/观察/回避），并给出 2026 年组合建议（含仓位区间和触发条件）。
-5. 单独输出 `sources.md`，列出关键数据来源链接与抓取时间。
-6. 所有结果统一放到新目录：`~/Desktop/multica-fin-bench/case-01/`。
-7. 如果无法直接生成 xlsx，请说明原因并提供结构等价的 CSV 文件集。
+Requirements:
+1. Use "top 10 US stocks by market cap as of 2026-02-01" as the sample; if data windows are incomplete for certain companies, note this and substitute with the most recent available complete fiscal year.
+2. Generate 1 detailed analysis per company, covering at minimum: revenue and profit structure, gross/operating margin trends, cash flow quality, capex and buybacks/dividends, valuation range, and key risks.
+3. Generate an Excel file (.xlsx) with at least 4 sheets: `raw_data`, `company_scorecard`, `valuation`, `risk_matrix`.
+4. Generate a comprehensive report with cross-company comparison and tiering (core holding / watchlist / avoid), along with 2026 portfolio recommendations (including position ranges and trigger conditions).
+5. Output a separate `sources.md` listing key data source links and retrieval timestamps.
+6. Place all output in a new directory: `~/Desktop/multica-fin-bench/case-01/`.
+7. If unable to generate xlsx directly, explain why and provide structurally equivalent CSV files.
 
-执行要求：先给出 8-12 步执行计划，再执行。最后做自检清单，确认文件齐全。
+Execution requirements: First present an 8-12 step execution plan, then execute. Conclude with a self-check checklist confirming all files are complete.

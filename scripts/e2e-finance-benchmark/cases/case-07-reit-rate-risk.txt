@@ -1,14 +1,14 @@
-请做“高利率环境下 REIT 投资筛选”任务（中文输出）。
+Perform a "REIT Investment Screening in a High-Rate Environment" task.
 
-样本：VNQ、PLD、AMT、EQIX、O、SPG、PSA、DLR。
+Sample: VNQ, PLD, AMT, EQIX, O, SPG, PSA, DLR.
 
-任务要求：
-1. 整理最近三个完整财年的关键指标：FFO/AFFO 增速、杠杆、利息覆盖、债务到期结构、分红覆盖。
-2. 设计 2026 年三种利率情景（10Y 美债收益率 3.5% / 4.5% / 5.5%），分析估值压力与分红可持续性。
-3. 给出“持有/观察/回避”分类，并解释最关键的 2-3 个驱动因子。
-4. 生成 Excel（.xlsx）：`reit_raw`、`debt_profile`、`rate_scenarios`、`selection_result`。
-5. 生成 `reit_investment_note.md`。
-6. 生成 `sources.md`。
-7. 输出到：`~/Desktop/multica-fin-bench/case-07/`。
+Requirements:
+1. Compile key metrics from the most recent three complete fiscal years: FFO/AFFO growth, leverage, interest coverage, debt maturity profile, and dividend coverage.
+2. Design three 2026 interest rate scenarios (10Y Treasury yield at 3.5% / 4.5% / 5.5%) and analyze valuation pressure and dividend sustainability.
+3. Classify each as "hold / watchlist / avoid" and explain the 2-3 most critical driving factors.
+4. Generate an Excel file (.xlsx) with sheets: `reit_raw`, `debt_profile`, `rate_scenarios`, `selection_result`.
+5. Generate `reit_investment_note.md`.
+6. Generate `sources.md`.
+7. Output to: `~/Desktop/multica-fin-bench/case-07/`.
 
-执行要求：如果数据缺失，必须在表中显式标注 NA，不允许静默跳过。
+Execution requirements: If data is missing, it must be explicitly marked as NA in the tables; silent omission is not allowed.

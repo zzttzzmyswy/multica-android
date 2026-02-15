@@ -1,18 +1,18 @@
-请完成“能源价格冲击下的能源与运输行业敏感性分析”（中文输出）。
+Complete an "Energy Price Shock Sensitivity Analysis for Energy & Transport Sectors."
 
-样本：XOM、CVX、COP、SLB、DAL、UAL、FDX、UPS。
-时间范围：2023-01-01 到 2025-12-31。
+Sample: XOM, CVX, COP, SLB, DAL, UAL, FDX, UPS.
+Time range: 2023-01-01 to 2025-12-31.
 
-任务要求：
-1. 归纳各公司对油价/燃料成本的敏感方向与经营杠杆来源。
-2. 构建三种油价路径（2026 年）：
-   - 情景A：WTI 均价 60 美元
-   - 情景B：WTI 均价 80 美元
-   - 情景C：WTI 均价 100 美元
-3. 估计不同情景下各公司盈利和估值的相对变化方向（可用区间而非点估计，但要说明依据）。
-4. 生成 Excel（.xlsx）：`raw_financials`、`oil_scenarios`、`sensitivity_map`、`trade_ideas`。
-5. 生成 `hedge_plan.md`，提出至少 2 套对冲或配对交易思路，并说明失效条件。
-6. 生成 `sources.md`。
-7. 输出到：`~/Desktop/multica-fin-bench/case-05/`。
+Requirements:
+1. Summarize each company's sensitivity direction to oil/fuel costs and sources of operating leverage.
+2. Construct three oil price paths for 2026:
+   - Scenario A: WTI average $60
+   - Scenario B: WTI average $80
+   - Scenario C: WTI average $100
+3. Estimate directional changes in earnings and valuation for each company under different scenarios (ranges are acceptable over point estimates, but rationale must be provided).
+4. Generate an Excel file (.xlsx) with sheets: `raw_financials`, `oil_scenarios`, `sensitivity_map`, `trade_ideas`.
+5. Generate `hedge_plan.md` proposing at least 2 hedging or paired trade strategies, including conditions under which they would fail.
+6. Generate `sources.md`.
+7. Output to: `~/Desktop/multica-fin-bench/case-05/`.
 
-执行要求：结论必须包含“基准仓位 + 对冲仓位 + 触发阈值”。
+Execution requirements: Conclusions must include "base position + hedge position + trigger thresholds."

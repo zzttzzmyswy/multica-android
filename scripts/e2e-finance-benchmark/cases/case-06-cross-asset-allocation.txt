@@ -1,17 +1,17 @@
-请做“跨资产战术配置（2026）”项目（中文输出）。
+Build a "Cross-Asset Tactical Allocation (2026)" project.
 
-资产池：SPY、QQQ、IWM、TLT、IEF、HYG、GLD、DBC、BTC-USD。
-历史区间：2021-01-01 到 2025-12-31（月频即可）。
+Asset universe: SPY, QQQ, IWM, TLT, IEF, HYG, GLD, DBC, BTC-USD.
+Historical period: 2021-01-01 to 2025-12-31 (monthly frequency is sufficient).
 
-任务要求：
-1. 计算并比较关键指标：年化收益、波动率、最大回撤、Sharpe、相关性矩阵。
-2. 设计两种组合：
-   - 防守型（目标最大回撤尽量低）
-   - 进攻型（目标风险调整后收益更高）
-3. 对两种组合做 2026 三情景压力测试（增长放缓/通胀反复/流动性宽松），给出调仓规则。
-4. 生成 Excel（.xlsx）：`price_returns`、`risk_metrics`、`corr_matrix`、`portfolio_defensive`、`portfolio_offensive`、`scenario_test`。
-5. 生成 `allocation_memo.md`，说明为什么这两种组合在 2026 年有可执行性。
-6. 生成 `sources.md`。
-7. 输出目录：`~/Desktop/multica-fin-bench/case-06/`。
+Requirements:
+1. Calculate and compare key metrics: annualized return, volatility, maximum drawdown, Sharpe ratio, and correlation matrix.
+2. Design two portfolios:
+   - Defensive (target: minimize maximum drawdown)
+   - Offensive (target: higher risk-adjusted returns)
+3. Stress test both portfolios under three 2026 scenarios (growth slowdown / inflation resurgence / liquidity easing), and provide rebalancing rules.
+4. Generate an Excel file (.xlsx) with sheets: `price_returns`, `risk_metrics`, `corr_matrix`, `portfolio_defensive`, `portfolio_offensive`, `scenario_test`.
+5. Generate `allocation_memo.md` explaining why these two portfolios are actionable in 2026.
+6. Generate `sources.md`.
+7. Output directory: `~/Desktop/multica-fin-bench/case-06/`.
 
-执行要求：明确列出每个组合的再平衡频率、止损规则和再入场条件。
+Execution requirements: Explicitly state rebalancing frequency, stop-loss rules, and re-entry conditions for each portfolio.

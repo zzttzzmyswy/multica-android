@@ -1,13 +1,13 @@
-请制作“2026 年 Q2 投资委员会材料包”（中文输出）。
+Produce a "Q2 2026 Investment Committee Materials Pack."
 
-目标：面向一个美元多资产组合，形成可直接开会使用的投委会文件。
+Objective: Create meeting-ready investment committee documents for a USD multi-asset portfolio.
 
-任务要求：
-1. 输出一个总览文件 `committee_pack.md`，结构至少包括：宏观判断、权益、利率、信用、商品、组合风险、执行清单。
-2. 输出一个 Excel（.xlsx）工作簿，至少包含：`macro_dashboard`、`equity_watchlist`、`rates_credit`、`commodity_view`、`portfolio_risk`、`action_tracker`。
-3. 在 `action_tracker` 中给出 2026 年 Q2 可执行动作，每条动作要有：触发条件、目标仓位变化、风控阈值、复盘时间点。
-4. 额外输出 `devil_advocate.md`，专门反驳你自己的核心投资观点，至少给 5 条反方论据。
-5. 额外输出 `sources.md`，列明关键数据来源与日期。
-6. 所有文件放到新目录：`~/Desktop/multica-fin-bench/case-10/`。
+Requirements:
+1. Output a summary document `committee_pack.md` with at least the following sections: macro outlook, equities, rates, credit, commodities, portfolio risk, and action list.
+2. Output an Excel workbook (.xlsx) with at least these sheets: `macro_dashboard`, `equity_watchlist`, `rates_credit`, `commodity_view`, `portfolio_risk`, `action_tracker`.
+3. In `action_tracker`, provide actionable items for Q2 2026, each with: trigger condition, target position change, risk control threshold, and review date.
+4. Additionally output `devil_advocate.md`, specifically rebutting your own core investment views with at least 5 counter-arguments.
+5. Additionally output `sources.md` listing key data sources and dates.
+6. Place all files in a new directory: `~/Desktop/multica-fin-bench/case-10/`.
 
-执行要求：先列计划再执行；最后给“投委会 10 分钟口头汇报提纲”。
+Execution requirements: Plan first, then execute; conclude with a "10-minute oral briefing outline for the investment committee."

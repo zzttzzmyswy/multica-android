@@ -1,14 +1,14 @@
-请做“财报质量法证分析”（中文输出）。
+Perform an "Earnings Quality Forensic Analysis."
 
-样本：AAPL、MSFT、GOOGL、AMZN、META、NVDA、TSLA、BRK.B、UNH、JPM。
-时间范围：2023-01-01 到 2025-12-31。
+Sample: AAPL, MSFT, GOOGL, AMZN, META, NVDA, TSLA, BRK.B, UNH, JPM.
+Time range: 2023-01-01 to 2025-12-31.
 
-任务要求：
-1. 建立财报质量检查框架，至少包含：应计项目质量、经营现金流与净利润匹配度、股权激励稀释、回购与债务关系、一次性项目影响。
-2. 对每家公司给出 Red/Yellow/Green 评级，并给出可追踪的证据。
-3. 生成 Excel（.xlsx）：`quality_raw`、`forensic_flags`、`rating_summary`、`watchlist_2026`。
-4. 生成 `forensic_report.md`，总结最值得警惕的 5 个红旗。
-5. 生成 `sources.md`。
-6. 输出目录：`~/Desktop/multica-fin-bench/case-08/`。
+Requirements:
+1. Establish an earnings quality inspection framework covering at minimum: accruals quality, operating cash flow to net income matching, stock-based compensation dilution, buyback-to-debt relationship, and one-time item impact.
+2. Assign each company a Red / Yellow / Green rating with traceable supporting evidence.
+3. Generate an Excel file (.xlsx) with sheets: `quality_raw`, `forensic_flags`, `rating_summary`, `watchlist_2026`.
+4. Generate `forensic_report.md` summarizing the 5 most concerning red flags.
+5. Generate `sources.md`.
+6. Output directory: `~/Desktop/multica-fin-bench/case-08/`.
 
-执行要求：必须在报告中明确“哪些结论是事实、哪些是推断”。
+Execution requirements: The report must clearly distinguish "which conclusions are factual vs. which are inferred."
