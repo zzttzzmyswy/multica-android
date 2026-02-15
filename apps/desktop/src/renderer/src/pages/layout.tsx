@@ -284,8 +284,8 @@ export default function Layout() {
                     </div>
                     <ChevronsUpDown className="ml-auto size-4" />
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent side="top">
-                    <DropdownMenuItem onClick={handleLogout}>
+                  <DropdownMenuContent side="top" align="end">
+                    <DropdownMenuItem variant="destructive" onClick={handleLogout}>
                       <LogOut className="size-4" />
                       Log out
                     </DropdownMenuItem>

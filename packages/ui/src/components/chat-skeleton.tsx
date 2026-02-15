@@ -5,7 +5,7 @@ import { Skeleton } from "@multica/ui/components/ui/skeleton";
 /** Skeleton placeholder matching MessageList layout, shown while reconnecting */
 export function ChatSkeleton() {
   return (
-    <div className="px-4 py-6 space-y-6 max-w-4xl mx-auto">
+    <div className="container px-4 py-6 space-y-6">
       {/* Assistant message */}
       <div className="flex justify-start">
         <div className="w-full p-1 px-2.5 space-y-2">

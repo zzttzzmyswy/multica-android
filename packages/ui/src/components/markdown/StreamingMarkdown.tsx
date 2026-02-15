@@ -1,11 +1,11 @@
 import * as React from 'react'
 import { Markdown, type RenderMode } from './Markdown'
-import { Spinner } from '@multica/ui/components/spinner'
 
 export interface StreamingMarkdownProps {
   content: string
   isStreaming: boolean
   mode?: RenderMode
+  className?: string
   onUrlClick?: (url: string) => void
   onFileClick?: (path: string) => void
 }
@@ -132,23 +132,25 @@ const MemoizedBlock = React.memo(
   function Block({
     content,
     mode,
+    className,
     onUrlClick,
     onFileClick
   }: {
     content: string
     mode: RenderMode
+    className?: string
     onUrlClick?: (url: string) => void
     onFileClick?: (path: string) => void
   }) {
     return (
-      <Markdown mode={mode} onUrlClick={onUrlClick} onFileClick={onFileClick}>
+      <Markdown mode={mode} className={className} onUrlClick={onUrlClick} onFileClick={onFileClick}>
         {content}
       </Markdown>
     )
   },
   (prev, next) => {
     // Only re-render if content actually changed
-    return prev.content === next.content && prev.mode === next.mode
+    return prev.content === next.content && prev.mode === next.mode && prev.className === next.className
   }
 )
 MemoizedBlock.displayName = 'MemoizedBlock'
@@ -173,6 +175,7 @@ export function StreamingMarkdown({
   content,
   isStreaming,
   mode = 'minimal',
+  className,
   onUrlClick,
   onFileClick
 }: StreamingMarkdownProps): React.JSX.Element {
@@ -186,27 +189,16 @@ export function StreamingMarkdown({
   // Not streaming - use simple Markdown (no block splitting needed)
   if (!isStreaming) {
     return (
-      <Markdown mode={mode} onUrlClick={onUrlClick} onFileClick={onFileClick}>
+      <Markdown mode={mode} className={className} onUrlClick={onUrlClick} onFileClick={onFileClick}>
         {content}
       </Markdown>
     )
   }
 
+  // Empty content - return null, let parent handle loading indicator
   if (blocks.length === 0) {
-    return (
-      <div className="flex items-center gap-2 py-1 text-muted-foreground">
-        <Spinner className="text-xs" />
-        <span className="text-xs">Generating...</span>
-      </div>
-    )
+    return <></>
   }
-
-  const indicator = (
-    <div className="absolute bottom-1 left-6 flex items-center gap-2 py-1 text-muted-foreground">
-      <Spinner className="text-xs" />
-      <span className="text-xs">Generating...</span>
-    </div>
-  )
 
   return (
     <>
@@ -222,12 +214,12 @@ export function StreamingMarkdown({
             key={key}
             content={block.content}
             mode={mode}
+            className={className}
             onUrlClick={onUrlClick}
             onFileClick={onFileClick}
           />
         )
       })}
-      {indicator}
     </>
   )
 }

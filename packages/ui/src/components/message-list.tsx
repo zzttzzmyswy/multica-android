@@ -7,6 +7,7 @@ import { ToolCallItem } from "@multica/ui/components/tool-call-item";
 import { ThinkingItem } from "@multica/ui/components/thinking-item";
 import { CompactionItem } from "@multica/ui/components/compaction-item";
 import { MessageSourceIcon } from "@multica/ui/components/message-source-icon";
+import { LoadingIndicator } from "@multica/ui/components/loading-indicator";
 import { cn, getTextContent } from "@multica/ui/lib/utils";
 import type { Message } from "@multica/store";
 import type { ContentBlock, ToolCall, ThinkingContent } from "@multica/sdk";
@@ -62,9 +63,16 @@ function toRunningMessage(tc: ToolCall, agentId: string): Message {
 interface MessageListProps {
   messages: Message[]
   streamingIds: Set<string>
+  isLoading?: boolean
+  hasPendingApprovals?: boolean
 }
 
-export const MessageList = memo(function MessageList({ messages, streamingIds }: MessageListProps) {
+export const MessageList = memo(function MessageList({
+  messages,
+  streamingIds,
+  isLoading = false,
+  hasPendingApprovals = false,
+}: MessageListProps) {
   // Build a set of toolCallIds that already have a toolResult message,
   // so we don't render duplicate items from the assistant's toolCall blocks
   const resolvedToolCallIds = useMemo(() => {
@@ -78,7 +86,7 @@ export const MessageList = memo(function MessageList({ messages, streamingIds }:
   }, [messages])
 
   return (
-    <div className="relative p-6 px-4 sm:px-10 max-w-4xl mx-auto">
+    <div className="container relative p-6">
       {messages.map((msg) => {
         // System messages (e.g. compaction notifications)
         if (msg.role === "system") {
@@ -125,13 +133,22 @@ export const MessageList = memo(function MessageList({ messages, streamingIds }:
                 )}
                 <div
                   className={cn(
-                    msg.role === "user" ? "bg-muted rounded-md max-w-[60%] py-1 px-2.5 my-2" : "w-full py-1 px-2.5 my-1"
+                    msg.role === "user" ? "bg-muted rounded-md max-w-[60%] p-2 px-4 my-2" : "w-full p-2 my-2"
                   )}
                 >
                   {isStreaming ? (
-                    <StreamingMarkdown content={text} isStreaming={true} mode="minimal" />
+                    <StreamingMarkdown
+                      content={text}
+                      isStreaming={true}
+                      mode="minimal"
+                      className={msg.role === "user" ? "[&_p]:whitespace-pre-wrap" : ""}
+                    />
                   ) : (
-                    <MemoizedMarkdown mode="minimal" id={msg.id}>
+                    <MemoizedMarkdown
+                      mode="minimal"
+                      id={msg.id}
+                      className={msg.role === "user" ? "[&_p]:whitespace-pre-wrap" : ""}
+                    >
                       {text}
                     </MemoizedMarkdown>
                   )}
@@ -146,6 +163,12 @@ export const MessageList = memo(function MessageList({ messages, streamingIds }:
           </div>
         )
       })}
+      {isLoading && !hasPendingApprovals && (
+        <LoadingIndicator
+          variant={streamingIds.size > 0 ? "streaming" : "generating"}
+          className="px-2"
+        />
+      )}
     </div>
   )
 })

@@ -8,7 +8,6 @@ import { MessageList } from "@multica/ui/components/message-list";
 import { MemoizedMarkdown } from "@multica/ui/components/markdown";
 import { MulticaIcon } from "@multica/ui/components/multica-icon";
 import { ExecApprovalItem } from "@multica/ui/components/exec-approval-item";
-import { Spinner } from "@multica/ui/components/spinner";
 import { useScrollFade } from "@multica/ui/hooks/use-scroll-fade";
 import { useAutoScroll } from "@multica/ui/hooks/use-auto-scroll";
 import type { Message } from "@multica/store";
@@ -145,7 +144,7 @@ export function ChatView({
 
       <main ref={mainRef} className="flex-1 overflow-y-auto min-h-0" style={fadeStyle}>
         {isLoadingHistory && messages.length === 0 ? (
-          <div className="px-4 py-6 max-w-4xl mx-auto">
+          <div className="container px-4 py-6">
             {/* User bubble */}
             <div className="flex justify-end my-2">
               <Skeleton className="h-8 w-[30%] rounded-md" />
@@ -209,17 +208,14 @@ export function ChatView({
                 </div>
               </div>
             )}
-            <MessageList messages={messages} streamingIds={streamingIds} />
-            {isLoading && streamingIds.size === 0 && pendingApprovals.length === 0 && (
-              <div className="relative px-4 sm:px-10 max-w-4xl mx-auto">
-                <div className="flex items-center gap-2 py-1 px-2.5 text-muted-foreground">
-                  <Spinner className="text-xs" />
-                  <span className="text-xs">Generating...</span>
-                </div>
-              </div>
-            )}
+            <MessageList
+              messages={messages}
+              streamingIds={streamingIds}
+              isLoading={isLoading}
+              hasPendingApprovals={pendingApprovals.length > 0}
+            />
             {pendingApprovals.length > 0 && (
-              <div className="relative px-4 max-w-4xl mx-auto">
+              <div className="container relative px-4">
                 {pendingApprovals.map((approval) => (
                   <ExecApprovalItem
                     key={approval.approvalId}
