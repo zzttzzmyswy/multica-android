@@ -78,7 +78,7 @@ export const MessageList = memo(function MessageList({ messages, streamingIds }:
   }, [messages])
 
   return (
-    <div className="container relative p-6 px-4 sm:px-10">
+    <div className="container relative p-6">
       {messages.map((msg) => {
         // System messages (e.g. compaction notifications)
         if (msg.role === "system") {
@@ -125,7 +125,7 @@ export const MessageList = memo(function MessageList({ messages, streamingIds }:
                 )}
                 <div
                   className={cn(
-                    msg.role === "user" ? "bg-muted rounded-md max-w-[60%] p-3 px-4" : "w-full p-3 my-1"
+                    msg.role === "user" ? "bg-muted rounded-md max-w-[60%] p-2 px-4" : "w-full p-2 my-1"
                   )}
                 >
                   {isStreaming ? (
