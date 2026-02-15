@@ -153,6 +153,8 @@ export class Agent {
   private _internalRun = false;
   private _isRunning = false;
   private _aborted = false;
+  /** Last assistant message saved by the message_end event handler */
+  private _lastEventSavedAssistant: AgentMessage | undefined;
   private _runMutex: Promise<void> = Promise.resolve();
   private _compactionPromise: Promise<void> = Promise.resolve();
   private currentUserDisplayPrompt: string | undefined;
@@ -681,15 +683,17 @@ export class Agent {
     } finally {
       // On abort, persist any partial messages that pi-agent-core appended
       // via appendMessage() (no message_end event fires for those).
+      // Skip if message_end already fired for this message (avoids duplicates).
       if (this._aborted) {
         const messages = this.agent.state.messages;
         const lastMsg = messages[messages.length - 1];
-        if (lastMsg?.role === "assistant") {
+        if (lastMsg?.role === "assistant" && lastMsg !== this._lastEventSavedAssistant) {
           this.session.saveMessage(lastMsg);
         }
       }
       this._isRunning = false;
       this._aborted = false;
+      this._lastEventSavedAssistant = undefined;
       this.currentUserDisplayPrompt = undefined;
       this.currentUserSource = undefined;
       this.runLog.flush().catch(() => {});
@@ -829,6 +833,9 @@ export class Agent {
         saveOptions.source = this.currentUserSource;
       }
       this.session.saveMessage(message, Object.keys(saveOptions).length > 0 ? saveOptions : undefined);
+      if (message.role === "assistant") {
+        this._lastEventSavedAssistant = message;
+      }
       // Skip compaction during internal runs — internal messages will be
       // rolled back from memory afterwards, so compacting now would be incorrect.
       if (message.role === "assistant" && !this._internalRun) {
