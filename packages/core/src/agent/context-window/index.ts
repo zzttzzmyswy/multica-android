@@ -43,7 +43,6 @@ export {
   splitMessagesForSummary,
   detectSplitTurn,
   computeAdaptiveChunkRatio,
-  compactMessagesWithSummary,
   compactMessagesWithChunkedSummary,
 } from "./summarization.js";
 
