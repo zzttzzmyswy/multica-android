@@ -254,6 +254,17 @@ export function repairToolUseResultPairing(messages: AgentMessage[]): ToolUseRep
       }
     }
 
+    // Drop duplicate assistant messages whose tool calls all already have results.
+    // This happens when a session abort persists the same assistant message twice.
+    if (toolCalls.every((call) => seenToolResultIds.has(call.id))) {
+      for (const rem of remainder) {
+        out.push(rem);
+      }
+      changed = true;
+      i = j - 1;
+      continue;
+    }
+
     out.push(msg);
 
     if (spanResultsById.size > 0 && remainder.length > 0) {
