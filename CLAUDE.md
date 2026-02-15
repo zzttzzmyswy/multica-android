@@ -190,6 +190,26 @@ Logged events: `run_start`, `run_end`, `llm_call`, `llm_result`, `tool_start`, `
 
 Each line is a JSON object with `ts` (timestamp) and `event` (type), suitable for AI-assisted log analysis. Full event reference: `packages/core/src/agent/run-log.ts`.
 
+## SWE-bench (Agent Benchmark)
+
+Run the Multica agent against [SWE-bench](https://www.swebench.com/), the standard benchmark for evaluating AI coding agents on real GitHub issues.
+
+```bash
+# Download dataset
+python scripts/swe-bench/download-dataset.py --dataset lite --limit 5
+
+# Run agent against tasks
+npx tsx scripts/swe-bench/run.ts --limit 5 --provider kimi-coding
+
+# Analyze results
+npx tsx scripts/swe-bench/analyze.ts
+
+# Official evaluation (requires Docker)
+bash scripts/swe-bench/evaluate.sh
+```
+
+Scripts are in `scripts/swe-bench/`. Full guide: `docs/swe-bench.md`.
+
 ## E2E Testing (Agent-Driven)
 
 E2E tests are executed and analyzed by the Coding Agent (Claude Code), not by vitest. The Coding Agent runs the Multica agent via CLI, reads the structured run-log, and intelligently analyzes intermediate behavior and results.

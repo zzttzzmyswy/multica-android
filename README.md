@@ -100,6 +100,13 @@ Web/Mobile Clients
 | Package management | [docs/package-management.md](./docs/package-management.md) |
 | Mobile development | [docs/mobile/guide.md](./docs/mobile/guide.md) |
 
+**Testing & Benchmarks**
+
+| Topic | Link |
+|-------|------|
+| SWE-bench runner | [docs/swe-bench.md](./docs/swe-bench.md) |
+| E2E testing guide | [docs/e2e-testing-guide.md](./docs/e2e-testing-guide.md) |
+
 **Architecture & Protocols**
 
 | Topic | Link |
