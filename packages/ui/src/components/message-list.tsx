@@ -78,7 +78,7 @@ export const MessageList = memo(function MessageList({ messages, streamingIds }:
   }, [messages])
 
   return (
-    <div className="relative p-6 px-4 sm:px-10 max-w-4xl mx-auto">
+    <div className="container relative p-6 px-4 sm:px-10">
       {messages.map((msg) => {
         // System messages (e.g. compaction notifications)
         if (msg.role === "system") {
@@ -125,13 +125,22 @@ export const MessageList = memo(function MessageList({ messages, streamingIds }:
                 )}
                 <div
                   className={cn(
-                    msg.role === "user" ? "bg-muted rounded-md max-w-[60%] py-1 px-2.5 my-2" : "w-full py-1 px-2.5 my-1"
+                    msg.role === "user" ? "bg-muted rounded-md max-w-[60%] p-3 px-4" : "w-full p-3 my-1"
                   )}
                 >
                   {isStreaming ? (
-                    <StreamingMarkdown content={text} isStreaming={true} mode="minimal" />
+                    <StreamingMarkdown
+                      content={text}
+                      isStreaming={true}
+                      mode="minimal"
+                      className={msg.role === "user" ? "[&_p]:whitespace-pre-wrap" : ""}
+                    />
                   ) : (
-                    <MemoizedMarkdown mode="minimal" id={msg.id}>
+                    <MemoizedMarkdown
+                      mode="minimal"
+                      id={msg.id}
+                      className={msg.role === "user" ? "[&_p]:whitespace-pre-wrap" : ""}
+                    >
                       {text}
                     </MemoizedMarkdown>
                   )}

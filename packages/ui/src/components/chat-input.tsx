@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useEffect, useImperativeHandle, forwardRef } from "react";
-import { useEditor, EditorContent } from "@tiptap/react";
+import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Button } from "@multica/ui/components/ui/button";
@@ -27,9 +27,10 @@ interface ChatInputProps {
 
 export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
   function ChatInput({ onSubmit, onAbort, isLoading, disabled, placeholder = "Type a message...", defaultValue }, ref) {
-    // Use ref to avoid stale closure in Tiptap keydown handler
+    // Use refs to avoid stale closures in Tiptap keydown handler
     const onSubmitRef = useRef(onSubmit);
     onSubmitRef.current = onSubmit;
+    const editorRef = useRef<Editor | null>(null);
 
     const editor = useEditor({
       extensions: [
@@ -69,15 +70,11 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
 
           if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
-            const text = _view.state.doc.textContent;
+            // Use TipTap's getText API to preserve newlines between paragraphs
+            const text = editorRef.current?.getText({ blockSeparator: '\n' }) ?? '';
             if (!text.trim()) return true;
             onSubmitRef.current?.(text);
-            // Clear editor after submit
-            _view.dispatch(
-              _view.state.tr
-                .delete(0, _view.state.doc.content.size)
-                .setMeta("addToHistory", false),
-            );
+            editorRef.current?.commands.clearContent();
             return true;
           }
 
@@ -85,6 +82,9 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
         },
       },
     });
+
+    // Keep editorRef in sync for use in handleKeyDown closure
+    editorRef.current = editor;
 
     // Sync disabled state
     useEffect(() => {
@@ -104,7 +104,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
 
     // Expose imperative API
     useImperativeHandle(ref, () => ({
-      getText: () => editor?.state.doc.textContent ?? "",
+      getText: () => editor?.getText({ blockSeparator: '\n' }) ?? "",
       setText: (text: string) => {
         editor?.commands.setContent(text ? `<p>${text}</p>` : "");
       },
@@ -114,7 +114,8 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
 
     const handleSubmit = () => {
       if (!editor) return;
-      const text = editor.state.doc.textContent;
+      // Use TipTap's getText API to preserve newlines between paragraphs
+      const text = editor.getText({ blockSeparator: '\n' });
       if (!text.trim()) return;
       onSubmit?.(text);
       editor.commands.clearContent();
