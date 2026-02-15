@@ -1,7 +1,7 @@
 ---
 name: Skill Creator
-description: Create, edit, and manage custom skills to extend agent capabilities. Use when the user asks to create a new skill, build a custom capability, or extend the agent's functionality.
-version: 1.1.0
+description: Create, edit, and manage custom skills to extend agent capabilities. Also activates inactive skills by guiding users through API key setup. Use when the user asks to create a new skill, build a custom capability, extend the agent's functionality, or when an inactive skill matches the user's intent.
+version: 1.2.0
 metadata:
   emoji: "🛠️"
   always: true
@@ -13,7 +13,59 @@ metadata:
 
 ## Instructions
 
-You can create, edit, and manage skills to extend your own capabilities or help users build custom skills.
+You can create, edit, and manage skills to extend your own capabilities or help users build custom skills. You also activate inactive skills by guiding users through API key configuration.
+
+## Activating Inactive Skills
+
+When a user's request matches an **inactive skill** (listed under "Installed But Inactive Skills" in your system prompt), follow this flow:
+
+1. **Inform the user**: Tell them the skill exists but needs setup
+2. **Explain what's missing**: Reference the diagnostic info (e.g., "The Gmail skill requires a GMAIL_API_KEY")
+3. **Guide them to get the key**: Use `web_search` or `web_fetch` to find how to obtain the required API key, then provide clear step-by-step instructions to the user
+4. **Accept the key in chat**: Ask the user to paste the API key directly in the conversation
+5. **Write the `.env` file**: Use the `write` tool to create the skill's `.env` file:
+   ```
+   ~/.super-multica/skills/<skill-id>/.env
+   ```
+   Content format:
+   ```
+   # API key for <Skill Name>
+   <ENV_VAR_NAME>=<pasted-key>
+   ```
+6. **Confirm activation**: The skill system auto-reloads on file changes. Tell the user the skill is now active and proceed with their original request.
+
+**IMPORTANT**: The user's API key is written to a local file only. Never log, echo, or transmit the key anywhere else.
+
+### Example (hypothetical — only act on skills that actually appear in your system prompt)
+
+Suppose the system prompt contains an inactive skill entry like:
+```
+- **Stock Tracker** (`stock-tracker`): Track stock prices
+  - Missing environment variables: STOCK_API_KEY
+  - Fix: Set STOCK_API_KEY in ~/.super-multica/skills/stock-tracker/.env
+```
+
+Then the conversation would be:
+```
+User: "What's AAPL trading at?"
+Agent: *sees stock-tracker in inactive skills list*
+Agent: *uses web_search to find how to get a Stock API key*
+Agent: "I have a Stock Tracker skill but it needs a STOCK_API_KEY. Here's how to get one: ..."
+User: "sk-abc123..."
+Agent: *writes ~/.super-multica/skills/stock-tracker/.env*
+Agent: "Done! Stock Tracker is active. Let me check AAPL for you..."
+```
+
+**CRITICAL**: Only reference skills that are actually listed in your system prompt under "Installed But Inactive Skills". Never assume a skill exists without seeing it there.
+
+## Creating New Skills When No Match Exists
+
+If the user asks for a capability that doesn't match any existing or inactive skill:
+
+1. **Suggest creating a new skill** if the capability is well-defined and repeatable
+2. Briefly describe what the skill would do and ask for confirmation
+3. Follow the **Skill Creation Process** below to create it
+4. If the new skill needs API keys, guide the user through obtaining and configuring them
 
 ## Skill Creation Process
 
@@ -197,13 +249,48 @@ rm -rf ~/.super-multica/skills/<skill-name>
 rm -rf ~/.super-multica/agent-profiles/<profile-id>/skills/<skill-name>
 ```
 
+## Skills with API Key Requirements
+
+When creating a skill that needs an API key:
+
+1. Declare env requirements in the SKILL.md frontmatter:
+   ```yaml
+   metadata:
+     requires:
+       env: [SERVICE_API_KEY]
+   ```
+
+2. After creating the SKILL.md, write the `.env` file in the same directory:
+   ```
+   # API key for <Service Name>
+   SERVICE_API_KEY=<key-value>
+   ```
+
+3. The skill becomes eligible immediately (hot-reload is automatic).
+
+### .env File Format
+
+Each skill stores its credentials in `~/.super-multica/skills/<skill-id>/.env`:
+
+```
+# Lines starting with # are comments
+KEY_NAME=value
+ANOTHER_KEY="value with spaces"
+```
+
+Rules:
+- One key per line, `KEY=VALUE` format
+- Quotes are optional (stripped automatically)
+- Each skill has its own `.env` — no centralized credential file
+
 ## Best Practices
 
-1. **Use init_skill.py** - Never create skills manually in random directories
+1. **Correct directory** - Never create skills in the current working directory
 2. **Clear description** - Include "when to use" triggers in the description
 3. **Concise instructions** - Keep SKILL.md under 500 lines
 4. **Test scripts** - Run helper scripts to verify they work
 5. **Single responsibility** - Each skill should do one thing well
+6. **Proactive activation** - When you see an inactive skill matching user intent, suggest activating it
 
 ## Skill Precedence
 

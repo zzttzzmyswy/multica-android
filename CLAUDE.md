@@ -192,7 +192,9 @@ pnpm multica credentials init
 
 Creates:
 - `~/.super-multica/credentials.json5` (LLM providers + built-in tools)
-- `~/.super-multica/skills.env.json5` (skills / plugins / integrations)
+
+Skill-specific API keys go in `.env` files within each skill's directory:
+- `~/.super-multica/skills/<skill-id>/.env`
 
 ## Atomic Commits
 

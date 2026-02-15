@@ -35,12 +35,7 @@ export type CredentialsConfig = {
   channels?: Record<string, Record<string, Record<string, unknown>> | undefined> | undefined;
 };
 
-type SkillsEnvConfig = {
-  env?: Record<string, string> | undefined;
-};
-
 const DEFAULT_CREDENTIALS_PATH = join(DATA_DIR, "credentials.json5");
-const DEFAULT_SKILLS_ENV_PATH = join(DATA_DIR, "skills.env.json5");
 
 function expandHome(value: string): string {
   if (value === "~") return homedir();
@@ -58,42 +53,16 @@ function isTestEnv(): boolean {
   );
 }
 
-function isString(value: unknown): value is string {
-  return typeof value === "string";
-}
-
-function setEnvValue(target: Record<string, string>, key: string, value: unknown): void {
-  if (isString(value)) {
-    target[key] = value;
-  }
-}
-
-function applyEnvMap(target: Record<string, string>, env?: Record<string, string>): void {
-  if (!env) return;
-  for (const [key, value] of Object.entries(env)) {
-    setEnvValue(target, key, value);
-  }
-}
-
 export function getCredentialsPath(): string {
   const raw = process.env.SMC_CREDENTIALS_PATH ?? DEFAULT_CREDENTIALS_PATH;
   return expandHome(raw);
 }
 
-export function getSkillsEnvPath(): string {
-  const raw = process.env.SMC_SKILLS_ENV_PATH ?? DEFAULT_SKILLS_ENV_PATH;
-  return expandHome(raw);
-}
-
 export class CredentialManager {
   private corePath: string | null = null;
-  private skillsPath: string | null = null;
   private disabledState: boolean | null = null;
   private coreConfig: CredentialsConfig | null = null;
-  private skillsConfig: SkillsEnvConfig | null = null;
-  private resolvedSkillsEnv: Record<string, string> | null = null;
   private coreMtimeMs: number | null = null;
-  private skillsMtimeMs: number | null = null;
 
   private isDisabled(): boolean {
     if (process.env.SMC_CREDENTIALS_DISABLE === "1") return true;
@@ -139,63 +108,6 @@ export class CredentialManager {
     }
   }
 
-  private loadSkillsEnv(): void {
-    const path = getSkillsEnvPath();
-    const disabled = this.isDisabled();
-    let mtimeMs: number | null = null;
-
-    if (!disabled && existsSync(path)) {
-      try {
-        mtimeMs = statSync(path).mtimeMs;
-      } catch {
-        mtimeMs = null;
-      }
-    }
-
-    if (
-      this.skillsPath === path
-      && this.disabledState === disabled
-      && this.resolvedSkillsEnv
-      && this.skillsMtimeMs === mtimeMs
-    ) {
-      return;
-    }
-
-    this.skillsPath = path;
-    this.disabledState = disabled;
-    this.skillsConfig = null;
-    this.resolvedSkillsEnv = null;
-    this.skillsMtimeMs = mtimeMs;
-
-    if (disabled) return;
-    if (mtimeMs === null) return;
-
-    const raw = readFileSync(path, "utf8");
-    try {
-      this.skillsConfig = JSON5.parse(raw) as SkillsEnvConfig;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      throw new Error(`Failed to parse skills env file (${path}): ${message}`);
-    }
-  }
-
-  private buildSkillsEnv(): Record<string, string> {
-    const env: Record<string, string> = {};
-    if (!this.skillsConfig) return env;
-
-    applyEnvMap(env, this.skillsConfig.env);
-
-    return env;
-  }
-
-  private getResolvedSkillsEnv(): Record<string, string> {
-    this.loadSkillsEnv();
-    if (!this.resolvedSkillsEnv) {
-      this.resolvedSkillsEnv = this.buildSkillsEnv();
-    }
-    return this.resolvedSkillsEnv;
-  }
-
   getLlmProvider(): string | undefined {
     this.loadCore();
     return this.coreConfig?.llm?.provider;
@@ -209,22 +121,6 @@ export class CredentialManager {
   getToolConfig(toolName: string): ToolConfig | undefined {
     this.loadCore();
     return this.coreConfig?.tools?.[toolName];
-  }
-
-  getEnv(name: string): string | undefined {
-    const resolved = this.getResolvedSkillsEnv();
-    if (Object.prototype.hasOwnProperty.call(resolved, name)) {
-      return resolved[name];
-    }
-    return process.env[name];
-  }
-
-  hasEnv(name: string): boolean {
-    const resolved = this.getResolvedSkillsEnv();
-    if (Object.prototype.hasOwnProperty.call(resolved, name)) {
-      return true;
-    }
-    return name in process.env;
   }
 
   /**
@@ -257,19 +153,11 @@ export class CredentialManager {
     return this.coreConfig?.channels ?? {};
   }
 
-  getResolvedEnvSnapshot(): Record<string, string> {
-    return { ...this.getResolvedSkillsEnv() };
-  }
-
   reset(): void {
     this.corePath = null;
-    this.skillsPath = null;
     this.disabledState = null;
     this.coreConfig = null;
-    this.skillsConfig = null;
-    this.resolvedSkillsEnv = null;
     this.coreMtimeMs = null;
-    this.skillsMtimeMs = null;
   }
 
   /**

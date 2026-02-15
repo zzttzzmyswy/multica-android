@@ -198,7 +198,7 @@ export function initializeManagedSkills(): void {
 
       // Check if skill exists in managed
       if (!existsSync(dest)) {
-        // Skill doesn't exist, copy it
+        // Skill doesn't exist, copy it as-is
         cpSync(src, dest, { recursive: true, dereference: true });
         continue;
       }
@@ -214,9 +214,9 @@ export function initializeManagedSkills(): void {
 
       // Update if bundled version is higher
       if (compareVersions(bundledVersion, managedVersion) > 0) {
-        // Remove old and copy new
-        rmSync(dest, { recursive: true });
-        cpSync(src, dest, { recursive: true, dereference: true });
+        // Overwrite only files that exist in the bundle, preserving
+        // user-created files (e.g. .env, credentials.json, token.json)
+        cpSync(src, dest, { recursive: true, dereference: true, force: true });
       }
     }
 

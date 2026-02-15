@@ -7,7 +7,7 @@ export * from "./skills/index.js";
 export * from "./channel.js";
 export * from "./sync-agent.js";
 export * from "./async-agent.js";
-export { credentialManager, getCredentialsPath, getSkillsEnvPath, type CredentialsConfig } from "./credentials.js";
+export { credentialManager, getCredentialsPath, type CredentialsConfig } from "./credentials.js";
 export * from "./providers/index.js";
 export * from "./tools.js";
 export * from "./tools/policy.js";

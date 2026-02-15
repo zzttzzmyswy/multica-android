@@ -10,7 +10,9 @@ import { loadAllSkills, getProfileSkillsDir, initializeManagedSkills, getManaged
 import {
   filterEligibleSkills,
   checkEligibility,
+  checkEligibilityDetailed,
   type EligibilityContext,
+  type DiagnosticItem,
 } from "./eligibility.js";
 import {
   startSkillsWatcher,
@@ -72,6 +74,7 @@ export {
 } from "./eligibility.js";
 
 export { parseFrontmatter, parseSkillFile } from "./parser.js";
+export { parseDotEnv } from "./dotenv.js";
 export { loadAllSkills, getProfileSkillsDir, initializeManagedSkills, getManagedSkillsDir } from "./loader.js";
 
 // Export install module
@@ -315,27 +318,31 @@ export class SkillManager {
   buildSkillsPrompt(): string {
     this.ensureLoaded();
 
-    if (this.eligibleSkills!.size === 0) {
-      return "";
+    const parts: string[] = [];
+
+    if (this.eligibleSkills!.size > 0) {
+      parts.push("# Available Skills\n");
+      parts.push("You have access to the following skills:\n");
+
+      for (const [id, skill] of this.eligibleSkills!) {
+        const emoji = skill.frontmatter.metadata?.emoji ?? "🔧";
+        const name = skill.frontmatter.name;
+        const desc = skill.frontmatter.description ?? "No description provided";
+
+        parts.push(`## ${emoji} ${name} (${id})`);
+        parts.push(`${desc}\n`);
+
+        // Include full instructions
+        if (skill.instructions) {
+          parts.push(skill.instructions);
+          parts.push("");
+        }
+      }
     }
 
-    const parts: string[] = [];
-    parts.push("# Available Skills\n");
-    parts.push("You have access to the following skills:\n");
-
-    for (const [id, skill] of this.eligibleSkills!) {
-      const emoji = skill.frontmatter.metadata?.emoji ?? "🔧";
-      const name = skill.frontmatter.name;
-      const desc = skill.frontmatter.description ?? "No description provided";
-
-      parts.push(`## ${emoji} ${name} (${id})`);
-      parts.push(`${desc}\n`);
-
-      // Include full instructions
-      if (skill.instructions) {
-        parts.push(skill.instructions);
-        parts.push("");
-      }
+    const ineligibleSummary = this.buildIneligibleSkillsSummary();
+    if (ineligibleSummary) {
+      parts.push(ineligibleSummary);
     }
 
     return parts.join("\n");
@@ -490,6 +497,8 @@ export class SkillManager {
   buildModelSkillsPrompt(): string {
     this.ensureLoaded();
 
+    const parts: string[] = [];
+
     const modelSkills = new Map<string, Skill>();
     for (const [id, skill] of this.eligibleSkills!) {
       if (isModelInvocable(skill)) {
@@ -497,24 +506,27 @@ export class SkillManager {
       }
     }
 
-    if (modelSkills.size === 0) {
-      return "";
+    if (modelSkills.size > 0) {
+      parts.push("# Available Skills\n");
+      parts.push("You have access to the following skills. When you need to use a skill, the full instructions will be provided.\n");
+
+      for (const [id, skill] of modelSkills) {
+        const emoji = skill.frontmatter.metadata?.emoji ?? "🔧";
+        const name = skill.frontmatter.name;
+        const desc = skill.frontmatter.description ?? "No description provided";
+
+        // Progressive loading: only output metadata, not full instructions
+        parts.push(`- ${emoji} **${name}** (\`${id}\`): ${desc}`);
+      }
+
+      parts.push("");
     }
 
-    const parts: string[] = [];
-    parts.push("# Available Skills\n");
-    parts.push("You have access to the following skills. When you need to use a skill, the full instructions will be provided.\n");
-
-    for (const [id, skill] of modelSkills) {
-      const emoji = skill.frontmatter.metadata?.emoji ?? "🔧";
-      const name = skill.frontmatter.name;
-      const desc = skill.frontmatter.description ?? "No description provided";
-
-      // Progressive loading: only output metadata, not full instructions
-      parts.push(`- ${emoji} **${name}** (\`${id}\`): ${desc}`);
+    const ineligibleSummary = this.buildIneligibleSkillsSummary();
+    if (ineligibleSummary) {
+      parts.push(ineligibleSummary);
     }
 
-    parts.push("");
     return parts.join("\n");
   }
 
@@ -545,5 +557,61 @@ export class SkillManager {
     }
 
     return parts.join("\n");
+  }
+
+  /**
+   * Build a compact summary of ineligible skills for system prompt awareness.
+   *
+   * Only includes skills with actionable issues (missing env vars, binaries, config).
+   * Excludes platform-incompatible or disabled skills since the agent cannot fix those.
+   */
+  buildIneligibleSkillsSummary(): string {
+    this.ensureLoaded();
+
+    const actionable: Array<{
+      id: string;
+      name: string;
+      description: string;
+      diagnostics: DiagnosticItem[];
+    }> = [];
+
+    for (const [id, skill] of this.skills!) {
+      if (this.eligibleSkills!.has(id)) continue;
+
+      const result = checkEligibilityDetailed(skill, this.getEligibilityContext());
+      if (!result.diagnostics) continue;
+
+      const actionableDiagnostics = result.diagnostics.filter(
+        (d) => d.type === "env" || d.type === "binary" || d.type === "any_binary" || d.type === "config",
+      );
+
+      if (actionableDiagnostics.length === 0) continue;
+
+      actionable.push({
+        id,
+        name: skill.frontmatter.name,
+        description: skill.frontmatter.description ?? "",
+        diagnostics: actionableDiagnostics,
+      });
+    }
+
+    if (actionable.length === 0) return "";
+
+    const lines: string[] = [];
+    lines.push("# Installed But Inactive Skills\n");
+    lines.push("These skills are installed but not yet ready. You can help the user activate them.\n");
+
+    for (const s of actionable) {
+      lines.push(`- **${s.name}** (\`${s.id}\`): ${s.description}`);
+      for (const d of s.diagnostics) {
+        lines.push(`  - ${d.message}`);
+        if (d.hint) {
+          lines.push(`  - Fix: ${d.hint}`);
+        }
+      }
+    }
+
+    lines.push("");
+    return lines.join("\n");
   }
 }
