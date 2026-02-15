@@ -283,7 +283,7 @@ function takeTail(text: string, maxChars: number): string {
  * Returns the artifact relative path, or null if not found.
  */
 function extractArtifactRef(text: string): string | null {
-  const match = text.match(/Full result saved to (artifacts\/[^\s.]+\.txt)/);
+  const match = text.match(/Full result (?:saved to|available at) (artifacts\/[^\s.]+\.txt)/);
   return match?.[1] ?? null;
 }
 
