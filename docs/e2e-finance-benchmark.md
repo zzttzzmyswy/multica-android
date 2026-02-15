@@ -32,6 +32,8 @@ scripts/e2e-finance-benchmark/run.sh
 The script defaults:
 - Providers: `kimi-coding claude-code`
 - Case glob: `case-*.txt`
+- Max parallel workers: `2`
+- Per-case timeout: `900s` (set `CASE_TIMEOUT_SEC=0` to disable)
 - Output directory: `.context/finance-e2e-runs/<timestamp>/`
 
 Generated artifact:
@@ -49,6 +51,12 @@ Run only specific cases by glob:
 
 ```bash
 CASE_GLOB="case-0[1-3]*.txt" scripts/e2e-finance-benchmark/run.sh
+```
+
+Run with higher parallelism for long-horizon tasks:
+
+```bash
+MAX_PARALLEL=4 CASE_TIMEOUT_SEC=2700 scripts/e2e-finance-benchmark/run.sh
 ```
 
 ## Case List
