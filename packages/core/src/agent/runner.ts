@@ -215,6 +215,9 @@ export class Agent {
         let result = sanitizeToolCallInputs(messages);
         result = sanitizeToolUseResultPairing(result);
         result = this.preflightCompact(result);
+        // Re-validate after compaction — compaction can break tool_use/tool_result
+        // pairing by dropping assistant messages while keeping their tool_results
+        result = sanitizeToolUseResultPairing(result);
         return result;
       },
     });
