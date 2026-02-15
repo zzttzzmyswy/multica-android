@@ -208,6 +208,13 @@ describe("buildSkillsSection", () => {
     expect(text).toContain("## commit");
   });
 
+  it("includes inactive skill guidance", () => {
+    const result = buildSkillsSection("## commit\nDo commits.", "full");
+    const text = result.join("\n");
+    expect(text).toContain("inactive skill");
+    expect(text).toContain("suggest activating it");
+  });
+
   it("returns empty in minimal mode", () => {
     expect(buildSkillsSection("skills", "minimal")).toEqual([]);
   });
