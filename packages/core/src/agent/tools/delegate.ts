@@ -133,10 +133,11 @@ async function runSubagentTask(
 
     if (timeoutMs > 0) {
       // Race agent.run against timeout
+      let timer: ReturnType<typeof setTimeout>;
       result = await Promise.race([
         childAgent.run(taskDef.task),
         new Promise<never>((_, reject) => {
-          setTimeout(() => {
+          timer = setTimeout(() => {
             timedOut = true;
             childAgent.abort();
             reject(new Error("timeout"));
@@ -147,6 +148,8 @@ async function runSubagentTask(
           return { text: "", error: `Timed out after ${formatElapsed(timeoutMs)}` };
         }
         throw err;
+      }).finally(() => {
+        clearTimeout(timer);
       });
     } else {
       // No timeout
