@@ -3,7 +3,7 @@ import { getModel, type Model, type UserMessage } from "@mariozechner/pi-ai";
 import type { SessionEntry, SessionMeta } from "./types.js";
 import { appendEntry, readEntries, resolveSessionPath, writeEntries } from "./storage.js";
 import { compactMessages, compactMessagesAsync, type CompactionResult } from "./compaction.js";
-import { estimateTokenUsage, shouldCompact as shouldCompactTokens } from "../context-window/index.js";
+import { estimateTokenUsage, estimateMessagesTokens, shouldCompact as shouldCompactTokens } from "../context-window/index.js";
 import { credentialManager } from "../credentials.js";
 import { repairSessionFileIfNeeded, type RepairReport } from "./session-file-repair.js";
 import { sanitizeToolCallInputs, sanitizeToolUseResultPairing } from "./session-transcript-repair.js";
@@ -11,6 +11,7 @@ import {
   pruneToolResults,
   type ToolResultPruningSettings,
 } from "../context-window/tool-result-pruning.js";
+import type { RunLog } from "../run-log.js";
 
 /** Get Kimi model for summarization (use a cheaper model than k2-thinking) */
 function getSummaryModel(): Model<any> {
@@ -64,6 +65,10 @@ export type SessionManagerOptions = {
   enableToolResultPruning?: boolean | undefined;
   /** Tool result pruning settings */
   toolResultPruning?: Partial<ToolResultPruningSettings> | undefined;
+
+  // Observability
+  /** RunLog instance for structured logging */
+  runLog?: RunLog | undefined;
 };
 
 export class SessionManager {
@@ -87,6 +92,8 @@ export class SessionManager {
   // Tool result pruning
   private readonly enableToolResultPruning: boolean;
   private readonly toolResultPruning: Partial<ToolResultPruningSettings> | undefined;
+  // Observability
+  private readonly runLog: RunLog;
 
   private queue: Promise<void> = Promise.resolve();
   private meta: SessionMeta | undefined;
@@ -119,6 +126,9 @@ export class SessionManager {
       options.enableToolResultPruning ??
       (this.compactionMode === "tokens" || this.compactionMode === "summary");
     this.toolResultPruning = options.toolResultPruning;
+
+    // Observability
+    this.runLog = options.runLog ?? { log() {}, async flush() {} };
 
     this.meta = this.loadMeta();
   }
@@ -270,6 +280,10 @@ export class SessionManager {
   async maybeCompact(messages: AgentMessage[]): Promise<CompactionResult | null> {
     let workingMessages = messages;
     let toolResultPruningApplied = false;
+    let pruningStats: { softTrimmed: number; hardCleared: number; charsSaved: number } | undefined;
+
+    // Capture pre-pruning token count for accurate combined metrics
+    const preCompactionTokens = estimateMessagesTokens(messages);
 
     // Phase 1: Tool result pruning (soft trim / hard clear)
     // This reduces token usage without removing messages
@@ -283,6 +297,14 @@ export class SessionManager {
       if (pruneResult.changed) {
         workingMessages = pruneResult.messages;
         toolResultPruningApplied = true;
+        pruningStats = {
+          softTrimmed: pruneResult.softTrimmed,
+          hardCleared: pruneResult.hardCleared,
+          charsSaved: pruneResult.charsSaved,
+        };
+
+        const postPruningTokens = estimateMessagesTokens(workingMessages);
+
         // Log pruning stats
         if (pruneResult.softTrimmed > 0 || pruneResult.hardCleared > 0) {
           console.error(
@@ -290,11 +312,19 @@ export class SessionManager {
               `${pruneResult.hardCleared} hard-cleared, ~${Math.round(pruneResult.charsSaved / 1000)}k chars saved`,
           );
         }
+        this.runLog.log("tool_result_pruning", {
+          soft_trimmed: pruneResult.softTrimmed,
+          hard_cleared: pruneResult.hardCleared,
+          chars_saved: pruneResult.charsSaved,
+          tokens_before: preCompactionTokens,
+          tokens_after: postPruningTokens,
+          phase: "compaction",
+        });
       }
     }
 
     // Phase 2: Message compaction (remove old messages if still needed)
-    let result;
+    let result: CompactionResult | null = null;
 
     if (this.compactionMode === "summary") {
       // Use provided model/apiKey or fall back to Kimi
@@ -364,10 +394,32 @@ export class SessionManager {
     // still return the pruned messages
     if (!result) {
       if (toolResultPruningApplied) {
-        return { kept: workingMessages, removedCount: 0, reason: "pruning" as const };
+        const postPruningTokens = estimateMessagesTokens(workingMessages);
+        return {
+          kept: workingMessages,
+          removedCount: 0,
+          tokensRemoved: preCompactionTokens - postPruningTokens,
+          tokensKept: postPruningTokens,
+          reason: "pruning" as const,
+          pruningStats,
+        };
       }
       return null;
     }
+
+    // Override metrics with accurate combined savings (Phase 1 + Phase 2)
+    const postCompactionTokens = estimateMessagesTokens(result.kept);
+    result.tokensRemoved = preCompactionTokens - postCompactionTokens;
+    result.tokensKept = postCompactionTokens;
+    result.pruningStats = pruningStats;
+
+    this.runLog.log("compaction_detail", {
+      pre_pruning_tokens: preCompactionTokens,
+      post_compaction_tokens: postCompactionTokens,
+      messages_removed: result.removedCount,
+      reason: result.reason,
+      pruning_applied: toolResultPruningApplied,
+    });
 
     const entries: SessionEntry[] = [];
     if (this.meta) {

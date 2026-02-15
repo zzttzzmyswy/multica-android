@@ -40,6 +40,8 @@ export type CompactionEndEvent = {
   tokensRemoved?: number;
   tokensKept?: number;
   reason: string;
+  /** Tool result pruning statistics (when Phase 1 pruning was applied) */
+  pruningStats?: { softTrimmed: number; hardCleared: number; charsSaved: number };
 };
 
 /** Union of all compaction events */

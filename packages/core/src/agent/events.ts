@@ -26,6 +26,8 @@ export type CompactionEndEvent = {
   reason: "count" | "tokens" | "summary" | "pruning";
   /** Generated summary text (only present when reason is "summary") */
   summary?: string | undefined;
+  /** Tool result pruning statistics (when Phase 1 pruning was applied) */
+  pruningStats?: { softTrimmed: number; hardCleared: number; charsSaved: number } | undefined;
 };
 
 /** Emitted when an agent encounters an error during execution */

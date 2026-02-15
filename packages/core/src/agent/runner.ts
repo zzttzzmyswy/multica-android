@@ -306,6 +306,8 @@ export class Agent {
       model: compactionMode === "summary" ? model : undefined,
       apiKey: summaryApiKey,
       customInstructions: options.summaryInstructions,
+      // Observability
+      runLog: this.runLog,
     });
 
     if (!options.thinkingLevel && storedMeta?.thinkingLevel) {
@@ -810,6 +812,14 @@ export class Agent {
     });
     if (pruneResult.changed) {
       result = pruneResult.messages;
+      if (pruneResult.softTrimmed > 0 || pruneResult.hardCleared > 0) {
+        this.runLog.log("tool_result_pruning", {
+          soft_trimmed: pruneResult.softTrimmed,
+          hard_cleared: pruneResult.hardCleared,
+          chars_saved: pruneResult.charsSaved,
+          phase: "preflight",
+        });
+      }
     }
 
     // Re-estimate after pruning
@@ -862,6 +872,7 @@ export class Agent {
       tokensKept: result.tokensKept,
       reason: result.reason ?? "tokens",
       summary: result.summary,
+      pruningStats: result.pruningStats,
     };
     this.emitMulticaEvent(endEvent);
     this.runLog.log("compaction", {
@@ -870,6 +881,7 @@ export class Agent {
       tokens_removed: endEvent.tokensRemoved,
       tokens_kept: endEvent.tokensKept,
       reason: endEvent.reason,
+      pruning_stats: endEvent.pruningStats,
     });
   }
 

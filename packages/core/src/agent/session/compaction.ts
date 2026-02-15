@@ -11,6 +11,13 @@ import {
   MIN_KEEP_MESSAGES,
 } from "../context-window/index.js";
 
+/** Tool result pruning statistics */
+export type PruningStats = {
+  softTrimmed: number;
+  hardCleared: number;
+  charsSaved: number;
+};
+
 export type CompactionResult = {
   kept: AgentMessage[];
   removedCount: number;
@@ -25,6 +32,8 @@ export type CompactionResult = {
   toolFailures?: Array<{ toolName: string; summary: string }> | undefined;
   /** Reason for compaction: count, tokens, summary, or pruning (tool result trimming only) */
   reason: "count" | "tokens" | "summary" | "pruning";
+  /** Tool result pruning statistics (when Phase 1 pruning was applied) */
+  pruningStats?: PruningStats | undefined;
 };
 
 /**
