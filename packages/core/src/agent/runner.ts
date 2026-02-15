@@ -783,19 +783,17 @@ export class Agent {
 
   private handleRunLogEvent(event: AgentEvent) {
     if (event.type === "tool_execution_start") {
-      const toolCallId = (event as any).toolCallId ?? "unknown";
       const toolName = (event as any).toolName ?? "unknown";
-      this.toolStartTimes.set(toolCallId, Date.now());
+      this.toolStartTimes.set(toolName, Date.now());
       this.runLog.log("tool_start", {
         tool: toolName,
         args: JSON.stringify((event as any).args ?? {}).slice(0, 500),
       });
     } else if (event.type === "tool_execution_end") {
-      const toolCallId = (event as any).toolCallId ?? "unknown";
       const toolName = (event as any).toolName ?? "unknown";
-      const startTime = this.toolStartTimes.get(toolCallId);
+      const startTime = this.toolStartTimes.get(toolName);
       const duration_ms = startTime ? Date.now() - startTime : undefined;
-      this.toolStartTimes.delete(toolCallId);
+      this.toolStartTimes.delete(toolName);
 
       // Extract result metadata for run-log persistence (survives session compaction)
       const result = (event as any).result;
