@@ -393,11 +393,10 @@ export class Agent {
     const mergedToolsConfig = mergeToolsConfig(profileToolsConfig, options.tools);
     const profileDir = this.profile?.getProfileDir();
     // Use this.sessionId (which may be auto-generated) instead of options.sessionId
-    // (which may be undefined). Without this, sessions_list and sessions_spawn
-    // can't find sub-agent runs because they have no session context.
+    // (which may be undefined). Without this, delegate tool has no session context.
     this.toolsOptions = mergedToolsConfig
-      ? { ...options, sessionId: this.sessionId, cwd: effectiveCwd, tools: mergedToolsConfig, profileDir, provider: this.resolvedProvider }
-      : { ...options, sessionId: this.sessionId, cwd: effectiveCwd, profileDir, provider: this.resolvedProvider };
+      ? { ...options, sessionId: this.sessionId, cwd: effectiveCwd, tools: mergedToolsConfig, profileDir, provider: this.resolvedProvider, runLog: this.runLog }
+      : { ...options, sessionId: this.sessionId, cwd: effectiveCwd, profileDir, provider: this.resolvedProvider, runLog: this.runLog };
 
     const tools = resolveTools(this.toolsOptions);
     if (this.debug) {
@@ -1242,10 +1241,10 @@ export class Agent {
 
     // Update internal state
     this.resolvedProvider = providerId;
-    // Keep toolsOptions.provider in sync so sessions_spawn inherits the current provider
+    // Keep toolsOptions.provider in sync so delegate tool inherits the current provider
     this.toolsOptions = { ...this.toolsOptions, provider: providerId };
 
-    // Reload tools so sessions_spawn picks up the new provider in its closure.
+    // Reload tools so delegate picks up the new provider in its closure.
     // Without this, the existing tool instance still captures the old provider.
     const tools = resolveTools(this.toolsOptions);
     this.agent.setTools(tools);

@@ -45,6 +45,16 @@
  * - `compaction_detail` — Detailed compaction breakdown.
  *     Fields: pre_pruning_tokens, post_compaction_tokens, messages_removed, reason, pruning_applied
  *
+ * ### Delegation (Sub-Agents)
+ * - `delegate_start`      — Delegate tool invoked.
+ *     Fields: task_count, timeout_seconds, labels[]
+ * - `delegate_task_start`  — Individual sub-agent task begins.
+ *     Fields: index, label, task (first 200 chars)
+ * - `delegate_task_end`    — Individual sub-agent task completes.
+ *     Fields: index, label, status (ok|error|timeout), duration_ms, findings_chars, error?
+ * - `delegate_end`         — All delegated tasks complete.
+ *     Fields: task_count, ok, errors, timeouts, total_duration_ms
+ *
  * ### Error Recovery
  * - `context_overflow`           — Context window overflow detected.
  *     Fields: attempt, messages_before
