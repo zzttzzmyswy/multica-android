@@ -15,11 +15,16 @@ export interface QueuedLocalMessage {
   createdAt: number
 }
 
+interface UseLocalChatOptions {
+  conversationId?: string
+}
+
 function makeQueueId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `queued-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-export function useLocalChat() {
+export function useLocalChat(options: UseLocalChatOptions = {}) {
+  const requestedConversationId = options.conversationId
   const chat = useChat()
   const chatRef = useRef(chat)
   chatRef.current = chat
@@ -33,6 +38,7 @@ export function useLocalChat() {
   const [initError, setInitError] = useState<string | null>(null)
   const initRef = useRef(false)
   const offsetRef = useRef<number | null>(null)
+  const activeConversationId = requestedConversationId ?? agentId
 
   // Initialize hub and get default agent ID
   useEffect(() => {
@@ -41,10 +47,13 @@ export function useLocalChat() {
 
     window.electronAPI.hub.init()
       .then((result) => {
-        const r = result as { defaultAgentId?: string }
-        console.log('[LocalChat] hub.init → defaultAgentId:', r.defaultAgentId)
-        if (r.defaultAgentId) {
-          setAgentId(r.defaultAgentId)
+        const r = result as { defaultAgentId?: string; defaultConversationId?: string }
+        const defaultConversationId = r.defaultConversationId ?? r.defaultAgentId
+        console.log('[LocalChat] hub.init → defaultConversationId:', defaultConversationId)
+        if (defaultConversationId) {
+          setAgentId(defaultConversationId)
+        } else if (requestedConversationId) {
+          setAgentId(requestedConversationId)
         } else {
           setInitError('No default agent available')
           setIsLoadingHistory(false)
@@ -54,14 +63,20 @@ export function useLocalChat() {
         setInitError(err.message)
         setIsLoadingHistory(false)
       })
-  }, [])
+  }, [requestedConversationId])
 
-  // Subscribe to events + fetch history once agentId is available
+  // Subscribe to events + fetch history once conversation is available
   useEffect(() => {
-    if (!agentId) return
+    if (!activeConversationId) return
+    const resolvedAgentId = agentId ?? activeConversationId
+    setQueuedMessages([])
+    offsetRef.current = null
+    setIsLoading(false)
+    setIsLoadingHistory(true)
+    chatRef.current.reset()
 
     // Subscribe to agent events
-    window.electronAPI.localChat.subscribe(agentId).catch(() => {})
+    window.electronAPI.localChat.subscribe(activeConversationId).catch(() => {})
 
     // Listen for stream events
     window.electronAPI.localChat.onEvent((data) => {
@@ -104,24 +119,39 @@ export function useLocalChat() {
     // Listen for inbound messages from all sources (gateway, channel)
     // This allows the local UI to display messages from other sources
     window.electronAPI.hub.onInboundMessage((event: InboundMessageEvent) => {
+      const eventConversationId = event.conversationId ?? event.agentId
       // Only add non-local messages (local messages are added by sendMessage)
-      if (event.source.type !== 'local' && event.agentId === agentId) {
-        chatRef.current.addUserMessage(event.content, event.agentId, event.source as MessageSource)
+      if (event.source.type !== 'local' && eventConversationId === activeConversationId) {
+        chatRef.current.addUserMessage(
+          event.content,
+          event.agentId,
+          event.source as MessageSource,
+          eventConversationId,
+        )
         setIsLoading(true)
       }
     })
 
     // Fetch history with pagination
-    window.electronAPI.localChat.getHistory(agentId, { limit: DEFAULT_MESSAGES_LIMIT })
+    window.electronAPI.localChat.getHistory(resolvedAgentId, {
+      limit: DEFAULT_MESSAGES_LIMIT,
+      conversationId: activeConversationId,
+    })
       .then((result) => {
         console.log('[LocalChat] getHistory result:', result.messages?.length, 'messages, total:', result.total)
         if (result.messages?.length) {
-          chatRef.current.setHistory(result.messages as AgentMessageItem[], agentId, {
+          chatRef.current.setHistory(result.messages as AgentMessageItem[], resolvedAgentId, {
             total: result.total,
             offset: result.offset,
             contextWindowTokens: result.contextWindowTokens,
-          })
+          }, activeConversationId)
           offsetRef.current = result.offset
+        } else {
+          chatRef.current.setHistory([], resolvedAgentId, {
+            total: 0,
+            offset: 0,
+            contextWindowTokens: result.contextWindowTokens,
+          }, activeConversationId)
         }
       })
       .catch(() => {})
@@ -131,9 +161,9 @@ export function useLocalChat() {
       window.electronAPI.localChat.offEvent()
       window.electronAPI.localChat.offApproval()
       window.electronAPI.hub.offInboundMessage()
-      window.electronAPI.localChat.unsubscribe(agentId).catch(() => {})
+      window.electronAPI.localChat.unsubscribe(activeConversationId).catch(() => {})
     }
-  }, [agentId])
+  }, [agentId, activeConversationId])
 
   useEffect(() => {
     isLoadingRef.current = isLoading
@@ -141,11 +171,12 @@ export function useLocalChat() {
 
   const dispatchMessageNow = useCallback((text: string) => {
     const trimmed = text.trim()
-    if (!trimmed || !agentId) return
-    chatRef.current.addUserMessage(trimmed, agentId, { type: 'local' })
+    if (!trimmed || !activeConversationId) return
+    const resolvedAgentId = agentId ?? activeConversationId
+    chatRef.current.addUserMessage(trimmed, resolvedAgentId, { type: 'local' }, activeConversationId)
     chatRef.current.setError(null)
     setIsLoading(true)
-    window.electronAPI.localChat.send(agentId, trimmed)
+    window.electronAPI.localChat.send(resolvedAgentId, trimmed, activeConversationId)
       .then((result) => {
         const response = result as { ok?: boolean; error?: string } | undefined
         if (response?.error) {
@@ -155,11 +186,11 @@ export function useLocalChat() {
       .catch(() => {
         setIsLoading(false)
       })
-  }, [agentId])
+  }, [agentId, activeConversationId])
 
   const sendMessage = useCallback((text: string) => {
     const trimmed = text.trim()
-    if (!trimmed || !agentId) return
+    if (!trimmed || !activeConversationId) return
 
     if (isLoadingRef.current) {
       setQueuedMessages((prev) => [
@@ -174,7 +205,7 @@ export function useLocalChat() {
     }
 
     dispatchMessageNow(trimmed)
-  }, [agentId, dispatchMessageNow])
+  }, [activeConversationId, dispatchMessageNow])
 
   const removeQueuedMessage = useCallback((id: string) => {
     setQueuedMessages((prev) => prev.filter((item) => item.id !== id))
@@ -185,35 +216,41 @@ export function useLocalChat() {
   }, [])
 
   useEffect(() => {
-    if (!agentId || isLoading || queuedMessages.length === 0) return
+    if (!activeConversationId || isLoading || queuedMessages.length === 0) return
     const next = queuedMessages[0]
     if (!next) return
     setQueuedMessages((prev) => prev.slice(1))
     dispatchMessageNow(next.text)
-  }, [agentId, isLoading, queuedMessages, dispatchMessageNow])
+  }, [activeConversationId, isLoading, queuedMessages, dispatchMessageNow])
 
   const abortGeneration = useCallback(() => {
-    if (!agentId) return
-    window.electronAPI.localChat.abort(agentId).catch(() => {})
+    if (!activeConversationId) return
+    const resolvedAgentId = agentId ?? activeConversationId
+    window.electronAPI.localChat.abort(resolvedAgentId, activeConversationId).catch(() => {})
     setIsLoading(false)
-  }, [agentId])
+  }, [agentId, activeConversationId])
 
   const loadMore = useCallback(async () => {
     const currentOffset = offsetRef.current
-    if (!agentId || currentOffset == null || currentOffset <= 0 || isLoadingMoreRef.current) return
+    if (!activeConversationId || currentOffset == null || currentOffset <= 0 || isLoadingMoreRef.current) return
 
     isLoadingMoreRef.current = true
     setIsLoadingMore(true)
     try {
+      const resolvedAgentId = agentId ?? activeConversationId
       const newOffset = Math.max(0, currentOffset - DEFAULT_MESSAGES_LIMIT)
       const limit = currentOffset - newOffset
-      const result = await window.electronAPI.localChat.getHistory(agentId, { offset: newOffset, limit })
+      const result = await window.electronAPI.localChat.getHistory(resolvedAgentId, {
+        offset: newOffset,
+        limit,
+        conversationId: activeConversationId,
+      })
       if (result.messages?.length) {
-        chatRef.current.prependHistory(result.messages as AgentMessageItem[], agentId, {
+        chatRef.current.prependHistory(result.messages as AgentMessageItem[], resolvedAgentId, {
           total: result.total,
           offset: result.offset,
           contextWindowTokens: result.contextWindowTokens,
-        })
+        }, activeConversationId)
         offsetRef.current = result.offset
       }
     } catch {
@@ -222,7 +259,7 @@ export function useLocalChat() {
       isLoadingMoreRef.current = false
       setIsLoadingMore(false)
     }
-  }, [agentId])
+  }, [agentId, activeConversationId])
 
   const resolveApproval = useCallback(
     (approvalId: string, decision: ApprovalDecision) => {
@@ -238,6 +275,7 @@ export function useLocalChat() {
 
   return {
     agentId,
+    conversationId: activeConversationId,
     initError,
     messages: chat.messages,
     streamingIds: chat.streamingIds,

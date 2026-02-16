@@ -8,6 +8,7 @@ export interface TelegramConnectQRProps {
   gateway: string
   hubId: string
   agentId: string
+  conversationId?: string
   expirySeconds?: number
   size?: number
 }
@@ -23,6 +24,7 @@ export function TelegramConnectQR({
   gateway,
   hubId,
   agentId,
+  conversationId,
   expirySeconds = 30,
   size = 200,
 }: TelegramConnectQRProps) {
@@ -44,7 +46,14 @@ export function TelegramConnectQR({
         const res = await fetch(`${gateway}/telegram/connect-code`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ gateway, hubId, agentId, token, expires: expiresAt }),
+          body: JSON.stringify({
+            gateway,
+            hubId,
+            agentId,
+            conversationId: conversationId ?? agentId,
+            token,
+            expires: expiresAt,
+          }),
         })
 
         if (cancelled) return
@@ -72,7 +81,7 @@ export function TelegramConnectQR({
 
     fetchCode()
     return () => { cancelled = true }
-  }, [token, expiresAt, gateway, hubId, agentId])
+  }, [token, expiresAt, gateway, hubId, agentId, conversationId])
 
   if (loading) {
     return (

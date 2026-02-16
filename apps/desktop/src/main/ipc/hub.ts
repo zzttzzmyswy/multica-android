@@ -112,6 +112,7 @@ export function registerHubIpcHandlers(): void {
       url: h.url,
       connectionState: h.connectionState,
       defaultAgentId,
+      defaultConversationId: defaultAgentId,
     }
   })
 
@@ -189,6 +190,21 @@ export function registerHubIpcHandlers(): void {
   })
 
   /**
+   * List all conversations (alias of listAgents for clearer semantics).
+   */
+  ipcMain.handle('hub:listConversations', async (): Promise<AgentInfo[]> => {
+    const h = getHub()
+    const conversationIds = h.listConversations()
+    return conversationIds.map((id) => {
+      const conversation = h.getConversation(id)
+      return {
+        id,
+        closed: conversation?.closed ?? true,
+      }
+    })
+  })
+
+  /**
    * Create a new agent.
    */
   ipcMain.handle('hub:createAgent', async (_event, id?: string) => {
@@ -197,6 +213,18 @@ export function registerHubIpcHandlers(): void {
     return {
       id: agent.sessionId,
       closed: agent.closed,
+    }
+  })
+
+  /**
+   * Create a new conversation (alias of createAgent).
+   */
+  ipcMain.handle('hub:createConversation', async (_event, id?: string) => {
+    const h = getHub()
+    const conversation = h.createConversation(id)
+    return {
+      id: conversation.sessionId,
+      closed: conversation.closed,
     }
   })
 
@@ -216,6 +244,21 @@ export function registerHubIpcHandlers(): void {
   })
 
   /**
+   * Get a specific conversation (alias of getAgent).
+   */
+  ipcMain.handle('hub:getConversation', async (_event, id: string) => {
+    const h = getHub()
+    const conversation = h.getConversation(id)
+    if (!conversation) {
+      return { error: `Conversation not found: ${id}` }
+    }
+    return {
+      id: conversation.sessionId,
+      closed: conversation.closed,
+    }
+  })
+
+  /**
    * Close/delete an agent.
    */
   ipcMain.handle('hub:closeAgent', async (_event, id: string) => {
@@ -225,17 +268,27 @@ export function registerHubIpcHandlers(): void {
   })
 
   /**
+   * Close/delete a conversation (alias of closeAgent).
+   */
+  ipcMain.handle('hub:closeConversation', async (_event, id: string) => {
+    const h = getHub()
+    const result = h.closeConversation(id)
+    return { ok: result }
+  })
+
+  /**
    * Send a message to an agent (for remote clients via Gateway).
    * Note: For local direct chat, use 'localChat:send' instead.
    */
-  ipcMain.handle('hub:sendMessage', async (_event, agentId: string, content: string) => {
+  ipcMain.handle('hub:sendMessage', async (_event, agentId: string, content: string, conversationId?: string) => {
     const h = getHub()
-    const agent = h.getAgent(agentId)
+    const resolvedConversationId = conversationId ?? agentId
+    const agent = h.getAgent(resolvedConversationId)
     if (!agent) {
-      return { error: `Agent not found: ${agentId}` }
+      return { error: `Conversation not found: ${resolvedConversationId}` }
     }
     if (agent.closed) {
-      return { error: `Agent is closed: ${agentId}` }
+      return { error: `Conversation is closed: ${resolvedConversationId}` }
     }
     h.channelManager.clearLastRoute()
     agent.write(content)
@@ -277,6 +330,7 @@ export function registerHubIpcHandlers(): void {
         safeLog(`[IPC] Sending ${event.type} event to renderer`)
         mainWindowRef.webContents.send('localChat:event', {
           agentId,
+          conversationId: agentId,
           streamId: null,
           event,
         })
@@ -305,6 +359,7 @@ export function registerHubIpcHandlers(): void {
       safeLog(`[IPC] Sending event to renderer: ${event.type}, streamId: ${currentStreamId}`)
       mainWindowRef.webContents.send('localChat:event', {
         agentId,
+        conversationId: agentId,
         streamId: currentStreamId,
         event,
       })
@@ -351,9 +406,14 @@ export function registerHubIpcHandlers(): void {
    * Reads from session storage (not in-memory state) so that internal
    * orchestration messages are excluded by default.
    */
-  ipcMain.handle('localChat:getHistory', async (_event, agentId: string, options?: { offset?: number; limit?: number }) => {
+  ipcMain.handle('localChat:getHistory', async (
+    _event,
+    agentId: string,
+    options?: { offset?: number; limit?: number; conversationId?: string },
+  ) => {
     const h = getHub()
-    const agent = h.getAgent(agentId)
+    const conversationId = options?.conversationId ?? agentId
+    const agent = h.getAgent(conversationId)
     if (!agent) {
       return { messages: [], total: 0, offset: 0, limit: 0, contextWindowTokens: undefined }
     }
@@ -377,18 +437,19 @@ export function registerHubIpcHandlers(): void {
    * Send a message via local direct IPC (no Gateway).
    * Events will be pushed to renderer via 'localChat:event' channel.
    */
-  ipcMain.handle('localChat:send', async (_event, agentId: string, content: string) => {
+  ipcMain.handle('localChat:send', async (_event, agentId: string, content: string, conversationId?: string) => {
     const h = getHub()
-    const agent = h.getAgent(agentId)
+    const resolvedConversationId = conversationId ?? agentId
+    const agent = h.getAgent(resolvedConversationId)
     if (!agent) {
-      return { error: `Agent not found: ${agentId}` }
+      return { error: `Conversation not found: ${resolvedConversationId}` }
     }
     if (agent.closed) {
-      return { error: `Agent is closed: ${agentId}` }
+      return { error: `Conversation is closed: ${resolvedConversationId}` }
     }
 
     // Must be subscribed first to receive events
-    if (!ipcAgentSubscriptions.has(agentId)) {
+    if (!ipcAgentSubscriptions.has(resolvedConversationId)) {
       return { error: 'Not subscribed to agent events. Call subscribe first.' }
     }
 
@@ -397,26 +458,28 @@ export function registerHubIpcHandlers(): void {
     // Broadcast as local source (for consistency, though UI already knows)
     h.broadcastInbound({
       agentId,
+      conversationId: resolvedConversationId,
       content,
       source,
       timestamp: Date.now(),
     })
     agent.write(content, { source })
-    safeLog(`[IPC] Local chat message sent to agent: ${agentId}`)
+    safeLog(`[IPC] Local chat message sent to conversation: ${resolvedConversationId}`)
     return { ok: true }
   })
 
   /**
    * Abort the current agent run for local chat.
    */
-  ipcMain.handle('localChat:abort', async (_event, agentId: string) => {
+  ipcMain.handle('localChat:abort', async (_event, agentId: string, conversationId?: string) => {
     const h = getHub()
-    const agent = h.getAgent(agentId)
+    const resolvedConversationId = conversationId ?? agentId
+    const agent = h.getAgent(resolvedConversationId)
     if (!agent) {
-      return { error: `Agent not found: ${agentId}` }
+      return { error: `Conversation not found: ${resolvedConversationId}` }
     }
     agent.abort()
-    safeLog(`[IPC] Abort sent to agent: ${agentId}`)
+    safeLog(`[IPC] Abort sent to conversation: ${resolvedConversationId}`)
     return { ok: true }
   })
 

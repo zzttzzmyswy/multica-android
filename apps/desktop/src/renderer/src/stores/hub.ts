@@ -27,6 +27,8 @@ interface HubStore {
   init: () => Promise<void>
   refresh: () => Promise<void>
   reconnect: (url: string) => Promise<{ ok: boolean; error?: string }>
+  createConversation: (id?: string) => Promise<AgentInfo | null>
+  closeConversation: (id: string) => Promise<boolean>
 }
 
 export const useHubStore = create<HubStore>()((set, get) => ({
@@ -99,6 +101,34 @@ export const useHubStore = create<HubStore>()((set, get) => ({
       const message = err instanceof Error ? err.message : String(err)
       set({ error: message })
       return { ok: false, error: message }
+    }
+  },
+
+  createConversation: async (id?: string) => {
+    try {
+      const result = await window.electronAPI.hub.createConversation(id) as { id?: string; closed?: boolean }
+      await get().refresh()
+      if (!result?.id) return null
+      return {
+        id: result.id,
+        closed: result.closed ?? false,
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      set({ error: message })
+      return null
+    }
+  },
+
+  closeConversation: async (id: string) => {
+    try {
+      const result = await window.electronAPI.hub.closeConversation(id) as { ok?: boolean }
+      await get().refresh()
+      return !!result?.ok
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      set({ error: message })
+      return false
     }
   },
 }))

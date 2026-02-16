@@ -11,6 +11,7 @@ export interface QRCodeData {
   gateway: string
   hubId: string
   agentId: string
+  conversationId?: string
   token: string
   expires: number
 }
@@ -19,6 +20,7 @@ export interface ConnectionQRCodeProps {
   gateway: string
   hubId: string
   agentId: string
+  conversationId?: string
   expirySeconds?: number
   size?: number
 }
@@ -125,6 +127,7 @@ export function ConnectionQRCode({
   gateway,
   hubId,
   agentId,
+  conversationId,
   expirySeconds = 30,
   size = 200,
 }: ConnectionQRCodeProps) {
@@ -138,10 +141,11 @@ export function ConnectionQRCode({
       gateway,
       hubId,
       agentId,
+      conversationId: conversationId ?? agentId,
       token,
       expires: expiresAt,
     }),
-    [gateway, hubId, agentId, token, expiresAt]
+    [gateway, hubId, agentId, conversationId, token, expiresAt]
   )
 
   const connectionUrl = useMemo(() => {
@@ -149,11 +153,12 @@ export function ConnectionQRCode({
       gateway,
       hub: hubId,
       agent: agentId,
+      conversation: conversationId ?? agentId,
       token,
       exp: expiresAt.toString(),
     })
     return `multica://connect?${params.toString()}`
-  }, [gateway, hubId, agentId, token, expiresAt])
+  }, [gateway, hubId, agentId, conversationId, token, expiresAt])
 
   return (
     <div className="flex flex-col items-center gap-4">
