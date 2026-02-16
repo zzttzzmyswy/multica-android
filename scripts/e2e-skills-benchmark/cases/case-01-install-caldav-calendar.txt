@@ -1,0 +1,15 @@
+Run an end-to-end test for the Meta Skill Installer.
+
+Goal: install a real ClawHub skill for CalDAV calendar capability.
+Reference page: https://clawhub.ai/skills/caldav-calendar
+
+Follow this exact workflow:
+1. State the missing capability in one sentence.
+2. Search ClawHub for CalDAV-related skills and choose the best candidate.
+3. Stage-install to a temporary directory first (never install directly to active skills path).
+4. Run security review on the staged skill:
+   DATA_DIR="${SMC_DATA_DIR:-$HOME/.super-multica}"
+   node "$DATA_DIR/skills/meta-skill-installer/scripts/review-skill-security.mjs" "<staged skill path>"
+5. If riskLevel is safe, install to "$DATA_DIR/skills".
+6. Verify final install by checking "$DATA_DIR/skills/<slug>/SKILL.md" exists.
+7. Return a short report: selected slug, riskLevel, final install path.

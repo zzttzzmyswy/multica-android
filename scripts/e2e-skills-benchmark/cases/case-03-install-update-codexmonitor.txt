@@ -1,0 +1,16 @@
+Run an end-to-end install+update regression test for Meta Skill Installer.
+
+Goal: use a real ClawHub skill and verify install, review, and update flow.
+Reference page: https://clawhub.ai/odrobnik/codexmonitor
+
+Requirements:
+1. Search ClawHub for CodexMonitor and select the matching skill slug.
+2. Stage-install to a temporary directory and run security review:
+   DATA_DIR="${SMC_DATA_DIR:-$HOME/.super-multica}"
+   node "$DATA_DIR/skills/meta-skill-installer/scripts/review-skill-security.mjs" "<staged skill path>"
+3. If riskLevel is safe, install to "$DATA_DIR/skills".
+4. Verify "$DATA_DIR/skills/<slug>/SKILL.md" exists.
+5. Run an update for the same slug in managed dir:
+   clawhub update "<slug>" --workdir "$DATA_DIR" --dir skills --force
+6. Run security review again on the final installed path.
+7. Return: slug, initial riskLevel, update executed (yes/no), final path.

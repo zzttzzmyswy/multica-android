@@ -40,6 +40,8 @@ export interface ExecApprovalRequest {
 export interface ApprovalResult {
   approved: boolean;
   decision: ApprovalDecision;
+  /** Optional denial/approval message for the exec tool response */
+  message?: string | undefined;
 }
 
 // ============ Configuration ============
