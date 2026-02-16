@@ -43,6 +43,11 @@ import {
 } from "./system-prompt/index.js";
 import type { AuthProfileFailureReason } from "./auth-profiles/index.js";
 import {
+  shouldEnforceWebFetchAfterSearch,
+  summarizeWebToolUsage,
+  type ToolExecutionRecord,
+} from "./web-tools-policy.js";
+import {
   sanitizeToolCallInputs,
   sanitizeToolUseResultPairing,
 } from "./session/session-transcript-repair.js";
@@ -127,6 +132,16 @@ function formatRunLogToolSummary(tool: string, details: Record<string, unknown> 
   }
 }
 
+const WEB_SEARCH_FETCH_ENFORCEMENT_PROMPT = [
+  "You used web_search but did not complete a successful web_fetch in this turn.",
+  "Search snippets are incomplete previews and are not sufficient evidence for detailed claims.",
+  "Before finalizing your answer, you MUST:",
+  "1) Pick the 1-3 most relevant URLs from the web_search results.",
+  "2) Call web_fetch on those URLs.",
+  "3) Revise your answer based on fetched content.",
+  "If all fetch attempts fail, explicitly say so and avoid relying on snippets for specific claims.",
+].join("\n");
+
 export class Agent {
   private readonly agent: PiAgentCore;
   private output;
@@ -141,6 +156,7 @@ export class Agent {
   private readonly stderr: NodeJS.WritableStream;
   private readonly runLog: RunLog;
   private readonly toolStartTimes = new Map<string, number>();
+  private currentRunToolExecutions: ToolExecutionRecord[] = [];
   private initialized = false;
 
   // Context window settings (for pre-flight compaction)
@@ -524,6 +540,7 @@ export class Agent {
     this.currentUserSource = options?.source;
     this._isRunning = true;
     this._aborted = false;
+    this.currentRunToolExecutions = [];
 
     const runStart = Date.now();
     this.runLog.log("run_start", {
@@ -552,6 +569,7 @@ export class Agent {
 
       // Loop to exhaust all candidate profiles on rotatable errors
       while (true) {
+        const toolExecutionStartIndex = this.currentRunToolExecutions.length;
         try {
           const llmStart = Date.now();
           this.runLog.log("llm_call", {
@@ -561,6 +579,7 @@ export class Agent {
             messages: this.agent.state.messages.length,
           });
           await this.agent.prompt(prompt);
+          await this.enforceWebFetchAfterSearchIfNeeded(toolExecutionStartIndex);
           this.runLog.log("llm_result", {
             duration_ms: Date.now() - llmStart,
           });
@@ -692,6 +711,7 @@ export class Agent {
       this._lastEventSavedAssistant = undefined;
       this.currentUserDisplayPrompt = undefined;
       this.currentUserSource = undefined;
+      this.currentRunToolExecutions = [];
       this.runLog.flush().catch(() => {});
     }
   }
@@ -781,6 +801,56 @@ export class Agent {
     this.session.setApiKey(this.currentApiKey);
   }
 
+  private async enforceWebFetchAfterSearchIfNeeded(
+    toolExecutionStartIndex: number,
+  ): Promise<void> {
+    if (this._internalRun) return;
+
+    const activeTools = new Set(
+      (this.agent.state.tools ?? []).map((tool) => tool.name.toLowerCase()),
+    );
+    const webSearchAvailable = activeTools.has("web_search");
+    const webFetchAvailable = activeTools.has("web_fetch");
+
+    const currentTurnExecutions = this.currentRunToolExecutions.slice(
+      toolExecutionStartIndex,
+    );
+    const usage = summarizeWebToolUsage(currentTurnExecutions);
+
+    if (
+      !shouldEnforceWebFetchAfterSearch({
+        usage,
+        webSearchAvailable,
+        webFetchAvailable,
+      })
+    ) {
+      return;
+    }
+
+    this.runLog.log("web_search_fetch_guard", {
+      search_calls: usage.searchCalls,
+      search_success: usage.searchSuccess,
+      search_with_results: usage.searchSuccessWithResults,
+      fetch_calls: usage.fetchCalls,
+      fetch_success: usage.fetchSuccess,
+    });
+
+    try {
+      await this.agent.prompt(WEB_SEARCH_FETCH_ENFORCEMENT_PROMPT);
+      this.runLog.log("web_search_fetch_guard_applied", {
+        search_with_results: usage.searchSuccessWithResults,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.runLog.log("web_search_fetch_guard_failed", {
+        error: message.slice(0, 200),
+      });
+      if (this.debug) {
+        this.stderr.write(`[web-guard] Failed to enforce search->fetch: ${message}\n`);
+      }
+    }
+  }
+
   private handleRunLogEvent(event: AgentEvent) {
     if (event.type === "tool_execution_start") {
       const toolName = (event as any).toolName ?? "unknown";
@@ -800,11 +870,18 @@ export class Agent {
       const resultText = extractRunLogResultText(result);
       const resultChars = resultText?.length ?? 0;
       const details = extractRunLogResultDetails(result);
+      const isError = Boolean((event as any).isError ?? false);
+
+      this.currentRunToolExecutions.push({
+        toolName,
+        isError,
+        details,
+      });
 
       const toolEndData: Record<string, unknown> = {
         tool: toolName,
         duration_ms,
-        is_error: (event as any).isError ?? false,
+        is_error: isError,
         result_chars: resultChars,
         result_summary: formatRunLogToolSummary(toolName, details),
       };

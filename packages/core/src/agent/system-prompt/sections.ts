@@ -364,14 +364,12 @@ export function buildConditionalToolSections(
       "## Web Access",
       "You have web access. Use it when the user asks about current events, needs up-to-date information, or requests content from URLs.",
       "Prefer web_search for discovery and web_fetch for specific URLs.",
-      "Web usage is conditional, not mandatory: call web tools when they materially improve evidence quality.",
+      "When web_search is used, treat snippets as incomplete previews rather than final evidence.",
       "",
       "### Search-then-Fetch",
-      "After web_search, evaluate whether the snippets contain enough detail to answer accurately.",
-      "If not, use web_fetch on the 1-3 most relevant URLs to get full content before answering.",
-      "Always fetch when the user asks for detailed explanations, comparisons, or analysis;",
-      "when snippets are vague or contradictory; or when the question requires specific data points.",
-      "Skip fetch when the answer is a simple fact clearly stated in the snippet or the user only wants a quick overview.",
+      "After every successful web_search, you MUST call web_fetch on 1-3 relevant URLs before detailed reasoning or factual claims.",
+      "Use fetched page content (not snippets) as the primary evidence for analysis and synthesis.",
+      "If all fetch attempts fail, explicitly report that limitation and avoid specific claims derived only from snippets.",
       "",
     );
   }
