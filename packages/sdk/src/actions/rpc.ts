@@ -187,6 +187,8 @@ export interface VerifyParams {
 export interface VerifyResult {
   hubId: string;
   agentId: string;
-  /** Main conversation for this agent. Defaults to agentId in legacy mode. */
+  /** Authorized conversation scope for this device. */
+  conversationId?: string;
+  /** Backward-compatible alias for conversationId. */
   mainConversationId?: string;
 }

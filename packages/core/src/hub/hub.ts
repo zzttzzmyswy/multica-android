@@ -103,7 +103,9 @@ export class Hub {
   private heartbeatUnsubscribe: (() => void) | null = null;
   private client: GatewayClient;
   readonly deviceStore: DeviceStore;
-  private _onConfirmDevice: ((deviceId: string, agentId: string, meta?: DeviceMeta) => Promise<boolean>) | null = null;
+  private _onConfirmDevice: (
+    (deviceId: string, agentId: string, conversationId: string, meta?: DeviceMeta) => Promise<boolean>
+  ) | null = null;
   private _stateChangeListeners: ((state: ConnectionState) => void)[] = [];
   readonly channelManager: ChannelManager;
   url: string;
@@ -126,12 +128,12 @@ export class Hub {
       hubId: this.hubId,
       deviceStore: this.deviceStore,
       resolveMainConversationId: (agentId) => this.getAgentMainConversationId(agentId),
-      onConfirmDevice: (deviceId, agentId, meta) => {
+      onConfirmDevice: (deviceId, agentId, conversationId, meta) => {
         if (!this._onConfirmDevice) {
           // No UI confirm handler registered (CLI mode etc.) — auto-approve
           return Promise.resolve(true);
         }
-        return this._onConfirmDevice(deviceId, agentId, meta);
+        return this._onConfirmDevice(deviceId, agentId, conversationId, meta);
       },
     }));
     this.rpc.register("generateChannelWelcome", createGenerateChannelWelcomeHandler(this));
@@ -413,6 +415,7 @@ export class Hub {
       }
 
       // Non-RPC messages also require verified device
+      const payload = msg.payload as { agentId?: string; conversationId?: string; content?: string } | undefined;
       if (!this.deviceStore.isAllowed(msg.from)) {
         console.warn(`[Hub] Rejected message from unverified device: ${msg.from}`);
         this.client.send(msg.from, "error", {
@@ -422,9 +425,6 @@ export class Hub {
         });
         return;
       }
-
-      // Regular chat message
-      const payload = msg.payload as { agentId?: string; conversationId?: string; content?: string } | undefined;
       const incomingAgentId = payload?.agentId;
       const conversationId = this.resolveConversationId(incomingAgentId, payload?.conversationId);
       const agentId = this.resolveAgentId(incomingAgentId, conversationId);
@@ -433,6 +433,30 @@ export class Hub {
         console.warn(`[Hub] Invalid payload, missing agentId or content`);
         return;
       }
+
+      const allowedScope = this.deviceStore.isAllowed(msg.from, conversationId);
+      if (!allowedScope) {
+        console.warn(`[Hub] Rejected message outside authorized conversation scope: ${msg.from} -> ${conversationId}`);
+        this.client.send(msg.from, "error", {
+          code: "UNAUTHORIZED",
+          message: "Device is not authorized for this conversation.",
+          messageId: msg.id,
+        });
+        return;
+      }
+
+      if (allowedScope.agentId !== agentId) {
+        console.warn(
+          `[Hub] Rejected message due to agent mismatch: device=${msg.from}, allowedAgent=${allowedScope.agentId}, targetAgent=${agentId}`,
+        );
+        this.client.send(msg.from, "error", {
+          code: "UNAUTHORIZED",
+          message: "Device is not authorized for this agent.",
+          messageId: msg.id,
+        });
+        return;
+      }
+
       const agent = this.agents.get(conversationId);
       if (agent && !agent.closed) {
         this.agentSenders.set(conversationId, msg.from);
@@ -459,7 +483,11 @@ export class Hub {
   }
 
   /** Register a confirmation handler for new device connections (called by Desktop UI) */
-  setConfirmHandler(handler: ((deviceId: string, agentId: string, meta?: DeviceMeta) => Promise<boolean>) | null): void {
+  setConfirmHandler(
+    handler: (
+      (deviceId: string, agentId: string, conversationId: string, meta?: DeviceMeta) => Promise<boolean>
+    ) | null,
+  ): void {
     this._onConfirmDevice = handler;
   }
 
@@ -488,11 +516,21 @@ export class Hub {
   }
 
   /** Register a one-time token for device verification (called when QR code is generated) */
-  registerToken(token: string, agentId: string, expiresAt: number): void {
+  registerToken(token: string, agentId: string, conversationId: string, expiresAt: number): void {
     const normalizedAgentId = this.normalizeId(agentId);
-    if (!normalizedAgentId) return;
-    const resolvedAgentId = this.conversationAgents.get(normalizedAgentId) ?? normalizedAgentId;
-    this.deviceStore.registerToken(token, resolvedAgentId, expiresAt);
+    const normalizedConversationId = this.normalizeId(conversationId);
+    if (!normalizedAgentId || !normalizedConversationId) return;
+
+    const resolvedConversationId = this.resolveConversationId(normalizedAgentId, normalizedConversationId);
+    const ownerAgentId = this.conversationAgents.get(resolvedConversationId);
+    if (ownerAgentId && ownerAgentId !== normalizedAgentId) {
+      console.warn(
+        `[Hub] registerToken rejected due to agent/conversation mismatch: agent=${normalizedAgentId}, conversation=${resolvedConversationId}, owner=${ownerAgentId}`,
+      );
+      return;
+    }
+    const resolvedAgentId = ownerAgentId ?? normalizedAgentId;
+    this.deviceStore.registerToken(token, resolvedAgentId, resolvedConversationId, expiresAt);
   }
 
   /** 重连到新的 Gateway 地址 */
@@ -777,6 +815,12 @@ export class Hub {
     const { requestId, method } = request;
     try {
       const result = await this.rpc.dispatch(method, request.params, from);
+      if (method === "createConversation") {
+        const createdConversationId = (result as { id?: unknown }).id;
+        if (typeof createdConversationId === "string" && createdConversationId) {
+          this.deviceStore.allowConversation(from, createdConversationId);
+        }
+      }
       this.client.send<ResponseSuccessPayload>(from, ResponseAction, {
         requestId,
         ok: true,

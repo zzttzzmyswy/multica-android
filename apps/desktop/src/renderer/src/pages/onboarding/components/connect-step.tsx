@@ -25,6 +25,8 @@ interface DeviceMeta {
 
 interface PendingConfirm {
   deviceId: string
+  agentId: string
+  conversationId: string
   meta?: DeviceMeta
 }
 
@@ -42,9 +44,11 @@ export default function ConnectStep({ onNext, onBack }: ConnectStepProps) {
 
   // Listen for device confirm requests during onboarding
   useEffect(() => {
-    window.electronAPI?.hub.onDeviceConfirmRequest((deviceId: string, meta?: DeviceMeta) => {
-      setPending({ deviceId, meta })
-    })
+    window.electronAPI?.hub.onDeviceConfirmRequest(
+      (deviceId: string, agentId: string, conversationId: string, meta?: DeviceMeta) => {
+        setPending({ deviceId, agentId, conversationId, meta })
+      },
+    )
     return () => {
       window.electronAPI?.hub.offDeviceConfirmRequest()
     }

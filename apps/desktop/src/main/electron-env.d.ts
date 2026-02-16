@@ -74,11 +74,13 @@ interface DeviceMeta {
   userAgent?: string
   platform?: string
   language?: string
+  clientName?: string
 }
 
 interface DeviceEntryInfo {
   deviceId: string
   agentId: string
+  conversationIds: string[]
   addedAt: number
   meta?: DeviceMeta
 }
@@ -188,8 +190,8 @@ interface ElectronAPI {
     closeAgent: (id: string) => Promise<unknown>
     closeConversation: (id: string) => Promise<unknown>
     sendMessage: (agentId: string, content: string, conversationId?: string) => Promise<unknown>
-    registerToken: (token: string, agentId: string, expiresAt: number) => Promise<unknown>
-    onDeviceConfirmRequest: (callback: (deviceId: string, meta?: DeviceMeta) => void) => void
+    registerToken: (token: string, agentId: string, conversationId: string, expiresAt: number) => Promise<unknown>
+    onDeviceConfirmRequest: (callback: (deviceId: string, agentId: string, conversationId: string, meta?: DeviceMeta) => void) => void
     offDeviceConfirmRequest: () => void
     deviceConfirmResponse: (deviceId: string, allowed: boolean) => void
     listDevices: () => Promise<DeviceEntryInfo[]>

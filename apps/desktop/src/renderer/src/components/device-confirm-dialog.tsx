@@ -20,6 +20,8 @@ interface DeviceMeta {
 
 interface PendingConfirm {
   deviceId: string
+  agentId: string
+  conversationId: string
   meta?: DeviceMeta
 }
 
@@ -32,9 +34,11 @@ export function DeviceConfirmDialog() {
   const [pending, setPending] = useState<PendingConfirm | null>(null)
 
   useEffect(() => {
-    window.electronAPI?.hub.onDeviceConfirmRequest((deviceId: string, meta?: DeviceMeta) => {
-      setPending({ deviceId, meta })
-    })
+    window.electronAPI?.hub.onDeviceConfirmRequest(
+      (deviceId: string, agentId: string, conversationId: string, meta?: DeviceMeta) => {
+        setPending({ deviceId, agentId, conversationId, meta })
+      },
+    )
     return () => {
       window.electronAPI?.hub.offDeviceConfirmRequest()
     }

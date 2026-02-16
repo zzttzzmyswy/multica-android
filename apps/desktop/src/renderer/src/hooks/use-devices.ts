@@ -14,6 +14,7 @@ export interface DeviceMeta {
 export interface DeviceEntry {
   deviceId: string
   agentId: string
+  conversationIds: string[]
   addedAt: number
   meta?: DeviceMeta
 }

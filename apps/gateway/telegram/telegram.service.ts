@@ -1319,7 +1319,11 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
           ? `Telegram @${msg.from.username}`
           : `Telegram ${msg?.from?.first_name ?? telegramUserId}`,
       });
-      const mainConversationId = connectionInfo.conversationId ?? result.mainConversationId ?? result.agentId;
+      const mainConversationId =
+        connectionInfo.conversationId
+        ?? result.conversationId
+        ?? result.mainConversationId
+        ?? result.agentId;
 
       // 5. Save to DB
       await this.userStore.upsert({

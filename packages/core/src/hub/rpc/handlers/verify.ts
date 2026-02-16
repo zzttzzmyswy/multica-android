@@ -7,7 +7,12 @@ interface VerifyContext {
   deviceStore: DeviceStore;
   resolveMainConversationId?: (agentId: string) => string | undefined;
   /** Called for first-time connections. Returns true if user approves, false if rejected. */
-  onConfirmDevice: (deviceId: string, agentId: string, meta?: DeviceMeta) => Promise<boolean>;
+  onConfirmDevice: (
+    deviceId: string,
+    agentId: string,
+    conversationId: string,
+    meta?: DeviceMeta,
+  ) => Promise<boolean>;
 }
 
 interface VerifyParams {
@@ -22,11 +27,18 @@ export function createVerifyHandler(ctx: VerifyContext): RpcHandler {
     // 1. Already in whitelist → pass through (reconnection, no confirmation needed)
     const allowed = ctx.deviceStore.isAllowed(from);
     if (allowed) {
-      const mainConversationId = ctx.resolveMainConversationId?.(allowed.agentId) ?? allowed.agentId;
+      const preferredConversationId = allowed.conversationIds[0];
+      const mainConversationId = ctx.resolveMainConversationId?.(allowed.agentId)
+        ?? preferredConversationId
+        ?? allowed.agentId;
+      const conversationId = allowed.conversationIds.includes(mainConversationId)
+        ? mainConversationId
+        : preferredConversationId ?? mainConversationId;
       return {
         hubId: ctx.hubId,
         agentId: allowed.agentId,
-        mainConversationId,
+        conversationId,
+        mainConversationId: conversationId,
         isNewDevice: false,
       };
     }
@@ -42,17 +54,18 @@ export function createVerifyHandler(ctx: VerifyContext): RpcHandler {
     }
 
     // 3. Token valid → await Desktop user confirmation
-    const confirmed = await ctx.onConfirmDevice(from, result.agentId, meta);
+    const confirmed = await ctx.onConfirmDevice(from, result.agentId, result.conversationId, meta);
     if (!confirmed) {
       throw new RpcError("REJECTED", "Connection rejected by user");
     }
 
     // 4. User confirmed → add to whitelist (with device metadata)
-    ctx.deviceStore.allowDevice(from, result.agentId, meta);
-    const mainConversationId = ctx.resolveMainConversationId?.(result.agentId) ?? result.agentId;
+    ctx.deviceStore.allowDevice(from, result.agentId, result.conversationId, meta);
+    const mainConversationId = ctx.resolveMainConversationId?.(result.agentId) ?? result.conversationId;
     return {
       hubId: ctx.hubId,
       agentId: result.agentId,
+      conversationId: mainConversationId,
       mainConversationId,
       isNewDevice: true,
     };

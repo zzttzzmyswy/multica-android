@@ -11,7 +11,7 @@ function generateToken(): string {
  * - Auto-refreshes when expired
  * - Registers token with Hub
  */
-export function useQRToken(agentId: string, expirySeconds: number) {
+export function useQRToken(agentId: string, conversationId: string, expirySeconds: number) {
   const [token, setToken] = useState(generateToken)
   const [expiresAt, setExpiresAt] = useState(() => Date.now() + expirySeconds * 1000)
 
@@ -20,12 +20,12 @@ export function useQRToken(agentId: string, expirySeconds: number) {
     const newExpiry = Date.now() + expirySeconds * 1000
     setToken(newToken)
     setExpiresAt(newExpiry)
-    window.electronAPI?.hub.registerToken(newToken, agentId, newExpiry)
-  }, [agentId, expirySeconds])
+    window.electronAPI?.hub.registerToken(newToken, agentId, conversationId, newExpiry)
+  }, [agentId, conversationId, expirySeconds])
 
   // Register initial token
   useEffect(() => {
-    window.electronAPI?.hub.registerToken(token, agentId, expiresAt)
+    window.electronAPI?.hub.registerToken(token, agentId, conversationId, expiresAt)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return { token, expiresAt, refresh }

@@ -170,10 +170,26 @@ const electronAPI = {
     closeConversation: (id: string) => ipcRenderer.invoke('hub:closeConversation', id),
     sendMessage: (agentId: string, content: string, conversationId?: string) =>
       ipcRenderer.invoke('hub:sendMessage', agentId, content, conversationId),
-    registerToken: (token: string, agentId: string, expiresAt: number) =>
-      ipcRenderer.invoke('hub:registerToken', token, agentId, expiresAt),
-    onDeviceConfirmRequest: (callback: (deviceId: string, meta?: { userAgent?: string; platform?: string; language?: string }) => void) => {
-      ipcRenderer.on('hub:device-confirm-request', (_event, deviceId: string, meta?: { userAgent?: string; platform?: string; language?: string }) => callback(deviceId, meta))
+    registerToken: (token: string, agentId: string, conversationId: string, expiresAt: number) =>
+      ipcRenderer.invoke('hub:registerToken', token, agentId, conversationId, expiresAt),
+    onDeviceConfirmRequest: (
+      callback: (
+        deviceId: string,
+        agentId: string,
+        conversationId: string,
+        meta?: { userAgent?: string; platform?: string; language?: string; clientName?: string },
+      ) => void,
+    ) => {
+      ipcRenderer.on(
+        'hub:device-confirm-request',
+        (
+          _event,
+          deviceId: string,
+          agentId: string,
+          conversationId: string,
+          meta?: { userAgent?: string; platform?: string; language?: string; clientName?: string },
+        ) => callback(deviceId, agentId, conversationId, meta),
+      )
     },
     offDeviceConfirmRequest: () => {
       ipcRenderer.removeAllListeners('hub:device-confirm-request')

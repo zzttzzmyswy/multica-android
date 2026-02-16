@@ -501,11 +501,14 @@ export function registerHubIpcHandlers(): void {
    * Register a one-time token for device verification.
    * Called by the QR code component when a token is generated or refreshed.
    */
-  ipcMain.handle('hub:registerToken', async (_event, token: string, agentId: string, expiresAt: number) => {
+  ipcMain.handle(
+    'hub:registerToken',
+    async (_event, token: string, agentId: string, conversationId: string, expiresAt: number) => {
     const h = getHub()
-    h.registerToken(token, agentId, expiresAt)
+    h.registerToken(token, agentId, conversationId, expiresAt)
     return { ok: true }
-  })
+    },
+  )
 
   /**
    * List all verified (whitelisted) devices.
@@ -551,7 +554,7 @@ export function setupDeviceConfirmation(mainWindow: Electron.BrowserWindow): voi
   })
 
   // Register confirm handler on Hub — sends request to renderer, awaits response
-  h.setConfirmHandler((deviceId: string, _agentId: string, meta) => {
+  h.setConfirmHandler((deviceId: string, agentId: string, conversationId: string, meta) => {
     return new Promise<boolean>((resolve) => {
       // Auto-reject if user doesn't respond within 60 seconds
       const timeout = setTimeout(() => {
@@ -566,7 +569,7 @@ export function setupDeviceConfirmation(mainWindow: Electron.BrowserWindow): voi
           mainWindow.webContents.send('hub:devices-changed')
         }
       })
-      mainWindow.webContents.send('hub:device-confirm-request', deviceId, meta)
+      mainWindow.webContents.send('hub:device-confirm-request', deviceId, agentId, conversationId, meta)
     })
   })
 
