@@ -103,6 +103,11 @@ export interface ListAgentsResult {
   agents: { id: string; closed: boolean }[];
 }
 
+/** listConversations - no params needed (conversation-first alias of listAgents) */
+export interface ListConversationsResult {
+  conversations: { id: string; closed: boolean }[];
+}
+
 /** createAgent - request params */
 export interface CreateAgentParams {
   id?: string;
@@ -113,6 +118,16 @@ export interface CreateAgentResult {
   id: string;
 }
 
+/** createConversation - request params (conversation-first alias of createAgent) */
+export interface CreateConversationParams {
+  id?: string;
+}
+
+/** createConversation - response payload */
+export interface CreateConversationResult {
+  id: string;
+}
+
 /** deleteAgent - request params */
 export interface DeleteAgentParams {
   id: string;
@@ -120,6 +135,16 @@ export interface DeleteAgentParams {
 
 /** deleteAgent - response payload */
 export interface DeleteAgentResult {
+  ok: boolean;
+}
+
+/** deleteConversation - request params (conversation-first alias of deleteAgent) */
+export interface DeleteConversationParams {
+  id: string;
+}
+
+/** deleteConversation - response payload */
+export interface DeleteConversationResult {
   ok: boolean;
 }
 
