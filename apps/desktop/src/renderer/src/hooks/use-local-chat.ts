@@ -79,7 +79,21 @@ export function useLocalChat() {
 
       chatRef.current.handleStream(payload)
       if (payload.event.type === 'message_start') setIsLoading(true)
-      if (payload.event.type === 'message_end') setIsLoading(false)
+      if (payload.event.type === 'tool_execution_start') setIsLoading(true)
+      if (payload.event.type === 'message_end') {
+        const stopReason =
+          'message' in payload.event
+            ? (payload.event.message as { stopReason?: string } | undefined)?.stopReason
+            : undefined
+
+        // message_end with stopReason=toolUse is an intermediate step in the same run.
+        // Keep loading=true so queued user messages are not dispatched mid-run.
+        if (stopReason === 'toolUse') {
+          setIsLoading(true)
+        } else {
+          setIsLoading(false)
+        }
+      }
     })
 
     // Listen for exec approval requests
