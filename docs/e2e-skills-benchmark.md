@@ -7,7 +7,7 @@ This benchmark validates the meta skill workflow for capability-gap discovery, C
 - Domain: skill discovery + installation + update
 - Focus: `skills/meta-skill-installer`
 - Providers: default `kimi-coding` (override with `PROVIDERS`)
-- Cases: 4
+- Cases: 5
 
 Case prompts are stored in:
 - `scripts/e2e-skills-benchmark/cases/`
@@ -20,6 +20,7 @@ The case set references real public pages from ClawHub:
 - [Home Assistant](https://clawhub.ai/skills/homeassistant)
 - [CodexMonitor](https://clawhub.ai/odrobnik/codexmonitor)
 - [Spotify (gap-discovery UX flow)](https://clawhub.ai/search?q=spotify)
+- [Notion (gap-discovery UX flow)](https://clawhub.ai/search?q=notion)
 
 ## Prerequisites
 
@@ -87,7 +88,8 @@ For each run:
    - `clawhub install`
    - `review-skill-security.mjs`
    - for case 03 also `clawhub update`
-   - for case 04, final response must include ClawHub + install confirmation language, and must not run `clawhub install/update` before confirmation
+   - for case 04, prompt is a natural user request only; agent must self-discover capability gap, propose ClawHub + security review + install confirmation, and must not run workaround commands (`osascript`, `ha.sh`, `spogo`, `spotify_player`) before user confirmation
+   - for case 05, prompt is a natural Notion request; agent must discover missing capability, search skill candidates, trigger `install_guard` (blocked until confirmation), and ask for explicit install consent plus token/auth prerequisites
 
 ## Notes
 

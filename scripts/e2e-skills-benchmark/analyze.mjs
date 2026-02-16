@@ -66,6 +66,7 @@ const CASE_RULES = {
   "case-04-gap-discovery-spotify-ux": {
     requireExecUsage: false,
     requiredResponseRegex: [
+      "缺少|没有.*(技能|能力|集成)|capability gap",
       "clawhub|cloud\\s*hub|cloudhub",
       "安装|install",
       "是否|要不要|would you like|do you want",
@@ -74,6 +75,34 @@ const CASE_RULES = {
     forbiddenCommandTokens: [
       ["clawhub", "install"],
       ["clawhub", "update"],
+      ["osascript"],
+      ["spogo"],
+      ["spotify_player"],
+      ["ha.sh"],
+      ["/api/states"],
+    ],
+  },
+  "case-05-gap-discovery-notion-ux": {
+    requireExecUsage: false,
+    requiredCommandTokens: [
+      ["clawhub", "search"],
+      ["notion"],
+    ],
+    requiredEventTokens: [
+      ["install_guard", "blocked"],
+    ],
+    requiredResponseRegex: [
+      "notion",
+      "安装|install",
+      "是否|要不要|would you like|do you want|同意",
+      "token|授权|integration",
+    ],
+    forbiddenCommandTokens: [
+      ["osascript"],
+      ["spogo"],
+      ["spotify_player"],
+      ["ha.sh"],
+      ["/api/states"],
     ],
   },
 };
@@ -319,6 +348,22 @@ for (let i = 1; i < rows.length; i++) {
           analysis,
           `cmd-${r + 1}`,
           `exec command contains tokens: ${tokenList.join(" + ")}`,
+          passed,
+        );
+      }
+    }
+
+    if (Array.isArray(rules.requiredEventTokens)) {
+      const eventLines = events.map((event) => JSON.stringify(event).toLowerCase());
+      for (let r = 0; r < rules.requiredEventTokens.length; r++) {
+        const tokenList = rules.requiredEventTokens[r];
+        const passed = eventLines.some((line) =>
+          tokenList.every((token) => line.includes(token.toLowerCase())),
+        );
+        addCheck(
+          analysis,
+          `event-${r + 1}`,
+          `event log contains tokens: ${tokenList.join(" + ")}`,
           passed,
         );
       }
