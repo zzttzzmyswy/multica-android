@@ -218,6 +218,15 @@ describe("buildSkillsSection", () => {
     expect(text).toContain("suggest activating it");
   });
 
+  it("includes capability-gap recovery guidance", () => {
+    const result = buildSkillsSection("## commit\nDo commits.", "full");
+    const text = result.join("\n");
+    expect(text).toContain("capability gap");
+    expect(text).toContain("meta-skill-installer");
+    expect(text).toContain("explicit user confirmation");
+    expect(text).toContain("clawhub install");
+  });
+
   it("returns empty in minimal mode", () => {
     expect(buildSkillsSection("skills", "minimal")).toEqual([]);
   });
