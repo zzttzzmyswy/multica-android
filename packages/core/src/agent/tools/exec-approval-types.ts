@@ -24,8 +24,8 @@ export interface ExecApprovalRequest {
   approvalId: string;
   /** Agent that initiated the command */
   agentId: string;
-  /** Optional conversation ID. Falls back to agentId in legacy mode. */
-  conversationId?: string;
+  /** Conversation ID that initiated the command. */
+  conversationId: string;
   /** Shell command to execute */
   command: string;
   /** Working directory */

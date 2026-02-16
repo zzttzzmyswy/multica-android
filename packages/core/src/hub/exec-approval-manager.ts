@@ -42,7 +42,7 @@ export class ExecApprovalManager {
    */
   requestApproval(params: {
     agentId: string;
-    conversationId?: string;
+    conversationId: string;
     command: string;
     cwd?: string;
     riskLevel: "safe" | "needs-review" | "dangerous";
@@ -54,7 +54,7 @@ export class ExecApprovalManager {
     const approvalId = uuidv7();
     const timeoutMs = params.timeoutMs ?? this.defaultTimeoutMs;
     const expiresAtMs = timeoutMs >= 0 ? Date.now() + timeoutMs : -1;
-    const conversationId = params.conversationId ?? params.agentId;
+    const conversationId = params.conversationId;
 
     const request: ExecApprovalRequest = {
       approvalId,
@@ -124,8 +124,7 @@ export class ExecApprovalManager {
    */
   cancelPending(agentId: string): void {
     for (const [id, entry] of this.pending) {
-      const requestConversationId = entry.request.conversationId ?? entry.request.agentId;
-      if (entry.request.agentId === agentId || requestConversationId === agentId) {
+      if (entry.request.agentId === agentId || entry.request.conversationId === agentId) {
         if (entry.timer) clearTimeout(entry.timer);
         this.pending.delete(id);
         entry.resolve({ approved: false, decision: "deny" });

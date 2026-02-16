@@ -73,14 +73,16 @@ export type MessageSource =
 /** Inbound message event broadcast to all listeners */
 export interface InboundMessageEvent {
   agentId: string;
-  /** Optional conversation ID. Falls back to agentId in legacy mode. */
-  conversationId?: string;
+  /** Conversation ID for this inbound message. */
+  conversationId: string;
   content: string;
   source: MessageSource;
   timestamp: number;
 }
 
 export class Hub {
+  private readonly allowLegacyAgentConversationFallback = process.env.MULTICA_ALLOW_LEGACY_AGENT_FALLBACK === "1";
+  private readonly warnedConversationFallbackAgents = new Set<string>();
   // Runtime conversation map (conversationId -> AsyncAgent).
   private readonly agents = new Map<string, AsyncAgent>();
   // Conversation ownership map (conversationId -> logical agentId).
@@ -138,7 +140,12 @@ export class Hub {
     }));
     this.rpc.register("generateChannelWelcome", createGenerateChannelWelcomeHandler(this));
     this.rpc.register("getAgentMessages", createGetAgentMessagesHandler((agentId, conversationId) => {
-      return this.resolveConversationId(agentId, conversationId);
+      const resolvedConversationId = this.resolveConversationId(agentId, conversationId);
+      if (!resolvedConversationId) return null;
+      return {
+        conversationId: resolvedConversationId,
+        storageAgentId: this.getConversationAgentId(resolvedConversationId) ?? this.normalizeId(agentId),
+      };
     }));
     this.rpc.register("getHubInfo", createGetHubInfoHandler(this));
     this.rpc.register("listAgents", createListAgentsHandler(this));
@@ -433,6 +440,14 @@ export class Hub {
         console.warn(`[Hub] Invalid payload, missing agentId or content`);
         return;
       }
+      if (!conversationId) {
+        this.client.send(msg.from, "error", {
+          code: "INVALID_PARAMS",
+          message: "Unable to resolve conversationId. Please provide a valid conversationId.",
+          messageId: msg.id,
+        });
+        return;
+      }
 
       const allowedScope = this.deviceStore.isAllowed(msg.from, conversationId);
       if (!allowedScope) {
@@ -668,8 +683,24 @@ export class Hub {
     const mainConversationId = this.resolveAgentMainConversationId(normalizedAgentId);
     if (mainConversationId) return mainConversationId;
 
-    // Legacy fallback: treat agentId as conversationId when no mapping exists yet.
-    return normalizedAgentId;
+    if (this.allowLegacyAgentConversationFallback) {
+      if (!this.warnedConversationFallbackAgents.has(normalizedAgentId)) {
+        this.warnedConversationFallbackAgents.add(normalizedAgentId);
+        console.warn(
+          `[Hub] Legacy fallback enabled: using agentId as conversationId for ${normalizedAgentId}. ` +
+          "Set explicit conversationId in clients to avoid this deprecated path.",
+        );
+      }
+      return normalizedAgentId;
+    }
+
+    if (!this.warnedConversationFallbackAgents.has(normalizedAgentId)) {
+      this.warnedConversationFallbackAgents.add(normalizedAgentId);
+      console.warn(
+        `[Hub] Conversation resolution failed for agent ${normalizedAgentId}: no main conversation found and legacy fallback is disabled.`,
+      );
+    }
+    return "";
   }
 
   private beginStream(agentId: string, event: unknown): string {

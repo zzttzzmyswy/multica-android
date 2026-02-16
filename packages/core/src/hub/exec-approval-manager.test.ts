@@ -18,6 +18,7 @@ describe("ExecApprovalManager", () => {
   it("sends approval request to client and resolves on decision", async () => {
     const promise = manager.requestApproval({
       agentId: "agent-1",
+      conversationId: "agent-1",
       command: "rm -rf /tmp/test",
       cwd: "/workspace",
       riskLevel: "dangerous",
@@ -43,6 +44,7 @@ describe("ExecApprovalManager", () => {
   it("resolves with deny when decision is deny", async () => {
     const promise = manager.requestApproval({
       agentId: "agent-1",
+      conversationId: "agent-1",
       command: "sudo reboot",
       riskLevel: "dangerous",
       riskReasons: [],
@@ -59,6 +61,7 @@ describe("ExecApprovalManager", () => {
   it("resolves with allow-always", async () => {
     const promise = manager.requestApproval({
       agentId: "agent-1",
+      conversationId: "agent-1",
       command: "git push",
       riskLevel: "needs-review",
       riskReasons: [],
@@ -75,6 +78,7 @@ describe("ExecApprovalManager", () => {
   it("auto-denies on timeout (fail-closed)", async () => {
     const promise = manager.requestApproval({
       agentId: "agent-1",
+      conversationId: "agent-1",
       command: "dangerous-command",
       riskLevel: "dangerous",
       riskReasons: [],
@@ -91,6 +95,7 @@ describe("ExecApprovalManager", () => {
   it("keeps approval pending indefinitely when timeoutMs is -1", async () => {
     const promise = manager.requestApproval({
       agentId: "agent-1",
+      conversationId: "agent-1",
       command: "cmd",
       riskLevel: "needs-review",
       riskReasons: [],
@@ -112,6 +117,7 @@ describe("ExecApprovalManager", () => {
   it("honors askFallback full on timeout", async () => {
     const promise = manager.requestApproval({
       agentId: "agent-1",
+      conversationId: "agent-1",
       command: "cmd",
       riskLevel: "needs-review",
       riskReasons: [],
@@ -128,6 +134,7 @@ describe("ExecApprovalManager", () => {
   it("honors askFallback allowlist on timeout", async () => {
     const allowPromise = manager.requestApproval({
       agentId: "agent-1",
+      conversationId: "agent-1",
       command: "cmd",
       riskLevel: "needs-review",
       riskReasons: [],
@@ -143,6 +150,7 @@ describe("ExecApprovalManager", () => {
 
     const denyPromise = manager.requestApproval({
       agentId: "agent-1",
+      conversationId: "agent-1",
       command: "cmd",
       riskLevel: "needs-review",
       riskReasons: [],
@@ -165,6 +173,7 @@ describe("ExecApprovalManager", () => {
   it("returns false when resolving already-resolved approval", async () => {
     const promise = manager.requestApproval({
       agentId: "agent-1",
+      conversationId: "agent-1",
       command: "cmd",
       riskLevel: "needs-review",
       riskReasons: [],
@@ -183,6 +192,7 @@ describe("ExecApprovalManager", () => {
   it("cancels all pending approvals for an agent", async () => {
     const promise1 = manager.requestApproval({
       agentId: "agent-1",
+      conversationId: "agent-1",
       command: "cmd1",
       riskLevel: "needs-review",
       riskReasons: [],
@@ -190,6 +200,7 @@ describe("ExecApprovalManager", () => {
 
     const promise2 = manager.requestApproval({
       agentId: "agent-1",
+      conversationId: "agent-1",
       command: "cmd2",
       riskLevel: "needs-review",
       riskReasons: [],
@@ -197,6 +208,7 @@ describe("ExecApprovalManager", () => {
 
     const promise3 = manager.requestApproval({
       agentId: "agent-2",
+      conversationId: "agent-2",
       command: "cmd3",
       riskLevel: "needs-review",
       riskReasons: [],
@@ -231,6 +243,7 @@ describe("ExecApprovalManager", () => {
 
     const result = await failManager.requestApproval({
       agentId: "agent-1",
+      conversationId: "agent-1",
       command: "cmd",
       riskLevel: "needs-review",
       riskReasons: [],
@@ -243,6 +256,7 @@ describe("ExecApprovalManager", () => {
   it("getSnapshot returns request details", () => {
     manager.requestApproval({
       agentId: "agent-1",
+      conversationId: "agent-1",
       command: "ls",
       riskLevel: "safe",
       riskReasons: [],
@@ -265,6 +279,7 @@ describe("ExecApprovalManager", () => {
 
     manager.requestApproval({
       agentId: "agent-1",
+      conversationId: "agent-1",
       command: "cmd1",
       riskLevel: "needs-review",
       riskReasons: [],
@@ -273,6 +288,7 @@ describe("ExecApprovalManager", () => {
 
     manager.requestApproval({
       agentId: "agent-1",
+      conversationId: "agent-1",
       command: "cmd2",
       riskLevel: "needs-review",
       riskReasons: [],

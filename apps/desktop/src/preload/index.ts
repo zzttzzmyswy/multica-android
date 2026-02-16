@@ -90,7 +90,7 @@ export type MessageSource =
 
 export interface InboundMessageEvent {
   agentId: string
-  conversationId?: string
+  conversationId: string
   content: string
   source: MessageSource
   timestamp: number

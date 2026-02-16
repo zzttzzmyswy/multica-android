@@ -13,7 +13,12 @@ interface GetAgentMessagesParams {
   limit?: number;
 }
 
-type ConversationResolver = (agentId: string, conversationId?: string) => string;
+interface ResolvedConversation {
+  conversationId: string;
+  storageAgentId?: string;
+}
+
+type ConversationResolver = (agentId: string, conversationId?: string) => ResolvedConversation | null;
 
 export function createGetAgentMessagesHandler(resolveConversationId?: ConversationResolver): RpcHandler {
   return (params: unknown) => {
@@ -26,16 +31,28 @@ export function createGetAgentMessagesHandler(resolveConversationId?: Conversati
       throw new RpcError("INVALID_PARAMS", "Missing required param: agentId");
     }
     const fallbackConversationId = (conversationId ?? "").trim() || agentId;
-    const resolvedConversationId = resolveConversationId
+    const resolved = resolveConversationId
       ? resolveConversationId(agentId, conversationId)
-      : fallbackConversationId;
+      : { conversationId: fallbackConversationId };
 
-    const sessionPath = resolveSessionPath(resolvedConversationId);
+    const resolvedConversationId = resolved?.conversationId?.trim() ?? "";
+    if (!resolvedConversationId) {
+      throw new RpcError("INVALID_PARAMS", "Unable to resolve conversationId");
+    }
+
+    const storageOptions = resolved?.storageAgentId
+      ? { agentId: resolved.storageAgentId }
+      : undefined;
+
+    const sessionPath = resolveSessionPath(resolvedConversationId, storageOptions);
     if (!existsSync(sessionPath)) {
       throw new RpcError("AGENT_NOT_FOUND", `No session found for conversation: ${resolvedConversationId}`);
     }
 
-    const session = new SessionManager({ sessionId: resolvedConversationId });
+    const session = new SessionManager({
+      sessionId: resolvedConversationId,
+      ...(storageOptions ?? {}),
+    });
     const allMessages = session.loadMessagesForDisplay();
     const total = allMessages.length;
     const contextWindowTokens = session.getMeta()?.contextWindowTokens ?? session.getContextWindowTokens();

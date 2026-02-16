@@ -23,6 +23,16 @@ export interface HubStoreSnapshot {
 
 const AGENTS_DIR = join(DATA_DIR, "agents");
 const AGENTS_FILE = join(AGENTS_DIR, "agents.json");
+const warnedLegacyApis = new Set<string>();
+
+function warnLegacyApi(apiName: string): void {
+  if (warnedLegacyApis.has(apiName)) return;
+  warnedLegacyApis.add(apiName);
+  console.warn(
+    `[agent-store] Deprecated legacy API "${apiName}" was used. ` +
+    "Migrate callers to conversation-first APIs (loadHubStoreSnapshot/upsertConversationRecord).",
+  );
+}
 
 function ensureDir(): void {
   if (!existsSync(AGENTS_DIR)) {
@@ -230,10 +240,12 @@ export function removeConversationRecordById(conversationId: string): void {
 // Legacy compatibility wrappers
 // NOTE: In legacy mode, each agent record is treated as both agent and main conversation.
 export function loadAgentRecords(): AgentRecord[] {
+  warnLegacyApi("loadAgentRecords");
   return loadHubStoreSnapshot().agents;
 }
 
 export function saveAgentRecords(records: AgentRecord[]): void {
+  warnLegacyApi("saveAgentRecords");
   const agents = normalizeAgentRecords(records);
   const conversations = agents.map((record) => ({
     id: record.id,
@@ -249,6 +261,7 @@ export function saveAgentRecords(records: AgentRecord[]): void {
 }
 
 export function addAgentRecord(record: AgentRecord): void {
+  warnLegacyApi("addAgentRecord");
   upsertAgentRecord(record);
   upsertConversationRecord({
     id: record.id,
@@ -259,6 +272,7 @@ export function addAgentRecord(record: AgentRecord): void {
 }
 
 export function removeAgentRecord(id: string): void {
+  warnLegacyApi("removeAgentRecord");
   // Legacy API accepts either agent id or conversation id.
   const snapshot = loadHubStoreSnapshot();
   const conversation = snapshot.conversations.find((item) => item.id === id);
