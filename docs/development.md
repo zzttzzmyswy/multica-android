@@ -75,6 +75,12 @@ Telegram behavior:
 - `/session <id>` switches the active conversation.
 - `/sessions` lists available conversations.
 
+Channel route behavior:
+
+- Runtime route key is `channelId:accountId:externalConversationId`.
+- Each route key is bound to one Hub `conversationId`.
+- Incoming/outgoing channel traffic is isolated per bound conversation (no global first-agent fallback).
+
 ## Local Full-Stack Notes (`pnpm dev:local`)
 
 `pnpm dev:local` is the recommended way to run the full local stack for integration work.
