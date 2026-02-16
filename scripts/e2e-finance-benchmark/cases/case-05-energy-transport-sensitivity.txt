@@ -1,0 +1,17 @@
+Complete an "Energy Price Shock Sensitivity Analysis for Energy & Transport Sectors."
+
+Sample: XOM, CVX, COP, SLB, DAL, UAL, FDX, UPS.
+Time range: 2023-01-01 to 2025-12-31.
+
+Requirements:
+1. Summarize each company's sensitivity direction to oil/fuel costs and sources of operating leverage.
+2. Construct three oil price paths for 2026:
+   - Scenario A: WTI average $60
+   - Scenario B: WTI average $80
+   - Scenario C: WTI average $100
+3. Estimate directional changes in earnings and valuation for each company under different scenarios (ranges are acceptable over point estimates, but rationale must be provided).
+4. Generate an Excel file (.xlsx) with sheets: `raw_financials`, `oil_scenarios`, `sensitivity_map`, `trade_ideas`.
+5. Generate `hedge_plan.md` proposing at least 2 hedging or paired trade strategies, including conditions under which they would fail.
+6. Generate `sources.md`.
+
+Execution requirements: Conclusions must include "base position + hedge position + trigger thresholds."

@@ -1,0 +1,14 @@
+Perform a "US Consumer Sector & Macro Variable Linkage Analysis."
+
+Sample companies: WMT, COST, TGT, HD, LOW, MCD, SBUX, NKE, DIS, AMZN.
+Time range: 2023-01-01 to 2025-12-31.
+
+Requirements:
+1. Split companies into "consumer staples" and "consumer discretionary" groups; compare revenue growth, margins, inventory changes, same-store sales (if available), and cash flow quality.
+2. Analyze each group's earnings elasticity relative to macro variables (CPI, real wages, unemployment, interest rates).
+3. Build a "2026 three-scenario" earnings elasticity matrix: soft landing / reflation / recession.
+4. Generate an Excel file (.xlsx) with sheets: `company_metrics`, `macro_series`, `elasticity_matrix`, `portfolio_actions`.
+5. Generate `strategy_note.md` with 2026 sector allocation recommendations and rebalancing trigger conditions.
+6. Generate `sources.md`.
+
+Execution requirements: Each allocation recommendation must explicitly state the verifiable metrics behind it.

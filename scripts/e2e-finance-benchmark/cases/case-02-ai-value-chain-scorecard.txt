@@ -1,0 +1,14 @@
+Build an "AI Value Chain Fundamentals & Valuation Scorecard" project.
+
+Stock universe: NVDA, AMD, AVGO, MSFT, GOOGL, AMZN, META, TSM, ASML, ANET.
+Time range: 2023-01-01 to 2025-12-31 (fill gaps with most recent available data and flag accordingly).
+
+Requirements:
+1. Construct a 100-point scoring model with at least 6 dimensions: growth, profitability, capital efficiency, R&D intensity, cash flow quality, and valuation margin of safety.
+2. Provide weights and scoring logic for each dimension; must be reproducible.
+3. Generate an Excel file (.xlsx) with sheets: `input_data`, `factor_scores`, `weighted_rank`, `scenario_2026`.
+4. In `scenario_2026`, provide target ranges and trigger signals under three scenarios (optimistic / base / conservative).
+5. Produce `investment_memo.md` (including entry logic for the top 3 and avoidance logic for the bottom 3).
+6. Produce `sources.md` (source links + dates).
+
+Execution requirements: Plan before executing; conclude with a "reproducibility check" (can someone else reproduce your results following your steps).

@@ -1,0 +1,13 @@
+Complete a high-complexity investment research task:
+
+Objective: Analyze the top 10 US stocks by market capitalization across their most recent three complete fiscal years and provide investment recommendations for 2026 (2026-01-01 to 2026-12-31).
+
+Requirements:
+1. Use "top 10 US stocks by market cap as of 2026-02-01" as the sample; if data windows are incomplete for certain companies, note this and substitute with the most recent available complete fiscal year.
+2. Generate 1 detailed analysis per company, covering at minimum: revenue and profit structure, gross/operating margin trends, cash flow quality, capex and buybacks/dividends, valuation range, and key risks.
+3. Generate an Excel file (.xlsx) with at least 4 sheets: `raw_data`, `company_scorecard`, `valuation`, `risk_matrix`.
+4. Generate a comprehensive report with cross-company comparison and tiering (core holding / watchlist / avoid), along with 2026 portfolio recommendations (including position ranges and trigger conditions).
+5. Output a separate `sources.md` listing key data source links and retrieval timestamps.
+6. If unable to generate xlsx directly, explain why and provide structurally equivalent CSV files.
+
+Execution requirements: First present an 8-12 step execution plan, then execute. Conclude with a self-check checklist confirming all files are complete.

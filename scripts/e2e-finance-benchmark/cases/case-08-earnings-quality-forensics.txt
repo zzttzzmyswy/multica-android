@@ -1,0 +1,13 @@
+Perform an "Earnings Quality Forensic Analysis."
+
+Sample: AAPL, MSFT, GOOGL, AMZN, META, NVDA, TSLA, BRK.B, UNH, JPM.
+Time range: 2023-01-01 to 2025-12-31.
+
+Requirements:
+1. Establish an earnings quality inspection framework covering at minimum: accruals quality, operating cash flow to net income matching, stock-based compensation dilution, buyback-to-debt relationship, and one-time item impact.
+2. Assign each company a Red / Yellow / Green rating with traceable supporting evidence.
+3. Generate an Excel file (.xlsx) with sheets: `quality_raw`, `forensic_flags`, `rating_summary`, `watchlist_2026`.
+4. Generate `forensic_report.md` summarizing the 5 most concerning red flags.
+5. Generate `sources.md`.
+
+Execution requirements: The report must clearly distinguish "which conclusions are factual vs. which are inferred."

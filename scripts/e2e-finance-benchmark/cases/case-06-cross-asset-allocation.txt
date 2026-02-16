@@ -1,0 +1,16 @@
+Build a "Cross-Asset Tactical Allocation (2026)" project.
+
+Asset universe: SPY, QQQ, IWM, TLT, IEF, HYG, GLD, DBC, BTC-USD.
+Historical period: 2021-01-01 to 2025-12-31 (monthly frequency is sufficient).
+
+Requirements:
+1. Calculate and compare key metrics: annualized return, volatility, maximum drawdown, Sharpe ratio, and correlation matrix.
+2. Design two portfolios:
+   - Defensive (target: minimize maximum drawdown)
+   - Offensive (target: higher risk-adjusted returns)
+3. Stress test both portfolios under three 2026 scenarios (growth slowdown / inflation resurgence / liquidity easing), and provide rebalancing rules.
+4. Generate an Excel file (.xlsx) with sheets: `price_returns`, `risk_metrics`, `corr_matrix`, `portfolio_defensive`, `portfolio_offensive`, `scenario_test`.
+5. Generate `allocation_memo.md` explaining why these two portfolios are actionable in 2026.
+6. Generate `sources.md`.
+
+Execution requirements: Explicitly state rebalancing frequency, stop-loss rules, and re-entry conditions for each portfolio.

@@ -1,0 +1,14 @@
+Perform a "Post-Earnings Announcement Drift (PEAD) Strategy Feasibility Study."
+
+Research period: 2023-01-01 to 2025-12-31.
+Sample: Select at least 30 US large/mid-cap stocks (provide selection criteria).
+
+Requirements:
+1. Define an executable PEAD signal (e.g., post-earnings 1-3 day information, earnings surprise proxy, or post-announcement momentum proxy) and explain its limitations.
+2. Group the sample (high signal / low signal) and analyze performance differences at 1-month and 3-month horizons.
+3. Add basic risk controls (position limits, stop-loss, sector exposure limits) and evaluate whether the strategy warrants a small-scale pilot in 2026.
+4. Generate an Excel file (.xlsx) with sheets: `universe`, `signal_definition`, `group_performance`, `risk_controls`, `pilot_plan_2026`.
+5. Generate `pead_study.md` (covering methodology, results, sources of bias, and implementation recommendations).
+6. Generate `sources.md`.
+
+Execution requirements: Must provide "failure scenarios" and objective conditions for "stopping the pilot."

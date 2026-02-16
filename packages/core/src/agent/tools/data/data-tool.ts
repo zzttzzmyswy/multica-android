@@ -83,36 +83,20 @@ export function createDataTool(): AgentTool<typeof DataToolSchema, DataToolResul
       const { domain, action, params } = args as DataToolArgs;
 
       if (domain !== "finance") {
-        const errorPayload = {
-          error: true,
-          message: `Unknown domain: "${domain}". Currently supported: "finance".`,
-        };
-        return {
-          content: [{ type: "text", text: JSON.stringify(errorPayload, null, 2) }],
-          details: { domain, action, data: null } as unknown as DataToolResult,
-        };
+        throw new Error(`Unknown domain: "${domain}". Currently supported: "finance".`);
       }
 
-      try {
-        const result = await executeFinanceAction(action, params ?? {}, signal);
-        const payload: DataToolResult = {
-          domain,
-          action,
-          data: result.data,
-          sourceUrl: result.sourceUrl,
-        };
-        return {
-          content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
-          details: payload,
-        };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const errorPayload = { error: true, domain, action, message };
-        return {
-          content: [{ type: "text", text: JSON.stringify(errorPayload, null, 2) }],
-          details: { domain, action, data: null } as unknown as DataToolResult,
-        };
-      }
+      const result = await executeFinanceAction(action, params ?? {}, signal);
+      const payload: DataToolResult = {
+        domain,
+        action,
+        data: result.data,
+        sourceUrl: result.sourceUrl,
+      };
+      return {
+        content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+        details: payload,
+      };
     },
   };
 }

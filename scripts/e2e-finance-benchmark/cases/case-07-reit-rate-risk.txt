@@ -1,0 +1,13 @@
+Perform a "REIT Investment Screening in a High-Rate Environment" task.
+
+Sample: VNQ, PLD, AMT, EQIX, O, SPG, PSA, DLR.
+
+Requirements:
+1. Compile key metrics from the most recent three complete fiscal years: FFO/AFFO growth, leverage, interest coverage, debt maturity profile, and dividend coverage.
+2. Design three 2026 interest rate scenarios (10Y Treasury yield at 3.5% / 4.5% / 5.5%) and analyze valuation pressure and dividend sustainability.
+3. Classify each as "hold / watchlist / avoid" and explain the 2-3 most critical driving factors.
+4. Generate an Excel file (.xlsx) with sheets: `reit_raw`, `debt_profile`, `rate_scenarios`, `selection_result`.
+5. Generate `reit_investment_note.md`.
+6. Generate `sources.md`.
+
+Execution requirements: If data is missing, it must be explicitly marked as NA in the tables; silent omission is not allowed.
