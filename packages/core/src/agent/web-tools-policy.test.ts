@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  analyzeCrossTurnWebFetchNeed,
   shouldEnforceWebFetchAfterSearch,
   summarizeWebToolUsage,
   type ToolExecutionRecord,
@@ -140,6 +141,93 @@ describe("web-tools-policy", () => {
           webFetchAvailable: true,
         }),
       ).toBe(true);
+    });
+  });
+
+  describe("analyzeCrossTurnWebFetchNeed", () => {
+    it("enforces when user explicitly asks to refetch page content", () => {
+      const usage = summarizeWebToolUsage([]);
+      const analysis = analyzeCrossTurnWebFetchNeed({
+        usage,
+        webFetchAvailable: true,
+        userPrompt: "Please refetch the page body this turn and verify with sources.",
+        assistantText: "Here is a quick summary.",
+      });
+
+      expect(analysis.shouldEnforce).toBe(true);
+      expect(analysis.explicitFetchRequest).toBe(true);
+    });
+
+    it("enforces for freshness requests when assistant makes web-style claims", () => {
+      const usage = summarizeWebToolUsage([]);
+      const analysis = analyzeCrossTurnWebFetchNeed({
+        usage,
+        webFetchAvailable: true,
+        userPrompt: "Give me the latest web news about OpenAI with sources.",
+        assistantText: "According to Reuters, OpenAI announced a new release.",
+      });
+
+      expect(analysis.shouldEnforce).toBe(true);
+      expect(analysis.freshnessCue).toBe(true);
+      expect(analysis.webCue).toBe(true);
+      expect(analysis.assistantHasWebClaimSignal).toBe(true);
+    });
+
+    it("does not enforce when a fetch was already attempted in this turn", () => {
+      const usage = summarizeWebToolUsage([
+        buildRecord({
+          toolName: "web_fetch",
+          details: { error: true, code: "fetch_failed" },
+        }),
+      ]);
+      const analysis = analyzeCrossTurnWebFetchNeed({
+        usage,
+        webFetchAvailable: true,
+        userPrompt: "Please verify with the latest web sources.",
+        assistantText: "According to Reuters, ...",
+      });
+
+      expect(analysis.shouldEnforce).toBe(false);
+    });
+
+    it("does not enforce when user explicitly blocks web fetch", () => {
+      const usage = summarizeWebToolUsage([]);
+      const analysis = analyzeCrossTurnWebFetchNeed({
+        usage,
+        webFetchAvailable: true,
+        userPrompt: "Do not browse the web, only use snippets.",
+        assistantText: "According to Reuters, ...",
+      });
+
+      expect(analysis.shouldEnforce).toBe(false);
+      expect(analysis.userBlocksWebFetch).toBe(true);
+    });
+
+    it("enforces when user provides a direct URL but no fetch happened", () => {
+      const usage = summarizeWebToolUsage([]);
+      const analysis = analyzeCrossTurnWebFetchNeed({
+        usage,
+        webFetchAvailable: true,
+        userPrompt: "Summarize https://example.com/article and include key takeaways.",
+        assistantText: "I can summarize it for you.",
+      });
+
+      expect(analysis.shouldEnforce).toBe(true);
+      expect(analysis.userProvidesUrl).toBe(true);
+    });
+
+    it("does not enforce for non-web freshness requests", () => {
+      const usage = summarizeWebToolUsage([]);
+      const analysis = analyzeCrossTurnWebFetchNeed({
+        usage,
+        webFetchAvailable: true,
+        userPrompt: "What is the latest version in this repository?",
+        assistantText: "The latest version is 1.2.3.",
+      });
+
+      expect(analysis.shouldEnforce).toBe(false);
+      expect(analysis.freshnessCue).toBe(true);
+      expect(analysis.webCue).toBe(false);
     });
   });
 });

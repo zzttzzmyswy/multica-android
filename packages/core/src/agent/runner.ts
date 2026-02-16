@@ -43,6 +43,7 @@ import {
 } from "./system-prompt/index.js";
 import type { AuthProfileFailureReason } from "./auth-profiles/index.js";
 import {
+  analyzeCrossTurnWebFetchNeed,
   shouldEnforceWebFetchAfterSearch,
   summarizeWebToolUsage,
   type ToolExecutionRecord,
@@ -140,6 +141,16 @@ const WEB_SEARCH_FETCH_ENFORCEMENT_PROMPT = [
   "2) Call web_fetch on those URLs.",
   "3) Revise your answer based on fetched content.",
   "If all fetch attempts fail, explicitly say so and avoid relying on snippets for specific claims.",
+].join("\n");
+
+const CROSS_TURN_WEB_FETCH_ENFORCEMENT_PROMPT = [
+  "You are about to finalize a web-dependent answer, but no successful web_fetch happened in this turn.",
+  "Do not rely only on snippets or prior-turn memory for fresh factual claims.",
+  "Before finalizing your answer, you MUST:",
+  "1) If relevant URLs are already available in this conversation, call web_fetch on 1-3 of them.",
+  "2) If no URLs are available, call web_search to find candidates, then web_fetch on 1-3 relevant URLs.",
+  "3) Revise your answer using fetched page content as primary evidence.",
+  "If all fetch attempts fail, explicitly report that limitation and avoid specific claims not backed by fetched content.",
 ].join("\n");
 
 export class Agent {
@@ -580,6 +591,10 @@ export class Agent {
           });
           await this.agent.prompt(prompt);
           await this.enforceWebFetchAfterSearchIfNeeded(toolExecutionStartIndex);
+          await this.enforceCrossTurnWebFetchIfNeeded({
+            toolExecutionStartIndex,
+            userPrompt: prompt,
+          });
           this.runLog.log("llm_result", {
             duration_ms: Date.now() - llmStart,
           });
@@ -847,6 +862,58 @@ export class Agent {
       });
       if (this.debug) {
         this.stderr.write(`[web-guard] Failed to enforce search->fetch: ${message}\n`);
+      }
+    }
+  }
+
+  private async enforceCrossTurnWebFetchIfNeeded(params: {
+    toolExecutionStartIndex: number;
+    userPrompt: string;
+  }): Promise<void> {
+    if (this._internalRun) return;
+
+    const activeTools = new Set(
+      (this.agent.state.tools ?? []).map((tool) => tool.name.toLowerCase()),
+    );
+    const webFetchAvailable = activeTools.has("web_fetch");
+    const currentTurnExecutions = this.currentRunToolExecutions.slice(
+      params.toolExecutionStartIndex,
+    );
+    const usage = summarizeWebToolUsage(currentTurnExecutions);
+    const analysis = analyzeCrossTurnWebFetchNeed({
+      usage,
+      webFetchAvailable,
+      userPrompt: params.userPrompt,
+      assistantText: this.output.state.lastAssistantText ?? "",
+    });
+
+    if (!analysis.shouldEnforce) return;
+
+    this.runLog.log("web_cross_turn_fetch_guard", {
+      fetch_calls: usage.fetchCalls,
+      fetch_success: usage.fetchSuccess,
+      explicit_fetch_request: analysis.explicitFetchRequest,
+      user_provides_url: analysis.userProvidesUrl,
+      freshness_cue: analysis.freshnessCue,
+      web_cue: analysis.webCue,
+      user_needs_fresh_web_evidence: analysis.userNeedsFreshWebEvidence,
+      user_blocks_web_fetch: analysis.userBlocksWebFetch,
+      assistant_web_claim_signal: analysis.assistantHasWebClaimSignal,
+    });
+
+    try {
+      await this.agent.prompt(CROSS_TURN_WEB_FETCH_ENFORCEMENT_PROMPT);
+      this.runLog.log("web_cross_turn_fetch_guard_applied", {
+        explicit_fetch_request: analysis.explicitFetchRequest,
+        user_provides_url: analysis.userProvidesUrl,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.runLog.log("web_cross_turn_fetch_guard_failed", {
+        error: message.slice(0, 200),
+      });
+      if (this.debug) {
+        this.stderr.write(`[web-cross-turn-guard] Failed to enforce fetch: ${message}\n`);
       }
     }
   }
