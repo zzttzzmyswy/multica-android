@@ -1,64 +1,76 @@
-# Credentials & LLM Providers
+# Credentials Guide
 
-## Setup
+## Initialize
 
 ```bash
-multica credentials init
+pnpm multica credentials init
 ```
 
-Creates:
-- `~/.super-multica/credentials.json5` — LLM providers + tools
+This creates:
 
-Example `credentials.json5`:
+- `~/.super-multica/credentials.json5`
+
+## Path Resolution
+
+Credential file lookup order:
+
+1. `SMC_CREDENTIALS_PATH` (explicit override)
+2. `SMC_DATA_DIR/credentials.json5` (or default data dir)
+3. `~/.super-multica/credentials.json5` fallback
+
+## Minimal Template
 
 ```json5
 {
   version: 1,
   llm: {
-    provider: "openai",
+    provider: "kimi-coding",
     providers: {
-      openai: { apiKey: "sk-xxx", model: "gpt-4o" }
-    }
+      "kimi-coding": {
+        apiKey: "your-key",
+      },
+    },
   },
   tools: {
-    brave: { apiKey: "brv-..." }
-  }
+    // tool-specific keys
+  },
 }
 ```
 
-## Skill API Keys
+## Multi-Key Rotation (Per Provider)
 
-Skill-specific API keys are stored in `.env` files within each skill's directory:
+You can define multiple keys under one provider namespace:
 
-```
-~/.super-multica/skills/<skill-id>/.env
-```
-
-Example for the `earnings-analysis` skill:
-
-```bash
-# ~/.super-multica/skills/earnings-analysis/.env
-FINANCIAL_DATASETS_API_KEY=your-key-here
-```
-
-Skills declare their required environment variables in `SKILL.md` frontmatter:
-
-```yaml
-metadata:
-  requires:
-    env:
-      - FINANCIAL_DATASETS_API_KEY
+```json5
+{
+  llm: {
+    providers: {
+      "anthropic": { apiKey: "primary" },
+      "anthropic:backup": { apiKey: "backup" },
+    },
+    order: {
+      anthropic: ["anthropic", "anthropic:backup"],
+    },
+  },
+}
 ```
 
-The `.env` file is preserved across skill upgrades and is never committed to version control.
+## OAuth Providers
 
-## LLM Providers
+- `claude-code`: run `claude login`
+- `openai-codex`: run `codex login`
 
-**OAuth Providers** (external CLI login):
-- `claude-code` — requires `claude login`
-- `openai-codex` — requires `codex login`
+API-key providers are configured directly in `credentials.json5`.
 
-**API Key Providers** (configure in `credentials.json5`):
-- `anthropic`, `openai`, `kimi-coding`, `google`, `groq`, `mistral`, `xai`, `openrouter`
+## Tool Credentials
 
-Check status: `/provider` in interactive mode
+Tool credentials are read from:
+
+- `credentials.json5` under `tools`
+- skill-level `.env` files under skill directories
+
+## Security
+
+- Keep credentials file mode private (`600` on Unix-like systems).
+- Do not commit keys into the repository.
+- Prefer isolated data dirs (`SMC_DATA_DIR`) for test/dev environments.

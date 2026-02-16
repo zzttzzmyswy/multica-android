@@ -1,60 +1,51 @@
 # Super Multica
 
-**Multiplexed Information & Computing Agent**
+Super Multica is a distributed AI agent framework and product monorepo.
+It provides a local-first agent runtime plus CLI, gateway, web, and mobile integration surfaces.
 
-An always-on AI agent that pulls real data, runs real computation, and takes real action — monitoring, analyzing, and acting within user-defined authorization boundaries.
+What this project does:
 
-See [Memo](./docs/memo.md) for product vision, architecture, and roadmap.
+- runs AI agent sessions with tools, skills, and persistent session state
+- supports scheduled/automated execution workflows
+- supports both standalone local usage and remote-access client workflows
 
-## Project Structure
+This repository keeps docs focused on:
 
-```
-apps/
-├── cli/           # Command-line interface
-├── desktop/       # Electron desktop app (recommended)
-├── gateway/       # NestJS WebSocket gateway
-├── server/        # NestJS REST API server
-├── web/           # Next.js web app
-└── mobile/        # React Native mobile app
+1. Development workflow
+2. Testing workflow
+3. Operational process
 
-packages/
-├── core/          # Agent engine, hub, channels
-├── sdk/           # Gateway client SDK
-├── ui/            # Shared UI components (Shadcn/Tailwind v4)
-├── store/         # Zustand state management
-├── hooks/         # React hooks
-├── types/         # Shared TypeScript types
-└── utils/         # Utility functions
+Architecture details are still source-of-truth in code, but docs keep minimal project context for onboarding.
 
-skills/            # Bundled agent skills
-```
-
-## Quick Start
+## Quick Start (Workflow)
 
 ```bash
 pnpm install
+pnpm multica credentials init
+pnpm multica
 ```
 
-### Development
+Run local desktop workflow:
 
 ```bash
-pnpm dev              # Desktop app (standalone, no Gateway needed)
-pnpm dev:gateway      # Gateway only
-pnpm dev:web          # Web app only
-pnpm dev:all          # Gateway + Web
+pnpm dev
 ```
 
-### Local Full-Stack Development
+## Local Full-Stack Development (`pnpm dev:local`)
 
-`pnpm dev:local` starts the entire stack locally (Gateway + Desktop + Web) with isolated data directories, useful for end-to-end development and testing.
+Use this when you need **Gateway + Web + Desktop** together for end-to-end dev.
 
-**Setup:**
+Setup:
 
-1. Copy `.env.example` to `.env` at the repo root
-2. Fill in `TELEGRAM_BOT_TOKEN` (get from [@BotFather](https://t.me/BotFather))
-3. Run `pnpm dev:local`
+1. Copy `.env.example` to `.env` in repo root
+2. Set `TELEGRAM_BOT_TOKEN` in `.env` (from `@BotFather`)
+3. Run:
 
-**What it starts:**
+```bash
+pnpm dev:local
+```
+
+What starts:
 
 | Service | Address | Notes |
 |---------|---------|-------|
@@ -62,61 +53,77 @@ pnpm dev:all          # Gateway + Web
 | Web | `http://localhost:3000` | OAuth login flow |
 | Desktop | — | Connects to local Gateway + Web |
 
-**Data isolation:** All data goes to `~/.super-multica-dev` and `~/Documents/Multica-dev`, separate from production `~/.super-multica`.
+Data isolation:
 
-**Related commands:**
+- runtime data: `~/.super-multica-dev`
+- workspace data: `~/Documents/Multica-dev`
+
+Related:
 
 ```bash
-pnpm dev:local:archive    # Archive dev data and start fresh
+pnpm dev:local:archive
 ```
 
-## Architecture
+## Workflow Commands
 
+```bash
+# CLI
+pnpm multica
+pnpm multica run "Hello"
+pnpm multica chat
+pnpm multica help
+
+# Development
+pnpm dev
+pnpm dev:desktop
+pnpm dev:gateway
+pnpm dev:web
+pnpm dev:local
+pnpm dev:local:archive
+
+# Build / quality
+pnpm build
+pnpm typecheck
+pnpm test
 ```
-Desktop App (standalone, recommended)
-  └─ Hub (embedded)
-     └─ Agent Engine
 
-Web/Mobile Clients
-  → Gateway (WebSocket, :3000)
-    → Hub
-      → Agent Engine
+## Testing Workflow
+
+```bash
+# Unit/integration
+pnpm test
+pnpm test:watch
+pnpm test:coverage
+
+# Type safety gate
+pnpm typecheck
+
+# Agent E2E
+pnpm multica run --run-log "your test prompt"
 ```
 
-- **Desktop App**: Electron app with embedded Hub, no Gateway needed
-- **Gateway**: WebSocket server for remote clients
-- **Hub**: Agent lifecycle and event distribution
+E2E process docs:
 
-## Documentation
+- `docs/e2e-testing-guide.md`
+- `docs/e2e-finance-benchmark.md`
 
-**Getting Started**
+## Runtime Paths
 
-| Topic | Link |
-|-------|------|
-| Development guide | [docs/development.md](./docs/development.md) |
-| Credentials & LLM providers | [docs/credentials.md](./docs/credentials.md) |
-| CLI usage | [docs/cli.md](./docs/cli.md) |
-| Skills & tools | [docs/skills-and-tools.md](./docs/skills-and-tools.md) |
-| Package management | [docs/package-management.md](./docs/package-management.md) |
-| Mobile development | [docs/mobile/guide.md](./docs/mobile/guide.md) |
+By default, runtime data is stored under:
 
-**Testing & Benchmarks**
+- `~/.super-multica`
 
-| Topic | Link |
-|-------|------|
-| SWE-bench runner | [docs/swe-bench.md](./docs/swe-bench.md) |
-| E2E testing guide | [docs/e2e-testing-guide.md](./docs/e2e-testing-guide.md) |
+You can isolate environments with:
 
-**Architecture & Protocols**
+- `SMC_DATA_DIR=~/.super-multica-dev` (or other path)
 
-| Topic | Link |
-|-------|------|
-| Product capabilities | [docs/product-capabilities.md](./docs/product-capabilities.md) |
-| Message paths (Desktop/Web/Channel) | [docs/message-paths.md](./docs/message-paths.md) |
-| Client streaming protocol | [docs/client-streaming-protocol.md](./docs/client-streaming-protocol.md) |
-| Hub RPC protocol | [docs/rpc.md](./docs/rpc.md) |
-| Exec approval protocol | [docs/exec-approval.md](./docs/exec-approval.md) |
-| Time injection design | [docs/time-injection.md](./docs/time-injection.md) |
-| Channel system | [docs/channels/README.md](./docs/channels/README.md) |
-| Channel media handling | [docs/channels/media-handling.md](./docs/channels/media-handling.md) |
-| Desktop login integration | [docs/auth/desktop-integration.md](./docs/auth/desktop-integration.md) |
+## Process Docs
+
+- `CLAUDE.md`
+- `docs/development.md`
+- `docs/cli.md`
+- `docs/credentials.md`
+- `docs/skills-and-tools.md`
+- `docs/package-management.md`
+- `docs/e2e-testing-guide.md`
+- `docs/e2e-finance-benchmark.md`

@@ -1,82 +1,109 @@
 # Development Guide
 
-## Dev Commands
+## Prerequisites
+
+- Node.js 20+
+- pnpm 10+
+- macOS/Linux/Windows
+
+## Install
 
 ```bash
-pnpm dev              # Desktop app (recommended)
-pnpm dev:desktop      # Same as above
-pnpm dev:gateway      # Gateway only
-pnpm dev:web          # Web app only
-pnpm dev:all          # Gateway + Web
-
-pnpm build            # Production build (turbo-orchestrated)
-pnpm typecheck        # Type check all packages
-pnpm test             # Run tests
-pnpm test:watch       # Watch mode
-pnpm test:coverage    # With v8 coverage
+pnpm install
 ```
 
-## Local Full-Stack Development
+`.npmrc` must keep:
 
-`pnpm dev:local` starts Gateway + Desktop + Web together with isolated data directories.
+```ini
+shamefully-hoist=true
+```
 
-**Setup:**
+## Main Dev Entry Points
 
-1. Copy `.env.example` to `.env` at the repo root
-2. Fill in `TELEGRAM_BOT_TOKEN` (get from [@BotFather](https://t.me/BotFather))
+```bash
+# Recommended local desktop workflow
+pnpm dev
+
+# Service-specific
+pnpm dev:desktop
+pnpm dev:gateway
+pnpm dev:web
+
+# Full local stack with isolated dev data
+pnpm dev:local
+pnpm dev:local:archive
+```
+
+## What Each Command Does
+
+- `pnpm dev`: builds shared packages, then runs `types + utils + core + desktop` watch flow.
+- `pnpm dev:desktop`: Electron desktop only.
+- `pnpm dev:gateway`: NestJS WebSocket gateway (`PORT`, default `3000`).
+- `pnpm dev:web`: Next.js web app (`3000` by script).
+- `pnpm dev:local`: gateway + web + desktop with dev-safe env defaults.
+- `pnpm dev:local:archive`: archive dev data and start fresh.
+
+## Important Environment Variables
+
+- `SMC_DATA_DIR`: override runtime data root (default `~/.super-multica`)
+- `GATEWAY_URL`: gateway endpoint for desktop/CLI hub connection
+- `MULTICA_API_URL`: required by web/data tools
+- `PORT`: gateway/server port
+- `MULTICA_WORKSPACE_DIR`: override workspace root
+- `MULTICA_RUN_LOG=1`: enable structured run-log output
+
+## Local Full-Stack Notes (`pnpm dev:local`)
+
+`pnpm dev:local` is the recommended way to run the full local stack for integration work.
+
+Setup:
+
+1. `cp .env.example .env`
+2. Set `TELEGRAM_BOT_TOKEN` in root `.env`
 3. Run `pnpm dev:local`
+
+Services started by the script:
 
 | Service | Address | Notes |
 |---------|---------|-------|
-| Gateway | `http://localhost:4000` | Telegram long-polling mode |
-| Web | `http://localhost:3000` | OAuth login flow |
-| Desktop | — | Connects to local Gateway + Web |
+| Gateway | `http://localhost:4000` | Telegram long-polling mode (`PORT=4000`) |
+| Web | `http://localhost:3000` | OAuth login / frontend |
+| Desktop | — | Uses `GATEWAY_URL=http://localhost:4000` and local web URL |
 
-Data is stored in `~/.super-multica-dev` and `~/Documents/Multica-dev`, isolated from production.
+Data/workspace isolation used by the script:
 
-```bash
-pnpm dev:local:archive    # Archive dev data and start fresh
-```
+- `SMC_DATA_DIR=~/.super-multica-dev`
+- `MULTICA_WORKSPACE_DIR=~/Documents/Multica-dev`
 
-## Environment Configuration
+Why this matters:
 
-**Desktop** (`apps/desktop/.env.*`):
+- avoids polluting production data under `~/.super-multica`
+- provides a stable local target for auth/session debugging
 
-| Variable | Description |
-|----------|-------------|
-| `MAIN_VITE_GATEWAY_URL` | WebSocket Gateway URL for remote device pairing |
-| `MAIN_VITE_WEB_URL` | Web app URL for OAuth login redirect |
-
-**Web** (`apps/web/next.config.ts`):
-
-| Variable | Description |
-|----------|-------------|
-| `MULTICA_API_URL` | Backend API URL (required, no default) |
-
-**Build for different environments:**
+Common follow-up:
 
 ```bash
-# Desktop
-pnpm --filter @multica/desktop build              # Production (.env.production)
-pnpm --filter @multica/desktop build:staging      # Staging (.env.staging)
-
-# Web (Vercel)
-# Set MULTICA_API_URL in Vercel Dashboard → Settings → Environment Variables
+pnpm dev:local:archive
 ```
 
-See `apps/desktop/.env.example` for the full variable reference.
+This archives prior dev data before starting fresh local runs.
 
-## Monorepo Workflow
+## Build / Quality
 
-| Command | Purpose |
-|---------|---------|
-| `pnpm dev` | Full dev mode — watches `core`, `types`, `utils` packages |
-| `pnpm dev:desktop` | Desktop only — skip package watching |
+```bash
+pnpm build
+pnpm typecheck
+pnpm test
+pnpm test:coverage
+```
 
-**When modifying packages:**
+## Useful Reset Commands
 
-1. Edit code in `packages/core`, `packages/types`, or `packages/utils`
-2. Terminal shows `[core] ESM ⚡️ Build success` (~100ms)
-3. Restart Desktop to apply changes (Ctrl+C, then `pnpm dev`)
+```bash
+# Reset default + dev data dirs used by desktop scripts
+pnpm dev:desktop:reset
 
-> **Why restart?** Electron main process does not support hot reload — this is an Electron limitation, not ours.
+# Reset and relaunch desktop onboarding flow
+pnpm dev:desktop:fresh
+pnpm dev:desktop:onboarding
+```

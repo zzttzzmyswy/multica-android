@@ -1,30 +1,129 @@
-# CLI
+# CLI Guide (`multica`)
+
+## Entry
 
 ```bash
-multica                              # Interactive mode
-multica run "prompt"                 # Single prompt
-multica chat --profile my-agent      # Use profile
-multica --session abc123             # Continue session
-multica session list                 # List sessions
-multica profile list                 # List profiles
-multica skills list                  # List skills
-multica help                         # Show help
+pnpm multica
 ```
 
-Short alias: `mu`
+Equivalent command names:
+
+- `multica`
+- `mu`
+
+## Core Commands
+
+```bash
+multica                       # interactive chat (default)
+multica run "<prompt>"        # one-shot run
+multica chat                  # explicit interactive mode
+multica session <command>     # session management
+multica profile <command>     # profile management
+multica skills <command>      # skill management
+multica tools <command>       # tool policy inspection
+multica credentials <command> # credentials management
+multica cron <command>        # scheduled tasks
+multica dev [service]         # start dev services
+multica help
+```
+
+## Run Mode
+
+```bash
+multica run [options] <prompt>
+echo "prompt" | multica run
+```
+
+Common options:
+
+- `--profile <id>`
+- `--provider <name>`
+- `--model <name>`
+- `--session <id>`
+- `--cwd <dir>`
+- `--run-log`
+- `--tools-allow a,b,c`
+- `--tools-deny a,b,c`
+- `--context-window <tokens>`
+
+## Chat Mode
+
+```bash
+multica chat [options]
+multica [options]
+```
+
+In-chat commands:
+
+- `/help`
+- `/exit`
+- `/clear`
+- `/session`
+- `/new`
+- `/multiline`
+- `/provider`
+- `/model`
 
 ## Sessions
 
-Sessions persist to `~/.super-multica/sessions/<id>/` with JSONL message history and JSON metadata. Context windows are automatically managed with token-aware compaction.
+```bash
+multica session list
+multica session show <id>
+multica session delete <id>
+```
+
+Session data root:
+
+- `~/.super-multica/sessions/`
+- or `SMC_DATA_DIR/sessions/`
 
 ## Profiles
 
-Profiles define agent identity, personality, and memory in `~/.super-multica/agent-profiles/<id>/`.
-
 ```bash
-multica profile new my-agent    # Create profile
-multica profile list            # List all
-multica profile edit my-agent   # Open in file manager
+multica profile list
+multica profile new <id>
+multica profile setup <id>
+multica profile show <id>
+multica profile edit <id>
+multica profile delete <id>
 ```
 
-Profile files: `soul.md`, `user.md`, `workspace.md`, `memory.md`, `memory/*.md`
+## Skills
+
+```bash
+multica skills list
+multica skills status [id]
+multica skills install <id>
+multica skills add <owner/repo[/skill]>
+multica skills remove <name>
+```
+
+## Tools
+
+```bash
+multica tools list
+multica tools list --allow group:fs,web_fetch
+multica tools list --deny exec
+multica tools groups
+```
+
+## Credentials
+
+```bash
+multica credentials init
+multica credentials show
+multica credentials edit
+```
+
+## Cron
+
+```bash
+multica cron status
+multica cron list
+multica cron add -n "name" --every "30m" --message "..."
+multica cron run <id>
+multica cron enable <id>
+multica cron disable <id>
+multica cron remove <id>
+multica cron logs <id>
+```
