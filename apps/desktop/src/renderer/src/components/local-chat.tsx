@@ -22,6 +22,7 @@ export function LocalChat({ initialPrompt }: LocalChatProps) {
     isLoadingHistory,
     isLoadingMore,
     hasMore,
+    contextWindowTokens,
     error,
     pendingApprovals,
     sendMessage,
@@ -110,6 +111,7 @@ export function LocalChat({ initialPrompt }: LocalChatProps) {
         isLoadingHistory={isLoadingHistory}
         isLoadingMore={isLoadingMore}
         hasMore={hasMore}
+        contextWindowTokens={contextWindowTokens}
         error={error}
         pendingApprovals={pendingApprovals}
         sendMessage={sendMessage}

@@ -354,20 +354,21 @@ export function registerHubIpcHandlers(): void {
     const h = getHub()
     const agent = h.getAgent(agentId)
     if (!agent) {
-      return { messages: [], total: 0, offset: 0, limit: 0 }
+      return { messages: [], total: 0, offset: 0, limit: 0, contextWindowTokens: undefined }
     }
 
     try {
       await agent.ensureInitialized()
       const allMessages = agent.loadSessionMessagesForDisplay()
+      const contextWindowTokens = agent.getContextWindowTokens()
       const total = allMessages.length
       // Must match DEFAULT_MESSAGES_LIMIT from @multica/sdk/actions/rpc
       const limit = options?.limit ?? 200
       const offset = options?.offset ?? Math.max(0, total - limit)
       const sliced = allMessages.slice(offset, offset + limit)
-      return { messages: sliced, total, offset, limit }
+      return { messages: sliced, total, offset, limit, contextWindowTokens }
     } catch {
-      return { messages: [], total: 0, offset: 0, limit: 0 }
+      return { messages: [], total: 0, offset: 0, limit: 0, contextWindowTokens: undefined }
     }
   })
 

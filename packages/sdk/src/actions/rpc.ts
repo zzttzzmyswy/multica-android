@@ -91,6 +91,8 @@ export interface GetAgentMessagesResult {
   total: number;
   offset: number;
   limit: number;
+  /** Context window size (tokens) used by this session */
+  contextWindowTokens?: number;
 }
 
 /** getHubInfo - no params needed */

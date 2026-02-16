@@ -250,7 +250,7 @@ interface ElectronAPI {
   localChat: {
     subscribe: (agentId: string) => Promise<{ ok?: boolean; error?: string; alreadySubscribed?: boolean }>
     unsubscribe: (agentId: string) => Promise<{ ok: boolean }>
-    getHistory: (agentId: string, options?: { offset?: number; limit?: number }) => Promise<{ messages: unknown[]; total: number; offset: number; limit: number }>
+    getHistory: (agentId: string, options?: { offset?: number; limit?: number }) => Promise<{ messages: unknown[]; total: number; offset: number; limit: number; contextWindowTokens?: number }>
     send: (agentId: string, content: string) => Promise<{ ok?: boolean; error?: string }>
     abort: (agentId: string) => Promise<{ ok?: boolean; error?: string }>
     resolveExecApproval: (approvalId: string, decision: string) => Promise<{ ok: boolean }>

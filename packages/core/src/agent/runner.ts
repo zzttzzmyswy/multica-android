@@ -15,6 +15,7 @@ import {
   getDefaultModel,
 } from "./providers/index.js";
 import { SessionManager } from "./session/session-manager.js";
+import type { SessionMeta } from "./session/types.js";
 import { ProfileManager } from "./profile/index.js";
 import { SkillManager } from "./skills/index.js";
 import { credentialManager, getCredentialsPath } from "./credentials.js";
@@ -1197,6 +1198,20 @@ export class Agent {
       provider: this.resolvedProvider,
       model: this.agent.state.model?.id,
     };
+  }
+
+  /**
+   * Get persisted session metadata.
+   */
+  getSessionMeta(): SessionMeta | undefined {
+    return this.session.getMeta();
+  }
+
+  /**
+   * Get effective context window token limit for this session.
+   */
+  getContextWindowTokens(): number {
+    return this.session.getMeta()?.contextWindowTokens ?? this.session.getContextWindowTokens();
   }
 
   /**

@@ -31,6 +31,7 @@ export function createGetAgentMessagesHandler(): RpcHandler {
     const session = new SessionManager({ sessionId: agentId });
     const allMessages = session.loadMessagesForDisplay();
     const total = allMessages.length;
+    const contextWindowTokens = session.getMeta()?.contextWindowTokens ?? session.getContextWindowTokens();
 
     // When offset is not provided, return the latest messages
     if (offset == null) {
@@ -39,6 +40,6 @@ export function createGetAgentMessagesHandler(): RpcHandler {
 
     const sliced = allMessages.slice(offset, offset + limit);
 
-    return { messages: sliced, total, offset, limit };
+    return { messages: sliced, total, offset, limit, contextWindowTokens };
   };
 }

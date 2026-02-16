@@ -84,6 +84,7 @@ export function useChat() {
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [error, setError] = useState<ChatError | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  const [contextWindowTokens, setContextWindowTokens] = useState<number | undefined>(undefined);
 
   const isStreaming = streamingIds.size > 0;
 
@@ -125,19 +126,33 @@ export function useChat() {
   }, []);
 
   /** Load initial history (replaces all messages) */
-  const setHistory = useCallback((raw: AgentMessageItem[], agentId: string, meta?: { total: number; offset: number }) => {
+  const setHistory = useCallback((
+    raw: AgentMessageItem[],
+    agentId: string,
+    meta?: { total: number; offset: number; contextWindowTokens?: number },
+  ) => {
     const loaded = convertMessages(raw, agentId);
     setMessages(loaded);
     if (meta) {
       setHasMore(meta.offset > 0);
+      if (meta.contextWindowTokens !== undefined) {
+        setContextWindowTokens(meta.contextWindowTokens);
+      }
     }
   }, [convertMessages]);
 
   /** Prepend older messages (for "load more" pagination) */
-  const prependHistory = useCallback((raw: AgentMessageItem[], agentId: string, meta: { total: number; offset: number }) => {
+  const prependHistory = useCallback((
+    raw: AgentMessageItem[],
+    agentId: string,
+    meta: { total: number; offset: number; contextWindowTokens?: number },
+  ) => {
     const older = convertMessages(raw, agentId);
     setMessages((prev) => [...older, ...prev]);
     setHasMore(meta.offset > 0);
+    if (meta.contextWindowTokens !== undefined) {
+      setContextWindowTokens(meta.contextWindowTokens);
+    }
   }, [convertMessages]);
 
   /** Add a user message */
@@ -274,6 +289,7 @@ export function useChat() {
     streamingIds,
     isStreaming,
     hasMore,
+    contextWindowTokens,
     pendingApprovals,
     error,
     // State control (for transport layer to call)
