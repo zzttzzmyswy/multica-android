@@ -1,8 +1,8 @@
 /**
  * Global Hub singleton for cross-module access.
  *
- * Used by subagent tools and announce flow to interact with the Hub
- * without threading references through the entire call chain.
+ * Used by modules like cron execution without threading Hub references
+ * through the entire call chain.
  */
 
 import type { Hub } from "./hub.js";
