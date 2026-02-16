@@ -13,7 +13,9 @@ interface GetAgentMessagesParams {
   limit?: number;
 }
 
-export function createGetAgentMessagesHandler(): RpcHandler {
+type ConversationResolver = (agentId: string, conversationId?: string) => string;
+
+export function createGetAgentMessagesHandler(resolveConversationId?: ConversationResolver): RpcHandler {
   return (params: unknown) => {
     if (!params || typeof params !== "object") {
       throw new RpcError("INVALID_PARAMS", "params must be an object");
@@ -23,7 +25,10 @@ export function createGetAgentMessagesHandler(): RpcHandler {
     if (!agentId) {
       throw new RpcError("INVALID_PARAMS", "Missing required param: agentId");
     }
-    const resolvedConversationId = (conversationId ?? "").trim() || agentId;
+    const fallbackConversationId = (conversationId ?? "").trim() || agentId;
+    const resolvedConversationId = resolveConversationId
+      ? resolveConversationId(agentId, conversationId)
+      : fallbackConversationId;
 
     const sessionPath = resolveSessionPath(resolvedConversationId);
     if (!existsSync(sessionPath)) {

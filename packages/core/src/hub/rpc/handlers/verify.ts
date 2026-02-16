@@ -5,6 +5,7 @@ import type { DeviceStore, DeviceMeta } from "../../device-store.js";
 interface VerifyContext {
   hubId: string;
   deviceStore: DeviceStore;
+  resolveMainConversationId?: (agentId: string) => string | undefined;
   /** Called for first-time connections. Returns true if user approves, false if rejected. */
   onConfirmDevice: (deviceId: string, agentId: string, meta?: DeviceMeta) => Promise<boolean>;
 }
@@ -21,10 +22,11 @@ export function createVerifyHandler(ctx: VerifyContext): RpcHandler {
     // 1. Already in whitelist → pass through (reconnection, no confirmation needed)
     const allowed = ctx.deviceStore.isAllowed(from);
     if (allowed) {
+      const mainConversationId = ctx.resolveMainConversationId?.(allowed.agentId) ?? allowed.agentId;
       return {
         hubId: ctx.hubId,
         agentId: allowed.agentId,
-        mainConversationId: allowed.agentId,
+        mainConversationId,
         isNewDevice: false,
       };
     }
@@ -47,10 +49,11 @@ export function createVerifyHandler(ctx: VerifyContext): RpcHandler {
 
     // 4. User confirmed → add to whitelist (with device metadata)
     ctx.deviceStore.allowDevice(from, result.agentId, meta);
+    const mainConversationId = ctx.resolveMainConversationId?.(result.agentId) ?? result.agentId;
     return {
       hubId: ctx.hubId,
       agentId: result.agentId,
-      mainConversationId: result.agentId,
+      mainConversationId,
       isNewDevice: true,
     };
   };

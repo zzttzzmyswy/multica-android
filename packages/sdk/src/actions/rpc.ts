@@ -127,9 +127,10 @@ export interface CreateAgentResult {
   id: string;
 }
 
-/** createConversation - request params (conversation-first alias of createAgent) */
+/** createConversation - request params (create a conversation, optionally under a specific agent) */
 export interface CreateConversationParams {
   id?: string;
+  agentId?: string;
 }
 
 /** createConversation - response payload */
