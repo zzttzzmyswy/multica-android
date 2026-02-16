@@ -236,6 +236,36 @@ export function evaluateCustomSkillAuthoringConsent(
   }
 
   return { allowAuthoring: false, declined: false };
+/**
+ * Infer whether a tool call should be classified as error in run-log.
+ *
+ * Some tool adapters encode failures in payload fields (`error`, `error_type`)
+ * without setting `event.isError=true`. This helper keeps run-log semantics
+ * consistent for E2E health checks.
+ */
+export function inferRunLogToolIsError(
+  eventIsError: unknown,
+  resultText: string | undefined,
+  details: Record<string, unknown> | null,
+): boolean {
+  if (eventIsError === true) return true;
+  if (!details) {
+    return typeof resultText === "string" && /^error[:\s]/i.test(resultText.trim());
+  }
+
+  const errorType = details.error_type;
+  if (typeof errorType === "boolean") return errorType;
+  if (typeof errorType === "string") {
+    const normalized = errorType.trim().toLowerCase();
+    if (normalized === "true" || normalized === "error") return true;
+  }
+
+  const errorValue = details.error;
+  if (typeof errorValue === "string") return errorValue.trim().length > 0;
+  if (errorValue === true) return true;
+  if (errorValue && typeof errorValue === "object") return true;
+
+  return typeof resultText === "string" && /^error[:\s]/i.test(resultText.trim());
 }
 
 // ── Run-log result extraction helpers ──────────────────────────────────────
@@ -1292,8 +1322,7 @@ export class Agent {
       const resultText = extractRunLogResultText(result);
       const resultChars = resultText?.length ?? 0;
       const details = extractRunLogResultDetails(result);
-      const isError = Boolean((event as any).isError ?? false);
-
+      const isError = inferRunLogToolIsError((event as any).isError, resultText, details);
       this.currentRunToolExecutions.push({
         toolName,
         isError,
