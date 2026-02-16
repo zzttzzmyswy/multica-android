@@ -6,6 +6,7 @@ import { useLocalChat } from '../hooks/use-local-chat'
 import { useProviderStore } from '../stores/provider'
 import { ApiKeyDialog } from './api-key-dialog'
 import { OAuthDialog } from './oauth-dialog'
+import { QueuedMessageBar } from './queued-message-bar'
 
 interface LocalChatProps {
   initialPrompt?: string
@@ -25,8 +26,11 @@ export function LocalChat({ initialPrompt }: LocalChatProps) {
     contextWindowTokens,
     error,
     pendingApprovals,
+    queuedMessages,
     sendMessage,
     abortGeneration,
+    removeQueuedMessage,
+    clearQueuedMessages,
     loadMore,
     resolveApproval,
     clearError,
@@ -119,6 +123,14 @@ export function LocalChat({ initialPrompt }: LocalChatProps) {
         loadMore={loadMore}
         resolveApproval={resolveApproval}
         errorAction={errorAction}
+        bottomSlot={
+          <QueuedMessageBar
+            messages={queuedMessages}
+            isRunning={isLoading}
+            onRemove={removeQueuedMessage}
+            onClear={clearQueuedMessages}
+          />
+        }
       />
 
       {currentMeta && currentMeta.authMethod === 'api-key' && (
