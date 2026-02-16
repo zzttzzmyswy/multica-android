@@ -31,6 +31,7 @@ pnpm dev:web
 
 # Full local stack with isolated dev data
 pnpm dev:local
+pnpm dev:local:archive
 ```
 
 ## What Each Command Does
@@ -40,6 +41,7 @@ pnpm dev:local
 - `pnpm dev:gateway`: NestJS WebSocket gateway (`PORT`, default `3000`).
 - `pnpm dev:web`: Next.js web app (`3000` by script).
 - `pnpm dev:local`: gateway + web + desktop with dev-safe env defaults.
+- `pnpm dev:local:archive`: archive dev data and start fresh.
 
 ## Important Environment Variables
 
@@ -50,17 +52,41 @@ pnpm dev:local
 - `MULTICA_WORKSPACE_DIR`: override workspace root
 - `MULTICA_RUN_LOG=1`: enable structured run-log output
 
-## Local Full-Stack Notes
+## Local Full-Stack Notes (`pnpm dev:local`)
 
-`pnpm dev:local` expects root `.env` with Telegram credentials:
+`pnpm dev:local` is the recommended way to run the full local stack for integration work.
+
+Setup:
+
+1. `cp .env.example .env`
+2. Set `TELEGRAM_BOT_TOKEN` in root `.env`
+3. Run `pnpm dev:local`
+
+Services started by the script:
+
+| Service | Address | Notes |
+|---------|---------|-------|
+| Gateway | `http://localhost:4000` | Telegram long-polling mode (`PORT=4000`) |
+| Web | `http://localhost:3000` | OAuth login / frontend |
+| Desktop | — | Uses `GATEWAY_URL=http://localhost:4000` and local web URL |
+
+Data/workspace isolation used by the script:
+
+- `SMC_DATA_DIR=~/.super-multica-dev`
+- `MULTICA_WORKSPACE_DIR=~/Documents/Multica-dev`
+
+Why this matters:
+
+- avoids polluting production data under `~/.super-multica`
+- provides a stable local target for auth/session debugging
+
+Common follow-up:
 
 ```bash
-cp .env.example .env
+pnpm dev:local:archive
 ```
 
-At minimum set:
-
-- `TELEGRAM_BOT_TOKEN`
+This archives prior dev data before starting fresh local runs.
 
 ## Build / Quality
 

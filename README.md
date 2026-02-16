@@ -45,6 +45,39 @@ Run desktop app in dev mode:
 pnpm dev
 ```
 
+## Local Full-Stack Development (`pnpm dev:local`)
+
+Use this when you need **Gateway + Web + Desktop** together for end-to-end dev.
+
+Setup:
+
+1. Copy `.env.example` to `.env` in repo root
+2. Set `TELEGRAM_BOT_TOKEN` in `.env` (from `@BotFather`)
+3. Run:
+
+```bash
+pnpm dev:local
+```
+
+What starts:
+
+| Service | Address | Notes |
+|---------|---------|-------|
+| Gateway | `http://localhost:4000` | Telegram long-polling mode |
+| Web | `http://localhost:3000` | OAuth login flow |
+| Desktop | — | Connects to local Gateway + Web |
+
+Data isolation:
+
+- runtime data: `~/.super-multica-dev`
+- workspace data: `~/Documents/Multica-dev`
+
+Related:
+
+```bash
+pnpm dev:local:archive
+```
+
 ## Common Commands
 
 ```bash
@@ -60,6 +93,7 @@ pnpm dev:desktop
 pnpm dev:gateway
 pnpm dev:web
 pnpm dev:local
+pnpm dev:local:archive
 
 # Build / quality
 pnpm build
