@@ -1,37 +1,15 @@
 # Super Multica
 
-Super Multica is a monorepo for a distributed AI agent framework.
-It includes a local-first Desktop app, CLI, Gateway/Web access, and reusable core packages.
+This repository keeps docs focused on:
 
-## Current Documentation Strategy
+1. Development workflow
+2. Testing workflow
+3. Operational process
 
-The docs set is intentionally **small and high-signal**.
-For current status and priorities, see:
+Architecture and project-description details are intentionally omitted from docs.
+Use source code as the architecture reference.
 
-- `docs/README.md`
-
-## Monorepo Layout
-
-```text
-apps/
-  cli/      @multica/cli       Command-line interface
-  desktop/  @multica/desktop   Electron desktop app (primary local runtime)
-  gateway/  @multica/gateway   NestJS WebSocket gateway
-  server/   @multica/server    NestJS REST server
-  web/      @multica/web       Next.js web app
-  mobile/   @multica/mobile    React Native app
-
-packages/
-  core/     @multica/core      Agent, Hub, tools, channels, cron, heartbeat
-  sdk/      @multica/sdk       Gateway client SDK
-  ui/       @multica/ui        Shared React UI components
-  store/    @multica/store     Zustand stores
-  hooks/    @multica/hooks     Shared hooks
-  types/    @multica/types     Shared types
-  utils/    @multica/utils     Shared utilities
-```
-
-## Quick Start
+## Quick Start (Workflow)
 
 ```bash
 pnpm install
@@ -39,7 +17,7 @@ pnpm multica credentials init
 pnpm multica
 ```
 
-Run desktop app in dev mode:
+Run local desktop workflow:
 
 ```bash
 pnpm dev
@@ -78,7 +56,7 @@ Related:
 pnpm dev:local:archive
 ```
 
-## Common Commands
+## Workflow Commands
 
 ```bash
 # CLI
@@ -101,7 +79,27 @@ pnpm typecheck
 pnpm test
 ```
 
-## Runtime Data
+## Testing Workflow
+
+```bash
+# Unit/integration
+pnpm test
+pnpm test:watch
+pnpm test:coverage
+
+# Type safety gate
+pnpm typecheck
+
+# Agent E2E
+pnpm multica run --run-log "your test prompt"
+```
+
+E2E process docs:
+
+- `docs/e2e-testing-guide.md`
+- `docs/e2e-finance-benchmark.md`
+
+## Runtime Paths
 
 By default, runtime data is stored under:
 
@@ -111,12 +109,13 @@ You can isolate environments with:
 
 - `SMC_DATA_DIR=~/.super-multica-dev` (or other path)
 
-## Core Docs
+## Process Docs
 
-- `CLAUDE.md` (AI coding guidance in this repo)
+- `CLAUDE.md`
 - `docs/development.md`
 - `docs/cli.md`
 - `docs/credentials.md`
 - `docs/skills-and-tools.md`
+- `docs/package-management.md`
 - `docs/e2e-testing-guide.md`
 - `docs/e2e-finance-benchmark.md`

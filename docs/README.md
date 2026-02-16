@@ -1,6 +1,8 @@
 # Documentation Index (Priority-Based)
 
 This repo keeps documentation intentionally small to reduce stale AI context.
+Only workflow/testing/process documentation should be maintained.
+Project-intro and architecture explanation docs are intentionally omitted.
 
 ## P0 (Keep Fresh)
 
