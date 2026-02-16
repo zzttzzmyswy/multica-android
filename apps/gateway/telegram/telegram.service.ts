@@ -1197,7 +1197,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
-  private sendRpc<TParams extends Record<string, unknown>, TResult>(
+  private sendRpc<TParams, TResult>(
     deviceId: string,
     hubId: string,
     method: string,
