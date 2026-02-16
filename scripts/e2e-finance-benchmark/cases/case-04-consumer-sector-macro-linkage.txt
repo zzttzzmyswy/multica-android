@@ -10,6 +10,5 @@ Requirements:
 4. Generate an Excel file (.xlsx) with sheets: `company_metrics`, `macro_series`, `elasticity_matrix`, `portfolio_actions`.
 5. Generate `strategy_note.md` with 2026 sector allocation recommendations and rebalancing trigger conditions.
 6. Generate `sources.md`.
-7. Output directory: `~/Desktop/multica-fin-bench/case-04/`.
 
 Execution requirements: Each allocation recommendation must explicitly state the verifiable metrics behind it.

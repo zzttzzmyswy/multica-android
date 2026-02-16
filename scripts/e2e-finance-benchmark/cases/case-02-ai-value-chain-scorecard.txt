@@ -10,6 +10,5 @@ Requirements:
 4. In `scenario_2026`, provide target ranges and trigger signals under three scenarios (optimistic / base / conservative).
 5. Produce `investment_memo.md` (including entry logic for the top 3 and avoidance logic for the bottom 3).
 6. Produce `sources.md` (source links + dates).
-7. Output directory: `~/Desktop/multica-fin-bench/case-02/`.
 
 Execution requirements: Plan before executing; conclude with a "reproducibility check" (can someone else reproduce your results following your steps).

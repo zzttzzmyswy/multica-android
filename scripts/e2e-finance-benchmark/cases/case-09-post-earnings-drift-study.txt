@@ -10,6 +10,5 @@ Requirements:
 4. Generate an Excel file (.xlsx) with sheets: `universe`, `signal_definition`, `group_performance`, `risk_controls`, `pilot_plan_2026`.
 5. Generate `pead_study.md` (covering methodology, results, sources of bias, and implementation recommendations).
 6. Generate `sources.md`.
-7. Output to: `~/Desktop/multica-fin-bench/case-09/`.
 
 Execution requirements: Must provide "failure scenarios" and objective conditions for "stopping the pilot."

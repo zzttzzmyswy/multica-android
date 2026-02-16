@@ -8,7 +8,6 @@ Requirements:
 3. Generate an Excel file (.xlsx) with at least 4 sheets: `raw_data`, `company_scorecard`, `valuation`, `risk_matrix`.
 4. Generate a comprehensive report with cross-company comparison and tiering (core holding / watchlist / avoid), along with 2026 portfolio recommendations (including position ranges and trigger conditions).
 5. Output a separate `sources.md` listing key data source links and retrieval timestamps.
-6. Place all output in a new directory: `~/Desktop/multica-fin-bench/case-01/`.
-7. If unable to generate xlsx directly, explain why and provide structurally equivalent CSV files.
+6. If unable to generate xlsx directly, explain why and provide structurally equivalent CSV files.
 
 Execution requirements: First present an 8-12 step execution plan, then execute. Conclude with a self-check checklist confirming all files are complete.

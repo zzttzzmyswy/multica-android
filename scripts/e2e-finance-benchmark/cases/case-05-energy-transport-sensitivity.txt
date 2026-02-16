@@ -13,6 +13,5 @@ Requirements:
 4. Generate an Excel file (.xlsx) with sheets: `raw_financials`, `oil_scenarios`, `sensitivity_map`, `trade_ideas`.
 5. Generate `hedge_plan.md` proposing at least 2 hedging or paired trade strategies, including conditions under which they would fail.
 6. Generate `sources.md`.
-7. Output to: `~/Desktop/multica-fin-bench/case-05/`.
 
 Execution requirements: Conclusions must include "base position + hedge position + trigger thresholds."

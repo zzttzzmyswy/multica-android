@@ -9,6 +9,5 @@ Requirements:
 3. Generate an Excel file (.xlsx) with sheets: `quality_raw`, `forensic_flags`, `rating_summary`, `watchlist_2026`.
 4. Generate `forensic_report.md` summarizing the 5 most concerning red flags.
 5. Generate `sources.md`.
-6. Output directory: `~/Desktop/multica-fin-bench/case-08/`.
 
 Execution requirements: The report must clearly distinguish "which conclusions are factual vs. which are inferred."

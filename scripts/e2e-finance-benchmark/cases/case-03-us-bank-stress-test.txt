@@ -11,6 +11,5 @@ Requirements:
 4. Generate an Excel file (.xlsx) with sheets: `bank_raw`, `stress_assumptions`, `impact_estimate`, `ranking`.
 5. Generate `risk_brief.md` containing "top 5 risk signals to watch."
 6. Generate `sources.md`.
-7. Output to: `~/Desktop/multica-fin-bench/case-03/`.
 
 Execution requirements: Present methodology first, then results; conclude by listing the 3 assumptions you are least confident about.

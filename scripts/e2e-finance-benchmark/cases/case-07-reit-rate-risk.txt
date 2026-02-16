@@ -9,6 +9,5 @@ Requirements:
 4. Generate an Excel file (.xlsx) with sheets: `reit_raw`, `debt_profile`, `rate_scenarios`, `selection_result`.
 5. Generate `reit_investment_note.md`.
 6. Generate `sources.md`.
-7. Output to: `~/Desktop/multica-fin-bench/case-07/`.
 
 Execution requirements: If data is missing, it must be explicitly marked as NA in the tables; silent omission is not allowed.

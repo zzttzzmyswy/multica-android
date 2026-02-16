@@ -12,6 +12,5 @@ Requirements:
 4. Generate an Excel file (.xlsx) with sheets: `price_returns`, `risk_metrics`, `corr_matrix`, `portfolio_defensive`, `portfolio_offensive`, `scenario_test`.
 5. Generate `allocation_memo.md` explaining why these two portfolios are actionable in 2026.
 6. Generate `sources.md`.
-7. Output directory: `~/Desktop/multica-fin-bench/case-06/`.
 
 Execution requirements: Explicitly state rebalancing frequency, stop-loss rules, and re-entry conditions for each portfolio.
