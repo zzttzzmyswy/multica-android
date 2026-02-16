@@ -7,7 +7,7 @@ This benchmark validates the meta skill workflow for capability-gap discovery, C
 - Domain: skill discovery + installation + update
 - Focus: `skills/meta-skill-installer`
 - Providers: default `kimi-coding` (override with `PROVIDERS`)
-- Cases: 3
+- Cases: 4
 
 Case prompts are stored in:
 - `scripts/e2e-skills-benchmark/cases/`
@@ -19,6 +19,7 @@ The case set references real public pages from ClawHub:
 - [CalDAV Calendar](https://clawhub.ai/skills/caldav-calendar)
 - [Home Assistant](https://clawhub.ai/skills/homeassistant)
 - [CodexMonitor](https://clawhub.ai/odrobnik/codexmonitor)
+- [Spotify (gap-discovery UX flow)](https://clawhub.ai/search?q=spotify)
 
 ## Prerequisites
 
@@ -86,6 +87,7 @@ For each run:
    - `clawhub install`
    - `review-skill-security.mjs`
    - for case 03 also `clawhub update`
+   - for case 04, final response must include ClawHub + install confirmation language, and must not run `clawhub install/update` before confirmation
 
 ## Notes
 
