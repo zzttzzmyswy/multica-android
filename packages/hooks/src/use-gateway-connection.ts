@@ -104,6 +104,7 @@ export function useGatewayConnection(): UseGatewayConnectionReturn {
   const [identity, setIdentity] = useState<ConnectionIdentity | null>(null);
   const [error, setError] = useState<string | null>(null);
   const clientRef = useRef<GatewayClient | null>(null);
+  const verifiedIdentityRef = useRef<ConnectionIdentity | null>(null);
   const disconnectingRef = useRef(false);
   const pairingKeyRef = useRef(0);
 
@@ -123,13 +124,23 @@ export function useGatewayConnection(): UseGatewayConnectionReturn {
           hubId: id.hubId,
           ...(token ? { token } : {}),
         })
+          .onVerified((result) => {
+            if (disconnectingRef.current) return;
+            verifiedIdentityRef.current = {
+              gateway: id.gateway,
+              hubId: result.hubId,
+              agentId: result.agentId,
+              conversationId: id.conversationId ?? result.mainConversationId ?? result.agentId,
+            };
+          })
           .onStateChange((state: ConnectionState) => {
             console.log("[GatewayConnection] state:", state);
             if (disconnectingRef.current) return;
             setConnectionState(state);
             if (state === "registered") {
-              saveIdentity(id);
-              setIdentity(id);
+              const resolvedIdentity = verifiedIdentityRef.current ?? id;
+              saveIdentity(resolvedIdentity);
+              setIdentity(resolvedIdentity);
               setPageState("connected");
             }
           })
@@ -137,6 +148,7 @@ export function useGatewayConnection(): UseGatewayConnectionReturn {
             console.log("[GatewayConnection] error:", err.message);
             if (disconnectingRef.current) return;
             pairingKeyRef.current += 1;
+            verifiedIdentityRef.current = null;
             clearIdentity();
             setIdentity(null);
             setError(err.message);
@@ -157,8 +169,10 @@ export function useGatewayConnection(): UseGatewayConnectionReturn {
       if (clientRef.current) {
         clientRef.current.disconnect();
         clientRef.current = null;
+        verifiedIdentityRef.current = null;
         setTimeout(doConnect, 300);
       } else {
+        verifiedIdentityRef.current = null;
         doConnect();
       }
     },
@@ -183,6 +197,7 @@ export function useGatewayConnection(): UseGatewayConnectionReturn {
       clearTimeout(timer);
       clientRef.current?.disconnect();
       clientRef.current = null;
+      verifiedIdentityRef.current = null;
     };
   }, []);
 
@@ -191,6 +206,7 @@ export function useGatewayConnection(): UseGatewayConnectionReturn {
     pairingKeyRef.current += 1;
     clientRef.current?.disconnect();
     clientRef.current = null;
+    verifiedIdentityRef.current = null;
     clearIdentity();
     setIdentity(null);
     setPageState("not-connected");
