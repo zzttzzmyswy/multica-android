@@ -71,7 +71,7 @@
 import { join } from "path";
 import { mkdirSync } from "fs";
 import { appendFile } from "fs/promises";
-import { resolveBaseDir, type SessionStorageOptions } from "./session/storage.js";
+import { ensureSessionDir, resolveSessionDir, type SessionStorageOptions } from "./session/storage.js";
 
 export interface RunLog {
   log(event: string, data?: Record<string, unknown>): void;
@@ -85,16 +85,10 @@ class FileRunLog implements RunLog {
   private flushScheduled = false;
 
   constructor(sessionId: string, options?: SessionStorageOptions) {
-    const sessionDir = join(resolveBaseDir(options), sessionId);
-    try {
-      mkdirSync(sessionDir, { recursive: true });
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-        mkdirSync(sessionDir, { recursive: true });
-      } else {
-        throw err;
-      }
-    }
+    ensureSessionDir(sessionId, options);
+    const sessionDir = resolveSessionDir(sessionId, options);
+    // keep an extra guard for run-log-only writes when session dir is cleaned externally
+    mkdirSync(sessionDir, { recursive: true });
     this.filePath = join(sessionDir, "run-log.jsonl");
   }
 

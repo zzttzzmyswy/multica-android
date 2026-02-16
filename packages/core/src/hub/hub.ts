@@ -620,6 +620,7 @@ export class Hub {
     const channels = this.channelManager.listChannelInfos();
     const agent = new AsyncAgent({
       sessionId: conversationId,
+      ownerAgentId: targetAgentId,
       profileId,
       onExecApprovalNeeded,
       onChannelSendFile,

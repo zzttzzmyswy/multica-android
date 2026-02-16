@@ -41,6 +41,8 @@ export type AgentOptions = {
   /** Command execution directory */
   cwd?: string | undefined;
   sessionId?: string | undefined;
+  /** Logical owner agent ID for hierarchical session storage (agent/conversation). */
+  ownerAgentId?: string | undefined;
   logger?: AgentLogger | undefined;
 
   // === Context Window Guard Configuration ===

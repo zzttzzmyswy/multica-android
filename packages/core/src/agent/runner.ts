@@ -400,12 +400,17 @@ export class Agent {
     // Load session metadata early so stored provider/model can inform defaults
     this.sessionId = options.sessionId ?? uuidv7();
     this.guardedExecApproval = this.createGuardedExecApprovalCallback(options.onExecApprovalNeeded);
+    const storageAgentId = options.ownerAgentId;
     this.runLog = createRunLog(
       options.enableRunLog ?? !!process.env.MULTICA_RUN_LOG,
       this.sessionId,
+      storageAgentId ? { agentId: storageAgentId } : undefined,
     );
     const storedMeta = (() => {
-      const tempSession = new SessionManager({ sessionId: this.sessionId });
+      const tempSession = new SessionManager({
+        sessionId: this.sessionId,
+        ...(storageAgentId ? { agentId: storageAgentId } : {}),
+      });
       return tempSession.getMeta();
     })();
 
@@ -554,6 +559,7 @@ export class Agent {
     // 创建 SessionManager（带 context window 配置）
     this.session = new SessionManager({
       sessionId: this.sessionId,
+      ...(storageAgentId ? { agentId: storageAgentId } : {}),
       compactionMode,
       // Token 模式参数
       contextWindowTokens: this.contextWindowGuard.tokens,

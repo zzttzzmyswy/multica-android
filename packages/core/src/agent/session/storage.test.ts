@@ -58,12 +58,22 @@ describe("session/storage", () => {
       const result = resolveSessionDir("session-123-abc", { baseDir: testBaseDir });
       expect(result).toBe(join(testBaseDir, "session-123-abc"));
     });
+
+    it("should return hierarchical path when agentId is provided", () => {
+      const result = resolveSessionDir("conv-1", { baseDir: testBaseDir, agentId: "agent-1" });
+      expect(result).toBe(join(testBaseDir, "agent-1", "conv-1"));
+    });
   });
 
   describe("resolveSessionPath", () => {
     it("should return path to session.jsonl file", () => {
       const result = resolveSessionPath("test-session", { baseDir: testBaseDir });
       expect(result).toBe(join(testBaseDir, "test-session", "session.jsonl"));
+    });
+
+    it("should return hierarchical path when agentId is provided", () => {
+      const result = resolveSessionPath("conv-1", { baseDir: testBaseDir, agentId: "agent-1" });
+      expect(result).toBe(join(testBaseDir, "agent-1", "conv-1", "session.jsonl"));
     });
   });
 
@@ -84,6 +94,20 @@ describe("session/storage", () => {
       expect(() => ensureSessionDir(sessionId, { baseDir: testBaseDir })).not.toThrow();
       expect(existsSync(dir)).toBe(true);
     });
+
+    it("should migrate legacy flat directory into hierarchical path", () => {
+      const sessionId = "legacy-migrate";
+      const legacyDir = join(testBaseDir, sessionId);
+      mkdirSync(legacyDir, { recursive: true });
+      writeFileSync(join(legacyDir, "session.jsonl"), '{"type":"meta","meta":{},"timestamp":1}\n');
+
+      ensureSessionDir(sessionId, { baseDir: testBaseDir, agentId: "agent-1" });
+
+      const nextDir = join(testBaseDir, "agent-1", sessionId);
+      expect(existsSync(nextDir)).toBe(true);
+      expect(existsSync(join(nextDir, "session.jsonl"))).toBe(true);
+      expect(existsSync(legacyDir)).toBe(false);
+    });
   });
 
   describe("readEntries", () => {
@@ -100,6 +124,21 @@ describe("session/storage", () => {
 
       const entries = readEntries(sessionId, { baseDir: testBaseDir });
       expect(entries).toEqual([]);
+    });
+
+    it("should read legacy flat session when hierarchical path is requested", () => {
+      const sessionId = "legacy-read";
+      const legacyDir = join(testBaseDir, sessionId);
+      mkdirSync(legacyDir, { recursive: true });
+      const entry: SessionEntry = {
+        type: "message",
+        message: { role: "user", content: "legacy" } as any,
+        timestamp: 1000,
+      };
+      writeFileSync(join(legacyDir, "session.jsonl"), `${JSON.stringify(entry)}\n`);
+
+      const entries = readEntries(sessionId, { baseDir: testBaseDir, agentId: "agent-1" });
+      expect(entries).toEqual([entry]);
     });
 
     it("should parse valid JSONL entries", () => {
