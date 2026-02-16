@@ -1,0 +1,83 @@
+# Development Guide
+
+## Prerequisites
+
+- Node.js 20+
+- pnpm 10+
+- macOS/Linux/Windows
+
+## Install
+
+```bash
+pnpm install
+```
+
+`.npmrc` must keep:
+
+```ini
+shamefully-hoist=true
+```
+
+## Main Dev Entry Points
+
+```bash
+# Recommended local desktop workflow
+pnpm dev
+
+# Service-specific
+pnpm dev:desktop
+pnpm dev:gateway
+pnpm dev:web
+
+# Full local stack with isolated dev data
+pnpm dev:local
+```
+
+## What Each Command Does
+
+- `pnpm dev`: builds shared packages, then runs `types + utils + core + desktop` watch flow.
+- `pnpm dev:desktop`: Electron desktop only.
+- `pnpm dev:gateway`: NestJS WebSocket gateway (`PORT`, default `3000`).
+- `pnpm dev:web`: Next.js web app (`3000` by script).
+- `pnpm dev:local`: gateway + web + desktop with dev-safe env defaults.
+
+## Important Environment Variables
+
+- `SMC_DATA_DIR`: override runtime data root (default `~/.super-multica`)
+- `GATEWAY_URL`: gateway endpoint for desktop/CLI hub connection
+- `MULTICA_API_URL`: required by web/data tools
+- `PORT`: gateway/server port
+- `MULTICA_WORKSPACE_DIR`: override workspace root
+- `MULTICA_RUN_LOG=1`: enable structured run-log output
+
+## Local Full-Stack Notes
+
+`pnpm dev:local` expects root `.env` with Telegram credentials:
+
+```bash
+cp .env.example .env
+```
+
+At minimum set:
+
+- `TELEGRAM_BOT_TOKEN`
+
+## Build / Quality
+
+```bash
+pnpm build
+pnpm typecheck
+pnpm test
+pnpm test:coverage
+```
+
+## Useful Reset Commands
+
+```bash
+# Reset default + dev data dirs used by desktop scripts
+pnpm dev:desktop:reset
+
+# Reset and relaunch desktop onboarding flow
+pnpm dev:desktop:fresh
+pnpm dev:desktop:onboarding
+```
