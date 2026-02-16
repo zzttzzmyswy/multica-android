@@ -18,6 +18,7 @@ interface TelegramUserRow extends RowDataPacket {
   telegram_user_id: string;
   hub_id: string;
   agent_id: string;
+  conversation_id?: string | null;
   device_id: string;
   created_at: Date;
   updated_at: Date;
@@ -37,6 +38,12 @@ export class TelegramUserStore {
   private localStoreLoaded = false;
 
   constructor(@Inject(DatabaseService) private readonly db: DatabaseService) {}
+
+  private hasMissingConversationColumnError(err: unknown): boolean {
+    if (!err || typeof err !== "object") return false;
+    const maybe = err as { code?: string; message?: string };
+    return maybe.code === "ER_BAD_FIELD_ERROR" && (maybe.message ?? "").includes("conversation_id");
+  }
 
   /** Find user by Telegram user ID */
   async findByTelegramUserId(telegramUserId: string): Promise<TelegramUser | null> {
@@ -84,25 +91,51 @@ export class TelegramUserStore {
 
     if (existing) {
       // Update existing user — also update device_id if provided
-      await this.db.execute(
-        `UPDATE telegram_users SET
-          hub_id = ?,
-          agent_id = ?,
-          device_id = ?,
-          telegram_username = ?,
-          telegram_first_name = ?,
-          telegram_last_name = ?
-        WHERE telegram_user_id = ?`,
-        [
-          data.hubId,
-          data.agentId,
-          data.deviceId ?? existing.deviceId,
-          data.telegramUsername ?? null,
-          data.telegramFirstName ?? null,
-          data.telegramLastName ?? null,
-          data.telegramUserId,
-        ]
-      );
+      const nextConversationId = data.conversationId ?? existing.conversationId ?? existing.agentId;
+      try {
+        await this.db.execute(
+          `UPDATE telegram_users SET
+            hub_id = ?,
+            agent_id = ?,
+            conversation_id = ?,
+            device_id = ?,
+            telegram_username = ?,
+            telegram_first_name = ?,
+            telegram_last_name = ?
+          WHERE telegram_user_id = ?`,
+          [
+            data.hubId,
+            data.agentId,
+            nextConversationId,
+            data.deviceId ?? existing.deviceId,
+            data.telegramUsername ?? null,
+            data.telegramFirstName ?? null,
+            data.telegramLastName ?? null,
+            data.telegramUserId,
+          ]
+        );
+      } catch (err) {
+        if (!this.hasMissingConversationColumnError(err)) throw err;
+        await this.db.execute(
+          `UPDATE telegram_users SET
+            hub_id = ?,
+            agent_id = ?,
+            device_id = ?,
+            telegram_username = ?,
+            telegram_first_name = ?,
+            telegram_last_name = ?
+          WHERE telegram_user_id = ?`,
+          [
+            data.hubId,
+            data.agentId,
+            data.deviceId ?? existing.deviceId,
+            data.telegramUsername ?? null,
+            data.telegramFirstName ?? null,
+            data.telegramLastName ?? null,
+            data.telegramUserId,
+          ]
+        );
+      }
 
       const updated = await this.findByTelegramUserId(data.telegramUserId);
       return updated!;
@@ -110,22 +143,43 @@ export class TelegramUserStore {
 
     // Create new user with provided or generated device ID
     const deviceId = data.deviceId ?? `tg-${generateEncryptedId()}`;
+    const conversationId = data.conversationId ?? data.agentId;
 
-    await this.db.execute(
-      `INSERT INTO telegram_users (
-        telegram_user_id, hub_id, agent_id, device_id,
-        telegram_username, telegram_first_name, telegram_last_name
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        data.telegramUserId,
-        data.hubId,
-        data.agentId,
-        deviceId,
-        data.telegramUsername ?? null,
-        data.telegramFirstName ?? null,
-        data.telegramLastName ?? null,
-      ]
-    );
+    try {
+      await this.db.execute(
+        `INSERT INTO telegram_users (
+          telegram_user_id, hub_id, agent_id, conversation_id, device_id,
+          telegram_username, telegram_first_name, telegram_last_name
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          data.telegramUserId,
+          data.hubId,
+          data.agentId,
+          conversationId,
+          deviceId,
+          data.telegramUsername ?? null,
+          data.telegramFirstName ?? null,
+          data.telegramLastName ?? null,
+        ]
+      );
+    } catch (err) {
+      if (!this.hasMissingConversationColumnError(err)) throw err;
+      await this.db.execute(
+        `INSERT INTO telegram_users (
+          telegram_user_id, hub_id, agent_id, device_id,
+          telegram_username, telegram_first_name, telegram_last_name
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          data.telegramUserId,
+          data.hubId,
+          data.agentId,
+          deviceId,
+          data.telegramUsername ?? null,
+          data.telegramFirstName ?? null,
+          data.telegramLastName ?? null,
+        ]
+      );
+    }
 
     const created = await this.findByTelegramUserId(data.telegramUserId);
     return created!;
@@ -178,6 +232,7 @@ export class TelegramUserStore {
       telegramUserId: data.telegramUserId,
       hubId: data.hubId,
       agentId: data.agentId,
+      conversationId: data.conversationId ?? existing?.conversationId ?? data.agentId,
       deviceId: data.deviceId ?? existing?.deviceId ?? `tg-${generateEncryptedId()}`,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
@@ -198,6 +253,7 @@ export class TelegramUserStore {
       telegramUserId: row.telegram_user_id,
       hubId: row.hub_id,
       agentId: row.agent_id,
+      conversationId: row.conversation_id ?? undefined,
       deviceId: row.device_id,
       createdAt: row.created_at,
       updatedAt: row.updated_at,

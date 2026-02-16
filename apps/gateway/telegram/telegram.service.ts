@@ -92,6 +92,14 @@ interface GenerateChannelWelcomeResult {
   text: string;
 }
 
+interface ListAgentsResult {
+  agents: Array<{ id: string; closed: boolean }>;
+}
+
+interface CreateAgentResult {
+  id: string;
+}
+
 // ── Constants ──
 
 const VERIFY_TIMEOUT_MS = 30_000;
@@ -355,6 +363,21 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       await ctx.reply(text, { parse_mode: "HTML", reply_markup: keyboard });
     });
 
+    this.bot.command("new", async (ctx) => {
+      if (!this.isPrivateChat(ctx)) return;
+      await this.handleNewConversationCommand(ctx);
+    });
+
+    this.bot.command("session", async (ctx) => {
+      if (!this.isPrivateChat(ctx)) return;
+      await this.handleSessionCommand(ctx, ctx.match?.trim() ?? "");
+    });
+
+    this.bot.command("sessions", async (ctx) => {
+      if (!this.isPrivateChat(ctx)) return;
+      await this.handleSessionsCommand(ctx);
+    });
+
     // Inline button callback queries
     this.bot.callbackQuery(CB_HOW_TO_CONNECT, async (ctx) => {
       await ctx.answerCallbackQuery();
@@ -529,7 +552,8 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     const text =
       `<b>Welcome back!</b>\n\n` +
       `${statusEmoji} Status: <b>${statusText}</b>\n` +
-      `Agent: <code>${user.agentId}</code>\n\n` +
+      `Agent: <code>${user.agentId}</code>\n` +
+      `Session: <code>${user.conversationId ?? user.agentId}</code>\n\n` +
       (online
         ? `Your agent is ready. Just send a message to start chatting.`
         : `Your Hub is offline. Make sure the Multica Desktop app is running.`);
@@ -563,7 +587,8 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       `<b>Connection Status</b>\n\n` +
       `${statusEmoji} <b>${statusLabel}</b>\n\n` +
       `Hub: <code>${user.hubId}</code>\n` +
-      `Agent: <code>${user.agentId}</code>\n\n` +
+      `Agent: <code>${user.agentId}</code>\n` +
+      `Session: <code>${user.conversationId ?? user.agentId}</code>\n\n` +
       (online
         ? `Your Hub is online and ready to receive messages.`
         : `Your Hub is offline. Make sure the Multica Desktop app is running.`);
@@ -585,6 +610,9 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       `<b>Commands</b>\n` +
       `  /start \u2014 Connect your account or see welcome\n` +
       `  /status \u2014 Check connection status\n` +
+      `  /new \u2014 Start a new isolated session\n` +
+      `  /session [id] \u2014 Show or switch current session\n` +
+      `  /sessions \u2014 List available sessions\n` +
       `  /help \u2014 Show this message\n\n` +
       `<b>How to connect</b>\n` +
       `  <b>1.</b> Open Multica Desktop app\n` +
@@ -610,6 +638,9 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       await this.bot.api.setMyCommands([
         { command: "start", description: "Connect or show welcome" },
         { command: "status", description: "Check connection status" },
+        { command: "new", description: "Create a new session" },
+        { command: "session", description: "Show/switch current session" },
+        { command: "sessions", description: "List sessions" },
         { command: "help", description: "Show help and instructions" },
       ]);
 
@@ -675,6 +706,181 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     // New user without connection link
     const welcome = this.buildWelcomeMessage();
     await ctx.reply(welcome.text, { parse_mode: "HTML", reply_markup: welcome.keyboard });
+  }
+
+  private async handleNewConversationCommand(ctx: Context): Promise<void> {
+    const telegramUserId = String(ctx.from?.id);
+    const user = await this.userStore.findByTelegramUserId(telegramUserId);
+    if (!user) {
+      await ctx.reply("You are not connected yet. Use /start and connect from Desktop first.");
+      return;
+    }
+
+    if (!this.eventsGateway.isDeviceRegistered(user.hubId)) {
+      await ctx.reply(
+        "Your Hub is currently offline.\n\n" +
+          "Make sure the Multica Desktop app is running and connected to the Gateway.",
+      );
+      return;
+    }
+
+    if (!this.eventsGateway.isDeviceRegistered(user.deviceId)) {
+      this.registerVirtualDeviceForUser(user.deviceId, user.telegramUserId);
+    }
+
+    try {
+      const created = await this.sendRpc<Record<string, never>, CreateAgentResult>(
+        user.deviceId,
+        user.hubId,
+        "createAgent",
+        {},
+        VERIFY_TIMEOUT_MS,
+        "Create session request timed out",
+      );
+
+      await this.userStore.upsert({
+        telegramUserId: user.telegramUserId,
+        hubId: user.hubId,
+        agentId: user.agentId,
+        conversationId: created.id,
+        deviceId: user.deviceId,
+        telegramUsername: user.telegramUsername,
+        telegramFirstName: user.telegramFirstName,
+        telegramLastName: user.telegramLastName,
+      });
+
+      await ctx.reply(
+        `<b>\u2705 New session created</b>\n\n` +
+          `Session: <code>${created.id}</code>\n\n` +
+          `All next messages in this Telegram chat will use this session.`,
+        { parse_mode: "HTML" },
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await ctx.reply(`Failed to create session: ${message}`);
+    }
+  }
+
+  private async handleSessionsCommand(ctx: Context): Promise<void> {
+    const telegramUserId = String(ctx.from?.id);
+    const user = await this.userStore.findByTelegramUserId(telegramUserId);
+    if (!user) {
+      await ctx.reply("You are not connected yet. Use /start and connect from Desktop first.");
+      return;
+    }
+
+    if (!this.eventsGateway.isDeviceRegistered(user.hubId)) {
+      await ctx.reply("Your Hub is offline. Open Desktop and reconnect, then try again.");
+      return;
+    }
+
+    if (!this.eventsGateway.isDeviceRegistered(user.deviceId)) {
+      this.registerVirtualDeviceForUser(user.deviceId, user.telegramUserId);
+    }
+
+    try {
+      const result = await this.sendRpc<Record<string, never>, ListAgentsResult>(
+        user.deviceId,
+        user.hubId,
+        "listAgents",
+        {},
+        VERIFY_TIMEOUT_MS,
+        "List sessions request timed out",
+      );
+
+      const sessions = result.agents.filter((item) => !item.closed).map((item) => item.id);
+      if (sessions.length === 0) {
+        await ctx.reply("No sessions found.");
+        return;
+      }
+
+      const current = user.conversationId ?? user.agentId;
+      const lines = sessions.slice(0, 20).map((id) => {
+        const marker = id === current ? "\u2022 current" : "";
+        return `<code>${id}</code>${marker ? ` ${marker}` : ""}`;
+      });
+      const extra = sessions.length > 20 ? `\n...and ${sessions.length - 20} more` : "";
+
+      await ctx.reply(
+        `<b>Available sessions</b>\n\n` +
+          `${lines.join("\n")}${extra}\n\n` +
+          `Use <code>/session &lt;id&gt;</code> to switch.`,
+        { parse_mode: "HTML" },
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await ctx.reply(`Failed to load sessions: ${message}`);
+    }
+  }
+
+  private async handleSessionCommand(ctx: Context, input: string): Promise<void> {
+    const telegramUserId = String(ctx.from?.id);
+    const user = await this.userStore.findByTelegramUserId(telegramUserId);
+    if (!user) {
+      await ctx.reply("You are not connected yet. Use /start and connect from Desktop first.");
+      return;
+    }
+
+    const target = input.trim();
+    const current = user.conversationId ?? user.agentId;
+    if (!target) {
+      await ctx.reply(
+        `<b>Current session</b>\n\n` +
+          `<code>${current}</code>\n\n` +
+          `Use <code>/session &lt;id&gt;</code> to switch.`,
+        { parse_mode: "HTML" },
+      );
+      return;
+    }
+
+    if (!this.eventsGateway.isDeviceRegistered(user.hubId)) {
+      await ctx.reply("Your Hub is offline. Open Desktop and reconnect, then try again.");
+      return;
+    }
+
+    if (!this.eventsGateway.isDeviceRegistered(user.deviceId)) {
+      this.registerVirtualDeviceForUser(user.deviceId, user.telegramUserId);
+    }
+
+    try {
+      const result = await this.sendRpc<Record<string, never>, ListAgentsResult>(
+        user.deviceId,
+        user.hubId,
+        "listAgents",
+        {},
+        VERIFY_TIMEOUT_MS,
+        "List sessions request timed out",
+      );
+
+      const exists = result.agents.some((item) => item.id === target && !item.closed);
+      if (!exists) {
+        await ctx.reply(
+          `Session not found: <code>${target}</code>\n\nUse /sessions to list available sessions.`,
+          { parse_mode: "HTML" },
+        );
+        return;
+      }
+
+      await this.userStore.upsert({
+        telegramUserId: user.telegramUserId,
+        hubId: user.hubId,
+        agentId: user.agentId,
+        conversationId: target,
+        deviceId: user.deviceId,
+        telegramUsername: user.telegramUsername,
+        telegramFirstName: user.telegramFirstName,
+        telegramLastName: user.telegramLastName,
+      });
+
+      await ctx.reply(
+        `<b>\u2705 Session switched</b>\n\n` +
+          `Current session: <code>${target}</code>`,
+        { parse_mode: "HTML" },
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await ctx.reply(`Failed to switch session: ${message}`);
+    }
   }
 
   // ── Inbound: media messages ──
@@ -1073,12 +1279,14 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
           ? `Telegram @${msg.from.username}`
           : `Telegram ${msg?.from?.first_name ?? telegramUserId}`,
       });
+      const mainConversationId = connectionInfo.conversationId ?? result.mainConversationId ?? result.agentId;
 
       // 5. Save to DB
       await this.userStore.upsert({
         telegramUserId,
         hubId: connectionInfo.hubId,
         agentId: connectionInfo.agentId,
+        conversationId: mainConversationId,
         deviceId,
         telegramUsername: msg?.from?.username,
         telegramFirstName: msg?.from?.first_name,
@@ -1092,7 +1300,8 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       await ctx.reply(
         `<b>\u2705 Connected successfully!</b>\n\n` +
           `Hub: <code>${result.hubId}</code>\n` +
-          `Agent: <code>${result.agentId}</code>\n\n` +
+          `Agent: <code>${result.agentId}</code>\n` +
+          `Session: <code>${mainConversationId}</code>\n\n` +
           `You can now send messages to interact with your agent.`,
         { parse_mode: "HTML", reply_markup: successKeyboard },
       );
@@ -1298,13 +1507,14 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Send message to Hub
+    const conversationId = user.conversationId ?? user.agentId;
     const message: RoutedMessage = {
       id: uuidv7(),
       uid: null,
       from: user.deviceId,
       to: user.hubId,
       action: "message",
-      payload: { agentId: user.agentId, content: text },
+      payload: { agentId: user.agentId, conversationId, content: text },
     };
 
     const sent = this.eventsGateway.routeFromVirtualDevice(message);
@@ -1314,7 +1524,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.logger.debug(
-      `Routed message to Hub: deviceId=${user.deviceId}, hubId=${user.hubId}, agentId=${user.agentId}`,
+      `Routed message to Hub: deviceId=${user.deviceId}, hubId=${user.hubId}, agentId=${user.agentId}, conversationId=${conversationId}`,
     );
   }
 

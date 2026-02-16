@@ -52,6 +52,24 @@ pnpm dev:local:archive
 - `MULTICA_WORKSPACE_DIR`: override workspace root
 - `MULTICA_RUN_LOG=1`: enable structured run-log output
 
+## Agent / Conversation Semantics
+
+- `agentId`: logical owner identity (capabilities/profile scope).
+- `conversationId`: isolated runtime thread under an agent.
+- `sessionId`: runtime/storage id for a conversation (currently same as `conversationId`).
+
+Compatibility behavior:
+
+- If only `agentId` is provided, the runtime resolves `conversationId = agentId`.
+- New integrations should pass `conversationId` explicitly.
+
+Telegram behavior:
+
+- One Telegram DM binds to one active `conversationId`.
+- `/new` creates and switches to a new conversation.
+- `/session <id>` switches the active conversation.
+- `/sessions` lists available conversations.
+
 ## Local Full-Stack Notes (`pnpm dev:local`)
 
 `pnpm dev:local` is the recommended way to run the full local stack for integration work.
