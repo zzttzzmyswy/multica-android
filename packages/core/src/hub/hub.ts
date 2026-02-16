@@ -17,7 +17,6 @@ import { AsyncAgent } from "../agent/async-agent.js";
 import type { AgentOptions } from "../agent/types.js";
 import { getHubId } from "./hub-identity.js";
 import { setHub } from "./hub-singleton.js";
-import { initSubagentRegistry, shutdownSubagentRegistry } from "../agent/subagent/index.js";
 import { loadAgentRecords, addAgentRecord, removeAgentRecord } from "./agent-store.js";
 import { RpcDispatcher, RpcError } from "./rpc/dispatcher.js";
 import { createGetAgentMessagesHandler } from "./rpc/handlers/get-agent-messages.js";
@@ -144,11 +143,8 @@ export class Hub {
     });
     this.rpc.register("resolveExecApproval", createResolveExecApprovalHandler(this.approvalManager));
 
-    // Register as global singleton for cross-module access (subagent tools, announce flow)
+    // Register as global singleton for cross-module access.
     setHub(this);
-
-    // Restore subagent registry from persistent state
-    initSubagentRegistry();
 
     // Initialize and start cron service
     this.initCronService();
@@ -799,9 +795,6 @@ export class Hub {
     this.heartbeatUnsubscribe?.();
     this.heartbeatUnsubscribe = null;
     this.heartbeatListeners.clear();
-
-    // Finalize subagent registry before closing agents
-    shutdownSubagentRegistry();
 
     for (const [id, agent] of this.agents) {
       agent.close();
