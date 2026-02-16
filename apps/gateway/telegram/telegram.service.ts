@@ -100,6 +100,14 @@ interface CreateAgentResult {
   id: string;
 }
 
+interface ListConversationsResult {
+  conversations: Array<{ id: string; closed: boolean }>;
+}
+
+interface CreateConversationResult {
+  id: string;
+}
+
 // ── Constants ──
 
 const VERIFY_TIMEOUT_MS = 30_000;
@@ -708,6 +716,61 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     await ctx.reply(welcome.text, { parse_mode: "HTML", reply_markup: welcome.keyboard });
   }
 
+  private isMethodNotFoundError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return message.includes("METHOD_NOT_FOUND") || message.includes("Unknown RPC method");
+  }
+
+  private async createConversationViaRpc(deviceId: string, hubId: string): Promise<{ id: string }> {
+    try {
+      const created = await this.sendRpc<Record<string, never>, CreateConversationResult>(
+        deviceId,
+        hubId,
+        "createConversation",
+        {},
+        VERIFY_TIMEOUT_MS,
+        "Create session request timed out",
+      );
+      return { id: created.id };
+    } catch (error) {
+      if (!this.isMethodNotFoundError(error)) throw error;
+      const created = await this.sendRpc<Record<string, never>, CreateAgentResult>(
+        deviceId,
+        hubId,
+        "createAgent",
+        {},
+        VERIFY_TIMEOUT_MS,
+        "Create session request timed out",
+      );
+      return { id: created.id };
+    }
+  }
+
+  private async listConversationsViaRpc(deviceId: string, hubId: string): Promise<Array<{ id: string; closed: boolean }>> {
+    try {
+      const result = await this.sendRpc<Record<string, never>, ListConversationsResult>(
+        deviceId,
+        hubId,
+        "listConversations",
+        {},
+        VERIFY_TIMEOUT_MS,
+        "List sessions request timed out",
+      );
+      return result.conversations;
+    } catch (error) {
+      if (!this.isMethodNotFoundError(error)) throw error;
+      const result = await this.sendRpc<Record<string, never>, ListAgentsResult>(
+        deviceId,
+        hubId,
+        "listAgents",
+        {},
+        VERIFY_TIMEOUT_MS,
+        "List sessions request timed out",
+      );
+      return result.agents;
+    }
+  }
+
   private async handleNewConversationCommand(ctx: Context): Promise<void> {
     const telegramUserId = String(ctx.from?.id);
     const user = await this.userStore.findByTelegramUserId(telegramUserId);
@@ -729,14 +792,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     }
 
     try {
-      const created = await this.sendRpc<Record<string, never>, CreateAgentResult>(
-        user.deviceId,
-        user.hubId,
-        "createAgent",
-        {},
-        VERIFY_TIMEOUT_MS,
-        "Create session request timed out",
-      );
+      const created = await this.createConversationViaRpc(user.deviceId, user.hubId);
 
       await this.userStore.upsert({
         telegramUserId: user.telegramUserId,
@@ -779,16 +835,8 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     }
 
     try {
-      const result = await this.sendRpc<Record<string, never>, ListAgentsResult>(
-        user.deviceId,
-        user.hubId,
-        "listAgents",
-        {},
-        VERIFY_TIMEOUT_MS,
-        "List sessions request timed out",
-      );
-
-      const sessions = result.agents.filter((item) => !item.closed).map((item) => item.id);
+      const conversations = await this.listConversationsViaRpc(user.deviceId, user.hubId);
+      const sessions = conversations.filter((item) => !item.closed).map((item) => item.id);
       if (sessions.length === 0) {
         await ctx.reply("No sessions found.");
         return;
@@ -843,16 +891,8 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     }
 
     try {
-      const result = await this.sendRpc<Record<string, never>, ListAgentsResult>(
-        user.deviceId,
-        user.hubId,
-        "listAgents",
-        {},
-        VERIFY_TIMEOUT_MS,
-        "List sessions request timed out",
-      );
-
-      const exists = result.agents.some((item) => item.id === target && !item.closed);
+      const conversations = await this.listConversationsViaRpc(user.deviceId, user.hubId);
+      const exists = conversations.some((item) => item.id === target && !item.closed);
       if (!exists) {
         await ctx.reply(
           `Session not found: <code>${target}</code>\n\nUse /sessions to list available sessions.`,

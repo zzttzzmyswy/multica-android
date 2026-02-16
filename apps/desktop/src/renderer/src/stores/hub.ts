@@ -47,7 +47,7 @@ export const useHubStore = create<HubStore>()((set, get) => ({
     try {
       await window.electronAPI.hub.init()
       const info = await window.electronAPI.hub.info()
-      const agentList = await window.electronAPI.hub.listAgents()
+      const agentList = await window.electronAPI.hub.listConversations()
 
       set({
         hubInfo: info as HubInfo,
@@ -77,7 +77,7 @@ export const useHubStore = create<HubStore>()((set, get) => ({
 
     try {
       const info = await window.electronAPI.hub.info()
-      const agentList = await window.electronAPI.hub.listAgents()
+      const agentList = await window.electronAPI.hub.listConversations()
 
       set({
         hubInfo: info as HubInfo,

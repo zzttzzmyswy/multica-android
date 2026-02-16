@@ -62,6 +62,9 @@ Compatibility behavior:
 
 - If only `agentId` is provided, the runtime resolves `conversationId = agentId`.
 - New integrations should pass `conversationId` explicitly.
+- Hub RPC supports both naming sets:
+  - Legacy: `createAgent/listAgents/deleteAgent`
+  - Conversation-first aliases: `createConversation/listConversations/deleteConversation`
 
 Telegram behavior:
 
