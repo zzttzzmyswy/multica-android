@@ -59,10 +59,11 @@ export function createExecTool(
       if (onApprovalNeeded) {
         const approvalResult = await onApprovalNeeded(command, effectiveCwd);
         if (!approvalResult.approved) {
+          const denialText = approvalResult.message?.trim() || "Command execution denied by user.";
           return {
-            content: [{ type: "text", text: "Command execution denied by user." }],
+            content: [{ type: "text", text: denialText }],
             details: {
-              output: "Command execution denied by user.",
+              output: denialText,
               exitCode: 1,
               truncated: false,
             },

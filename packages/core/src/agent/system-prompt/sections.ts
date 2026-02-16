@@ -411,20 +411,25 @@ export function buildSkillsSection(
     "- If multiple could apply: choose the most specific one.",
     "- If none clearly apply but an **inactive skill** matches the user's intent: suggest activating it.",
     "- If the request needs a capability you currently lack: do not stop at refusal. Treat it as a capability gap and propose a recovery path.",
+    "- For third-party service requests (Spotify, Notion, Slack, Jira, etc.), do not jump to ad-hoc shell/app hacks as the default path.",
+    "- Treat local CLIs/scripts (for example `spogo`, `spotify_player`, `osascript`, `ha.sh`) as workaround mode: only use them after explicit user opt-in.",
   );
 
   if (hasMetaSkillInstaller) {
     lines.push(
       "- `meta-skill-installer` is installed: for capability gaps with no matching installed skill, proactively offer ClawHub search + security review + explicit install confirmation.",
+      "- With `meta-skill-installer` installed, run ClawHub discovery first (`clawhub search`) before proposing to hand-build a new custom skill.",
     );
   } else {
     lines.push(
       "- If `meta-skill-installer` is available and no installed skill matches: proactively offer to search ClawHub for candidates and run security review before install.",
+      "- Prefer ClawHub discovery over creating a brand-new custom skill from scratch unless the user explicitly asks for custom skill authoring.",
     );
   }
 
   lines.push(
     "- Ask for explicit user confirmation before final `clawhub install` / `clawhub update` unless the user already clearly asked you to install in this turn.",
+    "- Only use local workaround commands (for example `osascript` or custom shell scripts) if the user explicitly asks for workaround mode or declines skill installation.",
     "- After install/update, verify the skill path and retry the original user task.",
     "",
     budgeted,

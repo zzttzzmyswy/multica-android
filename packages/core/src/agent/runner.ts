@@ -50,6 +50,7 @@ import {
 import { isContextOverflowError } from "./errors.js";
 import { resolveWorkspaceDir, ensureWorkspaceDir } from "./workspace.js";
 import { createRunLog, type RunLog } from "./run-log.js";
+import type { ExecApprovalCallback } from "./tools/exec-approval-types.js";
 
 // ============================================================
 // Error classification for auth profile rotation
@@ -81,6 +82,153 @@ export function classifyError(error: unknown): AuthProfileFailureReason {
 export function isRotatableError(reason: AuthProfileFailureReason): boolean {
   // timeout is rotatable because some providers hang on rate limit instead of returning 429
   return reason === "auth" || reason === "rate_limit" || reason === "billing" || reason === "timeout";
+}
+
+// ── Skill install consent guard ─────────────────────────────────────────────
+
+const CLAWHUB_MUTATION_RE = /\bclawhub\b[\s\S]*\b(?:install|update)\b/i;
+const ENV_INSTALL_RE = /\b(?:brew|apt-get|apt|yum|dnf|pacman|zypper)\s+(?:install|upgrade|tap)\b|\b(?:npm|pnpm|yarn|bun)\s+(?:install|add)\b|\bpip(?:3)?\s+install\b|\buv\s+(?:tool\s+install|pip\s+install)\b|\bcargo\s+install\b|\bgo\s+install\b/i;
+const THIRD_PARTY_WORKAROUND_RE = /\b(?:osascript|spogo|spotify_player|ha\.sh|homeassistant|hass)\b|\/api\/states\b/i;
+const LOCAL_SKILL_PATH_RE = /(?:~\/\.super-multica(?:-[\w-]+)?\/skills\/|\/\.super-multica(?:-[\w-]+)?\/skills\/|\/skills\/)/i;
+const LOCAL_SKILL_MUTATION_VERB_RE = /\b(?:mkdir|cp|mv|rm|touch|install|clone)\b/i;
+const INSTALL_ACTION_RE = /\b(?:install|update|add)\b|安装|更新|添加|启用|配置/i;
+const SKILL_CONTEXT_RE = /\b(?:clawhub|skill|skills)\b|技能|插件|扩展/i;
+const WORKAROUND_ACTION_RE = /\b(?:workaround|fallback|local\s+command|local\s+script|shell\s+script|osascript|apple\s*script|spogo|spotify_player|homeassistant|ha\.sh)\b|绕过|临时方案|本地命令|本机命令|脚本方式|直接执行|不用技能|不用skill|不装skill|不安装skill/i;
+const CUSTOM_SKILL_AUTHORING_RE = /\b(?:create|author|build)\b[\s\S]*\bskills?\b|创建[\s\S]{0,30}(?:技能|skill)|自定义[\s\S]{0,20}(?:技能|skill)|手写[\s\S]{0,20}(?:技能|skill)|custom\s+skill/i;
+const AFFIRMATIVE_RE = /\b(?:yes|y|ok|okay|sure|confirm|confirmed|continue|go ahead|please do|do it)\b|继续|确认|同意|可以|好的|继续安装/i;
+const STANDALONE_AFFIRMATIVE_RE = /^\s*(?:行|行吧|行的)\s*[。！!]?$/i;
+const DECLINE_RE = /\b(?:no|cancel|stop|don't|do not|not now|skip)\b|不要|不需要|取消|先别|暂时不用/i;
+
+function hasAffirmativeConsent(text: string): boolean {
+  return AFFIRMATIVE_RE.test(text) || STANDALONE_AFFIRMATIVE_RE.test(text);
+}
+
+/**
+ * Detect mutating ClawHub commands that require explicit user confirmation.
+ */
+export function isMutatingClawhubCommand(command: string): boolean {
+  return CLAWHUB_MUTATION_RE.test(command);
+}
+
+/**
+ * Detect package/environment installation commands.
+ * These mutate the runtime environment and should require explicit user confirmation.
+ */
+export function isEnvironmentInstallCommand(command: string): boolean {
+  return ENV_INSTALL_RE.test(command);
+}
+
+/**
+ * Detect local workaround commands for third-party integrations.
+ * These should require explicit user opt-in before execution.
+ */
+export function isThirdPartyWorkaroundCommand(command: string): boolean {
+  return THIRD_PARTY_WORKAROUND_RE.test(command);
+}
+
+/**
+ * Detect direct local skill mutations outside ClawHub install/update flow.
+ */
+export function isLocalSkillMutationCommand(command: string): boolean {
+  if (!LOCAL_SKILL_PATH_RE.test(command)) return false;
+  if (/\bclawhub\b/i.test(command)) return false;
+
+  if (LOCAL_SKILL_MUTATION_VERB_RE.test(command)) return true;
+
+  const hasCatOrEchoWrite = /\b(?:cat|tee|echo)\b/i.test(command) && />>?|<<\s*['"]?EOF/i.test(command);
+  return hasCatOrEchoWrite;
+}
+
+/**
+ * Determine whether the current user prompt grants permission to install/update skills.
+ *
+ * If `awaitingConfirmation` is true, short affirmative replies (e.g. "继续", "yes")
+ * are treated as confirmation.
+ */
+export function evaluateSkillInstallConsent(
+  prompt: string,
+  awaitingConfirmation: boolean,
+): { allowInstall: boolean; declined: boolean } {
+  const text = prompt.trim();
+  if (!text) return { allowInstall: false, declined: false };
+
+  if (DECLINE_RE.test(text)) {
+    return { allowInstall: false, declined: true };
+  }
+
+  const hasInstallAction = INSTALL_ACTION_RE.test(text);
+  const hasSkillContext = SKILL_CONTEXT_RE.test(text);
+  const hasAffirmative = hasAffirmativeConsent(text);
+
+  if (hasInstallAction) {
+    return { allowInstall: true, declined: false };
+  }
+
+  if (hasSkillContext && hasAffirmative) {
+    return { allowInstall: true, declined: false };
+  }
+
+  if (awaitingConfirmation && hasAffirmative) {
+    return { allowInstall: true, declined: false };
+  }
+
+  return { allowInstall: false, declined: false };
+}
+
+/**
+ * Determine whether the current user prompt explicitly opts into local workaround mode.
+ */
+export function evaluateWorkaroundConsent(
+  prompt: string,
+  awaitingConfirmation: boolean,
+): { allowWorkaround: boolean; declined: boolean } {
+  const text = prompt.trim();
+  if (!text) return { allowWorkaround: false, declined: false };
+
+  const hasWorkaroundAction = WORKAROUND_ACTION_RE.test(text);
+  const hasAffirmative = hasAffirmativeConsent(text);
+
+  if (hasWorkaroundAction) {
+    return { allowWorkaround: true, declined: false };
+  }
+
+  if (awaitingConfirmation && hasAffirmative) {
+    return { allowWorkaround: true, declined: false };
+  }
+
+  if (DECLINE_RE.test(text)) {
+    return { allowWorkaround: false, declined: true };
+  }
+
+  return { allowWorkaround: false, declined: false };
+}
+
+/**
+ * Determine whether the current prompt explicitly opts into custom skill authoring.
+ */
+export function evaluateCustomSkillAuthoringConsent(
+  prompt: string,
+  awaitingConfirmation: boolean,
+): { allowAuthoring: boolean; declined: boolean } {
+  const text = prompt.trim();
+  if (!text) return { allowAuthoring: false, declined: false };
+
+  if (DECLINE_RE.test(text)) {
+    return { allowAuthoring: false, declined: true };
+  }
+
+  const hasAuthoringIntent = CUSTOM_SKILL_AUTHORING_RE.test(text);
+  const hasAffirmative = hasAffirmativeConsent(text);
+
+  if (hasAuthoringIntent) {
+    return { allowAuthoring: true, declined: false };
+  }
+
+  if (awaitingConfirmation && hasAffirmative) {
+    return { allowAuthoring: true, declined: false };
+  }
+
+  return { allowAuthoring: false, declined: false };
 }
 
 // ── Run-log result extraction helpers ──────────────────────────────────────
@@ -143,6 +291,13 @@ export class Agent {
   private readonly runLog: RunLog;
   private readonly toolStartTimes = new Map<string, number>();
   private initialized = false;
+  private allowSkillInstallForCurrentRun = false;
+  private awaitingSkillInstallConfirmation = false;
+  private allowWorkaroundForCurrentRun = false;
+  private awaitingWorkaroundConfirmation = false;
+  private allowCustomSkillAuthoringForCurrentRun = false;
+  private awaitingCustomSkillAuthoringConfirmation = false;
+  private readonly guardedExecApproval: ExecApprovalCallback;
 
   // Context window settings (for pre-flight compaction)
   private readonly reserveTokens: number;
@@ -186,6 +341,7 @@ export class Agent {
 
     // Load session metadata early so stored provider/model can inform defaults
     this.sessionId = options.sessionId ?? uuidv7();
+    this.guardedExecApproval = this.createGuardedExecApprovalCallback(options.onExecApprovalNeeded);
     this.runLog = createRunLog(
       options.enableRunLog ?? !!process.env.MULTICA_RUN_LOG,
       this.sessionId,
@@ -396,8 +552,25 @@ export class Agent {
     // Use this.sessionId (which may be auto-generated) instead of options.sessionId
     // (which may be undefined). Without this, delegate tool has no session context.
     this.toolsOptions = mergedToolsConfig
-      ? { ...options, sessionId: this.sessionId, cwd: effectiveCwd, tools: mergedToolsConfig, profileDir, provider: this.resolvedProvider, runLog: this.runLog }
-      : { ...options, sessionId: this.sessionId, cwd: effectiveCwd, profileDir, provider: this.resolvedProvider, runLog: this.runLog };
+      ? {
+        ...options,
+        sessionId: this.sessionId,
+        cwd: effectiveCwd,
+        tools: mergedToolsConfig,
+        profileDir,
+        provider: this.resolvedProvider,
+        runLog: this.runLog,
+        onExecApprovalNeeded: this.guardedExecApproval,
+      }
+      : {
+        ...options,
+        sessionId: this.sessionId,
+        cwd: effectiveCwd,
+        profileDir,
+        provider: this.resolvedProvider,
+        runLog: this.runLog,
+        onExecApprovalNeeded: this.guardedExecApproval,
+      };
 
     const tools = resolveTools(this.toolsOptions);
     if (this.debug) {
@@ -525,6 +698,42 @@ export class Agent {
     this.currentUserSource = options?.source;
     this._isRunning = true;
     this._aborted = false;
+
+    if (this._internalRun) {
+      this.allowSkillInstallForCurrentRun = false;
+      this.allowWorkaroundForCurrentRun = false;
+      this.allowCustomSkillAuthoringForCurrentRun = false;
+    } else {
+      const consent = evaluateSkillInstallConsent(prompt, this.awaitingSkillInstallConfirmation);
+      if (consent.declined) {
+        this.awaitingSkillInstallConfirmation = false;
+      }
+      this.allowSkillInstallForCurrentRun = consent.allowInstall;
+      if (consent.allowInstall) {
+        this.awaitingSkillInstallConfirmation = false;
+      }
+
+      const workaroundConsent = evaluateWorkaroundConsent(prompt, this.awaitingWorkaroundConfirmation);
+      if (workaroundConsent.declined) {
+        this.awaitingWorkaroundConfirmation = false;
+      }
+      this.allowWorkaroundForCurrentRun = workaroundConsent.allowWorkaround;
+      if (workaroundConsent.allowWorkaround) {
+        this.awaitingWorkaroundConfirmation = false;
+      }
+
+      const customSkillConsent = evaluateCustomSkillAuthoringConsent(
+        prompt,
+        this.awaitingCustomSkillAuthoringConfirmation,
+      );
+      if (customSkillConsent.declined) {
+        this.awaitingCustomSkillAuthoringConfirmation = false;
+      }
+      this.allowCustomSkillAuthoringForCurrentRun = customSkillConsent.allowAuthoring;
+      if (customSkillConsent.allowAuthoring) {
+        this.awaitingCustomSkillAuthoringConfirmation = false;
+      }
+    }
 
     const runStart = Date.now();
     this.runLog.log("run_start", {
@@ -690,11 +899,99 @@ export class Agent {
       }
       this._isRunning = false;
       this._aborted = false;
+      this.allowSkillInstallForCurrentRun = false;
+      this.allowWorkaroundForCurrentRun = false;
+      this.allowCustomSkillAuthoringForCurrentRun = false;
       this._lastEventSavedAssistant = undefined;
       this.currentUserDisplayPrompt = undefined;
       this.currentUserSource = undefined;
       this.runLog.flush().catch(() => {});
     }
+  }
+
+  private createGuardedExecApprovalCallback(
+    base?: ExecApprovalCallback,
+  ): ExecApprovalCallback {
+    return async (command, cwd) => {
+      const needsInstallConsent =
+        isMutatingClawhubCommand(command) || isEnvironmentInstallCommand(command);
+      const needsWorkaroundConsent = isThirdPartyWorkaroundCommand(command);
+      const needsCustomSkillAuthoringConsent = isLocalSkillMutationCommand(command);
+      if (needsInstallConsent && !this.allowSkillInstallForCurrentRun) {
+        this.awaitingSkillInstallConfirmation = true;
+        this.runLog.log("install_guard", {
+          action: "blocked",
+          reason: "explicit_user_confirmation_required",
+          command: command.slice(0, 200),
+        });
+        return {
+          approved: false,
+          decision: "deny",
+          message:
+            "Install command blocked: explicit user confirmation is required first. Ask the user whether to continue installation.",
+        };
+      }
+
+      if (needsInstallConsent) {
+        this.runLog.log("install_guard", {
+          action: "allowed",
+          reason: "user_confirmed",
+          command: command.slice(0, 200),
+        });
+      }
+
+      if (needsCustomSkillAuthoringConsent && !this.allowCustomSkillAuthoringForCurrentRun) {
+        this.awaitingCustomSkillAuthoringConfirmation = true;
+        this.runLog.log("custom_skill_guard", {
+          action: "blocked",
+          reason: "explicit_custom_skill_authoring_confirmation_required",
+          command: command.slice(0, 200),
+        });
+        return {
+          approved: false,
+          decision: "deny",
+          message:
+            "Manual local skill creation command blocked by policy. Use ClawHub discovery/install flow first, or ask the user to explicitly confirm custom skill authoring.",
+        };
+      }
+
+      if (needsCustomSkillAuthoringConsent) {
+        this.runLog.log("custom_skill_guard", {
+          action: "allowed",
+          reason: "user_confirmed_custom_skill_authoring",
+          command: command.slice(0, 200),
+        });
+      }
+
+      if (needsWorkaroundConsent && !this.allowWorkaroundForCurrentRun) {
+        this.awaitingWorkaroundConfirmation = true;
+        this.runLog.log("workaround_guard", {
+          action: "blocked",
+          reason: "explicit_workaround_opt_in_required",
+          command: command.slice(0, 200),
+        });
+        return {
+          approved: false,
+          decision: "deny",
+          message:
+            "Local workaround command blocked by policy. First explain the capability gap and ask whether to search/install a Cloud Hub skill, or get explicit user opt-in for workaround mode.",
+        };
+      }
+
+      if (needsWorkaroundConsent) {
+        this.runLog.log("workaround_guard", {
+          action: "allowed",
+          reason: "user_opted_in_workaround_mode",
+          command: command.slice(0, 200),
+        });
+      }
+
+      if (base) {
+        return base(command, cwd);
+      }
+
+      return { approved: true, decision: "allow-once" };
+    };
   }
 
   /**

@@ -224,6 +224,9 @@ describe("buildSkillsSection", () => {
     expect(text).toContain("capability gap");
     expect(text).toContain("explicit user confirmation");
     expect(text).toContain("clawhub install");
+    expect(text).toContain("third-party service requests");
+    expect(text).toContain("local workaround commands");
+    expect(text).toContain("spotify_player");
   });
 
   it("surfaces installed skill IDs and prioritizes meta skill guidance when present", () => {
@@ -240,6 +243,7 @@ describe("buildSkillsSection", () => {
     expect(text).toContain("`meta-skill-installer`");
     expect(text).toContain("is installed");
     expect(text).toContain("ClawHub search");
+    expect(text).toContain("run ClawHub discovery first");
   });
 
   it("returns empty in minimal mode", () => {
