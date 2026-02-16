@@ -1,13 +1,21 @@
 # Super Multica
 
+Super Multica is a distributed AI agent framework and product monorepo.
+It provides a local-first agent runtime plus CLI, gateway, web, and mobile integration surfaces.
+
+What this project does:
+
+- runs AI agent sessions with tools, skills, and persistent session state
+- supports scheduled/automated execution workflows
+- supports both standalone local usage and remote-access client workflows
+
 This repository keeps docs focused on:
 
 1. Development workflow
 2. Testing workflow
 3. Operational process
 
-Architecture and project-description details are intentionally omitted from docs.
-Use source code as the architecture reference.
+Architecture details are still source-of-truth in code, but docs keep minimal project context for onboarding.
 
 ## Quick Start (Workflow)
 
