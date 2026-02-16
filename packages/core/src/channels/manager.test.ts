@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import type { Hub } from "../hub/hub.js";
 import type { AsyncAgent } from "../agent/async-agent.js";
 import type { ChannelPlugin, ChannelMessage } from "./types.js";
@@ -89,16 +92,17 @@ function createHarness() {
     },
   };
 
-  const manager = new ChannelManager(hub);
-
-  const routeIncoming = (message: ChannelMessage) => {
-    (manager as unknown as {
+  const routeIncomingToManager = (target: ChannelManager, message: ChannelMessage) => {
+    (target as unknown as {
       routeIncoming: (plugin: ChannelPlugin, accountId: string, message: ChannelMessage) => void;
     }).routeIncoming(plugin, "default", message);
   };
 
-  const getConversationIdByExternal = (externalConversationId: string): string | undefined => {
-    const bindings = (manager as unknown as {
+  const getConversationIdByExternal = (
+    target: ChannelManager,
+    externalConversationId: string,
+  ): string | undefined => {
+    const bindings = (target as unknown as {
       routeBindings: Map<string, { hubConversationId: string }>;
     }).routeBindings;
 
@@ -111,31 +115,38 @@ function createHarness() {
   };
 
   return {
-    manager,
     hub,
     replyText,
     sendText,
     addReaction,
-    routeIncoming,
+    plugin,
+    createManager: (routeBindingsPath: string) => new ChannelManager(hub, { routeBindingsPath }),
+    routeIncomingToManager,
     getConversationIdByExternal,
     conversations,
   };
 }
 
 describe("channel manager route isolation", () => {
+  let testDir: string;
+
   beforeEach(() => {
     vi.useFakeTimers();
+    testDir = mkdtempSync(join(tmpdir(), "channel-manager-"));
   });
 
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    rmSync(testDir, { recursive: true, force: true });
   });
 
   it("suppresses pure HEARTBEAT_OK in channel outbound", async () => {
-    const { manager, routeIncoming, getConversationIdByExternal, conversations, replyText, sendText } = createHarness();
+    const routeBindingsPath = join(testDir, "route-bindings.json");
+    const { createManager, routeIncomingToManager, getConversationIdByExternal, conversations, replyText, sendText } = createHarness();
+    const manager = createManager(routeBindingsPath);
 
-    routeIncoming({
+    routeIncomingToManager(manager, {
       messageId: "in-1",
       conversationId: "chat-1",
       senderId: "user-1",
@@ -143,7 +154,7 @@ describe("channel manager route isolation", () => {
       chatType: "direct",
     });
 
-    const hubConversationId = getConversationIdByExternal("chat-1");
+    const hubConversationId = getConversationIdByExternal(manager, "chat-1");
     expect(hubConversationId).toBeDefined();
 
     const harness = conversations.get(hubConversationId!);
@@ -167,9 +178,11 @@ describe("channel manager route isolation", () => {
   });
 
   it("keeps forwarding normal assistant replies", async () => {
-    const { manager, routeIncoming, getConversationIdByExternal, conversations, replyText, sendText } = createHarness();
+    const routeBindingsPath = join(testDir, "route-bindings.json");
+    const { createManager, routeIncomingToManager, getConversationIdByExternal, conversations, replyText, sendText } = createHarness();
+    const manager = createManager(routeBindingsPath);
 
-    routeIncoming({
+    routeIncomingToManager(manager, {
       messageId: "in-1",
       conversationId: "chat-1",
       senderId: "user-1",
@@ -177,7 +190,7 @@ describe("channel manager route isolation", () => {
       chatType: "direct",
     });
 
-    const hubConversationId = getConversationIdByExternal("chat-1");
+    const hubConversationId = getConversationIdByExternal(manager, "chat-1");
     expect(hubConversationId).toBeDefined();
 
     const harness = conversations.get(hubConversationId!);
@@ -211,14 +224,15 @@ describe("channel manager route isolation", () => {
 
   it("binds different external conversations to isolated hub conversations", async () => {
     const {
-      manager,
+      createManager,
       hub,
-      routeIncoming,
+      routeIncomingToManager,
       getConversationIdByExternal,
       conversations,
     } = createHarness();
+    const manager = createManager(join(testDir, "route-bindings.json"));
 
-    routeIncoming({
+    routeIncomingToManager(manager, {
       messageId: "in-a1",
       conversationId: "chat-a",
       senderId: "user-a",
@@ -226,7 +240,7 @@ describe("channel manager route isolation", () => {
       chatType: "group",
     });
 
-    routeIncoming({
+    routeIncomingToManager(manager, {
       messageId: "in-b1",
       conversationId: "chat-b",
       senderId: "user-b",
@@ -236,8 +250,8 @@ describe("channel manager route isolation", () => {
 
     await vi.advanceTimersByTimeAsync(600);
 
-    const convA = getConversationIdByExternal("chat-a");
-    const convB = getConversationIdByExternal("chat-b");
+    const convA = getConversationIdByExternal(manager, "chat-a");
+    const convB = getConversationIdByExternal(manager, "chat-b");
 
     expect(convA).toBeDefined();
     expect(convB).toBeDefined();
@@ -253,7 +267,7 @@ describe("channel manager route isolation", () => {
     expect(harnessB?.write.mock.calls[0]?.[0]).toContain("beta");
 
     // Same external route should reuse existing hub conversation binding.
-    routeIncoming({
+    routeIncomingToManager(manager, {
       messageId: "in-a2",
       conversationId: "chat-a",
       senderId: "user-a",
@@ -263,11 +277,57 @@ describe("channel manager route isolation", () => {
 
     await vi.advanceTimersByTimeAsync(600);
 
-    expect(getConversationIdByExternal("chat-a")).toBe(convA);
+    expect(getConversationIdByExternal(manager, "chat-a")).toBe(convA);
     expect((hub as unknown as { createConversation: ReturnType<typeof vi.fn> }).createConversation).toHaveBeenCalledTimes(2);
     expect(harnessA?.write).toHaveBeenCalledTimes(2);
     expect(harnessA?.write.mock.calls[1]?.[0]).toContain("alpha-2");
 
     manager.stopAll();
+  });
+
+  it("restores route bindings from disk after manager restart", async () => {
+    const routeBindingsPath = join(testDir, "route-bindings.json");
+    const {
+      hub,
+      createManager,
+      routeIncomingToManager,
+      getConversationIdByExternal,
+      conversations,
+    } = createHarness();
+
+    const managerA = createManager(routeBindingsPath);
+    routeIncomingToManager(managerA, {
+      messageId: "in-p1",
+      conversationId: "chat-persist",
+      senderId: "user-p",
+      text: "persist-1",
+      chatType: "direct",
+    });
+    await vi.advanceTimersByTimeAsync(600);
+
+    const firstConversationId = getConversationIdByExternal(managerA, "chat-persist");
+    expect(firstConversationId).toBeDefined();
+    const harness = conversations.get(firstConversationId!);
+    expect(harness?.write).toHaveBeenCalledTimes(1);
+
+    managerA.stopAll();
+
+    const managerB = createManager(routeBindingsPath);
+    routeIncomingToManager(managerB, {
+      messageId: "in-p2",
+      conversationId: "chat-persist",
+      senderId: "user-p",
+      text: "persist-2",
+      chatType: "direct",
+    });
+    await vi.advanceTimersByTimeAsync(600);
+
+    const restoredConversationId = getConversationIdByExternal(managerB, "chat-persist");
+    expect(restoredConversationId).toBe(firstConversationId);
+    expect((hub as unknown as { createConversation: ReturnType<typeof vi.fn> }).createConversation).toHaveBeenCalledTimes(1);
+    expect(harness?.write).toHaveBeenCalledTimes(2);
+    expect(harness?.write.mock.calls[1]?.[0]).toContain("persist-2");
+
+    managerB.stopAll();
   });
 });

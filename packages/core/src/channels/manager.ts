@@ -33,6 +33,27 @@ import { describeImage } from "../media/describe-image.js";
 import { describeVideo } from "../media/describe-video.js";
 import { InboundDebouncer } from "./inbound-debouncer.js";
 import { extname } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { DATA_DIR } from "@multica/utils";
+
+const ROUTE_BINDING_STORE_VERSION = 1;
+
+interface RouteBindingStoreEntry {
+  routeKey: string;
+  hubConversationId: string;
+  hubAgentId: string;
+  updatedAt: number;
+}
+
+interface RouteBindingStoreFile {
+  version: number;
+  bindings: RouteBindingStoreEntry[];
+}
+
+interface ChannelManagerOptions {
+  routeBindingsPath?: string;
+}
 
 interface AccountHandle {
   channelId: string;
@@ -54,7 +75,8 @@ interface RouteBinding {
   routeKey: string;
   hubConversationId: string;
   hubAgentId: string;
-  lastRoute: LastRoute;
+  updatedAt: number;
+  lastRoute: LastRoute | null;
 }
 
 interface PendingRoute {
@@ -79,6 +101,7 @@ interface ResolveRouteResult {
 
 export class ChannelManager {
   private readonly hub: Hub;
+  private readonly routeBindingsPath: string;
 
   /** Running accounts keyed by "channelId:accountId" */
   private readonly accounts = new Map<string, AccountHandle>();
@@ -98,13 +121,18 @@ export class ChannelManager {
   /** Inbound debouncer keyed by routeKey */
   private debouncer: InboundDebouncer | null = null;
 
-  constructor(hub: Hub) {
+  constructor(hub: Hub, options?: ChannelManagerOptions) {
     this.hub = hub;
+    this.routeBindingsPath = options?.routeBindingsPath ?? join(DATA_DIR, "channels", "route-bindings.json");
+    this.loadRouteBindings();
   }
 
   /** Start all configured channel accounts */
   async startAll(): Promise<void> {
     console.log("[Channels] Starting all channels...");
+    if (this.routeBindings.size === 0) {
+      this.loadRouteBindings();
+    }
     const config = loadChannelsConfig();
     const plugins = listChannels();
 
@@ -314,13 +342,33 @@ export class ChannelManager {
           existing.hubConversationId,
           existing.hubAgentId,
         );
+        existing.updatedAt = Date.now();
         this.routeBindings.set(routeKey, existing);
         return { binding: existing, conversation: existingConversation };
       }
 
-      // Conversation runtime disappeared — remove stale binding and rebuild.
-      this.routeBindings.delete(routeKey);
+      // Conversation runtime disappeared — re-create a conversation under the same agent when possible.
       this.cleanupConversationState(existing.hubConversationId, { unsubscribe: true });
+      const recreated = this.hub.createConversation(undefined, { agentId: existing.hubAgentId });
+      const recreatedConversationId = recreated.sessionId;
+      const recreatedAgentId = this.hub.getConversationAgentId(recreatedConversationId) ?? existing.hubAgentId;
+
+      existing.hubConversationId = recreatedConversationId;
+      existing.hubAgentId = recreatedAgentId;
+      existing.updatedAt = Date.now();
+      existing.lastRoute = this.createRoute(
+        routeKey,
+        plugin,
+        accountId,
+        externalConversationId,
+        messageId,
+        chatType,
+        recreatedConversationId,
+        recreatedAgentId,
+      );
+      this.routeBindings.set(routeKey, existing);
+      this.persistRouteBindings();
+      return { binding: existing, conversation: recreated };
     }
 
     const { agentId, conversation: maybeMainConversation } = this.resolveDefaultAgentAndConversation();
@@ -332,6 +380,7 @@ export class ChannelManager {
       routeKey,
       hubConversationId,
       hubAgentId,
+      updatedAt: Date.now(),
       lastRoute: this.createRoute(
         routeKey,
         plugin,
@@ -344,6 +393,7 @@ export class ChannelManager {
       ),
     };
     this.routeBindings.set(routeKey, binding);
+    this.persistRouteBindings();
 
     console.log(
       `[Channels] route bind: ${routeKey} -> conversation=${hubConversationId} (agent=${hubAgentId})`,
@@ -365,7 +415,7 @@ export class ChannelManager {
 
   private findRouteForConversation(conversationId: string): LastRoute | null {
     for (const binding of this.routeBindings.values()) {
-      if (binding.hubConversationId === conversationId) {
+      if (binding.hubConversationId === conversationId && binding.lastRoute) {
         return this.cloneRoute(binding.lastRoute);
       }
     }
@@ -554,6 +604,10 @@ export class ChannelManager {
     }
 
     const { binding, conversation } = resolved;
+    if (!binding.lastRoute) {
+      console.error(`[Channels] Route binding missing runtime route data for ${binding.routeKey}`);
+      return;
+    }
     this.ensureConversationSubscribed(conversation);
 
     const routeSnapshot = this.cloneRoute(binding.lastRoute);
@@ -677,12 +731,17 @@ export class ChannelManager {
               `[Channels] Debouncer flush dropped: conversation unavailable ${binding.hubConversationId}`,
             );
             this.routeBindings.delete(routeKey);
+            this.persistRouteBindings();
             this.cleanupConversationState(binding.hubConversationId, { unsubscribe: true });
             return;
           }
 
           this.ensureConversationSubscribed(conversation);
 
+          if (!binding.lastRoute) {
+            console.warn(`[Channels] Debouncer flush dropped: missing lastRoute for routeKey=${routeKey}`);
+            return;
+          }
           const state = this.getConversationState(binding.hubConversationId);
           const route = this.cloneRoute(binding.lastRoute);
           const acks = [...state.ackBuffer];
@@ -783,11 +842,15 @@ export class ChannelManager {
     const removedConversationIds = new Set<string>();
     for (const [routeKey, binding] of this.routeBindings.entries()) {
       const route = binding.lastRoute;
-      if (route.plugin.id === channelId && route.deliveryCtx.accountId === accountId) {
+      const matchesByRoute = route
+        ? route.plugin.id === channelId && route.deliveryCtx.accountId === accountId
+        : routeKey.startsWith(`${channelId}:${accountId}:`);
+      if (matchesByRoute) {
         this.routeBindings.delete(routeKey);
         removedConversationIds.add(binding.hubConversationId);
       }
     }
+    this.persistRouteBindings();
 
     for (const conversationId of removedConversationIds) {
       const stillBound = Array.from(this.routeBindings.values())
@@ -875,5 +938,57 @@ export class ChannelManager {
       });
     }
     return infos;
+  }
+
+  private loadRouteBindings(): void {
+    if (!existsSync(this.routeBindingsPath)) return;
+
+    try {
+      const raw = JSON.parse(readFileSync(this.routeBindingsPath, "utf-8")) as RouteBindingStoreFile;
+      const bindings = Array.isArray(raw.bindings) ? raw.bindings : [];
+      for (const item of bindings) {
+        if (!item || typeof item !== "object") continue;
+        if (typeof item.routeKey !== "string" || !item.routeKey.trim()) continue;
+        if (typeof item.hubConversationId !== "string" || !item.hubConversationId.trim()) continue;
+        if (typeof item.hubAgentId !== "string" || !item.hubAgentId.trim()) continue;
+        const routeKey = item.routeKey.trim();
+        this.routeBindings.set(routeKey, {
+          routeKey,
+          hubConversationId: item.hubConversationId.trim(),
+          hubAgentId: item.hubAgentId.trim(),
+          updatedAt: typeof item.updatedAt === "number" ? item.updatedAt : Date.now(),
+          lastRoute: null,
+        });
+      }
+      if (this.routeBindings.size > 0) {
+        console.log(`[Channels] Restored ${this.routeBindings.size} route binding(s) from disk`);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[Channels] Failed to load route bindings: ${message}`);
+    }
+  }
+
+  private persistRouteBindings(): void {
+    const serialized: RouteBindingStoreFile = {
+      version: ROUTE_BINDING_STORE_VERSION,
+      bindings: Array.from(this.routeBindings.values())
+        .map((binding) => ({
+          routeKey: binding.routeKey,
+          hubConversationId: binding.hubConversationId,
+          hubAgentId: binding.hubAgentId,
+          updatedAt: binding.updatedAt,
+        }))
+        .sort((a, b) => a.routeKey.localeCompare(b.routeKey)),
+    };
+
+    try {
+      const dir = dirname(this.routeBindingsPath);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(this.routeBindingsPath, JSON.stringify(serialized, null, 2), "utf-8");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[Channels] Failed to persist route bindings: ${message}`);
+    }
   }
 }
