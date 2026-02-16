@@ -1,0 +1,16 @@
+Run an end-to-end capability-gap discovery test for Meta Skill Installer.
+
+User intent: "I need to control Home Assistant lights and switches from the agent."
+Reference page: https://clawhub.ai/skills/homeassistant
+
+Requirements:
+1. Treat this as a missing capability and explicitly define the gap.
+2. Search ClawHub for relevant skills and list the top 3 candidates.
+3. Pick one candidate with rationale (scope match + lower security risk).
+4. Stage-install to a temporary directory.
+5. Run security review:
+   DATA_DIR="${SMC_DATA_DIR:-$HOME/.super-multica}"
+   node "$DATA_DIR/skills/meta-skill-installer/scripts/review-skill-security.mjs" "<staged skill path>"
+6. If riskLevel is safe, install to "$DATA_DIR/skills".
+7. Verify "$DATA_DIR/skills/<slug>/SKILL.md" exists.
+8. Return: candidate list, chosen slug, riskLevel, and final path.

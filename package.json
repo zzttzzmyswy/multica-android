@@ -30,7 +30,8 @@
     "typecheck": "turbo typecheck",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "e2e:skills": "bash scripts/e2e-skills-benchmark/run.sh"
   },
   "keywords": [],
   "author": "",
