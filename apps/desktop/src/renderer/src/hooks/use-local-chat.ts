@@ -9,15 +9,27 @@ import type {
 } from '@multica/sdk'
 import { DEFAULT_MESSAGES_LIMIT } from '@multica/sdk'
 
+export interface QueuedLocalMessage {
+  id: string
+  text: string
+  createdAt: number
+}
+
+function makeQueueId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `queued-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
 export function useLocalChat() {
   const chat = useChat()
   const chatRef = useRef(chat)
   chatRef.current = chat
   const [agentId, setAgentId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const isLoadingRef = useRef(false)
   const [isLoadingHistory, setIsLoadingHistory] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const isLoadingMoreRef = useRef(false)
+  const [queuedMessages, setQueuedMessages] = useState<QueuedLocalMessage[]>([])
   const [initError, setInitError] = useState<string | null>(null)
   const initRef = useRef(false)
   const offsetRef = useRef<number | null>(null)
@@ -67,7 +79,21 @@ export function useLocalChat() {
 
       chatRef.current.handleStream(payload)
       if (payload.event.type === 'message_start') setIsLoading(true)
-      if (payload.event.type === 'message_end') setIsLoading(false)
+      if (payload.event.type === 'tool_execution_start') setIsLoading(true)
+      if (payload.event.type === 'message_end') {
+        const stopReason =
+          'message' in payload.event
+            ? (payload.event.message as { stopReason?: string } | undefined)?.stopReason
+            : undefined
+
+        // message_end with stopReason=toolUse is an intermediate step in the same run.
+        // Keep loading=true so queued user messages are not dispatched mid-run.
+        if (stopReason === 'toolUse') {
+          setIsLoading(true)
+        } else {
+          setIsLoading(false)
+        }
+      }
     })
 
     // Listen for exec approval requests
@@ -109,17 +135,62 @@ export function useLocalChat() {
     }
   }, [agentId])
 
-  const sendMessage = useCallback(
-    (text: string) => {
-      const trimmed = text.trim()
-      if (!trimmed || !agentId) return
-      chatRef.current.addUserMessage(trimmed, agentId, { type: 'local' })
-      chatRef.current.setError(null)
-      window.electronAPI.localChat.send(agentId, trimmed).catch(() => {})
-      setIsLoading(true)
-    },
-    [agentId],
-  )
+  useEffect(() => {
+    isLoadingRef.current = isLoading
+  }, [isLoading])
+
+  const dispatchMessageNow = useCallback((text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed || !agentId) return
+    chatRef.current.addUserMessage(trimmed, agentId, { type: 'local' })
+    chatRef.current.setError(null)
+    setIsLoading(true)
+    window.electronAPI.localChat.send(agentId, trimmed)
+      .then((result) => {
+        const response = result as { ok?: boolean; error?: string } | undefined
+        if (response?.error) {
+          setIsLoading(false)
+        }
+      })
+      .catch(() => {
+        setIsLoading(false)
+      })
+  }, [agentId])
+
+  const sendMessage = useCallback((text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed || !agentId) return
+
+    if (isLoadingRef.current) {
+      setQueuedMessages((prev) => [
+        ...prev,
+        {
+          id: makeQueueId(),
+          text: trimmed,
+          createdAt: Date.now(),
+        },
+      ])
+      return
+    }
+
+    dispatchMessageNow(trimmed)
+  }, [agentId, dispatchMessageNow])
+
+  const removeQueuedMessage = useCallback((id: string) => {
+    setQueuedMessages((prev) => prev.filter((item) => item.id !== id))
+  }, [])
+
+  const clearQueuedMessages = useCallback(() => {
+    setQueuedMessages([])
+  }, [])
+
+  useEffect(() => {
+    if (!agentId || isLoading || queuedMessages.length === 0) return
+    const next = queuedMessages[0]
+    if (!next) return
+    setQueuedMessages((prev) => prev.slice(1))
+    dispatchMessageNow(next.text)
+  }, [agentId, isLoading, queuedMessages, dispatchMessageNow])
 
   const abortGeneration = useCallback(() => {
     if (!agentId) return
@@ -177,8 +248,11 @@ export function useLocalChat() {
     contextWindowTokens: chat.contextWindowTokens,
     error: chat.error,
     pendingApprovals: chat.pendingApprovals,
+    queuedMessages,
     sendMessage,
     abortGeneration,
+    removeQueuedMessage,
+    clearQueuedMessages,
     loadMore,
     resolveApproval,
     clearError,
