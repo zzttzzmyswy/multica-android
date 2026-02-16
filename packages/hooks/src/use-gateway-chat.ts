@@ -38,6 +38,7 @@ export function useGatewayChat({ client, hubId, agentId }: UseGatewayChatOptions
         chat.setHistory(result.messages, agentId, {
           total: result.total,
           offset: result.offset,
+          contextWindowTokens: result.contextWindowTokens,
         });
         offsetRef.current = result.offset;
       })
@@ -100,6 +101,7 @@ export function useGatewayChat({ client, hubId, agentId }: UseGatewayChatOptions
       chat.prependHistory(result.messages, agentId, {
         total: result.total,
         offset: result.offset,
+        contextWindowTokens: result.contextWindowTokens,
       });
       offsetRef.current = result.offset;
     } catch {
@@ -125,6 +127,7 @@ export function useGatewayChat({ client, hubId, agentId }: UseGatewayChatOptions
     isLoadingHistory,
     isLoadingMore,
     hasMore: chat.hasMore,
+    contextWindowTokens: chat.contextWindowTokens,
     error: chat.error,
     pendingApprovals: chat.pendingApprovals,
     sendMessage,

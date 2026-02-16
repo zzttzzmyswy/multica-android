@@ -554,6 +554,20 @@ export class AsyncAgent {
   }
 
   /**
+   * Get persisted session metadata.
+   */
+  getSessionMeta(): import("./session/types.js").SessionMeta | undefined {
+    return this.agent.getSessionMeta();
+  }
+
+  /**
+   * Get effective context window token limit for this session.
+   */
+  getContextWindowTokens(): number {
+    return this.agent.getContextWindowTokens();
+  }
+
+  /**
    * Switch to a different provider and/or model.
    * This updates the agent's model without recreating the session.
    */

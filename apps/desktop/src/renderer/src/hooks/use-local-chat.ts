@@ -93,6 +93,7 @@ export function useLocalChat() {
           chatRef.current.setHistory(result.messages as AgentMessageItem[], agentId, {
             total: result.total,
             offset: result.offset,
+            contextWindowTokens: result.contextWindowTokens,
           })
           offsetRef.current = result.offset
         }
@@ -140,6 +141,7 @@ export function useLocalChat() {
         chatRef.current.prependHistory(result.messages as AgentMessageItem[], agentId, {
           total: result.total,
           offset: result.offset,
+          contextWindowTokens: result.contextWindowTokens,
         })
         offsetRef.current = result.offset
       }
@@ -172,6 +174,7 @@ export function useLocalChat() {
     isLoadingHistory,
     isLoadingMore,
     hasMore: chat.hasMore,
+    contextWindowTokens: chat.contextWindowTokens,
     error: chat.error,
     pendingApprovals: chat.pendingApprovals,
     sendMessage,

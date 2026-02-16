@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@multica/ui/components/ui/button";
 import { Skeleton } from "@multica/ui/components/ui/skeleton";
-import { ChatInput } from "@multica/ui/components/chat-input";
+import { ChatInput, type ContextWindowUsage } from "@multica/ui/components/chat-input";
 import { MessageList } from "@multica/ui/components/message-list";
 import { MemoizedMarkdown } from "@multica/ui/components/markdown";
 import { MulticaIcon } from "@multica/ui/components/multica-icon";
@@ -33,6 +33,7 @@ export interface ChatViewProps {
   isLoadingHistory: boolean;
   isLoadingMore?: boolean;
   hasMore?: boolean;
+  contextWindowTokens?: number;
   error: ChatViewError | null;
   pendingApprovals: ChatViewApproval[];
   sendMessage: (text: string) => void;
@@ -48,6 +49,96 @@ export interface ChatViewProps {
   bottomSlot?: React.ReactNode;
 }
 
+const DEFAULT_CONTEXT_WINDOW_TOKENS = 200_000;
+const CHARS_PER_TOKEN = 4;
+const ESTIMATION_SAFETY_MARGIN = 1.2;
+const MESSAGE_OVERHEAD_TOKENS = 12;
+const RESPONSE_RESERVE_TOKENS = 1024;
+
+function safeJsonLength(value: unknown): number {
+  try {
+    return JSON.stringify(value)?.length ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+function estimateMessageChars(message: Message): number {
+  let chars = 0;
+
+  for (const block of message.content) {
+    if (block.type === "text") {
+      chars += block.text?.length ?? 0;
+      continue;
+    }
+    if (block.type === "thinking") {
+      chars += block.thinking?.length ?? 0;
+      continue;
+    }
+    if (block.type === "toolCall") {
+      chars += (block.name?.length ?? 0) + safeJsonLength(block.arguments) + 32;
+      continue;
+    }
+    if (block.type === "image") {
+      // Image blocks add prompt/metadata overhead even without inline text.
+      chars += 512;
+      continue;
+    }
+    chars += safeJsonLength(block);
+  }
+
+  if (message.toolArgs) {
+    chars += safeJsonLength(message.toolArgs);
+  }
+  if (message.toolName) {
+    chars += message.toolName.length;
+  }
+
+  return chars;
+}
+
+function deriveContextWindowUsage(
+  messages: Message[],
+  contextWindowTokens?: number,
+): ContextWindowUsage {
+  const totalTokens = Math.max(1, contextWindowTokens ?? DEFAULT_CONTEXT_WINDOW_TOKENS);
+  const contextMessages = messages.filter((message) => message.role !== "system");
+  const baseReserve = contextMessages.length > 0 ? RESPONSE_RESERVE_TOKENS : 0;
+
+  let estimatedUsedTokens = baseReserve;
+  for (const message of contextMessages) {
+    const chars = estimateMessageChars(message);
+    const tokenEstimate = Math.ceil((chars / CHARS_PER_TOKEN) * ESTIMATION_SAFETY_MARGIN);
+    estimatedUsedTokens += tokenEstimate + MESSAGE_OVERHEAD_TOKENS;
+  }
+
+  let lastCompaction: ContextWindowUsage["lastCompaction"];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message?.systemType === "compaction" && message.compaction) {
+      lastCompaction = {
+        removed: message.compaction.removed,
+        kept: message.compaction.kept,
+        tokensRemoved: message.compaction.tokensRemoved,
+        tokensKept: message.compaction.tokensKept,
+        reason: message.compaction.reason,
+      };
+      break;
+    }
+  }
+
+  const usageRatio = estimatedUsedTokens / totalTokens;
+  return {
+    usedTokens: estimatedUsedTokens,
+    totalTokens,
+    availableTokens: Math.max(0, totalTokens - estimatedUsedTokens),
+    usageRatio,
+    usagePercent: Math.round(usageRatio * 100),
+    isEstimated: true,
+    lastCompaction,
+  };
+}
+
 export function ChatView({
   messages,
   streamingIds,
@@ -55,6 +146,7 @@ export function ChatView({
   isLoadingHistory,
   isLoadingMore = false,
   hasMore = false,
+  contextWindowTokens,
   error,
   pendingApprovals,
   sendMessage,
@@ -70,6 +162,10 @@ export function ChatView({
   const sentinelRef = useRef<HTMLDivElement>(null);
   const fadeStyle = useScrollFade(mainRef);
   const { suppressAutoScroll } = useAutoScroll(mainRef);
+  const contextWindowUsage = useMemo(
+    () => deriveContextWindowUsage(messages, contextWindowTokens),
+    [messages, contextWindowTokens],
+  );
 
   // scrollHeight compensation for prepended messages
   const prevScrollHeightRef = useRef(0);
@@ -277,6 +373,7 @@ export function ChatView({
           disabled={!!error && error.code !== 'AGENT_ERROR'}
           placeholder={error && error.code !== 'AGENT_ERROR' ? "Connection error" : "Ask your Agent..."}
           defaultValue={initialPrompt}
+          contextWindowUsage={contextWindowUsage}
         />
       </footer>
     </div>
