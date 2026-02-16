@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import type { QueuedLocalMessage } from '../hooks/use-local-chat'
 
 interface QueuedMessageBarProps {
@@ -11,17 +11,17 @@ interface QueuedMessageBarProps {
 export function QueuedMessageBar({ messages, isRunning, onRemove, onClear }: QueuedMessageBarProps) {
   const [expanded, setExpanded] = useState(false)
 
-  if (messages.length === 0) return null
-
   const statusText = isRunning
     ? 'Agent is running. Queued messages will send automatically.'
     : 'Queued messages are being sent.'
 
-  const firstMessagePreview = useMemo(() => {
+  const firstMessagePreview = (() => {
     const text = messages[0]?.text ?? ''
     if (text.length <= 120) return text
     return `${text.slice(0, 120)}...`
-  }, [messages])
+  })()
+
+  if (messages.length === 0) return null
 
   return (
     <div className="container px-4 pb-2">
