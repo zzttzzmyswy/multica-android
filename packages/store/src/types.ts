@@ -44,6 +44,7 @@ export interface Message {
   role: "user" | "assistant" | "toolResult" | "system"
   content: ContentBlock[]
   agentId: string
+  conversationId?: string
   stopReason?: string
   toolCallId?: string
   toolName?: string

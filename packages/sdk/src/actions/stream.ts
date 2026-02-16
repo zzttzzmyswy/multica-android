@@ -62,6 +62,8 @@ export type AgentErrorEvent = {
 export interface StreamPayload {
   streamId: string;
   agentId: string;
+  /** Optional conversation ID. Falls back to agentId in legacy mode. */
+  conversationId?: string;
   event: AgentEvent | CompactionEvent | AgentErrorEvent;
 }
 

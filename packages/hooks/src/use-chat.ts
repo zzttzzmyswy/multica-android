@@ -56,6 +56,7 @@ export interface Message {
   role: "user" | "assistant" | "toolResult" | "system";
   content: ContentBlock[];
   agentId: string;
+  conversationId?: string;
   stopReason?: string;
   toolCallId?: string;
   toolName?: string;
@@ -174,8 +175,21 @@ export function useChat() {
 
   const isStreaming = streamingIds.size > 0;
 
+  const reset = useCallback(() => {
+    setMessages([]);
+    setStreamingIds(new Set());
+    setPendingApprovals([]);
+    setError(null);
+    setHasMore(false);
+    setContextWindowTokens(undefined);
+  }, []);
+
   /** Convert raw AgentMessageItem[] → Message[] */
-  const convertMessages = useCallback((raw: AgentMessageItem[], agentId: string): Message[] => {
+  const convertMessages = useCallback((
+    raw: AgentMessageItem[],
+    agentId: string,
+    conversationId = agentId,
+  ): Message[] => {
     const toolCallArgsMap = new Map<string, { name: string; args: Record<string, unknown> }>();
     for (const m of raw) {
       if (m.role === "assistant") {
@@ -190,9 +204,23 @@ export function useChat() {
     const loaded: Message[] = [];
     for (const m of raw) {
       if (m.role === "user") {
-        loaded.push({ id: uuidv7(), role: "user", content: toContentBlocks(m.content), agentId, source: m.source });
+        loaded.push({
+          id: uuidv7(),
+          role: "user",
+          content: toContentBlocks(m.content),
+          agentId,
+          conversationId,
+          source: m.source,
+        });
       } else if (m.role === "assistant") {
-        loaded.push({ id: uuidv7(), role: "assistant", content: toContentBlocks(m.content), agentId, stopReason: m.stopReason });
+        loaded.push({
+          id: uuidv7(),
+          role: "assistant",
+          content: toContentBlocks(m.content),
+          agentId,
+          conversationId,
+          stopReason: m.stopReason,
+        });
       } else if (m.role === "toolResult") {
         const callInfo = toolCallArgsMap.get(m.toolCallId);
         loaded.push({
@@ -200,6 +228,7 @@ export function useChat() {
           role: "toolResult",
           content: toContentBlocks(m.content),
           agentId,
+          conversationId,
           toolCallId: m.toolCallId,
           toolName: m.toolName,
           toolArgs: callInfo?.args,
@@ -216,8 +245,9 @@ export function useChat() {
     raw: AgentMessageItem[],
     agentId: string,
     meta?: { total: number; offset: number; contextWindowTokens?: number },
+    conversationId?: string,
   ) => {
-    const loaded = convertMessages(raw, agentId);
+    const loaded = convertMessages(raw, agentId, conversationId ?? agentId);
     setMessages(loaded);
     if (meta) {
       setHasMore(meta.offset > 0);
@@ -232,8 +262,9 @@ export function useChat() {
     raw: AgentMessageItem[],
     agentId: string,
     meta: { total: number; offset: number; contextWindowTokens?: number },
+    conversationId?: string,
   ) => {
-    const older = convertMessages(raw, agentId);
+    const older = convertMessages(raw, agentId, conversationId ?? agentId);
     setMessages((prev) => [...older, ...prev]);
     setHasMore(meta.offset > 0);
     if (meta.contextWindowTokens !== undefined) {
@@ -242,16 +273,29 @@ export function useChat() {
   }, [convertMessages]);
 
   /** Add a user message */
-  const addUserMessage = useCallback((text: string, agentId: string, source?: MessageSource) => {
+  const addUserMessage = useCallback((
+    text: string,
+    agentId: string,
+    source?: MessageSource,
+    conversationId?: string,
+  ) => {
     setMessages((prev) => [
       ...prev,
-      { id: uuidv7(), role: "user", content: [{ type: "text", text }], agentId, source },
+      {
+        id: uuidv7(),
+        role: "user",
+        content: [{ type: "text", text }],
+        agentId,
+        conversationId: conversationId ?? agentId,
+        source,
+      },
     ]);
   }, []);
 
   /** Process a StreamPayload → update messages + streamingIds */
   const handleStream = useCallback((payload: StreamPayload) => {
     const { event } = payload;
+    const conversationId = payload.conversationId ?? payload.agentId;
 
     switch (event.type) {
       case "message_start": {
@@ -260,6 +304,7 @@ export function useChat() {
           role: "assistant",
           content: [],
           agentId: payload.agentId,
+          conversationId,
         };
         const content = extractContent(event);
         if (content.length) newMsg.content = content;
@@ -285,7 +330,12 @@ export function useChat() {
         setMessages((prev) =>
           prev.map((m) => {
             if (m.id === payload.streamId) return { ...m, content, stopReason };
-            if (m.role === "toolResult" && m.toolStatus === "running" && m.agentId === payload.agentId) {
+            if (
+              m.role === "toolResult"
+              && m.toolStatus === "running"
+              && m.agentId === payload.agentId
+              && (m.conversationId ?? m.agentId) === conversationId
+            ) {
               return { ...m, toolStatus: "interrupted" as ToolStatus };
             }
             return m;
@@ -306,6 +356,7 @@ export function useChat() {
             role: "toolResult",
             content: [],
             agentId: payload.agentId,
+            conversationId,
             toolCallId: event.toolCallId,
             toolName: event.toolName,
             toolArgs: event.args as Record<string, unknown> | undefined,
@@ -358,6 +409,7 @@ export function useChat() {
             role: "system",
             content: [],
             agentId: payload.agentId,
+            conversationId,
             systemType: "compaction",
             compaction: {
               removed: ce.removed,
@@ -394,6 +446,7 @@ export function useChat() {
     error,
     // State control (for transport layer to call)
     setError,
+    reset,
     setHistory,
     prependHistory,
     addUserMessage,

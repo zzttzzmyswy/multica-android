@@ -66,6 +66,8 @@ export const DEFAULT_MESSAGES_LIMIT = 200;
 /** getAgentMessages - request params */
 export interface GetAgentMessagesParams {
   agentId: string;
+  /** Optional conversation ID. Falls back to agent main conversation when omitted. */
+  conversationId?: string;
   offset?: number;
   limit?: number;
 }
@@ -91,6 +93,8 @@ export interface GetAgentMessagesResult {
   total: number;
   offset: number;
   limit: number;
+  /** Resolved conversation ID used by the server */
+  conversationId?: string;
   /** Context window size (tokens) used by this session */
   contextWindowTokens?: number;
 }
@@ -157,4 +161,6 @@ export interface VerifyParams {
 export interface VerifyResult {
   hubId: string;
   agentId: string;
+  /** Main conversation for this agent. Defaults to agentId in legacy mode. */
+  mainConversationId?: string;
 }

@@ -14,6 +14,7 @@ export interface ConnectionIdentity {
   gateway: string;
   hubId: string;
   agentId: string;
+  conversationId?: string;
 }
 
 function loadIdentity(): ConnectionIdentity | null {
@@ -21,7 +22,14 @@ function loadIdentity(): ConnectionIdentity | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (parsed.gateway && parsed.hubId && parsed.agentId) return parsed;
+    if (
+      parsed.gateway
+      && parsed.hubId
+      && parsed.agentId
+      && (parsed.conversationId === undefined || typeof parsed.conversationId === "string")
+    ) {
+      return parsed;
+    }
     return null;
   } catch {
     return null;

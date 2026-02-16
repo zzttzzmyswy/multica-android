@@ -37,6 +37,7 @@ const ChatPage = () => {
             client={client}
             hubId={identity.hubId}
             agentId={identity.agentId}
+            conversationId={identity.conversationId}
             onDisconnect={disconnect}
           />
         )}
@@ -49,14 +50,16 @@ function ConnectedChat({
   client,
   hubId,
   agentId,
+  conversationId,
   onDisconnect,
 }: {
   client: NonNullable<ReturnType<typeof useGatewayConnection>["client"]>;
   hubId: string;
   agentId: string;
+  conversationId?: string;
   onDisconnect: () => void;
 }) {
-  const chat = useGatewayChat({ client, hubId, agentId });
+  const chat = useGatewayChat({ client, hubId, agentId, conversationId });
   return <ChatView {...chat} onDisconnect={onDisconnect} />;
 }
 

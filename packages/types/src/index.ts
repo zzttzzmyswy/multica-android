@@ -170,6 +170,7 @@ export type StreamEventType =
 export interface StreamEvent {
   type: StreamEventType
   agentId: string
+  conversationId?: string
   streamId?: string
   data?: unknown
 }
@@ -185,6 +186,7 @@ export type ApprovalDecision = 'allow-once' | 'allow-always' | 'deny'
 export interface ExecApprovalRequest {
   approvalId: string
   agentId: string
+  conversationId?: string
   command: string
   cwd?: string
   riskLevel: RiskLevel

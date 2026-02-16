@@ -24,7 +24,7 @@ interface PendingEntry {
  * The Hub wires this to Gateway message sending.
  */
 export type SendApprovalToClient = (
-  agentId: string,
+  conversationId: string,
   payload: ExecApprovalRequest,
 ) => void;
 
@@ -42,6 +42,7 @@ export class ExecApprovalManager {
    */
   requestApproval(params: {
     agentId: string;
+    conversationId?: string;
     command: string;
     cwd?: string;
     riskLevel: "safe" | "needs-review" | "dangerous";
@@ -53,10 +54,12 @@ export class ExecApprovalManager {
     const approvalId = uuidv7();
     const timeoutMs = params.timeoutMs ?? this.defaultTimeoutMs;
     const expiresAtMs = timeoutMs >= 0 ? Date.now() + timeoutMs : -1;
+    const conversationId = params.conversationId ?? params.agentId;
 
     const request: ExecApprovalRequest = {
       approvalId,
       agentId: params.agentId,
+      conversationId,
       command: params.command,
       cwd: params.cwd,
       riskLevel: params.riskLevel,
@@ -85,7 +88,7 @@ export class ExecApprovalManager {
 
       // Send to client via Gateway
       try {
-        this.sendToClient(params.agentId, request);
+        this.sendToClient(conversationId, request);
       } catch (err) {
         // If sending fails, auto-deny (fail-closed)
         if (timer) clearTimeout(timer);
@@ -121,7 +124,8 @@ export class ExecApprovalManager {
    */
   cancelPending(agentId: string): void {
     for (const [id, entry] of this.pending) {
-      if (entry.request.agentId === agentId) {
+      const requestConversationId = entry.request.conversationId ?? entry.request.agentId;
+      if (entry.request.agentId === agentId || requestConversationId === agentId) {
         if (entry.timer) clearTimeout(entry.timer);
         this.pending.delete(id);
         entry.resolve({ approved: false, decision: "deny" });

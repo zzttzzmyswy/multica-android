@@ -64,6 +64,8 @@ export type MessageSource =
 /** Inbound message event broadcast to all listeners */
 export interface InboundMessageEvent {
   agentId: string;
+  /** Optional conversation ID. Falls back to agentId in legacy mode. */
+  conversationId?: string;
   content: string;
   source: MessageSource;
   timestamp: number;
@@ -74,7 +76,7 @@ export class Hub {
   private readonly agentSenders = new Map<string, string>();
   private readonly agentStreamIds = new Map<string, string>();
   private readonly agentStreamCounters = new Map<string, number>();
-  private readonly pendingAssistantStarts = new Map<string, { agentId: string; event: unknown }>();
+  private readonly pendingAssistantStarts = new Map<string, { agentId: string; conversationId: string; event: unknown }>();
   private readonly suppressedStreamAgents = new Set<string>();
   private readonly localApprovalHandlers = new Map<string, (payload: ExecApprovalRequest) => void>();
   private readonly inboundListeners = new Set<(event: InboundMessageEvent) => void>();
@@ -127,17 +129,17 @@ export class Hub {
     this.rpc.register("wake-heartbeat", createWakeHeartbeatHandler(this));
 
     // Initialize exec approval manager
-    this.approvalManager = new ExecApprovalManager((agentId, payload) => {
+    this.approvalManager = new ExecApprovalManager((conversationId, payload) => {
       // Check local IPC handler first (for desktop direct chat)
-      const localHandler = this.localApprovalHandlers.get(agentId);
+      const localHandler = this.localApprovalHandlers.get(conversationId);
       if (localHandler) {
         localHandler(payload);
         return;
       }
       // Remote: send via Gateway
-      const targetDeviceId = this.agentSenders.get(agentId);
+      const targetDeviceId = this.agentSenders.get(conversationId);
       if (!targetDeviceId) {
-        throw new Error(`No client device found for agent ${agentId}`);
+        throw new Error(`No client device found for conversation ${conversationId}`);
       }
       this.client.send(targetDeviceId, "exec-approval-request", payload);
     });
@@ -276,27 +278,29 @@ export class Hub {
       }
 
       // Regular chat message
-      const payload = msg.payload as { agentId?: string; content?: string } | undefined;
+      const payload = msg.payload as { agentId?: string; conversationId?: string; content?: string } | undefined;
       const agentId = payload?.agentId;
+      const conversationId = this.resolveConversationId(agentId, payload?.conversationId);
       const content = payload?.content;
       if (!agentId || !content) {
         console.warn(`[Hub] Invalid payload, missing agentId or content`);
         return;
       }
-      const agent = this.agents.get(agentId);
+      const agent = this.agents.get(conversationId);
       if (agent && !agent.closed) {
-        this.agentSenders.set(agentId, msg.from);
+        this.agentSenders.set(conversationId, msg.from);
         this.channelManager.clearLastRoute();
         const source: MessageSource = { type: "gateway", deviceId: msg.from };
         this.broadcastInbound({
           agentId,
+          conversationId,
           content,
           source,
           timestamp: Date.now(),
         });
         agent.write(content, { source });
       } else {
-        console.warn(`[Hub] Agent not found or closed: ${agentId}`);
+        console.warn(`[Hub] Conversation not found or closed: ${conversationId} (agent=${agentId})`);
       }
     });
 
@@ -395,12 +399,32 @@ export class Hub {
     return agent;
   }
 
+  /**
+   * Create a new conversation runtime.
+   *
+   * Semantics:
+   * - Agent = capability/profile definition
+   * - Conversation = one isolated runtime/session thread
+   *
+   * Current runtime stores one AsyncAgent per conversation.
+   */
+  createConversation(id?: string, options?: { persist?: boolean; profileId?: string }): AsyncAgent {
+    return this.createAgent(id, options);
+  }
+
   private getMessageIdFromEvent(event: unknown): string | undefined {
     if (!event || typeof event !== "object") return undefined;
     const maybeMsg = (event as { message?: unknown }).message;
     if (!maybeMsg || typeof maybeMsg !== "object") return undefined;
     const id = (maybeMsg as { id?: unknown }).id;
     return typeof id === "string" && id.length > 0 ? id : undefined;
+  }
+
+  private resolveConversationId(agentId: string | undefined, conversationId?: string): string {
+    const fallback = (agentId ?? "").trim();
+    if (!fallback) return "";
+    const normalizedConversationId = (conversationId ?? "").trim();
+    return normalizedConversationId || fallback;
   }
 
   private beginStream(agentId: string, event: unknown): string {
@@ -426,7 +450,7 @@ export class Hub {
 
   private clearPendingAssistantStarts(agentId: string): void {
     for (const [streamId, pending] of this.pendingAssistantStarts) {
-      if (pending.agentId === agentId) {
+      if (pending.agentId === agentId || pending.conversationId === agentId) {
         this.pendingAssistantStarts.delete(streamId);
       }
     }
@@ -434,28 +458,31 @@ export class Hub {
 
   /** Internally read agent output and send via Gateway */
   private async consumeAgent(agent: AsyncAgent): Promise<void> {
+    const conversationId = agent.sessionId;
+    const agentId = agent.sessionId;
     for await (const item of agent.read()) {
-      const targetDeviceId = this.agentSenders.get(agent.sessionId);
+      const targetDeviceId = this.agentSenders.get(conversationId);
       if (!targetDeviceId) continue;
 
       if ("content" in item) {
         // Legacy Message (error fallback)
-        console.log(`[${agent.sessionId}] ${item.content}`);
+        console.log(`[${conversationId}] ${item.content}`);
         this.client.send(targetDeviceId, "message", {
-          agentId: agent.sessionId,
+          agentId,
+          conversationId,
           content: item.content,
         });
       } else {
-        const suppressForAgent = this.suppressedStreamAgents.has(agent.sessionId);
+        const suppressForAgent = this.suppressedStreamAgents.has(conversationId);
 
         // Suppress all user-visible stream events during silent heartbeat runs.
         if (suppressForAgent) {
           if (item.type === "message_start") {
-            this.beginStream(agent.sessionId, item);
+            this.beginStream(conversationId, item);
           } else if (item.type === "message_end") {
-            const streamId = this.getActiveStreamId(agent.sessionId, item);
+            const streamId = this.getActiveStreamId(conversationId, item);
             this.pendingAssistantStarts.delete(streamId);
-            this.endStream(agent.sessionId);
+            this.endStream(conversationId);
           }
           continue;
         }
@@ -465,8 +492,9 @@ export class Hub {
           item.type === "compaction_start" || item.type === "compaction_end" || item.type === "agent_error";
         if (isPassthroughEvent) {
           this.client.send(targetDeviceId, StreamAction, {
-            streamId: `system:${agent.sessionId}`,
-            agentId: agent.sessionId,
+            streamId: `system:${conversationId}`,
+            agentId,
+            conversationId,
             event: item,
           });
           continue;
@@ -489,17 +517,17 @@ export class Hub {
         // This lets us suppress pure HEARTBEAT_OK acknowledgements end-to-end.
         if (isAssistantMessageEvent && isAssistantMessage) {
           if (item.type === "message_start") {
-            const streamId = this.beginStream(agent.sessionId, item);
-            this.pendingAssistantStarts.set(streamId, { agentId: agent.sessionId, event: item });
+            const streamId = this.beginStream(conversationId, item);
+            this.pendingAssistantStarts.set(streamId, { agentId, conversationId, event: item });
             continue;
           }
 
-          const streamId = this.getActiveStreamId(agent.sessionId, item);
+          const streamId = this.getActiveStreamId(conversationId, item);
           const isHeartbeatAck = isHeartbeatAckEvent(item);
           if (isHeartbeatAck) {
             if (item.type === "message_end") {
               this.pendingAssistantStarts.delete(streamId);
-              this.endStream(agent.sessionId);
+              this.endStream(conversationId);
             }
             continue;
           }
@@ -508,7 +536,8 @@ export class Hub {
           if (pendingStart) {
             this.client.send(targetDeviceId, StreamAction, {
               streamId,
-              agentId: agent.sessionId,
+              agentId: pendingStart.agentId,
+              conversationId: pendingStart.conversationId,
               event: pendingStart.event,
             });
             this.pendingAssistantStarts.delete(streamId);
@@ -516,19 +545,21 @@ export class Hub {
 
           this.client.send(targetDeviceId, StreamAction, {
             streamId,
-            agentId: agent.sessionId,
+            agentId,
+            conversationId,
             event: item,
           });
           if (item.type === "message_end") {
-            this.endStream(agent.sessionId);
+            this.endStream(conversationId);
           }
           continue;
         }
 
-        const streamId = this.getActiveStreamId(agent.sessionId, item);
+        const streamId = this.getActiveStreamId(conversationId, item);
         this.client.send(targetDeviceId, StreamAction, {
           streamId,
-          agentId: agent.sessionId,
+          agentId,
+          conversationId,
           event: item,
         });
       }
@@ -582,7 +613,7 @@ export class Hub {
    * Create an exec approval callback for an agent.
    * This wires the safety evaluation + Hub approval manager together.
    */
-  private createExecApprovalCallback(sessionId: string, profileId: string): ExecApprovalCallback {
+  private createExecApprovalCallback(conversationId: string, profileId: string): ExecApprovalCallback {
     return async (command: string, cwd: string | undefined): Promise<ApprovalResult> => {
       // Load exec approval config from profile
       let config: ExecApprovalConfig = {};
@@ -636,7 +667,8 @@ export class Hub {
 
       // Request approval via Hub → Gateway → Client
       const result = await this.approvalManager.requestApproval({
-        agentId: sessionId,
+        agentId: conversationId,
+        conversationId,
         command,
         ...(cwd !== undefined ? { cwd } : {}),
         riskLevel: evaluation.riskLevel,
@@ -705,10 +737,18 @@ export class Hub {
     return this.agents.get(id);
   }
 
+  getConversation(id: string): AsyncAgent | undefined {
+    return this.getAgent(id);
+  }
+
   listAgents(): string[] {
     return Array.from(this.agents.entries())
       .filter(([, a]) => !a.closed)
       .map(([id]) => id);
+  }
+
+  listConversations(): string[] {
+    return this.listAgents();
   }
 
   /** Subscribe heartbeat state updates. Returns unsubscribe callback. */
@@ -783,6 +823,10 @@ export class Hub {
     removeAgentRecord(id);
     this.heartbeatRunner?.updateConfig();
     return true;
+  }
+
+  closeConversation(id: string): boolean {
+    return this.closeAgent(id);
   }
 
   shutdown(): void {

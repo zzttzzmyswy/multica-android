@@ -526,6 +526,7 @@ export class ChannelManager {
             // Broadcast inbound message to local listeners (Desktop UI)
             this.hub.broadcastInbound({
               agentId: agent.sessionId,
+              conversationId: agent.sessionId,
               content: combinedText,
               source: source!,
               timestamp: Date.now(),

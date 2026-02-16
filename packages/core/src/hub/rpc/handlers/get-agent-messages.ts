@@ -8,6 +8,7 @@ const DEFAULT_LIMIT = 200;
 
 interface GetAgentMessagesParams {
   agentId: string;
+  conversationId?: string;
   offset?: number;
   limit?: number;
 }
@@ -17,18 +18,19 @@ export function createGetAgentMessagesHandler(): RpcHandler {
     if (!params || typeof params !== "object") {
       throw new RpcError("INVALID_PARAMS", "params must be an object");
     }
-    const { agentId, limit = DEFAULT_LIMIT } = params as GetAgentMessagesParams;
+    const { agentId, conversationId, limit = DEFAULT_LIMIT } = params as GetAgentMessagesParams;
     let { offset } = params as GetAgentMessagesParams;
     if (!agentId) {
       throw new RpcError("INVALID_PARAMS", "Missing required param: agentId");
     }
+    const resolvedConversationId = (conversationId ?? "").trim() || agentId;
 
-    const sessionPath = resolveSessionPath(agentId);
+    const sessionPath = resolveSessionPath(resolvedConversationId);
     if (!existsSync(sessionPath)) {
-      throw new RpcError("AGENT_NOT_FOUND", `No session found for agent: ${agentId}`);
+      throw new RpcError("AGENT_NOT_FOUND", `No session found for conversation: ${resolvedConversationId}`);
     }
 
-    const session = new SessionManager({ sessionId: agentId });
+    const session = new SessionManager({ sessionId: resolvedConversationId });
     const allMessages = session.loadMessagesForDisplay();
     const total = allMessages.length;
     const contextWindowTokens = session.getMeta()?.contextWindowTokens ?? session.getContextWindowTokens();
@@ -40,6 +42,6 @@ export function createGetAgentMessagesHandler(): RpcHandler {
 
     const sliced = allMessages.slice(offset, offset + limit);
 
-    return { messages: sliced, total, offset, limit, contextWindowTokens };
+    return { messages: sliced, total, offset, limit, conversationId: resolvedConversationId, contextWindowTokens };
   };
 }
