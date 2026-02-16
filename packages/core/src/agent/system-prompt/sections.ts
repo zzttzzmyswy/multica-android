@@ -391,22 +391,67 @@ export function buildSkillsSection(
   const trimmed = skillsPrompt?.trim();
   if (!trimmed) return [];
 
+  const skillIds = extractSkillIdsFromSkillsPrompt(trimmed);
+  const hasMetaSkillInstaller = skillIds.includes("meta-skill-installer");
   const { text: budgeted } = truncateWithBudget(trimmed, DEFAULT_SKILLS_MAX_CHARS);
 
-  return [
+  const lines: string[] = [
     "## Skills (mandatory)",
     "Before replying: scan the available skills below.",
+  ];
+
+  if (skillIds.length > 0) {
+    lines.push(
+      `Installed skill IDs: ${skillIds.map((id) => `\`${id}\``).join(", ")}`,
+    );
+  }
+
+  lines.push(
     "- If exactly one skill clearly applies: follow its instructions.",
     "- If multiple could apply: choose the most specific one.",
     "- If none clearly apply but an **inactive skill** matches the user's intent: suggest activating it.",
     "- If the request needs a capability you currently lack: do not stop at refusal. Treat it as a capability gap and propose a recovery path.",
-    "- If `meta-skill-installer` is available and no installed skill matches: proactively offer to search ClawHub for candidates and run security review before install.",
+  );
+
+  if (hasMetaSkillInstaller) {
+    lines.push(
+      "- `meta-skill-installer` is installed: for capability gaps with no matching installed skill, proactively offer ClawHub search + security review + explicit install confirmation.",
+    );
+  } else {
+    lines.push(
+      "- If `meta-skill-installer` is available and no installed skill matches: proactively offer to search ClawHub for candidates and run security review before install.",
+    );
+  }
+
+  lines.push(
     "- Ask for explicit user confirmation before final `clawhub install` / `clawhub update` unless the user already clearly asked you to install in this turn.",
     "- After install/update, verify the skill path and retry the original user task.",
     "",
     budgeted,
     "",
-  ];
+  );
+
+  return lines;
+}
+
+/**
+ * Extract skill IDs from SkillManager prompt headings.
+ * Expected heading format: `## <emoji> <name> (<id>)`
+ */
+function extractSkillIdsFromSkillsPrompt(skillsPrompt: string): string[] {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  const headingRegex = /^##\s+.*\(([^()\n]+)\)\s*$/gm;
+
+  let match: RegExpExecArray | null;
+  while ((match = headingRegex.exec(skillsPrompt)) !== null) {
+    const id = match[1]?.trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+  }
+
+  return ids;
 }
 
 /**

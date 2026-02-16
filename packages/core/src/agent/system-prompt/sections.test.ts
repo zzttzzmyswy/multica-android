@@ -222,9 +222,24 @@ describe("buildSkillsSection", () => {
     const result = buildSkillsSection("## commit\nDo commits.", "full");
     const text = result.join("\n");
     expect(text).toContain("capability gap");
-    expect(text).toContain("meta-skill-installer");
     expect(text).toContain("explicit user confirmation");
     expect(text).toContain("clawhub install");
+  });
+
+  it("surfaces installed skill IDs and prioritizes meta skill guidance when present", () => {
+    const prompt = [
+      "## 🔧 Meta Skill Installer (meta-skill-installer)",
+      "Detect missing capabilities.",
+      "",
+      "## 📄 PDF (pdf)",
+      "Handle PDFs.",
+    ].join("\n");
+    const result = buildSkillsSection(prompt, "full");
+    const text = result.join("\n");
+    expect(text).toContain("Installed skill IDs:");
+    expect(text).toContain("`meta-skill-installer`");
+    expect(text).toContain("is installed");
+    expect(text).toContain("ClawHub search");
   });
 
   it("returns empty in minimal mode", () => {
