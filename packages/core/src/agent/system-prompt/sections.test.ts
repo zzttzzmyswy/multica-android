@@ -181,7 +181,7 @@ describe("buildConditionalToolSections", () => {
     const result = buildConditionalToolSections(["web_search"], "full");
     const text = result.join("\n");
     expect(text).toContain("## Web Access");
-    expect(text).toContain("Web usage is conditional, not mandatory");
+    expect(text).toContain("you MUST call web_fetch");
   });
 
   it("adds dynamic evidence decision guidance when data tool is present", () => {
