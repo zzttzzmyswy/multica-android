@@ -8,8 +8,17 @@ export type WebToolUsage = {
   searchCalls: number;
   searchSuccess: number;
   searchSuccessWithResults: number;
+  /** True when the latest successful search (with results) has no later successful fetch. */
+  searchNeedsFollowupFetch: boolean;
   fetchCalls: number;
   fetchSuccess: number;
+};
+
+export type WebFetchRequirement = {
+  requiredMinFetchSuccess: number;
+  promptSuggestsResearchDepth: boolean;
+  multiSourceCue: boolean;
+  explicitMinFetchFromPrompt: number | null;
 };
 
 export type CrossTurnWebFetchGuardAnalysis = {
@@ -45,6 +54,17 @@ const USER_WEB_CONTEXT_PATTERNS: RegExp[] = [
   /(?:\u7f51\u9875|\u7f51\u7ad9|\u7f51\u7edc|\u4e92\u8054\u7f51|\u94fe\u63a5|\u6765\u6e90|\u65b0\u95fb|\u62a5\u9053|\u6587\u7ae0)/,
 ];
 
+const USER_RESEARCH_DEPTH_PATTERNS: RegExp[] = [
+  /\b(research|investigate|analysis|analyze|compare|comparison|deep[-\s]?dive|survey|report|review)\b/i,
+  /(?:\u8c03\u7814|\u7814\u7a76|\u5206\u6790|\u6df1\u5ea6|\u5bf9\u6bd4|\u5bf9\u7167|\u6c47\u603b|\u76d8\u70b9|\u62a5\u544a|\u8bc4\u4f30|\u8bc4\u6d4b)/,
+];
+
+const USER_MULTI_SOURCE_PATTERNS: RegExp[] = [
+  /\b(multiple|multi-source|across sources|different sources)\b/i,
+  /(?:\u591a\u6765\u6e90|\u591a\u4e2a\u6765\u6e90|\u4e0d\u540c\u6765\u6e90|\u591a\u7f51\u7ad9)/,
+  /(?:\u81f3\u5c11|\u4e0d\u5c11\u4e8e|\u6700\u5c11)\s*\d+\s*(?:\u4e2a|\u6761)?(?:\u6765\u6e90|\u94fe\u63a5|\u7f51\u5740|\u7f51\u9875|\u6587\u7ae0)/,
+];
+
 const USER_WEB_BLOCK_PATTERNS: RegExp[] = [
   /\b(do not|don't|no|without)\s+(browse|web|internet|web_search|web_fetch|fetch)\b/i,
   /\bonly\b.*\b(snippet|snippets)\b/i,
@@ -61,6 +81,28 @@ const ASSISTANT_WEB_CLAIM_PATTERNS: RegExp[] = [
 function hasAnyPattern(text: string, patterns: RegExp[]): boolean {
   if (!text.trim()) return false;
   return patterns.some((pattern) => pattern.test(text));
+}
+
+function normalizeMinFetchSuccess(raw: number): number {
+  if (!Number.isFinite(raw)) return 1;
+  return Math.max(1, Math.min(4, Math.floor(raw)));
+}
+
+function extractExplicitMinFetchFromPrompt(prompt: string): number | null {
+  const patterns: RegExp[] = [
+    /\b(?:at least|minimum of|no less than)\s*(\d+)\s*(?:sources?|links?|urls?|articles?|pages?)\b/i,
+    /(?:\u81f3\u5c11|\u4e0d\u5c11\u4e8e|\u6700\u5c11)\s*(\d+)\s*(?:\u4e2a|\u6761)?(?:\u6765\u6e90|\u94fe\u63a5|\u7f51\u5740|\u7f51\u9875|\u6587\u7ae0)/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = prompt.match(pattern);
+    if (!match) continue;
+    const parsed = Number(match[1]);
+    if (!Number.isFinite(parsed)) continue;
+    return normalizeMinFetchSuccess(parsed);
+  }
+
+  return null;
 }
 
 function hasToolError(details: Record<string, unknown> | null): boolean {
@@ -93,9 +135,11 @@ export function summarizeWebToolUsage(records: ToolExecutionRecord[]): WebToolUs
     searchCalls: 0,
     searchSuccess: 0,
     searchSuccessWithResults: 0,
+    searchNeedsFollowupFetch: false,
     fetchCalls: 0,
     fetchSuccess: 0,
   };
+  let pendingSearchWithResults = false;
 
   for (const record of records) {
     const toolName = record.toolName.trim().toLowerCase();
@@ -106,6 +150,7 @@ export function summarizeWebToolUsage(records: ToolExecutionRecord[]): WebToolUs
         usage.searchSuccess += 1;
         if (getSearchResultCount(record.details) > 0) {
           usage.searchSuccessWithResults += 1;
+          pendingSearchWithResults = true;
         }
       }
       continue;
@@ -115,10 +160,12 @@ export function summarizeWebToolUsage(records: ToolExecutionRecord[]): WebToolUs
       usage.fetchCalls += 1;
       if (isSuccessfulExecution(record)) {
         usage.fetchSuccess += 1;
+        pendingSearchWithResults = false;
       }
     }
   }
 
+  usage.searchNeedsFollowupFetch = pendingSearchWithResults;
   return usage;
 }
 
@@ -126,14 +173,49 @@ export function shouldEnforceWebFetchAfterSearch(params: {
   usage: WebToolUsage;
   webSearchAvailable: boolean;
   webFetchAvailable: boolean;
+  requiredMinFetchSuccess?: number;
 }): boolean {
-  const { usage, webSearchAvailable, webFetchAvailable } = params;
+  const {
+    usage,
+    webSearchAvailable,
+    webFetchAvailable,
+    requiredMinFetchSuccess = 1,
+  } = params;
 
   if (!webSearchAvailable || !webFetchAvailable) return false;
   if (usage.searchSuccessWithResults <= 0) return false;
-  if (usage.fetchSuccess > 0) return false;
+  if (usage.fetchSuccess <= 0) return true;
+  if (usage.searchNeedsFollowupFetch) return true;
+  if (usage.fetchSuccess < normalizeMinFetchSuccess(requiredMinFetchSuccess)) return true;
 
-  return true;
+  return false;
+}
+
+export function resolveWebFetchRequirementFromPrompt(prompt: string): WebFetchRequirement {
+  const normalizedPrompt = prompt ?? "";
+  const promptSuggestsResearchDepth = hasAnyPattern(
+    normalizedPrompt,
+    USER_RESEARCH_DEPTH_PATTERNS,
+  );
+  const multiSourceCue = hasAnyPattern(normalizedPrompt, USER_MULTI_SOURCE_PATTERNS);
+  const explicitMinFetchFromPrompt = extractExplicitMinFetchFromPrompt(normalizedPrompt);
+
+  let requiredMinFetchSuccess = 1;
+  if (promptSuggestsResearchDepth) requiredMinFetchSuccess = 2;
+  if (multiSourceCue) requiredMinFetchSuccess = Math.max(requiredMinFetchSuccess, 2);
+  if (explicitMinFetchFromPrompt !== null) {
+    requiredMinFetchSuccess = Math.max(
+      requiredMinFetchSuccess,
+      explicitMinFetchFromPrompt,
+    );
+  }
+
+  return {
+    requiredMinFetchSuccess: normalizeMinFetchSuccess(requiredMinFetchSuccess),
+    promptSuggestsResearchDepth,
+    multiSourceCue,
+    explicitMinFetchFromPrompt,
+  };
 }
 
 export function analyzeCrossTurnWebFetchNeed(params: {

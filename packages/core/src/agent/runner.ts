@@ -44,6 +44,7 @@ import {
 import type { AuthProfileFailureReason } from "./auth-profiles/index.js";
 import {
   analyzeCrossTurnWebFetchNeed,
+  resolveWebFetchRequirementFromPrompt,
   shouldEnforceWebFetchAfterSearch,
   summarizeWebToolUsage,
   type ToolExecutionRecord,
@@ -133,15 +134,45 @@ function formatRunLogToolSummary(tool: string, details: Record<string, unknown> 
   }
 }
 
-const WEB_SEARCH_FETCH_ENFORCEMENT_PROMPT = [
-  "You used web_search but did not complete a successful web_fetch in this turn.",
-  "Search snippets are incomplete previews and are not sufficient evidence for detailed claims.",
-  "Before finalizing your answer, you MUST:",
-  "1) Pick the 1-3 most relevant URLs from the web_search results.",
-  "2) Call web_fetch on those URLs.",
-  "3) Revise your answer based on fetched content.",
-  "If all fetch attempts fail, explicitly say so and avoid relying on snippets for specific claims.",
-].join("\n");
+function buildWebSearchFetchEnforcementPrompt(params: {
+  requiredMinFetchSuccess: number;
+  fetchSuccess: number;
+  needsFollowupForLatestSearch: boolean;
+}): { prompt: string; additionalFetchNeeded: number } {
+  const additionalFetchNeeded = Math.max(
+    1,
+    params.requiredMinFetchSuccess - params.fetchSuccess,
+    params.needsFollowupForLatestSearch ? 1 : 0,
+  );
+
+  const lines = [
+    "You used web_search, but web evidence coverage for this turn is still incomplete.",
+    "Search snippets are incomplete previews and are not sufficient evidence for detailed claims.",
+  ];
+
+  if (params.requiredMinFetchSuccess > 1) {
+    lines.push(
+      `This task currently requires at least ${params.requiredMinFetchSuccess} successful web_fetch calls.`,
+    );
+  }
+
+  if (params.needsFollowupForLatestSearch) {
+    lines.push(
+      "You performed another successful web_search after your last successful web_fetch. " +
+      "You must fetch URLs from the latest search results before finalizing.",
+    );
+  }
+
+  lines.push(
+    "Before finalizing your answer, you MUST:",
+    "1) Pick the 1-3 most relevant URLs from the latest successful web_search results.",
+    `2) Complete at least ${additionalFetchNeeded} additional successful web_fetch call(s).`,
+    "3) Revise your answer based on fetched page content.",
+    "If all additional fetch attempts fail, explicitly say so and avoid relying on snippets for specific claims.",
+  );
+
+  return { prompt: lines.join("\n"), additionalFetchNeeded };
+}
 
 const CROSS_TURN_WEB_FETCH_ENFORCEMENT_PROMPT = [
   "You are about to finalize a web-dependent answer, but no successful web_fetch happened in this turn.",
@@ -590,7 +621,10 @@ export class Agent {
             messages: this.agent.state.messages.length,
           });
           await this.agent.prompt(prompt);
-          await this.enforceWebFetchAfterSearchIfNeeded(toolExecutionStartIndex);
+          await this.enforceWebFetchAfterSearchIfNeeded({
+            toolExecutionStartIndex,
+            userPrompt: prompt,
+          });
           await this.enforceCrossTurnWebFetchIfNeeded({
             toolExecutionStartIndex,
             userPrompt: prompt,
@@ -816,9 +850,10 @@ export class Agent {
     this.session.setApiKey(this.currentApiKey);
   }
 
-  private async enforceWebFetchAfterSearchIfNeeded(
-    toolExecutionStartIndex: number,
-  ): Promise<void> {
+  private async enforceWebFetchAfterSearchIfNeeded(params: {
+    toolExecutionStartIndex: number;
+    userPrompt: string;
+  }): Promise<void> {
     if (this._internalRun) return;
 
     const activeTools = new Set(
@@ -828,32 +863,48 @@ export class Agent {
     const webFetchAvailable = activeTools.has("web_fetch");
 
     const currentTurnExecutions = this.currentRunToolExecutions.slice(
-      toolExecutionStartIndex,
+      params.toolExecutionStartIndex,
     );
     const usage = summarizeWebToolUsage(currentTurnExecutions);
+    const requirement = resolveWebFetchRequirementFromPrompt(params.userPrompt);
 
     if (
       !shouldEnforceWebFetchAfterSearch({
         usage,
         webSearchAvailable,
         webFetchAvailable,
+        requiredMinFetchSuccess: requirement.requiredMinFetchSuccess,
       })
     ) {
       return;
     }
 
+    const { prompt, additionalFetchNeeded } = buildWebSearchFetchEnforcementPrompt({
+      requiredMinFetchSuccess: requirement.requiredMinFetchSuccess,
+      fetchSuccess: usage.fetchSuccess,
+      needsFollowupForLatestSearch: usage.searchNeedsFollowupFetch,
+    });
+
     this.runLog.log("web_search_fetch_guard", {
       search_calls: usage.searchCalls,
       search_success: usage.searchSuccess,
       search_with_results: usage.searchSuccessWithResults,
+      search_needs_followup_fetch: usage.searchNeedsFollowupFetch,
       fetch_calls: usage.fetchCalls,
       fetch_success: usage.fetchSuccess,
+      required_min_fetch_success: requirement.requiredMinFetchSuccess,
+      prompt_suggests_research_depth: requirement.promptSuggestsResearchDepth,
+      prompt_multi_source_cue: requirement.multiSourceCue,
+      prompt_explicit_min_fetch: requirement.explicitMinFetchFromPrompt,
     });
 
     try {
-      await this.agent.prompt(WEB_SEARCH_FETCH_ENFORCEMENT_PROMPT);
+      await this.agent.prompt(prompt);
       this.runLog.log("web_search_fetch_guard_applied", {
         search_with_results: usage.searchSuccessWithResults,
+        search_needs_followup_fetch: usage.searchNeedsFollowupFetch,
+        required_min_fetch_success: requirement.requiredMinFetchSuccess,
+        additional_fetch_needed: additionalFetchNeeded,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

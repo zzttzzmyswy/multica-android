@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   analyzeCrossTurnWebFetchNeed,
+  resolveWebFetchRequirementFromPrompt,
   shouldEnforceWebFetchAfterSearch,
   summarizeWebToolUsage,
   type ToolExecutionRecord,
@@ -31,6 +32,7 @@ describe("web-tools-policy", () => {
       expect(usage.searchCalls).toBe(1);
       expect(usage.searchSuccess).toBe(1);
       expect(usage.searchSuccessWithResults).toBe(1);
+      expect(usage.searchNeedsFollowupFetch).toBe(true);
       expect(usage.fetchCalls).toBe(0);
       expect(usage.fetchSuccess).toBe(0);
     });
@@ -46,6 +48,22 @@ describe("web-tools-policy", () => {
       expect(usage.searchCalls).toBe(1);
       expect(usage.searchSuccess).toBe(0);
       expect(usage.searchSuccessWithResults).toBe(0);
+      expect(usage.searchNeedsFollowupFetch).toBe(false);
+    });
+
+    it("marks latest search as covered when successful fetch follows", () => {
+      const usage = summarizeWebToolUsage([
+        buildRecord({
+          toolName: "web_search",
+          details: { count: 1, results: [{}] },
+        }),
+        buildRecord({
+          toolName: "web_fetch",
+          details: { status: 200, length: 1024 },
+        }),
+      ]);
+
+      expect(usage.searchNeedsFollowupFetch).toBe(false);
     });
   });
 
@@ -86,6 +104,53 @@ describe("web-tools-policy", () => {
           webFetchAvailable: true,
         }),
       ).toBe(false);
+    });
+
+    it("enforces when the latest successful search has no follow-up fetch", () => {
+      const usage = summarizeWebToolUsage([
+        buildRecord({
+          toolName: "web_search",
+          details: { count: 2, results: [{}, {}] },
+        }),
+        buildRecord({
+          toolName: "web_fetch",
+          details: { status: 200, length: 1200 },
+        }),
+        buildRecord({
+          toolName: "web_search",
+          details: { count: 3, results: [{}, {}, {}] },
+        }),
+      ]);
+
+      expect(
+        shouldEnforceWebFetchAfterSearch({
+          usage,
+          webSearchAvailable: true,
+          webFetchAvailable: true,
+        }),
+      ).toBe(true);
+    });
+
+    it("enforces when prompt requires deeper evidence coverage", () => {
+      const usage = summarizeWebToolUsage([
+        buildRecord({
+          toolName: "web_search",
+          details: { count: 6, results: [{}, {}, {}] },
+        }),
+        buildRecord({
+          toolName: "web_fetch",
+          details: { status: 200, length: 2200 },
+        }),
+      ]);
+
+      expect(
+        shouldEnforceWebFetchAfterSearch({
+          usage,
+          webSearchAvailable: true,
+          webFetchAvailable: true,
+          requiredMinFetchSuccess: 2,
+        }),
+      ).toBe(true);
     });
 
     it("does not enforce when search returns no results", () => {
@@ -228,6 +293,35 @@ describe("web-tools-policy", () => {
       expect(analysis.shouldEnforce).toBe(false);
       expect(analysis.freshnessCue).toBe(true);
       expect(analysis.webCue).toBe(false);
+    });
+  });
+
+  describe("resolveWebFetchRequirementFromPrompt", () => {
+    it("requires deeper fetch coverage for research-style prompts", () => {
+      const result = resolveWebFetchRequirementFromPrompt(
+        "帮我调研一下 APPLE 最近的产品信息，并做分析。",
+      );
+
+      expect(result.requiredMinFetchSuccess).toBe(2);
+      expect(result.promptSuggestsResearchDepth).toBe(true);
+    });
+
+    it("uses explicit minimum source count when present", () => {
+      const result = resolveWebFetchRequirementFromPrompt(
+        "Please use at least 3 sources and summarize the latest updates.",
+      );
+
+      expect(result.requiredMinFetchSuccess).toBe(3);
+      expect(result.explicitMinFetchFromPrompt).toBe(3);
+    });
+
+    it("falls back to 1 for simple prompts", () => {
+      const result = resolveWebFetchRequirementFromPrompt(
+        "What is OpenAI's CEO?",
+      );
+
+      expect(result.requiredMinFetchSuccess).toBe(1);
+      expect(result.promptSuggestsResearchDepth).toBe(false);
     });
   });
 });
