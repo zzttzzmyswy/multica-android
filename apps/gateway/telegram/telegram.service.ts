@@ -46,6 +46,10 @@ import { TelegramUserStore } from "./telegram-user.store.js";
 import type { TelegramUser } from "./types.js";
 import { markdownToTelegramHtml } from "./telegram-format.js";
 import { ShortCodeStore } from "./short-code-store.js";
+import {
+  MessageContextQueue,
+  type MessageContext,
+} from "./message-context-queue.js";
 
 // ── Types ──
 
@@ -65,12 +69,6 @@ interface PendingRequest<T = unknown> {
   resolve: (value: T) => void;
   reject: (reason: Error) => void;
   timer: ReturnType<typeof setTimeout>;
-}
-
-/** Tracks the originating Telegram message for reply_to and reaction cleanup */
-interface MessageContext {
-  telegramChatId: number;
-  telegramMessageId: number;
 }
 
 /** Media attachment extracted from a Telegram message */
@@ -182,8 +180,11 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
   private pendingRequests = new Map<string, PendingRequest>();
   /** Typing indicator timers, keyed by deviceId */
   private typingTimers = new Map<string, ReturnType<typeof setInterval>>();
-  /** Tracks the originating message for reply_to & reaction cleanup, keyed by deviceId */
-  private messageContexts = new Map<string, MessageContext>();
+  /**
+   * Per-device inbound message contexts.
+   * Queue preserves arrival order; active binds the current run's reply target.
+   */
+  private readonly messageContexts = new MessageContextQueue();
   /** Deduplicate welcome sends when Telegram replays updates in a short window */
   private welcomeSentAt = new Map<string, number>();
 
@@ -818,7 +819,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Use chatId from message context (supports groups); fall back to user ID (private chat)
-    const context = this.messageContexts.get(deviceId);
+    const context = this.messageContexts.peekForSend(deviceId);
     const chatId = context?.telegramChatId ?? Number(user.telegramUserId);
     const chunks = chunkText(text);
 
@@ -877,7 +878,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     const user = await this.userStore.findByDeviceId(deviceId);
     if (!user) return;
 
-    const context = this.messageContexts.get(deviceId);
+    const context = this.messageContexts.peekForSend(deviceId);
     const chatId = context?.telegramChatId ?? Number(user.telegramUserId);
     const inputFile = new InputFile(data, filename);
 
@@ -966,7 +967,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
   private startTyping(deviceId: string): void {
     if (this.typingTimers.has(deviceId)) return;
 
-    const context = this.messageContexts.get(deviceId);
+    const context = this.messageContexts.peekForSend(deviceId);
     if (!context) return;
 
     const chatId = context.telegramChatId;
@@ -996,18 +997,22 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
   // ── Message context tracking ──
 
   private storeMessageContext(deviceId: string, chatId: number, messageId: number): void {
-    this.messageContexts.set(deviceId, {
+    this.messageContexts.enqueue(deviceId, {
       telegramChatId: chatId,
       telegramMessageId: messageId,
     });
   }
 
+  /** Bind the oldest pending context to the currently running agent response. */
+  private activateMessageContext(deviceId: string): MessageContext | undefined {
+    return this.messageContexts.activate(deviceId);
+  }
+
   /** Remove context and 👀 reaction for a device after response is sent */
   private async clearMessageContext(deviceId: string): Promise<void> {
-    const context = this.messageContexts.get(deviceId);
+    const context = this.messageContexts.release(deviceId);
     if (context) {
       await this.removeReaction(context.telegramChatId, context.telegramMessageId);
-      this.messageContexts.delete(deviceId);
     }
   }
 
@@ -1353,6 +1358,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
 
           // Start typing when LLM begins generating
           if (event.type === "message_start") {
+            this.activateMessageContext(deviceId);
             this.startTyping(deviceId);
             return;
           }
@@ -1373,7 +1379,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
               if (narration) {
                 void this.sendToTelegram(deviceId, narration).then(() => {
                   // Re-send typing indicator — Telegram clears it when a message is sent
-                  const ctx = this.messageContexts.get(deviceId);
+                  const ctx = this.messageContexts.peekForSend(deviceId);
                   if (ctx) {
                     void this.bot?.api.sendChatAction(ctx.telegramChatId, "typing").catch(() => {});
                   }
@@ -1431,7 +1437,9 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
         if (msg.action === "message") {
           const payload = msg.payload as { content?: string; agentId?: string };
           if (payload?.content) {
-            void this.sendToTelegram(deviceId, payload.content);
+            void this.sendToTelegram(deviceId, payload.content).then(() => {
+              void this.clearMessageContext(deviceId);
+            });
           }
           return;
         }
