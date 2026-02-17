@@ -9,7 +9,6 @@ import {
   Search,
   FolderOpen,
   Globe,
-  Database,
   GitBranch,
   BarChart3,
   ChevronRight,
@@ -35,10 +34,6 @@ const TOOL_DISPLAY: Record<string, { label: string; icon: LucideIcon }> = {
   glob:            { label: "Glob",          icon: Search },
   web_search:      { label: "WebSearch",     icon: Globe },
   web_fetch:       { label: "WebFetch",      icon: Globe },
-  memory_get:      { label: "MemoryGet",     icon: Database },
-  memory_set:      { label: "MemorySet",     icon: Database },
-  memory_delete:   { label: "MemoryDelete",  icon: Database },
-  memory_list:     { label: "MemoryList",    icon: Database },
   delegate:        { label: "Delegate",      icon: GitBranch },
   data:            { label: "Data",          icon: BarChart3 },
 }

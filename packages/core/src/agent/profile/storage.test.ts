@@ -153,7 +153,6 @@ describe("storage", () => {
       writeFileSync(join(dir, "soul.md"), "Soul content");
       writeFileSync(join(dir, "user.md"), "User content");
       writeFileSync(join(dir, "workspace.md"), "Workspace content");
-      writeFileSync(join(dir, "memory.md"), "Memory content");
 
       const profile = loadProfile(profileId, { baseDir: testBaseDir });
 
@@ -161,7 +160,6 @@ describe("storage", () => {
       expect(profile.soul).toBe("Soul content");
       expect(profile.user).toBe("User content");
       expect(profile.workspace).toBe("Workspace content");
-      expect(profile.memory).toBe("Memory content");
     });
 
     it("should return undefined for missing files", () => {
@@ -177,7 +175,6 @@ describe("storage", () => {
       expect(profile.soul).toBe("Soul only");
       expect(profile.user).toBeUndefined();
       expect(profile.workspace).toBeUndefined();
-      expect(profile.memory).toBeUndefined();
     });
 
     it("should handle non-existent profile", () => {
@@ -195,7 +192,6 @@ describe("storage", () => {
         soul: "Soul data",
         user: "User data",
         workspace: "Workspace data",
-        memory: "Memory data",
       };
 
       saveProfile(profile, { baseDir: testBaseDir });
@@ -204,7 +200,6 @@ describe("storage", () => {
       expect(readFileSync(join(dir, "soul.md"), "utf-8")).toBe("Soul data");
       expect(readFileSync(join(dir, "user.md"), "utf-8")).toBe("User data");
       expect(readFileSync(join(dir, "workspace.md"), "utf-8")).toBe("Workspace data");
-      expect(readFileSync(join(dir, "memory.md"), "utf-8")).toBe("Memory data");
     });
 
     it("should only save defined fields", () => {
@@ -213,7 +208,6 @@ describe("storage", () => {
         soul: "Soul only",
         user: undefined,
         workspace: undefined,
-        memory: undefined,
       };
 
       saveProfile(profile, { baseDir: testBaseDir });

@@ -22,11 +22,6 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
   process: 'Manage background processes',
   web_fetch: 'Fetch content from URLs',
   web_search: 'Search the web via Devv Search',
-  memory_get: 'Get stored memory value',
-  memory_set: 'Store a memory value',
-  memory_delete: 'Delete a memory value',
-  memory_list: 'List all memory keys',
-  memory_search: 'Search memory files for keywords',
   cron: 'Create and manage scheduled tasks',
 }
 

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   buildConditionalToolSections,
   buildIdentitySection,
-  buildMemoryFileSection,
   buildProfileDirSection,
   buildRuntimeSection,
   buildSafetySection,
@@ -63,7 +62,6 @@ describe("buildWorkspaceSection", () => {
     expect(text).toContain("/path/to/profile");
     expect(text).toContain("soul.md");
     expect(text).toContain("user.md");
-    expect(text).toContain("memory.md");
     expect(text).toContain("Rules here");
   });
 
@@ -75,14 +73,6 @@ describe("buildWorkspaceSection", () => {
   it("returns empty in minimal mode", () => {
     expect(buildWorkspaceSection({ workspace: "data" }, "minimal")).toEqual([]);
     expect(buildWorkspaceSection({ workspace: "data" }, "minimal", "/path")).toEqual([]);
-  });
-});
-
-describe("buildMemoryFileSection", () => {
-  it("returns empty in all modes (progressive disclosure)", () => {
-    // Memory content is no longer injected - agent reads memory.md on demand
-    expect(buildMemoryFileSection({ memory: "Key facts" }, "full")).toEqual([]);
-    expect(buildMemoryFileSection({ memory: "data" }, "minimal")).toEqual([]);
   });
 });
 

@@ -21,7 +21,7 @@ export type AgentLogger = {
 };
 
 export type AgentOptions = {
-  /** Agent Profile ID - loads predefined identity, personality, memory and other configurations */
+  /** Agent Profile ID - loads predefined identity, personality, and other configurations */
   profileId?: string | undefined;
   /** Profile base directory, defaults to ~/.super-multica/agent-profiles */
   profileBaseDir?: string | undefined;

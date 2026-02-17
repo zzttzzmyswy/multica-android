@@ -7,7 +7,6 @@ const PROFILE = {
   soul: "# Soul\nYou are a helpful coding assistant.",
   user: "# User\nName: Alice",
   workspace: "# Workspace\nFollow conventional commits.",
-  memory: "# Memory\nUser prefers TypeScript.",
   config: { name: "TestAgent" },
 };
 
@@ -17,12 +16,11 @@ describe("buildSystemPrompt", () => {
   // ── Full mode ─────────────────────────────────────────────────────────
 
   it("full mode includes workspace section only (progressive disclosure)", () => {
-    // Soul, user, memory are read on-demand by the agent
+    // Soul and user are read on-demand by the agent
     const result = buildSystemPrompt({ mode: "full", profile: PROFILE });
     expect(result).not.toContain("# Soul");
     expect(result).not.toContain("# User");
     expect(result).toContain("# Workspace");
-    expect(result).not.toContain("# Memory");
   });
 
   it("full mode includes safety constitution", () => {
@@ -82,7 +80,6 @@ describe("buildSystemPrompt", () => {
     expect(result).toContain("/home/user/.super-multica/agent-profiles/test");
     expect(result).toContain("soul.md");
     expect(result).toContain("user.md");
-    expect(result).toContain("memory.md");
   });
 
   it("full mode excludes subagent section", () => {
@@ -100,7 +97,6 @@ describe("buildSystemPrompt", () => {
     expect(result).not.toContain("# Soul");
     expect(result).not.toContain("# User");
     expect(result).not.toContain("# Workspace");
-    expect(result).not.toContain("# Memory");
   });
 
   it("minimal mode includes safety constitution", () => {
@@ -246,7 +242,7 @@ describe("buildSystemPromptWithReport", () => {
     const identity = report.sections.find((s) => s.name === "identity");
     expect(identity?.included).toBe(true);
 
-    // User and memory are excluded (progressive disclosure)
+    // User is excluded (progressive disclosure)
     const user = report.sections.find((s) => s.name === "user");
     expect(user?.included).toBe(false);
 

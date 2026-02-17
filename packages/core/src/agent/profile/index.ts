@@ -49,7 +49,6 @@ export function createAgentProfile(
     profile.soul = DEFAULT_TEMPLATES.soul;
     profile.user = DEFAULT_TEMPLATES.user;
     profile.workspace = DEFAULT_TEMPLATES.workspace;
-    profile.memory = DEFAULT_TEMPLATES.memory;
     profile.heartbeat = DEFAULT_TEMPLATES.heartbeat;
     profile.config = { name: "Multica" };
 
@@ -151,7 +150,6 @@ export class ProfileManager {
         soul: profile.soul,
         user: profile.user,
         workspace: profile.workspace,
-        memory: profile.memory,
         heartbeat: profile.heartbeat,
         config: profile.config,
       },

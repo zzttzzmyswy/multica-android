@@ -7,7 +7,6 @@ import { createProcessTool } from "./tools/process.js";
 import { createGlobTool } from "./tools/glob.js";
 import { createWebFetchTool, createWebSearchTool } from "./tools/web/index.js";
 import { createDelegateTool } from "./tools/delegate.js";
-import { createMemorySearchTool } from "./tools/memory-search.js";
 import { createCronTool } from "./tools/cron/index.js";
 import { createDataTool } from "./tools/data/index.js";
 import { createSendFileTool } from "./tools/send-file.js";
@@ -23,8 +22,6 @@ export { resolveModel } from "./providers/index.js";
 /** Options for creating tools */
 export interface CreateToolsOptions {
   cwd: string;
-  /** Profile directory for memory_search tool (optional) */
-  profileDir?: string | undefined;
   /** Whether this agent is a subagent (passed to delegate tool) */
   isSubagent?: boolean | undefined;
   /** Session ID of the agent (passed to delegate tool) */
@@ -112,7 +109,7 @@ function wrapTool<TParams extends TSchema, TResult>(
 export function createAllTools(options: CreateToolsOptions | string): AgentTool<any>[] {
   // Support legacy string argument for backwards compatibility
   const opts: CreateToolsOptions = typeof options === "string" ? { cwd: options } : options;
-  const { cwd, profileDir, isSubagent, sessionId } = opts;
+  const { cwd, isSubagent, sessionId } = opts;
 
   const baseTools = createCodingTools(cwd)
     .filter((tool) => tool.name !== "bash")
@@ -138,12 +135,6 @@ export function createAllTools(options: CreateToolsOptions | string): AgentTool<
     dataTool as AgentTool<any>,
   ];
 
-  // Add memory_search tool if profileDir is provided
-  if (profileDir) {
-    const memorySearchTool = createMemorySearchTool(profileDir);
-    tools.push(memorySearchTool as AgentTool<any>);
-  }
-
   // Add send_file tool if channel send callback is provided
   if (opts.onChannelSendFile) {
     const sendFileTool = createSendFileTool(opts.onChannelSendFile);
@@ -166,10 +157,8 @@ export function createAllTools(options: CreateToolsOptions | string): AgentTool<
   return tools;
 }
 
-/** Extended options for resolveTools that includes profileDir */
+/** Extended options for resolveTools */
 export interface ResolveToolsOptions extends AgentOptions {
-  /** Profile directory for memory_search tool (computed from profileId if not provided) */
-  profileDir?: string | undefined;
   /** Run-log instance (forwarded to delegate tool) */
   runLog?: import("./run-log.js").RunLog | undefined;
 }
@@ -189,7 +178,6 @@ export function resolveTools(options: ResolveToolsOptions): AgentTool<any>[] {
   // Create all tools
   const allTools = createAllTools({
     cwd,
-    profileDir: options.profileDir,
     isSubagent: options.isSubagent,
     sessionId: options.sessionId,
     provider: options.provider,
