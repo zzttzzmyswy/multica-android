@@ -41,7 +41,7 @@ multica skills remove <name>
 
 - base coding tools (`read/write/edit/...`)
 - extended tools (`exec`, `process`, `glob`, `web_fetch`, `web_search`, `data`, `cron`, `delegate`)
-- conditional tools (`memory_search`, `send_file`)
+- conditional tools (`send_file`)
 
 Tool errors are wrapped into structured tool results instead of crashing runs.
 
@@ -52,7 +52,6 @@ Supported group aliases:
 - `group:fs` -> `read, write, edit, glob`
 - `group:runtime` -> `exec, process`
 - `group:web` -> `web_search, web_fetch`
-- `group:memory` -> `memory_search`
 - `group:subagent` -> `delegate`
 - `group:cron` -> `cron`
 - `group:data` -> `data`

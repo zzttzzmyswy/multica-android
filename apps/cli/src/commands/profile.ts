@@ -48,7 +48,6 @@ ${cyan("Profile Structure:")}
   - soul.md       Agent identity, personality and behavior
   - user.md       Information about the user
   - workspace.md  Workspace rules and conventions
-  - memory.md     Persistent knowledge
 
 ${cyan("Examples:")}
   ${dim("# Create a new profile")}
@@ -94,7 +93,6 @@ function cmdNew(profileId: string | undefined) {
   console.log("  - soul.md       (identity, personality and behavior)");
   console.log("  - user.md       (information about the user)");
   console.log("  - workspace.md  (workspace rules and conventions)");
-  console.log("  - memory.md     (persistent knowledge)");
   console.log("");
   console.log("Run interactive setup to personalize your agent:");
   console.log(`  multica profile setup ${profileId}`);
@@ -165,11 +163,6 @@ function cmdShow(profileId: string | undefined) {
     console.log("");
   }
 
-  if (profile.memory) {
-    console.log(`${green("=== memory.md ===")}`);
-    console.log(profile.memory.trim());
-    console.log("");
-  }
 }
 
 async function cmdEdit(profileId: string | undefined) {

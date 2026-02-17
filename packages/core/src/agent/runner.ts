@@ -519,7 +519,7 @@ export class Agent {
     });
 
     // Load Agent Profile (if profileId is specified)
-    // Every Agent should have a Profile for memory, tools config, and other settings
+    // Every Agent should have a Profile for tools config and other settings
     if (options.profileId) {
       this.profile = new ProfileManager({
         profileId: options.profileId,
@@ -644,7 +644,6 @@ export class Agent {
     // Merge Profile tools config with options.tools (options takes precedence)
     const profileToolsConfig = this.profile?.getToolsConfig();
     const mergedToolsConfig = mergeToolsConfig(profileToolsConfig, options.tools);
-    const profileDir = this.profile?.getProfileDir();
     // Use this.sessionId (which may be auto-generated) instead of options.sessionId
     // (which may be undefined). Without this, delegate tool has no session context.
     this.toolsOptions = mergedToolsConfig
@@ -653,7 +652,6 @@ export class Agent {
         sessionId: this.sessionId,
         cwd: effectiveCwd,
         tools: mergedToolsConfig,
-        profileDir,
         provider: this.resolvedProvider,
         runLog: this.runLog,
         onExecApprovalNeeded: this.guardedExecApproval,
@@ -662,7 +660,6 @@ export class Agent {
         ...options,
         sessionId: this.sessionId,
         cwd: effectiveCwd,
-        profileDir,
         provider: this.resolvedProvider,
         runLog: this.runLog,
         onExecApprovalNeeded: this.guardedExecApproval,
@@ -1883,7 +1880,6 @@ export class Agent {
         soul: profile.soul,
         user: profile.user,
         workspace: profile.workspace,
-        memory: profile.memory,
         heartbeat: profile.heartbeat,
         config: profile.config,
       },

@@ -10,7 +10,6 @@ export const PROFILE_FILES = {
   soul: "soul.md",
   user: "user.md",
   workspace: "workspace.md",
-  memory: "memory.md",
   heartbeat: "heartbeat.md",
   config: "config.json",
 } as const;
@@ -56,8 +55,6 @@ export interface AgentProfile {
   user?: string | undefined;
   /** Workspace guidelines - behavior rules and conventions */
   workspace?: string | undefined;
-  /** Persistent memory - long-term knowledge base */
-  memory?: string | undefined;
   /** Periodic heartbeat instructions */
   heartbeat?: string | undefined;
   /** Profile configuration (from config.json) */

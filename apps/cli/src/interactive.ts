@@ -31,7 +31,7 @@ function printUsage() {
   console.log(`${cyan("Usage:")} pnpm agent:interactive [options]`);
   console.log("");
   console.log(`${cyan("Options:")}`);
-  console.log(`  ${yellow("--profile")} ID     Load agent profile (identity, soul, tools, memory)`);
+  console.log(`  ${yellow("--profile")} ID     Load agent profile (identity, soul, tools)`);
   console.log(`  ${yellow("--provider")} NAME  LLM provider (e.g., openai, anthropic, kimi)`);
   console.log(`  ${yellow("--model")} NAME     Model name`);
   console.log(`  ${yellow("--system")} TEXT    System prompt (ignored if --profile is set)`);

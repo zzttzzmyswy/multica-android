@@ -68,7 +68,6 @@ function cmdNew(profileId: string | undefined) {
   console.log("  - soul.md       (identity, personality and behavior)");
   console.log("  - user.md       (information about the user)");
   console.log("  - workspace.md  (workspace rules and conventions)");
-  console.log("  - memory.md     (persistent knowledge)");
   console.log("");
   console.log("Edit these files to customize your agent, then run:");
   console.log(`  pnpm agent:cli --profile ${profileId} "Hello"`);
@@ -137,11 +136,6 @@ function cmdShow(profileId: string | undefined) {
     console.log("");
   }
 
-  if (profile.memory) {
-    console.log("=== memory.md ===");
-    console.log(profile.memory.trim());
-    console.log("");
-  }
 }
 
 async function cmdEdit(profileId: string | undefined) {

@@ -27,7 +27,6 @@ const CORE_TOOL_SUMMARIES: Record<string, string> = {
   process: "Manage background exec sessions",
   web_search: "Search the web via Devv Search",
   web_fetch: "Fetch and extract readable content from a URL",
-  memory_search: "Search memory files by keyword",
   delegate: "Run tasks in parallel via sub-agents",
   data: "Query structured financial and market data",
 };
@@ -42,7 +41,6 @@ const TOOL_ORDER = [
   "process",
   "web_search",
   "web_fetch",
-  "memory_search",
   "delegate",
   "data",
 ];
@@ -126,7 +124,7 @@ export function buildUserSection(
 /**
  * Workspace section — workspace.md content with profile directory path.
  * This is the primary profile content injected into system prompt.
- * Other profile files (soul.md, user.md, memory.md) are read on demand.
+ * Other profile files (soul.md, user.md) are read on demand.
  */
 export function buildWorkspaceSection(
   profile: ProfileContent | undefined,
@@ -155,13 +153,12 @@ export function buildWorkspaceSection(
       "## Profile",
       "",
       `Your profile directory: \`${profileDir}\``,
-      "Use this as the base path for profile files (soul.md, user.md, memory.md, heartbeat.md, memory/*.md).",
+      "Use this as the base path for profile files (soul.md, user.md, workspace.md, heartbeat.md).",
       "",
       "Profile files:",
       "- `soul.md` — Your identity and values",
       "- `user.md` — Information about your user",
       "- `workspace.md` — Guidelines and conventions (below)",
-      "- `memory.md` — Persistent knowledge",
       "- `heartbeat.md` — Background heartbeat loop instructions",
       "",
     );
@@ -174,18 +171,6 @@ export function buildWorkspaceSection(
   }
 
   return lines;
-}
-
-/**
- * Memory section — no longer injected into system prompt.
- * Agent reads memory.md on demand from profile directory.
- */
-export function buildMemoryFileSection(
-  _profile: ProfileContent | undefined,
-  _mode: SystemPromptMode,
-): string[] {
-  // Progressive disclosure: agent reads memory.md on demand
-  return [];
 }
 
 /**
@@ -297,21 +282,6 @@ export function buildConditionalToolSections(
 
   const toolSet = new Set(tools.map((t) => t.toLowerCase()));
   const lines: string[] = [];
-
-  // Memory tools
-  if (toolSet.has("memory_search")) {
-    lines.push(
-      "## Memory Recall",
-      "Before answering anything about prior work, decisions, dates, people, preferences, or todos:",
-      "1. Run `memory_search` to find relevant entries in memory files",
-      "2. Use `read` to pull needed context",
-      "",
-      "To update memory, use `edit` on the appropriate file:",
-      "- `memory.md` — Long-term knowledge (decisions, preferences, important context)",
-      "- `memory/YYYY-MM-DD.md` — Daily logs and session notes",
-      "",
-    );
-  }
 
   // Delegate tool (full mode only — sub-agents cannot delegate)
   if (mode === "full" && toolSet.has("delegate")) {

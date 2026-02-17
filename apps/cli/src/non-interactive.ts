@@ -25,7 +25,7 @@ function printUsage() {
   console.log("       echo \"your prompt\" | pnpm agent:cli");
   console.log("");
   console.log("Options:");
-  console.log("  --profile ID     Load agent profile (identity, soul, tools, memory)");
+  console.log("  --profile ID     Load agent profile (identity, soul, tools)");
   console.log("  --provider NAME  LLM provider (e.g., openai, anthropic, kimi)");
   console.log("  --model NAME     Model name");
   console.log("  --api-key KEY    API key (overrides environment variable)");
