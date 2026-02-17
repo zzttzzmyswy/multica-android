@@ -56,7 +56,7 @@ export interface Message {
   role: "user" | "assistant" | "toolResult" | "system";
   content: ContentBlock[];
   agentId: string;
-  conversationId?: string;
+  conversationId: string;
   stopReason?: string;
   toolCallId?: string;
   toolName?: string;
@@ -188,7 +188,7 @@ export function useChat() {
   const convertMessages = useCallback((
     raw: AgentMessageItem[],
     agentId: string,
-    conversationId = agentId,
+    conversationId: string,
   ): Message[] => {
     const toolCallArgsMap = new Map<string, { name: string; args: Record<string, unknown> }>();
     for (const m of raw) {
@@ -244,10 +244,10 @@ export function useChat() {
   const setHistory = useCallback((
     raw: AgentMessageItem[],
     agentId: string,
+    conversationId: string,
     meta?: { total: number; offset: number; contextWindowTokens?: number },
-    conversationId?: string,
   ) => {
-    const loaded = convertMessages(raw, agentId, conversationId ?? agentId);
+    const loaded = convertMessages(raw, agentId, conversationId);
     setMessages(loaded);
     if (meta) {
       setHasMore(meta.offset > 0);
@@ -261,10 +261,10 @@ export function useChat() {
   const prependHistory = useCallback((
     raw: AgentMessageItem[],
     agentId: string,
+    conversationId: string,
     meta: { total: number; offset: number; contextWindowTokens?: number },
-    conversationId?: string,
   ) => {
-    const older = convertMessages(raw, agentId, conversationId ?? agentId);
+    const older = convertMessages(raw, agentId, conversationId);
     setMessages((prev) => [...older, ...prev]);
     setHasMore(meta.offset > 0);
     if (meta.contextWindowTokens !== undefined) {
@@ -276,8 +276,8 @@ export function useChat() {
   const addUserMessage = useCallback((
     text: string,
     agentId: string,
+    conversationId: string,
     source?: MessageSource,
-    conversationId?: string,
   ) => {
     setMessages((prev) => [
       ...prev,
@@ -286,7 +286,7 @@ export function useChat() {
         role: "user",
         content: [{ type: "text", text }],
         agentId,
-        conversationId: conversationId ?? agentId,
+        conversationId,
         source,
       },
     ]);
@@ -295,7 +295,7 @@ export function useChat() {
   /** Process a StreamPayload → update messages + streamingIds */
   const handleStream = useCallback((payload: StreamPayload) => {
     const { event } = payload;
-    const sessionId = payload.sessionId ?? payload.conversationId ?? payload.agentId;
+    const conversationId = payload.conversationId;
 
     switch (event.type) {
       case "message_start": {
@@ -304,7 +304,7 @@ export function useChat() {
           role: "assistant",
           content: [],
           agentId: payload.agentId,
-          conversationId: sessionId,
+          conversationId,
         };
         const content = extractContent(event);
         if (content.length) newMsg.content = content;
@@ -334,7 +334,7 @@ export function useChat() {
               m.role === "toolResult"
               && m.toolStatus === "running"
               && m.agentId === payload.agentId
-              && (m.conversationId ?? m.agentId) === sessionId
+              && m.conversationId === conversationId
             ) {
               return { ...m, toolStatus: "interrupted" as ToolStatus };
             }
@@ -356,7 +356,7 @@ export function useChat() {
             role: "toolResult",
             content: [],
             agentId: payload.agentId,
-            conversationId: sessionId,
+            conversationId,
             toolCallId: event.toolCallId,
             toolName: event.toolName,
             toolArgs: event.args as Record<string, unknown> | undefined,
@@ -409,7 +409,7 @@ export function useChat() {
             role: "system",
             content: [],
             agentId: payload.agentId,
-            conversationId: sessionId,
+            conversationId,
             systemType: "compaction",
             compaction: {
               removed: ce.removed,

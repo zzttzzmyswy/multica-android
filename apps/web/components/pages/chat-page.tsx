@@ -32,7 +32,7 @@ const ChatPage = () => {
           />
         )}
 
-        {pageState === "connected" && client && identity && (
+        {pageState === "connected" && client && identity && identity.conversationId && (
           <ConnectedChat
             client={client}
             hubId={identity.hubId}
@@ -56,7 +56,7 @@ function ConnectedChat({
   client: NonNullable<ReturnType<typeof useGatewayConnection>["client"]>;
   hubId: string;
   agentId: string;
-  conversationId?: string;
+  conversationId: string;
   onDisconnect: () => void;
 }) {
   const chat = useGatewayChat({ client, hubId, agentId, conversationId });

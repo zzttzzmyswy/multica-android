@@ -17,12 +17,11 @@ interface UseGatewayChatOptions {
   client: GatewayClient;
   hubId: string;
   agentId: string;
-  conversationId?: string;
+  conversationId: string;
 }
 
 export function useGatewayChat({ client, hubId, agentId, conversationId }: UseGatewayChatOptions) {
   const chat = useChat();
-  const resolvedConversationId = conversationId ?? agentId;
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -34,28 +33,27 @@ export function useGatewayChat({ client, hubId, agentId, conversationId }: UseGa
     client
       .request<GetAgentMessagesResult>(hubId, "getAgentMessages", {
         agentId,
-        conversationId: resolvedConversationId,
+        conversationId,
         limit: DEFAULT_MESSAGES_LIMIT,
       })
       .then((result) => {
-        chat.setHistory(result.messages, agentId, {
+        chat.setHistory(result.messages, agentId, result.conversationId, {
           total: result.total,
           offset: result.offset,
           contextWindowTokens: result.contextWindowTokens,
-        }, result.conversationId ?? resolvedConversationId);
+        });
         offsetRef.current = result.offset;
       })
       .catch(() => {})
       .finally(() => setIsLoadingHistory(false));
-  }, [client, hubId, agentId, resolvedConversationId]);
+  }, [client, hubId, agentId, conversationId]);
 
   // Subscribe to events
   useEffect(() => {
     client.onMessage((msg) => {
       if (msg.action === StreamAction) {
         const payload = msg.payload as StreamPayload;
-        const payloadConversationId = payload.sessionId ?? payload.conversationId ?? payload.agentId;
-        if (payload.agentId !== agentId || payloadConversationId !== resolvedConversationId) {
+        if (payload.agentId !== agentId || payload.conversationId !== conversationId) {
           return;
         }
         if (payload.event.type === "agent_error") {
@@ -71,8 +69,7 @@ export function useGatewayChat({ client, hubId, agentId, conversationId }: UseGa
       }
       if (msg.action === ExecApprovalRequestAction) {
         const approval = msg.payload as ExecApprovalRequestPayload;
-        const approvalConversationId = approval.sessionId ?? approval.conversationId ?? approval.agentId;
-        if (approval.agentId !== agentId || approvalConversationId !== resolvedConversationId) {
+        if (approval.agentId !== agentId || approval.conversationId !== conversationId) {
           return;
         }
         chat.addApproval(approval);
@@ -84,23 +81,22 @@ export function useGatewayChat({ client, hubId, agentId, conversationId }: UseGa
       }
     });
     return () => { client.onMessage(() => {}); };
-  }, [client, agentId, resolvedConversationId]);
+  }, [client, agentId, conversationId]);
 
   const sendMessage = useCallback(
     (text: string) => {
       const trimmed = text.trim();
       if (!trimmed) return;
-      chat.addUserMessage(trimmed, agentId, { type: "local" }, resolvedConversationId);
+      chat.addUserMessage(trimmed, agentId, conversationId, { type: "local" });
       chat.setError(null);
       client.send(hubId, "message", {
         agentId,
-        conversationId: resolvedConversationId,
-        sessionId: resolvedConversationId,
+        conversationId,
         content: trimmed,
       });
       setIsLoading(true);
     },
-    [client, hubId, agentId, resolvedConversationId],
+    [client, hubId, agentId, conversationId],
   );
 
   const loadMore = useCallback(async () => {
@@ -113,13 +109,13 @@ export function useGatewayChat({ client, hubId, agentId, conversationId }: UseGa
       const newOffset = Math.max(0, currentOffset - DEFAULT_MESSAGES_LIMIT);
       const limit = currentOffset - newOffset;
       const result = await client.request<GetAgentMessagesResult>(
-        hubId, "getAgentMessages", { agentId, conversationId: resolvedConversationId, offset: newOffset, limit },
+        hubId, "getAgentMessages", { agentId, conversationId, offset: newOffset, limit },
       );
-      chat.prependHistory(result.messages, agentId, {
+      chat.prependHistory(result.messages, agentId, result.conversationId, {
         total: result.total,
         offset: result.offset,
         contextWindowTokens: result.contextWindowTokens,
-      }, result.conversationId ?? resolvedConversationId);
+      });
       offsetRef.current = result.offset;
     } catch {
       // Best-effort — pagination failure does not block chat
@@ -127,7 +123,7 @@ export function useGatewayChat({ client, hubId, agentId, conversationId }: UseGa
       isLoadingMoreRef.current = false;
       setIsLoadingMore(false);
     }
-  }, [client, hubId, agentId, resolvedConversationId]);
+  }, [client, hubId, agentId, conversationId]);
 
   const resolveApproval = useCallback(
     (approvalId: string, decision: ApprovalDecision) => {

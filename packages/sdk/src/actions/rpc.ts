@@ -66,8 +66,8 @@ export const DEFAULT_MESSAGES_LIMIT = 200;
 /** getAgentMessages - request params */
 export interface GetAgentMessagesParams {
   agentId: string;
-  /** Optional conversation ID. Falls back to agent main conversation when omitted. */
-  conversationId?: string;
+  /** Conversation ID to read. */
+  conversationId: string;
   offset?: number;
   limit?: number;
 }
@@ -93,8 +93,8 @@ export interface GetAgentMessagesResult {
   total: number;
   offset: number;
   limit: number;
-  /** Resolved conversation ID used by the server */
-  conversationId?: string;
+  /** Conversation ID used by the server. */
+  conversationId: string;
   /** Context window size (tokens) used by this session */
   contextWindowTokens?: number;
 }
@@ -107,24 +107,9 @@ export interface GetHubInfoResult {
   agentCount: number;
 }
 
-/** listAgents - no params needed */
-export interface ListAgentsResult {
-  agents: { id: string; closed: boolean }[];
-}
-
-/** listConversations - no params needed (conversation-first alias of listAgents) */
+/** listConversations - no params needed */
 export interface ListConversationsResult {
   conversations: { id: string; closed: boolean }[];
-}
-
-/** createAgent - request params */
-export interface CreateAgentParams {
-  id?: string;
-}
-
-/** createAgent - response payload */
-export interface CreateAgentResult {
-  id: string;
 }
 
 /** createConversation - request params (create a conversation, optionally under a specific agent) */
@@ -138,17 +123,7 @@ export interface CreateConversationResult {
   id: string;
 }
 
-/** deleteAgent - request params */
-export interface DeleteAgentParams {
-  id: string;
-}
-
-/** deleteAgent - response payload */
-export interface DeleteAgentResult {
-  ok: boolean;
-}
-
-/** deleteConversation - request params (conversation-first alias of deleteAgent) */
+/** deleteConversation - request params */
 export interface DeleteConversationParams {
   id: string;
 }
@@ -188,9 +163,5 @@ export interface VerifyResult {
   hubId: string;
   agentId: string;
   /** Authorized conversation scope for this device. */
-  conversationId?: string;
-  /** Session ID alias (same value as conversationId). */
-  sessionId?: string;
-  /** Backward-compatible alias for conversationId. */
-  mainConversationId?: string;
+  conversationId: string;
 }

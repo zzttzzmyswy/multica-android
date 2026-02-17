@@ -114,9 +114,7 @@ export interface GatewayClientCallbacks {
     result: {
       hubId: string;
       agentId: string;
-      conversationId?: string;
-      sessionId?: string;
-      mainConversationId?: string;
+      conversationId: string;
       isNewDevice?: boolean;
     }
   ) => void;

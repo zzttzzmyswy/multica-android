@@ -132,10 +132,7 @@ export function useGatewayConnection(): UseGatewayConnectionReturn {
               agentId: result.agentId,
               conversationId:
                 id.conversationId
-                ?? result.sessionId
-                ?? result.conversationId
-                ?? result.mainConversationId
-                ?? result.agentId,
+                ?? result.conversationId,
             };
           })
           .onStateChange((state: ConnectionState) => {

@@ -26,8 +26,6 @@ export interface ExecApprovalRequest {
   agentId: string;
   /** Conversation ID that initiated the command. */
   conversationId: string;
-  /** Session ID alias (same value as conversationId). */
-  sessionId?: string;
   /** Shell command to execute */
   command: string;
   /** Working directory */

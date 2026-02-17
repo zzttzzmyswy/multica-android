@@ -64,8 +64,6 @@ export interface StreamPayload {
   agentId: string;
   /** Conversation ID of this stream event. */
   conversationId: string;
-  /** Session ID alias (same value as conversationId). */
-  sessionId?: string;
   event: AgentEvent | CompactionEvent | AgentErrorEvent;
 }
 
