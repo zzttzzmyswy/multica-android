@@ -93,6 +93,7 @@ export class Hub {
   private readonly suppressedStreamAgents = new Set<string>();
   private readonly localApprovalHandlers = new Map<string, (payload: ExecApprovalRequest) => void>();
   private readonly inboundListeners = new Set<(event: InboundMessageEvent) => void>();
+  private readonly conversationListeners = new Set<(conversationIds: string[]) => void>();
   private readonly rpc: RpcDispatcher;
   private readonly approvalManager: ExecApprovalManager;
   private readonly heartbeatListeners = new Set<(event: HeartbeatEventPayload) => void>();
@@ -523,6 +524,26 @@ export class Hub {
     };
   }
 
+  /** Subscribe to conversation list changes. Returns unsubscribe function. */
+  onConversationsChanged(callback: (conversationIds: string[]) => void): () => void {
+    this.conversationListeners.add(callback);
+    return () => {
+      this.conversationListeners.delete(callback);
+    };
+  }
+
+  /** Notify listeners that conversation list changed. */
+  private emitConversationsChanged(): void {
+    const conversationIds = this.listConversations();
+    for (const listener of this.conversationListeners) {
+      try {
+        listener([...conversationIds]);
+      } catch {
+        // Keep fanout resilient against listener errors.
+      }
+    }
+  }
+
   /** Broadcast an inbound message to all listeners */
   broadcastInbound(event: InboundMessageEvent): void {
     for (const listener of this.inboundListeners) {
@@ -659,6 +680,7 @@ export class Hub {
     // Internally consume agent output (AgentEvent stream + error Messages)
     void this.consumeAgent(agent);
     this.heartbeatRunner?.updateConfig();
+    this.emitConversationsChanged();
 
     console.log(`[Hub] Conversation created: ${conversationId} (agent: ${targetAgentId})`);
     return agent;
@@ -1122,6 +1144,7 @@ export class Hub {
     this.agentProfiles.delete(resolvedAgentId);
     removeAgentRecordById(resolvedAgentId);
     this.heartbeatRunner?.updateConfig();
+    this.emitConversationsChanged();
     return closedAny;
   }
 
@@ -1147,6 +1170,7 @@ export class Hub {
 
     this.clearAgentIfNoConversation(agentId);
     this.heartbeatRunner?.updateConfig();
+    this.emitConversationsChanged();
     return true;
   }
 
@@ -1175,6 +1199,7 @@ export class Hub {
     }
     this.agentMainConversations.clear();
     this.agentProfiles.clear();
+    this.conversationListeners.clear();
     this.client.disconnect();
     console.log("Hub shut down");
   }

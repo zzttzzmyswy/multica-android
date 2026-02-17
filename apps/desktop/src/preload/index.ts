@@ -208,7 +208,22 @@ const electronAPI = {
       ipcRenderer.removeAllListeners('hub:devices-changed')
     },
     onInboundMessage: (callback: (event: InboundMessageEvent) => void) => {
-      ipcRenderer.on('hub:inbound-message', (_event, data: InboundMessageEvent) => callback(data))
+      const listener = (_event: Electron.IpcRendererEvent, data: InboundMessageEvent): void => {
+        callback(data)
+      }
+      ipcRenderer.on('hub:inbound-message', listener)
+      return (): void => {
+        ipcRenderer.removeListener('hub:inbound-message', listener)
+      }
+    },
+    onConversationsChanged: (callback: () => void) => {
+      const listener = (): void => {
+        callback()
+      }
+      ipcRenderer.on('hub:conversations-changed', listener)
+      return (): void => {
+        ipcRenderer.removeListener('hub:conversations-changed', listener)
+      }
     },
     offInboundMessage: () => {
       ipcRenderer.removeAllListeners('hub:inbound-message')
@@ -334,7 +349,7 @@ const electronAPI = {
     /** Subscribe to conversation events for local direct chat */
     subscribe: (conversationId: string) => ipcRenderer.invoke('localChat:subscribe', conversationId),
     /** Unsubscribe from conversation events */
-    unsubscribe: (conversationId: string) => ipcRenderer.invoke('localChat:unsubscribe', conversationId),
+    unsubscribe: (conversationId: string, token?: number) => ipcRenderer.invoke('localChat:unsubscribe', conversationId, token),
     /** Get message history for local chat with pagination (returns raw AgentMessageItem[]) */
     getHistory: (conversationId: string, options?: { offset?: number; limit?: number }) =>
       ipcRenderer.invoke('localChat:getHistory', conversationId, options),
@@ -349,7 +364,13 @@ const electronAPI = {
       ipcRenderer.invoke('localChat:resolveExecApproval', approvalId, decision),
     /** Listen for agent events */
     onEvent: (callback: (event: LocalChatEvent) => void) => {
-      ipcRenderer.on('localChat:event', (_event, data: LocalChatEvent) => callback(data))
+      const listener = (_event: Electron.IpcRendererEvent, data: LocalChatEvent): void => {
+        callback(data)
+      }
+      ipcRenderer.on('localChat:event', listener)
+      return (): void => {
+        ipcRenderer.removeListener('localChat:event', listener)
+      }
     },
     /** Remove event listener */
     offEvent: () => {
@@ -357,7 +378,13 @@ const electronAPI = {
     },
     /** Listen for exec approval requests */
     onApproval: (callback: (approval: LocalChatApproval) => void) => {
-      ipcRenderer.on('localChat:approval', (_event, data: LocalChatApproval) => callback(data))
+      const listener = (_event: Electron.IpcRendererEvent, data: LocalChatApproval): void => {
+        callback(data)
+      }
+      ipcRenderer.on('localChat:approval', listener)
+      return (): void => {
+        ipcRenderer.removeListener('localChat:approval', listener)
+      }
     },
     /** Remove approval listener */
     offApproval: () => {

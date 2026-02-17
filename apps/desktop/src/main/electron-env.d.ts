@@ -196,7 +196,8 @@ interface ElectronAPI {
     offConnectionStateChanged: () => void
     onDevicesChanged: (callback: () => void) => void
     offDevicesChanged: () => void
-    onInboundMessage: (callback: (event: InboundMessageEvent) => void) => void
+    onInboundMessage: (callback: (event: InboundMessageEvent) => void) => () => void
+    onConversationsChanged: (callback: () => void) => () => void
     offInboundMessage: () => void
   }
   tools: {
@@ -253,15 +254,15 @@ interface ElectronAPI {
     wake: (reason?: string) => Promise<{ ok: boolean; result?: unknown; error?: string }>
   }
   localChat: {
-    subscribe: (conversationId: string) => Promise<{ ok?: boolean; error?: string; alreadySubscribed?: boolean }>
-    unsubscribe: (conversationId: string) => Promise<{ ok: boolean }>
-    getHistory: (conversationId: string, options?: { offset?: number; limit?: number }) => Promise<{ messages: unknown[]; total: number; offset: number; limit: number; contextWindowTokens?: number }>
+    subscribe: (conversationId: string) => Promise<{ ok?: boolean; error?: string; alreadySubscribed?: boolean; token?: number; isRunning?: boolean }>
+    unsubscribe: (conversationId: string, token?: number) => Promise<{ ok: boolean; skipped?: boolean; alreadyUnsubscribed?: boolean }>
+    getHistory: (conversationId: string, options?: { offset?: number; limit?: number }) => Promise<{ messages: unknown[]; total: number; offset: number; limit: number; contextWindowTokens?: number; isRunning?: boolean }>
     send: (conversationId: string, content: string) => Promise<{ ok?: boolean; error?: string }>
     abort: (conversationId: string) => Promise<{ ok?: boolean; error?: string }>
     resolveExecApproval: (approvalId: string, decision: string) => Promise<{ ok: boolean }>
-    onEvent: (callback: (event: LocalChatEvent) => void) => void
+    onEvent: (callback: (event: LocalChatEvent) => void) => () => void
     offEvent: () => void
-    onApproval: (callback: (approval: LocalChatApproval) => void) => void
+    onApproval: (callback: (approval: LocalChatApproval) => void) => () => void
     offApproval: () => void
   }
 }
