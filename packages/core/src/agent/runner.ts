@@ -236,6 +236,8 @@ export function evaluateCustomSkillAuthoringConsent(
   }
 
   return { allowAuthoring: false, declined: false };
+}
+
 /**
  * Infer whether a tool call should be classified as error in run-log.
  *

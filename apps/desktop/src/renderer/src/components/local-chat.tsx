@@ -16,7 +16,6 @@ interface LocalChatProps {
 export function LocalChat({ initialPrompt, conversationId }: LocalChatProps) {
   const navigate = useNavigate()
   const {
-    agentId,
     conversationId: activeConversationId,
     initError,
     messages,
