@@ -20,7 +20,7 @@ export class AppController {
       hubId: this.hub.hubId,
       url: this.hub.url,
       connectionState: this.hub.connectionState,
-      agentCount: this.hub.listAgents().length,
+      agentCount: this.hub.listConversations().length,
     };
   }
 
@@ -33,23 +33,23 @@ export class AppController {
     };
   }
 
-  @Get("agents")
-  listAgents() {
-    return this.hub.listAgents().map((id) => {
-      const agent = this.hub.getAgent(id);
-      return { id, closed: agent?.closed ?? true };
+  @Get("conversations")
+  listConversations() {
+    return this.hub.listConversations().map((id) => {
+      const conversation = this.hub.getConversation(id);
+      return { id, closed: conversation?.closed ?? true };
     });
   }
 
-  @Post("agents")
-  createAgent(@Body() body?: { id?: string }) {
-    const agent = this.hub.createAgent(body?.id);
-    return { id: agent.sessionId };
+  @Post("conversations")
+  createConversation(@Body() body?: { id?: string; agentId?: string }) {
+    const conversation = this.hub.createConversation(body?.id, { agentId: body?.agentId });
+    return { id: conversation.sessionId };
   }
 
-  @Delete("agents/:id")
-  deleteAgent(@Param("id") id: string) {
-    const ok = this.hub.closeAgent(id);
+  @Delete("conversations/:id")
+  deleteConversation(@Param("id") id: string) {
+    const ok = this.hub.closeConversation(id);
     return { ok };
   }
 }

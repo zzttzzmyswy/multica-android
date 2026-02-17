@@ -12,6 +12,7 @@ import {
   MessageSquare,
   Users,
   Clock,
+  Plus,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -48,6 +49,7 @@ import { LocalChat } from '../components/local-chat'
 import { DeviceConfirmDialog } from '../components/device-confirm-dialog'
 import { UpdateNotification } from '../components/update-notification'
 import { useAuthStore } from '../stores/auth'
+import { useHubStore } from '../stores/hub'
 
 const mainNavItems = [
   { path: '/', label: 'Home', icon: Home, exact: true },
@@ -71,6 +73,11 @@ const allNavItems: Array<{ path: string; label: string; icon: typeof Home; exact
   { path: '/agent', label: 'Agent', icon: Bot },
   ...bottomNavItems,
 ]
+
+function shortConversationId(id: string): string {
+  if (id.length <= 18) return id
+  return `${id.slice(0, 8)}...${id.slice(-8)}`
+}
 
 function NavigationButtons() {
   const navigate = useNavigate()
@@ -155,12 +162,32 @@ export default function Layout() {
   const isAgentActive = location.pathname.startsWith('/agent')
   const isOnChat = location.pathname === '/chat'
   const { user, clearAuth } = useAuthStore()
+  const { agents, refresh: refreshAgents, createConversation } = useHubStore()
+  const [isCreatingConversation, setIsCreatingConversation] = useState(false)
+  const [conversationError, setConversationError] = useState<string | null>(null)
+  const selectedConversationId = isOnChat
+    ? new URLSearchParams(location.search).get('conversation') ?? undefined
+    : undefined
+  const activeConversationId = selectedConversationId ?? agents[0]?.id
 
   // Lazy mount: only mount Chat on first visit, then keep it mounted forever
   const [chatMounted, setChatMounted] = useState(false)
   useEffect(() => {
     if (isOnChat && !chatMounted) setChatMounted(true)
   }, [isOnChat, chatMounted])
+
+  useEffect(() => {
+    if (!isOnChat) return
+    void refreshAgents()
+  }, [isOnChat, refreshAgents])
+
+  useEffect(() => {
+    if (!isOnChat || !selectedConversationId || agents.length === 0) return
+    const exists = agents.some((item) => item.id === selectedConversationId)
+    if (!exists) {
+      navigate('/chat', { replace: true })
+    }
+  }, [isOnChat, selectedConversationId, agents, navigate])
 
   // Extract initialPrompt from URL search params when navigating to /chat?prompt=...
   const initialPrompt = isOnChat
@@ -170,6 +197,29 @@ export default function Layout() {
   const handleLogout = async () => {
     await clearAuth()
     navigate('/login')
+  }
+
+  const openConversation = (id: string) => {
+    if (!id) return
+    navigate(`/chat?conversation=${encodeURIComponent(id)}`)
+  }
+
+  const handleCreateConversation = async () => {
+    setConversationError(null)
+    setIsCreatingConversation(true)
+    try {
+      const created = await createConversation()
+      if (!created?.id) {
+        setConversationError('Failed to create session')
+        return
+      }
+      openConversation(created.id)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setConversationError(message)
+    } finally {
+      setIsCreatingConversation(false)
+    }
   }
 
   return (
@@ -304,7 +354,56 @@ export default function Layout() {
             </div>
             {chatMounted && (
               <div className={cn('h-full flex flex-col overflow-hidden', !isOnChat && 'hidden')}>
-                <LocalChat initialPrompt={initialPrompt} />
+                <div className="border-b px-4 py-2 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs text-muted-foreground">Session</span>
+                    {activeConversationId ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
+                            <Button variant="outline" size="sm" className="h-7 max-w-64 justify-start font-mono text-xs" />
+                          }
+                        >
+                          {shortConversationId(activeConversationId)}
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-80">
+                          {agents.length === 0 ? (
+                            <DropdownMenuItem disabled>
+                              No sessions available
+                            </DropdownMenuItem>
+                          ) : (
+                            agents.map((item) => (
+                              <DropdownMenuItem key={item.id} onClick={() => openConversation(item.id)}>
+                                <span className="font-mono text-xs truncate">{item.id}</span>
+                                {item.id === activeConversationId && <span className="ml-auto text-xs">Current</span>}
+                              </DropdownMenuItem>
+                            ))
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Initializing...</span>
+                    )}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1.5 shrink-0"
+                    onClick={handleCreateConversation}
+                    disabled={isCreatingConversation}
+                  >
+                    <Plus className="size-3.5" />
+                    {isCreatingConversation ? 'Creating...' : 'New Session'}
+                  </Button>
+                </div>
+
+                {conversationError && (
+                  <div className="px-4 py-2 text-xs text-destructive border-b">
+                    {conversationError}
+                  </div>
+                )}
+
+                <LocalChat initialPrompt={initialPrompt} conversationId={activeConversationId} />
               </div>
             )}
           </main>

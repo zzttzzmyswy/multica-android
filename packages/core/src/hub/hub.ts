@@ -17,13 +17,19 @@ import { AsyncAgent } from "../agent/async-agent.js";
 import type { AgentOptions } from "../agent/types.js";
 import { getHubId } from "./hub-identity.js";
 import { setHub } from "./hub-singleton.js";
-import { loadAgentRecords, addAgentRecord, removeAgentRecord } from "./agent-store.js";
+import {
+  loadHubStoreSnapshot,
+  upsertAgentRecord,
+  upsertConversationRecord,
+  removeConversationRecordById,
+  removeAgentRecordById,
+} from "./agent-store.js";
 import { RpcDispatcher, RpcError } from "./rpc/dispatcher.js";
 import { createGetAgentMessagesHandler } from "./rpc/handlers/get-agent-messages.js";
 import { createGetHubInfoHandler } from "./rpc/handlers/get-hub-info.js";
-import { createListAgentsHandler } from "./rpc/handlers/list-agents.js";
-import { createCreateAgentHandler } from "./rpc/handlers/create-agent.js";
-import { createDeleteAgentHandler } from "./rpc/handlers/delete-agent.js";
+import { createListConversationsHandler } from "./rpc/handlers/list-conversations.js";
+import { createCreateConversationHandler } from "./rpc/handlers/create-conversation.js";
+import { createDeleteConversationHandler } from "./rpc/handlers/delete-conversation.js";
 import { createUpdateGatewayHandler } from "./rpc/handlers/update-gateway.js";
 import { createGetLastHeartbeatHandler } from "./rpc/handlers/get-last-heartbeat.js";
 import { createSetHeartbeatsHandler } from "./rpc/handlers/set-heartbeats.js";
@@ -64,17 +70,26 @@ export type MessageSource =
 /** Inbound message event broadcast to all listeners */
 export interface InboundMessageEvent {
   agentId: string;
+  /** Conversation ID for this inbound message. */
+  conversationId: string;
   content: string;
   source: MessageSource;
   timestamp: number;
 }
 
 export class Hub {
+  // Runtime conversation map (conversationId -> AsyncAgent).
   private readonly agents = new Map<string, AsyncAgent>();
+  // Conversation ownership map (conversationId -> logical agentId).
+  private readonly conversationAgents = new Map<string, string>();
+  // Main conversation pointer for each agent (agentId -> mainConversationId).
+  private readonly agentMainConversations = new Map<string, string>();
+  // Runtime profile for each logical agent.
+  private readonly agentProfiles = new Map<string, string>();
   private readonly agentSenders = new Map<string, string>();
   private readonly agentStreamIds = new Map<string, string>();
   private readonly agentStreamCounters = new Map<string, number>();
-  private readonly pendingAssistantStarts = new Map<string, { agentId: string; event: unknown }>();
+  private readonly pendingAssistantStarts = new Map<string, { agentId: string; conversationId: string; event: unknown }>();
   private readonly suppressedStreamAgents = new Set<string>();
   private readonly localApprovalHandlers = new Map<string, (payload: ExecApprovalRequest) => void>();
   private readonly inboundListeners = new Set<(event: InboundMessageEvent) => void>();
@@ -85,7 +100,9 @@ export class Hub {
   private heartbeatUnsubscribe: (() => void) | null = null;
   private client: GatewayClient;
   readonly deviceStore: DeviceStore;
-  private _onConfirmDevice: ((deviceId: string, agentId: string, meta?: DeviceMeta) => Promise<boolean>) | null = null;
+  private _onConfirmDevice: (
+    (deviceId: string, agentId: string, conversationId: string, meta?: DeviceMeta) => Promise<boolean>
+  ) | null = null;
   private _stateChangeListeners: ((state: ConnectionState) => void)[] = [];
   readonly channelManager: ChannelManager;
   url: string;
@@ -107,37 +124,45 @@ export class Hub {
     this.rpc.register("verify", createVerifyHandler({
       hubId: this.hubId,
       deviceStore: this.deviceStore,
-      onConfirmDevice: (deviceId, agentId, meta) => {
+      resolveMainConversationId: (agentId) => this.getAgentMainConversationId(agentId),
+      onConfirmDevice: (deviceId, agentId, conversationId, meta) => {
         if (!this._onConfirmDevice) {
           // No UI confirm handler registered (CLI mode etc.) — auto-approve
           return Promise.resolve(true);
         }
-        return this._onConfirmDevice(deviceId, agentId, meta);
+        return this._onConfirmDevice(deviceId, agentId, conversationId, meta);
       },
     }));
     this.rpc.register("generateChannelWelcome", createGenerateChannelWelcomeHandler(this));
-    this.rpc.register("getAgentMessages", createGetAgentMessagesHandler());
+    this.rpc.register("getAgentMessages", createGetAgentMessagesHandler((agentId, conversationId) => {
+      const resolvedConversationId = this.normalizeId(conversationId);
+      if (!resolvedConversationId) return null;
+      return {
+        conversationId: resolvedConversationId,
+        storageAgentId: this.getConversationAgentId(resolvedConversationId) ?? this.normalizeId(agentId),
+      };
+    }));
     this.rpc.register("getHubInfo", createGetHubInfoHandler(this));
-    this.rpc.register("listAgents", createListAgentsHandler(this));
-    this.rpc.register("createAgent", createCreateAgentHandler(this));
-    this.rpc.register("deleteAgent", createDeleteAgentHandler(this));
+    this.rpc.register("listConversations", createListConversationsHandler(this));
+    this.rpc.register("createConversation", createCreateConversationHandler(this));
+    this.rpc.register("deleteConversation", createDeleteConversationHandler(this));
     this.rpc.register("updateGateway", createUpdateGatewayHandler(this));
     this.rpc.register("last-heartbeat", createGetLastHeartbeatHandler(this));
     this.rpc.register("set-heartbeats", createSetHeartbeatsHandler(this));
     this.rpc.register("wake-heartbeat", createWakeHeartbeatHandler(this));
 
     // Initialize exec approval manager
-    this.approvalManager = new ExecApprovalManager((agentId, payload) => {
+    this.approvalManager = new ExecApprovalManager((conversationId, payload) => {
       // Check local IPC handler first (for desktop direct chat)
-      const localHandler = this.localApprovalHandlers.get(agentId);
+      const localHandler = this.localApprovalHandlers.get(conversationId);
       if (localHandler) {
         localHandler(payload);
         return;
       }
       // Remote: send via Gateway
-      const targetDeviceId = this.agentSenders.get(agentId);
+      const targetDeviceId = this.agentSenders.get(conversationId);
       if (!targetDeviceId) {
-        throw new Error(`No client device found for agent ${agentId}`);
+        throw new Error(`No client device found for conversation ${conversationId}`);
       }
       this.client.send(targetDeviceId, "exec-approval-request", payload);
     });
@@ -199,20 +224,144 @@ export class Hub {
   }
 
   private getDefaultAgent(): AsyncAgent | null {
-    const first = this.listAgents()[0];
-    if (!first) return null;
-    return this.getAgent(first) ?? null;
+    const firstConversationId = this.listConversations()[0];
+    if (!firstConversationId) return null;
+    return this.getConversation(firstConversationId) ?? null;
   }
 
   /** Restore agents from persistent storage */
   private restoreAgents(): void {
-    const records = loadAgentRecords();
-    for (const record of records) {
-      this.createAgent(record.id, { persist: false });
+    const snapshot = loadHubStoreSnapshot();
+
+    for (const agent of snapshot.agents) {
+      this.agentProfiles.set(agent.id, agent.profileId ?? "default");
     }
-    if (records.length > 0) {
-      console.log(`[Hub] Restored ${records.length} agent(s)`);
+
+    for (const conversation of snapshot.conversations) {
+      this.createConversation(conversation.id, {
+        agentId: conversation.agentId,
+        profileId: conversation.profileId ?? this.agentProfiles.get(conversation.agentId) ?? "default",
+        persist: false,
+        createdAt: conversation.createdAt,
+        isMainConversation: !this.agentMainConversations.has(conversation.agentId),
+      });
     }
+
+    if (snapshot.conversations.length > 0) {
+      console.log(
+        `[Hub] Restored ${snapshot.agents.length} agent(s), ${snapshot.conversations.length} conversation(s)`,
+      );
+    }
+  }
+
+  private normalizeId(value: string | undefined): string | undefined {
+    const normalized = (value ?? "").trim();
+    return normalized || undefined;
+  }
+
+  private listConversationIdsForAgent(agentId: string): string[] {
+    const ids: string[] = [];
+    for (const [conversationId, ownerAgentId] of this.conversationAgents.entries()) {
+      const runtime = this.agents.get(conversationId);
+      if (ownerAgentId === agentId && runtime && !runtime.closed) {
+        ids.push(conversationId);
+      }
+    }
+    return ids;
+  }
+
+  private resolveAgentMainConversationId(agentId: string): string | undefined {
+    const main = this.agentMainConversations.get(agentId);
+    if (main) {
+      const runtime = this.agents.get(main);
+      if (runtime && !runtime.closed) {
+        return main;
+      }
+    }
+
+    const fallback = this.listConversationIdsForAgent(agentId)[0];
+    if (!fallback) return undefined;
+    this.agentMainConversations.set(agentId, fallback);
+    return fallback;
+  }
+
+  private resolveAgentId(agentId: string | undefined, conversationId: string): string {
+    const explicitAgentId = this.normalizeId(agentId);
+    if (explicitAgentId && this.agentMainConversations.has(explicitAgentId)) {
+      return explicitAgentId;
+    }
+    if (explicitAgentId && this.conversationAgents.has(explicitAgentId)) {
+      return this.conversationAgents.get(explicitAgentId) ?? explicitAgentId;
+    }
+    const owner = this.conversationAgents.get(conversationId);
+    if (owner) return owner;
+    return explicitAgentId ?? conversationId;
+  }
+
+  private resolveTargetAgentId(agentId: string | undefined, fallbackConversationId: string): string {
+    const normalized = this.normalizeId(agentId);
+    if (normalized) return normalized;
+    const firstAgentId = this.listAgents()[0];
+    return firstAgentId ?? fallbackConversationId;
+  }
+
+  private registerAgent(
+    agentId: string,
+    options: { profileId: string; createdAt: number; persist: boolean },
+  ): void {
+    const exists = this.agentProfiles.has(agentId);
+    if (exists) {
+      const currentProfileId = this.agentProfiles.get(agentId);
+      if (currentProfileId !== options.profileId) {
+        this.agentProfiles.set(agentId, options.profileId);
+      }
+      return;
+    }
+
+    this.agentProfiles.set(agentId, options.profileId);
+    if (options.persist) {
+      upsertAgentRecord({
+        id: agentId,
+        createdAt: options.createdAt,
+        profileId: options.profileId,
+      });
+    }
+  }
+
+  private clearAgentIfNoConversation(agentId: string): void {
+    const remaining = this.listConversationIdsForAgent(agentId);
+    if (remaining.length > 0) {
+      if (!this.agentMainConversations.get(agentId)) {
+        this.agentMainConversations.set(agentId, remaining[0]!);
+      }
+      return;
+    }
+    this.agentMainConversations.delete(agentId);
+    this.agentProfiles.delete(agentId);
+    removeAgentRecordById(agentId);
+  }
+
+  private closeConversationRuntime(conversationId: string, options?: { persist?: boolean }): { ok: boolean; agentId?: string } {
+    const runtime = this.agents.get(conversationId);
+    if (!runtime) return { ok: false };
+
+    const agentId = this.conversationAgents.get(conversationId) ?? conversationId;
+    runtime.close();
+    this.approvalManager.cancelPending(conversationId);
+    this.agents.delete(conversationId);
+    this.conversationAgents.delete(conversationId);
+    this.agentSenders.delete(conversationId);
+    this.agentStreamIds.delete(conversationId);
+    this.agentStreamCounters.delete(conversationId);
+    this.clearPendingAssistantStarts(conversationId);
+    this.suppressedStreamAgents.delete(conversationId);
+    this.localApprovalHandlers.delete(conversationId);
+
+    if (options?.persist !== false) {
+      removeConversationRecordById(conversationId);
+    }
+
+    return { ok: true, agentId };
   }
 
   private createClient(url: string): GatewayClient {
@@ -265,38 +414,79 @@ export class Hub {
       }
 
       // Non-RPC messages also require verified device
+      const payload = msg.payload as {
+        agentId?: string;
+        conversationId?: string;
+        content?: string;
+      } | undefined;
       if (!this.deviceStore.isAllowed(msg.from)) {
         console.warn(`[Hub] Rejected message from unverified device: ${msg.from}`);
         this.client.send(msg.from, "error", {
           code: "UNAUTHORIZED",
           message: "Device not verified. Please complete verification first.",
           messageId: msg.id,
+          ...(payload?.conversationId ? { conversationId: payload.conversationId } : {}),
+        });
+        return;
+      }
+      const inboundConversationId = this.normalizeId(payload?.conversationId);
+      if (!inboundConversationId) {
+        this.client.send(msg.from, "error", {
+          code: "INVALID_PARAMS",
+          message: "Missing required conversationId.",
+          messageId: msg.id,
+        });
+        return;
+      }
+      const incomingAgentId = payload?.agentId;
+      const conversationId = inboundConversationId;
+      const agentId = this.resolveAgentId(incomingAgentId, conversationId);
+      const content = payload?.content;
+      if (!content) {
+        console.warn("[Hub] Invalid payload, missing content");
+        return;
+      }
+
+      const allowedScope = this.deviceStore.isAllowed(msg.from, conversationId);
+      if (!allowedScope) {
+        console.warn(`[Hub] Rejected message outside authorized conversation scope: ${msg.from} -> ${conversationId}`);
+        this.client.send(msg.from, "error", {
+          code: "UNAUTHORIZED",
+          message: "Device is not authorized for this conversation.",
+          messageId: msg.id,
+          conversationId,
         });
         return;
       }
 
-      // Regular chat message
-      const payload = msg.payload as { agentId?: string; content?: string } | undefined;
-      const agentId = payload?.agentId;
-      const content = payload?.content;
-      if (!agentId || !content) {
-        console.warn(`[Hub] Invalid payload, missing agentId or content`);
+      if (allowedScope.agentId !== agentId) {
+        console.warn(
+          `[Hub] Rejected message due to agent mismatch: device=${msg.from}, allowedAgent=${allowedScope.agentId}, targetAgent=${agentId}`,
+        );
+        this.client.send(msg.from, "error", {
+          code: "UNAUTHORIZED",
+          message: "Device is not authorized for this agent.",
+          messageId: msg.id,
+          conversationId,
+        });
         return;
       }
-      const agent = this.agents.get(agentId);
+
+      const agent = this.agents.get(conversationId);
       if (agent && !agent.closed) {
-        this.agentSenders.set(agentId, msg.from);
+        this.agentSenders.set(conversationId, msg.from);
         this.channelManager.clearLastRoute();
         const source: MessageSource = { type: "gateway", deviceId: msg.from };
         this.broadcastInbound({
           agentId,
+          conversationId,
           content,
           source,
           timestamp: Date.now(),
         });
         agent.write(content, { source });
       } else {
-        console.warn(`[Hub] Agent not found or closed: ${agentId}`);
+        console.warn(`[Hub] Conversation not found or closed: ${conversationId} (agent=${incomingAgentId})`);
       }
     });
 
@@ -308,7 +498,11 @@ export class Hub {
   }
 
   /** Register a confirmation handler for new device connections (called by Desktop UI) */
-  setConfirmHandler(handler: ((deviceId: string, agentId: string, meta?: DeviceMeta) => Promise<boolean>) | null): void {
+  setConfirmHandler(
+    handler: (
+      (deviceId: string, agentId: string, conversationId: string, meta?: DeviceMeta) => Promise<boolean>
+    ) | null,
+  ): void {
     this._onConfirmDevice = handler;
   }
 
@@ -337,8 +531,20 @@ export class Hub {
   }
 
   /** Register a one-time token for device verification (called when QR code is generated) */
-  registerToken(token: string, agentId: string, expiresAt: number): void {
-    this.deviceStore.registerToken(token, agentId, expiresAt);
+  registerToken(token: string, agentId: string, conversationId: string, expiresAt: number): void {
+    const normalizedAgentId = this.normalizeId(agentId);
+    const normalizedConversationId = this.normalizeId(conversationId);
+    if (!normalizedAgentId || !normalizedConversationId) return;
+
+    const ownerAgentId = this.conversationAgents.get(normalizedConversationId);
+    if (ownerAgentId && ownerAgentId !== normalizedAgentId) {
+      console.warn(
+        `[Hub] registerToken rejected due to agent/conversation mismatch: agent=${normalizedAgentId}, conversation=${normalizedConversationId}, owner=${ownerAgentId}`,
+      );
+      return;
+    }
+    const resolvedAgentId = ownerAgentId ?? normalizedAgentId;
+    this.deviceStore.registerToken(token, resolvedAgentId, normalizedConversationId, expiresAt);
   }
 
   /** 重连到新的 Gateway 地址 */
@@ -365,33 +571,96 @@ export class Hub {
     return this.approvalManager.resolveApproval(approvalId, decision);
   }
 
-  /** Create new Agent, or rebuild with existing ID */
-  createAgent(id?: string, options?: { persist?: boolean; profileId?: string }): AsyncAgent {
-    if (id) {
-      const existing = this.agents.get(id);
+  /** Create a logical agent and its main conversation runtime. */
+  createAgent(
+    id?: string,
+    options?: { persist?: boolean; profileId?: string; mainConversationId?: string; createdAt?: number },
+  ): AsyncAgent {
+    const agentId = this.normalizeId(id) ?? uuidv7();
+    const existingMainConversationId = this.resolveAgentMainConversationId(agentId);
+    if (existingMainConversationId) {
+      const existing = this.agents.get(existingMainConversationId);
       if (existing && !existing.closed) {
         return existing;
       }
     }
 
-    const profileId = options?.profileId ?? "default";
-    const sessionId = id ?? uuidv7();
-    const onExecApprovalNeeded = this.createExecApprovalCallback(sessionId, profileId);
-    const onChannelSendFile = this.createChannelSendFileCallback(sessionId);
-    const channels = this.channelManager.listChannelInfos();
-    const agent = new AsyncAgent({ sessionId, profileId, onExecApprovalNeeded, onChannelSendFile, channels });
-    this.agents.set(agent.sessionId, agent);
+    const mainConversationId = this.normalizeId(options?.mainConversationId) ?? agentId;
+    return this.createConversation(mainConversationId, {
+      agentId,
+      profileId: options?.profileId,
+      persist: options?.persist,
+      isMainConversation: true,
+      createdAt: options?.createdAt,
+    });
+  }
 
-    // Persist to agent store (skip during restore to avoid duplicates)
-    if (options?.persist !== false) {
-      addAgentRecord({ id: agent.sessionId, createdAt: Date.now() });
+  /**
+   * Create a new conversation runtime.
+   *
+   * Semantics:
+   * - Agent = long-lived capability/profile identity
+   * - Conversation = isolated runtime/session thread
+   */
+  createConversation(
+    id?: string,
+    options?: {
+      persist?: boolean;
+      profileId?: string;
+      agentId?: string;
+      isMainConversation?: boolean;
+      createdAt?: number;
+    },
+  ): AsyncAgent {
+    const conversationId = this.normalizeId(id) ?? uuidv7();
+    const existing = this.agents.get(conversationId);
+    if (existing && !existing.closed) {
+      return existing;
+    }
+
+    const targetAgentId = this.resolveTargetAgentId(options?.agentId, conversationId);
+    const profileId = options?.profileId ?? this.agentProfiles.get(targetAgentId) ?? "default";
+    const createdAt = options?.createdAt ?? Date.now();
+    const persist = options?.persist !== false;
+
+    this.registerAgent(targetAgentId, {
+      profileId,
+      createdAt,
+      persist,
+    });
+
+    const onExecApprovalNeeded = this.createExecApprovalCallback(conversationId, targetAgentId, profileId);
+    const onChannelSendFile = this.createChannelSendFileCallback(conversationId);
+    const channels = this.channelManager.listChannelInfos();
+    const agent = new AsyncAgent({
+      sessionId: conversationId,
+      ownerAgentId: targetAgentId,
+      profileId,
+      onExecApprovalNeeded,
+      onChannelSendFile,
+      channels,
+    });
+
+    this.agents.set(conversationId, agent);
+    this.conversationAgents.set(conversationId, targetAgentId);
+    if (options?.isMainConversation || !this.agentMainConversations.has(targetAgentId)) {
+      this.agentMainConversations.set(targetAgentId, conversationId);
+    }
+
+    if (persist) {
+      upsertConversationRecord({
+        id: conversationId,
+        agentId: targetAgentId,
+        createdAt,
+        profileId,
+      });
     }
 
     // Internally consume agent output (AgentEvent stream + error Messages)
     void this.consumeAgent(agent);
     this.heartbeatRunner?.updateConfig();
 
-    console.log(`Agent created: ${agent.sessionId}`);
+    console.log(`[Hub] Conversation created: ${conversationId} (agent: ${targetAgentId})`);
     return agent;
   }
 
@@ -426,7 +695,7 @@ export class Hub {
 
   private clearPendingAssistantStarts(agentId: string): void {
     for (const [streamId, pending] of this.pendingAssistantStarts) {
-      if (pending.agentId === agentId) {
+      if (pending.agentId === agentId || pending.conversationId === agentId) {
         this.pendingAssistantStarts.delete(streamId);
       }
     }
@@ -434,28 +703,31 @@ export class Hub {
 
   /** Internally read agent output and send via Gateway */
   private async consumeAgent(agent: AsyncAgent): Promise<void> {
+    const conversationId = agent.sessionId;
+    const agentId = this.conversationAgents.get(conversationId) ?? conversationId;
     for await (const item of agent.read()) {
-      const targetDeviceId = this.agentSenders.get(agent.sessionId);
+      const targetDeviceId = this.agentSenders.get(conversationId);
       if (!targetDeviceId) continue;
 
       if ("content" in item) {
         // Legacy Message (error fallback)
-        console.log(`[${agent.sessionId}] ${item.content}`);
+        console.log(`[${conversationId}] ${item.content}`);
         this.client.send(targetDeviceId, "message", {
-          agentId: agent.sessionId,
+          agentId,
+          conversationId,
           content: item.content,
         });
       } else {
-        const suppressForAgent = this.suppressedStreamAgents.has(agent.sessionId);
+        const suppressForAgent = this.suppressedStreamAgents.has(conversationId);
 
         // Suppress all user-visible stream events during silent heartbeat runs.
         if (suppressForAgent) {
           if (item.type === "message_start") {
-            this.beginStream(agent.sessionId, item);
+            this.beginStream(conversationId, item);
           } else if (item.type === "message_end") {
-            const streamId = this.getActiveStreamId(agent.sessionId, item);
+            const streamId = this.getActiveStreamId(conversationId, item);
             this.pendingAssistantStarts.delete(streamId);
-            this.endStream(agent.sessionId);
+            this.endStream(conversationId);
           }
           continue;
         }
@@ -465,8 +737,9 @@ export class Hub {
           item.type === "compaction_start" || item.type === "compaction_end" || item.type === "agent_error";
         if (isPassthroughEvent) {
           this.client.send(targetDeviceId, StreamAction, {
-            streamId: `system:${agent.sessionId}`,
-            agentId: agent.sessionId,
+            streamId: `system:${conversationId}`,
+            agentId,
+            conversationId,
             event: item,
           });
           continue;
@@ -489,17 +762,17 @@ export class Hub {
         // This lets us suppress pure HEARTBEAT_OK acknowledgements end-to-end.
         if (isAssistantMessageEvent && isAssistantMessage) {
           if (item.type === "message_start") {
-            const streamId = this.beginStream(agent.sessionId, item);
-            this.pendingAssistantStarts.set(streamId, { agentId: agent.sessionId, event: item });
+            const streamId = this.beginStream(conversationId, item);
+            this.pendingAssistantStarts.set(streamId, { agentId, conversationId, event: item });
             continue;
           }
 
-          const streamId = this.getActiveStreamId(agent.sessionId, item);
+          const streamId = this.getActiveStreamId(conversationId, item);
           const isHeartbeatAck = isHeartbeatAckEvent(item);
           if (isHeartbeatAck) {
             if (item.type === "message_end") {
               this.pendingAssistantStarts.delete(streamId);
-              this.endStream(agent.sessionId);
+              this.endStream(conversationId);
             }
             continue;
           }
@@ -508,7 +781,8 @@ export class Hub {
           if (pendingStart) {
             this.client.send(targetDeviceId, StreamAction, {
               streamId,
-              agentId: agent.sessionId,
+              agentId: pendingStart.agentId,
+              conversationId: pendingStart.conversationId,
               event: pendingStart.event,
             });
             this.pendingAssistantStarts.delete(streamId);
@@ -516,19 +790,21 @@ export class Hub {
 
           this.client.send(targetDeviceId, StreamAction, {
             streamId,
-            agentId: agent.sessionId,
+            agentId,
+            conversationId,
             event: item,
           });
           if (item.type === "message_end") {
-            this.endStream(agent.sessionId);
+            this.endStream(conversationId);
           }
           continue;
         }
 
-        const streamId = this.getActiveStreamId(agent.sessionId, item);
+        const streamId = this.getActiveStreamId(conversationId, item);
         this.client.send(targetDeviceId, StreamAction, {
           streamId,
-          agentId: agent.sessionId,
+          agentId,
+          conversationId,
           event: item,
         });
       }
@@ -540,6 +816,12 @@ export class Hub {
     const { requestId, method } = request;
     try {
       const result = await this.rpc.dispatch(method, request.params, from);
+      if (method === "createConversation") {
+        const createdConversationId = (result as { id?: unknown }).id;
+        if (typeof createdConversationId === "string" && createdConversationId) {
+          this.deviceStore.allowConversation(from, createdConversationId);
+        }
+      }
       this.client.send<ResponseSuccessPayload>(from, ResponseAction, {
         requestId,
         ok: true,
@@ -582,7 +864,7 @@ export class Hub {
    * Create an exec approval callback for an agent.
    * This wires the safety evaluation + Hub approval manager together.
    */
-  private createExecApprovalCallback(sessionId: string, profileId: string): ExecApprovalCallback {
+  private createExecApprovalCallback(conversationId: string, agentId: string, profileId: string): ExecApprovalCallback {
     return async (command: string, cwd: string | undefined): Promise<ApprovalResult> => {
       // Load exec approval config from profile
       let config: ExecApprovalConfig = {};
@@ -636,7 +918,8 @@ export class Hub {
 
       // Request approval via Hub → Gateway → Client
       const result = await this.approvalManager.requestApproval({
-        agentId: sessionId,
+        agentId,
+        conversationId,
         command,
         ...(cwd !== undefined ? { cwd } : {}),
         riskLevel: evaluation.riskLevel,
@@ -688,6 +971,7 @@ export class Hub {
             type,
             caption,
             filename: basename(filePath),
+            conversationId: sessionId,
           });
           console.log(`[Hub] Sent file via gateway: ${basename(filePath)} → ${deviceId}`);
           return true;
@@ -702,13 +986,57 @@ export class Hub {
   }
 
   getAgent(id: string): AsyncAgent | undefined {
-    return this.agents.get(id);
+    const normalizedId = this.normalizeId(id);
+    if (!normalizedId) return undefined;
+
+    const directConversation = this.agents.get(normalizedId);
+    if (directConversation && !directConversation.closed) {
+      return directConversation;
+    }
+
+    const mainConversationId = this.resolveAgentMainConversationId(normalizedId);
+    if (!mainConversationId) return undefined;
+    const mainConversation = this.agents.get(mainConversationId);
+    if (!mainConversation || mainConversation.closed) return undefined;
+    return mainConversation;
+  }
+
+  getConversation(id: string): AsyncAgent | undefined {
+    const normalizedId = this.normalizeId(id);
+    if (!normalizedId) return undefined;
+    const conversation = this.agents.get(normalizedId);
+    if (!conversation || conversation.closed) return undefined;
+    return conversation;
+  }
+
+  getConversationAgentId(conversationId: string): string | undefined {
+    const normalizedConversationId = this.normalizeId(conversationId);
+    if (!normalizedConversationId) return undefined;
+    return this.conversationAgents.get(normalizedConversationId);
+  }
+
+  getAgentMainConversationId(agentId: string): string | undefined {
+    const normalizedAgentId = this.normalizeId(agentId);
+    if (!normalizedAgentId) return undefined;
+    return this.resolveAgentMainConversationId(normalizedAgentId);
   }
 
   listAgents(): string[] {
+    const activeAgentIds = new Set<string>();
+    for (const [conversationId, runtime] of this.agents.entries()) {
+      if (runtime.closed) continue;
+      const agentId = this.conversationAgents.get(conversationId);
+      if (agentId) {
+        activeAgentIds.add(agentId);
+      }
+    }
+    return Array.from(activeAgentIds.values());
+  }
+
+  listConversations(): string[] {
     return Array.from(this.agents.entries())
-      .filter(([, a]) => !a.closed)
-      .map(([id]) => id);
+      .filter(([conversationId, runtime]) => !runtime.closed && this.conversationAgents.has(conversationId))
+      .map(([conversationId]) => conversationId);
   }
 
   /** Subscribe heartbeat state updates. Returns unsubscribe callback. */
@@ -763,24 +1091,61 @@ export class Hub {
 
   /** Enqueue a system event for a specific agent or the default agent. */
   enqueueSystemEvent(text: string, opts?: { agentId?: string }): void {
-    const agentId = opts?.agentId ?? this.listAgents()[0];
-    if (!agentId) return;
-    enqueueSystemEvent(text, { sessionKey: agentId });
+    const requestedAgentId = this.normalizeId(opts?.agentId);
+    const conversationId = requestedAgentId
+      ? this.resolveAgentMainConversationId(requestedAgentId)
+      : this.listConversations()[0];
+    if (!conversationId) return;
+    enqueueSystemEvent(text, { sessionKey: conversationId });
   }
 
   closeAgent(id: string): boolean {
-    const agent = this.agents.get(id);
-    if (!agent) return false;
-    agent.close();
-    this.approvalManager.cancelPending(id);
-    this.agents.delete(id);
-    this.agentSenders.delete(id);
-    this.agentStreamIds.delete(id);
-    this.agentStreamCounters.delete(id);
-    this.clearPendingAssistantStarts(id);
-    this.suppressedStreamAgents.delete(id);
-    this.localApprovalHandlers.delete(id);
-    removeAgentRecord(id);
+    const normalizedId = this.normalizeId(id);
+    if (!normalizedId) return false;
+
+    const resolvedAgentId = this.agentMainConversations.has(normalizedId)
+      ? normalizedId
+      : this.conversationAgents.get(normalizedId) ?? normalizedId;
+    const conversationIds = this.listConversationIdsForAgent(resolvedAgentId);
+    if (conversationIds.length === 0) {
+      return this.closeConversation(normalizedId);
+    }
+
+    let closedAny = false;
+    for (const conversationId of conversationIds) {
+      const closed = this.closeConversationRuntime(conversationId, { persist: false });
+      closedAny = closedAny || closed.ok;
+    }
+    if (!closedAny) return false;
+
+    this.agentMainConversations.delete(resolvedAgentId);
+    this.agentProfiles.delete(resolvedAgentId);
+    removeAgentRecordById(resolvedAgentId);
+    this.heartbeatRunner?.updateConfig();
+    return closedAny;
+  }
+
+  closeConversation(id: string): boolean {
+    const normalizedId = this.normalizeId(id);
+    if (!normalizedId) return false;
+    const conversationId = this.agents.has(normalizedId)
+      ? normalizedId
+      : this.resolveAgentMainConversationId(normalizedId);
+    if (!conversationId) return false;
+
+    const { ok, agentId } = this.closeConversationRuntime(conversationId);
+    if (!ok || !agentId) return false;
+
+    const currentMainConversationId = this.agentMainConversations.get(agentId);
+    if (currentMainConversationId === conversationId) {
+      this.agentMainConversations.delete(agentId);
+      const replacementConversationId = this.listConversationIdsForAgent(agentId)[0];
+      if (replacementConversationId) {
+        this.agentMainConversations.set(agentId, replacementConversationId);
+      }
+    }
+
+    this.clearAgentIfNoConversation(agentId);
     this.heartbeatRunner?.updateConfig();
     return true;
   }
@@ -797,16 +1162,19 @@ export class Hub {
     this.heartbeatUnsubscribe = null;
     this.heartbeatListeners.clear();
 
-    for (const [id, agent] of this.agents) {
+    for (const [conversationId, agent] of this.agents) {
       agent.close();
-      this.agents.delete(id);
-      this.agentSenders.delete(id);
-      this.agentStreamIds.delete(id);
-      this.agentStreamCounters.delete(id);
-      this.clearPendingAssistantStarts(id);
-      this.suppressedStreamAgents.delete(id);
-      this.localApprovalHandlers.delete(id);
+      this.agents.delete(conversationId);
+      this.conversationAgents.delete(conversationId);
+      this.agentSenders.delete(conversationId);
+      this.agentStreamIds.delete(conversationId);
+      this.agentStreamCounters.delete(conversationId);
+      this.clearPendingAssistantStarts(conversationId);
+      this.suppressedStreamAgents.delete(conversationId);
+      this.localApprovalHandlers.delete(conversationId);
     }
+    this.agentMainConversations.clear();
+    this.agentProfiles.clear();
     this.client.disconnect();
     console.log("Hub shut down");
   }

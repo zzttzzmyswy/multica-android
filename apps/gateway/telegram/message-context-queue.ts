@@ -14,32 +14,32 @@ export class MessageContextQueue {
   private readonly pending = new Map<string, MessageContext[]>();
   private readonly active = new Map<string, MessageContext>();
 
-  enqueue(deviceId: string, context: MessageContext): void {
-    const queue = this.pending.get(deviceId);
+  enqueue(contextKey: string, context: MessageContext): void {
+    const queue = this.pending.get(contextKey);
     if (queue) {
       queue.push(context);
       return;
     }
-    this.pending.set(deviceId, [context]);
+    this.pending.set(contextKey, [context]);
   }
 
   /**
    * Bind the next pending context to the active run for this device.
    * If a run is already active, keep it unchanged.
    */
-  activate(deviceId: string): MessageContext | undefined {
-    const current = this.active.get(deviceId);
+  activate(contextKey: string): MessageContext | undefined {
+    const current = this.active.get(contextKey);
     if (current) return current;
 
-    const queue = this.pending.get(deviceId);
+    const queue = this.pending.get(contextKey);
     if (!queue || queue.length === 0) return undefined;
 
     const next = queue.shift();
     if (queue.length === 0) {
-      this.pending.delete(deviceId);
+      this.pending.delete(contextKey);
     }
     if (next) {
-      this.active.set(deviceId, next);
+      this.active.set(contextKey, next);
     }
     return next;
   }
@@ -48,11 +48,11 @@ export class MessageContextQueue {
    * Get the context to use for outbound sends.
    * Prefer active run context; otherwise fall back to oldest pending.
    */
-  peekForSend(deviceId: string): MessageContext | undefined {
-    const current = this.active.get(deviceId);
+  peekForSend(contextKey: string): MessageContext | undefined {
+    const current = this.active.get(contextKey);
     if (current) return current;
 
-    const queue = this.pending.get(deviceId);
+    const queue = this.pending.get(contextKey);
     return queue?.[0];
   }
 
@@ -60,19 +60,19 @@ export class MessageContextQueue {
    * Release one context after a run completes/errors.
    * Prefer active context; if none active, release oldest pending.
    */
-  release(deviceId: string): MessageContext | undefined {
-    const current = this.active.get(deviceId);
+  release(contextKey: string): MessageContext | undefined {
+    const current = this.active.get(contextKey);
     if (current) {
-      this.active.delete(deviceId);
+      this.active.delete(contextKey);
       return current;
     }
 
-    const queue = this.pending.get(deviceId);
+    const queue = this.pending.get(contextKey);
     if (!queue || queue.length === 0) return undefined;
 
     const next = queue.shift();
     if (queue.length === 0) {
-      this.pending.delete(deviceId);
+      this.pending.delete(contextKey);
     }
     return next;
   }

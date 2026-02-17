@@ -74,11 +74,13 @@ interface DeviceMeta {
   userAgent?: string
   platform?: string
   language?: string
+  clientName?: string
 }
 
 interface DeviceEntryInfo {
   deviceId: string
   agentId: string
+  conversationIds: string[]
   addedAt: number
   meta?: DeviceMeta
 }
@@ -98,6 +100,7 @@ interface ProfileData {
 
 interface LocalChatEvent {
   agentId: string
+  conversationId: string
   streamId?: string
   type?: 'error'
   content?: string
@@ -115,6 +118,7 @@ interface LocalChatEvent {
 interface LocalChatApproval {
   approvalId: string
   agentId: string
+  conversationId: string
   command: string
   cwd?: string
   riskLevel: 'safe' | 'needs-review' | 'dangerous'
@@ -157,6 +161,7 @@ type MessageSource =
 
 interface InboundMessageEvent {
   agentId: string
+  conversationId: string
   content: string
   source: MessageSource
   timestamp: number
@@ -176,13 +181,13 @@ interface ElectronAPI {
     getAgentInfo: () => Promise<AgentInfo | null>
     info: () => Promise<unknown>
     reconnect: (url: string) => Promise<unknown>
-    listAgents: () => Promise<unknown>
-    createAgent: (id?: string) => Promise<unknown>
-    getAgent: (id: string) => Promise<unknown>
-    closeAgent: (id: string) => Promise<unknown>
-    sendMessage: (agentId: string, content: string) => Promise<unknown>
-    registerToken: (token: string, agentId: string, expiresAt: number) => Promise<unknown>
-    onDeviceConfirmRequest: (callback: (deviceId: string, meta?: DeviceMeta) => void) => void
+    listConversations: () => Promise<unknown>
+    createConversation: (id?: string) => Promise<unknown>
+    getConversation: (id: string) => Promise<unknown>
+    closeConversation: (id: string) => Promise<unknown>
+    sendMessage: (agentId: string, content: string, conversationId: string) => Promise<unknown>
+    registerToken: (token: string, agentId: string, conversationId: string, expiresAt: number) => Promise<unknown>
+    onDeviceConfirmRequest: (callback: (deviceId: string, agentId: string, conversationId: string, meta?: DeviceMeta) => void) => void
     offDeviceConfirmRequest: () => void
     deviceConfirmResponse: (deviceId: string, allowed: boolean) => void
     listDevices: () => Promise<DeviceEntryInfo[]>
@@ -248,11 +253,11 @@ interface ElectronAPI {
     wake: (reason?: string) => Promise<{ ok: boolean; result?: unknown; error?: string }>
   }
   localChat: {
-    subscribe: (agentId: string) => Promise<{ ok?: boolean; error?: string; alreadySubscribed?: boolean }>
-    unsubscribe: (agentId: string) => Promise<{ ok: boolean }>
-    getHistory: (agentId: string, options?: { offset?: number; limit?: number }) => Promise<{ messages: unknown[]; total: number; offset: number; limit: number; contextWindowTokens?: number }>
-    send: (agentId: string, content: string) => Promise<{ ok?: boolean; error?: string }>
-    abort: (agentId: string) => Promise<{ ok?: boolean; error?: string }>
+    subscribe: (conversationId: string) => Promise<{ ok?: boolean; error?: string; alreadySubscribed?: boolean }>
+    unsubscribe: (conversationId: string) => Promise<{ ok: boolean }>
+    getHistory: (conversationId: string, options?: { offset?: number; limit?: number }) => Promise<{ messages: unknown[]; total: number; offset: number; limit: number; contextWindowTokens?: number }>
+    send: (conversationId: string, content: string) => Promise<{ ok?: boolean; error?: string }>
+    abort: (conversationId: string) => Promise<{ ok?: boolean; error?: string }>
     resolveExecApproval: (approvalId: string, decision: string) => Promise<{ ok: boolean }>
     onEvent: (callback: (event: LocalChatEvent) => void) => void
     offEvent: () => void

@@ -1,5 +1,5 @@
 import { join } from "path";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "fs";
 import { appendFile, writeFile } from "fs/promises";
 import { createHash } from "node:crypto";
 import type { SessionEntry } from "./types.js";
@@ -8,6 +8,8 @@ import { acquireSessionWriteLock } from "./session-write-lock.js";
 
 export type SessionStorageOptions = {
   baseDir?: string | undefined;
+  /** Owner agent ID. When provided, sessions are stored under agent/conversation hierarchy. */
+  agentId?: string | undefined;
 };
 
 /** Minimum base64 data length to externalize (32KB decoded ≈ 43KB base64) */
@@ -17,8 +19,33 @@ export function resolveBaseDir(options?: SessionStorageOptions) {
   return options?.baseDir ?? join(DATA_DIR, "sessions");
 }
 
-export function resolveSessionDir(sessionId: string, options?: SessionStorageOptions) {
+function normalizeId(value: string | undefined): string | undefined {
+  const normalized = (value ?? "").trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function resolveLegacySessionDir(sessionId: string, options?: SessionStorageOptions): string {
   return join(resolveBaseDir(options), sessionId);
+}
+
+function resolvePreferredSessionDir(sessionId: string, options?: SessionStorageOptions): string {
+  const normalizedAgentId = normalizeId(options?.agentId);
+  if (!normalizedAgentId) {
+    return resolveLegacySessionDir(sessionId, options);
+  }
+  return join(resolveBaseDir(options), normalizedAgentId, sessionId);
+}
+
+function resolveExistingSessionDir(sessionId: string, options?: SessionStorageOptions): string {
+  const preferred = resolvePreferredSessionDir(sessionId, options);
+  if (existsSync(preferred)) return preferred;
+  const legacy = resolveLegacySessionDir(sessionId, options);
+  if (legacy !== preferred && existsSync(legacy)) return legacy;
+  return preferred;
+}
+
+export function resolveSessionDir(sessionId: string, options?: SessionStorageOptions) {
+  return resolvePreferredSessionDir(sessionId, options);
 }
 
 export function resolveSessionPath(sessionId: string, options?: SessionStorageOptions) {
@@ -30,6 +57,19 @@ export function resolveMediaDir(sessionId: string, options?: SessionStorageOptio
 }
 
 export function ensureSessionDir(sessionId: string, options?: SessionStorageOptions) {
+  const preferredDir = resolvePreferredSessionDir(sessionId, options);
+  const legacyDir = resolveLegacySessionDir(sessionId, options);
+
+  if (preferredDir !== legacyDir && existsSync(legacyDir) && !existsSync(preferredDir)) {
+    try {
+      mkdirSync(join(preferredDir, ".."), { recursive: true });
+      renameSync(legacyDir, preferredDir);
+      return;
+    } catch {
+      // Fall through to normal mkdir flow below.
+    }
+  }
+
   const dir = resolveSessionDir(sessionId, options);
   // mkdirSync with recursive is idempotent (no-op if dir exists),
   // so skip the existsSync check to avoid a TOCTOU race.
@@ -127,7 +167,7 @@ function internalizeBlock(
 
   // Format A ref: { type: "image", $ref: "media/<hash>.bin" }
   if (typeof block.$ref === "string") {
-    const filePath = join(resolveSessionDir(sessionId, options), block.$ref);
+    const filePath = join(resolveExistingSessionDir(sessionId, options), block.$ref);
     try {
       const buffer = readFileSync(filePath);
       const data = buffer.toString("base64");
@@ -140,7 +180,7 @@ function internalizeBlock(
 
   // Format B ref: { type: "image", source: { type: "$ref", path: "media/<hash>.bin" } }
   if (block.source && typeof block.source === "object" && block.source.type === "$ref") {
-    const filePath = join(resolveSessionDir(sessionId, options), block.source.path);
+    const filePath = join(resolveExistingSessionDir(sessionId, options), block.source.path);
     try {
       const buffer = readFileSync(filePath);
       const data = buffer.toString("base64");
@@ -240,7 +280,7 @@ function internalizeImages(
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 export function readEntries(sessionId: string, options?: SessionStorageOptions): SessionEntry[] {
-  const filePath = resolveSessionPath(sessionId, options);
+  const filePath = join(resolveExistingSessionDir(sessionId, options), "session.jsonl");
   if (!existsSync(filePath)) return [];
   const content = readFileSync(filePath, "utf8");
   const lines = content.split("\n").filter(Boolean);

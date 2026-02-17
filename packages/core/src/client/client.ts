@@ -234,7 +234,16 @@ export class GatewayClient {
   }
 
   /** Hub 验证成功回调 */
-  onVerified(callback: (result: { hubId: string; agentId: string; isNewDevice?: boolean }) => void): this {
+  onVerified(
+    callback: (
+      result: {
+        hubId: string;
+        agentId: string;
+        conversationId: string;
+        isNewDevice?: boolean;
+      }
+    ) => void,
+  ): this {
     this.callbacks.onVerified = callback;
     return this;
   }
@@ -318,12 +327,17 @@ export class GatewayClient {
             platform: navigator.platform,
             language: navigator.language,
           } : undefined;
-          this.request<{ hubId: string; agentId: string; isNewDevice?: boolean }>(
-            this.options.hubId,
-            "verify",
-            { token: this.options.token, meta },
-            this.options.verifyTimeout,
-          )
+            this.request<{
+              hubId: string;
+              agentId: string;
+              conversationId: string;
+              isNewDevice?: boolean;
+            }>(
+              this.options.hubId,
+              "verify",
+              { token: this.options.token, meta },
+              this.options.verifyTimeout,
+            )
             .then((result) => {
               // Verify succeeded — now expose "registered" to upper layer
               this.callbacks.onVerified?.(result);

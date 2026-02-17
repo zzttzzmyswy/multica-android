@@ -1,7 +1,13 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import { getModel, type Model, type UserMessage } from "@mariozechner/pi-ai";
 import type { SessionEntry, SessionMeta } from "./types.js";
-import { appendEntry, readEntries, resolveSessionPath, writeEntries } from "./storage.js";
+import {
+  appendEntry,
+  readEntries,
+  resolveSessionPath,
+  writeEntries,
+  type SessionStorageOptions,
+} from "./storage.js";
 import { compactMessages, compactMessagesAsync, type CompactionResult } from "./compaction.js";
 import { estimateTokenUsage, estimateMessagesTokens, shouldCompact as shouldCompactTokens } from "../context-window/index.js";
 import { credentialManager } from "../credentials.js";
@@ -36,6 +42,8 @@ function getSummaryApiKey(): string | undefined {
 export type SessionManagerOptions = {
   sessionId: string;
   baseDir?: string | undefined;
+  /** Logical owner agent ID for hierarchical session storage. */
+  agentId?: string | undefined;
 
   // Compaction mode configuration
   /** Compaction mode: "tokens" uses token awareness, "summary" uses LLM summary (default) */
@@ -81,6 +89,7 @@ export type SessionManagerOptions = {
 export class SessionManager {
   private readonly sessionId: string;
   private readonly baseDir: string | undefined;
+  private readonly agentId: string | undefined;
   private readonly compactionMode: "tokens" | "summary";
   // Token mode
   private readonly contextWindowTokens: number;
@@ -108,6 +117,7 @@ export class SessionManager {
   constructor(options: SessionManagerOptions) {
     this.sessionId = options.sessionId;
     this.baseDir = options.baseDir;
+    this.agentId = options.agentId;
 
     // Compaction mode (default: summary with LLM-based summarization)
     this.compactionMode = options.compactionMode ?? "summary";
@@ -174,11 +184,11 @@ export class SessionManager {
   }
 
   loadEntries(): SessionEntry[] {
-    return readEntries(this.sessionId, { baseDir: this.baseDir });
+    return readEntries(this.sessionId, this.getStorageOptions());
   }
 
   async repairIfNeeded(warn?: (message: string) => void): Promise<RepairReport> {
-    const filePath = resolveSessionPath(this.sessionId, { baseDir: this.baseDir });
+    const filePath = resolveSessionPath(this.sessionId, this.getStorageOptions());
     return repairSessionFileIfNeeded({ sessionFile: filePath, ...(warn !== undefined ? { warn } : {}) });
   }
 
@@ -240,7 +250,7 @@ export class SessionManager {
       appendEntry(
         this.sessionId,
         { type: "meta", meta, timestamp: Date.now() },
-        { baseDir: this.baseDir },
+        this.getStorageOptions(),
       ),
     );
   }
@@ -258,7 +268,7 @@ export class SessionManager {
         contextWindowTokens: this.contextWindowTokens,
         settings: this.toolResultTruncation,
         saveArtifact: (toolCallId, content) =>
-          saveToolResultArtifact(this.sessionId, toolCallId, content, { baseDir: this.baseDir }),
+          saveToolResultArtifact(this.sessionId, toolCallId, content, this.getStorageOptions()),
       });
       if (result.truncated) {
         persistMessage = result.message;
@@ -286,7 +296,7 @@ export class SessionManager {
             : {}),
           ...(options?.source !== undefined ? { source: options.source } : {}),
         },
-        { baseDir: this.baseDir },
+        this.getStorageOptions(),
       ),
     );
   }
@@ -463,7 +473,7 @@ export class SessionManager {
     });
 
     await this.enqueue(() =>
-      writeEntries(this.sessionId, entries, { baseDir: this.baseDir }),
+      writeEntries(this.sessionId, entries, this.getStorageOptions()),
     );
     return result;
   }
@@ -482,5 +492,12 @@ export class SessionManager {
       throw err;
     });
     return this.queue;
+  }
+
+  private getStorageOptions(): SessionStorageOptions {
+    return {
+      ...(this.baseDir !== undefined ? { baseDir: this.baseDir } : {}),
+      ...(this.agentId !== undefined ? { agentId: this.agentId } : {}),
+    };
   }
 }

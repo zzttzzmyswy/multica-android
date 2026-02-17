@@ -92,6 +92,14 @@ interface GenerateChannelWelcomeResult {
   text: string;
 }
 
+interface ListConversationsResult {
+  conversations: Array<{ id: string; closed: boolean }>;
+}
+
+interface CreateConversationResult {
+  id: string;
+}
+
 // ── Constants ──
 
 const VERIFY_TIMEOUT_MS = 30_000;
@@ -194,6 +202,56 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     @Inject(EventsGateway) private readonly eventsGateway: EventsGateway,
     @Inject(TelegramUserStore) private readonly userStore: TelegramUserStore,
   ) {}
+
+  private makeConversationContextKey(deviceId: string, conversationId?: string): string {
+    return `${deviceId}:${conversationId ?? "default"}`;
+  }
+
+  private getThreadRoute(ctx: Context): { chatId: string; threadId: string } | null {
+    const chatId = ctx.chat?.id;
+    if (chatId === undefined || chatId === null) return null;
+    const maybeMsg = ctx.message as { message_thread_id?: number } | undefined;
+    const threadId = maybeMsg?.message_thread_id != null ? String(maybeMsg.message_thread_id) : "0";
+    return { chatId: String(chatId), threadId };
+  }
+
+  private async resolveConversationForContext(user: TelegramUser, ctx: Context): Promise<string> {
+    const fallbackConversationId = user.conversationId ?? user.agentId;
+    const threadRoute = this.getThreadRoute(ctx);
+    if (!threadRoute) return fallbackConversationId;
+
+    const mappedConversationId = await this.userStore.getThreadConversation(
+      user.telegramUserId,
+      threadRoute.chatId,
+      threadRoute.threadId,
+    );
+    if (mappedConversationId) {
+      return mappedConversationId;
+    }
+
+    await this.userStore.setThreadConversation(
+      user.telegramUserId,
+      threadRoute.chatId,
+      fallbackConversationId,
+      threadRoute.threadId,
+    );
+    return fallbackConversationId;
+  }
+
+  private async bindConversationToContext(
+    user: TelegramUser,
+    ctx: Context,
+    conversationId: string,
+  ): Promise<void> {
+    const threadRoute = this.getThreadRoute(ctx);
+    if (!threadRoute) return;
+    await this.userStore.setThreadConversation(
+      user.telegramUserId,
+      threadRoute.chatId,
+      conversationId,
+      threadRoute.threadId,
+    );
+  }
 
   // ── Lifecycle ──
 
@@ -353,6 +411,21 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       const user = await this.userStore.findByTelegramUserId(telegramUserId);
       const { text, keyboard } = this.buildHelpMessage(!!user);
       await ctx.reply(text, { parse_mode: "HTML", reply_markup: keyboard });
+    });
+
+    this.bot.command("new", async (ctx) => {
+      if (!this.isPrivateChat(ctx)) return;
+      await this.handleNewConversationCommand(ctx);
+    });
+
+    this.bot.command("session", async (ctx) => {
+      if (!this.isPrivateChat(ctx)) return;
+      await this.handleSessionCommand(ctx, ctx.match?.trim() ?? "");
+    });
+
+    this.bot.command("sessions", async (ctx) => {
+      if (!this.isPrivateChat(ctx)) return;
+      await this.handleSessionsCommand(ctx);
     });
 
     // Inline button callback queries
@@ -529,7 +602,8 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     const text =
       `<b>Welcome back!</b>\n\n` +
       `${statusEmoji} Status: <b>${statusText}</b>\n` +
-      `Agent: <code>${user.agentId}</code>\n\n` +
+      `Agent: <code>${user.agentId}</code>\n` +
+      `Conversation: <code>${user.conversationId ?? user.agentId}</code>\n\n` +
       (online
         ? `Your agent is ready. Just send a message to start chatting.`
         : `Your Hub is offline. Make sure the Multica Desktop app is running.`);
@@ -563,7 +637,8 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       `<b>Connection Status</b>\n\n` +
       `${statusEmoji} <b>${statusLabel}</b>\n\n` +
       `Hub: <code>${user.hubId}</code>\n` +
-      `Agent: <code>${user.agentId}</code>\n\n` +
+      `Agent: <code>${user.agentId}</code>\n` +
+      `Conversation: <code>${user.conversationId ?? user.agentId}</code>\n\n` +
       (online
         ? `Your Hub is online and ready to receive messages.`
         : `Your Hub is offline. Make sure the Multica Desktop app is running.`);
@@ -585,6 +660,9 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       `<b>Commands</b>\n` +
       `  /start \u2014 Connect your account or see welcome\n` +
       `  /status \u2014 Check connection status\n` +
+      `  /new \u2014 Start a new isolated conversation\n` +
+      `  /session [id] \u2014 Show or switch current conversation\n` +
+      `  /sessions \u2014 List available conversations\n` +
       `  /help \u2014 Show this message\n\n` +
       `<b>How to connect</b>\n` +
       `  <b>1.</b> Open Multica Desktop app\n` +
@@ -610,6 +688,9 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       await this.bot.api.setMyCommands([
         { command: "start", description: "Connect or show welcome" },
         { command: "status", description: "Check connection status" },
+        { command: "new", description: "Create a new conversation" },
+        { command: "session", description: "Show/switch current conversation" },
+        { command: "sessions", description: "List conversations" },
         { command: "help", description: "Show help and instructions" },
       ]);
 
@@ -664,7 +745,6 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     if (user) {
       // ACK: 👀 reaction on the original message
       await this.addReaction(msg.chat.id, msg.message_id, "👀");
-      this.storeMessageContext(user.deviceId, msg.chat.id, msg.message_id);
       // Prepend reply context if user is replying to a specific message
       const replyContext = extractReplyContext(ctx);
       const content = replyContext ? `${replyContext}\n${text}` : text;
@@ -675,6 +755,184 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     // New user without connection link
     const welcome = this.buildWelcomeMessage();
     await ctx.reply(welcome.text, { parse_mode: "HTML", reply_markup: welcome.keyboard });
+  }
+
+  private async createConversationViaRpc(deviceId: string, hubId: string, agentId?: string): Promise<{ id: string }> {
+    const created = await this.sendRpc<{ agentId?: string }, CreateConversationResult>(
+      deviceId,
+      hubId,
+      "createConversation",
+      agentId ? { agentId } : {},
+      VERIFY_TIMEOUT_MS,
+      "Create conversation request timed out",
+    );
+    return { id: created.id };
+  }
+
+  private async listConversationsViaRpc(deviceId: string, hubId: string): Promise<Array<{ id: string; closed: boolean }>> {
+    const result = await this.sendRpc<Record<string, never>, ListConversationsResult>(
+      deviceId,
+      hubId,
+      "listConversations",
+      {},
+      VERIFY_TIMEOUT_MS,
+      "List conversations request timed out",
+    );
+    return result.conversations;
+  }
+
+  private async handleNewConversationCommand(ctx: Context): Promise<void> {
+    const telegramUserId = String(ctx.from?.id);
+    const user = await this.userStore.findByTelegramUserId(telegramUserId);
+    if (!user) {
+      await ctx.reply("You are not connected yet. Use /start and connect from Desktop first.");
+      return;
+    }
+
+    if (!this.eventsGateway.isDeviceRegistered(user.hubId)) {
+      await ctx.reply(
+        "Your Hub is currently offline.\n\n" +
+          "Make sure the Multica Desktop app is running and connected to the Gateway.",
+      );
+      return;
+    }
+
+    if (!this.eventsGateway.isDeviceRegistered(user.deviceId)) {
+      this.registerVirtualDeviceForUser(user.deviceId, user.telegramUserId);
+    }
+
+    try {
+      const created = await this.createConversationViaRpc(user.deviceId, user.hubId, user.agentId);
+
+      await this.userStore.upsert({
+        telegramUserId: user.telegramUserId,
+        hubId: user.hubId,
+        agentId: user.agentId,
+        conversationId: created.id,
+        deviceId: user.deviceId,
+        telegramUsername: user.telegramUsername,
+        telegramFirstName: user.telegramFirstName,
+        telegramLastName: user.telegramLastName,
+      });
+      await this.bindConversationToContext(user, ctx, created.id);
+
+      await ctx.reply(
+        `<b>\u2705 New conversation created</b>\n\n` +
+          `Conversation: <code>${created.id}</code>\n\n` +
+          `All next messages in this Telegram thread will use this conversation.`,
+        { parse_mode: "HTML" },
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await ctx.reply(`Failed to create conversation: ${message}`);
+    }
+  }
+
+  private async handleSessionsCommand(ctx: Context): Promise<void> {
+    const telegramUserId = String(ctx.from?.id);
+    const user = await this.userStore.findByTelegramUserId(telegramUserId);
+    if (!user) {
+      await ctx.reply("You are not connected yet. Use /start and connect from Desktop first.");
+      return;
+    }
+
+    if (!this.eventsGateway.isDeviceRegistered(user.hubId)) {
+      await ctx.reply("Your Hub is offline. Open Desktop and reconnect, then try again.");
+      return;
+    }
+
+    if (!this.eventsGateway.isDeviceRegistered(user.deviceId)) {
+      this.registerVirtualDeviceForUser(user.deviceId, user.telegramUserId);
+    }
+
+    try {
+      const conversations = await this.listConversationsViaRpc(user.deviceId, user.hubId);
+      const conversationIds = conversations.filter((item) => !item.closed).map((item) => item.id);
+      if (conversationIds.length === 0) {
+        await ctx.reply("No conversations found.");
+        return;
+      }
+
+      const current = await this.resolveConversationForContext(user, ctx);
+      const lines = conversationIds.slice(0, 20).map((id) => {
+        const marker = id === current ? "\u2022 current" : "";
+        return `<code>${id}</code>${marker ? ` ${marker}` : ""}`;
+      });
+      const extra = conversationIds.length > 20 ? `\n...and ${conversationIds.length - 20} more` : "";
+
+      await ctx.reply(
+        `<b>Available conversations</b>\n\n` +
+          `${lines.join("\n")}${extra}\n\n` +
+          `Use <code>/session &lt;id&gt;</code> to switch.`,
+        { parse_mode: "HTML" },
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await ctx.reply(`Failed to load conversations: ${message}`);
+    }
+  }
+
+  private async handleSessionCommand(ctx: Context, input: string): Promise<void> {
+    const telegramUserId = String(ctx.from?.id);
+    const user = await this.userStore.findByTelegramUserId(telegramUserId);
+    if (!user) {
+      await ctx.reply("You are not connected yet. Use /start and connect from Desktop first.");
+      return;
+    }
+
+    const target = input.trim();
+    const current = await this.resolveConversationForContext(user, ctx);
+    if (!target) {
+      await ctx.reply(
+        `<b>Current conversation</b>\n\n` +
+          `<code>${current}</code>\n\n` +
+          `Use <code>/session &lt;id&gt;</code> to switch.`,
+        { parse_mode: "HTML" },
+      );
+      return;
+    }
+
+    if (!this.eventsGateway.isDeviceRegistered(user.hubId)) {
+      await ctx.reply("Your Hub is offline. Open Desktop and reconnect, then try again.");
+      return;
+    }
+
+    if (!this.eventsGateway.isDeviceRegistered(user.deviceId)) {
+      this.registerVirtualDeviceForUser(user.deviceId, user.telegramUserId);
+    }
+
+    try {
+      const conversations = await this.listConversationsViaRpc(user.deviceId, user.hubId);
+      const exists = conversations.some((item) => item.id === target && !item.closed);
+      if (!exists) {
+        await ctx.reply(
+          `Conversation not found: <code>${target}</code>\n\nUse /sessions to list available conversations.`,
+          { parse_mode: "HTML" },
+        );
+        return;
+      }
+
+      await this.userStore.upsert({
+        telegramUserId: user.telegramUserId,
+        hubId: user.hubId,
+        agentId: user.agentId,
+        conversationId: target,
+        deviceId: user.deviceId,
+        telegramUsername: user.telegramUsername,
+        telegramFirstName: user.telegramFirstName,
+        telegramLastName: user.telegramLastName,
+      });
+      await this.bindConversationToContext(user, ctx, target);
+
+      await ctx.reply(
+        `<b>\u2705 Conversation switched</b>\n\n` +
+          `Current conversation: <code>${target}</code>`,
+        { parse_mode: "HTML" },
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await ctx.reply(`Failed to switch conversation: ${message}`);
+    }
   }
 
   // ── Inbound: media messages ──
@@ -704,7 +962,6 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
 
     // ACK: 👀 reaction
     await this.addReaction(msg.chat.id, msg.message_id, "👀");
-    this.storeMessageContext(user.deviceId, msg.chat.id, msg.message_id);
 
     // Process media → text description (async, may take a few seconds)
     const processedText = await this.processMedia({ ...media, caption: caption ?? undefined });
@@ -809,7 +1066,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
    * Send text to a Telegram user/group by deviceId.
    * Applies Markdown → HTML formatting, text chunking, and reply-to.
    */
-  async sendToTelegram(deviceId: string, text: string): Promise<void> {
+  async sendToTelegram(deviceId: string, text: string, conversationId?: string): Promise<void> {
     if (!this.bot) return;
 
     const user = await this.userStore.findByDeviceId(deviceId);
@@ -819,7 +1076,8 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Use chatId from message context (supports groups); fall back to user ID (private chat)
-    const context = this.messageContexts.peekForSend(deviceId);
+    const contextKey = this.makeConversationContextKey(deviceId, conversationId);
+    const context = this.messageContexts.peekForSend(contextKey);
     const chatId = context?.telegramChatId ?? Number(user.telegramUserId);
     const chunks = chunkText(text);
 
@@ -872,13 +1130,15 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     type: string,
     caption?: string,
     filename?: string,
+    conversationId?: string,
   ): Promise<void> {
     if (!this.bot) return;
 
     const user = await this.userStore.findByDeviceId(deviceId);
     if (!user) return;
 
-    const context = this.messageContexts.peekForSend(deviceId);
+    const contextKey = this.makeConversationContextKey(deviceId, conversationId);
+    const context = this.messageContexts.peekForSend(contextKey);
     const chatId = context?.telegramChatId ?? Number(user.telegramUserId);
     const inputFile = new InputFile(data, filename);
 
@@ -964,10 +1224,10 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
 
   // ── Typing indicators ──
 
-  private startTyping(deviceId: string): void {
-    if (this.typingTimers.has(deviceId)) return;
+  private startTyping(contextKey: string): void {
+    if (this.typingTimers.has(contextKey)) return;
 
-    const context = this.messageContexts.peekForSend(deviceId);
+    const context = this.messageContexts.peekForSend(contextKey);
     if (!context) return;
 
     const chatId = context.telegramChatId;
@@ -976,41 +1236,41 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     };
     send();
     const interval = setInterval(send, 5000);
-    this.typingTimers.set(deviceId, interval);
+    this.typingTimers.set(contextKey, interval);
 
     // Safety timeout: auto-stop if no message_end/agent_error arrives
     setTimeout(() => {
-      if (this.typingTimers.get(deviceId) === interval) {
-        this.stopTyping(deviceId);
+      if (this.typingTimers.get(contextKey) === interval) {
+        this.stopTyping(contextKey);
       }
     }, TYPING_TIMEOUT_MS);
   }
 
-  private stopTyping(deviceId: string): void {
-    const timer = this.typingTimers.get(deviceId);
+  private stopTyping(contextKey: string): void {
+    const timer = this.typingTimers.get(contextKey);
     if (timer) {
       clearInterval(timer);
-      this.typingTimers.delete(deviceId);
+      this.typingTimers.delete(contextKey);
     }
   }
 
   // ── Message context tracking ──
 
-  private storeMessageContext(deviceId: string, chatId: number, messageId: number): void {
-    this.messageContexts.enqueue(deviceId, {
+  private storeMessageContext(contextKey: string, chatId: number, messageId: number): void {
+    this.messageContexts.enqueue(contextKey, {
       telegramChatId: chatId,
       telegramMessageId: messageId,
     });
   }
 
   /** Bind the oldest pending context to the currently running agent response. */
-  private activateMessageContext(deviceId: string): MessageContext | undefined {
-    return this.messageContexts.activate(deviceId);
+  private activateMessageContext(contextKey: string): MessageContext | undefined {
+    return this.messageContexts.activate(contextKey);
   }
 
   /** Remove context and 👀 reaction for a device after response is sent */
-  private async clearMessageContext(deviceId: string): Promise<void> {
-    const context = this.messageContexts.release(deviceId);
+  private async clearMessageContext(contextKey: string): Promise<void> {
+    const context = this.messageContexts.release(contextKey);
     if (context) {
       await this.removeReaction(context.telegramChatId, context.telegramMessageId);
     }
@@ -1073,26 +1333,38 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
           ? `Telegram @${msg.from.username}`
           : `Telegram ${msg?.from?.first_name ?? telegramUserId}`,
       });
+      const conversationId = connectionInfo.conversationId ?? result.conversationId;
 
       // 5. Save to DB
       await this.userStore.upsert({
         telegramUserId,
         hubId: connectionInfo.hubId,
         agentId: connectionInfo.agentId,
+        conversationId,
         deviceId,
         telegramUsername: msg?.from?.username,
         telegramFirstName: msg?.from?.first_name,
         telegramLastName: msg?.from?.last_name,
       });
+      const threadRoute = this.getThreadRoute(ctx);
+      if (threadRoute) {
+        await this.userStore.setThreadConversation(
+          telegramUserId,
+          threadRoute.chatId,
+          conversationId,
+          threadRoute.threadId,
+        );
+      }
 
       const successKeyboard = new InlineKeyboard()
         .text("Check status", CB_CHECK_STATUS)
         .text("Help", CB_SHOW_HELP);
 
       await ctx.reply(
-        `<b>\u2705 Connected successfully!</b>\n\n` +
+          `<b>\u2705 Connected successfully!</b>\n\n` +
           `Hub: <code>${result.hubId}</code>\n` +
-          `Agent: <code>${result.agentId}</code>\n\n` +
+          `Agent: <code>${result.agentId}</code>\n` +
+          `Conversation: <code>${conversationId}</code>\n\n` +
           `You can now send messages to interact with your agent.`,
         { parse_mode: "HTML", reply_markup: successKeyboard },
       );
@@ -1298,13 +1570,19 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Send message to Hub
+    const conversationId = await this.resolveConversationForContext(user, ctx);
+    const msg = ctx.message;
+    if (msg) {
+      const contextKey = this.makeConversationContextKey(user.deviceId, conversationId);
+      this.storeMessageContext(contextKey, msg.chat.id, msg.message_id);
+    }
     const message: RoutedMessage = {
       id: uuidv7(),
       uid: null,
       from: user.deviceId,
       to: user.hubId,
       action: "message",
-      payload: { agentId: user.agentId, content: text },
+      payload: { agentId: user.agentId, conversationId, content: text },
     };
 
     const sent = this.eventsGateway.routeFromVirtualDevice(message);
@@ -1314,7 +1592,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.logger.debug(
-      `Routed message to Hub: deviceId=${user.deviceId}, hubId=${user.hubId}, agentId=${user.agentId}`,
+      `Routed message to Hub: deviceId=${user.deviceId}, hubId=${user.hubId}, agentId=${user.agentId}, conversationId=${conversationId}`,
     );
   }
 
@@ -1355,11 +1633,13 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
           const streamPayload = msg.payload as StreamPayload;
           const event = streamPayload?.event;
           if (!event || !("type" in event)) return;
+          const conversationId = streamPayload?.conversationId;
+          const contextKey = this.makeConversationContextKey(deviceId, conversationId);
 
           // Start typing when LLM begins generating
           if (event.type === "message_start") {
-            this.activateMessageContext(deviceId);
-            this.startTyping(deviceId);
+            this.activateMessageContext(contextKey);
+            this.startTyping(contextKey);
             return;
           }
 
@@ -1377,9 +1657,9 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
                 .map((c) => c.text!)
                 .join("") ?? "";
               if (narration) {
-                void this.sendToTelegram(deviceId, narration).then(() => {
+                void this.sendToTelegram(deviceId, narration, conversationId).then(() => {
                   // Re-send typing indicator — Telegram clears it when a message is sent
-                  const ctx = this.messageContexts.peekForSend(deviceId);
+                  const ctx = this.messageContexts.peekForSend(contextKey);
                   if (ctx) {
                     void this.bot?.api.sendChatAction(ctx.telegramChatId, "typing").catch(() => {});
                   }
@@ -1388,15 +1668,15 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
               return;
             }
 
-            this.stopTyping(deviceId);
+            this.stopTyping(contextKey);
             if (agentMsg?.content) {
               const textContent = agentMsg.content
                 .filter((c) => c.type === "text" && c.text)
                 .map((c) => c.text!)
                 .join("");
               if (textContent) {
-                void this.sendToTelegram(deviceId, textContent).then(() => {
-                  void this.clearMessageContext(deviceId);
+                void this.sendToTelegram(deviceId, textContent, conversationId).then(() => {
+                  void this.clearMessageContext(contextKey);
                 });
               }
             }
@@ -1405,8 +1685,8 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
 
           // Stop typing on error
           if (event.type === "agent_error") {
-            this.stopTyping(deviceId);
-            void this.clearMessageContext(deviceId);
+            this.stopTyping(contextKey);
+            void this.clearMessageContext(contextKey);
             return;
           }
 
@@ -1420,25 +1700,36 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
             type?: string;
             caption?: string;
             filename?: string;
+            conversationId?: string;
           };
           if (payload?.data) {
+            const conversationId = payload.conversationId;
+            const contextKey = this.makeConversationContextKey(deviceId, conversationId);
             void this.sendFileToTelegram(
               deviceId,
               Buffer.from(payload.data, "base64"),
               payload.type ?? "document",
               payload.caption,
               payload.filename,
+              conversationId,
             );
+            this.activateMessageContext(contextKey);
           }
           return;
         }
 
         // Regular message (e.g., "message" action from Hub)
         if (msg.action === "message") {
-          const payload = msg.payload as { content?: string; agentId?: string };
+          const payload = msg.payload as {
+            content?: string;
+            agentId?: string;
+            conversationId?: string;
+          };
           if (payload?.content) {
-            void this.sendToTelegram(deviceId, payload.content).then(() => {
-              void this.clearMessageContext(deviceId);
+            const conversationId = payload.conversationId;
+            const contextKey = this.makeConversationContextKey(deviceId, conversationId);
+            void this.sendToTelegram(deviceId, payload.content, conversationId).then(() => {
+              void this.clearMessageContext(contextKey);
             });
           }
           return;
@@ -1446,11 +1737,17 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
 
         // Error messages
         if (msg.action === "error") {
-          this.stopTyping(deviceId);
-          void this.clearMessageContext(deviceId);
-          const payload = msg.payload as { message?: string; code?: string };
+          const payload = msg.payload as {
+            message?: string;
+            code?: string;
+            conversationId?: string;
+          };
+          const conversationId = payload.conversationId;
+          const contextKey = this.makeConversationContextKey(deviceId, conversationId);
+          this.stopTyping(contextKey);
+          void this.clearMessageContext(contextKey);
           if (payload?.message) {
-            void this.sendToTelegram(deviceId, `Error: ${payload.message}`);
+            void this.sendToTelegram(deviceId, `Error: ${payload.message}`, conversationId);
           }
         }
       },

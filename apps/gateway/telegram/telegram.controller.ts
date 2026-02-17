@@ -29,7 +29,14 @@ export class TelegramController {
 
   @Post("connect-code")
   async createConnectCode(
-    @Body() body: { gateway: string; hubId: string; agentId: string; token: string; expires: number },
+    @Body() body: {
+      gateway: string;
+      hubId: string;
+      agentId: string;
+      conversationId: string;
+      token: string;
+      expires: number;
+    },
   ): Promise<{ code: string; botUsername: string }> {
     if (!this.telegramService.isConfigured()) {
       throw new HttpException("Telegram bot not configured", HttpStatus.SERVICE_UNAVAILABLE);
@@ -45,6 +52,7 @@ export class TelegramController {
       gateway: body.gateway,
       hubId: body.hubId,
       agentId: body.agentId,
+      conversationId: body.conversationId,
       token: body.token,
       expires: body.expires,
     };

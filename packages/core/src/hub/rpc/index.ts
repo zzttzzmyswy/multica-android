@@ -1,9 +1,9 @@
 export { RpcDispatcher, RpcError, type RpcHandler } from "./dispatcher.js";
 export { createGetAgentMessagesHandler } from "./handlers/get-agent-messages.js";
 export { createGetHubInfoHandler } from "./handlers/get-hub-info.js";
-export { createListAgentsHandler } from "./handlers/list-agents.js";
-export { createCreateAgentHandler } from "./handlers/create-agent.js";
-export { createDeleteAgentHandler } from "./handlers/delete-agent.js";
+export { createListConversationsHandler } from "./handlers/list-conversations.js";
+export { createCreateConversationHandler } from "./handlers/create-conversation.js";
+export { createDeleteConversationHandler } from "./handlers/delete-conversation.js";
 export { createUpdateGatewayHandler } from "./handlers/update-gateway.js";
 export { createGetLastHeartbeatHandler } from "./handlers/get-last-heartbeat.js";
 export { createSetHeartbeatsHandler } from "./handlers/set-heartbeats.js";

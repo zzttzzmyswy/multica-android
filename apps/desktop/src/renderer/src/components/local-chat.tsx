@@ -10,12 +10,13 @@ import { QueuedMessageBar } from './queued-message-bar'
 
 interface LocalChatProps {
   initialPrompt?: string
+  conversationId?: string
 }
 
-export function LocalChat({ initialPrompt }: LocalChatProps) {
+export function LocalChat({ initialPrompt, conversationId }: LocalChatProps) {
   const navigate = useNavigate()
   const {
-    agentId,
+    conversationId: activeConversationId,
     initError,
     messages,
     streamingIds,
@@ -34,7 +35,7 @@ export function LocalChat({ initialPrompt }: LocalChatProps) {
     loadMore,
     resolveApproval,
     clearError,
-  } = useLocalChat()
+  } = useLocalChat({ conversationId })
 
   const { providers, current, setProvider: switchProvider, refresh: refreshProviders } = useProviderStore()
 
@@ -71,18 +72,21 @@ export function LocalChat({ initialPrompt }: LocalChatProps) {
   // Auto-send initial prompt after a short delay
   const lastPromptRef = useRef<string | undefined>(undefined)
   useEffect(() => {
-    if (!agentId || !initialPrompt) return
+    if (!activeConversationId || !initialPrompt) return
     if (initialPrompt === lastPromptRef.current) return
 
     const timer = setTimeout(() => {
       lastPromptRef.current = initialPrompt
       sendMessage(initialPrompt)
       // Remove prompt from URL to prevent re-sending on back navigation
-      navigate('/chat', { replace: true })
+      const nextPath = activeConversationId
+        ? `/chat?conversation=${encodeURIComponent(activeConversationId)}`
+        : '/chat'
+      navigate(nextPath, { replace: true })
     }, 500)
 
     return () => clearTimeout(timer)
-  }, [agentId, initialPrompt, sendMessage, navigate])
+  }, [activeConversationId, initialPrompt, sendMessage, navigate])
 
   if (initError) {
     return (
@@ -92,7 +96,7 @@ export function LocalChat({ initialPrompt }: LocalChatProps) {
     )
   }
 
-  if (!agentId) {
+  if (!activeConversationId) {
     return (
       <div className="flex-1 flex items-center justify-center gap-2 text-muted-foreground text-sm">
         <Loading />

@@ -17,9 +17,10 @@ interface UseGatewayChatOptions {
   client: GatewayClient;
   hubId: string;
   agentId: string;
+  conversationId: string;
 }
 
-export function useGatewayChat({ client, hubId, agentId }: UseGatewayChatOptions) {
+export function useGatewayChat({ client, hubId, agentId, conversationId }: UseGatewayChatOptions) {
   const chat = useChat();
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
@@ -32,10 +33,11 @@ export function useGatewayChat({ client, hubId, agentId }: UseGatewayChatOptions
     client
       .request<GetAgentMessagesResult>(hubId, "getAgentMessages", {
         agentId,
+        conversationId,
         limit: DEFAULT_MESSAGES_LIMIT,
       })
       .then((result) => {
-        chat.setHistory(result.messages, agentId, {
+        chat.setHistory(result.messages, agentId, result.conversationId, {
           total: result.total,
           offset: result.offset,
           contextWindowTokens: result.contextWindowTokens,
@@ -44,13 +46,16 @@ export function useGatewayChat({ client, hubId, agentId }: UseGatewayChatOptions
       })
       .catch(() => {})
       .finally(() => setIsLoadingHistory(false));
-  }, [client, hubId, agentId]);
+  }, [client, hubId, agentId, conversationId]);
 
   // Subscribe to events
   useEffect(() => {
     client.onMessage((msg) => {
       if (msg.action === StreamAction) {
         const payload = msg.payload as StreamPayload;
+        if (payload.agentId !== agentId || payload.conversationId !== conversationId) {
+          return;
+        }
         if (payload.event.type === "agent_error") {
           const errorMsg = (payload.event as { message?: string }).message ?? "Unknown error";
           chat.setError({ code: "AGENT_ERROR", message: errorMsg });
@@ -63,7 +68,11 @@ export function useGatewayChat({ client, hubId, agentId }: UseGatewayChatOptions
         return;
       }
       if (msg.action === ExecApprovalRequestAction) {
-        chat.addApproval(msg.payload as ExecApprovalRequestPayload);
+        const approval = msg.payload as ExecApprovalRequestPayload;
+        if (approval.agentId !== agentId || approval.conversationId !== conversationId) {
+          return;
+        }
+        chat.addApproval(approval);
         return;
       }
       if (msg.action === "error") {
@@ -72,18 +81,22 @@ export function useGatewayChat({ client, hubId, agentId }: UseGatewayChatOptions
       }
     });
     return () => { client.onMessage(() => {}); };
-  }, [client]);
+  }, [client, agentId, conversationId]);
 
   const sendMessage = useCallback(
     (text: string) => {
       const trimmed = text.trim();
       if (!trimmed) return;
-      chat.addUserMessage(trimmed, agentId);
+      chat.addUserMessage(trimmed, agentId, conversationId, { type: "local" });
       chat.setError(null);
-      client.send(hubId, "message", { agentId, content: trimmed });
+      client.send(hubId, "message", {
+        agentId,
+        conversationId,
+        content: trimmed,
+      });
       setIsLoading(true);
     },
-    [client, hubId, agentId],
+    [client, hubId, agentId, conversationId],
   );
 
   const loadMore = useCallback(async () => {
@@ -96,9 +109,9 @@ export function useGatewayChat({ client, hubId, agentId }: UseGatewayChatOptions
       const newOffset = Math.max(0, currentOffset - DEFAULT_MESSAGES_LIMIT);
       const limit = currentOffset - newOffset;
       const result = await client.request<GetAgentMessagesResult>(
-        hubId, "getAgentMessages", { agentId, offset: newOffset, limit },
+        hubId, "getAgentMessages", { agentId, conversationId, offset: newOffset, limit },
       );
-      chat.prependHistory(result.messages, agentId, {
+      chat.prependHistory(result.messages, agentId, result.conversationId, {
         total: result.total,
         offset: result.offset,
         contextWindowTokens: result.contextWindowTokens,
@@ -110,7 +123,7 @@ export function useGatewayChat({ client, hubId, agentId }: UseGatewayChatOptions
       isLoadingMoreRef.current = false;
       setIsLoadingMore(false);
     }
-  }, [client, hubId, agentId]);
+  }, [client, hubId, agentId, conversationId]);
 
   const resolveApproval = useCallback(
     (approvalId: string, decision: ApprovalDecision) => {

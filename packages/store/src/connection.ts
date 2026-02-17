@@ -3,6 +3,7 @@ export interface ConnectionInfo {
   gateway: string
   hubId: string
   agentId: string
+  conversationId?: string
   token: string
   expires: number
 }
@@ -15,12 +16,13 @@ function isConnectionInfo(obj: unknown): obj is ConnectionInfo {
     typeof o.gateway === "string" &&
     typeof o.hubId === "string" &&
     typeof o.agentId === "string" &&
+    (o.conversationId === undefined || typeof o.conversationId === "string") &&
     typeof o.token === "string" &&
     typeof o.expires === "number"
   )
 }
 
-// Parse multica://connect?gateway=...&hub=...&agent=...&token=...&exp=... URL format
+// Parse multica://connect?gateway=...&hub=...&agent=...&conversation=...&token=...&exp=... URL format
 // Uses string prefix + URLSearchParams to avoid cross-engine URL hostname differences
 function parseConnectionUrl(input: string): ConnectionInfo | null {
   const prefix = "multica://connect?"
@@ -30,6 +32,7 @@ function parseConnectionUrl(input: string): ConnectionInfo | null {
     const gateway = params.get("gateway")
     const hubId = params.get("hub")
     const agentId = params.get("agent")
+    const conversationId = params.get("conversation")
     const token = params.get("token")
     const exp = params.get("exp")
     if (!gateway || !hubId || !agentId || !token || !exp) return null
@@ -38,6 +41,7 @@ function parseConnectionUrl(input: string): ConnectionInfo | null {
       gateway,
       hubId,
       agentId,
+      ...(conversationId ? { conversationId } : {}),
       token,
       expires: Number(exp),
     }

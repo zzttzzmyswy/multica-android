@@ -52,6 +52,31 @@ pnpm dev:local:archive
 - `MULTICA_WORKSPACE_DIR`: override workspace root
 - `MULTICA_RUN_LOG=1`: enable structured run-log output
 
+## Agent / Conversation Semantics
+
+- `agentId`: logical owner identity (capabilities/profile scope).
+- `conversationId`: isolated runtime thread under an agent.
+- `sessionId`: internal runner/storage identifier for a conversation. External protocols use `conversationId`.
+
+Protocol rules:
+
+- Hub RPC is conversation-first: `createConversation/listConversations/deleteConversation`.
+- All message, stream, and verify payloads use `conversationId` (no `sessionId` alias fields).
+- New integrations should always pass `conversationId` explicitly.
+
+Telegram behavior:
+
+- One Telegram DM binds to one active `conversationId`.
+- `/new` creates and switches to a new conversation.
+- `/session <id>` switches the active conversation.
+- `/sessions` lists available conversations.
+
+Channel route behavior:
+
+- Runtime route key is `channelId:accountId:externalConversationId`.
+- Each route key is bound to one Hub `conversationId`.
+- Incoming/outgoing channel traffic is isolated per bound conversation (no global first-agent fallback).
+
 ## Local Full-Stack Notes (`pnpm dev:local`)
 
 `pnpm dev:local` is the recommended way to run the full local stack for integration work.

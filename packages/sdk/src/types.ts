@@ -110,7 +110,14 @@ export interface GatewayClientCallbacks {
   onConnect?: (socketId: string) => void;
   onDisconnect?: (reason: string) => void;
   onRegistered?: (deviceId: string) => void;
-  onVerified?: (result: { hubId: string; agentId: string; isNewDevice?: boolean }) => void;
+  onVerified?: (
+    result: {
+      hubId: string;
+      agentId: string;
+      conversationId: string;
+      isNewDevice?: boolean;
+    }
+  ) => void;
   onMessage?: (message: RoutedMessage) => void;
   onSendError?: (error: SendErrorResponse) => void;
   onPong?: (data: string) => void;

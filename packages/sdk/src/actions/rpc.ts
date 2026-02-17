@@ -66,6 +66,8 @@ export const DEFAULT_MESSAGES_LIMIT = 200;
 /** getAgentMessages - request params */
 export interface GetAgentMessagesParams {
   agentId: string;
+  /** Conversation ID to read. */
+  conversationId: string;
   offset?: number;
   limit?: number;
 }
@@ -91,6 +93,8 @@ export interface GetAgentMessagesResult {
   total: number;
   offset: number;
   limit: number;
+  /** Conversation ID used by the server. */
+  conversationId: string;
   /** Context window size (tokens) used by this session */
   contextWindowTokens?: number;
 }
@@ -103,28 +107,29 @@ export interface GetHubInfoResult {
   agentCount: number;
 }
 
-/** listAgents - no params needed */
-export interface ListAgentsResult {
-  agents: { id: string; closed: boolean }[];
+/** listConversations - no params needed */
+export interface ListConversationsResult {
+  conversations: { id: string; closed: boolean }[];
 }
 
-/** createAgent - request params */
-export interface CreateAgentParams {
+/** createConversation - request params (create a conversation, optionally under a specific agent) */
+export interface CreateConversationParams {
   id?: string;
+  agentId?: string;
 }
 
-/** createAgent - response payload */
-export interface CreateAgentResult {
+/** createConversation - response payload */
+export interface CreateConversationResult {
   id: string;
 }
 
-/** deleteAgent - request params */
-export interface DeleteAgentParams {
+/** deleteConversation - request params */
+export interface DeleteConversationParams {
   id: string;
 }
 
-/** deleteAgent - response payload */
-export interface DeleteAgentResult {
+/** deleteConversation - response payload */
+export interface DeleteConversationResult {
   ok: boolean;
 }
 
@@ -157,4 +162,6 @@ export interface VerifyParams {
 export interface VerifyResult {
   hubId: string;
   agentId: string;
+  /** Authorized conversation scope for this device. */
+  conversationId: string;
 }

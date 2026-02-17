@@ -62,6 +62,8 @@ export type AgentErrorEvent = {
 export interface StreamPayload {
   streamId: string;
   agentId: string;
+  /** Conversation ID of this stream event. */
+  conversationId: string;
   event: AgentEvent | CompactionEvent | AgentErrorEvent;
 }
 

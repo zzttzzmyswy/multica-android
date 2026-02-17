@@ -238,6 +238,38 @@ export function evaluateCustomSkillAuthoringConsent(
   return { allowAuthoring: false, declined: false };
 }
 
+/**
+ * Infer whether a tool call should be classified as error in run-log.
+ *
+ * Some tool adapters encode failures in payload fields (`error`, `error_type`)
+ * without setting `event.isError=true`. This helper keeps run-log semantics
+ * consistent for E2E health checks.
+ */
+export function inferRunLogToolIsError(
+  eventIsError: unknown,
+  resultText: string | undefined,
+  details: Record<string, unknown> | null,
+): boolean {
+  if (eventIsError === true) return true;
+  if (!details) {
+    return typeof resultText === "string" && /^error[:\s]/i.test(resultText.trim());
+  }
+
+  const errorType = details.error_type;
+  if (typeof errorType === "boolean") return errorType;
+  if (typeof errorType === "string") {
+    const normalized = errorType.trim().toLowerCase();
+    if (normalized === "true" || normalized === "error") return true;
+  }
+
+  const errorValue = details.error;
+  if (typeof errorValue === "string") return errorValue.trim().length > 0;
+  if (errorValue === true) return true;
+  if (errorValue && typeof errorValue === "object") return true;
+
+  return typeof resultText === "string" && /^error[:\s]/i.test(resultText.trim());
+}
+
 // ── Run-log result extraction helpers ──────────────────────────────────────
 // Lightweight extractors for tool_end metadata. These mirror the patterns in
 // cli/output.ts but are kept separate to avoid CLI-specific dependencies.
@@ -400,12 +432,17 @@ export class Agent {
     // Load session metadata early so stored provider/model can inform defaults
     this.sessionId = options.sessionId ?? uuidv7();
     this.guardedExecApproval = this.createGuardedExecApprovalCallback(options.onExecApprovalNeeded);
+    const storageAgentId = options.ownerAgentId;
     this.runLog = createRunLog(
       options.enableRunLog ?? !!process.env.MULTICA_RUN_LOG,
       this.sessionId,
+      storageAgentId ? { agentId: storageAgentId } : undefined,
     );
     const storedMeta = (() => {
-      const tempSession = new SessionManager({ sessionId: this.sessionId });
+      const tempSession = new SessionManager({
+        sessionId: this.sessionId,
+        ...(storageAgentId ? { agentId: storageAgentId } : {}),
+      });
       return tempSession.getMeta();
     })();
 
@@ -554,6 +591,7 @@ export class Agent {
     // 创建 SessionManager（带 context window 配置）
     this.session = new SessionManager({
       sessionId: this.sessionId,
+      ...(storageAgentId ? { agentId: storageAgentId } : {}),
       compactionMode,
       // Token 模式参数
       contextWindowTokens: this.contextWindowGuard.tokens,
@@ -1286,8 +1324,7 @@ export class Agent {
       const resultText = extractRunLogResultText(result);
       const resultChars = resultText?.length ?? 0;
       const details = extractRunLogResultDetails(result);
-      const isError = Boolean((event as any).isError ?? false);
-
+      const isError = inferRunLogToolIsError((event as any).isError, resultText, details);
       this.currentRunToolExecutions.push({
         toolName,
         isError,

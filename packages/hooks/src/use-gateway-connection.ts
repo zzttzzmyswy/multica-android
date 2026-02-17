@@ -14,6 +14,7 @@ export interface ConnectionIdentity {
   gateway: string;
   hubId: string;
   agentId: string;
+  conversationId?: string;
 }
 
 function loadIdentity(): ConnectionIdentity | null {
@@ -21,7 +22,14 @@ function loadIdentity(): ConnectionIdentity | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (parsed.gateway && parsed.hubId && parsed.agentId) return parsed;
+    if (
+      parsed.gateway
+      && parsed.hubId
+      && parsed.agentId
+      && (parsed.conversationId === undefined || typeof parsed.conversationId === "string")
+    ) {
+      return parsed;
+    }
     return null;
   } catch {
     return null;
@@ -96,6 +104,7 @@ export function useGatewayConnection(): UseGatewayConnectionReturn {
   const [identity, setIdentity] = useState<ConnectionIdentity | null>(null);
   const [error, setError] = useState<string | null>(null);
   const clientRef = useRef<GatewayClient | null>(null);
+  const verifiedIdentityRef = useRef<ConnectionIdentity | null>(null);
   const disconnectingRef = useRef(false);
   const pairingKeyRef = useRef(0);
 
@@ -115,13 +124,25 @@ export function useGatewayConnection(): UseGatewayConnectionReturn {
           hubId: id.hubId,
           ...(token ? { token } : {}),
         })
+          .onVerified((result) => {
+            if (disconnectingRef.current) return;
+            verifiedIdentityRef.current = {
+              gateway: id.gateway,
+              hubId: result.hubId,
+              agentId: result.agentId,
+              conversationId:
+                id.conversationId
+                ?? result.conversationId,
+            };
+          })
           .onStateChange((state: ConnectionState) => {
             console.log("[GatewayConnection] state:", state);
             if (disconnectingRef.current) return;
             setConnectionState(state);
             if (state === "registered") {
-              saveIdentity(id);
-              setIdentity(id);
+              const resolvedIdentity = verifiedIdentityRef.current ?? id;
+              saveIdentity(resolvedIdentity);
+              setIdentity(resolvedIdentity);
               setPageState("connected");
             }
           })
@@ -129,6 +150,7 @@ export function useGatewayConnection(): UseGatewayConnectionReturn {
             console.log("[GatewayConnection] error:", err.message);
             if (disconnectingRef.current) return;
             pairingKeyRef.current += 1;
+            verifiedIdentityRef.current = null;
             clearIdentity();
             setIdentity(null);
             setError(err.message);
@@ -149,8 +171,10 @@ export function useGatewayConnection(): UseGatewayConnectionReturn {
       if (clientRef.current) {
         clientRef.current.disconnect();
         clientRef.current = null;
+        verifiedIdentityRef.current = null;
         setTimeout(doConnect, 300);
       } else {
+        verifiedIdentityRef.current = null;
         doConnect();
       }
     },
@@ -175,6 +199,7 @@ export function useGatewayConnection(): UseGatewayConnectionReturn {
       clearTimeout(timer);
       clientRef.current?.disconnect();
       clientRef.current = null;
+      verifiedIdentityRef.current = null;
     };
   }, []);
 
@@ -183,6 +208,7 @@ export function useGatewayConnection(): UseGatewayConnectionReturn {
     pairingKeyRef.current += 1;
     clientRef.current?.disconnect();
     clientRef.current = null;
+    verifiedIdentityRef.current = null;
     clearIdentity();
     setIdentity(null);
     setPageState("not-connected");

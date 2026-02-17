@@ -4,7 +4,7 @@ interface HubLike {
   hubId: string;
   url: string;
   connectionState: string;
-  listAgents(): string[];
+  listConversations(): string[];
 }
 
 export function createGetHubInfoHandler(hub: HubLike): RpcHandler {
@@ -12,6 +12,6 @@ export function createGetHubInfoHandler(hub: HubLike): RpcHandler {
     hubId: hub.hubId,
     url: hub.url,
     connectionState: hub.connectionState,
-    agentCount: hub.listAgents().length,
+    agentCount: hub.listConversations().length,
   });
 }

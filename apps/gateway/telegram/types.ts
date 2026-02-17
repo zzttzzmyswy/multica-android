@@ -7,6 +7,8 @@ export interface TelegramUser {
   telegramUserId: string;
   hubId: string;
   agentId: string;
+  /** Default session fallback when no per-thread route is stored. */
+  conversationId?: string | undefined;
   deviceId: string;
   createdAt: Date;
   updatedAt: Date;
@@ -20,6 +22,7 @@ export interface TelegramUserCreate {
   telegramUserId: string;
   hubId: string;
   agentId: string;
+  conversationId?: string | undefined;
   deviceId?: string;
   telegramUsername?: string | undefined;
   telegramFirstName?: string | undefined;

@@ -37,6 +37,7 @@ export interface ConnectionIdentity {
   gateway: string;
   hubId: string;
   agentId: string;
+  conversationId?: string;
 }
 
 export interface DevicePairingProps {
@@ -150,7 +151,12 @@ export function DevicePairing({
         navigator.vibrate?.(50);
         setTimeout(() => {
           onConnect(
-            { gateway: info.gateway, hubId: info.hubId, agentId: info.agentId },
+            {
+              gateway: info.gateway,
+              hubId: info.hubId,
+              agentId: info.agentId,
+              ...(info.conversationId ? { conversationId: info.conversationId } : {}),
+            },
             info.token,
           );
         }, 600);
@@ -183,7 +189,12 @@ export function DevicePairing({
     async (data: string) => {
       const info = parseConnectionCode(data);
       onConnect(
-        { gateway: info.gateway, hubId: info.hubId, agentId: info.agentId },
+        {
+          gateway: info.gateway,
+          hubId: info.hubId,
+          agentId: info.agentId,
+          ...(info.conversationId ? { conversationId: info.conversationId } : {}),
+        },
         info.token,
       );
     },

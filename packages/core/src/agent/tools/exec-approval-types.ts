@@ -24,6 +24,8 @@ export interface ExecApprovalRequest {
   approvalId: string;
   /** Agent that initiated the command */
   agentId: string;
+  /** Conversation ID that initiated the command. */
+  conversationId: string;
   /** Shell command to execute */
   command: string;
   /** Working directory */
