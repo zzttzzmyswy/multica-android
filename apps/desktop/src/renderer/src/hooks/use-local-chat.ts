@@ -47,8 +47,8 @@ export function useLocalChat(options: UseLocalChatOptions = {}) {
 
     window.electronAPI.hub.init()
       .then((result) => {
-        const r = result as { defaultAgentId?: string; defaultConversationId?: string }
-        const defaultConversationId = r.defaultConversationId ?? r.defaultAgentId
+        const r = result as { defaultConversationId?: string }
+        const defaultConversationId = r.defaultConversationId
         console.log('[LocalChat] hub.init → defaultConversationId:', defaultConversationId)
         if (defaultConversationId) {
           setAgentId(defaultConversationId)
@@ -68,7 +68,6 @@ export function useLocalChat(options: UseLocalChatOptions = {}) {
   // Subscribe to events + fetch history once conversation is available
   useEffect(() => {
     if (!activeConversationId) return
-    const resolvedAgentId = agentId ?? activeConversationId
     setQueuedMessages([])
     offsetRef.current = null
     setIsLoading(false)
@@ -125,33 +124,32 @@ export function useLocalChat(options: UseLocalChatOptions = {}) {
         chatRef.current.addUserMessage(
           event.content,
           event.agentId,
-          event.source as MessageSource,
           eventConversationId,
+          event.source as MessageSource,
         )
         setIsLoading(true)
       }
     })
 
     // Fetch history with pagination
-    window.electronAPI.localChat.getHistory(resolvedAgentId, {
+    window.electronAPI.localChat.getHistory(activeConversationId, {
       limit: DEFAULT_MESSAGES_LIMIT,
-      conversationId: activeConversationId,
     })
       .then((result) => {
         console.log('[LocalChat] getHistory result:', result.messages?.length, 'messages, total:', result.total)
         if (result.messages?.length) {
-          chatRef.current.setHistory(result.messages as AgentMessageItem[], resolvedAgentId, {
+          chatRef.current.setHistory(result.messages as AgentMessageItem[], activeConversationId, activeConversationId, {
             total: result.total,
             offset: result.offset,
             contextWindowTokens: result.contextWindowTokens,
-          }, activeConversationId)
+          })
           offsetRef.current = result.offset
         } else {
-          chatRef.current.setHistory([], resolvedAgentId, {
+          chatRef.current.setHistory([], activeConversationId, activeConversationId, {
             total: 0,
             offset: 0,
             contextWindowTokens: result.contextWindowTokens,
-          }, activeConversationId)
+          })
         }
       })
       .catch(() => {})
@@ -163,7 +161,7 @@ export function useLocalChat(options: UseLocalChatOptions = {}) {
       window.electronAPI.hub.offInboundMessage()
       window.electronAPI.localChat.unsubscribe(activeConversationId).catch(() => {})
     }
-  }, [agentId, activeConversationId])
+  }, [activeConversationId])
 
   useEffect(() => {
     isLoadingRef.current = isLoading
@@ -172,11 +170,10 @@ export function useLocalChat(options: UseLocalChatOptions = {}) {
   const dispatchMessageNow = useCallback((text: string) => {
     const trimmed = text.trim()
     if (!trimmed || !activeConversationId) return
-    const resolvedAgentId = agentId ?? activeConversationId
-    chatRef.current.addUserMessage(trimmed, resolvedAgentId, { type: 'local' }, activeConversationId)
+    chatRef.current.addUserMessage(trimmed, activeConversationId, activeConversationId, { type: 'local' })
     chatRef.current.setError(null)
     setIsLoading(true)
-    window.electronAPI.localChat.send(resolvedAgentId, trimmed, activeConversationId)
+    window.electronAPI.localChat.send(activeConversationId, trimmed)
       .then((result) => {
         const response = result as { ok?: boolean; error?: string } | undefined
         if (response?.error) {
@@ -186,7 +183,7 @@ export function useLocalChat(options: UseLocalChatOptions = {}) {
       .catch(() => {
         setIsLoading(false)
       })
-  }, [agentId, activeConversationId])
+  }, [activeConversationId])
 
   const sendMessage = useCallback((text: string) => {
     const trimmed = text.trim()
@@ -225,10 +222,9 @@ export function useLocalChat(options: UseLocalChatOptions = {}) {
 
   const abortGeneration = useCallback(() => {
     if (!activeConversationId) return
-    const resolvedAgentId = agentId ?? activeConversationId
-    window.electronAPI.localChat.abort(resolvedAgentId, activeConversationId).catch(() => {})
+    window.electronAPI.localChat.abort(activeConversationId).catch(() => {})
     setIsLoading(false)
-  }, [agentId, activeConversationId])
+  }, [activeConversationId])
 
   const loadMore = useCallback(async () => {
     const currentOffset = offsetRef.current
@@ -237,20 +233,18 @@ export function useLocalChat(options: UseLocalChatOptions = {}) {
     isLoadingMoreRef.current = true
     setIsLoadingMore(true)
     try {
-      const resolvedAgentId = agentId ?? activeConversationId
       const newOffset = Math.max(0, currentOffset - DEFAULT_MESSAGES_LIMIT)
       const limit = currentOffset - newOffset
-      const result = await window.electronAPI.localChat.getHistory(resolvedAgentId, {
+      const result = await window.electronAPI.localChat.getHistory(activeConversationId, {
         offset: newOffset,
         limit,
-        conversationId: activeConversationId,
       })
       if (result.messages?.length) {
-        chatRef.current.prependHistory(result.messages as AgentMessageItem[], resolvedAgentId, {
+        chatRef.current.prependHistory(result.messages as AgentMessageItem[], activeConversationId, activeConversationId, {
           total: result.total,
           offset: result.offset,
           contextWindowTokens: result.contextWindowTokens,
-        }, activeConversationId)
+        })
         offsetRef.current = result.offset
       }
     } catch {
@@ -259,7 +253,7 @@ export function useLocalChat(options: UseLocalChatOptions = {}) {
       isLoadingMoreRef.current = false
       setIsLoadingMore(false)
     }
-  }, [agentId, activeConversationId])
+  }, [activeConversationId])
 
   const resolveApproval = useCallback(
     (approvalId: string, decision: ApprovalDecision) => {

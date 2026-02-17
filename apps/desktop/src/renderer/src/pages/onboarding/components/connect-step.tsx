@@ -124,6 +124,7 @@ export default function ConnectStep({ onNext, onBack }: ConnectStepProps) {
               gateway={hubInfo?.url ?? 'http://localhost:3000'}
               hubId={hubInfo?.hubId ?? 'unknown'}
               agentId={primaryAgent?.id ?? 'unknown'}
+              conversationId={primaryAgent?.id ?? 'unknown'}
               expirySeconds={30}
               size={180}
             />

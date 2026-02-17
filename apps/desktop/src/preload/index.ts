@@ -67,8 +67,7 @@ export interface CurrentProviderInfo {
 // Local chat event types (for direct IPC communication without Gateway)
 export interface LocalChatEvent {
   agentId: string
-  conversationId?: string
-  sessionId?: string
+  conversationId: string
   streamId?: string
   type?: 'error'
   content?: string
@@ -101,8 +100,7 @@ export interface InboundMessageEvent {
 export interface LocalChatApproval {
   approvalId: string
   agentId: string
-  conversationId?: string
-  sessionId?: string
+  conversationId: string
   command: string
   cwd?: string
   riskLevel: 'safe' | 'needs-review' | 'dangerous'
@@ -162,15 +160,11 @@ const electronAPI = {
     getAgentInfo: (): Promise<AgentInfo | null> => ipcRenderer.invoke('hub:getAgentInfo'),
     info: () => ipcRenderer.invoke('hub:info'),
     reconnect: (url: string) => ipcRenderer.invoke('hub:reconnect', url),
-    listAgents: () => ipcRenderer.invoke('hub:listAgents'),
     listConversations: () => ipcRenderer.invoke('hub:listConversations'),
-    createAgent: (id?: string) => ipcRenderer.invoke('hub:createAgent', id),
     createConversation: (id?: string) => ipcRenderer.invoke('hub:createConversation', id),
-    getAgent: (id: string) => ipcRenderer.invoke('hub:getAgent', id),
     getConversation: (id: string) => ipcRenderer.invoke('hub:getConversation', id),
-    closeAgent: (id: string) => ipcRenderer.invoke('hub:closeAgent', id),
     closeConversation: (id: string) => ipcRenderer.invoke('hub:closeConversation', id),
-    sendMessage: (agentId: string, content: string, conversationId?: string) =>
+    sendMessage: (agentId: string, content: string, conversationId: string) =>
       ipcRenderer.invoke('hub:sendMessage', agentId, content, conversationId),
     registerToken: (token: string, agentId: string, conversationId: string, expiresAt: number) =>
       ipcRenderer.invoke('hub:registerToken', token, agentId, conversationId, expiresAt),
@@ -337,19 +331,19 @@ const electronAPI = {
 
   // Local chat (direct IPC, no Gateway required)
   localChat: {
-    /** Subscribe to agent events for local direct chat */
-    subscribe: (agentId: string) => ipcRenderer.invoke('localChat:subscribe', agentId),
-    /** Unsubscribe from agent events */
-    unsubscribe: (agentId: string) => ipcRenderer.invoke('localChat:unsubscribe', agentId),
+    /** Subscribe to conversation events for local direct chat */
+    subscribe: (conversationId: string) => ipcRenderer.invoke('localChat:subscribe', conversationId),
+    /** Unsubscribe from conversation events */
+    unsubscribe: (conversationId: string) => ipcRenderer.invoke('localChat:unsubscribe', conversationId),
     /** Get message history for local chat with pagination (returns raw AgentMessageItem[]) */
-    getHistory: (agentId: string, options?: { offset?: number; limit?: number; conversationId?: string }) =>
-      ipcRenderer.invoke('localChat:getHistory', agentId, options),
-    /** Send message to agent via direct IPC (no Gateway) */
-    send: (agentId: string, content: string, conversationId?: string) =>
-      ipcRenderer.invoke('localChat:send', agentId, content, conversationId),
+    getHistory: (conversationId: string, options?: { offset?: number; limit?: number }) =>
+      ipcRenderer.invoke('localChat:getHistory', conversationId, options),
+    /** Send message to conversation via direct IPC (no Gateway) */
+    send: (conversationId: string, content: string) =>
+      ipcRenderer.invoke('localChat:send', conversationId, content),
     /** Abort the current agent run */
-    abort: (agentId: string, conversationId?: string) =>
-      ipcRenderer.invoke('localChat:abort', agentId, conversationId),
+    abort: (conversationId: string) =>
+      ipcRenderer.invoke('localChat:abort', conversationId),
     /** Resolve an exec approval request */
     resolveExecApproval: (approvalId: string, decision: string) =>
       ipcRenderer.invoke('localChat:resolveExecApproval', approvalId, decision),

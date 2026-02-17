@@ -56,17 +56,13 @@ pnpm dev:local:archive
 
 - `agentId`: logical owner identity (capabilities/profile scope).
 - `conversationId`: isolated runtime thread under an agent.
-- `sessionId`: runtime/storage id for a conversation (currently same as `conversationId`).
+- `sessionId`: internal runner/storage identifier for a conversation. External protocols use `conversationId`.
 
-Compatibility behavior:
+Protocol rules:
 
-- If only `agentId` is provided, runtime resolves to that agent's `mainConversationId`.
-- Legacy fallback is still supported: when no mapping exists, `conversationId = agentId`.
-- New integrations should pass `conversationId` explicitly.
-- Hub RPC supports both naming sets:
-  - Legacy: `createAgent/listAgents/deleteAgent`
-  - Conversation-first aliases: `createConversation/listConversations/deleteConversation`
-  - `createConversation` supports optional `agentId` to create a new thread under a specific agent.
+- Hub RPC is conversation-first: `createConversation/listConversations/deleteConversation`.
+- All message, stream, and verify payloads use `conversationId` (no `sessionId` alias fields).
+- New integrations should always pass `conversationId` explicitly.
 
 Telegram behavior:
 

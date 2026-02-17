@@ -92,14 +92,6 @@ interface GenerateChannelWelcomeResult {
   text: string;
 }
 
-interface ListAgentsResult {
-  agents: Array<{ id: string; closed: boolean }>;
-}
-
-interface CreateAgentResult {
-  id: string;
-}
-
 interface ListConversationsResult {
   conversations: Array<{ id: string; closed: boolean }>;
 }
@@ -611,7 +603,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       `<b>Welcome back!</b>\n\n` +
       `${statusEmoji} Status: <b>${statusText}</b>\n` +
       `Agent: <code>${user.agentId}</code>\n` +
-      `Session: <code>${user.conversationId ?? user.agentId}</code>\n\n` +
+      `Conversation: <code>${user.conversationId ?? user.agentId}</code>\n\n` +
       (online
         ? `Your agent is ready. Just send a message to start chatting.`
         : `Your Hub is offline. Make sure the Multica Desktop app is running.`);
@@ -646,7 +638,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       `${statusEmoji} <b>${statusLabel}</b>\n\n` +
       `Hub: <code>${user.hubId}</code>\n` +
       `Agent: <code>${user.agentId}</code>\n` +
-      `Session: <code>${user.conversationId ?? user.agentId}</code>\n\n` +
+      `Conversation: <code>${user.conversationId ?? user.agentId}</code>\n\n` +
       (online
         ? `Your Hub is online and ready to receive messages.`
         : `Your Hub is offline. Make sure the Multica Desktop app is running.`);
@@ -668,9 +660,9 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       `<b>Commands</b>\n` +
       `  /start \u2014 Connect your account or see welcome\n` +
       `  /status \u2014 Check connection status\n` +
-      `  /new \u2014 Start a new isolated session\n` +
-      `  /session [id] \u2014 Show or switch current session\n` +
-      `  /sessions \u2014 List available sessions\n` +
+      `  /new \u2014 Start a new isolated conversation\n` +
+      `  /session [id] \u2014 Show or switch current conversation\n` +
+      `  /sessions \u2014 List available conversations\n` +
       `  /help \u2014 Show this message\n\n` +
       `<b>How to connect</b>\n` +
       `  <b>1.</b> Open Multica Desktop app\n` +
@@ -696,9 +688,9 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       await this.bot.api.setMyCommands([
         { command: "start", description: "Connect or show welcome" },
         { command: "status", description: "Check connection status" },
-        { command: "new", description: "Create a new session" },
-        { command: "session", description: "Show/switch current session" },
-        { command: "sessions", description: "List sessions" },
+        { command: "new", description: "Create a new conversation" },
+        { command: "session", description: "Show/switch current conversation" },
+        { command: "sessions", description: "List conversations" },
         { command: "help", description: "Show help and instructions" },
       ]);
 
@@ -765,59 +757,28 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     await ctx.reply(welcome.text, { parse_mode: "HTML", reply_markup: welcome.keyboard });
   }
 
-  private isMethodNotFoundError(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error);
-    return message.includes("METHOD_NOT_FOUND") || message.includes("Unknown RPC method");
-  }
-
   private async createConversationViaRpc(deviceId: string, hubId: string, agentId?: string): Promise<{ id: string }> {
-    try {
-      const created = await this.sendRpc<{ agentId?: string }, CreateConversationResult>(
-        deviceId,
-        hubId,
-        "createConversation",
-        agentId ? { agentId } : {},
-        VERIFY_TIMEOUT_MS,
-        "Create session request timed out",
-      );
-      return { id: created.id };
-    } catch (error) {
-      if (!this.isMethodNotFoundError(error)) throw error;
-      const created = await this.sendRpc<Record<string, never>, CreateAgentResult>(
-        deviceId,
-        hubId,
-        "createAgent",
-        {},
-        VERIFY_TIMEOUT_MS,
-        "Create session request timed out",
-      );
-      return { id: created.id };
-    }
+    const created = await this.sendRpc<{ agentId?: string }, CreateConversationResult>(
+      deviceId,
+      hubId,
+      "createConversation",
+      agentId ? { agentId } : {},
+      VERIFY_TIMEOUT_MS,
+      "Create conversation request timed out",
+    );
+    return { id: created.id };
   }
 
   private async listConversationsViaRpc(deviceId: string, hubId: string): Promise<Array<{ id: string; closed: boolean }>> {
-    try {
-      const result = await this.sendRpc<Record<string, never>, ListConversationsResult>(
-        deviceId,
-        hubId,
-        "listConversations",
-        {},
-        VERIFY_TIMEOUT_MS,
-        "List sessions request timed out",
-      );
-      return result.conversations;
-    } catch (error) {
-      if (!this.isMethodNotFoundError(error)) throw error;
-      const result = await this.sendRpc<Record<string, never>, ListAgentsResult>(
-        deviceId,
-        hubId,
-        "listAgents",
-        {},
-        VERIFY_TIMEOUT_MS,
-        "List sessions request timed out",
-      );
-      return result.agents;
-    }
+    const result = await this.sendRpc<Record<string, never>, ListConversationsResult>(
+      deviceId,
+      hubId,
+      "listConversations",
+      {},
+      VERIFY_TIMEOUT_MS,
+      "List conversations request timed out",
+    );
+    return result.conversations;
   }
 
   private async handleNewConversationCommand(ctx: Context): Promise<void> {
@@ -856,14 +817,14 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       await this.bindConversationToContext(user, ctx, created.id);
 
       await ctx.reply(
-        `<b>\u2705 New session created</b>\n\n` +
-          `Session: <code>${created.id}</code>\n\n` +
-          `All next messages in this Telegram thread will use this session.`,
+        `<b>\u2705 New conversation created</b>\n\n` +
+          `Conversation: <code>${created.id}</code>\n\n` +
+          `All next messages in this Telegram thread will use this conversation.`,
         { parse_mode: "HTML" },
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await ctx.reply(`Failed to create session: ${message}`);
+      await ctx.reply(`Failed to create conversation: ${message}`);
     }
   }
 
@@ -886,28 +847,28 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
 
     try {
       const conversations = await this.listConversationsViaRpc(user.deviceId, user.hubId);
-      const sessions = conversations.filter((item) => !item.closed).map((item) => item.id);
-      if (sessions.length === 0) {
-        await ctx.reply("No sessions found.");
+      const conversationIds = conversations.filter((item) => !item.closed).map((item) => item.id);
+      if (conversationIds.length === 0) {
+        await ctx.reply("No conversations found.");
         return;
       }
 
       const current = await this.resolveConversationForContext(user, ctx);
-      const lines = sessions.slice(0, 20).map((id) => {
+      const lines = conversationIds.slice(0, 20).map((id) => {
         const marker = id === current ? "\u2022 current" : "";
         return `<code>${id}</code>${marker ? ` ${marker}` : ""}`;
       });
-      const extra = sessions.length > 20 ? `\n...and ${sessions.length - 20} more` : "";
+      const extra = conversationIds.length > 20 ? `\n...and ${conversationIds.length - 20} more` : "";
 
       await ctx.reply(
-        `<b>Available sessions</b>\n\n` +
+        `<b>Available conversations</b>\n\n` +
           `${lines.join("\n")}${extra}\n\n` +
           `Use <code>/session &lt;id&gt;</code> to switch.`,
         { parse_mode: "HTML" },
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await ctx.reply(`Failed to load sessions: ${message}`);
+      await ctx.reply(`Failed to load conversations: ${message}`);
     }
   }
 
@@ -923,7 +884,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     const current = await this.resolveConversationForContext(user, ctx);
     if (!target) {
       await ctx.reply(
-        `<b>Current session</b>\n\n` +
+        `<b>Current conversation</b>\n\n` +
           `<code>${current}</code>\n\n` +
           `Use <code>/session &lt;id&gt;</code> to switch.`,
         { parse_mode: "HTML" },
@@ -945,7 +906,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       const exists = conversations.some((item) => item.id === target && !item.closed);
       if (!exists) {
         await ctx.reply(
-          `Session not found: <code>${target}</code>\n\nUse /sessions to list available sessions.`,
+          `Conversation not found: <code>${target}</code>\n\nUse /sessions to list available conversations.`,
           { parse_mode: "HTML" },
         );
         return;
@@ -964,13 +925,13 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       await this.bindConversationToContext(user, ctx, target);
 
       await ctx.reply(
-        `<b>\u2705 Session switched</b>\n\n` +
-          `Current session: <code>${target}</code>`,
+        `<b>\u2705 Conversation switched</b>\n\n` +
+          `Current conversation: <code>${target}</code>`,
         { parse_mode: "HTML" },
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await ctx.reply(`Failed to switch session: ${message}`);
+      await ctx.reply(`Failed to switch conversation: ${message}`);
     }
   }
 
@@ -1372,19 +1333,14 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
           ? `Telegram @${msg.from.username}`
           : `Telegram ${msg?.from?.first_name ?? telegramUserId}`,
       });
-      const sessionId =
-        connectionInfo.conversationId
-        ?? result.sessionId
-        ?? result.conversationId
-        ?? result.mainConversationId
-        ?? result.agentId;
+      const conversationId = connectionInfo.conversationId ?? result.conversationId;
 
       // 5. Save to DB
       await this.userStore.upsert({
         telegramUserId,
         hubId: connectionInfo.hubId,
         agentId: connectionInfo.agentId,
-        conversationId: sessionId,
+        conversationId,
         deviceId,
         telegramUsername: msg?.from?.username,
         telegramFirstName: msg?.from?.first_name,
@@ -1395,7 +1351,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
         await this.userStore.setThreadConversation(
           telegramUserId,
           threadRoute.chatId,
-          sessionId,
+          conversationId,
           threadRoute.threadId,
         );
       }
@@ -1408,7 +1364,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
           `<b>\u2705 Connected successfully!</b>\n\n` +
           `Hub: <code>${result.hubId}</code>\n` +
           `Agent: <code>${result.agentId}</code>\n` +
-          `Session: <code>${sessionId}</code>\n\n` +
+          `Conversation: <code>${conversationId}</code>\n\n` +
           `You can now send messages to interact with your agent.`,
         { parse_mode: "HTML", reply_markup: successKeyboard },
       );
@@ -1626,7 +1582,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       from: user.deviceId,
       to: user.hubId,
       action: "message",
-      payload: { agentId: user.agentId, conversationId, sessionId: conversationId, content: text },
+      payload: { agentId: user.agentId, conversationId, content: text },
     };
 
     const sent = this.eventsGateway.routeFromVirtualDevice(message);
@@ -1677,7 +1633,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
           const streamPayload = msg.payload as StreamPayload;
           const event = streamPayload?.event;
           if (!event || !("type" in event)) return;
-          const conversationId = streamPayload?.sessionId ?? streamPayload?.conversationId;
+          const conversationId = streamPayload?.conversationId;
           const contextKey = this.makeConversationContextKey(deviceId, conversationId);
 
           // Start typing when LLM begins generating
@@ -1745,10 +1701,9 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
             caption?: string;
             filename?: string;
             conversationId?: string;
-            sessionId?: string;
           };
           if (payload?.data) {
-            const conversationId = payload.sessionId ?? payload.conversationId;
+            const conversationId = payload.conversationId;
             const contextKey = this.makeConversationContextKey(deviceId, conversationId);
             void this.sendFileToTelegram(
               deviceId,
@@ -1769,10 +1724,9 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
             content?: string;
             agentId?: string;
             conversationId?: string;
-            sessionId?: string;
           };
           if (payload?.content) {
-            const conversationId = payload.sessionId ?? payload.conversationId;
+            const conversationId = payload.conversationId;
             const contextKey = this.makeConversationContextKey(deviceId, conversationId);
             void this.sendToTelegram(deviceId, payload.content, conversationId).then(() => {
               void this.clearMessageContext(contextKey);
@@ -1787,9 +1741,8 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
             message?: string;
             code?: string;
             conversationId?: string;
-            sessionId?: string;
           };
-          const conversationId = payload.sessionId ?? payload.conversationId;
+          const conversationId = payload.conversationId;
           const contextKey = this.makeConversationContextKey(deviceId, conversationId);
           this.stopTyping(contextKey);
           void this.clearMessageContext(contextKey);

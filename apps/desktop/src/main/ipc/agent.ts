@@ -47,10 +47,10 @@ function getDefaultAgent() {
   const hub = getCurrentHub()
   if (!hub) return null
 
-  const agentIds = hub.listAgents()
-  if (agentIds.length === 0) return null
+  const conversationIds = hub.listConversations()
+  if (conversationIds.length === 0) return null
 
-  return hub.getAgent(agentIds[0]) ?? null
+  return hub.getConversation(conversationIds[0]) ?? null
 }
 
 /**

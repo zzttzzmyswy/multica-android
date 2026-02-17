@@ -232,7 +232,7 @@
       color: var(--green);
     }
 
-    /* ── Agents section ── */
+    /* ── Conversations section ── */
     .section-header {
       display: flex;
       align-items: center;
@@ -347,7 +347,7 @@
         <div class="stat-value" id="stat-state">—</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Agents</div>
+        <div class="stat-label">Conversations</div>
         <div class="stat-value" id="stat-agents">—</div>
       </div>
     </div>
@@ -359,17 +359,17 @@
       <button class="btn btn-accent" onclick="updateGateway()">Connect</button>
     </div>
 
-    <!-- Agents -->
+    <!-- Conversations -->
     <div class="section-header">
-      <span class="section-title">Agents</span>
-      <button class="btn btn-accent" onclick="createAgent()">
+      <span class="section-title">Conversations</span>
+      <button class="btn btn-accent" onclick="createConversation()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Create Agent
+        Create Conversation
       </button>
     </div>
     <div class="agent-table" id="agent-table">
       <div class="agent-table-head">
-        <span>Agent ID</span>
+        <span>Conversation ID</span>
         <span>Actions</span>
       </div>
       <div id="agent-list"></div>
@@ -419,9 +419,9 @@
     }
 
     async function refresh() {
-      const [hubRes, agentsRes] = await Promise.all([
+      const [hubRes, conversationsRes] = await Promise.all([
         fetch(`${API}/hub`).then(r => r.json()),
-        fetch(`${API}/agents`).then(r => r.json()),
+        fetch(`${API}/conversations`).then(r => r.json()),
       ]);
 
       // Stats
@@ -446,19 +446,19 @@
         input.value = hubRes.url || '';
       }
 
-      // Agent list
+      // Conversation list
       const list = document.getElementById('agent-list');
-      if (agentsRes.length === 0) {
-        list.innerHTML = '<div class="empty-state">No agents yet. Create one to get started.</div>';
+      if (conversationsRes.length === 0) {
+        list.innerHTML = '<div class="empty-state">No conversations yet. Create one to get started.</div>';
       } else {
-        list.innerHTML = agentsRes.map(a =>
+        list.innerHTML = conversationsRes.map(a =>
           `<div class="agent-row">` +
             `<div class="agent-id">` +
               `<span title="${a.id}">${a.id}</span>` +
               `<button class="copy-btn" onclick="copyText('${a.id}', this)">${copyIcon()}</button>` +
             `</div>` +
             `<div class="agent-actions">` +
-              `<button class="btn-danger-ghost btn" onclick="deleteAgent('${a.id}')" title="Delete">${trashIcon()}</button>` +
+              `<button class="btn-danger-ghost btn" onclick="deleteConversation('${a.id}')" title="Delete">${trashIcon()}</button>` +
             `</div>` +
           `</div>`
         ).join('');
@@ -482,13 +482,13 @@
       refresh();
     }
 
-    async function createAgent() {
-      await fetch(`${API}/agents`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    async function createConversation() {
+      await fetch(`${API}/conversations`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
       refresh();
     }
 
-    async function deleteAgent(id) {
-      await fetch(`${API}/agents/${id}`, { method: 'DELETE' });
+    async function deleteConversation(id) {
+      await fetch(`${API}/conversations/${id}`, { method: 'DELETE' });
       refresh();
     }
 

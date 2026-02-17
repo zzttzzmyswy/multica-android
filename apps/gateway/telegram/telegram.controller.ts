@@ -33,8 +33,7 @@ export class TelegramController {
       gateway: string;
       hubId: string;
       agentId: string;
-      conversationId?: string;
-      sessionId?: string;
+      conversationId: string;
       token: string;
       expires: number;
     },
@@ -53,7 +52,7 @@ export class TelegramController {
       gateway: body.gateway,
       hubId: body.hubId,
       agentId: body.agentId,
-      ...((body.sessionId ?? body.conversationId) ? { conversationId: body.sessionId ?? body.conversationId } : {}),
+      conversationId: body.conversationId,
       token: body.token,
       expires: body.expires,
     };

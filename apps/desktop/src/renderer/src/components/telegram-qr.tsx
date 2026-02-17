@@ -8,7 +8,7 @@ export interface TelegramConnectQRProps {
   gateway: string
   hubId: string
   agentId: string
-  conversationId?: string
+  conversationId: string
   expirySeconds?: number
   size?: number
 }
@@ -28,8 +28,7 @@ export function TelegramConnectQR({
   expirySeconds = 30,
   size = 200,
 }: TelegramConnectQRProps) {
-  const resolvedConversationId = conversationId ?? agentId
-  const { token, expiresAt, refresh } = useQRToken(agentId, resolvedConversationId, expirySeconds)
+  const { token, expiresAt, refresh } = useQRToken(agentId, conversationId, expirySeconds)
   const remaining = useCountdown(expiresAt, refresh)
 
   const [deepLink, setDeepLink] = useState<string | null>(null)
@@ -51,7 +50,7 @@ export function TelegramConnectQR({
             gateway,
             hubId,
             agentId,
-            conversationId: resolvedConversationId,
+            conversationId,
             token,
             expires: expiresAt,
           }),
@@ -82,7 +81,7 @@ export function TelegramConnectQR({
 
     fetchCode()
     return () => { cancelled = true }
-  }, [token, expiresAt, gateway, hubId, agentId, resolvedConversationId])
+  }, [token, expiresAt, gateway, hubId, agentId, conversationId])
 
   if (loading) {
     return (
