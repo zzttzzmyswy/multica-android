@@ -37,8 +37,6 @@ describe("createVerifyHandler", () => {
       hubId: "hub-1",
       agentId: "agent-1",
       conversationId: "conv-1",
-      sessionId: "conv-1",
-      mainConversationId: "conv-1",
       isNewDevice: false,
     });
     expect(storeApi.consumeToken).not.toHaveBeenCalled();
@@ -71,8 +69,6 @@ describe("createVerifyHandler", () => {
       hubId: "hub-2",
       agentId: "agent-2",
       conversationId: "conv-2",
-      sessionId: "conv-2",
-      mainConversationId: "conv-2",
       isNewDevice: true,
     });
     expect(onConfirmDevice).toHaveBeenCalledWith("dev-2", "agent-2", "conv-2", undefined);

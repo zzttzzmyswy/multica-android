@@ -309,12 +309,13 @@ export class ChannelManager {
   }
 
   private resolveDefaultAgentAndConversation(): { agentId: string; conversation?: AsyncAgent } {
-    const existingAgentId = this.hub.listAgents()[0];
-    if (existingAgentId) {
+    const existingConversationId = this.hub.listConversations()[0];
+    if (existingConversationId) {
+      const existingAgentId = this.hub.getConversationAgentId(existingConversationId) ?? existingConversationId;
       return { agentId: existingAgentId };
     }
 
-    const mainConversation = this.hub.createAgent();
+    const mainConversation = this.hub.createConversation();
     const agentId = this.hub.getConversationAgentId(mainConversation.sessionId) ?? mainConversation.sessionId;
     return { agentId, conversation: mainConversation };
   }

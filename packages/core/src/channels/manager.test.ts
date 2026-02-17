@@ -52,15 +52,8 @@ function createHarness() {
     return harness.agent;
   });
 
-  const mainConversation = createAgentHarness("main-conv");
-  const createAgent = vi.fn(() => {
-    conversations.set(mainConversation.agent.sessionId, mainConversation);
-    return mainConversation.agent;
-  });
-
   const hub = {
-    listAgents: vi.fn(() => ["agent-1"]),
-    createAgent,
+    listConversations: vi.fn(() => ["existing-conv"]),
     createConversation,
     getConversation: vi.fn((conversationId: string) => conversations.get(conversationId)?.agent),
     getConversationAgentId: vi.fn(() => "agent-1"),

@@ -8,7 +8,7 @@ const DEFAULT_LIMIT = 200;
 
 interface GetAgentMessagesParams {
   agentId: string;
-  conversationId?: string;
+  conversationId: string;
   offset?: number;
   limit?: number;
 }
@@ -18,7 +18,7 @@ interface ResolvedConversation {
   storageAgentId?: string;
 }
 
-type ConversationResolver = (agentId: string, conversationId?: string) => ResolvedConversation | null;
+type ConversationResolver = (agentId: string, conversationId: string) => ResolvedConversation | null;
 
 export function createGetAgentMessagesHandler(resolveConversationId?: ConversationResolver): RpcHandler {
   return (params: unknown) => {
@@ -30,10 +30,13 @@ export function createGetAgentMessagesHandler(resolveConversationId?: Conversati
     if (!agentId) {
       throw new RpcError("INVALID_PARAMS", "Missing required param: agentId");
     }
-    const fallbackConversationId = (conversationId ?? "").trim() || agentId;
+    const normalizedConversationId = (conversationId ?? "").trim();
+    if (!normalizedConversationId) {
+      throw new RpcError("INVALID_PARAMS", "Missing required param: conversationId");
+    }
     const resolved = resolveConversationId
       ? resolveConversationId(agentId, conversationId)
-      : { conversationId: fallbackConversationId };
+      : { conversationId: normalizedConversationId };
 
     const resolvedConversationId = resolved?.conversationId?.trim() ?? "";
     if (!resolvedConversationId) {

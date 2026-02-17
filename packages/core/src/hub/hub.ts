@@ -27,9 +27,6 @@ import {
 import { RpcDispatcher, RpcError } from "./rpc/dispatcher.js";
 import { createGetAgentMessagesHandler } from "./rpc/handlers/get-agent-messages.js";
 import { createGetHubInfoHandler } from "./rpc/handlers/get-hub-info.js";
-import { createListAgentsHandler } from "./rpc/handlers/list-agents.js";
-import { createCreateAgentHandler } from "./rpc/handlers/create-agent.js";
-import { createDeleteAgentHandler } from "./rpc/handlers/delete-agent.js";
 import { createListConversationsHandler } from "./rpc/handlers/list-conversations.js";
 import { createCreateConversationHandler } from "./rpc/handlers/create-conversation.js";
 import { createDeleteConversationHandler } from "./rpc/handlers/delete-conversation.js";
@@ -81,8 +78,6 @@ export interface InboundMessageEvent {
 }
 
 export class Hub {
-  private readonly allowLegacyAgentConversationFallback = process.env.MULTICA_ALLOW_LEGACY_AGENT_FALLBACK === "1";
-  private readonly warnedConversationFallbackAgents = new Set<string>();
   // Runtime conversation map (conversationId -> AsyncAgent).
   private readonly agents = new Map<string, AsyncAgent>();
   // Conversation ownership map (conversationId -> logical agentId).
@@ -140,7 +135,7 @@ export class Hub {
     }));
     this.rpc.register("generateChannelWelcome", createGenerateChannelWelcomeHandler(this));
     this.rpc.register("getAgentMessages", createGetAgentMessagesHandler((agentId, conversationId) => {
-      const resolvedConversationId = this.resolveConversationId(agentId, conversationId);
+      const resolvedConversationId = this.normalizeId(conversationId);
       if (!resolvedConversationId) return null;
       return {
         conversationId: resolvedConversationId,
@@ -148,9 +143,6 @@ export class Hub {
       };
     }));
     this.rpc.register("getHubInfo", createGetHubInfoHandler(this));
-    this.rpc.register("listAgents", createListAgentsHandler(this));
-    this.rpc.register("createAgent", createCreateAgentHandler(this));
-    this.rpc.register("deleteAgent", createDeleteAgentHandler(this));
     this.rpc.register("listConversations", createListConversationsHandler(this));
     this.rpc.register("createConversation", createCreateConversationHandler(this));
     this.rpc.register("deleteConversation", createDeleteConversationHandler(this));
@@ -425,39 +417,33 @@ export class Hub {
       const payload = msg.payload as {
         agentId?: string;
         conversationId?: string;
-        sessionId?: string;
         content?: string;
       } | undefined;
       if (!this.deviceStore.isAllowed(msg.from)) {
         console.warn(`[Hub] Rejected message from unverified device: ${msg.from}`);
-        const inboundSessionId = payload?.sessionId ?? payload?.conversationId;
         this.client.send(msg.from, "error", {
           code: "UNAUTHORIZED",
           message: "Device not verified. Please complete verification first.",
           messageId: msg.id,
-          ...(inboundSessionId ? { conversationId: inboundSessionId, sessionId: inboundSessionId } : {}),
+          ...(payload?.conversationId ? { conversationId: payload.conversationId } : {}),
+        });
+        return;
+      }
+      const inboundConversationId = this.normalizeId(payload?.conversationId);
+      if (!inboundConversationId) {
+        this.client.send(msg.from, "error", {
+          code: "INVALID_PARAMS",
+          message: "Missing required conversationId.",
+          messageId: msg.id,
         });
         return;
       }
       const incomingAgentId = payload?.agentId;
-      const conversationId = this.resolveConversationId(
-        incomingAgentId,
-        payload?.sessionId ?? payload?.conversationId,
-      );
+      const conversationId = inboundConversationId;
       const agentId = this.resolveAgentId(incomingAgentId, conversationId);
       const content = payload?.content;
       if (!content) {
         console.warn("[Hub] Invalid payload, missing content");
-        return;
-      }
-      if (!conversationId) {
-        const inboundSessionId = payload?.sessionId ?? payload?.conversationId;
-        this.client.send(msg.from, "error", {
-          code: "INVALID_PARAMS",
-          message: "Unable to resolve sessionId (conversationId). Please provide a valid sessionId.",
-          messageId: msg.id,
-          ...(inboundSessionId ? { conversationId: inboundSessionId, sessionId: inboundSessionId } : {}),
-        });
         return;
       }
 
@@ -469,7 +455,6 @@ export class Hub {
           message: "Device is not authorized for this conversation.",
           messageId: msg.id,
           conversationId,
-          sessionId: conversationId,
         });
         return;
       }
@@ -483,7 +468,6 @@ export class Hub {
           message: "Device is not authorized for this agent.",
           messageId: msg.id,
           conversationId,
-          sessionId: conversationId,
         });
         return;
       }
@@ -552,16 +536,15 @@ export class Hub {
     const normalizedConversationId = this.normalizeId(conversationId);
     if (!normalizedAgentId || !normalizedConversationId) return;
 
-    const resolvedConversationId = this.resolveConversationId(normalizedAgentId, normalizedConversationId);
-    const ownerAgentId = this.conversationAgents.get(resolvedConversationId);
+    const ownerAgentId = this.conversationAgents.get(normalizedConversationId);
     if (ownerAgentId && ownerAgentId !== normalizedAgentId) {
       console.warn(
-        `[Hub] registerToken rejected due to agent/conversation mismatch: agent=${normalizedAgentId}, conversation=${resolvedConversationId}, owner=${ownerAgentId}`,
+        `[Hub] registerToken rejected due to agent/conversation mismatch: agent=${normalizedAgentId}, conversation=${normalizedConversationId}, owner=${ownerAgentId}`,
       );
       return;
     }
     const resolvedAgentId = ownerAgentId ?? normalizedAgentId;
-    this.deviceStore.registerToken(token, resolvedAgentId, resolvedConversationId, expiresAt);
+    this.deviceStore.registerToken(token, resolvedAgentId, normalizedConversationId, expiresAt);
   }
 
   /** 重连到新的 Gateway 地址 */
@@ -689,36 +672,6 @@ export class Hub {
     return typeof id === "string" && id.length > 0 ? id : undefined;
   }
 
-  private resolveConversationId(agentId: string | undefined, conversationId?: string): string {
-    const normalizedConversationId = this.normalizeId(conversationId);
-    if (normalizedConversationId) return normalizedConversationId;
-
-    const normalizedAgentId = this.normalizeId(agentId);
-    if (!normalizedAgentId) return "";
-
-    const mainConversationId = this.resolveAgentMainConversationId(normalizedAgentId);
-    if (mainConversationId) return mainConversationId;
-
-    if (this.allowLegacyAgentConversationFallback) {
-      if (!this.warnedConversationFallbackAgents.has(normalizedAgentId)) {
-        this.warnedConversationFallbackAgents.add(normalizedAgentId);
-        console.warn(
-          `[Hub] Legacy fallback enabled: using agentId as conversationId for ${normalizedAgentId}. ` +
-          "Set explicit conversationId in clients to avoid this deprecated path.",
-        );
-      }
-      return normalizedAgentId;
-    }
-
-    if (!this.warnedConversationFallbackAgents.has(normalizedAgentId)) {
-      this.warnedConversationFallbackAgents.add(normalizedAgentId);
-      console.warn(
-        `[Hub] Conversation resolution failed for agent ${normalizedAgentId}: no main conversation found and legacy fallback is disabled.`,
-      );
-    }
-    return "";
-  }
-
   private beginStream(agentId: string, event: unknown): string {
     const explicitId = this.getMessageIdFromEvent(event);
     if (explicitId) {
@@ -762,7 +715,6 @@ export class Hub {
         this.client.send(targetDeviceId, "message", {
           agentId,
           conversationId,
-          sessionId: conversationId,
           content: item.content,
         });
       } else {
@@ -788,7 +740,6 @@ export class Hub {
             streamId: `system:${conversationId}`,
             agentId,
             conversationId,
-            sessionId: conversationId,
             event: item,
           });
           continue;
@@ -832,7 +783,6 @@ export class Hub {
               streamId,
               agentId: pendingStart.agentId,
               conversationId: pendingStart.conversationId,
-              sessionId: pendingStart.conversationId,
               event: pendingStart.event,
             });
             this.pendingAssistantStarts.delete(streamId);
@@ -842,7 +792,6 @@ export class Hub {
             streamId,
             agentId,
             conversationId,
-            sessionId: conversationId,
             event: item,
           });
           if (item.type === "message_end") {
@@ -856,7 +805,6 @@ export class Hub {
           streamId,
           agentId,
           conversationId,
-          sessionId: conversationId,
           event: item,
         });
       }
@@ -1024,7 +972,6 @@ export class Hub {
             caption,
             filename: basename(filePath),
             conversationId: sessionId,
-            sessionId,
           });
           console.log(`[Hub] Sent file via gateway: ${basename(filePath)} → ${deviceId}`);
           return true;
@@ -1144,8 +1091,10 @@ export class Hub {
 
   /** Enqueue a system event for a specific agent or the default agent. */
   enqueueSystemEvent(text: string, opts?: { agentId?: string }): void {
-    const agentId = opts?.agentId ?? this.listAgents()[0];
-    const conversationId = this.resolveConversationId(agentId, undefined);
+    const requestedAgentId = this.normalizeId(opts?.agentId);
+    const conversationId = requestedAgentId
+      ? this.resolveAgentMainConversationId(requestedAgentId)
+      : this.listConversations()[0];
     if (!conversationId) return;
     enqueueSystemEvent(text, { sessionKey: conversationId });
   }
