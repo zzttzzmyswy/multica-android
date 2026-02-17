@@ -106,6 +106,8 @@ const VERIFY_TIMEOUT_MS = 30_000;
 const WELCOME_RPC_TIMEOUT_MS = 20_000;
 const WELCOME_COOLDOWN_MS = 15_000;
 const TYPING_TIMEOUT_MS = 60_000;
+const INBOUND_MESSAGE_DEDUP_WINDOW_MS = 2 * 60_000;
+const INBOUND_MESSAGE_DEDUP_MAX_ENTRIES = 10_000;
 const MAX_CHARS_PER_MESSAGE = 4000; // Telegram limit is 4096; leave room for HTML overhead
 const REPLY_CONTEXT_MAX_CHARS = 300; // Max chars of quoted text when user replies to a message
 
@@ -195,6 +197,8 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
   private readonly messageContexts = new MessageContextQueue();
   /** Deduplicate welcome sends when Telegram replays updates in a short window */
   private welcomeSentAt = new Map<string, number>();
+  /** Deduplicate inbound Telegram message updates by chatId:messageId */
+  private inboundMessageSeenAt = new Map<string, number>();
 
   private readonly logger = new Logger(TelegramService.name);
 
@@ -725,6 +729,10 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
   private async handleTextMessage(ctx: Context): Promise<void> {
     const msg = ctx.message;
     if (!msg || !msg.text) return;
+    if (!this.shouldHandleInboundMessage(msg.chat.id, msg.message_id)) {
+      this.logger.debug(`Skipped duplicate inbound text update: chatId=${msg.chat.id} messageId=${msg.message_id}`);
+      return;
+    }
 
     const telegramUserId = String(msg.from?.id);
     const text = msg.text.trim();
@@ -940,6 +948,10 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
   private async handleMediaMessage(ctx: Context, media: MediaAttachment): Promise<void> {
     const msg = ctx.message;
     if (!msg) return;
+    if (!this.shouldHandleInboundMessage(msg.chat.id, msg.message_id)) {
+      this.logger.debug(`Skipped duplicate inbound media update: chatId=${msg.chat.id} messageId=${msg.message_id}`);
+      return;
+    }
 
     const telegramUserId = String(msg.from?.id);
     const caption = (msg as any).caption as string | undefined;
@@ -1415,6 +1427,44 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       return false;
     }
     this.welcomeSentAt.set(telegramUserId, now);
+    return true;
+  }
+
+  private shouldHandleInboundMessage(chatId: number, messageId: number): boolean {
+    const now = Date.now();
+    const key = `${chatId}:${messageId}`;
+    const seenAt = this.inboundMessageSeenAt.get(key);
+    if (seenAt && now - seenAt < INBOUND_MESSAGE_DEDUP_WINDOW_MS) {
+      return false;
+    }
+
+    this.inboundMessageSeenAt.set(key, now);
+
+    if (this.inboundMessageSeenAt.size <= INBOUND_MESSAGE_DEDUP_MAX_ENTRIES) {
+      return true;
+    }
+
+    // Opportunistic pruning to keep memory bounded.
+    for (const [candidate, ts] of this.inboundMessageSeenAt.entries()) {
+      if (now - ts > INBOUND_MESSAGE_DEDUP_WINDOW_MS) {
+        this.inboundMessageSeenAt.delete(candidate);
+      }
+    }
+
+    if (this.inboundMessageSeenAt.size <= INBOUND_MESSAGE_DEDUP_MAX_ENTRIES) {
+      return true;
+    }
+
+    const overflow = this.inboundMessageSeenAt.size - INBOUND_MESSAGE_DEDUP_MAX_ENTRIES;
+    if (overflow > 0) {
+      let removed = 0;
+      for (const candidate of this.inboundMessageSeenAt.keys()) {
+        this.inboundMessageSeenAt.delete(candidate);
+        removed += 1;
+        if (removed >= overflow) break;
+      }
+    }
+
     return true;
   }
 

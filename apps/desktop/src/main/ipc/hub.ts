@@ -13,9 +13,21 @@ let hub: Hub | null = null
 let defaultConversationId: string | null = null
 let mainWindowRef: BrowserWindow | null = null
 
+function isConversationBusy(conversation: AsyncAgent): boolean {
+  return conversation.isRunning
+    || conversation.isStreaming
+    || conversation.hasQueuedMessages()
+    || conversation.getPendingWrites() > 0
+}
+
+interface IpcAgentSubscription {
+  token: number
+  unsubscribe: () => void
+}
+
 // Track which agents have active IPC subscriptions (for local direct chat)
-// Value is the unsubscribe function returned by agent.subscribe()
-const ipcAgentSubscriptions = new Map<string, () => void>()
+const ipcAgentSubscriptions = new Map<string, IpcAgentSubscription>()
+let nextIpcSubscriptionToken = 1
 
 // Resolve gateway URL: GATEWAY_URL env > MAIN_VITE_GATEWAY_URL (.env file)
 const gatewayUrl =
@@ -258,9 +270,19 @@ export function registerHubIpcHandlers(): void {
     }
     const logicalAgentId = h.getConversationAgentId(conversationId) ?? conversationId
 
-    // Already subscribed?
-    if (ipcAgentSubscriptions.has(conversationId)) {
-      return { ok: true, alreadySubscribed: true }
+    const existingSubscription = ipcAgentSubscriptions.get(conversationId)
+    if (existingSubscription) {
+      const refreshedToken = nextIpcSubscriptionToken++
+      ipcAgentSubscriptions.set(conversationId, {
+        token: refreshedToken,
+        unsubscribe: existingSubscription.unsubscribe,
+      })
+      return {
+        ok: true,
+        alreadySubscribed: true,
+        token: refreshedToken,
+        isRunning: isConversationBusy(conversation),
+      }
     }
 
     // Track current stream ID for message grouping
@@ -318,7 +340,8 @@ export function registerHubIpcHandlers(): void {
       }
     })
 
-    ipcAgentSubscriptions.set(conversationId, unsubscribe)
+    const token = nextIpcSubscriptionToken++
+    ipcAgentSubscriptions.set(conversationId, { token, unsubscribe })
 
     // Register local approval handler so exec approval requests route via IPC
     h.setLocalApprovalHandler(conversationId, (payload) => {
@@ -329,17 +352,24 @@ export function registerHubIpcHandlers(): void {
 
     safeLog(`[IPC] Local chat subscribed to conversation: ${conversationId}`)
 
-    return { ok: true }
+    return { ok: true, token, isRunning: isConversationBusy(conversation) }
   })
 
   /**
    * Unsubscribe from local agent events.
    */
-  ipcMain.handle('localChat:unsubscribe', async (_event, conversationId: string) => {
-    const unsubscribe = ipcAgentSubscriptions.get(conversationId)
-    if (unsubscribe) {
-      unsubscribe()
+  ipcMain.handle('localChat:unsubscribe', async (_event, conversationId: string, token?: number) => {
+    const subscription = ipcAgentSubscriptions.get(conversationId)
+    if (!subscription) {
+      return { ok: true, alreadyUnsubscribed: true }
     }
+
+    if (typeof token === 'number' && token !== subscription.token) {
+      safeLog(`[IPC] Skip stale local chat unsubscribe: conversation=${conversationId}, token=${token}`)
+      return { ok: true, skipped: true }
+    }
+
+    subscription.unsubscribe()
     ipcAgentSubscriptions.delete(conversationId)
     getHub().removeLocalApprovalHandler(conversationId)
     safeLog(`[IPC] Local chat unsubscribed from conversation: ${conversationId}`)
@@ -362,21 +392,36 @@ export function registerHubIpcHandlers(): void {
     const h = getHub()
     const agent = h.getConversation(conversationId)
     if (!agent) {
-      return { messages: [], total: 0, offset: 0, limit: 0, contextWindowTokens: undefined }
+      return {
+        messages: [],
+        total: 0,
+        offset: 0,
+        limit: 0,
+        contextWindowTokens: undefined,
+        isRunning: false,
+      }
     }
 
     try {
       await agent.ensureInitialized()
       const allMessages = agent.loadSessionMessagesForDisplay()
       const contextWindowTokens = agent.getContextWindowTokens()
+      const isRunning = isConversationBusy(agent)
       const total = allMessages.length
       // Must match DEFAULT_MESSAGES_LIMIT from @multica/sdk/actions/rpc
       const limit = options?.limit ?? 200
       const offset = options?.offset ?? Math.max(0, total - limit)
       const sliced = allMessages.slice(offset, offset + limit)
-      return { messages: sliced, total, offset, limit, contextWindowTokens }
+      return { messages: sliced, total, offset, limit, contextWindowTokens, isRunning }
     } catch {
-      return { messages: [], total: 0, offset: 0, limit: 0, contextWindowTokens: undefined }
+      return {
+        messages: [],
+        total: 0,
+        offset: 0,
+        limit: 0,
+        contextWindowTokens: undefined,
+        isRunning: false,
+      }
     }
   })
 
@@ -528,6 +573,13 @@ export function setupDeviceConfirmation(mainWindow: Electron.BrowserWindow): voi
       mainWindow.webContents.send('hub:inbound-message', event)
     }
   })
+
+  // Forward conversation list changes (e.g. created from Telegram / RPC).
+  h.onConversationsChanged(() => {
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('hub:conversations-changed')
+    }
+  })
 }
 
 /**
@@ -535,8 +587,8 @@ export function setupDeviceConfirmation(mainWindow: Electron.BrowserWindow): voi
  */
 export function cleanupHub(): void {
   // Unsubscribe all IPC listeners
-  for (const unsubscribe of ipcAgentSubscriptions.values()) {
-    unsubscribe()
+  for (const subscription of ipcAgentSubscriptions.values()) {
+    subscription.unsubscribe()
   }
   ipcAgentSubscriptions.clear()
 

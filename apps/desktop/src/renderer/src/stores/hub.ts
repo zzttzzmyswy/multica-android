@@ -63,6 +63,12 @@ export const useHubStore = create<HubStore>()((set, get) => ({
             : prev.hubInfo,
         }))
       })
+
+      // Refresh conversation list when backend conversations change
+      // (e.g. Telegram / RPC creates a new session).
+      window.electronAPI.hub.onConversationsChanged(() => {
+        void get().refresh()
+      })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       set({ error: message })

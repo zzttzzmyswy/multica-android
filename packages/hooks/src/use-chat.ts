@@ -315,9 +315,27 @@ export function useChat() {
       }
       case "message_update": {
         const content = extractContent(event);
-        setMessages((prev) =>
-          prev.map((m) => (m.id === payload.streamId ? { ...m, content } : m)),
-        );
+        setMessages((prev) => {
+          let found = false;
+          const updated = prev.map((m) => {
+            if (m.id !== payload.streamId) return m;
+            found = true;
+            return { ...m, content };
+          });
+          if (found) return updated;
+          // Session switches can miss message_start; recover by creating the stream message on first update.
+          return [
+            ...updated,
+            {
+              id: payload.streamId,
+              role: "assistant",
+              content,
+              agentId: payload.agentId,
+              conversationId,
+            },
+          ];
+        });
+        setStreamingIds((prev) => new Set(prev).add(payload.streamId));
         break;
       }
       case "message_end": {
@@ -327,9 +345,13 @@ export function useChat() {
             ? (event.message as { stopReason?: string })?.stopReason
             : undefined;
 
-        setMessages((prev) =>
-          prev.map((m) => {
-            if (m.id === payload.streamId) return { ...m, content, stopReason };
+        setMessages((prev) => {
+          let found = false;
+          const updated = prev.map((m) => {
+            if (m.id === payload.streamId) {
+              found = true;
+              return { ...m, content, stopReason };
+            }
             if (
               m.role === "toolResult"
               && m.toolStatus === "running"
@@ -339,8 +361,22 @@ export function useChat() {
               return { ...m, toolStatus: "interrupted" as ToolStatus };
             }
             return m;
-          }),
-        );
+          });
+
+          if (found || content.length === 0) return updated;
+          // Session switches can miss message_start; recover final content from message_end.
+          return [
+            ...updated,
+            {
+              id: payload.streamId,
+              role: "assistant",
+              content,
+              agentId: payload.agentId,
+              conversationId,
+              stopReason,
+            },
+          ];
+        });
         setStreamingIds((prev) => {
           const next = new Set(prev);
           next.delete(payload.streamId);

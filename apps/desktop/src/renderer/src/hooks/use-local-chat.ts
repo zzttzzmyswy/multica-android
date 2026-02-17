@@ -15,8 +15,32 @@ export interface QueuedLocalMessage {
   createdAt: number
 }
 
+interface QueuedInboundMessage {
+  content: string
+  agentId: string
+  conversationId: string
+  source: MessageSource
+}
+
 interface UseLocalChatOptions {
   conversationId?: string
+}
+
+interface LocalChatSubscribeResult {
+  ok?: boolean
+  error?: string
+  alreadySubscribed?: boolean
+  token?: number
+  isRunning?: boolean
+}
+
+interface LocalChatHistoryResult {
+  messages?: AgentMessageItem[]
+  total: number
+  offset: number
+  limit: number
+  contextWindowTokens?: number
+  isRunning?: boolean
 }
 
 function makeQueueId(): string {
@@ -35,6 +59,7 @@ export function useLocalChat(options: UseLocalChatOptions = {}) {
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const isLoadingMoreRef = useRef(false)
   const [queuedMessages, setQueuedMessages] = useState<QueuedLocalMessage[]>([])
+  const [queuedInboundMessages, setQueuedInboundMessages] = useState<QueuedInboundMessage[]>([])
   const [initError, setInitError] = useState<string | null>(null)
   const initRef = useRef(false)
   const offsetRef = useRef<number | null>(null)
@@ -68,20 +93,31 @@ export function useLocalChat(options: UseLocalChatOptions = {}) {
   // Subscribe to events + fetch history once conversation is available
   useEffect(() => {
     if (!activeConversationId) return
+    let disposed = false
     setQueuedMessages([])
+    setQueuedInboundMessages([])
     offsetRef.current = null
     setIsLoading(false)
     setIsLoadingHistory(true)
     chatRef.current.reset()
 
     // Subscribe to agent events
-    window.electronAPI.localChat.subscribe(activeConversationId).catch(() => {})
+    const subscribePromise = window.electronAPI.localChat.subscribe(activeConversationId)
+      .then((result) => {
+        const typed = result as LocalChatSubscribeResult
+        if (!disposed && typed.isRunning) {
+          setIsLoading(true)
+        }
+        return typed
+      })
+      .catch(() => null)
 
     // Listen for stream events
-    window.electronAPI.localChat.onEvent((data) => {
+    const unsubscribeEvent = window.electronAPI.localChat.onEvent((data) => {
       // Cast IPC event to StreamPayload (same shape: { agentId, streamId, event })
       const payload = data as unknown as StreamPayload
       if (!payload.event) return
+      if (payload.conversationId !== activeConversationId) return
 
       // Handle agent error events
       if (payload.event.type === 'agent_error') {
@@ -111,21 +147,33 @@ export function useLocalChat(options: UseLocalChatOptions = {}) {
     })
 
     // Listen for exec approval requests
-    window.electronAPI.localChat.onApproval((approval) => {
+    const unsubscribeApproval = window.electronAPI.localChat.onApproval((approval) => {
+      if (approval.conversationId !== activeConversationId) return
       chatRef.current.addApproval(approval as ExecApprovalRequestPayload)
     })
 
     // Listen for inbound messages from all sources (gateway, channel)
     // This allows the local UI to display messages from other sources
-    window.electronAPI.hub.onInboundMessage((event: InboundMessageEvent) => {
+    const unsubscribeInbound = window.electronAPI.hub.onInboundMessage((event: InboundMessageEvent) => {
       const eventConversationId = event.conversationId
       // Only add non-local messages (local messages are added by sendMessage)
       if (event.source.type !== 'local' && eventConversationId === activeConversationId) {
+        const queuedInbound: QueuedInboundMessage = {
+          content: event.content,
+          agentId: event.agentId,
+          conversationId: eventConversationId,
+          source: event.source as MessageSource,
+        }
+        if (isLoadingRef.current) {
+          setQueuedInboundMessages((prev) => [...prev, queuedInbound])
+          return
+        }
+
         chatRef.current.addUserMessage(
-          event.content,
-          event.agentId,
-          eventConversationId,
-          event.source as MessageSource,
+          queuedInbound.content,
+          queuedInbound.agentId,
+          queuedInbound.conversationId,
+          queuedInbound.source,
         )
         setIsLoading(true)
       }
@@ -136,6 +184,11 @@ export function useLocalChat(options: UseLocalChatOptions = {}) {
       limit: DEFAULT_MESSAGES_LIMIT,
     })
       .then((result) => {
+        if (disposed) return
+        const typed = result as LocalChatHistoryResult
+        if (typed.isRunning) {
+          setIsLoading(true)
+        }
         console.log('[LocalChat] getHistory result:', result.messages?.length, 'messages, total:', result.total)
         if (result.messages?.length) {
           chatRef.current.setHistory(result.messages as AgentMessageItem[], activeConversationId, activeConversationId, {
@@ -153,13 +206,23 @@ export function useLocalChat(options: UseLocalChatOptions = {}) {
         }
       })
       .catch(() => {})
-      .finally(() => setIsLoadingHistory(false))
+      .finally(() => {
+        if (!disposed) {
+          setIsLoadingHistory(false)
+        }
+      })
 
     return () => {
-      window.electronAPI.localChat.offEvent()
-      window.electronAPI.localChat.offApproval()
-      window.electronAPI.hub.offInboundMessage()
-      window.electronAPI.localChat.unsubscribe(activeConversationId).catch(() => {})
+      disposed = true
+      unsubscribeEvent?.()
+      unsubscribeApproval?.()
+      unsubscribeInbound?.()
+      void subscribePromise
+        .then((result) => {
+          if (typeof result?.token !== 'number') return
+          return window.electronAPI.localChat.unsubscribe(activeConversationId, result.token)
+        })
+        .catch(() => {})
     }
   }, [activeConversationId])
 
@@ -213,12 +276,28 @@ export function useLocalChat(options: UseLocalChatOptions = {}) {
   }, [])
 
   useEffect(() => {
-    if (!activeConversationId || isLoading || queuedMessages.length === 0) return
-    const next = queuedMessages[0]
-    if (!next) return
+    if (!activeConversationId || isLoading) return
+
+    // Inbound channel/gateway messages are already queued in backend.
+    // Render them first to keep frontend ordering aligned with agent run order.
+    const nextInbound = queuedInboundMessages[0]
+    if (nextInbound) {
+      setQueuedInboundMessages((prev) => prev.slice(1))
+      chatRef.current.addUserMessage(
+        nextInbound.content,
+        nextInbound.agentId,
+        nextInbound.conversationId,
+        nextInbound.source,
+      )
+      setIsLoading(true)
+      return
+    }
+
+    const nextLocal = queuedMessages[0]
+    if (!nextLocal) return
     setQueuedMessages((prev) => prev.slice(1))
-    dispatchMessageNow(next.text)
-  }, [activeConversationId, isLoading, queuedMessages, dispatchMessageNow])
+    dispatchMessageNow(nextLocal.text)
+  }, [activeConversationId, isLoading, queuedInboundMessages, queuedMessages, dispatchMessageNow])
 
   const abortGeneration = useCallback(() => {
     if (!activeConversationId) return

@@ -18,7 +18,7 @@ const ExecSchema = Type.Object({
   yieldMs: Type.Optional(
     Type.Number({
       description:
-        "Auto-background threshold in milliseconds. If command doesn't complete within this time, it runs in background. Default 10000ms. Set to 0 to disable auto-backgrounding.",
+        "Auto-background threshold in milliseconds. If command doesn't complete within this time, it runs in background. Default 30000ms when timeoutMs is not set. If timeoutMs is set and yieldMs is omitted, auto-backgrounding is disabled. Set to 0 to disable auto-backgrounding.",
       minimum: 0,
     }),
   ),
@@ -39,7 +39,7 @@ export type ExecResult = {
   processId?: string;
 };
 
-const DEFAULT_YIELD_MS = 10000; // Changed from 5000 to 10000
+const DEFAULT_YIELD_MS = 30000;
 
 export function createExecTool(
   defaultCwd?: string,
@@ -49,10 +49,13 @@ export function createExecTool(
     name: "exec",
     label: "Exec",
     description:
-      "Execute a shell command. If the command doesn't complete within yieldMs (default 10s), it automatically runs in background and returns a process ID with any output collected so far. Use 'process output <id>' to check output, 'process status <id>' to check status, 'process stop <id>' to terminate.",
+      "Execute a shell command. If the command doesn't complete within yieldMs, it automatically runs in background and returns a process ID with any output collected so far. Default yieldMs is 30s when timeoutMs is not provided. If timeoutMs is provided and yieldMs is omitted, auto-backgrounding is disabled. Use 'process output <id>' to check output, 'process status <id>' to check status, 'process stop <id>' to terminate.",
     parameters: ExecSchema,
     execute: async (_toolCallId, args, signal, onUpdate) => {
-      const { command, cwd, timeoutMs, yieldMs = DEFAULT_YIELD_MS } = args as ExecArgs;
+      const { command, cwd, timeoutMs, yieldMs } = args as ExecArgs;
+      const effectiveYieldMs = typeof yieldMs === "number"
+        ? yieldMs
+        : (typeof timeoutMs === "number" && timeoutMs > 0 ? 0 : DEFAULT_YIELD_MS);
       const effectiveCwd = cwd || defaultCwd;
 
       // Exec approval: ask for permission before executing
@@ -119,7 +122,7 @@ export function createExecTool(
         }
 
         // Yield window handling (auto-background)
-        if (yieldMs > 0) {
+        if (effectiveYieldMs > 0) {
           yieldTimer = setTimeout(() => {
             if (yielded) return;
             yielded = true;
@@ -152,7 +155,7 @@ export function createExecTool(
                 processId,
               },
             });
-          }, yieldMs);
+          }, effectiveYieldMs);
         }
 
         // Note: Output is now collected by process-registry, no local chunk collection needed
