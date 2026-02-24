@@ -5,35 +5,43 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./agent": {
       "types": "./dist/agent/index.d.ts",
-      "import": "./dist/agent/index.js"
+      "import": "./dist/agent/index.js",
+      "default": "./dist/agent/index.js"
     },
     "./hub": {
       "types": "./dist/hub/index.d.ts",
-      "import": "./dist/hub/index.js"
+      "import": "./dist/hub/index.js",
+      "default": "./dist/hub/index.js"
     },
     "./channels": {
       "types": "./dist/channels/index.d.ts",
-      "import": "./dist/channels/index.js"
+      "import": "./dist/channels/index.js",
+      "default": "./dist/channels/index.js"
     },
     "./cron": {
       "types": "./dist/cron/index.d.ts",
-      "import": "./dist/cron/index.js"
+      "import": "./dist/cron/index.js",
+      "default": "./dist/cron/index.js"
     },
     "./heartbeat": {
       "types": "./dist/heartbeat/index.d.ts",
-      "import": "./dist/heartbeat/index.js"
+      "import": "./dist/heartbeat/index.js",
+      "default": "./dist/heartbeat/index.js"
     },
     "./media": {
       "types": "./dist/media/index.d.ts",
-      "import": "./dist/media/index.js"
+      "import": "./dist/media/index.js",
+      "default": "./dist/media/index.js"
     },
     "./client": {
       "types": "./dist/client/index.d.ts",
-      "import": "./dist/client/index.js"
+      "import": "./dist/client/index.js",
+      "default": "./dist/client/index.js"
     }
   },
   "main": "./dist/index.js",

@@ -794,6 +794,8 @@ export class Agent {
 
       const MAX_OVERFLOW_COMPACTION_ATTEMPTS = 2;
       let overflowAttempts = 0;
+      const MAX_FORMAT_REPAIR_ATTEMPTS = 1;
+      let formatRepairAttempts = 0;
 
       // Loop to exhaust all candidate profiles on rotatable errors
       while (true) {
@@ -860,6 +862,31 @@ export class Agent {
             reason,
             rotatable: isRotatableError(reason),
           });
+
+          // Format error recovery: reload sanitized messages from disk and retry.
+          // This handles corrupted in-memory state (e.g. orphaned tool_call_id references)
+          // that causes persistent 400 errors until process restart.
+          if (reason === "format" && formatRepairAttempts < MAX_FORMAT_REPAIR_ATTEMPTS) {
+            formatRepairAttempts++;
+            this.stderr.write(
+              `[format-repair] Format error detected (attempt ${formatRepairAttempts}/${MAX_FORMAT_REPAIR_ATTEMPTS}), reloading messages from disk...\n`,
+            );
+            this.runLog.log("format_repair", {
+              attempt: formatRepairAttempts,
+              error: errorMsg.slice(0, 200),
+              messages_before: this.agent.state.messages.length,
+            });
+            const repairedMessages = this.session.loadMessages();
+            if (repairedMessages.length > 0) {
+              this.runLog.log("format_repair_reloaded", {
+                messages_after: repairedMessages.length,
+              });
+              this.agent.replaceMessages(repairedMessages);
+              this.output.state.lastAssistantText = "";
+              continue; // retry with sanitized messages
+            }
+          }
+
           if (this.currentProfileId && isRotatableError(reason)) {
             markAuthProfileFailure(this.currentProfileId, reason);
           }

@@ -20,6 +20,13 @@ describe("classifyError", () => {
     expect(classifyError(new Error("Schema validation failed"))).toBe("format");
   });
 
+  it("classifies tool_call_id 400 errors as format (recoverable via transcript repair)", () => {
+    expect(
+      classifyError(new Error("400 tool_call_id  is not found in the list of tool calls")),
+    ).toBe("format");
+    expect(classifyError(new Error("400 Bad Request: tool_call_id not found"))).toBe("format");
+  });
+
   it("classifies 429/rate limit as rate_limit", () => {
     expect(classifyError(new Error("429 Too Many Requests"))).toBe("rate_limit");
     expect(classifyError(new Error("Rate limit exceeded"))).toBe("rate_limit");
