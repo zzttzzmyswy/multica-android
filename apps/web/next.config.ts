@@ -2,16 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@multica/ui", "@multica/store", "@multica/hooks", "@multica/sdk"],
-  rewrites: async () => {
-    const apiUrl = process.env.MULTICA_API_URL;
-    if (!apiUrl) return [];
-    return [
-      {
-        source: "/api/:path*",
-        destination: `${apiUrl}/api/:path*`,
-      },
-    ];
-  },
+  // Removed rewrites proxy - frontend requests API directly via NEXT_PUBLIC_API_URL
   headers: async () => [
     {
       source: "/sw.js",
