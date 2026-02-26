@@ -118,6 +118,25 @@ export function repairToolCallInputs(messages: AgentMessage[]): ToolCallInputRep
       continue;
     }
 
+    // Drop toolCalls from aborted/error assistant messages.
+    // pi-ai's transformMessages drops these messages entirely, so any
+    // synthetic toolResults we'd insert would become orphaned.
+    const stopReason = (msg as { stopReason?: unknown }).stopReason;
+    if (stopReason === "aborted" || stopReason === "error") {
+      const filtered = msg.content.filter((block: unknown) => !isToolCallBlock(block));
+      if (filtered.length === 0) {
+        droppedAssistantMessages += 1;
+        changed = true;
+        continue;
+      }
+      if (filtered.length !== msg.content.length) {
+        droppedToolCalls += msg.content.length - filtered.length;
+        changed = true;
+        out.push({ ...msg, content: filtered });
+        continue;
+      }
+    }
+
     const nextContent = [];
     let droppedInMessage = 0;
 

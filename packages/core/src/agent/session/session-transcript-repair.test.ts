@@ -257,4 +257,84 @@ describe("sanitizeToolCallInputs", () => {
     const out = sanitizeToolCallInputs(input);
     expect(out.map((m) => m.role)).toEqual(["user"]);
   });
+
+  it("strips toolCalls from aborted assistant but keeps text", () => {
+    const input = [
+      {
+        role: "assistant",
+        stopReason: "aborted",
+        content: [
+          { type: "text", text: "Let me try" },
+          { type: "toolCall", id: "call_1", name: "write", arguments: { path: "/tmp/x" } },
+        ],
+      },
+      { role: "user", content: "hello" },
+    ] as AgentMessage[];
+
+    const out = sanitizeToolCallInputs(input);
+    expect(out).toHaveLength(2);
+    expect(out[0]?.role).toBe("assistant");
+    const assistant = out[0] as Extract<AgentMessage, { role: "assistant" }>;
+    const types = Array.isArray(assistant.content)
+      ? assistant.content.map((b) => (b as { type?: unknown }).type)
+      : [];
+    expect(types).toEqual(["text"]);
+    expect(out[1]?.role).toBe("user");
+  });
+
+  it("drops aborted assistant entirely when only toolCalls remain", () => {
+    const input = [
+      {
+        role: "assistant",
+        stopReason: "aborted",
+        content: [
+          { type: "toolCall", id: "call_1", name: "write", arguments: { path: "/tmp/x" } },
+        ],
+      },
+      { role: "user", content: "hello" },
+    ] as AgentMessage[];
+
+    const out = sanitizeToolCallInputs(input);
+    expect(out.map((m) => m.role)).toEqual(["user"]);
+  });
+
+  it("strips toolCalls from error assistant messages", () => {
+    const input = [
+      {
+        role: "assistant",
+        stopReason: "error",
+        content: [
+          { type: "toolCall", id: "call_1", name: "read", arguments: { path: "a" } },
+        ],
+      },
+      { role: "user", content: "retry" },
+    ] as AgentMessage[];
+
+    const out = sanitizeToolCallInputs(input);
+    expect(out.map((m) => m.role)).toEqual(["user"]);
+  });
+
+  it("prevents orphan toolResults when aborted assistant is followed by user message", () => {
+    // Full scenario: aborted assistant with toolCall → sanitizeToolCallInputs strips toolCall
+    // → sanitizeToolUseResultPairing should NOT insert synthetic toolResult
+    const input = [
+      {
+        role: "assistant",
+        stopReason: "aborted",
+        content: [
+          { type: "toolCall", id: "call_1", name: "write", arguments: { path: "/tmp/x" } },
+        ],
+      },
+      { role: "user", content: "continue" },
+      { role: "assistant", content: [] },
+    ] as AgentMessage[];
+
+    // Run both sanitizers in sequence (same as transformContext)
+    const step1 = sanitizeToolCallInputs(input);
+    const step2 = sanitizeToolUseResultPairing(step1);
+
+    // No orphan toolResults should exist
+    const toolResults = step2.filter((m) => m.role === "toolResult");
+    expect(toolResults).toHaveLength(0);
+  });
 });
