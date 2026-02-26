@@ -147,11 +147,25 @@ function createWindow() {
     return { action: 'deny' }
   })
 
+  // Track renderer crashes for debugging
+  win.webContents.on('render-process-gone', (_event, details) => {
+    console.error('[Window] Renderer process gone:', details.reason, details.exitCode)
+  })
+
   // Hide window on close instead of quitting (tray keeps running)
   win.on('close', (event) => {
     if (!isQuitting) {
       event.preventDefault()
-      win?.hide()
+      // On macOS, hiding a fullscreen window causes a black screen.
+      // Exit fullscreen first, then hide.
+      if (win?.isFullScreen()) {
+        win.once('leave-full-screen', () => {
+          win?.hide()
+        })
+        win.setFullScreen(false)
+      } else {
+        win?.hide()
+      }
     }
   })
 
