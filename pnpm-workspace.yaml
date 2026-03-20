@@ -19,26 +19,9 @@ catalog:
   # UI & Styling
   tailwindcss: "^4"
   "@tailwindcss/postcss": "^4"
-  "@tailwindcss/vite": "^4"
   tailwind-merge: "^3.4.0"
   class-variance-authority: "^0.7.1"
   clsx: "^2.1.1"
 
   # Icons
   lucide-react: "^0.511.0"
-
-  # Networking
-  socket.io-client: "^4.8.3"
-  uuid: "^13.0.0"
-  "@types/uuid": "^11.0.0"
-
-  # AI SDK
-  "@mariozechner/pi-agent-core": "^0.52.9"
-  "@mariozechner/pi-ai": "^0.52.9"
-  "@mariozechner/pi-coding-agent": "^0.52.9"
-
-  # Linting
-  eslint: "^9"
-
-  # Dev Tools
-  tsx: "^4.20.1"

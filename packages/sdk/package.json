@@ -1,25 +1,19 @@
 {
   "name": "@multica/sdk",
-  "version": "0.1.0",
-  "type": "module",
+  "version": "0.2.0",
   "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./*": "./src/*.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "socket.io-client": "catalog:",
-    "uuid": "catalog:"
+    "@multica/types": "workspace:*"
   },
   "devDependencies": {
-    "@mariozechner/pi-agent-core": "catalog:",
-    "@mariozechner/pi-ai": "catalog:",
-    "@types/uuid": "catalog:",
     "typescript": "catalog:"
   }
 }

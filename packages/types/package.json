@@ -1,23 +1,16 @@
 {
   "name": "@multica/types",
-  "version": "0.0.1",
+  "version": "0.2.0",
+  "private": true,
   "type": "module",
+  "main": "./src/index.ts",
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
+    ".": "./src/index.ts"
   },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "files": ["dist"],
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch --no-dts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "tsup": "^8.0.0",
     "typescript": "catalog:"
   }
 }

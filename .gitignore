@@ -9,25 +9,22 @@ out
 .turbo
 build
 bin
-dist-electron
-release
 *.tsbuildinfo
 
 # env
 .env*
 !.env.example
-!apps/desktop/.env.production
-!apps/desktop/.env.development
+
+# test coverage
+coverage
+
+# Go
+server/bin/
+server/tmp/
+
+# context (agent workspace)
+.context
 
 # platform specific
 *.dmg
 *.app
-*.apk
-*.ipa
-monorepo.md
-
-# python
-__pycache__
-
-# test coverage
-coverage

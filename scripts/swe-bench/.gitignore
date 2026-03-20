@@ -1,5 +1,0 @@
-# Downloaded datasets
-*.jsonl
-
-# Don't ignore the scripts themselves
-!.gitignore

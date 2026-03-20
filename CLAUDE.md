@@ -4,63 +4,56 @@ This file gives coding agents high-signal guidance for this repository.
 
 ## 1. Project Context
 
-Super Multica is a distributed AI agent framework/product monorepo.
-It is used to run local-first agent workflows and support CLI/Desktop/Web/Gateway-based usage.
+Multica is an AI-native task management platform — like Linear, but with AI agents as first-class citizens.
 
-Core purpose:
+- Agents can be assigned issues, create issues, comment, and change status
+- Supports local (daemon) and cloud agent runtimes
+- Built for 2-10 person AI-native teams
 
-- execute agent tasks with tools and skills
-- persist sessions/profiles/credentials across runs
-- support development, testing, and operational automation workflows
+## 2. Architecture
 
-## 2. Documentation Scope
+**Polyglot monorepo** — Go backend + TypeScript frontend.
 
-Documentation in this repo should prioritize:
-
-1. Development workflow
-2. Testing methods
-3. Operational process
-
-Architecture explanations should stay minimal in docs.
-Treat source code as the architecture source of truth.
+- `server/` — Go backend (Chi + sqlc + gorilla/websocket)
+- `apps/web/` — Next.js 16 frontend
+- `packages/` — Shared TypeScript packages (ui, types, sdk, store, hooks, utils)
 
 ## 3. Core Workflow Commands
 
 ```bash
+# Frontend
 pnpm install
-pnpm multica
-pnpm multica run "<prompt>"
-pnpm dev
-pnpm dev:gateway
-pnpm dev:web
-pnpm dev:local
-pnpm build
-pnpm typecheck
-pnpm test
+pnpm dev:web          # Next.js dev server
+pnpm build            # Build all TS packages
+pnpm typecheck        # TypeScript check
+pnpm test             # TS tests
+
+# Backend (Go)
+make dev              # Run Go server with hot-reload
+make daemon           # Run local daemon
+make test             # Go tests
+make sqlc             # Regenerate sqlc code
+make migrate-up       # Run database migrations
+make migrate-down     # Rollback migrations
+
+# Infrastructure
+docker compose up -d  # Start PostgreSQL
 ```
 
-## 4. Data and Credentials Workflow
-
-- Default data dir: `~/.super-multica` (override with `SMC_DATA_DIR`)
-- Credentials: `~/.super-multica/credentials.json5` (override with `SMC_CREDENTIALS_PATH`)
-- Initialize credentials via `pnpm multica credentials init`
-
-## 5. Coding Rules
+## 4. Coding Rules
 
 - TypeScript strict mode is enabled; keep types explicit.
+- Go code follows standard Go conventions (gofmt, go vet).
 - Keep comments in code **English only**.
 - Prefer existing patterns/components over introducing parallel abstractions.
 - Avoid broad refactors unless required by the task.
-- Keep docs concise and aligned with current code behavior.
 
-## 6. Testing Rules
+## 5. Testing Rules
 
-- Test runner: Vitest.
-- Mock policy: mock external/third-party dependencies only.
-- Do not mock internal modules when real integration can be tested.
-- Prefer temp directories and real file I/O for storage-related tests.
+- **TypeScript**: Vitest. Mock external/third-party dependencies only.
+- **Go**: Standard `go test`. Use testcontainers or test database for DB tests.
 
-## 7. Commit Rules
+## 6. Commit Rules
 
 - Use atomic commits grouped by logical intent.
 - Conventional format:
@@ -71,14 +64,10 @@ pnpm test
   - `test(scope): ...`
   - `chore(scope): ...`
 
-## 8. Minimum Pre-Push Checks
+## 7. Minimum Pre-Push Checks
 
 ```bash
 pnpm typecheck
 pnpm test
+make test
 ```
-
-## 9. E2E Process Docs
-
-- `docs/e2e-testing-guide.md`
-- `docs/e2e-finance-benchmark.md`

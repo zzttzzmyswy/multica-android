@@ -1,8 +1,0 @@
-# Build outputs (keep build/ for icons and entitlements)
-!build/
-dist
-dist-electron
-dist-ssr
-out
-release
-*.local

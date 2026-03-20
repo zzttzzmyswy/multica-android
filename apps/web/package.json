@@ -1,32 +1,33 @@
 {
   "name": "@multica/web",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev --port 3000",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "typecheck": "tsc --noEmit",
+    "lint": "next lint"
   },
   "dependencies": {
     "@multica/hooks": "workspace:*",
     "@multica/sdk": "workspace:*",
     "@multica/store": "workspace:*",
+    "@multica/types": "workspace:*",
     "@multica/ui": "workspace:*",
-    "@react-oauth/google": "^0.12.1",
-    "next": "16.1.6",
+    "@multica/utils": "workspace:*",
+    "lucide-react": "catalog:",
+    "next": "^16.1.6",
     "next-themes": "^0.4.6",
     "react": "catalog:",
-    "react-dom": "catalog:",
-    "uuid": "catalog:",
-    "zustand": "catalog:"
+    "react-dom": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "catalog:",
+    "@tailwindcss/postcss": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "eslint": "catalog:",
-    "eslint-config-next": "16.1.6",
+    "tailwindcss": "catalog:",
     "typescript": "catalog:"
   }
 }

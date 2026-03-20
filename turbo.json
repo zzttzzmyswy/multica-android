@@ -1,12 +1,11 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalDependencies": ["tsconfig.json", "tsconfig.base.json"],
-  "globalEnv": ["MULTICA_API_URL"],
+  "globalDependencies": ["tsconfig.base.json"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["src/**", "package.json", "tsconfig.json"],
-      "outputs": ["dist/**"]
+      "outputs": ["dist/**", ".next/**"]
     },
     "dev": {
       "dependsOn": ["^build"],
@@ -15,17 +14,17 @@
     },
     "typecheck": {
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "package.json", "tsconfig.json"],
-      "outputs": []
+      "inputs": ["src/**", "package.json", "tsconfig.json"]
     },
     "test": {
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "package.json", "tsconfig.json", "vitest.config.*"],
-      "outputs": []
+      "inputs": ["src/**", "package.json", "tsconfig.json", "vitest.config.*"]
     },
     "lint": {
-      "inputs": ["src/**", "package.json", "eslint.config.*", ".eslintrc.*"],
-      "outputs": []
+      "inputs": ["src/**", "package.json"]
+    },
+    "clean": {
+      "cache": false
     }
   }
 }
