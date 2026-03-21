@@ -3,11 +3,11 @@
 import { use } from "react";
 import Link from "next/link";
 import {
-  ArrowLeft,
   Bot,
   Calendar,
   ChevronRight,
   User,
+  MessageSquare,
 } from "lucide-react";
 import {
   MOCK_ISSUES,
@@ -24,6 +24,7 @@ import { StatusIcon, PriorityIcon } from "../page";
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return "just now";
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
@@ -32,7 +33,7 @@ function timeAgo(dateStr: string): string {
 }
 
 function formatDate(date: string | null): string {
-  if (!date) return "None";
+  if (!date) return "—";
   return new Date(date).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -40,30 +41,45 @@ function formatDate(date: string | null): string {
   });
 }
 
-function ActorAvatar({ actor, size = "sm" }: { actor: MockAssignee; size?: "sm" | "md" }) {
-  const sizeClass = size === "sm" ? "h-5 w-5 text-[10px]" : "h-6 w-6 text-xs";
+function shortDate(date: string): string {
+  return new Date(date).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Avatar
+// ---------------------------------------------------------------------------
+
+function Avatar({
+  person,
+  size = 20,
+}: {
+  person: MockAssignee;
+  size?: number;
+}) {
+  const isAgent = person.type === "agent";
   return (
     <div
-      className={`flex shrink-0 items-center justify-center rounded-full font-medium ${sizeClass} ${
-        actor.type === "agent"
+      className={`inline-flex shrink-0 items-center justify-center rounded-full font-medium ${
+        isAgent
           ? "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
           : "bg-muted text-muted-foreground"
       }`}
+      style={{ width: size, height: size, fontSize: size * 0.45 }}
+      title={person.name}
     >
-      {actor.type === "agent" ? (
-        <Bot className={size === "sm" ? "h-3 w-3" : "h-3.5 w-3.5"} />
-      ) : (
-        actor.avatar.charAt(0)
-      )}
+      {isAgent ? <Bot style={{ width: size * 0.55, height: size * 0.55 }} /> : person.avatar.charAt(0)}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Properties Sidebar
+// Property row (Linear-style: label left, clickable value right)
 // ---------------------------------------------------------------------------
 
-function PropertyRow({
+function PropRow({
   label,
   children,
 }: {
@@ -71,9 +87,11 @@ function PropertyRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between py-1.5">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <div className="flex items-center gap-1.5">{children}</div>
+    <div className="flex min-h-[32px] items-center gap-3 rounded-md px-2 -mx-2 hover:bg-accent/50 transition-colors">
+      <span className="w-20 shrink-0 text-[13px] text-muted-foreground">{label}</span>
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5 text-[13px]">
+        {children}
+      </div>
     </div>
   );
 }
@@ -103,6 +121,7 @@ export default function IssueDetailPage({
   const isOverdue =
     issue.dueDate && new Date(issue.dueDate) < new Date() && issue.status !== "done";
 
+  // Merge activity + comments into timeline
   const timeline = [
     ...issue.activity.map((a) => ({
       id: a.id,
@@ -118,148 +137,160 @@ export default function IssueDetailPage({
       content: c.body,
       createdAt: c.createdAt,
     })),
-  ].sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-  );
+  ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
   return (
     <div className="flex h-full">
-      {/* ---- Left: Content ---- */}
+      {/* ================================================================
+          LEFT: Content area
+          ================================================================ */}
       <div className="flex-1 overflow-y-auto">
-        {/* Breadcrumb bar */}
-        <div className="flex h-11 items-center gap-1.5 border-b px-6 text-xs">
+        {/* Header bar */}
+        <div className="sticky top-0 z-10 flex h-11 items-center gap-1.5 border-b bg-background px-6 text-[13px]">
           <Link
             href="/issues"
-            className="text-muted-foreground transition-colors hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground transition-colors"
           >
             Issues
           </Link>
-          <ChevronRight className="h-3 w-3 text-muted-foreground" />
-          <span className="text-muted-foreground">{issue.key}</span>
+          <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
+          <span className="truncate text-muted-foreground">{issue.key}</span>
         </div>
 
-        <div className="max-w-2xl px-10 py-8">
+        {/* Content */}
+        <div className="px-12 py-8 max-w-[720px]">
+          {/* Issue key */}
+          <div className="mb-1 text-[13px] text-muted-foreground">{issue.key}</div>
+
           {/* Title */}
-          <h1 className="text-lg font-semibold leading-snug">{issue.title}</h1>
+          <h1 className="text-xl font-semibold leading-snug tracking-tight">
+            {issue.title}
+          </h1>
 
           {/* Description */}
           {issue.description && (
-            <div className="mt-4 whitespace-pre-wrap text-[13px] leading-relaxed text-foreground/80">
+            <div className="mt-5 text-[14px] leading-[1.7] text-foreground/85 whitespace-pre-wrap">
               {issue.description}
             </div>
           )}
 
-          {/* Activity */}
-          <div className="mt-10">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Activity
-              </h2>
-            </div>
+          {/* Separator */}
+          <div className="my-8 border-t" />
 
-            <div className="space-y-3">
+          {/* Activity */}
+          <div>
+            <h2 className="mb-5 text-[13px] font-medium">Activity</h2>
+
+            <div className="space-y-4">
               {timeline.map((entry) =>
                 entry.kind === "comment" ? (
-                  <div key={entry.id} className="flex gap-2.5">
-                    <ActorAvatar actor={entry.actor} size="md" />
+                  /* ---- Comment ---- */
+                  <div key={entry.id} className="flex gap-3">
+                    <Avatar person={entry.actor} size={24} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline gap-2">
                         <span className="text-[13px] font-medium">
                           {entry.actor.name}
                         </span>
-                        <span className="text-[11px] text-muted-foreground">
+                        <span className="text-[12px] text-muted-foreground">
                           {timeAgo(entry.createdAt)}
                         </span>
                       </div>
-                      <div className="mt-1 whitespace-pre-wrap rounded-md border px-3 py-2 text-[13px] leading-relaxed text-foreground/80">
+                      <p className="mt-1.5 text-[13px] leading-relaxed text-foreground/80 whitespace-pre-wrap">
                         {entry.content}
-                      </div>
+                      </p>
                     </div>
                   </div>
                 ) : (
+                  /* ---- Activity entry ---- */
                   <div
                     key={entry.id}
-                    className="flex items-center gap-2.5 pl-1 text-[12px] text-muted-foreground"
+                    className="flex items-center gap-3 text-[12px] text-muted-foreground"
                   >
-                    <div className="flex h-6 w-6 items-center justify-center">
-                      <span className="h-1 w-1 rounded-full bg-muted-foreground/50" />
-                    </div>
-                    <span className="font-medium text-foreground/70">
-                      {entry.actor.name}
+                    <Avatar person={entry.actor} size={18} />
+                    <span>
+                      <span className="font-medium text-foreground/70">
+                        {entry.actor.name}
+                      </span>{" "}
+                      {entry.content}
                     </span>
-                    <span>{entry.content}</span>
-                    <span className="ml-auto shrink-0">
-                      {timeAgo(entry.createdAt)}
-                    </span>
+                    <span className="ml-auto shrink-0">{timeAgo(entry.createdAt)}</span>
                   </div>
                 )
               )}
+            </div>
 
-              {/* Comment placeholder */}
-              <div className="flex gap-2.5 pt-2">
-                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted">
-                  <User className="h-3 w-3 text-muted-foreground" />
-                </div>
-                <div className="min-w-0 flex-1 cursor-text rounded-md border px-3 py-2 text-[13px] text-muted-foreground">
-                  Leave a comment...
-                </div>
+            {/* Comment input */}
+            <div className="mt-6 flex gap-3">
+              <div
+                className="flex shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"
+                style={{ width: 24, height: 24 }}
+              >
+                <User className="h-3 w-3" />
+              </div>
+              <div className="min-w-0 flex-1 cursor-text rounded-lg border px-3 py-2 text-[13px] text-muted-foreground transition-colors hover:border-foreground/20">
+                Leave a comment...
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ---- Right: Properties ---- */}
-      <div className="w-56 shrink-0 overflow-y-auto border-l px-4 py-4">
-        <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Properties
-        </div>
+      {/* ================================================================
+          RIGHT: Properties sidebar
+          ================================================================ */}
+      <div className="w-60 shrink-0 overflow-y-auto border-l">
+        <div className="p-4">
+          <div className="mb-2 text-[12px] font-medium text-muted-foreground">
+            Properties
+          </div>
 
-        <div className="divide-y">
-          <PropertyRow label="Status">
-            <StatusIcon status={issue.status} className="h-3.5 w-3.5" />
-            <span className={`text-xs font-medium ${statusCfg.iconColor}`}>
-              {statusCfg.label}
-            </span>
-          </PropertyRow>
+          <div className="space-y-0.5">
+            <PropRow label="Status">
+              <StatusIcon status={issue.status} className="h-3.5 w-3.5" />
+              <span className={statusCfg.iconColor}>{statusCfg.label}</span>
+            </PropRow>
 
-          <PropertyRow label="Priority">
-            <PriorityIcon priority={issue.priority} />
-            <span className="text-xs">{priorityCfg.label}</span>
-          </PropertyRow>
+            <PropRow label="Priority">
+              <PriorityIcon priority={issue.priority} />
+              <span>{priorityCfg.label}</span>
+            </PropRow>
 
-          <PropertyRow label="Assignee">
-            {issue.assignee ? (
-              <>
-                <ActorAvatar actor={issue.assignee} />
-                <span className="text-xs">{issue.assignee.name}</span>
-              </>
-            ) : (
-              <span className="text-xs text-muted-foreground">Unassigned</span>
-            )}
-          </PropertyRow>
+            <PropRow label="Assignee">
+              {issue.assignee ? (
+                <>
+                  <Avatar person={issue.assignee} size={18} />
+                  <span>{issue.assignee.name}</span>
+                </>
+              ) : (
+                <span className="text-muted-foreground">Unassigned</span>
+              )}
+            </PropRow>
 
-          <PropertyRow label="Due Date">
-            <Calendar className="h-3 w-3 text-muted-foreground" />
-            <span
-              className={`text-xs ${isOverdue ? "font-medium text-red-500" : ""}`}
-            >
-              {formatDate(issue.dueDate)}
-            </span>
-          </PropertyRow>
+            <PropRow label="Due date">
+              {issue.dueDate ? (
+                <span className={isOverdue ? "text-red-500" : ""}>
+                  {shortDate(issue.dueDate)}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">None</span>
+              )}
+            </PropRow>
 
-          <PropertyRow label="Created by">
-            <ActorAvatar actor={issue.creator} />
-            <span className="text-xs">{issue.creator.name}</span>
-          </PropertyRow>
+            <PropRow label="Created by">
+              <Avatar person={issue.creator} size={18} />
+              <span>{issue.creator.name}</span>
+            </PropRow>
+          </div>
 
-          <PropertyRow label="Created">
-            <span className="text-xs">{formatDate(issue.createdAt)}</span>
-          </PropertyRow>
-
-          <PropertyRow label="Updated">
-            <span className="text-xs">{formatDate(issue.updatedAt)}</span>
-          </PropertyRow>
+          <div className="mt-4 border-t pt-3 space-y-0.5">
+            <PropRow label="Created">
+              <span className="text-muted-foreground">{shortDate(issue.createdAt)}</span>
+            </PropRow>
+            <PropRow label="Updated">
+              <span className="text-muted-foreground">{shortDate(issue.updatedAt)}</span>
+            </PropRow>
+          </div>
         </div>
       </div>
     </div>
