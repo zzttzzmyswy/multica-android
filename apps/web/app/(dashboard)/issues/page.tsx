@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import Link from "next/link";
 import {
   Columns3,
@@ -17,6 +17,19 @@ import {
   Minus,
   MessageSquare,
 } from "lucide-react";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  closestCorners,
+  type DragStartEvent,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import type { IssueStatus, IssuePriority } from "@multica/types";
 import {
   MOCK_ISSUES,
@@ -119,15 +132,12 @@ function formatDate(date: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Board View
+// Board View — Card (static, used in both draggable wrapper and overlay)
 // ---------------------------------------------------------------------------
 
-function BoardCard({ issue }: { issue: MockIssue }) {
+function BoardCardContent({ issue }: { issue: MockIssue }) {
   return (
-    <Link
-      href={`/issues/${issue.id}`}
-      className="block rounded-lg border bg-background p-3 transition-colors hover:border-border/80 hover:bg-accent/30"
-    >
+    <div className="rounded-lg border bg-background p-3">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <PriorityIcon priority={issue.priority} />
         <span>{issue.key}</span>
@@ -149,11 +159,108 @@ function BoardCard({ issue }: { issue: MockIssue }) {
           </span>
         )}
       </div>
-    </Link>
+    </div>
   );
 }
 
-function BoardView() {
+// ---------------------------------------------------------------------------
+// Draggable card wrapper
+// ---------------------------------------------------------------------------
+
+function DraggableBoardCard({ issue }: { issue: MockIssue }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: issue.id,
+    data: { status: issue.status },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className={isDragging ? "opacity-30" : ""}
+    >
+      <Link
+        href={`/issues/${issue.id}`}
+        onClick={(e) => {
+          // Prevent navigation when dragging
+          if (isDragging) e.preventDefault();
+        }}
+        className="block transition-colors hover:opacity-80"
+      >
+        <BoardCardContent issue={issue} />
+      </Link>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Droppable column
+// ---------------------------------------------------------------------------
+
+function DroppableColumn({
+  status,
+  issues,
+}: {
+  status: IssueStatus;
+  issues: MockIssue[];
+}) {
+  const cfg = STATUS_CONFIG[status];
+  const { setNodeRef, isOver } = useDroppable({ id: status });
+
+  return (
+    <div className="flex w-64 shrink-0 flex-col">
+      <div className="mb-2 flex items-center gap-2 px-1">
+        <StatusIcon status={status} className="h-3.5 w-3.5" />
+        <span className="text-xs font-medium">{cfg.label}</span>
+        <span className="text-xs text-muted-foreground">{issues.length}</span>
+      </div>
+      <div
+        ref={setNodeRef}
+        className={`flex-1 space-y-1.5 overflow-y-auto rounded-lg p-1 transition-colors ${
+          isOver ? "bg-accent/40" : ""
+        }`}
+      >
+        {issues.map((issue) => (
+          <DraggableBoardCard key={issue.id} issue={issue} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Board View (with DnD)
+// ---------------------------------------------------------------------------
+
+function BoardView({
+  issues,
+  onMoveIssue,
+}: {
+  issues: MockIssue[];
+  onMoveIssue: (issueId: string, newStatus: IssueStatus) => void;
+}) {
+  const [activeIssue, setActiveIssue] = useState<MockIssue | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 },
+    })
+  );
+
   const visibleStatuses: IssueStatus[] = [
     "backlog",
     "todo",
@@ -162,27 +269,68 @@ function BoardView() {
     "done",
   ];
 
+  const handleDragStart = useCallback(
+    (event: DragStartEvent) => {
+      const issue = issues.find((i) => i.id === event.active.id);
+      if (issue) setActiveIssue(issue);
+    },
+    [issues]
+  );
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      setActiveIssue(null);
+      const { active, over } = event;
+      if (!over) return;
+
+      const issueId = active.id as string;
+      // `over.id` is the column's droppable id (a status string)
+      // or another card's sortable id
+      let targetStatus: IssueStatus | undefined;
+
+      if (visibleStatuses.includes(over.id as IssueStatus)) {
+        targetStatus = over.id as IssueStatus;
+      } else {
+        // Dropped on a card — find which column that card is in
+        const targetIssue = issues.find((i) => i.id === over.id);
+        if (targetIssue) targetStatus = targetIssue.status;
+      }
+
+      if (targetStatus) {
+        const currentIssue = issues.find((i) => i.id === issueId);
+        if (currentIssue && currentIssue.status !== targetStatus) {
+          onMoveIssue(issueId, targetStatus);
+        }
+      }
+    },
+    [issues, onMoveIssue, visibleStatuses]
+  );
+
   return (
-    <div className="flex h-full gap-3 overflow-x-auto p-4">
-      {visibleStatuses.map((status) => {
-        const cfg = STATUS_CONFIG[status];
-        const issues = MOCK_ISSUES.filter((i) => i.status === status);
-        return (
-          <div key={status} className="flex w-64 shrink-0 flex-col">
-            <div className="mb-2 flex items-center gap-2 px-1">
-              <StatusIcon status={status} className="h-3.5 w-3.5" />
-              <span className="text-xs font-medium">{cfg.label}</span>
-              <span className="text-xs text-muted-foreground">{issues.length}</span>
-            </div>
-            <div className="flex-1 space-y-1.5 overflow-y-auto">
-              {issues.map((issue) => (
-                <BoardCard key={issue.id} issue={issue} />
-              ))}
-            </div>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCorners}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="flex h-full gap-3 overflow-x-auto p-4">
+        {visibleStatuses.map((status) => (
+          <DroppableColumn
+            key={status}
+            status={status}
+            issues={issues.filter((i) => i.status === status)}
+          />
+        ))}
+      </div>
+
+      <DragOverlay>
+        {activeIssue ? (
+          <div className="w-64 rotate-2 opacity-90 shadow-lg">
+            <BoardCardContent issue={activeIssue} />
           </div>
-        );
-      })}
-    </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   );
 }
 
@@ -210,7 +358,7 @@ function ListRow({ issue }: { issue: MockIssue }) {
   );
 }
 
-function ListView() {
+function ListView({ issues }: { issues: MockIssue[] }) {
   const groupOrder: IssueStatus[] = [
     "in_review",
     "in_progress",
@@ -223,16 +371,16 @@ function ListView() {
     <div className="overflow-y-auto">
       {groupOrder.map((status) => {
         const cfg = STATUS_CONFIG[status];
-        const issues = MOCK_ISSUES.filter((i) => i.status === status);
-        if (issues.length === 0) return null;
+        const filtered = issues.filter((i) => i.status === status);
+        if (filtered.length === 0) return null;
         return (
           <div key={status}>
             <div className="flex h-8 items-center gap-2 border-b px-4">
               <StatusIcon status={status} className="h-3.5 w-3.5" />
               <span className="text-xs font-medium">{cfg.label}</span>
-              <span className="text-xs text-muted-foreground">{issues.length}</span>
+              <span className="text-xs text-muted-foreground">{filtered.length}</span>
             </div>
-            {issues.map((issue) => (
+            {filtered.map((issue) => (
               <ListRow key={issue.id} issue={issue} />
             ))}
           </div>
@@ -250,6 +398,20 @@ type ViewMode = "board" | "list";
 
 export default function IssuesPage() {
   const [view, setView] = useState<ViewMode>("board");
+  const [issues, setIssues] = useState<MockIssue[]>(MOCK_ISSUES);
+
+  const handleMoveIssue = useCallback(
+    (issueId: string, newStatus: IssueStatus) => {
+      setIssues((prev) =>
+        prev.map((issue) =>
+          issue.id === issueId
+            ? { ...issue, status: newStatus, updatedAt: new Date().toISOString() }
+            : issue
+        )
+      );
+    },
+    []
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -289,7 +451,11 @@ export default function IssuesPage() {
       </div>
 
       <div className="flex-1 overflow-hidden">
-        {view === "board" ? <BoardView /> : <ListView />}
+        {view === "board" ? (
+          <BoardView issues={issues} onMoveIssue={handleMoveIssue} />
+        ) : (
+          <ListView issues={issues} />
+        )}
       </div>
     </div>
   );
