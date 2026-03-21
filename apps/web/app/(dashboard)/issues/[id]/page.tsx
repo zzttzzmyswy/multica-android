@@ -158,7 +158,7 @@ export default function IssueDetailPage({
         </div>
 
         {/* Content */}
-        <div className="px-12 py-8 max-w-[720px]">
+        <div className="mx-auto w-full max-w-3xl px-8 py-8">
           {/* Issue key */}
           <div className="mb-1 text-[13px] text-muted-foreground">{issue.key}</div>
 
