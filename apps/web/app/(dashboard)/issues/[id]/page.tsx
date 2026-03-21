@@ -179,37 +179,37 @@ export default function IssueDetailPage({
 
           {/* Activity */}
           <div>
-            <h2 className="mb-5 text-[13px] font-medium">Activity</h2>
+            <h2 className="text-[13px] font-medium">Activity</h2>
 
-            <div className="space-y-4">
-              {timeline.map((entry) =>
+            <div className="mt-4">
+              {timeline.map((entry, idx) =>
                 entry.kind === "comment" ? (
                   /* ---- Comment ---- */
-                  <div key={entry.id} className="flex gap-3">
-                    <Avatar person={entry.actor} size={24} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-[13px] font-medium">
-                          {entry.actor.name}
-                        </span>
-                        <span className="text-[12px] text-muted-foreground">
-                          {timeAgo(entry.createdAt)}
-                        </span>
-                      </div>
-                      <p className="mt-1.5 text-[13px] leading-relaxed text-foreground/80 whitespace-pre-wrap">
-                        {entry.content}
-                      </p>
+                  <div key={entry.id} className="relative py-3">
+                    <div className="flex items-center gap-2.5">
+                      <Avatar person={entry.actor} size={28} />
+                      <span className="text-[13px] font-medium">
+                        {entry.actor.name}
+                      </span>
+                      <span className="text-[12px] text-muted-foreground">
+                        {timeAgo(entry.createdAt)}
+                      </span>
+                    </div>
+                    <div className="mt-2 pl-[38px] text-[13px] leading-[1.6] text-foreground/85 whitespace-pre-wrap">
+                      {entry.content}
                     </div>
                   </div>
                 ) : (
-                  /* ---- Activity entry ---- */
+                  /* ---- Status change ---- */
                   <div
                     key={entry.id}
-                    className="flex items-center gap-3 text-[12px] text-muted-foreground"
+                    className="flex items-center gap-2.5 py-1.5 text-[12px] text-muted-foreground"
                   >
-                    <Avatar person={entry.actor} size={18} />
+                    <span className="flex h-[28px] w-[28px] shrink-0 items-center justify-center">
+                      <span className="h-[5px] w-[5px] rounded-full bg-muted-foreground/40" />
+                    </span>
                     <span>
-                      <span className="font-medium text-foreground/70">
+                      <span className="text-foreground/70">
                         {entry.actor.name}
                       </span>{" "}
                       {entry.content}
@@ -221,15 +221,14 @@ export default function IssueDetailPage({
             </div>
 
             {/* Comment input */}
-            <div className="mt-6 flex gap-3">
-              <div
-                className="flex shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"
-                style={{ width: 24, height: 24 }}
-              >
-                <User className="h-3 w-3" />
-              </div>
-              <div className="min-w-0 flex-1 cursor-text rounded-lg border px-3 py-2 text-[13px] text-muted-foreground transition-colors hover:border-foreground/20">
-                Leave a comment...
+            <div className="mt-2 border-t pt-4">
+              <div className="flex items-center gap-2.5 cursor-text text-[13px] text-muted-foreground">
+                <span className="flex h-[28px] w-[28px] shrink-0 items-center justify-center">
+                  <span className="h-[5px] w-[5px] rounded-full bg-muted-foreground/30" />
+                </span>
+                <span className="transition-colors hover:text-foreground/50">
+                  Leave a comment...
+                </span>
               </div>
             </div>
           </div>
