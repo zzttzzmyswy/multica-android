@@ -1,12 +1,297 @@
+"use client";
+
+import { use } from "react";
+import Link from "next/link";
+import {
+  Bot,
+  Calendar,
+  ChevronRight,
+  User,
+  MessageSquare,
+} from "lucide-react";
+import {
+  MOCK_ISSUES,
+  STATUS_CONFIG,
+  PRIORITY_CONFIG,
+} from "../_data/mock";
+import type { MockAssignee } from "../_data/mock";
+import { StatusIcon, PriorityIcon } from "../page";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function formatDate(date: string | null): string {
+  if (!date) return "—";
+  return new Date(date).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function shortDate(date: string): string {
+  return new Date(date).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Avatar
+// ---------------------------------------------------------------------------
+
+function Avatar({
+  person,
+  size = 20,
+}: {
+  person: MockAssignee;
+  size?: number;
+}) {
+  const isAgent = person.type === "agent";
+  return (
+    <div
+      className={`inline-flex shrink-0 items-center justify-center rounded-full font-medium ${
+        isAgent
+          ? "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
+          : "bg-muted text-muted-foreground"
+      }`}
+      style={{ width: size, height: size, fontSize: size * 0.45 }}
+      title={person.name}
+    >
+      {isAgent ? <Bot style={{ width: size * 0.55, height: size * 0.55 }} /> : person.avatar.charAt(0)}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Property row (Linear-style: label left, clickable value right)
+// ---------------------------------------------------------------------------
+
+function PropRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-h-[32px] items-center gap-3 rounded-md px-2 -mx-2 hover:bg-accent/50 transition-colors">
+      <span className="w-20 shrink-0 text-[13px] text-muted-foreground">{label}</span>
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5 text-[13px]">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
 export default function IssueDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { id } = use(params);
+  const issue = MOCK_ISSUES.find((i) => i.id === id);
+
+  if (!issue) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        Issue not found
+      </div>
+    );
+  }
+
+  const statusCfg = STATUS_CONFIG[issue.status];
+  const priorityCfg = PRIORITY_CONFIG[issue.priority];
+  const isOverdue =
+    issue.dueDate && new Date(issue.dueDate) < new Date() && issue.status !== "done";
+
+  // Merge activity + comments into timeline
+  const timeline = [
+    ...issue.activity.map((a) => ({
+      id: a.id,
+      kind: "activity" as const,
+      actor: a.actor,
+      content: a.action,
+      createdAt: a.createdAt,
+    })),
+    ...issue.comments.map((c) => ({
+      id: c.id,
+      kind: "comment" as const,
+      actor: c.author,
+      content: c.body,
+      createdAt: c.createdAt,
+    })),
+  ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold">Issue Detail</h1>
-      <p className="mt-2 text-muted-foreground">Issue detail view</p>
+    <div className="flex h-full">
+      {/* ================================================================
+          LEFT: Content area
+          ================================================================ */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Header bar */}
+        <div className="sticky top-0 z-10 flex h-11 items-center gap-1.5 border-b bg-background px-6 text-[13px]">
+          <Link
+            href="/issues"
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Issues
+          </Link>
+          <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
+          <span className="truncate text-muted-foreground">{issue.key}</span>
+        </div>
+
+        {/* Content */}
+        <div className="mx-auto w-full max-w-3xl px-8 py-8">
+          {/* Issue key */}
+          <div className="mb-1 text-[13px] text-muted-foreground">{issue.key}</div>
+
+          {/* Title */}
+          <h1 className="text-xl font-semibold leading-snug tracking-tight">
+            {issue.title}
+          </h1>
+
+          {/* Description */}
+          {issue.description && (
+            <div className="mt-5 text-[14px] leading-[1.7] text-foreground/85 whitespace-pre-wrap">
+              {issue.description}
+            </div>
+          )}
+
+          {/* Separator */}
+          <div className="my-8 border-t" />
+
+          {/* Activity */}
+          <div>
+            <h2 className="text-[13px] font-medium">Activity</h2>
+
+            <div className="mt-4">
+              {timeline.map((entry, idx) =>
+                entry.kind === "comment" ? (
+                  /* ---- Comment ---- */
+                  <div key={entry.id} className="relative py-3">
+                    <div className="flex items-center gap-2.5">
+                      <Avatar person={entry.actor} size={28} />
+                      <span className="text-[13px] font-medium">
+                        {entry.actor.name}
+                      </span>
+                      <span className="text-[12px] text-muted-foreground">
+                        {timeAgo(entry.createdAt)}
+                      </span>
+                    </div>
+                    <div className="mt-2 pl-[38px] text-[13px] leading-[1.6] text-foreground/85 whitespace-pre-wrap">
+                      {entry.content}
+                    </div>
+                  </div>
+                ) : (
+                  /* ---- Status change ---- */
+                  <div
+                    key={entry.id}
+                    className="flex items-center gap-2.5 py-1.5 text-[12px] text-muted-foreground"
+                  >
+                    <span className="flex h-[28px] w-[28px] shrink-0 items-center justify-center">
+                      <span className="h-[5px] w-[5px] rounded-full bg-muted-foreground/40" />
+                    </span>
+                    <span>
+                      <span className="text-foreground/70">
+                        {entry.actor.name}
+                      </span>{" "}
+                      {entry.content}
+                    </span>
+                    <span className="ml-auto shrink-0">{timeAgo(entry.createdAt)}</span>
+                  </div>
+                )
+              )}
+            </div>
+
+            {/* Comment input */}
+            <div className="mt-2 border-t pt-4">
+              <div className="flex items-center gap-2.5 cursor-text text-[13px] text-muted-foreground">
+                <span className="flex h-[28px] w-[28px] shrink-0 items-center justify-center">
+                  <span className="h-[5px] w-[5px] rounded-full bg-muted-foreground/30" />
+                </span>
+                <span className="transition-colors hover:text-foreground/50">
+                  Leave a comment...
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ================================================================
+          RIGHT: Properties sidebar
+          ================================================================ */}
+      <div className="w-60 shrink-0 overflow-y-auto border-l">
+        <div className="p-4">
+          <div className="mb-2 text-[12px] font-medium text-muted-foreground">
+            Properties
+          </div>
+
+          <div className="space-y-0.5">
+            <PropRow label="Status">
+              <StatusIcon status={issue.status} className="h-3.5 w-3.5" />
+              <span className={statusCfg.iconColor}>{statusCfg.label}</span>
+            </PropRow>
+
+            <PropRow label="Priority">
+              <PriorityIcon priority={issue.priority} />
+              <span>{priorityCfg.label}</span>
+            </PropRow>
+
+            <PropRow label="Assignee">
+              {issue.assignee ? (
+                <>
+                  <Avatar person={issue.assignee} size={18} />
+                  <span>{issue.assignee.name}</span>
+                </>
+              ) : (
+                <span className="text-muted-foreground">Unassigned</span>
+              )}
+            </PropRow>
+
+            <PropRow label="Due date">
+              {issue.dueDate ? (
+                <span className={isOverdue ? "text-red-500" : ""}>
+                  {shortDate(issue.dueDate)}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">None</span>
+              )}
+            </PropRow>
+
+            <PropRow label="Created by">
+              <Avatar person={issue.creator} size={18} />
+              <span>{issue.creator.name}</span>
+            </PropRow>
+          </div>
+
+          <div className="mt-4 border-t pt-3 space-y-0.5">
+            <PropRow label="Created">
+              <span className="text-muted-foreground">{shortDate(issue.createdAt)}</span>
+            </PropRow>
+            <PropRow label="Updated">
+              <span className="text-muted-foreground">{shortDate(issue.updatedAt)}</span>
+            </PropRow>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
