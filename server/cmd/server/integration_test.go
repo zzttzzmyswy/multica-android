@@ -1,0 +1,618 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/gorilla/websocket"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/multica-ai/multica/server/internal/realtime"
+	db "github.com/multica-ai/multica/server/pkg/db/generated"
+)
+
+var (
+	testServer      *httptest.Server
+	testToken       string
+	testUserID      string
+	testWorkspaceID string
+)
+
+var jwtSecret = []byte("multica-dev-secret-change-in-production")
+
+func TestMain(m *testing.M) {
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		dbURL = "postgres://multica:multica@localhost:5432/multica?sslmode=disable"
+	}
+
+	pool, err := pgxpool.New(context.Background(), dbURL)
+	if err != nil {
+		fmt.Printf("Skipping integration tests: could not connect to database: %v\n", err)
+		os.Exit(0)
+	}
+	defer pool.Close()
+
+	// Get seed data IDs
+	row := pool.QueryRow(context.Background(), `SELECT id FROM "user" WHERE email = 'jiayuan@multica.ai'`)
+	row.Scan(&testUserID)
+
+	row = pool.QueryRow(context.Background(), `SELECT id FROM workspace WHERE slug = 'multica'`)
+	row.Scan(&testWorkspaceID)
+
+	if testUserID == "" || testWorkspaceID == "" {
+		fmt.Println("Skipping integration tests: seed data not found. Run 'go run ./cmd/seed/' first.")
+		os.Exit(0)
+	}
+
+	queries := db.New(pool)
+	hub := realtime.NewHub()
+	go hub.Run()
+
+	router := NewRouter(queries, hub)
+	testServer = httptest.NewServer(router)
+	defer testServer.Close()
+
+	// Login to get a real JWT token
+	loginBody, _ := json.Marshal(map[string]string{
+		"email": "jiayuan@multica.ai",
+		"name":  "Jiayuan Zhang",
+	})
+	resp, err := http.Post(testServer.URL+"/auth/login", "application/json", bytes.NewReader(loginBody))
+	if err != nil {
+		fmt.Printf("Skipping: login failed: %v\n", err)
+		os.Exit(0)
+	}
+	defer resp.Body.Close()
+
+	var loginResp struct {
+		Token string `json:"token"`
+		User  struct {
+			ID string `json:"id"`
+		} `json:"user"`
+	}
+	json.NewDecoder(resp.Body).Decode(&loginResp)
+	testToken = loginResp.Token
+
+	os.Exit(m.Run())
+}
+
+// Helper to make authenticated requests
+func authRequest(t *testing.T, method, path string, body any) *http.Response {
+	t.Helper()
+	var bodyReader io.Reader
+	if body != nil {
+		b, _ := json.Marshal(body)
+		bodyReader = bytes.NewReader(b)
+	}
+	req, err := http.NewRequest(method, testServer.URL+path, bodyReader)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+testToken)
+	req.Header.Set("X-Workspace-ID", testWorkspaceID)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	return resp
+}
+
+func readJSON(t *testing.T, resp *http.Response, v any) {
+	t.Helper()
+	defer resp.Body.Close()
+	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+}
+
+// ---- Health ----
+
+func TestHealth(t *testing.T) {
+	resp, err := http.Get(testServer.URL + "/health")
+	if err != nil {
+		t.Fatalf("health check failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var result map[string]string
+	json.NewDecoder(resp.Body).Decode(&result)
+	if result["status"] != "ok" {
+		t.Fatalf("expected status ok, got %s", result["status"])
+	}
+}
+
+// ---- Auth ----
+
+func TestLoginAndGetMe(t *testing.T) {
+	// Login
+	body, _ := json.Marshal(map[string]string{
+		"email": "integration-test@multica.ai",
+		"name":  "Integration Tester",
+	})
+	resp, err := http.Post(testServer.URL+"/auth/login", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("login failed: %v", err)
+	}
+
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var loginResp struct {
+		Token string `json:"token"`
+		User  struct {
+			ID    string `json:"id"`
+			Email string `json:"email"`
+			Name  string `json:"name"`
+		} `json:"user"`
+	}
+	readJSON(t, resp, &loginResp)
+
+	if loginResp.Token == "" {
+		t.Fatal("expected non-empty token")
+	}
+	if loginResp.User.Email != "integration-test@multica.ai" {
+		t.Fatalf("expected email 'integration-test@multica.ai', got '%s'", loginResp.User.Email)
+	}
+
+	// Use token to call /api/me
+	req, _ := http.NewRequest("GET", testServer.URL+"/api/me", nil)
+	req.Header.Set("Authorization", "Bearer "+loginResp.Token)
+	meResp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("getMe failed: %v", err)
+	}
+
+	if meResp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", meResp.StatusCode)
+	}
+
+	var me struct {
+		Email string `json:"email"`
+		Name  string `json:"name"`
+	}
+	readJSON(t, meResp, &me)
+	if me.Email != "integration-test@multica.ai" {
+		t.Fatalf("expected email 'integration-test@multica.ai', got '%s'", me.Email)
+	}
+}
+
+func TestProtectedRoutesRequireAuth(t *testing.T) {
+	paths := []string{"/api/me", "/api/issues", "/api/agents", "/api/inbox", "/api/workspaces"}
+
+	for _, path := range paths {
+		resp, err := http.Get(testServer.URL + path)
+		if err != nil {
+			t.Fatalf("request to %s failed: %v", path, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != 401 {
+			t.Fatalf("%s: expected 401, got %d", path, resp.StatusCode)
+		}
+	}
+}
+
+func TestInvalidJWT(t *testing.T) {
+	cases := []struct {
+		name  string
+		token string
+	}{
+		{"garbage token", "not-a-jwt"},
+		{"empty token", ""},
+		{"wrong secret", func() string {
+			claims := jwt.MapClaims{"sub": "test", "exp": time.Now().Add(time.Hour).Unix()}
+			t, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte("wrong"))
+			return t
+		}()},
+		{"expired token", func() string {
+			claims := jwt.MapClaims{"sub": "test", "exp": time.Now().Add(-time.Hour).Unix()}
+			t, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(jwtSecret)
+			return t
+		}()},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req, _ := http.NewRequest("GET", testServer.URL+"/api/me", nil)
+			if tc.token != "" {
+				req.Header.Set("Authorization", "Bearer "+tc.token)
+			}
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("request failed: %v", err)
+			}
+			resp.Body.Close()
+			if resp.StatusCode != 401 {
+				t.Fatalf("expected 401, got %d", resp.StatusCode)
+			}
+		})
+	}
+}
+
+// ---- Issues CRUD through full router ----
+
+func TestIssuesCRUDThroughRouter(t *testing.T) {
+	// Create
+	resp := authRequest(t, "POST", "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
+		"title":    "Integration test issue",
+		"status":   "todo",
+		"priority": "high",
+	})
+	if resp.StatusCode != 201 {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("CreateIssue: expected 201, got %d: %s", resp.StatusCode, body)
+	}
+
+	var created map[string]any
+	readJSON(t, resp, &created)
+	issueID := created["id"].(string)
+	if created["title"] != "Integration test issue" {
+		t.Fatalf("expected title 'Integration test issue', got '%s'", created["title"])
+	}
+
+	// Get
+	resp = authRequest(t, "GET", "/api/issues/"+issueID, nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("GetIssue: expected 200, got %d", resp.StatusCode)
+	}
+	var fetched map[string]any
+	readJSON(t, resp, &fetched)
+	if fetched["id"] != issueID {
+		t.Fatalf("expected id %s, got %s", issueID, fetched["id"])
+	}
+
+	// Update status only — should preserve title
+	resp = authRequest(t, "PUT", "/api/issues/"+issueID, map[string]any{
+		"status": "in_progress",
+	})
+	if resp.StatusCode != 200 {
+		t.Fatalf("UpdateIssue: expected 200, got %d", resp.StatusCode)
+	}
+	var updated map[string]any
+	readJSON(t, resp, &updated)
+	if updated["status"] != "in_progress" {
+		t.Fatalf("expected status 'in_progress', got '%s'", updated["status"])
+	}
+	if updated["title"] != "Integration test issue" {
+		t.Fatalf("title should be preserved, got '%s'", updated["title"])
+	}
+
+	// Update title only — should preserve status
+	resp = authRequest(t, "PUT", "/api/issues/"+issueID, map[string]any{
+		"title": "Renamed integration issue",
+	})
+	if resp.StatusCode != 200 {
+		t.Fatalf("UpdateIssue title: expected 200, got %d", resp.StatusCode)
+	}
+	var updated2 map[string]any
+	readJSON(t, resp, &updated2)
+	if updated2["title"] != "Renamed integration issue" {
+		t.Fatalf("expected title 'Renamed integration issue', got '%s'", updated2["title"])
+	}
+	if updated2["status"] != "in_progress" {
+		t.Fatalf("status should be preserved, got '%s'", updated2["status"])
+	}
+
+	// List
+	resp = authRequest(t, "GET", "/api/issues?workspace_id="+testWorkspaceID, nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("ListIssues: expected 200, got %d", resp.StatusCode)
+	}
+	var listResp map[string]any
+	readJSON(t, resp, &listResp)
+	total := listResp["total"].(float64)
+	if total < 1 {
+		t.Fatal("expected at least 1 issue")
+	}
+
+	// Delete
+	resp = authRequest(t, "DELETE", "/api/issues/"+issueID, nil)
+	resp.Body.Close()
+	if resp.StatusCode != 204 {
+		t.Fatalf("DeleteIssue: expected 204, got %d", resp.StatusCode)
+	}
+
+	// Verify deleted
+	resp = authRequest(t, "GET", "/api/issues/"+issueID, nil)
+	resp.Body.Close()
+	if resp.StatusCode != 404 {
+		t.Fatalf("GetIssue after delete: expected 404, got %d", resp.StatusCode)
+	}
+}
+
+// ---- Comments through full router ----
+
+func TestCommentsThroughRouter(t *testing.T) {
+	// Create issue
+	resp := authRequest(t, "POST", "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
+		"title": "Comment integration test",
+	})
+	var issue map[string]any
+	readJSON(t, resp, &issue)
+	issueID := issue["id"].(string)
+
+	// Create comment
+	resp = authRequest(t, "POST", "/api/issues/"+issueID+"/comments", map[string]any{
+		"content": "Integration test comment",
+		"type":    "comment",
+	})
+	if resp.StatusCode != 201 {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("CreateComment: expected 201, got %d: %s", resp.StatusCode, body)
+	}
+	var comment map[string]any
+	readJSON(t, resp, &comment)
+	if comment["content"] != "Integration test comment" {
+		t.Fatalf("expected content 'Integration test comment', got '%s'", comment["content"])
+	}
+
+	// Create second comment
+	resp = authRequest(t, "POST", "/api/issues/"+issueID+"/comments", map[string]any{
+		"content": "Second comment",
+		"type":    "comment",
+	})
+	resp.Body.Close()
+
+	// List comments
+	resp = authRequest(t, "GET", "/api/issues/"+issueID+"/comments", nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("ListComments: expected 200, got %d", resp.StatusCode)
+	}
+	var comments []map[string]any
+	readJSON(t, resp, &comments)
+	if len(comments) != 2 {
+		t.Fatalf("expected 2 comments, got %d", len(comments))
+	}
+
+	// Cleanup
+	resp = authRequest(t, "DELETE", "/api/issues/"+issueID, nil)
+	resp.Body.Close()
+}
+
+// ---- Agents through full router ----
+
+func TestAgentsThroughRouter(t *testing.T) {
+	// List
+	resp := authRequest(t, "GET", "/api/agents?workspace_id="+testWorkspaceID, nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("ListAgents: expected 200, got %d", resp.StatusCode)
+	}
+	var agents []map[string]any
+	readJSON(t, resp, &agents)
+	if len(agents) < 1 {
+		t.Fatal("expected at least 1 agent")
+	}
+
+	// Get
+	agentID := agents[0]["id"].(string)
+	resp = authRequest(t, "GET", "/api/agents/"+agentID, nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("GetAgent: expected 200, got %d", resp.StatusCode)
+	}
+	var agent map[string]any
+	readJSON(t, resp, &agent)
+	if agent["id"] != agentID {
+		t.Fatalf("expected agent id %s, got %s", agentID, agent["id"])
+	}
+
+	// Update status
+	resp = authRequest(t, "PUT", "/api/agents/"+agentID, map[string]any{
+		"status": "idle",
+	})
+	if resp.StatusCode != 200 {
+		t.Fatalf("UpdateAgent: expected 200, got %d", resp.StatusCode)
+	}
+	var updated map[string]any
+	readJSON(t, resp, &updated)
+	if updated["status"] != "idle" {
+		t.Fatalf("expected status 'idle', got '%s'", updated["status"])
+	}
+	// Name should be preserved
+	if updated["name"] != agents[0]["name"] {
+		t.Fatalf("name should be preserved, got '%s'", updated["name"])
+	}
+}
+
+// ---- Workspaces through full router ----
+
+func TestWorkspacesThroughRouter(t *testing.T) {
+	// List
+	resp := authRequest(t, "GET", "/api/workspaces", nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("ListWorkspaces: expected 200, got %d", resp.StatusCode)
+	}
+	var workspaces []map[string]any
+	readJSON(t, resp, &workspaces)
+	if len(workspaces) < 1 {
+		t.Fatal("expected at least 1 workspace")
+	}
+
+	// Get
+	wsID := workspaces[0]["id"].(string)
+	resp = authRequest(t, "GET", "/api/workspaces/"+wsID, nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("GetWorkspace: expected 200, got %d", resp.StatusCode)
+	}
+	var ws map[string]any
+	readJSON(t, resp, &ws)
+	if ws["id"] != wsID {
+		t.Fatalf("expected workspace id %s, got %s", wsID, ws["id"])
+	}
+
+	// Update
+	resp = authRequest(t, "PUT", "/api/workspaces/"+wsID, map[string]any{
+		"description": "Integration test update",
+	})
+	if resp.StatusCode != 200 {
+		t.Fatalf("UpdateWorkspace: expected 200, got %d", resp.StatusCode)
+	}
+	var updated map[string]any
+	readJSON(t, resp, &updated)
+	if updated["description"] != "Integration test update" {
+		t.Fatalf("expected description 'Integration test update', got '%v'", updated["description"])
+	}
+	// Name should be preserved
+	if updated["name"] != ws["name"] {
+		t.Fatalf("name should be preserved")
+	}
+
+	// Members
+	resp = authRequest(t, "GET", "/api/workspaces/"+wsID+"/members", nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("ListMembers: expected 200, got %d", resp.StatusCode)
+	}
+	var members []map[string]any
+	readJSON(t, resp, &members)
+	if len(members) < 1 {
+		t.Fatal("expected at least 1 member")
+	}
+	// Verify member has user info
+	if members[0]["email"] == nil || members[0]["email"] == "" {
+		t.Fatal("member should have email field")
+	}
+	if members[0]["role"] == nil || members[0]["role"] == "" {
+		t.Fatal("member should have role field")
+	}
+}
+
+// ---- Inbox through full router ----
+
+func TestInboxThroughRouter(t *testing.T) {
+	resp := authRequest(t, "GET", "/api/inbox", nil)
+	if resp.StatusCode != 200 {
+		t.Fatalf("ListInbox: expected 200, got %d", resp.StatusCode)
+	}
+	var items []map[string]any
+	readJSON(t, resp, &items)
+	// Inbox may be empty, just verify it returns valid JSON array
+	if items == nil {
+		t.Fatal("expected non-nil inbox items array")
+	}
+}
+
+// ---- 404 for non-existent resources ----
+
+func TestNonExistentResources(t *testing.T) {
+	fakeUUID := "00000000-0000-0000-0000-000000000000"
+
+	cases := []struct {
+		name string
+		path string
+	}{
+		{"issue", "/api/issues/" + fakeUUID},
+		{"agent", "/api/agents/" + fakeUUID},
+		{"workspace", "/api/workspaces/" + fakeUUID},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := authRequest(t, "GET", tc.path, nil)
+			resp.Body.Close()
+			if resp.StatusCode != 404 {
+				t.Fatalf("expected 404, got %d", resp.StatusCode)
+			}
+		})
+	}
+}
+
+// ---- Invalid request bodies ----
+
+func TestInvalidRequestBodies(t *testing.T) {
+	resp := authRequest(t, "POST", "/api/issues?workspace_id="+testWorkspaceID, nil)
+	defer resp.Body.Close()
+	// Sending nil body should fail with 400
+	if resp.StatusCode != 400 {
+		// Some handlers may return 500 for nil body, that's acceptable too
+		if resp.StatusCode != 500 {
+			t.Fatalf("expected 400 or 500, got %d", resp.StatusCode)
+		}
+	}
+}
+
+// ---- WebSocket integration through full router ----
+
+func TestWebSocketIntegration(t *testing.T) {
+	// Connect WebSocket client
+	wsURL := "ws" + strings.TrimPrefix(testServer.URL, "http") + "/ws"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("WebSocket connection failed: %v", err)
+	}
+	defer conn.Close()
+
+	// Create an issue — this should trigger a WebSocket broadcast
+	resp := authRequest(t, "POST", "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
+		"title":  "WebSocket test issue",
+		"status": "todo",
+	})
+	var issue map[string]any
+	readJSON(t, resp, &issue)
+	issueID := issue["id"].(string)
+
+	// Read the WebSocket message
+	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	_, msg, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("WebSocket read error: %v", err)
+	}
+
+	// Verify the message contains the issue event
+	var wsMsg map[string]any
+	if err := json.Unmarshal(msg, &wsMsg); err != nil {
+		t.Fatalf("failed to parse WebSocket message: %v", err)
+	}
+	if wsMsg["type"] != "issue:created" {
+		t.Fatalf("expected type 'issue:created', got '%s'", wsMsg["type"])
+	}
+
+	// Update the issue — should trigger another broadcast
+	resp = authRequest(t, "PUT", "/api/issues/"+issueID, map[string]any{
+		"status": "in_progress",
+	})
+	resp.Body.Close()
+
+	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	_, msg, err = conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("WebSocket read error on update: %v", err)
+	}
+	var updateMsg map[string]any
+	json.Unmarshal(msg, &updateMsg)
+	if updateMsg["type"] != "issue:updated" {
+		t.Fatalf("expected type 'issue:updated', got '%s'", updateMsg["type"])
+	}
+
+	// Delete the issue — should trigger another broadcast
+	resp = authRequest(t, "DELETE", "/api/issues/"+issueID, nil)
+	resp.Body.Close()
+
+	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	_, msg, err = conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("WebSocket read error on delete: %v", err)
+	}
+	var deleteMsg map[string]any
+	json.Unmarshal(msg, &deleteMsg)
+	if deleteMsg["type"] != "issue:deleted" {
+		t.Fatalf("expected type 'issue:deleted', got '%s'", deleteMsg["type"])
+	}
+}

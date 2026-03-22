@@ -1,6 +1,6 @@
 export type { Issue, IssueStatus, IssuePriority, IssueAssigneeType } from "./issue.js";
 export type { Agent, AgentStatus, AgentRuntimeMode, AgentVisibility } from "./agent.js";
-export type { Workspace, Member, MemberRole } from "./workspace.js";
+export type { Workspace, Member, MemberRole, User, MemberWithUser } from "./workspace.js";
 export type { InboxItem, InboxSeverity, InboxItemType } from "./inbox.js";
 export type { Comment, CommentType, CommentAuthorType } from "./comment.js";
 export type * from "./events.js";

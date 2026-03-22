@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import {
   Columns3,
@@ -15,7 +15,6 @@ import {
   CircleAlert,
   Eye,
   Minus,
-  MessageSquare,
 } from "lucide-react";
 import {
   DndContext,
@@ -30,14 +29,12 @@ import {
 } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { IssueStatus, IssuePriority } from "@multica/types";
-import {
-  MOCK_ISSUES,
-  STATUS_CONFIG,
-  PRIORITY_CONFIG,
-  type MockIssue,
-  type MockAssignee,
-} from "./_data/mock";
+import type { Issue, IssueStatus, IssuePriority } from "@multica/types";
+import { STATUS_CONFIG, PRIORITY_CONFIG } from "./_data/mock";
+import { api } from "../../../lib/api";
+import { useAuth } from "../../../lib/auth-context";
+import { useWSEvent } from "../../../lib/ws-context";
+import type { IssueCreatedPayload, IssueUpdatedPayload, IssueDeletedPayload } from "@multica/types";
 
 // ---------------------------------------------------------------------------
 // Shared icon components
@@ -98,27 +95,30 @@ export function PriorityIcon({
 }
 
 function AssigneeAvatar({
-  assignee,
+  issue,
   size = "sm",
 }: {
-  assignee: MockAssignee | null;
+  issue: Issue;
   size?: "sm" | "md";
 }) {
-  if (!assignee) return null;
+  const { getActorName, getActorInitials } = useAuth();
+  if (!issue.assignee_type || !issue.assignee_id) return null;
+  const name = getActorName(issue.assignee_type, issue.assignee_id);
+  const initials = getActorInitials(issue.assignee_type, issue.assignee_id);
   const sizeClass = size === "sm" ? "h-5 w-5 text-[10px]" : "h-6 w-6 text-xs";
   return (
     <div
       className={`flex shrink-0 items-center justify-center rounded-full font-medium ${sizeClass} ${
-        assignee.type === "agent"
+        issue.assignee_type === "agent"
           ? "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
           : "bg-muted text-muted-foreground"
       }`}
-      title={assignee.name}
+      title={name}
     >
-      {assignee.type === "agent" ? (
+      {issue.assignee_type === "agent" ? (
         <Bot className={size === "sm" ? "h-3 w-3" : "h-3.5 w-3.5"} />
       ) : (
-        assignee.avatar.charAt(0)
+        initials
       )}
     </div>
   );
@@ -132,30 +132,24 @@ function formatDate(date: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Board View — Card (static, used in both draggable wrapper and overlay)
+// Board View — Card
 // ---------------------------------------------------------------------------
 
-function BoardCardContent({ issue }: { issue: MockIssue }) {
+function BoardCardContent({ issue }: { issue: Issue }) {
   return (
     <div className="rounded-lg border bg-background p-3">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <PriorityIcon priority={issue.priority} />
-        <span>{issue.key}</span>
+        <span>{issue.id.slice(0, 8)}</span>
       </div>
       <p className="mt-1.5 text-[13px] leading-snug">{issue.title}</p>
       <div className="mt-2.5 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <AssigneeAvatar assignee={issue.assignee} />
-          {issue.comments.length > 0 && (
-            <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
-              <MessageSquare className="h-3 w-3" />
-              {issue.comments.length}
-            </span>
-          )}
+          <AssigneeAvatar issue={issue} />
         </div>
-        {issue.dueDate && (
+        {issue.due_date && (
           <span className="text-xs text-muted-foreground">
-            {formatDate(issue.dueDate)}
+            {formatDate(issue.due_date)}
           </span>
         )}
       </div>
@@ -167,7 +161,7 @@ function BoardCardContent({ issue }: { issue: MockIssue }) {
 // Draggable card wrapper
 // ---------------------------------------------------------------------------
 
-function DraggableBoardCard({ issue }: { issue: MockIssue }) {
+function DraggableBoardCard({ issue }: { issue: Issue }) {
   const {
     attributes,
     listeners,
@@ -196,7 +190,6 @@ function DraggableBoardCard({ issue }: { issue: MockIssue }) {
       <Link
         href={`/issues/${issue.id}`}
         onClick={(e) => {
-          // Prevent navigation when dragging
           if (isDragging) e.preventDefault();
         }}
         className="block transition-colors hover:opacity-80"
@@ -216,7 +209,7 @@ function DroppableColumn({
   issues,
 }: {
   status: IssueStatus;
-  issues: MockIssue[];
+  issues: Issue[];
 }) {
   const cfg = STATUS_CONFIG[status];
   const { setNodeRef, isOver } = useDroppable({ id: status });
@@ -250,10 +243,10 @@ function BoardView({
   issues,
   onMoveIssue,
 }: {
-  issues: MockIssue[];
+  issues: Issue[];
   onMoveIssue: (issueId: string, newStatus: IssueStatus) => void;
 }) {
-  const [activeIssue, setActiveIssue] = useState<MockIssue | null>(null);
+  const [activeIssue, setActiveIssue] = useState<Issue | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -284,14 +277,11 @@ function BoardView({
       if (!over) return;
 
       const issueId = active.id as string;
-      // `over.id` is the column's droppable id (a status string)
-      // or another card's sortable id
       let targetStatus: IssueStatus | undefined;
 
       if (visibleStatuses.includes(over.id as IssueStatus)) {
         targetStatus = over.id as IssueStatus;
       } else {
-        // Dropped on a card — find which column that card is in
         const targetIssue = issues.find((i) => i.id === over.id);
         if (targetIssue) targetStatus = targetIssue.status;
       }
@@ -338,27 +328,29 @@ function BoardView({
 // List View
 // ---------------------------------------------------------------------------
 
-function ListRow({ issue }: { issue: MockIssue }) {
+function ListRow({ issue }: { issue: Issue }) {
   return (
     <Link
       href={`/issues/${issue.id}`}
       className="flex h-9 items-center gap-2 px-4 text-[13px] transition-colors hover:bg-accent/50"
     >
       <PriorityIcon priority={issue.priority} />
-      <span className="w-16 shrink-0 text-xs text-muted-foreground">{issue.key}</span>
+      <span className="w-16 shrink-0 text-xs text-muted-foreground">
+        {issue.id.slice(0, 8)}
+      </span>
       <StatusIcon status={issue.status} className="h-3.5 w-3.5" />
       <span className="min-w-0 flex-1 truncate">{issue.title}</span>
-      {issue.dueDate && (
+      {issue.due_date && (
         <span className="shrink-0 text-xs text-muted-foreground">
-          {formatDate(issue.dueDate)}
+          {formatDate(issue.due_date)}
         </span>
       )}
-      <AssigneeAvatar assignee={issue.assignee} />
+      <AssigneeAvatar issue={issue} />
     </Link>
   );
 }
 
-function ListView({ issues }: { issues: MockIssue[] }) {
+function ListView({ issues }: { issues: Issue[] }) {
   const groupOrder: IssueStatus[] = [
     "in_review",
     "in_progress",
@@ -391,6 +383,69 @@ function ListView({ issues }: { issues: MockIssue[] }) {
 }
 
 // ---------------------------------------------------------------------------
+// Create Issue Dialog (simple inline)
+// ---------------------------------------------------------------------------
+
+function CreateIssueForm({ onCreated }: { onCreated: (issue: Issue) => void }) {
+  const [title, setTitle] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+    try {
+      const issue = await api.createIssue({ title: title.trim() });
+      onCreated(issue);
+      setTitle("");
+      setIsOpen(false);
+    } catch (err) {
+      console.error("Failed to create issue:", err);
+    }
+  };
+
+  if (!isOpen) {
+    return (
+      <button
+        onClick={() => setIsOpen(true)}
+        className="flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary/90"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        New Issue
+      </button>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex items-center gap-2">
+      <input
+        autoFocus
+        type="text"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") setIsOpen(false);
+        }}
+        placeholder="Issue title..."
+        className="rounded-md border bg-background px-2 py-1 text-xs w-48"
+      />
+      <button
+        type="submit"
+        className="rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground"
+      >
+        Create
+      </button>
+      <button
+        type="button"
+        onClick={() => setIsOpen(false)}
+        className="text-xs text-muted-foreground"
+      >
+        Cancel
+      </button>
+    </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -398,20 +453,77 @@ type ViewMode = "board" | "list";
 
 export default function IssuesPage() {
   const [view, setView] = useState<ViewMode>("board");
-  const [issues, setIssues] = useState<MockIssue[]>(MOCK_ISSUES);
+  const [issues, setIssues] = useState<Issue[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api
+      .listIssues({ limit: 200 })
+      .then((res) => {
+        setIssues(res.issues);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Real-time updates
+  useWSEvent(
+    "issue:created",
+    useCallback((payload: unknown) => {
+      const { issue } = payload as IssueCreatedPayload;
+      setIssues((prev) => {
+        if (prev.some((i) => i.id === issue.id)) return prev;
+        return [...prev, issue];
+      });
+    }, []),
+  );
+
+  useWSEvent(
+    "issue:updated",
+    useCallback((payload: unknown) => {
+      const { issue } = payload as IssueUpdatedPayload;
+      setIssues((prev) => prev.map((i) => (i.id === issue.id ? issue : i)));
+    }, []),
+  );
+
+  useWSEvent(
+    "issue:deleted",
+    useCallback((payload: unknown) => {
+      const { issue_id } = payload as IssueDeletedPayload;
+      setIssues((prev) => prev.filter((i) => i.id !== issue_id));
+    }, []),
+  );
 
   const handleMoveIssue = useCallback(
     (issueId: string, newStatus: IssueStatus) => {
+      // Optimistic update
       setIssues((prev) =>
         prev.map((issue) =>
-          issue.id === issueId
-            ? { ...issue, status: newStatus, updatedAt: new Date().toISOString() }
-            : issue
+          issue.id === issueId ? { ...issue, status: newStatus } : issue
         )
       );
+
+      // Persist to API
+      api.updateIssue(issueId, { status: newStatus }).catch((err) => {
+        console.error("Failed to update issue:", err);
+        // Revert on error
+        api.listIssues({ limit: 200 }).then((res) => setIssues(res.issues));
+      });
     },
     []
   );
+
+  const handleIssueCreated = useCallback((issue: Issue) => {
+    setIssues((prev) => [...prev, issue]);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        Loading...
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -444,10 +556,7 @@ export default function IssuesPage() {
             </button>
           </div>
         </div>
-        <button className="flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary/90">
-          <Plus className="h-3.5 w-3.5" />
-          New Issue
-        </button>
+        <CreateIssueForm onCreated={handleIssueCreated} />
       </div>
 
       <div className="flex-1 overflow-hidden">

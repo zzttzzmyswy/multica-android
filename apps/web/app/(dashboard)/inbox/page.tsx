@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   AlertCircle,
   Bot,
@@ -11,111 +11,7 @@ import {
   ArrowRightLeft,
 } from "lucide-react";
 import type { InboxItem, InboxItemType, InboxSeverity } from "@multica/types";
-
-// ---------------------------------------------------------------------------
-// Mock data
-// ---------------------------------------------------------------------------
-
-const MOCK_INBOX_ITEMS: InboxItem[] = [
-  {
-    id: "inb_1",
-    workspace_id: "ws_1",
-    recipient_type: "member",
-    recipient_id: "usr_1",
-    type: "agent_blocked",
-    severity: "action_required",
-    issue_id: "iss_12",
-    title: "Agent Claude-1 is blocked on MUL-12",
-    body: "I need clarification on the authentication flow. The current OAuth implementation uses PKCE, but the design doc references a session-based approach. Which one should I follow?\n\nSpecifically:\n1. Should we keep the PKCE flow for the SPA?\n2. Is the session cookie approach only for the server-rendered pages?\n3. Should I implement both and let the client decide?\n\nBlocked on this decision before I can continue with the login page implementation.",
-    read: false,
-    archived: false,
-    created_at: "2026-03-21T05:32:00Z",
-  },
-  {
-    id: "inb_2",
-    workspace_id: "ws_1",
-    recipient_type: "member",
-    recipient_id: "usr_1",
-    type: "review_requested",
-    severity: "action_required",
-    issue_id: "iss_8",
-    title: "PR #47: Add WebSocket reconnection logic",
-    body: "Agent Codex-1 has submitted a pull request for review.\n\n**Changes:**\n- Added exponential backoff for WebSocket reconnection\n- Max retry attempts configurable via env var\n- Added connection state to the store\n- Unit tests for reconnection logic\n\n**Files changed:** 6 files (+284, -12)\n\nThe agent notes that it chose exponential backoff over linear retry because of the bursty reconnection pattern observed in the daemon logs.",
-    read: false,
-    archived: false,
-    created_at: "2026-03-21T04:15:00Z",
-  },
-  {
-    id: "inb_3",
-    workspace_id: "ws_1",
-    recipient_type: "member",
-    recipient_id: "usr_1",
-    type: "issue_assigned",
-    severity: "action_required",
-    issue_id: "iss_15",
-    title: "New issue assigned: Design the agent config UI",
-    body: "You've been assigned to MUL-15: Design the agent config UI.\n\nPriority: High\nCreated by: Bohan\n\nDescription:\nWe need a configuration panel where users can set up their local agents — select runtime type, set concurrency limits, and manage API keys. This should live in the Settings page for now.",
-    read: true,
-    archived: false,
-    created_at: "2026-03-21T02:40:00Z",
-  },
-  {
-    id: "inb_4",
-    workspace_id: "ws_1",
-    recipient_type: "member",
-    recipient_id: "usr_1",
-    type: "agent_completed",
-    severity: "attention",
-    issue_id: "iss_6",
-    title: "Agent Claude-1 completed MUL-6: API error handling",
-    body: "The task has been completed and all acceptance criteria passed:\n\n✅ Standardized error response format\n✅ Added error codes enum\n✅ Middleware catches panics and returns 500\n✅ All existing tests still pass\n✅ 4 new test cases added\n\nPR #45 has been created and CI is green. Ready for your review when convenient.",
-    read: false,
-    archived: false,
-    created_at: "2026-03-20T22:10:00Z",
-  },
-  {
-    id: "inb_5",
-    workspace_id: "ws_1",
-    recipient_type: "member",
-    recipient_id: "usr_1",
-    type: "mentioned",
-    severity: "attention",
-    issue_id: "iss_10",
-    title: "Yuzhen mentioned you in MUL-10",
-    body: "@jiayuan Can you take a look at the database schema for the knowledge base? I want to make sure the vector embeddings table is set up correctly before we start indexing.\n\nI'm thinking we should use pgvector with HNSW index for the similarity search. Thoughts?",
-    read: true,
-    archived: false,
-    created_at: "2026-03-20T18:30:00Z",
-  },
-  {
-    id: "inb_6",
-    workspace_id: "ws_1",
-    recipient_type: "member",
-    recipient_id: "usr_1",
-    type: "status_change",
-    severity: "info",
-    issue_id: "iss_3",
-    title: "MUL-3 moved to Done",
-    body: "Issue \"Set up CI/CD pipeline\" has been moved from In Review to Done by Bohan.\n\nThe GitHub Actions workflow is now running on every push to main. Build, test, and lint checks are all configured.",
-    read: true,
-    archived: false,
-    created_at: "2026-03-20T15:00:00Z",
-  },
-  {
-    id: "inb_7",
-    workspace_id: "ws_1",
-    recipient_type: "member",
-    recipient_id: "usr_1",
-    type: "status_change",
-    severity: "info",
-    issue_id: "iss_9",
-    title: "MUL-9 moved to In Progress",
-    body: "Agent Codex-1 has started working on \"Implement issue list API endpoint\".\n\nEstimated approach:\n1. Add sqlc queries for listing/filtering issues\n2. Implement Chi handler with pagination\n3. Add sorting by priority, status, created_at\n4. Write integration tests",
-    read: true,
-    archived: false,
-    created_at: "2026-03-20T12:45:00Z",
-  },
-];
+import { api } from "../../../lib/api";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -165,16 +61,14 @@ function InboxListItem({
   isSelected: boolean;
   onClick: () => void;
 }) {
-  const Icon = typeIcons[item.type];
+  const Icon = typeIcons[item.type] ?? CircleDot;
   const colorClass = severityColors[item.severity];
 
   return (
     <button
       onClick={onClick}
       className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors ${
-        isSelected
-          ? "bg-accent"
-          : "hover:bg-accent/50"
+        isSelected ? "bg-accent" : "hover:bg-accent/50"
       } ${!item.read ? "font-medium" : ""}`}
     >
       <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${colorClass}`} />
@@ -185,12 +79,12 @@ function InboxListItem({
             {timeAgo(item.created_at)}
           </span>
         </div>
-        {item.type === "agent_blocked" || item.type === "review_requested" ? (
+        {(item.type === "agent_blocked" || item.type === "review_requested") && (
           <div className="mt-0.5 flex items-center gap-1.5">
             <Bot className="h-3 w-3 text-muted-foreground" />
             <span className="text-xs text-muted-foreground">Agent action</span>
           </div>
-        ) : null}
+        )}
       </div>
       {!item.read && (
         <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" />
@@ -199,8 +93,14 @@ function InboxListItem({
   );
 }
 
-function InboxDetail({ item }: { item: InboxItem }) {
-  const Icon = typeIcons[item.type];
+function InboxDetail({
+  item,
+  onMarkRead,
+}: {
+  item: InboxItem;
+  onMarkRead: (id: string) => void;
+}) {
+  const Icon = typeIcons[item.type] ?? CircleDot;
   const colorClass = severityColors[item.severity];
 
   const severityLabel: Record<InboxSeverity, string> = {
@@ -220,14 +120,16 @@ function InboxDetail({ item }: { item: InboxItem }) {
             <span className={colorClass}>{severityLabel[item.severity]}</span>
             <span>·</span>
             <span>{timeAgo(item.created_at)}</span>
-            {item.issue_id && (
-              <>
-                <span>·</span>
-                <span>{item.issue_id}</span>
-              </>
-            )}
           </div>
         </div>
+        {!item.read && (
+          <button
+            onClick={() => onMarkRead(item.id)}
+            className="shrink-0 rounded-md border px-2 py-1 text-xs hover:bg-accent"
+          >
+            Mark read
+          </button>
+        )}
       </div>
 
       {/* Body */}
@@ -245,14 +147,47 @@ function InboxDetail({ item }: { item: InboxItem }) {
 // ---------------------------------------------------------------------------
 
 export default function InboxPage() {
-  const sorted = [...MOCK_INBOX_ITEMS].sort(
-    (a, b) =>
-      severityOrder[a.severity] - severityOrder[b.severity] ||
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  );
+  const [items, setItems] = useState<InboxItem[]>([]);
+  const [selectedId, setSelectedId] = useState<string>("");
+  const [loading, setLoading] = useState(true);
 
-  const [selectedId, setSelectedId] = useState<string>(sorted[0]?.id ?? "");
-  const selected = sorted.find((i) => i.id === selectedId) ?? null;
+  useEffect(() => {
+    api
+      .listInbox()
+      .then((data) => {
+        const sorted = [...data].sort(
+          (a, b) =>
+            severityOrder[a.severity] - severityOrder[b.severity] ||
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        setItems(sorted);
+        if (sorted.length > 0) setSelectedId(sorted[0]!.id);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleMarkRead = async (id: string) => {
+    try {
+      await api.markInboxRead(id);
+      setItems((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, read: true } : i))
+      );
+    } catch (err) {
+      console.error("Failed to mark read:", err);
+    }
+  };
+
+  const selected = items.find((i) => i.id === selectedId) ?? null;
+  const unreadCount = items.filter((i) => !i.read).length;
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        Loading...
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full">
@@ -260,29 +195,39 @@ export default function InboxPage() {
       <div className="w-80 shrink-0 overflow-y-auto border-r">
         <div className="flex h-12 items-center border-b px-4">
           <h1 className="text-sm font-semibold">Inbox</h1>
-          <span className="ml-2 rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
-            {sorted.filter((i) => !i.read).length}
-          </span>
+          {unreadCount > 0 && (
+            <span className="ml-2 rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
+              {unreadCount}
+            </span>
+          )}
         </div>
-        <div className="divide-y">
-          {sorted.map((item) => (
-            <InboxListItem
-              key={item.id}
-              item={item}
-              isSelected={item.id === selectedId}
-              onClick={() => setSelectedId(item.id)}
-            />
-          ))}
-        </div>
+        {items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-sm text-muted-foreground">
+            <p>No notifications yet</p>
+          </div>
+        ) : (
+          <div className="divide-y">
+            {items.map((item) => (
+              <InboxListItem
+                key={item.id}
+                item={item}
+                isSelected={item.id === selectedId}
+                onClick={() => setSelectedId(item.id)}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Right column — detail */}
       <div className="flex-1 overflow-y-auto">
         {selected ? (
-          <InboxDetail item={selected} />
+          <InboxDetail item={selected} onMarkRead={handleMarkRead} />
         ) : (
           <div className="flex h-full items-center justify-center text-muted-foreground">
-            Select an item to view details
+            {items.length === 0
+              ? "Your inbox is empty"
+              : "Select an item to view details"}
           </div>
         )}
       </div>

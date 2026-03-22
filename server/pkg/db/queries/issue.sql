@@ -20,13 +20,13 @@ INSERT INTO issue (
 
 -- name: UpdateIssue :one
 UPDATE issue SET
-    title = COALESCE($2, title),
-    description = COALESCE($3, description),
-    status = COALESCE($4, status),
-    priority = COALESCE($5, priority),
-    assignee_type = $6,
-    assignee_id = $7,
-    position = COALESCE($8, position),
+    title = COALESCE(sqlc.narg('title'), title),
+    description = COALESCE(sqlc.narg('description'), description),
+    status = COALESCE(sqlc.narg('status'), status),
+    priority = COALESCE(sqlc.narg('priority'), priority),
+    assignee_type = sqlc.narg('assignee_type'),
+    assignee_id = sqlc.narg('assignee_id'),
+    position = COALESCE(sqlc.narg('position'), position),
     updated_at = now()
 WHERE id = $1
 RETURNING *;

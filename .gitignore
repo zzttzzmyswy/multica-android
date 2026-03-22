@@ -21,6 +21,11 @@ coverage
 # Go
 server/bin/
 server/tmp/
+server/migrate
+
+# Test artifacts
+test-results/
+apps/web/test-results/
 
 # context (agent workspace)
 .context
