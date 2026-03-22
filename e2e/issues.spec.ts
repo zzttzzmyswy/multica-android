@@ -1,9 +1,17 @@
 import { test, expect } from "@playwright/test";
-import { loginAsDefault } from "./helpers";
+import { loginAsDefault, createTestApi } from "./helpers";
+import type { TestApiClient } from "./fixtures";
 
 test.describe("Issues", () => {
+  let api: TestApiClient;
+
   test.beforeEach(async ({ page }) => {
+    api = await createTestApi();
     await loginAsDefault(page);
+  });
+
+  test.afterEach(async () => {
+    await api.cleanup();
   });
 
   test("issues page loads with board view", async ({ page }) => {
@@ -41,15 +49,18 @@ test.describe("Issues", () => {
   });
 
   test("can navigate to issue detail page", async ({ page }) => {
-    // Wait for issues to load
+    // Create a known issue via API so we don't depend on seed data
+    const issue = await api.createIssue("E2E Detail Test " + Date.now());
+
+    // Reload to see the new issue
+    await page.reload();
     await expect(page.locator("text=All Issues")).toBeVisible();
 
-    // Click first issue card that has an anchor tag to issue detail
-    const issueLink = page.locator('a[href^="/issues/"]').first();
+    // Navigate to the issue detail
+    const issueLink = page.locator(`a[href="/issues/${issue.id}"]`);
     await expect(issueLink).toBeVisible({ timeout: 5000 });
     await issueLink.click();
 
-    // Should navigate to issue detail
     await page.waitForURL(/\/issues\/[\w-]+/);
 
     // Should show Properties panel

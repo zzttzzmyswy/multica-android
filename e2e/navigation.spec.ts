@@ -29,8 +29,8 @@ test.describe("Navigation", () => {
     await page.locator("text=Settings").click();
     await page.waitForURL("**/settings");
 
-    await expect(page.locator("text=Workspace")).toBeVisible();
-    await expect(page.locator("text=Members")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Workspace" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Members" })).toBeVisible();
   });
 
   test("agents page shows agent list", async ({ page }) => {
