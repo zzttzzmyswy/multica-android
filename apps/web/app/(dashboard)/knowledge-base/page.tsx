@@ -31,15 +31,15 @@ function renderMarkdown(text: string): React.ReactNode[] {
   let i = 0;
 
   while (i < lines.length) {
-    const line = lines[i];
+    const line = lines[i]!;
 
     // Code block
     if (line.startsWith("```")) {
       const lang = line.slice(3).trim();
       const codeLines: string[] = [];
       i++;
-      while (i < lines.length && !lines[i].startsWith("```")) {
-        codeLines.push(lines[i]);
+      while (i < lines.length && !lines[i]!.startsWith("```")) {
+        codeLines.push(lines[i]!);
         i++;
       }
       i++; // skip closing ```
@@ -57,8 +57,8 @@ function renderMarkdown(text: string): React.ReactNode[] {
     // Table (simplified: detect | pipes)
     if (line.includes("|") && line.trim().startsWith("|")) {
       const tableRows: string[] = [];
-      while (i < lines.length && lines[i].includes("|") && lines[i].trim().startsWith("|")) {
-        tableRows.push(lines[i]);
+      while (i < lines.length && lines[i]!.includes("|") && lines[i]!.trim().startsWith("|")) {
+        tableRows.push(lines[i]!);
         i++;
       }
       // Filter out separator rows (|---|---|)
@@ -66,7 +66,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
       if (dataRows.length > 0) {
         const parseRow = (row: string) =>
           row.split("|").filter((c) => c.trim() !== "").map((c) => c.trim());
-        const header = parseRow(dataRows[0]);
+        const header = parseRow(dataRows[0]!);
         const body = dataRows.slice(1).map(parseRow);
         elements.push(
           <div key={`table-${i}`} className="my-3 overflow-x-auto">
@@ -103,7 +103,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
       elements.push(
         <h2 key={`h2-${i}`} className="mt-6 mb-2 text-[15px] font-semibold">
           {line.slice(3)}
-        </h2>
+        </h2>,
       );
       i++;
       continue;
@@ -112,14 +112,14 @@ function renderMarkdown(text: string): React.ReactNode[] {
       elements.push(
         <h3 key={`h3-${i}`} className="mt-4 mb-1.5 text-[14px] font-medium">
           {line.slice(4)}
-        </h3>
+        </h3>,
       );
       i++;
       continue;
     }
 
     // List item
-    if (line.match(/^- \[[ x]\] /)) {
+    if (/^- \[[ x]\] /.test(line)) {
       const checked = line.includes("[x]");
       const text = line.replace(/^- \[[ x]\] /, "");
       elements.push(
@@ -142,8 +142,8 @@ function renderMarkdown(text: string): React.ReactNode[] {
       continue;
     }
     // Numbered list
-    if (line.match(/^\d+\. /)) {
-      const num = line.match(/^(\d+)\. /)![1];
+    if (/^\d+\. /.test(line)) {
+      const num = line.match(/^(\d+)\. /)![1]!;
       const text = line.replace(/^\d+\. /, "");
       elements.push(
         <div key={`ol-${i}`} className="flex gap-2 py-0.5 text-[13px] text-foreground/80">
@@ -155,7 +155,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
       continue;
     }
 
-    // Empty line
+    // Empty line — guard is redundant since line is already asserted, but keeps TS happy
     if (line.trim() === "") {
       elements.push(<div key={`br-${i}`} className="h-2" />);
       i++;

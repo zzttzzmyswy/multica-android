@@ -62,8 +62,17 @@ vi.mock("../../../lib/api", () => ({
   },
 }));
 
+const issueDefaults = {
+  parent_issue_id: null,
+  acceptance_criteria: [],
+  context_refs: [],
+  repository: null,
+  position: 0,
+};
+
 const mockIssues: Issue[] = [
   {
+    ...issueDefaults,
     id: "issue-1",
     workspace_id: "ws-1",
     title: "Implement auth",
@@ -79,6 +88,7 @@ const mockIssues: Issue[] = [
     updated_at: "2026-01-01T00:00:00Z",
   },
   {
+    ...issueDefaults,
     id: "issue-2",
     workspace_id: "ws-1",
     title: "Design landing page",
@@ -94,6 +104,7 @@ const mockIssues: Issue[] = [
     updated_at: "2026-01-01T00:00:00Z",
   },
   {
+    ...issueDefaults,
     id: "issue-3",
     workspace_id: "ws-1",
     title: "Write tests",
@@ -210,6 +221,7 @@ describe("IssuesPage", () => {
     } as ListIssuesResponse);
 
     const newIssue: Issue = {
+      ...issueDefaults,
       id: "issue-new",
       workspace_id: "ws-1",
       title: "New test issue",

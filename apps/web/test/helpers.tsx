@@ -1,4 +1,5 @@
 import React from "react";
+import { vi } from "vitest";
 import { render, type RenderOptions } from "@testing-library/react";
 import type { User, Workspace, MemberWithUser, Agent } from "@multica/types";
 
@@ -43,20 +44,21 @@ export const mockAgents: Agent[] = [
     id: "agent-1",
     workspace_id: "ws-1",
     name: "Claude Agent",
+    avatar_url: null,
     status: "idle",
     runtime_mode: "cloud",
+    runtime_config: {},
     visibility: "workspace",
     max_concurrent_tasks: 3,
-    description: "A test agent",
-    system_prompt: null,
-    config: {},
+    owner_id: null,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
   },
 ];
 
 // Mock auth context value
-export const mockAuthValue = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const mockAuthValue: Record<string, any> = {
   user: mockUser,
   workspace: mockWorkspace,
   members: mockMembers,
