@@ -21,23 +21,30 @@ Multica is an AI-native task management platform — like Linear, but with AI ag
 ## 3. Core Workflow Commands
 
 ```bash
+# One-click setup & run
+make setup            # First-time: install deps, start DB, migrate, seed
+make start            # Start backend + frontend together
+make stop             # Stop everything
+
 # Frontend
 pnpm install
-pnpm dev:web          # Next.js dev server
+pnpm dev:web          # Next.js dev server (port 3000)
 pnpm build            # Build all TS packages
 pnpm typecheck        # TypeScript check
-pnpm test             # TS tests
+pnpm test             # TS tests (Vitest)
 
 # Backend (Go)
-make dev              # Run Go server with hot-reload
+make dev              # Run Go server (port 8080)
 make daemon           # Run local daemon
 make test             # Go tests
 make sqlc             # Regenerate sqlc code
 make migrate-up       # Run database migrations
 make migrate-down     # Rollback migrations
+make seed             # Seed sample data
 
 # Infrastructure
 docker compose up -d  # Start PostgreSQL
+docker compose down   # Stop PostgreSQL
 ```
 
 ## 4. Coding Rules
