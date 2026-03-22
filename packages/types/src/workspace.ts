@@ -26,3 +26,14 @@ export interface User {
   created_at: string;
   updated_at: string;
 }
+
+export interface MemberWithUser {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  role: MemberRole;
+  created_at: string;
+  name: string;
+  email: string;
+  avatar_url: string | null;
+}
