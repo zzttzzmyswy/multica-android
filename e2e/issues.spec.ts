@@ -34,8 +34,8 @@ test.describe("Issues", () => {
     await page.fill('input[placeholder="Issue title..."]', title);
     await page.click("text=Create");
 
-    // New issue should appear on the page (may need API call to complete)
-    await expect(page.locator(`text=${title}`)).toBeVisible({
+    // New issue should appear on the page
+    await expect(page.locator(`text=${title}`).first()).toBeVisible({
       timeout: 10000,
     });
   });
