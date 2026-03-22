@@ -1,21 +1,17 @@
 "use client";
 
-import { use } from "react";
+import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Bot,
-  Calendar,
   ChevronRight,
-  User,
-  MessageSquare,
+  Send,
 } from "lucide-react";
-import {
-  MOCK_ISSUES,
-  STATUS_CONFIG,
-  PRIORITY_CONFIG,
-} from "../_data/mock";
-import type { MockAssignee } from "../_data/mock";
+import type { Issue, Comment } from "@multica/types";
+import { STATUS_CONFIG, PRIORITY_CONFIG } from "../_data/mock";
 import { StatusIcon, PriorityIcon } from "../page";
+import { api } from "../../../../lib/api";
+import { useAuth } from "../../../../lib/auth-context";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -32,16 +28,8 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
-function formatDate(date: string | null): string {
+function shortDate(date: string | null): string {
   if (!date) return "—";
-  return new Date(date).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function shortDate(date: string): string {
   return new Date(date).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -52,14 +40,19 @@ function shortDate(date: string): string {
 // Avatar
 // ---------------------------------------------------------------------------
 
-function Avatar({
-  person,
+function ActorAvatar({
+  actorType,
+  actorId,
   size = 20,
 }: {
-  person: MockAssignee;
+  actorType: string;
+  actorId: string;
   size?: number;
 }) {
-  const isAgent = person.type === "agent";
+  const { getActorName, getActorInitials } = useAuth();
+  const name = getActorName(actorType, actorId);
+  const initials = getActorInitials(actorType, actorId);
+  const isAgent = actorType === "agent";
   return (
     <div
       className={`inline-flex shrink-0 items-center justify-center rounded-full font-medium ${
@@ -68,15 +61,19 @@ function Avatar({
           : "bg-muted text-muted-foreground"
       }`}
       style={{ width: size, height: size, fontSize: size * 0.45 }}
-      title={person.name}
+      title={name}
     >
-      {isAgent ? <Bot style={{ width: size * 0.55, height: size * 0.55 }} /> : person.avatar.charAt(0)}
+      {isAgent ? (
+        <Bot style={{ width: size * 0.55, height: size * 0.55 }} />
+      ) : (
+        initials
+      )}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Property row (Linear-style: label left, clickable value right)
+// Property row
 // ---------------------------------------------------------------------------
 
 function PropRow({
@@ -106,7 +103,45 @@ export default function IssueDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const issue = MOCK_ISSUES.find((i) => i.id === id);
+  const { getActorName } = useAuth();
+  const [issue, setIssue] = useState<Issue | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [commentText, setCommentText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    Promise.all([api.getIssue(id), api.listComments(id)])
+      .then(([iss, cmts]) => {
+        setIssue(iss);
+        setComments(cmts);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  const handleSubmitComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!commentText.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      const comment = await api.createComment(id, commentText.trim());
+      setComments((prev) => [...prev, comment]);
+      setCommentText("");
+    } catch (err) {
+      console.error("Failed to create comment:", err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        Loading...
+      </div>
+    );
+  }
 
   if (!issue) {
     return (
@@ -119,31 +154,11 @@ export default function IssueDetailPage({
   const statusCfg = STATUS_CONFIG[issue.status];
   const priorityCfg = PRIORITY_CONFIG[issue.priority];
   const isOverdue =
-    issue.dueDate && new Date(issue.dueDate) < new Date() && issue.status !== "done";
-
-  // Merge activity + comments into timeline
-  const timeline = [
-    ...issue.activity.map((a) => ({
-      id: a.id,
-      kind: "activity" as const,
-      actor: a.actor,
-      content: a.action,
-      createdAt: a.createdAt,
-    })),
-    ...issue.comments.map((c) => ({
-      id: c.id,
-      kind: "comment" as const,
-      actor: c.author,
-      content: c.body,
-      createdAt: c.createdAt,
-    })),
-  ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    issue.due_date && new Date(issue.due_date) < new Date() && issue.status !== "done";
 
   return (
     <div className="flex h-full">
-      {/* ================================================================
-          LEFT: Content area
-          ================================================================ */}
+      {/* LEFT: Content area */}
       <div className="flex-1 overflow-y-auto">
         {/* Header bar */}
         <div className="sticky top-0 z-10 flex h-11 items-center gap-1.5 border-b bg-background px-6 text-[13px]">
@@ -154,90 +169,76 @@ export default function IssueDetailPage({
             Issues
           </Link>
           <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
-          <span className="truncate text-muted-foreground">{issue.key}</span>
+          <span className="truncate text-muted-foreground">{issue.id.slice(0, 8)}</span>
         </div>
 
         {/* Content */}
         <div className="mx-auto w-full max-w-3xl px-8 py-8">
-          {/* Issue key */}
-          <div className="mb-1 text-[13px] text-muted-foreground">{issue.key}</div>
+          <div className="mb-1 text-[13px] text-muted-foreground">{issue.id.slice(0, 8)}</div>
 
-          {/* Title */}
           <h1 className="text-xl font-semibold leading-snug tracking-tight">
             {issue.title}
           </h1>
 
-          {/* Description */}
           {issue.description && (
             <div className="mt-5 text-[14px] leading-[1.7] text-foreground/85 whitespace-pre-wrap">
               {issue.description}
             </div>
           )}
 
-          {/* Separator */}
           <div className="my-8 border-t" />
 
-          {/* Activity */}
+          {/* Activity / Comments */}
           <div>
             <h2 className="text-[13px] font-medium">Activity</h2>
 
             <div className="mt-4">
-              {timeline.map((entry, idx) =>
-                entry.kind === "comment" ? (
-                  /* ---- Comment ---- */
-                  <div key={entry.id} className="relative py-3">
-                    <div className="flex items-center gap-2.5">
-                      <Avatar person={entry.actor} size={28} />
-                      <span className="text-[13px] font-medium">
-                        {entry.actor.name}
-                      </span>
-                      <span className="text-[12px] text-muted-foreground">
-                        {timeAgo(entry.createdAt)}
-                      </span>
-                    </div>
-                    <div className="mt-2 pl-[38px] text-[13px] leading-[1.6] text-foreground/85 whitespace-pre-wrap">
-                      {entry.content}
-                    </div>
-                  </div>
-                ) : (
-                  /* ---- Status change ---- */
-                  <div
-                    key={entry.id}
-                    className="flex items-center gap-2.5 py-1.5 text-[12px] text-muted-foreground"
-                  >
-                    <span className="flex h-[28px] w-[28px] shrink-0 items-center justify-center">
-                      <span className="h-[5px] w-[5px] rounded-full bg-muted-foreground/40" />
+              {comments.map((comment) => (
+                <div key={comment.id} className="relative py-3">
+                  <div className="flex items-center gap-2.5">
+                    <ActorAvatar
+                      actorType={comment.author_type}
+                      actorId={comment.author_id}
+                      size={28}
+                    />
+                    <span className="text-[13px] font-medium">
+                      {getActorName(comment.author_type, comment.author_id)}
                     </span>
-                    <span>
-                      <span className="text-foreground/70">
-                        {entry.actor.name}
-                      </span>{" "}
-                      {entry.content}
+                    <span className="text-[12px] text-muted-foreground">
+                      {timeAgo(comment.created_at)}
                     </span>
-                    <span className="ml-auto shrink-0">{timeAgo(entry.createdAt)}</span>
                   </div>
-                )
-              )}
+                  <div className="mt-2 pl-[38px] text-[13px] leading-[1.6] text-foreground/85 whitespace-pre-wrap">
+                    {comment.content}
+                  </div>
+                </div>
+              ))}
             </div>
 
             {/* Comment input */}
-            <div className="mt-2 border-t pt-4">
-              <div className="flex items-center gap-2.5 cursor-text text-[13px] text-muted-foreground">
-                <span className="flex h-[28px] w-[28px] shrink-0 items-center justify-center">
-                  <span className="h-[5px] w-[5px] rounded-full bg-muted-foreground/30" />
-                </span>
-                <span className="transition-colors hover:text-foreground/50">
-                  Leave a comment...
-                </span>
+            <form onSubmit={handleSubmitComment} className="mt-2 border-t pt-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  placeholder="Leave a comment..."
+                  className="flex-1 rounded-md border bg-background px-3 py-2 text-[13px] placeholder:text-muted-foreground"
+                />
+                <button
+                  type="submit"
+                  disabled={!commentText.trim() || submitting}
+                  className="rounded-md bg-primary p-2 text-primary-foreground disabled:opacity-50"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                </button>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       </div>
 
-      {/* ================================================================
-          RIGHT: Properties sidebar
-          ================================================================ */}
+      {/* RIGHT: Properties sidebar */}
       <div className="w-60 shrink-0 overflow-y-auto border-l">
         <div className="p-4">
           <div className="mb-2 text-[12px] font-medium text-muted-foreground">
@@ -256,10 +257,14 @@ export default function IssueDetailPage({
             </PropRow>
 
             <PropRow label="Assignee">
-              {issue.assignee ? (
+              {issue.assignee_type && issue.assignee_id ? (
                 <>
-                  <Avatar person={issue.assignee} size={18} />
-                  <span>{issue.assignee.name}</span>
+                  <ActorAvatar
+                    actorType={issue.assignee_type}
+                    actorId={issue.assignee_id}
+                    size={18}
+                  />
+                  <span>{getActorName(issue.assignee_type, issue.assignee_id)}</span>
                 </>
               ) : (
                 <span className="text-muted-foreground">Unassigned</span>
@@ -267,9 +272,9 @@ export default function IssueDetailPage({
             </PropRow>
 
             <PropRow label="Due date">
-              {issue.dueDate ? (
+              {issue.due_date ? (
                 <span className={isOverdue ? "text-red-500" : ""}>
-                  {shortDate(issue.dueDate)}
+                  {shortDate(issue.due_date)}
                 </span>
               ) : (
                 <span className="text-muted-foreground">None</span>
@@ -277,17 +282,21 @@ export default function IssueDetailPage({
             </PropRow>
 
             <PropRow label="Created by">
-              <Avatar person={issue.creator} size={18} />
-              <span>{issue.creator.name}</span>
+              <ActorAvatar
+                actorType={issue.creator_type}
+                actorId={issue.creator_id}
+                size={18}
+              />
+              <span>{getActorName(issue.creator_type, issue.creator_id)}</span>
             </PropRow>
           </div>
 
           <div className="mt-4 border-t pt-3 space-y-0.5">
             <PropRow label="Created">
-              <span className="text-muted-foreground">{shortDate(issue.createdAt)}</span>
+              <span className="text-muted-foreground">{shortDate(issue.created_at)}</span>
             </PropRow>
             <PropRow label="Updated">
-              <span className="text-muted-foreground">{shortDate(issue.updatedAt)}</span>
+              <span className="text-muted-foreground">{shortDate(issue.updated_at)}</span>
             </PropRow>
           </div>
         </div>

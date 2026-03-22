@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { ThemeProvider } from "@multica/ui/components/theme-provider";
+import { AuthProvider } from "../lib/auth-context";
+import { WSProvider } from "../lib/ws-context";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -21,7 +23,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <AuthProvider>
+            <WSProvider>{children}</WSProvider>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

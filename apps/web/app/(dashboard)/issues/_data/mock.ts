@@ -95,7 +95,12 @@ export const PRIORITY_CONFIG: Record<
 // Mock Issues
 // ---------------------------------------------------------------------------
 
-const { jiayuan, bohan, yuzhen, claude1, codex1, reviewBot } = PEOPLE;
+const jiayuan = PEOPLE["jiayuan"]!;
+const bohan = PEOPLE["bohan"]!;
+const yuzhen = PEOPLE["yuzhen"]!;
+const claude1 = PEOPLE["claude1"]!;
+const codex1 = PEOPLE["codex1"]!;
+const reviewBot = PEOPLE["reviewBot"]!;
 
 export const MOCK_ISSUES: MockIssue[] = [
   // ---- Backlog ----
