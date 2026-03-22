@@ -1,0 +1,19 @@
+import { defineConfig } from "vitest/config";
+import react from "@vitejs/plugin-react";
+import path from "path";
+
+export default defineConfig({
+  plugins: [react()],
+  test: {
+    environment: "jsdom",
+    globals: true,
+    setupFiles: ["./test/setup.ts"],
+    include: ["**/*.test.{ts,tsx}"],
+  },
+  resolve: {
+    alias: {
+      "@multica/types": path.resolve(__dirname, "../../packages/types/src"),
+      "@multica/sdk": path.resolve(__dirname, "../../packages/sdk/src"),
+    },
+  },
+});
