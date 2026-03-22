@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Bot,
   Cloud,
@@ -9,8 +9,9 @@ import {
   Zap,
   ListTodo,
 } from "lucide-react";
-import type { Agent, AgentStatus } from "@multica/types";
+import type { Agent, AgentStatus, AgentStatusPayload } from "@multica/types";
 import { api } from "../../../lib/api";
+import { useWSEvent } from "../../../lib/ws-context";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -177,6 +178,14 @@ export default function AgentsPage() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  useWSEvent(
+    "agent:status",
+    useCallback((payload: unknown) => {
+      const { agent } = payload as AgentStatusPayload;
+      setAgents((prev) => prev.map((a) => (a.id === agent.id ? agent : a)));
+    }, []),
+  );
 
   const selected = agents.find((a) => a.id === selectedId) ?? null;
 

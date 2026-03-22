@@ -1,4 +1,4 @@
-.PHONY: dev daemon build test migrate-up migrate-down sqlc seed clean setup start stop
+.PHONY: dev daemon build test migrate-up migrate-down sqlc seed clean setup start stop check
 
 # ---------- One-click commands ----------
 
@@ -7,11 +7,15 @@ setup:
 	@echo "==> Installing dependencies..."
 	pnpm install
 	@echo "==> Starting PostgreSQL..."
-	docker compose up -d
-	@echo "==> Waiting for PostgreSQL to be ready..."
-	@until docker compose exec -T postgres pg_isready -U multica > /dev/null 2>&1; do \
-		sleep 1; \
-	done
+	@if pg_isready -h localhost -p 5432 -U multica > /dev/null 2>&1; then \
+		echo "    PostgreSQL already running, skipping docker compose up."; \
+	else \
+		docker compose up -d; \
+		echo "==> Waiting for PostgreSQL to be ready..."; \
+		until docker compose exec -T postgres pg_isready -U multica > /dev/null 2>&1; do \
+			sleep 1; \
+		done; \
+	fi
 	@echo "==> Running migrations..."
 	cd server && go run ./cmd/migrate up
 	@echo "==> Seeding data..."
@@ -21,10 +25,14 @@ setup:
 
 # Start all services (backend + frontend)
 start:
-	@docker compose up -d
-	@until docker compose exec -T postgres pg_isready -U multica > /dev/null 2>&1; do \
-		sleep 1; \
-	done
+	@if pg_isready -h localhost -p 5432 -U multica > /dev/null 2>&1; then \
+		echo "PostgreSQL already running, skipping docker compose up."; \
+	else \
+		docker compose up -d; \
+		until docker compose exec -T postgres pg_isready -U multica > /dev/null 2>&1; do \
+			sleep 1; \
+		done; \
+	fi
 	@echo "Starting backend and frontend..."
 	@trap 'kill 0' EXIT; \
 		(cd server && go run ./cmd/server) & \
@@ -38,6 +46,10 @@ stop:
 	@-lsof -ti:3000 | xargs kill -9 2>/dev/null
 	docker compose down
 	@echo "✓ All services stopped."
+
+# Full verification: typecheck + unit tests + Go tests + E2E
+check:
+	@bash scripts/check.sh
 
 # ---------- Individual commands ----------
 

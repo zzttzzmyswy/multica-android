@@ -111,6 +111,9 @@ export default function IssueDetailPage({
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    setIssue(null);
+    setComments([]);
+    setLoading(true);
     Promise.all([api.getIssue(id), api.listComments(id)])
       .then(([iss, cmts]) => {
         setIssue(iss);

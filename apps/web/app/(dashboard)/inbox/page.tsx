@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   AlertCircle,
   Bot,
@@ -10,8 +10,9 @@ import {
   MessageSquare,
   ArrowRightLeft,
 } from "lucide-react";
-import type { InboxItem, InboxItemType, InboxSeverity } from "@multica/types";
+import type { InboxItem, InboxItemType, InboxSeverity, InboxNewPayload } from "@multica/types";
 import { api } from "../../../lib/api";
+import { useWSEvent } from "../../../lib/ws-context";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -166,6 +167,17 @@ export default function InboxPage() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  useWSEvent(
+    "inbox:new",
+    useCallback((payload: unknown) => {
+      const { item } = payload as InboxNewPayload;
+      setItems((prev) => {
+        if (prev.some((i) => i.id === item.id)) return prev;
+        return [item, ...prev];
+      });
+    }, []),
+  );
 
   const handleMarkRead = async (id: string) => {
     try {

@@ -39,7 +39,7 @@ function MemberRow({ member }: { member: MemberWithUser }) {
 }
 
 export default function SettingsPage() {
-  const { workspace, members } = useAuth();
+  const { workspace, members, updateWorkspace } = useAuth();
 
   const [name, setName] = useState(workspace?.name ?? "");
   const [description, setDescription] = useState(
@@ -52,10 +52,11 @@ export default function SettingsPage() {
     if (!workspace) return;
     setSaving(true);
     try {
-      await api.updateWorkspace(workspace.id, {
+      const updated = await api.updateWorkspace(workspace.id, {
         name,
         description: description || undefined,
       });
+      updateWorkspace(updated);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {

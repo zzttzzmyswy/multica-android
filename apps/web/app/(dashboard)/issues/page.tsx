@@ -215,7 +215,7 @@ function DroppableColumn({
   const { setNodeRef, isOver } = useDroppable({ id: status });
 
   return (
-    <div className="flex w-64 shrink-0 flex-col">
+    <div className="flex min-w-52 flex-1 flex-col">
       <div className="mb-2 flex items-center gap-2 px-1">
         <StatusIcon status={status} className="h-3.5 w-3.5" />
         <span className="text-xs font-medium">{cfg.label}</span>
@@ -514,7 +514,10 @@ export default function IssuesPage() {
   );
 
   const handleIssueCreated = useCallback((issue: Issue) => {
-    setIssues((prev) => [...prev, issue]);
+    setIssues((prev) => {
+      if (prev.some((i) => i.id === issue.id)) return prev;
+      return [...prev, issue];
+    });
   }, []);
 
   if (loading) {

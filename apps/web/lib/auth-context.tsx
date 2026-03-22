@@ -20,6 +20,7 @@ interface AuthContextValue {
   isLoading: boolean;
   login: (email: string, name?: string) => Promise<void>;
   logout: () => void;
+  updateWorkspace: (ws: Workspace) => void;
   refreshMembers: () => Promise<void>;
   refreshAgents: () => Promise<void>;
   getMemberName: (userId: string) => string;
@@ -114,6 +115,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push("/login");
   }, [router]);
 
+  const updateWorkspaceState = useCallback((ws: Workspace) => {
+    setWorkspace(ws);
+  }, []);
+
   const refreshMembers = useCallback(async () => {
     if (!workspace) return;
     const m = await api.listMembers(workspace.id);
@@ -174,6 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         login,
         logout,
+        updateWorkspace: updateWorkspaceState,
         refreshMembers,
         refreshAgents,
         getMemberName,

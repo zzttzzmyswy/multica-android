@@ -264,6 +264,33 @@ describe("AuthContext", () => {
     expect(result.current.workspace).toEqual(mockWorkspace);
   });
 
+  it("updateWorkspace updates workspace in context", async () => {
+    mockApi.login.mockResolvedValueOnce({ token: "test-jwt", user: mockUser });
+    mockApi.listWorkspaces.mockResolvedValueOnce([mockWorkspace]);
+    mockApi.listMembers.mockResolvedValueOnce(mockMembers);
+    mockApi.listAgents.mockResolvedValueOnce(mockAgents);
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.login("test@multica.ai");
+    });
+
+    expect(result.current.workspace?.name).toBe("Test WS");
+
+    const updated: Workspace = { ...mockWorkspace, name: "Renamed WS", description: "new desc" };
+    act(() => {
+      result.current.updateWorkspace(updated);
+    });
+
+    expect(result.current.workspace?.name).toBe("Renamed WS");
+    expect(result.current.workspace?.description).toBe("new desc");
+  });
+
   it("clears token when stored token is invalid", async () => {
     localStorage.setItem("multica_token", "invalid-token");
 
