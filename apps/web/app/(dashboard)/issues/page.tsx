@@ -2,19 +2,13 @@
 
 import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
+import { TabLink } from "../_components/tab-link";
+import { useTabStore } from "../../../lib/tab-store";
 import {
   Columns3,
   List,
   Plus,
   Bot,
-  Circle,
-  CircleDashed,
-  CircleDot,
-  CircleCheck,
-  CircleX,
-  CircleAlert,
-  Eye,
-  Minus,
 } from "lucide-react";
 import {
   DndContext,
@@ -30,69 +24,20 @@ import {
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Issue, IssueStatus, IssuePriority } from "@multica/types";
-import { STATUS_CONFIG, PRIORITY_CONFIG } from "./_data/config";
+import { STATUS_CONFIG, PRIORITY_CONFIG, ALL_STATUSES, PRIORITY_ORDER } from "./_config";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogTrigger,
+} from "@multica/ui/components/ui/dialog";
+import { StatusIcon, PriorityIcon } from "./_components";
 import { api } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth-context";
 import { useWSEvent } from "../../../lib/ws-context";
 import type { IssueCreatedPayload, IssueUpdatedPayload, IssueDeletedPayload } from "@multica/types";
-
-// ---------------------------------------------------------------------------
-// Shared icon components
-// ---------------------------------------------------------------------------
-
-const STATUS_ICONS: Record<IssueStatus, typeof Circle> = {
-  backlog: CircleDashed,
-  todo: Circle,
-  in_progress: CircleDot,
-  in_review: Eye,
-  done: CircleCheck,
-  blocked: CircleAlert,
-  cancelled: CircleX,
-};
-
-export function StatusIcon({
-  status,
-  className = "h-4 w-4",
-}: {
-  status: IssueStatus;
-  className?: string;
-}) {
-  const Icon = STATUS_ICONS[status];
-  const cfg = STATUS_CONFIG[status];
-  return <Icon className={`${className} ${cfg.iconColor}`} />;
-}
-
-export function PriorityIcon({
-  priority,
-  className = "",
-}: {
-  priority: IssuePriority;
-  className?: string;
-}) {
-  const cfg = PRIORITY_CONFIG[priority];
-  if (cfg.bars === 0) {
-    return <Minus className={`h-3.5 w-3.5 text-muted-foreground ${className}`} />;
-  }
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      className={`h-3.5 w-3.5 ${cfg.color} ${className}`}
-      fill="currentColor"
-    >
-      {[0, 1, 2, 3].map((i) => (
-        <rect
-          key={i}
-          x={1 + i * 4}
-          y={12 - (i + 1) * 3}
-          width="3"
-          height={(i + 1) * 3}
-          rx="0.5"
-          opacity={i < cfg.bars ? 1 : 0.2}
-        />
-      ))}
-    </svg>
-  );
-}
 
 function AssigneeAvatar({
   issue,
@@ -186,16 +131,18 @@ function DraggableBoardCard({ issue }: { issue: Issue }) {
       {...attributes}
       {...listeners}
       className={isDragging ? "opacity-30" : ""}
+      onClickCapture={(e) => {
+        if (isDragging) e.stopPropagation();
+      }}
     >
-      <Link
+      <TabLink
         href={`/issues/${issue.id}`}
-        onClick={(e) => {
-          if (isDragging) e.preventDefault();
-        }}
+        title={issue.title}
+        iconKey="issues"
         className="block transition-colors hover:opacity-80"
       >
         <BoardCardContent issue={issue} />
-      </Link>
+      </TabLink>
     </div>
   );
 }
@@ -330,8 +277,10 @@ function BoardView({
 
 function ListRow({ issue }: { issue: Issue }) {
   return (
-    <Link
+    <TabLink
       href={`/issues/${issue.id}`}
+      title={issue.title}
+      iconKey="issues"
       className="flex h-9 items-center gap-2 px-4 text-[13px] transition-colors hover:bg-accent/50"
     >
       <PriorityIcon priority={issue.priority} />
@@ -346,7 +295,7 @@ function ListRow({ issue }: { issue: Issue }) {
         </span>
       )}
       <AssigneeAvatar issue={issue} />
-    </Link>
+    </TabLink>
   );
 }
 
@@ -383,65 +332,120 @@ function ListView({ issues }: { issues: Issue[] }) {
 }
 
 // ---------------------------------------------------------------------------
-// Create Issue Dialog (simple inline)
+// Create Issue Dialog
 // ---------------------------------------------------------------------------
 
-function CreateIssueForm({ onCreated }: { onCreated: (issue: Issue) => void }) {
+function CreateIssueDialog({ onCreated }: { onCreated: (issue: Issue) => void }) {
+  const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
-  const [isOpen, setIsOpen] = useState(false);
+  const [description, setDescription] = useState("");
+  const [status, setStatus] = useState<IssueStatus>("todo");
+  const [priority, setPriority] = useState<IssuePriority>("none");
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const reset = () => {
+    setTitle("");
+    setDescription("");
+    setStatus("todo");
+    setPriority("none");
+  };
+
+  const handleSubmit = async () => {
     if (!title.trim()) return;
+    setSubmitting(true);
     try {
-      const issue = await api.createIssue({ title: title.trim() });
+      const issue = await api.createIssue({
+        title: title.trim(),
+        description: description.trim() || undefined,
+        status,
+        priority,
+      });
       onCreated(issue);
-      setTitle("");
-      setIsOpen(false);
+      reset();
+      setOpen(false);
     } catch (err) {
       console.error("Failed to create issue:", err);
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  if (!isOpen) {
-    return (
-      <button
-        onClick={() => setIsOpen(true)}
-        className="flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary/90"
-      >
-        <Plus className="h-3.5 w-3.5" />
-        New Issue
-      </button>
-    );
-  }
-
   return (
-    <form onSubmit={handleSubmit} className="flex items-center gap-2">
-      <input
-        autoFocus
-        type="text"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") setIsOpen(false);
-        }}
-        placeholder="Issue title..."
-        className="rounded-md border bg-background px-2 py-1 text-xs w-48"
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
+      <DialogTrigger
+        render={
+          <button className="flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary/90">
+            <Plus className="h-3.5 w-3.5" />
+            New Issue
+          </button>
+        }
       />
-      <button
-        type="submit"
-        className="rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground"
-      >
-        Create
-      </button>
-      <button
-        type="button"
-        onClick={() => setIsOpen(false)}
-        className="text-xs text-muted-foreground"
-      >
-        Cancel
-      </button>
-    </form>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>New Issue</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <input
+            autoFocus
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit();
+              }
+            }}
+            placeholder="Issue title"
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
+          />
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Add description..."
+            rows={3}
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring resize-none"
+          />
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Status selector */}
+            <div className="flex items-center gap-1.5 text-xs">
+              <StatusIcon status={status} className="h-3.5 w-3.5" />
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as IssueStatus)}
+                className="bg-transparent text-xs outline-none cursor-pointer"
+              >
+                {ALL_STATUSES.map((s) => (
+                  <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>
+                ))}
+              </select>
+            </div>
+            {/* Priority selector */}
+            <div className="flex items-center gap-1.5 text-xs">
+              <PriorityIcon priority={priority} />
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as IssuePriority)}
+                className="bg-transparent text-xs outline-none cursor-pointer"
+              >
+                {PRIORITY_ORDER.map((p) => (
+                  <option key={p} value={p}>{PRIORITY_CONFIG[p].label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <button
+            onClick={handleSubmit}
+            disabled={!title.trim() || submitting}
+            className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            {submitting ? "Creating..." : "Create Issue"}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -452,19 +456,27 @@ function CreateIssueForm({ onCreated }: { onCreated: (issue: Issue) => void }) {
 type ViewMode = "board" | "list";
 
 export default function IssuesPage() {
+  const { closeTabByPath } = useTabStore();
   const [view, setView] = useState<ViewMode>("board");
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filterStatus, setFilterStatus] = useState<IssueStatus | "">("");
+  const [filterPriority, setFilterPriority] = useState<IssuePriority | "">("");
 
   useEffect(() => {
+    setLoading(true);
     api
-      .listIssues({ limit: 200 })
+      .listIssues({
+        limit: 200,
+        ...(filterStatus ? { status: filterStatus } : {}),
+        ...(filterPriority ? { priority: filterPriority } : {}),
+      })
       .then((res) => {
         setIssues(res.issues);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [filterStatus, filterPriority]);
 
   // Real-time updates
   useWSEvent(
@@ -491,7 +503,8 @@ export default function IssuesPage() {
     useCallback((payload: unknown) => {
       const { issue_id } = payload as IssueDeletedPayload;
       setIssues((prev) => prev.filter((i) => i.id !== issue_id));
-    }, []),
+      closeTabByPath(`/issues/${issue_id}`);
+    }, [closeTabByPath]),
   );
 
   const handleMoveIssue = useCallback(
@@ -558,8 +571,30 @@ export default function IssuesPage() {
               List
             </button>
           </div>
+          <div className="flex items-center gap-2">
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as IssueStatus | "")}
+              className="rounded-md border bg-background px-2 py-1 text-xs outline-none"
+            >
+              <option value="">All Status</option>
+              {ALL_STATUSES.map((s) => (
+                <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>
+              ))}
+            </select>
+            <select
+              value={filterPriority}
+              onChange={(e) => setFilterPriority(e.target.value as IssuePriority | "")}
+              className="rounded-md border bg-background px-2 py-1 text-xs outline-none"
+            >
+              <option value="">All Priority</option>
+              {PRIORITY_ORDER.map((p) => (
+                <option key={p} value={p}>{PRIORITY_CONFIG[p].label}</option>
+              ))}
+            </select>
+          </div>
         </div>
-        <CreateIssueForm onCreated={handleIssueCreated} />
+        <CreateIssueDialog onCreated={handleIssueCreated} />
       </div>
 
       <div className="flex-1 overflow-hidden">

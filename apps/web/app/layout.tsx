@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ThemeProvider } from "@multica/ui/components/theme-provider";
+import { Toaster } from "@multica/ui/components/ui/sonner";
 import { AuthProvider } from "../lib/auth-context";
 import { WSProvider } from "../lib/ws-context";
 import "./globals.css";
@@ -26,6 +27,7 @@ export default function RootLayout({
           <AuthProvider>
             <WSProvider>{children}</WSProvider>
           </AuthProvider>
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>

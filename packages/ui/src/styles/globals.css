@@ -263,6 +263,11 @@
   @apply w-full max-w-4xl mx-auto;
 }
 
+/* Shadcn sidebar: remove default padding from inset container */
+[data-slot="sidebar-container"] {
+  padding: 0 !important;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
