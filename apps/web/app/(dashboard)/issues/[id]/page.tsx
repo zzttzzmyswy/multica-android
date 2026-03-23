@@ -8,7 +8,7 @@ import {
   Send,
 } from "lucide-react";
 import type { Issue, Comment } from "@multica/types";
-import { STATUS_CONFIG, PRIORITY_CONFIG } from "../_data/mock";
+import { STATUS_CONFIG, PRIORITY_CONFIG } from "../_data/config";
 import { StatusIcon, PriorityIcon } from "../page";
 import { api } from "../../../../lib/api";
 import { useAuth } from "../../../../lib/auth-context";

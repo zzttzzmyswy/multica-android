@@ -30,7 +30,7 @@ import {
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Issue, IssueStatus, IssuePriority } from "@multica/types";
-import { STATUS_CONFIG, PRIORITY_CONFIG } from "./_data/mock";
+import { STATUS_CONFIG, PRIORITY_CONFIG } from "./_data/config";
 import { api } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth-context";
 import { useWSEvent } from "../../../lib/ws-context";
