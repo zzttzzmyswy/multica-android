@@ -1,19 +1,43 @@
 "use client";
 
-import { use, useState, useEffect, useRef } from "react";
+import { use, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Bot,
   ChevronRight,
+  GitBranch,
+  Link2,
+  Pencil,
   Send,
-  UserCircle,
+  Trash2,
   X,
 } from "lucide-react";
-import type { Issue, Comment, IssueAssigneeType } from "@multica/types";
-import { STATUS_CONFIG, PRIORITY_CONFIG } from "../_data/config";
-import { StatusIcon, PriorityIcon } from "../page";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@multica/ui/components/ui/alert-dialog";
+import { Calendar } from "@multica/ui/components/ui/calendar";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@multica/ui/components/ui/popover";
+import type { Issue, Comment, UpdateIssueRequest } from "@multica/types";
+import { StatusPicker, PriorityPicker, AssigneePicker } from "../_components";
 import { api } from "../../../../lib/api";
 import { useAuth } from "../../../../lib/auth-context";
+import { useWSEvent } from "../../../../lib/ws-context";
+import { useTabStore } from "../../../../lib/tab-store";
+import type { CommentCreatedPayload, CommentUpdatedPayload, CommentDeletedPayload } from "@multica/types";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -81,19 +105,12 @@ function ActorAvatar({
 function PropRow({
   label,
   children,
-  onClick,
 }: {
   label: string;
   children: React.ReactNode;
-  onClick?: () => void;
 }) {
   return (
-    <div
-      onClick={onClick}
-      className={`flex min-h-[32px] items-center gap-3 rounded-md px-2 -mx-2 hover:bg-accent/50 transition-colors ${
-        onClick ? "cursor-pointer" : ""
-      }`}
-    >
+    <div className="flex min-h-[32px] items-center gap-3 rounded-md px-2 -mx-2 hover:bg-accent/50 transition-colors">
       <span className="w-20 shrink-0 text-[13px] text-muted-foreground">{label}</span>
       <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5 text-[13px]">
         {children}
@@ -103,147 +120,282 @@ function PropRow({
 }
 
 // ---------------------------------------------------------------------------
-// Assignee Picker
+// Due Date Picker
 // ---------------------------------------------------------------------------
 
-function AssigneePicker({
-  issue,
-  onSelect,
-  onClose,
+function DueDatePicker({
+  dueDate,
+  onUpdate,
 }: {
-  issue: Issue;
-  onSelect: (type: IssueAssigneeType | null, id: string | null) => void;
-  onClose: () => void;
+  dueDate: string | null;
+  onUpdate: (updates: Partial<UpdateIssueRequest>) => void;
 }) {
-  const { members, agents } = useAuth();
-  const [search, setSearch] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [onClose]);
-
-  const q = search.toLowerCase();
-  const filteredMembers = members.filter((m) =>
-    m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q),
-  );
-  const filteredAgents = agents.filter((a) =>
-    a.name.toLowerCase().includes(q),
-  );
-
-  const isSelected = (type: string, id: string) =>
-    issue.assignee_type === type && issue.assignee_id === id;
+  const [open, setOpen] = useState(false);
+  const date = dueDate ? new Date(dueDate) : undefined;
+  const isOverdue = date ? date < new Date() : false;
 
   return (
-    <div
-      ref={ref}
-      className="absolute right-0 top-full z-50 mt-1 w-64 rounded-lg border bg-popover shadow-md"
-    >
-      <div className="p-2">
-        <input
-          ref={inputRef}
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search..."
-          className="w-full rounded-md border bg-background px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger className="flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 hover:bg-accent/30 transition-colors">
+        {date ? (
+          <span className={isOverdue ? "text-red-500" : ""}>
+            {date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">None</span>
+        )}
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="end">
+        <Calendar
+          mode="single"
+          selected={date}
+          onSelect={(d: Date | undefined) => {
+            onUpdate({ due_date: d ? d.toISOString() : null });
+            setOpen(false);
+          }}
         />
-      </div>
-
-      <div className="max-h-64 overflow-y-auto px-1 pb-1">
-        {/* Unassign option */}
-        {issue.assignee_id && (
-          <>
+        {date && (
+          <div className="border-t px-3 py-2">
             <button
-              onClick={() => onSelect(null, null)}
-              className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-xs hover:bg-accent"
+              onClick={() => {
+                onUpdate({ due_date: null });
+                setOpen(false);
+              }}
+              className="text-xs text-muted-foreground hover:text-foreground"
             >
-              <X className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-muted-foreground">Unassign</span>
+              Clear date
             </button>
-            <div className="my-1 border-t mx-1" />
-          </>
-        )}
-
-        {/* Members */}
-        {filteredMembers.length > 0 && (
-          <>
-            <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              Members
-            </div>
-            {filteredMembers.map((m) => (
-              <button
-                key={m.user_id}
-                onClick={() => onSelect("member", m.user_id)}
-                className={`flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
-                  isSelected("member", m.user_id) ? "bg-accent" : "hover:bg-accent/50"
-                }`}
-              >
-                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground">
-                  {m.name
-                    .split(" ")
-                    .map((w) => w[0])
-                    .join("")
-                    .toUpperCase()
-                    .slice(0, 2)}
-                </div>
-                <div className="min-w-0 flex-1 text-left">
-                  <div className="truncate font-medium">{m.name}</div>
-                </div>
-                {isSelected("member", m.user_id) && (
-                  <span className="text-primary text-[10px] font-medium">Assigned</span>
-                )}
-              </button>
-            ))}
-          </>
-        )}
-
-        {/* Agents */}
-        {filteredAgents.length > 0 && (
-          <>
-            <div className="px-2 py-1 mt-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              Agents
-            </div>
-            {filteredAgents.map((a) => (
-              <button
-                key={a.id}
-                onClick={() => onSelect("agent", a.id)}
-                className={`flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
-                  isSelected("agent", a.id) ? "bg-accent" : "hover:bg-accent/50"
-                }`}
-              >
-                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300">
-                  <Bot className="h-3 w-3" />
-                </div>
-                <div className="min-w-0 flex-1 text-left">
-                  <div className="truncate font-medium">{a.name}</div>
-                </div>
-                {isSelected("agent", a.id) && (
-                  <span className="text-primary text-[10px] font-medium">Assigned</span>
-                )}
-              </button>
-            ))}
-          </>
-        )}
-
-        {filteredMembers.length === 0 && filteredAgents.length === 0 && (
-          <div className="px-2 py-3 text-center text-xs text-muted-foreground">
-            No results found
           </div>
         )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Acceptance Criteria Editor
+// ---------------------------------------------------------------------------
+
+function AcceptanceCriteriaEditor({
+  criteria,
+  onUpdate,
+}: {
+  criteria: string[];
+  onUpdate: (updates: Partial<UpdateIssueRequest>) => void;
+}) {
+  const [newItem, setNewItem] = useState("");
+
+  const addItem = () => {
+    if (!newItem.trim()) return;
+    onUpdate({ acceptance_criteria: [...criteria, newItem.trim()] });
+    setNewItem("");
+  };
+
+  const removeItem = (index: number) => {
+    onUpdate({ acceptance_criteria: criteria.filter((_, i) => i !== index) });
+  };
+
+  if (criteria.length === 0 && !newItem) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-2">
+      <h3 className="text-xs font-medium text-muted-foreground">Acceptance Criteria</h3>
+      <div className="space-y-1">
+        {criteria.map((item, i) => (
+          <div key={i} className="group flex items-start gap-2 text-sm">
+            <span className="mt-0.5 text-muted-foreground">&bull;</span>
+            <span className="flex-1">{item}</span>
+            <button
+              onClick={() => removeItem(i)}
+              className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-opacity"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ))}
       </div>
+      <form
+        onSubmit={(e) => { e.preventDefault(); addItem(); }}
+        className="flex items-center gap-2"
+      >
+        <input
+          value={newItem}
+          onChange={(e) => setNewItem(e.target.value)}
+          placeholder="Add criteria..."
+          className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground"
+        />
+      </form>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Context Refs Editor
+// ---------------------------------------------------------------------------
+
+function ContextRefsEditor({
+  refs,
+  onUpdate,
+}: {
+  refs: string[];
+  onUpdate: (updates: Partial<UpdateIssueRequest>) => void;
+}) {
+  const [newRef, setNewRef] = useState("");
+
+  const addRef = () => {
+    if (!newRef.trim()) return;
+    onUpdate({ context_refs: [...refs, newRef.trim()] });
+    setNewRef("");
+  };
+
+  const removeRef = (index: number) => {
+    onUpdate({ context_refs: refs.filter((_, i) => i !== index) });
+  };
+
+  if (refs.length === 0 && !newRef) {
+    return null;
+  }
+
+  const isUrl = (s: string) => s.startsWith("http://") || s.startsWith("https://");
+
+  return (
+    <div className="space-y-2">
+      <h3 className="text-xs font-medium text-muted-foreground">Context References</h3>
+      <div className="space-y-1">
+        {refs.map((ref, i) => (
+          <div key={i} className="group flex items-center gap-2 text-sm">
+            <Link2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            {isUrl(ref) ? (
+              <a href={ref} target="_blank" rel="noopener noreferrer" className="flex-1 text-blue-500 hover:underline truncate">
+                {ref}
+              </a>
+            ) : (
+              <span className="flex-1 truncate">{ref}</span>
+            )}
+            <button
+              onClick={() => removeRef(i)}
+              className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-opacity"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <form
+        onSubmit={(e) => { e.preventDefault(); addRef(); }}
+        className="flex items-center gap-2"
+      >
+        <input
+          value={newRef}
+          onChange={(e) => setNewRef(e.target.value)}
+          placeholder="Add reference URL..."
+          className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground"
+        />
+      </form>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Repository Editor
+// ---------------------------------------------------------------------------
+
+function RepositoryEditor({
+  repository,
+  onUpdate,
+}: {
+  repository: { url: string; branch?: string; path?: string } | null;
+  onUpdate: (updates: Partial<UpdateIssueRequest>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState("");
+  const [branch, setBranch] = useState("");
+  const [path, setPath] = useState("");
+
+  const handleOpen = (v: boolean) => {
+    if (v) {
+      setUrl(repository?.url ?? "");
+      setBranch(repository?.branch ?? "");
+      setPath(repository?.path ?? "");
+    }
+    setOpen(v);
+  };
+
+  const save = () => {
+    if (!url.trim()) {
+      onUpdate({ repository: null });
+    } else {
+      onUpdate({
+        repository: {
+          url: url.trim(),
+          branch: branch.trim() || undefined,
+          path: path.trim() || undefined,
+        },
+      });
+    }
+    setOpen(false);
+  };
+
+  const clear = () => {
+    onUpdate({ repository: null });
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={handleOpen}>
+      <PopoverTrigger className="flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 hover:bg-accent/30 transition-colors">
+        {repository ? (
+          <>
+            <GitBranch className="h-3 w-3 shrink-0 text-muted-foreground" />
+            <span className="truncate text-xs">{repository.branch ?? "main"}</span>
+          </>
+        ) : (
+          <span className="text-muted-foreground text-xs">None</span>
+        )}
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-auto min-w-48 p-3 space-y-2.5">
+        <div className="text-xs font-medium">Repository</div>
+        <div className="space-y-2">
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://github.com/org/repo"
+            className="w-full rounded-md border bg-background px-2.5 py-1.5 text-xs outline-none focus:ring-1 focus:ring-ring"
+            autoFocus
+          />
+          <input
+            value={branch}
+            onChange={(e) => setBranch(e.target.value)}
+            placeholder="Branch"
+            className="w-full rounded-md border bg-background px-2.5 py-1.5 text-xs outline-none focus:ring-1 focus:ring-ring"
+          />
+          <input
+            value={path}
+            onChange={(e) => setPath(e.target.value)}
+            placeholder="Path"
+            className="w-full rounded-md border bg-background px-2.5 py-1.5 text-xs outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        <div className="flex items-center justify-between pt-1">
+          {repository && (
+            <button
+              onClick={clear}
+              className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+            >
+              Remove
+            </button>
+          )}
+          <button
+            onClick={save}
+            className="ml-auto rounded-md bg-primary px-3 py-1 text-xs text-primary-foreground hover:bg-primary/90"
+          >
+            Save
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -257,13 +409,17 @@ export default function IssueDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const { getActorName } = useAuth();
+  const router = useRouter();
+  const { user, getActorName } = useAuth();
+  const { updateTabTitle, activeTabId, closeTabByPath } = useTabStore();
   const [issue, setIssue] = useState<Issue | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [commentText, setCommentText] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [showAssigneePicker, setShowAssigneePicker] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState("");
 
   useEffect(() => {
     setIssue(null);
@@ -277,6 +433,13 @@ export default function IssueDetailPage({
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [id]);
+
+  // Sync tab title with loaded issue title
+  useEffect(() => {
+    if (issue?.title && activeTabId) {
+      updateTabTitle(activeTabId, issue.title);
+    }
+  }, [issue?.title, activeTabId, updateTabTitle]);
 
   const handleSubmitComment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -293,30 +456,91 @@ export default function IssueDetailPage({
     }
   };
 
-  const handleAssigneeChange = async (
-    type: IssueAssigneeType | null,
-    assigneeId: string | null,
-  ) => {
-    if (!issue) return;
-    setShowAssigneePicker(false);
-    // Optimistic update
-    setIssue({
-      ...issue,
-      assignee_type: type,
-      assignee_id: assigneeId,
-    });
-    try {
-      const updated = await api.updateIssue(id, {
-        assignee_type: type,
-        assignee_id: assigneeId,
+  const handleUpdateField = useCallback(
+    (updates: Partial<UpdateIssueRequest>) => {
+      if (!issue) return;
+      const prev = issue;
+      setIssue((curr) => (curr ? ({ ...curr, ...updates } as Issue) : curr));
+      api.updateIssue(id, updates).catch(() => {
+        setIssue(prev);
+        toast.error("Failed to update issue");
       });
-      setIssue(updated);
-    } catch (err) {
-      console.error("Failed to update assignee:", err);
-      // Revert on error
-      setIssue(issue);
+    },
+    [issue, id],
+  );
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await api.deleteIssue(issue!.id);
+      toast.success("Issue deleted");
+      closeTabByPath(`/issues/${id}`);
+      router.push("/issues");
+    } catch {
+      toast.error("Failed to delete issue");
+      setDeleting(false);
     }
   };
+
+  const startEditComment = (c: Comment) => {
+    setEditingCommentId(c.id);
+    setEditContent(c.content);
+  };
+
+  const handleSaveEditComment = async () => {
+    if (!editingCommentId || !editContent.trim()) return;
+    try {
+      const updated = await api.updateComment(editingCommentId, editContent.trim());
+      setComments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      setEditingCommentId(null);
+    } catch {
+      toast.error("Failed to update comment");
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    try {
+      await api.deleteComment(commentId);
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
+    } catch {
+      toast.error("Failed to delete comment");
+    }
+  };
+
+  // Real-time comment updates
+  useWSEvent(
+    "comment:created",
+    useCallback((payload: unknown) => {
+      const { comment } = payload as CommentCreatedPayload;
+      if (comment.issue_id !== id) return;
+      // Skip own comments — already added locally via API response
+      if (comment.author_type === "member" && comment.author_id === user?.id) return;
+      setComments((prev) => {
+        if (prev.some((c) => c.id === comment.id)) return prev;
+        return [...prev, comment];
+      });
+    }, [id, user?.id]),
+  );
+
+  useWSEvent(
+    "comment:updated",
+    useCallback((payload: unknown) => {
+      const { comment } = payload as CommentUpdatedPayload;
+      if (comment.issue_id === id) {
+        setComments((prev) => prev.map((c) => (c.id === comment.id ? comment : c)));
+      }
+    }, [id]),
+  );
+
+  useWSEvent(
+    "comment:deleted",
+    useCallback((payload: unknown) => {
+      const { comment_id, issue_id } = payload as CommentDeletedPayload;
+      if (issue_id === id) {
+        setComments((prev) => prev.filter((c) => c.id !== comment_id));
+      }
+    }, [id]),
+  );
 
   if (loading) {
     return (
@@ -334,25 +558,47 @@ export default function IssueDetailPage({
     );
   }
 
-  const statusCfg = STATUS_CONFIG[issue.status];
-  const priorityCfg = PRIORITY_CONFIG[issue.priority];
-  const isOverdue =
-    issue.due_date && new Date(issue.due_date) < new Date() && issue.status !== "done";
-
   return (
     <div className="flex h-full">
       {/* LEFT: Content area */}
       <div className="flex-1 overflow-y-auto">
         {/* Header bar */}
-        <div className="sticky top-0 z-10 flex h-11 items-center gap-1.5 border-b bg-background px-6 text-[13px]">
-          <Link
-            href="/issues"
-            className="text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Issues
-          </Link>
-          <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
-          <span className="truncate text-muted-foreground">{issue.id.slice(0, 8)}</span>
+        <div className="sticky top-0 z-10 flex h-11 items-center justify-between border-b bg-background px-6 text-[13px]">
+          <div className="flex items-center gap-1.5">
+            <Link
+              href="/issues"
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Issues
+            </Link>
+            <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
+            <span className="truncate text-muted-foreground">{issue.id.slice(0, 8)}</span>
+          </div>
+          <AlertDialog>
+            <AlertDialogTrigger
+              render={<button className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors" />}
+            >
+              <Trash2 className="h-4 w-4" />
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete issue</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete this issue and all its comments. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="bg-destructive text-white hover:bg-destructive/90"
+                >
+                  {deleting ? "Deleting..." : "Delete"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
 
         {/* Content */}
@@ -369,6 +615,19 @@ export default function IssueDetailPage({
             </div>
           )}
 
+          {(issue.acceptance_criteria.length > 0 || issue.context_refs.length > 0) && (
+            <div className="space-y-4 mt-4">
+              <AcceptanceCriteriaEditor
+                criteria={issue.acceptance_criteria}
+                onUpdate={handleUpdateField}
+              />
+              <ContextRefsEditor
+                refs={issue.context_refs}
+                onUpdate={handleUpdateField}
+              />
+            </div>
+          )}
+
           <div className="my-8 border-t" />
 
           {/* Activity / Comments */}
@@ -376,26 +635,57 @@ export default function IssueDetailPage({
             <h2 className="text-[13px] font-medium">Activity</h2>
 
             <div className="mt-4">
-              {comments.map((comment) => (
-                <div key={comment.id} className="relative py-3">
-                  <div className="flex items-center gap-2.5">
-                    <ActorAvatar
-                      actorType={comment.author_type}
-                      actorId={comment.author_id}
-                      size={28}
-                    />
-                    <span className="text-[13px] font-medium">
-                      {getActorName(comment.author_type, comment.author_id)}
-                    </span>
-                    <span className="text-[12px] text-muted-foreground">
-                      {timeAgo(comment.created_at)}
-                    </span>
+              {comments.map((comment) => {
+                const isOwn = comment.author_type === "member" && comment.author_id === user?.id;
+                return (
+                  <div key={comment.id} className="group relative py-3">
+                    <div className="flex items-center gap-2.5">
+                      <ActorAvatar
+                        actorType={comment.author_type}
+                        actorId={comment.author_id}
+                        size={28}
+                      />
+                      <span className="text-[13px] font-medium">
+                        {getActorName(comment.author_type, comment.author_id)}
+                      </span>
+                      <span className="text-[12px] text-muted-foreground">
+                        {timeAgo(comment.created_at)}
+                      </span>
+                      {isOwn && (
+                        <div className="ml-auto flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => startEditComment(comment)}
+                            className="p-1 text-muted-foreground hover:text-foreground rounded"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteComment(comment.id)}
+                            className="p-1 text-muted-foreground hover:text-destructive rounded"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {editingCommentId === comment.id ? (
+                      <form onSubmit={(e) => { e.preventDefault(); handleSaveEditComment(); }} className="mt-2 pl-[38px]">
+                        <input
+                          autoFocus
+                          value={editContent}
+                          onChange={(e) => setEditContent(e.target.value)}
+                          className="w-full text-[13px] bg-transparent border-b outline-none"
+                          onKeyDown={(e) => { if (e.key === "Escape") setEditingCommentId(null); }}
+                        />
+                      </form>
+                    ) : (
+                      <div className="mt-2 pl-[38px] text-[13px] leading-[1.6] text-foreground/85 whitespace-pre-wrap">
+                        {comment.content}
+                      </div>
+                    )}
                   </div>
-                  <div className="mt-2 pl-[38px] text-[13px] leading-[1.6] text-foreground/85 whitespace-pre-wrap">
-                    {comment.content}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Comment input */}
@@ -430,51 +720,27 @@ export default function IssueDetailPage({
 
           <div className="space-y-0.5">
             <PropRow label="Status">
-              <StatusIcon status={issue.status} className="h-3.5 w-3.5" />
-              <span className={statusCfg.iconColor}>{statusCfg.label}</span>
+              <StatusPicker status={issue.status} onUpdate={handleUpdateField} />
             </PropRow>
 
             <PropRow label="Priority">
-              <PriorityIcon priority={issue.priority} />
-              <span>{priorityCfg.label}</span>
+              <PriorityPicker priority={issue.priority} onUpdate={handleUpdateField} />
             </PropRow>
 
-            <div className="relative">
-              <PropRow
-                label="Assignee"
-                onClick={() => setShowAssigneePicker(!showAssigneePicker)}
-              >
-                {issue.assignee_type && issue.assignee_id ? (
-                  <>
-                    <ActorAvatar
-                      actorType={issue.assignee_type}
-                      actorId={issue.assignee_id}
-                      size={18}
-                    />
-                    <span>{getActorName(issue.assignee_type, issue.assignee_id)}</span>
-                  </>
-                ) : (
-                  <span className="text-muted-foreground">Unassigned</span>
-                )}
-              </PropRow>
-
-              {showAssigneePicker && (
-                <AssigneePicker
-                  issue={issue}
-                  onSelect={handleAssigneeChange}
-                  onClose={() => setShowAssigneePicker(false)}
-                />
-              )}
-            </div>
+            <PropRow label="Assignee">
+              <AssigneePicker
+                assigneeType={issue.assignee_type}
+                assigneeId={issue.assignee_id}
+                onUpdate={handleUpdateField}
+              />
+            </PropRow>
 
             <PropRow label="Due date">
-              {issue.due_date ? (
-                <span className={isOverdue ? "text-red-500" : ""}>
-                  {shortDate(issue.due_date)}
-                </span>
-              ) : (
-                <span className="text-muted-foreground">None</span>
-              )}
+              <DueDatePicker dueDate={issue.due_date} onUpdate={handleUpdateField} />
+            </PropRow>
+
+            <PropRow label="Repository">
+              <RepositoryEditor repository={issue.repository} onUpdate={handleUpdateField} />
             </PropRow>
 
             <PropRow label="Created by">

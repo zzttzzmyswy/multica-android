@@ -1,6 +1,9 @@
 -- name: ListIssues :many
 SELECT * FROM issue
 WHERE workspace_id = $1
+  AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status'))
+  AND (sqlc.narg('priority')::text IS NULL OR priority = sqlc.narg('priority'))
+  AND (sqlc.narg('assignee_id')::uuid IS NULL OR assignee_id = sqlc.narg('assignee_id'))
 ORDER BY position ASC, created_at DESC
 LIMIT $2 OFFSET $3;
 
@@ -27,6 +30,10 @@ UPDATE issue SET
     assignee_type = sqlc.narg('assignee_type'),
     assignee_id = sqlc.narg('assignee_id'),
     position = COALESCE(sqlc.narg('position'), position),
+    due_date = sqlc.narg('due_date'),
+    acceptance_criteria = COALESCE(sqlc.narg('acceptance_criteria'), acceptance_criteria),
+    context_refs = COALESCE(sqlc.narg('context_refs'), context_refs),
+    repository = COALESCE(sqlc.narg('repository'), repository),
     updated_at = now()
 WHERE id = $1
 RETURNING *;

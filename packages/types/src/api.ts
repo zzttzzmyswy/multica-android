@@ -23,6 +23,19 @@ export interface UpdateIssueRequest {
   assignee_type?: IssueAssigneeType | null;
   assignee_id?: string | null;
   position?: number;
+  due_date?: string | null;
+  acceptance_criteria?: string[];
+  context_refs?: string[];
+  repository?: { url: string; branch?: string; path?: string } | null;
+}
+
+export interface ListIssuesParams {
+  limit?: number;
+  offset?: number;
+  workspace_id?: string;
+  status?: IssueStatus;
+  priority?: IssuePriority;
+  assignee_id?: string;
 }
 
 export interface ListIssuesResponse {

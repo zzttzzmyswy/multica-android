@@ -1,12 +1,16 @@
 import type { Issue } from "./issue.js";
 import type { Agent } from "./agent.js";
 import type { InboxItem } from "./inbox.js";
+import type { Comment } from "./comment.js";
 
 // WebSocket event types (matching Go server protocol/events.go)
 export type WSEventType =
   | "issue:created"
   | "issue:updated"
   | "issue:deleted"
+  | "comment:created"
+  | "comment:updated"
+  | "comment:deleted"
   | "agent:status"
   | "task:dispatch"
   | "task:progress"
@@ -39,4 +43,17 @@ export interface AgentStatusPayload {
 
 export interface InboxNewPayload {
   item: InboxItem;
+}
+
+export interface CommentCreatedPayload {
+  comment: Comment;
+}
+
+export interface CommentUpdatedPayload {
+  comment: Comment;
+}
+
+export interface CommentDeletedPayload {
+  comment_id: string;
+  issue_id: string;
 }

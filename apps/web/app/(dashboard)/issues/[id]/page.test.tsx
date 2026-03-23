@@ -50,16 +50,42 @@ vi.mock("../../../../lib/auth-context", () => ({
   }),
 }));
 
+// Mock ws-context
+vi.mock("../../../../lib/ws-context", () => ({
+  useWSEvent: () => {},
+}));
+
+// Mock @multica/ui calendar (react-day-picker needs browser APIs)
+vi.mock("@multica/ui/components/ui/calendar", () => ({
+  Calendar: () => null,
+}));
+
+// Mock tab-store
+vi.mock("../../../../lib/tab-store", () => ({
+  useTabStore: () => ({
+    updateTabTitle: vi.fn(),
+    activeTabId: "tab-1",
+  }),
+}));
+
 // Mock api
 const mockGetIssue = vi.hoisted(() => vi.fn());
 const mockListComments = vi.hoisted(() => vi.fn());
 const mockCreateComment = vi.hoisted(() => vi.fn());
+const mockUpdateComment = vi.hoisted(() => vi.fn());
+const mockDeleteComment = vi.hoisted(() => vi.fn());
+const mockDeleteIssue = vi.hoisted(() => vi.fn());
+const mockUpdateIssue = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../../lib/api", () => ({
   api: {
     getIssue: (...args: any[]) => mockGetIssue(...args),
     listComments: (...args: any[]) => mockListComments(...args),
     createComment: (...args: any[]) => mockCreateComment(...args),
+    updateComment: (...args: any[]) => mockUpdateComment(...args),
+    deleteComment: (...args: any[]) => mockDeleteComment(...args),
+    deleteIssue: (...args: any[]) => mockDeleteIssue(...args),
+    updateIssue: (...args: any[]) => mockUpdateIssue(...args),
   },
 }));
 
