@@ -41,9 +41,8 @@ func inboxToResponse(i db.InboxItem) InboxItemResponse {
 }
 
 func (h *Handler) ListInbox(w http.ResponseWriter, r *http.Request) {
-	userID := r.Header.Get("X-User-ID")
-	if userID == "" {
-		writeError(w, http.StatusUnauthorized, "user not authenticated")
+	userID, ok := requireUserID(w, r)
+	if !ok {
 		return
 	}
 
@@ -81,6 +80,9 @@ func (h *Handler) ListInbox(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) MarkInboxRead(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if _, ok := h.loadInboxItemForUser(w, r, id); !ok {
+		return
+	}
 	item, err := h.Queries.MarkInboxRead(r.Context(), parseUUID(id))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to mark read")
@@ -91,6 +93,9 @@ func (h *Handler) MarkInboxRead(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ArchiveInboxItem(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if _, ok := h.loadInboxItemForUser(w, r, id); !ok {
+		return
+	}
 	item, err := h.Queries.ArchiveInboxItem(r.Context(), parseUUID(id))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to archive")

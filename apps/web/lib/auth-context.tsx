@@ -24,6 +24,10 @@ interface AuthContextValue {
   switchWorkspace: (workspaceId: string) => Promise<void>;
   createWorkspace: (data: { name: string; slug: string; description?: string }) => Promise<Workspace>;
   updateWorkspace: (ws: Workspace) => void;
+  updateCurrentUser: (nextUser: User) => void;
+  leaveWorkspace: (workspaceId: string) => Promise<void>;
+  deleteWorkspace: (workspaceId: string) => Promise<void>;
+  refreshWorkspaces: () => Promise<Workspace[]>;
   refreshMembers: () => Promise<void>;
   refreshAgents: () => Promise<void>;
   getMemberName: (userId: string) => string;
@@ -43,6 +47,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
+  const hydrateWorkspace = useCallback(async (wsList: Workspace[], preferredWorkspaceId?: string | null) => {
+    setWorkspaces(wsList);
+
+    const nextWorkspace =
+      (preferredWorkspaceId ? wsList.find((item) => item.id === preferredWorkspaceId) : null) ??
+      wsList[0] ??
+      null;
+
+    if (!nextWorkspace) {
+      api.setWorkspaceId(null);
+      localStorage.removeItem("multica_workspace_id");
+      setWorkspace(null);
+      setMembers([]);
+      setAgents([]);
+      return null;
+    }
+
+    api.setWorkspaceId(nextWorkspace.id);
+    localStorage.setItem("multica_workspace_id", nextWorkspace.id);
+    setWorkspace(nextWorkspace);
+
+    const [nextMembers, nextAgents] = await Promise.all([
+      api.listMembers(nextWorkspace.id),
+      api.listAgents({ workspace_id: nextWorkspace.id }),
+    ]);
+    setMembers(nextMembers);
+    setAgents(nextAgents);
+
+    return nextWorkspace;
+  }, []);
+
+  const refreshWorkspaces = useCallback(async () => {
+    const storedWorkspaceId = localStorage.getItem("multica_workspace_id");
+    const wsList = await api.listWorkspaces();
+    await hydrateWorkspace(wsList, workspace?.id ?? storedWorkspaceId);
+    return wsList;
+  }, [hydrateWorkspace, workspace]);
+
   // Initialize from stored token
   useEffect(() => {
     const token = localStorage.getItem("multica_token");
@@ -53,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     api.setToken(token);
-    if (wsId) api.setWorkspaceId(wsId);
+    api.setWorkspaceId(wsId);
 
     (async () => {
       try {
@@ -61,30 +103,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(me);
 
         const wsList = await api.listWorkspaces();
-        setWorkspaces(wsList);
-        if (wsList.length > 0) {
-          const stored = wsId ? wsList.find(w => w.id === wsId) : null;
-          const ws = stored ?? wsList[0]!;
-          setWorkspace(ws);
-          api.setWorkspaceId(ws.id);
-          localStorage.setItem("multica_workspace_id", ws.id);
-
-          const [m, a] = await Promise.all([
-            api.listMembers(ws.id),
-            api.listAgents({ workspace_id: ws.id }),
-          ]);
-          setMembers(m);
-          setAgents(a);
-        }
+        await hydrateWorkspace(wsList, wsId);
       } catch {
         // Token invalid, clear it
+        api.setToken(null);
+        api.setWorkspaceId(null);
         localStorage.removeItem("multica_token");
         localStorage.removeItem("multica_workspace_id");
+        setUser(null);
+        setWorkspace(null);
+        setWorkspaces([]);
+        setMembers([]);
+        setAgents([]);
       } finally {
         setIsLoading(false);
       }
     })();
-  }, []);
+  }, [hydrateWorkspace]);
 
   const login = useCallback(async (email: string, name?: string) => {
     const { token, user: u } = await api.login(email, name);
@@ -92,27 +127,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("multica_token", token);
     setUser(u);
 
-    // Load workspace
     const wsList = await api.listWorkspaces();
-    setWorkspaces(wsList);
-    if (wsList.length > 0) {
-      const ws = wsList[0]!;
-      setWorkspace(ws);
-      api.setWorkspaceId(ws.id);
-      localStorage.setItem("multica_workspace_id", ws.id);
-
-      const [m, a] = await Promise.all([
-        api.listMembers(ws.id),
-        api.listAgents({ workspace_id: ws.id }),
-      ]);
-      setMembers(m);
-      setAgents(a);
-    }
+    await hydrateWorkspace(wsList);
 
     router.push("/issues");
-  }, [router]);
+  }, [hydrateWorkspace, router]);
 
   const logout = useCallback(() => {
+    api.setToken(null);
+    api.setWorkspaceId(null);
     localStorage.removeItem("multica_token");
     localStorage.removeItem("multica_workspace_id");
     setUser(null);
@@ -124,32 +147,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [router]);
 
   const switchWorkspace = useCallback(async (workspaceId: string) => {
-    const ws = workspaces.find(w => w.id === workspaceId);
+    const ws = workspaces.find((item) => item.id === workspaceId);
     if (!ws) return;
 
-    api.setWorkspaceId(ws.id);
-    localStorage.setItem("multica_workspace_id", ws.id);
-    setWorkspace(ws);
-
-    const [m, a] = await Promise.all([
-      api.listMembers(ws.id),
-      api.listAgents({ workspace_id: ws.id }),
-    ]);
-    setMembers(m);
-    setAgents(a);
-
-    window.location.reload();
-  }, [workspaces]);
+    await hydrateWorkspace(workspaces, ws.id);
+    router.refresh();
+  }, [hydrateWorkspace, router, workspaces]);
 
   const createNewWorkspace = useCallback(async (data: { name: string; slug: string; description?: string }) => {
     const ws = await api.createWorkspace(data);
-    setWorkspaces(prev => [...prev, ws]);
+    setWorkspaces((prev) => [...prev, ws]);
     return ws;
   }, []);
 
   const updateWorkspaceState = useCallback((ws: Workspace) => {
     setWorkspace(ws);
+    setWorkspaces((prev) => prev.map((item) => (item.id === ws.id ? ws : item)));
   }, []);
+
+  const updateCurrentUser = useCallback((nextUser: User) => {
+    setUser(nextUser);
+  }, []);
+
+  const reloadAfterWorkspaceRemoval = useCallback(async (removedWorkspaceId: string) => {
+    const wsList = await api.listWorkspaces();
+    const preferredWorkspaceId = workspace?.id === removedWorkspaceId ? null : workspace?.id ?? null;
+    await hydrateWorkspace(wsList, preferredWorkspaceId);
+    router.refresh();
+  }, [hydrateWorkspace, router, workspace]);
+
+  const leaveWorkspace = useCallback(async (workspaceId: string) => {
+    await api.leaveWorkspace(workspaceId);
+    await reloadAfterWorkspaceRemoval(workspaceId);
+  }, [reloadAfterWorkspaceRemoval]);
+
+  const deleteWorkspace = useCallback(async (workspaceId: string) => {
+    await api.deleteWorkspace(workspaceId);
+    await reloadAfterWorkspaceRemoval(workspaceId);
+  }, [reloadAfterWorkspaceRemoval]);
 
   const refreshMembers = useCallback(async () => {
     if (!workspace) return;
@@ -215,6 +250,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         switchWorkspace,
         createWorkspace: createNewWorkspace,
         updateWorkspace: updateWorkspaceState,
+        updateCurrentUser,
+        leaveWorkspace,
+        deleteWorkspace,
+        refreshWorkspaces,
         refreshMembers,
         refreshAgents,
         getMemberName,

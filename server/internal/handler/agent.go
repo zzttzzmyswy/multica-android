@@ -49,12 +49,8 @@ func agentToResponse(a db.Agent) AgentResponse {
 }
 
 func (h *Handler) ListAgents(w http.ResponseWriter, r *http.Request) {
-	workspaceID := r.URL.Query().Get("workspace_id")
-	if workspaceID == "" {
-		workspaceID = r.Header.Get("X-Workspace-ID")
-	}
-	if workspaceID == "" {
-		writeError(w, http.StatusBadRequest, "workspace_id is required")
+	workspaceID := resolveWorkspaceID(r)
+	if _, ok := h.requireWorkspaceMember(w, r, workspaceID, "workspace not found"); !ok {
 		return
 	}
 
@@ -74,9 +70,8 @@ func (h *Handler) ListAgents(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetAgent(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	agent, err := h.Queries.GetAgent(r.Context(), parseUUID(id))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "agent not found")
+	agent, ok := h.loadAgentForUser(w, r, id)
+	if !ok {
 		return
 	}
 	writeJSON(w, http.StatusOK, agentToResponse(agent))
@@ -92,17 +87,21 @@ type CreateAgentRequest struct {
 }
 
 func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
+	workspaceID := resolveWorkspaceID(r)
+	if _, ok := h.requireWorkspaceRole(w, r, workspaceID, "workspace not found", "owner", "admin"); !ok {
+		return
+	}
+
 	var req CreateAgentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
-	workspaceID := r.URL.Query().Get("workspace_id")
-	if workspaceID == "" {
-		workspaceID = r.Header.Get("X-Workspace-ID")
+	ownerID, ok := requireUserID(w, r)
+	if !ok {
+		return
 	}
-	ownerID := r.Header.Get("X-User-ID")
 
 	if req.Name == "" {
 		writeError(w, http.StatusBadRequest, "name is required")
@@ -152,6 +151,13 @@ type UpdateAgentRequest struct {
 
 func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	agent, ok := h.loadAgentForUser(w, r, id)
+	if !ok {
+		return
+	}
+	if _, ok := h.requireWorkspaceRole(w, r, uuidToString(agent.WorkspaceID), "agent not found", "owner", "admin"); !ok {
+		return
+	}
 
 	var req UpdateAgentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

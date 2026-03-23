@@ -3,6 +3,9 @@ import type {
   CreateIssueRequest,
   UpdateIssueRequest,
   ListIssuesResponse,
+  UpdateMeRequest,
+  CreateMemberRequest,
+  UpdateMemberRequest,
   Agent,
   InboxItem,
   Comment,
@@ -25,11 +28,11 @@ export class ApiClient {
     this.baseUrl = baseUrl;
   }
 
-  setToken(token: string) {
+  setToken(token: string | null) {
     this.token = token;
   }
 
-  setWorkspaceId(id: string) {
+  setWorkspaceId(id: string | null) {
     this.workspaceId = id;
   }
 
@@ -51,7 +54,16 @@ export class ApiClient {
     });
 
     if (!res.ok) {
-      throw new Error(`API error: ${res.status} ${res.statusText}`);
+      let message = `API error: ${res.status} ${res.statusText}`;
+      try {
+        const data = await res.json() as { error?: string };
+        if (typeof data.error === "string" && data.error) {
+          message = data.error;
+        }
+      } catch {
+        // Ignore non-JSON error bodies.
+      }
+      throw new Error(message);
     }
 
     // Handle 204 No Content
@@ -72,6 +84,13 @@ export class ApiClient {
 
   async getMe(): Promise<User> {
     return this.fetch("/api/me");
+  }
+
+  async updateMe(data: UpdateMeRequest): Promise<User> {
+    return this.fetch("/api/me", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
   }
 
   // Issues
@@ -163,7 +182,7 @@ export class ApiClient {
 
   async updateWorkspace(id: string, data: { name?: string; description?: string; settings?: Record<string, unknown> }): Promise<Workspace> {
     return this.fetch(`/api/workspaces/${id}`, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify(data),
     });
   }
@@ -171,5 +190,37 @@ export class ApiClient {
   // Members
   async listMembers(workspaceId: string): Promise<MemberWithUser[]> {
     return this.fetch(`/api/workspaces/${workspaceId}/members`);
+  }
+
+  async createMember(workspaceId: string, data: CreateMemberRequest): Promise<MemberWithUser> {
+    return this.fetch(`/api/workspaces/${workspaceId}/members`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateMember(workspaceId: string, memberId: string, data: UpdateMemberRequest): Promise<MemberWithUser> {
+    return this.fetch(`/api/workspaces/${workspaceId}/members/${memberId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteMember(workspaceId: string, memberId: string): Promise<void> {
+    await this.fetch(`/api/workspaces/${workspaceId}/members/${memberId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async leaveWorkspace(workspaceId: string): Promise<void> {
+    await this.fetch(`/api/workspaces/${workspaceId}/leave`, {
+      method: "POST",
+    });
+  }
+
+  async deleteWorkspace(workspaceId: string): Promise<void> {
+    await this.fetch(`/api/workspaces/${workspaceId}`, {
+      method: "DELETE",
+    });
   }
 }

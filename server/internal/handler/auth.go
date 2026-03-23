@@ -3,13 +3,14 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/multica-ai/multica/server/internal/auth"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
-
-var jwtSecret = []byte("multica-dev-secret-change-in-production")
 
 type UserResponse struct {
 	ID        string  `json:"id"`
@@ -48,6 +49,9 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	req.Name = strings.TrimSpace(req.Name)
+
 	if req.Email == "" {
 		writeError(w, http.StatusBadRequest, "email is required")
 		return
@@ -56,6 +60,11 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	// Try to find existing user
 	user, err := h.Queries.GetUserByEmail(r.Context(), req.Email)
 	if err != nil {
+		if !isNotFound(err) {
+			writeError(w, http.StatusInternalServerError, "failed to load user")
+			return
+		}
+
 		// Create new user
 		name := req.Name
 		if name == "" {
@@ -69,6 +78,15 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "failed to create user: "+err.Error())
 			return
 		}
+	} else if req.Name != "" && req.Name != user.Name {
+		user, err = h.Queries.UpdateUser(r.Context(), db.UpdateUserParams{
+			ID:   user.ID,
+			Name: req.Name,
+		})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to update user")
+			return
+		}
 	}
 
 	// Generate JWT
@@ -80,7 +98,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		"iat":   time.Now().Unix(),
 	})
 
-	tokenString, err := token.SignedString(jwtSecret)
+	tokenString, err := token.SignedString(auth.JWTSecret())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to generate token")
 		return
@@ -93,9 +111,8 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
-	userID := r.Header.Get("X-User-ID")
-	if userID == "" {
-		writeError(w, http.StatusUnauthorized, "user not authenticated")
+	userID, ok := requireUserID(w, r)
+	if !ok {
 		return
 	}
 
@@ -106,4 +123,53 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, userToResponse(user))
+}
+
+type UpdateMeRequest struct {
+	Name      *string `json:"name"`
+	AvatarURL *string `json:"avatar_url"`
+}
+
+func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return
+	}
+
+	var req UpdateMeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	currentUser, err := h.Queries.GetUser(r.Context(), parseUUID(userID))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	name := currentUser.Name
+	if req.Name != nil {
+		name = strings.TrimSpace(*req.Name)
+		if name == "" {
+			writeError(w, http.StatusBadRequest, "name is required")
+			return
+		}
+	}
+
+	params := db.UpdateUserParams{
+		ID:   currentUser.ID,
+		Name: name,
+	}
+	if req.AvatarURL != nil {
+		params.AvatarUrl = pgtype.Text{String: strings.TrimSpace(*req.AvatarURL), Valid: true}
+	}
+
+	updatedUser, err := h.Queries.UpdateUser(r.Context(), params)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update user")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, userToResponse(updatedUser))
 }

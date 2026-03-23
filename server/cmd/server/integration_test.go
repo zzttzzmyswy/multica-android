@@ -59,7 +59,8 @@ func TestMain(m *testing.M) {
 	hub := realtime.NewHub()
 	go hub.Run()
 
-	router := NewRouter(queries, hub)
+	_ = queries
+	router := NewRouter(pool, hub)
 	testServer = httptest.NewServer(router)
 	defer testServer.Close()
 

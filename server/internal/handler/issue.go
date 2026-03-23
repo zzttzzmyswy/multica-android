@@ -79,12 +79,8 @@ func issueToResponse(i db.Issue) IssueResponse {
 func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	workspaceID := r.URL.Query().Get("workspace_id")
-	if workspaceID == "" {
-		workspaceID = r.Header.Get("X-Workspace-ID")
-	}
-	if workspaceID == "" {
-		writeError(w, http.StatusBadRequest, "workspace_id is required")
+	workspaceID := resolveWorkspaceID(r)
+	if _, ok := h.requireWorkspaceMember(w, r, workspaceID, "workspace not found"); !ok {
 		return
 	}
 
@@ -124,9 +120,8 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetIssue(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	issue, err := h.Queries.GetIssue(r.Context(), parseUUID(id))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "issue not found")
+	issue, ok := h.loadIssueForUser(w, r, id)
+	if !ok {
 		return
 	}
 	writeJSON(w, http.StatusOK, issueToResponse(issue))
@@ -157,19 +152,14 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	workspaceID := r.URL.Query().Get("workspace_id")
-	if workspaceID == "" {
-		workspaceID = r.Header.Get("X-Workspace-ID")
-	}
-	if workspaceID == "" {
-		writeError(w, http.StatusBadRequest, "workspace_id is required")
+	workspaceID := resolveWorkspaceID(r)
+	if _, ok := h.requireWorkspaceMember(w, r, workspaceID, "workspace not found"); !ok {
 		return
 	}
 
 	// Get creator from context (set by auth middleware)
-	creatorID := r.Header.Get("X-User-ID")
-	if creatorID == "" {
-		writeError(w, http.StatusUnauthorized, "user not authenticated")
+	creatorID, ok := requireUserID(w, r)
+	if !ok {
 		return
 	}
 
@@ -265,6 +255,9 @@ type UpdateIssueRequest struct {
 
 func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if _, ok := h.loadIssueForUser(w, r, id); !ok {
+		return
+	}
 
 	var req UpdateIssueRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -330,6 +323,10 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) DeleteIssue(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if _, ok := h.loadIssueForUser(w, r, id); !ok {
+		return
+	}
+
 	err := h.Queries.DeleteIssue(r.Context(), parseUUID(id))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete issue")

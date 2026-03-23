@@ -1,24 +1,33 @@
 package handler
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/internal/realtime"
 )
 
-type Handler struct {
-	Queries *db.Queries
-	Hub     *realtime.Hub
+type txStarter interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
 }
 
-func New(queries *db.Queries, hub *realtime.Hub) *Handler {
-	return &Handler{Queries: queries, Hub: hub}
+type Handler struct {
+	Queries   *db.Queries
+	TxStarter txStarter
+	Hub       *realtime.Hub
+}
+
+func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub) *Handler {
+	return &Handler{Queries: queries, TxStarter: txStarter, Hub: hub}
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -111,4 +120,148 @@ func (h *Handler) broadcast(eventType string, payload any) {
 		return
 	}
 	h.Hub.Broadcast(data)
+}
+
+func isNotFound(err error) bool {
+	return errors.Is(err, pgx.ErrNoRows)
+}
+
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+func requestUserID(r *http.Request) string {
+	return r.Header.Get("X-User-ID")
+}
+
+func requireUserID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	userID := requestUserID(r)
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, "user not authenticated")
+		return "", false
+	}
+	return userID, true
+}
+
+func resolveWorkspaceID(r *http.Request) string {
+	workspaceID := r.URL.Query().Get("workspace_id")
+	if workspaceID != "" {
+		return workspaceID
+	}
+	return r.Header.Get("X-Workspace-ID")
+}
+
+func roleAllowed(role string, roles ...string) bool {
+	for _, candidate := range roles {
+		if role == candidate {
+			return true
+		}
+	}
+	return false
+}
+
+func countOwners(members []db.Member) int {
+	owners := 0
+	for _, member := range members {
+		if member.Role == "owner" {
+			owners++
+		}
+	}
+	return owners
+}
+
+func (h *Handler) getWorkspaceMember(ctx context.Context, userID, workspaceID string) (db.Member, error) {
+	return h.Queries.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
+		UserID:      parseUUID(userID),
+		WorkspaceID: parseUUID(workspaceID),
+	})
+}
+
+func (h *Handler) requireWorkspaceMember(w http.ResponseWriter, r *http.Request, workspaceID, notFoundMsg string) (db.Member, bool) {
+	if workspaceID == "" {
+		writeError(w, http.StatusBadRequest, "workspace_id is required")
+		return db.Member{}, false
+	}
+
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return db.Member{}, false
+	}
+
+	member, err := h.getWorkspaceMember(r.Context(), userID, workspaceID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, notFoundMsg)
+		return db.Member{}, false
+	}
+
+	return member, true
+}
+
+func (h *Handler) requireWorkspaceRole(w http.ResponseWriter, r *http.Request, workspaceID, notFoundMsg string, roles ...string) (db.Member, bool) {
+	member, ok := h.requireWorkspaceMember(w, r, workspaceID, notFoundMsg)
+	if !ok {
+		return db.Member{}, false
+	}
+	if !roleAllowed(member.Role, roles...) {
+		writeError(w, http.StatusForbidden, "insufficient permissions")
+		return db.Member{}, false
+	}
+	return member, true
+}
+
+func (h *Handler) loadIssueForUser(w http.ResponseWriter, r *http.Request, issueID string) (db.Issue, bool) {
+	if _, ok := requireUserID(w, r); !ok {
+		return db.Issue{}, false
+	}
+
+	issue, err := h.Queries.GetIssue(r.Context(), parseUUID(issueID))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "issue not found")
+		return db.Issue{}, false
+	}
+
+	if _, ok := h.requireWorkspaceMember(w, r, uuidToString(issue.WorkspaceID), "issue not found"); !ok {
+		return db.Issue{}, false
+	}
+
+	return issue, true
+}
+
+func (h *Handler) loadAgentForUser(w http.ResponseWriter, r *http.Request, agentID string) (db.Agent, bool) {
+	if _, ok := requireUserID(w, r); !ok {
+		return db.Agent{}, false
+	}
+
+	agent, err := h.Queries.GetAgent(r.Context(), parseUUID(agentID))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "agent not found")
+		return db.Agent{}, false
+	}
+
+	if _, ok := h.requireWorkspaceMember(w, r, uuidToString(agent.WorkspaceID), "agent not found"); !ok {
+		return db.Agent{}, false
+	}
+
+	return agent, true
+}
+
+func (h *Handler) loadInboxItemForUser(w http.ResponseWriter, r *http.Request, itemID string) (db.InboxItem, bool) {
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return db.InboxItem{}, false
+	}
+
+	item, err := h.Queries.GetInboxItem(r.Context(), parseUUID(itemID))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "inbox item not found")
+		return db.InboxItem{}, false
+	}
+
+	if item.RecipientType != "member" || uuidToString(item.RecipientID) != userID {
+		writeError(w, http.StatusNotFound, "inbox item not found")
+		return db.InboxItem{}, false
+	}
+
+	return item, true
 }

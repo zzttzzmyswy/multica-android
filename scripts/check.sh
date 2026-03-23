@@ -6,6 +6,24 @@ set -euo pipefail
 # Usage: bash scripts/check.sh
 # ==========================================================================
 
+ENV_FILE="${ENV_FILE:-$(if [ -f .env ]; then echo .env; elif [ -f .env.worktree ]; then echo .env.worktree; else echo .env; fi)}"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+  set +a
+fi
+
+POSTGRES_DB="${POSTGRES_DB:-multica}"
+POSTGRES_USER="${POSTGRES_USER:-multica}"
+POSTGRES_PORT="${POSTGRES_PORT:-5432}"
+PORT="${PORT:-8080}"
+FRONTEND_PORT="${FRONTEND_PORT:-3000}"
+PLAYWRIGHT_BASE_URL="${PLAYWRIGHT_BASE_URL:-http://localhost:${FRONTEND_PORT}}"
+export PLAYWRIGHT_BASE_URL
+
+COMPOSE_CMD=(docker compose --env-file "$ENV_FILE")
+
 BACKEND_PID=""
 FRONTEND_PID=""
 STARTED_BACKEND=false
@@ -57,13 +75,14 @@ wait_for_port() {
 # --------------------------------------------------------------------------
 # Step 0: Ensure DB
 # --------------------------------------------------------------------------
+echo "==> Using env file: $ENV_FILE"
 echo "==> Checking PostgreSQL..."
-if pg_isready -h localhost -p 5432 -U multica > /dev/null 2>&1; then
+if pg_isready -h localhost -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" > /dev/null 2>&1; then
   echo "    Already running."
 else
   echo "    Starting via docker compose..."
-  docker compose up -d
-  until docker compose exec -T postgres pg_isready -U multica > /dev/null 2>&1; do
+  "${COMPOSE_CMD[@]}" up -d
+  until "${COMPOSE_CMD[@]}" exec -T postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" > /dev/null 2>&1; do
     sleep 1
   done
   echo "    PostgreSQL ready."
@@ -96,24 +115,24 @@ echo "==> [3/5] Go tests..."
 echo ""
 echo "==> [4/5] Starting services for E2E..."
 
-if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
-  echo "    Backend already running on :8080"
+if curl -sf "http://localhost:${PORT}/health" > /dev/null 2>&1; then
+  echo "    Backend already running on :$PORT"
 else
   echo "    Starting backend..."
   (cd server && go run ./cmd/server) > /tmp/multica-check-backend.log 2>&1 &
   BACKEND_PID=$!
   STARTED_BACKEND=true
-  wait_for_port 8080 "Backend" 90 "/health"
+  wait_for_port "$PORT" "Backend" 90 "/health"
 fi
 
-if curl -sf http://localhost:3000 > /dev/null 2>&1; then
-  echo "    Frontend already running on :3000"
+if curl -sf "http://localhost:${FRONTEND_PORT}" > /dev/null 2>&1; then
+  echo "    Frontend already running on :$FRONTEND_PORT"
 else
   echo "    Starting frontend..."
   pnpm dev:web > /tmp/multica-check-frontend.log 2>&1 &
   FRONTEND_PID=$!
   STARTED_FRONTEND=true
-  wait_for_port 3000 "Frontend" 120 "/"
+  wait_for_port "$FRONTEND_PORT" "Frontend" 120 "/"
 fi
 
 # --------------------------------------------------------------------------

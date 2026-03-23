@@ -2,10 +2,13 @@ package main
 
 import (
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/multica-ai/multica/server/internal/handler"
 	"github.com/multica-ai/multica/server/internal/middleware"
@@ -13,9 +16,33 @@ import (
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
+func allowedOrigins() []string {
+	raw := strings.TrimSpace(os.Getenv("CORS_ALLOWED_ORIGINS"))
+	if raw == "" {
+		raw = strings.TrimSpace(os.Getenv("FRONTEND_ORIGIN"))
+	}
+	if raw == "" {
+		return []string{"http://localhost:3000"}
+	}
+
+	parts := strings.Split(raw, ",")
+	origins := make([]string, 0, len(parts))
+	for _, part := range parts {
+		origin := strings.TrimSpace(part)
+		if origin != "" {
+			origins = append(origins, origin)
+		}
+	}
+	if len(origins) == 0 {
+		return []string{"http://localhost:3000"}
+	}
+	return origins
+}
+
 // NewRouter creates the fully-configured Chi router with all middleware and routes.
-func NewRouter(queries *db.Queries, hub *realtime.Hub) chi.Router {
-	h := handler.New(queries, hub)
+func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub) chi.Router {
+	queries := db.New(pool)
+	h := handler.New(queries, pool, hub)
 
 	r := chi.NewRouter()
 
@@ -24,7 +51,7 @@ func NewRouter(queries *db.Queries, hub *realtime.Hub) chi.Router {
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.RequestID)
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000"},
+		AllowedOrigins:   allowedOrigins(),
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Workspace-ID"},
 		AllowCredentials: true,
@@ -51,6 +78,7 @@ func NewRouter(queries *db.Queries, hub *realtime.Hub) chi.Router {
 
 		// Auth
 		r.Get("/api/me", h.GetMe)
+		r.Patch("/api/me", h.UpdateMe)
 
 		// Issues
 		r.Route("/api/issues", func(r chi.Router) {
@@ -89,7 +117,15 @@ func NewRouter(queries *db.Queries, hub *realtime.Hub) chi.Router {
 			r.Route("/{id}", func(r chi.Router) {
 				r.Get("/", h.GetWorkspace)
 				r.Put("/", h.UpdateWorkspace)
+				r.Patch("/", h.UpdateWorkspace)
+				r.Delete("/", h.DeleteWorkspace)
 				r.Get("/members", h.ListMembersWithUser)
+				r.Post("/members", h.CreateMember)
+				r.Post("/leave", h.LeaveWorkspace)
+				r.Route("/members/{memberId}", func(r chi.Router) {
+					r.Patch("/", h.UpdateMember)
+					r.Delete("/", h.DeleteMember)
+				})
 			})
 		})
 	})
