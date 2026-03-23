@@ -22,7 +22,8 @@ Multica is an AI-native task management platform — like Linear, but with AI ag
 
 ```bash
 # One-click setup & run
-make setup            # First-time: install deps, start DB, migrate, seed
+make setup            # First-time: install deps, start DB, migrate
+make seed             # Optional: load example data
 make start            # Start backend + frontend together
 make stop             # Stop everything
 
@@ -40,7 +41,7 @@ make test             # Go tests
 make sqlc             # Regenerate sqlc code
 make migrate-up       # Run database migrations
 make migrate-down     # Rollback migrations
-make seed             # Seed sample data
+make seed             # Seed example data
 
 # Infrastructure
 docker compose up -d  # Start PostgreSQL

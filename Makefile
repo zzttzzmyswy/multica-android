@@ -28,7 +28,7 @@ COMPOSE := docker compose --env-file $(ENV_FILE)
 
 # ---------- One-click commands ----------
 
-# First-time setup: install deps, start DB, run migrations, seed data
+# First-time setup: install deps, start DB, run migrations
 setup:
 	@echo "==> Using env file: $(ENV_FILE)"
 	@echo "==> Installing dependencies..."
@@ -45,10 +45,8 @@ setup:
 	fi
 	@echo "==> Running migrations..."
 	cd server && go run ./cmd/migrate up
-	@echo "==> Seeding data..."
-	cd server && go run ./cmd/seed
 	@echo ""
-	@echo "✓ Setup complete! Run 'make start' to launch the app."
+	@echo "✓ Setup complete! Run 'make seed' if you want example data, then 'make start' to launch the app."
 
 # Start all services (backend + frontend)
 start:
