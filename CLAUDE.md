@@ -55,12 +55,19 @@ docker compose down   # Stop PostgreSQL
 - Prefer existing patterns/components over introducing parallel abstractions.
 - Avoid broad refactors unless required by the task.
 
-## 5. Testing Rules
+## 5. UI/UX Rules
+
+- Prefer `packages/ui` shadcn components over custom implementations.
+- Do not introduce extra state (useState, context, reducers) unless explicitly required by the design.
+- Pay close attention to **overflow** (truncate long text, scrollable containers), **alignment**, and **spacing** consistency.
+- When unsure about interaction or state design, ask — the user will provide direction.
+
+## 6. Testing Rules
 
 - **TypeScript**: Vitest. Mock external/third-party dependencies only.
 - **Go**: Standard `go test`. Use testcontainers or test database for DB tests.
 
-## 6. Commit Rules
+## 7. Commit Rules
 
 - Use atomic commits grouped by logical intent.
 - Conventional format:
@@ -71,7 +78,7 @@ docker compose down   # Stop PostgreSQL
   - `test(scope): ...`
   - `chore(scope): ...`
 
-## 7. Minimum Pre-Push Checks
+## 8. Minimum Pre-Push Checks
 
 ```bash
 make check    # Runs all checks: typecheck, unit tests, Go tests, E2E
@@ -85,7 +92,7 @@ make test             # Go tests only
 pnpm exec playwright test   # E2E only (requires backend + frontend running)
 ```
 
-## 8. AI Agent Verification Loop
+## 9. AI Agent Verification Loop
 
 After writing or modifying code, always run the full verification pipeline:
 
@@ -108,7 +115,7 @@ This runs all checks in sequence:
 
 **Quick iteration:** If you know only TypeScript or Go is affected, run individual checks first for faster feedback, then finish with a full `make check` before marking work complete.
 
-## 9. E2E Test Patterns
+## 10. E2E Test Patterns
 
 E2E tests should be self-contained. Use the `TestApiClient` fixture for data setup/teardown:
 
