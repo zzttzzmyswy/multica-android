@@ -32,6 +32,10 @@ type Agent struct {
 	OwnerID            pgtype.UUID        `json:"owner_id"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	Description        string             `json:"description"`
+	Skills             string             `json:"skills"`
+	Tools              []byte             `json:"tools"`
+	Triggers           []byte             `json:"triggers"`
 }
 
 type AgentTaskQueue struct {
@@ -46,6 +50,7 @@ type AgentTaskQueue struct {
 	Result       []byte             `json:"result"`
 	Error        pgtype.Text        `json:"error"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	Context      []byte             `json:"context"`
 }
 
 type Comment struct {

@@ -72,6 +72,22 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub) chi.Router {
 	// Auth (public)
 	r.Post("/auth/login", h.Login)
 
+	// Daemon API routes (no user auth; daemon auth deferred to later)
+	r.Route("/api/daemon", func(r chi.Router) {
+		r.Post("/register", h.DaemonRegister)
+		r.Post("/heartbeat", h.DaemonHeartbeat)
+
+		// Task claiming (daemon polls for work)
+		r.Post("/agents/{agentId}/tasks/claim", h.ClaimTask)
+		r.Get("/agents/{agentId}/tasks/pending", h.ListPendingTasks)
+
+		// Task lifecycle (daemon reports status)
+		r.Post("/tasks/{taskId}/start", h.StartTask)
+		r.Post("/tasks/{taskId}/progress", h.ReportTaskProgress)
+		r.Post("/tasks/{taskId}/complete", h.CompleteTask)
+		r.Post("/tasks/{taskId}/fail", h.FailTask)
+	})
+
 	// Protected API routes
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Auth)
@@ -100,6 +116,8 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub) chi.Router {
 			r.Route("/{id}", func(r chi.Router) {
 				r.Get("/", h.GetAgent)
 				r.Put("/", h.UpdateAgent)
+				r.Delete("/", h.DeleteAgent)
+				r.Get("/tasks", h.ListAgentTasks)
 			})
 		})
 

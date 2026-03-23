@@ -10,18 +10,22 @@ import (
 )
 
 type AgentResponse struct {
-	ID                 string `json:"id"`
-	WorkspaceID        string `json:"workspace_id"`
-	Name               string `json:"name"`
+	ID                 string  `json:"id"`
+	WorkspaceID        string  `json:"workspace_id"`
+	Name               string  `json:"name"`
+	Description        string  `json:"description"`
 	AvatarURL          *string `json:"avatar_url"`
-	RuntimeMode        string `json:"runtime_mode"`
-	RuntimeConfig      any    `json:"runtime_config"`
-	Visibility         string `json:"visibility"`
-	Status             string `json:"status"`
-	MaxConcurrentTasks int32  `json:"max_concurrent_tasks"`
+	RuntimeMode        string  `json:"runtime_mode"`
+	RuntimeConfig      any     `json:"runtime_config"`
+	Visibility         string  `json:"visibility"`
+	Status             string  `json:"status"`
+	MaxConcurrentTasks int32   `json:"max_concurrent_tasks"`
 	OwnerID            *string `json:"owner_id"`
-	CreatedAt          string `json:"created_at"`
-	UpdatedAt          string `json:"updated_at"`
+	Skills             string  `json:"skills"`
+	Tools              any     `json:"tools"`
+	Triggers           any     `json:"triggers"`
+	CreatedAt          string  `json:"created_at"`
+	UpdatedAt          string  `json:"updated_at"`
 }
 
 func agentToResponse(a db.Agent) AgentResponse {
@@ -32,10 +36,28 @@ func agentToResponse(a db.Agent) AgentResponse {
 	if rc == nil {
 		rc = map[string]any{}
 	}
+
+	var tools any
+	if a.Tools != nil {
+		json.Unmarshal(a.Tools, &tools)
+	}
+	if tools == nil {
+		tools = []any{}
+	}
+
+	var triggers any
+	if a.Triggers != nil {
+		json.Unmarshal(a.Triggers, &triggers)
+	}
+	if triggers == nil {
+		triggers = []any{}
+	}
+
 	return AgentResponse{
 		ID:                 uuidToString(a.ID),
 		WorkspaceID:        uuidToString(a.WorkspaceID),
 		Name:               a.Name,
+		Description:        a.Description,
 		AvatarURL:          textToPtr(a.AvatarUrl),
 		RuntimeMode:        a.RuntimeMode,
 		RuntimeConfig:      rc,
@@ -43,8 +65,51 @@ func agentToResponse(a db.Agent) AgentResponse {
 		Status:             a.Status,
 		MaxConcurrentTasks: a.MaxConcurrentTasks,
 		OwnerID:            uuidToPtr(a.OwnerID),
+		Skills:             a.Skills,
+		Tools:              tools,
+		Triggers:           triggers,
 		CreatedAt:          timestampToString(a.CreatedAt),
 		UpdatedAt:          timestampToString(a.UpdatedAt),
+	}
+}
+
+type AgentTaskResponse struct {
+	ID           string  `json:"id"`
+	AgentID      string  `json:"agent_id"`
+	IssueID      string  `json:"issue_id"`
+	Status       string  `json:"status"`
+	Priority     int32   `json:"priority"`
+	DispatchedAt *string `json:"dispatched_at"`
+	StartedAt    *string `json:"started_at"`
+	CompletedAt  *string `json:"completed_at"`
+	Result       any     `json:"result"`
+	Error        *string `json:"error"`
+	Context      any     `json:"context,omitempty"`
+	CreatedAt    string  `json:"created_at"`
+}
+
+func taskToResponse(t db.AgentTaskQueue) AgentTaskResponse {
+	var result any
+	if t.Result != nil {
+		json.Unmarshal(t.Result, &result)
+	}
+	var ctx any
+	if t.Context != nil {
+		json.Unmarshal(t.Context, &ctx)
+	}
+	return AgentTaskResponse{
+		ID:           uuidToString(t.ID),
+		AgentID:      uuidToString(t.AgentID),
+		IssueID:      uuidToString(t.IssueID),
+		Status:       t.Status,
+		Priority:     t.Priority,
+		DispatchedAt: timestampToPtr(t.DispatchedAt),
+		StartedAt:    timestampToPtr(t.StartedAt),
+		CompletedAt:  timestampToPtr(t.CompletedAt),
+		Result:       result,
+		Error:        textToPtr(t.Error),
+		Context:      ctx,
+		CreatedAt:    timestampToString(t.CreatedAt),
 	}
 }
 
@@ -79,11 +144,15 @@ func (h *Handler) GetAgent(w http.ResponseWriter, r *http.Request) {
 
 type CreateAgentRequest struct {
 	Name               string  `json:"name"`
+	Description        string  `json:"description"`
 	AvatarURL          *string `json:"avatar_url"`
 	RuntimeMode        string  `json:"runtime_mode"`
 	RuntimeConfig      any     `json:"runtime_config"`
 	Visibility         string  `json:"visibility"`
 	MaxConcurrentTasks int32   `json:"max_concurrent_tasks"`
+	Skills             string  `json:"skills"`
+	Tools              any     `json:"tools"`
+	Triggers           any     `json:"triggers"`
 }
 
 func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
@@ -122,15 +191,29 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		rc = []byte("{}")
 	}
 
+	tools, _ := json.Marshal(req.Tools)
+	if req.Tools == nil {
+		tools = []byte("[]")
+	}
+
+	triggers, _ := json.Marshal(req.Triggers)
+	if req.Triggers == nil {
+		triggers = []byte("[]")
+	}
+
 	agent, err := h.Queries.CreateAgent(r.Context(), db.CreateAgentParams{
 		WorkspaceID:        parseUUID(workspaceID),
 		Name:               req.Name,
+		Description:        req.Description,
 		AvatarUrl:          ptrToText(req.AvatarURL),
 		RuntimeMode:        req.RuntimeMode,
 		RuntimeConfig:      rc,
 		Visibility:         req.Visibility,
 		MaxConcurrentTasks: req.MaxConcurrentTasks,
 		OwnerID:            parseUUID(ownerID),
+		Skills:             req.Skills,
+		Tools:              tools,
+		Triggers:           triggers,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create agent: "+err.Error())
@@ -142,11 +225,15 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 
 type UpdateAgentRequest struct {
 	Name               *string `json:"name"`
+	Description        *string `json:"description"`
 	AvatarURL          *string `json:"avatar_url"`
 	RuntimeConfig      any     `json:"runtime_config"`
 	Visibility         *string `json:"visibility"`
 	Status             *string `json:"status"`
 	MaxConcurrentTasks *int32  `json:"max_concurrent_tasks"`
+	Skills             *string `json:"skills"`
+	Tools              any     `json:"tools"`
+	Triggers           any     `json:"triggers"`
 }
 
 func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
@@ -171,6 +258,9 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	if req.Name != nil {
 		params.Name = pgtype.Text{String: *req.Name, Valid: true}
 	}
+	if req.Description != nil {
+		params.Description = pgtype.Text{String: *req.Description, Valid: true}
+	}
 	if req.AvatarURL != nil {
 		params.AvatarUrl = pgtype.Text{String: *req.AvatarURL, Valid: true}
 	}
@@ -187,6 +277,17 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	if req.MaxConcurrentTasks != nil {
 		params.MaxConcurrentTasks = pgtype.Int4{Int32: *req.MaxConcurrentTasks, Valid: true}
 	}
+	if req.Skills != nil {
+		params.Skills = pgtype.Text{String: *req.Skills, Valid: true}
+	}
+	if req.Tools != nil {
+		tools, _ := json.Marshal(req.Tools)
+		params.Tools = tools
+	}
+	if req.Triggers != nil {
+		triggers, _ := json.Marshal(req.Triggers)
+		params.Triggers = triggers
+	}
 
 	agent, err := h.Queries.UpdateAgent(r.Context(), params)
 	if err != nil {
@@ -196,5 +297,31 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 
 	resp := agentToResponse(agent)
 	h.broadcast("agent:status", map[string]any{"agent": resp})
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handler) DeleteAgent(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	err := h.Queries.DeleteAgent(r.Context(), parseUUID(id))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to delete agent")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) ListAgentTasks(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	tasks, err := h.Queries.ListAgentTasks(r.Context(), parseUUID(id))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list agent tasks")
+		return
+	}
+
+	resp := make([]AgentTaskResponse, len(tasks))
+	for i, t := range tasks {
+		resp[i] = taskToResponse(t)
+	}
+
 	writeJSON(w, http.StatusOK, resp)
 }

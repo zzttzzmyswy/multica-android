@@ -238,6 +238,11 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			h.broadcast("inbox:new", map[string]any{"item": inboxToResponse(inboxItem)})
 		}
+
+		// If assigned to an agent, enqueue a task with context
+		if issue.AssigneeType.String == "agent" {
+			h.TaskService.EnqueueTaskForIssue(r.Context(), issue)
+		}
 	}
 
 	writeJSON(w, http.StatusCreated, resp)
@@ -299,6 +304,33 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 
 	resp := issueToResponse(issue)
 	h.broadcast("issue:updated", map[string]any{"issue": resp})
+
+	// If assignee changed, handle agent task queue
+	if req.AssigneeType != nil || req.AssigneeID != nil {
+		// Cancel any existing agent tasks for this issue
+		h.TaskService.CancelTasksForIssue(r.Context(), issue.ID)
+
+		// If newly assigned to an agent, enqueue a task with context
+		if issue.AssigneeType.Valid && issue.AssigneeType.String == "agent" && issue.AssigneeID.Valid {
+			h.TaskService.EnqueueTaskForIssue(r.Context(), issue)
+		}
+
+		// Create inbox notification for new assignee
+		if issue.AssigneeType.Valid && issue.AssigneeID.Valid {
+			inboxItem, err := h.Queries.CreateInboxItem(r.Context(), db.CreateInboxItemParams{
+				WorkspaceID:   issue.WorkspaceID,
+				RecipientType: issue.AssigneeType.String,
+				RecipientID:   issue.AssigneeID,
+				Type:          "issue_assigned",
+				Severity:      "action_required",
+				IssueID:       issue.ID,
+				Title:         "Assigned to you: " + issue.Title,
+			})
+			if err == nil {
+				h.broadcast("inbox:new", map[string]any{"item": inboxToResponse(inboxItem)})
+			}
+		}
+	}
 
 	// If status changed, create a notification
 	if req.Status != nil {
