@@ -7,8 +7,6 @@ import {
   Search,
   Link as LinkIcon,
 } from "lucide-react";
-import { MOCK_DOCUMENTS, type KBDocument } from "./_data/mock";
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -19,6 +17,15 @@ function timeAgo(dateStr: string): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
+}
+
+interface KBDocument {
+  id: string;
+  title: string;
+  content: string;
+  createdBy: string;
+  updatedAt: string;
+  referencedBy: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -268,18 +275,17 @@ function DocDetail({ doc }: { doc: KBDocument }) {
 // ---------------------------------------------------------------------------
 
 export default function KnowledgeBasePage() {
-  const [selectedId, setSelectedId] = useState<string>(
-    MOCK_DOCUMENTS[0]?.id ?? ""
-  );
+  const [documents] = useState<KBDocument[]>([]);
+  const [selectedId, setSelectedId] = useState<string>("");
   const [search, setSearch] = useState("");
 
   const filtered = search
-    ? MOCK_DOCUMENTS.filter((d) =>
+    ? documents.filter((d) =>
         d.title.toLowerCase().includes(search.toLowerCase())
       )
-    : MOCK_DOCUMENTS;
+    : documents;
 
-  const selected = MOCK_DOCUMENTS.find((d) => d.id === selectedId) ?? null;
+  const selected = documents.find((d) => d.id === selectedId) ?? null;
 
   return (
     <div className="flex h-full">
