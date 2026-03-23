@@ -7,6 +7,9 @@ import type {
   CreateMemberRequest,
   UpdateMemberRequest,
   Agent,
+  CreateAgentRequest,
+  UpdateAgentRequest,
+  AgentTask,
   InboxItem,
   Comment,
   Workspace,
@@ -149,6 +152,28 @@ export class ApiClient {
 
   async getAgent(id: string): Promise<Agent> {
     return this.fetch(`/api/agents/${id}`);
+  }
+
+  async createAgent(data: CreateAgentRequest): Promise<Agent> {
+    return this.fetch("/api/agents", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAgent(id: string, data: UpdateAgentRequest): Promise<Agent> {
+    return this.fetch(`/api/agents/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAgent(id: string): Promise<void> {
+    await this.fetch(`/api/agents/${id}`, { method: "DELETE" });
+  }
+
+  async listAgentTasks(agentId: string): Promise<AgentTask[]> {
+    return this.fetch(`/api/agents/${agentId}/tasks`);
   }
 
   // Inbox

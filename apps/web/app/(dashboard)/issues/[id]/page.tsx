@@ -1,13 +1,15 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
+import { use, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   Bot,
   ChevronRight,
   Send,
+  UserCircle,
+  X,
 } from "lucide-react";
-import type { Issue, Comment } from "@multica/types";
+import type { Issue, Comment, IssueAssigneeType } from "@multica/types";
 import { STATUS_CONFIG, PRIORITY_CONFIG } from "../_data/config";
 import { StatusIcon, PriorityIcon } from "../page";
 import { api } from "../../../../lib/api";
@@ -79,15 +81,167 @@ function ActorAvatar({
 function PropRow({
   label,
   children,
+  onClick,
 }: {
   label: string;
   children: React.ReactNode;
+  onClick?: () => void;
 }) {
   return (
-    <div className="flex min-h-[32px] items-center gap-3 rounded-md px-2 -mx-2 hover:bg-accent/50 transition-colors">
+    <div
+      onClick={onClick}
+      className={`flex min-h-[32px] items-center gap-3 rounded-md px-2 -mx-2 hover:bg-accent/50 transition-colors ${
+        onClick ? "cursor-pointer" : ""
+      }`}
+    >
       <span className="w-20 shrink-0 text-[13px] text-muted-foreground">{label}</span>
       <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5 text-[13px]">
         {children}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Assignee Picker
+// ---------------------------------------------------------------------------
+
+function AssigneePicker({
+  issue,
+  onSelect,
+  onClose,
+}: {
+  issue: Issue;
+  onSelect: (type: IssueAssigneeType | null, id: string | null) => void;
+  onClose: () => void;
+}) {
+  const { members, agents } = useAuth();
+  const [search, setSearch] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        onClose();
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [onClose]);
+
+  const q = search.toLowerCase();
+  const filteredMembers = members.filter((m) =>
+    m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q),
+  );
+  const filteredAgents = agents.filter((a) =>
+    a.name.toLowerCase().includes(q),
+  );
+
+  const isSelected = (type: string, id: string) =>
+    issue.assignee_type === type && issue.assignee_id === id;
+
+  return (
+    <div
+      ref={ref}
+      className="absolute right-0 top-full z-50 mt-1 w-64 rounded-lg border bg-popover shadow-md"
+    >
+      <div className="p-2">
+        <input
+          ref={inputRef}
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search..."
+          className="w-full rounded-md border bg-background px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+        />
+      </div>
+
+      <div className="max-h-64 overflow-y-auto px-1 pb-1">
+        {/* Unassign option */}
+        {issue.assignee_id && (
+          <>
+            <button
+              onClick={() => onSelect(null, null)}
+              className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-xs hover:bg-accent"
+            >
+              <X className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-muted-foreground">Unassign</span>
+            </button>
+            <div className="my-1 border-t mx-1" />
+          </>
+        )}
+
+        {/* Members */}
+        {filteredMembers.length > 0 && (
+          <>
+            <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              Members
+            </div>
+            {filteredMembers.map((m) => (
+              <button
+                key={m.user_id}
+                onClick={() => onSelect("member", m.user_id)}
+                className={`flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
+                  isSelected("member", m.user_id) ? "bg-accent" : "hover:bg-accent/50"
+                }`}
+              >
+                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground">
+                  {m.name
+                    .split(" ")
+                    .map((w) => w[0])
+                    .join("")
+                    .toUpperCase()
+                    .slice(0, 2)}
+                </div>
+                <div className="min-w-0 flex-1 text-left">
+                  <div className="truncate font-medium">{m.name}</div>
+                </div>
+                {isSelected("member", m.user_id) && (
+                  <span className="text-primary text-[10px] font-medium">Assigned</span>
+                )}
+              </button>
+            ))}
+          </>
+        )}
+
+        {/* Agents */}
+        {filteredAgents.length > 0 && (
+          <>
+            <div className="px-2 py-1 mt-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              Agents
+            </div>
+            {filteredAgents.map((a) => (
+              <button
+                key={a.id}
+                onClick={() => onSelect("agent", a.id)}
+                className={`flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
+                  isSelected("agent", a.id) ? "bg-accent" : "hover:bg-accent/50"
+                }`}
+              >
+                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300">
+                  <Bot className="h-3 w-3" />
+                </div>
+                <div className="min-w-0 flex-1 text-left">
+                  <div className="truncate font-medium">{a.name}</div>
+                </div>
+                {isSelected("agent", a.id) && (
+                  <span className="text-primary text-[10px] font-medium">Assigned</span>
+                )}
+              </button>
+            ))}
+          </>
+        )}
+
+        {filteredMembers.length === 0 && filteredAgents.length === 0 && (
+          <div className="px-2 py-3 text-center text-xs text-muted-foreground">
+            No results found
+          </div>
+        )}
       </div>
     </div>
   );
@@ -109,6 +263,7 @@ export default function IssueDetailPage({
   const [loading, setLoading] = useState(true);
   const [commentText, setCommentText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [showAssigneePicker, setShowAssigneePicker] = useState(false);
 
   useEffect(() => {
     setIssue(null);
@@ -135,6 +290,31 @@ export default function IssueDetailPage({
       console.error("Failed to create comment:", err);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleAssigneeChange = async (
+    type: IssueAssigneeType | null,
+    assigneeId: string | null,
+  ) => {
+    if (!issue) return;
+    setShowAssigneePicker(false);
+    // Optimistic update
+    setIssue({
+      ...issue,
+      assignee_type: type,
+      assignee_id: assigneeId,
+    });
+    try {
+      const updated = await api.updateIssue(id, {
+        assignee_type: type,
+        assignee_id: assigneeId,
+      });
+      setIssue(updated);
+    } catch (err) {
+      console.error("Failed to update assignee:", err);
+      // Revert on error
+      setIssue(issue);
     }
   };
 
@@ -259,20 +439,33 @@ export default function IssueDetailPage({
               <span>{priorityCfg.label}</span>
             </PropRow>
 
-            <PropRow label="Assignee">
-              {issue.assignee_type && issue.assignee_id ? (
-                <>
-                  <ActorAvatar
-                    actorType={issue.assignee_type}
-                    actorId={issue.assignee_id}
-                    size={18}
-                  />
-                  <span>{getActorName(issue.assignee_type, issue.assignee_id)}</span>
-                </>
-              ) : (
-                <span className="text-muted-foreground">Unassigned</span>
+            <div className="relative">
+              <PropRow
+                label="Assignee"
+                onClick={() => setShowAssigneePicker(!showAssigneePicker)}
+              >
+                {issue.assignee_type && issue.assignee_id ? (
+                  <>
+                    <ActorAvatar
+                      actorType={issue.assignee_type}
+                      actorId={issue.assignee_id}
+                      size={18}
+                    />
+                    <span>{getActorName(issue.assignee_type, issue.assignee_id)}</span>
+                  </>
+                ) : (
+                  <span className="text-muted-foreground">Unassigned</span>
+                )}
+              </PropRow>
+
+              {showAssigneePicker && (
+                <AssigneePicker
+                  issue={issue}
+                  onSelect={handleAssigneeChange}
+                  onClose={() => setShowAssigneePicker(false)}
+                />
               )}
-            </PropRow>
+            </div>
 
             <PropRow label="Due date">
               {issue.due_date ? (
