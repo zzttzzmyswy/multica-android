@@ -18,10 +18,13 @@ pnpm install
 # 2. Copy environment variables for the shared main environment
 cp .env.example .env
 
-# 3. One-time setup: start DB, run migrations, seed data
+# 3. One-time setup: start DB and run migrations
 make setup
 
-# 4. Start backend + frontend
+# 4. Optional: load example data
+make seed
+
+# 5. Start backend + frontend
 make start
 ```
 
@@ -88,7 +91,7 @@ This lets you keep `.env` connected to your main database while using `.env.work
 | `docker compose down` | Stop PostgreSQL |
 | `make migrate-up` | Run database migrations |
 | `make migrate-down` | Rollback database migrations |
-| `make seed` | Seed test data |
+| `make seed` | Seed example data |
 | `make worktree-env` | Generate an isolated `.env.worktree` for the current worktree |
 | `make setup-main` / `make start-main` | Force use of the shared main `.env` |
 | `make setup-worktree` / `make start-worktree` | Force use of isolated `.env.worktree` |
