@@ -62,13 +62,45 @@ func main() {
 	// Create some agents
 	agents := []struct {
 		name        string
+		description string
 		runtimeMode string
 		status      string
+		skills      string
+		tools       string
+		triggers    string
 	}{
-		{"Claude-1", "cloud", "idle"},
-		{"Claude-2", "cloud", "working"},
-		{"Local Agent", "local", "offline"},
-		{"Code Review Bot", "cloud", "idle"},
+		{
+			"Deep Research Agent",
+			"Performs deep research on topics using web search and analysis",
+			"local", "idle",
+			"# Deep Research Agent\n\nYou are a research agent that performs thorough analysis on assigned topics.\n\n## Workflow\n1. Break down the research question into sub-questions\n2. Use web search to gather information from multiple sources\n3. Cross-reference and validate findings\n4. Synthesize a comprehensive report\n5. Post the report as a comment on the issue\n\n## Output Format\nAlways produce a structured report with:\n- Executive Summary\n- Key Findings\n- Sources\n- Recommendations",
+			`[{"id":"tool-1","name":"Google Search","description":"Search the web for information","auth_type":"api_key","connected":true,"config":{}},{"id":"tool-2","name":"Web Scraper","description":"Extract content from web pages","auth_type":"none","connected":true,"config":{}}]`,
+			`[{"id":"trigger-1","type":"on_assign","enabled":true,"config":{}}]`,
+		},
+		{
+			"Code Review Bot",
+			"Reviews pull requests and provides feedback on code quality",
+			"cloud", "idle",
+			"# Code Review Bot\n\nYou review code changes and provide constructive feedback.\n\n## Review Criteria\n- Code correctness and logic\n- Performance implications\n- Security vulnerabilities\n- Code style and readability\n- Test coverage\n\n## Process\n1. Read the issue description for context\n2. Analyze code changes\n3. Post review comments on specific lines\n4. Provide an overall summary",
+			`[{"id":"tool-3","name":"GitHub","description":"Access GitHub repositories and PRs","auth_type":"oauth","connected":true,"config":{}}]`,
+			`[{"id":"trigger-2","type":"on_assign","enabled":true,"config":{}}]`,
+		},
+		{
+			"Daily Standup Bot",
+			"Generates daily standup summaries from recent activity",
+			"cloud", "working",
+			"# Daily Standup Bot\n\nGenerate a daily standup summary based on workspace activity.\n\n## Tasks\n1. Collect all issue status changes from the last 24 hours\n2. Summarize what each team member worked on\n3. Identify blocked items\n4. Post the summary to the team channel",
+			`[{"id":"tool-4","name":"Slack","description":"Send messages to Slack channels","auth_type":"oauth","connected":true,"config":{"channel":"#standup"}}]`,
+			`[{"id":"trigger-3","type":"scheduled","enabled":true,"config":{"cron":"0 9 * * 1-5","timezone":"Asia/Shanghai"}}]`,
+		},
+		{
+			"Local Dev Agent",
+			"A local development agent running on your machine",
+			"local", "offline",
+			"",
+			`[]`,
+			`[{"id":"trigger-4","type":"on_assign","enabled":true,"config":{}}]`,
+		},
 	}
 
 	for _, a := range agents {
@@ -82,10 +114,10 @@ func main() {
 			continue
 		}
 		err = pool.QueryRow(ctx, `
-			INSERT INTO agent (workspace_id, name, runtime_mode, status, owner_id)
-			VALUES ($1, $2, $3, $4, $5)
+			INSERT INTO agent (workspace_id, name, description, runtime_mode, status, owner_id, skills, tools, triggers)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb)
 			RETURNING id
-		`, workspaceID, a.name, a.runtimeMode, a.status, userID).Scan(&agentID)
+		`, workspaceID, a.name, a.description, a.runtimeMode, a.status, userID, a.skills, a.tools, a.triggers).Scan(&agentID)
 		if err != nil {
 			log.Printf("Failed to create agent %s: %v", a.name, err)
 			continue

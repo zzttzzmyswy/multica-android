@@ -4,10 +4,51 @@ export type AgentRuntimeMode = "local" | "cloud";
 
 export type AgentVisibility = "workspace" | "private";
 
+export type AgentTriggerType = "on_assign" | "scheduled";
+
+export interface RuntimeDevice {
+  id: string;
+  name: string;
+  runtime_mode: AgentRuntimeMode;
+  status: "online" | "offline";
+  device_info: string;
+}
+
+export interface AgentTool {
+  id: string;
+  name: string;
+  description: string;
+  auth_type: "oauth" | "api_key" | "none";
+  connected: boolean;
+  config: Record<string, unknown>;
+}
+
+export interface AgentTrigger {
+  id: string;
+  type: AgentTriggerType;
+  enabled: boolean;
+  config: Record<string, unknown>;
+}
+
+export interface AgentTask {
+  id: string;
+  agent_id: string;
+  issue_id: string;
+  status: "queued" | "dispatched" | "running" | "completed" | "failed" | "cancelled";
+  priority: number;
+  dispatched_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  result: unknown;
+  error: string | null;
+  created_at: string;
+}
+
 export interface Agent {
   id: string;
   workspace_id: string;
   name: string;
+  description: string;
   avatar_url: string | null;
   runtime_mode: AgentRuntimeMode;
   runtime_config: Record<string, unknown>;
@@ -15,6 +56,35 @@ export interface Agent {
   status: AgentStatus;
   max_concurrent_tasks: number;
   owner_id: string | null;
+  skills: string;
+  tools: AgentTool[];
+  triggers: AgentTrigger[];
   created_at: string;
   updated_at: string;
+}
+
+export interface CreateAgentRequest {
+  name: string;
+  description?: string;
+  avatar_url?: string;
+  runtime_mode?: AgentRuntimeMode;
+  runtime_config?: Record<string, unknown>;
+  visibility?: AgentVisibility;
+  max_concurrent_tasks?: number;
+  skills?: string;
+  tools?: AgentTool[];
+  triggers?: AgentTrigger[];
+}
+
+export interface UpdateAgentRequest {
+  name?: string;
+  description?: string;
+  avatar_url?: string;
+  runtime_config?: Record<string, unknown>;
+  visibility?: AgentVisibility;
+  status?: AgentStatus;
+  max_concurrent_tasks?: number;
+  skills?: string;
+  tools?: AgentTool[];
+  triggers?: AgentTrigger[];
 }
