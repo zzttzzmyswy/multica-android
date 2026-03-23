@@ -96,5 +96,58 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, commentToResponse(comment))
+	resp := commentToResponse(comment)
+	h.broadcast("comment:created", map[string]any{"comment": resp})
+	writeJSON(w, http.StatusCreated, resp)
+}
+
+func (h *Handler) UpdateComment(w http.ResponseWriter, r *http.Request) {
+	commentId := chi.URLParam(r, "commentId")
+
+	var req struct {
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Content == "" {
+		writeError(w, http.StatusBadRequest, "content is required")
+		return
+	}
+
+	comment, err := h.Queries.UpdateComment(r.Context(), db.UpdateCommentParams{
+		ID:      parseUUID(commentId),
+		Content: req.Content,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update comment")
+		return
+	}
+
+	resp := commentToResponse(comment)
+	h.broadcast("comment:updated", map[string]any{"comment": resp})
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handler) DeleteComment(w http.ResponseWriter, r *http.Request) {
+	commentId := chi.URLParam(r, "commentId")
+
+	// Get the comment first to know the issue_id for the broadcast
+	comment, err := h.Queries.GetComment(r.Context(), parseUUID(commentId))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "comment not found")
+		return
+	}
+
+	if err := h.Queries.DeleteComment(r.Context(), parseUUID(commentId)); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to delete comment")
+		return
+	}
+
+	h.broadcast("comment:deleted", map[string]any{
+		"comment_id": commentId,
+		"issue_id":   uuidToString(comment.IssueID),
+	})
+	w.WriteHeader(http.StatusNoContent)
 }

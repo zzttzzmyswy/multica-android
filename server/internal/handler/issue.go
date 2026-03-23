@@ -2,8 +2,10 @@ package handler
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -97,10 +99,27 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Parse optional filter params
+	var statusFilter pgtype.Text
+	if s := r.URL.Query().Get("status"); s != "" {
+		statusFilter = pgtype.Text{String: s, Valid: true}
+	}
+	var priorityFilter pgtype.Text
+	if p := r.URL.Query().Get("priority"); p != "" {
+		priorityFilter = pgtype.Text{String: p, Valid: true}
+	}
+	var assigneeFilter pgtype.UUID
+	if a := r.URL.Query().Get("assignee_id"); a != "" {
+		assigneeFilter = parseUUID(a)
+	}
+
 	issues, err := h.Queries.ListIssues(ctx, db.ListIssuesParams{
 		WorkspaceID: parseUUID(workspaceID),
 		Limit:       int32(limit),
 		Offset:      int32(offset),
+		Status:      statusFilter,
+		Priority:    priorityFilter,
+		AssigneeID:  assigneeFilter,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list issues")
@@ -249,31 +268,52 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 }
 
 type UpdateIssueRequest struct {
-	Title        *string  `json:"title"`
-	Description  *string  `json:"description"`
-	Status       *string  `json:"status"`
-	Priority     *string  `json:"priority"`
-	AssigneeType *string  `json:"assignee_type"`
-	AssigneeID   *string  `json:"assignee_id"`
-	Position     *float64 `json:"position"`
+	Title              *string  `json:"title"`
+	Description        *string  `json:"description"`
+	Status             *string  `json:"status"`
+	Priority           *string  `json:"priority"`
+	AssigneeType       *string  `json:"assignee_type"`
+	AssigneeID         *string  `json:"assignee_id"`
+	Position           *float64 `json:"position"`
+	DueDate            *string  `json:"due_date"`
+	AcceptanceCriteria *[]any   `json:"acceptance_criteria"`
+	ContextRefs        *[]any   `json:"context_refs"`
+	Repository         *any     `json:"repository"`
 }
 
 func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if _, ok := h.loadIssueForUser(w, r, id); !ok {
+	current, ok := h.loadIssueForUser(w, r, id)
+	if !ok {
+		return
+	}
+
+	// Read body as raw bytes so we can detect which fields were explicitly sent
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "failed to read request body")
 		return
 	}
 
 	var req UpdateIssueRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.Unmarshal(bodyBytes, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
+	// Track which fields were explicitly present in JSON (even if null)
+	var rawFields map[string]json.RawMessage
+	json.Unmarshal(bodyBytes, &rawFields)
+
+	// Pre-fill nullable fields (bare sqlc.narg) with current values
 	params := db.UpdateIssueParams{
-		ID: parseUUID(id),
+		ID:           current.ID,
+		AssigneeType: current.AssigneeType,
+		AssigneeID:   current.AssigneeID,
+		DueDate:      current.DueDate,
 	}
 
+	// COALESCE fields — only set when explicitly provided
 	if req.Title != nil {
 		params.Title = pgtype.Text{String: *req.Title, Valid: true}
 	}
@@ -286,14 +326,48 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 	if req.Priority != nil {
 		params.Priority = pgtype.Text{String: *req.Priority, Valid: true}
 	}
-	if req.AssigneeType != nil {
-		params.AssigneeType = pgtype.Text{String: *req.AssigneeType, Valid: true}
-	}
-	if req.AssigneeID != nil {
-		params.AssigneeID = parseUUID(*req.AssigneeID)
-	}
 	if req.Position != nil {
 		params.Position = pgtype.Float8{Float64: *req.Position, Valid: true}
+	}
+	if req.AcceptanceCriteria != nil {
+		ac, _ := json.Marshal(*req.AcceptanceCriteria)
+		params.AcceptanceCriteria = ac
+	}
+	if req.ContextRefs != nil {
+		cr, _ := json.Marshal(*req.ContextRefs)
+		params.ContextRefs = cr
+	}
+	if req.Repository != nil {
+		repo, _ := json.Marshal(*req.Repository)
+		params.Repository = repo
+	}
+
+	// Nullable fields — only override when explicitly present in JSON
+	if _, ok := rawFields["assignee_type"]; ok {
+		if req.AssigneeType != nil {
+			params.AssigneeType = pgtype.Text{String: *req.AssigneeType, Valid: true}
+		} else {
+			params.AssigneeType = pgtype.Text{Valid: false} // explicit null = unassign
+		}
+	}
+	if _, ok := rawFields["assignee_id"]; ok {
+		if req.AssigneeID != nil {
+			params.AssigneeID = parseUUID(*req.AssigneeID)
+		} else {
+			params.AssigneeID = pgtype.UUID{Valid: false} // explicit null = unassign
+		}
+	}
+	if _, ok := rawFields["due_date"]; ok {
+		if req.DueDate != nil && *req.DueDate != "" {
+			t, err := time.Parse(time.RFC3339, *req.DueDate)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "invalid due_date format, expected RFC3339")
+				return
+			}
+			params.DueDate = pgtype.Timestamptz{Time: t, Valid: true}
+		} else {
+			params.DueDate = pgtype.Timestamptz{Valid: false} // explicit null = clear date
+		}
 	}
 
 	issue, err := h.Queries.UpdateIssue(r.Context(), params)

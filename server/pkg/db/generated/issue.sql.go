@@ -123,6 +123,9 @@ func (q *Queries) GetIssue(ctx context.Context, id pgtype.UUID) (Issue, error) {
 const listIssues = `-- name: ListIssues :many
 SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, repository, position, due_date, created_at, updated_at FROM issue
 WHERE workspace_id = $1
+  AND ($4::text IS NULL OR status = $4)
+  AND ($5::text IS NULL OR priority = $5)
+  AND ($6::uuid IS NULL OR assignee_id = $6)
 ORDER BY position ASC, created_at DESC
 LIMIT $2 OFFSET $3
 `
@@ -131,10 +134,20 @@ type ListIssuesParams struct {
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
 	Limit       int32       `json:"limit"`
 	Offset      int32       `json:"offset"`
+	Status      pgtype.Text `json:"status"`
+	Priority    pgtype.Text `json:"priority"`
+	AssigneeID  pgtype.UUID `json:"assignee_id"`
 }
 
 func (q *Queries) ListIssues(ctx context.Context, arg ListIssuesParams) ([]Issue, error) {
-	rows, err := q.db.Query(ctx, listIssues, arg.WorkspaceID, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, listIssues,
+		arg.WorkspaceID,
+		arg.Limit,
+		arg.Offset,
+		arg.Status,
+		arg.Priority,
+		arg.AssigneeID,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -181,20 +194,28 @@ UPDATE issue SET
     assignee_type = $6,
     assignee_id = $7,
     position = COALESCE($8, position),
+    due_date = $9,
+    acceptance_criteria = COALESCE($10, acceptance_criteria),
+    context_refs = COALESCE($11, context_refs),
+    repository = COALESCE($12, repository),
     updated_at = now()
 WHERE id = $1
 RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, repository, position, due_date, created_at, updated_at
 `
 
 type UpdateIssueParams struct {
-	ID           pgtype.UUID   `json:"id"`
-	Title        pgtype.Text   `json:"title"`
-	Description  pgtype.Text   `json:"description"`
-	Status       pgtype.Text   `json:"status"`
-	Priority     pgtype.Text   `json:"priority"`
-	AssigneeType pgtype.Text   `json:"assignee_type"`
-	AssigneeID   pgtype.UUID   `json:"assignee_id"`
-	Position     pgtype.Float8 `json:"position"`
+	ID                 pgtype.UUID        `json:"id"`
+	Title              pgtype.Text        `json:"title"`
+	Description        pgtype.Text        `json:"description"`
+	Status             pgtype.Text        `json:"status"`
+	Priority           pgtype.Text        `json:"priority"`
+	AssigneeType       pgtype.Text        `json:"assignee_type"`
+	AssigneeID         pgtype.UUID        `json:"assignee_id"`
+	Position           pgtype.Float8      `json:"position"`
+	DueDate            pgtype.Timestamptz `json:"due_date"`
+	AcceptanceCriteria []byte             `json:"acceptance_criteria"`
+	ContextRefs        []byte             `json:"context_refs"`
+	Repository         []byte             `json:"repository"`
 }
 
 func (q *Queries) UpdateIssue(ctx context.Context, arg UpdateIssueParams) (Issue, error) {
@@ -207,6 +228,10 @@ func (q *Queries) UpdateIssue(ctx context.Context, arg UpdateIssueParams) (Issue
 		arg.AssigneeType,
 		arg.AssigneeID,
 		arg.Position,
+		arg.DueDate,
+		arg.AcceptanceCriteria,
+		arg.ContextRefs,
+		arg.Repository,
 	)
 	var i Issue
 	err := row.Scan(

@@ -6,6 +6,7 @@ import type {
   UpdateMeRequest,
   CreateMemberRequest,
   UpdateMemberRequest,
+  ListIssuesParams,
   Agent,
   CreateAgentRequest,
   UpdateAgentRequest,
@@ -97,12 +98,15 @@ export class ApiClient {
   }
 
   // Issues
-  async listIssues(params?: { limit?: number; offset?: number; workspace_id?: string }): Promise<ListIssuesResponse> {
+  async listIssues(params?: ListIssuesParams): Promise<ListIssuesResponse> {
     const search = new URLSearchParams();
     if (params?.limit) search.set("limit", String(params.limit));
     if (params?.offset) search.set("offset", String(params.offset));
     const wsId = params?.workspace_id ?? this.workspaceId;
     if (wsId) search.set("workspace_id", wsId);
+    if (params?.status) search.set("status", params.status);
+    if (params?.priority) search.set("priority", params.priority);
+    if (params?.assignee_id) search.set("assignee_id", params.assignee_id);
     return this.fetch(`/api/issues?${search}`);
   }
 
@@ -140,6 +144,17 @@ export class ApiClient {
       method: "POST",
       body: JSON.stringify({ content, type: type ?? "comment" }),
     });
+  }
+
+  async updateComment(commentId: string, content: string): Promise<Comment> {
+    return this.fetch(`/api/comments/${commentId}`, {
+      method: "PUT",
+      body: JSON.stringify({ content }),
+    });
+  }
+
+  async deleteComment(commentId: string): Promise<void> {
+    await this.fetch(`/api/comments/${commentId}`, { method: "DELETE" });
   }
 
   // Agents

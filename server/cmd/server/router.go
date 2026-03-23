@@ -109,6 +109,12 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub) chi.Router {
 			})
 		})
 
+		// Comments
+		r.Route("/api/comments/{commentId}", func(r chi.Router) {
+			r.Put("/", h.UpdateComment)
+			r.Delete("/", h.DeleteComment)
+		})
+
 		// Agents
 		r.Route("/api/agents", func(r chi.Router) {
 			r.Get("/", h.ListAgents)
