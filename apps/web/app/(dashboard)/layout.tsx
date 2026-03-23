@@ -38,6 +38,12 @@ export default function DashboardLayout({
   const [newSlug, setNewSlug] = useState("");
   const [creating, setCreating] = useState(false);
 
+  useEffect(() => {
+    if (!isLoading && user && workspaces.length === 0) {
+      setShowCreateDialog(true);
+    }
+  }, [isLoading, user, workspaces.length]);
+
   const handleNameChange = (value: string) => {
     setNewName(value);
     setNewSlug(value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""));
@@ -74,6 +80,100 @@ export default function DashboardLayout({
   }
 
   if (!user) return null;
+
+  if (!workspace) {
+    return (
+      <>
+        <div className="flex min-h-screen items-center justify-center bg-canvas p-6">
+          <div className="w-full max-w-md rounded-2xl border bg-background p-8 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <MulticaIcon className="size-5" noSpin />
+              </div>
+              <div>
+                <h1 className="text-lg font-semibold">Create your first workspace</h1>
+                <p className="text-sm text-muted-foreground">{user.email}</p>
+              </div>
+            </div>
+
+            <p className="mt-6 text-sm text-muted-foreground">
+              You need a workspace before you can manage issues, agents, and inbox items.
+            </p>
+
+            <div className="mt-6 flex gap-2">
+              <button
+                onClick={() => setShowCreateDialog(true)}
+                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                Create workspace
+              </button>
+              <button
+                onClick={logout}
+                className="rounded-md border px-3 py-2 text-sm hover:bg-accent"
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {showCreateDialog && (
+          <>
+            <div
+              className="fixed inset-0 z-50 bg-black/10 backdrop-blur-xs"
+              onClick={() => setShowCreateDialog(false)}
+            />
+            <div className="fixed top-1/2 left-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl bg-background p-6 shadow-lg ring-1 ring-foreground/10">
+              <div className="flex flex-col gap-1.5">
+                <h2 className="text-lg font-semibold leading-none">Create workspace</h2>
+                <p className="text-sm text-muted-foreground">
+                  Create a new workspace for your team.
+                </p>
+              </div>
+              <div className="mt-4 space-y-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Name</label>
+                  <input
+                    autoFocus
+                    type="text"
+                    value={newName}
+                    onChange={(e) => handleNameChange(e.target.value)}
+                    placeholder="My Workspace"
+                    className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Slug</label>
+                  <input
+                    type="text"
+                    value={newSlug}
+                    onChange={(e) => setNewSlug(e.target.value)}
+                    placeholder="my-workspace"
+                    className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  onClick={logout}
+                  className="rounded-md px-3 py-1.5 text-sm hover:bg-accent"
+                >
+                  Sign out
+                </button>
+                <button
+                  onClick={handleCreateWorkspace}
+                  disabled={creating || !newName.trim() || !newSlug.trim()}
+                  className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {creating ? "Creating..." : "Create"}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-canvas">

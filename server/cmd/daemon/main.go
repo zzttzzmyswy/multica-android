@@ -11,7 +11,11 @@ import (
 func main() {
 	serverURL := os.Getenv("MULTICA_SERVER_URL")
 	if serverURL == "" {
-		serverURL = "ws://localhost:8080/ws"
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "8080"
+		}
+		serverURL = "ws://localhost:" + port + "/ws"
 	}
 
 	fmt.Println("Multica Daemon starting...")

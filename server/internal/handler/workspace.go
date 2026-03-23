@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -57,9 +58,8 @@ func memberToResponse(m db.Member) MemberResponse {
 }
 
 func (h *Handler) ListWorkspaces(w http.ResponseWriter, r *http.Request) {
-	userID := r.Header.Get("X-User-ID")
-	if userID == "" {
-		writeError(w, http.StatusUnauthorized, "user not authenticated")
+	userID, ok := requireUserID(w, r)
+	if !ok {
 		return
 	}
 
@@ -79,6 +79,10 @@ func (h *Handler) ListWorkspaces(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetWorkspace(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if _, ok := h.requireWorkspaceMember(w, r, id, "workspace not found"); !ok {
+		return
+	}
+
 	ws, err := h.Queries.GetWorkspace(r.Context(), parseUUID(id))
 	if err != nil {
 		writeError(w, http.StatusNotFound, "workspace not found")
@@ -94,9 +98,8 @@ type CreateWorkspaceRequest struct {
 }
 
 func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
-	userID := r.Header.Get("X-User-ID")
-	if userID == "" {
-		writeError(w, http.StatusUnauthorized, "user not authenticated")
+	userID, ok := requireUserID(w, r)
+	if !ok {
 		return
 	}
 
@@ -106,29 +109,47 @@ func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	req.Name = strings.TrimSpace(req.Name)
+	req.Slug = strings.ToLower(strings.TrimSpace(req.Slug))
 	if req.Name == "" || req.Slug == "" {
 		writeError(w, http.StatusBadRequest, "name and slug are required")
 		return
 	}
 
-	ws, err := h.Queries.CreateWorkspace(r.Context(), db.CreateWorkspaceParams{
+	tx, err := h.TxStarter.Begin(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create workspace")
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	qtx := h.Queries.WithTx(tx)
+	ws, err := qtx.CreateWorkspace(r.Context(), db.CreateWorkspaceParams{
 		Name:        req.Name,
 		Slug:        req.Slug,
 		Description: ptrToText(req.Description),
 	})
 	if err != nil {
+		if isUniqueViolation(err) {
+			writeError(w, http.StatusConflict, "workspace slug already exists")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "failed to create workspace: "+err.Error())
 		return
 	}
 
-	// Add creator as owner
-	_, err = h.Queries.CreateMember(r.Context(), db.CreateMemberParams{
+	_, err = qtx.CreateMember(r.Context(), db.CreateMemberParams{
 		WorkspaceID: ws.ID,
 		UserID:      parseUUID(userID),
 		Role:        "owner",
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to add owner: "+err.Error())
+		return
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create workspace")
 		return
 	}
 
@@ -143,6 +164,9 @@ type UpdateWorkspaceRequest struct {
 
 func (h *Handler) UpdateWorkspace(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if _, ok := h.requireWorkspaceRole(w, r, id, "workspace not found", "owner", "admin"); !ok {
+		return
+	}
 
 	var req UpdateWorkspaceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -154,7 +178,12 @@ func (h *Handler) UpdateWorkspace(w http.ResponseWriter, r *http.Request) {
 		ID: parseUUID(id),
 	}
 	if req.Name != nil {
-		params.Name = pgtype.Text{String: *req.Name, Valid: true}
+		name := strings.TrimSpace(*req.Name)
+		if name == "" {
+			writeError(w, http.StatusBadRequest, "name is required")
+			return
+		}
+		params.Name = pgtype.Text{String: name, Valid: true}
 	}
 	if req.Description != nil {
 		params.Description = pgtype.Text{String: *req.Description, Valid: true}
@@ -175,6 +204,10 @@ func (h *Handler) UpdateWorkspace(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListMembers(w http.ResponseWriter, r *http.Request) {
 	workspaceID := chi.URLParam(r, "id")
+	if _, ok := h.requireWorkspaceMember(w, r, workspaceID, "workspace not found"); !ok {
+		return
+	}
+
 	members, err := h.Queries.ListMembers(r.Context(), parseUUID(workspaceID))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list members")
@@ -202,6 +235,10 @@ type MemberWithUserResponse struct {
 
 func (h *Handler) ListMembersWithUser(w http.ResponseWriter, r *http.Request) {
 	workspaceID := chi.URLParam(r, "id")
+	if _, ok := h.requireWorkspaceMember(w, r, workspaceID, "workspace not found"); !ok {
+		return
+	}
+
 	members, err := h.Queries.ListMembersWithUser(r.Context(), parseUUID(workspaceID))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list members")
@@ -223,4 +260,241 @@ func (h *Handler) ListMembersWithUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+type CreateMemberRequest struct {
+	Email string `json:"email"`
+	Role  string `json:"role"`
+}
+
+func memberWithUserResponse(member db.Member, user db.User) MemberWithUserResponse {
+	return MemberWithUserResponse{
+		ID:          uuidToString(member.ID),
+		WorkspaceID: uuidToString(member.WorkspaceID),
+		UserID:      uuidToString(member.UserID),
+		Role:        member.Role,
+		CreatedAt:   timestampToString(member.CreatedAt),
+		Name:        user.Name,
+		Email:       user.Email,
+		AvatarURL:   textToPtr(user.AvatarUrl),
+	}
+}
+
+func normalizeMemberRole(role string) (string, bool) {
+	if role == "" {
+		return "member", true
+	}
+
+	role = strings.TrimSpace(role)
+	switch role {
+	case "owner", "admin", "member":
+		return role, true
+	default:
+		return "", false
+	}
+}
+
+func (h *Handler) CreateMember(w http.ResponseWriter, r *http.Request) {
+	workspaceID := chi.URLParam(r, "id")
+	requester, ok := h.requireWorkspaceRole(w, r, workspaceID, "workspace not found", "owner", "admin")
+	if !ok {
+		return
+	}
+
+	var req CreateMemberRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+	if email == "" {
+		writeError(w, http.StatusBadRequest, "email is required")
+		return
+	}
+
+	role, valid := normalizeMemberRole(req.Role)
+	if !valid {
+		writeError(w, http.StatusBadRequest, "invalid member role")
+		return
+	}
+	if role == "owner" && requester.Role != "owner" {
+		writeError(w, http.StatusForbidden, "insufficient permissions")
+		return
+	}
+
+	user, err := h.Queries.GetUserByEmail(r.Context(), email)
+	if err != nil {
+		if isNotFound(err) {
+			writeError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to load user")
+		return
+	}
+
+	member, err := h.Queries.CreateMember(r.Context(), db.CreateMemberParams{
+		WorkspaceID: parseUUID(workspaceID),
+		UserID:      user.ID,
+		Role:        role,
+	})
+	if err != nil {
+		if isUniqueViolation(err) {
+			writeError(w, http.StatusConflict, "user is already a member")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to create member")
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, memberWithUserResponse(member, user))
+}
+
+type UpdateMemberRequest struct {
+	Role string `json:"role"`
+}
+
+func (h *Handler) UpdateMember(w http.ResponseWriter, r *http.Request) {
+	workspaceID := chi.URLParam(r, "id")
+	requester, ok := h.requireWorkspaceRole(w, r, workspaceID, "workspace not found", "owner", "admin")
+	if !ok {
+		return
+	}
+
+	memberID := chi.URLParam(r, "memberId")
+	target, err := h.Queries.GetMember(r.Context(), parseUUID(memberID))
+	if err != nil || uuidToString(target.WorkspaceID) != workspaceID {
+		writeError(w, http.StatusNotFound, "member not found")
+		return
+	}
+
+	var req UpdateMemberRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if strings.TrimSpace(req.Role) == "" {
+		writeError(w, http.StatusBadRequest, "role is required")
+		return
+	}
+
+	role, valid := normalizeMemberRole(req.Role)
+	if !valid {
+		writeError(w, http.StatusBadRequest, "invalid member role")
+		return
+	}
+
+	if (target.Role == "owner" || role == "owner") && requester.Role != "owner" {
+		writeError(w, http.StatusForbidden, "insufficient permissions")
+		return
+	}
+
+	if target.Role == "owner" && role != "owner" {
+		members, err := h.Queries.ListMembers(r.Context(), target.WorkspaceID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to update member")
+			return
+		}
+		if countOwners(members) <= 1 {
+			writeError(w, http.StatusBadRequest, "workspace must have at least one owner")
+			return
+		}
+	}
+
+	updatedMember, err := h.Queries.UpdateMemberRole(r.Context(), db.UpdateMemberRoleParams{
+		ID:   target.ID,
+		Role: role,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update member")
+		return
+	}
+
+	user, err := h.Queries.GetUser(r.Context(), updatedMember.UserID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load member")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, memberWithUserResponse(updatedMember, user))
+}
+
+func (h *Handler) DeleteMember(w http.ResponseWriter, r *http.Request) {
+	workspaceID := chi.URLParam(r, "id")
+	requester, ok := h.requireWorkspaceRole(w, r, workspaceID, "workspace not found", "owner", "admin")
+	if !ok {
+		return
+	}
+
+	memberID := chi.URLParam(r, "memberId")
+	target, err := h.Queries.GetMember(r.Context(), parseUUID(memberID))
+	if err != nil || uuidToString(target.WorkspaceID) != workspaceID {
+		writeError(w, http.StatusNotFound, "member not found")
+		return
+	}
+
+	if target.Role == "owner" && requester.Role != "owner" {
+		writeError(w, http.StatusForbidden, "insufficient permissions")
+		return
+	}
+
+	if target.Role == "owner" {
+		members, err := h.Queries.ListMembers(r.Context(), target.WorkspaceID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to delete member")
+			return
+		}
+		if countOwners(members) <= 1 {
+			writeError(w, http.StatusBadRequest, "workspace must have at least one owner")
+			return
+		}
+	}
+
+	if err := h.Queries.DeleteMember(r.Context(), target.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to delete member")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) LeaveWorkspace(w http.ResponseWriter, r *http.Request) {
+	workspaceID := chi.URLParam(r, "id")
+	member, ok := h.requireWorkspaceMember(w, r, workspaceID, "workspace not found")
+	if !ok {
+		return
+	}
+
+	if member.Role == "owner" {
+		members, err := h.Queries.ListMembers(r.Context(), member.WorkspaceID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to leave workspace")
+			return
+		}
+		if countOwners(members) <= 1 {
+			writeError(w, http.StatusBadRequest, "workspace must have at least one owner")
+			return
+		}
+	}
+
+	if err := h.Queries.DeleteMember(r.Context(), member.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to leave workspace")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) DeleteWorkspace(w http.ResponseWriter, r *http.Request) {
+	workspaceID := chi.URLParam(r, "id")
+	if _, ok := h.requireWorkspaceRole(w, r, workspaceID, "workspace not found", "owner"); !ok {
+		return
+	}
+
+	if err := h.Queries.DeleteWorkspace(r.Context(), parseUUID(workspaceID)); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to delete workspace")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }

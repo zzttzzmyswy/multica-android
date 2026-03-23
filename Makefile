@@ -1,18 +1,45 @@
-.PHONY: dev daemon build test migrate-up migrate-down sqlc seed clean setup start stop check
+.PHONY: dev daemon build test migrate-up migrate-down sqlc seed clean setup start stop check worktree-env setup-main start-main stop-main check-main setup-worktree start-worktree stop-worktree check-worktree
+
+MAIN_ENV_FILE ?= .env
+WORKTREE_ENV_FILE ?= .env.worktree
+ENV_FILE ?= $(if $(wildcard $(MAIN_ENV_FILE)),$(MAIN_ENV_FILE),$(if $(wildcard $(WORKTREE_ENV_FILE)),$(WORKTREE_ENV_FILE),$(MAIN_ENV_FILE)))
+
+ifneq ($(wildcard $(ENV_FILE)),)
+include $(ENV_FILE)
+endif
+
+POSTGRES_DB ?= multica
+POSTGRES_USER ?= multica
+POSTGRES_PASSWORD ?= multica
+POSTGRES_PORT ?= 5432
+PORT ?= 8080
+FRONTEND_PORT ?= 3000
+FRONTEND_ORIGIN ?= http://localhost:$(FRONTEND_PORT)
+DATABASE_URL ?= postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=disable
+NEXT_PUBLIC_API_URL ?= http://localhost:$(PORT)
+NEXT_PUBLIC_WS_URL ?= ws://localhost:$(PORT)/ws
+GOOGLE_REDIRECT_URI ?= $(FRONTEND_ORIGIN)/auth/callback
+MULTICA_SERVER_URL ?= ws://localhost:$(PORT)/ws
+COMPOSE_PROJECT_NAME ?= super_multica
+
+export
+
+COMPOSE := docker compose --env-file $(ENV_FILE)
 
 # ---------- One-click commands ----------
 
 # First-time setup: install deps, start DB, run migrations, seed data
 setup:
+	@echo "==> Using env file: $(ENV_FILE)"
 	@echo "==> Installing dependencies..."
 	pnpm install
 	@echo "==> Starting PostgreSQL..."
-	@if pg_isready -h localhost -p 5432 -U multica > /dev/null 2>&1; then \
+	@if pg_isready -h localhost -p $(POSTGRES_PORT) -U $(POSTGRES_USER) -d $(POSTGRES_DB) > /dev/null 2>&1; then \
 		echo "    PostgreSQL already running, skipping docker compose up."; \
 	else \
-		docker compose up -d; \
+		$(COMPOSE) up -d; \
 		echo "==> Waiting for PostgreSQL to be ready..."; \
-		until docker compose exec -T postgres pg_isready -U multica > /dev/null 2>&1; do \
+		until $(COMPOSE) exec -T postgres pg_isready -U $(POSTGRES_USER) -d $(POSTGRES_DB) > /dev/null 2>&1; do \
 			sleep 1; \
 		done; \
 	fi
@@ -25,11 +52,14 @@ setup:
 
 # Start all services (backend + frontend)
 start:
-	@if pg_isready -h localhost -p 5432 -U multica > /dev/null 2>&1; then \
+	@echo "Using env file: $(ENV_FILE)"
+	@echo "Backend: http://localhost:$(PORT)"
+	@echo "Frontend: http://localhost:$(FRONTEND_PORT)"
+	@if pg_isready -h localhost -p $(POSTGRES_PORT) -U $(POSTGRES_USER) -d $(POSTGRES_DB) > /dev/null 2>&1; then \
 		echo "PostgreSQL already running, skipping docker compose up."; \
 	else \
-		docker compose up -d; \
-		until docker compose exec -T postgres pg_isready -U multica > /dev/null 2>&1; do \
+		$(COMPOSE) up -d; \
+		until $(COMPOSE) exec -T postgres pg_isready -U $(POSTGRES_USER) -d $(POSTGRES_DB) > /dev/null 2>&1; do \
 			sleep 1; \
 		done; \
 	fi
@@ -42,14 +72,41 @@ start:
 # Stop all services
 stop:
 	@echo "Stopping services..."
-	@-lsof -ti:8080 | xargs kill -9 2>/dev/null
-	@-lsof -ti:3000 | xargs kill -9 2>/dev/null
-	docker compose down
+	@-lsof -ti:$(PORT) | xargs kill -9 2>/dev/null
+	@-lsof -ti:$(FRONTEND_PORT) | xargs kill -9 2>/dev/null
+	$(COMPOSE) down
 	@echo "✓ All services stopped."
 
 # Full verification: typecheck + unit tests + Go tests + E2E
 check:
 	@bash scripts/check.sh
+
+worktree-env:
+	@bash scripts/init-worktree-env.sh .env.worktree
+
+setup-main:
+	@$(MAKE) setup ENV_FILE=$(MAIN_ENV_FILE)
+
+start-main:
+	@$(MAKE) start ENV_FILE=$(MAIN_ENV_FILE)
+
+stop-main:
+	@$(MAKE) stop ENV_FILE=$(MAIN_ENV_FILE)
+
+check-main:
+	@ENV_FILE=$(MAIN_ENV_FILE) bash scripts/check.sh
+
+setup-worktree:
+	@$(MAKE) setup ENV_FILE=$(WORKTREE_ENV_FILE)
+
+start-worktree:
+	@$(MAKE) start ENV_FILE=$(WORKTREE_ENV_FILE)
+
+stop-worktree:
+	@$(MAKE) stop ENV_FILE=$(WORKTREE_ENV_FILE)
+
+check-worktree:
+	@ENV_FILE=$(WORKTREE_ENV_FILE) bash scripts/check.sh
 
 # ---------- Individual commands ----------
 

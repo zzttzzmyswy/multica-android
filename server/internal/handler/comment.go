@@ -34,7 +34,12 @@ func commentToResponse(c db.Comment) CommentResponse {
 
 func (h *Handler) ListComments(w http.ResponseWriter, r *http.Request) {
 	issueID := chi.URLParam(r, "id")
-	comments, err := h.Queries.ListComments(r.Context(), parseUUID(issueID))
+	issue, ok := h.loadIssueForUser(w, r, issueID)
+	if !ok {
+		return
+	}
+
+	comments, err := h.Queries.ListComments(r.Context(), issue.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list comments")
 		return
@@ -55,9 +60,13 @@ type CreateCommentRequest struct {
 
 func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 	issueID := chi.URLParam(r, "id")
-	userID := r.Header.Get("X-User-ID")
-	if userID == "" {
-		writeError(w, http.StatusUnauthorized, "user not authenticated")
+	issue, ok := h.loadIssueForUser(w, r, issueID)
+	if !ok {
+		return
+	}
+
+	userID, ok := requireUserID(w, r)
+	if !ok {
 		return
 	}
 
@@ -76,7 +85,7 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	comment, err := h.Queries.CreateComment(r.Context(), db.CreateCommentParams{
-		IssueID:    parseUUID(issueID),
+		IssueID:    issue.ID,
 		AuthorType: "member",
 		AuthorID:   parseUUID(userID),
 		Content:    req.Content,

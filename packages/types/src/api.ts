@@ -1,4 +1,5 @@
 import type { Issue, IssueStatus, IssuePriority, IssueAssigneeType } from "./issue.js";
+import type { MemberRole } from "./workspace.js";
 
 // Issue API
 export interface CreateIssueRequest {
@@ -27,6 +28,20 @@ export interface UpdateIssueRequest {
 export interface ListIssuesResponse {
   issues: Issue[];
   total: number;
+}
+
+export interface UpdateMeRequest {
+  name?: string;
+  avatar_url?: string;
+}
+
+export interface CreateMemberRequest {
+  email: string;
+  role?: MemberRole;
+}
+
+export interface UpdateMemberRequest {
+  role: MemberRole;
 }
 
 // Pagination

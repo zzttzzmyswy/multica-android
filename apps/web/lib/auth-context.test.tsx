@@ -4,8 +4,9 @@ import type { User, Workspace, MemberWithUser, Agent } from "@multica/types";
 
 // Mock next/navigation
 const mockPush = vi.fn();
+const mockRefresh = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: mockPush, refresh: mockRefresh }),
 }));
 
 // Must use vi.hoisted so the mock object is defined before vi.mock factory runs
@@ -18,6 +19,9 @@ const mockApi = vi.hoisted(() => ({
   listMembers: vi.fn(),
   listAgents: vi.fn(),
   createWorkspace: vi.fn(),
+  updateMe: vi.fn(),
+  leaveWorkspace: vi.fn(),
+  deleteWorkspace: vi.fn(),
 }));
 
 vi.mock("./api", () => ({
@@ -393,12 +397,6 @@ describe("AuthContext", () => {
   });
 
   it("switchWorkspace updates context and calls setWorkspaceId", async () => {
-    const reloadMock = vi.fn();
-    Object.defineProperty(window, "location", {
-      value: { ...window.location, reload: reloadMock },
-      writable: true,
-    });
-
     const mockWorkspace2: Workspace = {
       id: "ws-2",
       name: "Second WS",
@@ -434,6 +432,6 @@ describe("AuthContext", () => {
 
     expect(mockApi.setWorkspaceId).toHaveBeenCalledWith("ws-2");
     expect(localStorage.getItem("multica_workspace_id")).toBe("ws-2");
-    expect(reloadMock).toHaveBeenCalled();
+    expect(mockRefresh).toHaveBeenCalled();
   });
 });

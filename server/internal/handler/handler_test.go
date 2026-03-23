@@ -37,7 +37,7 @@ func TestMain(m *testing.M) {
 	queries := db.New(pool)
 	hub := realtime.NewHub()
 	go hub.Run()
-	testHandler = New(queries, hub)
+	testHandler = New(queries, pool, hub)
 
 	// Get seed user and workspace IDs
 	row := pool.QueryRow(context.Background(), `SELECT id FROM "user" WHERE email = 'jiayuan@multica.ai'`)

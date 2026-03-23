@@ -12,7 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/multica-ai/multica/server/internal/realtime"
-	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
 func main() {
@@ -39,11 +38,10 @@ func main() {
 	}
 	log.Println("Connected to database")
 
-	queries := db.New(pool)
 	hub := realtime.NewHub()
 	go hub.Run()
 
-	r := NewRouter(queries, hub)
+	r := NewRouter(pool, hub)
 
 	srv := &http.Server{
 		Addr:    ":" + port,

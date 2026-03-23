@@ -5,7 +5,7 @@
  * have zero build-time coupling to monorepo packages.
  */
 
-const API_BASE = "http://localhost:8080";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? `http://localhost:${process.env.PORT ?? "8080"}`;
 
 export class TestApiClient {
   private token: string | null = null;

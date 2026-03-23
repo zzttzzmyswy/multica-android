@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/multica-ai/multica/server/internal/auth"
 )
 
 func generateToken(claims jwt.MapClaims, secret []byte) string {
@@ -80,7 +81,7 @@ func TestAuth_ExpiredToken(t *testing.T) {
 
 	claims := validClaims()
 	claims["exp"] = time.Now().Add(-time.Hour).Unix()
-	token := generateToken(claims, jwtSecret)
+	token := generateToken(claims, auth.JWTSecret())
 
 	req := httptest.NewRequest("GET", "/api/me", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -136,7 +137,7 @@ func TestAuth_ValidToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	token := generateToken(validClaims(), jwtSecret)
+	token := generateToken(validClaims(), auth.JWTSecret())
 
 	req := httptest.NewRequest("GET", "/api/me", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -155,31 +156,22 @@ func TestAuth_ValidToken(t *testing.T) {
 }
 
 func TestAuth_MissingClaims(t *testing.T) {
-	var gotUserID, gotEmail string
 	handler := Auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotUserID = r.Header.Get("X-User-ID")
-		gotEmail = r.Header.Get("X-User-Email")
-		w.WriteHeader(http.StatusOK)
+		t.Fatal("next handler should not be called")
 	}))
 
 	// Token with no sub or email claims, only exp
 	claims := jwt.MapClaims{
 		"exp": time.Now().Add(time.Hour).Unix(),
 	}
-	token := generateToken(claims, jwtSecret)
+	token := generateToken(claims, auth.JWTSecret())
 
 	req := httptest.NewRequest("GET", "/api/me", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-	if gotUserID != "" {
-		t.Fatalf("expected empty X-User-ID, got '%s'", gotUserID)
-	}
-	if gotEmail != "" {
-		t.Fatalf("expected empty X-User-Email, got '%s'", gotEmail)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", w.Code)
 	}
 }
