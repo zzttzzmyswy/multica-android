@@ -15,11 +15,14 @@ import { api } from "./api";
 interface AuthContextValue {
   user: User | null;
   workspace: Workspace | null;
+  workspaces: Workspace[];
   members: MemberWithUser[];
   agents: Agent[];
   isLoading: boolean;
   login: (email: string, name?: string) => Promise<void>;
   logout: () => void;
+  switchWorkspace: (workspaceId: string) => Promise<void>;
+  createWorkspace: (data: { name: string; slug: string; description?: string }) => Promise<Workspace>;
   updateWorkspace: (ws: Workspace) => void;
   refreshMembers: () => Promise<void>;
   refreshAgents: () => Promise<void>;
@@ -35,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [members, setMembers] = useState<MemberWithUser[]>([]);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
@@ -56,9 +60,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const me = await api.getMe();
         setUser(me);
 
-        const workspaces = await api.listWorkspaces();
-        if (workspaces.length > 0) {
-          const ws = workspaces[0]!;
+        const wsList = await api.listWorkspaces();
+        setWorkspaces(wsList);
+        if (wsList.length > 0) {
+          const stored = wsId ? wsList.find(w => w.id === wsId) : null;
+          const ws = stored ?? wsList[0]!;
           setWorkspace(ws);
           api.setWorkspaceId(ws.id);
           localStorage.setItem("multica_workspace_id", ws.id);
@@ -87,9 +93,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(u);
 
     // Load workspace
-    const workspaces = await api.listWorkspaces();
-    if (workspaces.length > 0) {
-      const ws = workspaces[0]!;
+    const wsList = await api.listWorkspaces();
+    setWorkspaces(wsList);
+    if (wsList.length > 0) {
+      const ws = wsList[0]!;
       setWorkspace(ws);
       api.setWorkspaceId(ws.id);
       localStorage.setItem("multica_workspace_id", ws.id);
@@ -110,10 +117,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("multica_workspace_id");
     setUser(null);
     setWorkspace(null);
+    setWorkspaces([]);
     setMembers([]);
     setAgents([]);
     router.push("/login");
   }, [router]);
+
+  const switchWorkspace = useCallback(async (workspaceId: string) => {
+    const ws = workspaces.find(w => w.id === workspaceId);
+    if (!ws) return;
+
+    api.setWorkspaceId(ws.id);
+    localStorage.setItem("multica_workspace_id", ws.id);
+    setWorkspace(ws);
+
+    const [m, a] = await Promise.all([
+      api.listMembers(ws.id),
+      api.listAgents({ workspace_id: ws.id }),
+    ]);
+    setMembers(m);
+    setAgents(a);
+
+    window.location.reload();
+  }, [workspaces]);
+
+  const createNewWorkspace = useCallback(async (data: { name: string; slug: string; description?: string }) => {
+    const ws = await api.createWorkspace(data);
+    setWorkspaces(prev => [...prev, ws]);
+    return ws;
+  }, []);
 
   const updateWorkspaceState = useCallback((ws: Workspace) => {
     setWorkspace(ws);
@@ -174,11 +206,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         workspace,
+        workspaces,
         members,
         agents,
         isLoading,
         login,
         logout,
+        switchWorkspace,
+        createWorkspace: createNewWorkspace,
         updateWorkspace: updateWorkspaceState,
         refreshMembers,
         refreshAgents,

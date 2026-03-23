@@ -17,6 +17,7 @@ const mockApi = vi.hoisted(() => ({
   listWorkspaces: vi.fn(),
   listMembers: vi.fn(),
   listAgents: vi.fn(),
+  createWorkspace: vi.fn(),
 }));
 
 vi.mock("./api", () => ({
@@ -304,5 +305,135 @@ describe("AuthContext", () => {
 
     expect(result.current.user).toBeNull();
     expect(localStorage.getItem("multica_token")).toBeNull();
+  });
+
+  it("initialization prefers stored workspace ID from list", async () => {
+    const mockWorkspace2: Workspace = {
+      id: "ws-2",
+      name: "Second WS",
+      slug: "second",
+      description: null,
+      settings: {},
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    };
+
+    localStorage.setItem("multica_token", "stored-token");
+    localStorage.setItem("multica_workspace_id", "ws-2");
+
+    mockApi.getMe.mockResolvedValueOnce(mockUser);
+    mockApi.listWorkspaces.mockResolvedValueOnce([mockWorkspace, mockWorkspace2]);
+    mockApi.listMembers.mockResolvedValueOnce(mockMembers);
+    mockApi.listAgents.mockResolvedValueOnce(mockAgents);
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(result.current.workspace).toEqual(mockWorkspace2);
+    expect(result.current.workspaces).toHaveLength(2);
+  });
+
+  it("initialization falls back to first workspace when stored ID not in list", async () => {
+    localStorage.setItem("multica_token", "stored-token");
+    localStorage.setItem("multica_workspace_id", "ws-deleted");
+
+    mockApi.getMe.mockResolvedValueOnce(mockUser);
+    mockApi.listWorkspaces.mockResolvedValueOnce([mockWorkspace]);
+    mockApi.listMembers.mockResolvedValueOnce(mockMembers);
+    mockApi.listAgents.mockResolvedValueOnce(mockAgents);
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(result.current.workspace).toEqual(mockWorkspace);
+  });
+
+  it("createWorkspace calls API and adds to workspaces list", async () => {
+    mockApi.login.mockResolvedValueOnce({ token: "test-jwt", user: mockUser });
+    mockApi.listWorkspaces.mockResolvedValueOnce([mockWorkspace]);
+    mockApi.listMembers.mockResolvedValueOnce(mockMembers);
+    mockApi.listAgents.mockResolvedValueOnce(mockAgents);
+
+    const newWs: Workspace = {
+      id: "ws-new",
+      name: "New WS",
+      slug: "new-ws",
+      description: null,
+      settings: {},
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    };
+    mockApi.createWorkspace.mockResolvedValueOnce(newWs);
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.login("test@multica.ai");
+    });
+
+    let created: Workspace | undefined;
+    await act(async () => {
+      created = await result.current.createWorkspace({ name: "New WS", slug: "new-ws" });
+    });
+
+    expect(mockApi.createWorkspace).toHaveBeenCalledWith({ name: "New WS", slug: "new-ws" });
+    expect(created).toEqual(newWs);
+    expect(result.current.workspaces).toHaveLength(2);
+    expect(result.current.workspaces[1]).toEqual(newWs);
+  });
+
+  it("switchWorkspace updates context and calls setWorkspaceId", async () => {
+    const reloadMock = vi.fn();
+    Object.defineProperty(window, "location", {
+      value: { ...window.location, reload: reloadMock },
+      writable: true,
+    });
+
+    const mockWorkspace2: Workspace = {
+      id: "ws-2",
+      name: "Second WS",
+      slug: "second",
+      description: null,
+      settings: {},
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    };
+
+    mockApi.login.mockResolvedValueOnce({ token: "test-jwt", user: mockUser });
+    mockApi.listWorkspaces.mockResolvedValueOnce([mockWorkspace, mockWorkspace2]);
+    mockApi.listMembers.mockResolvedValueOnce(mockMembers);
+    mockApi.listAgents.mockResolvedValueOnce(mockAgents);
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.login("test@multica.ai");
+    });
+
+    // Setup mocks for the switch
+    mockApi.listMembers.mockResolvedValueOnce([]);
+    mockApi.listAgents.mockResolvedValueOnce([]);
+
+    await act(async () => {
+      await result.current.switchWorkspace("ws-2");
+    });
+
+    expect(mockApi.setWorkspaceId).toHaveBeenCalledWith("ws-2");
+    expect(localStorage.getItem("multica_workspace_id")).toBe("ws-2");
+    expect(reloadMock).toHaveBeenCalled();
   });
 });
