@@ -18,7 +18,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/multica-ai/multica/server/internal/realtime"
-	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
 var (
@@ -30,48 +29,48 @@ var (
 
 var jwtSecret = []byte("multica-dev-secret-change-in-production")
 
+const (
+	integrationTestEmail         = "integration-test@multica.ai"
+	integrationTestName          = "Integration Tester"
+	integrationTestWorkspaceSlug = "integration-tests"
+)
+
 func TestMain(m *testing.M) {
+	ctx := context.Background()
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
 		dbURL = "postgres://multica:multica@localhost:5432/multica?sslmode=disable"
 	}
 
-	pool, err := pgxpool.New(context.Background(), dbURL)
+	pool, err := pgxpool.New(ctx, dbURL)
 	if err != nil {
 		fmt.Printf("Skipping integration tests: could not connect to database: %v\n", err)
 		os.Exit(0)
 	}
-	defer pool.Close()
 
-	// Get seed data IDs
-	row := pool.QueryRow(context.Background(), `SELECT id FROM "user" WHERE email = 'jiayuan@multica.ai'`)
-	row.Scan(&testUserID)
-
-	row = pool.QueryRow(context.Background(), `SELECT id FROM workspace WHERE slug = 'multica'`)
-	row.Scan(&testWorkspaceID)
-
-	if testUserID == "" || testWorkspaceID == "" {
-		fmt.Println("Skipping integration tests: seed data not found. Run 'go run ./cmd/seed/' first.")
-		os.Exit(0)
+	testUserID, testWorkspaceID, err = setupIntegrationTestFixture(ctx, pool)
+	if err != nil {
+		fmt.Printf("Failed to set up integration test fixture: %v\n", err)
+		pool.Close()
+		os.Exit(1)
 	}
 
-	queries := db.New(pool)
 	hub := realtime.NewHub()
 	go hub.Run()
 
-	_ = queries
 	router := NewRouter(pool, hub)
 	testServer = httptest.NewServer(router)
-	defer testServer.Close()
 
 	// Login to get a real JWT token
 	loginBody, _ := json.Marshal(map[string]string{
-		"email": "jiayuan@multica.ai",
-		"name":  "Jiayuan Zhang",
+		"email": integrationTestEmail,
+		"name":  integrationTestName,
 	})
 	resp, err := http.Post(testServer.URL+"/auth/login", "application/json", bytes.NewReader(loginBody))
 	if err != nil {
 		fmt.Printf("Skipping: login failed: %v\n", err)
+		testServer.Close()
+		pool.Close()
 		os.Exit(0)
 	}
 	defer resp.Body.Close()
@@ -85,7 +84,81 @@ func TestMain(m *testing.M) {
 	json.NewDecoder(resp.Body).Decode(&loginResp)
 	testToken = loginResp.Token
 
-	os.Exit(m.Run())
+	code := m.Run()
+
+	if err := cleanupIntegrationTestFixture(context.Background(), pool); err != nil {
+		fmt.Printf("Failed to clean up integration test fixture: %v\n", err)
+		if code == 0 {
+			code = 1
+		}
+	}
+	testServer.Close()
+	pool.Close()
+	os.Exit(code)
+}
+
+func setupIntegrationTestFixture(ctx context.Context, pool *pgxpool.Pool) (string, string, error) {
+	if err := cleanupIntegrationTestFixture(ctx, pool); err != nil {
+		return "", "", err
+	}
+
+	var userID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO "user" (name, email)
+		VALUES ($1, $2)
+		RETURNING id
+	`, integrationTestName, integrationTestEmail).Scan(&userID); err != nil {
+		return "", "", err
+	}
+
+	var workspaceID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO workspace (name, slug, description)
+		VALUES ($1, $2, $3)
+		RETURNING id
+	`, "Integration Tests", integrationTestWorkspaceSlug, "Temporary workspace for router integration tests").Scan(&workspaceID); err != nil {
+		return "", "", err
+	}
+
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO member (workspace_id, user_id, role)
+		VALUES ($1, $2, 'owner')
+	`, workspaceID, userID); err != nil {
+		return "", "", err
+	}
+
+	var runtimeID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO agent_runtime (
+			workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at
+		)
+		VALUES ($1, NULL, $2, 'cloud', $3, 'online', $4, '{}'::jsonb, now())
+		RETURNING id
+	`, workspaceID, "Integration Test Runtime", "integration_test_runtime", "Integration test runtime").Scan(&runtimeID); err != nil {
+		return "", "", err
+	}
+
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO agent (
+			workspace_id, name, description, runtime_mode, runtime_config,
+			runtime_id, visibility, max_concurrent_tasks, owner_id, skills, tools, triggers
+		)
+		VALUES ($1, $2, '', 'cloud', '{}'::jsonb, $3, 'workspace', 1, $4, '', '[]'::jsonb, '[]'::jsonb)
+	`, workspaceID, "Integration Test Agent", runtimeID, userID); err != nil {
+		return "", "", err
+	}
+
+	return userID, workspaceID, nil
+}
+
+func cleanupIntegrationTestFixture(ctx context.Context, pool *pgxpool.Pool) error {
+	if _, err := pool.Exec(ctx, `DELETE FROM workspace WHERE slug = $1`, integrationTestWorkspaceSlug); err != nil {
+		return err
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM "user" WHERE email = $1`, integrationTestEmail); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Helper to make authenticated requests
