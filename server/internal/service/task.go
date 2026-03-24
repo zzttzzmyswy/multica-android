@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -42,7 +43,13 @@ func (s *TaskService) EnqueueTaskForIssue(ctx context.Context, issue db.Issue) (
 		return db.AgentTaskQueue{}, fmt.Errorf("load runtime: %w", err)
 	}
 
-	snapshot := buildContextSnapshot(issue, agent, runtime)
+	// Include workspace context in the snapshot when available.
+	var workspaceContext string
+	if ws, err := s.Queries.GetWorkspace(ctx, issue.WorkspaceID); err == nil && ws.Context.Valid {
+		workspaceContext = ws.Context.String
+	}
+
+	snapshot := buildContextSnapshot(issue, agent, runtime, workspaceContext)
 	contextJSON, _ := json.Marshal(snapshot)
 
 	task, err := s.Queries.CreateAgentTaskWithContext(ctx, db.CreateAgentTaskWithContextParams{
@@ -105,6 +112,14 @@ func (s *TaskService) ClaimTaskForRuntime(ctx context.Context, runtimeID pgtype.
 		return nil, fmt.Errorf("list pending tasks: %w", err)
 	}
 
+	if len(tasks) > 0 {
+		log.Printf("[ClaimTaskForRuntime] runtime=%s found %d pending tasks", util.UUIDToString(runtimeID), len(tasks))
+		for _, t := range tasks {
+			log.Printf("[ClaimTaskForRuntime]   task=%s agent=%s status=%s",
+				util.UUIDToString(t.ID), util.UUIDToString(t.AgentID), t.Status)
+		}
+	}
+
 	triedAgents := map[string]struct{}{}
 	for _, candidate := range tasks {
 		agentKey := util.UUIDToString(candidate.AgentID)
@@ -115,10 +130,15 @@ func (s *TaskService) ClaimTaskForRuntime(ctx context.Context, runtimeID pgtype.
 
 		task, err := s.ClaimTask(ctx, candidate.AgentID)
 		if err != nil {
+			log.Printf("[ClaimTaskForRuntime] ClaimTask for agent %s failed: %v", agentKey, err)
 			return nil, err
 		}
 		if task != nil && task.RuntimeID == runtimeID {
 			return task, nil
+		}
+		if task != nil {
+			log.Printf("[ClaimTaskForRuntime] task %s runtime mismatch: task.RuntimeID=%s != requested=%s",
+				util.UUIDToString(task.ID), util.UUIDToString(task.RuntimeID), util.UUIDToString(runtimeID))
 		}
 	}
 
@@ -146,29 +166,45 @@ func (s *TaskService) StartTask(ctx context.Context, taskID pgtype.UUID) (*db.Ag
 
 // CompleteTask marks a task as completed and syncs issue/agent status.
 func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, result []byte) (*db.AgentTaskQueue, error) {
+	log.Printf("[CompleteTask] task=%s result_len=%d result_preview=%s",
+		util.UUIDToString(taskID), len(result), truncate(string(result), 200))
+
 	task, err := s.Queries.CompleteAgentTask(ctx, db.CompleteAgentTaskParams{
 		ID:     taskID,
 		Result: result,
 	})
 	if err != nil {
+		log.Printf("[CompleteTask] CompleteAgentTask failed: %v (task may not be in 'running' state)", err)
 		return nil, fmt.Errorf("complete task: %w", err)
 	}
+	log.Printf("[CompleteTask] task %s marked completed, issue=%s agent=%s",
+		util.UUIDToString(task.ID), util.UUIDToString(task.IssueID), util.UUIDToString(task.AgentID))
 
 	// Sync issue → in_review
 	issue, issueErr := s.Queries.UpdateIssueStatus(ctx, db.UpdateIssueStatusParams{
 		ID:     task.IssueID,
 		Status: "in_review",
 	})
-	if issueErr == nil {
+	if issueErr != nil {
+		log.Printf("[CompleteTask] UpdateIssueStatus to in_review failed: %v", issueErr)
+	} else {
+		log.Printf("[CompleteTask] issue %s status updated to in_review", util.UUIDToString(issue.ID))
 		s.broadcastIssueUpdated(issue)
 	}
 
 	var payload protocol.TaskCompletedPayload
 	if err := json.Unmarshal(result, &payload); err == nil {
+		log.Printf("[CompleteTask] parsed payload: output_len=%d", len(payload.Output))
 		if payload.Output != "" {
 			s.createAgentComment(ctx, task.IssueID, task.AgentID, payload.Output, "comment")
+			log.Printf("[CompleteTask] created agent comment for issue %s", util.UUIDToString(task.IssueID))
+		} else {
+			log.Printf("[CompleteTask] payload.Output is empty, skipping comment")
 		}
+	} else {
+		log.Printf("[CompleteTask] failed to unmarshal result into TaskCompletedPayload: %v", err)
 	}
+
 	if issueErr == nil {
 		s.createInboxForIssueCreator(ctx, issue, "review_requested", "attention", "Review requested: "+issue.Title, "")
 	}
@@ -250,7 +286,7 @@ func (s *TaskService) updateAgentStatus(ctx context.Context, agentID pgtype.UUID
 	s.broadcast(protocol.EventAgentStatus, map[string]any{"agent": agentToMap(agent)})
 }
 
-func buildContextSnapshot(issue db.Issue, agent db.Agent, runtime db.AgentRuntime) map[string]any {
+func buildContextSnapshot(issue db.Issue, agent db.Agent, runtime db.AgentRuntime, workspaceContext string) map[string]any {
 	var ac []string
 	if issue.AcceptanceCriteria != nil {
 		json.Unmarshal(issue.AcceptanceCriteria, &ac)
@@ -274,7 +310,7 @@ func buildContextSnapshot(issue db.Issue, agent db.Agent, runtime db.AgentRuntim
 		json.Unmarshal(runtime.Metadata, &metadata)
 	}
 
-	return map[string]any{
+	m := map[string]any{
 		"issue": map[string]any{
 			"id":                  util.UUIDToString(issue.ID),
 			"title":               issue.Title,
@@ -298,6 +334,10 @@ func buildContextSnapshot(issue db.Issue, agent db.Agent, runtime db.AgentRuntim
 			"metadata":     metadata,
 		},
 	}
+	if workspaceContext != "" {
+		m["workspace_context"] = workspaceContext
+	}
+	return m
 }
 
 func priorityToInt(p string) int32 {
@@ -449,6 +489,13 @@ func inboxToMap(item db.InboxItem) map[string]any {
 		"archived":       item.Archived,
 		"created_at":     util.TimestampToString(item.CreatedAt),
 	}
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "..."
 }
 
 // agentToMap builds a simple map for broadcasting agent status updates.

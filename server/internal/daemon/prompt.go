@@ -55,6 +55,12 @@ func BuildPrompt(task Task, workdir string) string {
 		b.WriteString("\n")
 	}
 
+	if task.Context.WorkspaceContext != "" {
+		b.WriteString("Workspace context:\n")
+		b.WriteString(task.Context.WorkspaceContext)
+		b.WriteString("\n\n")
+	}
+
 	if task.Context.Agent.Skills != "" {
 		b.WriteString("Agent skills/instructions:\n")
 		b.WriteString(task.Context.Agent.Skills)

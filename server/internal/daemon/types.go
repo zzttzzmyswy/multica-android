@@ -45,9 +45,10 @@ type Task struct {
 
 // TaskContext contains the snapshot context for a task.
 type TaskContext struct {
-	Issue   IssueContext   `json:"issue"`
-	Agent   AgentContext   `json:"agent"`
-	Runtime RuntimeContext `json:"runtime"`
+	Issue            IssueContext   `json:"issue"`
+	Agent            AgentContext   `json:"agent"`
+	Runtime          RuntimeContext `json:"runtime"`
+	WorkspaceContext string         `json:"workspace_context,omitempty"`
 }
 
 // IssueContext holds issue details for task execution.
