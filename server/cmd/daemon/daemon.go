@@ -42,7 +42,7 @@ type config struct {
 	DeviceName        string
 	RuntimeName       string
 	Agents            map[string]agentEntry // "claude" -> entry, "codex" -> entry
-	DefaultWorkdir    string
+	ReposRoot         string // parent directory containing all repos
 	PollInterval      time.Duration
 	HeartbeatInterval time.Duration
 	AgentTimeout      time.Duration
@@ -175,16 +175,16 @@ func loadConfig() (config, error) {
 		host = "local-machine"
 	}
 
-	defaultWorkdir := strings.TrimSpace(os.Getenv("MULTICA_AGENT_WORKDIR"))
-	if defaultWorkdir == "" {
-		defaultWorkdir, err = os.Getwd()
+	reposRoot := strings.TrimSpace(os.Getenv("MULTICA_REPOS_ROOT"))
+	if reposRoot == "" {
+		reposRoot, err = os.Getwd()
 		if err != nil {
 			return config{}, fmt.Errorf("resolve working directory: %w", err)
 		}
 	}
-	defaultWorkdir, err = filepath.Abs(defaultWorkdir)
+	reposRoot, err = filepath.Abs(reposRoot)
 	if err != nil {
-		return config{}, fmt.Errorf("resolve absolute workdir: %w", err)
+		return config{}, fmt.Errorf("resolve absolute repos root: %w", err)
 	}
 
 	pollInterval, err := durationFromEnv("MULTICA_DAEMON_POLL_INTERVAL", defaultPollInterval)
@@ -208,7 +208,7 @@ func loadConfig() (config, error) {
 		DeviceName:        envOrDefault("MULTICA_DAEMON_DEVICE_NAME", host),
 		RuntimeName:       envOrDefault("MULTICA_AGENT_RUNTIME_NAME", defaultRuntimeName),
 		Agents:            agents,
-		DefaultWorkdir:    defaultWorkdir,
+		ReposRoot:         reposRoot,
 		PollInterval:      pollInterval,
 		HeartbeatInterval: heartbeatInterval,
 		AgentTimeout:      agentTimeout,
@@ -228,8 +228,8 @@ func (d *daemon) run(ctx context.Context) error {
 	for name := range d.cfg.Agents {
 		agentNames = append(agentNames, name)
 	}
-	d.logger.Printf("starting daemon agents=%v workspace=%s server=%s workdir=%s",
-		agentNames, d.cfg.WorkspaceID, d.cfg.ServerBaseURL, d.cfg.DefaultWorkdir)
+	d.logger.Printf("starting daemon agents=%v workspace=%s server=%s repos_root=%s",
+		agentNames, d.cfg.WorkspaceID, d.cfg.ServerBaseURL, d.cfg.ReposRoot)
 
 	if strings.TrimSpace(d.cfg.WorkspaceID) == "" {
 		workspaceID, err := d.ensurePaired(ctx)
@@ -460,7 +460,7 @@ func (d *daemon) runTask(ctx context.Context, task daemonTask) (taskResult, erro
 		return taskResult{}, fmt.Errorf("no agent configured for provider %q", provider)
 	}
 
-	workdir, err := resolveTaskWorkdir(d.cfg.DefaultWorkdir, task.Context.Issue.Repository)
+	workdir, err := resolveTaskWorkdir(d.cfg.ReposRoot, task.Context.Issue.Repository)
 	if err != nil {
 		return taskResult{}, err
 	}
@@ -581,8 +581,8 @@ func buildPrompt(task daemonTask, workdir string) string {
 	return b.String()
 }
 
-func resolveTaskWorkdir(defaultWorkdir string, repo *daemonRepoRef) (string, error) {
-	base := defaultWorkdir
+func resolveTaskWorkdir(reposRoot string, repo *daemonRepoRef) (string, error) {
+	base := reposRoot
 	if repo == nil || strings.TrimSpace(repo.Path) == "" {
 		return base, nil
 	}
