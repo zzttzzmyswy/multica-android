@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -285,7 +286,9 @@ func (h *Handler) createAgentInitIssue(ctx context.Context, agent db.Agent, crea
 	h.broadcast("issue:created", map[string]any{"issue": issueToResponse(issue)})
 
 	// Enqueue the task directly — we know the agent is assigned and status is "todo".
-	h.TaskService.EnqueueTaskForIssue(ctx, issue)
+	if _, err := h.TaskService.EnqueueTaskForIssue(ctx, issue); err != nil {
+		log.Printf("createAgentInitIssue: enqueue task failed for issue %s: %v", issue.Title, err)
+	}
 }
 
 type UpdateAgentRequest struct {

@@ -104,7 +104,10 @@ func (b *codexBackend) Execute(ctx context.Context, prompt string, opts ExecOpti
 		c.closeAllPending(fmt.Errorf("codex process exited"))
 	}()
 
-	// Drive the session lifecycle in a goroutine
+	// Drive the session lifecycle in a goroutine.
+	// Shutdown sequence: lifecycle goroutine closes stdin + cancels context →
+	// codex process exits → reader goroutine's scanner.Scan() returns false →
+	// readerDone closes → lifecycle goroutine collects final output and sends Result.
 	go func() {
 		defer cancel()
 		defer close(msgCh)

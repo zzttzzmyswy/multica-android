@@ -3,7 +3,6 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 
@@ -207,17 +206,13 @@ func (h *Handler) CompleteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("[Handler.CompleteTask] task=%s output_len=%d", taskID, len(req.Output))
-
 	result, _ := json.Marshal(req)
 	task, err := h.TaskService.CompleteTask(r.Context(), parseUUID(taskID), result)
 	if err != nil {
-		log.Printf("[Handler.CompleteTask] task=%s error: %v", taskID, err)
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	log.Printf("[Handler.CompleteTask] task=%s completed, issue status synced", taskID)
 	writeJSON(w, http.StatusOK, taskToResponse(*task))
 }
 
