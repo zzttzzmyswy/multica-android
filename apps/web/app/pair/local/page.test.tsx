@@ -56,15 +56,21 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams("token=test-token"),
 }));
 
-vi.mock("../../../lib/api", () => ({
+vi.mock("@/shared/api", () => ({
   api: {
     getDaemonPairingSession: mockGetDaemonPairingSession,
     approveDaemonPairingSession: mockApproveDaemonPairingSession,
   },
 }));
 
-vi.mock("../../../lib/auth-context", () => ({
-  useAuth: () => mockAuthValue,
+vi.mock("@/features/auth", () => ({
+  useAuthStore: (selector: (s: any) => any) =>
+    selector(mockAuthValue),
+}));
+
+vi.mock("@/features/workspace", () => ({
+  useWorkspaceStore: (selector: (s: any) => any) =>
+    selector(mockAuthValue),
 }));
 
 import LocalDaemonPairPage from "./page";
