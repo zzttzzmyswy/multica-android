@@ -205,6 +205,12 @@ func (b *codexBackend) Execute(ctx context.Context, prompt string, opts ExecOpti
 		b.cfg.Logger.Printf("[codex] finished pid=%d status=%s duration=%s",
 			cmd.Process.Pid, finalStatus, duration.Round(time.Millisecond))
 
+		// Close stdin and cancel context to signal the app-server to exit.
+		// Without this, the long-running codex process keeps stdout open and
+		// the reader goroutine blocks forever on scanner.Scan().
+		stdin.Close()
+		cancel()
+
 		// Wait for the reader goroutine to finish so all output is accumulated.
 		<-readerDone
 
