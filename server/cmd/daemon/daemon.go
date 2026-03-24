@@ -384,6 +384,7 @@ func (d *daemon) heartbeatLoop(ctx context.Context, runtimeIDs []string) {
 }
 
 func (d *daemon) pollLoop(ctx context.Context, runtimeIDs []string) error {
+	pollOffset := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -392,7 +393,9 @@ func (d *daemon) pollLoop(ctx context.Context, runtimeIDs []string) error {
 		}
 
 		claimed := false
-		for _, rid := range runtimeIDs {
+		n := len(runtimeIDs)
+		for i := 0; i < n; i++ {
+			rid := runtimeIDs[(pollOffset+i)%n]
 			task, err := d.client.claimTask(ctx, rid)
 			if err != nil {
 				d.logger.Printf("claim task failed for runtime %s: %v", rid, err)
@@ -402,11 +405,13 @@ func (d *daemon) pollLoop(ctx context.Context, runtimeIDs []string) error {
 				d.logger.Printf("poll: got task=%s issue=%s title=%q", task.ID, task.IssueID, task.Context.Issue.Title)
 				d.handleTask(ctx, *task)
 				claimed = true
+				pollOffset = (pollOffset + i + 1) % n
 				break
 			}
 		}
 
 		if !claimed {
+			pollOffset = (pollOffset + 1) % n
 			if err := sleepWithContext(ctx, d.cfg.PollInterval); err != nil {
 				return err
 			}

@@ -60,23 +60,38 @@ func (b *codexBackend) Execute(ctx context.Context, prompt string, opts ExecOpti
 	msgCh := make(chan Message, 256)
 	resCh := make(chan Result, 1)
 
+	var outputMu sync.Mutex
 	var output strings.Builder
 
+	// turnDone is set before starting the reader goroutine so there is no
+	// race between the lifecycle goroutine writing and the reader reading.
+	turnDone := make(chan bool, 1) // true = aborted
+
 	c := &codexClient{
-		cfg:     b.cfg,
-		stdin:   stdin,
-		pending: make(map[int]*pendingRPC),
-		// Set onMessage before starting the reader goroutine to avoid a race.
+		cfg:                  b.cfg,
+		stdin:                stdin,
+		pending:              make(map[int]*pendingRPC),
+		notificationProtocol: "unknown",
 		onMessage: func(msg Message) {
 			if msg.Type == MessageText {
+				outputMu.Lock()
 				output.WriteString(msg.Content)
+				outputMu.Unlock()
 			}
 			trySend(msgCh, msg)
+		},
+		onTurnDone: func(aborted bool) {
+			select {
+			case turnDone <- aborted:
+			default:
+			}
 		},
 	}
 
 	// Start reading stdout in background
+	readerDone := make(chan struct{})
 	go func() {
+		defer close(readerDone)
 		scanner := bufio.NewScanner(stdout)
 		scanner.Buffer(make([]byte, 0, 1024*1024), 10*1024*1024)
 		for scanner.Scan() {
@@ -156,14 +171,6 @@ func (b *codexBackend) Execute(ctx context.Context, prompt string, opts ExecOpti
 		b.cfg.Logger.Printf("[codex] thread started: %s", threadID)
 
 		// 3. Send turn and wait for completion
-		turnDone := make(chan bool, 1) // true = aborted
-		c.onTurnDone = func(aborted bool) {
-			select {
-			case turnDone <- aborted:
-			default:
-			}
-		}
-
 		_, err = c.request(runCtx, "turn/start", map[string]any{
 			"threadId": threadID,
 			"input": []map[string]any{
@@ -198,9 +205,16 @@ func (b *codexBackend) Execute(ctx context.Context, prompt string, opts ExecOpti
 		b.cfg.Logger.Printf("[codex] finished pid=%d status=%s duration=%s",
 			cmd.Process.Pid, finalStatus, duration.Round(time.Millisecond))
 
+		// Wait for the reader goroutine to finish so all output is accumulated.
+		<-readerDone
+
+		outputMu.Lock()
+		finalOutput := output.String()
+		outputMu.Unlock()
+
 		resCh <- Result{
 			Status:     finalStatus,
-			Output:     output.String(),
+			Output:     finalOutput,
 			Error:      finalError,
 			DurationMs: duration.Milliseconds(),
 		}

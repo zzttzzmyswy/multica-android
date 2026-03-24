@@ -244,10 +244,13 @@ func (b *claudeBackend) handleControlRequest(msg claudeSDKMessage, stdin interfa
 
 	data, err := json.Marshal(response)
 	if err != nil {
+		b.cfg.Logger.Printf("[claude] failed to marshal control response: %v", err)
 		return
 	}
 	data = append(data, '\n')
-	_, _ = stdin.Write(data)
+	if _, err := stdin.Write(data); err != nil {
+		b.cfg.Logger.Printf("[claude] failed to write control response: %v", err)
+	}
 }
 
 // ── Claude SDK JSON types ──
