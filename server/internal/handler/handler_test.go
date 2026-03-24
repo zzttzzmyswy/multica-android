@@ -12,55 +12,118 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/internal/realtime"
+	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
 var testHandler *Handler
 var testUserID string
 var testWorkspaceID string
-var testToken string
+
+const (
+	handlerTestEmail         = "handler-test@multica.ai"
+	handlerTestName          = "Handler Test User"
+	handlerTestWorkspaceSlug = "handler-tests"
+)
 
 func TestMain(m *testing.M) {
+	ctx := context.Background()
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
 		dbURL = "postgres://multica:multica@localhost:5432/multica?sslmode=disable"
 	}
 
-	pool, err := pgxpool.New(context.Background(), dbURL)
+	pool, err := pgxpool.New(ctx, dbURL)
 	if err != nil {
 		fmt.Printf("Skipping tests: could not connect to database: %v\n", err)
 		os.Exit(0)
 	}
-	defer pool.Close()
 
 	queries := db.New(pool)
 	hub := realtime.NewHub()
 	go hub.Run()
 	testHandler = New(queries, pool, hub)
 
-	// Get seed user and workspace IDs
-	row := pool.QueryRow(context.Background(), `SELECT id FROM "user" WHERE email = 'jiayuan@multica.ai'`)
-	row.Scan(&testUserID)
-
-	row = pool.QueryRow(context.Background(), `SELECT id FROM workspace WHERE slug = 'multica'`)
-	row.Scan(&testWorkspaceID)
-
-	if testUserID == "" || testWorkspaceID == "" {
-		fmt.Println("Skipping tests: seed data not found. Run 'go run ./cmd/seed/' first.")
-		os.Exit(0)
+	testUserID, testWorkspaceID, err = setupHandlerTestFixture(ctx, pool)
+	if err != nil {
+		fmt.Printf("Failed to set up handler test fixture: %v\n", err)
+		pool.Close()
+		os.Exit(1)
 	}
 
-	// Generate a test token
-	import_jwt(testUserID)
-
-	os.Exit(m.Run())
+	code := m.Run()
+	if err := cleanupHandlerTestFixture(context.Background(), pool); err != nil {
+		fmt.Printf("Failed to clean up handler test fixture: %v\n", err)
+		if code == 0 {
+			code = 1
+		}
+	}
+	pool.Close()
+	os.Exit(code)
 }
 
-func import_jwt(userID string) {
-	// Simple token generation for tests using the login handler
-	// We'll just set the headers directly instead
-	testToken = userID // We'll use X-User-ID header directly
+func setupHandlerTestFixture(ctx context.Context, pool *pgxpool.Pool) (string, string, error) {
+	if err := cleanupHandlerTestFixture(ctx, pool); err != nil {
+		return "", "", err
+	}
+
+	var userID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO "user" (name, email)
+		VALUES ($1, $2)
+		RETURNING id
+	`, handlerTestName, handlerTestEmail).Scan(&userID); err != nil {
+		return "", "", err
+	}
+
+	var workspaceID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO workspace (name, slug, description)
+		VALUES ($1, $2, $3)
+		RETURNING id
+	`, "Handler Tests", handlerTestWorkspaceSlug, "Temporary workspace for handler tests").Scan(&workspaceID); err != nil {
+		return "", "", err
+	}
+
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO member (workspace_id, user_id, role)
+		VALUES ($1, $2, 'owner')
+	`, workspaceID, userID); err != nil {
+		return "", "", err
+	}
+
+	var runtimeID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO agent_runtime (
+			workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at
+		)
+		VALUES ($1, NULL, $2, 'cloud', $3, 'online', $4, '{}'::jsonb, now())
+		RETURNING id
+	`, workspaceID, "Handler Test Runtime", "handler_test_runtime", "Handler test runtime").Scan(&runtimeID); err != nil {
+		return "", "", err
+	}
+
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO agent (
+			workspace_id, name, description, runtime_mode, runtime_config,
+			runtime_id, visibility, max_concurrent_tasks, owner_id, skills, tools, triggers
+		)
+		VALUES ($1, $2, '', 'cloud', '{}'::jsonb, $3, 'workspace', 1, $4, '', '[]'::jsonb, '[]'::jsonb)
+	`, workspaceID, "Handler Test Agent", runtimeID, userID); err != nil {
+		return "", "", err
+	}
+
+	return userID, workspaceID, nil
+}
+
+func cleanupHandlerTestFixture(ctx context.Context, pool *pgxpool.Pool) error {
+	if _, err := pool.Exec(ctx, `DELETE FROM workspace WHERE slug = $1`, handlerTestWorkspaceSlug); err != nil {
+		return err
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM "user" WHERE email = $1`, handlerTestEmail); err != nil {
+		return err
+	}
+	return nil
 }
 
 func newRequest(method, path string, body any) *http.Request {

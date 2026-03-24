@@ -22,10 +22,10 @@ Multica is an AI-native task management platform — like Linear, but with AI ag
 
 ```bash
 # One-click setup & run
-make setup            # First-time: install deps, start DB, migrate
-make seed             # Optional: load example data
+make setup            # First-time: ensure shared DB, create app DB, migrate
 make start            # Start backend + frontend together
-make stop             # Stop everything
+make stop             # Stop app processes for the current checkout
+make db-down          # Stop the shared PostgreSQL container
 
 # Frontend
 pnpm install
@@ -41,11 +41,10 @@ make test             # Go tests
 make sqlc             # Regenerate sqlc code
 make migrate-up       # Run database migrations
 make migrate-down     # Rollback migrations
-make seed             # Seed example data
 
 # Infrastructure
-docker compose up -d  # Start PostgreSQL
-docker compose down   # Stop PostgreSQL
+make db-up            # Start shared PostgreSQL
+make db-down          # Stop shared PostgreSQL
 ```
 
 ## 4. Coding Rules
@@ -69,7 +68,7 @@ docker compose down   # Stop PostgreSQL
 ## 6. Testing Rules
 
 - **TypeScript**: Vitest. Mock external/third-party dependencies only.
-- **Go**: Standard `go test`. Use testcontainers or test database for DB tests.
+- **Go**: Standard `go test`. Tests should create their own fixture data in a test database.
 
 ## 7. Commit Rules
 
