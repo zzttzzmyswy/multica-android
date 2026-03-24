@@ -1,6 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@multica/ui/*": ["./src/*"]
+    },
     "outDir": "dist"
   },
   "include": ["src"]

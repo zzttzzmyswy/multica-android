@@ -7,8 +7,8 @@ import {
   Search,
   Link as LinkIcon,
 } from "lucide-react";
-import { Input } from "@multica/ui/components/ui/input";
-import { Button } from "@multica/ui/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

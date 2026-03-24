@@ -24,4 +24,4 @@ catalog:
   clsx: "^2.1.1"
 
   # Icons
-  lucide-react: "^0.511.0"
+  lucide-react: "^1.0.1"

@@ -2,8 +2,8 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { MulticaIcon } from "@multica/ui/components/multica-icon";
-import { SidebarProvider, SidebarInset } from "@multica/ui/components/ui/sidebar";
+import { MulticaIcon } from "@/components/multica-icon";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
 import { AppSidebar } from "./_components/app-sidebar";
