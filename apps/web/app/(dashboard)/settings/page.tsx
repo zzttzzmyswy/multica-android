@@ -95,6 +95,7 @@ export default function SettingsPage() {
   const [description, setDescription] = useState(
     workspace?.description ?? "",
   );
+  const [context, setContext] = useState(workspace?.context ?? "");
   const [profileName, setProfileName] = useState(user?.name ?? "");
   const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url ?? "");
   const [saving, setSaving] = useState(false);
@@ -115,6 +116,7 @@ export default function SettingsPage() {
   useEffect(() => {
     setName(workspace?.name ?? "");
     setDescription(workspace?.description ?? "");
+    setContext(workspace?.context ?? "");
   }, [workspace]);
 
   useEffect(() => {
@@ -130,6 +132,7 @@ export default function SettingsPage() {
       const updated = await api.updateWorkspace(workspace.id, {
         name,
         description: description || undefined,
+        context: context || undefined,
       });
       updateWorkspace(updated);
       setSaved(true);
@@ -328,6 +331,19 @@ export default function SettingsPage() {
               disabled={!canManageWorkspace}
               className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
               placeholder="What does this workspace focus on?"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">
+              Context
+            </label>
+            <textarea
+              value={context}
+              onChange={(e) => setContext(e.target.value)}
+              rows={4}
+              disabled={!canManageWorkspace}
+              className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+              placeholder="Background information and context for AI agents working in this workspace"
             />
           </div>
           <div>
