@@ -1,4 +1,4 @@
-.PHONY: dev daemon build test migrate-up migrate-down sqlc seed clean setup start stop check worktree-env setup-main start-main stop-main check-main setup-worktree start-worktree stop-worktree check-worktree
+.PHONY: dev daemon cli build test migrate-up migrate-down sqlc seed clean setup start stop check worktree-env setup-main start-main stop-main check-main setup-worktree start-worktree stop-worktree check-worktree
 
 MAIN_ENV_FILE ?= .env
 WORKTREE_ENV_FILE ?= .env.worktree
@@ -113,11 +113,14 @@ dev:
 	cd server && go run ./cmd/server
 
 daemon:
-	cd server && MULTICA_REPOS_ROOT="${MULTICA_REPOS_ROOT:-$(abspath .)}" go run ./cmd/daemon
+	cd server && MULTICA_REPOS_ROOT="${MULTICA_REPOS_ROOT:-$(abspath .)}" go run ./cmd/multica daemon
+
+cli:
+	cd server && go run ./cmd/multica $(ARGS)
 
 build:
 	cd server && go build -o bin/server ./cmd/server
-	cd server && go build -o bin/daemon ./cmd/daemon
+	cd server && go build -o bin/multica-cli ./cmd/multica
 
 test:
 	cd server && go test ./...
