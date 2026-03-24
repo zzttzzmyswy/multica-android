@@ -29,18 +29,19 @@ import {
   DialogTitle,
   DialogFooter,
   DialogTrigger,
-} from "@multica/ui/components/ui/dialog";
-import { Button } from "@multica/ui/components/ui/button";
-import { Input } from "@multica/ui/components/ui/input";
-import { Textarea } from "@multica/ui/components/ui/textarea";
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectTrigger,
   SelectValue,
   SelectContent,
   SelectItem,
-} from "@multica/ui/components/ui/select";
-import { ActorAvatar } from "@multica/ui/components/common/actor-avatar";
+  SelectGroup,
+} from "@/components/ui/select";
+import { ActorAvatar } from "@/components/common/actor-avatar";
 import { StatusIcon, PriorityIcon } from "@/features/issues/components";
 import { api } from "@/shared/api";
 import { useActorName } from "@/features/workspace";
@@ -567,10 +568,12 @@ export default function IssuesPage() {
                 <SelectValue placeholder="All Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Status</SelectItem>
-                {ALL_STATUSES.map((s) => (
-                  <SelectItem key={s} value={s}>{STATUS_CONFIG[s].label}</SelectItem>
-                ))}
+                <SelectGroup>
+                  <SelectItem value="">All Status</SelectItem>
+                  {ALL_STATUSES.map((s) => (
+                    <SelectItem key={s} value={s}>{STATUS_CONFIG[s].label}</SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
             <Select value={filterPriority || undefined} onValueChange={(v) => setFilterPriority((v ?? "") as IssuePriority | "")}>
@@ -578,10 +581,12 @@ export default function IssuesPage() {
                 <SelectValue placeholder="All Priority" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Priority</SelectItem>
-                {PRIORITY_ORDER.map((p) => (
-                  <SelectItem key={p} value={p}>{PRIORITY_CONFIG[p].label}</SelectItem>
-                ))}
+                <SelectGroup>
+                  <SelectItem value="">All Priority</SelectItem>
+                  {PRIORITY_ORDER.map((p) => (
+                    <SelectItem key={p} value={p}>{PRIORITY_CONFIG[p].label}</SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>

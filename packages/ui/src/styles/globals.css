@@ -1,92 +1,14 @@
-/**
- * =============================================================================
- * MULTICA DESIGN SYSTEM
- * =============================================================================
- *
- * Design Philosophy:
- * - Restrained & Professional: This is a work tool, not a consumer app
- * - Clear Communication: UI should inform, not decorate
- * - Trust Through Transparency: Users need to understand what the AI is doing
- *
- * Key Principles:
- * 1. RESTRAINT over decoration — avoid flashy colors, excessive animations
- * 2. CLARITY over cleverness — obvious > subtle, explicit > implicit
- * 3. CONSISTENCY over novelty — use established patterns (Shadcn/UI)
- * 4. DENSITY over sprawl — respect user's screen real estate
- *
- * =============================================================================
- * TYPOGRAPHY
- * =============================================================================
- *
- * Fonts are loaded via CSS variables injected by each app:
- * - Web (Next.js): Uses next/font/google in layout.tsx
- * - Desktop (Electron): Uses @fontsource packages
- *
- * Variables used:
- * - --font-sans: Primary UI text (Inter/system font)
- * - --font-geist-mono: Code and technical values
- * - --font-brand: Brand name "Multica" only (Playfair Display)
- *
- * =============================================================================
- * COLOR SYSTEM
- * =============================================================================
- *
- * Approach: Neutral grays + semantic colors only
- *
- * Base Palette (OKLCH for perceptual uniformity):
- * - background/foreground: Near-black and near-white, minimal chroma
- * - muted: Subtle gray for secondary elements
- * - primary: Near-black (light mode), near-white (dark mode) — NOT a brand color
- *
- * Why no brand color?
- * - Purple/blue "AI colors" feel generic and dated
- * - Work tools should recede, not demand attention
- * - Color is reserved for STATE (running/success/error), not decoration
- *
- * Semantic Colors:
- * - destructive: Red — delete, danger, errors
- * - tool-running: Blue — active/in-progress state
- * - tool-success: Green — completed successfully
- * - tool-error: Red/orange — failed state
- *
- * Dark Mode:
- * - True dark (#0f0f10), not gray
- * - Slightly elevated surfaces for cards/popovers
- * - Borders use subtle transparency (oklch with alpha)
- *
- * =============================================================================
- * COMPONENT LIBRARY
- * =============================================================================
- *
- * Built on: Shadcn/UI (https://ui.shadcn.com)
- * - Copy-paste components, not a dependency
- * - Radix UI primitives for accessibility
- * - Tailwind CSS v4 for styling
- *
- * Customizations:
- * - Slightly smaller radius (0.625rem base)
- * - Muted color accents (no vibrant primary)
- * - Custom scrollbar styling
- *
- * =============================================================================
- */
-
 @import "tailwindcss";
-@source "../../../apps/**/*.{ts,tsx}";
-@source "../**/*.{ts,tsx}";
-
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
+@source "../../../apps/**/*.{ts,tsx}";
+@source "../**/*.{ts,tsx}";
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --font-heading: var(--font-sans);
   --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-brand: var(--font-brand);
-  --color-canvas: var(--canvas);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -104,9 +26,6 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
-  --color-success: var(--success);
-  --color-warning: var(--warning);
-  --color-info: var(--info);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -119,30 +38,25 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 :root {
-  /* =========================================================================
-   * COLORS — Light mode
-   * Using OKLCH for perceptual uniformity across the palette
-   * Hue ~286 (cool gray with slight purple undertone) for neutrals
-   * ========================================================================= */
-
-  /* Base: pure white bg, near-black text */
   --background: oklch(1 0 0);
   --foreground: oklch(0.141 0.005 285.823);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.141 0.005 285.823);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.141 0.005 285.823);
-  --primary: oklch(0.205 0.006 285.885);
+  --primary: oklch(0.21 0.006 285.885);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.967 0.001 286.375);
   --secondary-foreground: oklch(0.21 0.006 285.885);
@@ -154,51 +68,31 @@
   --border: oklch(0.92 0.004 286.32);
   --input: oklch(0.92 0.004 286.32);
   --ring: oklch(0.705 0.015 286.067);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.714);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+  --chart-1: oklch(0.871 0.006 286.286);
+  --chart-2: oklch(0.552 0.016 285.938);
+  --chart-3: oklch(0.442 0.017 285.786);
+  --chart-4: oklch(0.37 0.013 285.805);
+  --chart-5: oklch(0.274 0.006 286.033);
   --radius: 0.625rem;
-  --canvas: oklch(0.95 0.002 286);
-  --sidebar: oklch(0.95 0.002 286);
+  --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.141 0.005 285.823);
-  --sidebar-primary: oklch(0.205 0.006 285.885);
+  --sidebar-primary: oklch(0.21 0.006 285.885);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.967 0.001 286.375);
   --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
   --sidebar-border: oklch(0.92 0.004 286.32);
   --sidebar-ring: oklch(0.705 0.015 286.067);
-  /* Scrollbar: subtle, non-distracting */
-  --scrollbar-thumb: oklch(0.82 0.003 286);
-  --scrollbar-thumb-hover: oklch(0.705 0.015 286.067);
-  --scrollbar-track: transparent;
-
-  /* Tool execution states — these ARE allowed to use color for clarity */
-  --tool-running: oklch(0.6 0.18 250);   /* Blue: active/in-progress */
-  --tool-success: oklch(0.72 0.12 145);  /* Green: completed */
-  --tool-error: oklch(0.65 0.2 25);      /* Red: failed */
-
-  /* Semantic status colors — for general UI (badges, alerts, indicators) */
-  --success: oklch(0.55 0.16 145);       /* Green: saved, completed, online */
-  --warning: oklch(0.75 0.16 85);        /* Yellow/amber: blocked, attention */
-  --info: oklch(0.55 0.18 250);          /* Blue: links, dispatched, done */
 }
 
-/* =========================================================================
- * COLORS — Dark mode
- * True dark theme (not gray), elevated surfaces for depth
- * ========================================================================= */
 .dark {
-  /* Base: near-black bg, near-white text */
-  --background: oklch(0.155 0.005 285.823);
+  --background: oklch(0.141 0.005 285.823);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.21 0.006 285.885);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.21 0.006 285.885);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0.006 285.885);
-  --primary-foreground: oklch(0.205 0.006 285.885);
+  --primary: oklch(0.92 0.004 286.32);
+  --primary-foreground: oklch(0.21 0.006 285.885);
   --secondary: oklch(0.274 0.006 286.033);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.274 0.006 286.033);
@@ -209,116 +103,29 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.552 0.016 285.938);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --canvas: oklch(0.2 0.005 286);
-  --sidebar: oklch(0.2 0.005 286);
+  --chart-1: oklch(0.871 0.006 286.286);
+  --chart-2: oklch(0.552 0.016 285.938);
+  --chart-3: oklch(0.442 0.017 285.786);
+  --chart-4: oklch(0.37 0.013 285.805);
+  --chart-5: oklch(0.274 0.006 286.033);
+  --sidebar: oklch(0.21 0.006 285.885);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.922 0.006 285.885);
-  --sidebar-primary-foreground: oklch(0.205 0.006 285.885);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.274 0.006 286.033);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.552 0.016 285.938);
-  --scrollbar-thumb: oklch(1 0 0 / 15%);
-  --scrollbar-thumb-hover: oklch(1 0 0 / 30%);
-  --scrollbar-track: transparent;
-  --tool-running: oklch(0.65 0.2 250);
-  --tool-success: oklch(0.65 0.15 145);
-  --tool-error: oklch(0.7 0.2 22);
-
-  --success: oklch(0.65 0.15 145);
-  --warning: oklch(0.70 0.16 85);
-  --info: oklch(0.65 0.18 250);
-}
-
-/* Shiki dual themes: CSS-only light/dark switching via CSS variables */
-/* @see https://shiki.style/guide/dual-themes */
-.shiki,
-.shiki span {
-  color: var(--shiki-light);
-}
-
-.dark .shiki,
-.dark .shiki span {
-  color: var(--shiki-dark) !important;
-}
-
-/* KaTeX math: inherit text color for light/dark theme support */
-.katex {
-  color: inherit;
-  font-size: 1em;
-}
-
-.katex-display {
-  margin: 1em 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 0.5em 0;
-}
-
-/* Scroll fade hint utilities — mask content edges to hint at scrollable overflow */
-.mask-fade-y {
-  mask-image: linear-gradient(to bottom, transparent 0%, black 32px, black calc(100% - 32px), transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 32px, black calc(100% - 32px), transparent 100%);
-}
-
-.mask-fade-bottom {
-  mask-image: linear-gradient(to bottom, black 0%, black calc(100% - 32px), transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, black 0%, black calc(100% - 32px), transparent 100%);
-}
-
-@utility container {
-  @apply w-full max-w-4xl mx-auto;
-}
-
-/* Shadcn sidebar: remove default padding from inset container */
-[data-slot="sidebar-container"] {
-  padding: 0 !important;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    scrollbar-width: thin;
-    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
-  }
-  *::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  *::-webkit-scrollbar-track {
-    background: var(--scrollbar-track);
-  }
-  *::-webkit-scrollbar-thumb {
-    background: var(--scrollbar-thumb);
-    border-radius: 3px;
-  }
-  *::-webkit-scrollbar-thumb:hover {
-    background: var(--scrollbar-thumb-hover);
   }
   body {
     @apply bg-background text-foreground;
   }
 }
 
-
-/* Tool status: running glow pulse */
-@keyframes glow-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 var(--tool-running); }
-  50% { box-shadow: 0 0 0 3px oklch(0.6 0.2 250 / 0); }
-}
-
-/* Multica icon: entrance spin */
-@keyframes entrance-spin {
-  0% { transform: rotate(0deg); opacity: 0; }
-  50% { opacity: 1; }
-  100% { transform: rotate(360deg); opacity: 1; }
-}
-
-.animate-entrance-spin {
-  animation: entrance-spin 0.6s ease-out forwards;
-}
+/* Project customizations (separate file for organization) */
+@import "./custom.css";

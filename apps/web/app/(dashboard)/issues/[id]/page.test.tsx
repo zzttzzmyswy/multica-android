@@ -66,8 +66,8 @@ vi.mock("@/features/realtime", () => ({
   useWSEvent: () => {},
 }));
 
-// Mock @multica/ui calendar (react-day-picker needs browser APIs)
-vi.mock("@multica/ui/components/ui/calendar", () => ({
+// Mock calendar (react-day-picker needs browser APIs)
+vi.mock("@/components/ui/calendar", () => ({
   Calendar: () => null,
 }));
 

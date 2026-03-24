@@ -16,5 +16,8 @@
     "hooks": "@multica/ui/hooks",
     "lib": "@multica/ui/lib",
     "ui": "@multica/ui/components/ui"
-  }
+  },
+  "rtl": false,
+  "menuColor": "inverted-translucent",
+  "menuAccent": "subtle"
 }

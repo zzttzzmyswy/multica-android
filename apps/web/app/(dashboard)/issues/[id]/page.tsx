@@ -23,16 +23,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@multica/ui/components/ui/alert-dialog";
-import { Calendar } from "@multica/ui/components/ui/calendar";
+} from "@/components/ui/alert-dialog";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
   PopoverTrigger,
   PopoverContent,
-} from "@multica/ui/components/ui/popover";
-import { Button } from "@multica/ui/components/ui/button";
-import { Input } from "@multica/ui/components/ui/input";
-import { ActorAvatar } from "@multica/ui/components/common/actor-avatar";
+} from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ActorAvatar } from "@/components/common/actor-avatar";
 import type { Issue, Comment, UpdateIssueRequest } from "@multica/types";
 import { StatusPicker, PriorityPicker, AssigneePicker } from "@/features/issues/components";
 import { api } from "@/shared/api";

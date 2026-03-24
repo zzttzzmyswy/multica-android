@@ -6,7 +6,7 @@ import {
   Popover,
   PopoverTrigger,
   PopoverContent,
-} from "@multica/ui/components/ui/popover";
+} from "@/components/ui/popover";
 
 // ---------------------------------------------------------------------------
 // PropertyPicker — generic Popover shell with optional search

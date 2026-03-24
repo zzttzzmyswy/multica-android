@@ -11,7 +11,7 @@ import {
   ArrowRightLeft,
 } from "lucide-react";
 import type { InboxItem, InboxItemType, InboxSeverity, InboxNewPayload } from "@multica/types";
-import { Button } from "@multica/ui/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { api } from "@/shared/api";
 import { useWSEvent } from "@/features/realtime";
 
