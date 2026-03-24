@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "../../../lib/auth-context";
 
-export default function LoginPage() {
+function LoginPageContent() {
   const { login, isLoading } = useAuth();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
@@ -63,5 +63,13 @@ export default function LoginPage() {
         </button>
       </form>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

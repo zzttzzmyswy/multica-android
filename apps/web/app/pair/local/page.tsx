@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { DaemonPairingSession } from "@multica/types";
 import { api } from "../../../lib/api";
@@ -16,7 +16,7 @@ function formatExpiresAt(value: string) {
   });
 }
 
-export default function LocalDaemonPairPage() {
+function LocalDaemonPairPageContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token") ?? "";
   const { user, workspaces, workspace, isLoading } = useAuth();
@@ -151,5 +151,13 @@ export default function LocalDaemonPairPage() {
         ) : null}
       </div>
     </div>
+  );
+}
+
+export default function LocalDaemonPairPage() {
+  return (
+    <Suspense fallback={null}>
+      <LocalDaemonPairPageContent />
+    </Suspense>
   );
 }
