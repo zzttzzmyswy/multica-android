@@ -9,6 +9,7 @@ out
 .turbo
 build
 bin
+dist-electron
 *.tsbuildinfo
 
 # env
@@ -30,6 +31,9 @@ apps/web/test-results/
 
 # context (agent workspace)
 .context
+
+# local settings
+.claude/
 
 # platform specific
 *.dmg
