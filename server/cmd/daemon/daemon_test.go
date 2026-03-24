@@ -40,7 +40,7 @@ func TestResolveTaskWorkdirUsesRepoPathWhenPresent(t *testing.T) {
 func TestBuildCodexPromptIncludesIssueAndSkills(t *testing.T) {
 	t.Parallel()
 
-	prompt := buildCodexPrompt(daemonTask{
+	prompt := buildPrompt(daemonTask{
 		Context: daemonTaskContext{
 			Issue: daemonIssueContext{
 				Title:              "Fix failing test",

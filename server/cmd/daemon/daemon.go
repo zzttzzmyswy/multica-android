@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/multica-ai/multica/server/pkg/agent"
 )
 
 const (
@@ -22,10 +24,15 @@ const (
 	defaultDaemonConfigPath  = ".multica/daemon.json"
 	defaultPollInterval      = 3 * time.Second
 	defaultHeartbeatInterval = 15 * time.Second
-	defaultCodexTimeout      = 20 * time.Minute
-	defaultRuntimeName       = "Local Codex"
-	defaultCodexPath         = "codex"
+	defaultAgentTimeout      = 20 * time.Minute
+	defaultRuntimeName       = "Local Agent"
 )
+
+// agentEntry describes a single available agent CLI.
+type agentEntry struct {
+	Path  string // path to CLI binary
+	Model string // model override (optional)
+}
 
 type config struct {
 	ServerBaseURL     string
@@ -34,12 +41,11 @@ type config struct {
 	DaemonID          string
 	DeviceName        string
 	RuntimeName       string
-	CodexPath         string
-	CodexModel        string
+	Agents            map[string]agentEntry // "claude" -> entry, "codex" -> entry
 	DefaultWorkdir    string
 	PollInterval      time.Duration
 	HeartbeatInterval time.Duration
-	CodexTimeout      time.Duration
+	AgentTimeout      time.Duration
 }
 
 type daemon struct {
@@ -120,7 +126,7 @@ type daemonRepoRef struct {
 	Path   string `json:"path"`
 }
 
-type codexTaskResult struct {
+type taskResult struct {
 	Status  string `json:"status"`
 	Comment string `json:"comment"`
 }
@@ -144,9 +150,24 @@ func loadConfig() (config, error) {
 		workspaceID = persisted.WorkspaceID
 	}
 
-	codexPath := envOrDefault("MULTICA_CODEX_PATH", defaultCodexPath)
-	if _, err := exec.LookPath(codexPath); err != nil {
-		return config{}, fmt.Errorf("codex executable not found at %q: %w", codexPath, err)
+	// Probe available agent CLIs.
+	agents := map[string]agentEntry{}
+	claudePath := envOrDefault("MULTICA_CLAUDE_PATH", "claude")
+	if _, err := exec.LookPath(claudePath); err == nil {
+		agents["claude"] = agentEntry{
+			Path:  claudePath,
+			Model: strings.TrimSpace(os.Getenv("MULTICA_CLAUDE_MODEL")),
+		}
+	}
+	codexPath := envOrDefault("MULTICA_CODEX_PATH", "codex")
+	if _, err := exec.LookPath(codexPath); err == nil {
+		agents["codex"] = agentEntry{
+			Path:  codexPath,
+			Model: strings.TrimSpace(os.Getenv("MULTICA_CODEX_MODEL")),
+		}
+	}
+	if len(agents) == 0 {
+		return config{}, fmt.Errorf("no agent CLI found: install claude or codex and ensure it is on PATH")
 	}
 
 	host, err := os.Hostname()
@@ -154,7 +175,7 @@ func loadConfig() (config, error) {
 		host = "local-machine"
 	}
 
-	defaultWorkdir := strings.TrimSpace(os.Getenv("MULTICA_CODEX_WORKDIR"))
+	defaultWorkdir := strings.TrimSpace(os.Getenv("MULTICA_AGENT_WORKDIR"))
 	if defaultWorkdir == "" {
 		defaultWorkdir, err = os.Getwd()
 		if err != nil {
@@ -174,7 +195,7 @@ func loadConfig() (config, error) {
 	if err != nil {
 		return config{}, err
 	}
-	codexTimeout, err := durationFromEnv("MULTICA_CODEX_TIMEOUT", defaultCodexTimeout)
+	agentTimeout, err := durationFromEnv("MULTICA_AGENT_TIMEOUT", defaultAgentTimeout)
 	if err != nil {
 		return config{}, err
 	}
@@ -185,13 +206,12 @@ func loadConfig() (config, error) {
 		WorkspaceID:       workspaceID,
 		DaemonID:          envOrDefault("MULTICA_DAEMON_ID", host),
 		DeviceName:        envOrDefault("MULTICA_DAEMON_DEVICE_NAME", host),
-		RuntimeName:       envOrDefault("MULTICA_CODEX_RUNTIME_NAME", defaultRuntimeName),
-		CodexPath:         codexPath,
-		CodexModel:        strings.TrimSpace(os.Getenv("MULTICA_CODEX_MODEL")),
+		RuntimeName:       envOrDefault("MULTICA_AGENT_RUNTIME_NAME", defaultRuntimeName),
+		Agents:            agents,
 		DefaultWorkdir:    defaultWorkdir,
 		PollInterval:      pollInterval,
 		HeartbeatInterval: heartbeatInterval,
-		CodexTimeout:      codexTimeout,
+		AgentTimeout:      agentTimeout,
 	}, nil
 }
 
@@ -204,8 +224,12 @@ func newDaemon(cfg config, logger *log.Logger) *daemon {
 }
 
 func (d *daemon) run(ctx context.Context) error {
-	d.logger.Printf("starting daemon for workspace=%s server=%s runtime=%s workdir=%s",
-		d.cfg.WorkspaceID, d.cfg.ServerBaseURL, d.cfg.RuntimeName, d.cfg.DefaultWorkdir)
+	agentNames := make([]string, 0, len(d.cfg.Agents))
+	for name := range d.cfg.Agents {
+		agentNames = append(agentNames, name)
+	}
+	d.logger.Printf("starting daemon agents=%v workspace=%s server=%s workdir=%s",
+		agentNames, d.cfg.WorkspaceID, d.cfg.ServerBaseURL, d.cfg.DefaultWorkdir)
 
 	if strings.TrimSpace(d.cfg.WorkspaceID) == "" {
 		workspaceID, err := d.ensurePaired(ctx)
@@ -216,50 +240,68 @@ func (d *daemon) run(ctx context.Context) error {
 		d.logger.Printf("pairing completed for workspace=%s", workspaceID)
 	}
 
-	runtime, err := d.registerRuntime(ctx)
+	runtimes, err := d.registerRuntimes(ctx)
 	if err != nil {
 		return err
 	}
-	d.logger.Printf("registered runtime id=%s provider=%s status=%s", runtime.ID, runtime.Provider, runtime.Status)
+	runtimeIDs := make([]string, 0, len(runtimes))
+	for _, rt := range runtimes {
+		d.logger.Printf("registered runtime id=%s provider=%s status=%s", rt.ID, rt.Provider, rt.Status)
+		runtimeIDs = append(runtimeIDs, rt.ID)
+	}
 
-	go d.heartbeatLoop(ctx, runtime.ID)
-	return d.pollLoop(ctx, runtime.ID)
+	go d.heartbeatLoop(ctx, runtimeIDs)
+	return d.pollLoop(ctx, runtimeIDs)
 }
 
-func (d *daemon) registerRuntime(ctx context.Context) (daemonRuntime, error) {
-	version, err := detectCodexVersion(ctx, d.cfg.CodexPath)
-	if err != nil {
-		return daemonRuntime{}, err
+func (d *daemon) registerRuntimes(ctx context.Context) ([]daemonRuntime, error) {
+	var runtimes []map[string]string
+	for name, entry := range d.cfg.Agents {
+		version, err := agent.DetectVersion(ctx, entry.Path)
+		if err != nil {
+			d.logger.Printf("skip registering %s: %v", name, err)
+			continue
+		}
+		runtimes = append(runtimes, map[string]string{
+			"name":    fmt.Sprintf("Local %s", strings.Title(name)),
+			"type":    name,
+			"version": version,
+			"status":  "online",
+		})
+	}
+	if len(runtimes) == 0 {
+		return nil, fmt.Errorf("no agent runtimes could be registered")
 	}
 
 	req := map[string]any{
 		"workspace_id": d.cfg.WorkspaceID,
 		"daemon_id":    d.cfg.DaemonID,
 		"device_name":  d.cfg.DeviceName,
-		"runtimes": []map[string]string{
-			{
-				"name":    d.cfg.RuntimeName,
-				"type":    "codex",
-				"version": version,
-				"status":  "online",
-			},
-		},
+		"runtimes":     runtimes,
 	}
 
 	var resp struct {
 		Runtimes []daemonRuntime `json:"runtimes"`
 	}
 	if err := d.client.postJSON(ctx, "/api/daemon/register", req, &resp); err != nil {
-		return daemonRuntime{}, fmt.Errorf("register runtime: %w", err)
+		return nil, fmt.Errorf("register runtimes: %w", err)
 	}
 	if len(resp.Runtimes) == 0 {
-		return daemonRuntime{}, fmt.Errorf("register runtime: empty response")
+		return nil, fmt.Errorf("register runtimes: empty response")
 	}
-	return resp.Runtimes[0], nil
+	return resp.Runtimes, nil
 }
 
 func (d *daemon) ensurePaired(ctx context.Context) (string, error) {
-	version, err := detectCodexVersion(ctx, d.cfg.CodexPath)
+	// Use the first available agent for the pairing session metadata.
+	var firstName string
+	var firstEntry agentEntry
+	for name, entry := range d.cfg.Agents {
+		firstName = name
+		firstEntry = entry
+		break
+	}
+	version, err := agent.DetectVersion(ctx, firstEntry.Path)
 	if err != nil {
 		return "", err
 	}
@@ -268,14 +310,14 @@ func (d *daemon) ensurePaired(ctx context.Context) (string, error) {
 		"daemon_id":       d.cfg.DaemonID,
 		"device_name":     d.cfg.DeviceName,
 		"runtime_name":    d.cfg.RuntimeName,
-		"runtime_type":    "codex",
+		"runtime_type":    firstName,
 		"runtime_version": version,
 	})
 	if err != nil {
 		return "", fmt.Errorf("create pairing session: %w", err)
 	}
 	if session.LinkURL != nil {
-		d.logger.Printf("open this link to pair the local Codex runtime: %s", *session.LinkURL)
+		d.logger.Printf("open this link to pair the daemon: %s", *session.LinkURL)
 	} else {
 		d.logger.Printf("pairing session created: %s", session.Token)
 	}
@@ -318,7 +360,7 @@ func (d *daemon) ensurePaired(ctx context.Context) (string, error) {
 	}
 }
 
-func (d *daemon) heartbeatLoop(ctx context.Context, runtimeID string) {
+func (d *daemon) heartbeatLoop(ctx context.Context, runtimeIDs []string) {
 	ticker := time.NewTicker(d.cfg.HeartbeatInterval)
 	defer ticker.Stop()
 
@@ -327,17 +369,19 @@ func (d *daemon) heartbeatLoop(ctx context.Context, runtimeID string) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			err := d.client.postJSON(ctx, "/api/daemon/heartbeat", map[string]string{
-				"runtime_id": runtimeID,
-			}, nil)
-			if err != nil {
-				d.logger.Printf("heartbeat failed: %v", err)
+			for _, rid := range runtimeIDs {
+				err := d.client.postJSON(ctx, "/api/daemon/heartbeat", map[string]string{
+					"runtime_id": rid,
+				}, nil)
+				if err != nil {
+					d.logger.Printf("heartbeat failed for runtime %s: %v", rid, err)
+				}
 			}
 		}
 	}
 }
 
-func (d *daemon) pollLoop(ctx context.Context, runtimeID string) error {
+func (d *daemon) pollLoop(ctx context.Context, runtimeIDs []string) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -345,34 +389,39 @@ func (d *daemon) pollLoop(ctx context.Context, runtimeID string) error {
 		default:
 		}
 
-		task, err := d.client.claimTask(ctx, runtimeID)
-		if err != nil {
-			d.logger.Printf("claim task failed: %v", err)
-			if err := sleepWithContext(ctx, d.cfg.PollInterval); err != nil {
-				return err
+		claimed := false
+		for _, rid := range runtimeIDs {
+			task, err := d.client.claimTask(ctx, rid)
+			if err != nil {
+				d.logger.Printf("claim task failed for runtime %s: %v", rid, err)
+				continue
 			}
-			continue
-		}
-		if task == nil {
-			if err := sleepWithContext(ctx, d.cfg.PollInterval); err != nil {
-				return err
+			if task != nil {
+				d.logger.Printf("poll: got task=%s issue=%s title=%q", task.ID, task.IssueID, task.Context.Issue.Title)
+				d.handleTask(ctx, *task)
+				claimed = true
+				break
 			}
-			continue
 		}
 
-		d.handleTask(ctx, *task)
+		if !claimed {
+			if err := sleepWithContext(ctx, d.cfg.PollInterval); err != nil {
+				return err
+			}
+		}
 	}
 }
 
 func (d *daemon) handleTask(ctx context.Context, task daemonTask) {
-	d.logger.Printf("picked task=%s issue=%s title=%q", task.ID, task.IssueID, task.Context.Issue.Title)
+	provider := task.Context.Runtime.Provider
+	d.logger.Printf("picked task=%s issue=%s provider=%s title=%q", task.ID, task.IssueID, provider, task.Context.Issue.Title)
 
 	if err := d.client.startTask(ctx, task.ID); err != nil {
 		d.logger.Printf("start task %s failed: %v", task.ID, err)
 		return
 	}
 
-	_ = d.client.reportProgress(ctx, task.ID, "Launching Codex", 1, 2)
+	_ = d.client.reportProgress(ctx, task.ID, fmt.Sprintf("Launching %s", provider), 1, 2)
 
 	result, err := d.runTask(ctx, task)
 	if err != nil {
@@ -397,119 +446,76 @@ func (d *daemon) handleTask(ctx context.Context, task daemonTask) {
 	}
 }
 
-func (d *daemon) runTask(ctx context.Context, task daemonTask) (codexTaskResult, error) {
+func (d *daemon) runTask(ctx context.Context, task daemonTask) (taskResult, error) {
+	provider := task.Context.Runtime.Provider
+	entry, ok := d.cfg.Agents[provider]
+	if !ok {
+		return taskResult{}, fmt.Errorf("no agent configured for provider %q", provider)
+	}
+
 	workdir, err := resolveTaskWorkdir(d.cfg.DefaultWorkdir, task.Context.Issue.Repository)
 	if err != nil {
-		return codexTaskResult{}, err
+		return taskResult{}, err
 	}
 
-	prompt := buildCodexPrompt(task, workdir)
-	runCtx, cancel := context.WithTimeout(ctx, d.cfg.CodexTimeout)
-	defer cancel()
+	prompt := buildPrompt(task, workdir)
 
-	model := d.cfg.CodexModel
-	if model == "" {
-		model = "default"
+	backend, err := agent.New(provider, agent.Config{
+		ExecutablePath: entry.Path,
+		Logger:         d.logger,
+	})
+	if err != nil {
+		return taskResult{}, fmt.Errorf("create agent backend: %w", err)
 	}
 
-	startedAt := time.Now()
 	d.logger.Printf(
-		"starting codex exec task=%s workdir=%s model=%s timeout=%s",
-		task.ID,
-		workdir,
-		model,
-		d.cfg.CodexTimeout,
+		"starting %s task=%s workdir=%s model=%s timeout=%s",
+		provider, task.ID, workdir, entry.Model, d.cfg.AgentTimeout,
 	)
 
-	result, err := runCodexExec(runCtx, d.cfg, workdir, prompt)
+	session, err := backend.Execute(ctx, prompt, agent.ExecOptions{
+		Cwd:     workdir,
+		Model:   entry.Model,
+		Timeout: d.cfg.AgentTimeout,
+	})
 	if err != nil {
-		d.logger.Printf(
-			"codex exec failed task=%s duration=%s err=%v",
-			task.ID,
-			time.Since(startedAt).Round(time.Millisecond),
-			err,
-		)
-		if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
-			return codexTaskResult{}, fmt.Errorf("Codex timed out after %s", d.cfg.CodexTimeout)
+		return taskResult{}, err
+	}
+
+	// Drain message channel (log tool uses, ignore text since Result has output)
+	go func() {
+		for msg := range session.Messages {
+			switch msg.Type {
+			case agent.MessageToolUse:
+				d.logger.Printf("[%s] tool-use: %s (call=%s)", provider, msg.Tool, msg.CallID)
+			case agent.MessageError:
+				d.logger.Printf("[%s] error: %s", provider, msg.Content)
+			}
 		}
-		return codexTaskResult{}, err
-	}
+	}()
 
-	d.logger.Printf(
-		"codex exec finished task=%s duration=%s status=%s",
-		task.ID,
-		time.Since(startedAt).Round(time.Millisecond),
-		result.Status,
-	)
-	return result, nil
+	result := <-session.Result
+
+	switch result.Status {
+	case "completed":
+		if result.Output == "" {
+			return taskResult{}, fmt.Errorf("%s returned empty output", provider)
+		}
+		return taskResult{Status: "completed", Comment: result.Output}, nil
+	case "timeout":
+		return taskResult{}, fmt.Errorf("%s timed out after %s", provider, d.cfg.AgentTimeout)
+	default:
+		errMsg := result.Error
+		if errMsg == "" {
+			errMsg = fmt.Sprintf("%s execution %s", provider, result.Status)
+		}
+		return taskResult{Status: "blocked", Comment: errMsg}, nil
+	}
 }
 
-func runCodexExec(ctx context.Context, cfg config, workdir, prompt string) (codexTaskResult, error) {
-	outputFile, err := os.CreateTemp("", "multica-codex-output-*.json")
-	if err != nil {
-		return codexTaskResult{}, fmt.Errorf("create codex output file: %w", err)
-	}
-	outputPath := outputFile.Name()
-	outputFile.Close()
-	defer os.Remove(outputPath)
-
-	schemaFile, err := os.CreateTemp("", "multica-codex-schema-*.json")
-	if err != nil {
-		return codexTaskResult{}, fmt.Errorf("create schema file: %w", err)
-	}
-	schemaPath := schemaFile.Name()
-	if _, err := schemaFile.WriteString(codexResultSchema); err != nil {
-		schemaFile.Close()
-		return codexTaskResult{}, fmt.Errorf("write schema file: %w", err)
-	}
-	schemaFile.Close()
-	defer os.Remove(schemaPath)
-
-	args := []string{
-		"-a", "never",
-		"exec",
-		"--skip-git-repo-check",
-		"--sandbox", "workspace-write",
-		"-C", workdir,
-		"--output-schema", schemaPath,
-		"-o", outputPath,
-		prompt,
-	}
-	if cfg.CodexModel != "" {
-		args = append([]string{"-m", cfg.CodexModel}, args...)
-	}
-
-	cmd := exec.CommandContext(ctx, cfg.CodexPath, args...)
-	var output bytes.Buffer
-	cmd.Stdout = &output
-	cmd.Stderr = &output
-
-	if err := cmd.Run(); err != nil {
-		return codexTaskResult{}, fmt.Errorf("codex exec failed: %w\n%s", err, strings.TrimSpace(output.String()))
-	}
-
-	data, err := os.ReadFile(outputPath)
-	if err != nil {
-		return codexTaskResult{}, fmt.Errorf("read codex result: %w", err)
-	}
-
-	var result codexTaskResult
-	if err := json.Unmarshal(data, &result); err != nil {
-		return codexTaskResult{}, fmt.Errorf("parse codex result: %w", err)
-	}
-	if result.Comment == "" {
-		return codexTaskResult{}, fmt.Errorf("codex returned empty comment")
-	}
-	if result.Status == "" {
-		result.Status = "completed"
-	}
-
-	return result, nil
-}
-
-func buildCodexPrompt(task daemonTask, workdir string) string {
+func buildPrompt(task daemonTask, workdir string) string {
 	var b strings.Builder
-	b.WriteString("You are running as the local Codex runtime for a Multica agent.\n")
+	b.WriteString("You are running as a local coding agent for a Multica workspace.\n")
 	b.WriteString("Complete the assigned issue using the local environment.\n")
 	b.WriteString("Return a concise Markdown comment suitable for posting back to the issue.\n")
 	b.WriteString("If you cannot complete the task because context, files, or permissions are missing, return status \"blocked\" and explain the blocker in the comment.\n\n")
@@ -588,15 +594,6 @@ func resolveTaskWorkdir(defaultWorkdir string, repo *daemonRepoRef) (string, err
 		return "", fmt.Errorf("repository path is not a directory: %s", path)
 	}
 	return path, nil
-}
-
-func detectCodexVersion(ctx context.Context, codexPath string) (string, error) {
-	cmd := exec.CommandContext(ctx, codexPath, "--version")
-	data, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("detect codex version: %w", err)
-	}
-	return strings.TrimSpace(string(data)), nil
 }
 
 func resolveDaemonConfigPath(raw string) (string, error) {
@@ -810,17 +807,3 @@ func (c *daemonClient) getJSON(ctx context.Context, path string, respBody any) e
 	return json.NewDecoder(resp.Body).Decode(respBody)
 }
 
-const codexResultSchema = `{
-  "type": "object",
-  "properties": {
-    "status": {
-      "type": "string",
-      "enum": ["completed", "blocked"]
-    },
-    "comment": {
-      "type": "string"
-    }
-  },
-  "required": ["status", "comment"],
-  "additionalProperties": false
-}`
