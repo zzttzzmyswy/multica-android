@@ -26,6 +26,17 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@multica/ui/components/ui/sidebar";
+import { Input } from "@multica/ui/components/ui/input";
+import { Label } from "@multica/ui/components/ui/label";
+import { Button } from "@multica/ui/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@multica/ui/components/ui/dialog";
 import { useAuth } from "../../../lib/auth-context";
 import { useTabStore } from "../../../lib/tab-store";
 
@@ -165,7 +176,7 @@ export function AppSidebar() {
                     setShowMenu(false);
                     logout();
                   }}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-red-500 hover:bg-accent"
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-destructive hover:bg-accent"
                 >
                   <LogOut className="h-3.5 w-3.5" />
                   Sign out
@@ -230,66 +241,57 @@ export function AppSidebar() {
       </Sidebar>
 
       {/* Create Workspace Dialog */}
-      {showCreateDialog && (
-        <>
-          <div
-            className="fixed inset-0 z-50 bg-black/10 backdrop-blur-xs"
-            onClick={() => setShowCreateDialog(false)}
-          />
-          <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl bg-background p-6 shadow-lg ring-1 ring-foreground/10">
-            <div className="flex flex-col gap-1.5">
-              <h2 className="text-lg font-semibold leading-none">
-                Create workspace
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Create a new workspace for your team.
-              </p>
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create workspace</DialogTitle>
+            <DialogDescription>
+              Create a new workspace for your team.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs text-muted-foreground">
+                Name
+              </Label>
+              <Input
+                autoFocus
+                type="text"
+                value={newName}
+                onChange={(e) => handleNameChange(e.target.value)}
+                placeholder="My Workspace"
+                className="mt-1"
+              />
             </div>
-            <div className="mt-4 space-y-3">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">
-                  Name
-                </label>
-                <input
-                  autoFocus
-                  type="text"
-                  value={newName}
-                  onChange={(e) => handleNameChange(e.target.value)}
-                  placeholder="My Workspace"
-                  className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">
-                  Slug
-                </label>
-                <input
-                  type="text"
-                  value={newSlug}
-                  onChange={(e) => setNewSlug(e.target.value)}
-                  placeholder="my-workspace"
-                  className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                onClick={() => setShowCreateDialog(false)}
-                className="rounded-md px-3 py-1.5 text-sm hover:bg-accent"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateWorkspace}
-                disabled={creating || !newName.trim() || !newSlug.trim()}
-                className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-              >
-                {creating ? "Creating..." : "Create"}
-              </button>
+            <div>
+              <Label className="text-xs text-muted-foreground">
+                Slug
+              </Label>
+              <Input
+                type="text"
+                value={newSlug}
+                onChange={(e) => setNewSlug(e.target.value)}
+                placeholder="my-workspace"
+                className="mt-1"
+              />
             </div>
           </div>
-        </>
-      )}
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setShowCreateDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateWorkspace}
+              disabled={creating || !newName.trim() || !newSlug.trim()}
+            >
+              {creating ? "Creating..." : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

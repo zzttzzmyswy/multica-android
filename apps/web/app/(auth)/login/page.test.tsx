@@ -44,9 +44,9 @@ describe("LoginPage", () => {
 
     expect(screen.getByText("Multica")).toBeInTheDocument();
     expect(screen.getByText("AI-native task management")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Email")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Name")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Email")).toBeInTheDocument();
+    expect(screen.getByLabelText("Name")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /sign in/i })).toBeInTheDocument();
   });
 
   it("does not call login when email is empty", async () => {
@@ -64,8 +64,8 @@ describe("LoginPage", () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await user.type(screen.getByPlaceholderText("Email"), "test@multica.ai");
-    await user.type(screen.getByPlaceholderText("Name"), "Test User");
+    await user.type(screen.getByLabelText("Email"), "test@multica.ai");
+    await user.type(screen.getByLabelText("Name"), "Test User");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
 
     await waitFor(() => {
@@ -78,7 +78,7 @@ describe("LoginPage", () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await user.type(screen.getByPlaceholderText("Email"), "test@multica.ai");
+    await user.type(screen.getByLabelText("Email"), "test@multica.ai");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
 
     await waitFor(() => {
@@ -92,7 +92,7 @@ describe("LoginPage", () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await user.type(screen.getByPlaceholderText("Email"), "test@multica.ai");
+    await user.type(screen.getByLabelText("Email"), "test@multica.ai");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
 
     await waitFor(() => {
@@ -105,7 +105,7 @@ describe("LoginPage", () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await user.type(screen.getByPlaceholderText("Email"), "test@multica.ai");
+    await user.type(screen.getByLabelText("Email"), "test@multica.ai");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
 
     await waitFor(() => {

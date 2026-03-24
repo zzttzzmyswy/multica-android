@@ -62,6 +62,9 @@ docker compose down   # Stop PostgreSQL
 ## 5. UI/UX Rules
 
 - Prefer `packages/ui` shadcn components over custom implementations.
+- **shadcn official components** → `packages/ui/src/components/ui/` — keep this directory clean; install missing components via `npx shadcn add`, do not mix in business code.
+- **Shared business components & utils** → `packages/ui/src/components/common/` — reusable project-level UI components (e.g. StatusBadge, PriorityIcon) and shared utilities live here.
+- Use shadcn design tokens for styling (e.g. `bg-primary`, `text-muted-foreground`, `text-destructive`). Avoid hardcoded color values (e.g. `text-red-500`, `bg-gray-100`).
 - Do not introduce extra state (useState, context, reducers) unless explicitly required by the design.
 - Pay close attention to **overflow** (truncate long text, scrollable containers), **alignment**, and **spacing** consistency.
 - When unsure about interaction or state design, ask — the user will provide direction.
