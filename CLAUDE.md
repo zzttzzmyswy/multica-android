@@ -1,8 +1,8 @@
 # CLAUDE.md
 
-This file gives coding agents high-signal guidance for this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## 1. Project Context
+## Project Context
 
 Multica is an AI-native task management platform — like Linear, but with AI agents as first-class citizens.
 
@@ -10,15 +10,56 @@ Multica is an AI-native task management platform — like Linear, but with AI ag
 - Supports local (daemon) and cloud agent runtimes
 - Built for 2-10 person AI-native teams
 
-## 2. Architecture
+## Architecture
 
 **Polyglot monorepo** — Go backend + TypeScript frontend.
 
-- `server/` — Go backend (Chi + sqlc + gorilla/websocket)
-- `apps/web/` — Next.js 16 frontend
+- `server/` — Go backend (Chi router, sqlc for DB, gorilla/websocket for real-time)
+- `apps/web/` — Next.js 16 frontend (App Router)
 - `packages/` — Shared TypeScript packages (ui, types, sdk, store, hooks, utils)
 
-## 3. Core Workflow Commands
+### Data Flow
+
+```
+Browser → ApiClient (SDK) → REST API (Chi handlers) → sqlc queries → PostgreSQL
+Browser ← WSClient (SDK) ← WebSocket ← Hub.Broadcast() ← Handlers/TaskService
+```
+
+### Backend Structure (`server/`)
+
+- **Entry points** (`cmd/`): `server` (HTTP API), `daemon` (local agent runtime), `migrate`, `seed`
+- **Handlers** (`internal/handler/`): One file per domain (issue, comment, agent, auth, daemon, etc.). Each handler holds `Queries`, `DB`, `Hub`, and `TaskService`.
+- **Real-time** (`internal/realtime/`): Hub manages WebSocket clients. Server broadcasts events; inbound WS message routing is still TODO.
+- **Auth** (`internal/auth/` + `internal/middleware/`): JWT (HS256). Middleware sets `X-User-ID` and `X-User-Email` headers. Login creates user on-the-fly if not found.
+- **Task lifecycle** (`internal/service/task.go`): Orchestrates agent work — enqueue → claim → start → complete/fail. Syncs issue status automatically and broadcasts WS events at each transition.
+- **Database**: sqlc generates Go code from SQL in `pkg/db/queries/` → `pkg/db/generated/`. Migrations in `migrations/`.
+- **Routes** (`cmd/server/router.go`): Public routes (auth, health, ws) + protected routes (require JWT) + daemon routes (unauthenticated, separate auth model).
+
+### Frontend Structure (`apps/web/`)
+
+- **App Router layout groups**: `(auth)/` for login, `(dashboard)/` for protected routes
+- **Auth context** (`lib/auth-context.tsx`): Global provider for user, workspace, members, agents. Hydrates from localStorage. Provides actor lookup helpers (`getMemberName`, `getAgentName`, `getActorName`).
+- **WebSocket context** (`lib/ws-context.tsx`): Wraps `WSClient` from SDK. `useWSEvent()` hook auto-subscribes/unsubscribes.
+- **API client** (`lib/api.ts`): Singleton `ApiClient` from `@multica/sdk`, initialized from localStorage.
+- **State**: Zustand stores (`@multica/store`) for issues, agents, inbox. WebSocket events keep stores in sync without re-fetching.
+
+### Key Packages
+
+- **`@multica/sdk`**: `ApiClient` (REST) and `WSClient` (WebSocket) classes. All backend communication goes through here.
+- **`@multica/types`**: Shared domain types + WebSocket event types (issue:created/updated/deleted, task:*, agent:status, comment:*, inbox:new, daemon:*).
+- **`@multica/store`**: Zustand stores — simple arrays with add/update/remove. No persistence; memory only.
+- **`@multica/ui`**: shadcn/ui component library with Radix primitives, Tailwind CSS 4, Shiki syntax highlighting for markdown.
+- **`@multica/hooks`**: `useRealtime()` (WS → store sync), `useIssues()`, `useAgents()`, `useInbox()` (fetch + cache).
+
+### Multi-tenancy
+
+All queries filter by `workspace_id`. Membership checks gate access. `X-Workspace-ID` header routes requests to the correct workspace.
+
+### Agent Assignees
+
+Assignees are polymorphic — can be a member or an agent. `assignee_type` + `assignee_id` on issues. Agents render with distinct styling (purple background, robot icon).
+
+## Commands
 
 ```bash
 # One-click setup & run
@@ -38,17 +79,34 @@ pnpm test             # TS tests (Vitest)
 make dev              # Run Go server (port 8080)
 make daemon           # Run local daemon
 make test             # Go tests
-make sqlc             # Regenerate sqlc code
+make sqlc             # Regenerate sqlc code after editing SQL in server/pkg/db/queries/
 make migrate-up       # Run database migrations
 make migrate-down     # Rollback migrations
-make seed             # Seed example data
+
+# Run a single Go test
+cd server && go test ./internal/handler/ -run TestName
+
+# Run a single TS test
+pnpm --filter @multica/web exec vitest run src/path/to/file.test.ts
+
+# Run a single E2E test (requires backend + frontend running)
+pnpm exec playwright test e2e/tests/specific-test.spec.ts
 
 # Infrastructure
 docker compose up -d  # Start PostgreSQL
 docker compose down   # Stop PostgreSQL
 ```
 
-## 4. Coding Rules
+### Worktree Support
+
+For isolated feature testing with a separate database:
+```bash
+make worktree-env       # Generate .env.worktree with unique DB/ports
+make setup-worktree     # Setup using .env.worktree
+make start-worktree     # Start using .env.worktree
+```
+
+## Coding Rules
 
 - TypeScript strict mode is enabled; keep types explicit.
 - Go code follows standard Go conventions (gofmt, go vet).
@@ -59,19 +117,19 @@ docker compose down   # Stop PostgreSQL
 - Treat compatibility code as a maintenance cost, not a default safety mechanism. Avoid "just in case" branches that make the codebase harder to reason about.
 - Avoid broad refactors unless required by the task.
 
-## 5. UI/UX Rules
+## UI/UX Rules
 
 - Prefer `packages/ui` shadcn components over custom implementations.
 - Do not introduce extra state (useState, context, reducers) unless explicitly required by the design.
 - Pay close attention to **overflow** (truncate long text, scrollable containers), **alignment**, and **spacing** consistency.
 - When unsure about interaction or state design, ask — the user will provide direction.
 
-## 6. Testing Rules
+## Testing Rules
 
 - **TypeScript**: Vitest. Mock external/third-party dependencies only.
 - **Go**: Standard `go test`. Use testcontainers or test database for DB tests.
 
-## 7. Commit Rules
+## Commit Rules
 
 - Use atomic commits grouped by logical intent.
 - Conventional format:
@@ -82,7 +140,7 @@ docker compose down   # Stop PostgreSQL
   - `test(scope): ...`
   - `chore(scope): ...`
 
-## 8. Minimum Pre-Push Checks
+## Minimum Pre-Push Checks
 
 ```bash
 make check    # Runs all checks: typecheck, unit tests, Go tests, E2E
@@ -96,7 +154,7 @@ make test             # Go tests only
 pnpm exec playwright test   # E2E only (requires backend + frontend running)
 ```
 
-## 9. AI Agent Verification Loop
+## AI Agent Verification Loop
 
 After writing or modifying code, always run the full verification pipeline:
 
@@ -119,7 +177,7 @@ This runs all checks in sequence:
 
 **Quick iteration:** If you know only TypeScript or Go is affected, run individual checks first for faster feedback, then finish with a full `make check` before marking work complete.
 
-## 10. E2E Test Patterns
+## E2E Test Patterns
 
 E2E tests should be self-contained. Use the `TestApiClient` fixture for data setup/teardown:
 
