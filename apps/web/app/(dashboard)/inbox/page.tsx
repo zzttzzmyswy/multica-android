@@ -12,8 +12,8 @@ import {
 } from "lucide-react";
 import type { InboxItem, InboxItemType, InboxSeverity, InboxNewPayload } from "@multica/types";
 import { Button } from "@multica/ui/components/ui/button";
-import { api } from "../../../lib/api";
-import { useWSEvent } from "../../../lib/ws-context";
+import { api } from "@/shared/api";
+import { useWSEvent } from "@/features/realtime";
 
 // ---------------------------------------------------------------------------
 // Helpers

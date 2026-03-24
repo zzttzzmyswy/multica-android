@@ -34,11 +34,11 @@ import { Button } from "@multica/ui/components/ui/button";
 import { Input } from "@multica/ui/components/ui/input";
 import { ActorAvatar } from "@multica/ui/components/common/actor-avatar";
 import type { Issue, Comment, UpdateIssueRequest } from "@multica/types";
-import { StatusPicker, PriorityPicker, AssigneePicker } from "../_components";
-import { api } from "../../../../lib/api";
-import { useAuth } from "../../../../lib/auth-context";
-import { useWSEvent } from "../../../../lib/ws-context";
-import { useTabStore } from "../../../../lib/tab-store";
+import { StatusPicker, PriorityPicker, AssigneePicker } from "@/features/issues/components";
+import { api } from "@/shared/api";
+import { useAuthStore } from "@/features/auth";
+import { useActorName } from "@/features/workspace";
+import { useWSEvent } from "@/features/realtime";
 import type { CommentCreatedPayload, CommentUpdatedPayload, CommentDeletedPayload } from "@multica/types";
 
 // ---------------------------------------------------------------------------
@@ -385,8 +385,8 @@ export default function IssueDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
-  const { user, getActorName, getActorInitials } = useAuth();
-  const { updateTabTitle, activeTabId, closeTabByPath } = useTabStore();
+  const user = useAuthStore((s) => s.user);
+  const { getActorName, getActorInitials } = useActorName();
   const [issue, setIssue] = useState<Issue | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -408,13 +408,6 @@ export default function IssueDetailPage({
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [id]);
-
-  // Sync tab title with loaded issue title
-  useEffect(() => {
-    if (issue?.title && activeTabId) {
-      updateTabTitle(activeTabId, issue.title);
-    }
-  }, [issue?.title, activeTabId, updateTabTitle]);
 
   const handleSubmitComment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -449,7 +442,6 @@ export default function IssueDetailPage({
     try {
       await api.deleteIssue(issue!.id);
       toast.success("Issue deleted");
-      closeTabByPath(`/issues/${id}`);
       router.push("/issues");
     } catch {
       toast.error("Failed to delete issue");

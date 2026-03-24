@@ -14,8 +14,9 @@ import {
   SelectContent,
   SelectItem,
 } from "@multica/ui/components/ui/select";
-import { useAuth } from "../../../lib/auth-context";
-import { api } from "../../../lib/api";
+import { useAuthStore } from "@/features/auth";
+import { useWorkspaceStore } from "@/features/workspace";
+import { api } from "@/shared/api";
 
 const roleConfig: Record<MemberRole, { label: string; icon: typeof Crown }> = {
   owner: { label: "Owner", icon: Crown },
@@ -90,16 +91,14 @@ function MemberRow({
 }
 
 export default function SettingsPage() {
-  const {
-    user,
-    workspace,
-    members,
-    updateWorkspace,
-    updateCurrentUser,
-    refreshMembers,
-    leaveWorkspace,
-    deleteWorkspace,
-  } = useAuth();
+  const user = useAuthStore((s) => s.user);
+  const setUser = useAuthStore((s) => s.setUser);
+  const workspace = useWorkspaceStore((s) => s.workspace);
+  const members = useWorkspaceStore((s) => s.members);
+  const updateWorkspace = useWorkspaceStore((s) => s.updateWorkspace);
+  const refreshMembers = useWorkspaceStore((s) => s.refreshMembers);
+  const leaveWorkspace = useWorkspaceStore((s) => s.leaveWorkspace);
+  const deleteWorkspace = useWorkspaceStore((s) => s.deleteWorkspace);
 
   const [name, setName] = useState(workspace?.name ?? "");
   const [description, setDescription] = useState(
@@ -159,7 +158,7 @@ export default function SettingsPage() {
         name: profileName,
         avatar_url: avatarUrl || undefined,
       });
-      updateCurrentUser(updated);
+      setUser(updated);
       setProfileSaved(true);
       setTimeout(() => setProfileSaved(false), 2000);
     } catch (e) {
