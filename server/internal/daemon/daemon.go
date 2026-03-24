@@ -184,6 +184,7 @@ func (d *Daemon) heartbeatLoop(ctx context.Context, runtimeIDs []string) {
 
 func (d *Daemon) pollLoop(ctx context.Context, runtimeIDs []string) error {
 	pollOffset := 0
+	pollCount := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -210,10 +211,16 @@ func (d *Daemon) pollLoop(ctx context.Context, runtimeIDs []string) error {
 		}
 
 		if !claimed {
+			pollCount++
+			if pollCount%20 == 1 {
+				d.logger.Printf("poll: no tasks (runtimes=%v, cycle=%d)", runtimeIDs, pollCount)
+			}
 			pollOffset = (pollOffset + 1) % n
 			if err := sleepWithContext(ctx, d.cfg.PollInterval); err != nil {
 				return err
 			}
+		} else {
+			pollCount = 0
 		}
 	}
 }
@@ -240,14 +247,26 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 
 	_ = d.client.ReportProgress(ctx, task.ID, "Finishing task", 2, 2)
 
+	// Debug: log result details before sending to server
+	commentPreview := result.Comment
+	if len(commentPreview) > 200 {
+		commentPreview = commentPreview[:200] + "..."
+	}
+	d.logger.Printf("task %s result: status=%s comment_len=%d comment_preview=%q",
+		task.ID, result.Status, len(result.Comment), commentPreview)
+
 	switch result.Status {
 	case "blocked":
 		if err := d.client.FailTask(ctx, task.ID, result.Comment); err != nil {
 			d.logger.Printf("report blocked task %s failed: %v", task.ID, err)
+		} else {
+			d.logger.Printf("task %s reported as blocked to server", task.ID)
 		}
 	default:
 		if err := d.client.CompleteTask(ctx, task.ID, result.Comment); err != nil {
 			d.logger.Printf("complete task %s failed: %v", task.ID, err)
+		} else {
+			d.logger.Printf("task %s completed successfully on server", task.ID)
 		}
 	}
 }
