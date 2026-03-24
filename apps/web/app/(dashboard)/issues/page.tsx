@@ -2,8 +2,6 @@
 
 import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
-import { TabLink } from "../_components/tab-link";
-import { useTabStore } from "../../../lib/tab-store";
 import {
   Columns3,
   List,
@@ -23,7 +21,7 @@ import {
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Issue, IssueStatus, IssuePriority } from "@multica/types";
-import { STATUS_CONFIG, PRIORITY_CONFIG, ALL_STATUSES, PRIORITY_ORDER } from "./_config";
+import { STATUS_CONFIG, PRIORITY_CONFIG, ALL_STATUSES, PRIORITY_ORDER } from "@/features/issues/config";
 import {
   Dialog,
   DialogContent,
@@ -43,10 +41,10 @@ import {
   SelectItem,
 } from "@multica/ui/components/ui/select";
 import { ActorAvatar } from "@multica/ui/components/common/actor-avatar";
-import { StatusIcon, PriorityIcon } from "./_components";
-import { api } from "../../../lib/api";
-import { useAuth } from "../../../lib/auth-context";
-import { useWSEvent } from "../../../lib/ws-context";
+import { StatusIcon, PriorityIcon } from "@/features/issues/components";
+import { api } from "@/shared/api";
+import { useActorName } from "@/features/workspace";
+import { useWSEvent } from "@/features/realtime";
 import type { IssueCreatedPayload, IssueUpdatedPayload, IssueDeletedPayload } from "@multica/types";
 
 function formatDate(date: string): string {
@@ -61,7 +59,7 @@ function formatDate(date: string): string {
 // ---------------------------------------------------------------------------
 
 function BoardCardContent({ issue }: { issue: Issue }) {
-  const { getActorName, getActorInitials } = useAuth();
+  const { getActorName, getActorInitials } = useActorName();
   return (
     <div className="rounded-lg border bg-background p-3">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -124,14 +122,12 @@ function DraggableBoardCard({ issue }: { issue: Issue }) {
         if (isDragging) e.stopPropagation();
       }}
     >
-      <TabLink
+      <Link
         href={`/issues/${issue.id}`}
-        title={issue.title}
-        iconKey="issues"
         className="block transition-colors hover:opacity-80"
       >
         <BoardCardContent issue={issue} />
-      </TabLink>
+      </Link>
     </div>
   );
 }
@@ -265,12 +261,10 @@ function BoardView({
 // ---------------------------------------------------------------------------
 
 function ListRow({ issue }: { issue: Issue }) {
-  const { getActorName, getActorInitials } = useAuth();
+  const { getActorName, getActorInitials } = useActorName();
   return (
-    <TabLink
+    <Link
       href={`/issues/${issue.id}`}
-      title={issue.title}
-      iconKey="issues"
       className="flex h-9 items-center gap-2 px-4 text-[13px] transition-colors hover:bg-accent/50"
     >
       <PriorityIcon priority={issue.priority} />
@@ -293,7 +287,7 @@ function ListRow({ issue }: { issue: Issue }) {
           getInitials={getActorInitials}
         />
       )}
-    </TabLink>
+    </Link>
   );
 }
 
@@ -450,7 +444,6 @@ function CreateIssueDialog({ onCreated }: { onCreated: (issue: Issue) => void })
 type ViewMode = "board" | "list";
 
 export default function IssuesPage() {
-  const { closeTabByPath } = useTabStore();
   const [view, setView] = useState<ViewMode>("board");
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
@@ -497,8 +490,7 @@ export default function IssuesPage() {
     useCallback((payload: unknown) => {
       const { issue_id } = payload as IssueDeletedPayload;
       setIssues((prev) => prev.filter((i) => i.id !== issue_id));
-      closeTabByPath(`/issues/${issue_id}`);
-    }, [closeTabByPath]),
+    }, []),
   );
 
   const handleMoveIssue = useCallback(

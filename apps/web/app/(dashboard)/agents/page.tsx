@@ -45,9 +45,10 @@ import { Button } from "@multica/ui/components/ui/button";
 import { Input } from "@multica/ui/components/ui/input";
 import { Textarea } from "@multica/ui/components/ui/textarea";
 import { Label } from "@multica/ui/components/ui/label";
-import { api } from "../../../lib/api";
-import { useAuth } from "../../../lib/auth-context";
-import { useWSEvent } from "../../../lib/ws-context";
+import { api } from "@/shared/api";
+import { useAuthStore } from "@/features/auth";
+import { useWorkspaceStore } from "@/features/workspace";
+import { useWSEvent } from "@/features/realtime";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1030,7 +1031,10 @@ function AgentDetail({
 // ---------------------------------------------------------------------------
 
 export default function AgentsPage() {
-  const { agents, refreshAgents, workspace, isLoading } = useAuth();
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const workspace = useWorkspaceStore((s) => s.workspace);
+  const agents = useWorkspaceStore((s) => s.agents);
+  const refreshAgents = useWorkspaceStore((s) => s.refreshAgents);
   const [selectedId, setSelectedId] = useState<string>("");
   const [showCreate, setShowCreate] = useState(false);
   const [runtimes, setRuntimes] = useState<RuntimeDevice[]>([]);

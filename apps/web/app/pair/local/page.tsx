@@ -12,8 +12,9 @@ import {
   SelectContent,
   SelectItem,
 } from "@multica/ui/components/ui/select";
-import { api } from "../../../lib/api";
-import { useAuth } from "../../../lib/auth-context";
+import { api } from "@/shared/api";
+import { useAuthStore } from "@/features/auth";
+import { useWorkspaceStore } from "@/features/workspace";
 
 function formatExpiresAt(value: string) {
   return new Date(value).toLocaleString("en-US", {
@@ -27,7 +28,10 @@ function formatExpiresAt(value: string) {
 function LocalDaemonPairPageContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token") ?? "";
-  const { user, workspaces, workspace, isLoading } = useAuth();
+  const user = useAuthStore((s) => s.user);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const workspace = useWorkspaceStore((s) => s.workspace);
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
   const [session, setSession] = useState<DaemonPairingSession | null>(null);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
   const [loading, setLoading] = useState(true);

@@ -1,8 +1,10 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { useAuth } from "../../../lib/auth-context";
+import { useSearchParams, useRouter } from "next/navigation";
+import { useAuthStore } from "@/features/auth";
+import { useWorkspaceStore } from "@/features/workspace";
+import { api } from "@/shared/api";
 import {
   Card,
   CardHeader,
@@ -16,7 +18,10 @@ import { Button } from "@multica/ui/components/ui/button";
 import { Label } from "@multica/ui/components/ui/label";
 
 function LoginPageContent() {
-  const { login, isLoading } = useAuth();
+  const router = useRouter();
+  const login = useAuthStore((s) => s.login);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const hydrateWorkspace = useWorkspaceStore((s) => s.hydrateWorkspace);
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -32,7 +37,10 @@ function LoginPageContent() {
     setError("");
     setSubmitting(true);
     try {
-      await login(email, name || undefined, searchParams.get("next") || undefined);
+      await login(email, name || undefined);
+      const wsList = await api.listWorkspaces();
+      await hydrateWorkspace(wsList);
+      router.push(searchParams.get("next") || "/issues");
     } catch (err) {
       setError("Login failed. Make sure the server is running.");
       setSubmitting(false);
