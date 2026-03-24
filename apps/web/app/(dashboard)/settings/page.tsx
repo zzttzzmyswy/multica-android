@@ -131,8 +131,8 @@ export default function SettingsPage() {
     try {
       const updated = await api.updateWorkspace(workspace.id, {
         name,
-        description: description || undefined,
-        context: context || undefined,
+        description,
+        context,
       });
       updateWorkspace(updated);
       setSaved(true);
