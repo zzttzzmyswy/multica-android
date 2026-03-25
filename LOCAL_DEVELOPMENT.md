@@ -72,11 +72,11 @@ make worktree-env
 That generates values like:
 
 ```bash
-POSTGRES_DB=multica_super_multica_702
+POSTGRES_DB=multica_my_feature_702
 POSTGRES_PORT=5432
 PORT=18782
 FRONTEND_PORT=13702
-DATABASE_URL=postgres://multica:multica@localhost:5432/multica_super_multica_702?sslmode=disable
+DATABASE_URL=postgres://multica:multica@localhost:5432/multica_my_feature_702?sslmode=disable
 ```
 
 Notes:
@@ -169,8 +169,8 @@ make check-main
 Use a worktree when you want isolated data and separate app ports.
 
 ```bash
-git worktree add ../super-multica-feature -b feat/my-change main
-cd ../super-multica-feature
+git worktree add ../multica-feature -b feat/my-change main
+cd ../multica-feature
 make worktree-env
 make setup-worktree
 make start-worktree
@@ -195,7 +195,7 @@ Example:
   - backend: `8080`
   - frontend: `3000`
 - worktree checkout
-  - database: `multica_super_multica_702`
+  - database: `multica_my_feature_702`
   - backend: generated worktree port such as `18782`
   - frontend: generated worktree port such as `13702`
 
@@ -442,8 +442,8 @@ make start-main
 ### Feature Worktree
 
 ```bash
-git worktree add ../super-multica-feature -b feat/my-change main
-cd ../super-multica-feature
+git worktree add ../multica-feature -b feat/my-change main
+cd ../multica-feature
 make worktree-env
 make setup-worktree
 make start-worktree
@@ -452,7 +452,7 @@ make start-worktree
 ### Return to a Previously Configured Worktree
 
 ```bash
-cd ../super-multica-feature
+cd ../multica-feature
 make start-worktree
 ```
 
