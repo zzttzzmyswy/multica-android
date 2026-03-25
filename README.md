@@ -40,7 +40,7 @@ make start-worktree
 Every checkout shares the same PostgreSQL container on `localhost:5432`. Isolation now happens at the database level:
 
 - `.env` typically uses `POSTGRES_DB=multica`
-- each `.env.worktree` gets its own `POSTGRES_DB`, such as `multica_super_multica_702`
+- each `.env.worktree` gets its own `POSTGRES_DB`, such as `multica_my_feature_702`
 - backend/frontend ports still stay unique per worktree
 
 That keeps one Docker container and one volume, while still isolating schema and data per worktree.

@@ -1,4 +1,4 @@
-name: super_multica
+name: multica
 
 services:
   postgres:
