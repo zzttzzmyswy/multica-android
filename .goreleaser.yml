@@ -1,16 +1,16 @@
 version: 2
 
-project_name: multica-cli
+project_name: multica
 
 before:
   hooks:
     - cd server && go mod tidy
 
 builds:
-  - id: multica-cli
+  - id: multica
     main: ./cmd/multica
     dir: server
-    binary: multica-cli
+    binary: multica
     ldflags:
       - -s -w
       - -X main.version={{.Version}}
@@ -42,7 +42,7 @@ changelog:
       - "^chore:"
 
 brews:
-  - name: multica-cli
+  - name: multica
     repository:
       owner: multica-ai
       name: homebrew-tap
@@ -53,6 +53,6 @@ brews:
     description: "Multica CLI — local agent runtime and management tool for the Multica platform"
     license: "MIT"
     install: |
-      bin.install "multica-cli"
+      bin.install "multica"
     test: |
-      system "#{bin}/multica-cli", "version"
+      system "#{bin}/multica", "version"
