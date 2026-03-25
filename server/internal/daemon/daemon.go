@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/multica-ai/multica/server/internal/daemon/execenv"
 	"github.com/multica-ai/multica/server/pkg/agent"
 )
 
@@ -254,7 +255,7 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 		}
 	default:
 		d.logger.Printf("task %s completed status=%s", task.ID, result.Status)
-		if err := d.client.CompleteTask(ctx, task.ID, result.Comment); err != nil {
+		if err := d.client.CompleteTask(ctx, task.ID, result.Comment, result.BranchName); err != nil {
 			d.logger.Printf("complete task %s failed: %v", task.ID, err)
 		}
 	}
@@ -267,9 +268,38 @@ func (d *Daemon) runTask(ctx context.Context, task Task) (TaskResult, error) {
 		return TaskResult{}, fmt.Errorf("no agent configured for provider %q", provider)
 	}
 
-	workdir := ResolveTaskWorkdir(d.cfg.ReposRoot)
+	// Prepare isolated execution environment.
+	taskCtx := execenv.TaskContextForEnv{
+		IssueTitle:         task.Context.Issue.Title,
+		IssueDescription:   task.Context.Issue.Description,
+		AcceptanceCriteria: task.Context.Issue.AcceptanceCriteria,
+		ContextRefs:        task.Context.Issue.ContextRefs,
+		WorkspaceContext:   task.Context.WorkspaceContext,
+		AgentName:          task.Context.Agent.Name,
+		AgentSkills:        convertSkillsForEnv(task.Context.Agent.Skills),
+	}
+	env, err := execenv.Prepare(execenv.PrepareParams{
+		WorkspacesRoot: d.cfg.WorkspacesRoot,
+		ReposRoot:      d.cfg.ReposRoot,
+		TaskID:         task.ID,
+		AgentName:      task.Context.Agent.Name,
+		Task:           taskCtx,
+	}, d.logger)
+	if err != nil {
+		return TaskResult{}, fmt.Errorf("prepare execution environment: %w", err)
+	}
 
-	prompt := BuildPrompt(task, workdir)
+	// Inject runtime-specific config (meta skill) so the agent discovers .agent_context/.
+	if err := execenv.InjectRuntimeConfig(env.WorkDir, provider, taskCtx); err != nil {
+		d.logger.Printf("execenv: inject runtime config failed (non-fatal): %v", err)
+	}
+	defer func() {
+		if cleanupErr := env.Cleanup(!d.cfg.KeepEnvAfterTask); cleanupErr != nil {
+			d.logger.Printf("cleanup env for task %s: %v", task.ID, cleanupErr)
+		}
+	}()
+
+	prompt := BuildPrompt(task)
 
 	backend, err := agent.New(provider, agent.Config{
 		ExecutablePath: entry.Path,
@@ -280,12 +310,12 @@ func (d *Daemon) runTask(ctx context.Context, task Task) (TaskResult, error) {
 	}
 
 	d.logger.Printf(
-		"starting %s task=%s workdir=%s model=%s timeout=%s",
-		provider, task.ID, workdir, entry.Model, d.cfg.AgentTimeout,
+		"starting %s task=%s workdir=%s branch=%s env_type=%s model=%s timeout=%s",
+		provider, task.ID, env.WorkDir, env.BranchName, env.Type, entry.Model, d.cfg.AgentTimeout,
 	)
 
 	session, err := backend.Execute(ctx, prompt, agent.ExecOptions{
-		Cwd:     workdir,
+		Cwd:     env.WorkDir,
 		Model:   entry.Model,
 		Timeout: d.cfg.AgentTimeout,
 	})
@@ -312,7 +342,12 @@ func (d *Daemon) runTask(ctx context.Context, task Task) (TaskResult, error) {
 		if result.Output == "" {
 			return TaskResult{}, fmt.Errorf("%s returned empty output", provider)
 		}
-		return TaskResult{Status: "completed", Comment: result.Output}, nil
+		return TaskResult{
+			Status:     "completed",
+			Comment:    result.Output,
+			BranchName: env.BranchName,
+			EnvType:    string(env.Type),
+		}, nil
 	case "timeout":
 		return TaskResult{}, fmt.Errorf("%s timed out after %s", provider, d.cfg.AgentTimeout)
 	default:
@@ -322,4 +357,24 @@ func (d *Daemon) runTask(ctx context.Context, task Task) (TaskResult, error) {
 		}
 		return TaskResult{Status: "blocked", Comment: errMsg}, nil
 	}
+}
+
+func convertSkillsForEnv(skills []SkillData) []execenv.SkillContextForEnv {
+	if len(skills) == 0 {
+		return nil
+	}
+	result := make([]execenv.SkillContextForEnv, len(skills))
+	for i, s := range skills {
+		result[i] = execenv.SkillContextForEnv{
+			Name:    s.Name,
+			Content: s.Content,
+		}
+		for _, f := range s.Files {
+			result[i].Files = append(result[i].Files, execenv.SkillFileContextForEnv{
+				Path:    f.Path,
+				Content: f.Content,
+			})
+		}
+	}
+	return result
 }

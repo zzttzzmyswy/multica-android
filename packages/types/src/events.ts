@@ -28,7 +28,10 @@ export type WSEventType =
   | "member:updated"
   | "member:removed"
   | "daemon:heartbeat"
-  | "daemon:register";
+  | "daemon:register"
+  | "skill:created"
+  | "skill:updated"
+  | "skill:deleted";
 
 export interface WSMessage<T = unknown> {
   type: WSEventType;

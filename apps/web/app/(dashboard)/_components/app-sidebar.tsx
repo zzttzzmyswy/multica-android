@@ -12,6 +12,7 @@ import {
   LogOut,
   Plus,
   Check,
+  Sparkles,
 } from "lucide-react";
 import { MulticaIcon } from "@/components/multica-icon";
 import {
@@ -42,6 +43,7 @@ import { useModalStore } from "@/features/modals";
 const navItems = [
   { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/agents", label: "Agents", icon: Bot },
+  { href: "/skills", label: "Skills", icon: Sparkles },
   { href: "/issues", label: "Issues", icon: ListTodo },
   { href: "/knowledge-base", label: "Knowledge Base", icon: BookOpen },
 ];

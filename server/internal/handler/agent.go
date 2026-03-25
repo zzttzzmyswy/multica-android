@@ -14,23 +14,23 @@ import (
 )
 
 type AgentResponse struct {
-	ID                 string  `json:"id"`
-	WorkspaceID        string  `json:"workspace_id"`
-	RuntimeID          string  `json:"runtime_id"`
-	Name               string  `json:"name"`
-	Description        string  `json:"description"`
-	AvatarURL          *string `json:"avatar_url"`
-	RuntimeMode        string  `json:"runtime_mode"`
-	RuntimeConfig      any     `json:"runtime_config"`
-	Visibility         string  `json:"visibility"`
-	Status             string  `json:"status"`
-	MaxConcurrentTasks int32   `json:"max_concurrent_tasks"`
-	OwnerID            *string `json:"owner_id"`
-	Skills             string  `json:"skills"`
-	Tools              any     `json:"tools"`
-	Triggers           any     `json:"triggers"`
-	CreatedAt          string  `json:"created_at"`
-	UpdatedAt          string  `json:"updated_at"`
+	ID                 string          `json:"id"`
+	WorkspaceID        string          `json:"workspace_id"`
+	RuntimeID          string          `json:"runtime_id"`
+	Name               string          `json:"name"`
+	Description        string          `json:"description"`
+	AvatarURL          *string         `json:"avatar_url"`
+	RuntimeMode        string          `json:"runtime_mode"`
+	RuntimeConfig      any             `json:"runtime_config"`
+	Visibility         string          `json:"visibility"`
+	Status             string          `json:"status"`
+	MaxConcurrentTasks int32           `json:"max_concurrent_tasks"`
+	OwnerID            *string         `json:"owner_id"`
+	Skills             []SkillResponse `json:"skills"`
+	Tools              any             `json:"tools"`
+	Triggers           any             `json:"triggers"`
+	CreatedAt          string          `json:"created_at"`
+	UpdatedAt          string          `json:"updated_at"`
 }
 
 func agentToResponse(a db.Agent) AgentResponse {
@@ -71,7 +71,7 @@ func agentToResponse(a db.Agent) AgentResponse {
 		Status:             a.Status,
 		MaxConcurrentTasks: a.MaxConcurrentTasks,
 		OwnerID:            uuidToPtr(a.OwnerID),
-		Skills:             a.Skills,
+		Skills:             []SkillResponse{},
 		Tools:              tools,
 		Triggers:           triggers,
 		CreatedAt:          timestampToString(a.CreatedAt),
@@ -137,13 +137,33 @@ func (h *Handler) ListAgents(w http.ResponseWriter, r *http.Request) {
 	userID := requestUserID(r)
 	isAdmin := roleAllowed(member.Role, "owner", "admin")
 
+	// Batch-load skills for all agents to avoid N+1.
+	skillRows, err := h.Queries.ListAgentSkillsByWorkspace(r.Context(), parseUUID(workspaceID))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load agent skills")
+		return
+	}
+	skillMap := map[string][]SkillResponse{}
+	for _, row := range skillRows {
+		agentID := uuidToString(row.AgentID)
+		skillMap[agentID] = append(skillMap[agentID], SkillResponse{
+			ID:          uuidToString(row.ID),
+			Name:        row.Name,
+			Description: row.Description,
+		})
+	}
+
 	// Filter private agents: only visible to owner_id or workspace admin
 	var visible []AgentResponse
 	for _, a := range agents {
 		if a.Visibility == "private" && !isAdmin && uuidToString(a.OwnerID) != userID {
 			continue
 		}
-		visible = append(visible, agentToResponse(a))
+		resp := agentToResponse(a)
+		if skills, ok := skillMap[resp.ID]; ok {
+			resp.Skills = skills
+		}
+		visible = append(visible, resp)
 	}
 	if visible == nil {
 		visible = []AgentResponse{}
@@ -158,7 +178,19 @@ func (h *Handler) GetAgent(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, agentToResponse(agent))
+	resp := agentToResponse(agent)
+	skills, err := h.Queries.ListAgentSkills(r.Context(), agent.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load agent skills")
+		return
+	}
+	if len(skills) > 0 {
+		resp.Skills = make([]SkillResponse, len(skills))
+		for i, s := range skills {
+			resp.Skills[i] = skillToResponse(s)
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 type CreateAgentRequest struct {
@@ -169,7 +201,6 @@ type CreateAgentRequest struct {
 	RuntimeConfig      any     `json:"runtime_config"`
 	Visibility         string  `json:"visibility"`
 	MaxConcurrentTasks int32   `json:"max_concurrent_tasks"`
-	Skills             string  `json:"skills"`
 	Tools              any     `json:"tools"`
 	Triggers           any     `json:"triggers"`
 }
@@ -241,7 +272,6 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		Visibility:         req.Visibility,
 		MaxConcurrentTasks: req.MaxConcurrentTasks,
 		OwnerID:            parseUUID(ownerID),
-		Skills:             req.Skills,
 		Tools:              tools,
 		Triggers:           triggers,
 	})
@@ -305,6 +335,7 @@ func (h *Handler) createAgentInitIssue(ctx context.Context, agent db.Agent, crea
 	}
 }
 
+
 type UpdateAgentRequest struct {
 	Name               *string `json:"name"`
 	Description        *string `json:"description"`
@@ -314,7 +345,6 @@ type UpdateAgentRequest struct {
 	Visibility         *string `json:"visibility"`
 	Status             *string `json:"status"`
 	MaxConcurrentTasks *int32  `json:"max_concurrent_tasks"`
-	Skills             *string `json:"skills"`
 	Tools              any     `json:"tools"`
 	Triggers           any     `json:"triggers"`
 }
@@ -371,9 +401,6 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.MaxConcurrentTasks != nil {
 		params.MaxConcurrentTasks = pgtype.Int4{Int32: *req.MaxConcurrentTasks, Valid: true}
-	}
-	if req.Skills != nil {
-		params.Skills = pgtype.Text{String: *req.Skills, Valid: true}
 	}
 	if req.Tools != nil {
 		tools, _ := json.Marshal(req.Tools)

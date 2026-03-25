@@ -130,6 +130,22 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 				r.Put("/", h.UpdateAgent)
 				r.Delete("/", h.DeleteAgent)
 				r.Get("/tasks", h.ListAgentTasks)
+				r.Get("/skills", h.ListAgentSkills)
+				r.Put("/skills", h.SetAgentSkills)
+			})
+		})
+
+		// Skills
+		r.Route("/api/skills", func(r chi.Router) {
+			r.Get("/", h.ListSkills)
+			r.Post("/", h.CreateSkill)
+			r.Route("/{id}", func(r chi.Router) {
+				r.Get("/", h.GetSkill)
+				r.Put("/", h.UpdateSkill)
+				r.Delete("/", h.DeleteSkill)
+				r.Get("/files", h.ListSkillFiles)
+				r.Put("/files", h.UpsertSkillFile)
+				r.Delete("/files/{fileId}", h.DeleteSkillFile)
 			})
 		})
 
