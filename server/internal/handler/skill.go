@@ -440,6 +440,15 @@ func (h *Handler) UpsertSkillFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DeleteSkillFile(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	skill, ok := h.loadSkillForUser(w, r, id)
+	if !ok {
+		return
+	}
+	if _, ok := h.requireWorkspaceRole(w, r, uuidToString(skill.WorkspaceID), "skill not found", "owner", "admin"); !ok {
+		return
+	}
+
 	fileID := chi.URLParam(r, "fileId")
 	if err := h.Queries.DeleteSkillFile(r.Context(), parseUUID(fileID)); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete skill file")

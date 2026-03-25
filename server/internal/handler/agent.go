@@ -130,7 +130,11 @@ func (h *Handler) ListAgents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Batch-load skills for all agents to avoid N+1.
-	skillRows, _ := h.Queries.ListAgentSkillsByWorkspace(r.Context(), parseUUID(workspaceID))
+	skillRows, err := h.Queries.ListAgentSkillsByWorkspace(r.Context(), parseUUID(workspaceID))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load agent skills")
+		return
+	}
 	skillMap := map[string][]SkillResponse{}
 	for _, row := range skillRows {
 		agentID := uuidToString(row.AgentID)
@@ -159,7 +163,11 @@ func (h *Handler) GetAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp := agentToResponse(agent)
-	skills, _ := h.Queries.ListAgentSkills(r.Context(), agent.ID)
+	skills, err := h.Queries.ListAgentSkills(r.Context(), agent.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load agent skills")
+		return
+	}
 	if len(skills) > 0 {
 		resp.Skills = make([]SkillResponse, len(skills))
 		for i, s := range skills {

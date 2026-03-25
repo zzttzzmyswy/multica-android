@@ -22,6 +22,8 @@ interface WorkspaceActions {
   refreshMembers: () => Promise<void>;
   refreshAgents: () => Promise<void>;
   refreshSkills: () => Promise<void>;
+  upsertSkill: (skill: Skill) => void;
+  removeSkill: (id: string) => void;
   createWorkspace: (data: {
     name: string;
     slug: string;
@@ -106,10 +108,34 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   },
 
   refreshSkills: async () => {
-    const { workspace } = get();
+    const { workspace, skills: existing } = get();
     if (!workspace) return;
-    const skills = await api.listSkills();
-    set({ skills });
+    const fetched = await api.listSkills();
+    // listSkills doesn't include files — preserve files from existing entries
+    const filesById = new Map(
+      existing.filter((s) => s.files?.length).map((s) => [s.id, s.files]),
+    );
+    const merged = fetched.map((s) => ({
+      ...s,
+      files: s.files ?? filesById.get(s.id) ?? [],
+    }));
+    set({ skills: merged });
+  },
+
+  upsertSkill: (skill) => {
+    set((state) => {
+      const idx = state.skills.findIndex((s) => s.id === skill.id);
+      if (idx >= 0) {
+        const next = [...state.skills];
+        next[idx] = skill;
+        return { skills: next };
+      }
+      return { skills: [...state.skills, skill] };
+    });
+  },
+
+  removeSkill: (id) => {
+    set((state) => ({ skills: state.skills.filter((s) => s.id !== id) }));
   },
 
   createWorkspace: async (data) => {
