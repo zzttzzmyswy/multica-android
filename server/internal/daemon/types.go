@@ -62,9 +62,22 @@ type IssueContext struct {
 
 // AgentContext holds agent details for task execution.
 type AgentContext struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Skills string `json:"skills"`
+	ID     string      `json:"id"`
+	Name   string      `json:"name"`
+	Skills []SkillData `json:"skills"`
+}
+
+// SkillData represents a structured skill in the task context.
+type SkillData struct {
+	Name    string          `json:"name"`
+	Content string          `json:"content"`
+	Files   []SkillFileData `json:"files,omitempty"`
+}
+
+// SkillFileData represents a supporting file within a skill.
+type SkillFileData struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
 }
 
 // RuntimeContext holds runtime details for task execution.

@@ -29,20 +29,29 @@ func TestBuildPromptIncludesIssueAndContext(t *testing.T) {
 				AcceptanceCriteria: []string{"tests pass"},
 			},
 			Agent: AgentContext{
-				Name:   "Local Codex",
-				Skills: "Be concise.",
+				Name: "Local Codex",
+				Skills: []SkillData{
+					{Name: "Concise", Content: "Be concise."},
+				},
 			},
 		},
 	})
 
+	// Lean prompt: issue + acceptance criteria only. No inlined skill content.
 	for _, want := range []string{
 		"Fix failing test",
 		"Investigate and fix the test failure.",
 		"tests pass",
-		".agent_context/issue_context.md",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("prompt missing %q", want)
+		}
+	}
+
+	// Skills should NOT be inlined in the prompt (they're in runtime config).
+	for _, absent := range []string{"## Agent Skills", "Be concise."} {
+		if strings.Contains(prompt, absent) {
+			t.Fatalf("prompt should NOT contain %q (skills are in runtime config)", absent)
 		}
 	}
 }

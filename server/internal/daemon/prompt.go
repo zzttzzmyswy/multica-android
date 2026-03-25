@@ -6,16 +6,13 @@ import (
 )
 
 // BuildPrompt constructs the task prompt for an agent CLI.
-// Full context is available in .agent_context/issue_context.md (written by execenv).
-// The prompt contains a brief summary for immediate context.
+// This is kept lean — only the issue summary and acceptance criteria.
+// Detailed skill instructions are injected via the runtime's native config
+// mechanism (e.g., .claude/CLAUDE.md, AGENTS.md) by execenv.InjectRuntimeConfig.
 func BuildPrompt(task Task) string {
 	var b strings.Builder
 	b.WriteString("You are running as a local coding agent for a Multica workspace.\n")
 	b.WriteString("Complete the assigned issue using the local environment.\n\n")
-
-	b.WriteString("## Context\n\n")
-	b.WriteString("Full issue context is available in `.agent_context/issue_context.md` in your working directory.\n")
-	b.WriteString("Read this file first for the complete issue description, acceptance criteria, and instructions.\n\n")
 
 	fmt.Fprintf(&b, "**Issue:** %s\n", task.Context.Issue.Title)
 	fmt.Fprintf(&b, "**Agent:** %s\n\n", task.Context.Agent.Name)
@@ -35,12 +32,6 @@ func BuildPrompt(task Task) string {
 		}
 		b.WriteString("\n")
 	}
-
-	b.WriteString("## Output Requirements\n\n")
-	b.WriteString("Return a concise Markdown comment suitable for posting back to the issue.\n")
-	b.WriteString("- Lead with the outcome.\n")
-	b.WriteString("- Mention concrete files or commands if you changed anything.\n")
-	b.WriteString("- If blocked, explain the blocker clearly.\n")
 
 	return b.String()
 }

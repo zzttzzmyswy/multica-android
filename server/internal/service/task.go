@@ -48,7 +48,10 @@ func (s *TaskService) EnqueueTaskForIssue(ctx context.Context, issue db.Issue) (
 		workspaceContext = ws.Context.String
 	}
 
-	snapshot := buildContextSnapshot(issue, agent, runtime, workspaceContext)
+	// Load agent's structured skills + files.
+	agentSkills := s.loadAgentSkillsForSnapshot(ctx, agent.ID)
+
+	snapshot := buildContextSnapshot(issue, agent, runtime, workspaceContext, agentSkills)
 	contextJSON, _ := json.Marshal(snapshot)
 
 	task, err := s.Queries.CreateAgentTaskWithContext(ctx, db.CreateAgentTaskWithContextParams{
@@ -257,7 +260,36 @@ func (s *TaskService) updateAgentStatus(ctx context.Context, agentID pgtype.UUID
 	s.broadcast(protocol.EventAgentStatus, map[string]any{"agent": agentToMap(agent)})
 }
 
-func buildContextSnapshot(issue db.Issue, agent db.Agent, runtime db.AgentRuntime, workspaceContext string) map[string]any {
+type skillSnapshot struct {
+	Name    string             `json:"name"`
+	Content string             `json:"content"`
+	Files   []skillFileSnapshot `json:"files,omitempty"`
+}
+
+type skillFileSnapshot struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
+func (s *TaskService) loadAgentSkillsForSnapshot(ctx context.Context, agentID pgtype.UUID) []skillSnapshot {
+	skills, err := s.Queries.ListAgentSkills(ctx, agentID)
+	if err != nil || len(skills) == 0 {
+		return nil
+	}
+
+	result := make([]skillSnapshot, 0, len(skills))
+	for _, sk := range skills {
+		snap := skillSnapshot{Name: sk.Name, Content: sk.Content}
+		files, _ := s.Queries.ListSkillFiles(ctx, sk.ID)
+		for _, f := range files {
+			snap.Files = append(snap.Files, skillFileSnapshot{Path: f.Path, Content: f.Content})
+		}
+		result = append(result, snap)
+	}
+	return result
+}
+
+func buildContextSnapshot(issue db.Issue, agent db.Agent, runtime db.AgentRuntime, workspaceContext string, skills []skillSnapshot) map[string]any {
 	var ac []string
 	if issue.AcceptanceCriteria != nil {
 		json.Unmarshal(issue.AcceptanceCriteria, &ac)
@@ -286,7 +318,7 @@ func buildContextSnapshot(issue db.Issue, agent db.Agent, runtime db.AgentRuntim
 		"agent": map[string]any{
 			"id":     util.UUIDToString(agent.ID),
 			"name":   agent.Name,
-			"skills": agent.Skills,
+			"skills": skills,
 			"tools":  tools,
 		},
 		"runtime": map[string]any{
@@ -476,7 +508,7 @@ func agentToMap(a db.Agent) map[string]any {
 		"status":               a.Status,
 		"max_concurrent_tasks": a.MaxConcurrentTasks,
 		"owner_id":             util.UUIDToPtr(a.OwnerID),
-		"skills":               a.Skills,
+		"skills":               []any{},
 		"tools":                tools,
 		"triggers":             triggers,
 		"created_at":           util.TimestampToString(a.CreatedAt),

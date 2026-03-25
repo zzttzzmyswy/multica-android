@@ -35,7 +35,20 @@ type TaskContextForEnv struct {
 	ContextRefs        []string
 	WorkspaceContext   string
 	AgentName          string
-	AgentSkills        string
+	AgentSkills        []SkillContextForEnv
+}
+
+// SkillContextForEnv represents a skill to be written into the execution environment.
+type SkillContextForEnv struct {
+	Name    string
+	Content string
+	Files   []SkillFileContextForEnv
+}
+
+// SkillFileContextForEnv represents a supporting file within a skill.
+type SkillFileContextForEnv struct {
+	Path    string
+	Content string
 }
 
 // Environment represents a prepared, isolated execution environment.
@@ -101,9 +114,11 @@ func Prepare(params PrepareParams, logger *log.Logger) (*Environment, error) {
 				env.BranchName = branchName
 				env.gitRoot = gitRoot
 
-				// Exclude .agent_context from git tracking.
-				if err := excludeFromGit(workDir, ".agent_context"); err != nil {
-					logger.Printf("execenv: failed to exclude .agent_context from git: %v", err)
+				// Exclude injected directories from git tracking.
+				for _, pattern := range []string{".agent_context", ".claude", "AGENTS.md"} {
+					if err := excludeFromGit(workDir, pattern); err != nil {
+						logger.Printf("execenv: failed to exclude %s from git: %v", pattern, err)
+					}
 				}
 			}
 		}
