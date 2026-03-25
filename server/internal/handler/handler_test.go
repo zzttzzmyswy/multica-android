@@ -41,6 +41,11 @@ func TestMain(m *testing.M) {
 		fmt.Printf("Skipping tests: could not connect to database: %v\n", err)
 		os.Exit(0)
 	}
+	if err := pool.Ping(ctx); err != nil {
+		fmt.Printf("Skipping tests: database not reachable: %v\n", err)
+		pool.Close()
+		os.Exit(0)
+	}
 
 	queries := db.New(pool)
 	hub := realtime.NewHub()

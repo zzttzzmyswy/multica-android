@@ -49,6 +49,11 @@ func TestMain(m *testing.M) {
 		fmt.Printf("Skipping integration tests: could not connect to database: %v\n", err)
 		os.Exit(0)
 	}
+	if err := pool.Ping(ctx); err != nil {
+		fmt.Printf("Skipping integration tests: database not reachable: %v\n", err)
+		pool.Close()
+		os.Exit(0)
+	}
 
 	testPool = pool
 	testUserID, testWorkspaceID, err = setupIntegrationTestFixture(ctx, pool)
