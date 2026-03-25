@@ -67,7 +67,7 @@ export interface Agent {
   status: AgentStatus;
   max_concurrent_tasks: number;
   owner_id: string | null;
-  skills: string;
+  skills: Skill[];
   tools: AgentTool[];
   triggers: AgentTrigger[];
   created_at: string;
@@ -82,7 +82,6 @@ export interface CreateAgentRequest {
   runtime_config?: Record<string, unknown>;
   visibility?: AgentVisibility;
   max_concurrent_tasks?: number;
-  skills?: string;
   tools?: AgentTool[];
   triggers?: AgentTrigger[];
 }
@@ -96,7 +95,50 @@ export interface UpdateAgentRequest {
   visibility?: AgentVisibility;
   status?: AgentStatus;
   max_concurrent_tasks?: number;
-  skills?: string;
   tools?: AgentTool[];
   triggers?: AgentTrigger[];
+}
+
+// Skills
+
+export interface Skill {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string;
+  content: string;
+  config: Record<string, unknown>;
+  files: SkillFile[];
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SkillFile {
+  id: string;
+  skill_id: string;
+  path: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateSkillRequest {
+  name: string;
+  description?: string;
+  content?: string;
+  config?: Record<string, unknown>;
+  files?: { path: string; content: string }[];
+}
+
+export interface UpdateSkillRequest {
+  name?: string;
+  description?: string;
+  content?: string;
+  config?: Record<string, unknown>;
+  files?: { path: string; content: string }[];
+}
+
+export interface SetAgentSkillsRequest {
+  skill_ids: string[];
 }

@@ -18,7 +18,10 @@ export type WSEventType =
   | "task:failed"
   | "inbox:new"
   | "daemon:heartbeat"
-  | "daemon:register";
+  | "daemon:register"
+  | "skill:created"
+  | "skill:updated"
+  | "skill:deleted";
 
 export interface WSMessage<T = unknown> {
   type: WSEventType;

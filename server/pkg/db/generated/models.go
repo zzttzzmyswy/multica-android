@@ -33,7 +33,6 @@ type Agent struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 	Description        string             `json:"description"`
-	Skills             string             `json:"skills"`
 	Tools              []byte             `json:"tools"`
 	Triggers           []byte             `json:"triggers"`
 	RuntimeID          pgtype.UUID        `json:"runtime_id"`
@@ -52,6 +51,12 @@ type AgentRuntime struct {
 	LastSeenAt  pgtype.Timestamptz `json:"last_seen_at"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type AgentSkill struct {
+	AgentID   pgtype.UUID        `json:"agent_id"`
+	SkillID   pgtype.UUID        `json:"skill_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type AgentTaskQueue struct {
@@ -170,6 +175,27 @@ type Member struct {
 	UserID      pgtype.UUID        `json:"user_id"`
 	Role        string             `json:"role"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+type Skill struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Name        string             `json:"name"`
+	Description string             `json:"description"`
+	Content     string             `json:"content"`
+	Config      []byte             `json:"config"`
+	CreatedBy   pgtype.UUID        `json:"created_by"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type SkillFile struct {
+	ID        pgtype.UUID        `json:"id"`
+	SkillID   pgtype.UUID        `json:"skill_id"`
+	Path      string             `json:"path"`
+	Content   string             `json:"content"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
 type User struct {

@@ -19,6 +19,10 @@ import type {
   Workspace,
   MemberWithUser,
   User,
+  Skill,
+  CreateSkillRequest,
+  UpdateSkillRequest,
+  SetAgentSkillsRequest,
 } from "@multica/types";
 
 export interface LoginResponse {
@@ -285,6 +289,44 @@ export class ApiClient {
   async deleteWorkspace(workspaceId: string): Promise<void> {
     await this.fetch(`/api/workspaces/${workspaceId}`, {
       method: "DELETE",
+    });
+  }
+
+  // Skills
+  async listSkills(): Promise<Skill[]> {
+    return this.fetch("/api/skills");
+  }
+
+  async getSkill(id: string): Promise<Skill> {
+    return this.fetch(`/api/skills/${id}`);
+  }
+
+  async createSkill(data: CreateSkillRequest): Promise<Skill> {
+    return this.fetch("/api/skills", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateSkill(id: string, data: UpdateSkillRequest): Promise<Skill> {
+    return this.fetch(`/api/skills/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteSkill(id: string): Promise<void> {
+    await this.fetch(`/api/skills/${id}`, { method: "DELETE" });
+  }
+
+  async listAgentSkills(agentId: string): Promise<Skill[]> {
+    return this.fetch(`/api/agents/${agentId}/skills`);
+  }
+
+  async setAgentSkills(agentId: string, data: SetAgentSkillsRequest): Promise<void> {
+    await this.fetch(`/api/agents/${agentId}/skills`, {
+      method: "PUT",
+      body: JSON.stringify(data),
     });
   }
 }

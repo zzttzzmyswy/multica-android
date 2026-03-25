@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import type { Workspace, MemberWithUser, Agent } from "@multica/types";
+import type { Workspace, MemberWithUser, Agent, Skill } from "@multica/types";
 import { api } from "@/shared/api";
 
 interface WorkspaceState {
@@ -9,6 +9,7 @@ interface WorkspaceState {
   workspaces: Workspace[];
   members: MemberWithUser[];
   agents: Agent[];
+  skills: Skill[];
 }
 
 interface WorkspaceActions {
@@ -20,6 +21,7 @@ interface WorkspaceActions {
   refreshWorkspaces: () => Promise<Workspace[]>;
   refreshMembers: () => Promise<void>;
   refreshAgents: () => Promise<void>;
+  refreshSkills: () => Promise<void>;
   createWorkspace: (data: {
     name: string;
     slug: string;
@@ -39,6 +41,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   workspaces: [],
   members: [],
   agents: [],
+  skills: [],
 
   // Actions
   hydrateWorkspace: async (wsList, preferredWorkspaceId) => {
@@ -54,7 +57,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     if (!nextWorkspace) {
       api.setWorkspaceId(null);
       localStorage.removeItem("multica_workspace_id");
-      set({ workspace: null, members: [], agents: [] });
+      set({ workspace: null, members: [], agents: [], skills: [] });
       return null;
     }
 
@@ -62,11 +65,12 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     localStorage.setItem("multica_workspace_id", nextWorkspace.id);
     set({ workspace: nextWorkspace });
 
-    const [nextMembers, nextAgents] = await Promise.all([
+    const [nextMembers, nextAgents, nextSkills] = await Promise.all([
       api.listMembers(nextWorkspace.id),
       api.listAgents({ workspace_id: nextWorkspace.id }),
+      api.listSkills().catch(() => [] as Skill[]),
     ]);
-    set({ members: nextMembers, agents: nextAgents });
+    set({ members: nextMembers, agents: nextAgents, skills: nextSkills });
 
     return nextWorkspace;
   },
@@ -99,6 +103,13 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     if (!workspace) return;
     const agents = await api.listAgents({ workspace_id: workspace.id });
     set({ agents });
+  },
+
+  refreshSkills: async () => {
+    const { workspace } = get();
+    if (!workspace) return;
+    const skills = await api.listSkills();
+    set({ skills });
   },
 
   createWorkspace: async (data) => {
@@ -137,6 +148,6 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   clearWorkspace: () => {
     api.setWorkspaceId(null);
     localStorage.removeItem("multica_workspace_id");
-    set({ workspace: null, workspaces: [], members: [], agents: [] });
+    set({ workspace: null, workspaces: [], members: [], agents: [], skills: [] });
   },
 }));

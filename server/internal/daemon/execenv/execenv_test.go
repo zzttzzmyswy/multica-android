@@ -106,7 +106,9 @@ func TestPrepareDirectoryMode(t *testing.T) {
 				"Login works",
 				"Tests pass",
 			},
-			AgentSkills: "Be concise.",
+			AgentSkills: []SkillContextForEnv{
+				{Name: "Code Review", Content: "Be concise."},
+			},
 		},
 	}, testLogger())
 	if err != nil {
@@ -134,11 +136,21 @@ func TestPrepareDirectoryMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read issue_context.md: %v", err)
 	}
-	for _, want := range []string{"Fix the bug", "login flow", "Login works", "Tests pass", "Be concise."} {
+	for _, want := range []string{"Fix the bug", "login flow", "Login works", "Tests pass", "Code Review"} {
 		if !strings.Contains(string(content), want) {
 			t.Fatalf("issue_context.md missing %q", want)
 		}
 	}
+
+	// Verify skill files.
+	skillContent, err := os.ReadFile(filepath.Join(env.WorkDir, ".agent_context", "skills", "code-review", "SKILL.md"))
+	if err != nil {
+		t.Fatalf("failed to read SKILL.md: %v", err)
+	}
+	if !strings.Contains(string(skillContent), "Be concise.") {
+		t.Fatal("SKILL.md missing content")
+	}
+
 }
 
 func TestPrepareGitWorktreeMode(t *testing.T) {
@@ -213,7 +225,15 @@ func TestWriteContextFiles(t *testing.T) {
 		AcceptanceCriteria: []string{"Criterion A", "Criterion B"},
 		ContextRefs:        []string{"ref-1", "ref-2"},
 		WorkspaceContext:   "We use Go and TypeScript.",
-		AgentSkills:        "Follow Go conventions.",
+		AgentSkills: []SkillContextForEnv{
+			{
+				Name:    "Go Conventions",
+				Content: "Follow Go conventions.",
+				Files: []SkillFileContextForEnv{
+					{Path: "templates/example.go", Content: "package main"},
+				},
+			},
+		},
 	}
 
 	if err := writeContextFiles(dir, ctx); err != nil {
@@ -237,12 +257,29 @@ func TestWriteContextFiles(t *testing.T) {
 		"- ref-1",
 		"## Workspace Context",
 		"Go and TypeScript",
-		"## Agent Instructions",
-		"Go conventions",
+		"## Agent Skills",
+		"Go Conventions",
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("content missing %q", want)
 		}
+	}
+
+	// Verify skill directory and files.
+	skillMd, err := os.ReadFile(filepath.Join(dir, ".agent_context", "skills", "go-conventions", "SKILL.md"))
+	if err != nil {
+		t.Fatalf("failed to read SKILL.md: %v", err)
+	}
+	if !strings.Contains(string(skillMd), "Follow Go conventions.") {
+		t.Error("SKILL.md missing content")
+	}
+
+	supportFile, err := os.ReadFile(filepath.Join(dir, ".agent_context", "skills", "go-conventions", "templates", "example.go"))
+	if err != nil {
+		t.Fatalf("failed to read supporting file: %v", err)
+	}
+	if string(supportFile) != "package main" {
+		t.Errorf("supporting file content = %q, want %q", string(supportFile), "package main")
 	}
 }
 
@@ -267,7 +304,7 @@ func TestWriteContextFilesOmitsEmpty(t *testing.T) {
 	if !strings.Contains(s, "Minimal Issue") {
 		t.Error("expected title to be present")
 	}
-	for _, absent := range []string{"## Description", "## Acceptance Criteria", "## Context References", "## Workspace Context", "## Agent Instructions"} {
+	for _, absent := range []string{"## Description", "## Acceptance Criteria", "## Context References", "## Workspace Context", "## Agent Skills"} {
 		if strings.Contains(s, absent) {
 			t.Errorf("expected %q to be omitted for empty content", absent)
 		}
@@ -324,6 +361,113 @@ func TestCleanupGitWorktree(t *testing.T) {
 	out, _ := cmd.Output()
 	if strings.TrimSpace(string(out)) != "" {
 		t.Fatalf("expected branch %s to be deleted", branchName)
+	}
+}
+
+func TestInjectRuntimeConfigClaude(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	ctx := TaskContextForEnv{
+		IssueTitle: "Test Issue",
+		AgentSkills: []SkillContextForEnv{
+			{Name: "Go Conventions", Content: "Follow Go conventions.", Files: []SkillFileContextForEnv{
+				{Path: "example.go", Content: "package main"},
+			}},
+			{Name: "PR Review", Content: "Review PRs carefully."},
+		},
+	}
+
+	if err := InjectRuntimeConfig(dir, "claude", ctx); err != nil {
+		t.Fatalf("InjectRuntimeConfig failed: %v", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(dir, ".claude", "CLAUDE.md"))
+	if err != nil {
+		t.Fatalf("failed to read .claude/CLAUDE.md: %v", err)
+	}
+
+	s := string(content)
+	for _, want := range []string{
+		"Multica Agent Runtime",
+		".agent_context/issue_context.md",
+		".agent_context/skills/",
+		"Go Conventions",
+		"PR Review",
+		"go-conventions/SKILL.md",
+		"pr-review/SKILL.md",
+		"1 supporting files",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("CLAUDE.md missing %q", want)
+		}
+	}
+}
+
+func TestInjectRuntimeConfigCodex(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	ctx := TaskContextForEnv{
+		IssueTitle:  "Test Issue",
+		AgentSkills: []SkillContextForEnv{{Name: "Coding", Content: "Write good code."}},
+	}
+
+	if err := InjectRuntimeConfig(dir, "codex", ctx); err != nil {
+		t.Fatalf("InjectRuntimeConfig failed: %v", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("failed to read AGENTS.md: %v", err)
+	}
+
+	s := string(content)
+	if !strings.Contains(s, "Multica Agent Runtime") {
+		t.Error("AGENTS.md missing meta skill header")
+	}
+	if !strings.Contains(s, "Coding") {
+		t.Error("AGENTS.md missing skill name")
+	}
+}
+
+func TestInjectRuntimeConfigNoSkills(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	ctx := TaskContextForEnv{IssueTitle: "Test Issue"}
+
+	if err := InjectRuntimeConfig(dir, "claude", ctx); err != nil {
+		t.Fatalf("InjectRuntimeConfig failed: %v", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(dir, ".claude", "CLAUDE.md"))
+	if err != nil {
+		t.Fatalf("failed to read .claude/CLAUDE.md: %v", err)
+	}
+
+	s := string(content)
+	if !strings.Contains(s, "issue_context.md") {
+		t.Error("should reference issue_context.md even without skills")
+	}
+	if strings.Contains(s, "## Skills") {
+		t.Error("should not have Skills section when there are no skills")
+	}
+}
+
+func TestInjectRuntimeConfigUnknownProvider(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	// Unknown provider should be a no-op.
+	if err := InjectRuntimeConfig(dir, "unknown", TaskContextForEnv{}); err != nil {
+		t.Fatalf("expected no error for unknown provider, got: %v", err)
+	}
+
+	// No files should be created.
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 0 {
+		t.Fatalf("expected empty dir for unknown provider, got %d entries", len(entries))
 	}
 }
 

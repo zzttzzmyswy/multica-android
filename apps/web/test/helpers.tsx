@@ -54,7 +54,7 @@ export const mockAgents: Agent[] = [
     visibility: "workspace",
     max_concurrent_tasks: 3,
     owner_id: null,
-    skills: "",
+    skills: [],
     tools: [],
     triggers: [],
     created_at: "2026-01-01T00:00:00Z",

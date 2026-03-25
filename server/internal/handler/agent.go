@@ -1,10 +1,7 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
-	"fmt"
-	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -13,23 +10,23 @@ import (
 )
 
 type AgentResponse struct {
-	ID                 string  `json:"id"`
-	WorkspaceID        string  `json:"workspace_id"`
-	RuntimeID          string  `json:"runtime_id"`
-	Name               string  `json:"name"`
-	Description        string  `json:"description"`
-	AvatarURL          *string `json:"avatar_url"`
-	RuntimeMode        string  `json:"runtime_mode"`
-	RuntimeConfig      any     `json:"runtime_config"`
-	Visibility         string  `json:"visibility"`
-	Status             string  `json:"status"`
-	MaxConcurrentTasks int32   `json:"max_concurrent_tasks"`
-	OwnerID            *string `json:"owner_id"`
-	Skills             string  `json:"skills"`
-	Tools              any     `json:"tools"`
-	Triggers           any     `json:"triggers"`
-	CreatedAt          string  `json:"created_at"`
-	UpdatedAt          string  `json:"updated_at"`
+	ID                 string          `json:"id"`
+	WorkspaceID        string          `json:"workspace_id"`
+	RuntimeID          string          `json:"runtime_id"`
+	Name               string          `json:"name"`
+	Description        string          `json:"description"`
+	AvatarURL          *string         `json:"avatar_url"`
+	RuntimeMode        string          `json:"runtime_mode"`
+	RuntimeConfig      any             `json:"runtime_config"`
+	Visibility         string          `json:"visibility"`
+	Status             string          `json:"status"`
+	MaxConcurrentTasks int32           `json:"max_concurrent_tasks"`
+	OwnerID            *string         `json:"owner_id"`
+	Skills             []SkillResponse `json:"skills"`
+	Tools              any             `json:"tools"`
+	Triggers           any             `json:"triggers"`
+	CreatedAt          string          `json:"created_at"`
+	UpdatedAt          string          `json:"updated_at"`
 }
 
 func agentToResponse(a db.Agent) AgentResponse {
@@ -70,7 +67,7 @@ func agentToResponse(a db.Agent) AgentResponse {
 		Status:             a.Status,
 		MaxConcurrentTasks: a.MaxConcurrentTasks,
 		OwnerID:            uuidToPtr(a.OwnerID),
-		Skills:             a.Skills,
+		Skills:             []SkillResponse{},
 		Tools:              tools,
 		Triggers:           triggers,
 		CreatedAt:          timestampToString(a.CreatedAt),
@@ -132,9 +129,24 @@ func (h *Handler) ListAgents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Batch-load skills for all agents to avoid N+1.
+	skillRows, _ := h.Queries.ListAgentSkillsByWorkspace(r.Context(), parseUUID(workspaceID))
+	skillMap := map[string][]SkillResponse{}
+	for _, row := range skillRows {
+		agentID := uuidToString(row.AgentID)
+		skillMap[agentID] = append(skillMap[agentID], SkillResponse{
+			ID:          uuidToString(row.ID),
+			Name:        row.Name,
+			Description: row.Description,
+		})
+	}
+
 	resp := make([]AgentResponse, len(agents))
 	for i, a := range agents {
 		resp[i] = agentToResponse(a)
+		if skills, ok := skillMap[resp[i].ID]; ok {
+			resp[i].Skills = skills
+		}
 	}
 
 	writeJSON(w, http.StatusOK, resp)
@@ -146,7 +158,15 @@ func (h *Handler) GetAgent(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, agentToResponse(agent))
+	resp := agentToResponse(agent)
+	skills, _ := h.Queries.ListAgentSkills(r.Context(), agent.ID)
+	if len(skills) > 0 {
+		resp.Skills = make([]SkillResponse, len(skills))
+		for i, s := range skills {
+			resp.Skills[i] = skillToResponse(s)
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 type CreateAgentRequest struct {
@@ -157,7 +177,6 @@ type CreateAgentRequest struct {
 	RuntimeConfig      any     `json:"runtime_config"`
 	Visibility         string  `json:"visibility"`
 	MaxConcurrentTasks int32   `json:"max_concurrent_tasks"`
-	Skills             string  `json:"skills"`
 	Tools              any     `json:"tools"`
 	Triggers           any     `json:"triggers"`
 }
@@ -229,7 +248,6 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		Visibility:         req.Visibility,
 		MaxConcurrentTasks: req.MaxConcurrentTasks,
 		OwnerID:            parseUUID(ownerID),
-		Skills:             req.Skills,
 		Tools:              tools,
 		Triggers:           triggers,
 	})
@@ -243,52 +261,7 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		agent, _ = h.Queries.GetAgent(r.Context(), agent.ID)
 	}
 
-	// Best-effort: create an initialization issue assigned to the new agent.
-	h.createAgentInitIssue(r.Context(), agent, parseUUID(ownerID))
-
 	writeJSON(w, http.StatusCreated, agentToResponse(agent))
-}
-
-// createAgentInitIssue creates an initialization issue assigned to a newly created agent.
-// It incorporates workspace context so the agent can set up its environment.
-// Failures are silently ignored — the agent creation itself has already succeeded.
-func (h *Handler) createAgentInitIssue(ctx context.Context, agent db.Agent, creatorID pgtype.UUID) {
-	ws, err := h.Queries.GetWorkspace(ctx, agent.WorkspaceID)
-	if err != nil {
-		return
-	}
-
-	var desc string
-	if ws.Context.Valid && ws.Context.String != "" {
-		desc = fmt.Sprintf("Initialize the development environment for agent **%s**.\n\n## Workspace Context\n\n%s\n\n## Instructions\n\n- Set up the local development environment based on the workspace context above\n- Clone and configure any referenced repositories\n- Verify access to the codebase and tools\n- Report back on what was set up and any issues encountered", agent.Name, ws.Context.String)
-	} else {
-		desc = fmt.Sprintf("Initialize the development environment for agent **%s**.\n\n## Instructions\n\n- Explore the local working directory and understand the project structure\n- Verify access to the codebase and tools\n- Report back on what was found and any issues encountered", agent.Name)
-	}
-
-	issue, err := h.Queries.CreateIssue(ctx, db.CreateIssueParams{
-		WorkspaceID:        agent.WorkspaceID,
-		Title:              "Initialize environment for " + agent.Name,
-		Description:        strToText(desc),
-		Status:             "todo",
-		Priority:           "medium",
-		AssigneeType:       pgtype.Text{String: "agent", Valid: true},
-		AssigneeID:         agent.ID,
-		CreatorType:        "member",
-		CreatorID:          creatorID,
-		AcceptanceCriteria: []byte("[]"),
-		ContextRefs:        []byte("[]"),
-		Position:           0,
-	})
-	if err != nil {
-		return
-	}
-
-	h.broadcast("issue:created", map[string]any{"issue": issueToResponse(issue)})
-
-	// Enqueue the task directly — we know the agent is assigned and status is "todo".
-	if _, err := h.TaskService.EnqueueTaskForIssue(ctx, issue); err != nil {
-		log.Printf("createAgentInitIssue: enqueue task failed for issue %s: %v", issue.Title, err)
-	}
 }
 
 type UpdateAgentRequest struct {
@@ -300,7 +273,6 @@ type UpdateAgentRequest struct {
 	Visibility         *string `json:"visibility"`
 	Status             *string `json:"status"`
 	MaxConcurrentTasks *int32  `json:"max_concurrent_tasks"`
-	Skills             *string `json:"skills"`
 	Tools              any     `json:"tools"`
 	Triggers           any     `json:"triggers"`
 }
@@ -357,9 +329,6 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.MaxConcurrentTasks != nil {
 		params.MaxConcurrentTasks = pgtype.Int4{Int32: *req.MaxConcurrentTasks, Valid: true}
-	}
-	if req.Skills != nil {
-		params.Skills = pgtype.Text{String: *req.Skills, Valid: true}
 	}
 	if req.Tools != nil {
 		tools, _ := json.Marshal(req.Tools)

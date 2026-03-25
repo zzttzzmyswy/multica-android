@@ -12,6 +12,11 @@ export type {
   RuntimeDevice,
   CreateAgentRequest,
   UpdateAgentRequest,
+  Skill,
+  SkillFile,
+  CreateSkillRequest,
+  UpdateSkillRequest,
+  SetAgentSkillsRequest,
 } from "./agent.js";
 export type { Workspace, Member, MemberRole, User, MemberWithUser } from "./workspace.js";
 export type { InboxItem, InboxSeverity, InboxItemType } from "./inbox.js";
