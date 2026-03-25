@@ -62,6 +62,7 @@ func TestMain(m *testing.M) {
 	go hub.Run()
 
 	bus := events.New()
+	registerListeners(bus, hub)
 	router := NewRouter(pool, hub, bus)
 	testServer = httptest.NewServer(router)
 
