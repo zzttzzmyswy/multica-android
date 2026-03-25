@@ -105,6 +105,37 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateComment(w http.ResponseWriter, r *http.Request) {
 	commentId := chi.URLParam(r, "commentId")
 
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return
+	}
+
+	// Load comment to check ownership
+	existing, err := h.Queries.GetComment(r.Context(), parseUUID(commentId))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "comment not found")
+		return
+	}
+
+	// Load issue to get workspace
+	issue, err := h.Queries.GetIssue(r.Context(), existing.IssueID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "comment not found")
+		return
+	}
+
+	member, ok := h.requireWorkspaceMember(w, r, uuidToString(issue.WorkspaceID), "comment not found")
+	if !ok {
+		return
+	}
+
+	isAuthor := existing.AuthorType == "member" && uuidToString(existing.AuthorID) == userID
+	isAdmin := roleAllowed(member.Role, "owner", "admin")
+	if !isAuthor && !isAdmin {
+		writeError(w, http.StatusForbidden, "only comment author or admin can edit")
+		return
+	}
+
 	var req struct {
 		Content string `json:"content"`
 	}
@@ -127,17 +158,17 @@ func (h *Handler) UpdateComment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := commentToResponse(comment)
-	userID := requestUserID(r)
-	workspaceID := ""
-	if issue, err := h.Queries.GetIssue(r.Context(), comment.IssueID); err == nil {
-		workspaceID = uuidToString(issue.WorkspaceID)
-	}
-	h.publish(protocol.EventCommentUpdated, workspaceID, "member", userID, map[string]any{"comment": resp})
+	h.publish(protocol.EventCommentUpdated, uuidToString(issue.WorkspaceID), "member", userID, map[string]any{"comment": resp})
 	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *Handler) DeleteComment(w http.ResponseWriter, r *http.Request) {
 	commentId := chi.URLParam(r, "commentId")
+
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return
+	}
 
 	// Get the comment first to know the issue_id for the broadcast
 	comment, err := h.Queries.GetComment(r.Context(), parseUUID(commentId))
@@ -146,17 +177,31 @@ func (h *Handler) DeleteComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Load issue to get workspace
+	issue, err := h.Queries.GetIssue(r.Context(), comment.IssueID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "comment not found")
+		return
+	}
+
+	member, ok := h.requireWorkspaceMember(w, r, uuidToString(issue.WorkspaceID), "comment not found")
+	if !ok {
+		return
+	}
+
+	isAuthor := comment.AuthorType == "member" && uuidToString(comment.AuthorID) == userID
+	isAdmin := roleAllowed(member.Role, "owner", "admin")
+	if !isAuthor && !isAdmin {
+		writeError(w, http.StatusForbidden, "only comment author or admin can delete")
+		return
+	}
+
 	if err := h.Queries.DeleteComment(r.Context(), parseUUID(commentId)); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete comment")
 		return
 	}
 
-	userID := requestUserID(r)
-	workspaceID := ""
-	if issue, err := h.Queries.GetIssue(r.Context(), comment.IssueID); err == nil {
-		workspaceID = uuidToString(issue.WorkspaceID)
-	}
-	h.publish(protocol.EventCommentDeleted, workspaceID, "member", userID, map[string]any{
+	h.publish(protocol.EventCommentDeleted, uuidToString(issue.WorkspaceID), "member", userID, map[string]any{
 		"comment_id": commentId,
 		"issue_id":   uuidToString(comment.IssueID),
 	})

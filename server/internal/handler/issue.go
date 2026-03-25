@@ -458,6 +458,8 @@ func (h *Handler) DeleteIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.TaskService.CancelTasksForIssue(r.Context(), issue.ID)
+
 	err := h.Queries.DeleteIssue(r.Context(), parseUUID(id))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete issue")

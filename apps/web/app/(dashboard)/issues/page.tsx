@@ -22,7 +22,7 @@ import {
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Issue, IssueStatus, IssuePriority } from "@multica/types";
-import { STATUS_CONFIG, PRIORITY_CONFIG, ALL_STATUSES, PRIORITY_ORDER } from "@/features/issues/config";
+import { STATUS_CONFIG, PRIORITY_CONFIG, ALL_STATUSES, PRIORITY_ORDER, STATUS_ORDER } from "@/features/issues/config";
 import {
   Dialog,
   DialogContent,
@@ -43,7 +43,7 @@ import {
   SelectGroup,
 } from "@/components/ui/select";
 import { ActorAvatar } from "@/components/common/actor-avatar";
-import { StatusIcon, PriorityIcon } from "@/features/issues/components";
+import { StatusIcon, PriorityIcon, AssigneePicker } from "@/features/issues/components";
 import { api } from "@/shared/api";
 import { useActorName } from "@/features/workspace";
 
@@ -118,13 +118,10 @@ function DraggableBoardCard({ issue }: { issue: Issue }) {
       {...attributes}
       {...listeners}
       className={isDragging ? "opacity-30" : ""}
-      onClickCapture={(e) => {
-        if (isDragging) e.stopPropagation();
-      }}
     >
       <Link
         href={`/issues/${issue.id}`}
-        className="block transition-colors hover:opacity-80"
+        className={`block transition-colors hover:opacity-80 ${isDragging ? "pointer-events-none" : ""}`}
       >
         <BoardCardContent issue={issue} />
       </Link>
@@ -155,7 +152,7 @@ function DroppableColumn({
       </div>
       <div
         ref={setNodeRef}
-        className={`flex-1 space-y-1.5 overflow-y-auto rounded-lg p-1 transition-colors ${
+        className={`min-h-[200px] flex-1 space-y-1.5 overflow-y-auto rounded-lg p-1 transition-colors ${
           isOver ? "bg-accent/40" : ""
         }`}
       >
@@ -192,6 +189,7 @@ function BoardView({
     "in_progress",
     "in_review",
     "done",
+    "blocked",
   ];
 
   const handleDragStart = useCallback(
@@ -292,13 +290,7 @@ function ListRow({ issue }: { issue: Issue }) {
 }
 
 function ListView({ issues }: { issues: Issue[] }) {
-  const groupOrder: IssueStatus[] = [
-    "in_review",
-    "in_progress",
-    "todo",
-    "backlog",
-    "done",
-  ];
+  const groupOrder = STATUS_ORDER.filter((s) => s !== "cancelled");
 
   return (
     <div className="overflow-y-auto">
@@ -334,12 +326,16 @@ function CreateIssueDialog({ onCreated }: { onCreated: (issue: Issue) => void })
   const [status, setStatus] = useState<IssueStatus>("todo");
   const [priority, setPriority] = useState<IssuePriority>("none");
   const [submitting, setSubmitting] = useState(false);
+  const [assigneeType, setAssigneeType] = useState<string | undefined>();
+  const [assigneeId, setAssigneeId] = useState<string | undefined>();
 
   const reset = () => {
     setTitle("");
     setDescription("");
     setStatus("todo");
     setPriority("none");
+    setAssigneeType(undefined);
+    setAssigneeId(undefined);
   };
 
   const handleSubmit = async () => {
@@ -351,6 +347,8 @@ function CreateIssueDialog({ onCreated }: { onCreated: (issue: Issue) => void })
         description: description.trim() || undefined,
         status,
         priority,
+        assignee_type: assigneeType,
+        assignee_id: assigneeId,
       });
       onCreated(issue);
       reset();
@@ -422,6 +420,15 @@ function CreateIssueDialog({ onCreated }: { onCreated: (issue: Issue) => void })
                 ))}
               </SelectContent>
             </Select>
+            {/* Assignee picker */}
+            <AssigneePicker
+              assigneeType={assigneeType ?? null}
+              assigneeId={assigneeId ?? null}
+              onUpdate={(updates) => {
+                setAssigneeType(updates.assignee_type ?? undefined);
+                setAssigneeId(updates.assignee_id ?? undefined);
+              }}
+            />
           </div>
         </div>
         <DialogFooter>

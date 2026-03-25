@@ -38,6 +38,7 @@ import { api } from "@/shared/api";
 import { useAuthStore } from "@/features/auth";
 import { useActorName } from "@/features/workspace";
 import { useWSEvent } from "@/features/realtime";
+import { useIssueStore } from "@multica/store";
 import type { CommentCreatedPayload, CommentUpdatedPayload, CommentDeletedPayload } from "@multica/types";
 
 // ---------------------------------------------------------------------------
@@ -290,6 +291,15 @@ export default function IssueDetailPage({
   const [deleting, setDeleting] = useState(false);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
+
+  // Watch the global issue store for real-time updates from other users/agents
+  const storeIssue = useIssueStore((s) => s.issues.find((i) => i.id === id));
+
+  useEffect(() => {
+    if (storeIssue) {
+      setIssue(storeIssue);
+    }
+  }, [storeIssue]);
 
   useEffect(() => {
     setIssue(null);
