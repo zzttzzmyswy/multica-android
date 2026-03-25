@@ -21,7 +21,7 @@ import {
 } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { Issue, IssueStatus, IssuePriority } from "@multica/types";
+import type { Issue, IssueStatus, IssuePriority, IssueAssigneeType } from "@multica/types";
 import { STATUS_CONFIG, PRIORITY_CONFIG, ALL_STATUSES, PRIORITY_ORDER, STATUS_ORDER } from "@/features/issues/config";
 import {
   Dialog,
@@ -326,7 +326,7 @@ function CreateIssueDialog({ onCreated }: { onCreated: (issue: Issue) => void })
   const [status, setStatus] = useState<IssueStatus>("todo");
   const [priority, setPriority] = useState<IssuePriority>("none");
   const [submitting, setSubmitting] = useState(false);
-  const [assigneeType, setAssigneeType] = useState<string | undefined>();
+  const [assigneeType, setAssigneeType] = useState<IssueAssigneeType | undefined>();
   const [assigneeId, setAssigneeId] = useState<string | undefined>();
 
   const reset = () => {

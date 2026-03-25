@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
+import { useInboxStore } from "@multica/store";
 
 const navItems = [
   { href: "/inbox", label: "Inbox", icon: Inbox },
@@ -65,6 +66,10 @@ export function AppSidebar() {
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const switchWorkspace = useWorkspaceStore((s) => s.switchWorkspace);
   const createWorkspace = useWorkspaceStore((s) => s.createWorkspace);
+
+  const unreadCount = useInboxStore((s) =>
+    s.items.filter((i) => !i.read && !i.archived).length
+  );
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newName, setNewName] = useState("");
@@ -200,6 +205,11 @@ export function AppSidebar() {
                       >
                         <item.icon />
                         <span>{item.label}</span>
+                        {item.label === "Inbox" && unreadCount > 0 && (
+                          <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
+                            {unreadCount > 99 ? "99+" : unreadCount}
+                          </span>
+                        )}
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   );

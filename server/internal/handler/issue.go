@@ -385,6 +385,25 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 
 	// If assignee changed, create a notification for the new assignee.
 	if assigneeChanged {
+		// Notify old assignee about unassignment
+		if prevIssue.AssigneeID.Valid && prevIssue.AssigneeType.Valid &&
+			prevIssue.AssigneeType.String == "member" && uuidToString(prevIssue.AssigneeID) != userID {
+			oldInbox, oErr := h.Queries.CreateInboxItem(r.Context(), db.CreateInboxItemParams{
+				WorkspaceID:   prevIssue.WorkspaceID,
+				RecipientType: "member",
+				RecipientID:   prevIssue.AssigneeID,
+				Type:          "status_change",
+				Severity:      "info",
+				IssueID:       prevIssue.ID,
+				Title:         "Unassigned from: " + issue.Title,
+				Body:          ptrToText(nil),
+			})
+			if oErr == nil {
+				h.publish(protocol.EventInboxNew, workspaceID, "member", userID,
+					map[string]any{"item": inboxToResponse(oldInbox)})
+			}
+		}
+
 		// Create inbox notification for new assignee
 		if issue.AssigneeType.Valid && issue.AssigneeID.Valid {
 			inboxItem, err := h.Queries.CreateInboxItem(r.Context(), db.CreateInboxItemParams{
@@ -416,6 +435,28 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 			})
 			if err == nil {
 				h.publish(protocol.EventInboxNew, workspaceID, "member", userID, map[string]any{"item": inboxToResponse(inboxItem)})
+			}
+		}
+
+		// Notify creator about status change (if creator is member and != the person making change)
+		if prevIssue.CreatorType == "member" && uuidToString(prevIssue.CreatorID) != userID {
+			// Don't double-notify if creator is also the assignee
+			isAlsoAssignee := prevIssue.AssigneeID.Valid && uuidToString(prevIssue.AssigneeID) == uuidToString(prevIssue.CreatorID)
+			if !isAlsoAssignee {
+				creatorInbox, cErr := h.Queries.CreateInboxItem(r.Context(), db.CreateInboxItemParams{
+					WorkspaceID:   prevIssue.WorkspaceID,
+					RecipientType: "member",
+					RecipientID:   prevIssue.CreatorID,
+					Type:          "status_change",
+					Severity:      "info",
+					IssueID:       prevIssue.ID,
+					Title:         "Status changed: " + issue.Title,
+					Body:          ptrToText(nil),
+				})
+				if cErr == nil {
+					h.publish(protocol.EventInboxNew, workspaceID, "member", userID,
+						map[string]any{"item": inboxToResponse(creatorInbox)})
+				}
 			}
 		}
 	}

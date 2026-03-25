@@ -120,3 +120,21 @@ func (h *Handler) ArchiveInboxItem(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, inboxToResponse(item))
 }
+
+func (h *Handler) CountUnreadInbox(w http.ResponseWriter, r *http.Request) {
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return
+	}
+
+	count, err := h.Queries.CountUnreadInbox(r.Context(), db.CountUnreadInboxParams{
+		RecipientType: "member",
+		RecipientID:   parseUUID(userID),
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to count unread inbox")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]int64{"count": count})
+}

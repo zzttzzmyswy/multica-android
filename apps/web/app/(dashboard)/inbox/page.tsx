@@ -12,6 +12,7 @@ import {
   ArrowRightLeft,
 } from "lucide-react";
 import type { InboxItem, InboxItemType, InboxSeverity } from "@multica/types";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { api } from "@/shared/api";
 
@@ -98,9 +99,11 @@ function InboxListItem({
 function InboxDetail({
   item,
   onMarkRead,
+  onArchive,
 }: {
   item: InboxItem;
   onMarkRead: (id: string) => void;
+  onArchive: (id: string) => void;
 }) {
   const Icon = typeIcons[item.type] ?? CircleDot;
   const colorClass = severityColors[item.severity];
@@ -134,6 +137,22 @@ function InboxDetail({
             Mark read
           </Button>
         )}
+        {item.issue_id && (
+          <Link
+            href={`/issues/${item.issue_id}`}
+            className="inline-flex h-7 shrink-0 items-center rounded-md border px-2.5 text-xs font-medium transition-colors hover:bg-accent"
+          >
+            View Issue
+          </Link>
+        )}
+        <Button
+          variant="outline"
+          size="xs"
+          onClick={() => onArchive(item.id)}
+          className="shrink-0"
+        >
+          Archive
+        </Button>
       </div>
 
       {/* Body */}
@@ -189,6 +208,19 @@ export default function InboxPage() {
     }
   };
 
+  const handleArchive = async (id: string) => {
+    try {
+      await api.archiveInbox(id);
+      useInboxStore.getState().archive(id);
+      // If archived item was selected, clear selection
+      if (selectedId === id) {
+        setSelectedId("");
+      }
+    } catch (err) {
+      console.error("Failed to archive:", err);
+    }
+  };
+
   const selected = items.find((i) => i.id === selectedId) ?? null;
   const unreadCount = items.filter((i) => !i.read).length;
 
@@ -233,7 +265,7 @@ export default function InboxPage() {
       {/* Right column — detail */}
       <div className="flex-1 overflow-y-auto">
         {selected ? (
-          <InboxDetail item={selected} onMarkRead={handleMarkRead} />
+          <InboxDetail item={selected} onMarkRead={handleMarkRead} onArchive={handleArchive} />
         ) : (
           <div className="flex h-full items-center justify-center text-muted-foreground">
             {items.length === 0
