@@ -2,10 +2,6 @@ version: 2
 
 project_name: multica
 
-before:
-  hooks:
-    - cd server && go mod tidy
-
 builds:
   - id: multica
     main: ./cmd/multica
