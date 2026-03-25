@@ -338,11 +338,19 @@ func (h *Handler) CreateMember(w http.ResponseWriter, r *http.Request) {
 	user, err := h.Queries.GetUserByEmail(r.Context(), email)
 	if err != nil {
 		if isNotFound(err) {
-			writeError(w, http.StatusNotFound, "user not found")
+			// Auto-create user with email so they can be invited before signing up
+			user, err = h.Queries.CreateUser(r.Context(), db.CreateUserParams{
+				Name:  email,
+				Email: email,
+			})
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "failed to create user")
+				return
+			}
+		} else {
+			writeError(w, http.StatusInternalServerError, "failed to load user")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "failed to load user")
-		return
 	}
 
 	member, err := h.Queries.CreateMember(r.Context(), db.CreateMemberParams{

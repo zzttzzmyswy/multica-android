@@ -393,6 +393,11 @@ func (h *Handler) DeleteAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	wsID := uuidToString(agent.WorkspaceID)
 
+	// Require owner or admin role
+	if _, ok := h.requireWorkspaceRole(w, r, wsID, "agent not found", "owner", "admin"); !ok {
+		return
+	}
+
 	err := h.Queries.DeleteAgent(r.Context(), parseUUID(id))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete agent")
@@ -406,6 +411,10 @@ func (h *Handler) DeleteAgent(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListAgentTasks(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if _, ok := h.loadAgentForUser(w, r, id); !ok {
+		return
+	}
+
 	tasks, err := h.Queries.ListAgentTasks(r.Context(), parseUUID(id))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list agent tasks")

@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import type { Workspace, MemberWithUser, Agent } from "@multica/types";
+import { useIssueStore, useInboxStore, useAgentStore } from "@multica/store";
 import { api } from "@/shared/api";
 
 interface WorkspaceState {
@@ -75,6 +76,11 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     const { workspaces, hydrateWorkspace } = get();
     const ws = workspaces.find((item) => item.id === workspaceId);
     if (!ws) return;
+
+    // Clear stale data from other stores before switching
+    useIssueStore.getState().setIssues([]);
+    useInboxStore.getState().setItems([]);
+    useAgentStore.getState().setAgents([]);
 
     await hydrateWorkspace(workspaces, ws.id);
   },
