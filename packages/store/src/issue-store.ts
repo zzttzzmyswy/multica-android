@@ -15,7 +15,12 @@ export const useIssueStore = create<IssueState>((set) => ({
   issues: [],
   activeIssueId: null,
   setIssues: (issues) => set({ issues }),
-  addIssue: (issue) => set((s) => ({ issues: [...s.issues, issue] })),
+  addIssue: (issue) =>
+    set((s) => ({
+      issues: s.issues.some((i) => i.id === issue.id)
+        ? s.issues
+        : [...s.issues, issue],
+    })),
   updateIssue: (id, updates) =>
     set((s) => ({
       issues: s.issues.map((i) => (i.id === id ? { ...i, ...updates } : i)),

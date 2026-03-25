@@ -1,0 +1,59 @@
+{
+  "id": "workspace-permissions",
+  "name": "Workspace & Permissions",
+  "status": "designing",
+  "createdAt": "2026-03-25",
+  "completedAt": null,
+  "description": "Complete workspace management with proper permission enforcement, member invitation flow, and consistent settings UI using shadcn components.",
+  "currentState": "Workspace CRUD works. Member add requires pre-existing user (no invite flow). DeleteAgent has no workspace check. Comment edit/delete has no author check. Settings page uses raw textarea for context field. Workspace switch doesn't refetch all data.",
+  "decisions": [
+    "Auth stays simple: email-only login, auto-create user, 72h JWT, no refresh token for MVP",
+    "Member invite: if user doesn't exist, backend auto-creates user record with email-only, they become member immediately",
+    "3 roles (owner/admin/member) sufficient for MVP, no custom permissions table",
+    "Owner: full control. Admin: manage members + agents + settings. Member: CRUD issues + comments.",
+    "All permission checks centralized in handler helpers, enforced at API level",
+    "Workspace switch triggers full data refresh: disconnect WS, clear stores, reconnect with new workspace_id, refetch all"
+  ],
+  "tasks": [
+    {
+      "task": "Backend: Fix DeleteAgent workspace + role check",
+      "done": false,
+      "scope": "DeleteAgent calls loadAgentForUser (workspace membership check) before deletion. Also calls CancelAgentTasksByIssue for all agent's assigned issues. Requires owner or admin role."
+    },
+    {
+      "task": "Backend: Fix ListAgentTasks workspace check",
+      "done": false,
+      "scope": "ListAgentTasks verifies agent belongs to user's workspace via loadAgentForUser before returning tasks."
+    },
+    {
+      "task": "Backend: Member invite auto-creates user if not found",
+      "done": false,
+      "scope": "CreateMember handler: if GetUserByEmail returns not found, call CreateUser(email, '') to create stub user, then proceed to add as member. Return 201 with member data."
+    },
+    {
+      "task": "Backend: Agent visibility filtering",
+      "done": false,
+      "scope": "ListAgents filters private agents: only visible to agent owner_id or workspace owner/admin. Other members only see workspace-visible agents."
+    },
+    {
+      "task": "Frontend: Settings page use shadcn components consistently",
+      "done": false,
+      "scope": "Replace raw textarea with shadcn Textarea for context field. All inputs use shadcn Input. Form validation: workspace name required, show inline errors. All buttons use shadcn Button with loading state."
+    },
+    {
+      "task": "Frontend: Workspace switcher error handling and feedback",
+      "done": false,
+      "scope": "Create workspace shows error toast on failure (including slug collision). Workspace list sorted alphabetically. Current workspace highlighted with check icon."
+    },
+    {
+      "task": "Frontend: Workspace switch triggers full data refresh",
+      "done": false,
+      "scope": "switchWorkspace action: disconnects WS, clears issue/inbox/agent stores, sets new workspace_id on API client, reconnects WS with new workspace, refetches all data."
+    },
+    {
+      "task": "Frontend: Member management UX improvements",
+      "done": false,
+      "scope": "Add member shows success/error toast. Email validation before submit. 'Already a member' error shown inline. Remove member confirmation uses AlertDialog. All operations show loading state on button."
+    }
+  ]
+}

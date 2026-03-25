@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
 type CommentResponse struct {
@@ -97,7 +98,7 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := commentToResponse(comment)
-	h.broadcast("comment:created", map[string]any{"comment": resp})
+	h.publish(protocol.EventCommentCreated, uuidToString(issue.WorkspaceID), "member", userID, map[string]any{"comment": resp})
 	writeJSON(w, http.StatusCreated, resp)
 }
 
@@ -126,7 +127,12 @@ func (h *Handler) UpdateComment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := commentToResponse(comment)
-	h.broadcast("comment:updated", map[string]any{"comment": resp})
+	userID := requestUserID(r)
+	workspaceID := ""
+	if issue, err := h.Queries.GetIssue(r.Context(), comment.IssueID); err == nil {
+		workspaceID = uuidToString(issue.WorkspaceID)
+	}
+	h.publish(protocol.EventCommentUpdated, workspaceID, "member", userID, map[string]any{"comment": resp})
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -145,7 +151,12 @@ func (h *Handler) DeleteComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.broadcast("comment:deleted", map[string]any{
+	userID := requestUserID(r)
+	workspaceID := ""
+	if issue, err := h.Queries.GetIssue(r.Context(), comment.IssueID); err == nil {
+		workspaceID = uuidToString(issue.WorkspaceID)
+	}
+	h.publish(protocol.EventCommentDeleted, workspaceID, "member", userID, map[string]any{
 		"comment_id": commentId,
 		"issue_id":   uuidToString(comment.IssueID),
 	})

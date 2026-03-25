@@ -13,7 +13,12 @@ interface InboxState {
 export const useInboxStore = create<InboxState>((set, get) => ({
   items: [],
   setItems: (items) => set({ items }),
-  addItem: (item) => set((s) => ({ items: [item, ...s.items] })),
+  addItem: (item) =>
+    set((s) => ({
+      items: s.items.some((i) => i.id === item.id)
+        ? s.items
+        : [item, ...s.items],
+    })),
   markRead: (id) =>
     set((s) => ({
       items: s.items.map((i) => (i.id === id ? { ...i, read: true } : i)),

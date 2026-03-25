@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
 // IssueResponse is the JSON response for an issue.
@@ -233,7 +234,7 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := issueToResponse(issue)
-	h.broadcast("issue:created", map[string]any{"issue": resp})
+	h.publish(protocol.EventIssueCreated, workspaceID, "member", creatorID, map[string]any{"issue": resp})
 
 	// Create inbox notification for assignee
 	if issue.AssigneeType.Valid && issue.AssigneeID.Valid {
@@ -248,7 +249,7 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 			Body:          ptrToText(req.Description),
 		})
 		if err == nil {
-			h.broadcast("inbox:new", map[string]any{"item": inboxToResponse(inboxItem)})
+			h.publish(protocol.EventInboxNew, workspaceID, "member", creatorID, map[string]any{"item": inboxToResponse(inboxItem)})
 		}
 
 		// Only ready issues in todo are enqueued for agents.
@@ -279,6 +280,8 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	userID := requestUserID(r)
+	workspaceID := uuidToString(prevIssue.WorkspaceID)
 
 	// Read body as raw bytes so we can detect which fields were explicitly sent.
 	bodyBytes, err := io.ReadAll(r.Body)
@@ -365,7 +368,7 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := issueToResponse(issue)
-	h.broadcast("issue:updated", map[string]any{"issue": resp})
+	h.publish(protocol.EventIssueUpdated, workspaceID, "member", userID, map[string]any{"issue": resp})
 
 	assigneeChanged := (req.AssigneeType != nil || req.AssigneeID != nil) &&
 		(prevIssue.AssigneeType.String != issue.AssigneeType.String || uuidToString(prevIssue.AssigneeID) != uuidToString(issue.AssigneeID))
@@ -394,7 +397,7 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 				Title:         "Assigned to you: " + issue.Title,
 			})
 			if err == nil {
-				h.broadcast("inbox:new", map[string]any{"item": inboxToResponse(inboxItem)})
+				h.publish(protocol.EventInboxNew, workspaceID, "member", userID, map[string]any{"item": inboxToResponse(inboxItem)})
 			}
 		}
 	}
@@ -412,7 +415,7 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 				Title:         issue.Title + " moved to " + *req.Status,
 			})
 			if err == nil {
-				h.broadcast("inbox:new", map[string]any{"item": inboxToResponse(inboxItem)})
+				h.publish(protocol.EventInboxNew, workspaceID, "member", userID, map[string]any{"item": inboxToResponse(inboxItem)})
 			}
 		}
 	}
@@ -450,7 +453,8 @@ func (h *Handler) shouldEnqueueAgentTask(ctx context.Context, issue db.Issue) bo
 
 func (h *Handler) DeleteIssue(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if _, ok := h.loadIssueForUser(w, r, id); !ok {
+	issue, ok := h.loadIssueForUser(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -460,6 +464,7 @@ func (h *Handler) DeleteIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.broadcast("issue:deleted", map[string]any{"issue_id": id})
+	userID := requestUserID(r)
+	h.publish(protocol.EventIssueDeleted, uuidToString(issue.WorkspaceID), "member", userID, map[string]any{"issue_id": id})
 	w.WriteHeader(http.StatusNoContent)
 }

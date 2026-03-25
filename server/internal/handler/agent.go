@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
 type AgentResponse struct {
@@ -246,7 +247,9 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 	// Best-effort: create an initialization issue assigned to the new agent.
 	h.createAgentInitIssue(r.Context(), agent, parseUUID(ownerID))
 
-	writeJSON(w, http.StatusCreated, agentToResponse(agent))
+	resp := agentToResponse(agent)
+	h.publish(protocol.EventAgentCreated, workspaceID, "member", ownerID, map[string]any{"agent": resp})
+	writeJSON(w, http.StatusCreated, resp)
 }
 
 // createAgentInitIssue creates an initialization issue assigned to a newly created agent.
@@ -283,7 +286,7 @@ func (h *Handler) createAgentInitIssue(ctx context.Context, agent db.Agent, crea
 		return
 	}
 
-	h.broadcast("issue:created", map[string]any{"issue": issueToResponse(issue)})
+	h.publish(protocol.EventIssueCreated, uuidToString(agent.WorkspaceID), "system", "", map[string]any{"issue": issueToResponse(issue)})
 
 	// Enqueue the task directly — we know the agent is assigned and status is "todo".
 	if _, err := h.TaskService.EnqueueTaskForIssue(ctx, issue); err != nil {
@@ -377,17 +380,27 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := agentToResponse(agent)
-	h.broadcast("agent:status", map[string]any{"agent": resp})
+	userID := requestUserID(r)
+	h.publish(protocol.EventAgentStatus, uuidToString(agent.WorkspaceID), "member", userID, map[string]any{"agent": resp})
 	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *Handler) DeleteAgent(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	agent, ok := h.loadAgentForUser(w, r, id)
+	if !ok {
+		return
+	}
+	wsID := uuidToString(agent.WorkspaceID)
+
 	err := h.Queries.DeleteAgent(r.Context(), parseUUID(id))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete agent")
 		return
 	}
+
+	userID := requestUserID(r)
+	h.publish(protocol.EventAgentDeleted, wsID, "member", userID, map[string]any{"agent_id": id, "workspace_id": wsID})
 	w.WriteHeader(http.StatusNoContent)
 }
 

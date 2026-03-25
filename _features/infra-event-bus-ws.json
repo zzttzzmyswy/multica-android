@@ -1,0 +1,78 @@
+{
+  "id": "infra-event-bus-ws",
+  "name": "Infrastructure: Event Bus + WS Isolation + Global Store",
+  "status": "done",
+  "createdAt": "2026-03-25",
+  "completedAt": "2026-03-25",
+  "description": "Foundation layer: internal event bus to decouple handlers from side-effects, WebSocket workspace isolation to fix multi-tenancy data leakage, and frontend global Zustand store with centralized WS sync.",
+  "currentState": "All tasks complete. Backend: Event Bus (server/internal/events/bus.go) with pub/sub + panic isolation, Hub upgraded to workspace-scoped rooms with JWT auth, all 11 handler broadcast calls replaced with Bus.Publish, 10 new event types added, inbox/workspace/agent handlers now emit events. Frontend: WSClient sends token+workspace_id, useRealtimeSync hook centralizes WS→store sync with reconnect refetch, issues/inbox pages migrated to global stores, dead use-realtime.ts removed. Go build + typecheck both pass.",
+  "decisions": [
+    "Event bus is in-process Go pub/sub (not external MQ), synchronous execution with recover isolation",
+    "Hub upgraded to room-based: map[workspaceID]map[*Client]bool, BroadcastToWorkspace replaces Broadcast",
+    "WS auth via query param ?token=xxx&workspace_id=yyy, parsed in HandleWebSocket before upgrade",
+    "Client struct gains userID + workspaceID fields, set during WS handshake",
+    "Frontend uses packages/store (useIssueStore, useInboxStore, useAgentStore) as single source of truth",
+    "useRealtimeSync() called once inside WSProvider, handles all WS event -> store updates",
+    "WS reconnect triggers refetch of issues + inbox + agents to recover missed events",
+    "Comment events stay page-local on issue detail page (not in global store)",
+    "Inbox creation stays in handlers and TaskService for now (complex business logic), will extract to bus listeners later",
+    "Broadcast() kept for daemon events (no workspace scope), BroadcastToWorkspace() for all user-facing events"
+  ],
+  "tasks": [
+    {
+      "task": "Backend: Create internal event bus (server/internal/events/bus.go)",
+      "done": true,
+      "scope": "Bus struct with Publish/Subscribe, Event type with Type/WorkspaceID/ActorType/ActorID/Payload. Synchronous dispatch with recover per listener. Unit test for pub/sub + panic isolation."
+    },
+    {
+      "task": "Backend: Register event listeners for WS broadcast",
+      "done": true,
+      "scope": "Listener that receives any event and calls Hub.BroadcastToWorkspace. Covers: issue CRUD, comment CRUD, agent status, inbox new/read/archive, task lifecycle events."
+    },
+    {
+      "task": "Backend: Register event listeners for inbox creation",
+      "done": false,
+      "scope": "Deferred: inbox creation stays in handlers/TaskService for now. Will extract to bus listeners when adding new notification triggers (inbox-notifications feature)."
+    },
+    {
+      "task": "Backend: Refactor handlers to publish events instead of direct broadcast/inbox",
+      "done": true,
+      "scope": "All handlers (issue, comment, agent, inbox, workspace, daemon) emit events via bus.Publish. Remove direct h.broadcast() calls. Task service also emits events via Bus.Publish."
+    },
+    {
+      "task": "Backend: Upgrade Hub to workspace-scoped rooms",
+      "done": true,
+      "scope": "Hub.rooms map, Client has userID+workspaceID, BroadcastToWorkspace method. HandleWebSocket validates JWT from ?token query param before upgrade. Reject unauthenticated connections."
+    },
+    {
+      "task": "Backend: Add missing WS event types to protocol",
+      "done": true,
+      "scope": "Added: EventCommentCreated/Updated/Deleted, EventInboxRead, EventInboxArchived, EventAgentCreated, EventAgentDeleted, EventWorkspaceUpdated, EventMemberAdded, EventMemberRemoved to both protocol/events.go and packages/types/src/events.ts."
+    },
+    {
+      "task": "Frontend: WSClient sends token on connect",
+      "done": true,
+      "scope": "WSClient.connect() builds URL with ?token=xxx&workspace_id=yyy. setAuth() method sets credentials. WSProvider reads token from localStorage, workspace from store. Reconnects when workspace changes."
+    },
+    {
+      "task": "Frontend: Implement useRealtimeSync() hook",
+      "done": true,
+      "scope": "Called inside WSProvider. Subscribes to issue/inbox/agent WS events → dispatches to global stores. onReconnect refetches issues+inbox+agents. Comment events excluded (page-local)."
+    },
+    {
+      "task": "Frontend: Migrate issues page from useState to useIssueStore",
+      "done": true,
+      "scope": "Issues page reads from useIssueStore. Filters applied locally via useMemo. Initial fetch populates store. WS event handlers removed (handled by useRealtimeSync). Drag-drop uses store for optimistic updates."
+    },
+    {
+      "task": "Frontend: Migrate inbox page from useState to useInboxStore",
+      "done": true,
+      "scope": "Inbox page reads from useInboxStore. Sorting applied locally via useMemo. WS handler removed. markRead updates store directly."
+    },
+    {
+      "task": "Frontend: Clean up dead store code",
+      "done": true,
+      "scope": "Removed packages/hooks/src/use-realtime.ts. Updated packages/hooks/src/index.ts. No duplicate WS subscriptions remain in pages."
+    }
+  ]
+}

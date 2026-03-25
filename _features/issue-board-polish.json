@@ -1,0 +1,102 @@
+{
+  "id": "issue-board-polish",
+  "name": "Issue Board & Detail Polish",
+  "status": "designing",
+  "createdAt": "2026-03-25",
+  "completedAt": null,
+  "description": "Fix drag-drop data consistency bugs, complete issue detail page interactions, and polish board/list views to Linear MVP quality with consistent shadcn UI.",
+  "currentState": "Board view has 5 columns (missing blocked), drag-drop has 3 data consistency bugs, issue detail title/description not editable, create dialog missing assignee/due date fields, comments lack optimistic updates and author-only edit/delete.",
+  "decisions": [
+    "Board shows 6 columns: backlog, todo, in_progress, in_review, done, blocked. Cancelled issues visible via filter only.",
+    "Drag-drop revert respects current filter params",
+    "WS issue events check against current filter before adding to view",
+    "AbortController used for filter change requests to prevent race conditions",
+    "Issue title: click-to-edit inline input, blur/Enter saves, Escape cancels",
+    "Issue description: click-to-edit textarea, blur saves",
+    "Comment creation uses optimistic update (show immediately, confirm on API response)",
+    "Comment edit/delete only by author or workspace admin (backend enforced)",
+    "All loading/empty/error states use shadcn Skeleton and consistent patterns"
+  ],
+  "tasks": [
+    {
+      "task": "Fix: Board drag-drop revert respects active filters",
+      "done": false,
+      "scope": "When drag-drop API call fails, revert calls listIssues with current filterStatus and filterPriority params instead of bare { limit: 200 }."
+    },
+    {
+      "task": "Fix: WS issue events respect current filter",
+      "done": false,
+      "scope": "issue:created handler checks if new issue matches filterStatus/filterPriority before adding. issue:updated handler removes issue from view if it no longer matches filter."
+    },
+    {
+      "task": "Fix: Filter change race condition with AbortController",
+      "done": false,
+      "scope": "useEffect for filter changes creates AbortController, passes signal to fetch, aborts previous request on new filter change. Stale responses ignored."
+    },
+    {
+      "task": "Fix: Board add blocked column, fix empty column drop target",
+      "done": false,
+      "scope": "visibleStatuses includes 'blocked'. All columns have min-h-[200px] for reliable drop target. Cancelled issues not shown as column but accessible via filter."
+    },
+    {
+      "task": "Fix: Board card click vs drag conflict",
+      "done": false,
+      "scope": "When isDragging is true, Link inside card has pointer-events-none to prevent navigation during drag."
+    },
+    {
+      "task": "Fix: List view status group order matches STATUS_ORDER",
+      "done": false,
+      "scope": "List view groups issues using STATUS_ORDER constant instead of hardcoded different order."
+    },
+    {
+      "task": "Create Issue dialog: add Assignee and Due Date fields",
+      "done": false,
+      "scope": "Dialog includes AssigneePicker and date picker (Calendar popover). Fields passed to api.createIssue(). Existing StatusPicker and PriorityPicker remain."
+    },
+    {
+      "task": "Issue detail: inline editable title",
+      "done": false,
+      "scope": "Title renders as h1. Click transforms to Input. Blur or Enter calls api.updateIssue with optimistic update. Escape reverts. Empty title rejected."
+    },
+    {
+      "task": "Issue detail: inline editable description",
+      "done": false,
+      "scope": "Description renders as paragraph. Click transforms to Textarea. Blur saves with optimistic update. Empty description allowed (clears field)."
+    },
+    {
+      "task": "Issue detail: listen to issue:updated WS event",
+      "done": false,
+      "scope": "Detail page subscribes to issue:updated. When event.issue.id matches current issue, merges update into local state (unless user is actively editing that field)."
+    },
+    {
+      "task": "Issue detail: acceptance criteria and context refs always addable",
+      "done": false,
+      "scope": "Show 'Add acceptance criteria' and 'Add context reference' buttons even when arrays are empty. Click reveals input field."
+    },
+    {
+      "task": "Comment: optimistic create",
+      "done": false,
+      "scope": "On submit, immediately append comment with temp ID and muted styling. On API success, replace temp with real. On API error, remove temp and show toast."
+    },
+    {
+      "task": "Comment: backend author-only edit/delete",
+      "done": false,
+      "scope": "UpdateComment and DeleteComment in comment.go load comment first, verify author_id matches request user OR user is workspace admin. Return 403 otherwise."
+    },
+    {
+      "task": "Comment: hover timestamp shows full date tooltip",
+      "done": false,
+      "scope": "Relative time ('2h ago') wrapped in shadcn Tooltip showing full ISO-formatted date on hover."
+    },
+    {
+      "task": "Issue delete: cancel running tasks first",
+      "done": false,
+      "scope": "DeleteIssue handler calls TaskService.CancelTasksForIssue before deleting issue to prevent FK constraint errors."
+    },
+    {
+      "task": "UI: consistent loading/empty/error states across issues pages",
+      "done": false,
+      "scope": "Board empty columns show 'No issues' muted text. List empty groups hidden. Initial load uses Skeleton. Error shows toast + retry. Filter with no results shows 'No matching issues' with clear filter link."
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useInboxStore } from "@multica/store";
 import {
   AlertCircle,
   Bot,
@@ -10,10 +11,9 @@ import {
   MessageSquare,
   ArrowRightLeft,
 } from "lucide-react";
-import type { InboxItem, InboxItemType, InboxSeverity, InboxNewPayload } from "@multica/types";
+import type { InboxItem, InboxItemType, InboxSeverity } from "@multica/types";
 import { Button } from "@/components/ui/button";
 import { api } from "@/shared/api";
-import { useWSEvent } from "@/features/realtime";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -151,43 +151,39 @@ function InboxDetail({
 // ---------------------------------------------------------------------------
 
 export default function InboxPage() {
-  const [items, setItems] = useState<InboxItem[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
+  // Read from global store (updated by useRealtimeSync)
+  const storeItems = useInboxStore((s) => s.items);
+
+  // Sort: severity first, then newest first
+  const items = useMemo(() => {
+    return [...storeItems]
+      .filter((i) => !i.archived)
+      .sort(
+        (a, b) =>
+          severityOrder[a.severity] - severityOrder[b.severity] ||
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+  }, [storeItems]);
+
+  // Initial fetch → populate store
   useEffect(() => {
     api
       .listInbox()
       .then((data) => {
-        const sorted = [...data].sort(
-          (a, b) =>
-            severityOrder[a.severity] - severityOrder[b.severity] ||
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-        setItems(sorted);
-        if (sorted.length > 0) setSelectedId(sorted[0]!.id);
+        useInboxStore.getState().setItems(data);
+        if (data.length > 0) setSelectedId(data[0]!.id);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
-  useWSEvent(
-    "inbox:new",
-    useCallback((payload: unknown) => {
-      const { item } = payload as InboxNewPayload;
-      setItems((prev) => {
-        if (prev.some((i) => i.id === item.id)) return prev;
-        return [item, ...prev];
-      });
-    }, []),
-  );
-
   const handleMarkRead = async (id: string) => {
     try {
       await api.markInboxRead(id);
-      setItems((prev) =>
-        prev.map((i) => (i.id === id ? { ...i, read: true } : i))
-      );
+      useInboxStore.getState().markRead(id);
     } catch (err) {
       console.error("Failed to mark read:", err);
     }

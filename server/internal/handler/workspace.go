@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
 type WorkspaceResponse struct {
@@ -207,6 +208,9 @@ func (h *Handler) UpdateWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userID := requestUserID(r)
+	h.publish(protocol.EventWorkspaceUpdated, id, "member", userID, map[string]any{"workspace": workspaceToResponse(ws)})
+
 	writeJSON(w, http.StatusOK, workspaceToResponse(ws))
 }
 
@@ -355,6 +359,9 @@ func (h *Handler) CreateMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userID := requestUserID(r)
+	h.publish(protocol.EventMemberAdded, workspaceID, "member", userID, map[string]any{"member": memberWithUserResponse(member, user)})
+
 	writeJSON(w, http.StatusCreated, memberWithUserResponse(member, user))
 }
 
@@ -463,6 +470,13 @@ func (h *Handler) DeleteMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userID := requestUserID(r)
+	h.publish(protocol.EventMemberRemoved, workspaceID, "member", userID, map[string]any{
+		"member_id":    uuidToString(target.ID),
+		"workspace_id": workspaceID,
+		"user_id":      uuidToString(target.UserID),
+	})
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -489,6 +503,13 @@ func (h *Handler) LeaveWorkspace(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to leave workspace")
 		return
 	}
+
+	userID := requestUserID(r)
+	h.publish(protocol.EventMemberRemoved, workspaceID, "member", userID, map[string]any{
+		"member_id":    uuidToString(member.ID),
+		"workspace_id": workspaceID,
+		"user_id":      uuidToString(member.UserID),
+	})
 
 	w.WriteHeader(http.StatusNoContent)
 }

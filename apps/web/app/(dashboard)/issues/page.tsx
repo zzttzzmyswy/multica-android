@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
+import { useIssueStore } from "@multica/store";
 import Link from "next/link";
 import {
   Columns3,
@@ -45,8 +46,6 @@ import { ActorAvatar } from "@/components/common/actor-avatar";
 import { StatusIcon, PriorityIcon } from "@/features/issues/components";
 import { api } from "@/shared/api";
 import { useActorName } from "@/features/workspace";
-import { useWSEvent } from "@/features/realtime";
-import type { IssueCreatedPayload, IssueUpdatedPayload, IssueDeletedPayload } from "@multica/types";
 
 function formatDate(date: string): string {
   return new Date(date).toLocaleDateString("en-US", {
@@ -446,78 +445,53 @@ type ViewMode = "board" | "list";
 
 export default function IssuesPage() {
   const [view, setView] = useState<ViewMode>("board");
-  const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<IssueStatus | "">("");
   const [filterPriority, setFilterPriority] = useState<IssuePriority | "">("");
 
+  // Read from global store (updated by useRealtimeSync)
+  const allIssues = useIssueStore((s) => s.issues);
+
+  // Apply local filters
+  const issues = useMemo(() => {
+    return allIssues.filter((issue) => {
+      if (filterStatus && issue.status !== filterStatus) return false;
+      if (filterPriority && issue.priority !== filterPriority) return false;
+      return true;
+    });
+  }, [allIssues, filterStatus, filterPriority]);
+
+  // Initial fetch → populate store
   useEffect(() => {
     setLoading(true);
     api
-      .listIssues({
-        limit: 200,
-        ...(filterStatus ? { status: filterStatus } : {}),
-        ...(filterPriority ? { priority: filterPriority } : {}),
-      })
+      .listIssues({ limit: 200 })
       .then((res) => {
-        setIssues(res.issues);
+        useIssueStore.getState().setIssues(res.issues);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [filterStatus, filterPriority]);
-
-  // Real-time updates
-  useWSEvent(
-    "issue:created",
-    useCallback((payload: unknown) => {
-      const { issue } = payload as IssueCreatedPayload;
-      setIssues((prev) => {
-        if (prev.some((i) => i.id === issue.id)) return prev;
-        return [...prev, issue];
-      });
-    }, []),
-  );
-
-  useWSEvent(
-    "issue:updated",
-    useCallback((payload: unknown) => {
-      const { issue } = payload as IssueUpdatedPayload;
-      setIssues((prev) => prev.map((i) => (i.id === issue.id ? issue : i)));
-    }, []),
-  );
-
-  useWSEvent(
-    "issue:deleted",
-    useCallback((payload: unknown) => {
-      const { issue_id } = payload as IssueDeletedPayload;
-      setIssues((prev) => prev.filter((i) => i.id !== issue_id));
-    }, []),
-  );
+  }, []);
 
   const handleMoveIssue = useCallback(
     (issueId: string, newStatus: IssueStatus) => {
-      // Optimistic update
-      setIssues((prev) =>
-        prev.map((issue) =>
-          issue.id === issueId ? { ...issue, status: newStatus } : issue
-        )
-      );
+      // Optimistic update in store
+      useIssueStore.getState().updateIssue(issueId, { status: newStatus });
 
       // Persist to API
       api.updateIssue(issueId, { status: newStatus }).catch((err) => {
         console.error("Failed to update issue:", err);
-        // Revert on error
-        api.listIssues({ limit: 200 }).then((res) => setIssues(res.issues));
+        // Revert on error by refetching
+        api.listIssues({ limit: 200 }).then((res) => {
+          useIssueStore.getState().setIssues(res.issues);
+        });
       });
     },
     []
   );
 
   const handleIssueCreated = useCallback((issue: Issue) => {
-    setIssues((prev) => {
-      if (prev.some((i) => i.id === issue.id)) return prev;
-      return [...prev, issue];
-    });
+    useIssueStore.getState().addIssue(issue);
   }, []);
 
   if (loading) {

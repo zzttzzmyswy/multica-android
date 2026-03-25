@@ -1,0 +1,6 @@
+[
+  { "id": "infra-event-bus-ws", "status": "done", "name": "Infrastructure: Event Bus + WS Isolation + Global Store" },
+  { "id": "issue-board-polish", "status": "designing", "name": "Issue Board & Detail Polish" },
+  { "id": "workspace-permissions", "status": "designing", "name": "Workspace & Permissions" },
+  { "id": "inbox-notifications", "status": "designing", "name": "Inbox & Notifications" }
+]
