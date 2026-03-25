@@ -1,4 +1,4 @@
-export type { Issue, IssueStatus, IssuePriority, IssueAssigneeType } from "./issue.js";
+export type { Issue, IssueStatus, IssuePriority, IssueAssigneeType } from "./issue";
 export type {
   Agent,
   AgentStatus,
@@ -12,10 +12,10 @@ export type {
   RuntimeDevice,
   CreateAgentRequest,
   UpdateAgentRequest,
-} from "./agent.js";
-export type { Workspace, Member, MemberRole, User, MemberWithUser } from "./workspace.js";
-export type { InboxItem, InboxSeverity, InboxItemType } from "./inbox.js";
-export type { Comment, CommentType, CommentAuthorType } from "./comment.js";
-export type { DaemonPairingSession, DaemonPairingSessionStatus, ApproveDaemonPairingSessionRequest } from "./daemon.js";
-export type * from "./events.js";
-export type * from "./api.js";
+} from "./agent";
+export type { Workspace, Member, MemberRole, User, MemberWithUser } from "./workspace";
+export type { InboxItem, InboxSeverity, InboxItemType } from "./inbox";
+export type { Comment, CommentType, CommentAuthorType } from "./comment";
+export type { DaemonPairingSession, DaemonPairingSessionStatus, ApproveDaemonPairingSessionRequest } from "./daemon";
+export type * from "./events";
+export type * from "./api";

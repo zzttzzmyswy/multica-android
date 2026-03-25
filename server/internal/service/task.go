@@ -390,12 +390,37 @@ func (s *TaskService) createAgentComment(ctx context.Context, issueID, agentID p
 	if content == "" {
 		return
 	}
-	s.Queries.CreateComment(ctx, db.CreateCommentParams{
+	comment, err := s.Queries.CreateComment(ctx, db.CreateCommentParams{
 		IssueID:    issueID,
 		AuthorType: "agent",
 		AuthorID:   agentID,
 		Content:    content,
 		Type:       commentType,
+	})
+	if err != nil {
+		return
+	}
+	// Look up issue to get workspace ID for broadcasting
+	issue, err := s.Queries.GetIssue(ctx, issueID)
+	if err != nil {
+		return
+	}
+	s.Bus.Publish(events.Event{
+		Type:        protocol.EventCommentCreated,
+		WorkspaceID: util.UUIDToString(issue.WorkspaceID),
+		ActorType:   "agent",
+		ActorID:     util.UUIDToString(agentID),
+		Payload: map[string]any{
+			"comment": map[string]any{
+				"id":          util.UUIDToString(comment.ID),
+				"issue_id":    util.UUIDToString(comment.IssueID),
+				"author_type": comment.AuthorType,
+				"author_id":   util.UUIDToString(comment.AuthorID),
+				"content":     comment.Content,
+				"type":        comment.Type,
+				"created_at":  comment.CreatedAt.Time.Format("2006-01-02T15:04:05Z"),
+			},
+		},
 	})
 }
 

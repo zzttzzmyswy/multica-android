@@ -45,11 +45,14 @@ export class WSClient {
 
     this.ws.onmessage = (event) => {
       const msg = JSON.parse(event.data as string) as WSMessage;
+      console.log("[ws] received:", msg.type);
       const eventHandlers = this.handlers.get(msg.type);
       if (eventHandlers) {
         for (const handler of eventHandlers) {
           handler(msg.payload);
         }
+      } else {
+        console.log("[ws] no handlers registered for:", msg.type);
       }
     };
 
@@ -58,8 +61,9 @@ export class WSClient {
       this.reconnectTimer = setTimeout(() => this.connect(), 3000);
     };
 
-    this.ws.onerror = (err) => {
-      console.error("[ws] error:", err);
+    this.ws.onerror = () => {
+      // Suppress — onclose handles reconnect; errors during StrictMode
+      // double-fire are expected in dev and harmless.
     };
   }
 
@@ -68,8 +72,13 @@ export class WSClient {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    this.ws?.close();
-    this.ws = null;
+    if (this.ws) {
+      // Remove handlers before close to prevent onclose from scheduling a reconnect
+      this.ws.onclose = null;
+      this.ws.onerror = null;
+      this.ws.close();
+      this.ws = null;
+    }
     this.hasConnectedBefore = false;
   }
 

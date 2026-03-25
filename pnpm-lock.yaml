@@ -197,55 +197,11 @@ importers:
         specifier: ^4.1.0
         version: 4.1.0(@types/node@25.5.0)(jsdom@29.0.1(@noble/hashes@1.8.0))(msw@2.12.14(@types/node@25.5.0)(typescript@5.9.3))(vite@8.0.1(@types/node@25.5.0)(jiti@2.6.1))
 
-  packages/agent-sdk:
-    devDependencies:
-      '@types/node':
-        specifier: 'catalog:'
-        version: 25.5.0
-      typescript:
-        specifier: 'catalog:'
-        version: 5.9.3
-
-  packages/hooks:
-    dependencies:
-      '@multica/sdk':
-        specifier: workspace:*
-        version: link:../sdk
-      '@multica/store':
-        specifier: workspace:*
-        version: link:../store
-      '@multica/types':
-        specifier: workspace:*
-        version: link:../types
-      react:
-        specifier: 'catalog:'
-        version: 19.2.3
-    devDependencies:
-      '@types/react':
-        specifier: ^19.2.0
-        version: 19.2.14
-      typescript:
-        specifier: 'catalog:'
-        version: 5.9.3
-
   packages/sdk:
     dependencies:
       '@multica/types':
         specifier: workspace:*
         version: link:../types
-    devDependencies:
-      typescript:
-        specifier: 'catalog:'
-        version: 5.9.3
-
-  packages/store:
-    dependencies:
-      '@multica/types':
-        specifier: workspace:*
-        version: link:../types
-      zustand:
-        specifier: 'catalog:'
-        version: 5.0.12(@types/react@19.2.14)(immer@11.1.4)(react@19.2.3)(use-sync-external-store@1.6.0(react@19.2.3))
     devDependencies:
       typescript:
         specifier: 'catalog:'

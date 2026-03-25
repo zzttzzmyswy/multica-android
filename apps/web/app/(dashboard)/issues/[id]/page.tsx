@@ -45,7 +45,7 @@ import { api } from "@/shared/api";
 import { useAuthStore } from "@/features/auth";
 import { useActorName } from "@/features/workspace";
 import { useWSEvent } from "@/features/realtime";
-import { useIssueStore } from "@multica/store";
+import { useIssueStore } from "@/features/issues";
 import type { CommentCreatedPayload, CommentUpdatedPayload, CommentDeletedPayload } from "@multica/types";
 
 // ---------------------------------------------------------------------------

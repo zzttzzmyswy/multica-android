@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
-import { useIssueStore } from "@multica/store";
+import { useState, useCallback, useMemo } from "react";
+import { useIssueStore } from "@/features/issues";
+import { useModalStore } from "@/features/modals";
 import { toast } from "sonner";
 import Link from "next/link";
 import {
@@ -23,19 +24,9 @@ import {
 } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { Issue, IssueStatus, IssuePriority, IssueAssigneeType } from "@multica/types";
+import type { Issue, IssueStatus, IssuePriority } from "@multica/types";
 import { STATUS_CONFIG, PRIORITY_CONFIG, ALL_STATUSES, PRIORITY_ORDER, STATUS_ORDER } from "@/features/issues/config";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectTrigger,
@@ -45,7 +36,7 @@ import {
   SelectGroup,
 } from "@/components/ui/select";
 import { ActorAvatar } from "@/components/common/actor-avatar";
-import { StatusIcon, PriorityIcon, AssigneePicker } from "@/features/issues/components";
+import { StatusIcon, PriorityIcon } from "@/features/issues/components";
 import { api } from "@/shared/api";
 import { useActorName } from "@/features/workspace";
 
@@ -326,131 +317,6 @@ function ListView({ issues }: { issues: Issue[] }) {
 // Create Issue Dialog
 // ---------------------------------------------------------------------------
 
-function CreateIssueDialog({ onCreated }: { onCreated: (issue: Issue) => void }) {
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [status, setStatus] = useState<IssueStatus>("todo");
-  const [priority, setPriority] = useState<IssuePriority>("none");
-  const [submitting, setSubmitting] = useState(false);
-  const [assigneeType, setAssigneeType] = useState<IssueAssigneeType | undefined>();
-  const [assigneeId, setAssigneeId] = useState<string | undefined>();
-
-  const reset = () => {
-    setTitle("");
-    setDescription("");
-    setStatus("todo");
-    setPriority("none");
-    setAssigneeType(undefined);
-    setAssigneeId(undefined);
-  };
-
-  const handleSubmit = async () => {
-    if (!title.trim()) return;
-    setSubmitting(true);
-    try {
-      const issue = await api.createIssue({
-        title: title.trim(),
-        description: description.trim() || undefined,
-        status,
-        priority,
-        assignee_type: assigneeType,
-        assignee_id: assigneeId,
-      });
-      onCreated(issue);
-      reset();
-      setOpen(false);
-    } catch (err) {
-      toast.error("Failed to create issue");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
-      <DialogTrigger
-        render={
-          <Button size="sm">
-            <Plus className="h-3.5 w-3.5" />
-            New Issue
-          </Button>
-        }
-      />
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>New Issue</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
-          <Input
-            autoFocus
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSubmit();
-              }
-            }}
-            placeholder="Issue title"
-          />
-          <Textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Add description..."
-            rows={3}
-            className="resize-none"
-          />
-          <div className="flex items-center gap-3 flex-wrap">
-            {/* Status selector */}
-            <Select value={status} onValueChange={(v) => setStatus(v as IssueStatus)}>
-              <SelectTrigger size="sm" className="text-xs">
-                <StatusIcon status={status} className="h-3.5 w-3.5" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ALL_STATUSES.map((s) => (
-                  <SelectItem key={s} value={s}>{STATUS_CONFIG[s].label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {/* Priority selector */}
-            <Select value={priority} onValueChange={(v) => setPriority(v as IssuePriority)}>
-              <SelectTrigger size="sm" className="text-xs">
-                <PriorityIcon priority={priority} />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PRIORITY_ORDER.map((p) => (
-                  <SelectItem key={p} value={p}>{PRIORITY_CONFIG[p].label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {/* Assignee picker */}
-            <AssigneePicker
-              assigneeType={assigneeType ?? null}
-              assigneeId={assigneeId ?? null}
-              onUpdate={(updates) => {
-                setAssigneeType(updates.assignee_type ?? undefined);
-                setAssigneeId(updates.assignee_id ?? undefined);
-              }}
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button
-            onClick={handleSubmit}
-            disabled={!title.trim() || submitting}
-          >
-            {submitting ? "Creating..." : "Create Issue"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
@@ -459,12 +325,12 @@ type ViewMode = "board" | "list";
 
 export default function IssuesPage() {
   const [view, setView] = useState<ViewMode>("board");
-  const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<IssueStatus | "">("");
   const [filterPriority, setFilterPriority] = useState<IssuePriority | "">("");
 
-  // Read from global store (updated by useRealtimeSync)
+  // Read from global store (populated by workspace hydrate + useRealtimeSync)
   const allIssues = useIssueStore((s) => s.issues);
+  const loading = useIssueStore((s) => s.loading);
 
   // Apply local filters
   const issues = useMemo(() => {
@@ -474,18 +340,6 @@ export default function IssuesPage() {
       return true;
     });
   }, [allIssues, filterStatus, filterPriority]);
-
-  // Initial fetch → populate store
-  useEffect(() => {
-    setLoading(true);
-    api
-      .listIssues({ limit: 200 })
-      .then((res) => {
-        useIssueStore.getState().setIssues(res.issues);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
 
   const handleMoveIssue = useCallback(
     (issueId: string, newStatus: IssueStatus) => {
@@ -503,10 +357,6 @@ export default function IssuesPage() {
     },
     []
   );
-
-  const handleIssueCreated = useCallback((issue: Issue) => {
-    useIssueStore.getState().addIssue(issue);
-  }, []);
 
   if (loading) {
     return (
@@ -591,7 +441,10 @@ export default function IssuesPage() {
             </Select>
           </div>
         </div>
-        <CreateIssueDialog onCreated={handleIssueCreated} />
+        <Button size="sm" onClick={() => useModalStore.getState().open("create-issue")}>
+          <Plus className="h-3.5 w-3.5" />
+          New Issue
+        </Button>
       </div>
 
       <div className="flex-1 overflow-hidden">

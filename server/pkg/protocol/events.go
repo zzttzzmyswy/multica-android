@@ -30,9 +30,11 @@ const (
 
 	// Workspace events
 	EventWorkspaceUpdated = "workspace:updated"
+	EventWorkspaceDeleted = "workspace:deleted"
 
 	// Member events
 	EventMemberAdded   = "member:added"
+	EventMemberUpdated = "member:updated"
 	EventMemberRemoved = "member:removed"
 
 	// Daemon events

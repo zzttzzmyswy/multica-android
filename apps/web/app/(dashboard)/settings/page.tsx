@@ -8,6 +8,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectTrigger,
   SelectValue,
@@ -114,6 +124,12 @@ export default function SettingsPage() {
   const [inviteRole, setInviteRole] = useState<MemberRole>("member");
   const [inviteLoading, setInviteLoading] = useState(false);
   const [memberActionId, setMemberActionId] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{
+    title: string;
+    description: string;
+    variant?: "destructive";
+    onConfirm: () => Promise<void>;
+  } | null>(null);
   const currentMember = members.find((member) => member.user_id === user?.id) ?? null;
   const canManageWorkspace = currentMember?.role === "owner" || currentMember?.role === "admin";
   const isOwner = currentMember?.role === "owner";
@@ -196,48 +212,63 @@ export default function SettingsPage() {
     }
   };
 
-  const handleRemoveMember = async (member: MemberWithUser) => {
+  const handleRemoveMember = (member: MemberWithUser) => {
     if (!workspace) return;
-    if (!window.confirm(`Remove ${member.name} from ${workspace.name}?`)) return;
-
-    setMemberActionId(member.id);
-    try {
-      await api.deleteMember(workspace.id, member.id);
-      await refreshMembers();
-      toast.success("Member removed");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to remove member");
-    } finally {
-      setMemberActionId(null);
-    }
+    setConfirmAction({
+      title: `Remove ${member.name}`,
+      description: `Remove ${member.name} from ${workspace.name}? They will lose access to this workspace.`,
+      variant: "destructive",
+      onConfirm: async () => {
+        setMemberActionId(member.id);
+        try {
+          await api.deleteMember(workspace.id, member.id);
+          await refreshMembers();
+          toast.success("Member removed");
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : "Failed to remove member");
+        } finally {
+          setMemberActionId(null);
+        }
+      },
+    });
   };
 
-  const handleLeaveWorkspace = async () => {
+  const handleLeaveWorkspace = () => {
     if (!workspace) return;
-    if (!window.confirm(`Leave ${workspace.name}?`)) return;
-
-    setMemberActionId("leave");
-    try {
-      await leaveWorkspace(workspace.id);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to leave workspace");
-    } finally {
-      setMemberActionId(null);
-    }
+    setConfirmAction({
+      title: "Leave workspace",
+      description: `Leave ${workspace.name}? You will lose access until re-invited.`,
+      variant: "destructive",
+      onConfirm: async () => {
+        setMemberActionId("leave");
+        try {
+          await leaveWorkspace(workspace.id);
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : "Failed to leave workspace");
+        } finally {
+          setMemberActionId(null);
+        }
+      },
+    });
   };
 
-  const handleDeleteWorkspace = async () => {
+  const handleDeleteWorkspace = () => {
     if (!workspace) return;
-    if (!window.confirm(`Delete ${workspace.name}? This cannot be undone.`)) return;
-
-    setMemberActionId("delete-workspace");
-    try {
-      await deleteWorkspace(workspace.id);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to delete workspace");
-    } finally {
-      setMemberActionId(null);
-    }
+    setConfirmAction({
+      title: "Delete workspace",
+      description: `Delete ${workspace.name}? This cannot be undone. All issues, agents, and data will be permanently removed.`,
+      variant: "destructive",
+      onConfirm: async () => {
+        setMemberActionId("delete-workspace");
+        try {
+          await deleteWorkspace(workspace.id);
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : "Failed to delete workspace");
+        } finally {
+          setMemberActionId(null);
+        }
+      },
+    });
   };
 
   if (!workspace) return null;
@@ -470,6 +501,27 @@ export default function SettingsPage() {
           )}
         </div>
       </section>
+
+      <AlertDialog open={!!confirmAction} onOpenChange={(v) => { if (!v) setConfirmAction(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmAction?.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmAction?.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className={confirmAction?.variant === "destructive" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+              onClick={async () => {
+                await confirmAction?.onConfirm();
+                setConfirmAction(null);
+              }}
+            >
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

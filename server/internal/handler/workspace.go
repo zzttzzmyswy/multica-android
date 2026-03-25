@@ -439,6 +439,11 @@ func (h *Handler) UpdateMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userID := requestUserID(r)
+	h.publish(protocol.EventMemberUpdated, workspaceID, "member", userID, map[string]any{
+		"member": memberWithUserResponse(updatedMember, user),
+	})
+
 	writeJSON(w, http.StatusOK, memberWithUserResponse(updatedMember, user))
 }
 
@@ -532,6 +537,10 @@ func (h *Handler) DeleteWorkspace(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to delete workspace")
 		return
 	}
+
+	h.publish(protocol.EventWorkspaceDeleted, workspaceID, "member", requestUserID(r), map[string]any{
+		"workspace_id": workspaceID,
+	})
 
 	w.WriteHeader(http.StatusNoContent)
 }

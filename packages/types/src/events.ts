@@ -1,8 +1,8 @@
-import type { Issue } from "./issue.js";
-import type { Agent } from "./agent.js";
-import type { InboxItem } from "./inbox.js";
-import type { Comment } from "./comment.js";
-import type { Workspace, MemberWithUser } from "./workspace.js";
+import type { Issue } from "./issue";
+import type { Agent } from "./agent";
+import type { InboxItem } from "./inbox";
+import type { Comment } from "./comment";
+import type { Workspace, MemberWithUser } from "./workspace";
 
 // WebSocket event types (matching Go server protocol/events.go)
 export type WSEventType =
@@ -23,7 +23,9 @@ export type WSEventType =
   | "inbox:read"
   | "inbox:archived"
   | "workspace:updated"
+  | "workspace:deleted"
   | "member:added"
+  | "member:updated"
   | "member:removed"
   | "daemon:heartbeat"
   | "daemon:register";
@@ -87,6 +89,14 @@ export interface CommentDeletedPayload {
 
 export interface WorkspaceUpdatedPayload {
   workspace: Workspace;
+}
+
+export interface WorkspaceDeletedPayload {
+  workspace_id: string;
+}
+
+export interface MemberUpdatedPayload {
+  member: MemberWithUser;
 }
 
 export interface MemberAddedPayload {

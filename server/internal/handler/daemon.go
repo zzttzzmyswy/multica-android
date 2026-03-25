@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
 // ---------------------------------------------------------------------------
@@ -97,6 +98,10 @@ func (h *Handler) DaemonRegister(w http.ResponseWriter, r *http.Request) {
 		}
 		resp = append(resp, runtimeToResponse(registered))
 	}
+
+	h.publish(protocol.EventDaemonRegister, req.WorkspaceID, "system", "", map[string]any{
+		"runtimes": resp,
+	})
 
 	writeJSON(w, http.StatusOK, map[string]any{"runtimes": resp})
 }

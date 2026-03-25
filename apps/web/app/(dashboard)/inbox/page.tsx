@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useInboxStore } from "@multica/store";
+import { useInboxStore } from "@/features/inbox";
 import { toast } from "sonner";
 import {
   AlertCircle,
@@ -173,10 +173,10 @@ function InboxDetail({
 
 export default function InboxPage() {
   const [selectedId, setSelectedId] = useState<string>("");
-  const [loading, setLoading] = useState(true);
 
-  // Read from global store (updated by useRealtimeSync)
+  // Read from global store (populated by workspace hydrate + useRealtimeSync)
   const storeItems = useInboxStore((s) => s.items);
+  const loading = useInboxStore((s) => s.loading);
 
   // Sort: severity first, then newest first
   const items = useMemo(() => {
@@ -189,17 +189,12 @@ export default function InboxPage() {
       );
   }, [storeItems]);
 
-  // Initial fetch → populate store
+  // Auto-select first item when items change
   useEffect(() => {
-    api
-      .listInbox()
-      .then((data) => {
-        useInboxStore.getState().setItems(data);
-        if (data.length > 0) setSelectedId(data[0]!.id);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+    if (items.length > 0 && !selectedId) {
+      setSelectedId(items[0]!.id);
+    }
+  }, [items, selectedId]);
 
   const handleMarkRead = async (id: string) => {
     try {
