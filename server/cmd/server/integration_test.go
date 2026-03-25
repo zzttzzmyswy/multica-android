@@ -17,6 +17,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/multica-ai/multica/server/internal/events"
 	"github.com/multica-ai/multica/server/internal/realtime"
 )
 
@@ -60,7 +61,8 @@ func TestMain(m *testing.M) {
 	hub := realtime.NewHub()
 	go hub.Run()
 
-	router := NewRouter(pool, hub)
+	bus := events.NewBus()
+	router := NewRouter(pool, hub, bus)
 	testServer = httptest.NewServer(router)
 
 	// Login to get a real JWT token
