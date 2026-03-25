@@ -710,7 +710,7 @@ func TestInvalidRequestBodies(t *testing.T) {
 
 func TestWebSocketIntegration(t *testing.T) {
 	// Connect WebSocket client
-	wsURL := "ws" + strings.TrimPrefix(testServer.URL, "http") + "/ws?token=" + testAuthToken + "&workspace_id=" + testWorkspaceID
+	wsURL := "ws" + strings.TrimPrefix(testServer.URL, "http") + "/ws?token=" + testToken + "&workspace_id=" + testWorkspaceID
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		t.Fatalf("WebSocket connection failed: %v", err)
