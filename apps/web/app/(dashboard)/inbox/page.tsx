@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useInboxStore } from "@multica/store";
+import { toast } from "sonner";
 import {
   AlertCircle,
   Bot,
@@ -205,7 +206,7 @@ export default function InboxPage() {
       await api.markInboxRead(id);
       useInboxStore.getState().markRead(id);
     } catch (err) {
-      console.error("Failed to mark read:", err);
+      toast.error("Failed to mark as read");
     }
   };
 
@@ -218,7 +219,7 @@ export default function InboxPage() {
         setSelectedId("");
       }
     } catch (err) {
-      console.error("Failed to archive:", err);
+      toast.error("Failed to archive");
     }
   };
 

@@ -92,17 +92,33 @@ func (h *Hub) Run() {
 		case message := <-h.broadcast:
 			// Global broadcast for daemon events (no workspace filtering)
 			h.mu.RLock()
+			var slow []*Client
 			for _, clients := range h.rooms {
 				for client := range clients {
 					select {
 					case client.send <- message:
 					default:
-						close(client.send)
-						delete(clients, client)
+						slow = append(slow, client)
 					}
 				}
 			}
 			h.mu.RUnlock()
+			if len(slow) > 0 {
+				h.mu.Lock()
+				for _, client := range slow {
+					room := client.workspaceID
+					if clients, ok := h.rooms[room]; ok {
+						if _, exists := clients[client]; exists {
+							delete(clients, client)
+							close(client.send)
+							if len(clients) == 0 {
+								delete(h.rooms, room)
+							}
+						}
+					}
+				}
+				h.mu.Unlock()
+			}
 		}
 	}
 }

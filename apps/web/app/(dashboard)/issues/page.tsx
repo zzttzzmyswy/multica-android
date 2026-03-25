@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useIssueStore } from "@multica/store";
+import { toast } from "sonner";
 import Link from "next/link";
 import {
   Columns3,
@@ -54,6 +55,15 @@ function formatDate(date: string): string {
     day: "numeric",
   });
 }
+
+const BOARD_STATUSES: IssueStatus[] = [
+  "backlog",
+  "todo",
+  "in_progress",
+  "in_review",
+  "done",
+  "blocked",
+];
 
 // ---------------------------------------------------------------------------
 // Board View — Card
@@ -187,14 +197,7 @@ function BoardView({
     })
   );
 
-  const visibleStatuses: IssueStatus[] = [
-    "backlog",
-    "todo",
-    "in_progress",
-    "in_review",
-    "done",
-    "blocked",
-  ];
+  const visibleStatuses = BOARD_STATUSES;
 
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
@@ -358,7 +361,7 @@ function CreateIssueDialog({ onCreated }: { onCreated: (issue: Issue) => void })
       reset();
       setOpen(false);
     } catch (err) {
-      console.error("Failed to create issue:", err);
+      toast.error("Failed to create issue");
     } finally {
       setSubmitting(false);
     }
@@ -491,7 +494,7 @@ export default function IssuesPage() {
 
       // Persist to API
       api.updateIssue(issueId, { status: newStatus }).catch((err) => {
-        console.error("Failed to update issue:", err);
+        toast.error("Failed to move issue");
         // Revert on error by refetching
         api.listIssues({ limit: 200 }).then((res) => {
           useIssueStore.getState().setIssues(res.issues);

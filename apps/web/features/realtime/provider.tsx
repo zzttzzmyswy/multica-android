@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useState,
   useRef,
   useCallback,
   type ReactNode,
@@ -27,6 +28,7 @@ const WSContext = createContext<WSContextValue | null>(null);
 export function WSProvider({ children }: { children: ReactNode }) {
   const user = useAuthStore((s) => s.user);
   const workspace = useWorkspaceStore((s) => s.workspace);
+  const [wsClient, setWsClient] = useState<WSClient | null>(null);
   const wsRef = useRef<WSClient | null>(null);
 
   useEffect(() => {
@@ -38,16 +40,18 @@ export function WSProvider({ children }: { children: ReactNode }) {
     const ws = new WSClient(WS_URL);
     ws.setAuth(token, workspace.id);
     wsRef.current = ws;
+    setWsClient(ws);
     ws.connect();
 
     return () => {
       ws.disconnect();
       wsRef.current = null;
+      setWsClient(null);
     };
   }, [user, workspace]);
 
-  // Centralized WS → store sync
-  useRealtimeSync(wsRef.current);
+  // Centralized WS → store sync (uses state so it re-subscribes when WS changes)
+  useRealtimeSync(wsClient);
 
   const subscribe = useCallback(
     (event: WSEventType, handler: EventHandler) => {
