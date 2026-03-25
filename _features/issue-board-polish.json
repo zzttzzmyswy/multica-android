@@ -1,11 +1,11 @@
 {
   "id": "issue-board-polish",
   "name": "Issue Board & Detail Polish",
-  "status": "in_progress",
+  "status": "done",
   "createdAt": "2026-03-25",
-  "completedAt": null,
+  "completedAt": "2026-03-25",
   "description": "Fix drag-drop data consistency bugs, complete issue detail page interactions, and polish board/list views to Linear MVP quality with consistent shadcn UI.",
-  "currentState": "Core tasks done: board has 6 columns with blocked, drag/click conflict fixed, list view uses STATUS_ORDER, create dialog has assignee picker, detail page syncs from global store, comment permissions enforced, delete cancels tasks. Remaining: inline edit title/description, comment optimistic create, comment timestamp tooltip, acceptance criteria UI, loading/empty states — all deferred as UI polish.",
+  "currentState": "All tasks done. Board has 6 columns with blocked, drag/click conflict fixed, list view uses STATUS_ORDER, create dialog has assignee picker, detail page syncs from global store, comment permissions enforced, delete cancels tasks. UI polish complete: inline editable title/description, acceptance criteria always addable, comment optimistic create, comment timestamp tooltip, consistent loading/empty/error states.",
   "decisions": [
     "Board shows 6 columns: backlog, todo, in_progress, in_review, done, blocked. Cancelled issues visible via filter only.",
     "3 filter/WS bugs auto-fixed by infra migration (global store + useMemo): no AbortController or per-page WS handlers needed",
@@ -52,12 +52,12 @@
     },
     {
       "task": "Issue detail: inline editable title",
-      "done": false,
+      "done": true,
       "scope": "Deferred: UI polish. Title renders as h1. Click transforms to Input. Blur or Enter saves."
     },
     {
       "task": "Issue detail: inline editable description",
-      "done": false,
+      "done": true,
       "scope": "Deferred: UI polish. Description renders as paragraph. Click transforms to Textarea."
     },
     {
@@ -67,12 +67,12 @@
     },
     {
       "task": "Issue detail: acceptance criteria and context refs always addable",
-      "done": false,
+      "done": true,
       "scope": "Deferred: UI polish."
     },
     {
       "task": "Comment: optimistic create",
-      "done": false,
+      "done": true,
       "scope": "Deferred: UI polish."
     },
     {
@@ -82,7 +82,7 @@
     },
     {
       "task": "Comment: hover timestamp shows full date tooltip",
-      "done": false,
+      "done": true,
       "scope": "Deferred: UI polish."
     },
     {
@@ -92,7 +92,7 @@
     },
     {
       "task": "UI: consistent loading/empty/error states across issues pages",
-      "done": false,
+      "done": true,
       "scope": "Deferred: UI polish."
     }
   ]

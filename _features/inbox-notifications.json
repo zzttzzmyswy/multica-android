@@ -5,7 +5,7 @@
   "createdAt": "2026-03-25",
   "completedAt": "2026-03-25",
   "description": "Complete inbox notification system: sidebar unread badge, notification triggers for all key actions, archive UI, issue navigation from notifications, and real-time sync across tabs.",
-  "currentState": "All core tasks done. Backend: unread-count endpoint, comment notifies assignee, status change notifies creator, unassign notifies old assignee, mark read/archive broadcast WS events. Frontend: SDK types fixed, sidebar unread badge, View Issue link, archive button, real-time sync via useRealtimeSync. Remaining: loading/empty states — deferred as UI polish.",
+  "currentState": "All tasks done. Backend: unread-count endpoint, comment notifies assignee, status change notifies creator, unassign notifies old assignee, mark read/archive broadcast WS events. Frontend: SDK types fixed, sidebar unread badge, View Issue link, archive button, real-time sync via useRealtimeSync. UI polish complete: inbox loading/empty states use shadcn components.",
   "decisions": [
     "Inbox uses useInboxStore from global store (not page-local useState)",
     "Sidebar badge reads unread count from store, updated by WS events",
@@ -74,7 +74,7 @@
     },
     {
       "task": "Frontend: Inbox loading/empty states with shadcn",
-      "done": false,
+      "done": true,
       "scope": "Deferred: UI polish."
     }
   ]

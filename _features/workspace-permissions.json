@@ -5,7 +5,7 @@
   "createdAt": "2026-03-25",
   "completedAt": "2026-03-25",
   "description": "Complete workspace management with proper permission enforcement, member invitation flow, and consistent settings UI using shadcn components.",
-  "currentState": "Core tasks done: DeleteAgent requires owner/admin role, ListAgentTasks verifies workspace membership, member invite auto-creates user if not found, workspace switch clears issue/inbox/agent stores before hydrating new workspace. Remaining: settings page shadcn polish, workspace switcher error toast, member management UX — all deferred as UI polish.",
+  "currentState": "All frontend polish tasks done. DeleteAgent requires owner/admin role, ListAgentTasks verifies workspace membership, member invite auto-creates user if not found, workspace switch clears stores before hydrating. UI polish complete: settings page uses shadcn consistently, workspace switcher has error handling/feedback, member management UX improved. Only backend agent visibility filtering remains deferred.",
   "decisions": [
     "Auth stays simple: email-only login, auto-create user, 72h JWT, no refresh token for MVP",
     "Member invite: if user doesn't exist, backend auto-creates user record with email as name, they become member immediately",
@@ -38,12 +38,12 @@
     },
     {
       "task": "Frontend: Settings page use shadcn components consistently",
-      "done": false,
+      "done": true,
       "scope": "Deferred: UI polish."
     },
     {
       "task": "Frontend: Workspace switcher error handling and feedback",
-      "done": false,
+      "done": true,
       "scope": "Deferred: UI polish."
     },
     {
@@ -53,7 +53,7 @@
     },
     {
       "task": "Frontend: Member management UX improvements",
-      "done": false,
+      "done": true,
       "scope": "Deferred: UI polish."
     }
   ]
