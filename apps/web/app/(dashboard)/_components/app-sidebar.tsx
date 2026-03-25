@@ -14,6 +14,7 @@ import {
   Plus,
   Check,
 } from "lucide-react";
+import { toast } from "sonner";
 import { MulticaIcon } from "@/components/multica-icon";
 import {
   Sidebar,
@@ -106,6 +107,7 @@ export function AppSidebar() {
       await switchWorkspace(ws.id);
     } catch (err) {
       console.error("Failed to create workspace:", err);
+      toast.error("Failed to create workspace");
     } finally {
       setCreating(false);
     }

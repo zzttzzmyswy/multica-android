@@ -8,6 +8,7 @@ import {
   List,
   Plus,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   DndContext,
   DragOverlay,
@@ -159,6 +160,9 @@ function DroppableColumn({
         {issues.map((issue) => (
           <DraggableBoardCard key={issue.id} issue={issue} />
         ))}
+        {issues.length === 0 && (
+          <p className="py-8 text-center text-xs text-muted-foreground">No issues</p>
+        )}
       </div>
     </div>
   );
@@ -503,8 +507,20 @@ export default function IssuesPage() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        Loading...
+      <div className="flex h-full flex-col">
+        <div className="flex h-11 shrink-0 items-center justify-between border-b px-4">
+          <Skeleton className="h-5 w-24" />
+          <Skeleton className="h-8 w-24" />
+        </div>
+        <div className="flex flex-1 gap-3 overflow-x-auto p-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex min-w-52 flex-1 flex-col gap-2">
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-24 w-full rounded-lg" />
+              <Skeleton className="h-24 w-full rounded-lg" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -576,7 +592,19 @@ export default function IssuesPage() {
       </div>
 
       <div className="flex-1 overflow-hidden">
-        {view === "board" ? (
+        {issues.length === 0 && !loading ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+            <p>No matching issues</p>
+            {(filterStatus || filterPriority) && (
+              <button
+                className="text-xs text-primary hover:underline"
+                onClick={() => { setFilterStatus(""); setFilterPriority(""); }}
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        ) : view === "board" ? (
           <BoardView issues={issues} onMoveIssue={handleMoveIssue} />
         ) : (
           <ListView issues={issues} />
