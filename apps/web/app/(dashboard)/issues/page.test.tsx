@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Issue } from "@multica/types";
 
@@ -42,6 +42,7 @@ vi.mock("@/features/workspace", () => ({
     },
     { getState: () => ({ workspace: { id: "ws-1", name: "Test", slug: "test" }, agents: [], members: [] }) },
   ),
+  WorkspaceAvatar: ({ name }: { name: string }) => <span>{name.charAt(0)}</span>,
 }));
 
 // Mock WebSocket context
@@ -57,18 +58,16 @@ vi.mock("sonner", () => ({
 }));
 
 // Mock api
-const mockCreateIssue = vi.fn();
 const mockUpdateIssue = vi.fn();
 
 vi.mock("@/shared/api", () => ({
   api: {
     listIssues: vi.fn().mockResolvedValue({ issues: [], total: 0 }),
-    createIssue: (...args: any[]) => mockCreateIssue(...args),
     updateIssue: (...args: any[]) => mockUpdateIssue(...args),
   },
 }));
 
-// Mock the issue store — control state directly
+// Mock the issue store
 let mockStoreState: {
   issues: Issue[];
   loading: boolean;
@@ -79,32 +78,66 @@ let mockStoreState: {
   removeIssue: (id: string) => void;
 };
 
+vi.mock("@/features/issues/store", () => ({
+  useIssueStore: Object.assign(
+    (selector?: any) => (selector ? selector(mockStoreState) : mockStoreState),
+    { getState: () => mockStoreState },
+  ),
+}));
+
 vi.mock("@/features/issues", () => ({
-  useIssueStore: (selector?: any) => {
-    return selector ? selector(mockStoreState) : mockStoreState;
-  },
+  useIssueStore: Object.assign(
+    (selector?: any) => (selector ? selector(mockStoreState) : mockStoreState),
+    { getState: () => mockStoreState },
+  ),
   StatusIcon: () => null,
+  PriorityIcon: () => null,
   StatusPicker: ({ value, onChange }: any) => (
     <button onClick={() => onChange?.("todo")}>{value || "todo"}</button>
   ),
   PriorityPicker: ({ value, onChange }: any) => (
     <button onClick={() => onChange?.("none")}>{value || "none"}</button>
   ),
-  statusConfig: {
-    backlog: { label: "Backlog" },
-    todo: { label: "Todo" },
-    in_progress: { label: "In Progress" },
-    in_review: { label: "In Review" },
-    done: { label: "Done" },
-    blocked: { label: "Blocked" },
-    cancelled: { label: "Cancelled" },
+}));
+
+// Mock view store
+const mockViewState = {
+  viewMode: "board" as const,
+  statusFilters: [] as string[],
+  priorityFilters: [] as string[],
+  setViewMode: vi.fn(),
+  toggleStatusFilter: vi.fn(),
+  togglePriorityFilter: vi.fn(),
+  clearFilters: vi.fn(),
+};
+
+vi.mock("@/features/issues/stores/view-store", () => ({
+  useIssueViewStore: Object.assign(
+    (selector?: any) => (selector ? selector(mockViewState) : mockViewState),
+    { getState: () => mockViewState, setState: vi.fn() },
+  ),
+}));
+
+// Mock issue config
+vi.mock("@/features/issues/config", () => ({
+  ALL_STATUSES: ["backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled"],
+  STATUS_ORDER: ["backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled"],
+  STATUS_CONFIG: {
+    backlog: { label: "Backlog", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent" },
+    todo: { label: "Todo", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent" },
+    in_progress: { label: "In Progress", iconColor: "text-warning", hoverBg: "hover:bg-warning/10" },
+    in_review: { label: "In Review", iconColor: "text-success", hoverBg: "hover:bg-success/10" },
+    done: { label: "Done", iconColor: "text-info", hoverBg: "hover:bg-info/10" },
+    blocked: { label: "Blocked", iconColor: "text-destructive", hoverBg: "hover:bg-destructive/10" },
+    cancelled: { label: "Cancelled", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent" },
   },
-  priorityConfig: {
-    urgent: { label: "Urgent" },
-    high: { label: "High" },
-    medium: { label: "Medium" },
-    low: { label: "Low" },
-    none: { label: "None" },
+  PRIORITY_ORDER: ["urgent", "high", "medium", "low", "none"],
+  PRIORITY_CONFIG: {
+    urgent: { label: "Urgent", bars: 4, color: "text-destructive" },
+    high: { label: "High", bars: 3, color: "text-warning" },
+    medium: { label: "Medium", bars: 2, color: "text-warning" },
+    low: { label: "Low", bars: 1, color: "text-info" },
+    none: { label: "No priority", bars: 0, color: "text-muted-foreground" },
   },
 }));
 
@@ -114,6 +147,33 @@ vi.mock("@/features/modals", () => ({
     () => ({ open: vi.fn() }),
     { getState: () => ({ open: vi.fn() }) },
   ),
+}));
+
+// Mock dnd-kit
+vi.mock("@dnd-kit/core", () => ({
+  DndContext: ({ children }: any) => children,
+  DragOverlay: () => null,
+  PointerSensor: class {},
+  useSensor: () => ({}),
+  useSensors: () => [],
+  useDroppable: () => ({ setNodeRef: vi.fn(), isOver: false }),
+  pointerWithin: vi.fn(),
+  closestCenter: vi.fn(),
+}));
+
+vi.mock("@dnd-kit/sortable", () => ({
+  useSortable: () => ({
+    attributes: {},
+    listeners: {},
+    setNodeRef: vi.fn(),
+    transform: null,
+    transition: null,
+    isDragging: false,
+  }),
+}));
+
+vi.mock("@dnd-kit/utilities", () => ({
+  CSS: { Transform: { toString: () => undefined } },
 }));
 
 const issueDefaults = {
@@ -188,13 +248,15 @@ describe("IssuesPage", () => {
       updateIssue: vi.fn(),
       removeIssue: vi.fn(),
     };
+    mockViewState.viewMode = "board";
+    mockViewState.statusFilters = [];
+    mockViewState.priorityFilters = [];
   });
 
   it("shows loading state initially", () => {
     mockStoreState.loading = true;
     mockStoreState.issues = [];
     render(<IssuesPage />);
-    // Now shows skeleton instead of text
     expect(screen.getAllByRole("generic").some(el => el.getAttribute("data-slot") === "skeleton")).toBe(true);
   });
 
@@ -222,66 +284,40 @@ describe("IssuesPage", () => {
     expect(screen.getAllByText("Done").length).toBeGreaterThanOrEqual(1);
   });
 
-  it("switches to list view", async () => {
+  it("shows workspace breadcrumb", () => {
+    mockStoreState.loading = false;
+    mockStoreState.issues = [];
+
+    render(<IssuesPage />);
+
+    expect(screen.getByText("Issues")).toBeInTheDocument();
+  });
+
+  it("shows 'New Issue' button", () => {
+    mockStoreState.loading = false;
+    mockStoreState.issues = [];
+
+    render(<IssuesPage />);
+
+    expect(screen.getByText("New Issue")).toBeInTheDocument();
+  });
+
+  it("shows filter buttons", () => {
     mockStoreState.loading = false;
     mockStoreState.issues = mockIssues;
 
-    const user = userEvent.setup();
     render(<IssuesPage />);
 
-    expect(screen.getByText("Implement auth")).toBeInTheDocument();
-
-    const listButton = screen.getByText("List");
-    await user.click(listButton);
-
-    expect(screen.getByText("Implement auth")).toBeInTheDocument();
-    expect(screen.getByText("Design landing page")).toBeInTheDocument();
+    expect(screen.getByText("Status: All")).toBeInTheDocument();
+    expect(screen.getByText("Priority: All")).toBeInTheDocument();
   });
 
-  it("shows 'New Issue' button", async () => {
+  it("shows empty state when no issues match", () => {
     mockStoreState.loading = false;
     mockStoreState.issues = [];
 
     render(<IssuesPage />);
 
-    expect(screen.getByText("New Issue")).toBeInTheDocument();
-  });
-
-  it("shows create dialog when New Issue is clicked", async () => {
-    mockStoreState.loading = false;
-    mockStoreState.issues = [];
-
-    const user = userEvent.setup();
-    render(<IssuesPage />);
-
-    expect(screen.getByText("New Issue")).toBeInTheDocument();
-    await user.click(screen.getByText("New Issue"));
-
-    // Create dialog is now a global modal, just check the button was clicked
-    // The modal renders in ModalRegistry which is outside IssuesPage
-  });
-
-  it("creates an issue via the dialog", async () => {
-    mockStoreState.loading = false;
-    mockStoreState.issues = [];
-
-    const user = userEvent.setup();
-    render(<IssuesPage />);
-
-    expect(screen.getByText("New Issue")).toBeInTheDocument();
-    await user.click(screen.getByText("New Issue"));
-
-    // Create dialog is now a global modal in ModalRegistry
-    // This test verifies the page itself doesn't crash
-  });
-
-  it("handles API error gracefully", async () => {
-    mockStoreState.loading = false;
-    mockStoreState.issues = [];
-
-    render(<IssuesPage />);
-
-    // Should render without crashing even with empty issues
-    expect(screen.queryAllByRole("generic").length).toBeGreaterThan(0);
+    expect(screen.getByText("No matching issues")).toBeInTheDocument();
   });
 });
