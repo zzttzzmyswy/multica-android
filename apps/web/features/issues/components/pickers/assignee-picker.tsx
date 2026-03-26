@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Bot, UserMinus } from "lucide-react";
-import type { IssueAssigneeType, UpdateIssueRequest } from "@multica/types";
+import type { IssueAssigneeType, UpdateIssueRequest } from "@/shared/types";
 import { useWorkspaceStore, useActorName } from "@/features/workspace";
 import {
   PropertyPicker,
@@ -69,7 +69,7 @@ export function AssigneePicker({
                 getActorInitials(assigneeType, assigneeId)
               )}
             </div>
-            <span>{triggerLabel}</span>
+            <span className="truncate">{triggerLabel}</span>
           </>
         ) : (
           <span className="text-muted-foreground">Unassigned</span>

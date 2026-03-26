@@ -1,4 +1,4 @@
-import type { IssueStatus } from "@multica/types";
+import type { IssueStatus } from "@/shared/types";
 
 export const STATUS_ORDER: IssueStatus[] = [
   "backlog",

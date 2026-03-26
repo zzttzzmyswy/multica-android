@@ -1,5 +1,9 @@
-import { ApiClient } from "@multica/sdk";
-import { createLogger } from "./logger";
+import { createLogger } from "@/shared/logger";
+import { ApiClient } from "./client";
+
+export { ApiClient } from "./client";
+export type { LoginResponse } from "./client";
+export { WSClient } from "./ws-client";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
@@ -16,13 +20,4 @@ if (typeof window !== "undefined") {
     api.setWorkspaceId(wsId);
   }
 
-  api.setOnUnauthorized(() => {
-    localStorage.removeItem("multica_token");
-    localStorage.removeItem("multica_workspace_id");
-    api.setToken(null);
-    api.setWorkspaceId(null);
-    if (window.location.pathname !== "/login") {
-      window.location.href = "/login";
-    }
-  });
 }

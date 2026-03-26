@@ -12,21 +12,20 @@ Multica is an AI-native task management platform — like Linear, but with AI ag
 
 ## Architecture
 
-**Polyglot monorepo** — Go backend + TypeScript frontend.
+**Go backend + standalone Next.js frontend.**
 
 - `server/` — Go backend (Chi router, sqlc for DB, gorilla/websocket for real-time)
-- `apps/web/` — Next.js 16 frontend (App Router)
-- `packages/` — Shared TypeScript packages (ui, types, sdk, utils)
+- `apps/web/` — Next.js 16 frontend (App Router) — self-contained, no shared package dependencies
 
 ### Web App Structure (`apps/web/`)
 
-The frontend uses a **feature-based architecture** with three layers:
+The frontend uses a **feature-based architecture** with four layers:
 
 ```
 apps/web/
 ├── app/          # Routing layer (thin shells — import from features/)
 ├── features/     # Business logic, organized by domain
-├── shared/       # Cross-feature utilities (api client)
+├── shared/       # Cross-feature utilities (api client, types, logger)
 ```
 
 **`app/`** — Next.js App Router pages. Route files should be thin: import and re-export from `features/`. Layout components and route-specific glue (redirects, auth guards) live here. Shared layout components (e.g. `app-sidebar`) stay in `app/(dashboard)/_components/`.
@@ -43,7 +42,10 @@ apps/web/
 | `features/modals/` | Modal registry and state | Modal store and components |
 | `features/skills/` | Skill management | Skill components |
 
-**`shared/`** — Code used across multiple features. Currently only `api.ts` (SDK singleton).
+**`shared/`** — Code used across multiple features:
+- `shared/api/` — `ApiClient` (REST) and `WSClient` (WebSocket) for backend communication, plus the `api` singleton.
+- `shared/types/` — Domain types (Issue, Agent, Workspace, etc.) and WebSocket event types.
+- `shared/logger.ts` — Logger utility.
 
 ### State Management
 
@@ -63,6 +65,7 @@ apps/web/
 Use `@/` alias (maps to `apps/web/`):
 ```typescript
 import { api } from "@/shared/api";
+import type { Issue } from "@/shared/types";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
 import { useIssueStore } from "@/features/issues";
@@ -76,8 +79,8 @@ Within a feature, use relative imports. Between features or to shared, use `@/`.
 ### Data Flow
 
 ```
-Browser → ApiClient (SDK) → REST API (Chi handlers) → sqlc queries → PostgreSQL
-Browser ← WSClient (SDK) ← WebSocket ← Hub.Broadcast() ← Handlers/TaskService
+Browser → ApiClient (shared/api) → REST API (Chi handlers) → sqlc queries → PostgreSQL
+Browser ← WSClient (shared/api) ← WebSocket ← Hub.Broadcast() ← Handlers/TaskService
 ```
 
 ### Backend Structure (`server/`)
@@ -93,13 +96,6 @@ Browser ← WSClient (SDK) ← WebSocket ← Hub.Broadcast() ← Handlers/TaskSe
 - **Events** (`internal/events/`): Internal event bus for decoupled communication between handlers and services.
 - **Database**: sqlc generates Go code from SQL in `pkg/db/queries/` → `pkg/db/generated/`. Migrations in `migrations/`.
 - **Routes** (`cmd/server/router.go`): Public routes (auth, health, ws) + protected routes (require JWT) + daemon routes (unauthenticated, separate auth model).
-
-### Key Packages
-
-- **`@multica/sdk`**: `ApiClient` (REST) and `WSClient` (WebSocket) classes. All backend communication goes through here.
-- **`@multica/types`**: Shared domain types + WebSocket event types (issue:created/updated/deleted, task:*, agent:status, comment:*, inbox:new, daemon:*).
-- **`@multica/ui`**: shadcn/ui component library with Radix primitives, Tailwind CSS 4, Shiki syntax highlighting for markdown.
-- **`@multica/utils`**: Shared utility functions used across apps and packages.
 
 ### Multi-tenancy
 
@@ -121,7 +117,7 @@ make db-down          # Stop the shared PostgreSQL container
 # Frontend
 pnpm install
 pnpm dev:web          # Next.js dev server (port 3000)
-pnpm build            # Build all TS packages
+pnpm build            # Build frontend
 pnpm typecheck        # TypeScript check
 pnpm test             # TS tests (Vitest)
 
@@ -170,10 +166,8 @@ make start-worktree     # Start using .env.worktree
 
 ## UI/UX Rules
 
-- Prefer `packages/ui` shadcn components over custom implementations.
-- **shadcn official components** → `packages/ui/src/components/ui/` — keep this directory clean; install missing components via `npx shadcn add`, do not mix in business code.
-- **Shared business components & utils** → `packages/ui/src/components/common/` — reusable project-level UI components (e.g. ActorAvatar) and shared utilities live here.
-- **Feature-specific components** → `features/<domain>/components/` — issue icons, pickers, and other domain-bound UI live inside their feature module, not in `packages/ui`.
+- Prefer shadcn components over custom implementations. Install missing components via `npx shadcn add`.
+- **Feature-specific components** → `features/<domain>/components/` — issue icons, pickers, and other domain-bound UI live inside their feature module.
 - Use shadcn design tokens for styling (e.g. `bg-primary`, `text-muted-foreground`, `text-destructive`). Avoid hardcoded color values (e.g. `text-red-500`, `bg-gray-100`).
 - Do not introduce extra state (useState, context, reducers) unless explicitly required by the design. Prefer zustand stores for shared state over React Context.
 - Pay close attention to **overflow** (truncate long text, scrollable containers), **alignment**, and **spacing** consistency.

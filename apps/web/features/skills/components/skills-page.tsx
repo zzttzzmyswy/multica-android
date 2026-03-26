@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useDefaultLayout } from "react-resizable-panels";
 import {
   Sparkles,
   Plus,
@@ -12,7 +13,7 @@ import {
   X,
   Download,
 } from "lucide-react";
-import type { Skill, CreateSkillRequest, UpdateSkillRequest } from "@multica/types";
+import type { Skill, CreateSkillRequest, UpdateSkillRequest } from "@/shared/types";
 import {
   Dialog,
   DialogContent,
@@ -21,6 +22,11 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -502,6 +508,9 @@ export default function SkillsPage() {
   const removeSkill = useWorkspaceStore((s) => s.removeSkill);
   const [selectedId, setSelectedId] = useState<string>("");
   const [showCreate, setShowCreate] = useState(false);
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
+    id: "multica_skills_layout",
+  });
 
   useEffect(() => {
     if (skills.length > 0 && !selectedId) {
@@ -554,73 +563,84 @@ export default function SkillsPage() {
   }
 
   return (
-    <div className="flex flex-1 min-h-0">
-      {/* Left column — skill list */}
-      <div className="w-72 shrink-0 overflow-y-auto border-r">
-        <div className="flex h-12 items-center justify-between border-b px-4">
-          <h1 className="text-sm font-semibold">Skills</h1>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => setShowCreate(true)}
-          >
-            <Plus className="h-4 w-4 text-muted-foreground" />
-          </Button>
+    <ResizablePanelGroup
+      orientation="horizontal"
+      className="flex-1 min-h-0"
+      defaultLayout={defaultLayout}
+      onLayoutChanged={onLayoutChanged}
+    >
+      <ResizablePanel id="list" defaultSize={280} minSize={240} maxSize={400} groupResizeBehavior="preserve-pixel-size">
+        {/* Left column — skill list */}
+        <div className="overflow-y-auto h-full border-r">
+          <div className="flex h-12 items-center justify-between border-b px-4">
+            <h1 className="text-sm font-semibold">Skills</h1>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => setShowCreate(true)}
+            >
+              <Plus className="h-4 w-4 text-muted-foreground" />
+            </Button>
+          </div>
+          {skills.length === 0 ? (
+            <div className="flex flex-col items-center justify-center px-4 py-12">
+              <Sparkles className="h-8 w-8 text-muted-foreground/40" />
+              <p className="mt-3 text-sm text-muted-foreground">No skills yet</p>
+              <p className="mt-1 text-xs text-muted-foreground text-center">
+                Skills define reusable instructions for agents.
+              </p>
+              <Button
+                onClick={() => setShowCreate(true)}
+                size="xs"
+                className="mt-3"
+              >
+                <Plus className="h-3 w-3" />
+                Create Skill
+              </Button>
+            </div>
+          ) : (
+            <div className="divide-y">
+              {skills.map((skill) => (
+                <SkillListItem
+                  key={skill.id}
+                  skill={skill}
+                  isSelected={skill.id === selectedId}
+                  onClick={() => setSelectedId(skill.id)}
+                />
+              ))}
+            </div>
+          )}
         </div>
-        {skills.length === 0 ? (
-          <div className="flex flex-col items-center justify-center px-4 py-12">
-            <Sparkles className="h-8 w-8 text-muted-foreground/40" />
-            <p className="mt-3 text-sm text-muted-foreground">No skills yet</p>
-            <p className="mt-1 text-xs text-muted-foreground text-center">
-              Skills define reusable instructions for agents.
-            </p>
-            <Button
-              onClick={() => setShowCreate(true)}
-              size="xs"
-              className="mt-3"
-            >
-              <Plus className="h-3 w-3" />
-              Create Skill
-            </Button>
-          </div>
-        ) : (
-          <div className="divide-y">
-            {skills.map((skill) => (
-              <SkillListItem
-                key={skill.id}
-                skill={skill}
-                isSelected={skill.id === selectedId}
-                onClick={() => setSelectedId(skill.id)}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      </ResizablePanel>
 
-      {/* Right column — skill detail */}
-      <div className="flex-1 overflow-hidden">
-        {selected ? (
-          <SkillDetail
-            key={selected.id}
-            skill={selected}
-            onUpdate={handleUpdate}
-            onDelete={handleDelete}
-          />
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
-            <Sparkles className="h-10 w-10 text-muted-foreground/30" />
-            <p className="mt-3 text-sm">Select a skill to view details</p>
-            <Button
-              onClick={() => setShowCreate(true)}
-              size="xs"
-              className="mt-3"
-            >
-              <Plus className="h-3 w-3" />
-              Create Skill
-            </Button>
-          </div>
-        )}
-      </div>
+      <ResizableHandle />
+
+      <ResizablePanel id="detail" minSize="50%">
+        {/* Right column — skill detail */}
+        <div className="flex-1 overflow-hidden h-full">
+          {selected ? (
+            <SkillDetail
+              key={selected.id}
+              skill={selected}
+              onUpdate={handleUpdate}
+              onDelete={handleDelete}
+            />
+          ) : (
+            <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
+              <Sparkles className="h-10 w-10 text-muted-foreground/30" />
+              <p className="mt-3 text-sm">Select a skill to view details</p>
+              <Button
+                onClick={() => setShowCreate(true)}
+                size="xs"
+                className="mt-3"
+              >
+                <Plus className="h-3 w-3" />
+                Create Skill
+              </Button>
+            </div>
+          )}
+        </div>
+      </ResizablePanel>
 
       {showCreate && (
         <CreateSkillDialog
@@ -629,6 +649,6 @@ export default function SkillsPage() {
           onImport={handleImport}
         />
       )}
-    </div>
+    </ResizablePanelGroup>
   );
 }

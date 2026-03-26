@@ -7,7 +7,6 @@ dist
 # build outputs
 .next
 out
-.turbo
 build
 bin
 dist-electron
