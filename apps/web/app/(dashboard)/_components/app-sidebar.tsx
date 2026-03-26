@@ -7,7 +7,6 @@ import {
   ListTodo,
   Bot,
   Monitor,
-  BookOpen,
   ChevronDown,
   Settings,
   LogOut,
@@ -53,7 +52,6 @@ const workspaceNav = [
   { href: "/agents", label: "Agents", icon: Bot },
   { href: "/runtimes", label: "Runtimes", icon: Monitor },
   { href: "/skills", label: "Skills", icon: Sparkles },
-  { href: "/knowledge-base", label: "Knowledge Base", icon: BookOpen },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

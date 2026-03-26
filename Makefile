@@ -95,10 +95,8 @@ check-main:
 	@ENV_FILE=$(MAIN_ENV_FILE) bash scripts/check.sh
 
 setup-worktree:
-	@if [ ! -f "$(WORKTREE_ENV_FILE)" ]; then \
-		echo "==> No $(WORKTREE_ENV_FILE) found, generating..."; \
-		bash scripts/init-worktree-env.sh $(WORKTREE_ENV_FILE); \
-	fi
+	@echo "==> Generating $(WORKTREE_ENV_FILE) with unique ports..."
+	@FORCE=1 bash scripts/init-worktree-env.sh $(WORKTREE_ENV_FILE)
 	@$(MAKE) setup ENV_FILE=$(WORKTREE_ENV_FILE)
 
 start-worktree:
