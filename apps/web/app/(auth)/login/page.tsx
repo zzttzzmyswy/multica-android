@@ -54,7 +54,7 @@ function LoginPageContent() {
       await sendCode(email);
       setStep("code");
       setCode("");
-      setCooldown(60);
+      setCooldown(10);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to send code. Make sure the server is running."
@@ -70,6 +70,34 @@ function LoginPageContent() {
       setError("");
       setSubmitting(true);
       try {
+        const cliCallback = searchParams.get("cli_callback");
+        if (cliCallback) {
+          // CLI browser login: verify code, get JWT, redirect to CLI callback.
+          // Only allow http://localhost callbacks to prevent open redirect / JWT theft.
+          try {
+            const cbUrl = new URL(cliCallback);
+            if (cbUrl.protocol !== "http:") {
+              setError("Invalid callback URL");
+              setSubmitting(false);
+              return;
+            }
+            if (cbUrl.hostname !== "localhost" && cbUrl.hostname !== "127.0.0.1") {
+              setError("Invalid callback URL");
+              setSubmitting(false);
+              return;
+            }
+          } catch {
+            setError("Invalid callback URL");
+            setSubmitting(false);
+            return;
+          }
+          const { token } = await api.verifyCode(email, value);
+          const cliState = searchParams.get("cli_state") || "";
+          const separator = cliCallback.includes("?") ? "&" : "?";
+          window.location.href = `${cliCallback}${separator}token=${encodeURIComponent(token)}&state=${encodeURIComponent(cliState)}`;
+          return;
+        }
+
         await verifyCode(email, value);
         const wsList = await api.listWorkspaces();
         await hydrateWorkspace(wsList);
@@ -90,7 +118,7 @@ function LoginPageContent() {
     setError("");
     try {
       await sendCode(email);
-      setCooldown(60);
+      setCooldown(10);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to resend code"
