@@ -112,10 +112,17 @@ export class ApiClient {
   }
 
   // Auth
-  async login(email: string, name?: string): Promise<LoginResponse> {
-    return this.fetch("/auth/login", {
+  async sendCode(email: string): Promise<void> {
+    await this.fetch("/auth/send-code", {
       method: "POST",
-      body: JSON.stringify({ email, name }),
+      body: JSON.stringify({ email }),
+    });
+  }
+
+  async verifyCode(email: string, code: string): Promise<LoginResponse> {
+    return this.fetch("/auth/verify-code", {
+      method: "POST",
+      body: JSON.stringify({ email, code }),
     });
   }
 
