@@ -91,9 +91,10 @@ function LoginPageContent() {
   }, [cooldown]);
 
   const handleCliAuthorize = async () => {
-    const cliCallback = searchParams.get("cli_callback")!;
+    const cliCallback = searchParams.get("cli_callback");
+    const token = localStorage.getItem("multica_token");
+    if (!cliCallback || !token) return;
     const cliState = searchParams.get("cli_state") || "";
-    const token = localStorage.getItem("multica_token")!;
     setSubmitting(true);
     redirectToCliCallback(cliCallback, token, cliState);
   };
