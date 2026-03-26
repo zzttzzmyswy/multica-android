@@ -27,6 +27,7 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from "@/components/ui/resizable";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -289,24 +290,38 @@ function FileEditor({
                   placeholder="path/to/file.md"
                   className="h-7 border-0 p-0 text-xs font-mono shadow-none focus-visible:ring-0"
                 />
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() =>
-                    setEditingIndex(editingIndex === index ? null : index)
-                  }
-                  className="shrink-0 text-muted-foreground"
-                >
-                  <FileText className="h-3 w-3" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => removeFile(index)}
-                  className="shrink-0 text-muted-foreground hover:text-destructive"
-                >
-                  <X className="h-3 w-3" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() =>
+                          setEditingIndex(editingIndex === index ? null : index)
+                        }
+                        className="shrink-0 text-muted-foreground"
+                      >
+                        <FileText className="h-3 w-3" />
+                      </Button>
+                    }
+                  />
+                  <TooltipContent>Edit content</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => removeFile(index)}
+                        className="shrink-0 text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    }
+                  />
+                  <TooltipContent>Remove file</TooltipContent>
+                </Tooltip>
               </div>
               {editingIndex === index && (
                 <Textarea
@@ -404,14 +419,21 @@ function SkillDetail({
               {saving ? "Saving..." : "Save"}
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={() => setConfirmDelete(true)}
-            className="text-muted-foreground hover:text-destructive"
-          >
-            <Trash2 className="h-3 w-3" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => setConfirmDelete(true)}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              }
+            />
+            <TooltipContent>Delete skill</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
@@ -574,13 +596,20 @@ export default function SkillsPage() {
         <div className="overflow-y-auto h-full border-r">
           <div className="flex h-12 items-center justify-between border-b px-4">
             <h1 className="text-sm font-semibold">Skills</h1>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => setShowCreate(true)}
-            >
-              <Plus className="h-4 w-4 text-muted-foreground" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => setShowCreate(true)}
+                  >
+                    <Plus className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                }
+              />
+              <TooltipContent side="bottom">Create skill</TooltipContent>
+            </Tooltip>
           </div>
           {skills.length === 0 ? (
             <div className="flex flex-col items-center justify-center px-4 py-12">

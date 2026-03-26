@@ -23,8 +23,6 @@ export interface Issue {
   creator_type: IssueAssigneeType;
   creator_id: string;
   parent_issue_id: string | null;
-  acceptance_criteria: string[];
-  context_refs: string[];
   position: number;
   due_date: string | null;
   created_at: string;

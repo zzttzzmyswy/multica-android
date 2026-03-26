@@ -22,6 +22,7 @@ import {
   PopoverContent,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RichTextEditor, type RichTextEditorRef } from "@/components/common/rich-text-editor";
@@ -138,18 +139,32 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
             <span className="font-medium">New issue</span>
           </div>
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="rounded-sm p-1.5 opacity-70 hover:opacity-100 hover:bg-accent/60 transition-all cursor-pointer"
-            >
-              {isExpanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
-            </button>
-            <button
-              onClick={onClose}
-              className="rounded-sm p-1.5 opacity-70 hover:opacity-100 hover:bg-accent/60 transition-all cursor-pointer"
-            >
-              <X className="size-4" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="rounded-sm p-1.5 opacity-70 hover:opacity-100 hover:bg-accent/60 transition-all cursor-pointer"
+                  >
+                    {isExpanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+                  </button>
+                }
+              />
+              <TooltipContent side="bottom">{isExpanded ? "Collapse" : "Expand"}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    onClick={onClose}
+                    className="rounded-sm p-1.5 opacity-70 hover:opacity-100 hover:bg-accent/60 transition-all cursor-pointer"
+                  >
+                    <X className="size-4" />
+                  </button>
+                }
+              />
+              <TooltipContent side="bottom">Close</TooltipContent>
+            </Tooltip>
           </div>
         </div>
 
@@ -167,7 +182,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
               }
             }}
             placeholder="Issue title"
-            className="border-none shadow-none px-0 text-lg font-semibold focus-visible:ring-0"
+            className="border-none shadow-none px-0 text-lg font-semibold focus-visible:ring-0 dark:bg-transparent"
           />
         </div>
 

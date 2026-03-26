@@ -17,7 +17,7 @@ function formatDate(date: string): string {
 
 export function BoardCardContent({ issue }: { issue: Issue }) {
   return (
-    <div className="rounded-lg border bg-background p-3">
+    <div className="rounded-lg border bg-card p-3">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <PriorityIcon priority={issue.priority} />
         <span>{issue.id.slice(0, 8)}</span>

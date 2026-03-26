@@ -109,164 +109,6 @@ function PropRow({
 
 
 // ---------------------------------------------------------------------------
-// Acceptance Criteria Editor
-// ---------------------------------------------------------------------------
-
-function AcceptanceCriteriaEditor({
-  criteria,
-  onUpdate,
-}: {
-  criteria: string[];
-  onUpdate: (updates: Partial<UpdateIssueRequest>) => void;
-}) {
-  const [newItem, setNewItem] = useState("");
-
-  const addItem = () => {
-    if (!newItem.trim()) return;
-    onUpdate({ acceptance_criteria: [...criteria, newItem.trim()] });
-    setNewItem("");
-  };
-
-  const removeItem = (index: number) => {
-    onUpdate({ acceptance_criteria: criteria.filter((_, i) => i !== index) });
-  };
-
-  const [adding, setAdding] = useState(false);
-
-  return (
-    <div className="space-y-2">
-      <h3 className="text-xs font-medium text-muted-foreground">Acceptance Criteria</h3>
-      {criteria.length > 0 && (
-        <div className="space-y-1">
-          {criteria.map((item, i) => (
-            <div key={i} className="group flex items-start gap-2 text-sm">
-              <span className="mt-0.5 text-muted-foreground">&bull;</span>
-              <span className="flex-1">{item}</span>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => removeItem(i)}
-                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-opacity"
-              >
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
-      {(criteria.length > 0 || adding) ? (
-        <form
-          onSubmit={(e) => { e.preventDefault(); addItem(); }}
-          className="flex items-center gap-2"
-        >
-          <input
-            autoFocus={adding}
-            value={newItem}
-            onChange={(e) => setNewItem(e.target.value)}
-            onBlur={() => { if (!newItem.trim()) setAdding(false); }}
-            placeholder="Add criteria..."
-            aria-label="Add acceptance criteria"
-            className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground"
-          />
-        </form>
-      ) : (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground h-7 px-2 text-xs"
-          onClick={() => setAdding(true)}
-        >
-          + Add acceptance criteria
-        </Button>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Context Refs Editor
-// ---------------------------------------------------------------------------
-
-function ContextRefsEditor({
-  refs,
-  onUpdate,
-}: {
-  refs: string[];
-  onUpdate: (updates: Partial<UpdateIssueRequest>) => void;
-}) {
-  const [newRef, setNewRef] = useState("");
-
-  const addRef = () => {
-    if (!newRef.trim()) return;
-    onUpdate({ context_refs: [...refs, newRef.trim()] });
-    setNewRef("");
-  };
-
-  const removeRef = (index: number) => {
-    onUpdate({ context_refs: refs.filter((_, i) => i !== index) });
-  };
-
-  const [adding, setAdding] = useState(false);
-
-  const isUrl = (s: string) => s.startsWith("http://") || s.startsWith("https://");
-
-  return (
-    <div className="space-y-2">
-      <h3 className="text-xs font-medium text-muted-foreground">Context References</h3>
-      {refs.length > 0 && (
-        <div className="space-y-1">
-          {refs.map((ref, i) => (
-            <div key={i} className="group flex items-center gap-2 text-sm">
-              <Link2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              {isUrl(ref) ? (
-                <a href={ref} target="_blank" rel="noopener noreferrer" className="flex-1 text-info hover:underline truncate">
-                  {ref}
-                </a>
-              ) : (
-                <span className="flex-1 truncate">{ref}</span>
-              )}
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => removeRef(i)}
-                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-opacity"
-              >
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
-      {(refs.length > 0 || adding) ? (
-        <form
-          onSubmit={(e) => { e.preventDefault(); addRef(); }}
-          className="flex items-center gap-2"
-        >
-          <input
-            autoFocus={adding}
-            value={newRef}
-            onChange={(e) => setNewRef(e.target.value)}
-            onBlur={() => { if (!newRef.trim()) setAdding(false); }}
-            placeholder="Add reference URL..."
-            aria-label="Add context reference URL"
-            className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground"
-          />
-        </form>
-      ) : (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground h-7 px-2 text-xs"
-          onClick={() => setAdding(true)}
-        >
-          + Add context reference
-        </Button>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
 
@@ -621,19 +463,26 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button
-              variant={sidebarOpen ? "secondary" : "ghost"}
-              size="icon-xs"
-              className={sidebarOpen ? "" : "text-muted-foreground"}
-              onClick={() => {
-                const panel = sidebarRef.current;
-                if (!panel) return;
-                if (panel.isCollapsed()) panel.expand();
-                else panel.collapse();
-              }}
-            >
-              <PanelRight className="h-4 w-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant={sidebarOpen ? "secondary" : "ghost"}
+                    size="icon-xs"
+                    className={sidebarOpen ? "" : "text-muted-foreground"}
+                    onClick={() => {
+                      const panel = sidebarRef.current;
+                      if (!panel) return;
+                      if (panel.isCollapsed()) panel.expand();
+                      else panel.collapse();
+                    }}
+                  >
+                    <PanelRight className="h-4 w-4" />
+                  </Button>
+                }
+              />
+              <TooltipContent side="bottom">Toggle sidebar</TooltipContent>
+            </Tooltip>
           </div>
 
             {/* Delete confirmation dialog (controlled by state) */}
@@ -700,17 +549,6 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
             className="mt-5"
           />
 
-          <div className="space-y-4 mt-4">
-            <AcceptanceCriteriaEditor
-              criteria={issue.acceptance_criteria}
-              onUpdate={handleUpdateField}
-            />
-            <ContextRefsEditor
-              refs={issue.context_refs}
-              onUpdate={handleUpdateField}
-            />
-          </div>
-
           <div className="my-8 border-t" />
 
           {/* Activity / Comments */}
@@ -745,22 +583,36 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                       </Tooltip>
                       {isOwn && (
                         <div className="ml-auto flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            onClick={() => startEditComment(comment)}
-                            className="text-muted-foreground hover:text-foreground"
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            onClick={() => handleDeleteComment(comment.id)}
-                            className="text-muted-foreground hover:text-destructive"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <Button
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  onClick={() => startEditComment(comment)}
+                                  className="text-muted-foreground hover:text-foreground"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                              }
+                            />
+                            <TooltipContent>Edit</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <Button
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  onClick={() => handleDeleteComment(comment.id)}
+                                  className="text-muted-foreground hover:text-destructive"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              }
+                            />
+                            <TooltipContent>Delete</TooltipContent>
+                          </Tooltip>
                         </div>
                       )}
                     </div>
@@ -797,13 +649,20 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                 />
               </div>
               <div className="flex items-center justify-end px-2 pb-2">
-                <Button
-                  size="icon-xs"
-                  disabled={commentEmpty || submitting}
-                  onClick={handleSubmitComment}
-                >
-                  <ArrowUp className="h-3.5 w-3.5" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        size="icon-sm"
+                        disabled={commentEmpty || submitting}
+                        onClick={handleSubmitComment}
+                      >
+                        <ArrowUp className="h-4 w-4" />
+                      </Button>
+                    }
+                  />
+                  <TooltipContent>Send</TooltipContent>
+                </Tooltip>
               </div>
             </div>
           </div>

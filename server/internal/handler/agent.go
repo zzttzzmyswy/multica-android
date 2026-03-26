@@ -322,8 +322,6 @@ func (h *Handler) createAgentInitIssue(ctx context.Context, agent db.Agent, crea
 		AssigneeID:         agent.ID,
 		CreatorType:        "member",
 		CreatorID:          creatorID,
-		AcceptanceCriteria: []byte("[]"),
-		ContextRefs:        []byte("[]"),
 		Position:           0,
 	})
 	if err != nil {

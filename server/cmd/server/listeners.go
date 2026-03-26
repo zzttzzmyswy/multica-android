@@ -28,6 +28,8 @@ func registerListeners(bus *events.Bus, hub *realtime.Hub) {
 		protocol.EventInboxNew,
 		protocol.EventInboxRead,
 		protocol.EventInboxArchived,
+		protocol.EventInboxBatchRead,
+		protocol.EventInboxBatchArchived,
 		protocol.EventWorkspaceUpdated,
 		protocol.EventWorkspaceDeleted,
 		protocol.EventMemberAdded,

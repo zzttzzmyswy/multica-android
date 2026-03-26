@@ -178,8 +178,6 @@ vi.mock("@dnd-kit/utilities", () => ({
 
 const issueDefaults = {
   parent_issue_id: null,
-  acceptance_criteria: [],
-  context_refs: [],
   position: 0,
 };
 
@@ -312,12 +310,13 @@ describe("IssuesPage", () => {
     expect(screen.getByText("Priority: All")).toBeInTheDocument();
   });
 
-  it("shows empty state when no issues match", () => {
+  it("shows empty board view when no issues exist", () => {
     mockStoreState.loading = false;
     mockStoreState.issues = [];
 
     render(<IssuesPage />);
 
-    expect(screen.getByText("No matching issues")).toBeInTheDocument();
+    // Should still render the board/list view, not a "no issues" message
+    expect(screen.queryByText("No matching issues")).not.toBeInTheDocument();
   });
 });

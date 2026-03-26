@@ -56,8 +56,20 @@ function createComponents(
   onFileClick?: (path: string) => void
 ): Partial<Components> {
   const baseComponents: Partial<Components> = {
-    // Links: Make clickable with callbacks
+    // Links: Make clickable with callbacks, or render as mention
     a: ({ href, children }) => {
+      // Mention links: mention://member/id or mention://agent/id
+      if (href?.startsWith('mention://')) {
+        return (
+          <span
+            className="text-primary font-medium"
+            style={{ background: 'color-mix(in srgb, var(--primary) 8%, transparent)', padding: '0 0.2em', borderRadius: 'calc(var(--radius) * 0.5)' }}
+          >
+            {children}
+          </span>
+        )
+      }
+
       const handleClick = (e: React.MouseEvent): void => {
         e.preventDefault()
         if (href) {

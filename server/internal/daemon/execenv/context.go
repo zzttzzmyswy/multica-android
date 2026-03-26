@@ -91,22 +91,6 @@ func renderIssueContext(ctx TaskContextForEnv) string {
 		b.WriteString("\n\n")
 	}
 
-	if len(ctx.AcceptanceCriteria) > 0 {
-		b.WriteString("## Acceptance Criteria\n\n")
-		for _, item := range ctx.AcceptanceCriteria {
-			fmt.Fprintf(&b, "- %s\n", item)
-		}
-		b.WriteString("\n")
-	}
-
-	if len(ctx.ContextRefs) > 0 {
-		b.WriteString("## Context References\n\n")
-		for _, ref := range ctx.ContextRefs {
-			fmt.Fprintf(&b, "- %s\n", ref)
-		}
-		b.WriteString("\n")
-	}
-
 	if ctx.WorkspaceContext != "" {
 		b.WriteString("## Workspace Context\n\n")
 		b.WriteString(ctx.WorkspaceContext)

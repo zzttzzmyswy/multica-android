@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/logger"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
@@ -68,6 +70,18 @@ func inboxRowToResponse(r db.ListInboxItemsRow) InboxItemResponse {
 	}
 }
 
+func (h *Handler) enrichInboxResponse(ctx context.Context, resp InboxItemResponse, issueID pgtype.UUID) InboxItemResponse {
+	if !issueID.Valid {
+		return resp
+	}
+	issue, err := h.Queries.GetIssue(ctx, issueID)
+	if err == nil {
+		s := issue.Status
+		resp.IssueStatus = &s
+	}
+	return resp
+}
+
 func (h *Handler) ListInbox(w http.ResponseWriter, r *http.Request) {
 	userID, ok := requireUserID(w, r)
 	if !ok {
@@ -124,7 +138,8 @@ func (h *Handler) MarkInboxRead(w http.ResponseWriter, r *http.Request) {
 		"recipient_id": uuidToString(item.RecipientID),
 	})
 
-	writeJSON(w, http.StatusOK, inboxToResponse(item))
+	resp := h.enrichInboxResponse(r.Context(), inboxToResponse(item), item.IssueID)
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *Handler) ArchiveInboxItem(w http.ResponseWriter, r *http.Request) {
@@ -145,7 +160,8 @@ func (h *Handler) ArchiveInboxItem(w http.ResponseWriter, r *http.Request) {
 		"recipient_id": uuidToString(item.RecipientID),
 	})
 
-	writeJSON(w, http.StatusOK, inboxToResponse(item))
+	resp := h.enrichInboxResponse(r.Context(), inboxToResponse(item), item.IssueID)
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *Handler) CountUnreadInbox(w http.ResponseWriter, r *http.Request) {

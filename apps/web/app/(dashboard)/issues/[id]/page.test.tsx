@@ -139,8 +139,6 @@ const mockIssue: Issue = {
   creator_type: "member",
   creator_id: "user-1",
   parent_issue_id: null,
-  acceptance_criteria: [],
-  context_refs: [],
   position: 0,
   due_date: "2026-06-01T00:00:00Z",
   created_at: "2026-01-15T00:00:00Z",

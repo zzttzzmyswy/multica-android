@@ -10,8 +10,6 @@ export interface CreateIssueRequest {
   assignee_type?: IssueAssigneeType;
   assignee_id?: string;
   parent_issue_id?: string;
-  acceptance_criteria?: string[];
-  context_refs?: string[];
   due_date?: string;
 }
 
@@ -24,8 +22,6 @@ export interface UpdateIssueRequest {
   assignee_id?: string | null;
   position?: number;
   due_date?: string | null;
-  acceptance_criteria?: string[];
-  context_refs?: string[];
 }
 
 export interface ListIssuesParams {
