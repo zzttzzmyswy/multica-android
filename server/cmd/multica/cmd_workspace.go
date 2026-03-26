@@ -23,28 +23,24 @@ var workspaceListCmd = &cobra.Command{
 	RunE:  runWorkspaceList,
 }
 
-var watchCmd = &cobra.Command{
+var workspaceWatchCmd = &cobra.Command{
 	Use:   "watch <workspace-id>",
 	Short: "Add a workspace to the daemon watch list",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runWatch,
 }
 
-var unwatchCmd = &cobra.Command{
+var workspaceUnwatchCmd = &cobra.Command{
 	Use:   "unwatch <workspace-id>",
 	Short: "Remove a workspace from the daemon watch list",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runUnwatch,
 }
 
-var watchesCmd = &cobra.Command{
-	Use:   "watches",
-	Short: "List workspaces the daemon is watching",
-	RunE:  runWatches,
-}
-
 func init() {
 	workspaceCmd.AddCommand(workspaceListCmd)
+	workspaceCmd.AddCommand(workspaceWatchCmd)
+	workspaceCmd.AddCommand(workspaceUnwatchCmd)
 }
 
 func runWorkspaceList(cmd *cobra.Command, _ []string) error {
@@ -152,27 +148,4 @@ func runUnwatch(_ *cobra.Command, args []string) error {
 
 	fmt.Fprintf(os.Stderr, "Stopped watching workspace %s\n", workspaceID)
 	return nil
-}
-
-func runWatches(_ *cobra.Command, _ []string) error {
-	cfg, err := cli.LoadCLIConfig()
-	if err != nil {
-		return err
-	}
-
-	if len(cfg.WatchedWorkspaces) == 0 {
-		fmt.Fprintln(os.Stderr, "No watched workspaces. Run 'multica watch <id>' to add one.")
-		return nil
-	}
-
-	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tNAME")
-	for _, ws := range cfg.WatchedWorkspaces {
-		name := ws.Name
-		if name == "" {
-			name = "-"
-		}
-		fmt.Fprintf(w, "%s\t%s\n", ws.ID, name)
-	}
-	return w.Flush()
 }

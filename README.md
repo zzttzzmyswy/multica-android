@@ -140,9 +140,9 @@ multica workspace list      # List all workspaces you belong to
 The daemon monitors one or more workspaces for tasks. Manage which workspaces are watched:
 
 ```bash
-multica watch <workspace-id>    # Add a workspace to the watch list
-multica unwatch <workspace-id>  # Remove a workspace from the watch list
-multica watches                 # Show the current watch list
+multica workspace watch <workspace-id>    # Add a workspace to the watch list
+multica workspace unwatch <workspace-id>  # Remove a workspace from the watch list
+multica workspace list                    # Show all workspaces (watched ones marked with *)
 ```
 
 The watch list is stored in `~/.multica/config.json`. Changes are picked up by a running daemon within 5 seconds (hot-reload).
@@ -156,7 +156,7 @@ The daemon polls watched workspaces for tasks and executes them using locally in
 multica auth login
 
 # 2. Add workspaces to watch
-multica watch <workspace-id>
+multica workspace watch <workspace-id>
 
 # 3. Start the daemon
 multica daemon
