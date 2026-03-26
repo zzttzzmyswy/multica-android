@@ -27,27 +27,29 @@ type dbExecutor interface {
 }
 
 type Handler struct {
-	Queries     *db.Queries
-	DB          dbExecutor
-	TxStarter   txStarter
-	Hub         *realtime.Hub
-	Bus         *events.Bus
-	TaskService *service.TaskService
+	Queries      *db.Queries
+	DB           dbExecutor
+	TxStarter    txStarter
+	Hub          *realtime.Hub
+	Bus          *events.Bus
+	TaskService  *service.TaskService
+	EmailService *service.EmailService
 }
 
-func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub, bus *events.Bus) *Handler {
+func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub, bus *events.Bus, emailService *service.EmailService) *Handler {
 	var executor dbExecutor
 	if candidate, ok := txStarter.(dbExecutor); ok {
 		executor = candidate
 	}
 
 	return &Handler{
-		Queries:     queries,
-		DB:          executor,
-		TxStarter:   txStarter,
-		Hub:         hub,
-		Bus:         bus,
-		TaskService: service.NewTaskService(queries, hub, bus),
+		Queries:      queries,
+		DB:           executor,
+		TxStarter:    txStarter,
+		Hub:          hub,
+		Bus:          bus,
+		TaskService:  service.NewTaskService(queries, hub, bus),
+		EmailService: emailService,
 	}
 }
 

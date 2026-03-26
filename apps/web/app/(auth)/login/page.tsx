@@ -4,7 +4,6 @@ import { Suspense, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
-import { useNavigationStore } from "@/features/navigation";
 import { api } from "@/shared/api";
 import {
   Card,
@@ -41,9 +40,8 @@ function LoginPageContent() {
       await login(email, name || undefined);
       const wsList = await api.listWorkspaces();
       await hydrateWorkspace(wsList);
-      const fallback = useNavigationStore.getState().lastPath;
-      router.push(searchParams.get("next") || fallback);
-    } catch (err) {
+      router.push(searchParams.get("next") || "/issues");
+    } catch {
       setError("Login failed. Make sure the server is running.");
       setSubmitting(false);
     }

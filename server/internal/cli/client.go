@@ -20,15 +20,26 @@ import (
 type APIClient struct {
 	BaseURL     string
 	WorkspaceID string
+	Token       string
 	HTTPClient  *http.Client
 }
 
 // NewAPIClient creates a new API client for ctrl commands.
-func NewAPIClient(baseURL, workspaceID string) *APIClient {
+func NewAPIClient(baseURL, workspaceID, token string) *APIClient {
 	return &APIClient{
 		BaseURL:     strings.TrimRight(baseURL, "/"),
 		WorkspaceID: workspaceID,
+		Token:       token,
 		HTTPClient:  &http.Client{Timeout: 15 * time.Second},
+	}
+}
+
+func (c *APIClient) setHeaders(req *http.Request) {
+	if c.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+	}
+	if c.WorkspaceID != "" {
+		req.Header.Set("X-Workspace-ID", c.WorkspaceID)
 	}
 }
 
@@ -38,9 +49,7 @@ func (c *APIClient) GetJSON(ctx context.Context, path string, out any) error {
 	if err != nil {
 		return err
 	}
-	if c.WorkspaceID != "" {
-		req.Header.Set("X-Workspace-ID", c.WorkspaceID)
-	}
+	c.setHeaders(req)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -64,9 +73,7 @@ func (c *APIClient) DeleteJSON(ctx context.Context, path string) error {
 	if err != nil {
 		return err
 	}
-	if c.WorkspaceID != "" {
-		req.Header.Set("X-Workspace-ID", c.WorkspaceID)
-	}
+	c.setHeaders(req)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -81,6 +88,36 @@ func (c *APIClient) DeleteJSON(ctx context.Context, path string) error {
 	return nil
 }
 
+// PostJSON performs a POST request with a JSON body.
+func (c *APIClient) PostJSON(ctx context.Context, path string, body any, out any) error {
+	data, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+path, bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	c.setHeaders(req)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		respData, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("POST %s returned %d: %s", path, resp.StatusCode, strings.TrimSpace(string(respData)))
+	}
+	if out == nil {
+		return nil
+	}
+	return json.NewDecoder(resp.Body).Decode(out)
+}
+
 // PutJSON performs a PUT request with a JSON body.
 func (c *APIClient) PutJSON(ctx context.Context, path string, body any, out any) error {
 	data, err := json.Marshal(body)
@@ -93,9 +130,7 @@ func (c *APIClient) PutJSON(ctx context.Context, path string, body any, out any)
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if c.WorkspaceID != "" {
-		req.Header.Set("X-Workspace-ID", c.WorkspaceID)
-	}
+	c.setHeaders(req)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {

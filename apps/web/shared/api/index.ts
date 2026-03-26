@@ -19,4 +19,5 @@ if (typeof window !== "undefined") {
   if (wsId) {
     api.setWorkspaceId(wsId);
   }
+
 }

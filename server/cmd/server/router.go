@@ -16,6 +16,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/handler"
 	"github.com/multica-ai/multica/server/internal/middleware"
 	"github.com/multica-ai/multica/server/internal/realtime"
+	"github.com/multica-ai/multica/server/internal/service"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -45,7 +46,8 @@ func allowedOrigins() []string {
 // NewRouter creates the fully-configured Chi router with all middleware and routes.
 func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Router {
 	queries := db.New(pool)
-	h := handler.New(queries, pool, hub, bus)
+	emailSvc := service.NewEmailService()
+	h := handler.New(queries, pool, hub, bus, emailSvc)
 
 	r := chi.NewRouter()
 
@@ -74,7 +76,8 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 	})
 
 	// Auth (public)
-	r.Post("/auth/login", h.Login)
+	r.Post("/auth/send-code", h.SendCode)
+	r.Post("/auth/verify-code", h.VerifyCode)
 
 	// Daemon API routes (no user auth; daemon auth deferred to later)
 	r.Route("/api/daemon", func(r chi.Router) {
@@ -96,7 +99,7 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 
 	// Protected API routes
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.Auth)
+		r.Use(middleware.Auth(queries))
 
 		// Auth
 		r.Get("/api/me", h.GetMe)
@@ -154,6 +157,13 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 		})
 
 		r.Post("/api/daemon/pairing-sessions/{token}/approve", h.ApproveDaemonPairingSession)
+
+		// Personal Access Tokens
+		r.Route("/api/tokens", func(r chi.Router) {
+			r.Get("/", h.ListPersonalAccessTokens)
+			r.Post("/", h.CreatePersonalAccessToken)
+			r.Delete("/{id}", h.RevokePersonalAccessToken)
+		})
 
 		// Inbox
 		r.Route("/api/inbox", func(r chi.Router) {

@@ -23,6 +23,9 @@ import type {
   CreateSkillRequest,
   UpdateSkillRequest,
   SetAgentSkillsRequest,
+  PersonalAccessToken,
+  CreatePersonalAccessTokenRequest,
+  CreatePersonalAccessTokenResponse,
 } from "@/shared/types";
 import { type Logger, noopLogger } from "@/shared/logger";
 
@@ -371,5 +374,21 @@ export class ApiClient {
       method: "PUT",
       body: JSON.stringify(data),
     });
+  }
+
+  // Personal Access Tokens
+  async listPersonalAccessTokens(): Promise<PersonalAccessToken[]> {
+    return this.fetch("/api/tokens");
+  }
+
+  async createPersonalAccessToken(data: CreatePersonalAccessTokenRequest): Promise<CreatePersonalAccessTokenResponse> {
+    return this.fetch("/api/tokens", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async revokePersonalAccessToken(id: string): Promise<void> {
+    await this.fetch(`/api/tokens/${id}`, { method: "DELETE" });
   }
 }

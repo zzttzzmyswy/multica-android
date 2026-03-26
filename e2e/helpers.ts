@@ -7,16 +7,20 @@ const DEFAULT_E2E_WORKSPACE = "e2e-workspace";
 
 /**
  * Log in as the default E2E user and ensure the workspace exists first.
+ * Authenticates via API (send-code → DB read → verify-code), then injects
+ * the token into localStorage so the browser session is authenticated.
  */
 export async function loginAsDefault(page: Page) {
   const api = new TestApiClient();
   await api.login(DEFAULT_E2E_EMAIL, DEFAULT_E2E_NAME);
   await api.ensureWorkspace("E2E Workspace", DEFAULT_E2E_WORKSPACE);
 
+  const token = api.getToken();
   await page.goto("/login");
-  await page.fill('input[placeholder="Name"]', DEFAULT_E2E_NAME);
-  await page.fill('input[placeholder="Email"]', DEFAULT_E2E_EMAIL);
-  await page.click('button[type="submit"]');
+  await page.evaluate((t) => {
+    localStorage.setItem("multica_token", t);
+  }, token);
+  await page.goto("/issues");
   await page.waitForURL("**/issues", { timeout: 10000 });
 }
 

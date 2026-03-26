@@ -39,6 +39,8 @@ apps/web/
 | `features/issues/` | Issue state, components, config | `useIssueStore`, icons, pickers, status/priority config |
 | `features/inbox/` | Inbox notification state | `useInboxStore` |
 | `features/realtime/` | WebSocket connection + sync | `WSProvider`, `useWSEvent`, `useRealtimeSync` |
+| `features/modals/` | Modal registry and state | Modal store and components |
+| `features/skills/` | Skill management | Skill components |
 
 **`shared/`** — Code used across multiple features:
 - `shared/api/` — `ApiClient` (REST) and `WSClient` (WebSocket) for backend communication, plus the `api` singleton.
@@ -91,6 +93,7 @@ Browser ← WSClient (shared/api) ← WebSocket ← Hub.Broadcast() ← Handlers
 - **Agent SDK** (`pkg/agent/`): Unified `Backend` interface for executing prompts via Claude Code or Codex. Each backend spawns its CLI and streams results via `Session.Messages` + `Session.Result` channels.
 - **Daemon** (`internal/daemon/`): Local agent runtime — auto-detects available CLIs (claude, codex), registers runtimes, polls for tasks, routes by provider.
 - **CLI** (`internal/cli/`): Shared helpers for the `multica` CLI — API client, config management, output formatting.
+- **Events** (`internal/events/`): Internal event bus for decoupled communication between handlers and services.
 - **Database**: sqlc generates Go code from SQL in `pkg/db/queries/` → `pkg/db/generated/`. Migrations in `migrations/`.
 - **Routes** (`cmd/server/router.go`): Public routes (auth, health, ws) + protected routes (require JWT) + daemon routes (unauthenticated, separate auth model).
 
@@ -142,7 +145,8 @@ make db-down          # Stop shared PostgreSQL
 
 ### Worktree Support
 
-For isolated feature testing with a separate database:
+All checkouts share one PostgreSQL container. Isolation is at the database level — each worktree gets its own DB name and unique ports via `.env.worktree`. Main checkouts use `.env`.
+
 ```bash
 make worktree-env       # Generate .env.worktree with unique DB/ports
 make setup-worktree     # Setup using .env.worktree

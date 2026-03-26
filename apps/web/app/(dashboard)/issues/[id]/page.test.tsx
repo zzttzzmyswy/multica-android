@@ -1,6 +1,6 @@
-import { Suspense, forwardRef, useState, useImperativeHandle } from "react";
+import { Suspense, forwardRef, useRef, useState, useImperativeHandle } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, act } from "@testing-library/react";
+import { render, screen, waitFor, act, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Issue, Comment } from "@/shared/types";
 
@@ -74,16 +74,18 @@ vi.mock("@/components/ui/calendar", () => ({
 // Mock RichTextEditor (Tiptap needs real DOM)
 vi.mock("@/components/common/rich-text-editor", () => ({
   RichTextEditor: forwardRef(({ defaultValue, onUpdate, placeholder, onSubmit }: any, ref: any) => {
+    const valueRef = useRef(defaultValue || "");
     const [value, setValue] = useState(defaultValue || "");
     useImperativeHandle(ref, () => ({
-      getMarkdown: () => value,
-      clearContent: () => setValue(""),
+      getMarkdown: () => valueRef.current,
+      clearContent: () => { valueRef.current = ""; setValue(""); },
       focus: () => {},
     }));
     return (
       <textarea
         value={value}
         onChange={(e) => {
+          valueRef.current = e.target.value;
           setValue(e.target.value);
           onUpdate?.(e.target.value);
         }}
@@ -268,11 +270,20 @@ describe("IssueDetailPage", () => {
     });
 
     const commentInput = screen.getByPlaceholderText("Leave a comment...");
-    await user.type(commentInput, "New test comment");
 
-    // Find the Send button (sibling of the editor wrapper)
-    const commentSection = commentInput.closest(".flex.items-start")!;
-    const submitBtn = commentSection.querySelector("button")!;
+    // Use fireEvent to update the textarea value and trigger onUpdate
+    await act(async () => {
+      fireEvent.change(commentInput, { target: { value: "New test comment" } });
+    });
+
+    // Wait for button to be enabled after commentEmpty state update
+    const allButtons = screen.getAllByRole("button");
+    const submitBtn = allButtons.find(
+      (btn) => btn.querySelector(".lucide-arrow-up") !== null,
+    )!;
+    await waitFor(() => {
+      expect(submitBtn).not.toBeDisabled();
+    });
     await user.click(submitBtn);
 
     await waitFor(() => {
