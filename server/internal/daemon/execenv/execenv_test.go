@@ -102,10 +102,6 @@ func TestPrepareDirectoryMode(t *testing.T) {
 		Task: TaskContextForEnv{
 			IssueTitle:       "Fix the bug",
 			IssueDescription: "There is a bug in the login flow.",
-			AcceptanceCriteria: []string{
-				"Login works",
-				"Tests pass",
-			},
 			AgentSkills: []SkillContextForEnv{
 				{Name: "Code Review", Content: "Be concise."},
 			},
@@ -136,7 +132,7 @@ func TestPrepareDirectoryMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read issue_context.md: %v", err)
 	}
-	for _, want := range []string{"Fix the bug", "login flow", "Login works", "Tests pass", "Code Review"} {
+	for _, want := range []string{"Fix the bug", "login flow", "Code Review"} {
 		if !strings.Contains(string(content), want) {
 			t.Fatalf("issue_context.md missing %q", want)
 		}

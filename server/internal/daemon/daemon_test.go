@@ -24,9 +24,8 @@ func TestBuildPromptIncludesIssueAndContext(t *testing.T) {
 	prompt := BuildPrompt(Task{
 		Context: TaskContext{
 			Issue: IssueContext{
-				Title:              "Fix failing test",
-				Description:        "Investigate and fix the test failure.",
-				AcceptanceCriteria: []string{"tests pass"},
+				Title:       "Fix failing test",
+				Description: "Investigate and fix the test failure.",
 			},
 			Agent: AgentContext{
 				Name: "Local Codex",
@@ -37,11 +36,10 @@ func TestBuildPromptIncludesIssueAndContext(t *testing.T) {
 		},
 	})
 
-	// Lean prompt: issue + acceptance criteria only. No inlined skill content.
+	// Lean prompt: issue title + description only. No inlined skill content.
 	for _, want := range []string{
 		"Fix failing test",
 		"Investigate and fix the test failure.",
-		"tests pass",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("prompt missing %q", want)
