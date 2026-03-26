@@ -1,6 +1,5 @@
 packages:
   - "apps/*"
-  - "packages/*"
 
 catalog:
   # Core React
