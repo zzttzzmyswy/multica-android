@@ -16,13 +16,12 @@ const (
 	DefaultHeartbeatInterval = 15 * time.Second
 	DefaultAgentTimeout      = 2 * time.Hour
 	DefaultRuntimeName       = "Local Agent"
+	DefaultConfigReloadInterval = 5 * time.Second
 )
 
 // Config holds all daemon configuration.
 type Config struct {
 	ServerBaseURL     string
-	WorkspaceID       string
-	Token             string
 	DaemonID          string
 	DeviceName        string
 	RuntimeName       string
@@ -38,7 +37,6 @@ type Config struct {
 // Zero values are ignored and the env/default value is used instead.
 type Overrides struct {
 	ServerURL         string
-	WorkspaceID       string
 	WorkspacesRoot    string
 	PollInterval      time.Duration
 	HeartbeatInterval time.Duration
@@ -48,8 +46,8 @@ type Overrides struct {
 	RuntimeName       string
 }
 
-// LoadConfig builds the daemon configuration from environment variables,
-// persisted config, and optional CLI flag overrides.
+// LoadConfig builds the daemon configuration from environment variables
+// and optional CLI flag overrides.
 func LoadConfig(overrides Overrides) (Config, error) {
 	// Server URL: override > env > default
 	rawServerURL := envOrDefault("MULTICA_SERVER_URL", DefaultServerURL)
@@ -59,12 +57,6 @@ func LoadConfig(overrides Overrides) (Config, error) {
 	serverBaseURL, err := NormalizeServerBaseURL(rawServerURL)
 	if err != nil {
 		return Config{}, err
-	}
-
-	// Workspace ID: override > env (optional — resolved at runtime if empty)
-	workspaceID := strings.TrimSpace(os.Getenv("MULTICA_WORKSPACE_ID"))
-	if overrides.WorkspaceID != "" {
-		workspaceID = overrides.WorkspaceID
 	}
 
 	// Probe available agent CLIs
@@ -156,7 +148,6 @@ func LoadConfig(overrides Overrides) (Config, error) {
 
 	return Config{
 		ServerBaseURL:     serverBaseURL,
-		WorkspaceID:       workspaceID,
 		DaemonID:          daemonID,
 		DeviceName:        deviceName,
 		RuntimeName:       runtimeName,
@@ -192,4 +183,3 @@ func NormalizeServerBaseURL(raw string) (string, error) {
 	u.Fragment = ""
 	return strings.TrimRight(u.String(), "/"), nil
 }
-

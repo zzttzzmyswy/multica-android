@@ -33,7 +33,6 @@ func init() {
 func runDaemon(cmd *cobra.Command, _ []string) error {
 	overrides := daemon.Overrides{
 		ServerURL:   cli.FlagOrEnv(cmd, "server-url", "MULTICA_SERVER_URL", ""),
-		WorkspaceID: cli.FlagOrEnv(cmd, "workspace-id", "MULTICA_WORKSPACE_ID", ""),
 		DaemonID:    flagString(cmd, "daemon-id"),
 		DeviceName:  flagString(cmd, "device-name"),
 		RuntimeName: flagString(cmd, "runtime-name"),
@@ -69,4 +68,3 @@ func flagString(cmd *cobra.Command, name string) string {
 	val, _ := cmd.Flags().GetString(name)
 	return val
 }
-
