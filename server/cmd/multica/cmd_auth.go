@@ -132,7 +132,7 @@ func runAuthLoginBrowser(cmd *cobra.Command) error {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(`<!DOCTYPE html><html><body><h2>Authentication successful!</h2><p>You can close this tab and return to the terminal.</p><script>window.close()</script></body></html>`))
+		w.Write([]byte(callbackSuccessHTML))
 		jwtCh <- token
 	})
 
@@ -281,6 +281,45 @@ func runAuthStatus(cmd *cobra.Command, _ []string) error {
 	fmt.Fprintf(os.Stderr, "Server:  %s\nUser:    %s (%s)\nToken:   %s\n", serverURL, me.Name, me.Email, prefix)
 	return nil
 }
+
+const callbackSuccessHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Multica — Authenticated</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0b0b0f; --card-bg: #16161d; --border: rgba(255,255,255,0.10); --fg: #f5f5f5; --fg2: #a1a1aa; --accent: #22c55e; --accent-bg: rgba(34,197,94,0.12); }
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f8f8fa; --card-bg: #ffffff; --border: rgba(0,0,0,0.08); --fg: #0f0f12; --fg2: #71717a; --accent: #16a34a; --accent-bg: rgba(22,163,74,0.08); }
+  }
+  body { font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; background: var(--bg); color: var(--fg); display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  .card { width: 100%; max-width: 380px; border: 1px solid var(--border); border-radius: 12px; background: var(--card-bg); padding: 40px 32px; text-align: center; }
+  .icon-wrap { width: 48px; height: 48px; margin: 0 auto 24px; background: var(--accent-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .icon-wrap svg { width: 24px; height: 24px; color: var(--accent); }
+  .brand { display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 8px; }
+  .asterisk { display: inline-block; width: 14px; height: 14px; background: var(--fg); clip-path: polygon(45% 62.1%,45% 100%,55% 100%,55% 62.1%,81.8% 88.9%,88.9% 81.8%,62.1% 55%,100% 55%,100% 45%,62.1% 45%,88.9% 18.2%,81.8% 11.1%,55% 37.9%,55% 0%,45% 0%,45% 37.9%,18.2% 11.1%,11.1% 18.2%,37.9% 45%,0% 45%,0% 55%,37.9% 55%,11.1% 81.8%,18.2% 88.9%); }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
+  p { font-size: 14px; color: var(--fg2); line-height: 1.5; }
+  .hint { margin-top: 24px; font-size: 13px; color: var(--fg2); opacity: 0.7; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon-wrap">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+    </div>
+    <div class="brand"><span class="asterisk"></span></div>
+    <h1>Authentication successful</h1>
+    <p>You can close this tab and return to the terminal.</p>
+    <p class="hint">Your CLI session is now authenticated.</p>
+  </div>
+  <script>setTimeout(function(){window.close()},3000)</script>
+</body>
+</html>`
 
 func runAuthLogout(_ *cobra.Command, _ []string) error {
 	cfg, _ := cli.LoadCLIConfig()
