@@ -2,21 +2,70 @@ import type { IssueStatus } from "@multica/types";
 import { STATUS_CONFIG } from "@/features/issues/config";
 
 // ---------------------------------------------------------------------------
-// Circle geometry constants (viewBox 0 0 16 16, center 8,8, radius 6)
+// Geometry constants (viewBox 0 0 14 14, center 7,7)
 // ---------------------------------------------------------------------------
 
-const CX = 8;
-const CY = 8;
-const R = 6;
+const CX = 7;
+const CY = 7;
+const OUTER_R = 6;
+const FILL_R = 3.5;
 
 // ---------------------------------------------------------------------------
-// Per-status SVG renderers — Linear-style icons
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Build a pie-wedge SVG path from 12 o'clock, clockwise */
+function piePath(cx: number, cy: number, r: number, progress: number): string {
+  const angle = 2 * Math.PI * progress;
+  const endX = cx + r * Math.sin(angle);
+  const endY = cy - r * Math.cos(angle);
+  const largeArc = progress > 0.5 ? 1 : 0;
+  return `M${cx},${cy} L${cx},${cy - r} A${r},${r} 0 ${largeArc},1 ${endX},${endY} Z`;
+}
+
+// ---------------------------------------------------------------------------
+// Base component — dashed outer ring + pie fill + optional center icon
+// ---------------------------------------------------------------------------
+
+function ProgressCircle({
+  progress,
+  children,
+}: {
+  progress: number;
+  children?: React.ReactNode;
+}) {
+  return (
+    <>
+      {/* Outer dashed ring */}
+      <circle
+        cx={CX}
+        cy={CY}
+        r={OUTER_R}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        strokeDasharray="3.14 0"
+        strokeDashoffset={-0.7}
+      />
+      {/* Progress fill */}
+      {progress === 1 ? (
+        <circle cx={CX} cy={CY} r={OUTER_R} fill="currentColor" />
+      ) : progress > 0 ? (
+        <path d={piePath(CX, CY, FILL_R, progress)} fill="currentColor" />
+      ) : null}
+      {children}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Per-status renderers
 // ---------------------------------------------------------------------------
 
 /** 16 small dots arranged in a ring */
 function BacklogIcon() {
   const count = 16;
-  const dotR = 0.65;
+  const dotR = 0.55;
   return (
     <g>
       {Array.from({ length: count }, (_, i) => {
@@ -24,8 +73,8 @@ function BacklogIcon() {
         return (
           <circle
             key={i}
-            cx={CX + R * Math.cos(angle)}
-            cy={CY + R * Math.sin(angle)}
+            cx={CX + OUTER_R * Math.cos(angle)}
+            cy={CY + OUTER_R * Math.sin(angle)}
             r={dotR}
             fill="currentColor"
           />
@@ -35,97 +84,58 @@ function BacklogIcon() {
   );
 }
 
-/** Empty circle, solid outline */
 function TodoIcon() {
-  return (
-    <circle
-      cx={CX}
-      cy={CY}
-      r={R}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-    />
-  );
+  return <ProgressCircle progress={0} />;
 }
 
-/** Circle outline + right half filled (D-shape) */
 function InProgressIcon() {
-  return (
-    <>
-      <circle
-        cx={CX}
-        cy={CY}
-        r={R}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      />
-      <path
-        d={`M${CX},${CY - R} A${R},${R} 0 0,1 ${CX},${CY + R} Z`}
-        fill="currentColor"
-      />
-    </>
-  );
+  return <ProgressCircle progress={0.5} />;
 }
 
-/** Circle outline + 75% pie fill (bottom-left quarter empty) */
 function InReviewIcon() {
-  return (
-    <>
-      <circle
-        cx={CX}
-        cy={CY}
-        r={R}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      />
-      <path
-        d={`M${CX},${CY} L${CX},${CY - R} A${R},${R} 0 1,1 ${CX - R},${CY} Z`}
-        fill="currentColor"
-      />
-    </>
-  );
+  return <ProgressCircle progress={0.75} />;
 }
 
-/** Solid filled circle + white checkmark */
 function DoneIcon() {
   return (
-    <>
-      <circle cx={CX} cy={CY} r={R} fill="currentColor" />
+    <ProgressCircle progress={1}>
       <path
-        d="M5.5 8.2 L7.2 9.8 L10.5 6.2"
-        fill="none"
-        stroke="white"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        d="M10.951 4.24896C11.283 4.58091 11.283 5.11909 10.951 5.45104L5.95104 10.451C5.61909 10.783 5.0809 10.783 4.74896 10.451L2.74896 8.45104C2.41701 8.11909 2.41701 7.5809 2.74896 7.24896C3.0809 6.91701 3.61909 6.91701 3.95104 7.24896L5.35 8.64792L9.74896 4.24896C10.0809 3.91701 10.6191 3.91701 10.951 4.24896Z"
+        fill="white"
+        stroke="none"
       />
-    </>
+    </ProgressCircle>
   );
 }
 
-/** Circle outline + X inside */
-function CancelledIcon() {
+/** Outer ring + prohibition slash (🚫 style) */
+function BlockedIcon() {
   return (
-    <>
-      <circle
-        cx={CX}
-        cy={CY}
-        r={R}
-        fill="none"
+    <ProgressCircle progress={0}>
+      <line
+        x1={CX + FILL_R * Math.cos(Math.PI * 0.75)}
+        y1={CY - FILL_R * Math.sin(Math.PI * 0.75)}
+        x2={CX + FILL_R * Math.cos(-Math.PI * 0.25)}
+        y2={CY - FILL_R * Math.sin(-Math.PI * 0.25)}
         stroke="currentColor"
-        strokeWidth="1.5"
-      />
-      <path
-        d="M5.75 5.75 L10.25 10.25 M10.25 5.75 L5.75 10.25"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
+        strokeWidth={1.5}
         strokeLinecap="round"
       />
-    </>
+    </ProgressCircle>
+  );
+}
+
+function CancelledIcon() {
+  return (
+    <ProgressCircle progress={0}>
+      <path
+        d="M5 5 L9 9 M9 5 L5 9"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+      />
+    </ProgressCircle>
   );
 }
 
@@ -139,7 +149,7 @@ const STATUS_RENDERERS: Record<IssueStatus, () => React.ReactNode> = {
   in_progress: InProgressIcon,
   in_review: InReviewIcon,
   done: DoneIcon,
-  blocked: CancelledIcon, // fallback if backend sends blocked
+  blocked: BlockedIcon,
   cancelled: CancelledIcon,
 };
 
@@ -159,7 +169,7 @@ export function StatusIcon({
 
   return (
     <svg
-      viewBox="0 0 16 16"
+      viewBox="0 0 14 14"
       fill="none"
       className={`${className} ${cfg.iconColor} shrink-0`}
     >
