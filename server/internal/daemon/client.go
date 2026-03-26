@@ -36,12 +36,6 @@ func isWorkspaceNotFoundError(err error) bool {
 	return strings.Contains(strings.ToLower(reqErr.Body), "workspace not found")
 }
 
-// Workspace represents a workspace from the API.
-type Workspace struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
 // Client handles HTTP communication with the Multica server daemon API.
 type Client struct {
 	baseURL string
@@ -60,15 +54,6 @@ func NewClient(baseURL string) *Client {
 // SetToken sets the auth token for authenticated requests.
 func (c *Client) SetToken(token string) {
 	c.token = token
-}
-
-// ListWorkspaces fetches the user's workspaces using the auth token.
-func (c *Client) ListWorkspaces(ctx context.Context) ([]Workspace, error) {
-	var ws []Workspace
-	if err := c.getJSON(ctx, "/api/workspaces", &ws); err != nil {
-		return nil, err
-	}
-	return ws, nil
 }
 
 func (c *Client) ClaimTask(ctx context.Context, runtimeID string) (*Task, error) {

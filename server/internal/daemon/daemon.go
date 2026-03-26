@@ -204,6 +204,8 @@ func (d *Daemon) configWatchLoop(ctx context.Context) {
 }
 
 // reloadWorkspaces reconciles the active workspace set with the config file.
+// NOTE: Token changes (e.g. re-login as a different user) are not picked up;
+// the daemon must be restarted for a new auth token to take effect.
 func (d *Daemon) reloadWorkspaces(ctx context.Context) {
 	d.reloading.Lock()
 	defer d.reloading.Unlock()

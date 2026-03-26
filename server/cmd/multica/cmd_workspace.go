@@ -123,6 +123,7 @@ func runWatch(cmd *cobra.Command, args []string) error {
 
 	if cfg.WorkspaceID == "" {
 		cfg.WorkspaceID = ws.ID
+		fmt.Fprintf(os.Stderr, "Set default workspace to %s (%s)\n", ws.ID, ws.Name)
 	}
 
 	if err := cli.SaveCLIConfig(cfg); err != nil {
