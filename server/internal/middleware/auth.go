@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -14,12 +15,14 @@ func Auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
+			slog.Debug("auth: missing authorization header", "path", r.URL.Path)
 			http.Error(w, `{"error":"missing authorization header"}`, http.StatusUnauthorized)
 			return
 		}
 
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		if tokenString == authHeader {
+			slog.Debug("auth: invalid format", "path", r.URL.Path)
 			http.Error(w, `{"error":"invalid authorization format"}`, http.StatusUnauthorized)
 			return
 		}
@@ -31,18 +34,21 @@ func Auth(next http.Handler) http.Handler {
 			return auth.JWTSecret(), nil
 		})
 		if err != nil || !token.Valid {
+			slog.Warn("auth: invalid token", "path", r.URL.Path, "error", err)
 			http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 			return
 		}
 
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
+			slog.Warn("auth: invalid claims", "path", r.URL.Path)
 			http.Error(w, `{"error":"invalid claims"}`, http.StatusUnauthorized)
 			return
 		}
 
 		sub, ok := claims["sub"].(string)
 		if !ok || strings.TrimSpace(sub) == "" {
+			slog.Warn("auth: invalid claims", "path", r.URL.Path)
 			http.Error(w, `{"error":"invalid claims"}`, http.StatusUnauthorized)
 			return
 		}

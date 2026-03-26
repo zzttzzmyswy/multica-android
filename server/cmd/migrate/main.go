@@ -3,16 +3,19 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/multica-ai/multica/server/internal/logger"
 )
 
 func main() {
+	logger.Init()
+
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: go run ./cmd/migrate <up|down>")
 		os.Exit(1)
@@ -32,12 +35,14 @@ func main() {
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, dbURL)
 	if err != nil {
-		log.Fatalf("Unable to connect to database: %v", err)
+		slog.Error("unable to connect to database", "error", err)
+		os.Exit(1)
 	}
 	defer pool.Close()
 
 	if err := pool.Ping(ctx); err != nil {
-		log.Fatalf("Unable to ping database: %v", err)
+		slog.Error("unable to ping database", "error", err)
+		os.Exit(1)
 	}
 
 	// Create migrations tracking table
@@ -48,7 +53,8 @@ func main() {
 		)
 	`)
 	if err != nil {
-		log.Fatalf("Failed to create migrations table: %v", err)
+		slog.Error("failed to create migrations table", "error", err)
+		os.Exit(1)
 	}
 
 	// Find migration files
@@ -61,7 +67,8 @@ func main() {
 	suffix := "." + direction + ".sql"
 	files, err := filepath.Glob(filepath.Join(migrationsDir, "*"+suffix))
 	if err != nil {
-		log.Fatalf("Failed to find migration files: %v", err)
+		slog.Error("failed to find migration files", "error", err)
+		os.Exit(1)
 	}
 
 	if direction == "up" {
@@ -78,7 +85,8 @@ func main() {
 			var exists bool
 			err := pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)", version).Scan(&exists)
 			if err != nil {
-				log.Fatalf("Failed to check migration status: %v", err)
+				slog.Error("failed to check migration status", "version", version, "error", err)
+				os.Exit(1)
 			}
 			if exists {
 				fmt.Printf("  skip  %s (already applied)\n", version)
@@ -89,7 +97,8 @@ func main() {
 			var exists bool
 			err := pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)", version).Scan(&exists)
 			if err != nil {
-				log.Fatalf("Failed to check migration status: %v", err)
+				slog.Error("failed to check migration status", "version", version, "error", err)
+				os.Exit(1)
 			}
 			if !exists {
 				fmt.Printf("  skip  %s (not applied)\n", version)
@@ -99,12 +108,14 @@ func main() {
 
 		sql, err := os.ReadFile(file)
 		if err != nil {
-			log.Fatalf("Failed to read %s: %v", file, err)
+			slog.Error("failed to read migration file", "file", file, "error", err)
+			os.Exit(1)
 		}
 
 		_, err = pool.Exec(ctx, string(sql))
 		if err != nil {
-			log.Fatalf("Failed to run %s: %v", file, err)
+			slog.Error("failed to run migration", "file", file, "error", err)
+			os.Exit(1)
 		}
 
 		if direction == "up" {
@@ -113,7 +124,8 @@ func main() {
 			_, err = pool.Exec(ctx, "DELETE FROM schema_migrations WHERE version = $1", version)
 		}
 		if err != nil {
-			log.Fatalf("Failed to record migration %s: %v", version, err)
+			slog.Error("failed to record migration", "version", version, "error", err)
+			os.Exit(1)
 		}
 
 		fmt.Printf("  %s  %s\n", direction, version)

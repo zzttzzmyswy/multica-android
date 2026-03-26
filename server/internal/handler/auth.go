@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/auth"
+	"github.com/multica-ai/multica/server/internal/logger"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -167,6 +169,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	user, err := h.Queries.GetUserByEmail(r.Context(), req.Email)
 	if err != nil {
 		if !isNotFound(err) {
+			slog.Warn("login failed", append(logger.RequestAttrs(r), "error", err, "email", req.Email)...)
 			writeError(w, http.StatusInternalServerError, "failed to load user")
 			return
 		}
@@ -181,9 +184,11 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 			Email: req.Email,
 		})
 		if err != nil {
+			slog.Warn("login failed", append(logger.RequestAttrs(r), "error", err, "email", req.Email)...)
 			writeError(w, http.StatusInternalServerError, "failed to create user: "+err.Error())
 			return
 		}
+		slog.Info("new user created", append(logger.RequestAttrs(r), "user_id", uuidToString(user.ID), "email", user.Email)...)
 	} else if req.Name != "" && req.Name != user.Name {
 		user, err = h.Queries.UpdateUser(r.Context(), db.UpdateUserParams{
 			ID:   user.ID,
@@ -196,6 +201,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.ensureUserWorkspace(r.Context(), user); err != nil {
+		slog.Warn("login failed", append(logger.RequestAttrs(r), "error", err, "email", req.Email)...)
 		writeError(w, http.StatusInternalServerError, "failed to provision workspace")
 		return
 	}
@@ -211,10 +217,12 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	tokenString, err := token.SignedString(auth.JWTSecret())
 	if err != nil {
+		slog.Warn("login failed", append(logger.RequestAttrs(r), "error", err, "email", req.Email)...)
 		writeError(w, http.StatusInternalServerError, "failed to generate token")
 		return
 	}
 
+	slog.Info("user logged in", append(logger.RequestAttrs(r), "user_id", uuidToString(user.ID), "email", user.Email)...)
 	writeJSON(w, http.StatusOK, LoginResponse{
 		Token: tokenString,
 		User:  userToResponse(user),

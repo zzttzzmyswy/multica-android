@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/multica-ai/multica/server/internal/logger"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
@@ -276,9 +277,11 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		Triggers:           triggers,
 	})
 	if err != nil {
+		slog.Warn("create agent failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", workspaceID)...)
 		writeError(w, http.StatusInternalServerError, "failed to create agent: "+err.Error())
 		return
 	}
+	slog.Info("agent created", append(logger.RequestAttrs(r), "agent_id", uuidToString(agent.ID), "name", agent.Name, "workspace_id", workspaceID)...)
 
 	if runtime.Status == "online" {
 		h.TaskService.ReconcileAgentStatus(r.Context(), agent.ID)
@@ -331,7 +334,7 @@ func (h *Handler) createAgentInitIssue(ctx context.Context, agent db.Agent, crea
 
 	// Enqueue the task directly — we know the agent is assigned and status is "todo".
 	if _, err := h.TaskService.EnqueueTaskForIssue(ctx, issue); err != nil {
-		log.Printf("createAgentInitIssue: enqueue task failed for issue %s: %v", issue.Title, err)
+		slog.Warn("createAgentInitIssue: enqueue task failed", "issue_title", issue.Title, "error", err)
 	}
 }
 
@@ -413,11 +416,13 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 
 	agent, err := h.Queries.UpdateAgent(r.Context(), params)
 	if err != nil {
+		slog.Warn("update agent failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
 		writeError(w, http.StatusInternalServerError, "failed to update agent: "+err.Error())
 		return
 	}
 
 	resp := agentToResponse(agent)
+	slog.Info("agent updated", append(logger.RequestAttrs(r), "agent_id", id, "workspace_id", uuidToString(agent.WorkspaceID))...)
 	userID := requestUserID(r)
 	h.publish(protocol.EventAgentStatus, uuidToString(agent.WorkspaceID), "member", userID, map[string]any{"agent": resp})
 	writeJSON(w, http.StatusOK, resp)
@@ -438,10 +443,12 @@ func (h *Handler) DeleteAgent(w http.ResponseWriter, r *http.Request) {
 
 	err := h.Queries.DeleteAgent(r.Context(), parseUUID(id))
 	if err != nil {
+		slog.Warn("delete agent failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
 		writeError(w, http.StatusInternalServerError, "failed to delete agent")
 		return
 	}
 
+	slog.Info("agent deleted", append(logger.RequestAttrs(r), "agent_id", id, "workspace_id", wsID)...)
 	userID := requestUserID(r)
 	h.publish(protocol.EventAgentDeleted, wsID, "member", userID, map[string]any{"agent_id": id, "workspace_id": wsID})
 	w.WriteHeader(http.StatusNoContent)

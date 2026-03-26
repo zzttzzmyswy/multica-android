@@ -2,7 +2,7 @@ package execenv
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -57,18 +57,18 @@ func runGitWorktreeAdd(gitRoot, worktreePath, branchName, baseRef string) error 
 }
 
 // removeGitWorktree removes a worktree and its branch. Best-effort: logs errors.
-func removeGitWorktree(gitRoot, worktreePath, branchName string, logger *log.Logger) {
+func removeGitWorktree(gitRoot, worktreePath, branchName string, logger *slog.Logger) {
 	// Remove the worktree.
 	cmd := exec.Command("git", "-C", gitRoot, "worktree", "remove", "--force", worktreePath)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		logger.Printf("execenv: git worktree remove: %s: %v", strings.TrimSpace(string(out)), err)
+		logger.Warn("execenv: git worktree remove failed", "output", strings.TrimSpace(string(out)), "error", err)
 	}
 
 	// Delete the branch (best-effort).
 	if branchName != "" {
 		cmd = exec.Command("git", "-C", gitRoot, "branch", "-D", branchName)
 		if out, err := cmd.CombinedOutput(); err != nil {
-			logger.Printf("execenv: git branch -D %s: %s: %v", branchName, strings.TrimSpace(string(out)), err)
+			logger.Warn("execenv: git branch delete failed", "branch", branchName, "output", strings.TrimSpace(string(out)), "error", err)
 		}
 	}
 }

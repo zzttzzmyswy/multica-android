@@ -2,7 +2,7 @@ package realtime
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -68,7 +68,7 @@ func (h *Hub) Run() {
 				total += len(r)
 			}
 			h.mu.Unlock()
-			log.Printf("Client connected (workspace=%s). Total: %d", room, total)
+			slog.Info("ws client connected", "workspace_id", room, "total_clients", total)
 
 		case client := <-h.unregister:
 			h.mu.Lock()
@@ -87,7 +87,7 @@ func (h *Hub) Run() {
 				total += len(r)
 			}
 			h.mu.Unlock()
-			log.Printf("Client disconnected (workspace=%s). Total: %d", room, total)
+			slog.Info("ws client disconnected", "workspace_id", room, "total_clients", total)
 
 		case message := <-h.broadcast:
 			// Global broadcast for daemon events (no workspace filtering)
@@ -202,7 +202,7 @@ func HandleWebSocket(hub *Hub, mc MembershipChecker, w http.ResponseWriter, r *h
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("WebSocket upgrade error: %v", err)
+		slog.Error("websocket upgrade failed", "error", err)
 		return
 	}
 
@@ -226,15 +226,15 @@ func (c *Client) readPump() {
 	}()
 
 	for {
-		_, message, err := c.conn.ReadMessage()
+		_, _, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-				log.Printf("WebSocket read error: %v", err)
+				slog.Debug("websocket read error", "error", err, "user_id", c.userID, "workspace_id", c.workspaceID)
 			}
 			break
 		}
 		// TODO: Route inbound messages to appropriate handlers
-		log.Printf("Received message from user=%s workspace=%s: %s", c.userID, c.workspaceID, message)
+		slog.Debug("ws message received", "user_id", c.userID, "workspace_id", c.workspaceID)
 	}
 }
 
@@ -243,7 +243,7 @@ func (c *Client) writePump() {
 
 	for message := range c.send {
 		if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
-			log.Printf("WebSocket write error: %v", err)
+			slog.Warn("websocket write error", "error", err)
 			return
 		}
 	}

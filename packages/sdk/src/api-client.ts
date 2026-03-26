@@ -24,6 +24,7 @@ import type {
   UpdateSkillRequest,
   SetAgentSkillsRequest,
 } from "@multica/types";
+import { type SDKLogger, noopLogger } from "./logger";
 
 export interface LoginResponse {
   token: string;
@@ -34,9 +35,11 @@ export class ApiClient {
   private baseUrl: string;
   private token: string | null = null;
   private workspaceId: string | null = null;
+  private logger: SDKLogger;
 
-  constructor(baseUrl: string) {
+  constructor(baseUrl: string, options?: { logger?: SDKLogger }) {
     this.baseUrl = baseUrl;
+    this.logger = options?.logger ?? noopLogger;
   }
 
   setToken(token: string | null) {
@@ -48,8 +51,13 @@ export class ApiClient {
   }
 
   private async fetch<T>(path: string, init?: RequestInit): Promise<T> {
+    const rid = crypto.randomUUID().slice(0, 8);
+    const start = Date.now();
+    const method = init?.method ?? "GET";
+
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
+      "X-Request-ID": rid,
       ...((init?.headers as Record<string, string>) ?? {}),
     };
     if (this.token) {
@@ -58,6 +66,8 @@ export class ApiClient {
     if (this.workspaceId) {
       headers["X-Workspace-ID"] = this.workspaceId;
     }
+
+    this.logger.info(`→ ${method} ${path}`, { rid });
 
     const res = await fetch(`${this.baseUrl}${path}`, {
       ...init,
@@ -74,8 +84,11 @@ export class ApiClient {
       } catch {
         // Ignore non-JSON error bodies.
       }
+      this.logger.error(`← ${res.status} ${path}`, { rid, duration: `${Date.now() - start}ms`, error: message });
       throw new Error(message);
     }
+
+    this.logger.info(`← ${res.status} ${path}`, { rid, duration: `${Date.now() - start}ms` });
 
     // Handle 204 No Content
     if (res.status === 204) {
@@ -234,6 +247,22 @@ export class ApiClient {
 
   async getUnreadInboxCount(): Promise<{ count: number }> {
     return this.fetch("/api/inbox/unread-count");
+  }
+
+  async markAllInboxRead(): Promise<{ count: number }> {
+    return this.fetch("/api/inbox/mark-all-read", { method: "POST" });
+  }
+
+  async archiveAllInbox(): Promise<{ count: number }> {
+    return this.fetch("/api/inbox/archive-all", { method: "POST" });
+  }
+
+  async archiveAllReadInbox(): Promise<{ count: number }> {
+    return this.fetch("/api/inbox/archive-all-read", { method: "POST" });
+  }
+
+  async archiveCompletedInbox(): Promise<{ count: number }> {
+    return this.fetch("/api/inbox/archive-completed", { method: "POST" });
   }
 
   // Workspaces

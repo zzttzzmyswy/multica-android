@@ -2,9 +2,11 @@ package handler
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/multica-ai/multica/server/internal/logger"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
@@ -93,11 +95,13 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 		Type:       req.Type,
 	})
 	if err != nil {
+		slog.Warn("create comment failed", append(logger.RequestAttrs(r), "error", err, "issue_id", issueID)...)
 		writeError(w, http.StatusInternalServerError, "failed to create comment: "+err.Error())
 		return
 	}
 
 	resp := commentToResponse(comment)
+	slog.Info("comment created", append(logger.RequestAttrs(r), "comment_id", uuidToString(comment.ID), "issue_id", issueID)...)
 	h.publish(protocol.EventCommentCreated, uuidToString(issue.WorkspaceID), "member", userID, map[string]any{
 		"comment":              resp,
 		"issue_title":          issue.Title,
@@ -159,11 +163,13 @@ func (h *Handler) UpdateComment(w http.ResponseWriter, r *http.Request) {
 		Content: req.Content,
 	})
 	if err != nil {
+		slog.Warn("update comment failed", append(logger.RequestAttrs(r), "error", err, "comment_id", commentId)...)
 		writeError(w, http.StatusInternalServerError, "failed to update comment")
 		return
 	}
 
 	resp := commentToResponse(comment)
+	slog.Info("comment updated", append(logger.RequestAttrs(r), "comment_id", commentId)...)
 	h.publish(protocol.EventCommentUpdated, uuidToString(issue.WorkspaceID), "member", userID, map[string]any{"comment": resp})
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -203,10 +209,12 @@ func (h *Handler) DeleteComment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.Queries.DeleteComment(r.Context(), parseUUID(commentId)); err != nil {
+		slog.Warn("delete comment failed", append(logger.RequestAttrs(r), "error", err, "comment_id", commentId)...)
 		writeError(w, http.StatusInternalServerError, "failed to delete comment")
 		return
 	}
 
+	slog.Info("comment deleted", append(logger.RequestAttrs(r), "comment_id", commentId, "issue_id", uuidToString(comment.IssueID))...)
 	h.publish(protocol.EventCommentDeleted, uuidToString(issue.WorkspaceID), "member", userID, map[string]any{
 		"comment_id": commentId,
 		"issue_id":   uuidToString(comment.IssueID),

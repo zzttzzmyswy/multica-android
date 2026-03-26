@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -99,6 +100,8 @@ func (h *Handler) DaemonRegister(w http.ResponseWriter, r *http.Request) {
 		resp = append(resp, runtimeToResponse(registered))
 	}
 
+	slog.Info("daemon registered", "workspace_id", req.WorkspaceID, "daemon_id", req.DaemonID, "runtimes_count", len(resp))
+
 	h.publish(protocol.EventDaemonRegister, req.WorkspaceID, "system", "", map[string]any{
 		"runtimes": resp,
 	})
@@ -128,6 +131,7 @@ func (h *Handler) DaemonHeartbeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	slog.Debug("daemon heartbeat", "runtime_id", req.RuntimeID)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -142,10 +146,12 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if task == nil {
+		slog.Debug("no task to claim", "runtime_id", runtimeID)
 		writeJSON(w, http.StatusOK, map[string]any{"task": nil})
 		return
 	}
 
+	slog.Info("task claimed by runtime", "task_id", uuidToString(task.ID), "runtime_id", runtimeID, "agent_id", uuidToString(task.AgentID))
 	writeJSON(w, http.StatusOK, map[string]any{"task": taskToResponse(*task)})
 }
 
@@ -177,10 +183,12 @@ func (h *Handler) StartTask(w http.ResponseWriter, r *http.Request) {
 
 	task, err := h.TaskService.StartTask(r.Context(), parseUUID(taskID))
 	if err != nil {
+		slog.Warn("start task failed", "task_id", taskID, "error", err)
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
+	slog.Info("task started", "task_id", taskID, "agent_id", uuidToString(task.AgentID))
 	writeJSON(w, http.StatusOK, taskToResponse(*task))
 }
 
@@ -231,10 +239,12 @@ func (h *Handler) CompleteTask(w http.ResponseWriter, r *http.Request) {
 	result, _ := json.Marshal(req)
 	task, err := h.TaskService.CompleteTask(r.Context(), parseUUID(taskID), result)
 	if err != nil {
+		slog.Warn("complete task failed", "task_id", taskID, "error", err)
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
+	slog.Info("task completed", "task_id", taskID, "agent_id", uuidToString(task.AgentID))
 	writeJSON(w, http.StatusOK, taskToResponse(*task))
 }
 
@@ -254,9 +264,11 @@ func (h *Handler) FailTask(w http.ResponseWriter, r *http.Request) {
 
 	task, err := h.TaskService.FailTask(r.Context(), parseUUID(taskID), req.Error)
 	if err != nil {
+		slog.Warn("fail task failed", "task_id", taskID, "error", err)
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
+	slog.Info("task failed", "task_id", taskID, "agent_id", uuidToString(task.AgentID), "task_error", req.Error)
 	writeJSON(w, http.StatusOK, taskToResponse(*task))
 }

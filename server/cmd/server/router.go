@@ -50,13 +50,13 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 	r := chi.NewRouter()
 
 	// Global middleware
-	r.Use(chimw.Logger)
-	r.Use(chimw.Recoverer)
 	r.Use(chimw.RequestID)
+	r.Use(middleware.RequestLogger)
+	r.Use(chimw.Recoverer)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   allowedOrigins(),
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Workspace-ID"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Workspace-ID", "X-Request-ID"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
@@ -159,6 +159,10 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 		r.Route("/api/inbox", func(r chi.Router) {
 			r.Get("/", h.ListInbox)
 			r.Get("/unread-count", h.CountUnreadInbox)
+			r.Post("/mark-all-read", h.MarkAllInboxRead)
+			r.Post("/archive-all", h.ArchiveAllInbox)
+			r.Post("/archive-all-read", h.ArchiveAllReadInbox)
+			r.Post("/archive-completed", h.ArchiveCompletedInbox)
 			r.Post("/{id}/read", h.MarkInboxRead)
 			r.Post("/{id}/archive", h.ArchiveInboxItem)
 		})

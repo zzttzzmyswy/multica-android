@@ -5,7 +5,7 @@ package execenv
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 )
@@ -63,11 +63,11 @@ type Environment struct {
 	BranchName string
 
 	gitRoot string      // source repo root (for cleanup)
-	logger  *log.Logger // for cleanup logging
+	logger  *slog.Logger // for cleanup logging
 }
 
 // Prepare creates an isolated execution environment for a task.
-func Prepare(params PrepareParams, logger *log.Logger) (*Environment, error) {
+func Prepare(params PrepareParams, logger *slog.Logger) (*Environment, error) {
 	if params.WorkspacesRoot == "" {
 		return nil, fmt.Errorf("execenv: workspaces root is required")
 	}
@@ -108,7 +108,7 @@ func Prepare(params PrepareParams, logger *log.Logger) (*Environment, error) {
 			baseRef := getDefaultBranch(gitRoot)
 
 			if err := setupGitWorktree(gitRoot, workDir, branchName, baseRef); err != nil {
-				logger.Printf("execenv: git worktree setup failed, falling back to directory mode: %v", err)
+				logger.Warn("execenv: git worktree setup failed, falling back to directory mode", "error", err)
 			} else {
 				env.Type = WorkspaceTypeGitWorktree
 				env.BranchName = branchName
@@ -117,7 +117,7 @@ func Prepare(params PrepareParams, logger *log.Logger) (*Environment, error) {
 				// Exclude injected directories from git tracking.
 				for _, pattern := range []string{".agent_context", ".claude", "AGENTS.md"} {
 					if err := excludeFromGit(workDir, pattern); err != nil {
-						logger.Printf("execenv: failed to exclude %s from git: %v", pattern, err)
+						logger.Warn("execenv: failed to exclude from git", "pattern", pattern, "error", err)
 					}
 				}
 			}
@@ -129,7 +129,7 @@ func Prepare(params PrepareParams, logger *log.Logger) (*Environment, error) {
 		return nil, fmt.Errorf("execenv: write context files: %w", err)
 	}
 
-	logger.Printf("execenv: prepared env root=%s type=%s branch=%s", envRoot, env.Type, env.BranchName)
+	logger.Info("execenv: prepared env", "root", envRoot, "type", env.Type, "branch", env.BranchName)
 	return env, nil
 }
 
@@ -148,7 +148,7 @@ func (env *Environment) Cleanup(removeAll bool) error {
 
 	if removeAll {
 		if err := os.RemoveAll(env.RootDir); err != nil {
-			env.logger.Printf("execenv: cleanup removeAll failed: %v", err)
+			env.logger.Warn("execenv: cleanup removeAll failed", "error", err)
 			return err
 		}
 		return nil
@@ -156,7 +156,7 @@ func (env *Environment) Cleanup(removeAll bool) error {
 
 	// Partial cleanup: remove workdir, keep output/ and logs/.
 	if err := os.RemoveAll(env.WorkDir); err != nil {
-		env.logger.Printf("execenv: cleanup workdir failed: %v", err)
+		env.logger.Warn("execenv: cleanup workdir failed", "error", err)
 		return err
 	}
 	return nil

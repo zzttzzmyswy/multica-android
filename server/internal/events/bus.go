@@ -1,7 +1,7 @@
 package events
 
 import (
-	"log"
+	"log/slog"
 	"sync"
 )
 
@@ -50,7 +50,7 @@ func (b *Bus) Publish(e Event) {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					log.Printf("[event-bus] panic in listener for %q: %v", e.Type, r)
+					slog.Error("panic in event listener", "event_type", e.Type, "recovered", r)
 				}
 			}()
 			h(e)

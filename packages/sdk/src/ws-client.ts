@@ -1,4 +1,5 @@
 import type { WSMessage, WSEventType } from "@multica/types";
+import { type SDKLogger, noopLogger } from "./logger";
 
 type EventHandler = (payload: unknown) => void;
 
@@ -11,9 +12,11 @@ export class WSClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private hasConnectedBefore = false;
   private onReconnectCallbacks = new Set<() => void>();
+  private logger: SDKLogger;
 
-  constructor(url: string) {
+  constructor(url: string, options?: { logger?: SDKLogger }) {
     this.baseUrl = url;
+    this.logger = options?.logger ?? noopLogger;
   }
 
   setAuth(token: string, workspaceId: string) {
@@ -30,7 +33,7 @@ export class WSClient {
     this.ws = new WebSocket(url.toString());
 
     this.ws.onopen = () => {
-      console.log("[ws] connected");
+      this.logger.info("connected");
       if (this.hasConnectedBefore) {
         for (const cb of this.onReconnectCallbacks) {
           try {
@@ -45,19 +48,19 @@ export class WSClient {
 
     this.ws.onmessage = (event) => {
       const msg = JSON.parse(event.data as string) as WSMessage;
-      console.log("[ws] received:", msg.type);
+      this.logger.debug("received", msg.type);
       const eventHandlers = this.handlers.get(msg.type);
       if (eventHandlers) {
         for (const handler of eventHandlers) {
           handler(msg.payload);
         }
       } else {
-        console.log("[ws] no handlers registered for:", msg.type);
+        this.logger.debug("unhandled event", msg.type);
       }
     };
 
     this.ws.onclose = () => {
-      console.log("[ws] disconnected, reconnecting in 3s...");
+      this.logger.warn("disconnected, reconnecting in 3s");
       this.reconnectTimer = setTimeout(() => this.connect(), 3000);
     };
 

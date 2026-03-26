@@ -3,7 +3,7 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"testing"
 )
@@ -15,7 +15,7 @@ func newTestCodexClient(t *testing.T) (*codexClient, *fakeStdin, []Message) {
 	var messages []Message
 
 	c := &codexClient{
-		cfg:     Config{Logger: log.Default()},
+		cfg:     Config{Logger: slog.Default()},
 		stdin:   fs,
 		pending: make(map[int]*pendingRPC),
 		onMessage: func(msg Message) {
