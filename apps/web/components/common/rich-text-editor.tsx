@@ -11,9 +11,11 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Link from "@tiptap/extension-link";
 import Typography from "@tiptap/extension-typography";
+import Mention from "@tiptap/extension-mention";
 import { Markdown } from "tiptap-markdown";
 import { Extension } from "@tiptap/core";
 import { cn } from "@/lib/utils";
+import { createMentionSuggestion } from "./mention-suggestion";
 import "./rich-text-editor.css";
 
 // ---------------------------------------------------------------------------
@@ -35,6 +37,54 @@ interface RichTextEditorRef {
   clearContent: () => void;
   focus: () => void;
 }
+
+// ---------------------------------------------------------------------------
+// Submit shortcut extension (Mod+Enter)
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Mention extension configured for markdown serialization
+// Stores as: [@Label](mention://type/id)
+// ---------------------------------------------------------------------------
+
+const MentionExtension = Mention.configure({
+  HTMLAttributes: { class: "mention" },
+  suggestion: createMentionSuggestion(),
+}).extend({
+  renderHTML({ node, HTMLAttributes }) {
+    return [
+      "a",
+      {
+        ...HTMLAttributes,
+        href: `mention://${node.attrs.type ?? "member"}/${node.attrs.id}`,
+        "data-mention-type": node.attrs.type ?? "member",
+        "data-mention-id": node.attrs.id,
+      },
+      `@${node.attrs.label ?? node.attrs.id}`,
+    ];
+  },
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      type: {
+        default: "member",
+        parseHTML: (el: HTMLElement) => el.getAttribute("data-mention-type") ?? "member",
+      },
+    };
+  },
+  addStorage() {
+    return {
+      markdown: {
+        serialize(state: { write: (s: string) => void }, node: { attrs: { label?: string; type?: string; id?: string } }) {
+          state.write(
+            `[@${node.attrs.label ?? node.attrs.id}](mention://${node.attrs.type ?? "member"}/${node.attrs.id})`,
+          );
+        },
+        parse: {},
+      },
+    };
+  },
+});
 
 // ---------------------------------------------------------------------------
 // Submit shortcut extension (Mod+Enter)
@@ -103,6 +153,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
           },
         }),
         Typography,
+        MentionExtension,
         Markdown.configure({
           html: false,
           transformPastedText: true,

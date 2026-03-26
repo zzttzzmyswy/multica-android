@@ -375,16 +375,19 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 	assigneeChanged := (req.AssigneeType != nil || req.AssigneeID != nil) &&
 		(prevIssue.AssigneeType.String != issue.AssigneeType.String || uuidToString(prevIssue.AssigneeID) != uuidToString(issue.AssigneeID))
 	statusChanged := req.Status != nil && prevIssue.Status != issue.Status
+	descriptionChanged := req.Description != nil && textToPtr(prevIssue.Description) != resp.Description
 
 	h.publish(protocol.EventIssueUpdated, workspaceID, "member", userID, map[string]any{
-		"issue":              resp,
-		"assignee_changed":   assigneeChanged,
-		"status_changed":     statusChanged,
-		"prev_assignee_type": textToPtr(prevIssue.AssigneeType),
-		"prev_assignee_id":   uuidToPtr(prevIssue.AssigneeID),
-		"prev_status":        prevIssue.Status,
-		"creator_type":       prevIssue.CreatorType,
-		"creator_id":         uuidToString(prevIssue.CreatorID),
+		"issue":               resp,
+		"assignee_changed":    assigneeChanged,
+		"status_changed":      statusChanged,
+		"description_changed": descriptionChanged,
+		"prev_assignee_type":  textToPtr(prevIssue.AssigneeType),
+		"prev_assignee_id":    uuidToPtr(prevIssue.AssigneeID),
+		"prev_status":         prevIssue.Status,
+		"prev_description":    textToPtr(prevIssue.Description),
+		"creator_type":        prevIssue.CreatorType,
+		"creator_id":          uuidToString(prevIssue.CreatorID),
 	})
 
 	// If assignee or readiness status changed, reconcile the task queue.

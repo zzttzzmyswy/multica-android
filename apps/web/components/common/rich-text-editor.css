@@ -130,6 +130,16 @@
   text-underline-offset: 2px;
 }
 
+/* Mentions */
+.rich-text-editor .mention {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  padding: 0 0.2em;
+  border-radius: calc(var(--radius) * 0.5);
+  font-weight: 500;
+  text-decoration: none;
+}
+
 /* Strong / emphasis */
 .rich-text-editor strong {
   font-weight: 600;

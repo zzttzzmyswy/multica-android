@@ -46,6 +46,30 @@ export function IssuesHeader() {
   return (
     <div className="flex h-12 shrink-0 items-center justify-between px-4">
       <div className="flex items-center gap-2">
+        {/* View toggle */}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="outline" size="sm">
+                {viewMode === "board" ? <Columns3 /> : <List />}
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="start" className="w-auto">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>View</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => setViewMode("board")}>
+                <Columns3 />
+                Board
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setViewMode("list")}>
+                <List />
+                List
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         {/* Status filter */}
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -122,30 +146,6 @@ export function IssuesHeader() {
       </div>
 
       <div className="flex items-center gap-2">
-        {/* View toggle */}
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button variant="outline" size="sm">
-                {viewMode === "board" ? <Columns3 /> : <List />}
-              </Button>
-            }
-          />
-          <DropdownMenuContent align="end" className="w-auto">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>View</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => setViewMode("board")}>
-                <Columns3 />
-                Board
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setViewMode("list")}>
-                <List />
-                List
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
         {/* New issue */}
         <Button
           variant="outline"

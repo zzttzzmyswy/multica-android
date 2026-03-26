@@ -197,7 +197,7 @@ func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, resu
 	}
 
 	if issueErr == nil {
-		s.createInboxForIssueCreator(ctx, issue, "review_requested", "attention", "Review requested: "+issue.Title, "")
+		s.createInboxForIssueCreator(ctx, issue, task.AgentID, "review_requested", "attention", "Review requested: "+issue.Title, "")
 	}
 
 	// Reconcile agent status
@@ -233,7 +233,7 @@ func (s *TaskService) FailTask(ctx context.Context, taskID pgtype.UUID, errMsg s
 		s.createAgentComment(ctx, task.IssueID, task.AgentID, errMsg, "system")
 	}
 	if issueErr == nil {
-		s.createInboxForIssueCreator(ctx, issue, "agent_blocked", "action_required", "Agent blocked: "+issue.Title, errMsg)
+		s.createInboxForIssueCreator(ctx, issue, task.AgentID, "agent_blocked", "action_required", "Agent blocked: "+issue.Title, errMsg)
 	}
 
 	// Reconcile agent status
@@ -474,7 +474,7 @@ func (s *TaskService) createAgentComment(ctx context.Context, issueID, agentID p
 	})
 }
 
-func (s *TaskService) createInboxForIssueCreator(ctx context.Context, issue db.Issue, itemType, severity, title, body string) {
+func (s *TaskService) createInboxForIssueCreator(ctx context.Context, issue db.Issue, agentID pgtype.UUID, itemType, severity, title, body string) {
 	if issue.CreatorType != "member" {
 		return
 	}
@@ -487,16 +487,20 @@ func (s *TaskService) createInboxForIssueCreator(ctx context.Context, issue db.I
 		IssueID:       issue.ID,
 		Title:         title,
 		Body:          util.PtrToText(&body),
+		ActorType:     util.StrToText("agent"),
+		ActorID:       agentID,
 	})
 	if err != nil {
 		return
 	}
+	resp := inboxToMap(item)
+	resp["issue_status"] = issue.Status
 	s.Bus.Publish(events.Event{
 		Type:        protocol.EventInboxNew,
 		WorkspaceID: util.UUIDToString(issue.WorkspaceID),
-		ActorType:   "system",
-		ActorID:     "",
-		Payload:     map[string]any{"item": inboxToMap(item)},
+		ActorType:   "agent",
+		ActorID:     util.UUIDToString(agentID),
+		Payload:     map[string]any{"item": resp},
 	})
 }
 
@@ -552,6 +556,8 @@ func inboxToMap(item db.InboxItem) map[string]any {
 		"read":           item.Read,
 		"archived":       item.Archived,
 		"created_at":     util.TimestampToString(item.CreatedAt),
+		"actor_type":     util.TextToPtr(item.ActorType),
+		"actor_id":       util.UUIDToPtr(item.ActorID),
 	}
 }
 

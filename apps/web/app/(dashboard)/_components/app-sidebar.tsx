@@ -22,6 +22,7 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarHeader,
+  SidebarFooter,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -51,6 +52,7 @@ const workspaceNav = [
   { href: "/agents", label: "Agents", icon: Bot },
   { href: "/skills", label: "Skills", icon: Sparkles },
   { href: "/knowledge-base", label: "Knowledge Base", icon: BookOpen },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function AppSidebar() {
@@ -101,15 +103,6 @@ export function AppSidebar() {
                     <DropdownMenuLabel className="text-xs text-muted-foreground">
                       {user?.email}
                     </DropdownMenuLabel>
-                  </DropdownMenuGroup>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                    <DropdownMenuItem
-                      render={<Link href="/settings" />}
-                    >
-                      <Settings className="h-3.5 w-3.5" />
-                      Settings
-                    </DropdownMenuItem>
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator />
                   <DropdownMenuGroup className="group/ws-section">
@@ -218,6 +211,7 @@ export function AppSidebar() {
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
+        <SidebarFooter />
         <SidebarRail />
       </Sidebar>
   );

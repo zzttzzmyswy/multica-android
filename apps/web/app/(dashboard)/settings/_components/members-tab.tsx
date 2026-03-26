@@ -1,0 +1,272 @@
+"use client";
+
+import { useState } from "react";
+import { Crown, Shield, User, Plus, Trash2, Users } from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import type { MemberWithUser, MemberRole } from "@/shared/types";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import { toast } from "sonner";
+import { useAuthStore } from "@/features/auth";
+import { useWorkspaceStore } from "@/features/workspace";
+import { api } from "@/shared/api";
+
+const roleConfig: Record<MemberRole, { label: string; icon: typeof Crown }> = {
+  owner: { label: "Owner", icon: Crown },
+  admin: { label: "Admin", icon: Shield },
+  member: { label: "Member", icon: User },
+};
+
+function MemberRow({
+  member,
+  canManage,
+  canManageOwners,
+  isSelf,
+  busy,
+  onRoleChange,
+  onRemove,
+}: {
+  member: MemberWithUser;
+  canManage: boolean;
+  canManageOwners: boolean;
+  isSelf: boolean;
+  busy: boolean;
+  onRoleChange: (role: MemberRole) => void;
+  onRemove: () => void;
+}) {
+  const rc = roleConfig[member.role];
+  const RoleIcon = rc.icon;
+  const canEditRole = canManage && (!isSelf || canManageOwners) && (member.role !== "owner" || canManageOwners);
+  const canRemove = canManage && !isSelf && (member.role !== "owner" || canManageOwners);
+
+  return (
+    <Card>
+      <CardContent className="flex items-center gap-3">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">
+          {member.name
+            .split(" ")
+            .map((w) => w[0])
+            .join("")
+            .toUpperCase()
+            .slice(0, 2)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium truncate">{member.name}</div>
+          <div className="text-xs text-muted-foreground truncate">{member.email}</div>
+        </div>
+        {canEditRole ? (
+          <Select value={member.role} onValueChange={(value) => onRoleChange(value as MemberRole)} disabled={busy}>
+            <SelectTrigger size="sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="member">Member</SelectItem>
+              <SelectItem value="admin">Admin</SelectItem>
+              {canManageOwners && <SelectItem value="owner">Owner</SelectItem>}
+            </SelectContent>
+          </Select>
+        ) : (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <RoleIcon className="h-3 w-3" />
+            {rc.label}
+          </div>
+        )}
+        {canRemove && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={onRemove}
+                  disabled={busy}
+                  aria-label={`Remove ${member.name}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              }
+            />
+            <TooltipContent>Remove member</TooltipContent>
+          </Tooltip>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function MembersTab() {
+  const user = useAuthStore((s) => s.user);
+  const workspace = useWorkspaceStore((s) => s.workspace);
+  const members = useWorkspaceStore((s) => s.members);
+  const refreshMembers = useWorkspaceStore((s) => s.refreshMembers);
+
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<MemberRole>("member");
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [memberActionId, setMemberActionId] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{
+    title: string;
+    description: string;
+    variant?: "destructive";
+    onConfirm: () => Promise<void>;
+  } | null>(null);
+
+  const currentMember = members.find((m) => m.user_id === user?.id) ?? null;
+  const canManageWorkspace = currentMember?.role === "owner" || currentMember?.role === "admin";
+  const isOwner = currentMember?.role === "owner";
+
+  const handleAddMember = async () => {
+    if (!workspace) return;
+    setInviteLoading(true);
+    try {
+      await api.createMember(workspace.id, {
+        email: inviteEmail,
+        role: inviteRole,
+      });
+      setInviteEmail("");
+      setInviteRole("member");
+      await refreshMembers();
+      toast.success("Member added");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to add member");
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  const handleRoleChange = async (memberId: string, role: MemberRole) => {
+    if (!workspace) return;
+    setMemberActionId(memberId);
+    try {
+      await api.updateMember(workspace.id, memberId, { role });
+      await refreshMembers();
+      toast.success("Role updated");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update member");
+    } finally {
+      setMemberActionId(null);
+    }
+  };
+
+  const handleRemoveMember = (member: MemberWithUser) => {
+    if (!workspace) return;
+    setConfirmAction({
+      title: `Remove ${member.name}`,
+      description: `Remove ${member.name} from ${workspace.name}? They will lose access to this workspace.`,
+      variant: "destructive",
+      onConfirm: async () => {
+        setMemberActionId(member.id);
+        try {
+          await api.deleteMember(workspace.id, member.id);
+          await refreshMembers();
+          toast.success("Member removed");
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : "Failed to remove member");
+        } finally {
+          setMemberActionId(null);
+        }
+      },
+    });
+  };
+
+  if (!workspace) return null;
+
+  return (
+    <div className="space-y-8">
+      <section className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Users className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold">Members ({members.length})</h2>
+        </div>
+
+        {canManageWorkspace && (
+          <Card>
+            <CardContent className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Plus className="h-4 w-4 text-muted-foreground" />
+                <h3 className="text-sm font-medium">Add member</h3>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-[1fr_120px_auto]">
+                <Input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="user@company.com"
+                />
+                <Select value={inviteRole} onValueChange={(value) => setInviteRole(value as MemberRole)}>
+                  <SelectTrigger size="sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="member">Member</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    {isOwner && <SelectItem value="owner">Owner</SelectItem>}
+                  </SelectContent>
+                </Select>
+                <Button
+                  onClick={handleAddMember}
+                  disabled={inviteLoading || !inviteEmail.trim()}
+                >
+                  {inviteLoading ? "Adding..." : "Add"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="space-y-2">
+          {members.map((m) => (
+            <MemberRow
+              key={m.id}
+              member={m}
+              canManage={canManageWorkspace}
+              canManageOwners={isOwner}
+              isSelf={m.user_id === user?.id}
+              busy={memberActionId === m.id}
+              onRoleChange={(role) => handleRoleChange(m.id, role)}
+              onRemove={() => handleRemoveMember(m)}
+            />
+          ))}
+          {members.length === 0 && (
+            <p className="text-sm text-muted-foreground">No members found.</p>
+          )}
+        </div>
+      </section>
+
+      <AlertDialog open={!!confirmAction} onOpenChange={(v) => { if (!v) setConfirmAction(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmAction?.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmAction?.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className={confirmAction?.variant === "destructive" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+              onClick={async () => {
+                await confirmAction?.onConfirm();
+                setConfirmAction(null);
+              }}
+            >
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

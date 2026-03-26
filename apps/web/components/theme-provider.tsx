@@ -17,7 +17,7 @@ function ThemeProvider({
       {...props}
     >
       <ThemeHotkey />
-      <TooltipProvider>
+      <TooltipProvider delay={500}>
         {children}
       </TooltipProvider>
     </NextThemesProvider>

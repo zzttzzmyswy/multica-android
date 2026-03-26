@@ -1,6 +1,7 @@
 "use client";
 
 import { EyeOff, MoreHorizontal, Plus } from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { useDroppable } from "@dnd-kit/core";
 import type { Issue, IssueStatus } from "@/shared/types";
 import { Button } from "@/components/ui/button";
@@ -53,14 +54,21 @@ export function BoardColumn({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="rounded-full text-muted-foreground"
-            onClick={() => useModalStore.getState().open("create-issue", { status })}
-          >
-            <Plus className="size-3.5" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="rounded-full text-muted-foreground"
+                  onClick={() => useModalStore.getState().open("create-issue", { status })}
+                >
+                  <Plus className="size-3.5" />
+                </Button>
+              }
+            />
+            <TooltipContent>Add issue</TooltipContent>
+          </Tooltip>
         </div>
       </div>
       <div

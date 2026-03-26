@@ -621,19 +621,26 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button
-              variant={sidebarOpen ? "secondary" : "ghost"}
-              size="icon-xs"
-              className={sidebarOpen ? "" : "text-muted-foreground"}
-              onClick={() => {
-                const panel = sidebarRef.current;
-                if (!panel) return;
-                if (panel.isCollapsed()) panel.expand();
-                else panel.collapse();
-              }}
-            >
-              <PanelRight className="h-4 w-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant={sidebarOpen ? "secondary" : "ghost"}
+                    size="icon-xs"
+                    className={sidebarOpen ? "" : "text-muted-foreground"}
+                    onClick={() => {
+                      const panel = sidebarRef.current;
+                      if (!panel) return;
+                      if (panel.isCollapsed()) panel.expand();
+                      else panel.collapse();
+                    }}
+                  >
+                    <PanelRight className="h-4 w-4" />
+                  </Button>
+                }
+              />
+              <TooltipContent side="bottom">Toggle sidebar</TooltipContent>
+            </Tooltip>
           </div>
 
             {/* Delete confirmation dialog (controlled by state) */}
@@ -745,22 +752,36 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                       </Tooltip>
                       {isOwn && (
                         <div className="ml-auto flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            onClick={() => startEditComment(comment)}
-                            className="text-muted-foreground hover:text-foreground"
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            onClick={() => handleDeleteComment(comment.id)}
-                            className="text-muted-foreground hover:text-destructive"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <Button
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  onClick={() => startEditComment(comment)}
+                                  className="text-muted-foreground hover:text-foreground"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                              }
+                            />
+                            <TooltipContent>Edit</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <Button
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  onClick={() => handleDeleteComment(comment.id)}
+                                  className="text-muted-foreground hover:text-destructive"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              }
+                            />
+                            <TooltipContent>Delete</TooltipContent>
+                          </Tooltip>
                         </div>
                       )}
                     </div>
@@ -797,13 +818,20 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                 />
               </div>
               <div className="flex items-center justify-end px-2 pb-2">
-                <Button
-                  size="icon-xs"
-                  disabled={commentEmpty || submitting}
-                  onClick={handleSubmitComment}
-                >
-                  <ArrowUp className="h-3.5 w-3.5" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        size="icon-sm"
+                        disabled={commentEmpty || submitting}
+                        onClick={handleSubmitComment}
+                      >
+                        <ArrowUp className="h-4 w-4" />
+                      </Button>
+                    }
+                  />
+                  <TooltipContent>Send</TooltipContent>
+                </Tooltip>
               </div>
             </div>
           </div>
