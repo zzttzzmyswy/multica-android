@@ -73,7 +73,7 @@ export function AppSidebar() {
   return (
       <Sidebar variant="inset">
         {/* Workspace Switcher */}
-        <SidebarHeader>
+        <SidebarHeader className="py-3">
           <div className="flex items-center gap-4">
             <SidebarMenu className="min-w-0 flex-1">
               <SidebarMenuItem>
@@ -181,9 +181,7 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu className="gap-0.5">
                 {navItems.map((item) => {
-                  const isActive =
-                    pathname === item.href ||
-                    pathname.startsWith(item.href + "/");
+                  const isActive = pathname === item.href;
                   return (
                     <SidebarMenuItem key={item.href}>
                       <SidebarMenuButton
@@ -194,7 +192,7 @@ export function AppSidebar() {
                         <item.icon />
                         <span>{item.label}</span>
                         {item.label === "Inbox" && unreadCount > 0 && (
-                          <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
+                          <span className="ml-auto text-xs">
                             {unreadCount > 99 ? "99+" : unreadCount}
                           </span>
                         )}
@@ -213,7 +211,7 @@ export function AppSidebar() {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton size="sm">
-                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[9px] font-medium">
+                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs leading-none font-medium">
                     {user.name
                       .split(" ")
                       .map((w) => w[0])
