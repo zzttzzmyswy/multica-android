@@ -54,7 +54,7 @@ function LoginPageContent() {
       await sendCode(email);
       setStep("code");
       setCode("");
-      setCooldown(60);
+      setCooldown(10);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to send code. Make sure the server is running."
@@ -118,7 +118,7 @@ function LoginPageContent() {
     setError("");
     try {
       await sendCode(email);
-      setCooldown(60);
+      setCooldown(10);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to resend code"
