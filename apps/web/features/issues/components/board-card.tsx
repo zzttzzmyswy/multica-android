@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { Issue } from "@multica/types";
+import type { Issue } from "@/shared/types";
+import { CalendarDays } from "lucide-react";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { PriorityIcon } from "./priority-icon";
 
@@ -21,7 +22,7 @@ export function BoardCardContent({ issue }: { issue: Issue }) {
         <PriorityIcon priority={issue.priority} />
         <span>{issue.id.slice(0, 8)}</span>
       </div>
-      <p className="mt-1.5 text-sm leading-snug">{issue.title}</p>
+      <p className="mt-1.5 text-sm leading-snug line-clamp-2">{issue.title}</p>
       <div className="mt-2.5 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {issue.assignee_type && issue.assignee_id && (
@@ -33,7 +34,8 @@ export function BoardCardContent({ issue }: { issue: Issue }) {
           )}
         </div>
         {issue.due_date && (
-          <span className="text-xs text-muted-foreground">
+          <span className={`flex items-center gap-1 text-xs ${new Date(issue.due_date) < new Date() ? "text-destructive" : "text-muted-foreground"}`}>
+            <CalendarDays className="size-3" />
             {formatDate(issue.due_date)}
           </span>
         )}

@@ -13,7 +13,7 @@ import {
   XCircle,
   Zap,
 } from "lucide-react";
-import type { AgentRuntime, RuntimeUsage, RuntimePingStatus } from "@multica/types";
+import type { AgentRuntime, RuntimeUsage, RuntimePingStatus } from "@/shared/types";
 import { Button } from "@/components/ui/button";
 import { api } from "@/shared/api";
 import { useAuthStore } from "@/features/auth";

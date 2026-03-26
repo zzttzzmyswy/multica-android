@@ -14,7 +14,6 @@ import {
   Plus,
   Check,
   Sparkles,
-  Search,
   SquarePen,
 } from "lucide-react";
 import { WorkspaceAvatar } from "@/features/workspace";
@@ -27,6 +26,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarRail,
 } from "@/components/ui/sidebar";
 import {
   DropdownMenu,
@@ -157,25 +157,15 @@ export function AppSidebar() {
                 </DropdownMenu>
               </SidebarMenuItem>
             </SidebarMenu>
-            <div className="flex items-center gap-1">
-              <Tooltip>
-                <TooltipTrigger
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                >
-                  <Search className="size-4" />
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Search</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger
-                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-background text-foreground shadow-sm hover:bg-accent"
-                  onClick={() => useModalStore.getState().open("create-issue")}
-                >
-                  <SquarePen className="size-3.5" />
-                </TooltipTrigger>
-                <TooltipContent side="bottom">New issue</TooltipContent>
-              </Tooltip>
-            </div>
+            <Tooltip>
+              <TooltipTrigger
+                className="flex h-7 w-7 items-center justify-center rounded-lg bg-background text-foreground shadow-sm hover:bg-accent"
+                onClick={() => useModalStore.getState().open("create-issue")}
+              >
+                <SquarePen className="size-3.5" />
+              </TooltipTrigger>
+              <TooltipContent side="bottom">New issue</TooltipContent>
+            </Tooltip>
           </div>
         </SidebarHeader>
 
@@ -230,6 +220,7 @@ export function AppSidebar() {
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
+        <SidebarRail />
       </Sidebar>
   );
 }

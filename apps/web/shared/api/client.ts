@@ -28,8 +28,8 @@ import type {
   CreatePersonalAccessTokenResponse,
   RuntimeUsage,
   RuntimePing,
-} from "@multica/types";
-import { type SDKLogger, noopLogger } from "./logger";
+} from "@/shared/types";
+import { type Logger, noopLogger } from "@/shared/logger";
 
 export interface LoginResponse {
   token: string;
@@ -40,10 +40,9 @@ export class ApiClient {
   private baseUrl: string;
   private token: string | null = null;
   private workspaceId: string | null = null;
-  private logger: SDKLogger;
-  private onUnauthorized: (() => void) | null = null;
+  private logger: Logger;
 
-  constructor(baseUrl: string, options?: { logger?: SDKLogger }) {
+  constructor(baseUrl: string, options?: { logger?: Logger }) {
     this.baseUrl = baseUrl;
     this.logger = options?.logger ?? noopLogger;
   }
@@ -54,10 +53,6 @@ export class ApiClient {
 
   setWorkspaceId(id: string | null) {
     this.workspaceId = id;
-  }
-
-  setOnUnauthorized(callback: (() => void) | null) {
-    this.onUnauthorized = callback;
   }
 
   private async fetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -85,9 +80,16 @@ export class ApiClient {
     });
 
     if (!res.ok) {
-      if (res.status === 401 && this.onUnauthorized) {
-        this.onUnauthorized();
+      if (res.status === 401 && typeof window !== "undefined") {
+        localStorage.removeItem("multica_token");
+        localStorage.removeItem("multica_workspace_id");
+        this.token = null;
+        this.workspaceId = null;
+        if (window.location.pathname !== "/login") {
+          window.location.href = "/login";
+        }
       }
+
       let message = `API error: ${res.status} ${res.statusText}`;
       try {
         const data = await res.json() as { error?: string };
@@ -112,8 +114,8 @@ export class ApiClient {
   }
 
   // Auth
-  async sendCode(email: string): Promise<{ message: string }> {
-    return this.fetch("/auth/send-code", {
+  async sendCode(email: string): Promise<void> {
+    await this.fetch("/auth/send-code", {
       method: "POST",
       body: JSON.stringify({ email }),
     });
@@ -384,6 +386,13 @@ export class ApiClient {
 
   async deleteSkill(id: string): Promise<void> {
     await this.fetch(`/api/skills/${id}`, { method: "DELETE" });
+  }
+
+  async importSkill(data: { url: string }): Promise<Skill> {
+    return this.fetch("/api/skills/import", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
   }
 
   async listAgentSkills(agentId: string): Promise<Skill[]> {

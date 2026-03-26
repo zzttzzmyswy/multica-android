@@ -1,5 +1,5 @@
-import type { WSMessage, WSEventType } from "@multica/types";
-import { type SDKLogger, noopLogger } from "./logger";
+import type { WSMessage, WSEventType } from "@/shared/types";
+import { type Logger, noopLogger } from "@/shared/logger";
 
 type EventHandler = (payload: unknown) => void;
 
@@ -12,9 +12,9 @@ export class WSClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private hasConnectedBefore = false;
   private onReconnectCallbacks = new Set<() => void>();
-  private logger: SDKLogger;
+  private logger: Logger;
 
-  constructor(url: string, options?: { logger?: SDKLogger }) {
+  constructor(url: string, options?: { logger?: Logger }) {
     this.baseUrl = url;
     this.logger = options?.logger ?? noopLogger;
   }

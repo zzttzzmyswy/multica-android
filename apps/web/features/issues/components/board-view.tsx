@@ -13,7 +13,7 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import type { Issue, IssueStatus } from "@multica/types";
+import type { Issue, IssueStatus } from "@/shared/types";
 import { BoardColumn } from "./board-column";
 import { BoardCardContent } from "./board-card";
 

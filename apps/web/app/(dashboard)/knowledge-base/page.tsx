@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useDefaultLayout } from "react-resizable-panels";
 import {
   FileText,
   Plus,
@@ -9,6 +10,11 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -280,6 +286,9 @@ export default function KnowledgeBasePage() {
   const [documents] = useState<KBDocument[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
   const [search, setSearch] = useState("");
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
+    id: "multica_kb_layout",
+  });
 
   const filtered = search
     ? documents.filter((d) =>
@@ -290,10 +299,11 @@ export default function KnowledgeBasePage() {
   const selected = documents.find((d) => d.id === selectedId) ?? null;
 
   return (
-    <div className="flex flex-1 min-h-0">
+    <ResizablePanelGroup orientation="horizontal" className="flex-1 min-h-0" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged}>
+      <ResizablePanel id="list" defaultSize={280} minSize={240} maxSize={400} groupResizeBehavior="preserve-pixel-size">
       {/* Left: Document list */}
-      <div className="w-72 shrink-0 overflow-y-auto border-r">
-        <div className="flex h-11 items-center justify-between border-b px-4">
+      <div className="overflow-y-auto h-full border-r">
+        <div className="flex h-12 items-center justify-between border-b px-4">
           <h1 className="text-sm font-semibold">Knowledge Base</h1>
           <Button variant="ghost" size="icon-xs">
             <Plus className="h-4 w-4 text-muted-foreground" />
@@ -331,15 +341,20 @@ export default function KnowledgeBasePage() {
           )}
         </div>
       </div>
+      </ResizablePanel>
 
+      <ResizableHandle />
+
+      <ResizablePanel id="detail" minSize="50%">
       {/* Right: Document content */}
       {selected ? (
         <DocDetail doc={selected} />
       ) : (
-        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
           Select a document
         </div>
       )}
-    </div>
+      </ResizablePanel>
+    </ResizablePanelGroup>
   );
 }

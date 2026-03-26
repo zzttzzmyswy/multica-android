@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import type { DaemonPairingSession } from "@multica/types";
+import type { DaemonPairingSession } from "@/shared/types";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {

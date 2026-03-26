@@ -28,6 +28,7 @@ func init() {
 	rootCmd.AddCommand(daemonCmd)
 	rootCmd.AddCommand(agentCmd)
 	rootCmd.AddCommand(runtimeCmd)
+	rootCmd.AddCommand(workspaceCmd)
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(versionCmd)

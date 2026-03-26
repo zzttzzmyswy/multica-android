@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { Issue } from "@multica/types";
+import type { Issue } from "@/shared/types";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { StatusIcon } from "./status-icon";
 import { PriorityIcon } from "./priority-icon";

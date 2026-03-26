@@ -3,7 +3,7 @@
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { ChevronRight } from "lucide-react";
-import type { IssueStatus } from "@multica/types";
+import type { IssueStatus } from "@/shared/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIssueStore } from "@/features/issues/store";
 import { useIssueViewStore } from "@/features/issues/stores/view-store";
@@ -68,11 +68,11 @@ export function IssuesPage() {
   if (loading) {
     return (
       <div className="flex flex-1 min-h-0 flex-col">
-        <div className="flex shrink-0 items-center gap-2 border-b px-4 py-2">
+        <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
           <Skeleton className="h-5 w-5 rounded" />
           <Skeleton className="h-4 w-32" />
         </div>
-        <div className="flex shrink-0 items-center justify-between border-b px-4 py-2">
+        <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
           <Skeleton className="h-5 w-24" />
           <Skeleton className="h-8 w-24" />
         </div>
@@ -92,7 +92,7 @@ export function IssuesPage() {
   return (
     <div className="flex flex-1 min-h-0 flex-col">
       {/* Header 1: Workspace breadcrumb */}
-      <div className="flex shrink-0 items-center gap-1.5 border-b px-4 py-2">
+      <div className="flex h-12 shrink-0 items-center gap-1.5 border-b px-4">
         <WorkspaceAvatar name={workspace?.name ?? "W"} size="sm" />
         <span className="text-sm text-muted-foreground">
           {workspace?.name ?? "Workspace"}

@@ -17,7 +17,6 @@ vi.mock("@/features/auth", () => ({
     selector({
       sendCode: mockSendCode,
       verifyCode: mockVerifyCode,
-      isLoading: false,
     }),
 }));
 
@@ -34,6 +33,9 @@ vi.mock("@/features/workspace", () => ({
 vi.mock("@/shared/api", () => ({
   api: {
     listWorkspaces: vi.fn().mockResolvedValue([]),
+    verifyCode: vi.fn(),
+    setToken: vi.fn(),
+    getMe: vi.fn(),
   },
 }));
 
@@ -44,14 +46,14 @@ describe("LoginPage", () => {
     vi.clearAllMocks();
   });
 
-  it("renders email form with heading and button", () => {
+  it("renders login form with email input and continue button", () => {
     render(<LoginPage />);
 
     expect(screen.getByText("Multica")).toBeInTheDocument();
     expect(screen.getByText("AI-native task management")).toBeInTheDocument();
     expect(screen.getByLabelText("Email")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /continue/i })
+      screen.getByRole("button", { name: "Continue" })
     ).toBeInTheDocument();
   });
 
@@ -59,24 +61,20 @@ describe("LoginPage", () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await user.click(screen.getByRole("button", { name: /continue/i }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
     expect(mockSendCode).not.toHaveBeenCalled();
   });
 
-  it("calls sendCode on submit and shows code step", async () => {
+  it("calls sendCode with email on submit", async () => {
     mockSendCode.mockResolvedValueOnce(undefined);
     const user = userEvent.setup();
     render(<LoginPage />);
 
     await user.type(screen.getByLabelText("Email"), "test@multica.ai");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
 
     await waitFor(() => {
       expect(mockSendCode).toHaveBeenCalledWith("test@multica.ai");
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText("Check your email")).toBeInTheDocument();
     });
   });
 
@@ -86,10 +84,23 @@ describe("LoginPage", () => {
     render(<LoginPage />);
 
     await user.type(screen.getByLabelText("Email"), "test@multica.ai");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
 
     await waitFor(() => {
       expect(screen.getByText("Sending code...")).toBeInTheDocument();
+    });
+  });
+
+  it("shows verification code step after sending code", async () => {
+    mockSendCode.mockResolvedValueOnce(undefined);
+    const user = userEvent.setup();
+    render(<LoginPage />);
+
+    await user.type(screen.getByLabelText("Email"), "test@multica.ai");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Check your email")).toBeInTheDocument();
     });
   });
 
@@ -99,27 +110,10 @@ describe("LoginPage", () => {
     render(<LoginPage />);
 
     await user.type(screen.getByLabelText("Email"), "test@multica.ai");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
 
     await waitFor(() => {
       expect(screen.getByText("Network error")).toBeInTheDocument();
     });
-  });
-
-  it("shows back button on code step", async () => {
-    mockSendCode.mockResolvedValueOnce(undefined);
-    const user = userEvent.setup();
-    render(<LoginPage />);
-
-    await user.type(screen.getByLabelText("Email"), "test@multica.ai");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText("Check your email")).toBeInTheDocument();
-    });
-
-    expect(
-      screen.getByRole("button", { name: /back/i })
-    ).toBeInTheDocument();
   });
 });

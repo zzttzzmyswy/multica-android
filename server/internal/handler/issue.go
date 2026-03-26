@@ -159,6 +159,7 @@ type CreateIssueRequest struct {
 	ParentIssueID      *string `json:"parent_issue_id"`
 	AcceptanceCriteria []any   `json:"acceptance_criteria"`
 	ContextRefs        []any   `json:"context_refs"`
+	DueDate            *string `json:"due_date"`
 }
 
 func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
@@ -215,6 +216,16 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 		parentIssueID = parseUUID(*req.ParentIssueID)
 	}
 
+	var dueDate pgtype.Timestamptz
+	if req.DueDate != nil && *req.DueDate != "" {
+		t, err := time.Parse(time.RFC3339, *req.DueDate)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid due_date format, expected RFC3339")
+			return
+		}
+		dueDate = pgtype.Timestamptz{Time: t, Valid: true}
+	}
+
 	issue, err := h.Queries.CreateIssue(r.Context(), db.CreateIssueParams{
 		WorkspaceID:        parseUUID(workspaceID),
 		Title:              req.Title,
@@ -229,6 +240,7 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 		AcceptanceCriteria: ac,
 		ContextRefs:        cr,
 		Position:           0,
+		DueDate:            dueDate,
 	})
 	if err != nil {
 		slog.Warn("create issue failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", workspaceID)...)

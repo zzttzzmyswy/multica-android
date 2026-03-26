@@ -44,7 +44,7 @@ export function IssuesHeader() {
   const togglePriorityFilter = useIssueViewStore((s) => s.togglePriorityFilter);
 
   return (
-    <div className="flex shrink-0 items-center justify-between px-4 py-2">
+    <div className="flex h-12 shrink-0 items-center justify-between px-4">
       <div className="flex items-center gap-2">
         {/* Status filter */}
         <DropdownMenu>
@@ -72,7 +72,7 @@ export function IssuesHeader() {
               {ALL_STATUSES.map((s) => (
                 <DropdownMenuCheckboxItem
                   key={s}
-                  checked={statusFilters.includes(s)}
+                  checked={statusFilters.length === 0 || statusFilters.includes(s)}
                   onCheckedChange={() => toggleStatusFilter(s)}
                 >
                   <StatusIcon status={s} className="h-3.5 w-3.5" />
@@ -109,7 +109,7 @@ export function IssuesHeader() {
               {PRIORITY_ORDER.map((p) => (
                 <DropdownMenuCheckboxItem
                   key={p}
-                  checked={priorityFilters.includes(p)}
+                  checked={priorityFilters.length === 0 || priorityFilters.includes(p)}
                   onCheckedChange={() => togglePriorityFilter(p)}
                 >
                   <PriorityIcon priority={p} />

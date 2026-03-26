@@ -1,51 +1,110 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { Bot, CalendarDays, ChevronRight, Maximize2, Minimize2, UserMinus, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import type { IssueStatus, IssuePriority, IssueAssigneeType } from "@multica/types";
-import { STATUS_CONFIG, ALL_STATUSES, PRIORITY_CONFIG, PRIORITY_ORDER } from "@/features/issues/config";
+import type { IssueStatus, IssuePriority, IssueAssigneeType } from "@/shared/types";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
-  DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
-import { StatusIcon, PriorityIcon, AssigneePicker } from "@/features/issues/components";
+import { RichTextEditor, type RichTextEditorRef } from "@/components/common/rich-text-editor";
+import { StatusIcon, PriorityIcon } from "@/features/issues/components";
+import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
+import { useWorkspaceStore, useActorName } from "@/features/workspace";
 import { useIssueStore } from "@/features/issues";
 import { api } from "@/shared/api";
 
-export function CreateIssueModal({ onClose }: { onClose: () => void }) {
+// ---------------------------------------------------------------------------
+// Pill trigger — shared rounded-full button style for toolbar
+// ---------------------------------------------------------------------------
+
+function PillButton({
+  children,
+  className,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs",
+        "hover:bg-accent/60 transition-colors cursor-pointer",
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// CreateIssueModal
+// ---------------------------------------------------------------------------
+
+export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?: Record<string, unknown> | null }) {
+  const workspaceName = useWorkspaceStore((s) => s.workspace?.name);
+  const members = useWorkspaceStore((s) => s.members);
+  const agents = useWorkspaceStore((s) => s.agents);
+  const { getActorName, getActorInitials } = useActorName();
+
   const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [status, setStatus] = useState<IssueStatus>("todo");
+  const descEditorRef = useRef<RichTextEditorRef>(null);
+  const [status, setStatus] = useState<IssueStatus>((data?.status as IssueStatus) || "todo");
   const [priority, setPriority] = useState<IssuePriority>("none");
   const [submitting, setSubmitting] = useState(false);
   const [assigneeType, setAssigneeType] = useState<IssueAssigneeType | undefined>();
   const [assigneeId, setAssigneeId] = useState<string | undefined>();
+  const [dueDate, setDueDate] = useState<string | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // Assignee popover
+  const [assigneeOpen, setAssigneeOpen] = useState(false);
+  const [assigneeFilter, setAssigneeFilter] = useState("");
+
+  // Due date popover
+  const [dueDateOpen, setDueDateOpen] = useState(false);
+
+  const assigneeQuery = assigneeFilter.toLowerCase();
+  const filteredMembers = members.filter((m) => m.name.toLowerCase().includes(assigneeQuery));
+  const filteredAgents = agents.filter((a) => a.name.toLowerCase().includes(assigneeQuery));
+
+  const assigneeLabel =
+    assigneeType && assigneeId
+      ? getActorName(assigneeType, assigneeId)
+      : "Assignee";
+
+  const dueDateObj = dueDate ? new Date(dueDate) : undefined;
 
   const handleSubmit = async () => {
-    if (!title.trim()) return;
+    if (!title.trim() || submitting) return;
     setSubmitting(true);
     try {
       const issue = await api.createIssue({
         title: title.trim(),
-        description: description.trim() || undefined,
+        description: descEditorRef.current?.getMarkdown()?.trim() || undefined,
         status,
         priority,
         assignee_type: assigneeType,
         assignee_id: assigneeId,
+        due_date: dueDate || undefined,
       });
       useIssueStore.getState().addIssue(issue);
       onClose();
@@ -58,12 +117,44 @@ export function CreateIssueModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>New Issue</DialogTitle>
-          <DialogDescription className="sr-only">Create a new issue for the workspace.</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
+      <DialogContent
+        showCloseButton={false}
+        className={cn(
+          "p-0 gap-0 flex flex-col overflow-hidden",
+          "!top-1/2 !left-1/2 !-translate-x-1/2",
+          "!transition-all !duration-300 !ease-out",
+          isExpanded
+            ? "!max-w-4xl !w-full !h-5/6 !-translate-y-1/2"
+            : "!max-w-2xl !w-full !h-96 !-translate-y-1/2",
+        )}
+      >
+        <DialogTitle className="sr-only">New Issue</DialogTitle>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-3 pb-2 shrink-0">
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="text-muted-foreground">{workspaceName}</span>
+            <ChevronRight className="size-3 text-muted-foreground/50" />
+            <span className="font-medium">New issue</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="rounded-sm p-1.5 opacity-70 hover:opacity-100 hover:bg-accent/60 transition-all cursor-pointer"
+            >
+              {isExpanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+            </button>
+            <button
+              onClick={onClose}
+              className="rounded-sm p-1.5 opacity-70 hover:opacity-100 hover:bg-accent/60 transition-all cursor-pointer"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Title */}
+        <div className="px-5 pb-2 shrink-0">
           <Input
             autoFocus
             type="text"
@@ -76,55 +167,211 @@ export function CreateIssueModal({ onClose }: { onClose: () => void }) {
               }
             }}
             placeholder="Issue title"
+            className="border-none shadow-none px-0 text-lg font-semibold focus-visible:ring-0"
           />
-          <Textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Add description..."
-            rows={3}
-            className="resize-none"
-          />
-          <div className="flex items-center gap-3 flex-wrap">
-            <Select value={status} onValueChange={(v) => setStatus(v as IssueStatus)}>
-              <SelectTrigger size="sm" className="text-xs">
-                <StatusIcon status={status} className="h-3.5 w-3.5" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ALL_STATUSES.map((s) => (
-                  <SelectItem key={s} value={s}>{STATUS_CONFIG[s].label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={priority} onValueChange={(v) => setPriority(v as IssuePriority)}>
-              <SelectTrigger size="sm" className="text-xs">
-                <PriorityIcon priority={priority} />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PRIORITY_ORDER.map((p) => (
-                  <SelectItem key={p} value={p}>{PRIORITY_CONFIG[p].label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <AssigneePicker
-              assigneeType={assigneeType ?? null}
-              assigneeId={assigneeId ?? null}
-              onUpdate={(updates) => {
-                setAssigneeType(updates.assignee_type ?? undefined);
-                setAssigneeId(updates.assignee_id ?? undefined);
-              }}
-            />
-          </div>
         </div>
-        <DialogFooter>
-          <Button
-            onClick={handleSubmit}
-            disabled={!title.trim() || submitting}
-          >
+
+        {/* Description — takes remaining space */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-5">
+          <RichTextEditor
+            ref={descEditorRef}
+            placeholder="Add description..."
+          />
+        </div>
+
+        {/* Property toolbar */}
+        <div className="flex items-center gap-1.5 px-4 py-2 shrink-0 flex-wrap">
+          {/* Status */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <PillButton>
+                  <StatusIcon status={status} className="size-3.5" />
+                  <span>{STATUS_CONFIG[status].label}</span>
+                </PillButton>
+              }
+            />
+            <DropdownMenuContent align="start" className="w-44">
+              {ALL_STATUSES.map((s) => (
+                <DropdownMenuItem key={s} onClick={() => setStatus(s)}>
+                  <StatusIcon status={s} className="size-3.5" />
+                  <span>{STATUS_CONFIG[s].label}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Priority */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <PillButton>
+                  <PriorityIcon priority={priority} />
+                  <span>{PRIORITY_CONFIG[priority].label}</span>
+                </PillButton>
+              }
+            />
+            <DropdownMenuContent align="start" className="w-44">
+              {PRIORITY_ORDER.map((p) => (
+                <DropdownMenuItem key={p} onClick={() => setPriority(p)}>
+                  <PriorityIcon priority={p} />
+                  <span>{PRIORITY_CONFIG[p].label}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Assignee — Popover for search support */}
+          <Popover open={assigneeOpen} onOpenChange={(v) => { setAssigneeOpen(v); if (!v) setAssigneeFilter(""); }}>
+            <PopoverTrigger
+              render={
+                <PillButton>
+                  {assigneeType && assigneeId ? (
+                    <>
+                      <div
+                        className={cn(
+                          "inline-flex shrink-0 items-center justify-center rounded-full font-medium text-[8px] size-4",
+                          assigneeType === "agent" ? "bg-info/10 text-info" : "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        {assigneeType === "agent" ? <Bot className="size-2.5" /> : getActorInitials(assigneeType, assigneeId)}
+                      </div>
+                      <span>{assigneeLabel}</span>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">Assignee</span>
+                  )}
+                </PillButton>
+              }
+            />
+            <PopoverContent align="start" className="w-52 p-0">
+              <div className="px-2 py-1.5 border-b">
+                <input
+                  type="text"
+                  value={assigneeFilter}
+                  onChange={(e) => setAssigneeFilter(e.target.value)}
+                  placeholder="Assign to..."
+                  className="w-full bg-transparent text-sm placeholder:text-muted-foreground outline-none"
+                />
+              </div>
+              <div className="p-1 max-h-60 overflow-y-auto">
+                {/* Unassigned */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAssigneeType(undefined);
+                    setAssigneeId(undefined);
+                    setAssigneeOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent transition-colors"
+                >
+                  <UserMinus className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-muted-foreground">Unassigned</span>
+                </button>
+
+                {/* Members */}
+                {filteredMembers.length > 0 && (
+                  <>
+                    <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">Members</div>
+                    {filteredMembers.map((m) => (
+                      <button
+                        type="button"
+                        key={m.user_id}
+                        onClick={() => {
+                          setAssigneeType("member");
+                          setAssigneeId(m.user_id);
+                          setAssigneeOpen(false);
+                        }}
+                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent transition-colors"
+                      >
+                        <div className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-[8px] font-medium text-muted-foreground">
+                          {getActorInitials("member", m.user_id)}
+                        </div>
+                        <span>{m.name}</span>
+                      </button>
+                    ))}
+                  </>
+                )}
+
+                {/* Agents */}
+                {filteredAgents.length > 0 && (
+                  <>
+                    <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">Agents</div>
+                    {filteredAgents.map((a) => (
+                      <button
+                        type="button"
+                        key={a.id}
+                        onClick={() => {
+                          setAssigneeType("agent");
+                          setAssigneeId(a.id);
+                          setAssigneeOpen(false);
+                        }}
+                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent transition-colors"
+                      >
+                        <div className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-info/10 text-info">
+                          <Bot className="size-2.5" />
+                        </div>
+                        <span>{a.name}</span>
+                      </button>
+                    ))}
+                  </>
+                )}
+
+                {filteredMembers.length === 0 && filteredAgents.length === 0 && assigneeFilter && (
+                  <div className="px-2 py-3 text-center text-sm text-muted-foreground">No results</div>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {/* Due date */}
+          <Popover open={dueDateOpen} onOpenChange={setDueDateOpen}>
+            <PopoverTrigger
+              render={
+                <PillButton>
+                  <CalendarDays className="size-3.5 text-muted-foreground" />
+                  {dueDateObj ? (
+                    <span>{dueDateObj.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                  ) : (
+                    <span className="text-muted-foreground">Due date</span>
+                  )}
+                </PillButton>
+              }
+            />
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={dueDateObj}
+                onSelect={(d: Date | undefined) => {
+                  setDueDate(d ? d.toISOString() : null);
+                  setDueDateOpen(false);
+                }}
+              />
+              {dueDateObj && (
+                <div className="border-t px-3 py-2">
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => {
+                      setDueDate(null);
+                      setDueDateOpen(false);
+                    }}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    Clear date
+                  </Button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end px-4 py-3 border-t shrink-0">
+          <Button size="sm" onClick={handleSubmit} disabled={!title.trim() || submitting}>
             {submitting ? "Creating..." : "Create Issue"}
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
