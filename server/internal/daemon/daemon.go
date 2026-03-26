@@ -33,7 +33,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	for name := range d.cfg.Agents {
 		agentNames = append(agentNames, name)
 	}
-	d.logger.Info("starting daemon", "agents", agentNames, "workspace_id", d.cfg.WorkspaceID, "server", d.cfg.ServerBaseURL, "repos_root", d.cfg.ReposRoot)
+	d.logger.Info("starting daemon", "agents", agentNames, "workspace_id", d.cfg.WorkspaceID, "server", d.cfg.ServerBaseURL)
 
 	if strings.TrimSpace(d.cfg.WorkspaceID) == "" {
 		workspaceID, err := d.ensurePaired(ctx)
@@ -279,7 +279,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task) (TaskResult, error) {
 	}
 	env, err := execenv.Prepare(execenv.PrepareParams{
 		WorkspacesRoot: d.cfg.WorkspacesRoot,
-		ReposRoot:      d.cfg.ReposRoot,
+		RepoPath:       task.Context.RepoPath,
 		TaskID:         task.ID,
 		AgentName:      task.Context.Agent.Name,
 		Task:           taskCtx,

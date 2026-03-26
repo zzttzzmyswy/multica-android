@@ -49,6 +49,7 @@ type TaskContext struct {
 	Agent            AgentContext   `json:"agent"`
 	Runtime          RuntimeContext `json:"runtime"`
 	WorkspaceContext string         `json:"workspace_context,omitempty"`
+	RepoPath         string         `json:"repo_path,omitempty"`
 }
 
 // IssueContext holds issue details for task execution.

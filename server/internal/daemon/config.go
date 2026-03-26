@@ -30,7 +30,6 @@ type Config struct {
 	DeviceName        string
 	RuntimeName       string
 	Agents            map[string]AgentEntry // "claude" -> entry, "codex" -> entry
-	ReposRoot         string                // parent directory containing all repos
 	WorkspacesRoot    string                // base path for execution envs (default: ~/multica_workspaces)
 	KeepEnvAfterTask  bool                  // preserve env after task for debugging
 	PollInterval      time.Duration
@@ -43,7 +42,6 @@ type Config struct {
 type Overrides struct {
 	ServerURL         string
 	WorkspaceID       string
-	ReposRoot         string
 	WorkspacesRoot    string
 	ConfigPath        string
 	PollInterval      time.Duration
@@ -118,22 +116,6 @@ func LoadConfig(overrides Overrides) (Config, error) {
 		host = "local-machine"
 	}
 
-	// Repos root: override > env > cwd
-	reposRoot := strings.TrimSpace(os.Getenv("MULTICA_REPOS_ROOT"))
-	if overrides.ReposRoot != "" {
-		reposRoot = overrides.ReposRoot
-	}
-	if reposRoot == "" {
-		reposRoot, err = os.Getwd()
-		if err != nil {
-			return Config{}, fmt.Errorf("resolve working directory: %w", err)
-		}
-	}
-	reposRoot, err = filepath.Abs(reposRoot)
-	if err != nil {
-		return Config{}, fmt.Errorf("resolve absolute repos root: %w", err)
-	}
-
 	// Durations: override > env > default
 	pollInterval, err := durationFromEnv("MULTICA_DAEMON_POLL_INTERVAL", DefaultPollInterval)
 	if err != nil {
@@ -181,12 +163,11 @@ func LoadConfig(overrides Overrides) (Config, error) {
 		workspacesRoot = overrides.WorkspacesRoot
 	}
 	if workspacesRoot == "" {
-		home, _ := os.UserHomeDir()
-		if home != "" {
-			workspacesRoot = filepath.Join(home, "multica_workspaces")
-		} else {
-			workspacesRoot = filepath.Join(reposRoot, "multica_workspaces")
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return Config{}, fmt.Errorf("resolve home directory: %w (set MULTICA_WORKSPACES_ROOT to override)", err)
 		}
+		workspacesRoot = filepath.Join(home, "multica_workspaces")
 	}
 	workspacesRoot, err = filepath.Abs(workspacesRoot)
 	if err != nil {
@@ -204,7 +185,6 @@ func LoadConfig(overrides Overrides) (Config, error) {
 		DeviceName:        deviceName,
 		RuntimeName:       runtimeName,
 		Agents:            agents,
-		ReposRoot:         reposRoot,
 		WorkspacesRoot:    workspacesRoot,
 		KeepEnvAfterTask:  keepEnv,
 		PollInterval:      pollInterval,
