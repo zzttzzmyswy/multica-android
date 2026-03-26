@@ -4,7 +4,11 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -20,7 +24,7 @@ var authCmd = &cobra.Command{
 
 var authLoginCmd = &cobra.Command{
 	Use:   "login",
-	Short: "Authenticate with a personal access token",
+	Short: "Authenticate with Multica",
 	RunE:  runAuthLogin,
 }
 
@@ -37,6 +41,7 @@ var authLogoutCmd = &cobra.Command{
 }
 
 func init() {
+	authLoginCmd.Flags().Bool("token", false, "Authenticate by pasting a personal access token")
 	authCmd.AddCommand(authLoginCmd)
 	authCmd.AddCommand(authStatusCmd)
 	authCmd.AddCommand(authLogoutCmd)
@@ -50,7 +55,146 @@ func resolveToken() string {
 	return cfg.Token
 }
 
+func resolveAppURL(cmd *cobra.Command) string {
+	val := cli.FlagOrEnv(cmd, "", "MULTICA_APP_URL", "")
+	if val != "" {
+		return strings.TrimRight(val, "/")
+	}
+	return "http://localhost:3000"
+}
+
+func openBrowser(url string) error {
+	var cmd string
+	var args []string
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = "open"
+		args = []string{url}
+	case "linux":
+		cmd = "xdg-open"
+		args = []string{url}
+	case "windows":
+		cmd = "cmd"
+		args = []string{"/c", "start", url}
+	default:
+		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+	}
+	return exec.Command(cmd, args...).Start()
+}
+
 func runAuthLogin(cmd *cobra.Command, _ []string) error {
+	useToken, _ := cmd.Flags().GetBool("token")
+	if useToken {
+		return runAuthLoginToken(cmd)
+	}
+	return runAuthLoginBrowser(cmd)
+}
+
+func runAuthLoginBrowser(cmd *cobra.Command) error {
+	serverURL := resolveServerURL(cmd)
+	appURL := resolveAppURL(cmd)
+
+	// Start a local HTTP server on a random port to receive the callback.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return fmt.Errorf("failed to start local server: %w", err)
+	}
+	defer listener.Close()
+
+	port := listener.Addr().(*net.TCPAddr).Port
+	callbackURL := fmt.Sprintf("http://localhost:%d/callback", port)
+	loginURL := fmt.Sprintf("%s/login?cli_callback=%s", appURL, callbackURL)
+
+	// Channel to receive the JWT from the browser callback.
+	jwtCh := make(chan string, 1)
+	errCh := make(chan error, 1)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+		token := r.URL.Query().Get("token")
+		if token == "" {
+			http.Error(w, "missing token", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(`<!DOCTYPE html><html><body><h2>Authentication successful!</h2><p>You can close this tab and return to the terminal.</p><script>window.close()</script></body></html>`))
+		jwtCh <- token
+	})
+
+	srv := &http.Server{Handler: mux}
+	go func() {
+		if err := srv.Serve(listener); err != nil && err != http.ErrServerClosed {
+			errCh <- err
+		}
+	}()
+	defer srv.Close()
+
+	// Open the browser.
+	fmt.Fprintln(os.Stderr, "Opening browser to authenticate...")
+	if err := openBrowser(loginURL); err != nil {
+		fmt.Fprintf(os.Stderr, "Could not open browser automatically.\n")
+	}
+	fmt.Fprintf(os.Stderr, "If the browser didn't open, visit:\n  %s\n\nWaiting for authentication...\n", loginURL)
+
+	// Wait for the JWT from the callback (timeout 5 minutes).
+	var jwtToken string
+	select {
+	case jwtToken = <-jwtCh:
+	case err := <-errCh:
+		return fmt.Errorf("local server error: %w", err)
+	case <-time.After(5 * time.Minute):
+		return fmt.Errorf("timed out waiting for authentication")
+	}
+
+	// Use the JWT to create a PAT via the existing API.
+	client := cli.NewAPIClient(serverURL, "", jwtToken)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	hostname, _ := os.Hostname()
+	if hostname == "" {
+		hostname = "unknown"
+	}
+	patName := fmt.Sprintf("CLI (%s)", hostname)
+	expiresInDays := 90
+
+	var patResp struct {
+		Token string `json:"token"`
+	}
+	err = client.PostJSON(ctx, "/api/tokens", map[string]any{
+		"name":            patName,
+		"expires_in_days": expiresInDays,
+	}, &patResp)
+	if err != nil {
+		return fmt.Errorf("failed to create access token: %w", err)
+	}
+
+	// Verify the PAT works.
+	patClient := cli.NewAPIClient(serverURL, "", patResp.Token)
+	var me struct {
+		Name  string `json:"name"`
+		Email string `json:"email"`
+	}
+	if err := patClient.GetJSON(ctx, "/api/me", &me); err != nil {
+		return fmt.Errorf("token verification failed: %w", err)
+	}
+
+	// Save to config.
+	cfg, _ := cli.LoadCLIConfig()
+	cfg.Token = patResp.Token
+	if cfg.ServerURL == "" {
+		cfg.ServerURL = serverURL
+	}
+	if err := cli.SaveCLIConfig(cfg); err != nil {
+		return fmt.Errorf("failed to save config: %w", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Authenticated as %s (%s)\nToken saved to config.\n", me.Name, me.Email)
+	return nil
+}
+
+func runAuthLoginToken(cmd *cobra.Command) error {
 	fmt.Print("Enter your personal access token: ")
 	scanner := bufio.NewScanner(os.Stdin)
 	if !scanner.Scan() {

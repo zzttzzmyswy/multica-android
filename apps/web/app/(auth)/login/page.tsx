@@ -70,6 +70,15 @@ function LoginPageContent() {
       setError("");
       setSubmitting(true);
       try {
+        const cliCallback = searchParams.get("cli_callback");
+        if (cliCallback) {
+          // CLI browser login: verify code, get JWT, redirect to CLI callback.
+          const { token } = await api.verifyCode(email, value);
+          const separator = cliCallback.includes("?") ? "&" : "?";
+          window.location.href = `${cliCallback}${separator}token=${encodeURIComponent(token)}`;
+          return;
+        }
+
         await verifyCode(email, value);
         const wsList = await api.listWorkspaces();
         await hydrateWorkspace(wsList);
