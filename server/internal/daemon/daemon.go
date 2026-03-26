@@ -3,7 +3,7 @@ package daemon
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -15,11 +15,11 @@ import (
 type Daemon struct {
 	cfg    Config
 	client *Client
-	logger *log.Logger
+	logger *slog.Logger
 }
 
 // New creates a new Daemon instance.
-func New(cfg Config, logger *log.Logger) *Daemon {
+func New(cfg Config, logger *slog.Logger) *Daemon {
 	return &Daemon{
 		cfg:    cfg,
 		client: NewClient(cfg.ServerBaseURL),
@@ -33,8 +33,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	for name := range d.cfg.Agents {
 		agentNames = append(agentNames, name)
 	}
-	d.logger.Printf("starting daemon agents=%v workspace=%s server=%s repos_root=%s",
-		agentNames, d.cfg.WorkspaceID, d.cfg.ServerBaseURL, d.cfg.ReposRoot)
+	d.logger.Info("starting daemon", "agents", agentNames, "workspace_id", d.cfg.WorkspaceID, "server", d.cfg.ServerBaseURL, "repos_root", d.cfg.ReposRoot)
 
 	if strings.TrimSpace(d.cfg.WorkspaceID) == "" {
 		workspaceID, err := d.ensurePaired(ctx)
@@ -42,7 +41,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 			return err
 		}
 		d.cfg.WorkspaceID = workspaceID
-		d.logger.Printf("pairing completed for workspace=%s", workspaceID)
+		d.logger.Info("pairing completed", "workspace_id", workspaceID)
 	}
 
 	runtimes, err := d.registerRuntimes(ctx)
@@ -51,7 +50,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	}
 	runtimeIDs := make([]string, 0, len(runtimes))
 	for _, rt := range runtimes {
-		d.logger.Printf("registered runtime id=%s provider=%s status=%s", rt.ID, rt.Provider, rt.Status)
+		d.logger.Info("registered runtime", "id", rt.ID, "provider", rt.Provider, "status", rt.Status)
 		runtimeIDs = append(runtimeIDs, rt.ID)
 	}
 
@@ -64,7 +63,7 @@ func (d *Daemon) registerRuntimes(ctx context.Context) ([]Runtime, error) {
 	for name, entry := range d.cfg.Agents {
 		version, err := agent.DetectVersion(ctx, entry.Path)
 		if err != nil {
-			d.logger.Printf("skip registering %s: %v", name, err)
+			d.logger.Warn("skip registering runtime", "name", name, "error", err)
 			continue
 		}
 		runtimes = append(runtimes, map[string]string{
@@ -122,9 +121,9 @@ func (d *Daemon) ensurePaired(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("create pairing session: %w", err)
 	}
 	if session.LinkURL != nil {
-		d.logger.Printf("open this link to pair the daemon: %s", *session.LinkURL)
+		d.logger.Info("open this link to pair the daemon", "url", *session.LinkURL)
 	} else {
-		d.logger.Printf("pairing session created: %s", session.Token)
+		d.logger.Info("pairing session created", "token", session.Token)
 	}
 
 	for {
@@ -176,7 +175,7 @@ func (d *Daemon) heartbeatLoop(ctx context.Context, runtimeIDs []string) {
 		case <-ticker.C:
 			for _, rid := range runtimeIDs {
 				if err := d.client.SendHeartbeat(ctx, rid); err != nil {
-					d.logger.Printf("heartbeat failed for runtime %s: %v", rid, err)
+					d.logger.Warn("heartbeat failed", "runtime_id", rid, "error", err)
 				}
 			}
 		}
@@ -199,11 +198,11 @@ func (d *Daemon) pollLoop(ctx context.Context, runtimeIDs []string) error {
 			rid := runtimeIDs[(pollOffset+i)%n]
 			task, err := d.client.ClaimTask(ctx, rid)
 			if err != nil {
-				d.logger.Printf("claim task failed for runtime %s: %v", rid, err)
+				d.logger.Warn("claim task failed", "runtime_id", rid, "error", err)
 				continue
 			}
 			if task != nil {
-				d.logger.Printf("poll: got task=%s issue=%s title=%q", task.ID, task.IssueID, task.Context.Issue.Title)
+				d.logger.Info("task received", "task_id", task.ID, "issue_id", task.IssueID, "title", task.Context.Issue.Title)
 				d.handleTask(ctx, *task)
 				claimed = true
 				pollOffset = (pollOffset + i + 1) % n
@@ -214,7 +213,7 @@ func (d *Daemon) pollLoop(ctx context.Context, runtimeIDs []string) error {
 		if !claimed {
 			pollCount++
 			if pollCount%20 == 1 {
-				d.logger.Printf("poll: no tasks (runtimes=%v, cycle=%d)", runtimeIDs, pollCount)
+				d.logger.Debug("poll: no tasks", "runtimes", runtimeIDs, "cycle", pollCount)
 			}
 			pollOffset = (pollOffset + 1) % n
 			if err := sleepWithContext(ctx, d.cfg.PollInterval); err != nil {
@@ -228,10 +227,10 @@ func (d *Daemon) pollLoop(ctx context.Context, runtimeIDs []string) error {
 
 func (d *Daemon) handleTask(ctx context.Context, task Task) {
 	provider := task.Context.Runtime.Provider
-	d.logger.Printf("picked task=%s issue=%s provider=%s title=%q", task.ID, task.IssueID, provider, task.Context.Issue.Title)
+	d.logger.Info("picked task", "task_id", task.ID, "issue_id", task.IssueID, "provider", provider, "title", task.Context.Issue.Title)
 
 	if err := d.client.StartTask(ctx, task.ID); err != nil {
-		d.logger.Printf("start task %s failed: %v", task.ID, err)
+		d.logger.Error("start task failed", "task_id", task.ID, "error", err)
 		return
 	}
 
@@ -239,9 +238,9 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 
 	result, err := d.runTask(ctx, task)
 	if err != nil {
-		d.logger.Printf("task %s failed: %v", task.ID, err)
+		d.logger.Error("task failed", "task_id", task.ID, "error", err)
 		if failErr := d.client.FailTask(ctx, task.ID, err.Error()); failErr != nil {
-			d.logger.Printf("fail task %s callback failed: %v", task.ID, failErr)
+			d.logger.Error("fail task callback failed", "task_id", task.ID, "error", failErr)
 		}
 		return
 	}
@@ -251,12 +250,12 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 	switch result.Status {
 	case "blocked":
 		if err := d.client.FailTask(ctx, task.ID, result.Comment); err != nil {
-			d.logger.Printf("report blocked task %s failed: %v", task.ID, err)
+			d.logger.Error("report blocked task failed", "task_id", task.ID, "error", err)
 		}
 	default:
-		d.logger.Printf("task %s completed status=%s", task.ID, result.Status)
+		d.logger.Info("task completed", "task_id", task.ID, "status", result.Status)
 		if err := d.client.CompleteTask(ctx, task.ID, result.Comment, result.BranchName); err != nil {
-			d.logger.Printf("complete task %s failed: %v", task.ID, err)
+			d.logger.Error("complete task failed", "task_id", task.ID, "error", err)
 		}
 	}
 }
@@ -291,11 +290,11 @@ func (d *Daemon) runTask(ctx context.Context, task Task) (TaskResult, error) {
 
 	// Inject runtime-specific config (meta skill) so the agent discovers .agent_context/.
 	if err := execenv.InjectRuntimeConfig(env.WorkDir, provider, taskCtx); err != nil {
-		d.logger.Printf("execenv: inject runtime config failed (non-fatal): %v", err)
+		d.logger.Warn("execenv: inject runtime config failed (non-fatal)", "error", err)
 	}
 	defer func() {
 		if cleanupErr := env.Cleanup(!d.cfg.KeepEnvAfterTask); cleanupErr != nil {
-			d.logger.Printf("cleanup env for task %s: %v", task.ID, cleanupErr)
+			d.logger.Warn("cleanup env failed", "task_id", task.ID, "error", cleanupErr)
 		}
 	}()
 
@@ -309,10 +308,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task) (TaskResult, error) {
 		return TaskResult{}, fmt.Errorf("create agent backend: %w", err)
 	}
 
-	d.logger.Printf(
-		"starting %s task=%s workdir=%s branch=%s env_type=%s model=%s timeout=%s",
-		provider, task.ID, env.WorkDir, env.BranchName, env.Type, entry.Model, d.cfg.AgentTimeout,
-	)
+	d.logger.Info("starting agent", "provider", provider, "task_id", task.ID, "workdir", env.WorkDir, "branch", env.BranchName, "env_type", env.Type, "model", entry.Model, "timeout", d.cfg.AgentTimeout.String())
 
 	session, err := backend.Execute(ctx, prompt, agent.ExecOptions{
 		Cwd:     env.WorkDir,
@@ -328,9 +324,9 @@ func (d *Daemon) runTask(ctx context.Context, task Task) (TaskResult, error) {
 		for msg := range session.Messages {
 			switch msg.Type {
 			case agent.MessageToolUse:
-				d.logger.Printf("[%s] tool-use: %s (call=%s)", provider, msg.Tool, msg.CallID)
+				d.logger.Debug("tool-use", "provider", provider, "tool", msg.Tool, "call_id", msg.CallID)
 			case agent.MessageError:
-				d.logger.Printf("[%s] error: %s", provider, msg.Content)
+				d.logger.Error("agent error", "provider", provider, "content", msg.Content)
 			}
 		}
 	}()

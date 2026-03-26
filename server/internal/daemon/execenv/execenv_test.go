@@ -1,7 +1,7 @@
 package execenv
 
 import (
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,8 +9,8 @@ import (
 	"testing"
 )
 
-func testLogger() *log.Logger {
-	return log.New(os.Stderr, "[test] ", log.LstdFlags)
+func testLogger() *slog.Logger {
+	return slog.Default()
 }
 
 func TestShortID(t *testing.T) {

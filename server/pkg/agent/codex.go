@@ -55,7 +55,7 @@ func (b *codexBackend) Execute(ctx context.Context, prompt string, opts ExecOpti
 		return nil, fmt.Errorf("start codex: %w", err)
 	}
 
-	b.cfg.Logger.Printf("[codex] started app-server pid=%d cwd=%s", cmd.Process.Pid, opts.Cwd)
+	b.cfg.Logger.Info("codex started app-server", "pid", cmd.Process.Pid, "cwd", opts.Cwd)
 
 	msgCh := make(chan Message, 256)
 	resCh := make(chan Result, 1)
@@ -171,7 +171,7 @@ func (b *codexBackend) Execute(ctx context.Context, prompt string, opts ExecOpti
 			return
 		}
 		c.threadID = threadID
-		b.cfg.Logger.Printf("[codex] thread started: %s", threadID)
+		b.cfg.Logger.Info("codex thread started", "thread_id", threadID)
 
 		// 3. Send turn and wait for completion
 		_, err = c.request(runCtx, "turn/start", map[string]any{
@@ -205,8 +205,7 @@ func (b *codexBackend) Execute(ctx context.Context, prompt string, opts ExecOpti
 		}
 
 		duration := time.Since(startTime)
-		b.cfg.Logger.Printf("[codex] finished pid=%d status=%s duration=%s",
-			cmd.Process.Pid, finalStatus, duration.Round(time.Millisecond))
+		b.cfg.Logger.Info("codex finished", "pid", cmd.Process.Pid, "status", finalStatus, "duration", duration.Round(time.Millisecond).String())
 
 		// Close stdin and cancel context to signal the app-server to exit.
 		// Without this, the long-running codex process keeps stdout open and

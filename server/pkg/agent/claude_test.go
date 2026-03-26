@@ -3,7 +3,7 @@ package agent
 import (
 	"bytes"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"strings"
 	"testing"
 )
@@ -11,7 +11,7 @@ import (
 func TestClaudeHandleAssistantText(t *testing.T) {
 	t.Parallel()
 
-	b := &claudeBackend{cfg: Config{Logger: log.Default()}}
+	b := &claudeBackend{cfg: Config{Logger: slog.Default()}}
 	ch := make(chan Message, 10)
 	var output strings.Builder
 
@@ -43,7 +43,7 @@ func TestClaudeHandleAssistantText(t *testing.T) {
 func TestClaudeHandleAssistantToolUse(t *testing.T) {
 	t.Parallel()
 
-	b := &claudeBackend{cfg: Config{Logger: log.Default()}}
+	b := &claudeBackend{cfg: Config{Logger: slog.Default()}}
 	ch := make(chan Message, 10)
 	var output strings.Builder
 
@@ -83,7 +83,7 @@ func TestClaudeHandleAssistantToolUse(t *testing.T) {
 func TestClaudeHandleUserToolResult(t *testing.T) {
 	t.Parallel()
 
-	b := &claudeBackend{cfg: Config{Logger: log.Default()}}
+	b := &claudeBackend{cfg: Config{Logger: slog.Default()}}
 	ch := make(chan Message, 10)
 
 	msg := claudeSDKMessage{
@@ -115,8 +115,7 @@ func TestClaudeHandleUserToolResult(t *testing.T) {
 func TestClaudeHandleControlRequestAutoApproves(t *testing.T) {
 	t.Parallel()
 
-	var buf bytes.Buffer
-	b := &claudeBackend{cfg: Config{Logger: log.New(&buf, "", 0)}}
+	b := &claudeBackend{cfg: Config{Logger: slog.Default()}}
 
 	var written bytes.Buffer
 
@@ -153,7 +152,7 @@ func TestClaudeHandleControlRequestAutoApproves(t *testing.T) {
 func TestClaudeHandleAssistantInvalidJSON(t *testing.T) {
 	t.Parallel()
 
-	b := &claudeBackend{cfg: Config{Logger: log.Default()}}
+	b := &claudeBackend{cfg: Config{Logger: slog.Default()}}
 	ch := make(chan Message, 10)
 	var output strings.Builder
 

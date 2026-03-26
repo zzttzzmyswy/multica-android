@@ -128,6 +128,8 @@ type InboxItem struct {
 	Read          bool               `json:"read"`
 	Archived      bool               `json:"archived"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	ActorType     pgtype.Text        `json:"actor_type"`
+	ActorID       pgtype.UUID        `json:"actor_id"`
 }
 
 type Issue struct {

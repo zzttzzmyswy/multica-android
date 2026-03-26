@@ -1,5 +1,8 @@
+"use client";
+
 import { Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useActorName } from "@/features/workspace";
 
 interface ActorAvatarProps {
   actorType: string;
@@ -18,8 +21,12 @@ function ActorAvatar({
   getInitials,
   className,
 }: ActorAvatarProps) {
-  const name = getName?.(actorType, actorId);
-  const initials = getInitials?.(actorType, actorId);
+  const actorNameHook = useActorName();
+  const resolveName = getName ?? actorNameHook.getActorName;
+  const resolveInitials = getInitials ?? actorNameHook.getActorInitials;
+
+  const name = resolveName(actorType, actorId);
+  const initials = resolveInitials(actorType, actorId);
   const isAgent = actorType === "agent";
 
   return (

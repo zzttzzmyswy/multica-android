@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 
 	"github.com/multica-ai/multica/server/internal/events"
 	"github.com/multica-ai/multica/server/internal/handler"
@@ -38,18 +38,23 @@ func registerInboxListeners(bus *events.Bus, queries *db.Queries) {
 			IssueID:       parseUUID(issue.ID),
 			Title:         "New issue assigned: " + issue.Title,
 			Body:          util.PtrToText(issue.Description),
+			ActorType:     util.StrToText(e.ActorType),
+			ActorID:       parseUUID(e.ActorID),
 		})
 		if err != nil {
-			log.Printf("[inbox-listener] issue:created inbox error: %v", err)
+			slog.Error("inbox item creation failed", "event", "issue:created", "error", err)
 			return
 		}
+
+		resp := inboxItemToResponse(item)
+		resp["issue_status"] = issue.Status
 
 		bus.Publish(events.Event{
 			Type:        protocol.EventInboxNew,
 			WorkspaceID: e.WorkspaceID,
 			ActorType:   e.ActorType,
 			ActorID:     e.ActorID,
-			Payload:     map[string]any{"item": inboxItemToResponse(item)},
+			Payload:     map[string]any{"item": resp},
 		})
 	})
 
@@ -84,14 +89,18 @@ func registerInboxListeners(bus *events.Bus, queries *db.Queries) {
 					Severity:      "info",
 					IssueID:       parseUUID(issue.ID),
 					Title:         "Unassigned from: " + issue.Title,
+					ActorType:     util.StrToText(e.ActorType),
+					ActorID:       parseUUID(e.ActorID),
 				})
 				if err == nil {
+					oldResp := inboxItemToResponse(oldItem)
+					oldResp["issue_status"] = issue.Status
 					bus.Publish(events.Event{
 						Type:        protocol.EventInboxNew,
 						WorkspaceID: e.WorkspaceID,
 						ActorType:   e.ActorType,
 						ActorID:     actorID,
-						Payload:     map[string]any{"item": inboxItemToResponse(oldItem)},
+						Payload:     map[string]any{"item": oldResp},
 					})
 				}
 			}
@@ -106,14 +115,18 @@ func registerInboxListeners(bus *events.Bus, queries *db.Queries) {
 					Severity:      "action_required",
 					IssueID:       parseUUID(issue.ID),
 					Title:         "Assigned to you: " + issue.Title,
+					ActorType:     util.StrToText(e.ActorType),
+					ActorID:       parseUUID(e.ActorID),
 				})
 				if err == nil {
+					newResp := inboxItemToResponse(newItem)
+					newResp["issue_status"] = issue.Status
 					bus.Publish(events.Event{
 						Type:        protocol.EventInboxNew,
 						WorkspaceID: e.WorkspaceID,
 						ActorType:   e.ActorType,
 						ActorID:     actorID,
-						Payload:     map[string]any{"item": inboxItemToResponse(newItem)},
+						Payload:     map[string]any{"item": newResp},
 					})
 				}
 			}
@@ -130,14 +143,18 @@ func registerInboxListeners(bus *events.Bus, queries *db.Queries) {
 					Severity:      "info",
 					IssueID:       parseUUID(issue.ID),
 					Title:         issue.Title + " moved to " + issue.Status,
+					ActorType:     util.StrToText(e.ActorType),
+					ActorID:       parseUUID(e.ActorID),
 				})
 				if err == nil {
+					aResp := inboxItemToResponse(aItem)
+					aResp["issue_status"] = issue.Status
 					bus.Publish(events.Event{
 						Type:        protocol.EventInboxNew,
 						WorkspaceID: e.WorkspaceID,
 						ActorType:   e.ActorType,
 						ActorID:     actorID,
-						Payload:     map[string]any{"item": inboxItemToResponse(aItem)},
+						Payload:     map[string]any{"item": aResp},
 					})
 				}
 			}
@@ -155,14 +172,18 @@ func registerInboxListeners(bus *events.Bus, queries *db.Queries) {
 						Severity:      "info",
 						IssueID:       parseUUID(issue.ID),
 						Title:         "Status changed: " + issue.Title,
+						ActorType:     util.StrToText(e.ActorType),
+						ActorID:       parseUUID(e.ActorID),
 					})
 					if err == nil {
+						cResp := inboxItemToResponse(cItem)
+						cResp["issue_status"] = issue.Status
 						bus.Publish(events.Event{
 							Type:        protocol.EventInboxNew,
 							WorkspaceID: e.WorkspaceID,
 							ActorType:   e.ActorType,
 							ActorID:     actorID,
-							Payload:     map[string]any{"item": inboxItemToResponse(cItem)},
+							Payload:     map[string]any{"item": cResp},
 						})
 					}
 				}
@@ -183,6 +204,7 @@ func registerInboxListeners(bus *events.Bus, queries *db.Queries) {
 		issueTitle, _ := payload["issue_title"].(string)
 		issueAssigneeType, _ := payload["issue_assignee_type"].(*string)
 		issueAssigneeID, _ := payload["issue_assignee_id"].(*string)
+		issueStatus, _ := payload["issue_status"].(string)
 
 		// Only notify if assignee is a member and is not the commenter
 		if issueAssigneeType == nil || issueAssigneeID == nil {
@@ -201,18 +223,23 @@ func registerInboxListeners(bus *events.Bus, queries *db.Queries) {
 			IssueID:       parseUUID(comment.IssueID),
 			Title:         "New comment on: " + issueTitle,
 			Body:          util.StrToText(comment.Content),
+			ActorType:     util.StrToText(e.ActorType),
+			ActorID:       parseUUID(e.ActorID),
 		})
 		if err != nil {
-			log.Printf("[inbox-listener] comment:created inbox error: %v", err)
+			slog.Error("inbox item creation failed", "event", "comment:created", "error", err)
 			return
 		}
+
+		commentResp := inboxItemToResponse(item)
+		commentResp["issue_status"] = issueStatus
 
 		bus.Publish(events.Event{
 			Type:        protocol.EventInboxNew,
 			WorkspaceID: e.WorkspaceID,
 			ActorType:   e.ActorType,
 			ActorID:     e.ActorID,
-			Payload:     map[string]any{"item": inboxItemToResponse(item)},
+			Payload:     map[string]any{"item": commentResp},
 		})
 	})
 }
@@ -233,5 +260,7 @@ func inboxItemToResponse(item db.InboxItem) map[string]any {
 		"read":           item.Read,
 		"archived":       item.Archived,
 		"created_at":     util.TimestampToString(item.CreatedAt),
+		"actor_type":     util.TextToPtr(item.ActorType),
+		"actor_id":       util.UUIDToPtr(item.ActorID),
 	}
 }

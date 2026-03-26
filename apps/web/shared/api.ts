@@ -1,8 +1,9 @@
 import { ApiClient } from "@multica/sdk";
+import { createLogger } from "./logger";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
-export const api = new ApiClient(API_BASE_URL);
+export const api = new ApiClient(API_BASE_URL, { logger: createLogger("api") });
 
 // Initialize token from localStorage on load
 if (typeof window !== "undefined") {

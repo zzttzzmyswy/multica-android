@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/multica-ai/multica/server/internal/logger"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
@@ -22,6 +24,9 @@ type InboxItemResponse struct {
 	Read          bool    `json:"read"`
 	Archived      bool    `json:"archived"`
 	CreatedAt     string  `json:"created_at"`
+	IssueStatus   *string `json:"issue_status"`
+	ActorType     *string `json:"actor_type"`
+	ActorID       *string `json:"actor_id"`
 }
 
 func inboxToResponse(i db.InboxItem) InboxItemResponse {
@@ -38,6 +43,28 @@ func inboxToResponse(i db.InboxItem) InboxItemResponse {
 		Read:          i.Read,
 		Archived:      i.Archived,
 		CreatedAt:     timestampToString(i.CreatedAt),
+		ActorType:     textToPtr(i.ActorType),
+		ActorID:       uuidToPtr(i.ActorID),
+	}
+}
+
+func inboxRowToResponse(r db.ListInboxItemsRow) InboxItemResponse {
+	return InboxItemResponse{
+		ID:            uuidToString(r.ID),
+		WorkspaceID:   uuidToString(r.WorkspaceID),
+		RecipientType: r.RecipientType,
+		RecipientID:   uuidToString(r.RecipientID),
+		Type:          r.Type,
+		Severity:      r.Severity,
+		IssueID:       uuidToPtr(r.IssueID),
+		Title:         r.Title,
+		Body:          textToPtr(r.Body),
+		Read:          r.Read,
+		Archived:      r.Archived,
+		CreatedAt:     timestampToString(r.CreatedAt),
+		IssueStatus:   textToPtr(r.IssueStatus),
+		ActorType:     textToPtr(r.ActorType),
+		ActorID:       uuidToPtr(r.ActorID),
 	}
 }
 
@@ -73,7 +100,7 @@ func (h *Handler) ListInbox(w http.ResponseWriter, r *http.Request) {
 
 	resp := make([]InboxItemResponse, len(items))
 	for i, item := range items {
-		resp[i] = inboxToResponse(item)
+		resp[i] = inboxRowToResponse(item)
 	}
 
 	writeJSON(w, http.StatusOK, resp)
@@ -137,4 +164,92 @@ func (h *Handler) CountUnreadInbox(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]int64{"count": count})
+}
+
+func (h *Handler) MarkAllInboxRead(w http.ResponseWriter, r *http.Request) {
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return
+	}
+
+	count, err := h.Queries.MarkAllInboxRead(r.Context(), parseUUID(userID))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to mark all inbox read")
+		return
+	}
+
+	slog.Info("inbox: mark all read", append(logger.RequestAttrs(r), "user_id", userID, "count", count)...)
+	workspaceID := r.Header.Get("X-Workspace-ID")
+	h.publish(protocol.EventInboxBatchRead, workspaceID, "member", userID, map[string]any{
+		"recipient_id": userID,
+		"count":        count,
+	})
+
+	writeJSON(w, http.StatusOK, map[string]any{"count": count})
+}
+
+func (h *Handler) ArchiveAllInbox(w http.ResponseWriter, r *http.Request) {
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return
+	}
+
+	count, err := h.Queries.ArchiveAllInbox(r.Context(), parseUUID(userID))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to archive all inbox")
+		return
+	}
+
+	slog.Info("inbox: archive all", append(logger.RequestAttrs(r), "user_id", userID, "count", count)...)
+	workspaceID := r.Header.Get("X-Workspace-ID")
+	h.publish(protocol.EventInboxBatchArchived, workspaceID, "member", userID, map[string]any{
+		"recipient_id": userID,
+		"count":        count,
+	})
+
+	writeJSON(w, http.StatusOK, map[string]any{"count": count})
+}
+
+func (h *Handler) ArchiveAllReadInbox(w http.ResponseWriter, r *http.Request) {
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return
+	}
+
+	count, err := h.Queries.ArchiveAllReadInbox(r.Context(), parseUUID(userID))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to archive all read inbox")
+		return
+	}
+
+	slog.Info("inbox: archive all read", append(logger.RequestAttrs(r), "user_id", userID, "count", count)...)
+	workspaceID := r.Header.Get("X-Workspace-ID")
+	h.publish(protocol.EventInboxBatchArchived, workspaceID, "member", userID, map[string]any{
+		"recipient_id": userID,
+		"count":        count,
+	})
+
+	writeJSON(w, http.StatusOK, map[string]any{"count": count})
+}
+
+func (h *Handler) ArchiveCompletedInbox(w http.ResponseWriter, r *http.Request) {
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return
+	}
+
+	count, err := h.Queries.ArchiveCompletedInbox(r.Context(), parseUUID(userID))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to archive completed inbox")
+		return
+	}
+
+	slog.Info("inbox: archive completed", append(logger.RequestAttrs(r), "user_id", userID, "count", count)...)
+	workspaceID := r.Header.Get("X-Workspace-ID")
+	h.publish(protocol.EventInboxBatchArchived, workspaceID, "member", userID, map[string]any{
+		"recipient_id": userID,
+		"count":        count,
+	})
+
+	writeJSON(w, http.StatusOK, map[string]any{"count": count})
 }

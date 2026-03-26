@@ -6,7 +6,7 @@ package agent
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 )
 
@@ -73,14 +73,14 @@ type Result struct {
 type Config struct {
 	ExecutablePath string            // path to CLI binary (claude or codex)
 	Env            map[string]string // extra environment variables
-	Logger         *log.Logger
+	Logger         *slog.Logger
 }
 
 // New creates a Backend for the given agent type.
 // Supported types: "claude", "codex".
 func New(agentType string, cfg Config) (Backend, error) {
 	if cfg.Logger == nil {
-		cfg.Logger = log.Default()
+		cfg.Logger = slog.Default()
 	}
 
 	switch agentType {

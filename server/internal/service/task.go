@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -28,19 +29,23 @@ func NewTaskService(q *db.Queries, hub *realtime.Hub, bus *events.Bus) *TaskServ
 // EnqueueTaskForIssue creates a task with a context snapshot of the issue.
 func (s *TaskService) EnqueueTaskForIssue(ctx context.Context, issue db.Issue) (db.AgentTaskQueue, error) {
 	if !issue.AssigneeID.Valid {
+		slog.Error("task enqueue failed", "issue_id", util.UUIDToString(issue.ID), "error", "issue has no assignee")
 		return db.AgentTaskQueue{}, fmt.Errorf("issue has no assignee")
 	}
 
 	agent, err := s.Queries.GetAgent(ctx, issue.AssigneeID)
 	if err != nil {
+		slog.Error("task enqueue failed", "issue_id", util.UUIDToString(issue.ID), "error", err)
 		return db.AgentTaskQueue{}, fmt.Errorf("load agent: %w", err)
 	}
 	if !agent.RuntimeID.Valid {
+		slog.Error("task enqueue failed", "issue_id", util.UUIDToString(issue.ID), "error", "agent has no runtime")
 		return db.AgentTaskQueue{}, fmt.Errorf("agent has no runtime")
 	}
 
 	runtime, err := s.Queries.GetAgentRuntime(ctx, agent.RuntimeID)
 	if err != nil {
+		slog.Error("task enqueue failed", "issue_id", util.UUIDToString(issue.ID), "error", err)
 		return db.AgentTaskQueue{}, fmt.Errorf("load runtime: %w", err)
 	}
 
@@ -64,9 +69,11 @@ func (s *TaskService) EnqueueTaskForIssue(ctx context.Context, issue db.Issue) (
 		Context:   contextJSON,
 	})
 	if err != nil {
+		slog.Error("task enqueue failed", "issue_id", util.UUIDToString(issue.ID), "error", err)
 		return db.AgentTaskQueue{}, fmt.Errorf("create task: %w", err)
 	}
 
+	slog.Info("task enqueued", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(issue.ID), "agent_id", util.UUIDToString(issue.AssigneeID))
 	return task, nil
 }
 
@@ -88,16 +95,20 @@ func (s *TaskService) ClaimTask(ctx context.Context, agentID pgtype.UUID) (*db.A
 		return nil, fmt.Errorf("count running tasks: %w", err)
 	}
 	if running >= int64(agent.MaxConcurrentTasks) {
+		slog.Debug("task claim: no capacity", "agent_id", util.UUIDToString(agentID), "running", running, "max", agent.MaxConcurrentTasks)
 		return nil, nil // No capacity
 	}
 
 	task, err := s.Queries.ClaimAgentTask(ctx, agentID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			slog.Debug("task claim: no tasks available", "agent_id", util.UUIDToString(agentID))
 			return nil, nil // No tasks available
 		}
 		return nil, fmt.Errorf("claim task: %w", err)
 	}
+
+	slog.Info("task claimed", "task_id", util.UUIDToString(task.ID), "agent_id", util.UUIDToString(agentID))
 
 	// Update agent status to working
 	s.updateAgentStatus(ctx, agentID, "working")
@@ -143,6 +154,8 @@ func (s *TaskService) StartTask(ctx context.Context, taskID pgtype.UUID) (*db.Ag
 		return nil, fmt.Errorf("start task: %w", err)
 	}
 
+	slog.Info("task started", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID))
+
 	// Sync issue → in_progress
 	issue, err := s.Queries.UpdateIssueStatus(ctx, db.UpdateIssueStatusParams{
 		ID:     task.IssueID,
@@ -164,6 +177,8 @@ func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, resu
 	if err != nil {
 		return nil, fmt.Errorf("complete task: %w", err)
 	}
+
+	slog.Info("task completed", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID))
 
 	// Sync issue → in_review
 	issue, issueErr := s.Queries.UpdateIssueStatus(ctx, db.UpdateIssueStatusParams{
@@ -203,6 +218,8 @@ func (s *TaskService) FailTask(ctx context.Context, taskID pgtype.UUID, errMsg s
 	if err != nil {
 		return nil, fmt.Errorf("fail task: %w", err)
 	}
+
+	slog.Warn("task failed", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID), "error", errMsg)
 
 	// Sync issue → blocked
 	issue, issueErr := s.Queries.UpdateIssueStatus(ctx, db.UpdateIssueStatusParams{
@@ -254,6 +271,7 @@ func (s *TaskService) ReconcileAgentStatus(ctx context.Context, agentID pgtype.U
 	if running > 0 {
 		newStatus = "working"
 	}
+	slog.Debug("agent status reconciled", "agent_id", util.UUIDToString(agentID), "status", newStatus, "running_tasks", running)
 	s.updateAgentStatus(ctx, agentID, newStatus)
 }
 

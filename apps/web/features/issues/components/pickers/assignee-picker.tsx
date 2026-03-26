@@ -57,7 +57,7 @@ export function AssigneePicker({
         assigneeType && assigneeId ? (
           <>
             <div
-              className={`inline-flex shrink-0 items-center justify-center rounded-full font-medium text-[8px] size-[18px] ${
+              className={`inline-flex shrink-0 items-center justify-center rounded-full font-medium text-[8px] size-4.5 ${
                 assigneeType === "agent"
                   ? "bg-info/10 text-info"
                   : "bg-muted text-muted-foreground"
@@ -103,7 +103,7 @@ export function AssigneePicker({
                 setOpen(false);
               }}
             >
-              <div className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-muted text-[8px] font-medium text-muted-foreground">
+              <div className="inline-flex size-4.5 shrink-0 items-center justify-center rounded-full bg-muted text-[8px] font-medium text-muted-foreground">
                 {getActorInitials("member", m.user_id)}
               </div>
               <span>{m.name}</span>
@@ -127,7 +127,7 @@ export function AssigneePicker({
                 setOpen(false);
               }}
             >
-              <div className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-info/10 text-info">
+              <div className="inline-flex size-4.5 shrink-0 items-center justify-center rounded-full bg-info/10 text-info">
                 <Bot className="size-2.5" />
               </div>
               <span>{a.name}</span>

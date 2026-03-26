@@ -63,7 +63,7 @@ export function PropertyPicker({
               }}
               placeholder={searchPlaceholder}
               aria-label="Filter options"
-              className="w-full bg-transparent text-[13px] placeholder:text-muted-foreground outline-none"
+              className="w-full bg-transparent text-sm placeholder:text-muted-foreground outline-none"
             />
           </div>
         )}
@@ -92,7 +92,7 @@ export function PickerItem({
     <button
       type="button"
       onClick={onClick}
-      className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[13px] ${hoverClassName ?? "hover:bg-accent"} transition-colors`}
+      className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm ${hoverClassName ?? "hover:bg-accent"} transition-colors`}
     >
       <span className="flex flex-1 items-center gap-2">{children}</span>
       {selected && <Check className="h-3.5 w-3.5 text-muted-foreground" />}
@@ -113,7 +113,7 @@ export function PickerSection({
 }) {
   return (
     <div>
-      <div className="px-2 pt-2 pb-1 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+      <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
         {label}
       </div>
       {children}
@@ -127,7 +127,7 @@ export function PickerSection({
 
 export function PickerEmpty() {
   return (
-    <div className="px-2 py-3 text-center text-[13px] text-muted-foreground">
+    <div className="px-2 py-3 text-center text-sm text-muted-foreground">
       No results
     </div>
   );

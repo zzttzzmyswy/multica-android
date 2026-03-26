@@ -13,6 +13,7 @@ import { WSClient } from "@multica/sdk";
 import type { WSEventType } from "@multica/types";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
+import { createLogger } from "@/shared/logger";
 import { useRealtimeSync } from "./use-realtime-sync";
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8080/ws";
@@ -37,7 +38,7 @@ export function WSProvider({ children }: { children: ReactNode }) {
     const token = localStorage.getItem("multica_token");
     if (!token) return;
 
-    const ws = new WSClient(WS_URL);
+    const ws = new WSClient(WS_URL, { logger: createLogger("ws") });
     ws.setAuth(token, workspace.id);
     wsRef.current = ws;
     setWsClient(ws);

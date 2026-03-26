@@ -55,7 +55,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
       elements.push(
         <pre
           key={`code-${i}`}
-          className="my-3 overflow-x-auto rounded-md bg-muted px-4 py-3 text-[13px] leading-relaxed"
+          className="my-3 overflow-x-auto rounded-md bg-muted px-4 py-3 text-sm leading-relaxed"
         >
           <code>{codeLines.join("\n")}</code>
         </pre>
@@ -79,7 +79,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
         const body = dataRows.slice(1).map(parseRow);
         elements.push(
           <div key={`table-${i}`} className="my-3 overflow-x-auto">
-            <table className="w-full text-[13px]">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="border-b">
                   {header.map((h, hi) => (
@@ -110,7 +110,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
     // Heading
     if (line.startsWith("## ")) {
       elements.push(
-        <h2 key={`h2-${i}`} className="mt-6 mb-2 text-[15px] font-semibold">
+        <h2 key={`h2-${i}`} className="mt-6 mb-2 text-base font-semibold">
           {line.slice(3)}
         </h2>,
       );
@@ -119,7 +119,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
     }
     if (line.startsWith("### ")) {
       elements.push(
-        <h3 key={`h3-${i}`} className="mt-4 mb-1.5 text-[14px] font-medium">
+        <h3 key={`h3-${i}`} className="mt-4 mb-1.5 text-sm font-medium">
           {line.slice(4)}
         </h3>,
       );
@@ -132,7 +132,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
       const checked = line.includes("[x]");
       const text = line.replace(/^- \[[ x]\] /, "");
       elements.push(
-        <div key={`check-${i}`} className="flex items-center gap-2 py-0.5 text-[13px] text-foreground/80">
+        <div key={`check-${i}`} className="flex items-center gap-2 py-0.5 text-sm text-foreground/80">
           <input type="checkbox" checked={checked} readOnly className="h-3.5 w-3.5 rounded" />
           <span>{text}</span>
         </div>
@@ -142,8 +142,8 @@ function renderMarkdown(text: string): React.ReactNode[] {
     }
     if (line.startsWith("- ")) {
       elements.push(
-        <div key={`li-${i}`} className="flex gap-2 py-0.5 text-[13px] text-foreground/80">
-          <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-foreground/40" />
+        <div key={`li-${i}`} className="flex gap-2 py-0.5 text-sm text-foreground/80">
+          <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-foreground/40" />
           <span>{renderInline(line.slice(2))}</span>
         </div>
       );
@@ -155,7 +155,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
       const num = line.match(/^(\d+)\. /)![1]!;
       const text = line.replace(/^\d+\. /, "");
       elements.push(
-        <div key={`ol-${i}`} className="flex gap-2 py-0.5 text-[13px] text-foreground/80">
+        <div key={`ol-${i}`} className="flex gap-2 py-0.5 text-sm text-foreground/80">
           <span className="w-4 shrink-0 text-right text-muted-foreground">{num}.</span>
           <span>{text}</span>
         </div>
@@ -173,7 +173,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
 
     // Paragraph
     elements.push(
-      <p key={`p-${i}`} className="text-[13px] leading-[1.7] text-foreground/85">
+      <p key={`p-${i}`} className="text-sm leading-relaxed text-foreground/85">
         {renderInline(line)}
       </p>
     );
@@ -189,7 +189,7 @@ function renderInline(text: string): React.ReactNode {
   return parts.map((part, i) => {
     if (part.startsWith("`") && part.endsWith("`")) {
       return (
-        <code key={i} className="rounded bg-muted px-1 py-0.5 text-[12px]">
+        <code key={i} className="rounded bg-muted px-1 py-0.5 text-xs">
           {part.slice(1, -1)}
         </code>
       );
@@ -220,8 +220,8 @@ function DocListItem({
     >
       <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[13px] font-medium">{doc.title}</div>
-        <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+        <div className="truncate text-sm font-medium">{doc.title}</div>
+        <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
           <span>{doc.createdBy}</span>
           <span>·</span>
           <span>{timeAgo(doc.updatedAt)}</span>
@@ -239,7 +239,7 @@ function DocDetail({ doc }: { doc: KBDocument }) {
         <h1 className="text-xl font-semibold tracking-tight">{doc.title}</h1>
 
         {/* Meta */}
-        <div className="mt-2 flex items-center gap-3 text-[12px] text-muted-foreground">
+        <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
           <span>By {doc.createdBy}</span>
           <span>·</span>
           <span>Updated {timeAgo(doc.updatedAt)}</span>
@@ -251,7 +251,7 @@ function DocDetail({ doc }: { doc: KBDocument }) {
         {/* Referenced by */}
         {doc.referencedBy.length > 0 && (
           <div className="mt-10 border-t pt-4">
-            <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <LinkIcon className="h-3 w-3" />
               <span>Referenced by</span>
             </div>
@@ -259,7 +259,7 @@ function DocDetail({ doc }: { doc: KBDocument }) {
               {doc.referencedBy.map((ref) => (
                 <span
                   key={ref}
-                  className="rounded bg-muted px-2 py-0.5 text-[12px] font-mono"
+                  className="rounded bg-muted px-2 py-0.5 text-xs font-mono"
                 >
                   {ref}
                 </span>
@@ -309,7 +309,7 @@ export default function KnowledgeBasePage() {
               placeholder="Search docs..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="border-0 bg-transparent shadow-none focus-visible:ring-0 flex-1 text-[13px]"
+              className="border-0 bg-transparent shadow-none focus-visible:ring-0 flex-1 text-sm"
             />
           </div>
         </div>
@@ -325,7 +325,7 @@ export default function KnowledgeBasePage() {
             />
           ))}
           {filtered.length === 0 && (
-            <div className="px-4 py-8 text-center text-[13px] text-muted-foreground">
+            <div className="px-4 py-8 text-center text-sm text-muted-foreground">
               No documents found
             </div>
           )}

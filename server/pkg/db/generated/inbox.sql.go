@@ -11,10 +11,50 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const archiveAllInbox = `-- name: ArchiveAllInbox :execrows
+UPDATE inbox_item SET archived = true
+WHERE recipient_type = 'member' AND recipient_id = $1 AND archived = false
+`
+
+func (q *Queries) ArchiveAllInbox(ctx context.Context, recipientID pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, archiveAllInbox, recipientID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const archiveAllReadInbox = `-- name: ArchiveAllReadInbox :execrows
+UPDATE inbox_item SET archived = true
+WHERE recipient_type = 'member' AND recipient_id = $1 AND read = true AND archived = false
+`
+
+func (q *Queries) ArchiveAllReadInbox(ctx context.Context, recipientID pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, archiveAllReadInbox, recipientID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const archiveCompletedInbox = `-- name: ArchiveCompletedInbox :execrows
+UPDATE inbox_item SET archived = true
+WHERE recipient_type = 'member' AND recipient_id = $1 AND archived = false
+  AND issue_id IN (SELECT id FROM issue WHERE status IN ('done', 'cancelled'))
+`
+
+func (q *Queries) ArchiveCompletedInbox(ctx context.Context, recipientID pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, archiveCompletedInbox, recipientID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const archiveInboxItem = `-- name: ArchiveInboxItem :one
 UPDATE inbox_item SET archived = true
 WHERE id = $1
-RETURNING id, workspace_id, recipient_type, recipient_id, type, severity, issue_id, title, body, read, archived, created_at
+RETURNING id, workspace_id, recipient_type, recipient_id, type, severity, issue_id, title, body, read, archived, created_at, actor_type, actor_id
 `
 
 func (q *Queries) ArchiveInboxItem(ctx context.Context, id pgtype.UUID) (InboxItem, error) {
@@ -33,6 +73,8 @@ func (q *Queries) ArchiveInboxItem(ctx context.Context, id pgtype.UUID) (InboxIt
 		&i.Read,
 		&i.Archived,
 		&i.CreatedAt,
+		&i.ActorType,
+		&i.ActorID,
 	)
 	return i, err
 }
@@ -57,9 +99,10 @@ func (q *Queries) CountUnreadInbox(ctx context.Context, arg CountUnreadInboxPara
 const createInboxItem = `-- name: CreateInboxItem :one
 INSERT INTO inbox_item (
     workspace_id, recipient_type, recipient_id,
-    type, severity, issue_id, title, body
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, workspace_id, recipient_type, recipient_id, type, severity, issue_id, title, body, read, archived, created_at
+    type, severity, issue_id, title, body,
+    actor_type, actor_id
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id, workspace_id, recipient_type, recipient_id, type, severity, issue_id, title, body, read, archived, created_at, actor_type, actor_id
 `
 
 type CreateInboxItemParams struct {
@@ -71,6 +114,8 @@ type CreateInboxItemParams struct {
 	IssueID       pgtype.UUID `json:"issue_id"`
 	Title         string      `json:"title"`
 	Body          pgtype.Text `json:"body"`
+	ActorType     pgtype.Text `json:"actor_type"`
+	ActorID       pgtype.UUID `json:"actor_id"`
 }
 
 func (q *Queries) CreateInboxItem(ctx context.Context, arg CreateInboxItemParams) (InboxItem, error) {
@@ -83,6 +128,8 @@ func (q *Queries) CreateInboxItem(ctx context.Context, arg CreateInboxItemParams
 		arg.IssueID,
 		arg.Title,
 		arg.Body,
+		arg.ActorType,
+		arg.ActorID,
 	)
 	var i InboxItem
 	err := row.Scan(
@@ -98,12 +145,14 @@ func (q *Queries) CreateInboxItem(ctx context.Context, arg CreateInboxItemParams
 		&i.Read,
 		&i.Archived,
 		&i.CreatedAt,
+		&i.ActorType,
+		&i.ActorID,
 	)
 	return i, err
 }
 
 const getInboxItem = `-- name: GetInboxItem :one
-SELECT id, workspace_id, recipient_type, recipient_id, type, severity, issue_id, title, body, read, archived, created_at FROM inbox_item
+SELECT id, workspace_id, recipient_type, recipient_id, type, severity, issue_id, title, body, read, archived, created_at, actor_type, actor_id FROM inbox_item
 WHERE id = $1
 `
 
@@ -123,14 +172,19 @@ func (q *Queries) GetInboxItem(ctx context.Context, id pgtype.UUID) (InboxItem, 
 		&i.Read,
 		&i.Archived,
 		&i.CreatedAt,
+		&i.ActorType,
+		&i.ActorID,
 	)
 	return i, err
 }
 
 const listInboxItems = `-- name: ListInboxItems :many
-SELECT id, workspace_id, recipient_type, recipient_id, type, severity, issue_id, title, body, read, archived, created_at FROM inbox_item
-WHERE recipient_type = $1 AND recipient_id = $2 AND archived = false
-ORDER BY created_at DESC
+SELECT i.id, i.workspace_id, i.recipient_type, i.recipient_id, i.type, i.severity, i.issue_id, i.title, i.body, i.read, i.archived, i.created_at, i.actor_type, i.actor_id,
+       iss.status as issue_status
+FROM inbox_item i
+LEFT JOIN issue iss ON iss.id = i.issue_id
+WHERE i.recipient_type = $1 AND i.recipient_id = $2 AND i.archived = false
+ORDER BY i.created_at DESC
 LIMIT $3 OFFSET $4
 `
 
@@ -141,7 +195,25 @@ type ListInboxItemsParams struct {
 	Offset        int32       `json:"offset"`
 }
 
-func (q *Queries) ListInboxItems(ctx context.Context, arg ListInboxItemsParams) ([]InboxItem, error) {
+type ListInboxItemsRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
+	RecipientType string             `json:"recipient_type"`
+	RecipientID   pgtype.UUID        `json:"recipient_id"`
+	Type          string             `json:"type"`
+	Severity      string             `json:"severity"`
+	IssueID       pgtype.UUID        `json:"issue_id"`
+	Title         string             `json:"title"`
+	Body          pgtype.Text        `json:"body"`
+	Read          bool               `json:"read"`
+	Archived      bool               `json:"archived"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	ActorType     pgtype.Text        `json:"actor_type"`
+	ActorID       pgtype.UUID        `json:"actor_id"`
+	IssueStatus   pgtype.Text        `json:"issue_status"`
+}
+
+func (q *Queries) ListInboxItems(ctx context.Context, arg ListInboxItemsParams) ([]ListInboxItemsRow, error) {
 	rows, err := q.db.Query(ctx, listInboxItems,
 		arg.RecipientType,
 		arg.RecipientID,
@@ -152,9 +224,9 @@ func (q *Queries) ListInboxItems(ctx context.Context, arg ListInboxItemsParams) 
 		return nil, err
 	}
 	defer rows.Close()
-	items := []InboxItem{}
+	items := []ListInboxItemsRow{}
 	for rows.Next() {
-		var i InboxItem
+		var i ListInboxItemsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
@@ -168,6 +240,9 @@ func (q *Queries) ListInboxItems(ctx context.Context, arg ListInboxItemsParams) 
 			&i.Read,
 			&i.Archived,
 			&i.CreatedAt,
+			&i.ActorType,
+			&i.ActorID,
+			&i.IssueStatus,
 		); err != nil {
 			return nil, err
 		}
@@ -179,10 +254,23 @@ func (q *Queries) ListInboxItems(ctx context.Context, arg ListInboxItemsParams) 
 	return items, nil
 }
 
+const markAllInboxRead = `-- name: MarkAllInboxRead :execrows
+UPDATE inbox_item SET read = true
+WHERE recipient_type = 'member' AND recipient_id = $1 AND archived = false AND read = false
+`
+
+func (q *Queries) MarkAllInboxRead(ctx context.Context, recipientID pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, markAllInboxRead, recipientID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const markInboxRead = `-- name: MarkInboxRead :one
 UPDATE inbox_item SET read = true
 WHERE id = $1
-RETURNING id, workspace_id, recipient_type, recipient_id, type, severity, issue_id, title, body, read, archived, created_at
+RETURNING id, workspace_id, recipient_type, recipient_id, type, severity, issue_id, title, body, read, archived, created_at, actor_type, actor_id
 `
 
 func (q *Queries) MarkInboxRead(ctx context.Context, id pgtype.UUID) (InboxItem, error) {
@@ -201,6 +289,8 @@ func (q *Queries) MarkInboxRead(ctx context.Context, id pgtype.UUID) (InboxItem,
 		&i.Read,
 		&i.Archived,
 		&i.CreatedAt,
+		&i.ActorType,
+		&i.ActorID,
 	)
 	return i, err
 }

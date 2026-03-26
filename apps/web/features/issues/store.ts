@@ -3,6 +3,9 @@
 import { create } from "zustand";
 import type { Issue } from "@multica/types";
 import { api } from "@/shared/api";
+import { createLogger } from "@/shared/logger";
+
+const logger = createLogger("issue-store");
 
 interface IssueState {
   issues: Issue[];
@@ -22,14 +25,14 @@ export const useIssueStore = create<IssueState>((set) => ({
   activeIssueId: null,
 
   fetch: async () => {
-    console.log("[issue-store] fetch start");
+    logger.debug("fetch start");
     set({ loading: true });
     try {
       const res = await api.listIssues({ limit: 200 });
-      console.log("[issue-store] fetched", res.issues.length, "issues");
+      logger.info("fetched", res.issues.length, "issues");
       set({ issues: res.issues, loading: false });
     } catch (err) {
-      console.error("[issue-store] fetch failed", err);
+      logger.error("fetch failed", err);
       set({ loading: false });
     }
   },

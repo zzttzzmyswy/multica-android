@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
@@ -72,7 +72,7 @@ func (b *claudeBackend) Execute(ctx context.Context, prompt string, opts ExecOpt
 		return nil, fmt.Errorf("start claude: %w", err)
 	}
 
-	b.cfg.Logger.Printf("[claude] started pid=%d cwd=%s model=%s", cmd.Process.Pid, opts.Cwd, opts.Model)
+	b.cfg.Logger.Info("claude started", "pid", cmd.Process.Pid, "cwd", opts.Cwd, "model", opts.Model)
 
 	msgCh := make(chan Message, 256)
 	resCh := make(chan Result, 1)
@@ -151,8 +151,7 @@ func (b *claudeBackend) Execute(ctx context.Context, prompt string, opts ExecOpt
 			finalError = fmt.Sprintf("claude exited with error: %v", exitErr)
 		}
 
-		b.cfg.Logger.Printf("[claude] finished pid=%d status=%s duration=%s",
-			cmd.Process.Pid, finalStatus, duration.Round(time.Millisecond))
+		b.cfg.Logger.Info("claude finished", "pid", cmd.Process.Pid, "status", finalStatus, "duration", duration.Round(time.Millisecond).String())
 
 		resCh <- Result{
 			Status:     finalStatus,
@@ -244,12 +243,12 @@ func (b *claudeBackend) handleControlRequest(msg claudeSDKMessage, stdin interfa
 
 	data, err := json.Marshal(response)
 	if err != nil {
-		b.cfg.Logger.Printf("[claude] failed to marshal control response: %v", err)
+		b.cfg.Logger.Warn("claude: failed to marshal control response", "error", err)
 		return
 	}
 	data = append(data, '\n')
 	if _, err := stdin.Write(data); err != nil {
-		b.cfg.Logger.Printf("[claude] failed to write control response: %v", err)
+		b.cfg.Logger.Warn("claude: failed to write control response", "error", err)
 	}
 }
 
@@ -329,20 +328,20 @@ func detectCLIVersion(ctx context.Context, execPath string) (string, error) {
 	return strings.TrimSpace(string(data)), nil
 }
 
-// logWriter adapts a *log.Logger to an io.Writer for capturing stderr.
+// logWriter adapts a *slog.Logger to an io.Writer for capturing stderr.
 type logWriter struct {
-	logger *log.Logger
+	logger *slog.Logger
 	prefix string
 }
 
-func newLogWriter(logger *log.Logger, prefix string) *logWriter {
+func newLogWriter(logger *slog.Logger, prefix string) *logWriter {
 	return &logWriter{logger: logger, prefix: prefix}
 }
 
 func (w *logWriter) Write(p []byte) (int, error) {
 	text := strings.TrimSpace(string(p))
 	if text != "" {
-		w.logger.Printf("%s%s", w.prefix, text)
+		w.logger.Debug(w.prefix + text)
 	}
 	return len(p), nil
 }

@@ -7,6 +7,7 @@ import { useIssueStore } from "@/features/issues";
 import { useInboxStore } from "@/features/inbox";
 import { useWorkspaceStore } from "@/features/workspace";
 import { useAuthStore } from "@/features/auth";
+import { createLogger } from "@/shared/logger";
 import type {
   IssueCreatedPayload,
   IssueUpdatedPayload,
@@ -22,6 +23,8 @@ import type {
   MemberUpdatedPayload,
   MemberRemovedPayload,
 } from "@multica/types";
+
+const logger = createLogger("realtime-sync");
 
 /**
  * Centralized WS → store sync. Called once from WSProvider.
@@ -41,6 +44,7 @@ export function useRealtimeSync(ws: WSClient | null) {
       ws.on("issue:updated", (p) => {
         const { issue } = p as IssueUpdatedPayload;
         useIssueStore.getState().updateIssue(issue.id, issue);
+        useInboxStore.getState().updateIssueStatus(issue.id, issue.status);
       }),
       ws.on("issue:deleted", (p) => {
         const { issue_id } = p as IssueDeletedPayload;
@@ -71,6 +75,12 @@ export function useRealtimeSync(ws: WSClient | null) {
       ws.on("inbox:archived", (p) => {
         const { item_id } = p as InboxArchivedPayload;
         useInboxStore.getState().archive(item_id);
+      }),
+      ws.on("inbox:batch-read", () => {
+        useInboxStore.getState().markAllRead();
+      }),
+      ws.on("inbox:batch-archived", () => {
+        useInboxStore.getState().fetch();
       }),
     ];
 
@@ -108,27 +118,27 @@ export function useRealtimeSync(ws: WSClient | null) {
     const unsubs = [
       ws.on("workspace:updated", (p) => {
         const { workspace } = p as WorkspaceUpdatedPayload;
-        console.log("[realtime-sync] workspace:updated", workspace.name);
+        logger.debug("workspace:updated", workspace.name);
         useWorkspaceStore.getState().updateWorkspace(workspace);
       }),
       ws.on("workspace:deleted", (p) => {
         const { workspace_id } = p as WorkspaceDeletedPayload;
         const currentWs = useWorkspaceStore.getState().workspace;
         if (currentWs?.id === workspace_id) {
-          console.log("[realtime-sync] current workspace deleted, switching away");
+          logger.warn("current workspace deleted, switching");
           toast.info("This workspace was deleted");
           useWorkspaceStore.getState().refreshWorkspaces();
         }
       }),
       ws.on("member:updated", (p) => {
         const payload = p as MemberUpdatedPayload;
-        console.log("[realtime-sync] member:updated", payload.member.email, payload.member.role);
+        logger.debug("member:updated", payload.member.email, payload.member.role);
         useWorkspaceStore.getState().refreshMembers();
       }),
       ws.on("member:added", (p) => {
         const payload = p as MemberAddedPayload;
         const myUserId = useAuthStore.getState().user?.id;
-        console.log("[realtime-sync] member:added", payload.member.email);
+        logger.debug("member:added", payload.member.email);
         if (payload.member.user_id === myUserId) {
           // I was invited to a workspace — refresh list so it appears
           useWorkspaceStore.getState().refreshWorkspaces();
@@ -139,9 +149,9 @@ export function useRealtimeSync(ws: WSClient | null) {
       ws.on("member:removed", (p) => {
         const payload = p as MemberRemovedPayload;
         const myUserId = useAuthStore.getState().user?.id;
-        console.log("[realtime-sync] member:removed user_id:", payload.user_id);
+        logger.debug("member:removed", payload.user_id);
         if (payload.user_id === myUserId) {
-          console.log("[realtime-sync] I was removed, switching away");
+          logger.warn("removed from workspace, switching");
           toast.info("You were removed from this workspace");
           useWorkspaceStore.getState().refreshWorkspaces();
         } else {
@@ -158,7 +168,7 @@ export function useRealtimeSync(ws: WSClient | null) {
     if (!ws) return;
 
     const unsub = ws.onReconnect(async () => {
-      console.log("[realtime-sync] reconnected, refetching all data");
+      logger.info("reconnected, refetching all data");
       try {
         await Promise.all([
           useIssueStore.getState().fetch(),

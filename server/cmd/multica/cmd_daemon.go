@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
-	"os"
 	"os/signal"
 	"syscall"
 
@@ -12,6 +10,7 @@ import (
 
 	"github.com/multica-ai/multica/server/internal/cli"
 	"github.com/multica-ai/multica/server/internal/daemon"
+	logger_pkg "github.com/multica-ai/multica/server/internal/logger"
 )
 
 var daemonCmd = &cobra.Command{
@@ -61,7 +60,7 @@ func runDaemon(cmd *cobra.Command, _ []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	logger := log.New(os.Stdout, "multica-daemon: ", log.LstdFlags)
+	logger := logger_pkg.NewLogger("daemon")
 	d := daemon.New(cfg, logger)
 
 	if err := d.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {

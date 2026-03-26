@@ -1,8 +1,11 @@
 "use client";
 
 import { create } from "zustand";
-import type { InboxItem } from "@multica/types";
+import type { InboxItem, IssueStatus } from "@multica/types";
 import { api } from "@/shared/api";
+import { createLogger } from "@/shared/logger";
+
+const logger = createLogger("inbox-store");
 
 interface InboxState {
   items: InboxItem[];
@@ -12,6 +15,10 @@ interface InboxState {
   addItem: (item: InboxItem) => void;
   markRead: (id: string) => void;
   archive: (id: string) => void;
+  markAllRead: () => void;
+  archiveAll: () => void;
+  archiveAllRead: () => void;
+  updateIssueStatus: (issueId: string, status: IssueStatus) => void;
   unreadCount: () => number;
 }
 
@@ -20,14 +27,14 @@ export const useInboxStore = create<InboxState>((set, get) => ({
   loading: true,
 
   fetch: async () => {
-    console.log("[inbox-store] fetch start");
+    logger.debug("fetch start");
     set({ loading: true });
     try {
       const data = await api.listInbox();
-      console.log("[inbox-store] fetched", data.length, "items");
+      logger.info("fetched", data.length, "items");
       set({ items: data, loading: false });
     } catch (err) {
-      console.error("[inbox-store] fetch failed", err);
+      logger.error("fetch failed", err);
       set({ loading: false });
     }
   },
@@ -46,6 +53,26 @@ export const useInboxStore = create<InboxState>((set, get) => ({
   archive: (id) =>
     set((s) => ({
       items: s.items.map((i) => (i.id === id ? { ...i, archived: true } : i)),
+    })),
+  markAllRead: () =>
+    set((s) => ({
+      items: s.items.map((i) => (!i.archived ? { ...i, read: true } : i)),
+    })),
+  archiveAll: () =>
+    set((s) => ({
+      items: s.items.map((i) => (!i.archived ? { ...i, archived: true } : i)),
+    })),
+  archiveAllRead: () =>
+    set((s) => ({
+      items: s.items.map((i) =>
+        i.read && !i.archived ? { ...i, archived: true } : i
+      ),
+    })),
+  updateIssueStatus: (issueId, status) =>
+    set((s) => ({
+      items: s.items.map((i) =>
+        i.issue_id === issueId ? { ...i, issue_status: status } : i
+      ),
     })),
   unreadCount: () => get().items.filter((i) => !i.read && !i.archived).length,
 }));
