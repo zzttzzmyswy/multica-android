@@ -24,8 +24,13 @@ func validClaims() jwt.MapClaims {
 	}
 }
 
+// authMiddleware returns the Auth middleware with nil queries (JWT-only tests).
+func authMiddleware(next http.Handler) http.Handler {
+	return Auth(nil)(next)
+}
+
 func TestAuth_MissingHeader(t *testing.T) {
-	handler := Auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("next handler should not be called")
 	}))
 
@@ -42,7 +47,7 @@ func TestAuth_MissingHeader(t *testing.T) {
 }
 
 func TestAuth_NoBearerPrefix(t *testing.T) {
-	handler := Auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("next handler should not be called")
 	}))
 
@@ -60,7 +65,7 @@ func TestAuth_NoBearerPrefix(t *testing.T) {
 }
 
 func TestAuth_InvalidToken(t *testing.T) {
-	handler := Auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("next handler should not be called")
 	}))
 
@@ -75,7 +80,7 @@ func TestAuth_InvalidToken(t *testing.T) {
 }
 
 func TestAuth_ExpiredToken(t *testing.T) {
-	handler := Auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("next handler should not be called")
 	}))
 
@@ -94,7 +99,7 @@ func TestAuth_ExpiredToken(t *testing.T) {
 }
 
 func TestAuth_WrongSecret(t *testing.T) {
-	handler := Auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("next handler should not be called")
 	}))
 
@@ -111,7 +116,7 @@ func TestAuth_WrongSecret(t *testing.T) {
 }
 
 func TestAuth_WrongSigningMethod(t *testing.T) {
-	handler := Auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("next handler should not be called")
 	}))
 
@@ -131,7 +136,7 @@ func TestAuth_WrongSigningMethod(t *testing.T) {
 
 func TestAuth_ValidToken(t *testing.T) {
 	var gotUserID, gotEmail string
-	handler := Auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotUserID = r.Header.Get("X-User-ID")
 		gotEmail = r.Header.Get("X-User-Email")
 		w.WriteHeader(http.StatusOK)
@@ -156,7 +161,7 @@ func TestAuth_ValidToken(t *testing.T) {
 }
 
 func TestAuth_MissingClaims(t *testing.T) {
-	handler := Auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("next handler should not be called")
 	}))
 
@@ -168,6 +173,21 @@ func TestAuth_MissingClaims(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/me", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", w.Code)
+	}
+}
+
+func TestAuth_InvalidPAT(t *testing.T) {
+	handler := authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("next handler should not be called")
+	}))
+
+	req := httptest.NewRequest("GET", "/api/me", nil)
+	req.Header.Set("Authorization", "Bearer mul_invalid_token_here")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 

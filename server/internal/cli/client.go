@@ -16,15 +16,26 @@ import (
 type APIClient struct {
 	BaseURL     string
 	WorkspaceID string
+	Token       string
 	HTTPClient  *http.Client
 }
 
 // NewAPIClient creates a new API client for ctrl commands.
-func NewAPIClient(baseURL, workspaceID string) *APIClient {
+func NewAPIClient(baseURL, workspaceID, token string) *APIClient {
 	return &APIClient{
 		BaseURL:     strings.TrimRight(baseURL, "/"),
 		WorkspaceID: workspaceID,
+		Token:       token,
 		HTTPClient:  &http.Client{Timeout: 15 * time.Second},
+	}
+}
+
+func (c *APIClient) setHeaders(req *http.Request) {
+	if c.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+	}
+	if c.WorkspaceID != "" {
+		req.Header.Set("X-Workspace-ID", c.WorkspaceID)
 	}
 }
 
@@ -34,9 +45,7 @@ func (c *APIClient) GetJSON(ctx context.Context, path string, out any) error {
 	if err != nil {
 		return err
 	}
-	if c.WorkspaceID != "" {
-		req.Header.Set("X-Workspace-ID", c.WorkspaceID)
-	}
+	c.setHeaders(req)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -60,9 +69,7 @@ func (c *APIClient) DeleteJSON(ctx context.Context, path string) error {
 	if err != nil {
 		return err
 	}
-	if c.WorkspaceID != "" {
-		req.Header.Set("X-Workspace-ID", c.WorkspaceID)
-	}
+	c.setHeaders(req)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -89,9 +96,7 @@ func (c *APIClient) PutJSON(ctx context.Context, path string, body any, out any)
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if c.WorkspaceID != "" {
-		req.Header.Set("X-Workspace-ID", c.WorkspaceID)
-	}
+	c.setHeaders(req)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {

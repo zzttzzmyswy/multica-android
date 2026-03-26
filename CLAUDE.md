@@ -16,7 +16,7 @@ Multica is an AI-native task management platform — like Linear, but with AI ag
 
 - `server/` — Go backend (Chi router, sqlc for DB, gorilla/websocket for real-time)
 - `apps/web/` — Next.js 16 frontend (App Router)
-- `packages/` — Shared TypeScript packages (ui, types, sdk, store, hooks, utils)
+- `packages/` — Shared TypeScript packages (ui, types, sdk, utils)
 
 ### Web App Structure (`apps/web/`)
 
@@ -40,6 +40,8 @@ apps/web/
 | `features/issues/` | Issue state, components, config | `useIssueStore`, icons, pickers, status/priority config |
 | `features/inbox/` | Inbox notification state | `useInboxStore` |
 | `features/realtime/` | WebSocket connection + sync | `WSProvider`, `useWSEvent`, `useRealtimeSync` |
+| `features/modals/` | Modal registry and state | Modal store and components |
+| `features/skills/` | Skill management | Skill components |
 
 **`shared/`** — Code used across multiple features. Currently only `api.ts` (SDK singleton).
 
@@ -88,6 +90,7 @@ Browser ← WSClient (SDK) ← WebSocket ← Hub.Broadcast() ← Handlers/TaskSe
 - **Agent SDK** (`pkg/agent/`): Unified `Backend` interface for executing prompts via Claude Code or Codex. Each backend spawns its CLI and streams results via `Session.Messages` + `Session.Result` channels.
 - **Daemon** (`internal/daemon/`): Local agent runtime — auto-detects available CLIs (claude, codex), registers runtimes, polls for tasks, routes by provider.
 - **CLI** (`internal/cli/`): Shared helpers for the `multica` CLI — API client, config management, output formatting.
+- **Events** (`internal/events/`): Internal event bus for decoupled communication between handlers and services.
 - **Database**: sqlc generates Go code from SQL in `pkg/db/queries/` → `pkg/db/generated/`. Migrations in `migrations/`.
 - **Routes** (`cmd/server/router.go`): Public routes (auth, health, ws) + protected routes (require JWT) + daemon routes (unauthenticated, separate auth model).
 
@@ -96,6 +99,7 @@ Browser ← WSClient (SDK) ← WebSocket ← Hub.Broadcast() ← Handlers/TaskSe
 - **`@multica/sdk`**: `ApiClient` (REST) and `WSClient` (WebSocket) classes. All backend communication goes through here.
 - **`@multica/types`**: Shared domain types + WebSocket event types (issue:created/updated/deleted, task:*, agent:status, comment:*, inbox:new, daemon:*).
 - **`@multica/ui`**: shadcn/ui component library with Radix primitives, Tailwind CSS 4, Shiki syntax highlighting for markdown.
+- **`@multica/utils`**: Shared utility functions used across apps and packages.
 
 ### Multi-tenancy
 
@@ -145,7 +149,8 @@ make db-down          # Stop shared PostgreSQL
 
 ### Worktree Support
 
-For isolated feature testing with a separate database:
+All checkouts share one PostgreSQL container. Isolation is at the database level — each worktree gets its own DB name and unique ports via `.env.worktree`. Main checkouts use `.env`.
+
 ```bash
 make worktree-env       # Generate .env.worktree with unique DB/ports
 make setup-worktree     # Setup using .env.worktree
