@@ -48,7 +48,7 @@ export function PropertyPicker({
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger className="flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 hover:bg-accent/30 transition-colors">
+      <PopoverTrigger className="flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 hover:bg-accent/30 transition-colors overflow-hidden">
         {trigger}
       </PopoverTrigger>
       <PopoverContent align={align} className={`${width} gap-0 p-0`}>

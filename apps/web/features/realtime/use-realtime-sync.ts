@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import type { WSClient } from "@multica/sdk";
+import type { WSClient } from "@/shared/api";
 import { toast } from "sonner";
 import { useIssueStore } from "@/features/issues";
 import { useInboxStore } from "@/features/inbox";
@@ -22,7 +22,7 @@ import type {
   MemberAddedPayload,
   MemberUpdatedPayload,
   MemberRemovedPayload,
-} from "@multica/types";
+} from "@/shared/types";
 
 const logger = createLogger("realtime-sync");
 

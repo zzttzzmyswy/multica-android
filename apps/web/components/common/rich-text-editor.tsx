@@ -1,0 +1,150 @@
+"use client";
+
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+} from "react";
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Placeholder from "@tiptap/extension-placeholder";
+import Link from "@tiptap/extension-link";
+import Typography from "@tiptap/extension-typography";
+import { Markdown } from "tiptap-markdown";
+import { Extension } from "@tiptap/core";
+import { cn } from "@/lib/utils";
+import "./rich-text-editor.css";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface RichTextEditorProps {
+  defaultValue?: string;
+  onUpdate?: (markdown: string) => void;
+  placeholder?: string;
+  editable?: boolean;
+  className?: string;
+  debounceMs?: number;
+  onSubmit?: () => void;
+}
+
+interface RichTextEditorRef {
+  getMarkdown: () => string;
+  clearContent: () => void;
+  focus: () => void;
+}
+
+// ---------------------------------------------------------------------------
+// Submit shortcut extension (Mod+Enter)
+// ---------------------------------------------------------------------------
+
+function createSubmitExtension(onSubmit: () => void) {
+  return Extension.create({
+    name: "submitShortcut",
+    addKeyboardShortcuts() {
+      return {
+        "Mod-Enter": () => {
+          onSubmit();
+          return true;
+        },
+      };
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
+const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
+  function RichTextEditor(
+    {
+      defaultValue = "",
+      onUpdate,
+      placeholder: placeholderText = "",
+      editable = true,
+      className,
+      debounceMs = 300,
+      onSubmit,
+    },
+    ref,
+  ) {
+    const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+    const onUpdateRef = useRef(onUpdate);
+    const onSubmitRef = useRef(onSubmit);
+
+    // Helper to get markdown from tiptap-markdown storage
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const getEditorMarkdown = (ed: any): string =>
+      ed?.storage?.markdown?.getMarkdown?.() ?? "";
+
+    // Keep refs in sync without recreating editor
+    onUpdateRef.current = onUpdate;
+    onSubmitRef.current = onSubmit;
+
+    const editor = useEditor({
+      immediatelyRender: false,
+      editable,
+      content: defaultValue,
+      extensions: [
+        StarterKit.configure({
+          heading: { levels: [1, 2, 3] },
+        }),
+        Placeholder.configure({
+          placeholder: placeholderText,
+        }),
+        Link.configure({
+          openOnClick: false,
+          autolink: true,
+          HTMLAttributes: {
+            class: "text-primary hover:underline cursor-pointer",
+          },
+        }),
+        Typography,
+        Markdown.configure({
+          html: false,
+          transformPastedText: true,
+          transformCopiedText: true,
+        }),
+        createSubmitExtension(() => onSubmitRef.current?.()),
+      ],
+      onUpdate: ({ editor: ed }) => {
+        if (!onUpdateRef.current) return;
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+          onUpdateRef.current?.(getEditorMarkdown(ed));
+        }, debounceMs);
+      },
+      editorProps: {
+        attributes: {
+          class: cn("rich-text-editor text-sm outline-none", className),
+        },
+      },
+    });
+
+    // Cleanup debounce on unmount
+    useEffect(() => {
+      return () => {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+      };
+    }, []);
+
+    useImperativeHandle(ref, () => ({
+      getMarkdown: () => getEditorMarkdown(editor),
+      clearContent: () => {
+        editor?.commands.clearContent();
+      },
+      focus: () => {
+        editor?.commands.focus();
+      },
+    }));
+
+    if (!editor) return null;
+
+    return <EditorContent editor={editor} />;
+  },
+);
+
+export { RichTextEditor, type RichTextEditorProps, type RichTextEditorRef };

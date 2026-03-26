@@ -1,8 +1,8 @@
-import { Suspense } from "react";
+import { Suspense, forwardRef, useRef, useState, useImperativeHandle } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, act } from "@testing-library/react";
+import { render, screen, waitFor, act, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { Issue, Comment } from "@multica/types";
+import type { Issue, Comment } from "@/shared/types";
 
 // Mock next/navigation
 vi.mock("next/navigation", () => ({
@@ -69,6 +69,41 @@ vi.mock("@/features/realtime", () => ({
 // Mock calendar (react-day-picker needs browser APIs)
 vi.mock("@/components/ui/calendar", () => ({
   Calendar: () => null,
+}));
+
+// Mock RichTextEditor (Tiptap needs real DOM)
+vi.mock("@/components/common/rich-text-editor", () => ({
+  RichTextEditor: forwardRef(({ defaultValue, onUpdate, placeholder, onSubmit }: any, ref: any) => {
+    const valueRef = useRef(defaultValue || "");
+    const [value, setValue] = useState(defaultValue || "");
+    useImperativeHandle(ref, () => ({
+      getMarkdown: () => valueRef.current,
+      clearContent: () => { valueRef.current = ""; setValue(""); },
+      focus: () => {},
+    }));
+    return (
+      <textarea
+        value={value}
+        onChange={(e) => {
+          valueRef.current = e.target.value;
+          setValue(e.target.value);
+          onUpdate?.(e.target.value);
+        }}
+        onKeyDown={(e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+            onSubmit?.();
+          }
+        }}
+        placeholder={placeholder}
+        data-testid="rich-text-editor"
+      />
+    );
+  }),
+}));
+
+// Mock Markdown renderer
+vi.mock("@/components/markdown", () => ({
+  Markdown: ({ children }: { children: string }) => <div>{children}</div>,
 }));
 
 // Mock api
@@ -234,17 +269,21 @@ describe("IssueDetailPage", () => {
       ).toBeInTheDocument();
     });
 
-    await user.type(
-      screen.getByPlaceholderText("Leave a comment..."),
-      "New test comment",
-    );
+    const commentInput = screen.getByPlaceholderText("Leave a comment...");
 
-    const form = screen
-      .getByPlaceholderText("Leave a comment...")
-      .closest("form")!;
-    const submitBtn = form.querySelector(
-      'button[type="submit"]',
-    ) as HTMLElement;
+    // Use fireEvent to update the textarea value and trigger onUpdate
+    await act(async () => {
+      fireEvent.change(commentInput, { target: { value: "New test comment" } });
+    });
+
+    // Wait for button to be enabled after commentEmpty state update
+    const allButtons = screen.getAllByRole("button");
+    const submitBtn = allButtons.find(
+      (btn) => btn.querySelector(".lucide-arrow-up") !== null,
+    )!;
+    await waitFor(() => {
+      expect(submitBtn).not.toBeDisabled();
+    });
     await user.click(submitBtn);
 
     await waitFor(() => {

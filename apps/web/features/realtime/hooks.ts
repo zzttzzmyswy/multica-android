@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import type { WSEventType } from "@multica/types";
+import type { WSEventType } from "@/shared/types";
 import { useWS } from "./provider";
 
 type EventHandler = (payload: unknown) => void;

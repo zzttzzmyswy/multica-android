@@ -2,3 +2,4 @@ export { PropertyPicker, PickerItem, PickerSection, PickerEmpty } from "./proper
 export { StatusPicker } from "./status-picker";
 export { PriorityPicker } from "./priority-picker";
 export { AssigneePicker } from "./assignee-picker";
+export { DueDatePicker } from "./due-date-picker";

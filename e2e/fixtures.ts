@@ -1,8 +1,7 @@
 /**
  * TestApiClient — lightweight API helper for E2E test data setup/teardown.
  *
- * Uses raw fetch (no dependency on @multica/sdk build) so E2E tests
- * have zero build-time coupling to monorepo packages.
+ * Uses raw fetch so E2E tests have zero build-time coupling to the web app.
  */
 
 import pg from "pg";

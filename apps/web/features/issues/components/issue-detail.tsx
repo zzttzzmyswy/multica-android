@@ -1,14 +1,20 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useDefaultLayout, usePanelRef } from "react-resizable-panels";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  ArrowUp,
+  Bot,
+  Calendar,
   ChevronRight,
   Link2,
+  MoreHorizontal,
+  PanelRight,
   Pencil,
-  Send,
   Trash2,
+  UserMinus,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -21,31 +27,41 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+} from "@/components/ui/dropdown-menu";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor, type RichTextEditorRef } from "@/components/common/rich-text-editor";
+import { Markdown } from "@/components/markdown";
 import {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
 } from "@/components/ui/tooltip";
 import { ActorAvatar } from "@/components/common/actor-avatar";
-import type { Issue, Comment, UpdateIssueRequest } from "@multica/types";
-import { StatusPicker, PriorityPicker, AssigneePicker } from "@/features/issues/components";
+import type { Issue, Comment, UpdateIssueRequest, IssueStatus, IssuePriority } from "@/shared/types";
+import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
+import { StatusIcon, PriorityIcon } from "@/features/issues/components";
 import { api } from "@/shared/api";
 import { useAuthStore } from "@/features/auth";
-import { useActorName } from "@/features/workspace";
+import { useWorkspaceStore, useActorName } from "@/features/workspace";
 import { useWSEvent } from "@/features/realtime";
 import { useIssueStore } from "@/features/issues";
-import type { CommentCreatedPayload, CommentUpdatedPayload, CommentDeletedPayload } from "@multica/types";
+import type { CommentCreatedPayload, CommentUpdatedPayload, CommentDeletedPayload } from "@/shared/types";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -82,69 +98,15 @@ function PropRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-8 items-center gap-3 rounded-md px-2 -mx-2 hover:bg-accent/50 transition-colors">
-      <span className="w-20 shrink-0 text-sm text-muted-foreground">{label}</span>
-      <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5 text-sm">
+    <div className="flex min-h-8 items-center gap-2 rounded-md px-2 -mx-2 hover:bg-accent/50 transition-colors">
+      <span className="w-16 shrink-0 text-xs text-muted-foreground">{label}</span>
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 text-sm truncate">
         {children}
       </div>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Due Date Picker
-// ---------------------------------------------------------------------------
-
-function DueDatePicker({
-  dueDate,
-  onUpdate,
-}: {
-  dueDate: string | null;
-  onUpdate: (updates: Partial<UpdateIssueRequest>) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const date = dueDate ? new Date(dueDate) : undefined;
-  const isOverdue = date ? date < new Date() : false;
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger className="flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 hover:bg-accent/30 transition-colors">
-        {date ? (
-          <span className={isOverdue ? "text-destructive" : ""}>
-            {date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-          </span>
-        ) : (
-          <span className="text-muted-foreground">None</span>
-        )}
-      </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="end">
-        <Calendar
-          mode="single"
-          selected={date}
-          onSelect={(d: Date | undefined) => {
-            onUpdate({ due_date: d ? d.toISOString() : null });
-            setOpen(false);
-          }}
-        />
-        {date && (
-          <div className="border-t px-3 py-2">
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={() => {
-                onUpdate({ due_date: null });
-                setOpen(false);
-              }}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              Clear date
-            </Button>
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Acceptance Criteria Editor
@@ -310,7 +272,6 @@ function ContextRefsEditor({
 
 interface IssueDetailProps {
   issueId: string;
-  showBreadcrumb?: boolean;
   onDelete?: () => void;
 }
 
@@ -318,23 +279,30 @@ interface IssueDetailProps {
 // IssueDetail
 // ---------------------------------------------------------------------------
 
-export function IssueDetail({ issueId, showBreadcrumb, onDelete }: IssueDetailProps) {
+export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
   const id = issueId;
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const { getActorName } = useActorName();
+  const members = useWorkspaceStore((s) => s.members);
+  const agents = useWorkspaceStore((s) => s.agents);
+  const { getActorName, getActorInitials } = useActorName();
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
+    id: "multica_issue_detail_layout",
+  });
+  const sidebarRef = usePanelRef();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [issue, setIssue] = useState<Issue | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [commentText, setCommentText] = useState("");
+  const [commentEmpty, setCommentEmpty] = useState(true);
+  const commentEditorRef = useRef<RichTextEditorRef>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
-  const [editingDesc, setEditingDesc] = useState(false);
-  const [descDraft, setDescDraft] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   // Watch the global issue store for real-time updates from other users/agents
   const storeIssue = useIssueStore((s) => s.issues.find((i) => i.id === id));
@@ -358,10 +326,9 @@ export function IssueDetail({ issueId, showBreadcrumb, onDelete }: IssueDetailPr
       .finally(() => setLoading(false));
   }, [id]);
 
-  const handleSubmitComment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!commentText.trim() || submitting || !user) return;
-    const content = commentText.trim();
+  const handleSubmitComment = async () => {
+    const content = commentEditorRef.current?.getMarkdown()?.trim();
+    if (!content || submitting || !user) return;
     const tempId = "temp-" + Date.now();
     const tempComment: Comment = {
       id: tempId,
@@ -374,7 +341,8 @@ export function IssueDetail({ issueId, showBreadcrumb, onDelete }: IssueDetailPr
       updated_at: new Date().toISOString(),
     };
     setComments((prev) => [...prev, tempComment]);
-    setCommentText("");
+    commentEditorRef.current?.clearContent();
+    setCommentEmpty(true);
     setSubmitting(true);
     try {
       const comment = await api.createComment(id, content);
@@ -490,28 +458,186 @@ export function IssueDetail({ issueId, showBreadcrumb, onDelete }: IssueDetailPr
   }
 
   return (
-    <div className="flex flex-1 min-h-0">
+    <ResizablePanelGroup orientation="horizontal" className="flex-1 min-h-0" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged}>
+      <ResizablePanel id="content" minSize="50%">
       {/* LEFT: Content area */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex h-full flex-col">
         {/* Header bar */}
-        {showBreadcrumb !== false && (
-          <div className="sticky top-0 z-10 flex h-11 items-center justify-between border-b bg-background px-6 text-sm">
-            <div className="flex items-center gap-1.5">
-              <Link
-                href="/issues"
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Issues
-              </Link>
-              <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
-              <span className="truncate text-muted-foreground">{issue.id.slice(0, 8)}</span>
-            </div>
-            <AlertDialog>
-              <AlertDialogTrigger
-                render={<Button variant="ghost" size="icon-xs" className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive" />}
-              >
-                <Trash2 className="h-4 w-4" />
-              </AlertDialogTrigger>
+        <div className="flex h-12 shrink-0 items-center justify-between border-b bg-background px-4 text-sm">
+          <div className="flex items-center gap-1.5">
+            <Link
+              href="/issues"
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Issues
+            </Link>
+            <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
+            <span className="truncate text-muted-foreground">{issue.id.slice(0, 8)}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button variant="ghost" size="icon-xs" className="text-muted-foreground">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end" className="w-auto">
+                {/* Status */}
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <StatusIcon status={issue.status} className="h-3.5 w-3.5" />
+                    Status
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    {ALL_STATUSES.map((s) => (
+                      <DropdownMenuItem
+                        key={s}
+                        onClick={() => handleUpdateField({ status: s })}
+                      >
+                        <StatusIcon status={s} className="h-3.5 w-3.5" />
+                        {STATUS_CONFIG[s].label}
+                        {issue.status === s && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+
+                {/* Priority */}
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <PriorityIcon priority={issue.priority} />
+                    Priority
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    {PRIORITY_ORDER.map((p) => (
+                      <DropdownMenuItem
+                        key={p}
+                        onClick={() => handleUpdateField({ priority: p })}
+                      >
+                        <PriorityIcon priority={p} />
+                        {PRIORITY_CONFIG[p].label}
+                        {issue.priority === p && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+
+                {/* Assignee */}
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <UserMinus className="h-3.5 w-3.5" />
+                    Assignee
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    <DropdownMenuItem
+                      onClick={() => handleUpdateField({ assignee_type: null, assignee_id: null })}
+                    >
+                      <UserMinus className="h-3.5 w-3.5 text-muted-foreground" />
+                      Unassigned
+                      {!issue.assignee_type && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
+                    </DropdownMenuItem>
+                    {members.map((m) => (
+                      <DropdownMenuItem
+                        key={m.user_id}
+                        onClick={() => handleUpdateField({ assignee_type: "member", assignee_id: m.user_id })}
+                      >
+                        <div className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-[8px] font-medium text-muted-foreground">
+                          {getActorInitials("member", m.user_id)}
+                        </div>
+                        {m.name}
+                        {issue.assignee_type === "member" && issue.assignee_id === m.user_id && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
+                      </DropdownMenuItem>
+                    ))}
+                    {agents.map((a) => (
+                      <DropdownMenuItem
+                        key={a.id}
+                        onClick={() => handleUpdateField({ assignee_type: "agent", assignee_id: a.id })}
+                      >
+                        <div className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-info/10 text-info">
+                          <Bot className="size-2.5" />
+                        </div>
+                        {a.name}
+                        {issue.assignee_type === "agent" && issue.assignee_id === a.id && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+
+                {/* Due date */}
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <Calendar className="h-3.5 w-3.5" />
+                    Due date
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    <DropdownMenuItem onClick={() => handleUpdateField({ due_date: new Date().toISOString() })}>
+                      Today
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => {
+                      const d = new Date(); d.setDate(d.getDate() + 1);
+                      handleUpdateField({ due_date: d.toISOString() });
+                    }}>
+                      Tomorrow
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => {
+                      const d = new Date(); d.setDate(d.getDate() + 7);
+                      handleUpdateField({ due_date: d.toISOString() });
+                    }}>
+                      Next week
+                    </DropdownMenuItem>
+                    {issue.due_date && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleUpdateField({ due_date: null })}>
+                          Clear date
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+
+                <DropdownMenuSeparator />
+
+                {/* Copy link */}
+                <DropdownMenuItem onClick={() => {
+                  navigator.clipboard.writeText(window.location.href);
+                  toast.success("Link copied");
+                }}>
+                  <Link2 className="h-3.5 w-3.5" />
+                  Copy link
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator />
+
+                {/* Delete */}
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() => setDeleteDialogOpen(true)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete issue
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              variant={sidebarOpen ? "secondary" : "ghost"}
+              size="icon-xs"
+              className={sidebarOpen ? "" : "text-muted-foreground"}
+              onClick={() => {
+                const panel = sidebarRef.current;
+                if (!panel) return;
+                if (panel.isCollapsed()) panel.expand();
+                else panel.collapse();
+              }}
+            >
+              <PanelRight className="h-4 w-4" />
+            </Button>
+          </div>
+
+            {/* Delete confirmation dialog (controlled by state) */}
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete issue</AlertDialogTitle>
@@ -532,9 +658,9 @@ export function IssueDetail({ issueId, showBreadcrumb, onDelete }: IssueDetailPr
               </AlertDialogContent>
             </AlertDialog>
           </div>
-        )}
 
-        {/* Content */}
+        {/* Content — scrollable */}
+        <div className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl px-8 py-8">
           <div className="mb-1 text-sm text-muted-foreground">{issue.id.slice(0, 8)}</div>
 
@@ -566,33 +692,13 @@ export function IssueDetail({ issueId, showBreadcrumb, onDelete }: IssueDetailPr
             </h1>
           )}
 
-          {editingDesc ? (
-            <Textarea
-              autoFocus
-              value={descDraft}
-              onChange={(e) => setDescDraft(e.target.value)}
-              onBlur={() => {
-                handleUpdateField({ description: descDraft.trim() || undefined });
-                setEditingDesc(false);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") setEditingDesc(false);
-              }}
-              rows={4}
-              className="mt-5 text-sm leading-relaxed resize-none"
-            />
-          ) : (
-            <div
-              className="mt-5 text-sm leading-relaxed whitespace-pre-wrap cursor-pointer hover:bg-accent/50 rounded px-1 -mx-1"
-              onClick={() => { setDescDraft(issue.description || ""); setEditingDesc(true); }}
-            >
-              {issue.description ? (
-                <span className="text-foreground/85">{issue.description}</span>
-              ) : (
-                <span className="text-muted-foreground">Add description...</span>
-              )}
-            </div>
-          )}
+          <RichTextEditor
+            defaultValue={issue.description || ""}
+            placeholder="Add description..."
+            onUpdate={(md) => handleUpdateField({ description: md || undefined })}
+            debounceMs={1500}
+            className="mt-5"
+          />
 
           <div className="space-y-4 mt-4">
             <AcceptanceCriteriaEditor
@@ -670,8 +776,8 @@ export function IssueDetail({ issueId, showBreadcrumb, onDelete }: IssueDetailPr
                         />
                       </form>
                     ) : (
-                      <div className="mt-2 pl-9.5 text-sm leading-relaxed text-foreground/85 whitespace-pre-wrap">
-                        {comment.content}
+                      <div className="mt-2 pl-9.5 text-sm leading-relaxed text-foreground/85">
+                        <Markdown mode="minimal">{comment.content}</Markdown>
                       </div>
                     )}
                   </div>
@@ -680,63 +786,197 @@ export function IssueDetail({ issueId, showBreadcrumb, onDelete }: IssueDetailPr
             </div>
 
             {/* Comment input */}
-            <form onSubmit={handleSubmitComment} className="mt-2 border-t pt-4">
-              <div className="flex items-center gap-2">
-                <Input
-                  type="text"
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
+            <div className="mt-4 rounded-md border bg-muted/30">
+              <div className="min-h-20 max-h-48 overflow-y-auto px-3 py-2">
+                <RichTextEditor
+                  ref={commentEditorRef}
                   placeholder="Leave a comment..."
-                  className="flex-1 text-sm"
+                  onUpdate={(md) => setCommentEmpty(!md.trim())}
+                  onSubmit={handleSubmitComment}
+                  debounceMs={100}
                 />
+              </div>
+              <div className="flex items-center justify-end px-2 pb-2">
                 <Button
-                  type="submit"
-                  size="icon"
-                  disabled={!commentText.trim() || submitting}
+                  size="icon-xs"
+                  disabled={commentEmpty || submitting}
+                  onClick={handleSubmitComment}
                 >
-                  <Send className="h-3.5 w-3.5" />
+                  <ArrowUp className="h-3.5 w-3.5" />
                 </Button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
+        </div>
       </div>
-
+      </ResizablePanel>
+      <ResizableHandle />
+      <ResizablePanel
+        id="sidebar"
+        defaultSize={320}
+        minSize={260}
+        maxSize={420}
+        collapsible
+        groupResizeBehavior="preserve-pixel-size"
+        panelRef={sidebarRef}
+        onResize={(size) => setSidebarOpen(size.inPixels > 0)}
+      >
       {/* RIGHT: Properties sidebar */}
-      <div className="w-60 shrink-0 overflow-y-auto border-l">
+      <div className="overflow-y-auto border-l h-full">
         <div className="p-4">
           <div className="mb-2 text-xs font-medium text-muted-foreground">
             Properties
           </div>
 
           <div className="space-y-0.5">
+            {/* Status */}
             <PropRow label="Status">
-              <StatusPicker status={issue.status} onUpdate={handleUpdateField} />
+              <DropdownMenu>
+                <DropdownMenuTrigger className="flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 hover:bg-accent/30 transition-colors overflow-hidden">
+                  <StatusIcon status={issue.status} className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{STATUS_CONFIG[issue.status].label}</span>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-44">
+                  <DropdownMenuRadioGroup value={issue.status} onValueChange={(v) => handleUpdateField({ status: v as IssueStatus })}>
+                    {ALL_STATUSES.map((s) => (
+                      <DropdownMenuRadioItem key={s} value={s}>
+                        <StatusIcon status={s} className="h-3.5 w-3.5" />
+                        {STATUS_CONFIG[s].label}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </PropRow>
 
+            {/* Priority */}
             <PropRow label="Priority">
-              <PriorityPicker priority={issue.priority} onUpdate={handleUpdateField} />
+              <DropdownMenu>
+                <DropdownMenuTrigger className="flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 hover:bg-accent/30 transition-colors overflow-hidden">
+                  <PriorityIcon priority={issue.priority} className="shrink-0" />
+                  <span className="truncate">{PRIORITY_CONFIG[issue.priority].label}</span>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-44">
+                  <DropdownMenuRadioGroup value={issue.priority} onValueChange={(v) => handleUpdateField({ priority: v as IssuePriority })}>
+                    {PRIORITY_ORDER.map((p) => (
+                      <DropdownMenuRadioItem key={p} value={p}>
+                        <PriorityIcon priority={p} />
+                        {PRIORITY_CONFIG[p].label}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </PropRow>
 
+            {/* Assignee */}
             <PropRow label="Assignee">
-              <AssigneePicker
-                assigneeType={issue.assignee_type}
-                assigneeId={issue.assignee_id}
-                onUpdate={handleUpdateField}
-              />
+              <DropdownMenu>
+                <DropdownMenuTrigger className="flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 hover:bg-accent/30 transition-colors overflow-hidden">
+                  {issue.assignee_type && issue.assignee_id ? (
+                    <>
+                      <div className={`inline-flex shrink-0 items-center justify-center rounded-full font-medium text-[8px] size-4 ${
+                        issue.assignee_type === "agent" ? "bg-info/10 text-info" : "bg-muted text-muted-foreground"
+                      }`}>
+                        {issue.assignee_type === "agent" ? <Bot className="size-2.5" /> : getActorInitials(issue.assignee_type, issue.assignee_id)}
+                      </div>
+                      <span className="truncate">{getActorName(issue.assignee_type, issue.assignee_id)}</span>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">Unassigned</span>
+                  )}
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-52">
+                  <DropdownMenuItem onClick={() => handleUpdateField({ assignee_type: null, assignee_id: null })}>
+                    <UserMinus className="h-3.5 w-3.5 text-muted-foreground" />
+                    Unassigned
+                  </DropdownMenuItem>
+                  {members.length > 0 && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel>Members</DropdownMenuLabel>
+                        {members.map((m) => (
+                          <DropdownMenuItem key={m.user_id} onClick={() => handleUpdateField({ assignee_type: "member", assignee_id: m.user_id })}>
+                            <div className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-[8px] font-medium text-muted-foreground">
+                              {getActorInitials("member", m.user_id)}
+                            </div>
+                            {m.name}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuGroup>
+                    </>
+                  )}
+                  {agents.length > 0 && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel>Agents</DropdownMenuLabel>
+                        {agents.map((a) => (
+                          <DropdownMenuItem key={a.id} onClick={() => handleUpdateField({ assignee_type: "agent", assignee_id: a.id })}>
+                            <div className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-info/10 text-info">
+                              <Bot className="size-2.5" />
+                            </div>
+                            {a.name}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuGroup>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </PropRow>
 
+            {/* Due date */}
             <PropRow label="Due date">
-              <DueDatePicker dueDate={issue.due_date} onUpdate={handleUpdateField} />
+              <DropdownMenu>
+                <DropdownMenuTrigger className="flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 hover:bg-accent/30 transition-colors overflow-hidden">
+                  <Calendar className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  {issue.due_date ? (
+                    <span className={new Date(issue.due_date) < new Date() ? "text-destructive" : ""}>
+                      {shortDate(issue.due_date)}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">None</span>
+                  )}
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-auto">
+                  <DropdownMenuItem onClick={() => handleUpdateField({ due_date: new Date().toISOString() })}>
+                    Today
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => {
+                    const d = new Date(); d.setDate(d.getDate() + 1);
+                    handleUpdateField({ due_date: d.toISOString() });
+                  }}>
+                    Tomorrow
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => {
+                    const d = new Date(); d.setDate(d.getDate() + 7);
+                    handleUpdateField({ due_date: d.toISOString() });
+                  }}>
+                    Next week
+                  </DropdownMenuItem>
+                  {issue.due_date && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => handleUpdateField({ due_date: null })}>
+                        Clear date
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </PropRow>
 
+            {/* Created by */}
             <PropRow label="Created by">
               <ActorAvatar
                 actorType={issue.creator_type}
                 actorId={issue.creator_id}
                 size={18}
               />
-              <span>{getActorName(issue.creator_type, issue.creator_id)}</span>
+              <span className="truncate">{getActorName(issue.creator_type, issue.creator_id)}</span>
             </PropRow>
           </div>
 
@@ -750,6 +990,7 @@ export function IssueDetail({ issueId, showBreadcrumb, onDelete }: IssueDetailPr
           </div>
         </div>
       </div>
-    </div>
+      </ResizablePanel>
+    </ResizablePanelGroup>
   );
 }

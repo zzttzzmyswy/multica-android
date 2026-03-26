@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { Issue } from "@multica/types";
+import type { Issue } from "@/shared/types";
 
 // Mock next/navigation
 vi.mock("next/navigation", () => ({

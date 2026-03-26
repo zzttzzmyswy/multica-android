@@ -10,13 +10,11 @@ vi.mock("next/navigation", () => ({
 }));
 
 // Mock auth store
-const mockSendCode = vi.fn();
-const mockVerifyCode = vi.fn();
+const mockLogin = vi.fn();
 vi.mock("@/features/auth", () => ({
   useAuthStore: (selector: (s: any) => any) =>
     selector({
-      sendCode: mockSendCode,
-      verifyCode: mockVerifyCode,
+      login: mockLogin,
       isLoading: false,
     }),
 }));
@@ -44,82 +42,78 @@ describe("LoginPage", () => {
     vi.clearAllMocks();
   });
 
-  it("renders email form with heading and button", () => {
+  it("renders login form with heading, inputs, and button", () => {
     render(<LoginPage />);
 
     expect(screen.getByText("Multica")).toBeInTheDocument();
     expect(screen.getByText("AI-native task management")).toBeInTheDocument();
     expect(screen.getByLabelText("Email")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /continue/i })
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Name")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /sign in/i })).toBeInTheDocument();
   });
 
-  it("does not call sendCode when email is empty", async () => {
+  it("does not call login when email is empty", async () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await user.click(screen.getByRole("button", { name: /continue/i }));
-    expect(mockSendCode).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    expect(mockLogin).not.toHaveBeenCalled();
   });
 
-  it("calls sendCode on submit and shows code step", async () => {
-    mockSendCode.mockResolvedValueOnce(undefined);
-    const user = userEvent.setup();
-    render(<LoginPage />);
-
-    await user.type(screen.getByLabelText("Email"), "test@multica.ai");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
-
-    await waitFor(() => {
-      expect(mockSendCode).toHaveBeenCalledWith("test@multica.ai");
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText("Check your email")).toBeInTheDocument();
-    });
-  });
-
-  it("shows 'Sending code...' while submitting", async () => {
-    mockSendCode.mockReturnValueOnce(new Promise(() => {}));
+  it("calls login with correct args on submit", async () => {
+    mockLogin.mockResolvedValueOnce({ id: "u1", name: "Test User" });
+    mockHydrateWorkspace.mockResolvedValueOnce(null);
     const user = userEvent.setup();
     render(<LoginPage />);
 
     await user.type(screen.getByLabelText("Email"), "test@multica.ai");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
+    await user.type(screen.getByLabelText("Name"), "Test User");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
 
     await waitFor(() => {
-      expect(screen.getByText("Sending code...")).toBeInTheDocument();
+      expect(mockLogin).toHaveBeenCalledWith("test@multica.ai", "Test User");
     });
   });
 
-  it("shows error when sendCode fails", async () => {
-    mockSendCode.mockRejectedValueOnce(new Error("Network error"));
+  it("calls login with email only when name is empty", async () => {
+    mockLogin.mockResolvedValueOnce({ id: "u1", name: "" });
+    mockHydrateWorkspace.mockResolvedValueOnce(null);
     const user = userEvent.setup();
     render(<LoginPage />);
 
     await user.type(screen.getByLabelText("Email"), "test@multica.ai");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
 
     await waitFor(() => {
-      expect(screen.getByText("Network error")).toBeInTheDocument();
+      expect(mockLogin).toHaveBeenCalledWith("test@multica.ai", undefined);
     });
   });
 
-  it("shows back button on code step", async () => {
-    mockSendCode.mockResolvedValueOnce(undefined);
+  it("shows 'Signing in...' while submitting", async () => {
+    mockLogin.mockReturnValueOnce(new Promise(() => {}));
     const user = userEvent.setup();
     render(<LoginPage />);
 
     await user.type(screen.getByLabelText("Email"), "test@multica.ai");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
 
     await waitFor(() => {
-      expect(screen.getByText("Check your email")).toBeInTheDocument();
+      expect(screen.getByText("Signing in...")).toBeInTheDocument();
     });
+  });
 
-    expect(
-      screen.getByRole("button", { name: /back/i })
-    ).toBeInTheDocument();
+  it("shows error when login fails", async () => {
+    mockLogin.mockRejectedValueOnce(new Error("Network error"));
+    const user = userEvent.setup();
+    render(<LoginPage />);
+
+    await user.type(screen.getByLabelText("Email"), "test@multica.ai");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Login failed. Make sure the server is running."),
+      ).toBeInTheDocument();
+    });
   });
 });

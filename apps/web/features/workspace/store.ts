@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import type { Workspace, MemberWithUser, Agent, Skill } from "@multica/types";
+import type { Workspace, MemberWithUser, Agent, Skill } from "@/shared/types";
 import { useIssueStore } from "@/features/issues";
 import { useInboxStore } from "@/features/inbox";
 import { api } from "@/shared/api";

@@ -21,7 +21,7 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
-import type { User } from "@multica/types";
+import type { User } from "@/shared/types";
 
 function validateCliCallback(cliCallback: string): boolean {
   try {
