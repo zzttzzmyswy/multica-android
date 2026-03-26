@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import type { InboxItem, IssueStatus } from "@multica/types";
+import type { InboxItem, IssueStatus } from "@/shared/types";
 import { api } from "@/shared/api";
 import { createLogger } from "@/shared/logger";
 

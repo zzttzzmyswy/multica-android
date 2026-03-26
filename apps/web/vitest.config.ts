@@ -13,8 +13,6 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "."),
-      "@multica/types": path.resolve(__dirname, "../../packages/types/src"),
-      "@multica/sdk": path.resolve(__dirname, "../../packages/sdk/src"),
     },
   },
 });

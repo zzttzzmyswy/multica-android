@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useDefaultLayout } from "react-resizable-panels";
 import { useInboxStore } from "@/features/inbox";
 import { IssueDetail, StatusIcon } from "@/features/issues/components";
 import { ActorAvatar } from "@/components/common/actor-avatar";
@@ -13,8 +14,13 @@ import {
   BookCheck,
   ListChecks,
 } from "lucide-react";
-import type { InboxItem, InboxItemType, InboxSeverity } from "@multica/types";
+import type { InboxItem, InboxItemType, InboxSeverity } from "@/shared/types";
 import { Button } from "@/components/ui/button";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   DropdownMenu,
@@ -82,25 +88,25 @@ function InboxListItem({
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <span
-            className={`truncate text-sm ${!item.read ? "font-medium" : "text-muted-foreground"}`}
-          >
-            {item.title}
-          </span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            {item.issue_status && (
-              <StatusIcon status={item.issue_status} className="h-3.5 w-3.5" />
-            )}
+          <div className="flex min-w-0 items-center gap-1.5">
             {!item.read && (
-              <span className="h-2 w-2 rounded-full bg-primary" />
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" />
             )}
+            <span
+              className={`truncate text-sm ${!item.read ? "font-medium" : "text-muted-foreground"}`}
+            >
+              {item.title}
+            </span>
           </div>
+          {item.issue_status && (
+            <StatusIcon status={item.issue_status} className="h-3.5 w-3.5 shrink-0" />
+          )}
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-2">
-          <p className="truncate text-xs text-muted-foreground">
+          <p className={`truncate text-xs ${item.read ? "text-muted-foreground/60" : "text-muted-foreground"}`}>
             {typeLabels[item.type] ?? item.type}
           </p>
-          <span className="shrink-0 text-xs text-muted-foreground">
+          <span className={`shrink-0 text-xs ${item.read ? "text-muted-foreground/60" : "text-muted-foreground"}`}>
             {timeAgo(item.created_at)}
           </span>
         </div>
@@ -118,6 +124,10 @@ export default function InboxPage() {
 
   const storeItems = useInboxStore((s) => s.items);
   const loading = useInboxStore((s) => s.loading);
+
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
+    id: "multica_inbox_layout",
+  });
 
   // Sort: severity first, then newest first
   const items = useMemo(() => {
@@ -202,40 +212,46 @@ export default function InboxPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-1 min-h-0">
-        <div className="w-80 shrink-0 border-r">
-          <div className="flex h-12 items-center border-b px-4">
-            <Skeleton className="h-5 w-16" />
-          </div>
-          <div className="space-y-1 p-2">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 px-4 py-2.5">
-                <Skeleton className="h-7 w-7 shrink-0 rounded-full" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-3 w-1/2" />
+      <ResizablePanelGroup orientation="horizontal" className="flex-1 min-h-0" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged}>
+        <ResizablePanel id="list" defaultSize={320} minSize={240} maxSize={480} groupResizeBehavior="preserve-pixel-size">
+          <div className="overflow-y-auto border-r h-full">
+            <div className="flex h-12 items-center border-b px-4">
+              <Skeleton className="h-5 w-16" />
+            </div>
+            <div className="space-y-1 p-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+                  <Skeleton className="h-7 w-7 shrink-0 rounded-full" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-3 w-1/2" />
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-        <div className="flex-1 p-6">
-          <Skeleton className="h-6 w-48" />
-          <Skeleton className="mt-4 h-4 w-32" />
-        </div>
-      </div>
+        </ResizablePanel>
+        <ResizableHandle />
+        <ResizablePanel id="detail" minSize="40%">
+          <div className="p-6">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="mt-4 h-4 w-32" />
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
     );
   }
 
   return (
-    <div className="flex flex-1 min-h-0">
+    <ResizablePanelGroup orientation="horizontal" className="flex-1 min-h-0" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged}>
+      <ResizablePanel id="list" defaultSize={320} minSize={240} maxSize={480} groupResizeBehavior="preserve-pixel-size">
       {/* Left column — inbox list */}
-      <div className="w-80 shrink-0 overflow-y-auto border-r">
+      <div className="overflow-y-auto border-r h-full">
         <div className="flex h-12 items-center justify-between border-b px-4">
           <div className="flex items-center gap-2">
             <h1 className="text-sm font-semibold">Inbox</h1>
             {unreadCount > 0 && (
-              <span className="rounded-full bg-primary px-1.5 py-0.5 text-xs font-medium text-primary-foreground">
+              <span className="text-xs text-muted-foreground">
                 {unreadCount}
               </span>
             )}
@@ -280,7 +296,7 @@ export default function InboxPage() {
             <p className="text-sm">No notifications</p>
           </div>
         ) : (
-          <div className="divide-y">
+          <div>
             {items.map((item) => (
               <InboxListItem
                 key={item.id}
@@ -292,13 +308,14 @@ export default function InboxPage() {
           </div>
         )}
       </div>
-
+      </ResizablePanel>
+      <ResizableHandle />
+      <ResizablePanel id="detail" minSize="40%">
       {/* Right column — detail */}
-      <div className="flex flex-col flex-1 min-h-0">
+      <div className="flex flex-col min-h-0 h-full">
         {selected?.issue_id ? (
           <IssueDetail
             issueId={selected.issue_id}
-            showBreadcrumb={false}
             onDelete={() => {
               handleArchive(selected.id);
             }}
@@ -336,6 +353,7 @@ export default function InboxPage() {
           </div>
         )}
       </div>
-    </div>
+      </ResizablePanel>
+    </ResizablePanelGroup>
   );
 }

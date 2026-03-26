@@ -16,26 +16,27 @@ INSERT INTO issue (
     workspace_id, title, description, status, priority,
     assignee_type, assignee_id, creator_type, creator_id,
     parent_issue_id, acceptance_criteria, context_refs,
-    position
+    position, due_date
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
 ) RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at
 `
 
 type CreateIssueParams struct {
-	WorkspaceID        pgtype.UUID `json:"workspace_id"`
-	Title              string      `json:"title"`
-	Description        pgtype.Text `json:"description"`
-	Status             string      `json:"status"`
-	Priority           string      `json:"priority"`
-	AssigneeType       pgtype.Text `json:"assignee_type"`
-	AssigneeID         pgtype.UUID `json:"assignee_id"`
-	CreatorType        string      `json:"creator_type"`
-	CreatorID          pgtype.UUID `json:"creator_id"`
-	ParentIssueID      pgtype.UUID `json:"parent_issue_id"`
-	AcceptanceCriteria []byte      `json:"acceptance_criteria"`
-	ContextRefs        []byte      `json:"context_refs"`
-	Position           float64     `json:"position"`
+	WorkspaceID        pgtype.UUID        `json:"workspace_id"`
+	Title              string             `json:"title"`
+	Description        pgtype.Text        `json:"description"`
+	Status             string             `json:"status"`
+	Priority           string             `json:"priority"`
+	AssigneeType       pgtype.Text        `json:"assignee_type"`
+	AssigneeID         pgtype.UUID        `json:"assignee_id"`
+	CreatorType        string             `json:"creator_type"`
+	CreatorID          pgtype.UUID        `json:"creator_id"`
+	ParentIssueID      pgtype.UUID        `json:"parent_issue_id"`
+	AcceptanceCriteria []byte             `json:"acceptance_criteria"`
+	ContextRefs        []byte             `json:"context_refs"`
+	Position           float64            `json:"position"`
+	DueDate            pgtype.Timestamptz `json:"due_date"`
 }
 
 func (q *Queries) CreateIssue(ctx context.Context, arg CreateIssueParams) (Issue, error) {
@@ -53,6 +54,7 @@ func (q *Queries) CreateIssue(ctx context.Context, arg CreateIssueParams) (Issue
 		arg.AcceptanceCriteria,
 		arg.ContextRefs,
 		arg.Position,
+		arg.DueDate,
 	)
 	var i Issue
 	err := row.Scan(

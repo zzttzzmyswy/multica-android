@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { IssuePriority, UpdateIssueRequest } from "@multica/types";
+import type { IssuePriority, UpdateIssueRequest } from "@/shared/types";
 import { PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
 import { PriorityIcon } from "../priority-icon";
 import { PropertyPicker, PickerItem } from "./property-picker";
@@ -23,8 +23,8 @@ export function PriorityPicker({
       width="w-44"
       trigger={
         <>
-          <PriorityIcon priority={priority} />
-          <span>{cfg.label}</span>
+          <PriorityIcon priority={priority} className="shrink-0" />
+          <span className="truncate">{cfg.label}</span>
         </>
       }
     >

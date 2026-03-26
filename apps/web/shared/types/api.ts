@@ -12,6 +12,7 @@ export interface CreateIssueRequest {
   parent_issue_id?: string;
   acceptance_criteria?: string[];
   context_refs?: string[];
+  due_date?: string;
 }
 
 export interface UpdateIssueRequest {

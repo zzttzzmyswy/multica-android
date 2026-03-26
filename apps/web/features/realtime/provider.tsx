@@ -9,8 +9,8 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import { WSClient } from "@multica/sdk";
-import type { WSEventType } from "@multica/types";
+import { WSClient } from "@/shared/api";
+import type { WSEventType } from "@/shared/types";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
 import { createLogger } from "@/shared/logger";

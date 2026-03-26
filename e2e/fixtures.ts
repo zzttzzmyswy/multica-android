@@ -1,8 +1,7 @@
 /**
  * TestApiClient — lightweight API helper for E2E test data setup/teardown.
  *
- * Uses raw fetch (no dependency on @multica/sdk build) so E2E tests
- * have zero build-time coupling to monorepo packages.
+ * Uses raw fetch so E2E tests have zero build-time coupling to the web app.
  */
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? `http://localhost:${process.env.PORT ?? "8080"}`;

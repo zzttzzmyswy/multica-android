@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Settings, Users, Building2, Save, Crown, Shield, User, Plus, Trash2, LogOut } from "lucide-react";
-import type { MemberWithUser, MemberRole } from "@multica/types";
+import type { MemberWithUser, MemberRole } from "@/shared/types";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";

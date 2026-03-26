@@ -1,4 +1,4 @@
-import type { IssuePriority } from "@multica/types";
+import type { IssuePriority } from "@/shared/types";
 
 export const PRIORITY_ORDER: IssuePriority[] = [
   "urgent",

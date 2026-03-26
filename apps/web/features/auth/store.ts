@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import type { User } from "@multica/types";
+import type { User } from "@/shared/types";
 import { api } from "@/shared/api";
 
 interface AuthState {
