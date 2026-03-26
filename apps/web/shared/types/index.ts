@@ -17,6 +17,9 @@ export type {
   CreateSkillRequest,
   UpdateSkillRequest,
   SetAgentSkillsRequest,
+  RuntimeUsage,
+  RuntimePing,
+  RuntimePingStatus,
 } from "./agent";
 export type { Workspace, Member, MemberRole, User, MemberWithUser } from "./workspace";
 export type { InboxItem, InboxSeverity, InboxItemType } from "./inbox";
