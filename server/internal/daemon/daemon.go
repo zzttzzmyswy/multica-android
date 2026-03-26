@@ -28,6 +28,7 @@ type Daemon struct {
 
 	mu         sync.Mutex
 	workspaces map[string]*workspaceState
+	reloading  sync.Mutex // prevents concurrent reloadWorkspaces
 }
 
 // New creates a new Daemon instance.
@@ -196,6 +197,9 @@ func (d *Daemon) configWatchLoop(ctx context.Context) {
 
 // reloadWorkspaces reconciles the active workspace set with the config file.
 func (d *Daemon) reloadWorkspaces(ctx context.Context) {
+	d.reloading.Lock()
+	defer d.reloading.Unlock()
+
 	cfg, err := cli.LoadCLIConfig()
 	if err != nil {
 		d.logger.Warn("reload config failed", "error", err)
