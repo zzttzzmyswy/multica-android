@@ -73,6 +73,19 @@ function LoginPageContent() {
         const cliCallback = searchParams.get("cli_callback");
         if (cliCallback) {
           // CLI browser login: verify code, get JWT, redirect to CLI callback.
+          // Only allow localhost callbacks to prevent open redirect / JWT theft.
+          try {
+            const cbUrl = new URL(cliCallback);
+            if (cbUrl.hostname !== "localhost" && cbUrl.hostname !== "127.0.0.1") {
+              setError("Invalid callback URL");
+              setSubmitting(false);
+              return;
+            }
+          } catch {
+            setError("Invalid callback URL");
+            setSubmitting(false);
+            return;
+          }
           const { token } = await api.verifyCode(email, value);
           const separator = cliCallback.includes("?") ? "&" : "?";
           window.location.href = `${cliCallback}${separator}token=${encodeURIComponent(token)}`;

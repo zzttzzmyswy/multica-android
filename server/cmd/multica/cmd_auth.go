@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -55,9 +56,8 @@ func resolveToken() string {
 	return cfg.Token
 }
 
-func resolveAppURL(cmd *cobra.Command) string {
-	val := cli.FlagOrEnv(cmd, "", "MULTICA_APP_URL", "")
-	if val != "" {
+func resolveAppURL() string {
+	if val := strings.TrimSpace(os.Getenv("MULTICA_APP_URL")); val != "" {
 		return strings.TrimRight(val, "/")
 	}
 	return "http://localhost:3000"
@@ -92,7 +92,7 @@ func runAuthLogin(cmd *cobra.Command, _ []string) error {
 
 func runAuthLoginBrowser(cmd *cobra.Command) error {
 	serverURL := resolveServerURL(cmd)
-	appURL := resolveAppURL(cmd)
+	appURL := resolveAppURL()
 
 	// Start a local HTTP server on a random port to receive the callback.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -103,7 +103,7 @@ func runAuthLoginBrowser(cmd *cobra.Command) error {
 
 	port := listener.Addr().(*net.TCPAddr).Port
 	callbackURL := fmt.Sprintf("http://localhost:%d/callback", port)
-	loginURL := fmt.Sprintf("%s/login?cli_callback=%s", appURL, callbackURL)
+	loginURL := fmt.Sprintf("%s/login?cli_callback=%s", appURL, url.QueryEscape(callbackURL))
 
 	// Channel to receive the JWT from the browser callback.
 	jwtCh := make(chan string, 1)
