@@ -73,7 +73,10 @@ func (d *Daemon) Run(ctx context.Context) error {
 
 // resolveAuth loads the auth token from the CLI config.
 func (d *Daemon) resolveAuth() error {
-	cfg, _ := cli.LoadCLIConfig()
+	cfg, err := cli.LoadCLIConfig()
+	if err != nil {
+		return fmt.Errorf("load CLI config: %w", err)
+	}
 	if cfg.Token == "" {
 		d.logger.Warn("not authenticated — run 'multica auth login' to authenticate, then restart the daemon")
 		return fmt.Errorf("not authenticated: run 'multica auth login' first")
@@ -94,6 +97,7 @@ func (d *Daemon) loadWatchedWorkspaces(ctx context.Context) error {
 		return fmt.Errorf("no watched workspaces configured: run 'multica watch <id>' to add one")
 	}
 
+	var registered int
 	for _, ws := range cfg.WatchedWorkspaces {
 		runtimes, err := d.registerRuntimesForWorkspace(ctx, ws.ID)
 		if err != nil {
@@ -109,8 +113,12 @@ func (d *Daemon) loadWatchedWorkspaces(ctx context.Context) error {
 		d.workspaces[ws.ID] = &workspaceState{workspaceID: ws.ID, runtimeIDs: runtimeIDs}
 		d.mu.Unlock()
 		d.logger.Info("watching workspace", "workspace_id", ws.ID, "name", ws.Name, "runtimes", len(runtimes))
+		registered++
 	}
 
+	if registered == 0 {
+		return fmt.Errorf("failed to register runtimes for any of the %d watched workspace(s)", len(cfg.WatchedWorkspaces))
+	}
 	return nil
 }
 
@@ -238,6 +246,8 @@ func (d *Daemon) reloadWorkspaces(ctx context.Context) {
 	}
 
 	// Remove workspaces no longer in config.
+	// NOTE: runtimes are not deregistered server-side; they will go offline
+	// after heartbeats stop arriving (within HeartbeatInterval).
 	for id := range currentIDs {
 		if _, ok := newIDs[id]; !ok {
 			d.mu.Lock()
