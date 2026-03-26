@@ -14,39 +14,85 @@ import (
 
 var workspaceCmd = &cobra.Command{
 	Use:   "workspace",
-	Short: "Manage watched workspaces for the daemon",
-}
-
-var workspaceWatchCmd = &cobra.Command{
-	Use:   "watch <workspace-id>",
-	Short: "Add a workspace to the daemon watch list",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runWorkspaceWatch,
-}
-
-var workspaceUnwatchCmd = &cobra.Command{
-	Use:   "unwatch <workspace-id>",
-	Short: "Remove a workspace from the daemon watch list",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runWorkspaceUnwatch,
+	Short: "Manage workspaces",
 }
 
 var workspaceListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List watched workspaces",
+	Short: "List all workspaces you belong to",
 	RunE:  runWorkspaceList,
 }
 
+var watchCmd = &cobra.Command{
+	Use:   "watch <workspace-id>",
+	Short: "Add a workspace to the daemon watch list",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runWatch,
+}
+
+var unwatchCmd = &cobra.Command{
+	Use:   "unwatch <workspace-id>",
+	Short: "Remove a workspace from the daemon watch list",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runUnwatch,
+}
+
+var watchesCmd = &cobra.Command{
+	Use:   "watches",
+	Short: "List workspaces the daemon is watching",
+	RunE:  runWatches,
+}
+
 func init() {
-	workspaceCmd.AddCommand(workspaceWatchCmd)
-	workspaceCmd.AddCommand(workspaceUnwatchCmd)
 	workspaceCmd.AddCommand(workspaceListCmd)
 }
 
-func runWorkspaceWatch(cmd *cobra.Command, args []string) error {
+func runWorkspaceList(cmd *cobra.Command, _ []string) error {
+	serverURL := resolveServerURL(cmd)
+	token := resolveToken()
+	if token == "" {
+		return fmt.Errorf("not authenticated: run 'multica auth login' first")
+	}
+
+	client := cli.NewAPIClient(serverURL, "", token)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	var workspaces []struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := client.GetJSON(ctx, "/api/workspaces", &workspaces); err != nil {
+		return fmt.Errorf("list workspaces: %w", err)
+	}
+
+	if len(workspaces) == 0 {
+		fmt.Fprintln(os.Stderr, "No workspaces found.")
+		return nil
+	}
+
+	// Load watched set for marking.
+	cfg, _ := cli.LoadCLIConfig()
+	watched := make(map[string]bool)
+	for _, w := range cfg.WatchedWorkspaces {
+		watched[w.ID] = true
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "ID\tNAME\tWATCHING")
+	for _, ws := range workspaces {
+		mark := ""
+		if watched[ws.ID] {
+			mark = "*"
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\n", ws.ID, ws.Name, mark)
+	}
+	return w.Flush()
+}
+
+func runWatch(cmd *cobra.Command, args []string) error {
 	workspaceID := args[0]
 
-	// Validate the workspace exists by calling the API.
 	serverURL := resolveServerURL(cmd)
 	token := resolveToken()
 	if token == "" {
@@ -75,7 +121,6 @@ func runWorkspaceWatch(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Also set as default workspace_id if none is set.
 	if cfg.WorkspaceID == "" {
 		cfg.WorkspaceID = ws.ID
 	}
@@ -88,7 +133,7 @@ func runWorkspaceWatch(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runWorkspaceUnwatch(_ *cobra.Command, args []string) error {
+func runUnwatch(_ *cobra.Command, args []string) error {
 	workspaceID := args[0]
 
 	cfg, err := cli.LoadCLIConfig()
@@ -108,14 +153,14 @@ func runWorkspaceUnwatch(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func runWorkspaceList(_ *cobra.Command, _ []string) error {
+func runWatches(_ *cobra.Command, _ []string) error {
 	cfg, err := cli.LoadCLIConfig()
 	if err != nil {
 		return err
 	}
 
 	if len(cfg.WatchedWorkspaces) == 0 {
-		fmt.Fprintln(os.Stderr, "No watched workspaces. Run 'multica workspace watch <id>' to add one.")
+		fmt.Fprintln(os.Stderr, "No watched workspaces. Run 'multica watch <id>' to add one.")
 		return nil
 	}
 

@@ -90,7 +90,7 @@ func (d *Daemon) loadWatchedWorkspaces(ctx context.Context) error {
 	}
 
 	if len(cfg.WatchedWorkspaces) == 0 {
-		return fmt.Errorf("no watched workspaces configured: run 'multica workspace watch <id>' to add one")
+		return fmt.Errorf("no watched workspaces configured: run 'multica watch <id>' to add one")
 	}
 
 	for _, ws := range cfg.WatchedWorkspaces {
