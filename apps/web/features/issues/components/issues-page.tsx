@@ -30,7 +30,7 @@ export function IssuesPage() {
   const viewMode = useIssueViewStore((s) => s.viewMode);
   const statusFilters = useIssueViewStore((s) => s.statusFilters);
   const priorityFilters = useIssueViewStore((s) => s.priorityFilters);
-  const clearFilters = useIssueViewStore((s) => s.clearFilters);
+
 
   const issues = useMemo(() => {
     return allIssues.filter((issue) => {
@@ -106,19 +106,7 @@ export function IssuesPage() {
 
       {/* Content: scrollable */}
       <div className="flex flex-col flex-1 min-h-0">
-        {issues.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
-            <p>No matching issues</p>
-            {(statusFilters.length > 0 || priorityFilters.length > 0) && (
-              <button
-                className="text-xs text-primary hover:underline"
-                onClick={clearFilters}
-              >
-                Clear filters
-              </button>
-            )}
-          </div>
-        ) : viewMode === "board" ? (
+        {viewMode === "board" ? (
           <BoardView
             issues={issues}
             visibleStatuses={visibleStatuses}
