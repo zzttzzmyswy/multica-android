@@ -24,9 +24,11 @@ const (
 	EventTaskFailed    = "task:failed"
 
 	// Inbox events
-	EventInboxNew      = "inbox:new"
-	EventInboxRead     = "inbox:read"
-	EventInboxArchived = "inbox:archived"
+	EventInboxNew           = "inbox:new"
+	EventInboxRead          = "inbox:read"
+	EventInboxArchived      = "inbox:archived"
+	EventInboxBatchRead     = "inbox:batch-read"
+	EventInboxBatchArchived = "inbox:batch-archived"
 
 	// Workspace events
 	EventWorkspaceUpdated = "workspace:updated"

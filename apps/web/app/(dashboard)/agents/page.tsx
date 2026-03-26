@@ -186,7 +186,7 @@ function CreateAgentDialog({
                       {selectedRuntime?.name ?? "No runtime available"}
                     </span>
                     {selectedRuntime?.runtime_mode === "cloud" && (
-                      <span className="shrink-0 rounded bg-info/10 px-1.5 py-0.5 text-[10px] font-medium text-info">
+                      <span className="shrink-0 rounded bg-info/10 px-1.5 py-0.5 text-xs font-medium text-info">
                         Cloud
                       </span>
                     )}
@@ -222,7 +222,7 @@ function CreateAgentDialog({
                           <div className="flex items-center gap-2">
                             <span className="truncate font-medium">{device.name}</span>
                             {device.runtime_mode === "cloud" && (
-                              <span className="shrink-0 rounded bg-info/10 px-1.5 py-0.5 text-[10px] font-medium text-info">
+                              <span className="shrink-0 rounded bg-info/10 px-1.5 py-0.5 text-xs font-medium text-info">
                                 Cloud
                               </span>
                             )}
@@ -812,7 +812,7 @@ function TriggersTab({
                 >
                   <span
                     className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
-                      trigger.enabled ? "left-[18px]" : "left-0.5"
+                      trigger.enabled ? "left-4.5" : "left-0.5"
                     }`}
                   />
                 </button>
@@ -1007,7 +1007,7 @@ function AgentDetail({
               <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />
               {st.label}
             </span>
-            <span className="flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            <span className="flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
               {agent.runtime_mode === "cloud" ? (
                 <Cloud className="h-3 w-3" />
               ) : (

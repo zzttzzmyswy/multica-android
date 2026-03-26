@@ -129,7 +129,7 @@ function createComponents(
       p: ({ children }) => <p className="my-2 leading-relaxed">{children}</p>,
       // Styled lists
       ul: ({ children }) => (
-        <ul className="my-2 space-y-1 ps-[16px] pe-2 list-disc marker:text-muted-foreground">
+        <ul className="my-2 space-y-1 ps-4 pe-2 list-disc marker:text-muted-foreground">
           {children}
         </ul>
       ),
@@ -189,7 +189,7 @@ function createComponents(
     p: ({ children }) => <p className="my-3 leading-relaxed">{children}</p>,
     // Styled lists
     ul: ({ children }) => (
-      <ul className="my-3 space-y-1.5 ps-[16px] pe-2 list-disc marker:text-muted-foreground">
+      <ul className="my-3 space-y-1.5 ps-4 pe-2 list-disc marker:text-muted-foreground">
         {children}
       </ul>
     ),

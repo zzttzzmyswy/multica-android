@@ -4,6 +4,9 @@ import { useEffect, type ReactNode } from "react";
 import { useAuthStore } from "./store";
 import { useWorkspaceStore } from "@/features/workspace";
 import { api } from "@/shared/api";
+import { createLogger } from "@/shared/logger";
+
+const logger = createLogger("auth");
 
 /**
  * Initializes auth + workspace state from localStorage on mount.
@@ -25,7 +28,7 @@ export function AuthInitializer({ children }: { children: ReactNode }) {
 
     api.listWorkspaces().then((wsList) => {
       hydrateWorkspace(wsList, wsId);
-    }).catch(console.error);
+    }).catch((err) => logger.error("workspace hydration failed", err));
   }, [user, isLoading, hydrateWorkspace]);
 
   return <>{children}</>;

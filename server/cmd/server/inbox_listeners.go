@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 
 	"github.com/multica-ai/multica/server/internal/events"
 	"github.com/multica-ai/multica/server/internal/handler"
@@ -40,7 +40,7 @@ func registerInboxListeners(bus *events.Bus, queries *db.Queries) {
 			Body:          util.PtrToText(issue.Description),
 		})
 		if err != nil {
-			log.Printf("[inbox-listener] issue:created inbox error: %v", err)
+			slog.Error("inbox item creation failed", "event", "issue:created", "error", err)
 			return
 		}
 
@@ -203,7 +203,7 @@ func registerInboxListeners(bus *events.Bus, queries *db.Queries) {
 			Body:          util.StrToText(comment.Content),
 		})
 		if err != nil {
-			log.Printf("[inbox-listener] comment:created inbox error: %v", err)
+			slog.Error("inbox item creation failed", "event", "comment:created", "error", err)
 			return
 		}
 

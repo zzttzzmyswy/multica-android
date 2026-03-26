@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 
 	"github.com/multica-ai/multica/server/internal/events"
 	"github.com/multica-ai/multica/server/internal/realtime"
@@ -44,7 +44,7 @@ func registerListeners(bus *events.Bus, hub *realtime.Hub) {
 			}
 			data, err := json.Marshal(msg)
 			if err != nil {
-				log.Printf("[listeners] failed to marshal %s event: %v", eventType, err)
+				slog.Error("failed to marshal event", "event_type", eventType, "error", err)
 				return
 			}
 			if e.WorkspaceID != "" {

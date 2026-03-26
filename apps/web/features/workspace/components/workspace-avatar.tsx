@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 const sizeMap = {
-  sm: "h-5 w-5 text-[10px] rounded",
+  sm: "h-5 w-5 text-xs rounded",
   md: "h-7 w-7 text-xs rounded-md",
   lg: "h-9 w-9 text-sm rounded-md",
 } as const;

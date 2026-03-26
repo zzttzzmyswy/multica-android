@@ -28,3 +28,20 @@ RETURNING *;
 -- name: CountUnreadInbox :one
 SELECT count(*) FROM inbox_item
 WHERE recipient_type = $1 AND recipient_id = $2 AND read = false AND archived = false;
+
+-- name: MarkAllInboxRead :execrows
+UPDATE inbox_item SET read = true
+WHERE recipient_type = 'member' AND recipient_id = $1 AND archived = false AND read = false;
+
+-- name: ArchiveAllInbox :execrows
+UPDATE inbox_item SET archived = true
+WHERE recipient_type = 'member' AND recipient_id = $1 AND archived = false;
+
+-- name: ArchiveAllReadInbox :execrows
+UPDATE inbox_item SET archived = true
+WHERE recipient_type = 'member' AND recipient_id = $1 AND read = true AND archived = false;
+
+-- name: ArchiveCompletedInbox :execrows
+UPDATE inbox_item SET archived = true
+WHERE recipient_type = 'member' AND recipient_id = $1 AND archived = false
+  AND issue_id IN (SELECT id FROM issue WHERE status IN ('done', 'cancelled'));

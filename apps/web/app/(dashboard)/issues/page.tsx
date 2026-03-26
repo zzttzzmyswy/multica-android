@@ -68,7 +68,7 @@ function BoardCardContent({ issue }: { issue: Issue }) {
         <PriorityIcon priority={issue.priority} />
         <span>{issue.id.slice(0, 8)}</span>
       </div>
-      <p className="mt-1.5 text-[13px] leading-snug">{issue.title}</p>
+      <p className="mt-1.5 text-sm leading-snug">{issue.title}</p>
       <div className="mt-2.5 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {issue.assignee_type && issue.assignee_id && (
@@ -261,7 +261,7 @@ function ListRow({ issue }: { issue: Issue }) {
   return (
     <Link
       href={`/issues/${issue.id}`}
-      className="flex h-9 items-center gap-2 px-4 text-[13px] transition-colors hover:bg-accent/50"
+      className="flex h-9 items-center gap-2 px-4 text-sm transition-colors hover:bg-accent/50"
     >
       <PriorityIcon priority={issue.priority} />
       <span className="w-16 shrink-0 text-xs text-muted-foreground">

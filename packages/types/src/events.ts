@@ -22,6 +22,8 @@ export type WSEventType =
   | "inbox:new"
   | "inbox:read"
   | "inbox:archived"
+  | "inbox:batch-read"
+  | "inbox:batch-archived"
   | "workspace:updated"
   | "workspace:deleted"
   | "member:added"
@@ -75,6 +77,16 @@ export interface InboxReadPayload {
 export interface InboxArchivedPayload {
   item_id: string;
   recipient_id: string;
+}
+
+export interface InboxBatchReadPayload {
+  recipient_id: string;
+  count: number;
+}
+
+export interface InboxBatchArchivedPayload {
+  recipient_id: string;
+  count: number;
 }
 
 export interface CommentCreatedPayload {

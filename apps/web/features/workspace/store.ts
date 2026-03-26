@@ -5,6 +5,9 @@ import type { Workspace, MemberWithUser, Agent, Skill } from "@multica/types";
 import { useIssueStore } from "@/features/issues";
 import { useInboxStore } from "@/features/inbox";
 import { api } from "@/shared/api";
+import { createLogger } from "@/shared/logger";
+
+const logger = createLogger("workspace-store");
 
 interface WorkspaceState {
   workspace: Workspace | null;
@@ -70,7 +73,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     localStorage.setItem("multica_workspace_id", nextWorkspace.id);
     set({ workspace: nextWorkspace });
 
-    console.log("[workspace-store] hydrate workspace:", nextWorkspace.name, nextWorkspace.id);
+    logger.debug("hydrate workspace", nextWorkspace.name, nextWorkspace.id);
     const [nextMembers, nextAgents, nextSkills] = await Promise.all([
       api.listMembers(nextWorkspace.id),
       api.listAgents({ workspace_id: nextWorkspace.id }),
@@ -78,14 +81,14 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       useIssueStore.getState().fetch(),
       useInboxStore.getState().fetch(),
     ]);
-    console.log("[workspace-store] hydrate complete, members:", nextMembers.length, "agents:", nextAgents.length);
+    logger.info("hydrate complete", "members:", nextMembers.length, "agents:", nextAgents.length);
     set({ members: nextMembers, agents: nextAgents, skills: nextSkills });
 
     return nextWorkspace;
   },
 
   switchWorkspace: async (workspaceId) => {
-    console.log("[workspace-store] switching to", workspaceId);
+    logger.info("switching to", workspaceId);
     const { workspaces, hydrateWorkspace } = get();
     const ws = workspaces.find((item) => item.id === workspaceId);
     if (!ws) return;

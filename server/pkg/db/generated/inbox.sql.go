@@ -11,6 +11,46 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const archiveAllInbox = `-- name: ArchiveAllInbox :execrows
+UPDATE inbox_item SET archived = true
+WHERE recipient_type = 'member' AND recipient_id = $1 AND archived = false
+`
+
+func (q *Queries) ArchiveAllInbox(ctx context.Context, recipientID pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, archiveAllInbox, recipientID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const archiveAllReadInbox = `-- name: ArchiveAllReadInbox :execrows
+UPDATE inbox_item SET archived = true
+WHERE recipient_type = 'member' AND recipient_id = $1 AND read = true AND archived = false
+`
+
+func (q *Queries) ArchiveAllReadInbox(ctx context.Context, recipientID pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, archiveAllReadInbox, recipientID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const archiveCompletedInbox = `-- name: ArchiveCompletedInbox :execrows
+UPDATE inbox_item SET archived = true
+WHERE recipient_type = 'member' AND recipient_id = $1 AND archived = false
+  AND issue_id IN (SELECT id FROM issue WHERE status IN ('done', 'cancelled'))
+`
+
+func (q *Queries) ArchiveCompletedInbox(ctx context.Context, recipientID pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, archiveCompletedInbox, recipientID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const archiveInboxItem = `-- name: ArchiveInboxItem :one
 UPDATE inbox_item SET archived = true
 WHERE id = $1
@@ -177,6 +217,19 @@ func (q *Queries) ListInboxItems(ctx context.Context, arg ListInboxItemsParams) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const markAllInboxRead = `-- name: MarkAllInboxRead :execrows
+UPDATE inbox_item SET read = true
+WHERE recipient_type = 'member' AND recipient_id = $1 AND archived = false AND read = false
+`
+
+func (q *Queries) MarkAllInboxRead(ctx context.Context, recipientID pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, markAllInboxRead, recipientID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const markInboxRead = `-- name: MarkInboxRead :one
