@@ -373,13 +373,11 @@ func (d *Daemon) runTask(ctx context.Context, task Task) (TaskResult, error) {
 
 	// Prepare isolated execution environment.
 	taskCtx := execenv.TaskContextForEnv{
-		IssueTitle:         task.Context.Issue.Title,
-		IssueDescription:   task.Context.Issue.Description,
-		AcceptanceCriteria: task.Context.Issue.AcceptanceCriteria,
-		ContextRefs:        task.Context.Issue.ContextRefs,
-		WorkspaceContext:   task.Context.WorkspaceContext,
-		AgentName:          task.Context.Agent.Name,
-		AgentSkills:        convertSkillsForEnv(task.Context.Agent.Skills),
+		IssueTitle:       task.Context.Issue.Title,
+		IssueDescription: task.Context.Issue.Description,
+		WorkspaceContext: task.Context.WorkspaceContext,
+		AgentName:        task.Context.Agent.Name,
+		AgentSkills:      convertSkillsForEnv(task.Context.Agent.Skills),
 	}
 	env, err := execenv.Prepare(execenv.PrepareParams{
 		WorkspacesRoot: d.cfg.WorkspacesRoot,

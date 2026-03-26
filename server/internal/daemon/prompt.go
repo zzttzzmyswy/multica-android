@@ -25,13 +25,5 @@ func BuildPrompt(task Task) string {
 		fmt.Fprintf(&b, "**Summary:** %s\n\n", desc)
 	}
 
-	if len(task.Context.Issue.AcceptanceCriteria) > 0 {
-		b.WriteString("## Acceptance Criteria\n\n")
-		for _, item := range task.Context.Issue.AcceptanceCriteria {
-			fmt.Fprintf(&b, "- %s\n", item)
-		}
-		b.WriteString("\n")
-	}
-
 	return b.String()
 }

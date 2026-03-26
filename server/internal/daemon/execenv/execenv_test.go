@@ -220,11 +220,9 @@ func TestWriteContextFiles(t *testing.T) {
 	dir := t.TempDir()
 
 	ctx := TaskContextForEnv{
-		IssueTitle:         "Test Issue",
-		IssueDescription:   "A detailed description.",
-		AcceptanceCriteria: []string{"Criterion A", "Criterion B"},
-		ContextRefs:        []string{"ref-1", "ref-2"},
-		WorkspaceContext:   "We use Go and TypeScript.",
+		IssueTitle:       "Test Issue",
+		IssueDescription: "A detailed description.",
+		WorkspaceContext: "We use Go and TypeScript.",
 		AgentSkills: []SkillContextForEnv{
 			{
 				Name:    "Go Conventions",
@@ -250,11 +248,6 @@ func TestWriteContextFiles(t *testing.T) {
 		"# Issue: Test Issue",
 		"## Description",
 		"A detailed description.",
-		"## Acceptance Criteria",
-		"- Criterion A",
-		"- Criterion B",
-		"## Context References",
-		"- ref-1",
 		"## Workspace Context",
 		"Go and TypeScript",
 		"## Agent Skills",
@@ -304,7 +297,7 @@ func TestWriteContextFilesOmitsEmpty(t *testing.T) {
 	if !strings.Contains(s, "Minimal Issue") {
 		t.Error("expected title to be present")
 	}
-	for _, absent := range []string{"## Description", "## Acceptance Criteria", "## Context References", "## Workspace Context", "## Agent Skills"} {
+	for _, absent := range []string{"## Description", "## Workspace Context", "## Agent Skills"} {
 		if strings.Contains(s, absent) {
 			t.Errorf("expected %q to be omitted for empty content", absent)
 		}

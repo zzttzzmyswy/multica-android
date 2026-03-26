@@ -33,11 +33,9 @@ type TaskContext struct {
 
 // IssueContext holds issue details for task execution.
 type IssueContext struct {
-	ID                 string   `json:"id"`
-	Title              string   `json:"title"`
-	Description        string   `json:"description"`
-	AcceptanceCriteria []string `json:"acceptance_criteria"`
-	ContextRefs        []string `json:"context_refs"`
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
 }
 
 // AgentContext holds agent details for task execution.

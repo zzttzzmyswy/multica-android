@@ -15,10 +15,9 @@ WHERE id = $1;
 INSERT INTO issue (
     workspace_id, title, description, status, priority,
     assignee_type, assignee_id, creator_type, creator_id,
-    parent_issue_id, acceptance_criteria, context_refs,
-    position, due_date
+    parent_issue_id, position, due_date
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
 ) RETURNING *;
 
 -- name: UpdateIssue :one
@@ -31,8 +30,6 @@ UPDATE issue SET
     assignee_id = sqlc.narg('assignee_id'),
     position = COALESCE(sqlc.narg('position'), position),
     due_date = sqlc.narg('due_date'),
-    acceptance_criteria = COALESCE(sqlc.narg('acceptance_criteria'), acceptance_criteria),
-    context_refs = COALESCE(sqlc.narg('context_refs'), context_refs),
     updated_at = now()
 WHERE id = $1
 RETURNING *;

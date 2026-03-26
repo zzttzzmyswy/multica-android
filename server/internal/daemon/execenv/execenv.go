@@ -29,11 +29,9 @@ type PrepareParams struct {
 
 // TaskContextForEnv is the subset of task context used for writing context files.
 type TaskContextForEnv struct {
-	IssueTitle         string
-	IssueDescription   string
-	AcceptanceCriteria []string
-	ContextRefs        []string
-	WorkspaceContext   string
+	IssueTitle       string
+	IssueDescription string
+	WorkspaceContext string
 	AgentName          string
 	AgentSkills        []SkillContextForEnv
 }

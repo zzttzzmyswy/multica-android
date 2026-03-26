@@ -10,12 +10,10 @@ type Message struct {
 
 // TaskDispatchPayload is sent from server to daemon when a task is assigned.
 type TaskDispatchPayload struct {
-	TaskID             string   `json:"task_id"`
-	IssueID            string   `json:"issue_id"`
-	Title              string   `json:"title"`
-	Description        string   `json:"description"`
-	AcceptanceCriteria []string `json:"acceptance_criteria"`
-	ContextRefs        []string `json:"context_refs"`
+	TaskID      string `json:"task_id"`
+	IssueID     string `json:"issue_id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
 }
 
 // TaskProgressPayload is sent from daemon to server during task execution.

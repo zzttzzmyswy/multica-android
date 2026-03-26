@@ -29,8 +29,6 @@ type IssueResponse struct {
 	CreatorType        string  `json:"creator_type"`
 	CreatorID          string  `json:"creator_id"`
 	ParentIssueID      *string `json:"parent_issue_id"`
-	AcceptanceCriteria []any   `json:"acceptance_criteria"`
-	ContextRefs        []any   `json:"context_refs"`
 	Position           float64 `json:"position"`
 	DueDate            *string `json:"due_date"`
 	CreatedAt          string  `json:"created_at"`
@@ -44,40 +42,22 @@ type agentTriggerSnapshot struct {
 }
 
 func issueToResponse(i db.Issue) IssueResponse {
-	var ac []any
-	if i.AcceptanceCriteria != nil {
-		json.Unmarshal(i.AcceptanceCriteria, &ac)
-	}
-	if ac == nil {
-		ac = []any{}
-	}
-
-	var cr []any
-	if i.ContextRefs != nil {
-		json.Unmarshal(i.ContextRefs, &cr)
-	}
-	if cr == nil {
-		cr = []any{}
-	}
-
 	return IssueResponse{
-		ID:                 uuidToString(i.ID),
-		WorkspaceID:        uuidToString(i.WorkspaceID),
-		Title:              i.Title,
-		Description:        textToPtr(i.Description),
-		Status:             i.Status,
-		Priority:           i.Priority,
-		AssigneeType:       textToPtr(i.AssigneeType),
-		AssigneeID:         uuidToPtr(i.AssigneeID),
-		CreatorType:        i.CreatorType,
-		CreatorID:          uuidToString(i.CreatorID),
-		ParentIssueID:      uuidToPtr(i.ParentIssueID),
-		AcceptanceCriteria: ac,
-		ContextRefs:        cr,
-		Position:           i.Position,
-		DueDate:            timestampToPtr(i.DueDate),
-		CreatedAt:          timestampToString(i.CreatedAt),
-		UpdatedAt:          timestampToString(i.UpdatedAt),
+		ID:            uuidToString(i.ID),
+		WorkspaceID:   uuidToString(i.WorkspaceID),
+		Title:         i.Title,
+		Description:   textToPtr(i.Description),
+		Status:        i.Status,
+		Priority:      i.Priority,
+		AssigneeType:  textToPtr(i.AssigneeType),
+		AssigneeID:    uuidToPtr(i.AssigneeID),
+		CreatorType:   i.CreatorType,
+		CreatorID:     uuidToString(i.CreatorID),
+		ParentIssueID: uuidToPtr(i.ParentIssueID),
+		Position:      i.Position,
+		DueDate:       timestampToPtr(i.DueDate),
+		CreatedAt:     timestampToString(i.CreatedAt),
+		UpdatedAt:     timestampToString(i.UpdatedAt),
 	}
 }
 
@@ -157,8 +137,6 @@ type CreateIssueRequest struct {
 	AssigneeType       *string `json:"assignee_type"`
 	AssigneeID         *string `json:"assignee_id"`
 	ParentIssueID      *string `json:"parent_issue_id"`
-	AcceptanceCriteria []any   `json:"acceptance_criteria"`
-	ContextRefs        []any   `json:"context_refs"`
 	DueDate            *string `json:"due_date"`
 }
 
@@ -194,14 +172,6 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 		priority = "none"
 	}
 
-	ac, _ := json.Marshal(req.AcceptanceCriteria)
-	if req.AcceptanceCriteria == nil {
-		ac = []byte("[]")
-	}
-	cr, _ := json.Marshal(req.ContextRefs)
-	if req.ContextRefs == nil {
-		cr = []byte("[]")
-	}
 	var assigneeType pgtype.Text
 	var assigneeID pgtype.UUID
 	if req.AssigneeType != nil {
@@ -237,8 +207,6 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 		CreatorType:        "member",
 		CreatorID:          parseUUID(creatorID),
 		ParentIssueID:      parentIssueID,
-		AcceptanceCriteria: ac,
-		ContextRefs:        cr,
 		Position:           0,
 		DueDate:            dueDate,
 	})
@@ -271,8 +239,6 @@ type UpdateIssueRequest struct {
 	AssigneeID         *string  `json:"assignee_id"`
 	Position           *float64 `json:"position"`
 	DueDate            *string  `json:"due_date"`
-	AcceptanceCriteria *[]any   `json:"acceptance_criteria"`
-	ContextRefs        *[]any   `json:"context_refs"`
 }
 
 func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
@@ -325,15 +291,6 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 	if req.Position != nil {
 		params.Position = pgtype.Float8{Float64: *req.Position, Valid: true}
 	}
-	if req.AcceptanceCriteria != nil {
-		ac, _ := json.Marshal(*req.AcceptanceCriteria)
-		params.AcceptanceCriteria = ac
-	}
-	if req.ContextRefs != nil {
-		cr, _ := json.Marshal(*req.ContextRefs)
-		params.ContextRefs = cr
-	}
-
 	// Nullable fields — only override when explicitly present in JSON
 	if _, ok := rawFields["assignee_type"]; ok {
 		if req.AssigneeType != nil {

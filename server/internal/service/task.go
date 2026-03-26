@@ -322,14 +322,6 @@ func (s *TaskService) loadAgentSkillsForSnapshot(ctx context.Context, agentID pg
 }
 
 func buildContextSnapshot(issue db.Issue, agent db.Agent, runtime db.AgentRuntime, workspaceContext string, skills []skillSnapshot) map[string]any {
-	var ac []string
-	if issue.AcceptanceCriteria != nil {
-		json.Unmarshal(issue.AcceptanceCriteria, &ac)
-	}
-	var cr []string
-	if issue.ContextRefs != nil {
-		json.Unmarshal(issue.ContextRefs, &cr)
-	}
 	var tools any
 	if agent.Tools != nil {
 		json.Unmarshal(agent.Tools, &tools)
@@ -341,11 +333,9 @@ func buildContextSnapshot(issue db.Issue, agent db.Agent, runtime db.AgentRuntim
 
 	m := map[string]any{
 		"issue": map[string]any{
-			"id":                  util.UUIDToString(issue.ID),
-			"title":               issue.Title,
-			"description":         issue.Description.String,
-			"acceptance_criteria": ac,
-			"context_refs":        cr,
+			"id":          util.UUIDToString(issue.ID),
+			"title":       issue.Title,
+			"description": issue.Description.String,
 		},
 		"agent": map[string]any{
 			"id":     util.UUIDToString(agent.ID),
@@ -505,40 +495,22 @@ func (s *TaskService) createInboxForIssueCreator(ctx context.Context, issue db.I
 }
 
 func issueToMap(issue db.Issue) map[string]any {
-	var ac []any
-	if issue.AcceptanceCriteria != nil {
-		json.Unmarshal(issue.AcceptanceCriteria, &ac)
-	}
-	if ac == nil {
-		ac = []any{}
-	}
-
-	var cr []any
-	if issue.ContextRefs != nil {
-		json.Unmarshal(issue.ContextRefs, &cr)
-	}
-	if cr == nil {
-		cr = []any{}
-	}
-
 	return map[string]any{
-		"id":                  util.UUIDToString(issue.ID),
-		"workspace_id":        util.UUIDToString(issue.WorkspaceID),
-		"title":               issue.Title,
-		"description":         util.TextToPtr(issue.Description),
-		"status":              issue.Status,
-		"priority":            issue.Priority,
-		"assignee_type":       util.TextToPtr(issue.AssigneeType),
-		"assignee_id":         util.UUIDToPtr(issue.AssigneeID),
-		"creator_type":        issue.CreatorType,
-		"creator_id":          util.UUIDToString(issue.CreatorID),
-		"parent_issue_id":     util.UUIDToPtr(issue.ParentIssueID),
-		"acceptance_criteria": ac,
-		"context_refs":        cr,
-		"position":            issue.Position,
-		"due_date":            util.TimestampToPtr(issue.DueDate),
-		"created_at":          util.TimestampToString(issue.CreatedAt),
-		"updated_at":          util.TimestampToString(issue.UpdatedAt),
+		"id":             util.UUIDToString(issue.ID),
+		"workspace_id":   util.UUIDToString(issue.WorkspaceID),
+		"title":          issue.Title,
+		"description":    util.TextToPtr(issue.Description),
+		"status":         issue.Status,
+		"priority":       issue.Priority,
+		"assignee_type":  util.TextToPtr(issue.AssigneeType),
+		"assignee_id":    util.UUIDToPtr(issue.AssigneeID),
+		"creator_type":   issue.CreatorType,
+		"creator_id":     util.UUIDToString(issue.CreatorID),
+		"parent_issue_id": util.UUIDToPtr(issue.ParentIssueID),
+		"position":       issue.Position,
+		"due_date":       util.TimestampToPtr(issue.DueDate),
+		"created_at":     util.TimestampToString(issue.CreatedAt),
+		"updated_at":     util.TimestampToString(issue.UpdatedAt),
 	}
 }
 
