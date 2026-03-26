@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 )
@@ -37,9 +36,16 @@ func isWorkspaceNotFoundError(err error) bool {
 	return strings.Contains(strings.ToLower(reqErr.Body), "workspace not found")
 }
 
+// Workspace represents a workspace from the API.
+type Workspace struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
 // Client handles HTTP communication with the Multica server daemon API.
 type Client struct {
 	baseURL string
+	token   string
 	client  *http.Client
 }
 
@@ -51,6 +57,20 @@ func NewClient(baseURL string) *Client {
 	}
 }
 
+// SetToken sets the auth token for authenticated requests.
+func (c *Client) SetToken(token string) {
+	c.token = token
+}
+
+// ListWorkspaces fetches the user's workspaces using the auth token.
+func (c *Client) ListWorkspaces(ctx context.Context) ([]Workspace, error) {
+	var ws []Workspace
+	if err := c.getJSON(ctx, "/api/workspaces", &ws); err != nil {
+		return nil, err
+	}
+	return ws, nil
+}
+
 func (c *Client) ClaimTask(ctx context.Context, runtimeID string) (*Task, error) {
 	var resp struct {
 		Task *Task `json:"task"`
@@ -59,30 +79,6 @@ func (c *Client) ClaimTask(ctx context.Context, runtimeID string) (*Task, error)
 		return nil, err
 	}
 	return resp.Task, nil
-}
-
-func (c *Client) CreatePairingSession(ctx context.Context, req map[string]string) (PairingSession, error) {
-	var resp PairingSession
-	if err := c.postJSON(ctx, "/api/daemon/pairing-sessions", req, &resp); err != nil {
-		return PairingSession{}, err
-	}
-	return resp, nil
-}
-
-func (c *Client) GetPairingSession(ctx context.Context, token string) (PairingSession, error) {
-	var resp PairingSession
-	if err := c.getJSON(ctx, fmt.Sprintf("/api/daemon/pairing-sessions/%s", url.PathEscape(token)), &resp); err != nil {
-		return PairingSession{}, err
-	}
-	return resp, nil
-}
-
-func (c *Client) ClaimPairingSession(ctx context.Context, token string) (PairingSession, error) {
-	var resp PairingSession
-	if err := c.postJSON(ctx, fmt.Sprintf("/api/daemon/pairing-sessions/%s/claim", url.PathEscape(token)), map[string]any{}, &resp); err != nil {
-		return PairingSession{}, err
-	}
-	return resp, nil
 }
 
 func (c *Client) StartTask(ctx context.Context, taskID string) error {
@@ -142,6 +138,9 @@ func (c *Client) postJSON(ctx context.Context, path string, reqBody any, respBod
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -164,6 +163,9 @@ func (c *Client) getJSON(ctx context.Context, path string, respBody any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
 	if err != nil {
 		return err
+	}
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
 
 	resp, err := c.client.Do(req)

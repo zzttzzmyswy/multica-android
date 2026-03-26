@@ -1,8 +1,6 @@
 package daemon
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -14,7 +12,6 @@ import (
 
 const (
 	DefaultServerURL         = "ws://localhost:8080/ws"
-	DefaultDaemonConfigPath  = ".multica/daemon.json"
 	DefaultPollInterval      = 3 * time.Second
 	DefaultHeartbeatInterval = 15 * time.Second
 	DefaultAgentTimeout      = 2 * time.Hour
@@ -24,8 +21,8 @@ const (
 // Config holds all daemon configuration.
 type Config struct {
 	ServerBaseURL     string
-	ConfigPath        string
 	WorkspaceID       string
+	Token             string
 	DaemonID          string
 	DeviceName        string
 	RuntimeName       string
@@ -43,7 +40,6 @@ type Overrides struct {
 	ServerURL         string
 	WorkspaceID       string
 	WorkspacesRoot    string
-	ConfigPath        string
 	PollInterval      time.Duration
 	HeartbeatInterval time.Duration
 	AgentTimeout      time.Duration
@@ -65,27 +61,8 @@ func LoadConfig(overrides Overrides) (Config, error) {
 		return Config{}, err
 	}
 
-	// Config path
-	rawConfigPath := strings.TrimSpace(os.Getenv("MULTICA_DAEMON_CONFIG"))
-	if overrides.ConfigPath != "" {
-		rawConfigPath = overrides.ConfigPath
-	}
-	configPath, err := resolveDaemonConfigPath(rawConfigPath)
-	if err != nil {
-		return Config{}, err
-	}
-
-	// Load persisted config
-	persisted, err := LoadPersistedConfig(configPath)
-	if err != nil {
-		return Config{}, err
-	}
-
-	// Workspace ID: override > env > persisted
+	// Workspace ID: override > env (optional — resolved at runtime if empty)
 	workspaceID := strings.TrimSpace(os.Getenv("MULTICA_WORKSPACE_ID"))
-	if workspaceID == "" {
-		workspaceID = persisted.WorkspaceID
-	}
 	if overrides.WorkspaceID != "" {
 		workspaceID = overrides.WorkspaceID
 	}
@@ -179,7 +156,6 @@ func LoadConfig(overrides Overrides) (Config, error) {
 
 	return Config{
 		ServerBaseURL:     serverBaseURL,
-		ConfigPath:        configPath,
 		WorkspaceID:       workspaceID,
 		DaemonID:          daemonID,
 		DeviceName:        deviceName,
@@ -217,44 +193,3 @@ func NormalizeServerBaseURL(raw string) (string, error) {
 	return strings.TrimRight(u.String(), "/"), nil
 }
 
-func resolveDaemonConfigPath(raw string) (string, error) {
-	if raw != "" {
-		return filepath.Abs(raw)
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve daemon config path: %w", err)
-	}
-	return filepath.Join(home, DefaultDaemonConfigPath), nil
-}
-
-// LoadPersistedConfig reads the daemon config from disk.
-func LoadPersistedConfig(path string) (PersistedConfig, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return PersistedConfig{}, nil
-		}
-		return PersistedConfig{}, fmt.Errorf("read daemon config: %w", err)
-	}
-	var cfg PersistedConfig
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return PersistedConfig{}, fmt.Errorf("parse daemon config: %w", err)
-	}
-	return cfg, nil
-}
-
-// SavePersistedConfig writes the daemon config to disk.
-func SavePersistedConfig(path string, cfg PersistedConfig) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("create daemon config directory: %w", err)
-	}
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode daemon config: %w", err)
-	}
-	if err := os.WriteFile(path, append(data, '\n'), 0o600); err != nil {
-		return fmt.Errorf("write daemon config: %w", err)
-	}
-	return nil
-}

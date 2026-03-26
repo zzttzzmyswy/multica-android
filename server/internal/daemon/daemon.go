@@ -7,9 +7,27 @@ import (
 	"strings"
 	"time"
 
+	"github.com/multica-ai/multica/server/internal/cli"
 	"github.com/multica-ai/multica/server/internal/daemon/execenv"
 	"github.com/multica-ai/multica/server/pkg/agent"
 )
+
+// cliConfigData holds the fields we need from the CLI config.
+type cliConfigData struct {
+	Token       string
+	WorkspaceID string
+}
+
+func loadCLIConfig() (cliConfigData, error) {
+	cfg, err := cli.LoadCLIConfig()
+	if err != nil {
+		return cliConfigData{}, err
+	}
+	return cliConfigData{
+		Token:       cfg.Token,
+		WorkspaceID: cfg.WorkspaceID,
+	}, nil
+}
 
 // Daemon is the local agent runtime that polls for and executes tasks.
 type Daemon struct {
@@ -27,21 +45,17 @@ func New(cfg Config, logger *slog.Logger) *Daemon {
 	}
 }
 
-// Run starts the daemon: pairs if needed, registers runtimes, then polls for tasks.
+// Run starts the daemon: resolves auth, registers runtimes, then polls for tasks.
 func (d *Daemon) Run(ctx context.Context) error {
 	agentNames := make([]string, 0, len(d.cfg.Agents))
 	for name := range d.cfg.Agents {
 		agentNames = append(agentNames, name)
 	}
-	d.logger.Info("starting daemon", "agents", agentNames, "workspace_id", d.cfg.WorkspaceID, "server", d.cfg.ServerBaseURL)
+	d.logger.Info("starting daemon", "agents", agentNames, "server", d.cfg.ServerBaseURL)
 
-	if strings.TrimSpace(d.cfg.WorkspaceID) == "" {
-		workspaceID, err := d.ensurePaired(ctx)
-		if err != nil {
-			return err
-		}
-		d.cfg.WorkspaceID = workspaceID
-		d.logger.Info("pairing completed", "workspace_id", workspaceID)
+	// Resolve auth token and workspace from CLI config.
+	if err := d.resolveAuth(ctx); err != nil {
+		return err
 	}
 
 	runtimes, err := d.registerRuntimes(ctx)
@@ -56,6 +70,48 @@ func (d *Daemon) Run(ctx context.Context) error {
 
 	go d.heartbeatLoop(ctx, runtimeIDs)
 	return d.pollLoop(ctx, runtimeIDs)
+}
+
+// resolveAuth loads the CLI auth token and workspace ID.
+// If not authenticated, it waits and retries periodically until the user logs in.
+func (d *Daemon) resolveAuth(ctx context.Context) error {
+	// If workspace ID is already set via flag/env, just need a token.
+	if d.cfg.WorkspaceID != "" {
+		if d.cfg.Token != "" {
+			d.client.SetToken(d.cfg.Token)
+			d.logger.Info("authenticated", "workspace_id", d.cfg.WorkspaceID)
+			return nil
+		}
+	}
+
+	// Try loading from CLI config.
+	cfg, _ := loadCLIConfig()
+	if cfg.Token != "" {
+		d.client.SetToken(cfg.Token)
+		if d.cfg.WorkspaceID == "" && cfg.WorkspaceID != "" {
+			d.cfg.WorkspaceID = cfg.WorkspaceID
+		}
+	}
+
+	if d.cfg.Token == "" && cfg.Token == "" {
+		d.logger.Warn("not authenticated — run 'multica auth login' to authenticate, then restart the daemon")
+		return fmt.Errorf("not authenticated: run 'multica auth login' first")
+	}
+
+	// If we have a token but no workspace ID, fetch the user's workspaces.
+	if d.cfg.WorkspaceID == "" {
+		ws, err := d.client.ListWorkspaces(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to fetch workspaces: %w (is your token valid? try 'multica auth login')", err)
+		}
+		if len(ws) == 0 {
+			return fmt.Errorf("no workspaces found for this account")
+		}
+		d.cfg.WorkspaceID = ws[0].ID
+		d.logger.Info("using workspace", "workspace_id", ws[0].ID, "name", ws[0].Name)
+	}
+
+	return nil
 }
 
 func (d *Daemon) registerRuntimes(ctx context.Context) ([]Runtime, error) {
@@ -94,75 +150,6 @@ func (d *Daemon) registerRuntimes(ctx context.Context) ([]Runtime, error) {
 	return rts, nil
 }
 
-func (d *Daemon) ensurePaired(ctx context.Context) (string, error) {
-	// Use a deterministic agent for the pairing session metadata (prefer codex for backward compat).
-	var firstName string
-	var firstEntry AgentEntry
-	for _, preferred := range []string{"codex", "claude"} {
-		if entry, ok := d.cfg.Agents[preferred]; ok {
-			firstName = preferred
-			firstEntry = entry
-			break
-		}
-	}
-	version, err := agent.DetectVersion(ctx, firstEntry.Path)
-	if err != nil {
-		return "", err
-	}
-
-	session, err := d.client.CreatePairingSession(ctx, map[string]string{
-		"daemon_id":       d.cfg.DaemonID,
-		"device_name":     d.cfg.DeviceName,
-		"runtime_name":    d.cfg.RuntimeName,
-		"runtime_type":    firstName,
-		"runtime_version": version,
-	})
-	if err != nil {
-		return "", fmt.Errorf("create pairing session: %w", err)
-	}
-	if session.LinkURL != nil {
-		d.logger.Info("open this link to pair the daemon", "url", *session.LinkURL)
-	} else {
-		d.logger.Info("pairing session created", "token", session.Token)
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			return "", ctx.Err()
-		default:
-		}
-
-		current, err := d.client.GetPairingSession(ctx, session.Token)
-		if err != nil {
-			return "", fmt.Errorf("poll pairing session: %w", err)
-		}
-
-		switch current.Status {
-		case "approved", "claimed":
-			if current.WorkspaceID == nil || strings.TrimSpace(*current.WorkspaceID) == "" {
-				return "", fmt.Errorf("pairing session approved without workspace")
-			}
-			if err := SavePersistedConfig(d.cfg.ConfigPath, PersistedConfig{
-				WorkspaceID: strings.TrimSpace(*current.WorkspaceID),
-			}); err != nil {
-				return "", err
-			}
-			if current.Status != "claimed" {
-				if _, err := d.client.ClaimPairingSession(ctx, current.Token); err != nil {
-					return "", fmt.Errorf("claim pairing session: %w", err)
-				}
-			}
-			return strings.TrimSpace(*current.WorkspaceID), nil
-		case "expired":
-			return "", fmt.Errorf("pairing session expired before approval")
-		}
-
-		if err := sleepWithContext(ctx, d.cfg.PollInterval); err != nil {
-			return "", err
-		}
-	}
-}
 
 func (d *Daemon) heartbeatLoop(ctx context.Context, runtimeIDs []string) {
 	ticker := time.NewTicker(d.cfg.HeartbeatInterval)
