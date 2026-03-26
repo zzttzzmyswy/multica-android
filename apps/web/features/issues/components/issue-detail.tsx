@@ -322,7 +322,7 @@ export function IssueDetail({ issueId, showBreadcrumb, onDelete }: IssueDetailPr
   const id = issueId;
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const { getActorName, getActorInitials } = useActorName();
+  const { getActorName } = useActorName();
   const [issue, setIssue] = useState<Issue | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -621,8 +621,6 @@ export function IssueDetail({ issueId, showBreadcrumb, onDelete }: IssueDetailPr
                         actorType={comment.author_type}
                         actorId={comment.author_id}
                         size={28}
-                        getName={getActorName}
-                        getInitials={getActorInitials}
                       />
                       <span className="text-sm font-medium">
                         {getActorName(comment.author_type, comment.author_id)}
@@ -737,8 +735,6 @@ export function IssueDetail({ issueId, showBreadcrumb, onDelete }: IssueDetailPr
                 actorType={issue.creator_type}
                 actorId={issue.creator_id}
                 size={18}
-                getName={getActorName}
-                getInitials={getActorInitials}
               />
               <span>{getActorName(issue.creator_type, issue.creator_id)}</span>
             </PropRow>

@@ -41,7 +41,7 @@ export default function DashboardLayout({
   if (!user || !workspace) return null;
 
   return (
-    <SidebarProvider className="max-h-svh">
+    <SidebarProvider className="h-svh">
       <AppSidebar />
       <SidebarInset className="overflow-hidden">{children}</SidebarInset>
     </SidebarProvider>

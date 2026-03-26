@@ -24,6 +24,9 @@ type InboxItemResponse struct {
 	Read          bool    `json:"read"`
 	Archived      bool    `json:"archived"`
 	CreatedAt     string  `json:"created_at"`
+	IssueStatus   *string `json:"issue_status"`
+	ActorType     *string `json:"actor_type"`
+	ActorID       *string `json:"actor_id"`
 }
 
 func inboxToResponse(i db.InboxItem) InboxItemResponse {
@@ -40,6 +43,28 @@ func inboxToResponse(i db.InboxItem) InboxItemResponse {
 		Read:          i.Read,
 		Archived:      i.Archived,
 		CreatedAt:     timestampToString(i.CreatedAt),
+		ActorType:     textToPtr(i.ActorType),
+		ActorID:       uuidToPtr(i.ActorID),
+	}
+}
+
+func inboxRowToResponse(r db.ListInboxItemsRow) InboxItemResponse {
+	return InboxItemResponse{
+		ID:            uuidToString(r.ID),
+		WorkspaceID:   uuidToString(r.WorkspaceID),
+		RecipientType: r.RecipientType,
+		RecipientID:   uuidToString(r.RecipientID),
+		Type:          r.Type,
+		Severity:      r.Severity,
+		IssueID:       uuidToPtr(r.IssueID),
+		Title:         r.Title,
+		Body:          textToPtr(r.Body),
+		Read:          r.Read,
+		Archived:      r.Archived,
+		CreatedAt:     timestampToString(r.CreatedAt),
+		IssueStatus:   textToPtr(r.IssueStatus),
+		ActorType:     textToPtr(r.ActorType),
+		ActorID:       uuidToPtr(r.ActorID),
 	}
 }
 
@@ -75,7 +100,7 @@ func (h *Handler) ListInbox(w http.ResponseWriter, r *http.Request) {
 
 	resp := make([]InboxItemResponse, len(items))
 	for i, item := range items {
-		resp[i] = inboxToResponse(item)
+		resp[i] = inboxRowToResponse(item)
 	}
 
 	writeJSON(w, http.StatusOK, resp)

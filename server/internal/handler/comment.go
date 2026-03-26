@@ -103,10 +103,11 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 	resp := commentToResponse(comment)
 	slog.Info("comment created", append(logger.RequestAttrs(r), "comment_id", uuidToString(comment.ID), "issue_id", issueID)...)
 	h.publish(protocol.EventCommentCreated, uuidToString(issue.WorkspaceID), "member", userID, map[string]any{
-		"comment":              resp,
-		"issue_title":          issue.Title,
-		"issue_assignee_type":  textToPtr(issue.AssigneeType),
-		"issue_assignee_id":    uuidToPtr(issue.AssigneeID),
+		"comment":             resp,
+		"issue_title":         issue.Title,
+		"issue_assignee_type": textToPtr(issue.AssigneeType),
+		"issue_assignee_id":   uuidToPtr(issue.AssigneeID),
+		"issue_status":        issue.Status,
 	})
 
 	writeJSON(w, http.StatusCreated, resp)

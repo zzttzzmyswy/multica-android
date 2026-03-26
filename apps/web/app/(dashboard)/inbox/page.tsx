@@ -2,8 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useInboxStore } from "@/features/inbox";
-import { useActorName } from "@/features/workspace";
-import { IssueDetail } from "@/features/issues/components";
+import { IssueDetail, StatusIcon } from "@/features/issues/components";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { toast } from "sonner";
 import {
@@ -64,14 +63,10 @@ function InboxListItem({
   item,
   isSelected,
   onClick,
-  getActorName,
-  getActorInitials,
 }: {
   item: InboxItem;
   isSelected: boolean;
   onClick: () => void;
-  getActorName: (type: string, id: string) => string;
-  getActorInitials: (type: string, id: string) => string;
 }) {
   return (
     <button
@@ -81,30 +76,35 @@ function InboxListItem({
       }`}
     >
       <ActorAvatar
-        actorType={item.recipient_type}
-        actorId={item.recipient_id}
+        actorType={item.actor_type ?? item.recipient_type}
+        actorId={item.actor_id ?? item.recipient_id}
         size={28}
-        getName={getActorName}
-        getInitials={getActorInitials}
       />
       <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-2">
+        <div className="flex items-center justify-between gap-2">
           <span
             className={`truncate text-sm ${!item.read ? "font-medium" : "text-muted-foreground"}`}
           >
             {item.title}
           </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {item.issue_status && (
+              <StatusIcon status={item.issue_status} className="h-3.5 w-3.5" />
+            )}
+            {!item.read && (
+              <span className="h-2 w-2 rounded-full bg-primary" />
+            )}
+          </div>
+        </div>
+        <div className="mt-0.5 flex items-center justify-between gap-2">
+          <p className="truncate text-xs text-muted-foreground">
+            {typeLabels[item.type] ?? item.type}
+          </p>
           <span className="shrink-0 text-xs text-muted-foreground">
             {timeAgo(item.created_at)}
           </span>
         </div>
-        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-          {typeLabels[item.type] ?? item.type}
-        </p>
       </div>
-      {!item.read && (
-        <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
-      )}
     </button>
   );
 }
@@ -118,7 +118,6 @@ export default function InboxPage() {
 
   const storeItems = useInboxStore((s) => s.items);
   const loading = useInboxStore((s) => s.loading);
-  const { getActorName, getActorInitials } = useActorName();
 
   // Sort: severity first, then newest first
   const items = useMemo(() => {
@@ -253,7 +252,7 @@ export default function InboxPage() {
             >
               <MoreHorizontal className="h-4 w-4" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-auto">
               <DropdownMenuItem onClick={handleMarkAllRead}>
                 <CheckCheck className="h-4 w-4" />
                 Mark all as read
@@ -288,8 +287,6 @@ export default function InboxPage() {
                 item={item}
                 isSelected={item.id === selectedId}
                 onClick={() => handleSelect(item)}
-                getActorName={getActorName}
-                getActorInitials={getActorInitials}
               />
             ))}
           </div>
@@ -297,7 +294,7 @@ export default function InboxPage() {
       </div>
 
       {/* Right column — detail */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex flex-col flex-1 min-h-0">
         {selected?.issue_id ? (
           <IssueDetail
             issueId={selected.issue_id}

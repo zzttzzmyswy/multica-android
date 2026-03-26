@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import type { InboxItem } from "@multica/types";
+import type { InboxItem, IssueStatus } from "@multica/types";
 import { api } from "@/shared/api";
 import { createLogger } from "@/shared/logger";
 
@@ -18,6 +18,7 @@ interface InboxState {
   markAllRead: () => void;
   archiveAll: () => void;
   archiveAllRead: () => void;
+  updateIssueStatus: (issueId: string, status: IssueStatus) => void;
   unreadCount: () => number;
 }
 
@@ -65,6 +66,12 @@ export const useInboxStore = create<InboxState>((set, get) => ({
     set((s) => ({
       items: s.items.map((i) =>
         i.read && !i.archived ? { ...i, archived: true } : i
+      ),
+    })),
+  updateIssueStatus: (issueId, status) =>
+    set((s) => ({
+      items: s.items.map((i) =>
+        i.issue_id === issueId ? { ...i, issue_status: status } : i
       ),
     })),
   unreadCount: () => get().items.filter((i) => !i.read && !i.archived).length,

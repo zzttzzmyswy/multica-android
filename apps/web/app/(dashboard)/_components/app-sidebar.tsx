@@ -20,7 +20,6 @@ import { WorkspaceAvatar } from "@/features/workspace";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarHeader,
@@ -43,11 +42,14 @@ import { useWorkspaceStore } from "@/features/workspace";
 import { useInboxStore } from "@/features/inbox";
 import { useModalStore } from "@/features/modals";
 
-const navItems = [
+const primaryNav = [
   { href: "/inbox", label: "Inbox", icon: Inbox },
+  { href: "/issues", label: "Issues", icon: ListTodo },
+];
+
+const workspaceNav = [
   { href: "/agents", label: "Agents", icon: Bot },
   { href: "/skills", label: "Skills", icon: Sparkles },
-  { href: "/issues", label: "Issues", icon: ListTodo },
   { href: "/knowledge-base", label: "Knowledge Base", icon: BookOpen },
 ];
 
@@ -180,7 +182,7 @@ export function AppSidebar() {
           <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu className="gap-0.5">
-                {navItems.map((item) => {
+                {primaryNav.map((item) => {
                   const isActive = pathname === item.href;
                   return (
                     <SidebarMenuItem key={item.href}>
@@ -203,28 +205,29 @@ export function AppSidebar() {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-        </SidebarContent>
 
-        {/* User */}
-        <SidebarFooter>
-          {user && (
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton size="sm">
-                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs leading-none font-medium">
-                    {user.name
-                      .split(" ")
-                      .map((w) => w[0])
-                      .join("")
-                      .toUpperCase()
-                      .slice(0, 2)}
-                  </div>
-                  <span className="truncate">{user.name}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          )}
-        </SidebarFooter>
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu className="gap-0.5">
+                {workspaceNav.map((item) => {
+                  const isActive = pathname === item.href;
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        isActive={isActive}
+                        render={<Link href={item.href} />}
+                        className="text-muted-foreground hover:not-data-active:bg-sidebar-accent/70 data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground"
+                      >
+                        <item.icon />
+                        <span>{item.label}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
       </Sidebar>
   );
 }

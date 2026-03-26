@@ -44,6 +44,7 @@ export function useRealtimeSync(ws: WSClient | null) {
       ws.on("issue:updated", (p) => {
         const { issue } = p as IssueUpdatedPayload;
         useIssueStore.getState().updateIssue(issue.id, issue);
+        useInboxStore.getState().updateIssueStatus(issue.id, issue.status);
       }),
       ws.on("issue:deleted", (p) => {
         const { issue_id } = p as IssueDeletedPayload;
