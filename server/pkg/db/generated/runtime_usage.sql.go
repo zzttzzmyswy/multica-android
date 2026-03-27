@@ -11,41 +11,52 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const upsertRuntimeUsage = `-- name: UpsertRuntimeUsage :exec
-INSERT INTO runtime_usage (runtime_id, date, provider, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-ON CONFLICT (runtime_id, date, provider, model)
-DO UPDATE SET
-    input_tokens = EXCLUDED.input_tokens,
-    output_tokens = EXCLUDED.output_tokens,
-    cache_read_tokens = EXCLUDED.cache_read_tokens,
-    cache_write_tokens = EXCLUDED.cache_write_tokens,
-    updated_at = now()
+const getRuntimeUsageSummary = `-- name: GetRuntimeUsageSummary :many
+SELECT provider, model,
+    SUM(input_tokens)::bigint AS total_input_tokens,
+    SUM(output_tokens)::bigint AS total_output_tokens,
+    SUM(cache_read_tokens)::bigint AS total_cache_read_tokens,
+    SUM(cache_write_tokens)::bigint AS total_cache_write_tokens
+FROM runtime_usage
+WHERE runtime_id = $1
+GROUP BY provider, model
+ORDER BY provider, model
 `
 
-type UpsertRuntimeUsageParams struct {
-	RuntimeID       pgtype.UUID `json:"runtime_id"`
-	Date            pgtype.Date `json:"date"`
-	Provider        string      `json:"provider"`
-	Model           string      `json:"model"`
-	InputTokens     int64       `json:"input_tokens"`
-	OutputTokens    int64       `json:"output_tokens"`
-	CacheReadTokens int64       `json:"cache_read_tokens"`
-	CacheWriteTokens int64      `json:"cache_write_tokens"`
+type GetRuntimeUsageSummaryRow struct {
+	Provider              string `json:"provider"`
+	Model                 string `json:"model"`
+	TotalInputTokens      int64  `json:"total_input_tokens"`
+	TotalOutputTokens     int64  `json:"total_output_tokens"`
+	TotalCacheReadTokens  int64  `json:"total_cache_read_tokens"`
+	TotalCacheWriteTokens int64  `json:"total_cache_write_tokens"`
 }
 
-func (q *Queries) UpsertRuntimeUsage(ctx context.Context, arg UpsertRuntimeUsageParams) error {
-	_, err := q.db.Exec(ctx, upsertRuntimeUsage,
-		arg.RuntimeID,
-		arg.Date,
-		arg.Provider,
-		arg.Model,
-		arg.InputTokens,
-		arg.OutputTokens,
-		arg.CacheReadTokens,
-		arg.CacheWriteTokens,
-	)
-	return err
+func (q *Queries) GetRuntimeUsageSummary(ctx context.Context, runtimeID pgtype.UUID) ([]GetRuntimeUsageSummaryRow, error) {
+	rows, err := q.db.Query(ctx, getRuntimeUsageSummary, runtimeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetRuntimeUsageSummaryRow{}
+	for rows.Next() {
+		var i GetRuntimeUsageSummaryRow
+		if err := rows.Scan(
+			&i.Provider,
+			&i.Model,
+			&i.TotalInputTokens,
+			&i.TotalOutputTokens,
+			&i.TotalCacheReadTokens,
+			&i.TotalCacheWriteTokens,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listRuntimeUsage = `-- name: ListRuntimeUsage :many
@@ -92,50 +103,39 @@ func (q *Queries) ListRuntimeUsage(ctx context.Context, arg ListRuntimeUsagePara
 	return items, nil
 }
 
-const getRuntimeUsageSummary = `-- name: GetRuntimeUsageSummary :many
-SELECT provider, model,
-    SUM(input_tokens)::bigint AS total_input_tokens,
-    SUM(output_tokens)::bigint AS total_output_tokens,
-    SUM(cache_read_tokens)::bigint AS total_cache_read_tokens,
-    SUM(cache_write_tokens)::bigint AS total_cache_write_tokens
-FROM runtime_usage
-WHERE runtime_id = $1
-GROUP BY provider, model
-ORDER BY provider, model
+const upsertRuntimeUsage = `-- name: UpsertRuntimeUsage :exec
+INSERT INTO runtime_usage (runtime_id, date, provider, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+ON CONFLICT (runtime_id, date, provider, model)
+DO UPDATE SET
+    input_tokens = EXCLUDED.input_tokens,
+    output_tokens = EXCLUDED.output_tokens,
+    cache_read_tokens = EXCLUDED.cache_read_tokens,
+    cache_write_tokens = EXCLUDED.cache_write_tokens,
+    updated_at = now()
 `
 
-type GetRuntimeUsageSummaryRow struct {
-	Provider             string `json:"provider"`
-	Model                string `json:"model"`
-	TotalInputTokens     int64  `json:"total_input_tokens"`
-	TotalOutputTokens    int64  `json:"total_output_tokens"`
-	TotalCacheReadTokens int64  `json:"total_cache_read_tokens"`
-	TotalCacheWriteTokens int64 `json:"total_cache_write_tokens"`
+type UpsertRuntimeUsageParams struct {
+	RuntimeID        pgtype.UUID `json:"runtime_id"`
+	Date             pgtype.Date `json:"date"`
+	Provider         string      `json:"provider"`
+	Model            string      `json:"model"`
+	InputTokens      int64       `json:"input_tokens"`
+	OutputTokens     int64       `json:"output_tokens"`
+	CacheReadTokens  int64       `json:"cache_read_tokens"`
+	CacheWriteTokens int64       `json:"cache_write_tokens"`
 }
 
-func (q *Queries) GetRuntimeUsageSummary(ctx context.Context, runtimeID pgtype.UUID) ([]GetRuntimeUsageSummaryRow, error) {
-	rows, err := q.db.Query(ctx, getRuntimeUsageSummary, runtimeID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetRuntimeUsageSummaryRow{}
-	for rows.Next() {
-		var i GetRuntimeUsageSummaryRow
-		if err := rows.Scan(
-			&i.Provider,
-			&i.Model,
-			&i.TotalInputTokens,
-			&i.TotalOutputTokens,
-			&i.TotalCacheReadTokens,
-			&i.TotalCacheWriteTokens,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+func (q *Queries) UpsertRuntimeUsage(ctx context.Context, arg UpsertRuntimeUsageParams) error {
+	_, err := q.db.Exec(ctx, upsertRuntimeUsage,
+		arg.RuntimeID,
+		arg.Date,
+		arg.Provider,
+		arg.Model,
+		arg.InputTokens,
+		arg.OutputTokens,
+		arg.CacheReadTokens,
+		arg.CacheWriteTokens,
+	)
+	return err
 }
