@@ -15,10 +15,12 @@ export function AssigneePicker({
   assigneeType,
   assigneeId,
   onUpdate,
+  trigger: customTrigger,
 }: {
   assigneeType: IssueAssigneeType | null;
   assigneeId: string | null;
   onUpdate: (updates: Partial<UpdateIssueRequest>) => void;
+  trigger?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
@@ -54,7 +56,7 @@ export function AssigneePicker({
       searchPlaceholder="Assign to..."
       onSearchChange={setFilter}
       trigger={
-        assigneeType && assigneeId ? (
+        customTrigger ? customTrigger : assigneeType && assigneeId ? (
           <>
             <div
               className={`inline-flex shrink-0 items-center justify-center rounded-full font-medium text-[8px] size-4.5 ${

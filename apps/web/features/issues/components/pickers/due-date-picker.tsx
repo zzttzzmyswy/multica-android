@@ -14,9 +14,11 @@ import { Button } from "@/components/ui/button";
 export function DueDatePicker({
   dueDate,
   onUpdate,
+  trigger: customTrigger,
 }: {
   dueDate: string | null;
   onUpdate: (updates: Partial<UpdateIssueRequest>) => void;
+  trigger?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const date = dueDate ? new Date(dueDate) : undefined;
@@ -25,13 +27,17 @@ export function DueDatePicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger className="flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 hover:bg-accent/30 transition-colors">
-        <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
-        {date ? (
-          <span className={isOverdue ? "text-destructive" : ""}>
-            {date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-          </span>
-        ) : (
-          <span className="text-muted-foreground">Due date</span>
+        {customTrigger ?? (
+          <>
+            <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+            {date ? (
+              <span className={isOverdue ? "text-destructive" : ""}>
+                {date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">Due date</span>
+            )}
+          </>
         )}
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
