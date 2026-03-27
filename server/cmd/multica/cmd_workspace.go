@@ -119,13 +119,11 @@ func runWorkspaceGet(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("workspace ID is required: pass as argument or set MULTICA_WORKSPACE_ID")
 	}
 
-	serverURL := resolveServerURL(cmd)
-	token := resolveToken()
-	if token == "" {
-		return fmt.Errorf("not authenticated: run 'multica auth login' first")
+	client, err := newAPIClient(cmd)
+	if err != nil {
+		return err
 	}
 
-	client := cli.NewAPIClient(serverURL, "", token)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
@@ -167,13 +165,11 @@ func runWorkspaceMembers(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("workspace ID is required: pass as argument or set MULTICA_WORKSPACE_ID")
 	}
 
-	serverURL := resolveServerURL(cmd)
-	token := resolveToken()
-	if token == "" {
-		return fmt.Errorf("not authenticated: run 'multica auth login' first")
+	client, err := newAPIClient(cmd)
+	if err != nil {
+		return err
 	}
 
-	client := cli.NewAPIClient(serverURL, "", token)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 

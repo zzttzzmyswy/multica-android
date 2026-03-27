@@ -133,6 +133,9 @@ func init() {
 	issueUpdateCmd.Flags().String("due-date", "", "New due date (RFC3339 format)")
 	issueUpdateCmd.Flags().String("output", "json", "Output format: table or json")
 
+	// issue status
+	issueStatusCmd.Flags().String("output", "table", "Output format: table or json")
+
 	// issue assign
 	issueAssignCmd.Flags().String("to", "", "Assignee name (member or agent)")
 	issueAssignCmd.Flags().Bool("unassign", false, "Remove current assignee")
@@ -459,11 +462,17 @@ func runIssueStatus(cmd *cobra.Command, args []string) error {
 	defer cancel()
 
 	body := map[string]any{"status": status}
-	if err := client.PutJSON(ctx, "/api/issues/"+id, body, nil); err != nil {
+	var result map[string]any
+	if err := client.PutJSON(ctx, "/api/issues/"+id, body, &result); err != nil {
 		return fmt.Errorf("update status: %w", err)
 	}
 
 	fmt.Fprintf(os.Stderr, "Issue %s status changed to %s.\n", truncateID(id), status)
+
+	output, _ := cmd.Flags().GetString("output")
+	if output == "json" {
+		return cli.PrintJSON(os.Stdout, result)
+	}
 	return nil
 }
 
@@ -643,8 +652,9 @@ func formatAssignee(issue map[string]any) string {
 }
 
 func truncateID(id string) string {
-	if len(id) > 8 {
-		return id[:8]
+	if utf8.RuneCountInString(id) > 8 {
+		runes := []rune(id)
+		return string(runes[:8])
 	}
 	return id
 }
