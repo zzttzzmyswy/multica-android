@@ -8,12 +8,12 @@ import (
 )
 
 // InjectRuntimeConfig writes the meta skill content into the runtime-specific
-// config file so the agent discovers .agent_context/ through its native mechanism.
+// config file so the agent discovers its environment through its native mechanism.
 //
-// For Claude: writes {workDir}/CLAUDE.md
-// For Codex:  writes {workDir}/AGENTS.md
+// For Claude: writes {workDir}/CLAUDE.md  (skills discovered natively from .claude/skills/)
+// For Codex:  writes {workDir}/AGENTS.md  (skills discovered natively via CODEX_HOME)
 func InjectRuntimeConfig(workDir, provider string, ctx TaskContextForEnv) error {
-	content := buildMetaSkillContent(ctx)
+	content := buildMetaSkillContent(provider, ctx)
 
 	switch provider {
 	case "claude":
@@ -28,7 +28,7 @@ func InjectRuntimeConfig(workDir, provider string, ctx TaskContextForEnv) error 
 
 // buildMetaSkillContent generates the meta skill markdown that teaches the agent
 // about the Multica runtime environment and available CLI tools.
-func buildMetaSkillContent(ctx TaskContextForEnv) string {
+func buildMetaSkillContent(provider string, ctx TaskContextForEnv) string {
 	var b strings.Builder
 
 	b.WriteString("# Multica Agent Runtime\n\n")
@@ -64,14 +64,18 @@ func buildMetaSkillContent(ctx TaskContextForEnv) string {
 
 	if len(ctx.AgentSkills) > 0 {
 		b.WriteString("## Skills\n\n")
-		b.WriteString("Detailed skill instructions are in `.agent_context/skills/`. Each subdirectory contains a `SKILL.md`.\n\n")
+		switch provider {
+		case "claude":
+			// Claude discovers skills natively from .claude/skills/ — just list names.
+			b.WriteString("You have the following skills installed (discovered automatically):\n\n")
+		case "codex":
+			// Codex discovers skills natively via CODEX_HOME/skills/ — just list names.
+			b.WriteString("You have the following skills installed (discovered automatically):\n\n")
+		default:
+			b.WriteString("Detailed skill instructions are in `.agent_context/skills/`. Each subdirectory contains a `SKILL.md`.\n\n")
+		}
 		for _, skill := range ctx.AgentSkills {
-			dirName := sanitizeSkillName(skill.Name)
-			fmt.Fprintf(&b, "- **%s** → `.agent_context/skills/%s/SKILL.md`", skill.Name, dirName)
-			if len(skill.Files) > 0 {
-				fmt.Fprintf(&b, " (+ %d supporting files)", len(skill.Files))
-			}
-			b.WriteString("\n")
+			fmt.Fprintf(&b, "- **%s**\n", skill.Name)
 		}
 		b.WriteString("\n")
 	}

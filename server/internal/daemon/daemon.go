@@ -573,6 +573,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string) (TaskR
 		WorkspacesRoot: d.cfg.WorkspacesRoot,
 		TaskID:         task.ID,
 		AgentName:      agentName,
+		Provider:       provider,
 		Task:           taskCtx,
 	}, d.logger)
 	if err != nil {
@@ -593,13 +594,19 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string) (TaskR
 
 	// Pass the daemon's auth credentials so the spawned agent CLI can call
 	// the Multica API (e.g. `multica issue get`, `multica issue comment add`).
+	agentEnv := map[string]string{
+		"MULTICA_TOKEN":      d.client.Token(),
+		"MULTICA_SERVER_URL": d.cfg.ServerBaseURL,
+	}
+	// Point Codex to the per-task CODEX_HOME so it discovers skills natively
+	// without polluting the system ~/.codex/skills/.
+	if env.CodexHome != "" {
+		agentEnv["CODEX_HOME"] = env.CodexHome
+	}
 	backend, err := agent.New(provider, agent.Config{
 		ExecutablePath: entry.Path,
-		Env: map[string]string{
-			"MULTICA_TOKEN":      d.client.Token(),
-			"MULTICA_SERVER_URL": d.cfg.ServerBaseURL,
-		},
-		Logger: d.logger,
+		Env:            agentEnv,
+		Logger:         d.logger,
 	})
 	if err != nil {
 		return TaskResult{}, fmt.Errorf("create agent backend: %w", err)

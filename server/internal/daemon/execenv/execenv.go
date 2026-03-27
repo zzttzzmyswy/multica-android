@@ -24,6 +24,7 @@ type PrepareParams struct {
 	RepoPath       string           // source git repo path (for worktree creation), provided per-task by server
 	TaskID         string           // task UUID — used for directory name
 	AgentName      string           // for git branch naming only
+	Provider       string           // agent provider ("claude", "codex") — determines skill injection paths
 	Task           TaskContextForEnv // context data for writing files
 }
 
@@ -57,6 +58,8 @@ type Environment struct {
 	Type WorkspaceType
 	// BranchName is the git branch name (empty for directory type).
 	BranchName string
+	// CodexHome is the path to the per-task CODEX_HOME directory (set only for codex provider).
+	CodexHome string
 
 	gitRoot string      // source repo root (for cleanup)
 	logger  *slog.Logger // for cleanup logging
@@ -111,7 +114,7 @@ func Prepare(params PrepareParams, logger *slog.Logger) (*Environment, error) {
 				env.gitRoot = gitRoot
 
 				// Exclude injected directories from git tracking.
-				for _, pattern := range []string{".agent_context", "CLAUDE.md", "AGENTS.md"} {
+				for _, pattern := range []string{".agent_context", ".claude", "CLAUDE.md", "AGENTS.md"} {
 					if err := excludeFromGit(workDir, pattern); err != nil {
 						logger.Warn("execenv: failed to exclude from git", "pattern", pattern, "error", err)
 					}
@@ -120,9 +123,23 @@ func Prepare(params PrepareParams, logger *slog.Logger) (*Environment, error) {
 		}
 	}
 
-	// Write context files into workdir.
-	if err := writeContextFiles(workDir, params.Task); err != nil {
+	// Write context files into workdir (skills go to provider-native paths).
+	if err := writeContextFiles(workDir, params.Provider, params.Task); err != nil {
 		return nil, fmt.Errorf("execenv: write context files: %w", err)
+	}
+
+	// For Codex, set up a per-task CODEX_HOME seeded from ~/.codex/ with skills.
+	if params.Provider == "codex" {
+		codexHome := filepath.Join(envRoot, "codex-home")
+		if err := prepareCodexHome(codexHome, logger); err != nil {
+			return nil, fmt.Errorf("execenv: prepare codex-home: %w", err)
+		}
+		if len(params.Task.AgentSkills) > 0 {
+			if err := writeSkillFiles(filepath.Join(codexHome, "skills"), params.Task.AgentSkills); err != nil {
+				return nil, fmt.Errorf("execenv: write codex skills: %w", err)
+			}
+		}
+		env.CodexHome = codexHome
 	}
 
 	logger.Info("execenv: prepared env", "root", envRoot, "type", env.Type, "branch", env.BranchName)

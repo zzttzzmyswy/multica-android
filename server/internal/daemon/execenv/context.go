@@ -8,26 +8,56 @@ import (
 	"strings"
 )
 
-// writeContextFiles renders and writes .agent_context/issue_context.md and skills into workDir.
-func writeContextFiles(workDir string, ctx TaskContextForEnv) error {
+// writeContextFiles renders and writes .agent_context/issue_context.md and
+// skills into the appropriate provider-native location.
+//
+// Claude:  skills → {workDir}/.claude/skills/{name}/SKILL.md  (native discovery)
+// Codex:   skills → handled separately in Prepare via codex-home
+// Default: skills → {workDir}/.agent_context/skills/{name}/SKILL.md
+func writeContextFiles(workDir, provider string, ctx TaskContextForEnv) error {
 	contextDir := filepath.Join(workDir, ".agent_context")
 	if err := os.MkdirAll(contextDir, 0o755); err != nil {
 		return fmt.Errorf("create .agent_context dir: %w", err)
 	}
 
-	content := renderIssueContext(ctx)
+	content := renderIssueContext(provider, ctx)
 	path := filepath.Join(contextDir, "issue_context.md")
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		return fmt.Errorf("write issue_context.md: %w", err)
 	}
 
 	if len(ctx.AgentSkills) > 0 {
-		if err := writeSkillFiles(contextDir, ctx.AgentSkills); err != nil {
-			return fmt.Errorf("write skill files: %w", err)
+		skillsDir, err := resolveSkillsDir(workDir, provider)
+		if err != nil {
+			return fmt.Errorf("resolve skills dir: %w", err)
+		}
+		// Codex skills are written to codex-home in Prepare; skip here.
+		if provider != "codex" {
+			if err := writeSkillFiles(skillsDir, ctx.AgentSkills); err != nil {
+				return fmt.Errorf("write skill files: %w", err)
+			}
 		}
 	}
 
 	return nil
+}
+
+// resolveSkillsDir returns the directory where skills should be written
+// based on the agent provider.
+func resolveSkillsDir(workDir, provider string) (string, error) {
+	var skillsDir string
+	switch provider {
+	case "claude":
+		// Claude Code natively discovers skills from .claude/skills/ in the workdir.
+		skillsDir = filepath.Join(workDir, ".claude", "skills")
+	default:
+		// Fallback: write to .agent_context/skills/ (referenced by meta config).
+		skillsDir = filepath.Join(workDir, ".agent_context", "skills")
+	}
+	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
+		return "", err
+	}
+	return skillsDir, nil
 }
 
 var nonAlphaNum = regexp.MustCompile(`[^a-z0-9]+`)
@@ -43,9 +73,9 @@ func sanitizeSkillName(name string) string {
 	return s
 }
 
-// writeSkillFiles creates a skills/ directory with one subdirectory per skill.
-func writeSkillFiles(contextDir string, skills []SkillContextForEnv) error {
-	skillsDir := filepath.Join(contextDir, "skills")
+// writeSkillFiles writes skill directories into the given parent directory.
+// Each skill gets its own subdirectory containing SKILL.md and supporting files.
+func writeSkillFiles(skillsDir string, skills []SkillContextForEnv) error {
 	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
 		return fmt.Errorf("create skills dir: %w", err)
 	}
@@ -77,9 +107,7 @@ func writeSkillFiles(contextDir string, skills []SkillContextForEnv) error {
 }
 
 // renderIssueContext builds the markdown content for issue_context.md.
-// It contains only the issue ID and pointers to CLI commands for fetching
-// dynamic data. Sections with empty content are omitted.
-func renderIssueContext(ctx TaskContextForEnv) string {
+func renderIssueContext(provider string, ctx TaskContextForEnv) string {
 	var b strings.Builder
 
 	b.WriteString("# Task Assignment\n\n")
@@ -90,8 +118,7 @@ func renderIssueContext(ctx TaskContextForEnv) string {
 
 	if len(ctx.AgentSkills) > 0 {
 		b.WriteString("## Agent Skills\n\n")
-		b.WriteString("Detailed skill instructions are in `.agent_context/skills/`.\n")
-		b.WriteString("Each subdirectory contains a `SKILL.md` with instructions and any supporting files.\n\n")
+		b.WriteString("The following skills are available to you:\n\n")
 		for _, skill := range ctx.AgentSkills {
 			fmt.Fprintf(&b, "- **%s**\n", skill.Name)
 		}

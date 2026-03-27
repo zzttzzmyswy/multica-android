@@ -226,7 +226,7 @@ func TestWriteContextFiles(t *testing.T) {
 		},
 	}
 
-	if err := writeContextFiles(dir, ctx); err != nil {
+	if err := writeContextFiles(dir, "", ctx); err != nil {
 		t.Fatalf("writeContextFiles failed: %v", err)
 	}
 
@@ -280,7 +280,7 @@ func TestWriteContextFilesOmitsSkillsWhenEmpty(t *testing.T) {
 		IssueID: "minimal-issue-id",
 	}
 
-	if err := writeContextFiles(dir, ctx); err != nil {
+	if err := writeContextFiles(dir, "", ctx); err != nil {
 		t.Fatalf("writeContextFiles failed: %v", err)
 	}
 
@@ -295,6 +295,56 @@ func TestWriteContextFilesOmitsSkillsWhenEmpty(t *testing.T) {
 	}
 	if strings.Contains(s, "## Agent Skills") {
 		t.Error("expected skills section to be omitted when no skills")
+	}
+}
+
+func TestWriteContextFilesClaudeNativeSkills(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	ctx := TaskContextForEnv{
+		IssueID: "claude-skill-test",
+		AgentSkills: []SkillContextForEnv{
+			{
+				Name:    "Go Conventions",
+				Content: "Follow Go conventions.",
+				Files: []SkillFileContextForEnv{
+					{Path: "templates/example.go", Content: "package main"},
+				},
+			},
+		},
+	}
+
+	if err := writeContextFiles(dir, "claude", ctx); err != nil {
+		t.Fatalf("writeContextFiles failed: %v", err)
+	}
+
+	// Skills should be in .claude/skills/ (native discovery), NOT .agent_context/skills/.
+	skillMd, err := os.ReadFile(filepath.Join(dir, ".claude", "skills", "go-conventions", "SKILL.md"))
+	if err != nil {
+		t.Fatalf("failed to read .claude/skills/go-conventions/SKILL.md: %v", err)
+	}
+	if !strings.Contains(string(skillMd), "Follow Go conventions.") {
+		t.Error("SKILL.md missing content")
+	}
+
+	// Supporting files should also be under .claude/skills/.
+	supportFile, err := os.ReadFile(filepath.Join(dir, ".claude", "skills", "go-conventions", "templates", "example.go"))
+	if err != nil {
+		t.Fatalf("failed to read supporting file: %v", err)
+	}
+	if string(supportFile) != "package main" {
+		t.Errorf("supporting file content = %q, want %q", string(supportFile), "package main")
+	}
+
+	// .agent_context/skills/ should NOT exist for Claude.
+	if _, err := os.Stat(filepath.Join(dir, ".agent_context", "skills")); !os.IsNotExist(err) {
+		t.Error("expected .agent_context/skills/ to NOT exist for Claude provider")
+	}
+
+	// issue_context.md should still be in .agent_context/.
+	if _, err := os.Stat(filepath.Join(dir, ".agent_context", "issue_context.md")); os.IsNotExist(err) {
+		t.Error("expected .agent_context/issue_context.md to exist")
 	}
 }
 
@@ -381,12 +431,16 @@ func TestInjectRuntimeConfigClaude(t *testing.T) {
 		"multica issue comment list",
 		"Go Conventions",
 		"PR Review",
-		"go-conventions/SKILL.md",
-		"pr-review/SKILL.md",
-		"1 supporting files",
+		"discovered automatically",
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("CLAUDE.md missing %q", want)
+		}
+	}
+	// Skills are now discovered natively — no path references in CLAUDE.md.
+	for _, absent := range []string{"go-conventions/SKILL.md", ".agent_context/skills/"} {
+		if strings.Contains(s, absent) {
+			t.Errorf("CLAUDE.md should NOT contain path %q — skills are discovered natively", absent)
 		}
 	}
 }
@@ -490,5 +544,122 @@ func TestCleanupPreservesLogs(t *testing.T) {
 	logFile := filepath.Join(env.RootDir, "logs", "test.log")
 	if _, err := os.Stat(logFile); os.IsNotExist(err) {
 		t.Fatal("expected logs/test.log to be preserved")
+	}
+}
+
+func TestPrepareCodexHomeSeedsFromShared(t *testing.T) {
+	// Cannot use t.Parallel() with t.Setenv.
+
+	// Create a fake shared codex home.
+	sharedHome := t.TempDir()
+	os.WriteFile(filepath.Join(sharedHome, "auth.json"), []byte(`{"token":"secret"}`), 0o644)
+	os.WriteFile(filepath.Join(sharedHome, "config.json"), []byte(`{"model":"o3"}`), 0o644)
+	os.WriteFile(filepath.Join(sharedHome, "config.toml"), []byte(`model = "o3"`), 0o644)
+	os.WriteFile(filepath.Join(sharedHome, "instructions.md"), []byte("Be helpful."), 0o644)
+
+	// Point CODEX_HOME to our fake shared home.
+	t.Setenv("CODEX_HOME", sharedHome)
+
+	codexHome := filepath.Join(t.TempDir(), "codex-home")
+	if err := prepareCodexHome(codexHome, testLogger()); err != nil {
+		t.Fatalf("prepareCodexHome failed: %v", err)
+	}
+
+	// auth.json should be a symlink.
+	authPath := filepath.Join(codexHome, "auth.json")
+	fi, err := os.Lstat(authPath)
+	if err != nil {
+		t.Fatalf("auth.json not found: %v", err)
+	}
+	if fi.Mode()&os.ModeSymlink == 0 {
+		t.Error("auth.json should be a symlink")
+	}
+	target, _ := os.Readlink(authPath)
+	if target != filepath.Join(sharedHome, "auth.json") {
+		t.Errorf("auth.json symlink target = %q, want %q", target, filepath.Join(sharedHome, "auth.json"))
+	}
+	// Verify content is accessible through symlink.
+	data, _ := os.ReadFile(authPath)
+	if string(data) != `{"token":"secret"}` {
+		t.Errorf("auth.json content = %q", data)
+	}
+
+	// config.json should be a copy (not symlink).
+	configPath := filepath.Join(codexHome, "config.json")
+	fi, err = os.Lstat(configPath)
+	if err != nil {
+		t.Fatalf("config.json not found: %v", err)
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		t.Error("config.json should be a copy, not a symlink")
+	}
+	data, _ = os.ReadFile(configPath)
+	if string(data) != `{"model":"o3"}` {
+		t.Errorf("config.json content = %q", data)
+	}
+
+	// config.toml should be copied.
+	data, _ = os.ReadFile(filepath.Join(codexHome, "config.toml"))
+	if string(data) != `model = "o3"` {
+		t.Errorf("config.toml content = %q", data)
+	}
+
+	// instructions.md should be copied.
+	data, _ = os.ReadFile(filepath.Join(codexHome, "instructions.md"))
+	if string(data) != "Be helpful." {
+		t.Errorf("instructions.md content = %q", data)
+	}
+}
+
+func TestPrepareCodexHomeSkipsMissingFiles(t *testing.T) {
+	// Cannot use t.Parallel() with t.Setenv.
+
+	// Empty shared home — no files to seed.
+	sharedHome := t.TempDir()
+	t.Setenv("CODEX_HOME", sharedHome)
+
+	codexHome := filepath.Join(t.TempDir(), "codex-home")
+	if err := prepareCodexHome(codexHome, testLogger()); err != nil {
+		t.Fatalf("prepareCodexHome failed: %v", err)
+	}
+
+	// Directory should exist but be empty (no auth.json, no config.json, etc.).
+	entries, err := os.ReadDir(codexHome)
+	if err != nil {
+		t.Fatalf("failed to read codex-home: %v", err)
+	}
+	if len(entries) != 0 {
+		names := make([]string, len(entries))
+		for i, e := range entries {
+			names[i] = e.Name()
+		}
+		t.Errorf("expected empty codex-home, got: %v", names)
+	}
+}
+
+func TestEnsureSymlinkRepairsBrokenLink(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	src := filepath.Join(dir, "source.json")
+	dst := filepath.Join(dir, "link.json")
+
+	os.WriteFile(src, []byte("real"), 0o644)
+
+	// Create a broken symlink pointing to a non-existent file.
+	os.Symlink(filepath.Join(dir, "old-source.json"), dst)
+
+	if err := ensureSymlink(src, dst); err != nil {
+		t.Fatalf("ensureSymlink failed: %v", err)
+	}
+
+	// Should now point to src.
+	target, _ := os.Readlink(dst)
+	if target != src {
+		t.Errorf("symlink target = %q, want %q", target, src)
+	}
+	data, _ := os.ReadFile(dst)
+	if string(data) != "real" {
+		t.Errorf("content = %q, want %q", data, "real")
 	}
 }
