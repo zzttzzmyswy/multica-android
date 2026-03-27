@@ -398,7 +398,7 @@ function SkillDetail({
   };
 
   return (
-    <div className="flex flex-1 min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       {/* Header */}
       <div className="flex items-center justify-between border-b px-6 py-4">
         <div className="flex items-center gap-3">

@@ -59,8 +59,10 @@ func resolveToken() string {
 }
 
 func resolveAppURL() string {
-	if val := strings.TrimSpace(os.Getenv("MULTICA_APP_URL")); val != "" {
-		return strings.TrimRight(val, "/")
+	for _, key := range []string{"MULTICA_APP_URL", "FRONTEND_ORIGIN"} {
+		if val := strings.TrimSpace(os.Getenv(key)); val != "" {
+			return strings.TrimRight(val, "/")
+		}
 	}
 	return "http://localhost:3000"
 }

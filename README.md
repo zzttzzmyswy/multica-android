@@ -84,6 +84,7 @@ That keeps one Docker container and one volume, while still isolating schema and
 |---------|-------------|
 | `make dev` | Run Go server (uses `PORT`, default `8080`) |
 | `make daemon` | Run local agent daemon |
+| `make multica ARGS="version"` | Run the local `multica` CLI without installing it |
 | `make test` | Run Go tests |
 | `make build` | Build server & daemon binaries |
 | `make sqlc` | Regenerate sqlc code from SQL |
@@ -117,6 +118,15 @@ Or build from source:
 make build
 cp server/bin/multica /usr/local/bin/multica   # or ~/.local/bin/multica
 ```
+
+For local development, you can also run the CLI directly from the repo:
+
+```bash
+make multica ARGS="version"
+make multica ARGS="auth status"
+```
+
+For browser-based auth from source, make sure the local frontend is running at `FRONTEND_ORIGIN` first, for example with `make start`, `make start-main`, or `make start-worktree`.
 
 ### Authentication
 
