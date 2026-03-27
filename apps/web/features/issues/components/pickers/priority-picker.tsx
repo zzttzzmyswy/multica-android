@@ -9,9 +9,11 @@ import { PropertyPicker, PickerItem } from "./property-picker";
 export function PriorityPicker({
   priority,
   onUpdate,
+  trigger: customTrigger,
 }: {
   priority: IssuePriority;
   onUpdate: (updates: Partial<UpdateIssueRequest>) => void;
+  trigger?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const cfg = PRIORITY_CONFIG[priority];
@@ -22,10 +24,12 @@ export function PriorityPicker({
       onOpenChange={setOpen}
       width="w-44"
       trigger={
-        <>
-          <PriorityIcon priority={priority} className="shrink-0" />
-          <span className="truncate">{cfg.label}</span>
-        </>
+        customTrigger ?? (
+          <>
+            <PriorityIcon priority={priority} className="shrink-0" />
+            <span className="truncate">{cfg.label}</span>
+          </>
+        )
       }
     >
       {PRIORITY_ORDER.map((p) => {

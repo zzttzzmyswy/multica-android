@@ -6,16 +6,47 @@ import type { IssueStatus, IssuePriority } from "@/shared/types";
 import { ALL_STATUSES, PRIORITY_ORDER } from "@/features/issues/config";
 
 export type ViewMode = "board" | "list";
+export type SortField = "position" | "priority" | "due_date" | "created_at" | "title";
+export type SortDirection = "asc" | "desc";
+
+export interface CardProperties {
+  priority: boolean;
+  description: boolean;
+  assignee: boolean;
+  dueDate: boolean;
+}
+
+export const SORT_OPTIONS: { value: SortField; label: string }[] = [
+  { value: "position", label: "Manual" },
+  { value: "priority", label: "Priority" },
+  { value: "due_date", label: "Due date" },
+  { value: "created_at", label: "Created date" },
+  { value: "title", label: "Title" },
+];
+
+export const CARD_PROPERTY_OPTIONS: { key: keyof CardProperties; label: string }[] = [
+  { key: "priority", label: "Priority" },
+  { key: "description", label: "Description" },
+  { key: "assignee", label: "Assignee" },
+  { key: "dueDate", label: "Due date" },
+];
 
 interface IssueViewState {
   viewMode: ViewMode;
   statusFilters: IssueStatus[];
   priorityFilters: IssuePriority[];
+  sortBy: SortField;
+  sortDirection: SortDirection;
+  cardProperties: CardProperties;
   setViewMode: (mode: ViewMode) => void;
   toggleStatusFilter: (status: IssueStatus) => void;
   togglePriorityFilter: (priority: IssuePriority) => void;
   hideStatus: (status: IssueStatus) => void;
+  showStatus: (status: IssueStatus) => void;
   clearFilters: () => void;
+  setSortBy: (field: SortField) => void;
+  setSortDirection: (dir: SortDirection) => void;
+  toggleCardProperty: (key: keyof CardProperties) => void;
 }
 
 export const useIssueViewStore = create<IssueViewState>()(
@@ -24,6 +55,14 @@ export const useIssueViewStore = create<IssueViewState>()(
       viewMode: "board",
       statusFilters: [],
       priorityFilters: [],
+      sortBy: "position",
+      sortDirection: "asc",
+      cardProperties: {
+        priority: true,
+        description: true,
+        assignee: true,
+        dueDate: true,
+      },
 
       setViewMode: (mode) => set({ viewMode: mode }),
       toggleStatusFilter: (status) =>
@@ -52,7 +91,22 @@ export const useIssueViewStore = create<IssueViewState>()(
             ? ALL_STATUSES.filter((s) => s !== status)
             : state.statusFilters.filter((s) => s !== status),
         })),
+      showStatus: (status) =>
+        set((state) => {
+          if (state.statusFilters.length === 0) return state;
+          const next = [...state.statusFilters, status];
+          return { statusFilters: next.length >= ALL_STATUSES.length ? [] : next };
+        }),
       clearFilters: () => set({ statusFilters: [], priorityFilters: [] }),
+      setSortBy: (field) => set({ sortBy: field }),
+      setSortDirection: (dir) => set({ sortDirection: dir }),
+      toggleCardProperty: (key) =>
+        set((state) => ({
+          cardProperties: {
+            ...state.cardProperties,
+            [key]: !state.cardProperties[key],
+          },
+        })),
     }),
     {
       name: "multica_issues_view",
@@ -60,6 +114,9 @@ export const useIssueViewStore = create<IssueViewState>()(
         viewMode: state.viewMode,
         statusFilters: state.statusFilters,
         priorityFilters: state.priorityFilters,
+        sortBy: state.sortBy,
+        sortDirection: state.sortDirection,
+        cardProperties: state.cardProperties,
       }),
     }
   )

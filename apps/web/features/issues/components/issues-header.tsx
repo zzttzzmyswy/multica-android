@@ -1,6 +1,15 @@
 "use client";
 
-import { ChevronDown, Columns3, List, Plus } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  Columns3,
+  Filter,
+  List,
+  Plus,
+  SlidersHorizontal,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -12,6 +21,12 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import { Switch } from "@/components/ui/switch";
 import { useModalStore } from "@/features/modals";
 import {
   ALL_STATUSES,
@@ -20,28 +35,31 @@ import {
   PRIORITY_CONFIG,
 } from "@/features/issues/config";
 import { StatusIcon, PriorityIcon } from "@/features/issues/components";
-import { useIssueViewStore } from "@/features/issues/stores/view-store";
-
-function formatFilterLabel(
-  prefix: string,
-  selected: string[],
-  configMap: Record<string, { label: string }>
-) {
-  if (selected.length === 0) return `${prefix}: All`;
-  if (selected.length === 1) {
-    const key = selected[0];
-    if (key) return `${prefix}: ${configMap[key]?.label ?? key}`;
-  }
-  return `${prefix}: ${selected.length} selected`;
-}
+import {
+  useIssueViewStore,
+  SORT_OPTIONS,
+  CARD_PROPERTY_OPTIONS,
+} from "@/features/issues/stores/view-store";
 
 export function IssuesHeader() {
   const viewMode = useIssueViewStore((s) => s.viewMode);
   const statusFilters = useIssueViewStore((s) => s.statusFilters);
   const priorityFilters = useIssueViewStore((s) => s.priorityFilters);
+  const sortBy = useIssueViewStore((s) => s.sortBy);
+  const sortDirection = useIssueViewStore((s) => s.sortDirection);
+  const cardProperties = useIssueViewStore((s) => s.cardProperties);
   const setViewMode = useIssueViewStore((s) => s.setViewMode);
   const toggleStatusFilter = useIssueViewStore((s) => s.toggleStatusFilter);
   const togglePriorityFilter = useIssueViewStore((s) => s.togglePriorityFilter);
+  const setSortBy = useIssueViewStore((s) => s.setSortBy);
+  const setSortDirection = useIssueViewStore((s) => s.setSortDirection);
+  const toggleCardProperty = useIssueViewStore((s) => s.toggleCardProperty);
+  const clearFilters = useIssueViewStore((s) => s.clearFilters);
+
+  const sortLabel =
+    SORT_OPTIONS.find((o) => o.value === sortBy)?.label ?? "Manual";
+  const hasActiveFilters =
+    statusFilters.length > 0 || priorityFilters.length > 0;
 
   return (
     <div className="flex h-12 shrink-0 items-center justify-between px-4">
@@ -51,7 +69,8 @@ export function IssuesHeader() {
           <DropdownMenuTrigger
             render={
               <Button variant="outline" size="sm">
-                {viewMode === "board" ? <Columns3 /> : <List />}
+                {viewMode === "board" ? <Columns3 className="size-3.5" /> : <List className="size-3.5" />}
+                {viewMode === "board" ? "Board" : "List"}
               </Button>
             }
           />
@@ -70,79 +89,200 @@ export function IssuesHeader() {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Status filter */}
-        <DropdownMenu>
-          <DropdownMenuTrigger
+        {/* Filter */}
+        <Popover>
+          <PopoverTrigger
             render={
-              <Button variant="outline" size="sm" className="whitespace-nowrap text-xs">
-                {formatFilterLabel("Status", statusFilters, STATUS_CONFIG)}
-                <ChevronDown className="text-muted-foreground" />
+              <Button
+                variant="outline"
+                size="sm"
+                className={hasActiveFilters ? "border-primary/50 text-primary" : ""}
+              >
+                <Filter className="size-3.5" />
+                Filter
+                {hasActiveFilters && (
+                  <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+                    {statusFilters.length + priorityFilters.length}
+                  </span>
+                )}
               </Button>
             }
           />
-          <DropdownMenuContent align="start" className="w-auto">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>Status</DropdownMenuLabel>
-              <DropdownMenuItem
-                onClick={() =>
-                  useIssueViewStore.setState({ statusFilters: [] })
-                }
-              >
-                All
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              {ALL_STATUSES.map((s) => (
-                <DropdownMenuCheckboxItem
-                  key={s}
-                  checked={statusFilters.length === 0 || statusFilters.includes(s)}
-                  onCheckedChange={() => toggleStatusFilter(s)}
-                >
-                  <StatusIcon status={s} className="h-3.5 w-3.5" />
-                  {STATUS_CONFIG[s].label}
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          <PopoverContent align="start" className="w-64 p-0">
+            {/* Status */}
+            <div className="border-b px-3 py-2.5">
+              <span className="text-xs font-medium text-muted-foreground">
+                Status
+              </span>
+              <div className="mt-1.5 space-y-0.5">
+                {ALL_STATUSES.map((s) => (
+                  <label
+                    key={s}
+                    className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 hover:bg-accent"
+                    onClick={() => toggleStatusFilter(s)}
+                  >
+                    <div
+                      className={`flex h-4 w-4 items-center justify-center rounded border ${
+                        statusFilters.length === 0 || statusFilters.includes(s)
+                          ? "border-primary bg-primary"
+                          : "border-input"
+                      }`}
+                    >
+                      {(statusFilters.length === 0 ||
+                        statusFilters.includes(s)) && (
+                        <svg
+                          viewBox="0 0 12 12"
+                          className="h-3 w-3 text-primary-foreground"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path d="M2 6l3 3 5-5" />
+                        </svg>
+                      )}
+                    </div>
+                    <StatusIcon status={s} className="h-3.5 w-3.5" />
+                    <span className="text-sm">{STATUS_CONFIG[s].label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
 
-        {/* Priority filter */}
-        <DropdownMenu>
-          <DropdownMenuTrigger
+            {/* Priority */}
+            <div className="border-b px-3 py-2.5">
+              <span className="text-xs font-medium text-muted-foreground">
+                Priority
+              </span>
+              <div className="mt-1.5 space-y-0.5">
+                {PRIORITY_ORDER.map((p) => (
+                  <label
+                    key={p}
+                    className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 hover:bg-accent"
+                    onClick={() => togglePriorityFilter(p)}
+                  >
+                    <div
+                      className={`flex h-4 w-4 items-center justify-center rounded border ${
+                        priorityFilters.length === 0 ||
+                        priorityFilters.includes(p)
+                          ? "border-primary bg-primary"
+                          : "border-input"
+                      }`}
+                    >
+                      {(priorityFilters.length === 0 ||
+                        priorityFilters.includes(p)) && (
+                        <svg
+                          viewBox="0 0 12 12"
+                          className="h-3 w-3 text-primary-foreground"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path d="M2 6l3 3 5-5" />
+                        </svg>
+                      )}
+                    </div>
+                    <PriorityIcon priority={p} />
+                    <span className="text-sm">{PRIORITY_CONFIG[p].label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Reset */}
+            {hasActiveFilters && (
+              <div className="px-3 py-2">
+                <button
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                  onClick={clearFilters}
+                >
+                  Reset filters
+                </button>
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
+
+        {/* Display settings */}
+        <Popover>
+          <PopoverTrigger
             render={
-              <Button variant="outline" size="sm" className="whitespace-nowrap text-xs">
-                {formatFilterLabel("Priority", priorityFilters, PRIORITY_CONFIG)}
-                <ChevronDown className="text-muted-foreground" />
+              <Button variant="outline" size="sm">
+                <SlidersHorizontal className="size-3.5" />
+                Display
               </Button>
             }
           />
-          <DropdownMenuContent align="start" className="w-auto">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>Priority</DropdownMenuLabel>
-              <DropdownMenuItem
-                onClick={() =>
-                  useIssueViewStore.setState({ priorityFilters: [] })
-                }
-              >
-                All
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              {PRIORITY_ORDER.map((p) => (
-                <DropdownMenuCheckboxItem
-                  key={p}
-                  checked={priorityFilters.length === 0 || priorityFilters.includes(p)}
-                  onCheckedChange={() => togglePriorityFilter(p)}
+          <PopoverContent align="start" className="w-64 p-0">
+            {/* Ordering section */}
+            <div className="border-b px-3 py-2.5">
+              <span className="text-xs font-medium text-muted-foreground">
+                Ordering
+              </span>
+              <div className="mt-2 flex items-center gap-1.5">
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 justify-between text-xs"
+                      >
+                        {sortLabel}
+                        <ChevronDown className="size-3 text-muted-foreground" />
+                      </Button>
+                    }
+                  />
+                  <DropdownMenuContent align="start" className="w-auto">
+                    {SORT_OPTIONS.map((opt) => (
+                      <DropdownMenuItem
+                        key={opt.value}
+                        onClick={() => setSortBy(opt.value)}
+                      >
+                        {opt.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={() =>
+                    setSortDirection(sortDirection === "asc" ? "desc" : "asc")
+                  }
+                  title={sortDirection === "asc" ? "Ascending" : "Descending"}
                 >
-                  <PriorityIcon priority={p} />
-                  {PRIORITY_CONFIG[p].label}
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+                  {sortDirection === "asc" ? (
+                    <ArrowUp className="size-3.5" />
+                  ) : (
+                    <ArrowDown className="size-3.5" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {/* Card properties section */}
+            <div className="px-3 py-2.5">
+              <span className="text-xs font-medium text-muted-foreground">
+                Card properties
+              </span>
+              <div className="mt-2 space-y-2">
+                {CARD_PROPERTY_OPTIONS.map((opt) => (
+                  <label
+                    key={opt.key}
+                    className="flex cursor-pointer items-center justify-between"
+                  >
+                    <span className="text-sm">{opt.label}</span>
+                    <Switch
+                      size="sm"
+                      checked={cardProperties[opt.key]}
+                      onCheckedChange={() => toggleCardProperty(opt.key)}
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
 
       <div className="flex items-center gap-2">

@@ -8,6 +8,8 @@ import {
   ArrowUp,
   Bot,
   Calendar,
+  ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Link2,
   MoreHorizontal,
@@ -55,7 +57,7 @@ import {
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import type { Issue, Comment, UpdateIssueRequest, IssueStatus, IssuePriority } from "@/shared/types";
 import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
-import { StatusIcon, PriorityIcon } from "@/features/issues/components";
+import { StatusIcon, PriorityIcon, DueDatePicker } from "@/features/issues/components";
 import { api } from "@/shared/api";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore, useActorName } from "@/features/workspace";
@@ -125,8 +127,15 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
   const id = issueId;
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const workspace = useWorkspaceStore((s) => s.workspace);
   const members = useWorkspaceStore((s) => s.members);
   const agents = useWorkspaceStore((s) => s.agents);
+
+  // Issue navigation
+  const allIssues = useIssueStore((s) => s.issues);
+  const currentIndex = allIssues.findIndex((i) => i.id === id);
+  const prevIssue = currentIndex > 0 ? allIssues[currentIndex - 1] : null;
+  const nextIssue = currentIndex < allIssues.length - 1 ? allIssues[currentIndex + 1] : null;
   const { getActorName, getActorInitials } = useActorName();
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: "multica_issue_detail_layout",
@@ -306,17 +315,65 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
       <div className="flex h-full flex-col">
         {/* Header bar */}
         <div className="flex h-12 shrink-0 items-center justify-between border-b bg-background px-4 text-sm">
-          <div className="flex items-center gap-1.5">
-            <Link
-              href="/issues"
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Issues
-            </Link>
-            <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
-            <span className="truncate text-muted-foreground">{issue.id.slice(0, 8)}</span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            {workspace && (
+              <>
+                <Link
+                  href="/issues"
+                  className="text-muted-foreground hover:text-foreground transition-colors truncate shrink-0"
+                >
+                  {workspace.name}
+                </Link>
+                <ChevronRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+              </>
+            )}
+            <span className="truncate text-muted-foreground">
+              {issue.id.slice(0, 8)}
+            </span>
+            <ChevronRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+            <span className="truncate">{issue.title}</span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
+            {/* Issue navigation */}
+            {allIssues.length > 1 && (
+              <div className="flex items-center gap-0.5 mr-1">
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="text-muted-foreground"
+                        disabled={!prevIssue}
+                        onClick={() => prevIssue && router.push(`/issues/${prevIssue.id}`)}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                    }
+                  />
+                  <TooltipContent side="bottom">Previous issue</TooltipContent>
+                </Tooltip>
+                <span className="text-xs text-muted-foreground tabular-nums px-0.5">
+                  {currentIndex >= 0 ? currentIndex + 1 : "?"} / {allIssues.length}
+                </span>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="text-muted-foreground"
+                        disabled={!nextIssue}
+                        onClick={() => nextIssue && router.push(`/issues/${nextIssue.id}`)}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    }
+                  />
+                  <TooltipContent side="bottom">Next issue</TooltipContent>
+                </Tooltip>
+              </div>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
@@ -511,8 +568,6 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
         {/* Content — scrollable */}
         <div className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl px-8 py-8">
-          <div className="mb-1 text-sm text-muted-foreground">{issue.id.slice(0, 8)}</div>
-
           {editingTitle ? (
             <Input
               autoFocus
@@ -530,11 +585,11 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                   setEditingTitle(false);
                 }
               }}
-              className="text-xl font-semibold leading-snug tracking-tight"
+              className="text-2xl font-bold leading-snug tracking-tight"
             />
           ) : (
             <h1
-              className="text-xl font-semibold leading-snug tracking-tight cursor-pointer hover:bg-accent/50 rounded px-1 -mx-1"
+              className="text-2xl font-bold leading-snug tracking-tight cursor-pointer hover:bg-accent/50 rounded px-1 -mx-1"
               onClick={() => { setTitleDraft(issue.title); setEditingTitle(true); }}
             >
               {issue.title}
@@ -553,7 +608,7 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
 
           {/* Activity / Comments */}
           <div>
-            <h2 className="text-sm font-medium">Activity</h2>
+            <h2 className="text-base font-semibold">Activity</h2>
 
             <div className="mt-4">
               {comments.map((comment) => {
@@ -683,169 +738,152 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
       >
       {/* RIGHT: Properties sidebar */}
       <div className="overflow-y-auto border-l h-full">
-        <div className="p-4">
-          <div className="mb-2 text-xs font-medium text-muted-foreground">
-            Properties
+        <div className="p-4 space-y-5">
+          {/* Properties section */}
+          <div>
+            <button
+              className="flex w-full items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors mb-2"
+              onClick={() => {/* placeholder for future collapse */}}
+            >
+              Properties
+              <ChevronDown className="h-3 w-3" />
+            </button>
+
+            <div className="space-y-0.5">
+              {/* Status */}
+              <PropRow label="Status">
+                <DropdownMenu>
+                  <DropdownMenuTrigger className="flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 hover:bg-accent/30 transition-colors overflow-hidden">
+                    <StatusIcon status={issue.status} className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{STATUS_CONFIG[issue.status].label}</span>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-44">
+                    <DropdownMenuRadioGroup value={issue.status} onValueChange={(v) => handleUpdateField({ status: v as IssueStatus })}>
+                      {ALL_STATUSES.map((s) => (
+                        <DropdownMenuRadioItem key={s} value={s}>
+                          <StatusIcon status={s} className="h-3.5 w-3.5" />
+                          {STATUS_CONFIG[s].label}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </PropRow>
+
+              {/* Priority */}
+              <PropRow label="Priority">
+                <DropdownMenu>
+                  <DropdownMenuTrigger className="flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 hover:bg-accent/30 transition-colors overflow-hidden">
+                    <PriorityIcon priority={issue.priority} className="shrink-0" />
+                    <span className="truncate">{PRIORITY_CONFIG[issue.priority].label}</span>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-44">
+                    <DropdownMenuRadioGroup value={issue.priority} onValueChange={(v) => handleUpdateField({ priority: v as IssuePriority })}>
+                      {PRIORITY_ORDER.map((p) => (
+                        <DropdownMenuRadioItem key={p} value={p}>
+                          <PriorityIcon priority={p} />
+                          {PRIORITY_CONFIG[p].label}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </PropRow>
+
+              {/* Assignee */}
+              <PropRow label="Assignee">
+                <DropdownMenu>
+                  <DropdownMenuTrigger className="flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 hover:bg-accent/30 transition-colors overflow-hidden">
+                    {issue.assignee_type && issue.assignee_id ? (
+                      <>
+                        <ActorAvatar
+                          actorType={issue.assignee_type}
+                          actorId={issue.assignee_id}
+                          size={18}
+                        />
+                        <span className="truncate">{getActorName(issue.assignee_type, issue.assignee_id)}</span>
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground">Unassigned</span>
+                    )}
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-52">
+                    <DropdownMenuItem onClick={() => handleUpdateField({ assignee_type: null, assignee_id: null })}>
+                      <UserMinus className="h-3.5 w-3.5 text-muted-foreground" />
+                      Unassigned
+                    </DropdownMenuItem>
+                    {members.length > 0 && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuGroup>
+                          <DropdownMenuLabel>Members</DropdownMenuLabel>
+                          {members.map((m) => (
+                            <DropdownMenuItem key={m.user_id} onClick={() => handleUpdateField({ assignee_type: "member", assignee_id: m.user_id })}>
+                              <div className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-[8px] font-medium text-muted-foreground">
+                                {getActorInitials("member", m.user_id)}
+                              </div>
+                              {m.name}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuGroup>
+                      </>
+                    )}
+                    {agents.length > 0 && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuGroup>
+                          <DropdownMenuLabel>Agents</DropdownMenuLabel>
+                          {agents.map((a) => (
+                            <DropdownMenuItem key={a.id} onClick={() => handleUpdateField({ assignee_type: "agent", assignee_id: a.id })}>
+                              <div className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-info/10 text-info">
+                                <Bot className="size-2.5" />
+                              </div>
+                              {a.name}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuGroup>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </PropRow>
+
+              {/* Due date */}
+              <PropRow label="Due date">
+                <DueDatePicker
+                  dueDate={issue.due_date}
+                  onUpdate={handleUpdateField}
+                />
+              </PropRow>
+            </div>
           </div>
 
-          <div className="space-y-0.5">
-            {/* Status */}
-            <PropRow label="Status">
-              <DropdownMenu>
-                <DropdownMenuTrigger className="flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 hover:bg-accent/30 transition-colors overflow-hidden">
-                  <StatusIcon status={issue.status} className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{STATUS_CONFIG[issue.status].label}</span>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-44">
-                  <DropdownMenuRadioGroup value={issue.status} onValueChange={(v) => handleUpdateField({ status: v as IssueStatus })}>
-                    {ALL_STATUSES.map((s) => (
-                      <DropdownMenuRadioItem key={s} value={s}>
-                        <StatusIcon status={s} className="h-3.5 w-3.5" />
-                        {STATUS_CONFIG[s].label}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </PropRow>
+          {/* Details section */}
+          <div>
+            <button
+              className="flex w-full items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors mb-2"
+              onClick={() => {/* placeholder for future collapse */}}
+            >
+              Details
+              <ChevronDown className="h-3 w-3" />
+            </button>
 
-            {/* Priority */}
-            <PropRow label="Priority">
-              <DropdownMenu>
-                <DropdownMenuTrigger className="flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 hover:bg-accent/30 transition-colors overflow-hidden">
-                  <PriorityIcon priority={issue.priority} className="shrink-0" />
-                  <span className="truncate">{PRIORITY_CONFIG[issue.priority].label}</span>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-44">
-                  <DropdownMenuRadioGroup value={issue.priority} onValueChange={(v) => handleUpdateField({ priority: v as IssuePriority })}>
-                    {PRIORITY_ORDER.map((p) => (
-                      <DropdownMenuRadioItem key={p} value={p}>
-                        <PriorityIcon priority={p} />
-                        {PRIORITY_CONFIG[p].label}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </PropRow>
-
-            {/* Assignee */}
-            <PropRow label="Assignee">
-              <DropdownMenu>
-                <DropdownMenuTrigger className="flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 hover:bg-accent/30 transition-colors overflow-hidden">
-                  {issue.assignee_type && issue.assignee_id ? (
-                    <>
-                      <div className={`inline-flex shrink-0 items-center justify-center rounded-full font-medium text-[8px] size-4 ${
-                        issue.assignee_type === "agent" ? "bg-info/10 text-info" : "bg-muted text-muted-foreground"
-                      }`}>
-                        {issue.assignee_type === "agent" ? <Bot className="size-2.5" /> : getActorInitials(issue.assignee_type, issue.assignee_id)}
-                      </div>
-                      <span className="truncate">{getActorName(issue.assignee_type, issue.assignee_id)}</span>
-                    </>
-                  ) : (
-                    <span className="text-muted-foreground">Unassigned</span>
-                  )}
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-52">
-                  <DropdownMenuItem onClick={() => handleUpdateField({ assignee_type: null, assignee_id: null })}>
-                    <UserMinus className="h-3.5 w-3.5 text-muted-foreground" />
-                    Unassigned
-                  </DropdownMenuItem>
-                  {members.length > 0 && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuGroup>
-                        <DropdownMenuLabel>Members</DropdownMenuLabel>
-                        {members.map((m) => (
-                          <DropdownMenuItem key={m.user_id} onClick={() => handleUpdateField({ assignee_type: "member", assignee_id: m.user_id })}>
-                            <div className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-[8px] font-medium text-muted-foreground">
-                              {getActorInitials("member", m.user_id)}
-                            </div>
-                            {m.name}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuGroup>
-                    </>
-                  )}
-                  {agents.length > 0 && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuGroup>
-                        <DropdownMenuLabel>Agents</DropdownMenuLabel>
-                        {agents.map((a) => (
-                          <DropdownMenuItem key={a.id} onClick={() => handleUpdateField({ assignee_type: "agent", assignee_id: a.id })}>
-                            <div className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-info/10 text-info">
-                              <Bot className="size-2.5" />
-                            </div>
-                            {a.name}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuGroup>
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </PropRow>
-
-            {/* Due date */}
-            <PropRow label="Due date">
-              <DropdownMenu>
-                <DropdownMenuTrigger className="flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 hover:bg-accent/30 transition-colors overflow-hidden">
-                  <Calendar className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  {issue.due_date ? (
-                    <span className={new Date(issue.due_date) < new Date() ? "text-destructive" : ""}>
-                      {shortDate(issue.due_date)}
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground">None</span>
-                  )}
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-auto">
-                  <DropdownMenuItem onClick={() => handleUpdateField({ due_date: new Date().toISOString() })}>
-                    Today
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => {
-                    const d = new Date(); d.setDate(d.getDate() + 1);
-                    handleUpdateField({ due_date: d.toISOString() });
-                  }}>
-                    Tomorrow
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => {
-                    const d = new Date(); d.setDate(d.getDate() + 7);
-                    handleUpdateField({ due_date: d.toISOString() });
-                  }}>
-                    Next week
-                  </DropdownMenuItem>
-                  {issue.due_date && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => handleUpdateField({ due_date: null })}>
-                        Clear date
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </PropRow>
-
-            {/* Created by */}
-            <PropRow label="Created by">
-              <ActorAvatar
-                actorType={issue.creator_type}
-                actorId={issue.creator_id}
-                size={18}
-              />
-              <span className="truncate">{getActorName(issue.creator_type, issue.creator_id)}</span>
-            </PropRow>
-          </div>
-
-          <div className="mt-4 border-t pt-3 space-y-0.5">
-            <PropRow label="Created">
-              <span className="text-muted-foreground">{shortDate(issue.created_at)}</span>
-            </PropRow>
-            <PropRow label="Updated">
-              <span className="text-muted-foreground">{shortDate(issue.updated_at)}</span>
-            </PropRow>
+            <div className="space-y-0.5">
+              <PropRow label="Created by">
+                <ActorAvatar
+                  actorType={issue.creator_type}
+                  actorId={issue.creator_id}
+                  size={18}
+                />
+                <span className="truncate">{getActorName(issue.creator_type, issue.creator_id)}</span>
+              </PropRow>
+              <PropRow label="Created">
+                <span className="text-muted-foreground">{shortDate(issue.created_at)}</span>
+              </PropRow>
+              <PropRow label="Updated">
+                <span className="text-muted-foreground">{shortDate(issue.updated_at)}</span>
+              </PropRow>
+            </div>
           </div>
         </div>
       </div>

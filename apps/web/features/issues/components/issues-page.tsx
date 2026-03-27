@@ -51,11 +51,26 @@ export function IssuesPage() {
     return BOARD_STATUSES;
   }, [statusFilters]);
 
-  const handleMoveIssue = useCallback(
-    (issueId: string, newStatus: IssueStatus) => {
-      useIssueStore.getState().updateIssue(issueId, { status: newStatus });
+  const hiddenStatuses = useMemo(() => {
+    return BOARD_STATUSES.filter((s) => !visibleStatuses.includes(s));
+  }, [visibleStatuses]);
 
-      api.updateIssue(issueId, { status: newStatus }).catch(() => {
+  const handleMoveIssue = useCallback(
+    (issueId: string, newStatus: IssueStatus, newPosition?: number) => {
+      // Auto-switch to manual sort so drag ordering is preserved
+      if (useIssueViewStore.getState().sortBy !== "position") {
+        useIssueViewStore.getState().setSortBy("position");
+        useIssueViewStore.getState().setSortDirection("asc");
+      }
+
+      const updates: Partial<{ status: IssueStatus; position: number }> = {
+        status: newStatus,
+      };
+      if (newPosition !== undefined) updates.position = newPosition;
+
+      useIssueStore.getState().updateIssue(issueId, updates);
+
+      api.updateIssue(issueId, updates).catch(() => {
         toast.error("Failed to move issue");
         api.listIssues({ limit: 200 }).then((res) => {
           useIssueStore.getState().setIssues(res.issues);
@@ -76,7 +91,7 @@ export function IssuesPage() {
           <Skeleton className="h-5 w-24" />
           <Skeleton className="h-8 w-24" />
         </div>
-        <div className="flex flex-1 min-h-0 gap-3 overflow-x-auto p-4">
+        <div className="flex flex-1 min-h-0 gap-4 overflow-x-auto p-4">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="flex min-w-52 flex-1 flex-col gap-2">
               <Skeleton className="h-4 w-20" />
@@ -109,7 +124,9 @@ export function IssuesPage() {
         {viewMode === "board" ? (
           <BoardView
             issues={issues}
+            allIssues={allIssues}
             visibleStatuses={visibleStatuses}
+            hiddenStatuses={hiddenStatuses}
             onMoveIssue={handleMoveIssue}
           />
         ) : (
