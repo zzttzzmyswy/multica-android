@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/spf13/cobra"
 
@@ -172,11 +173,10 @@ func runIssueList(cmd *cobra.Command, _ []string) error {
 		params.Set("limit", fmt.Sprintf("%d", v))
 	}
 	if v, _ := cmd.Flags().GetString("assignee"); v != "" {
-		aType, aID, resolveErr := resolveAssignee(ctx, client, v)
+		_, aID, resolveErr := resolveAssignee(ctx, client, v)
 		if resolveErr != nil {
 			return fmt.Errorf("resolve assignee: %w", resolveErr)
 		}
-		_ = aType
 		params.Set("assignee_id", aID)
 	}
 
@@ -494,8 +494,9 @@ func runIssueCommentList(cmd *cobra.Command, args []string) error {
 	rows := make([][]string, 0, len(comments))
 	for _, c := range comments {
 		content := strVal(c, "content")
-		if len(content) > 80 {
-			content = content[:77] + "..."
+		if utf8.RuneCountInString(content) > 80 {
+			runes := []rune(content)
+			content = string(runes[:77]) + "..."
 		}
 		created := strVal(c, "created_at")
 		if len(created) >= 16 {
@@ -576,10 +577,13 @@ func resolveAssignee(ctx context.Context, client *cli.APIClient, name string) (s
 
 	nameLower := strings.ToLower(name)
 	var matches []assigneeMatch
+	var errs []error
 
 	// Search members.
 	var members []map[string]any
-	if err := client.GetJSON(ctx, "/api/workspaces/"+client.WorkspaceID+"/members", &members); err == nil {
+	if err := client.GetJSON(ctx, "/api/workspaces/"+client.WorkspaceID+"/members", &members); err != nil {
+		errs = append(errs, fmt.Errorf("fetch members: %w", err))
+	} else {
 		for _, m := range members {
 			mName := strVal(m, "name")
 			if strings.Contains(strings.ToLower(mName), nameLower) {
@@ -595,7 +599,9 @@ func resolveAssignee(ctx context.Context, client *cli.APIClient, name string) (s
 	// Search agents.
 	var agents []map[string]any
 	agentPath := "/api/agents?" + url.Values{"workspace_id": {client.WorkspaceID}}.Encode()
-	if err := client.GetJSON(ctx, agentPath, &agents); err == nil {
+	if err := client.GetJSON(ctx, agentPath, &agents); err != nil {
+		errs = append(errs, fmt.Errorf("fetch agents: %w", err))
+	} else {
 		for _, a := range agents {
 			aName := strVal(a, "name")
 			if strings.Contains(strings.ToLower(aName), nameLower) {
@@ -606,6 +612,11 @@ func resolveAssignee(ctx context.Context, client *cli.APIClient, name string) (s
 				})
 			}
 		}
+	}
+
+	// If both fetches failed, report the errors instead of a misleading "not found".
+	if len(errs) == 2 {
+		return "", "", fmt.Errorf("failed to resolve assignee: %v; %v", errs[0], errs[1])
 	}
 
 	switch len(matches) {
