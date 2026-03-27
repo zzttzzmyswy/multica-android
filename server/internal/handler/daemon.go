@@ -144,6 +144,7 @@ func (h *Handler) DaemonHeartbeat(w http.ResponseWriter, r *http.Request) {
 }
 
 // ClaimTaskByRuntime atomically claims the next queued task for a runtime.
+// The response includes the agent's name and skills, fetched fresh from the DB.
 func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 	runtimeID := chi.URLParam(r, "runtimeId")
 
@@ -159,8 +160,19 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Build response with fresh agent data (name + skills).
+	resp := taskToResponse(*task)
+	if agent, err := h.Queries.GetAgent(r.Context(), task.AgentID); err == nil {
+		skills := h.TaskService.LoadAgentSkills(r.Context(), task.AgentID)
+		resp.Agent = &TaskAgentData{
+			ID:     uuidToString(agent.ID),
+			Name:   agent.Name,
+			Skills: skills,
+		}
+	}
+
 	slog.Info("task claimed by runtime", "task_id", uuidToString(task.ID), "runtime_id", runtimeID, "agent_id", uuidToString(task.AgentID))
-	writeJSON(w, http.StatusOK, map[string]any{"task": taskToResponse(*task)})
+	writeJSON(w, http.StatusOK, map[string]any{"task": resp})
 }
 
 // ListPendingTasksByRuntime returns queued/dispatched tasks for a runtime.

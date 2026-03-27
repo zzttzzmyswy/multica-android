@@ -100,8 +100,7 @@ func TestPrepareDirectoryMode(t *testing.T) {
 		TaskID:         "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 		AgentName:      "Test Agent",
 		Task: TaskContextForEnv{
-			IssueTitle:       "Fix the bug",
-			IssueDescription: "There is a bug in the login flow.",
+			IssueID: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			AgentSkills: []SkillContextForEnv{
 				{Name: "Code Review", Content: "Be concise."},
 			},
@@ -127,12 +126,12 @@ func TestPrepareDirectoryMode(t *testing.T) {
 		}
 	}
 
-	// Verify context file.
+	// Verify context file contains issue ID and CLI hints.
 	content, err := os.ReadFile(filepath.Join(env.WorkDir, ".agent_context", "issue_context.md"))
 	if err != nil {
 		t.Fatalf("failed to read issue_context.md: %v", err)
 	}
-	for _, want := range []string{"Fix the bug", "login flow", "Code Review"} {
+	for _, want := range []string{"a1b2c3d4-e5f6-7890-abcd-ef1234567890", "multica issue get", "Code Review"} {
 		if !strings.Contains(string(content), want) {
 			t.Fatalf("issue_context.md missing %q", want)
 		}
@@ -176,8 +175,7 @@ func TestPrepareGitWorktreeMode(t *testing.T) {
 		TaskID:         "b2c3d4e5-f6a7-8901-bcde-f12345678901",
 		AgentName:      "Code Reviewer",
 		Task: TaskContextForEnv{
-			IssueTitle:       "Add feature",
-			IssueDescription: "Add a new feature.",
+			IssueID: "b2c3d4e5-f6a7-8901-bcde-f12345678901",
 		},
 	}, testLogger())
 	if err != nil {
@@ -216,9 +214,7 @@ func TestWriteContextFiles(t *testing.T) {
 	dir := t.TempDir()
 
 	ctx := TaskContextForEnv{
-		IssueTitle:       "Test Issue",
-		IssueDescription: "A detailed description.",
-		WorkspaceContext: "We use Go and TypeScript.",
+		IssueID: "test-issue-id-1234",
 		AgentSkills: []SkillContextForEnv{
 			{
 				Name:    "Go Conventions",
@@ -241,16 +237,20 @@ func TestWriteContextFiles(t *testing.T) {
 
 	s := string(content)
 	for _, want := range []string{
-		"# Issue: Test Issue",
-		"## Description",
-		"A detailed description.",
-		"## Workspace Context",
-		"Go and TypeScript",
+		"test-issue-id-1234",
+		"multica issue get",
 		"## Agent Skills",
 		"Go Conventions",
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("content missing %q", want)
+		}
+	}
+
+	// Issue details should NOT be in the context file (agent fetches via CLI).
+	for _, absent := range []string{"## Description", "## Workspace Context"} {
+		if strings.Contains(s, absent) {
+			t.Errorf("content should NOT contain %q — agent fetches details via CLI", absent)
 		}
 	}
 
@@ -272,12 +272,12 @@ func TestWriteContextFiles(t *testing.T) {
 	}
 }
 
-func TestWriteContextFilesOmitsEmpty(t *testing.T) {
+func TestWriteContextFilesOmitsSkillsWhenEmpty(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 
 	ctx := TaskContextForEnv{
-		IssueTitle: "Minimal Issue",
+		IssueID: "minimal-issue-id",
 	}
 
 	if err := writeContextFiles(dir, ctx); err != nil {
@@ -290,13 +290,11 @@ func TestWriteContextFilesOmitsEmpty(t *testing.T) {
 	}
 
 	s := string(content)
-	if !strings.Contains(s, "Minimal Issue") {
-		t.Error("expected title to be present")
+	if !strings.Contains(s, "minimal-issue-id") {
+		t.Error("expected issue ID to be present")
 	}
-	for _, absent := range []string{"## Description", "## Workspace Context", "## Agent Skills"} {
-		if strings.Contains(s, absent) {
-			t.Errorf("expected %q to be omitted for empty content", absent)
-		}
+	if strings.Contains(s, "## Agent Skills") {
+		t.Error("expected skills section to be omitted when no skills")
 	}
 }
 
@@ -326,7 +324,7 @@ func TestCleanupGitWorktree(t *testing.T) {
 		RepoPath:       reposRoot,
 		TaskID:         "c3d4e5f6-a7b8-9012-cdef-123456789012",
 		AgentName:      "Cleanup Test",
-		Task:           TaskContextForEnv{IssueTitle: "Cleanup test"},
+		Task:           TaskContextForEnv{IssueID: "cleanup-test-id"},
 	}, testLogger())
 	if err != nil {
 		t.Fatalf("Prepare failed: %v", err)
@@ -358,7 +356,7 @@ func TestInjectRuntimeConfigClaude(t *testing.T) {
 	dir := t.TempDir()
 
 	ctx := TaskContextForEnv{
-		IssueTitle: "Test Issue",
+		IssueID: "test-issue-id",
 		AgentSkills: []SkillContextForEnv{
 			{Name: "Go Conventions", Content: "Follow Go conventions.", Files: []SkillFileContextForEnv{
 				{Path: "example.go", Content: "package main"},
@@ -379,8 +377,8 @@ func TestInjectRuntimeConfigClaude(t *testing.T) {
 	s := string(content)
 	for _, want := range []string{
 		"Multica Agent Runtime",
-		".agent_context/issue_context.md",
-		".agent_context/skills/",
+		"multica issue get",
+		"multica issue comment list",
 		"Go Conventions",
 		"PR Review",
 		"go-conventions/SKILL.md",
@@ -398,7 +396,7 @@ func TestInjectRuntimeConfigCodex(t *testing.T) {
 	dir := t.TempDir()
 
 	ctx := TaskContextForEnv{
-		IssueTitle:  "Test Issue",
+		IssueID:     "test-issue-id",
 		AgentSkills: []SkillContextForEnv{{Name: "Coding", Content: "Write good code."}},
 	}
 
@@ -424,7 +422,7 @@ func TestInjectRuntimeConfigNoSkills(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 
-	ctx := TaskContextForEnv{IssueTitle: "Test Issue"}
+	ctx := TaskContextForEnv{IssueID: "test-issue-id"}
 
 	if err := InjectRuntimeConfig(dir, "claude", ctx); err != nil {
 		t.Fatalf("InjectRuntimeConfig failed: %v", err)
@@ -436,8 +434,8 @@ func TestInjectRuntimeConfigNoSkills(t *testing.T) {
 	}
 
 	s := string(content)
-	if !strings.Contains(s, "issue_context.md") {
-		t.Error("should reference issue_context.md even without skills")
+	if !strings.Contains(s, "multica issue get") {
+		t.Error("should reference multica CLI even without skills")
 	}
 	if strings.Contains(s, "## Skills") {
 		t.Error("should not have Skills section when there are no skills")
@@ -469,7 +467,7 @@ func TestCleanupPreservesLogs(t *testing.T) {
 		RepoPath:       t.TempDir(), // not a git repo
 		TaskID:         "d4e5f6a7-b8c9-0123-defa-234567890123",
 		AgentName:      "Preserve Test",
-		Task:           TaskContextForEnv{IssueTitle: "Preserve test"},
+		Task:           TaskContextForEnv{IssueID: "preserve-test-id"},
 	}, testLogger())
 	if err != nil {
 		t.Fatalf("Prepare failed: %v", err)

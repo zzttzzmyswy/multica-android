@@ -482,7 +482,7 @@ func (d *Daemon) pollLoop(ctx context.Context) error {
 				continue
 			}
 			if task != nil {
-				d.logger.Info("task received", "task_id", task.ID, "issue_id", task.IssueID, "title", task.Context.Issue.Title)
+				d.logger.Info("task received", "task_id", task.ID, "issue_id", task.IssueID)
 				d.handleTask(ctx, *task)
 				claimed = true
 				pollOffset = (pollOffset + i + 1) % n
@@ -506,8 +506,11 @@ func (d *Daemon) pollLoop(ctx context.Context) error {
 }
 
 func (d *Daemon) handleTask(ctx context.Context, task Task) {
-	provider := task.Context.Runtime.Provider
-	d.logger.Info("picked task", "task_id", task.ID, "issue_id", task.IssueID, "provider", provider, "title", task.Context.Issue.Title)
+	d.mu.Lock()
+	rt := d.runtimeIndex[task.RuntimeID]
+	d.mu.Unlock()
+	provider := rt.Provider
+	d.logger.Info("picked task", "task_id", task.ID, "issue_id", task.IssueID, "provider", provider)
 
 	if err := d.client.StartTask(ctx, task.ID); err != nil {
 		d.logger.Error("start task failed", "task_id", task.ID, "error", err)
@@ -516,7 +519,7 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 
 	_ = d.client.ReportProgress(ctx, task.ID, fmt.Sprintf("Launching %s", provider), 1, 2)
 
-	result, err := d.runTask(ctx, task)
+	result, err := d.runTask(ctx, task, provider)
 	if err != nil {
 		d.logger.Error("task failed", "task_id", task.ID, "error", err)
 		if failErr := d.client.FailTask(ctx, task.ID, err.Error()); failErr != nil {
@@ -540,26 +543,29 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 	}
 }
 
-func (d *Daemon) runTask(ctx context.Context, task Task) (TaskResult, error) {
-	provider := task.Context.Runtime.Provider
+func (d *Daemon) runTask(ctx context.Context, task Task, provider string) (TaskResult, error) {
 	entry, ok := d.cfg.Agents[provider]
 	if !ok {
 		return TaskResult{}, fmt.Errorf("no agent configured for provider %q", provider)
 	}
 
+	agentName := "agent"
+	var skills []SkillData
+	if task.Agent != nil {
+		agentName = task.Agent.Name
+		skills = task.Agent.Skills
+	}
+
 	// Prepare isolated execution environment.
 	taskCtx := execenv.TaskContextForEnv{
-		IssueTitle:       task.Context.Issue.Title,
-		IssueDescription: task.Context.Issue.Description,
-		WorkspaceContext: task.Context.WorkspaceContext,
-		AgentName:        task.Context.Agent.Name,
-		AgentSkills:      convertSkillsForEnv(task.Context.Agent.Skills),
+		IssueID:     task.IssueID,
+		AgentName:   agentName,
+		AgentSkills: convertSkillsForEnv(skills),
 	}
 	env, err := execenv.Prepare(execenv.PrepareParams{
 		WorkspacesRoot: d.cfg.WorkspacesRoot,
-		RepoPath:       task.Context.RepoPath,
 		TaskID:         task.ID,
-		AgentName:      task.Context.Agent.Name,
+		AgentName:      agentName,
 		Task:           taskCtx,
 	}, d.logger)
 	if err != nil {

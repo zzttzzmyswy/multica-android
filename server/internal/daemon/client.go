@@ -56,6 +56,11 @@ func (c *Client) SetToken(token string) {
 	c.token = token
 }
 
+// Token returns the current auth token.
+func (c *Client) Token() string {
+	return c.token
+}
+
 func (c *Client) ClaimTask(ctx context.Context, runtimeID string) (*Task, error) {
 	var resp struct {
 		Task *Task `json:"task"`

@@ -31,26 +31,35 @@ func InjectRuntimeConfig(workDir, provider string, ctx TaskContextForEnv) error 
 }
 
 // buildMetaSkillContent generates the meta skill markdown that teaches the agent
-// about the Multica runtime environment and where to find task context/skills.
+// about the Multica runtime environment and available CLI tools.
 func buildMetaSkillContent(ctx TaskContextForEnv) string {
 	var b strings.Builder
 
 	b.WriteString("# Multica Agent Runtime\n\n")
-	b.WriteString("You are running as a coding agent in the Multica platform.\n")
-	b.WriteString("Your task context and skill instructions are in the `.agent_context/` directory.\n\n")
+	b.WriteString("You are a coding agent in the Multica platform. Use the `multica` CLI to interact with the platform.\n\n")
 
-	b.WriteString("## Getting Started\n\n")
-	b.WriteString("1. Read `.agent_context/issue_context.md` for the full issue description, acceptance criteria, and context.\n")
+	b.WriteString("## Available Commands\n\n")
+	b.WriteString("### Read\n")
+	b.WriteString("- `multica issue get <id>` — Get full issue details (title, description, status, priority, assignee)\n")
+	b.WriteString("- `multica issue list [--status X] [--priority X] [--assignee X]` — List issues in workspace\n")
+	b.WriteString("- `multica issue comment list <issue-id>` — List all comments on an issue\n")
+	b.WriteString("- `multica workspace get` — Get workspace details and context\n")
+	b.WriteString("- `multica agent list` — List agents in workspace\n\n")
 
-	if len(ctx.AgentSkills) > 0 {
-		b.WriteString("2. Read your skill files in `.agent_context/skills/` for detailed instructions on how to work.\n")
-	}
+	b.WriteString("### Write\n")
+	b.WriteString("- `multica issue comment add <issue-id> --content \"...\"` — Post a comment to an issue\n")
+	b.WriteString("- `multica issue status <id> <status>` — Update issue status (todo, in_progress, in_review, done, blocked)\n")
+	b.WriteString("- `multica issue update <id> [--title X] [--description X] [--priority X]` — Update issue fields\n\n")
 
-	b.WriteString("\n")
+	b.WriteString("### Workflow\n")
+	fmt.Fprintf(&b, "1. Run `multica issue get %s --output json` to understand your task\n", ctx.IssueID)
+	b.WriteString("2. Read comments for additional context or human instructions\n")
+	b.WriteString("3. Complete the work in the local codebase\n")
+	b.WriteString("4. Post a comment summarizing what you did\n\n")
 
 	if len(ctx.AgentSkills) > 0 {
 		b.WriteString("## Skills\n\n")
-		b.WriteString("Each skill directory contains a `SKILL.md` with instructions and optionally supporting files.\n\n")
+		b.WriteString("Detailed skill instructions are in `.agent_context/skills/`. Each subdirectory contains a `SKILL.md`.\n\n")
 		for _, skill := range ctx.AgentSkills {
 			dirName := sanitizeSkillName(skill.Name)
 			fmt.Fprintf(&b, "- **%s** → `.agent_context/skills/%s/SKILL.md`", skill.Name, dirName)
@@ -63,7 +72,7 @@ func buildMetaSkillContent(ctx TaskContextForEnv) string {
 	}
 
 	b.WriteString("## Output\n\n")
-	b.WriteString("When done, return a concise Markdown comment suitable for posting back to the issue.\n")
+	b.WriteString("When done, return a concise Markdown summary of your work.\n")
 	b.WriteString("- Lead with the outcome.\n")
 	b.WriteString("- Mention concrete files or commands if you changed anything.\n")
 	b.WriteString("- If blocked, explain the blocker clearly.\n")
