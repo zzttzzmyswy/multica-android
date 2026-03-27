@@ -347,8 +347,9 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 		"creator_id":          uuidToString(prevIssue.CreatorID),
 	})
 
-	// If assignee or readiness status changed, reconcile the task queue.
-	if assigneeChanged || statusChanged {
+	// Reconcile task queue when assignee changes (not on status changes —
+	// agents manage issue status themselves via the CLI).
+	if assigneeChanged {
 		h.TaskService.CancelTasksForIssue(r.Context(), issue.ID)
 
 		if h.shouldEnqueueAgentTask(r.Context(), issue) {

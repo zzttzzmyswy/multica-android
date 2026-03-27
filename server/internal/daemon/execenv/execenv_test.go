@@ -369,9 +369,9 @@ func TestInjectRuntimeConfigClaude(t *testing.T) {
 		t.Fatalf("InjectRuntimeConfig failed: %v", err)
 	}
 
-	content, err := os.ReadFile(filepath.Join(dir, ".claude", "CLAUDE.md"))
+	content, err := os.ReadFile(filepath.Join(dir, "CLAUDE.md"))
 	if err != nil {
-		t.Fatalf("failed to read .claude/CLAUDE.md: %v", err)
+		t.Fatalf("failed to read CLAUDE.md: %v", err)
 	}
 
 	s := string(content)
@@ -428,9 +428,9 @@ func TestInjectRuntimeConfigNoSkills(t *testing.T) {
 		t.Fatalf("InjectRuntimeConfig failed: %v", err)
 	}
 
-	content, err := os.ReadFile(filepath.Join(dir, ".claude", "CLAUDE.md"))
+	content, err := os.ReadFile(filepath.Join(dir, "CLAUDE.md"))
 	if err != nil {
-		t.Fatalf("failed to read .claude/CLAUDE.md: %v", err)
+		t.Fatalf("failed to read CLAUDE.md: %v", err)
 	}
 
 	s := string(content)

@@ -46,6 +46,12 @@ func New(cfg Config, logger *slog.Logger) *Daemon {
 
 // Run starts the daemon: resolves auth, registers runtimes, then polls for tasks.
 func (d *Daemon) Run(ctx context.Context) error {
+	// Bind health port early to detect another running daemon.
+	healthLn, err := d.listenHealth()
+	if err != nil {
+		return err
+	}
+
 	agentNames := make([]string, 0, len(d.cfg.Agents))
 	for name := range d.cfg.Agents {
 		agentNames = append(agentNames, name)
@@ -72,6 +78,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 
 	go d.heartbeatLoop(ctx)
 	go d.usageScanLoop(ctx)
+	go d.serveHealth(ctx, healthLn, time.Now())
 	return d.pollLoop(ctx)
 }
 

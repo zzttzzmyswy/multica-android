@@ -10,18 +10,14 @@ import (
 // InjectRuntimeConfig writes the meta skill content into the runtime-specific
 // config file so the agent discovers .agent_context/ through its native mechanism.
 //
-// For Claude: writes {workDir}/.claude/CLAUDE.md
+// For Claude: writes {workDir}/CLAUDE.md
 // For Codex:  writes {workDir}/AGENTS.md
 func InjectRuntimeConfig(workDir, provider string, ctx TaskContextForEnv) error {
 	content := buildMetaSkillContent(ctx)
 
 	switch provider {
 	case "claude":
-		dir := filepath.Join(workDir, ".claude")
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return fmt.Errorf("create .claude dir: %w", err)
-		}
-		return os.WriteFile(filepath.Join(dir, "CLAUDE.md"), []byte(content), 0o644)
+		return os.WriteFile(filepath.Join(workDir, "CLAUDE.md"), []byte(content), 0o644)
 	case "codex":
 		return os.WriteFile(filepath.Join(workDir, "AGENTS.md"), []byte(content), 0o644)
 	default:
@@ -52,10 +48,19 @@ func buildMetaSkillContent(ctx TaskContextForEnv) string {
 	b.WriteString("- `multica issue update <id> [--title X] [--description X] [--priority X]` — Update issue fields\n\n")
 
 	b.WriteString("### Workflow\n")
+	b.WriteString("You are responsible for managing the issue status throughout your work.\n\n")
 	fmt.Fprintf(&b, "1. Run `multica issue get %s --output json` to understand your task\n", ctx.IssueID)
-	b.WriteString("2. Read comments for additional context or human instructions\n")
-	b.WriteString("3. Complete the work in the local codebase\n")
-	b.WriteString("4. Post a comment summarizing what you did\n\n")
+	fmt.Fprintf(&b, "2. Run `multica issue status %s in_progress`\n", ctx.IssueID)
+	b.WriteString("3. Read comments for additional context or human instructions\n")
+	b.WriteString("4. If the task requires code changes:\n")
+	b.WriteString("   a. Create a new branch\n")
+	b.WriteString("   b. Implement the changes and commit\n")
+	b.WriteString("   c. Push the branch to the remote\n")
+	b.WriteString("   d. Create a pull request (decide the target branch based on the repo's conventions)\n")
+	fmt.Fprintf(&b, "   e. Post the PR link as a comment: `multica issue comment add %s --content \"PR: <url>\"`\n", ctx.IssueID)
+	b.WriteString("5. If the task does not require code (e.g. research, documentation), post your findings as a comment\n")
+	fmt.Fprintf(&b, "6. Run `multica issue status %s in_review`\n", ctx.IssueID)
+	fmt.Fprintf(&b, "7. If blocked, run `multica issue status %s blocked` and post a comment explaining why\n\n", ctx.IssueID)
 
 	if len(ctx.AgentSkills) > 0 {
 		b.WriteString("## Skills\n\n")
@@ -72,10 +77,9 @@ func buildMetaSkillContent(ctx TaskContextForEnv) string {
 	}
 
 	b.WriteString("## Output\n\n")
-	b.WriteString("When done, return a concise Markdown summary of your work.\n")
-	b.WriteString("- Lead with the outcome.\n")
-	b.WriteString("- Mention concrete files or commands if you changed anything.\n")
-	b.WriteString("- If blocked, explain the blocker clearly.\n")
+	b.WriteString("Keep comments concise and natural — state the outcome, not the process.\n")
+	b.WriteString("Good: \"Fixed the login redirect. PR: https://...\"\n")
+	b.WriteString("Bad: \"1. Read the issue 2. Found the bug in auth.go 3. Created branch 4. ...\"\n")
 
 	return b.String()
 }

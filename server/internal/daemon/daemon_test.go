@@ -32,11 +32,10 @@ func TestBuildPromptContainsIssueID(t *testing.T) {
 		},
 	})
 
-	// Prompt should contain the issue ID and CLI instructions.
+	// Prompt should contain the issue ID and CLI hint.
 	for _, want := range []string{
 		issueID,
 		"multica issue get",
-		"multica issue comment list",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("prompt missing %q", want)

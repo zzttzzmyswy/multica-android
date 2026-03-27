@@ -130,7 +130,8 @@ func (s *TaskService) ClaimTaskForRuntime(ctx context.Context, runtimeID pgtype.
 	return nil, nil
 }
 
-// StartTask transitions a dispatched task to running and syncs issue status.
+// StartTask transitions a dispatched task to running.
+// Issue status is NOT changed here — the agent manages it via the CLI.
 func (s *TaskService) StartTask(ctx context.Context, taskID pgtype.UUID) (*db.AgentTaskQueue, error) {
 	task, err := s.Queries.StartAgentTask(ctx, taskID)
 	if err != nil {
@@ -138,39 +139,35 @@ func (s *TaskService) StartTask(ctx context.Context, taskID pgtype.UUID) (*db.Ag
 	}
 
 	slog.Info("task started", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID))
-
-	// Sync issue → in_progress
-	issue, err := s.Queries.UpdateIssueStatus(ctx, db.UpdateIssueStatusParams{
-		ID:     task.IssueID,
-		Status: "in_progress",
-	})
-	if err == nil {
-		s.broadcastIssueUpdated(issue)
-	}
-
 	return &task, nil
 }
 
-// CompleteTask marks a task as completed and syncs issue/agent status.
+// CompleteTask marks a task as completed.
+// Issue status is NOT changed here — the agent manages it via the CLI.
 func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, result []byte) (*db.AgentTaskQueue, error) {
 	task, err := s.Queries.CompleteAgentTask(ctx, db.CompleteAgentTaskParams{
 		ID:     taskID,
 		Result: result,
 	})
 	if err != nil {
+		// Log the current task state to help debug why the update matched no rows.
+		if existing, lookupErr := s.Queries.GetAgentTask(ctx, taskID); lookupErr == nil {
+			slog.Warn("complete task failed: task not in running state",
+				"task_id", util.UUIDToString(taskID),
+				"current_status", existing.Status,
+				"issue_id", util.UUIDToString(existing.IssueID),
+				"agent_id", util.UUIDToString(existing.AgentID),
+			)
+		} else {
+			slog.Warn("complete task failed: task not found",
+				"task_id", util.UUIDToString(taskID),
+				"lookup_error", lookupErr,
+			)
+		}
 		return nil, fmt.Errorf("complete task: %w", err)
 	}
 
 	slog.Info("task completed", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID))
-
-	// Sync issue → in_review
-	issue, issueErr := s.Queries.UpdateIssueStatus(ctx, db.UpdateIssueStatusParams{
-		ID:     task.IssueID,
-		Status: "in_review",
-	})
-	if issueErr == nil {
-		s.broadcastIssueUpdated(issue)
-	}
 
 	var payload protocol.TaskCompletedPayload
 	if err := json.Unmarshal(result, &payload); err == nil {
@@ -179,8 +176,8 @@ func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, resu
 		}
 	}
 
-	if issueErr == nil {
-		s.createInboxForIssueCreator(ctx, issue, task.AgentID, "review_requested", "attention", "Review requested: "+issue.Title, "")
+	if issue, err := s.Queries.GetIssue(ctx, task.IssueID); err == nil {
+		s.createInboxForIssueCreator(ctx, issue, task.AgentID, "task_completed", "attention", "Task completed: "+issue.Title, "")
 	}
 
 	// Reconcile agent status
@@ -192,31 +189,37 @@ func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, resu
 	return &task, nil
 }
 
-// FailTask marks a task as failed and syncs issue/agent status.
+// FailTask marks a task as failed.
+// Issue status is NOT changed here — the agent manages it via the CLI.
 func (s *TaskService) FailTask(ctx context.Context, taskID pgtype.UUID, errMsg string) (*db.AgentTaskQueue, error) {
 	task, err := s.Queries.FailAgentTask(ctx, db.FailAgentTaskParams{
 		ID:    taskID,
 		Error: pgtype.Text{String: errMsg, Valid: true},
 	})
 	if err != nil {
+		if existing, lookupErr := s.Queries.GetAgentTask(ctx, taskID); lookupErr == nil {
+			slog.Warn("fail task failed: task not in running state",
+				"task_id", util.UUIDToString(taskID),
+				"current_status", existing.Status,
+				"issue_id", util.UUIDToString(existing.IssueID),
+				"agent_id", util.UUIDToString(existing.AgentID),
+			)
+		} else {
+			slog.Warn("fail task failed: task not found",
+				"task_id", util.UUIDToString(taskID),
+				"lookup_error", lookupErr,
+			)
+		}
 		return nil, fmt.Errorf("fail task: %w", err)
 	}
 
 	slog.Warn("task failed", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID), "error", errMsg)
 
-	// Sync issue → blocked
-	issue, issueErr := s.Queries.UpdateIssueStatus(ctx, db.UpdateIssueStatusParams{
-		ID:     task.IssueID,
-		Status: "blocked",
-	})
-	if issueErr == nil {
-		s.broadcastIssueUpdated(issue)
-	}
 	if errMsg != "" {
 		s.createAgentComment(ctx, task.IssueID, task.AgentID, errMsg, "system")
 	}
-	if issueErr == nil {
-		s.createInboxForIssueCreator(ctx, issue, task.AgentID, "agent_blocked", "action_required", "Agent blocked: "+issue.Title, errMsg)
+	if issue, err := s.Queries.GetIssue(ctx, task.IssueID); err == nil {
+		s.createInboxForIssueCreator(ctx, issue, task.AgentID, "task_failed", "action_required", "Task failed: "+issue.Title, errMsg)
 	}
 
 	// Reconcile agent status

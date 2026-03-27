@@ -235,10 +235,20 @@ export function WorkspaceTab() {
             ))}
 
             {canManageWorkspace && (
-              <Button variant="outline" size="sm" onClick={handleAddRepo}>
-                <Plus className="h-3 w-3" />
-                Add repository
-              </Button>
+              <div className="flex items-center justify-between pt-1">
+                <Button variant="outline" size="sm" onClick={handleAddRepo}>
+                  <Plus className="h-3 w-3" />
+                  Add repository
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSave}
+                  disabled={saving || !name.trim() || !canManageWorkspace}
+                >
+                  <Save className="h-3 w-3" />
+                  {saving ? "Saving..." : "Save"}
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>

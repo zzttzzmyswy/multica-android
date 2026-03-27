@@ -11,12 +11,13 @@ import (
 )
 
 const (
-	DefaultServerURL         = "ws://localhost:8080/ws"
-	DefaultPollInterval      = 3 * time.Second
-	DefaultHeartbeatInterval = 15 * time.Second
-	DefaultAgentTimeout      = 2 * time.Hour
-	DefaultRuntimeName       = "Local Agent"
+	DefaultServerURL            = "ws://localhost:8080/ws"
+	DefaultPollInterval         = 3 * time.Second
+	DefaultHeartbeatInterval    = 15 * time.Second
+	DefaultAgentTimeout         = 2 * time.Hour
+	DefaultRuntimeName          = "Local Agent"
 	DefaultConfigReloadInterval = 5 * time.Second
+	DefaultHealthPort           = 19514
 )
 
 // Config holds all daemon configuration.
@@ -28,6 +29,7 @@ type Config struct {
 	Agents            map[string]AgentEntry // "claude" -> entry, "codex" -> entry
 	WorkspacesRoot    string                // base path for execution envs (default: ~/multica_workspaces)
 	KeepEnvAfterTask  bool                  // preserve env after task for debugging
+	HealthPort        int                   // local HTTP port for health checks (default: 19514)
 	PollInterval      time.Duration
 	HeartbeatInterval time.Duration
 	AgentTimeout      time.Duration
@@ -154,6 +156,7 @@ func LoadConfig(overrides Overrides) (Config, error) {
 		Agents:            agents,
 		WorkspacesRoot:    workspacesRoot,
 		KeepEnvAfterTask:  keepEnv,
+		HealthPort:        DefaultHealthPort,
 		PollInterval:      pollInterval,
 		HeartbeatInterval: heartbeatInterval,
 		AgentTimeout:      agentTimeout,

@@ -5,6 +5,8 @@ export type InboxSeverity = "action_required" | "attention" | "info";
 export type InboxItemType =
   | "issue_assigned"
   | "review_requested"
+  | "task_completed"
+  | "task_failed"
   | "agent_blocked"
   | "agent_completed"
   | "mentioned"

@@ -111,7 +111,7 @@ func Prepare(params PrepareParams, logger *slog.Logger) (*Environment, error) {
 				env.gitRoot = gitRoot
 
 				// Exclude injected directories from git tracking.
-				for _, pattern := range []string{".agent_context", ".claude", "AGENTS.md"} {
+				for _, pattern := range []string{".agent_context", "CLAUDE.md", "AGENTS.md"} {
 					if err := excludeFromGit(workDir, pattern); err != nil {
 						logger.Warn("execenv: failed to exclude from git", "pattern", pattern, "error", err)
 					}
