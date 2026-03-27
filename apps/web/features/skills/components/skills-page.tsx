@@ -144,22 +144,39 @@ function CreateSkillDialog({
                 type="text"
                 value={importUrl}
                 onChange={(e) => { setImportUrl(e.target.value); setImportError(""); }}
-                placeholder="https://clawhub.ai/owner/skill-name"
+                placeholder="Paste a skill URL..."
                 className="mt-1"
                 onKeyDown={(e) => e.key === "Enter" && handleImport()}
               />
-              <div className="flex items-center gap-2 mt-1.5">
-                {detectedSource ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-xs font-medium">
-                    {detectedSource === "clawhub" ? "ClawHub" : "Skills.sh"}
-                  </span>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    Supports <span className="font-medium">clawhub.ai</span> and <span className="font-medium">skills.sh</span>
-                  </p>
-                )}
+            </div>
+
+            {/* Supported sources — highlight on detection */}
+            <div>
+              <p className="text-xs text-muted-foreground mb-2">Supported sources</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div className={`rounded-lg border px-3 py-2.5 transition-colors ${
+                  detectedSource === "clawhub"
+                    ? "border-primary bg-primary/5"
+                    : ""
+                }`}>
+                  <div className="text-xs font-medium">ClawHub</div>
+                  <div className="mt-0.5 truncate text-[11px] text-muted-foreground font-mono">
+                    clawhub.ai/owner/skill
+                  </div>
+                </div>
+                <div className={`rounded-lg border px-3 py-2.5 transition-colors ${
+                  detectedSource === "skills.sh"
+                    ? "border-primary bg-primary/5"
+                    : ""
+                }`}>
+                  <div className="text-xs font-medium">Skills.sh</div>
+                  <div className="mt-0.5 truncate text-[11px] text-muted-foreground font-mono">
+                    skills.sh/owner/repo/skill
+                  </div>
+                </div>
               </div>
             </div>
+
             {importError && (
               <div className="flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
                 <AlertCircle className="h-3.5 w-3.5 shrink-0" />
@@ -177,8 +194,18 @@ function CreateSkillDialog({
             </Button>
           ) : (
             <Button onClick={handleImport} disabled={loading || !importUrl.trim()}>
-              <Download className="mr-1.5 h-3 w-3" />
-              {loading ? "Importing..." : "Import"}
+              {loading ? (
+                detectedSource === "clawhub"
+                  ? "Importing from ClawHub..."
+                  : detectedSource === "skills.sh"
+                    ? "Importing from Skills.sh..."
+                    : "Importing..."
+              ) : (
+                <>
+                  <Download className="mr-1.5 h-3 w-3" />
+                  Import
+                </>
+              )}
             </Button>
           )}
         </DialogFooter>
