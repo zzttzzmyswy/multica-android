@@ -21,7 +21,7 @@ export type {
   RuntimePing,
   RuntimePingStatus,
 } from "./agent";
-export type { Workspace, Member, MemberRole, User, MemberWithUser } from "./workspace";
+export type { Workspace, WorkspaceRepo, Member, MemberRole, User, MemberWithUser } from "./workspace";
 export type { InboxItem, InboxSeverity, InboxItemType } from "./inbox";
 export type { Comment, CommentType, CommentAuthorType } from "./comment";
 export type { DaemonPairingSession, DaemonPairingSessionStatus, ApproveDaemonPairingSessionRequest } from "./daemon";

@@ -77,25 +77,16 @@ func writeSkillFiles(contextDir string, skills []SkillContextForEnv) error {
 }
 
 // renderIssueContext builds the markdown content for issue_context.md.
-// Sections with empty content are omitted.
+// It contains only the issue ID and pointers to CLI commands for fetching
+// dynamic data. Sections with empty content are omitted.
 func renderIssueContext(ctx TaskContextForEnv) string {
 	var b strings.Builder
 
-	if ctx.IssueTitle != "" {
-		fmt.Fprintf(&b, "# Issue: %s\n\n", ctx.IssueTitle)
-	}
+	b.WriteString("# Task Assignment\n\n")
+	fmt.Fprintf(&b, "**Issue ID:** %s\n\n", ctx.IssueID)
 
-	if ctx.IssueDescription != "" {
-		b.WriteString("## Description\n\n")
-		b.WriteString(ctx.IssueDescription)
-		b.WriteString("\n\n")
-	}
-
-	if ctx.WorkspaceContext != "" {
-		b.WriteString("## Workspace Context\n\n")
-		b.WriteString(ctx.WorkspaceContext)
-		b.WriteString("\n\n")
-	}
+	b.WriteString("Run `multica issue get " + ctx.IssueID + " --output json` for full issue details and description.\n")
+	b.WriteString("Run `multica issue comment list " + ctx.IssueID + "` for discussion history.\n\n")
 
 	if len(ctx.AgentSkills) > 0 {
 		b.WriteString("## Agent Skills\n\n")

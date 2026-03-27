@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/logger"
+	"github.com/multica-ai/multica/server/internal/service"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
@@ -81,29 +82,33 @@ func agentToResponse(a db.Agent) AgentResponse {
 }
 
 type AgentTaskResponse struct {
-	ID           string  `json:"id"`
-	AgentID      string  `json:"agent_id"`
-	RuntimeID    string  `json:"runtime_id"`
-	IssueID      string  `json:"issue_id"`
-	Status       string  `json:"status"`
-	Priority     int32   `json:"priority"`
-	DispatchedAt *string `json:"dispatched_at"`
-	StartedAt    *string `json:"started_at"`
-	CompletedAt  *string `json:"completed_at"`
-	Result       any     `json:"result"`
-	Error        *string `json:"error"`
-	Context      any     `json:"context,omitempty"`
-	CreatedAt    string  `json:"created_at"`
+	ID           string         `json:"id"`
+	AgentID      string         `json:"agent_id"`
+	RuntimeID    string         `json:"runtime_id"`
+	IssueID      string         `json:"issue_id"`
+	Status       string         `json:"status"`
+	Priority     int32          `json:"priority"`
+	DispatchedAt *string        `json:"dispatched_at"`
+	StartedAt    *string        `json:"started_at"`
+	CompletedAt  *string        `json:"completed_at"`
+	Result       any            `json:"result"`
+	Error        *string        `json:"error"`
+	Agent        *TaskAgentData `json:"agent,omitempty"`
+	CreatedAt    string         `json:"created_at"`
+}
+
+// TaskAgentData holds agent info included in claim responses so the daemon
+// can set up the execution environment (branch naming, skill files).
+type TaskAgentData struct {
+	ID     string                    `json:"id"`
+	Name   string                    `json:"name"`
+	Skills []service.AgentSkillData  `json:"skills,omitempty"`
 }
 
 func taskToResponse(t db.AgentTaskQueue) AgentTaskResponse {
 	var result any
 	if t.Result != nil {
 		json.Unmarshal(t.Result, &result)
-	}
-	var ctx any
-	if t.Context != nil {
-		json.Unmarshal(t.Context, &ctx)
 	}
 	return AgentTaskResponse{
 		ID:           uuidToString(t.ID),
@@ -117,7 +122,6 @@ func taskToResponse(t db.AgentTaskQueue) AgentTaskResponse {
 		CompletedAt:  timestampToPtr(t.CompletedAt),
 		Result:       result,
 		Error:        textToPtr(t.Error),
-		Context:      ctx,
 		CreatedAt:    timestampToString(t.CreatedAt),
 	}
 }

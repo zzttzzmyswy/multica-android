@@ -30,6 +30,7 @@ func init() {
 	rootCmd.AddCommand(runtimeCmd)
 	rootCmd.AddCommand(workspaceCmd)
 	rootCmd.AddCommand(configCmd)
+	rootCmd.AddCommand(issueCmd)
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(versionCmd)
 }

@@ -18,28 +18,25 @@ func TestNormalizeServerBaseURL(t *testing.T) {
 	}
 }
 
-func TestBuildPromptIncludesIssueAndContext(t *testing.T) {
+func TestBuildPromptContainsIssueID(t *testing.T) {
 	t.Parallel()
 
+	issueID := "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 	prompt := BuildPrompt(Task{
-		Context: TaskContext{
-			Issue: IssueContext{
-				Title:       "Fix failing test",
-				Description: "Investigate and fix the test failure.",
-			},
-			Agent: AgentContext{
-				Name: "Local Codex",
-				Skills: []SkillData{
-					{Name: "Concise", Content: "Be concise."},
-				},
+		IssueID: issueID,
+		Agent: &AgentData{
+			Name: "Local Codex",
+			Skills: []SkillData{
+				{Name: "Concise", Content: "Be concise."},
 			},
 		},
 	})
 
-	// Lean prompt: issue title + description only. No inlined skill content.
+	// Prompt should contain the issue ID and CLI instructions.
 	for _, want := range []string{
-		"Fix failing test",
-		"Investigate and fix the test failure.",
+		issueID,
+		"multica issue get",
+		"multica issue comment list",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("prompt missing %q", want)
@@ -54,25 +51,19 @@ func TestBuildPromptIncludesIssueAndContext(t *testing.T) {
 	}
 }
 
-func TestBuildPromptTruncatesLongDescription(t *testing.T) {
+func TestBuildPromptNoIssueDetails(t *testing.T) {
 	t.Parallel()
 
-	longDesc := strings.Repeat("x", 300)
 	prompt := BuildPrompt(Task{
-		Context: TaskContext{
-			Issue: IssueContext{
-				Title:       "Long desc",
-				Description: longDesc,
-			},
-			Agent: AgentContext{Name: "Test"},
-		},
+		IssueID: "test-id",
+		Agent:   &AgentData{Name: "Test"},
 	})
 
-	if strings.Contains(prompt, longDesc) {
-		t.Fatal("expected long description to be truncated in prompt")
-	}
-	if !strings.Contains(prompt, "...") {
-		t.Fatal("expected truncation marker")
+	// Prompt should not contain issue title/description (agent fetches via CLI).
+	for _, absent := range []string{"**Issue:**", "**Summary:**"} {
+		if strings.Contains(prompt, absent) {
+			t.Fatalf("prompt should NOT contain %q — agent fetches details via CLI", absent)
+		}
 	}
 }
 

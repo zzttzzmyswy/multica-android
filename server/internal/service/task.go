@@ -26,7 +26,9 @@ func NewTaskService(q *db.Queries, hub *realtime.Hub, bus *events.Bus) *TaskServ
 	return &TaskService{Queries: q, Hub: hub, Bus: bus}
 }
 
-// EnqueueTaskForIssue creates a task with a context snapshot of the issue.
+// EnqueueTaskForIssue creates a queued task for an agent-assigned issue.
+// No context snapshot is stored — the agent fetches all data it needs at
+// runtime via the multica CLI.
 func (s *TaskService) EnqueueTaskForIssue(ctx context.Context, issue db.Issue) (db.AgentTaskQueue, error) {
 	if !issue.AssigneeID.Valid {
 		slog.Error("task enqueue failed", "issue_id", util.UUIDToString(issue.ID), "error", "issue has no assignee")
@@ -43,30 +45,11 @@ func (s *TaskService) EnqueueTaskForIssue(ctx context.Context, issue db.Issue) (
 		return db.AgentTaskQueue{}, fmt.Errorf("agent has no runtime")
 	}
 
-	runtime, err := s.Queries.GetAgentRuntime(ctx, agent.RuntimeID)
-	if err != nil {
-		slog.Error("task enqueue failed", "issue_id", util.UUIDToString(issue.ID), "error", err)
-		return db.AgentTaskQueue{}, fmt.Errorf("load runtime: %w", err)
-	}
-
-	// Include workspace context in the snapshot when available.
-	var workspaceContext string
-	if ws, err := s.Queries.GetWorkspace(ctx, issue.WorkspaceID); err == nil && ws.Context.Valid {
-		workspaceContext = ws.Context.String
-	}
-
-	// Load agent's structured skills + files.
-	agentSkills := s.loadAgentSkillsForSnapshot(ctx, agent.ID)
-
-	snapshot := buildContextSnapshot(issue, agent, runtime, workspaceContext, agentSkills)
-	contextJSON, _ := json.Marshal(snapshot)
-
-	task, err := s.Queries.CreateAgentTaskWithContext(ctx, db.CreateAgentTaskWithContextParams{
+	task, err := s.Queries.CreateAgentTask(ctx, db.CreateAgentTaskParams{
 		AgentID:   issue.AssigneeID,
 		RuntimeID: agent.RuntimeID,
 		IssueID:   issue.ID,
 		Priority:  priorityToInt(issue.Priority),
-		Context:   contextJSON,
 	})
 	if err != nil {
 		slog.Error("task enqueue failed", "issue_id", util.UUIDToString(issue.ID), "error", err)
@@ -292,70 +275,36 @@ func (s *TaskService) updateAgentStatus(ctx context.Context, agentID pgtype.UUID
 	})
 }
 
-type skillSnapshot struct {
-	Name    string             `json:"name"`
-	Content string             `json:"content"`
-	Files   []skillFileSnapshot `json:"files,omitempty"`
-}
-
-type skillFileSnapshot struct {
-	Path    string `json:"path"`
-	Content string `json:"content"`
-}
-
-func (s *TaskService) loadAgentSkillsForSnapshot(ctx context.Context, agentID pgtype.UUID) []skillSnapshot {
+// LoadAgentSkills loads an agent's skills with their files for task execution.
+func (s *TaskService) LoadAgentSkills(ctx context.Context, agentID pgtype.UUID) []AgentSkillData {
 	skills, err := s.Queries.ListAgentSkills(ctx, agentID)
 	if err != nil || len(skills) == 0 {
 		return nil
 	}
 
-	result := make([]skillSnapshot, 0, len(skills))
+	result := make([]AgentSkillData, 0, len(skills))
 	for _, sk := range skills {
-		snap := skillSnapshot{Name: sk.Name, Content: sk.Content}
+		data := AgentSkillData{Name: sk.Name, Content: sk.Content}
 		files, _ := s.Queries.ListSkillFiles(ctx, sk.ID)
 		for _, f := range files {
-			snap.Files = append(snap.Files, skillFileSnapshot{Path: f.Path, Content: f.Content})
+			data.Files = append(data.Files, AgentSkillFileData{Path: f.Path, Content: f.Content})
 		}
-		result = append(result, snap)
+		result = append(result, data)
 	}
 	return result
 }
 
-func buildContextSnapshot(issue db.Issue, agent db.Agent, runtime db.AgentRuntime, workspaceContext string, skills []skillSnapshot) map[string]any {
-	var tools any
-	if agent.Tools != nil {
-		json.Unmarshal(agent.Tools, &tools)
-	}
-	var metadata any
-	if runtime.Metadata != nil {
-		json.Unmarshal(runtime.Metadata, &metadata)
-	}
+// AgentSkillData represents a skill for task execution responses.
+type AgentSkillData struct {
+	Name    string               `json:"name"`
+	Content string               `json:"content"`
+	Files   []AgentSkillFileData `json:"files,omitempty"`
+}
 
-	m := map[string]any{
-		"issue": map[string]any{
-			"id":          util.UUIDToString(issue.ID),
-			"title":       issue.Title,
-			"description": issue.Description.String,
-		},
-		"agent": map[string]any{
-			"id":     util.UUIDToString(agent.ID),
-			"name":   agent.Name,
-			"skills": skills,
-			"tools":  tools,
-		},
-		"runtime": map[string]any{
-			"id":           util.UUIDToString(runtime.ID),
-			"name":         runtime.Name,
-			"runtime_mode": runtime.RuntimeMode,
-			"provider":     runtime.Provider,
-			"device_info":  runtime.DeviceInfo,
-			"metadata":     metadata,
-		},
-	}
-	if workspaceContext != "" {
-		m["workspace_context"] = workspaceContext
-	}
-	return m
+// AgentSkillFileData represents a supporting file within a skill.
+type AgentSkillFileData struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
 }
 
 func priorityToInt(p string) int32 {

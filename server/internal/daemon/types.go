@@ -15,37 +15,23 @@ type Runtime struct {
 }
 
 // Task represents a claimed task from the server.
+// Agent data (name, skills) is populated by the claim endpoint.
 type Task struct {
-	ID      string      `json:"id"`
-	AgentID string      `json:"agent_id"`
-	IssueID string      `json:"issue_id"`
-	Context TaskContext `json:"context"`
+	ID        string     `json:"id"`
+	AgentID   string     `json:"agent_id"`
+	RuntimeID string     `json:"runtime_id"`
+	IssueID   string     `json:"issue_id"`
+	Agent     *AgentData `json:"agent,omitempty"`
 }
 
-// TaskContext contains the snapshot context for a task.
-type TaskContext struct {
-	Issue            IssueContext   `json:"issue"`
-	Agent            AgentContext   `json:"agent"`
-	Runtime          RuntimeContext `json:"runtime"`
-	WorkspaceContext string         `json:"workspace_context,omitempty"`
-	RepoPath         string         `json:"repo_path,omitempty"`
-}
-
-// IssueContext holds issue details for task execution.
-type IssueContext struct {
-	ID          string `json:"id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-}
-
-// AgentContext holds agent details for task execution.
-type AgentContext struct {
+// AgentData holds agent details returned by the claim endpoint.
+type AgentData struct {
 	ID     string      `json:"id"`
 	Name   string      `json:"name"`
 	Skills []SkillData `json:"skills"`
 }
 
-// SkillData represents a structured skill in the task context.
+// SkillData represents a structured skill for task execution.
 type SkillData struct {
 	Name    string          `json:"name"`
 	Content string          `json:"content"`
@@ -56,14 +42,6 @@ type SkillData struct {
 type SkillFileData struct {
 	Path    string `json:"path"`
 	Content string `json:"content"`
-}
-
-// RuntimeContext holds runtime details for task execution.
-type RuntimeContext struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	Provider   string `json:"provider"`
-	DeviceInfo string `json:"device_info"`
 }
 
 // TaskResult is the outcome of executing a task.

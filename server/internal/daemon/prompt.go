@@ -6,24 +6,21 @@ import (
 )
 
 // BuildPrompt constructs the task prompt for an agent CLI.
-// This is kept lean — only the issue summary and acceptance criteria.
-// Detailed skill instructions are injected via the runtime's native config
-// mechanism (e.g., .claude/CLAUDE.md, AGENTS.md) by execenv.InjectRuntimeConfig.
+// The prompt is intentionally minimal — it provides only the issue ID and
+// instructs the agent to use the multica CLI to fetch details on demand.
+// Skill instructions are injected via the runtime's native config mechanism
+// (e.g., .claude/CLAUDE.md, AGENTS.md) by execenv.InjectRuntimeConfig.
 func BuildPrompt(task Task) string {
 	var b strings.Builder
-	b.WriteString("You are running as a local coding agent for a Multica workspace.\n")
-	b.WriteString("Complete the assigned issue using the local environment.\n\n")
+	b.WriteString("You are running as a local coding agent for a Multica workspace.\n\n")
 
-	fmt.Fprintf(&b, "**Issue:** %s\n", task.Context.Issue.Title)
-	fmt.Fprintf(&b, "**Agent:** %s\n\n", task.Context.Agent.Name)
+	fmt.Fprintf(&b, "Your assigned issue ID is: %s\n\n", task.IssueID)
 
-	if task.Context.Issue.Description != "" {
-		desc := task.Context.Issue.Description
-		if len(desc) > 200 {
-			desc = desc[:200] + "..."
-		}
-		fmt.Fprintf(&b, "**Summary:** %s\n\n", desc)
-	}
+	b.WriteString("Use the `multica` CLI to fetch the issue details and any context you need:\n\n")
+	fmt.Fprintf(&b, "  multica issue get %s --output json    # Full issue details\n", task.IssueID)
+	fmt.Fprintf(&b, "  multica issue comment list %s         # Comments and discussion\n\n", task.IssueID)
+
+	fmt.Fprintf(&b, "Start by running `multica issue get %s --output json` to understand your task, then complete it.\n", task.IssueID)
 
 	return b.String()
 }
