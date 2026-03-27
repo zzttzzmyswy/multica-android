@@ -10,6 +10,7 @@ import {
   ListTodo,
   Wrench,
   FileText,
+  BookOpenText,
   Timer,
   Trash2,
   Save,
@@ -976,7 +977,7 @@ function TasksTab({ agent }: { agent: Agent }) {
 type DetailTab = "skills" | "tools" | "triggers" | "tasks";
 
 const detailTabs: { id: DetailTab; label: string; icon: typeof FileText }[] = [
-  { id: "skills", label: "Skills", icon: FileText },
+  { id: "skills", label: "Skills", icon: BookOpenText },
   { id: "tools", label: "Tools", icon: Wrench },
   { id: "triggers", label: "Triggers", icon: Timer },
   { id: "tasks", label: "Tasks", icon: ListTodo },

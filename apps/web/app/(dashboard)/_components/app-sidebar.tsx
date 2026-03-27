@@ -12,7 +12,7 @@ import {
   LogOut,
   Plus,
   Check,
-  Sparkles,
+  BookOpenText,
   SquarePen,
 } from "lucide-react";
 import { WorkspaceAvatar } from "@/features/workspace";
@@ -51,7 +51,7 @@ const primaryNav = [
 const workspaceNav = [
   { href: "/agents", label: "Agents", icon: Bot },
   { href: "/runtimes", label: "Runtimes", icon: Monitor },
-  { href: "/skills", label: "Skills", icon: Sparkles },
+  { href: "/skills", label: "Skills", icon: BookOpenText },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

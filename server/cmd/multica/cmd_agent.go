@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/multica-ai/multica/server/internal/cli"
+	"github.com/multica-ai/multica/server/internal/daemon"
 )
 
 var agentCmd = &cobra.Command{
@@ -69,16 +70,24 @@ func newAPIClient(cmd *cobra.Command) (*cli.APIClient, error) {
 func resolveServerURL(cmd *cobra.Command) string {
 	val := cli.FlagOrEnv(cmd, "server-url", "MULTICA_SERVER_URL", "")
 	if val != "" {
-		return val
+		return normalizeAPIBaseURL(val)
 	}
 	cfg, err := cli.LoadCLIConfig()
 	if err != nil {
 		return "http://localhost:8080"
 	}
 	if cfg.ServerURL != "" {
-		return cfg.ServerURL
+		return normalizeAPIBaseURL(cfg.ServerURL)
 	}
 	return "http://localhost:8080"
+}
+
+func normalizeAPIBaseURL(raw string) string {
+	normalized, err := daemon.NormalizeServerBaseURL(raw)
+	if err == nil {
+		return normalized
+	}
+	return raw
 }
 
 func resolveWorkspaceID(cmd *cobra.Command) string {
