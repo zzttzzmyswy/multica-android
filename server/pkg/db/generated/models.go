@@ -131,6 +131,7 @@ type InboxItem struct {
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	ActorType     pgtype.Text        `json:"actor_type"`
 	ActorID       pgtype.UUID        `json:"actor_id"`
+	Details       []byte             `json:"details"`
 }
 
 type Issue struct {

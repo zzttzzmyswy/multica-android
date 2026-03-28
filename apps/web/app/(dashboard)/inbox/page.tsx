@@ -1,12 +1,17 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useDefaultLayout } from "react-resizable-panels";
 import { useInboxStore } from "@/features/inbox";
-import { IssueDetail, StatusIcon } from "@/features/issues/components";
+import { useIssueStore } from "@/features/issues";
+import { IssueDetail, StatusIcon, PriorityIcon } from "@/features/issues/components";
+import { STATUS_CONFIG, PRIORITY_CONFIG } from "@/features/issues/config";
+import { useActorName } from "@/features/workspace";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { toast } from "sonner";
 import {
+  ArrowRight,
   MoreHorizontal,
   Inbox,
   CheckCheck,
@@ -14,7 +19,7 @@ import {
   BookCheck,
   ListChecks,
 } from "lucide-react";
-import type { InboxItem, InboxItemType, InboxSeverity } from "@/shared/types";
+import type { InboxItem, InboxItemType, InboxSeverity, IssueStatus, IssuePriority } from "@/shared/types";
 import { Button } from "@/components/ui/button";
 import {
   ResizablePanelGroup,
@@ -29,6 +34,11 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  HoverCard,
+  HoverCardTrigger,
+  HoverCardContent,
+} from "@/components/ui/hover-card";
 import { api } from "@/shared/api";
 
 // ---------------------------------------------------------------------------
@@ -47,6 +57,7 @@ const typeLabels: Record<InboxItemType, string> = {
   assignee_changed: "Assignee changed",
   status_changed: "Status changed",
   priority_changed: "Priority changed",
+  due_date_changed: "Due date changed",
   new_comment: "New comment",
   mentioned: "Mentioned",
   review_requested: "Review requested",
@@ -67,6 +78,95 @@ function timeAgo(dateStr: string): string {
   return `${days}d`;
 }
 
+function shortDate(dateStr: string): string {
+  if (!dateStr) return "";
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+// ---------------------------------------------------------------------------
+// InboxHoverContent — shows issue context on hover
+// ---------------------------------------------------------------------------
+
+function InboxHoverContent({ item }: { item: InboxItem }) {
+  const issues = useIssueStore((s) => s.issues);
+  const issue = item.issue_id ? issues.find((i) => i.id === item.issue_id) : null;
+
+  if (!issue) return null;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-start gap-2">
+        <StatusIcon status={issue.status} className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <p className="text-sm font-medium line-clamp-2">{issue.title}</p>
+      </div>
+      {issue.description && (
+        <p className="line-clamp-2 text-xs text-muted-foreground">{issue.description}</p>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// InboxDetailLabel — renders rich subtitle per notification type
+// ---------------------------------------------------------------------------
+
+function InboxDetailLabel({ item }: { item: InboxItem }) {
+  const { getActorName } = useActorName();
+  const details = item.details ?? {};
+
+  switch (item.type) {
+    case "status_changed": {
+      if (!details.to) return <span>{typeLabels[item.type]}</span>;
+      const label = STATUS_CONFIG[details.to as IssueStatus]?.label ?? details.to;
+      return (
+        <span className="inline-flex items-center gap-1">
+          Set status to
+          <StatusIcon status={details.to as IssueStatus} className="h-3 w-3" />
+          {label}
+        </span>
+      );
+    }
+    case "priority_changed": {
+      if (!details.to) return <span>{typeLabels[item.type]}</span>;
+      const label = PRIORITY_CONFIG[details.to as IssuePriority]?.label ?? details.to;
+      return (
+        <span className="inline-flex items-center gap-1">
+          Set priority to
+          <PriorityIcon priority={details.to as IssuePriority} className="h-3 w-3" />
+          {label}
+        </span>
+      );
+    }
+    case "issue_assigned": {
+      if (details.new_assignee_id) {
+        return <span>Assigned to {getActorName(details.new_assignee_type ?? "member", details.new_assignee_id)}</span>;
+      }
+      return <span>{typeLabels[item.type]}</span>;
+    }
+    case "unassigned":
+      return <span>Removed assignee</span>;
+    case "assignee_changed": {
+      if (details.new_assignee_id) {
+        return <span>Assigned to {getActorName(details.new_assignee_type ?? "member", details.new_assignee_id)}</span>;
+      }
+      return <span>{typeLabels[item.type]}</span>;
+    }
+    case "due_date_changed": {
+      if (details.to) return <span>Set due date to {shortDate(details.to)}</span>;
+      return <span>Removed due date</span>;
+    }
+    case "new_comment": {
+      if (item.body) return <span className="truncate">{item.body}</span>;
+      return <span>{typeLabels[item.type]}</span>;
+    }
+    default:
+      return <span>{typeLabels[item.type] ?? item.type}</span>;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // InboxListItem
 // ---------------------------------------------------------------------------
@@ -81,43 +181,52 @@ function InboxListItem({
   onClick: () => void;
 }) {
   return (
-    <button
-      onClick={onClick}
-      className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-        isSelected ? "bg-accent" : "hover:bg-accent/50"
-      }`}
-    >
-      <ActorAvatar
-        actorType={item.actor_type ?? item.recipient_type}
-        actorId={item.actor_id ?? item.recipient_id}
-        size={28}
-      />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-1.5">
-            {!item.read && (
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" />
+    <HoverCard>
+      <HoverCardTrigger
+        render={
+          <button
+            onClick={onClick}
+            className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+              isSelected ? "bg-accent" : "hover:bg-accent/50"
+            }`}
+          />
+        }
+      >
+        <ActorAvatar
+          actorType={item.actor_type ?? item.recipient_type}
+          actorId={item.actor_id ?? item.recipient_id}
+          size={28}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-1.5">
+              {!item.read && (
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" />
+              )}
+              <span
+                className={`truncate text-sm ${!item.read ? "font-medium" : "text-muted-foreground"}`}
+              >
+                {item.title}
+              </span>
+            </div>
+            {item.issue_status && (
+              <StatusIcon status={item.issue_status} className="h-3.5 w-3.5 shrink-0" />
             )}
-            <span
-              className={`truncate text-sm ${!item.read ? "font-medium" : "text-muted-foreground"}`}
-            >
-              {item.title}
+          </div>
+          <div className="mt-0.5 flex items-center justify-between gap-2">
+            <p className={`min-w-0 truncate text-xs ${item.read ? "text-muted-foreground/60" : "text-muted-foreground"}`}>
+              <InboxDetailLabel item={item} />
+            </p>
+            <span className={`shrink-0 text-xs ${item.read ? "text-muted-foreground/60" : "text-muted-foreground"}`}>
+              {timeAgo(item.created_at)}
             </span>
           </div>
-          {item.issue_status && (
-            <StatusIcon status={item.issue_status} className="h-3.5 w-3.5 shrink-0" />
-          )}
         </div>
-        <div className="mt-0.5 flex items-center justify-between gap-2">
-          <p className={`truncate text-xs ${item.read ? "text-muted-foreground/60" : "text-muted-foreground"}`}>
-            {typeLabels[item.type] ?? item.type}
-          </p>
-          <span className={`shrink-0 text-xs ${item.read ? "text-muted-foreground/60" : "text-muted-foreground"}`}>
-            {timeAgo(item.created_at)}
-          </span>
-        </div>
-      </div>
-    </button>
+      </HoverCardTrigger>
+      <HoverCardContent side="right" align="start" className="w-72">
+        <InboxHoverContent item={item} />
+      </HoverCardContent>
+    </HoverCard>
   );
 }
 
@@ -126,7 +235,16 @@ function InboxListItem({
 // ---------------------------------------------------------------------------
 
 export default function InboxPage() {
-  const [selectedId, setSelectedId] = useState<string>("");
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const selectedId = searchParams.get("id") ?? "";
+  const setSelectedId = (id: string) => {
+    if (id) {
+      router.replace(`/inbox?id=${id}`, { scroll: false });
+    } else {
+      router.replace("/inbox", { scroll: false });
+    }
+  };
 
   const storeItems = useInboxStore((s) => s.items);
   const loading = useInboxStore((s) => s.loading);

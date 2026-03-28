@@ -332,16 +332,24 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 	assigneeChanged := (req.AssigneeType != nil || req.AssigneeID != nil) &&
 		(prevIssue.AssigneeType.String != issue.AssigneeType.String || uuidToString(prevIssue.AssigneeID) != uuidToString(issue.AssigneeID))
 	statusChanged := req.Status != nil && prevIssue.Status != issue.Status
+	priorityChanged := req.Priority != nil && prevIssue.Priority != issue.Priority
 	descriptionChanged := req.Description != nil && textToPtr(prevIssue.Description) != resp.Description
+	prevDueDate := timestampToPtr(prevIssue.DueDate)
+	dueDateChanged := prevDueDate != resp.DueDate && (prevDueDate == nil) != (resp.DueDate == nil) ||
+		(prevDueDate != nil && resp.DueDate != nil && *prevDueDate != *resp.DueDate)
 
 	h.publish(protocol.EventIssueUpdated, workspaceID, "member", userID, map[string]any{
 		"issue":               resp,
 		"assignee_changed":    assigneeChanged,
 		"status_changed":      statusChanged,
+		"priority_changed":    priorityChanged,
+		"due_date_changed":    dueDateChanged,
 		"description_changed": descriptionChanged,
 		"prev_assignee_type":  textToPtr(prevIssue.AssigneeType),
 		"prev_assignee_id":    uuidToPtr(prevIssue.AssigneeID),
 		"prev_status":         prevIssue.Status,
+		"prev_priority":       prevIssue.Priority,
+		"prev_due_date":       prevDueDate,
 		"prev_description":    textToPtr(prevIssue.Description),
 		"creator_type":        prevIssue.CreatorType,
 		"creator_id":          uuidToString(prevIssue.CreatorID),

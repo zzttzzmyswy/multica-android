@@ -260,6 +260,7 @@ func TestNotification_StatusChanged(t *testing.T) {
 			},
 			"assignee_changed": false,
 			"status_changed":   true,
+			"prev_status":      "todo",
 		},
 	})
 
@@ -279,6 +280,11 @@ func TestNotification_StatusChanged(t *testing.T) {
 	}
 	if sub1Items[0].Severity != "info" {
 		t.Fatalf("expected severity 'info', got %q", sub1Items[0].Severity)
+	}
+	// Title is now just the issue title; details contain from/to
+	expectedTitle := "status test issue"
+	if sub1Items[0].Title != expectedTitle {
+		t.Fatalf("expected title %q, got %q", expectedTitle, sub1Items[0].Title)
 	}
 
 	// sub2 should also get a status_changed notification
@@ -548,5 +554,131 @@ func TestNotification_TaskFailed(t *testing.T) {
 	}
 	if creatorItems[0].Severity != "action_required" {
 		t.Fatalf("expected severity 'action_required', got %q", creatorItems[0].Severity)
+	}
+}
+
+// TestNotification_PriorityChanged verifies that all subscribers except the actor
+// receive a "priority_changed" notification when an issue priority changes.
+func TestNotification_PriorityChanged(t *testing.T) {
+	queries := db.New(testPool)
+	bus := newNotificationBus(t, queries)
+
+	sub1Email := "notif-sub1-priority@multica.ai"
+	sub1ID := createTestUser(t, sub1Email)
+	t.Cleanup(func() { cleanupTestUser(t, sub1Email) })
+
+	issueID := createTestIssue(t, testWorkspaceID, testUserID)
+	t.Cleanup(func() {
+		cleanupInboxForIssue(t, issueID)
+		cleanupTestIssue(t, issueID)
+	})
+
+	addTestSubscriber(t, issueID, "member", testUserID, "creator")
+	addTestSubscriber(t, issueID, "member", sub1ID, "assignee")
+
+	bus.Publish(events.Event{
+		Type:        protocol.EventIssueUpdated,
+		WorkspaceID: testWorkspaceID,
+		ActorType:   "member",
+		ActorID:     testUserID,
+		Payload: map[string]any{
+			"issue": handler.IssueResponse{
+				ID:          issueID,
+				WorkspaceID: testWorkspaceID,
+				Title:       "priority test issue",
+				Status:      "todo",
+				Priority:    "high",
+				CreatorType: "member",
+				CreatorID:   testUserID,
+			},
+			"assignee_changed": false,
+			"status_changed":   false,
+			"priority_changed": true,
+			"prev_priority":    "medium",
+		},
+	})
+
+	// Actor should NOT get a notification
+	actorItems := inboxItemsForRecipient(t, queries, testUserID)
+	if len(actorItems) != 0 {
+		t.Fatalf("expected 0 inbox items for actor, got %d", len(actorItems))
+	}
+
+	// sub1 should get a priority_changed notification
+	sub1Items := inboxItemsForRecipient(t, queries, sub1ID)
+	if len(sub1Items) != 1 {
+		t.Fatalf("expected 1 inbox item for sub1, got %d", len(sub1Items))
+	}
+	if sub1Items[0].Type != "priority_changed" {
+		t.Fatalf("expected type 'priority_changed', got %q", sub1Items[0].Type)
+	}
+	if sub1Items[0].Severity != "info" {
+		t.Fatalf("expected severity 'info', got %q", sub1Items[0].Severity)
+	}
+	// Title is now just the issue title; details contain from/to
+	expectedTitle := "priority test issue"
+	if sub1Items[0].Title != expectedTitle {
+		t.Fatalf("expected title %q, got %q", expectedTitle, sub1Items[0].Title)
+	}
+}
+
+// TestNotification_DueDateChanged verifies that all subscribers except the actor
+// receive a "due_date_changed" notification when an issue due date changes.
+func TestNotification_DueDateChanged(t *testing.T) {
+	queries := db.New(testPool)
+	bus := newNotificationBus(t, queries)
+
+	sub1Email := "notif-sub1-duedate@multica.ai"
+	sub1ID := createTestUser(t, sub1Email)
+	t.Cleanup(func() { cleanupTestUser(t, sub1Email) })
+
+	issueID := createTestIssue(t, testWorkspaceID, testUserID)
+	t.Cleanup(func() {
+		cleanupInboxForIssue(t, issueID)
+		cleanupTestIssue(t, issueID)
+	})
+
+	addTestSubscriber(t, issueID, "member", testUserID, "creator")
+	addTestSubscriber(t, issueID, "member", sub1ID, "assignee")
+
+	dueDate := "2026-04-15T00:00:00Z"
+	bus.Publish(events.Event{
+		Type:        protocol.EventIssueUpdated,
+		WorkspaceID: testWorkspaceID,
+		ActorType:   "member",
+		ActorID:     testUserID,
+		Payload: map[string]any{
+			"issue": handler.IssueResponse{
+				ID:          issueID,
+				WorkspaceID: testWorkspaceID,
+				Title:       "due date test issue",
+				Status:      "todo",
+				Priority:    "medium",
+				CreatorType: "member",
+				CreatorID:   testUserID,
+				DueDate:     &dueDate,
+			},
+			"assignee_changed": false,
+			"status_changed":   false,
+			"due_date_changed": true,
+		},
+	})
+
+	// Actor should NOT get a notification
+	actorItems := inboxItemsForRecipient(t, queries, testUserID)
+	if len(actorItems) != 0 {
+		t.Fatalf("expected 0 inbox items for actor, got %d", len(actorItems))
+	}
+
+	// sub1 should get a due_date_changed notification
+	sub1Items := inboxItemsForRecipient(t, queries, sub1ID)
+	if len(sub1Items) != 1 {
+		t.Fatalf("expected 1 inbox item for sub1, got %d", len(sub1Items))
+	}
+	if sub1Items[0].Type != "due_date_changed" {
+		t.Fatalf("expected type 'due_date_changed', got %q", sub1Items[0].Type)
+	}
+	if sub1Items[0].Severity != "info" {
+		t.Fatalf("expected severity 'info', got %q", sub1Items[0].Severity)
 	}
 }
