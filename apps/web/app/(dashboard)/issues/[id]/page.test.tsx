@@ -124,6 +124,9 @@ vi.mock("@/shared/api", () => ({
     deleteComment: (...args: any[]) => mockDeleteComment(...args),
     deleteIssue: (...args: any[]) => mockDeleteIssue(...args),
     updateIssue: (...args: any[]) => mockUpdateIssue(...args),
+    listIssueSubscribers: vi.fn().mockResolvedValue([]),
+    subscribeToIssue: vi.fn().mockResolvedValue(undefined),
+    unsubscribeFromIssue: vi.fn().mockResolvedValue(undefined),
   },
 }));
 

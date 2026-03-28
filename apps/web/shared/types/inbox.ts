@@ -4,13 +4,17 @@ export type InboxSeverity = "action_required" | "attention" | "info";
 
 export type InboxItemType =
   | "issue_assigned"
+  | "unassigned"
+  | "assignee_changed"
+  | "status_changed"
+  | "priority_changed"
+  | "new_comment"
+  | "mentioned"
   | "review_requested"
   | "task_completed"
   | "task_failed"
   | "agent_blocked"
-  | "agent_completed"
-  | "mentioned"
-  | "status_change";
+  | "agent_completed";
 
 export interface InboxItem {
   id: string;
