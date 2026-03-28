@@ -279,10 +279,11 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
         setSubscribers((prev) => prev.filter((s) => !(s.user_id === userId && s.user_type === userType)));
       } else {
         await api.subscribeToIssue(id, userId, userType);
-        setSubscribers((prev) => [
-          ...prev,
-          { issue_id: id, user_type: userType, user_id: userId, reason: "manual" as const, created_at: new Date().toISOString() },
-        ]);
+        setSubscribers((prev) => {
+          // Deduplicate: WS event may have already added this subscriber
+          if (prev.some((s) => s.user_id === userId && s.user_type === userType)) return prev;
+          return [...prev, { issue_id: id, user_type: userType, user_id: userId, reason: "manual" as const, created_at: new Date().toISOString() }];
+        });
       }
     } catch {
       toast.error("Failed to update subscriber");
@@ -335,7 +336,7 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
       const p = payload as SubscriberAddedPayload;
       if (p.issue_id !== id) return;
       setSubscribers((prev) => {
-        if (prev.some((s) => s.user_id === p.user_id)) return prev;
+        if (prev.some((s) => s.user_id === p.user_id && s.user_type === p.user_type)) return prev;
         return [...prev, {
           issue_id: p.issue_id,
           user_type: p.user_type as "member" | "agent",
