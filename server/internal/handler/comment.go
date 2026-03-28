@@ -6,20 +6,22 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/logger"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
 type CommentResponse struct {
-	ID         string `json:"id"`
-	IssueID    string `json:"issue_id"`
-	AuthorType string `json:"author_type"`
-	AuthorID   string `json:"author_id"`
-	Content    string `json:"content"`
-	Type       string `json:"type"`
-	CreatedAt  string `json:"created_at"`
-	UpdatedAt  string `json:"updated_at"`
+	ID         string  `json:"id"`
+	IssueID    string  `json:"issue_id"`
+	AuthorType string  `json:"author_type"`
+	AuthorID   string  `json:"author_id"`
+	Content    string  `json:"content"`
+	Type       string  `json:"type"`
+	ParentID   *string `json:"parent_id"`
+	CreatedAt  string  `json:"created_at"`
+	UpdatedAt  string  `json:"updated_at"`
 }
 
 func commentToResponse(c db.Comment) CommentResponse {
@@ -30,6 +32,7 @@ func commentToResponse(c db.Comment) CommentResponse {
 		AuthorID:   uuidToString(c.AuthorID),
 		Content:    c.Content,
 		Type:       c.Type,
+		ParentID:   uuidToPtr(c.ParentID),
 		CreatedAt:  timestampToString(c.CreatedAt),
 		UpdatedAt:  timestampToString(c.UpdatedAt),
 	}
@@ -57,8 +60,9 @@ func (h *Handler) ListComments(w http.ResponseWriter, r *http.Request) {
 }
 
 type CreateCommentRequest struct {
-	Content string `json:"content"`
-	Type    string `json:"type"`
+	Content  string  `json:"content"`
+	Type     string  `json:"type"`
+	ParentID *string `json:"parent_id"`
 }
 
 func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
@@ -87,12 +91,23 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 		req.Type = "comment"
 	}
 
+	var parentID pgtype.UUID
+	if req.ParentID != nil {
+		parentID = parseUUID(*req.ParentID)
+		parent, err := h.Queries.GetComment(r.Context(), parentID)
+		if err != nil || uuidToString(parent.IssueID) != issueID {
+			writeError(w, http.StatusBadRequest, "invalid parent comment")
+			return
+		}
+	}
+
 	comment, err := h.Queries.CreateComment(r.Context(), db.CreateCommentParams{
 		IssueID:    issue.ID,
 		AuthorType: "member",
 		AuthorID:   parseUUID(userID),
 		Content:    req.Content,
 		Type:       req.Type,
+		ParentID:   parentID,
 	})
 	if err != nil {
 		slog.Warn("create comment failed", append(logger.RequestAttrs(r), "error", err, "issue_id", issueID)...)

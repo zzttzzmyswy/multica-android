@@ -53,7 +53,7 @@ func (q *Queries) CreateActivity(ctx context.Context, arg CreateActivityParams) 
 const listActivities = `-- name: ListActivities :many
 SELECT id, workspace_id, issue_id, actor_type, actor_id, action, details, created_at FROM activity_log
 WHERE issue_id = $1
-ORDER BY created_at DESC
+ORDER BY created_at ASC
 LIMIT $2 OFFSET $3
 `
 

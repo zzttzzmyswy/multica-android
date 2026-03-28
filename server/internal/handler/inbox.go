@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -14,21 +15,22 @@ import (
 )
 
 type InboxItemResponse struct {
-	ID            string  `json:"id"`
-	WorkspaceID   string  `json:"workspace_id"`
-	RecipientType string  `json:"recipient_type"`
-	RecipientID   string  `json:"recipient_id"`
-	Type          string  `json:"type"`
-	Severity      string  `json:"severity"`
-	IssueID       *string `json:"issue_id"`
-	Title         string  `json:"title"`
-	Body          *string `json:"body"`
-	Read          bool    `json:"read"`
-	Archived      bool    `json:"archived"`
-	CreatedAt     string  `json:"created_at"`
-	IssueStatus   *string `json:"issue_status"`
-	ActorType     *string `json:"actor_type"`
-	ActorID       *string `json:"actor_id"`
+	ID            string          `json:"id"`
+	WorkspaceID   string          `json:"workspace_id"`
+	RecipientType string          `json:"recipient_type"`
+	RecipientID   string          `json:"recipient_id"`
+	Type          string          `json:"type"`
+	Severity      string          `json:"severity"`
+	IssueID       *string         `json:"issue_id"`
+	Title         string          `json:"title"`
+	Body          *string         `json:"body"`
+	Read          bool            `json:"read"`
+	Archived      bool            `json:"archived"`
+	CreatedAt     string          `json:"created_at"`
+	IssueStatus   *string         `json:"issue_status"`
+	ActorType     *string         `json:"actor_type"`
+	ActorID       *string         `json:"actor_id"`
+	Details       json.RawMessage `json:"details"`
 }
 
 func inboxToResponse(i db.InboxItem) InboxItemResponse {
@@ -47,6 +49,7 @@ func inboxToResponse(i db.InboxItem) InboxItemResponse {
 		CreatedAt:     timestampToString(i.CreatedAt),
 		ActorType:     textToPtr(i.ActorType),
 		ActorID:       uuidToPtr(i.ActorID),
+		Details:       json.RawMessage(i.Details),
 	}
 }
 
@@ -67,6 +70,7 @@ func inboxRowToResponse(r db.ListInboxItemsRow) InboxItemResponse {
 		IssueStatus:   textToPtr(r.IssueStatus),
 		ActorType:     textToPtr(r.ActorType),
 		ActorID:       uuidToPtr(r.ActorID),
+		Details:       json.RawMessage(r.Details),
 	}
 }
 

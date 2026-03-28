@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useDefaultLayout, usePanelRef } from "react-resizable-panels";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ArrowUp,
   Bot,
   Calendar,
   ChevronLeft,
@@ -13,7 +12,6 @@ import {
   Link2,
   MoreHorizontal,
   PanelRight,
-  Pencil,
   Trash2,
   UserMinus,
   Users,
@@ -47,8 +45,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { Input } from "@/components/ui/input";
-import { RichTextEditor, type RichTextEditorRef } from "@/components/common/rich-text-editor";
-import { Markdown } from "@/components/markdown";
+import { RichTextEditor } from "@/components/common/rich-text-editor";
 import {
   Tooltip,
   TooltipTrigger,
@@ -59,30 +56,18 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount } from "@/components/ui/avatar";
 import { ActorAvatar } from "@/components/common/actor-avatar";
-import type { Issue, Comment, IssueSubscriber, UpdateIssueRequest, IssueStatus, IssuePriority } from "@/shared/types";
+import type { Issue, Comment, IssueSubscriber, UpdateIssueRequest, IssueStatus, IssuePriority, TimelineEntry } from "@/shared/types";
 import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
 import { StatusIcon, PriorityIcon, DueDatePicker } from "@/features/issues/components";
+import { CommentCard } from "./comment-card";
+import { CommentInput } from "./comment-input";
 import { api } from "@/shared/api";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore, useActorName } from "@/features/workspace";
 import { useWSEvent } from "@/features/realtime";
 import { useIssueStore } from "@/features/issues";
-import type { CommentCreatedPayload, CommentUpdatedPayload, CommentDeletedPayload, SubscriberAddedPayload, SubscriberRemovedPayload } from "@/shared/types";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
+import type { CommentCreatedPayload, CommentUpdatedPayload, CommentDeletedPayload, SubscriberAddedPayload, SubscriberRemovedPayload, ActivityCreatedPayload } from "@/shared/types";
+import { timeAgo } from "@/shared/utils";
 
 function shortDate(date: string | null): string {
   if (!date) return "—";
@@ -90,6 +75,66 @@ function shortDate(date: string | null): string {
     month: "short",
     day: "numeric",
   });
+}
+
+function statusLabel(status: string): string {
+  return STATUS_CONFIG[status as IssueStatus]?.label ?? status;
+}
+
+function priorityLabel(priority: string): string {
+  return PRIORITY_CONFIG[priority as IssuePriority]?.label ?? priority;
+}
+
+function formatActivity(
+  entry: TimelineEntry,
+  resolveActorName?: (type: string, id: string) => string,
+): string {
+  const details = (entry.details ?? {}) as Record<string, string>;
+  switch (entry.action) {
+    case "created":
+      return "created this issue";
+    case "status_changed":
+      return `changed status from ${statusLabel(details.from ?? "?")} to ${statusLabel(details.to ?? "?")}`;
+    case "priority_changed":
+      return `changed priority from ${priorityLabel(details.from ?? "?")} to ${priorityLabel(details.to ?? "?")}`;
+    case "assignee_changed": {
+      const isSelfAssign = details.to_type === entry.actor_type && details.to_id === entry.actor_id;
+      if (isSelfAssign) return "self-assigned this issue";
+      const toName = details.to_id && details.to_type && resolveActorName
+        ? resolveActorName(details.to_type, details.to_id)
+        : null;
+      if (toName) return `assigned to ${toName}`;
+      if (details.from_id && !details.to_id) return "removed assignee";
+      return "changed assignee";
+    }
+    case "due_date_changed": {
+      if (!details.to) return "removed due date";
+      const formatted = new Date(details.to).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      return `set due date to ${formatted}`;
+    }
+    case "description_updated":
+      return "updated the description";
+    case "task_completed":
+      return "completed the task";
+    case "task_failed":
+      return "task failed";
+    default:
+      return entry.action ?? "";
+  }
+}
+
+function commentToTimelineEntry(c: Comment): TimelineEntry {
+  return {
+    type: "comment",
+    id: c.id,
+    actor_type: c.author_type,
+    actor_id: c.author_id,
+    content: c.content,
+    parent_id: c.parent_id,
+    created_at: c.created_at,
+    updated_at: c.updated_at,
+    comment_type: c.type,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -147,15 +192,11 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
   const sidebarRef = usePanelRef();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [issue, setIssue] = useState<Issue | null>(null);
-  const [comments, setComments] = useState<Comment[]>([]);
+  const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [subscribers, setSubscribers] = useState<IssueSubscriber[]>([]);
   const [loading, setLoading] = useState(true);
-  const [commentEmpty, setCommentEmpty] = useState(true);
-  const commentEditorRef = useRef<RichTextEditorRef>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
-  const [editContent, setEditContent] = useState("");
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -173,45 +214,88 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
 
   useEffect(() => {
     setIssue(null);
-    setComments([]);
+    setTimeline([]);
     setSubscribers([]);
     setLoading(true);
-    Promise.all([api.getIssue(id), api.listComments(id), api.listIssueSubscribers(id)])
-      .then(([iss, cmts, subs]) => {
+    Promise.all([api.getIssue(id), api.listTimeline(id), api.listIssueSubscribers(id)])
+      .then(([iss, entries, subs]) => {
         setIssue(iss);
-        setComments(cmts);
+        setTimeline(entries);
         setSubscribers(subs);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [id]);
 
-  const handleSubmitComment = async () => {
-    const content = commentEditorRef.current?.getMarkdown()?.trim();
-    if (!content || submitting || !user) return;
+  const handleSubmitComment = async (content: string) => {
+    if (!content.trim() || submitting || !user) return;
     const tempId = "temp-" + Date.now();
-    const tempComment: Comment = {
-      id: tempId,
-      issue_id: id,
-      author_type: "member",
-      author_id: user.id,
-      content,
+    const tempEntry: TimelineEntry = {
       type: "comment",
+      id: tempId,
+      actor_type: "member",
+      actor_id: user.id,
+      content,
+      parent_id: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      comment_type: "comment",
     };
-    setComments((prev) => [...prev, tempComment]);
-    commentEditorRef.current?.clearContent();
-    setCommentEmpty(true);
+    setTimeline((prev) => [...prev, tempEntry]);
     setSubmitting(true);
     try {
       const comment = await api.createComment(id, content);
-      setComments((prev) => prev.map((c) => (c.id === tempId ? comment : c)));
+      setTimeline((prev) => prev.map((e) => (e.id === tempId ? commentToTimelineEntry(comment) : e)));
     } catch {
-      setComments((prev) => prev.filter((c) => c.id !== tempId));
+      setTimeline((prev) => prev.filter((e) => e.id !== tempId));
       toast.error("Failed to send comment");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleSubmitReply = async (parentId: string, content: string) => {
+    if (!content.trim() || !user) return;
+    try {
+      const comment = await api.createComment(id, content, "comment", parentId);
+      setTimeline((prev) => {
+        if (prev.some((e) => e.id === comment.id)) return prev;
+        return [...prev, commentToTimelineEntry(comment)];
+      });
+    } catch {
+      toast.error("Failed to send reply");
+    }
+  };
+
+  const handleEditComment = async (commentId: string, content: string) => {
+    try {
+      const updated = await api.updateComment(commentId, content);
+      setTimeline((prev) => prev.map((e) => (e.id === updated.id ? commentToTimelineEntry(updated) : e)));
+    } catch {
+      toast.error("Failed to update comment");
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    try {
+      await api.deleteComment(commentId);
+      setTimeline((prev) => {
+        const idsToRemove = new Set<string>([commentId]);
+        // Recursively collect all descendant IDs
+        let added = true;
+        while (added) {
+          added = false;
+          for (const e of prev) {
+            if (e.parent_id && idsToRemove.has(e.parent_id) && !idsToRemove.has(e.id)) {
+              idsToRemove.add(e.id);
+              added = true;
+            }
+          }
+        }
+        return prev.filter((e) => !idsToRemove.has(e.id));
+      });
+    } catch {
+      toast.error("Failed to delete comment");
     }
   };
 
@@ -238,31 +322,6 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
     } catch {
       toast.error("Failed to delete issue");
       setDeleting(false);
-    }
-  };
-
-  const startEditComment = (c: Comment) => {
-    setEditingCommentId(c.id);
-    setEditContent(c.content);
-  };
-
-  const handleSaveEditComment = async () => {
-    if (!editingCommentId || !editContent.trim()) return;
-    try {
-      const updated = await api.updateComment(editingCommentId, editContent.trim());
-      setComments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
-      setEditingCommentId(null);
-    } catch {
-      toast.error("Failed to update comment");
-    }
-  };
-
-  const handleDeleteComment = async (commentId: string) => {
-    try {
-      await api.deleteComment(commentId);
-      setComments((prev) => prev.filter((c) => c.id !== commentId));
-    } catch {
-      toast.error("Failed to delete comment");
     }
   };
 
@@ -302,9 +361,9 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
       if (comment.issue_id !== id) return;
       // Skip own comments — already added locally via API response
       if (comment.author_type === "member" && comment.author_id === user?.id) return;
-      setComments((prev) => {
-        if (prev.some((c) => c.id === comment.id)) return prev;
-        return [...prev, comment];
+      setTimeline((prev) => {
+        if (prev.some((e) => e.id === comment.id)) return prev;
+        return [...prev, commentToTimelineEntry(comment)];
       });
     }, [id, user?.id]),
   );
@@ -314,7 +373,7 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
     useCallback((payload: unknown) => {
       const { comment } = payload as CommentUpdatedPayload;
       if (comment.issue_id === id) {
-        setComments((prev) => prev.map((c) => (c.id === comment.id ? comment : c)));
+        setTimeline((prev) => prev.map((e) => (e.id === comment.id ? commentToTimelineEntry(comment) : e)));
       }
     }, [id]),
   );
@@ -324,8 +383,35 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
     useCallback((payload: unknown) => {
       const { comment_id, issue_id } = payload as CommentDeletedPayload;
       if (issue_id === id) {
-        setComments((prev) => prev.filter((c) => c.id !== comment_id));
+        setTimeline((prev) => {
+          const idsToRemove = new Set<string>([comment_id]);
+          let added = true;
+          while (added) {
+            added = false;
+            for (const e of prev) {
+              if (e.parent_id && idsToRemove.has(e.parent_id) && !idsToRemove.has(e.id)) {
+                idsToRemove.add(e.id);
+                added = true;
+              }
+            }
+          }
+          return prev.filter((e) => !idsToRemove.has(e.id));
+        });
       }
+    }, [id]),
+  );
+
+  useWSEvent(
+    "activity:created",
+    useCallback((payload: unknown) => {
+      const p = payload as ActivityCreatedPayload;
+      if (p.issue_id !== id) return;
+      const entry = p.entry;
+      if (!entry || !entry.id) return;
+      setTimeline((prev) => {
+        if (prev.some((e) => e.id === entry.id)) return prev;
+        return [...prev, entry];
+      });
     }, [id]),
   );
 
@@ -674,7 +760,9 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
           {/* Activity / Comments */}
           <div>
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold">Activity</h2>
+              <div className="flex items-center gap-3">
+                <h2 className="text-base font-semibold">Activity</h2>
+              </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleToggleSubscribe}
@@ -720,7 +808,7 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                                   <Checkbox checked={isSubbed} className="pointer-events-none" />
                                   <ActorAvatar actorType="member" actorId={m.user_id} size={22} />
                                   <span className="truncate flex-1">{m.name}</span>
-                                  
+
                                 </CommandItem>
                               );
                             })}
@@ -740,7 +828,7 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                                   <Checkbox checked={isSubbed} className="pointer-events-none" />
                                   <ActorAvatar actorType="agent" actorId={a.id} size={22} />
                                   <span className="truncate flex-1">{a.name}</span>
-                                  
+
                                 </CommandItem>
                               );
                             })}
@@ -753,115 +841,104 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
               </div>
             </div>
 
-            <div className="mt-4">
-              {comments.map((comment) => {
-                const isOwn = comment.author_type === "member" && comment.author_id === user?.id;
-                return (
-                  <div key={comment.id} className={`group relative py-3${comment.id.startsWith("temp-") ? " opacity-60" : ""}`}>
-                    <div className="flex items-center gap-2.5">
-                      <ActorAvatar
-                        actorType={comment.author_type}
-                        actorId={comment.author_id}
-                        size={28}
+            {/* Timeline entries */}
+            <div className="mt-4 space-y-2">
+              {(() => {
+                const topLevel = timeline.filter((e) => e.type === "activity" || !e.parent_id);
+                const repliesByParent = new Map<string, TimelineEntry[]>();
+                for (const e of timeline) {
+                  if (e.type === "comment" && e.parent_id) {
+                    const list = repliesByParent.get(e.parent_id) ?? [];
+                    list.push(e);
+                    repliesByParent.set(e.parent_id, list);
+                  }
+                }
+
+                // Group consecutive activities together so the connector line works
+                const groups: { type: "activities" | "comment"; entries: TimelineEntry[] }[] = [];
+                for (const entry of topLevel) {
+                  if (entry.type === "activity") {
+                    const last = groups[groups.length - 1];
+                    if (last?.type === "activities") {
+                      last.entries.push(entry);
+                    } else {
+                      groups.push({ type: "activities", entries: [entry] });
+                    }
+                  } else {
+                    groups.push({ type: "comment", entries: [entry] });
+                  }
+                }
+
+                return groups.map((group) => {
+                  if (group.type === "comment") {
+                    const entry = group.entries[0]!;
+                    return (
+                      <CommentCard
+                        key={entry.id}
+                        entry={entry}
+                        allReplies={repliesByParent}
+                        currentUserId={user?.id}
+                        onReply={handleSubmitReply}
+                        onEdit={handleEditComment}
+                        onDelete={handleDeleteComment}
                       />
-                      <span className="text-sm font-medium">
-                        {getActorName(comment.author_type, comment.author_id)}
-                      </span>
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <span className="text-xs text-muted-foreground cursor-default">
-                              {timeAgo(comment.created_at)}
-                            </span>
-                          }
-                        />
-                        <TooltipContent side="top">
-                          {new Date(comment.created_at).toLocaleString()}
-                        </TooltipContent>
-                      </Tooltip>
-                      {isOwn && (
-                        <div className="ml-auto flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Tooltip>
-                            <TooltipTrigger
-                              render={
-                                <Button
-                                  variant="ghost"
-                                  size="icon-xs"
-                                  onClick={() => startEditComment(comment)}
-                                  className="text-muted-foreground hover:text-foreground"
-                                >
-                                  <Pencil className="h-3 w-3" />
-                                </Button>
-                              }
-                            />
-                            <TooltipContent>Edit</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger
-                              render={
-                                <Button
-                                  variant="ghost"
-                                  size="icon-xs"
-                                  onClick={() => handleDeleteComment(comment.id)}
-                                  className="text-muted-foreground hover:text-destructive"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              }
-                            />
-                            <TooltipContent>Delete</TooltipContent>
-                          </Tooltip>
-                        </div>
-                      )}
+                    );
+                  }
+
+                  return (
+                    <div key={group.entries[0]!.id} className="px-4">
+                      {group.entries.map((entry, idx) => {
+                        const details = (entry.details ?? {}) as Record<string, string>;
+                        const isStatusChange = entry.action === "status_changed";
+                        const isPriorityChange = entry.action === "priority_changed";
+                        const isDueDateChange = entry.action === "due_date_changed";
+                        const isLast = idx === group.entries.length - 1;
+
+                        let leadIcon: React.ReactNode;
+                        if (isStatusChange && details.to) {
+                          leadIcon = <StatusIcon status={details.to as IssueStatus} className="h-3.5 w-3.5 shrink-0" />;
+                        } else if (isPriorityChange && details.to) {
+                          leadIcon = <PriorityIcon priority={details.to as IssuePriority} className="h-3.5 w-3.5 shrink-0" />;
+                        } else if (isDueDateChange) {
+                          leadIcon = <Calendar className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
+                        } else {
+                          leadIcon = <ActorAvatar actorType={entry.actor_type} actorId={entry.actor_id} size={14} />;
+                        }
+
+                        return (
+                          <div key={entry.id} className="flex text-xs text-muted-foreground">
+                            <div className="mr-2.5 flex w-3.5 shrink-0 flex-col items-center">
+                              <div className="flex h-5 items-center">{leadIcon}</div>
+                              {!isLast && <div className="w-px flex-1 bg-border" />}
+                            </div>
+                            <div className={`flex flex-1 items-baseline gap-1 ${!isLast ? "pb-3" : ""}`}>
+                              <span className="font-medium">{getActorName(entry.actor_type, entry.actor_id)}</span>
+                              <span>{formatActivity(entry, getActorName)}</span>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={
+                                    <span className="ml-auto shrink-0 cursor-default">
+                                      {timeAgo(entry.created_at)}
+                                    </span>
+                                  }
+                                />
+                                <TooltipContent side="top">
+                                  {new Date(entry.created_at).toLocaleString()}
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                    {editingCommentId === comment.id ? (
-                      <form onSubmit={(e) => { e.preventDefault(); handleSaveEditComment(); }} className="mt-2 pl-9.5">
-                        <input
-                          autoFocus
-                          value={editContent}
-                          onChange={(e) => setEditContent(e.target.value)}
-                          aria-label="Edit comment"
-                          className="w-full text-sm bg-transparent border-b outline-none"
-                          onKeyDown={(e) => { if (e.key === "Escape") setEditingCommentId(null); }}
-                        />
-                      </form>
-                    ) : (
-                      <div className="mt-2 pl-9.5 text-sm leading-relaxed text-foreground/85">
-                        <Markdown mode="minimal">{comment.content}</Markdown>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
 
-            {/* Comment input */}
-            <div className="mt-4 rounded-md border bg-muted/30">
-              <div className="min-h-20 max-h-48 overflow-y-auto px-3 py-2">
-                <RichTextEditor
-                  ref={commentEditorRef}
-                  placeholder="Leave a comment..."
-                  onUpdate={(md) => setCommentEmpty(!md.trim())}
-                  onSubmit={handleSubmitComment}
-                  debounceMs={100}
-                />
-              </div>
-              <div className="flex items-center justify-end px-2 pb-2">
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        size="icon-sm"
-                        disabled={commentEmpty || submitting}
-                        onClick={handleSubmitComment}
-                      >
-                        <ArrowUp className="h-4 w-4" />
-                      </Button>
-                    }
-                  />
-                  <TooltipContent>Send</TooltipContent>
-                </Tooltip>
-              </div>
+            {/* Bottom comment input — no avatar, full width */}
+            <div className="mt-4">
+              <CommentInput onSubmit={handleSubmitComment} />
             </div>
           </div>
         </div>

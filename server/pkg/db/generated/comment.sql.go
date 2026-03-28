@@ -12,9 +12,9 @@ import (
 )
 
 const createComment = `-- name: CreateComment :one
-INSERT INTO comment (issue_id, author_type, author_id, content, type)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, issue_id, author_type, author_id, content, type, created_at, updated_at
+INSERT INTO comment (issue_id, author_type, author_id, content, type, parent_id)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, issue_id, author_type, author_id, content, type, created_at, updated_at, parent_id
 `
 
 type CreateCommentParams struct {
@@ -23,6 +23,7 @@ type CreateCommentParams struct {
 	AuthorID   pgtype.UUID `json:"author_id"`
 	Content    string      `json:"content"`
 	Type       string      `json:"type"`
+	ParentID   pgtype.UUID `json:"parent_id"`
 }
 
 func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (Comment, error) {
@@ -32,6 +33,7 @@ func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (C
 		arg.AuthorID,
 		arg.Content,
 		arg.Type,
+		arg.ParentID,
 	)
 	var i Comment
 	err := row.Scan(
@@ -43,6 +45,7 @@ func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (C
 		&i.Type,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ParentID,
 	)
 	return i, err
 }
@@ -57,7 +60,7 @@ func (q *Queries) DeleteComment(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getComment = `-- name: GetComment :one
-SELECT id, issue_id, author_type, author_id, content, type, created_at, updated_at FROM comment
+SELECT id, issue_id, author_type, author_id, content, type, created_at, updated_at, parent_id FROM comment
 WHERE id = $1
 `
 
@@ -73,12 +76,13 @@ func (q *Queries) GetComment(ctx context.Context, id pgtype.UUID) (Comment, erro
 		&i.Type,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ParentID,
 	)
 	return i, err
 }
 
 const listComments = `-- name: ListComments :many
-SELECT id, issue_id, author_type, author_id, content, type, created_at, updated_at FROM comment
+SELECT id, issue_id, author_type, author_id, content, type, created_at, updated_at, parent_id FROM comment
 WHERE issue_id = $1
 ORDER BY created_at ASC
 `
@@ -101,6 +105,7 @@ func (q *Queries) ListComments(ctx context.Context, issueID pgtype.UUID) ([]Comm
 			&i.Type,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ParentID,
 		); err != nil {
 			return nil, err
 		}
@@ -117,7 +122,7 @@ UPDATE comment SET
     content = $2,
     updated_at = now()
 WHERE id = $1
-RETURNING id, issue_id, author_type, author_id, content, type, created_at, updated_at
+RETURNING id, issue_id, author_type, author_id, content, type, created_at, updated_at, parent_id
 `
 
 type UpdateCommentParams struct {
@@ -137,6 +142,7 @@ func (q *Queries) UpdateComment(ctx context.Context, arg UpdateCommentParams) (C
 		&i.Type,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ParentID,
 	)
 	return i, err
 }

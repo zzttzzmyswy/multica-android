@@ -9,6 +9,7 @@ export interface Comment {
   author_id: string;
   content: string;
   type: CommentType;
+  parent_id: string | null;
   created_at: string;
   updated_at: string;
 }

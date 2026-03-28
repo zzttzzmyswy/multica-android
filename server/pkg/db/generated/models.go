@@ -84,6 +84,7 @@ type Comment struct {
 	Type       string             `json:"type"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	ParentID   pgtype.UUID        `json:"parent_id"`
 }
 
 type DaemonConnection struct {
@@ -130,6 +131,7 @@ type InboxItem struct {
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	ActorType     pgtype.Text        `json:"actor_type"`
 	ActorID       pgtype.UUID        `json:"actor_id"`
+	Details       []byte             `json:"details"`
 }
 
 type Issue struct {

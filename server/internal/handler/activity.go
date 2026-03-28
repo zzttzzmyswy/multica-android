@@ -1,0 +1,100 @@
+package handler
+
+import (
+	"encoding/json"
+	"net/http"
+	"sort"
+
+	"github.com/go-chi/chi/v5"
+	db "github.com/multica-ai/multica/server/pkg/db/generated"
+)
+
+// TimelineEntry represents a single entry in the issue timeline, which can be
+// either an activity log record or a comment.
+type TimelineEntry struct {
+	Type string `json:"type"` // "activity" or "comment"
+	ID   string `json:"id"`
+
+	ActorType string `json:"actor_type"`
+	ActorID   string `json:"actor_id"`
+	CreatedAt string `json:"created_at"`
+
+	// Activity-only fields
+	Action  *string         `json:"action,omitempty"`
+	Details json.RawMessage `json:"details,omitempty"`
+
+	// Comment-only fields
+	Content     *string `json:"content,omitempty"`
+	ParentID    *string `json:"parent_id,omitempty"`
+	UpdatedAt   *string `json:"updated_at,omitempty"`
+	CommentType *string `json:"comment_type,omitempty"`
+}
+
+// ListTimeline returns a merged, chronologically-sorted timeline of activities
+// and comments for a given issue.
+func (h *Handler) ListTimeline(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	issue, ok := h.loadIssueForUser(w, r, id)
+	if !ok {
+		return
+	}
+
+	activities, err := h.Queries.ListActivities(r.Context(), db.ListActivitiesParams{
+		IssueID: issue.ID,
+		Limit:   200,
+		Offset:  0,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list activities")
+		return
+	}
+
+	comments, err := h.Queries.ListComments(r.Context(), issue.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list comments")
+		return
+	}
+
+	timeline := make([]TimelineEntry, 0, len(activities)+len(comments))
+
+	for _, a := range activities {
+		action := a.Action
+		actorType := ""
+		if a.ActorType.Valid {
+			actorType = a.ActorType.String
+		}
+		timeline = append(timeline, TimelineEntry{
+			Type:      "activity",
+			ID:        uuidToString(a.ID),
+			ActorType: actorType,
+			ActorID:   uuidToString(a.ActorID),
+			Action:    &action,
+			Details:   a.Details,
+			CreatedAt: timestampToString(a.CreatedAt),
+		})
+	}
+
+	for _, c := range comments {
+		content := c.Content
+		commentType := c.Type
+		updatedAt := timestampToString(c.UpdatedAt)
+		timeline = append(timeline, TimelineEntry{
+			Type:        "comment",
+			ID:          uuidToString(c.ID),
+			ActorType:   c.AuthorType,
+			ActorID:     uuidToString(c.AuthorID),
+			Content:     &content,
+			CommentType: &commentType,
+			ParentID:    uuidToPtr(c.ParentID),
+			CreatedAt:   timestampToString(c.CreatedAt),
+			UpdatedAt:   &updatedAt,
+		})
+	}
+
+	// Sort chronologically (ascending by created_at)
+	sort.Slice(timeline, func(i, j int) bool {
+		return timeline[i].CreatedAt < timeline[j].CreatedAt
+	})
+
+	writeJSON(w, http.StatusOK, timeline)
+}

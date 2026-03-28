@@ -8,6 +8,7 @@ export type InboxItemType =
   | "assignee_changed"
   | "status_changed"
   | "priority_changed"
+  | "due_date_changed"
   | "new_comment"
   | "mentioned"
   | "review_requested"
@@ -32,4 +33,5 @@ export interface InboxItem {
   read: boolean;
   archived: boolean;
   created_at: string;
+  details: Record<string, string> | null;
 }

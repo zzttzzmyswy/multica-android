@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"regexp"
 
@@ -20,6 +21,42 @@ type mention struct {
 
 // mentionRe matches [@Label](mention://type/id) in markdown.
 var mentionRe = regexp.MustCompile(`\[@[^\]]*\]\(mention://(member|agent)/([0-9a-fA-F-]+)\)`)
+
+// statusLabels maps DB status values to human-readable labels for notifications.
+var statusLabels = map[string]string{
+	"backlog":     "Backlog",
+	"todo":        "Todo",
+	"in_progress": "In Progress",
+	"in_review":   "In Review",
+	"done":        "Done",
+	"blocked":     "Blocked",
+	"cancelled":   "Cancelled",
+}
+
+// priorityLabels maps DB priority values to human-readable labels for notifications.
+var priorityLabels = map[string]string{
+	"urgent": "Urgent",
+	"high":   "High",
+	"medium": "Medium",
+	"low":    "Low",
+	"none":   "No priority",
+}
+
+func statusLabel(s string) string {
+	if l, ok := statusLabels[s]; ok {
+		return l
+	}
+	return s
+}
+
+func priorityLabel(p string) string {
+	if l, ok := priorityLabels[p]; ok {
+		return l
+	}
+	return p
+}
+
+var emptyDetails = []byte("{}")
 
 // parseMentions extracts mentions from markdown content.
 func parseMentions(content string) []mention {
@@ -53,6 +90,7 @@ func notifySubscribers(
 	severity string,
 	title string,
 	body string,
+	details []byte,
 ) {
 	subs, err := queries.ListIssueSubscribers(ctx, parseUUID(issueID))
 	if err != nil {
@@ -90,6 +128,7 @@ func notifySubscribers(
 			Body:          util.StrToText(body),
 			ActorType:     util.StrToText(e.ActorType),
 			ActorID:       parseUUID(e.ActorID),
+			Details:       details,
 		})
 		if err != nil {
 			slog.Error("subscriber notification creation failed",
@@ -125,6 +164,7 @@ func notifyDirect(
 	severity string,
 	title string,
 	body string,
+	details []byte,
 ) {
 	// Skip if recipient is the actor
 	if recipientID == e.ActorID {
@@ -142,6 +182,7 @@ func notifyDirect(
 		Body:          util.StrToText(body),
 		ActorType:     util.StrToText(e.ActorType),
 		ActorID:       parseUUID(e.ActorID),
+		Details:       details,
 	})
 	if err != nil {
 		slog.Error("direct notification creation failed",
@@ -172,6 +213,7 @@ func notifyMentionedMembers(
 	issueStatus string,
 	title string,
 	skip map[string]bool,
+	details []byte,
 ) {
 	for _, m := range mentions {
 		if m.Type != "member" {
@@ -190,6 +232,7 @@ func notifyMentionedMembers(
 			Title:         title,
 			ActorType:     util.StrToText(e.ActorType),
 			ActorID:       parseUUID(e.ActorID),
+			Details:       details,
 		})
 		if err != nil {
 			slog.Error("mention inbox creation failed", "mentioned_id", m.ID, "error", err)
@@ -238,8 +281,9 @@ func registerNotificationListeners(bus *events.Bus, queries *db.Queries) {
 				*issue.AssigneeType, *issue.AssigneeID,
 				issue.WorkspaceID, e, issue.ID, issue.Status,
 				"issue_assigned", "action_required",
-				"New issue assigned: "+issue.Title,
+				issue.Title,
 				"",
+				emptyDetails,
 			)
 		}
 
@@ -247,11 +291,11 @@ func registerNotificationListeners(bus *events.Bus, queries *db.Queries) {
 		if issue.Description != nil && *issue.Description != "" {
 			mentions := parseMentions(*issue.Description)
 			notifyMentionedMembers(bus, queries, e, mentions, issue.ID, issue.Title, issue.Status,
-				"Mentioned in: "+issue.Title, skip)
+				issue.Title, skip, emptyDetails)
 		}
 	})
 
-	// issue:updated — handle assignee changes and status changes
+	// issue:updated — handle assignee changes, status changes, priority, due date
 	bus.Subscribe(protocol.EventIssueUpdated, func(e events.Event) {
 		payload, ok := e.Payload.(map[string]any)
 		if !ok {
@@ -269,14 +313,31 @@ func registerNotificationListeners(bus *events.Bus, queries *db.Queries) {
 		prevDescription, _ := payload["prev_description"].(*string)
 
 		if assigneeChanged {
+			// Build structured details for assignee change
+			detailsMap := map[string]any{}
+			if prevAssigneeType != nil {
+				detailsMap["prev_assignee_type"] = *prevAssigneeType
+			}
+			if prevAssigneeID != nil {
+				detailsMap["prev_assignee_id"] = *prevAssigneeID
+			}
+			if issue.AssigneeType != nil {
+				detailsMap["new_assignee_type"] = *issue.AssigneeType
+			}
+			if issue.AssigneeID != nil {
+				detailsMap["new_assignee_id"] = *issue.AssigneeID
+			}
+			assigneeDetails, _ := json.Marshal(detailsMap)
+
 			// Direct: notify new assignee about assignment
 			if issue.AssigneeType != nil && issue.AssigneeID != nil {
 				notifyDirect(ctx, queries, bus,
 					*issue.AssigneeType, *issue.AssigneeID,
 					e.WorkspaceID, e, issue.ID, issue.Status,
 					"issue_assigned", "action_required",
-					"Assigned to you: "+issue.Title,
+					issue.Title,
 					"",
+					assigneeDetails,
 				)
 			}
 
@@ -286,8 +347,9 @@ func registerNotificationListeners(bus *events.Bus, queries *db.Queries) {
 					"member", *prevAssigneeID,
 					e.WorkspaceID, e, issue.ID, issue.Status,
 					"unassigned", "info",
-					"Unassigned from: "+issue.Title,
+					issue.Title,
 					"",
+					assigneeDetails,
 				)
 			}
 
@@ -302,14 +364,51 @@ func registerNotificationListeners(bus *events.Bus, queries *db.Queries) {
 			}
 			notifySubscribers(ctx, queries, bus, issue.ID, issue.Status, e.WorkspaceID, e,
 				exclude, "assignee_changed", "info",
-				"Assignee changed: "+issue.Title, "")
+				issue.Title, "",
+				assigneeDetails)
 		}
 
 		if statusChanged {
-			// Subscriber: notify all subscribers except actor
+			prevStatus, _ := payload["prev_status"].(string)
+			statusDetails, _ := json.Marshal(map[string]string{
+				"from": prevStatus,
+				"to":   issue.Status,
+			})
 			notifySubscribers(ctx, queries, bus, issue.ID, issue.Status, e.WorkspaceID, e,
 				nil, "status_changed", "info",
-				issue.Title+" moved to "+issue.Status, "")
+				issue.Title, "",
+				statusDetails)
+		}
+
+		if priorityChanged, _ := payload["priority_changed"].(bool); priorityChanged {
+			prevPriority, _ := payload["prev_priority"].(string)
+			priorityDetails, _ := json.Marshal(map[string]string{
+				"from": prevPriority,
+				"to":   issue.Priority,
+			})
+			notifySubscribers(ctx, queries, bus, issue.ID, issue.Status, e.WorkspaceID, e,
+				nil, "priority_changed", "info",
+				issue.Title, "",
+				priorityDetails)
+		}
+
+		if dueDateChanged, _ := payload["due_date_changed"].(bool); dueDateChanged {
+			prevDueDateStr := ""
+			if prevDueDate, ok := payload["prev_due_date"].(*string); ok && prevDueDate != nil {
+				prevDueDateStr = *prevDueDate
+			}
+			newDueDateStr := ""
+			if issue.DueDate != nil {
+				newDueDateStr = *issue.DueDate
+			}
+			dueDateDetails, _ := json.Marshal(map[string]string{
+				"from": prevDueDateStr,
+				"to":   newDueDateStr,
+			})
+			notifySubscribers(ctx, queries, bus, issue.ID, issue.Status, e.WorkspaceID, e,
+				nil, "due_date_changed", "info",
+				issue.Title, "",
+				dueDateDetails)
 		}
 
 		// Notify NEW @mentions in description
@@ -330,7 +429,7 @@ func registerNotificationListeners(bus *events.Bus, queries *db.Queries) {
 				}
 				skip := map[string]bool{e.ActorID: true}
 				notifyMentionedMembers(bus, queries, e, added, issue.ID, issue.Title, issue.Status,
-					"Mentioned in: "+issue.Title, skip)
+					issue.Title, skip, emptyDetails)
 			}
 		}
 	})
@@ -362,17 +461,15 @@ func registerNotificationListeners(bus *events.Bus, queries *db.Queries) {
 
 		notifySubscribers(ctx, queries, bus, issueID, issueStatus, e.WorkspaceID, e,
 			nil, "new_comment", "info",
-			"New comment on: "+issueTitle, commentContent)
+			issueTitle, commentContent,
+			emptyDetails)
 
 		// Notify @mentions in comment content.
-		// TODO: when @mention feature is enabled, pass already-notified subscriber IDs
-		// into the skip set to avoid duplicate notifications for users who are both
-		// subscribers and @mentioned.
 		mentions := parseMentions(commentContent)
 		if len(mentions) > 0 {
 			skip := map[string]bool{e.ActorID: true}
 			notifyMentionedMembers(bus, queries, e, mentions, issueID, issueTitle, issueStatus,
-				"Mentioned in comment: "+issueTitle, skip)
+				issueTitle, skip, emptyDetails)
 		}
 	})
 
@@ -409,7 +506,8 @@ func registerNotificationListeners(bus *events.Bus, queries *db.Queries) {
 				ActorID:     agentID,
 			},
 			exclude, "task_completed", "attention",
-			"Task completed: "+issue.Title, "")
+			issue.Title, "",
+			emptyDetails)
 	})
 
 	// task:failed — notify all subscribers except the agent
@@ -443,7 +541,8 @@ func registerNotificationListeners(bus *events.Bus, queries *db.Queries) {
 				ActorID:     agentID,
 			},
 			exclude, "task_failed", "action_required",
-			"Task failed: "+issue.Title, "")
+			issue.Title, "",
+			emptyDetails)
 	})
 }
 
@@ -465,5 +564,6 @@ func inboxItemToResponse(item db.InboxItem) map[string]any {
 		"created_at":     util.TimestampToString(item.CreatedAt),
 		"actor_type":     util.TextToPtr(item.ActorType),
 		"actor_id":       util.UUIDToPtr(item.ActorID),
+		"details":        json.RawMessage(item.Details),
 	}
 }
