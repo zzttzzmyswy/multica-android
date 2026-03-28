@@ -353,7 +353,7 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
     useCallback((payload: unknown) => {
       const p = payload as SubscriberRemovedPayload;
       if (p.issue_id !== id) return;
-      setSubscribers((prev) => prev.filter((s) => s.user_id !== p.user_id));
+      setSubscribers((prev) => prev.filter((s) => !(s.user_id === p.user_id && s.user_type === p.user_type)));
     }, [id]),
   );
 
