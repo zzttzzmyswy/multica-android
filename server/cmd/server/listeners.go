@@ -37,6 +37,7 @@ func registerListeners(bus *events.Bus, hub *realtime.Hub) {
 		protocol.EventMemberRemoved,
 		protocol.EventSubscriberAdded,
 		protocol.EventSubscriberRemoved,
+		protocol.EventActivityCreated,
 	}
 
 	for _, et := range allEvents {

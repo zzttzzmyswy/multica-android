@@ -30,6 +30,7 @@ import type {
   CreatePersonalAccessTokenResponse,
   RuntimeUsage,
   RuntimePing,
+  TimelineEntry,
 } from "@/shared/types";
 import { type Logger, noopLogger } from "@/shared/logger";
 
@@ -183,11 +184,19 @@ export class ApiClient {
     return this.fetch(`/api/issues/${issueId}/comments`);
   }
 
-  async createComment(issueId: string, content: string, type?: string): Promise<Comment> {
+  async createComment(issueId: string, content: string, type?: string, parentId?: string): Promise<Comment> {
     return this.fetch(`/api/issues/${issueId}/comments`, {
       method: "POST",
-      body: JSON.stringify({ content, type: type ?? "comment" }),
+      body: JSON.stringify({
+        content,
+        type: type ?? "comment",
+        ...(parentId ? { parent_id: parentId } : {}),
+      }),
     });
+  }
+
+  async listTimeline(issueId: string): Promise<TimelineEntry[]> {
+    return this.fetch(`/api/issues/${issueId}/timeline`);
   }
 
   async updateComment(commentId: string, content: string): Promise<Comment> {

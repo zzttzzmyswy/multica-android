@@ -55,6 +55,7 @@ func main() {
 	// The notification listener queries the subscriber table to determine recipients,
 	// so subscribers must be written first within the same synchronous event dispatch.
 	registerSubscriberListeners(bus, queries)
+	registerActivityListeners(bus, queries)
 	registerNotificationListeners(bus, queries)
 
 	r := NewRouter(pool, hub, bus)

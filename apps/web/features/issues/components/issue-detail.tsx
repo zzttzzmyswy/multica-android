@@ -10,7 +10,9 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
+  Circle,
   Link2,
+  MessageSquare,
   MoreHorizontal,
   PanelRight,
   Pencil,
@@ -59,7 +61,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount } from "@/components/ui/avatar";
 import { ActorAvatar } from "@/components/common/actor-avatar";
-import type { Issue, Comment, IssueSubscriber, UpdateIssueRequest, IssueStatus, IssuePriority } from "@/shared/types";
+import type { Issue, Comment, IssueSubscriber, UpdateIssueRequest, IssueStatus, IssuePriority, TimelineEntry } from "@/shared/types";
 import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
 import { StatusIcon, PriorityIcon, DueDatePicker } from "@/features/issues/components";
 import { api } from "@/shared/api";
@@ -67,7 +69,7 @@ import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore, useActorName } from "@/features/workspace";
 import { useWSEvent } from "@/features/realtime";
 import { useIssueStore } from "@/features/issues";
-import type { CommentCreatedPayload, CommentUpdatedPayload, CommentDeletedPayload, SubscriberAddedPayload, SubscriberRemovedPayload } from "@/shared/types";
+import type { CommentCreatedPayload, CommentUpdatedPayload, CommentDeletedPayload, SubscriberAddedPayload, SubscriberRemovedPayload, ActivityCreatedPayload } from "@/shared/types";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -90,6 +92,40 @@ function shortDate(date: string | null): string {
     month: "short",
     day: "numeric",
   });
+}
+
+function formatActivity(entry: TimelineEntry): string {
+  const details = (entry.details ?? {}) as Record<string, string>;
+  switch (entry.action) {
+    case "created":
+      return "created this issue";
+    case "status_changed":
+      return `changed status from ${details.from ?? "?"} to ${details.to ?? "?"}`;
+    case "assignee_changed":
+      return "changed assignee";
+    case "description_updated":
+      return "updated the description";
+    case "task_completed":
+      return "completed the task";
+    case "task_failed":
+      return "task failed";
+    default:
+      return entry.action ?? "";
+  }
+}
+
+function commentToTimelineEntry(c: Comment): TimelineEntry {
+  return {
+    type: "comment",
+    id: c.id,
+    actor_type: c.author_type,
+    actor_id: c.author_id,
+    content: c.content,
+    parent_id: c.parent_id,
+    created_at: c.created_at,
+    updated_at: c.updated_at,
+    comment_type: c.type,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -147,11 +183,12 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
   const sidebarRef = usePanelRef();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [issue, setIssue] = useState<Issue | null>(null);
-  const [comments, setComments] = useState<Comment[]>([]);
+  const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [subscribers, setSubscribers] = useState<IssueSubscriber[]>([]);
   const [loading, setLoading] = useState(true);
   const [commentEmpty, setCommentEmpty] = useState(true);
   const commentEditorRef = useRef<RichTextEditorRef>(null);
+  const replyEditorRef = useRef<RichTextEditorRef>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
@@ -161,6 +198,9 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(true);
+  const [filter, setFilter] = useState<"all" | "comments" | "activity">("all");
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyEmpty, setReplyEmpty] = useState(true);
 
   // Watch the global issue store for real-time updates from other users/agents
   const storeIssue = useIssueStore((s) => s.issues.find((i) => i.id === id));
@@ -173,13 +213,13 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
 
   useEffect(() => {
     setIssue(null);
-    setComments([]);
+    setTimeline([]);
     setSubscribers([]);
     setLoading(true);
-    Promise.all([api.getIssue(id), api.listComments(id), api.listIssueSubscribers(id)])
-      .then(([iss, cmts, subs]) => {
+    Promise.all([api.getIssue(id), api.listTimeline(id), api.listIssueSubscribers(id)])
+      .then(([iss, entries, subs]) => {
         setIssue(iss);
-        setComments(cmts);
+        setTimeline(entries);
         setSubscribers(subs);
       })
       .catch(console.error)
@@ -190,28 +230,43 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
     const content = commentEditorRef.current?.getMarkdown()?.trim();
     if (!content || submitting || !user) return;
     const tempId = "temp-" + Date.now();
-    const tempComment: Comment = {
-      id: tempId,
-      issue_id: id,
-      author_type: "member",
-      author_id: user.id,
-      content,
+    const tempEntry: TimelineEntry = {
       type: "comment",
+      id: tempId,
+      actor_type: "member",
+      actor_id: user.id,
+      content,
+      parent_id: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      comment_type: "comment",
     };
-    setComments((prev) => [...prev, tempComment]);
+    setTimeline((prev) => [...prev, tempEntry]);
     commentEditorRef.current?.clearContent();
     setCommentEmpty(true);
     setSubmitting(true);
     try {
       const comment = await api.createComment(id, content);
-      setComments((prev) => prev.map((c) => (c.id === tempId ? comment : c)));
+      setTimeline((prev) => prev.map((e) => (e.id === tempId ? commentToTimelineEntry(comment) : e)));
     } catch {
-      setComments((prev) => prev.filter((c) => c.id !== tempId));
+      setTimeline((prev) => prev.filter((e) => e.id !== tempId));
       toast.error("Failed to send comment");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleSubmitReply = async (parentId: string) => {
+    const md = replyEditorRef.current?.getMarkdown()?.trim();
+    if (!md || !user) return;
+    try {
+      const comment = await api.createComment(id, md, "comment", parentId);
+      setTimeline((prev) => [...prev, commentToTimelineEntry(comment)]);
+      replyEditorRef.current?.clearContent();
+      setReplyingTo(null);
+      setReplyEmpty(true);
+    } catch {
+      toast.error("Failed to send reply");
     }
   };
 
@@ -241,16 +296,16 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
     }
   };
 
-  const startEditComment = (c: Comment) => {
-    setEditingCommentId(c.id);
-    setEditContent(c.content);
+  const startEditComment = (entry: TimelineEntry) => {
+    setEditingCommentId(entry.id);
+    setEditContent(entry.content ?? "");
   };
 
   const handleSaveEditComment = async () => {
     if (!editingCommentId || !editContent.trim()) return;
     try {
       const updated = await api.updateComment(editingCommentId, editContent.trim());
-      setComments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      setTimeline((prev) => prev.map((e) => (e.id === updated.id ? commentToTimelineEntry(updated) : e)));
       setEditingCommentId(null);
     } catch {
       toast.error("Failed to update comment");
@@ -260,7 +315,7 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
   const handleDeleteComment = async (commentId: string) => {
     try {
       await api.deleteComment(commentId);
-      setComments((prev) => prev.filter((c) => c.id !== commentId));
+      setTimeline((prev) => prev.filter((e) => e.id !== commentId));
     } catch {
       toast.error("Failed to delete comment");
     }
@@ -302,9 +357,9 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
       if (comment.issue_id !== id) return;
       // Skip own comments — already added locally via API response
       if (comment.author_type === "member" && comment.author_id === user?.id) return;
-      setComments((prev) => {
-        if (prev.some((c) => c.id === comment.id)) return prev;
-        return [...prev, comment];
+      setTimeline((prev) => {
+        if (prev.some((e) => e.id === comment.id)) return prev;
+        return [...prev, commentToTimelineEntry(comment)];
       });
     }, [id, user?.id]),
   );
@@ -314,7 +369,7 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
     useCallback((payload: unknown) => {
       const { comment } = payload as CommentUpdatedPayload;
       if (comment.issue_id === id) {
-        setComments((prev) => prev.map((c) => (c.id === comment.id ? comment : c)));
+        setTimeline((prev) => prev.map((e) => (e.id === comment.id ? commentToTimelineEntry(comment) : e)));
       }
     }, [id]),
   );
@@ -324,8 +379,22 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
     useCallback((payload: unknown) => {
       const { comment_id, issue_id } = payload as CommentDeletedPayload;
       if (issue_id === id) {
-        setComments((prev) => prev.filter((c) => c.id !== comment_id));
+        setTimeline((prev) => prev.filter((e) => e.id !== comment_id));
       }
+    }, [id]),
+  );
+
+  useWSEvent(
+    "activity:created",
+    useCallback((payload: unknown) => {
+      const p = payload as ActivityCreatedPayload;
+      if (p.issue_id !== id) return;
+      const entry = p.entry;
+      if (!entry || !entry.id) return;
+      setTimeline((prev) => {
+        if (prev.some((e) => e.id === entry.id)) return prev;
+        return [...prev, entry];
+      });
     }, [id]),
   );
 
@@ -674,7 +743,14 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
           {/* Activity / Comments */}
           <div>
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold">Activity</h2>
+              <div className="flex items-center gap-3">
+                <h2 className="text-base font-semibold">Activity</h2>
+                <div className="flex gap-1">
+                  <Button variant={filter === "all" ? "secondary" : "ghost"} size="sm" className="h-6 text-xs" onClick={() => setFilter("all")}>All</Button>
+                  <Button variant={filter === "comments" ? "secondary" : "ghost"} size="sm" className="h-6 text-xs" onClick={() => setFilter("comments")}>Comments</Button>
+                  <Button variant={filter === "activity" ? "secondary" : "ghost"} size="sm" className="h-6 text-xs" onClick={() => setFilter("activity")}>Activity</Button>
+                </div>
+              </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleToggleSubscribe}
@@ -720,7 +796,7 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                                   <Checkbox checked={isSubbed} className="pointer-events-none" />
                                   <ActorAvatar actorType="member" actorId={m.user_id} size={22} />
                                   <span className="truncate flex-1">{m.name}</span>
-                                  
+
                                 </CommandItem>
                               );
                             })}
@@ -740,7 +816,7 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                                   <Checkbox checked={isSubbed} className="pointer-events-none" />
                                   <ActorAvatar actorType="agent" actorId={a.id} size={22} />
                                   <span className="truncate flex-1">{a.name}</span>
-                                  
+
                                 </CommandItem>
                               );
                             })}
@@ -753,33 +829,79 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
               </div>
             </div>
 
+            {/* Timeline entries */}
             <div className="mt-4">
-              {comments.map((comment) => {
-                const isOwn = comment.author_type === "member" && comment.author_id === user?.id;
-                return (
-                  <div key={comment.id} className={`group relative py-3${comment.id.startsWith("temp-") ? " opacity-60" : ""}`}>
-                    <div className="flex items-center gap-2.5">
-                      <ActorAvatar
-                        actorType={comment.author_type}
-                        actorId={comment.author_id}
-                        size={28}
-                      />
-                      <span className="text-sm font-medium">
-                        {getActorName(comment.author_type, comment.author_id)}
-                      </span>
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <span className="text-xs text-muted-foreground cursor-default">
-                              {timeAgo(comment.created_at)}
-                            </span>
-                          }
+              {(() => {
+                // Separate top-level entries from replies
+                const topLevel = timeline.filter((e) => e.type === "activity" || !e.parent_id);
+                const repliesByParent = new Map<string, TimelineEntry[]>();
+                for (const e of timeline) {
+                  if (e.type === "comment" && e.parent_id) {
+                    const list = repliesByParent.get(e.parent_id) ?? [];
+                    list.push(e);
+                    repliesByParent.set(e.parent_id, list);
+                  }
+                }
+
+                // Apply filter
+                const filtered = topLevel.filter((e) => {
+                  if (filter === "all") return true;
+                  if (filter === "comments") return e.type === "comment";
+                  if (filter === "activity") return e.type === "activity";
+                  return true;
+                });
+
+                return filtered.map((entry) => {
+                  if (entry.type === "activity") {
+                    return (
+                      <div key={entry.id} className="flex items-center gap-2 py-1.5 text-sm text-muted-foreground">
+                        <div className="w-7 flex justify-center">
+                          <Circle className="h-1.5 w-1.5 fill-current" />
+                        </div>
+                        <span className="font-medium">{getActorName(entry.actor_type, entry.actor_id)}</span>
+                        <span>{formatActivity(entry)}</span>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <span className="ml-auto text-xs cursor-default">
+                                {timeAgo(entry.created_at)}
+                              </span>
+                            }
+                          />
+                          <TooltipContent side="top">
+                            {new Date(entry.created_at).toLocaleString()}
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                    );
+                  }
+
+                  // Comment entry
+                  const replies = repliesByParent.get(entry.id) ?? [];
+                  const isOwn = entry.actor_type === "member" && entry.actor_id === user?.id;
+                  return (
+                    <div key={entry.id} className={`group relative py-3${entry.id.startsWith("temp-") ? " opacity-60" : ""}`}>
+                      <div className="flex items-center gap-2.5">
+                        <ActorAvatar
+                          actorType={entry.actor_type}
+                          actorId={entry.actor_id}
+                          size={28}
                         />
-                        <TooltipContent side="top">
-                          {new Date(comment.created_at).toLocaleString()}
-                        </TooltipContent>
-                      </Tooltip>
-                      {isOwn && (
+                        <span className="text-sm font-medium">
+                          {getActorName(entry.actor_type, entry.actor_id)}
+                        </span>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <span className="text-xs text-muted-foreground cursor-default">
+                                {timeAgo(entry.created_at)}
+                              </span>
+                            }
+                          />
+                          <TooltipContent side="top">
+                            {new Date(entry.created_at).toLocaleString()}
+                          </TooltipContent>
+                        </Tooltip>
                         <div className="ml-auto flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <Tooltip>
                             <TooltipTrigger
@@ -787,52 +909,166 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                                 <Button
                                   variant="ghost"
                                   size="icon-xs"
-                                  onClick={() => startEditComment(comment)}
+                                  onClick={() => setReplyingTo(replyingTo === entry.id ? null : entry.id)}
                                   className="text-muted-foreground hover:text-foreground"
                                 >
-                                  <Pencil className="h-3 w-3" />
+                                  <MessageSquare className="h-3 w-3" />
                                 </Button>
                               }
                             />
-                            <TooltipContent>Edit</TooltipContent>
+                            <TooltipContent>Reply</TooltipContent>
                           </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger
-                              render={
-                                <Button
-                                  variant="ghost"
-                                  size="icon-xs"
-                                  onClick={() => handleDeleteComment(comment.id)}
-                                  className="text-muted-foreground hover:text-destructive"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              }
+                          {isOwn && (
+                            <>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-xs"
+                                      onClick={() => startEditComment(entry)}
+                                      className="text-muted-foreground hover:text-foreground"
+                                    >
+                                      <Pencil className="h-3 w-3" />
+                                    </Button>
+                                  }
+                                />
+                                <TooltipContent>Edit</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-xs"
+                                      onClick={() => handleDeleteComment(entry.id)}
+                                      className="text-muted-foreground hover:text-destructive"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  }
+                                />
+                                <TooltipContent>Delete</TooltipContent>
+                              </Tooltip>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {editingCommentId === entry.id ? (
+                        <form onSubmit={(e) => { e.preventDefault(); handleSaveEditComment(); }} className="mt-2 pl-9.5">
+                          <input
+                            autoFocus
+                            value={editContent}
+                            onChange={(e) => setEditContent(e.target.value)}
+                            aria-label="Edit comment"
+                            className="w-full text-sm bg-transparent border-b outline-none"
+                            onKeyDown={(e) => { if (e.key === "Escape") setEditingCommentId(null); }}
+                          />
+                        </form>
+                      ) : (
+                        <div className="mt-2 pl-9.5 text-sm leading-relaxed text-foreground/85">
+                          <Markdown mode="minimal">{entry.content ?? ""}</Markdown>
+                        </div>
+                      )}
+
+                      {/* Replies */}
+                      {replies.length > 0 && (
+                        <div className="ml-9.5 mt-2 border-l-2 border-muted pl-3">
+                          {replies.map((reply) => {
+                            const isReplyOwn = reply.actor_type === "member" && reply.actor_id === user?.id;
+                            return (
+                              <div key={reply.id} className="group/reply py-1.5">
+                                <div className="flex items-center gap-2">
+                                  <ActorAvatar
+                                    actorType={reply.actor_type}
+                                    actorId={reply.actor_id}
+                                    size={22}
+                                  />
+                                  <span className="text-sm font-medium">
+                                    {getActorName(reply.actor_type, reply.actor_id)}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {timeAgo(reply.created_at)}
+                                  </span>
+                                  {isReplyOwn && (
+                                    <div className="ml-auto flex gap-1 opacity-0 group-hover/reply:opacity-100 transition-opacity">
+                                      <Tooltip>
+                                        <TooltipTrigger
+                                          render={
+                                            <Button
+                                              variant="ghost"
+                                              size="icon-xs"
+                                              onClick={() => startEditComment(reply)}
+                                              className="text-muted-foreground hover:text-foreground"
+                                            >
+                                              <Pencil className="h-3 w-3" />
+                                            </Button>
+                                          }
+                                        />
+                                        <TooltipContent>Edit</TooltipContent>
+                                      </Tooltip>
+                                      <Tooltip>
+                                        <TooltipTrigger
+                                          render={
+                                            <Button
+                                              variant="ghost"
+                                              size="icon-xs"
+                                              onClick={() => handleDeleteComment(reply.id)}
+                                              className="text-muted-foreground hover:text-destructive"
+                                            >
+                                              <Trash2 className="h-3 w-3" />
+                                            </Button>
+                                          }
+                                        />
+                                        <TooltipContent>Delete</TooltipContent>
+                                      </Tooltip>
+                                    </div>
+                                  )}
+                                </div>
+                                {editingCommentId === reply.id ? (
+                                  <form onSubmit={(e) => { e.preventDefault(); handleSaveEditComment(); }} className="mt-1 pl-7.5">
+                                    <input
+                                      autoFocus
+                                      value={editContent}
+                                      onChange={(e) => setEditContent(e.target.value)}
+                                      aria-label="Edit comment"
+                                      className="w-full text-sm bg-transparent border-b outline-none"
+                                      onKeyDown={(e) => { if (e.key === "Escape") setEditingCommentId(null); }}
+                                    />
+                                  </form>
+                                ) : (
+                                  <div className="mt-1 pl-7.5 text-sm leading-relaxed text-foreground/85">
+                                    <Markdown mode="minimal">{reply.content ?? ""}</Markdown>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Reply input */}
+                      {replyingTo === entry.id && (
+                        <div className="ml-9.5 mt-2">
+                          <div className="rounded-md border bg-muted/30 px-3 py-2">
+                            <RichTextEditor
+                              ref={replyEditorRef}
+                              placeholder="Write a reply..."
+                              onUpdate={(md) => setReplyEmpty(!md.trim())}
+                              onSubmit={() => handleSubmitReply(entry.id)}
+                              debounceMs={100}
                             />
-                            <TooltipContent>Delete</TooltipContent>
-                          </Tooltip>
+                          </div>
+                          <div className="flex items-center justify-end gap-2 mt-1">
+                            <Button variant="ghost" size="sm" onClick={() => setReplyingTo(null)}>Cancel</Button>
+                            <Button size="sm" disabled={replyEmpty} onClick={() => handleSubmitReply(entry.id)}>Reply</Button>
+                          </div>
                         </div>
                       )}
                     </div>
-                    {editingCommentId === comment.id ? (
-                      <form onSubmit={(e) => { e.preventDefault(); handleSaveEditComment(); }} className="mt-2 pl-9.5">
-                        <input
-                          autoFocus
-                          value={editContent}
-                          onChange={(e) => setEditContent(e.target.value)}
-                          aria-label="Edit comment"
-                          className="w-full text-sm bg-transparent border-b outline-none"
-                          onKeyDown={(e) => { if (e.key === "Escape") setEditingCommentId(null); }}
-                        />
-                      </form>
-                    ) : (
-                      <div className="mt-2 pl-9.5 text-sm leading-relaxed text-foreground/85">
-                        <Markdown mode="minimal">{comment.content}</Markdown>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
 
             {/* Comment input */}

@@ -2,7 +2,7 @@ import { Suspense, forwardRef, useRef, useState, useImperativeHandle } from "rea
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, act, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { Issue, Comment } from "@/shared/types";
+import type { Issue, Comment, TimelineEntry } from "@/shared/types";
 
 // Mock next/navigation
 vi.mock("next/navigation", () => ({
@@ -108,7 +108,7 @@ vi.mock("@/components/markdown", () => ({
 
 // Mock api
 const mockGetIssue = vi.hoisted(() => vi.fn());
-const mockListComments = vi.hoisted(() => vi.fn());
+const mockListTimeline = vi.hoisted(() => vi.fn());
 const mockCreateComment = vi.hoisted(() => vi.fn());
 const mockUpdateComment = vi.hoisted(() => vi.fn());
 const mockDeleteComment = vi.hoisted(() => vi.fn());
@@ -118,7 +118,8 @@ const mockUpdateIssue = vi.hoisted(() => vi.fn());
 vi.mock("@/shared/api", () => ({
   api: {
     getIssue: (...args: any[]) => mockGetIssue(...args),
-    listComments: (...args: any[]) => mockListComments(...args),
+    listTimeline: (...args: any[]) => mockListTimeline(...args),
+    listComments: vi.fn().mockResolvedValue([]),
     createComment: (...args: any[]) => mockCreateComment(...args),
     updateComment: (...args: any[]) => mockUpdateComment(...args),
     deleteComment: (...args: any[]) => mockDeleteComment(...args),
@@ -148,26 +149,28 @@ const mockIssue: Issue = {
   updated_at: "2026-01-20T00:00:00Z",
 };
 
-const mockComments: Comment[] = [
+const mockTimeline: TimelineEntry[] = [
   {
-    id: "comment-1",
-    issue_id: "issue-1",
-    content: "Started working on this",
     type: "comment",
-    author_type: "member",
-    author_id: "user-1",
+    id: "comment-1",
+    actor_type: "member",
+    actor_id: "user-1",
+    content: "Started working on this",
+    parent_id: null,
     created_at: "2026-01-16T00:00:00Z",
     updated_at: "2026-01-16T00:00:00Z",
+    comment_type: "comment",
   },
   {
-    id: "comment-2",
-    issue_id: "issue-1",
-    content: "I can help with this",
     type: "comment",
-    author_type: "agent",
-    author_id: "agent-1",
+    id: "comment-2",
+    actor_type: "agent",
+    actor_id: "agent-1",
+    content: "I can help with this",
+    parent_id: null,
     created_at: "2026-01-17T00:00:00Z",
     updated_at: "2026-01-17T00:00:00Z",
+    comment_type: "comment",
   },
 ];
 
@@ -193,7 +196,7 @@ describe("IssueDetailPage", () => {
 
   it("renders issue details after loading", async () => {
     mockGetIssue.mockResolvedValueOnce(mockIssue);
-    mockListComments.mockResolvedValueOnce(mockComments);
+    mockListTimeline.mockResolvedValueOnce(mockTimeline);
     await renderPage();
 
     await waitFor(() => {
@@ -209,7 +212,7 @@ describe("IssueDetailPage", () => {
 
   it("renders issue properties sidebar", async () => {
     mockGetIssue.mockResolvedValueOnce(mockIssue);
-    mockListComments.mockResolvedValueOnce(mockComments);
+    mockListTimeline.mockResolvedValueOnce(mockTimeline);
     await renderPage();
 
     await waitFor(() => {
@@ -222,7 +225,7 @@ describe("IssueDetailPage", () => {
 
   it("renders comments", async () => {
     mockGetIssue.mockResolvedValueOnce(mockIssue);
-    mockListComments.mockResolvedValueOnce(mockComments);
+    mockListTimeline.mockResolvedValueOnce(mockTimeline);
     await renderPage();
 
     await waitFor(() => {
@@ -232,12 +235,12 @@ describe("IssueDetailPage", () => {
     });
 
     expect(screen.getByText("I can help with this")).toBeInTheDocument();
-    expect(screen.getByText("Activity")).toBeInTheDocument();
+    expect(screen.getAllByText("Activity").length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows 'Issue not found' for missing issue", async () => {
     mockGetIssue.mockRejectedValueOnce(new Error("Not found"));
-    mockListComments.mockRejectedValueOnce(new Error("Not found"));
+    mockListTimeline.mockRejectedValueOnce(new Error("Not found"));
     await renderPage("nonexistent-id");
 
     await waitFor(() => {
@@ -247,7 +250,7 @@ describe("IssueDetailPage", () => {
 
   it("submits a new comment", async () => {
     mockGetIssue.mockResolvedValueOnce(mockIssue);
-    mockListComments.mockResolvedValueOnce(mockComments);
+    mockListTimeline.mockResolvedValueOnce(mockTimeline);
 
     const newComment: Comment = {
       id: "comment-3",
@@ -256,6 +259,7 @@ describe("IssueDetailPage", () => {
       type: "comment",
       author_type: "member",
       author_id: "user-1",
+      parent_id: null,
       created_at: "2026-01-18T00:00:00Z",
       updated_at: "2026-01-18T00:00:00Z",
     };
@@ -301,7 +305,7 @@ describe("IssueDetailPage", () => {
 
   it("renders breadcrumb navigation", async () => {
     mockGetIssue.mockResolvedValueOnce(mockIssue);
-    mockListComments.mockResolvedValueOnce(mockComments);
+    mockListTimeline.mockResolvedValueOnce(mockTimeline);
     await renderPage();
 
     await waitFor(() => {

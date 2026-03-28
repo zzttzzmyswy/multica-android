@@ -2,6 +2,7 @@ import type { Issue } from "./issue";
 import type { Agent } from "./agent";
 import type { InboxItem } from "./inbox";
 import type { Comment } from "./comment";
+import type { TimelineEntry } from "./activity";
 import type { Workspace, MemberWithUser } from "./workspace";
 
 // WebSocket event types (matching Go server protocol/events.go)
@@ -35,7 +36,8 @@ export type WSEventType =
   | "skill:updated"
   | "skill:deleted"
   | "subscriber:added"
-  | "subscriber:removed";
+  | "subscriber:removed"
+  | "activity:created";
 
 export interface WSMessage<T = unknown> {
   type: WSEventType;
@@ -138,4 +140,9 @@ export interface SubscriberRemovedPayload {
   issue_id: string;
   user_type: string;
   user_id: string;
+}
+
+export interface ActivityCreatedPayload {
+  issue_id: string;
+  entry: TimelineEntry;
 }

@@ -8,8 +8,8 @@ SELECT * FROM comment
 WHERE id = $1;
 
 -- name: CreateComment :one
-INSERT INTO comment (issue_id, author_type, author_id, content, type)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO comment (issue_id, author_type, author_id, content, type, parent_id)
+VALUES ($1, $2, $3, $4, $5, sqlc.narg(parent_id))
 RETURNING *;
 
 -- name: UpdateComment :one
