@@ -43,12 +43,17 @@ const severityOrder: Record<InboxSeverity, number> = {
 
 const typeLabels: Record<InboxItemType, string> = {
   issue_assigned: "Assigned",
+  unassigned: "Unassigned",
+  assignee_changed: "Assignee changed",
+  status_changed: "Status changed",
+  priority_changed: "Priority changed",
+  new_comment: "New comment",
+  mentioned: "Mentioned",
   review_requested: "Review requested",
   task_completed: "Task completed",
   task_failed: "Task failed",
   agent_blocked: "Agent blocked",
   agent_completed: "Agent completed",
-  mentioned: "Mentioned",
   status_change: "Status changed",
 };
 
