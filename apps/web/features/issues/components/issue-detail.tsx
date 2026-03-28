@@ -16,6 +16,7 @@ import {
   Pencil,
   Trash2,
   UserMinus,
+  Users,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -53,6 +54,8 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from "@/components/ui/tooltip";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import type { Issue, Comment, IssueSubscriber, UpdateIssueRequest, IssueStatus, IssuePriority } from "@/shared/types";
 import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
@@ -663,7 +666,69 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
 
           {/* Activity / Comments */}
           <div>
-            <h2 className="text-base font-semibold">Activity</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold">Activity</h2>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleToggleSubscribe}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {isSubscribed ? "Unsubscribe" : "Subscribe"}
+                </button>
+                <Popover>
+                  <PopoverTrigger className="flex items-center -space-x-1.5 hover:opacity-80 transition-opacity cursor-pointer">
+                      {subscribers.slice(0, 5).map((sub) => (
+                        <ActorAvatar
+                          key={sub.user_id}
+                          actorType={sub.user_type}
+                          actorId={sub.user_id}
+                          size={24}
+                          className="ring-2 ring-background"
+                        />
+                      ))}
+                      {subscribers.length > 5 && (
+                        <span className="flex items-center justify-center h-6 w-6 rounded-full bg-muted text-[10px] font-medium ring-2 ring-background">
+                          +{subscribers.length - 5}
+                        </span>
+                      )}
+                      {subscribers.length === 0 && (
+                        <span className="flex items-center justify-center h-6 w-6 rounded-full border border-dashed border-muted-foreground/30 text-muted-foreground">
+                          <Users className="h-3 w-3" />
+                        </span>
+                      )}
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-64 p-0">
+                    <div className="px-3 py-2 border-b">
+                      <p className="text-sm text-muted-foreground">Subscribers</p>
+                    </div>
+                    <div className="max-h-64 overflow-y-auto py-1">
+                      {subscribers.map((sub) => {
+                        const subName = getActorName(sub.user_type, sub.user_id);
+                        return (
+                          <div key={sub.user_id} className="flex items-center gap-2.5 px-3 py-1.5">
+                            <Checkbox checked disabled className="h-3.5 w-3.5" />
+                            <ActorAvatar actorType={sub.user_type} actorId={sub.user_id} size={22} />
+                            <span className="text-sm truncate flex-1">{subName}</span>
+                            {sub.reason !== "manual" && (
+                              <span className="text-[11px] text-muted-foreground capitalize">{sub.reason}</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {members
+                        .filter((m) => !subscribers.some((s) => s.user_id === m.user_id))
+                        .map((m) => (
+                          <div key={m.user_id} className="flex items-center gap-2.5 px-3 py-1.5 opacity-50">
+                            <Checkbox checked={false} disabled className="h-3.5 w-3.5" />
+                            <ActorAvatar actorType="member" actorId={m.user_id} size={22} />
+                            <span className="text-sm truncate flex-1">{m.name}</span>
+                          </div>
+                        ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
 
             <div className="mt-4">
               {comments.map((comment) => {
@@ -941,27 +1006,6 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
             </div>}
           </div>
 
-          {/* Subscribers section */}
-          <div>
-            <h4 className="text-xs font-medium text-muted-foreground mb-2">Subscribers</h4>
-            <div className="space-y-1 pl-2">
-              {subscribers.map((sub) => (
-                <div key={sub.user_id} className="flex items-center gap-2 text-sm">
-                  <ActorAvatar actorType={sub.user_type} actorId={sub.user_id} size={18} />
-                  <span className="truncate">{getActorName(sub.user_type, sub.user_id)}</span>
-                  <span className="text-xs text-muted-foreground">({sub.reason})</span>
-                </div>
-              ))}
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mt-1 h-7 text-xs w-full"
-              onClick={handleToggleSubscribe}
-            >
-              {isSubscribed ? "Unsubscribe" : "Subscribe"}
-            </Button>
-          </div>
         </div>
       </div>
       </ResizablePanel>
