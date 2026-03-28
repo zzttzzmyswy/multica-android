@@ -311,7 +311,7 @@ export function WorkspaceTab() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className={confirmAction?.variant === "destructive" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+              variant={confirmAction?.variant === "destructive" ? "destructive" : "default"}
               onClick={async () => {
                 await confirmAction?.onConfirm();
                 setConfirmAction(null);

@@ -105,10 +105,20 @@ const mockViewState = {
   viewMode: "board" as const,
   statusFilters: [] as string[],
   priorityFilters: [] as string[],
+  sortBy: "position" as const,
+  sortDirection: "asc" as const,
+  cardProperties: { priority: true, description: true, assignee: true, dueDate: true },
+  listCollapsedStatuses: [] as string[],
   setViewMode: vi.fn(),
   toggleStatusFilter: vi.fn(),
   togglePriorityFilter: vi.fn(),
+  hideStatus: vi.fn(),
+  showStatus: vi.fn(),
   clearFilters: vi.fn(),
+  setSortBy: vi.fn(),
+  setSortDirection: vi.fn(),
+  toggleCardProperty: vi.fn(),
+  toggleListCollapsed: vi.fn(),
 };
 
 vi.mock("@/features/issues/stores/view-store", () => ({
@@ -116,6 +126,19 @@ vi.mock("@/features/issues/stores/view-store", () => ({
     (selector?: any) => (selector ? selector(mockViewState) : mockViewState),
     { getState: () => mockViewState, setState: vi.fn() },
   ),
+  SORT_OPTIONS: [
+    { value: "position", label: "Manual" },
+    { value: "priority", label: "Priority" },
+    { value: "due_date", label: "Due date" },
+    { value: "created_at", label: "Created date" },
+    { value: "title", label: "Title" },
+  ],
+  CARD_PROPERTY_OPTIONS: [
+    { key: "priority", label: "Priority" },
+    { key: "description", label: "Description" },
+    { key: "assignee", label: "Assignee" },
+    { key: "dueDate", label: "Due date" },
+  ],
 }));
 
 // Mock issue config
@@ -162,6 +185,8 @@ vi.mock("@dnd-kit/core", () => ({
 }));
 
 vi.mock("@dnd-kit/sortable", () => ({
+  SortableContext: ({ children }: any) => children,
+  verticalListSortingStrategy: {},
   useSortable: () => ({
     attributes: {},
     listeners: {},
@@ -306,8 +331,8 @@ describe("IssuesPage", () => {
 
     render(<IssuesPage />);
 
-    expect(screen.getByText("Status: All")).toBeInTheDocument();
-    expect(screen.getByText("Priority: All")).toBeInTheDocument();
+    expect(screen.getByText("Filter")).toBeInTheDocument();
+    expect(screen.getByText("Display")).toBeInTheDocument();
   });
 
   it("shows empty board view when no issues exist", () => {

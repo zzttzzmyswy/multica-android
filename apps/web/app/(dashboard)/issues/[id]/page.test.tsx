@@ -195,8 +195,8 @@ describe("IssueDetailPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText("Implement authentication"),
-      ).toBeInTheDocument();
+        screen.getAllByText("Implement authentication").length,
+      ).toBeGreaterThanOrEqual(1);
     });
 
     expect(
@@ -302,10 +302,10 @@ describe("IssueDetailPage", () => {
     await renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText("Issues")).toBeInTheDocument();
+      expect(screen.getByText("Test WS")).toBeInTheDocument();
     });
 
-    const issuesLink = screen.getByText("Issues");
-    expect(issuesLink.closest("a")).toHaveAttribute("href", "/issues");
+    const wsLink = screen.getByText("Test WS");
+    expect(wsLink.closest("a")).toHaveAttribute("href", "/issues");
   });
 });

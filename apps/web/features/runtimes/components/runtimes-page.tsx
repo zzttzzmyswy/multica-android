@@ -13,8 +13,15 @@ import {
   XCircle,
   Zap,
 } from "lucide-react";
+import { useDefaultLayout } from "react-resizable-panels";
 import type { AgentRuntime, RuntimeUsage, RuntimePingStatus } from "@/shared/types";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
 import { api } from "@/shared/api";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
@@ -83,12 +90,13 @@ function RuntimeModeIcon({ mode }: { mode: string }) {
 function StatusBadge({ status }: { status: string }) {
   const isOnline = status === "online";
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
+    <Badge
+      variant="secondary"
+      className={
         isOnline
           ? "bg-success/10 text-success"
-          : "bg-muted text-muted-foreground"
-      }`}
+          : ""
+      }
     >
       {isOnline ? (
         <Wifi className="h-3 w-3" />
@@ -96,7 +104,7 @@ function StatusBadge({ status }: { status: string }) {
         <WifiOff className="h-3 w-3" />
       )}
       {isOnline ? "Online" : "Offline"}
-    </span>
+    </Badge>
   );
 }
 
@@ -394,12 +402,12 @@ function PingSection({ runtimeId }: { runtimeId: string }) {
 
 function RuntimeDetail({ runtime }: { runtime: AgentRuntime }) {
   return (
-    <div className="flex flex-1 min-h-0 flex-col">
+    <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-6 py-4">
-        <div className="flex items-center gap-3">
+      <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
+        <div className="flex min-w-0 items-center gap-2">
           <div
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${
               runtime.status === "online" ? "bg-success/10" : "bg-muted"
             }`}
           >
@@ -407,10 +415,6 @@ function RuntimeDetail({ runtime }: { runtime: AgentRuntime }) {
           </div>
           <div className="min-w-0">
             <h2 className="text-sm font-semibold truncate">{runtime.name}</h2>
-            <p className="text-xs text-muted-foreground truncate">
-              {runtime.provider} &middot;{" "}
-              {runtime.device_info || "Unknown device"}
-            </p>
           </div>
         </div>
         <StatusBadge status={runtime.status} />
@@ -512,6 +516,9 @@ export default function RuntimesPage() {
   const [runtimes, setRuntimes] = useState<AgentRuntime[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
   const [fetching, setFetching] = useState(true);
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
+    id: "multica_runtimes_layout",
+  });
 
   const fetchRuntimes = useCallback(async () => {
     if (!workspace) return;
@@ -553,46 +560,55 @@ export default function RuntimesPage() {
   }
 
   return (
-    <div className="flex flex-1 min-h-0">
-      {/* Left column - runtime list */}
-      <div className="w-72 shrink-0 overflow-y-auto border-r">
-        <div className="flex h-12 items-center justify-between border-b px-4">
-          <h1 className="text-sm font-semibold">Runtimes</h1>
-          <span className="text-xs text-muted-foreground">
-            {runtimes.filter((r) => r.status === "online").length}/
-            {runtimes.length} online
-          </span>
+    <ResizablePanelGroup
+      orientation="horizontal"
+      className="flex-1 min-h-0"
+      defaultLayout={defaultLayout}
+      onLayoutChanged={onLayoutChanged}
+    >
+      <ResizablePanel id="list" defaultSize={280} minSize={240} maxSize={400} groupResizeBehavior="preserve-pixel-size">
+        {/* Left column — runtime list */}
+        <div className="overflow-y-auto h-full border-r">
+          <div className="flex h-12 items-center justify-between border-b px-4">
+            <h1 className="text-sm font-semibold">Runtimes</h1>
+            <span className="text-xs text-muted-foreground">
+              {runtimes.filter((r) => r.status === "online").length}/
+              {runtimes.length} online
+            </span>
+          </div>
+          {runtimes.length === 0 ? (
+            <div className="flex flex-col items-center justify-center px-4 py-12">
+              <Server className="h-8 w-8 text-muted-foreground/40" />
+              <p className="mt-3 text-sm text-muted-foreground">
+                No runtimes registered
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground text-center">
+                Run{" "}
+                <code className="rounded bg-muted px-1 py-0.5">
+                  multica daemon start
+                </code>{" "}
+                to register a local runtime.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y">
+              {runtimes.map((runtime) => (
+                <RuntimeListItem
+                  key={runtime.id}
+                  runtime={runtime}
+                  isSelected={runtime.id === selectedId}
+                  onClick={() => setSelectedId(runtime.id)}
+                />
+              ))}
+            </div>
+          )}
         </div>
-        {runtimes.length === 0 ? (
-          <div className="flex flex-col items-center justify-center px-4 py-12">
-            <Server className="h-8 w-8 text-muted-foreground/40" />
-            <p className="mt-3 text-sm text-muted-foreground">
-              No runtimes registered
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground text-center">
-              Run{" "}
-              <code className="rounded bg-muted px-1 py-0.5">
-                multica daemon start
-              </code>{" "}
-              to register a local runtime.
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y">
-            {runtimes.map((runtime) => (
-              <RuntimeListItem
-                key={runtime.id}
-                runtime={runtime}
-                isSelected={runtime.id === selectedId}
-                onClick={() => setSelectedId(runtime.id)}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      </ResizablePanel>
 
-      {/* Right column - runtime detail */}
-      <div className="flex-1 overflow-hidden">
+      <ResizableHandle />
+
+      <ResizablePanel id="detail" minSize="50%">
+        {/* Right column — runtime detail */}
         {selected ? (
           <RuntimeDetail key={selected.id} runtime={selected} />
         ) : (
@@ -601,7 +617,7 @@ export default function RuntimesPage() {
             <p className="mt-3 text-sm">Select a runtime to view details</p>
           </div>
         )}
-      </div>
-    </div>
+      </ResizablePanel>
+    </ResizablePanelGroup>
   );
 }

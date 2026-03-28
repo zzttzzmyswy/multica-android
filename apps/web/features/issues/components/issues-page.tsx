@@ -130,7 +130,7 @@ export function IssuesPage() {
             onMoveIssue={handleMoveIssue}
           />
         ) : (
-          <ListView issues={issues} />
+          <ListView issues={issues} visibleStatuses={visibleStatuses} />
         )}
       </div>
     </div>

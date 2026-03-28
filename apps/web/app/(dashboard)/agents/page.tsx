@@ -48,6 +48,17 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from "@/components/ui/resizable";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -174,13 +185,10 @@ function CreateAgentDialog({
 
           <div>
             <Label className="text-xs text-muted-foreground">Runtime</Label>
-            <div className="relative mt-1.5">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setRuntimeOpen(!runtimeOpen)}
+            <Popover open={runtimeOpen} onOpenChange={setRuntimeOpen}>
+              <PopoverTrigger
                 disabled={runtimes.length === 0}
-                className="flex w-full items-center gap-3 px-3 py-2.5 h-auto text-left text-sm"
+                className="flex w-full items-center gap-3 rounded-lg border border-border bg-background px-3 py-2.5 mt-1.5 text-left text-sm transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
               >
                 {selectedRuntime?.runtime_mode === "cloud" ? (
                   <Cloud className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -203,50 +211,44 @@ function CreateAgentDialog({
                   </div>
                 </div>
                 <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${runtimeOpen ? "rotate-180" : ""}`} />
-              </Button>
-
-              {runtimeOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setRuntimeOpen(false)} />
-                  <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border bg-popover p-1 shadow-md">
-                    {runtimes.map((device) => (
-                      <button
-                        key={device.id}
-                        onClick={() => {
-                          setSelectedRuntimeId(device.id);
-                          setRuntimeOpen(false);
-                        }}
-                        className={`flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm transition-colors ${
-                          device.id === selectedRuntimeId ? "bg-accent" : "hover:bg-accent/50"
-                        }`}
-                      >
-                        {device.runtime_mode === "cloud" ? (
-                          <Cloud className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        ) : (
-                          <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-[var(--anchor-width)] p-1 max-h-60 overflow-y-auto">
+                {runtimes.map((device) => (
+                  <button
+                    key={device.id}
+                    onClick={() => {
+                      setSelectedRuntimeId(device.id);
+                      setRuntimeOpen(false);
+                    }}
+                    className={`flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm transition-colors ${
+                      device.id === selectedRuntimeId ? "bg-accent" : "hover:bg-accent/50"
+                    }`}
+                  >
+                    {device.runtime_mode === "cloud" ? (
+                      <Cloud className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate font-medium">{device.name}</span>
+                        {device.runtime_mode === "cloud" && (
+                          <span className="shrink-0 rounded bg-info/10 px-1.5 py-0.5 text-xs font-medium text-info">
+                            Cloud
+                          </span>
                         )}
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="truncate font-medium">{device.name}</span>
-                            {device.runtime_mode === "cloud" && (
-                              <span className="shrink-0 rounded bg-info/10 px-1.5 py-0.5 text-xs font-medium text-info">
-                                Cloud
-                              </span>
-                            )}
-                          </div>
-                          <div className="truncate text-xs text-muted-foreground">{device.device_info}</div>
-                        </div>
-                        <span
-                          className={`h-2 w-2 shrink-0 rounded-full ${
-                            device.status === "online" ? "bg-success" : "bg-muted-foreground/40"
-                          }`}
-                        />
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground">{device.device_info}</div>
+                    </div>
+                    <span
+                      className={`h-2 w-2 shrink-0 rounded-full ${
+                        device.status === "online" ? "bg-success" : "bg-muted-foreground/40"
+                      }`}
+                    />
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
 
@@ -997,19 +999,18 @@ function AgentDetail({
   const st = statusConfig[agent.status];
   const runtimeDevice = getRuntimeDevice(agent, runtimes);
   const [activeTab, setActiveTab] = useState<DetailTab>("skills");
-  const [showMenu, setShowMenu] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-start gap-4 border-b px-6 py-5">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted text-sm font-bold">
+      <div className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-bold">
           {getInitials(agent.name)}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-3">
-            <h2 className="text-base font-semibold truncate">{agent.name}</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold truncate">{agent.name}</h2>
             <span className={`flex items-center gap-1.5 text-xs ${st.color}`}>
               <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />
               {st.label}
@@ -1023,36 +1024,25 @@ function AgentDetail({
               {runtimeDevice?.name ?? (agent.runtime_mode === "cloud" ? "Cloud" : "Local")}
             </span>
           </div>
-          {agent.description && (
-            <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{agent.description}</p>
-          )}
         </div>
-        <div className="relative">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => setShowMenu(!showMenu)}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="ghost" size="icon-sm" />
+            }
           >
             <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
-          </Button>
-          {showMenu && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
-              <div className="absolute right-0 top-8 z-50 w-40 rounded-lg border bg-popover p-1 shadow-md">
-                <button
-                  onClick={() => {
-                    setShowMenu(false);
-                    setConfirmDelete(true);
-                  }}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-destructive hover:bg-accent"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete Agent
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              className="text-destructive"
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete Agent
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Tabs */}
@@ -1252,29 +1242,27 @@ export default function AgentsPage() {
 
       <ResizablePanel id="detail" minSize="50%">
         {/* Right column — agent detail */}
-        <div className="flex-1 overflow-hidden h-full">
-          {selected ? (
-            <AgentDetail
-              agent={selected}
-              runtimes={runtimes}
-              onUpdate={handleUpdate}
-              onDelete={handleDelete}
-            />
-          ) : (
-            <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
-              <Bot className="h-10 w-10 text-muted-foreground/30" />
-              <p className="mt-3 text-sm">Select an agent to view details</p>
-              <Button
-                onClick={() => setShowCreate(true)}
-                size="xs"
-                className="mt-3"
-              >
-                <Plus className="h-3 w-3" />
-                Create Agent
-              </Button>
-            </div>
-          )}
-        </div>
+        {selected ? (
+          <AgentDetail
+            agent={selected}
+            runtimes={runtimes}
+            onUpdate={handleUpdate}
+            onDelete={handleDelete}
+          />
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
+            <Bot className="h-10 w-10 text-muted-foreground/30" />
+            <p className="mt-3 text-sm">Select an agent to view details</p>
+            <Button
+              onClick={() => setShowCreate(true)}
+              size="xs"
+              className="mt-3"
+            >
+              <Plus className="h-3 w-3" />
+              Create Agent
+            </Button>
+          </div>
+        )}
       </ResizablePanel>
 
       {showCreate && (

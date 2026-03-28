@@ -38,6 +38,7 @@ interface IssueViewState {
   sortBy: SortField;
   sortDirection: SortDirection;
   cardProperties: CardProperties;
+  listCollapsedStatuses: IssueStatus[];
   setViewMode: (mode: ViewMode) => void;
   toggleStatusFilter: (status: IssueStatus) => void;
   togglePriorityFilter: (priority: IssuePriority) => void;
@@ -47,6 +48,7 @@ interface IssueViewState {
   setSortBy: (field: SortField) => void;
   setSortDirection: (dir: SortDirection) => void;
   toggleCardProperty: (key: keyof CardProperties) => void;
+  toggleListCollapsed: (status: IssueStatus) => void;
 }
 
 export const useIssueViewStore = create<IssueViewState>()(
@@ -63,6 +65,7 @@ export const useIssueViewStore = create<IssueViewState>()(
         assignee: true,
         dueDate: true,
       },
+      listCollapsedStatuses: [],
 
       setViewMode: (mode) => set({ viewMode: mode }),
       toggleStatusFilter: (status) =>
@@ -107,6 +110,12 @@ export const useIssueViewStore = create<IssueViewState>()(
             [key]: !state.cardProperties[key],
           },
         })),
+      toggleListCollapsed: (status) =>
+        set((state) => ({
+          listCollapsedStatuses: state.listCollapsedStatuses.includes(status)
+            ? state.listCollapsedStatuses.filter((s) => s !== status)
+            : [...state.listCollapsedStatuses, status],
+        })),
     }),
     {
       name: "multica_issues_view",
@@ -117,6 +126,7 @@ export const useIssueViewStore = create<IssueViewState>()(
         sortBy: state.sortBy,
         sortDirection: state.sortDirection,
         cardProperties: state.cardProperties,
+        listCollapsedStatuses: state.listCollapsedStatuses,
       }),
     }
   )
