@@ -13,38 +13,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { STATUS_CONFIG, PRIORITY_ORDER } from "@/features/issues/config";
+import { STATUS_CONFIG } from "@/features/issues/config";
 import { useModalStore } from "@/features/modals";
-import { useIssueViewStore, type SortField, type SortDirection } from "@/features/issues/stores/view-store";
+import { useIssueViewStore } from "@/features/issues/stores/view-store";
+import { sortIssues } from "@/features/issues/utils/sort";
 import { StatusIcon } from "./status-icon";
 import { DraggableBoardCard } from "./board-card";
-
-const PRIORITY_RANK: Record<string, number> = Object.fromEntries(
-  PRIORITY_ORDER.map((p, i) => [p, i])
-);
-
-function sortIssues(issues: Issue[], field: SortField, direction: SortDirection): Issue[] {
-  const sorted = [...issues].sort((a, b) => {
-    switch (field) {
-      case "priority":
-        return (PRIORITY_RANK[a.priority] ?? 99) - (PRIORITY_RANK[b.priority] ?? 99);
-      case "due_date": {
-        if (!a.due_date && !b.due_date) return 0;
-        if (!a.due_date) return 1;
-        if (!b.due_date) return -1;
-        return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
-      }
-      case "created_at":
-        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      case "title":
-        return a.title.localeCompare(b.title);
-      case "position":
-      default:
-        return a.position - b.position;
-    }
-  });
-  return direction === "desc" ? sorted.reverse() : sorted;
-}
 
 export function BoardColumn({
   status,

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -11,6 +12,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useIssueStore } from "@/features/issues/store";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -55,6 +57,21 @@ export function IssuesHeader() {
   const setSortDirection = useIssueViewStore((s) => s.setSortDirection);
   const toggleCardProperty = useIssueViewStore((s) => s.toggleCardProperty);
   const clearFilters = useIssueViewStore((s) => s.clearFilters);
+
+  const allIssues = useIssueStore((s) => s.issues);
+
+  const filteredCount = useMemo(() => {
+    return allIssues.filter((i) => {
+      if (statusFilters.length > 0 && !statusFilters.includes(i.status))
+        return false;
+      if (
+        priorityFilters.length > 0 &&
+        !priorityFilters.includes(i.priority)
+      )
+        return false;
+      return true;
+    }).length;
+  }, [allIssues, statusFilters, priorityFilters]);
 
   const sortLabel =
     SORT_OPTIONS.find((o) => o.value === sortBy)?.label ?? "Manual";
@@ -191,12 +208,14 @@ export function IssuesHeader() {
             {/* Reset */}
             {hasActiveFilters && (
               <div className="px-3 py-2">
-                <button
-                  className="text-xs text-muted-foreground hover:text-foreground"
+                <Button
+                  variant="link"
+                  size="xs"
+                  className="text-muted-foreground hover:text-foreground"
                   onClick={clearFilters}
                 >
                   Reset filters
-                </button>
+                </Button>
               </div>
             )}
           </PopoverContent>
@@ -285,7 +304,10 @@ export function IssuesHeader() {
         </Popover>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
+        <span className="text-xs text-muted-foreground">
+          {filteredCount} {filteredCount === 1 ? "Issue" : "Issues"}
+        </span>
         {/* New issue */}
         <Button
           variant="outline"

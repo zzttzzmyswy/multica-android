@@ -25,6 +25,7 @@ import {
   ResizableHandle,
 } from "@/components/ui/resizable";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -89,7 +90,7 @@ function CreateSkillDialog({
 
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Add Skill</DialogTitle>
           <DialogDescription>
@@ -109,7 +110,7 @@ function CreateSkillDialog({
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="create" className="space-y-4 mt-4">
+          <TabsContent value="create" className="space-y-4 mt-4 min-h-[180px]">
             <div>
               <Label className="text-xs text-muted-foreground">Name</Label>
               <Input
@@ -134,7 +135,7 @@ function CreateSkillDialog({
             </div>
           </TabsContent>
 
-          <TabsContent value="import" className="space-y-4 mt-4">
+          <TabsContent value="import" className="space-y-4 mt-4 min-h-[180px]">
             <div>
               <Label className="text-xs text-muted-foreground">Skill URL</Label>
               <Input
@@ -244,9 +245,9 @@ function SkillListItem({
         )}
       </div>
       {(skill.files?.length ?? 0) > 0 && (
-        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
+        <Badge variant="secondary">
           {skill.files.length} file{skill.files.length !== 1 ? "s" : ""}
-        </span>
+        </Badge>
       )}
     </button>
   );
