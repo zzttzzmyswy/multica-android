@@ -707,7 +707,7 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                         <CommandEmpty>No results found</CommandEmpty>
                         {members.length > 0 && (
                           <CommandGroup heading="Members">
-                            {members.map((m) => {
+                            {members.filter((m, i, arr) => arr.findIndex((x) => x.user_id === m.user_id) === i).map((m) => {
                               const sub = subscribers.find((s) => s.user_type === "member" && s.user_id === m.user_id);
                               const isSubbed = !!sub;
                               return (
