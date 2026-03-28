@@ -56,6 +56,8 @@ import {
 } from "@/components/ui/tooltip";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
+import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount } from "@/components/ui/avatar";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import type { Issue, Comment, IssueSubscriber, UpdateIssueRequest, IssueStatus, IssuePriority } from "@/shared/types";
 import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
@@ -269,22 +271,26 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
     (s) => s.user_type === "member" && s.user_id === user?.id
   );
 
-  const handleToggleSubscribe = async () => {
-    if (!user || !issue) return;
+  const toggleSubscriber = async (userId: string, currentlySubscribed: boolean) => {
+    if (!issue) return;
     try {
-      if (isSubscribed) {
-        await api.unsubscribeFromIssue(id);
-        setSubscribers((prev) => prev.filter((s) => s.user_id !== user.id));
+      if (currentlySubscribed) {
+        await api.unsubscribeFromIssue(id, userId);
+        setSubscribers((prev) => prev.filter((s) => s.user_id !== userId));
       } else {
-        await api.subscribeToIssue(id);
+        await api.subscribeToIssue(id, userId);
         setSubscribers((prev) => [
           ...prev,
-          { issue_id: id, user_type: "member" as const, user_id: user.id, reason: "manual" as const, created_at: new Date().toISOString() },
+          { issue_id: id, user_type: "member" as const, user_id: userId, reason: "manual" as const, created_at: new Date().toISOString() },
         ]);
       }
     } catch {
-      toast.error("Failed to update subscription");
+      toast.error("Failed to update subscriber");
     }
+  };
+
+  const handleToggleSubscribe = () => {
+    if (user) toggleSubscriber(user.id, isSubscribed);
   };
 
   // Real-time comment updates
@@ -676,55 +682,51 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                   {isSubscribed ? "Unsubscribe" : "Subscribe"}
                 </button>
                 <Popover>
-                  <PopoverTrigger className="flex items-center -space-x-1.5 hover:opacity-80 transition-opacity cursor-pointer">
-                      {subscribers.slice(0, 5).map((sub) => (
-                        <ActorAvatar
-                          key={sub.user_id}
-                          actorType={sub.user_type}
-                          actorId={sub.user_id}
-                          size={24}
-                          className="ring-2 ring-background"
-                        />
-                      ))}
-                      {subscribers.length > 5 && (
-                        <span className="flex items-center justify-center h-6 w-6 rounded-full bg-muted text-[10px] font-medium ring-2 ring-background">
-                          +{subscribers.length - 5}
-                        </span>
-                      )}
-                      {subscribers.length === 0 && (
-                        <span className="flex items-center justify-center h-6 w-6 rounded-full border border-dashed border-muted-foreground/30 text-muted-foreground">
-                          <Users className="h-3 w-3" />
-                        </span>
-                      )}
+                  <PopoverTrigger className="cursor-pointer hover:opacity-80 transition-opacity">
+                    {subscribers.length > 0 ? (
+                      <AvatarGroup>
+                        {subscribers.slice(0, 4).map((sub) => (
+                          <Avatar key={sub.user_id} size="sm">
+                            <AvatarFallback>{getActorInitials(sub.user_type, sub.user_id)}</AvatarFallback>
+                          </Avatar>
+                        ))}
+                        {subscribers.length > 4 && (
+                          <AvatarGroupCount>+{subscribers.length - 4}</AvatarGroupCount>
+                        )}
+                      </AvatarGroup>
+                    ) : (
+                      <span className="flex items-center justify-center h-6 w-6 rounded-full border border-dashed border-muted-foreground/30 text-muted-foreground">
+                        <Users className="h-3 w-3" />
+                      </span>
+                    )}
                   </PopoverTrigger>
                   <PopoverContent align="end" className="w-64 p-0">
-                    <div className="px-3 py-2 border-b">
-                      <p className="text-sm text-muted-foreground">Subscribers</p>
-                    </div>
-                    <div className="max-h-64 overflow-y-auto py-1">
-                      {subscribers.map((sub) => {
-                        const subName = getActorName(sub.user_type, sub.user_id);
-                        return (
-                          <div key={sub.user_id} className="flex items-center gap-2.5 px-3 py-1.5">
-                            <Checkbox checked disabled className="h-3.5 w-3.5" />
-                            <ActorAvatar actorType={sub.user_type} actorId={sub.user_id} size={22} />
-                            <span className="text-sm truncate flex-1">{subName}</span>
-                            {sub.reason !== "manual" && (
-                              <span className="text-[11px] text-muted-foreground capitalize">{sub.reason}</span>
-                            )}
-                          </div>
-                        );
-                      })}
-                      {members
-                        .filter((m) => !subscribers.some((s) => s.user_id === m.user_id))
-                        .map((m) => (
-                          <div key={m.user_id} className="flex items-center gap-2.5 px-3 py-1.5 opacity-50">
-                            <Checkbox checked={false} disabled className="h-3.5 w-3.5" />
-                            <ActorAvatar actorType="member" actorId={m.user_id} size={22} />
-                            <span className="text-sm truncate flex-1">{m.name}</span>
-                          </div>
-                        ))}
-                    </div>
+                    <Command>
+                      <CommandInput placeholder="Change subscribers..." />
+                      <CommandList>
+                        <CommandEmpty>No members found</CommandEmpty>
+                        <CommandGroup>
+                          {members.map((m) => {
+                            const sub = subscribers.find((s) => s.user_id === m.user_id);
+                            const isSubbed = !!sub;
+                            return (
+                              <CommandItem
+                                key={m.user_id}
+                                onSelect={() => toggleSubscriber(m.user_id, isSubbed)}
+                                className="flex items-center gap-2.5"
+                              >
+                                <Checkbox checked={isSubbed} className="pointer-events-none" />
+                                <ActorAvatar actorType="member" actorId={m.user_id} size={22} />
+                                <span className="truncate flex-1">{m.name}</span>
+                                {sub?.reason && sub.reason !== "manual" && (
+                                  <span className="text-xs text-muted-foreground capitalize">{sub.reason}</span>
+                                )}
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
                   </PopoverContent>
                 </Popover>
               </div>

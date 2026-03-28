@@ -54,7 +54,6 @@ const typeLabels: Record<InboxItemType, string> = {
   task_failed: "Task failed",
   agent_blocked: "Agent blocked",
   agent_completed: "Agent completed",
-  status_change: "Status changed",
 };
 
 function timeAgo(dateStr: string): string {

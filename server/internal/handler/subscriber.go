@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -49,7 +50,8 @@ func (h *Handler) ListIssueSubscribers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// SubscribeToIssue subscribes the current user to an issue with reason "manual".
+// SubscribeToIssue subscribes a user to an issue with reason "manual".
+// If request body contains user_id, subscribes that user; otherwise subscribes the caller.
 func (h *Handler) SubscribeToIssue(w http.ResponseWriter, r *http.Request) {
 	issueID := chi.URLParam(r, "id")
 	issue, ok := h.loadIssueForUser(w, r, issueID)
@@ -57,12 +59,22 @@ func (h *Handler) SubscribeToIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID := requestUserID(r)
+	// Default to current user; allow specifying another user
+	targetUserID := requestUserID(r)
+	var req struct {
+		UserID *string `json:"user_id"`
+	}
+	if r.Body != nil {
+		json.NewDecoder(r.Body).Decode(&req)
+	}
+	if req.UserID != nil && *req.UserID != "" {
+		targetUserID = *req.UserID
+	}
 
 	err := h.Queries.AddIssueSubscriber(r.Context(), db.AddIssueSubscriberParams{
 		IssueID:  issue.ID,
 		UserType: "member",
-		UserID:   parseUUID(userID),
+		UserID:   parseUUID(targetUserID),
 		Reason:   "manual",
 	})
 	if err != nil {
@@ -71,16 +83,19 @@ func (h *Handler) SubscribeToIssue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	workspaceID := uuidToString(issue.WorkspaceID)
-	h.publish(protocol.EventSubscriberAdded, workspaceID, "member", userID, map[string]any{
-		"issue_id": issueID,
-		"user_id":  userID,
-		"reason":   "manual",
+	callerID := requestUserID(r)
+	h.publish(protocol.EventSubscriberAdded, workspaceID, "member", callerID, map[string]any{
+		"issue_id":  issueID,
+		"user_type": "member",
+		"user_id":   targetUserID,
+		"reason":    "manual",
 	})
 
 	writeJSON(w, http.StatusOK, map[string]bool{"subscribed": true})
 }
 
-// UnsubscribeFromIssue removes the current user's subscription from an issue.
+// UnsubscribeFromIssue removes a user's subscription from an issue.
+// If request body contains user_id, unsubscribes that user; otherwise unsubscribes the caller.
 func (h *Handler) UnsubscribeFromIssue(w http.ResponseWriter, r *http.Request) {
 	issueID := chi.URLParam(r, "id")
 	issue, ok := h.loadIssueForUser(w, r, issueID)
@@ -88,12 +103,21 @@ func (h *Handler) UnsubscribeFromIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID := requestUserID(r)
+	targetUserID := requestUserID(r)
+	var req struct {
+		UserID *string `json:"user_id"`
+	}
+	if r.Body != nil {
+		json.NewDecoder(r.Body).Decode(&req)
+	}
+	if req.UserID != nil && *req.UserID != "" {
+		targetUserID = *req.UserID
+	}
 
 	err := h.Queries.RemoveIssueSubscriber(r.Context(), db.RemoveIssueSubscriberParams{
 		IssueID:  issue.ID,
 		UserType: "member",
-		UserID:   parseUUID(userID),
+		UserID:   parseUUID(targetUserID),
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to unsubscribe")
@@ -101,9 +125,11 @@ func (h *Handler) UnsubscribeFromIssue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	workspaceID := uuidToString(issue.WorkspaceID)
-	h.publish(protocol.EventSubscriberRemoved, workspaceID, "member", userID, map[string]any{
-		"issue_id": issueID,
-		"user_id":  userID,
+	callerID := requestUserID(r)
+	h.publish(protocol.EventSubscriberRemoved, workspaceID, "member", callerID, map[string]any{
+		"issue_id":  issueID,
+		"user_type": "member",
+		"user_id":   targetUserID,
 	})
 
 	writeJSON(w, http.StatusOK, map[string]bool{"subscribed": false})
