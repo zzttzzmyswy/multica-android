@@ -280,7 +280,7 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
         ]);
       }
     } catch {
-      // silently fail
+      toast.error("Failed to update subscription");
     }
   };
 

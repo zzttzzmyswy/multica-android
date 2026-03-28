@@ -45,6 +45,7 @@ func notifySubscribers(
 	queries *db.Queries,
 	bus *events.Bus,
 	issueID string,
+	issueStatus string,
 	workspaceID string,
 	e events.Event,
 	exclude map[string]bool,
@@ -97,6 +98,7 @@ func notifySubscribers(
 		}
 
 		resp := inboxItemToResponse(item)
+		resp["issue_status"] = issueStatus
 		bus.Publish(events.Event{
 			Type:        protocol.EventInboxNew,
 			WorkspaceID: workspaceID,
@@ -118,6 +120,7 @@ func notifyDirect(
 	workspaceID string,
 	e events.Event,
 	issueID string,
+	issueStatus string,
 	notifType string,
 	severity string,
 	title string,
@@ -147,6 +150,7 @@ func notifyDirect(
 	}
 
 	resp := inboxItemToResponse(item)
+	resp["issue_status"] = issueStatus
 	bus.Publish(events.Event{
 		Type:        protocol.EventInboxNew,
 		WorkspaceID: workspaceID,
@@ -206,6 +210,10 @@ func notifyMentionedMembers(
 // registerNotificationListeners wires up event bus listeners that create inbox
 // notifications using the subscriber table. This replaces the old hardcoded
 // notification logic from inbox_listeners.go.
+//
+// NOTE: uses context.Background() because the event bus dispatches synchronously
+// within the HTTP request goroutine. Adding per-handler timeouts is a bus-level
+// concern — see events.Bus for future improvements.
 func registerNotificationListeners(bus *events.Bus, queries *db.Queries) {
 	ctx := context.Background()
 
@@ -228,7 +236,7 @@ func registerNotificationListeners(bus *events.Bus, queries *db.Queries) {
 			skip[*issue.AssigneeID] = true
 			notifyDirect(ctx, queries, bus,
 				*issue.AssigneeType, *issue.AssigneeID,
-				issue.WorkspaceID, e, issue.ID,
+				issue.WorkspaceID, e, issue.ID, issue.Status,
 				"issue_assigned", "action_required",
 				"New issue assigned: "+issue.Title,
 				"",
@@ -265,7 +273,7 @@ func registerNotificationListeners(bus *events.Bus, queries *db.Queries) {
 			if issue.AssigneeType != nil && issue.AssigneeID != nil {
 				notifyDirect(ctx, queries, bus,
 					*issue.AssigneeType, *issue.AssigneeID,
-					e.WorkspaceID, e, issue.ID,
+					e.WorkspaceID, e, issue.ID, issue.Status,
 					"issue_assigned", "action_required",
 					"Assigned to you: "+issue.Title,
 					"",
@@ -276,7 +284,7 @@ func registerNotificationListeners(bus *events.Bus, queries *db.Queries) {
 			if prevAssigneeType != nil && prevAssigneeID != nil && *prevAssigneeType == "member" {
 				notifyDirect(ctx, queries, bus,
 					"member", *prevAssigneeID,
-					e.WorkspaceID, e, issue.ID,
+					e.WorkspaceID, e, issue.ID, issue.Status,
 					"unassigned", "info",
 					"Unassigned from: "+issue.Title,
 					"",
@@ -292,14 +300,14 @@ func registerNotificationListeners(bus *events.Bus, queries *db.Queries) {
 			if issue.AssigneeID != nil {
 				exclude[*issue.AssigneeID] = true
 			}
-			notifySubscribers(ctx, queries, bus, issue.ID, e.WorkspaceID, e,
+			notifySubscribers(ctx, queries, bus, issue.ID, issue.Status, e.WorkspaceID, e,
 				exclude, "assignee_changed", "info",
 				"Assignee changed: "+issue.Title, "")
 		}
 
 		if statusChanged {
 			// Subscriber: notify all subscribers except actor
-			notifySubscribers(ctx, queries, bus, issue.ID, e.WorkspaceID, e,
+			notifySubscribers(ctx, queries, bus, issue.ID, issue.Status, e.WorkspaceID, e,
 				nil, "status_changed", "info",
 				issue.Title+" moved to "+issue.Status, "")
 		}
@@ -350,15 +358,18 @@ func registerNotificationListeners(bus *events.Bus, queries *db.Queries) {
 		}
 
 		issueTitle, _ := payload["issue_title"].(string)
+		issueStatus, _ := payload["issue_status"].(string)
 
-		notifySubscribers(ctx, queries, bus, issueID, e.WorkspaceID, e,
+		notifySubscribers(ctx, queries, bus, issueID, issueStatus, e.WorkspaceID, e,
 			nil, "new_comment", "info",
 			"New comment on: "+issueTitle, commentContent)
 
-		// Notify @mentions in comment content
+		// Notify @mentions in comment content.
+		// TODO: when @mention feature is enabled, pass already-notified subscriber IDs
+		// into the skip set to avoid duplicate notifications for users who are both
+		// subscribers and @mentioned.
 		mentions := parseMentions(commentContent)
 		if len(mentions) > 0 {
-			issueStatus, _ := payload["issue_status"].(string)
 			skip := map[string]bool{e.ActorID: true}
 			notifyMentionedMembers(bus, queries, e, mentions, issueID, issueTitle, issueStatus,
 				"Mentioned in comment: "+issueTitle, skip)
@@ -390,7 +401,7 @@ func registerNotificationListeners(bus *events.Bus, queries *db.Queries) {
 			exclude[agentID] = true
 		}
 
-		notifySubscribers(ctx, queries, bus, issueID, e.WorkspaceID,
+		notifySubscribers(ctx, queries, bus, issueID, issue.Status, e.WorkspaceID,
 			events.Event{
 				Type:        e.Type,
 				WorkspaceID: e.WorkspaceID,
@@ -424,7 +435,7 @@ func registerNotificationListeners(bus *events.Bus, queries *db.Queries) {
 			exclude[agentID] = true
 		}
 
-		notifySubscribers(ctx, queries, bus, issueID, e.WorkspaceID,
+		notifySubscribers(ctx, queries, bus, issueID, issue.Status, e.WorkspaceID,
 			events.Event{
 				Type:        e.Type,
 				WorkspaceID: e.WorkspaceID,
