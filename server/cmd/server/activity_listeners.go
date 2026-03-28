@@ -186,19 +186,26 @@ func handleTaskActivity(ctx context.Context, bus *events.Bus, queries *db.Querie
 }
 
 // publishActivityEvent sends an activity:created event for WS broadcasting.
+// Payload matches frontend ActivityCreatedPayload: { issue_id, entry: TimelineEntry }
 func publishActivityEvent(bus *events.Bus, original events.Event, activity db.ActivityLog) {
+	actorType := ""
+	if activity.ActorType.Valid {
+		actorType = activity.ActorType.String
+	}
+	action := activity.Action
 	bus.Publish(events.Event{
 		Type:        protocol.EventActivityCreated,
 		WorkspaceID: original.WorkspaceID,
 		ActorType:   original.ActorType,
 		ActorID:     original.ActorID,
 		Payload: map[string]any{
-			"activity": map[string]any{
+			"issue_id": util.UUIDToString(activity.IssueID),
+			"entry": map[string]any{
+				"type":       "activity",
 				"id":         util.UUIDToString(activity.ID),
-				"issue_id":   util.UUIDToString(activity.IssueID),
-				"actor_type": util.TextToPtr(activity.ActorType),
+				"actor_type": actorType,
 				"actor_id":   util.UUIDToString(activity.ActorID),
-				"action":     activity.Action,
+				"action":     &action,
 				"details":    json.RawMessage(activity.Details),
 				"created_at": util.TimestampToString(activity.CreatedAt),
 			},

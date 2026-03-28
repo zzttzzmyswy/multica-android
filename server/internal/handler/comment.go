@@ -94,6 +94,16 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 	var parentID pgtype.UUID
 	if req.ParentID != nil {
 		parentID = parseUUID(*req.ParentID)
+		// Only allow one level of nesting: parent must be a top-level comment
+		parent, err := h.Queries.GetComment(r.Context(), parentID)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "parent comment not found")
+			return
+		}
+		if parent.ParentID.Valid {
+			writeError(w, http.StatusBadRequest, "replies to replies are not supported")
+			return
+		}
 	}
 
 	comment, err := h.Queries.CreateComment(r.Context(), db.CreateCommentParams{

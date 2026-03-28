@@ -315,7 +315,13 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
   const handleDeleteComment = async (commentId: string) => {
     try {
       await api.deleteComment(commentId);
-      setTimeline((prev) => prev.filter((e) => e.id !== commentId));
+      setTimeline((prev) =>
+        prev
+          // Promote replies of deleted comment to top-level
+          .map((e) => e.parent_id === commentId ? { ...e, parent_id: null } : e)
+          // Remove the deleted comment
+          .filter((e) => e.id !== commentId)
+      );
     } catch {
       toast.error("Failed to delete comment");
     }
@@ -379,7 +385,11 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
     useCallback((payload: unknown) => {
       const { comment_id, issue_id } = payload as CommentDeletedPayload;
       if (issue_id === id) {
-        setTimeline((prev) => prev.filter((e) => e.id !== comment_id));
+        setTimeline((prev) =>
+          prev
+            .map((e) => e.parent_id === comment_id ? { ...e, parent_id: null } : e)
+            .filter((e) => e.id !== comment_id)
+        );
       }
     }, [id]),
   );
