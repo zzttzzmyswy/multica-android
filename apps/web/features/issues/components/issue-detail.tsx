@@ -720,7 +720,7 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                                   <Checkbox checked={isSubbed} className="pointer-events-none" />
                                   <ActorAvatar actorType="member" actorId={m.user_id} size={22} />
                                   <span className="truncate flex-1">{m.name}</span>
-                                  {sub?.reason && sub.reason !== "manual" && (
+                                  {sub?.reason && (sub.reason === "creator" || sub.reason === "assignee") && (
                                     <span className="text-xs text-muted-foreground capitalize">{sub.reason}</span>
                                   )}
                                 </CommandItem>
@@ -742,7 +742,7 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                                   <Checkbox checked={isSubbed} className="pointer-events-none" />
                                   <ActorAvatar actorType="agent" actorId={a.id} size={22} />
                                   <span className="truncate flex-1">{a.name}</span>
-                                  {sub?.reason && sub.reason !== "manual" && (
+                                  {sub?.reason && (sub.reason === "creator" || sub.reason === "assignee") && (
                                     <span className="text-xs text-muted-foreground capitalize">{sub.reason}</span>
                                   )}
                                 </CommandItem>
