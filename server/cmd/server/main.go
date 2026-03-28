@@ -51,7 +51,8 @@ func main() {
 	registerListeners(bus, hub)
 
 	queries := db.New(pool)
-	registerInboxListeners(bus, queries)
+	registerSubscriberListeners(bus, queries)
+	registerNotificationListeners(bus, queries)
 
 	r := NewRouter(pool, hub, bus)
 

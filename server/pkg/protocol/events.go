@@ -39,6 +39,10 @@ const (
 	EventMemberUpdated = "member:updated"
 	EventMemberRemoved = "member:removed"
 
+	// Subscriber events
+	EventSubscriberAdded   = "subscriber:added"
+	EventSubscriberRemoved = "subscriber:removed"
+
 	// Daemon events
 	EventDaemonHeartbeat = "daemon:heartbeat"
 	EventDaemonRegister  = "daemon:register"

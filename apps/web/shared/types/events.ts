@@ -33,7 +33,9 @@ export type WSEventType =
   | "daemon:register"
   | "skill:created"
   | "skill:updated"
-  | "skill:deleted";
+  | "skill:deleted"
+  | "subscriber:added"
+  | "subscriber:removed";
 
 export interface WSMessage<T = unknown> {
   type: WSEventType;
@@ -123,4 +125,17 @@ export interface MemberRemovedPayload {
   member_id: string;
   user_id: string;
   workspace_id: string;
+}
+
+export interface SubscriberAddedPayload {
+  issue_id: string;
+  user_type: string;
+  user_id: string;
+  reason: string;
+}
+
+export interface SubscriberRemovedPayload {
+  issue_id: string;
+  user_type: string;
+  user_id: string;
 }

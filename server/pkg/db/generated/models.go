@@ -166,6 +166,14 @@ type IssueLabel struct {
 	Color       string      `json:"color"`
 }
 
+type IssueSubscriber struct {
+	IssueID   pgtype.UUID        `json:"issue_id"`
+	UserType  string             `json:"user_type"`
+	UserID    pgtype.UUID        `json:"user_id"`
+	Reason    string             `json:"reason"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type IssueToLabel struct {
 	IssueID pgtype.UUID `json:"issue_id"`
 	LabelID pgtype.UUID `json:"label_id"`

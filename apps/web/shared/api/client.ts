@@ -15,6 +15,7 @@ import type {
   DaemonPairingSession,
   ApproveDaemonPairingSessionRequest,
   InboxItem,
+  IssueSubscriber,
   Comment,
   Workspace,
   WorkspaceRepo,
@@ -198,6 +199,19 @@ export class ApiClient {
 
   async deleteComment(commentId: string): Promise<void> {
     await this.fetch(`/api/comments/${commentId}`, { method: "DELETE" });
+  }
+
+  // Subscribers
+  async listIssueSubscribers(issueId: string): Promise<IssueSubscriber[]> {
+    return this.fetch(`/api/issues/${issueId}/subscribers`);
+  }
+
+  async subscribeToIssue(issueId: string): Promise<void> {
+    await this.fetch(`/api/issues/${issueId}/subscribe`, { method: "POST" });
+  }
+
+  async unsubscribeFromIssue(issueId: string): Promise<void> {
+    await this.fetch(`/api/issues/${issueId}/unsubscribe`, { method: "POST" });
   }
 
   // Agents

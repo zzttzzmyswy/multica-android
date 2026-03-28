@@ -8,7 +8,6 @@ import {
   ArrowUp,
   Bot,
   Calendar,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Link2,
@@ -55,7 +54,7 @@ import {
   TooltipContent,
 } from "@/components/ui/tooltip";
 import { ActorAvatar } from "@/components/common/actor-avatar";
-import type { Issue, Comment, UpdateIssueRequest, IssueStatus, IssuePriority } from "@/shared/types";
+import type { Issue, Comment, IssueSubscriber, UpdateIssueRequest, IssueStatus, IssuePriority } from "@/shared/types";
 import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
 import { StatusIcon, PriorityIcon, DueDatePicker } from "@/features/issues/components";
 import { api } from "@/shared/api";
@@ -63,7 +62,7 @@ import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore, useActorName } from "@/features/workspace";
 import { useWSEvent } from "@/features/realtime";
 import { useIssueStore } from "@/features/issues";
-import type { CommentCreatedPayload, CommentUpdatedPayload, CommentDeletedPayload } from "@/shared/types";
+import type { CommentCreatedPayload, CommentUpdatedPayload, CommentDeletedPayload, SubscriberAddedPayload, SubscriberRemovedPayload } from "@/shared/types";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -144,6 +143,7 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [issue, setIssue] = useState<Issue | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
+  const [subscribers, setSubscribers] = useState<IssueSubscriber[]>([]);
   const [loading, setLoading] = useState(true);
   const [commentEmpty, setCommentEmpty] = useState(true);
   const commentEditorRef = useRef<RichTextEditorRef>(null);
@@ -154,6 +154,8 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [propertiesOpen, setPropertiesOpen] = useState(true);
+  const [detailsOpen, setDetailsOpen] = useState(true);
 
   // Watch the global issue store for real-time updates from other users/agents
   const storeIssue = useIssueStore((s) => s.issues.find((i) => i.id === id));
@@ -167,11 +169,13 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
   useEffect(() => {
     setIssue(null);
     setComments([]);
+    setSubscribers([]);
     setLoading(true);
-    Promise.all([api.getIssue(id), api.listComments(id)])
-      .then(([iss, cmts]) => {
+    Promise.all([api.getIssue(id), api.listComments(id), api.listIssueSubscribers(id)])
+      .then(([iss, cmts, subs]) => {
         setIssue(iss);
         setComments(cmts);
+        setSubscribers(subs);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -257,6 +261,29 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
     }
   };
 
+  // Subscriber state
+  const isSubscribed = subscribers.some(
+    (s) => s.user_type === "member" && s.user_id === user?.id
+  );
+
+  const handleToggleSubscribe = async () => {
+    if (!user || !issue) return;
+    try {
+      if (isSubscribed) {
+        await api.unsubscribeFromIssue(id);
+        setSubscribers((prev) => prev.filter((s) => s.user_id !== user.id));
+      } else {
+        await api.subscribeToIssue(id);
+        setSubscribers((prev) => [
+          ...prev,
+          { issue_id: id, user_type: "member" as const, user_id: user.id, reason: "manual" as const, created_at: new Date().toISOString() },
+        ]);
+      }
+    } catch {
+      // silently fail
+    }
+  };
+
   // Real-time comment updates
   useWSEvent(
     "comment:created",
@@ -289,6 +316,34 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
       if (issue_id === id) {
         setComments((prev) => prev.filter((c) => c.id !== comment_id));
       }
+    }, [id]),
+  );
+
+  // Real-time subscriber updates
+  useWSEvent(
+    "subscriber:added",
+    useCallback((payload: unknown) => {
+      const p = payload as SubscriberAddedPayload;
+      if (p.issue_id !== id) return;
+      setSubscribers((prev) => {
+        if (prev.some((s) => s.user_id === p.user_id)) return prev;
+        return [...prev, {
+          issue_id: p.issue_id,
+          user_type: p.user_type as "member" | "agent",
+          user_id: p.user_id,
+          reason: p.reason as IssueSubscriber["reason"],
+          created_at: new Date().toISOString(),
+        }];
+      });
+    }, [id]),
+  );
+
+  useWSEvent(
+    "subscriber:removed",
+    useCallback((payload: unknown) => {
+      const p = payload as SubscriberRemovedPayload;
+      if (p.issue_id !== id) return;
+      setSubscribers((prev) => prev.filter((s) => s.user_id !== p.user_id));
     }, [id]),
   );
 
@@ -742,14 +797,14 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
           {/* Properties section */}
           <div>
             <button
-              className="flex w-full items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors mb-2"
-              onClick={() => {/* placeholder for future collapse */}}
+              className={`flex w-full items-center gap-1 text-xs font-medium transition-colors mb-2 ${propertiesOpen ? "" : "text-muted-foreground hover:text-foreground"}`}
+              onClick={() => setPropertiesOpen(!propertiesOpen)}
             >
+              <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${propertiesOpen ? "rotate-90" : ""}`} />
               Properties
-              <ChevronDown className="h-3 w-3" />
             </button>
 
-            <div className="space-y-0.5">
+            {propertiesOpen && <div className="space-y-0.5 pl-2">
               {/* Status */}
               <PropRow label="Status">
                 <DropdownMenu>
@@ -855,20 +910,20 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                   onUpdate={handleUpdateField}
                 />
               </PropRow>
-            </div>
+            </div>}
           </div>
 
           {/* Details section */}
           <div>
             <button
-              className="flex w-full items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors mb-2"
-              onClick={() => {/* placeholder for future collapse */}}
+              className={`flex w-full items-center gap-1 text-xs font-medium transition-colors mb-2 ${detailsOpen ? "" : "text-muted-foreground hover:text-foreground"}`}
+              onClick={() => setDetailsOpen(!detailsOpen)}
             >
+              <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${detailsOpen ? "rotate-90" : ""}`} />
               Details
-              <ChevronDown className="h-3 w-3" />
             </button>
 
-            <div className="space-y-0.5">
+            {detailsOpen && <div className="space-y-0.5 pl-2">
               <PropRow label="Created by">
                 <ActorAvatar
                   actorType={issue.creator_type}
@@ -883,7 +938,29 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
               <PropRow label="Updated">
                 <span className="text-muted-foreground">{shortDate(issue.updated_at)}</span>
               </PropRow>
+            </div>}
+          </div>
+
+          {/* Subscribers section */}
+          <div>
+            <h4 className="text-xs font-medium text-muted-foreground mb-2">Subscribers</h4>
+            <div className="space-y-1 pl-2">
+              {subscribers.map((sub) => (
+                <div key={sub.user_id} className="flex items-center gap-2 text-sm">
+                  <ActorAvatar actorType={sub.user_type} actorId={sub.user_id} size={18} />
+                  <span className="truncate">{getActorName(sub.user_type, sub.user_id)}</span>
+                  <span className="text-xs text-muted-foreground">({sub.reason})</span>
+                </div>
+              ))}
             </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-1 h-7 text-xs w-full"
+              onClick={handleToggleSubscribe}
+            >
+              {isSubscribed ? "Unsubscribe" : "Subscribe"}
+            </Button>
           </div>
         </div>
       </div>

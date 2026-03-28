@@ -176,10 +176,6 @@ func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, resu
 		}
 	}
 
-	if issue, err := s.Queries.GetIssue(ctx, task.IssueID); err == nil {
-		s.createInboxForIssueCreator(ctx, issue, task.AgentID, "task_completed", "attention", "Task completed: "+issue.Title, "")
-	}
-
 	// Reconcile agent status
 	s.ReconcileAgentStatus(ctx, task.AgentID)
 
@@ -218,10 +214,6 @@ func (s *TaskService) FailTask(ctx context.Context, taskID pgtype.UUID, errMsg s
 	if errMsg != "" {
 		s.createAgentComment(ctx, task.IssueID, task.AgentID, errMsg, "system")
 	}
-	if issue, err := s.Queries.GetIssue(ctx, task.IssueID); err == nil {
-		s.createInboxForIssueCreator(ctx, issue, task.AgentID, "task_failed", "action_required", "Task failed: "+issue.Title, errMsg)
-	}
-
 	// Reconcile agent status
 	s.ReconcileAgentStatus(ctx, task.AgentID)
 
@@ -412,37 +404,9 @@ func (s *TaskService) createAgentComment(ctx context.Context, issueID, agentID p
 				"type":        comment.Type,
 				"created_at":  comment.CreatedAt.Time.Format("2006-01-02T15:04:05Z"),
 			},
+			"issue_title":  issue.Title,
+			"issue_status": issue.Status,
 		},
-	})
-}
-
-func (s *TaskService) createInboxForIssueCreator(ctx context.Context, issue db.Issue, agentID pgtype.UUID, itemType, severity, title, body string) {
-	if issue.CreatorType != "member" {
-		return
-	}
-	item, err := s.Queries.CreateInboxItem(ctx, db.CreateInboxItemParams{
-		WorkspaceID:   issue.WorkspaceID,
-		RecipientType: "member",
-		RecipientID:   issue.CreatorID,
-		Type:          itemType,
-		Severity:      severity,
-		IssueID:       issue.ID,
-		Title:         title,
-		Body:          util.PtrToText(&body),
-		ActorType:     util.StrToText("agent"),
-		ActorID:       agentID,
-	})
-	if err != nil {
-		return
-	}
-	resp := inboxToMap(item)
-	resp["issue_status"] = issue.Status
-	s.Bus.Publish(events.Event{
-		Type:        protocol.EventInboxNew,
-		WorkspaceID: util.UUIDToString(issue.WorkspaceID),
-		ActorType:   "agent",
-		ActorID:     util.UUIDToString(agentID),
-		Payload:     map[string]any{"item": resp},
 	})
 }
 
@@ -463,25 +427,6 @@ func issueToMap(issue db.Issue) map[string]any {
 		"due_date":       util.TimestampToPtr(issue.DueDate),
 		"created_at":     util.TimestampToString(issue.CreatedAt),
 		"updated_at":     util.TimestampToString(issue.UpdatedAt),
-	}
-}
-
-func inboxToMap(item db.InboxItem) map[string]any {
-	return map[string]any{
-		"id":             util.UUIDToString(item.ID),
-		"workspace_id":   util.UUIDToString(item.WorkspaceID),
-		"recipient_type": item.RecipientType,
-		"recipient_id":   util.UUIDToString(item.RecipientID),
-		"type":           item.Type,
-		"severity":       item.Severity,
-		"issue_id":       util.UUIDToPtr(item.IssueID),
-		"title":          item.Title,
-		"body":           util.TextToPtr(item.Body),
-		"read":           item.Read,
-		"archived":       item.Archived,
-		"created_at":     util.TimestampToString(item.CreatedAt),
-		"actor_type":     util.TextToPtr(item.ActorType),
-		"actor_id":       util.UUIDToPtr(item.ActorID),
 	}
 }
 

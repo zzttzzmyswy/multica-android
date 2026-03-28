@@ -131,15 +131,31 @@ export default function InboxPage() {
     id: "multica_inbox_layout",
   });
 
-  // Sort: severity first, then newest first
+  // Group by (issue_id, type, actor_id) and take the latest from each group
   const items = useMemo(() => {
-    return [...storeItems]
-      .filter((i) => !i.archived)
-      .sort(
-        (a, b) =>
-          severityOrder[a.severity] - severityOrder[b.severity] ||
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    const active = storeItems.filter((i) => !i.archived);
+    const groups = new Map<string, InboxItem[]>();
+    active.forEach((item) => {
+      const key = `${item.issue_id ?? "none"}|${item.type}|${item.actor_id ?? "none"}`;
+      const group = groups.get(key) ?? [];
+      group.push(item);
+      groups.set(key, group);
+    });
+
+    const merged: InboxItem[] = [];
+    groups.forEach((group) => {
+      const sorted = group.sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
+      const latest = sorted[0];
+      if (latest) merged.push(latest);
+    });
+
+    return merged.sort(
+      (a, b) =>
+        severityOrder[a.severity] - severityOrder[b.severity] ||
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
   }, [storeItems]);
 
   const selected = items.find((i) => i.id === selectedId) ?? null;

@@ -24,6 +24,7 @@ export type {
 export type { Workspace, WorkspaceRepo, Member, MemberRole, User, MemberWithUser } from "./workspace";
 export type { InboxItem, InboxSeverity, InboxItemType } from "./inbox";
 export type { Comment, CommentType, CommentAuthorType } from "./comment";
+export type { IssueSubscriber } from "./subscriber";
 export type { DaemonPairingSession, DaemonPairingSessionStatus, ApproveDaemonPairingSessionRequest } from "./daemon";
 export type * from "./events";
 export type * from "./api";
