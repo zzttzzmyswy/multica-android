@@ -271,17 +271,17 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
     (s) => s.user_type === "member" && s.user_id === user?.id
   );
 
-  const toggleSubscriber = async (userId: string, currentlySubscribed: boolean) => {
+  const toggleSubscriber = async (userId: string, userType: "member" | "agent", currentlySubscribed: boolean) => {
     if (!issue) return;
     try {
       if (currentlySubscribed) {
         await api.unsubscribeFromIssue(id, userId);
-        setSubscribers((prev) => prev.filter((s) => s.user_id !== userId));
+        setSubscribers((prev) => prev.filter((s) => !(s.user_id === userId && s.user_type === userType)));
       } else {
         await api.subscribeToIssue(id, userId);
         setSubscribers((prev) => [
           ...prev,
-          { issue_id: id, user_type: "member" as const, user_id: userId, reason: "manual" as const, created_at: new Date().toISOString() },
+          { issue_id: id, user_type: userType, user_id: userId, reason: "manual" as const, created_at: new Date().toISOString() },
         ]);
       }
     } catch {
@@ -290,7 +290,7 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
   };
 
   const handleToggleSubscribe = () => {
-    if (user) toggleSubscriber(user.id, isSubscribed);
+    if (user) toggleSubscriber(user.id, "member", isSubscribed);
   };
 
   // Real-time comment updates
@@ -686,7 +686,7 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                     {subscribers.length > 0 ? (
                       <AvatarGroup>
                         {subscribers.slice(0, 4).map((sub) => (
-                          <Avatar key={sub.user_id} size="sm">
+                          <Avatar key={`${sub.user_type}-${sub.user_id}`} size="sm">
                             <AvatarFallback>{getActorInitials(sub.user_type, sub.user_id)}</AvatarFallback>
                           </Avatar>
                         ))}
@@ -703,28 +703,52 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                   <PopoverContent align="end" className="w-64 p-0">
                     <Command>
                       <CommandInput placeholder="Change subscribers..." />
-                      <CommandList>
-                        <CommandEmpty>No members found</CommandEmpty>
-                        <CommandGroup>
-                          {members.map((m) => {
-                            const sub = subscribers.find((s) => s.user_id === m.user_id);
-                            const isSubbed = !!sub;
-                            return (
-                              <CommandItem
-                                key={m.user_id}
-                                onSelect={() => toggleSubscriber(m.user_id, isSubbed)}
-                                className="flex items-center gap-2.5"
-                              >
-                                <Checkbox checked={isSubbed} className="pointer-events-none" />
-                                <ActorAvatar actorType="member" actorId={m.user_id} size={22} />
-                                <span className="truncate flex-1">{m.name}</span>
-                                {sub?.reason && sub.reason !== "manual" && (
-                                  <span className="text-xs text-muted-foreground capitalize">{sub.reason}</span>
-                                )}
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
+                      <CommandList className="max-h-64">
+                        <CommandEmpty>No results found</CommandEmpty>
+                        {members.length > 0 && (
+                          <CommandGroup heading="Members">
+                            {members.map((m) => {
+                              const sub = subscribers.find((s) => s.user_type === "member" && s.user_id === m.user_id);
+                              const isSubbed = !!sub;
+                              return (
+                                <CommandItem
+                                  key={`member-${m.user_id}`}
+                                  onSelect={() => toggleSubscriber(m.user_id, "member", isSubbed)}
+                                  className="flex items-center gap-2.5"
+                                >
+                                  <Checkbox checked={isSubbed} className="pointer-events-none" />
+                                  <ActorAvatar actorType="member" actorId={m.user_id} size={22} />
+                                  <span className="truncate flex-1">{m.name}</span>
+                                  {sub?.reason && sub.reason !== "manual" && (
+                                    <span className="text-xs text-muted-foreground capitalize">{sub.reason}</span>
+                                  )}
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandGroup>
+                        )}
+                        {agents.length > 0 && (
+                          <CommandGroup heading="Agents">
+                            {agents.map((a) => {
+                              const sub = subscribers.find((s) => s.user_type === "agent" && s.user_id === a.id);
+                              const isSubbed = !!sub;
+                              return (
+                                <CommandItem
+                                  key={`agent-${a.id}`}
+                                  onSelect={() => toggleSubscriber(a.id, "agent", isSubbed)}
+                                  className="flex items-center gap-2.5"
+                                >
+                                  <Checkbox checked={isSubbed} className="pointer-events-none" />
+                                  <ActorAvatar actorType="agent" actorId={a.id} size={22} />
+                                  <span className="truncate flex-1">{a.name}</span>
+                                  {sub?.reason && sub.reason !== "manual" && (
+                                    <span className="text-xs text-muted-foreground capitalize">{sub.reason}</span>
+                                  )}
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandGroup>
+                        )}
                       </CommandList>
                     </Command>
                   </PopoverContent>
