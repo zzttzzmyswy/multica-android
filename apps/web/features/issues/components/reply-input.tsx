@@ -49,35 +49,46 @@ function ReplyInput({
   const avatarSize = size === "sm" ? 22 : 28;
 
   return (
-    <div className="flex items-center gap-2.5">
+    <div className="flex items-start gap-2.5">
       <ActorAvatar
         actorType={avatarType}
         actorId={avatarId}
         size={avatarSize}
-        className="shrink-0"
+        className="mt-0.5 shrink-0"
       />
-      <div
-        className={`min-w-0 flex-1 overflow-y-auto ${
-          size === "sm" ? "max-h-32" : "max-h-48"
-        }`}
-      >
-        <RichTextEditor
-          ref={editorRef}
-          placeholder={placeholder}
-          onUpdate={(md) => setIsEmpty(!md.trim())}
-          onSubmit={handleSubmit}
-          debounceMs={100}
-        />
+      <div className="min-w-0 flex-1">
+        <div
+          className={`overflow-y-auto text-sm ${
+            size === "sm" ? "max-h-32" : "max-h-48"
+          }`}
+        >
+          <RichTextEditor
+            ref={editorRef}
+            placeholder={placeholder}
+            onUpdate={(md) => setIsEmpty(!md.trim())}
+            onSubmit={handleSubmit}
+            debounceMs={100}
+          />
+        </div>
+        <div
+          className={`grid transition-all duration-150 ${
+            isEmpty ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"
+          }`}
+        >
+          <div className="overflow-hidden">
+            <div className="flex items-center justify-end pt-1">
+              <Button
+                size="icon-xs"
+                disabled={isEmpty || submitting}
+                onClick={handleSubmit}
+                tabIndex={isEmpty ? -1 : 0}
+              >
+                <ArrowUp className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
-      <Button
-        size="icon-xs"
-        variant="ghost"
-        disabled={isEmpty || submitting}
-        onClick={handleSubmit}
-        className="shrink-0 text-muted-foreground hover:text-foreground"
-      >
-        <ArrowUp className="h-3.5 w-3.5" />
-      </Button>
     </div>
   );
 }

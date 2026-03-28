@@ -281,11 +281,14 @@ describe("IssueDetailPage", () => {
       fireEvent.change(commentInput, { target: { value: "New test comment" } });
     });
 
-    // Wait for button to be enabled after commentEmpty state update
-    const allButtons = screen.getAllByRole("button");
-    const submitBtn = allButtons.find(
+    // Find the submit button associated with the "Leave a comment..." input.
+    // Multiple ArrowUp buttons exist (one per ReplyInput), so we find the
+    // button within the same ReplyInput container as our textarea.
+    const allArrowUpBtns = screen.getAllByRole("button").filter(
       (btn) => btn.querySelector(".lucide-arrow-up") !== null,
-    )!;
+    );
+    // The bottom "Leave a comment..." ReplyInput renders last, so its button is last
+    const submitBtn = allArrowUpBtns[allArrowUpBtns.length - 1]!;
     await waitFor(() => {
       expect(submitBtn).not.toBeDisabled();
     });

@@ -94,6 +94,11 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 	var parentID pgtype.UUID
 	if req.ParentID != nil {
 		parentID = parseUUID(*req.ParentID)
+		parent, err := h.Queries.GetComment(r.Context(), parentID)
+		if err != nil || uuidToString(parent.IssueID) != issueID {
+			writeError(w, http.StatusBadRequest, "invalid parent comment")
+			return
+		}
 	}
 
 	comment, err := h.Queries.CreateComment(r.Context(), db.CreateCommentParams{

@@ -67,21 +67,7 @@ import { useWorkspaceStore, useActorName } from "@/features/workspace";
 import { useWSEvent } from "@/features/realtime";
 import { useIssueStore } from "@/features/issues";
 import type { CommentCreatedPayload, CommentUpdatedPayload, CommentDeletedPayload, SubscriberAddedPayload, SubscriberRemovedPayload, ActivityCreatedPayload } from "@/shared/types";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
+import { timeAgo } from "@/shared/utils";
 
 function shortDate(date: string | null): string {
   if (!date) return "—";
@@ -91,15 +77,41 @@ function shortDate(date: string | null): string {
   });
 }
 
-function formatActivity(entry: TimelineEntry): string {
+function statusLabel(status: string): string {
+  return STATUS_CONFIG[status as IssueStatus]?.label ?? status;
+}
+
+function priorityLabel(priority: string): string {
+  return PRIORITY_CONFIG[priority as IssuePriority]?.label ?? priority;
+}
+
+function formatActivity(
+  entry: TimelineEntry,
+  resolveActorName?: (type: string, id: string) => string,
+): string {
   const details = (entry.details ?? {}) as Record<string, string>;
   switch (entry.action) {
     case "created":
       return "created this issue";
     case "status_changed":
-      return `changed status from ${details.from ?? "?"} to ${details.to ?? "?"}`;
-    case "assignee_changed":
+      return `changed status from ${statusLabel(details.from ?? "?")} to ${statusLabel(details.to ?? "?")}`;
+    case "priority_changed":
+      return `changed priority from ${priorityLabel(details.from ?? "?")} to ${priorityLabel(details.to ?? "?")}`;
+    case "assignee_changed": {
+      const isSelfAssign = details.to_type === entry.actor_type && details.to_id === entry.actor_id;
+      if (isSelfAssign) return "self-assigned this issue";
+      const toName = details.to_id && details.to_type && resolveActorName
+        ? resolveActorName(details.to_type, details.to_id)
+        : null;
+      if (toName) return `assigned to ${toName}`;
+      if (details.from_id && !details.to_id) return "removed assignee";
       return "changed assignee";
+    }
+    case "due_date_changed": {
+      if (!details.to) return "removed due date";
+      const formatted = new Date(details.to).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      return `set due date to ${formatted}`;
+    }
     case "description_updated":
       return "updated the description";
     case "task_completed":
@@ -267,9 +279,21 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
   const handleDeleteComment = async (commentId: string) => {
     try {
       await api.deleteComment(commentId);
-      setTimeline((prev) =>
-        prev.filter((e) => e.id !== commentId && e.parent_id !== commentId)
-      );
+      setTimeline((prev) => {
+        const idsToRemove = new Set<string>([commentId]);
+        // Recursively collect all descendant IDs
+        let added = true;
+        while (added) {
+          added = false;
+          for (const e of prev) {
+            if (e.parent_id && idsToRemove.has(e.parent_id) && !idsToRemove.has(e.id)) {
+              idsToRemove.add(e.id);
+              added = true;
+            }
+          }
+        }
+        return prev.filter((e) => !idsToRemove.has(e.id));
+      });
     } catch {
       toast.error("Failed to delete comment");
     }
@@ -359,9 +383,20 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
     useCallback((payload: unknown) => {
       const { comment_id, issue_id } = payload as CommentDeletedPayload;
       if (issue_id === id) {
-        setTimeline((prev) =>
-          prev.filter((e) => e.id !== comment_id && e.parent_id !== comment_id)
-        );
+        setTimeline((prev) => {
+          const idsToRemove = new Set<string>([comment_id]);
+          let added = true;
+          while (added) {
+            added = false;
+            for (const e of prev) {
+              if (e.parent_id && idsToRemove.has(e.parent_id) && !idsToRemove.has(e.id)) {
+                idsToRemove.add(e.id);
+                added = true;
+              }
+            }
+          }
+          return prev.filter((e) => !idsToRemove.has(e.id));
+        });
       }
     }, [id]),
   );
@@ -727,8 +762,6 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <h2 className="text-base font-semibold">Activity</h2>
-                <div className="flex gap-1">
-                </div>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -811,7 +844,6 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
             {/* Timeline entries */}
             <div className="mt-4 space-y-2">
               {(() => {
-                // Separate top-level entries from replies
                 const topLevel = timeline.filter((e) => e.type === "activity" || !e.parent_id);
                 const repliesByParent = new Map<string, TimelineEntry[]>();
                 for (const e of timeline) {
@@ -822,39 +854,83 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                   }
                 }
 
-                return topLevel.map((entry) => {
+                // Group consecutive activities together so the connector line works
+                const groups: { type: "activities" | "comment"; entries: TimelineEntry[] }[] = [];
+                for (const entry of topLevel) {
                   if (entry.type === "activity") {
+                    const last = groups[groups.length - 1];
+                    if (last?.type === "activities") {
+                      last.entries.push(entry);
+                    } else {
+                      groups.push({ type: "activities", entries: [entry] });
+                    }
+                  } else {
+                    groups.push({ type: "comment", entries: [entry] });
+                  }
+                }
+
+                return groups.map((group) => {
+                  if (group.type === "comment") {
+                    const entry = group.entries[0]!;
                     return (
-                      <div key={entry.id} className="flex items-center gap-2.5 py-1.5 text-sm text-muted-foreground">
-                        <ActorAvatar actorType={entry.actor_type} actorId={entry.actor_id} size={28} />
-                        <span className="font-medium">{getActorName(entry.actor_type, entry.actor_id)}</span>
-                        <span>{formatActivity(entry)}</span>
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <span className="ml-auto text-xs cursor-default">
-                                {timeAgo(entry.created_at)}
-                              </span>
-                            }
-                          />
-                          <TooltipContent side="top">
-                            {new Date(entry.created_at).toLocaleString()}
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
+                      <CommentCard
+                        key={entry.id}
+                        entry={entry}
+                        allReplies={repliesByParent}
+                        currentUserId={user?.id}
+                        onReply={handleSubmitReply}
+                        onEdit={handleEditComment}
+                        onDelete={handleDeleteComment}
+                      />
                     );
                   }
+
                   return (
-                    <CommentCard
-                      key={entry.id}
-                      entry={entry}
-                      replies={repliesByParent.get(entry.id) ?? []}
-                      allReplies={repliesByParent}
-                      currentUserId={user?.id}
-                      onReply={handleSubmitReply}
-                      onEdit={handleEditComment}
-                      onDelete={handleDeleteComment}
-                    />
+                    <div key={group.entries[0]!.id} className="px-4">
+                      {group.entries.map((entry, idx) => {
+                        const details = (entry.details ?? {}) as Record<string, string>;
+                        const isStatusChange = entry.action === "status_changed";
+                        const isPriorityChange = entry.action === "priority_changed";
+                        const isDueDateChange = entry.action === "due_date_changed";
+                        const isLast = idx === group.entries.length - 1;
+
+                        let leadIcon: React.ReactNode;
+                        if (isStatusChange && details.to) {
+                          leadIcon = <StatusIcon status={details.to as IssueStatus} className="h-3.5 w-3.5 shrink-0" />;
+                        } else if (isPriorityChange && details.to) {
+                          leadIcon = <PriorityIcon priority={details.to as IssuePriority} className="h-3.5 w-3.5 shrink-0" />;
+                        } else if (isDueDateChange) {
+                          leadIcon = <Calendar className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
+                        } else {
+                          leadIcon = <ActorAvatar actorType={entry.actor_type} actorId={entry.actor_id} size={14} />;
+                        }
+
+                        return (
+                          <div key={entry.id} className="flex text-xs text-muted-foreground">
+                            <div className="mr-2.5 flex w-3.5 shrink-0 flex-col items-center">
+                              <div className="flex h-5 items-center">{leadIcon}</div>
+                              {!isLast && <div className="w-px flex-1 bg-border" />}
+                            </div>
+                            <div className={`flex flex-1 items-baseline gap-1 ${!isLast ? "pb-3" : ""}`}>
+                              <span className="font-medium">{getActorName(entry.actor_type, entry.actor_id)}</span>
+                              <span>{formatActivity(entry, getActorName)}</span>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={
+                                    <span className="ml-auto shrink-0 cursor-default">
+                                      {timeAgo(entry.created_at)}
+                                    </span>
+                                  }
+                                />
+                                <TooltipContent side="top">
+                                  {new Date(entry.created_at).toLocaleString()}
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   );
                 });
               })()}

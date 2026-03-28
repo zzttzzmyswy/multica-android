@@ -59,6 +59,7 @@ func registerActivityListeners(bus *events.Bus, queries *db.Queries) {
 		}
 
 		statusChanged, _ := payload["status_changed"].(bool)
+		priorityChanged, _ := payload["priority_changed"].(bool)
 		assigneeChanged, _ := payload["assignee_changed"].(bool)
 		descriptionChanged, _ := payload["description_changed"].(bool)
 
@@ -78,6 +79,28 @@ func registerActivityListeners(bus *events.Bus, queries *db.Queries) {
 			})
 			if err != nil {
 				slog.Error("activity: failed to record status change",
+					"issue_id", issue.ID, "error", err)
+			} else {
+				publishActivityEvent(bus, e, activity)
+			}
+		}
+
+		if priorityChanged {
+			prevPriority, _ := payload["prev_priority"].(string)
+			details, _ := json.Marshal(map[string]string{
+				"from": prevPriority,
+				"to":   issue.Priority,
+			})
+			activity, err := queries.CreateActivity(ctx, db.CreateActivityParams{
+				WorkspaceID: parseUUID(issue.WorkspaceID),
+				IssueID:     parseUUID(issue.ID),
+				ActorType:   util.StrToText(e.ActorType),
+				ActorID:     parseUUID(e.ActorID),
+				Action:      "priority_changed",
+				Details:     details,
+			})
+			if err != nil {
+				slog.Error("activity: failed to record priority change",
 					"issue_id", issue.ID, "error", err)
 			} else {
 				publishActivityEvent(bus, e, activity)
@@ -113,6 +136,35 @@ func registerActivityListeners(bus *events.Bus, queries *db.Queries) {
 			})
 			if err != nil {
 				slog.Error("activity: failed to record assignee change",
+					"issue_id", issue.ID, "error", err)
+			} else {
+				publishActivityEvent(bus, e, activity)
+			}
+		}
+
+		if dueDateChanged, _ := payload["due_date_changed"].(bool); dueDateChanged {
+			prevDueDate := ""
+			if v, ok := payload["prev_due_date"].(*string); ok && v != nil {
+				prevDueDate = *v
+			}
+			newDueDate := ""
+			if issue.DueDate != nil {
+				newDueDate = *issue.DueDate
+			}
+			details, _ := json.Marshal(map[string]string{
+				"from": prevDueDate,
+				"to":   newDueDate,
+			})
+			activity, err := queries.CreateActivity(ctx, db.CreateActivityParams{
+				WorkspaceID: parseUUID(issue.WorkspaceID),
+				IssueID:     parseUUID(issue.ID),
+				ActorType:   util.StrToText(e.ActorType),
+				ActorID:     parseUUID(e.ActorID),
+				Action:      "due_date_changed",
+				Details:     details,
+			})
+			if err != nil {
+				slog.Error("activity: failed to record due date change",
 					"issue_id", issue.ID, "error", err)
 			} else {
 				publishActivityEvent(bus, e, activity)
@@ -205,7 +257,7 @@ func publishActivityEvent(bus *events.Bus, original events.Event, activity db.Ac
 				"id":         util.UUIDToString(activity.ID),
 				"actor_type": actorType,
 				"actor_id":   util.UUIDToString(activity.ActorID),
-				"action":     &action,
+				"action":     action,
 				"details":    json.RawMessage(activity.Details),
 				"created_at": util.TimestampToString(activity.CreatedAt),
 			},

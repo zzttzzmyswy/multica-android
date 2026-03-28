@@ -16,23 +16,9 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { Markdown } from "@/components/markdown";
 import { useActorName } from "@/features/workspace";
+import { timeAgo } from "@/shared/utils";
 import { ReplyInput } from "./reply-input";
 import type { TimelineEntry } from "@/shared/types";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,7 +26,6 @@ function timeAgo(dateStr: string): string {
 
 interface CommentCardProps {
   entry: TimelineEntry;
-  replies: TimelineEntry[];
   allReplies: Map<string, TimelineEntry[]>;
   currentUserId?: string;
   onReply: (parentId: string, content: string) => Promise<void>;
@@ -93,7 +78,7 @@ function CommentRow({
   };
 
   return (
-    <div className={`group/comment py-3${isTemp ? " opacity-60" : ""}`}>
+    <div className={`py-3${isTemp ? " opacity-60" : ""}`}>
       <div className="flex items-center gap-2.5">
         <ActorAvatar actorType={entry.actor_type} actorId={entry.actor_id} size={24} />
         <span className="text-sm font-medium">
@@ -112,23 +97,23 @@ function CommentRow({
           </TooltipContent>
         </Tooltip>
 
-        {!isTemp && (isOwn) && (
-          <div className="ml-auto opacity-0 group-hover/comment:opacity-100 transition-opacity">
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/50 data-[popup-open]:opacity-100 data-[popup-open]:bg-accent/50 transition-colors"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={startEdit}>Edit</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => onDelete(entry.id)} variant="destructive">
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+        {!isTemp && isOwn && (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button variant="ghost" size="icon-xs" className="ml-auto text-muted-foreground">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={startEdit}>Edit</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => onDelete(entry.id)} variant="destructive">
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
 
@@ -165,7 +150,6 @@ function CommentRow({
 
 function CommentCard({
   entry,
-  replies,
   allReplies,
   currentUserId,
   onReply,
