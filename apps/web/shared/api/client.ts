@@ -206,17 +206,23 @@ export class ApiClient {
     return this.fetch(`/api/issues/${issueId}/subscribers`);
   }
 
-  async subscribeToIssue(issueId: string, userId?: string): Promise<void> {
+  async subscribeToIssue(issueId: string, userId?: string, userType?: string): Promise<void> {
+    const body: Record<string, string> = {};
+    if (userId) body.user_id = userId;
+    if (userType) body.user_type = userType;
     await this.fetch(`/api/issues/${issueId}/subscribe`, {
       method: "POST",
-      body: JSON.stringify(userId ? { user_id: userId } : {}),
+      body: JSON.stringify(body),
     });
   }
 
-  async unsubscribeFromIssue(issueId: string, userId?: string): Promise<void> {
+  async unsubscribeFromIssue(issueId: string, userId?: string, userType?: string): Promise<void> {
+    const body: Record<string, string> = {};
+    if (userId) body.user_id = userId;
+    if (userType) body.user_type = userType;
     await this.fetch(`/api/issues/${issueId}/unsubscribe`, {
       method: "POST",
-      body: JSON.stringify(userId ? { user_id: userId } : {}),
+      body: JSON.stringify(body),
     });
   }
 

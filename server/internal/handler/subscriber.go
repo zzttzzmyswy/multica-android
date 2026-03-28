@@ -59,10 +59,12 @@ func (h *Handler) SubscribeToIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Default to current user; allow specifying another user
+	// Default to current user as member; allow specifying another user/agent
 	targetUserID := requestUserID(r)
+	targetUserType := "member"
 	var req struct {
-		UserID *string `json:"user_id"`
+		UserID   *string `json:"user_id"`
+		UserType *string `json:"user_type"`
 	}
 	if r.Body != nil {
 		json.NewDecoder(r.Body).Decode(&req)
@@ -70,10 +72,13 @@ func (h *Handler) SubscribeToIssue(w http.ResponseWriter, r *http.Request) {
 	if req.UserID != nil && *req.UserID != "" {
 		targetUserID = *req.UserID
 	}
+	if req.UserType != nil && *req.UserType != "" {
+		targetUserType = *req.UserType
+	}
 
 	err := h.Queries.AddIssueSubscriber(r.Context(), db.AddIssueSubscriberParams{
 		IssueID:  issue.ID,
-		UserType: "member",
+		UserType: targetUserType,
 		UserID:   parseUUID(targetUserID),
 		Reason:   "manual",
 	})
@@ -86,7 +91,7 @@ func (h *Handler) SubscribeToIssue(w http.ResponseWriter, r *http.Request) {
 	callerID := requestUserID(r)
 	h.publish(protocol.EventSubscriberAdded, workspaceID, "member", callerID, map[string]any{
 		"issue_id":  issueID,
-		"user_type": "member",
+		"user_type": targetUserType,
 		"user_id":   targetUserID,
 		"reason":    "manual",
 	})
@@ -104,8 +109,10 @@ func (h *Handler) UnsubscribeFromIssue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	targetUserID := requestUserID(r)
+	targetUserType := "member"
 	var req struct {
-		UserID *string `json:"user_id"`
+		UserID   *string `json:"user_id"`
+		UserType *string `json:"user_type"`
 	}
 	if r.Body != nil {
 		json.NewDecoder(r.Body).Decode(&req)
@@ -113,10 +120,13 @@ func (h *Handler) UnsubscribeFromIssue(w http.ResponseWriter, r *http.Request) {
 	if req.UserID != nil && *req.UserID != "" {
 		targetUserID = *req.UserID
 	}
+	if req.UserType != nil && *req.UserType != "" {
+		targetUserType = *req.UserType
+	}
 
 	err := h.Queries.RemoveIssueSubscriber(r.Context(), db.RemoveIssueSubscriberParams{
 		IssueID:  issue.ID,
-		UserType: "member",
+		UserType: targetUserType,
 		UserID:   parseUUID(targetUserID),
 	})
 	if err != nil {
@@ -128,7 +138,7 @@ func (h *Handler) UnsubscribeFromIssue(w http.ResponseWriter, r *http.Request) {
 	callerID := requestUserID(r)
 	h.publish(protocol.EventSubscriberRemoved, workspaceID, "member", callerID, map[string]any{
 		"issue_id":  issueID,
-		"user_type": "member",
+		"user_type": targetUserType,
 		"user_id":   targetUserID,
 	})
 

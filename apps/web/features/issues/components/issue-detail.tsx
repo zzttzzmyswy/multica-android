@@ -275,10 +275,10 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
     if (!issue) return;
     try {
       if (currentlySubscribed) {
-        await api.unsubscribeFromIssue(id, userId);
+        await api.unsubscribeFromIssue(id, userId, userType);
         setSubscribers((prev) => prev.filter((s) => !(s.user_id === userId && s.user_type === userType)));
       } else {
-        await api.subscribeToIssue(id, userId);
+        await api.subscribeToIssue(id, userId, userType);
         setSubscribers((prev) => [
           ...prev,
           { issue_id: id, user_type: userType, user_id: userId, reason: "manual" as const, created_at: new Date().toISOString() },
