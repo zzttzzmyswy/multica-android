@@ -316,11 +316,7 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
     try {
       await api.deleteComment(commentId);
       setTimeline((prev) =>
-        prev
-          // Promote replies of deleted comment to top-level
-          .map((e) => e.parent_id === commentId ? { ...e, parent_id: null } : e)
-          // Remove the deleted comment
-          .filter((e) => e.id !== commentId)
+        prev.filter((e) => e.id !== commentId && e.parent_id !== commentId)
       );
     } catch {
       toast.error("Failed to delete comment");
@@ -386,9 +382,7 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
       const { comment_id, issue_id } = payload as CommentDeletedPayload;
       if (issue_id === id) {
         setTimeline((prev) =>
-          prev
-            .map((e) => e.parent_id === comment_id ? { ...e, parent_id: null } : e)
-            .filter((e) => e.id !== comment_id)
+          prev.filter((e) => e.id !== comment_id && e.parent_id !== comment_id)
         );
       }
     }, [id]),
