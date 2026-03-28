@@ -10,7 +10,6 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
-  Circle,
   Link2,
   MessageSquare,
   MoreHorizontal,
@@ -198,7 +197,6 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(true);
-  const [filter, setFilter] = useState<"all" | "comments" | "activity">("all");
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyEmpty, setReplyEmpty] = useState(true);
 
@@ -750,9 +748,6 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
               <div className="flex items-center gap-3">
                 <h2 className="text-base font-semibold">Activity</h2>
                 <div className="flex gap-1">
-                  <Button variant={filter === "all" ? "secondary" : "ghost"} size="sm" className="h-6 text-xs" onClick={() => setFilter("all")}>All</Button>
-                  <Button variant={filter === "comments" ? "secondary" : "ghost"} size="sm" className="h-6 text-xs" onClick={() => setFilter("comments")}>Comments</Button>
-                  <Button variant={filter === "activity" ? "secondary" : "ghost"} size="sm" className="h-6 text-xs" onClick={() => setFilter("activity")}>Activity</Button>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -847,21 +842,11 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                   }
                 }
 
-                // Apply filter
-                const filtered = topLevel.filter((e) => {
-                  if (filter === "all") return true;
-                  if (filter === "comments") return e.type === "comment";
-                  if (filter === "activity") return e.type === "activity";
-                  return true;
-                });
-
-                return filtered.map((entry) => {
+                return topLevel.map((entry) => {
                   if (entry.type === "activity") {
                     return (
-                      <div key={entry.id} className="flex items-center gap-2 py-1.5 text-sm text-muted-foreground">
-                        <div className="w-7 flex justify-center">
-                          <Circle className="h-1.5 w-1.5 fill-current" />
-                        </div>
+                      <div key={entry.id} className="flex items-center gap-2.5 py-1.5 text-sm text-muted-foreground">
+                        <ActorAvatar actorType={entry.actor_type} actorId={entry.actor_id} size={28} />
                         <span className="font-medium">{getActorName(entry.actor_type, entry.actor_id)}</span>
                         <span>{formatActivity(entry)}</span>
                         <Tooltip>
