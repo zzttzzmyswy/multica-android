@@ -167,13 +167,15 @@ function PropRow({
 interface IssueDetailProps {
   issueId: string;
   onDelete?: () => void;
+  defaultSidebarOpen?: boolean;
+  layoutId?: string;
 }
 
 // ---------------------------------------------------------------------------
 // IssueDetail
 // ---------------------------------------------------------------------------
 
-export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
+export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layoutId = "multica_issue_detail_layout" }: IssueDetailProps) {
   const id = issueId;
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
@@ -188,10 +190,10 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
   const nextIssue = currentIndex < allIssues.length - 1 ? allIssues[currentIndex + 1] : null;
   const { getActorName, getActorInitials } = useActorName();
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
-    id: "multica_issue_detail_layout",
+    id: layoutId,
   });
   const sidebarRef = usePanelRef();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(defaultSidebarOpen);
   const [issue, setIssue] = useState<Issue | null>(null);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [subscribers, setSubscribers] = useState<IssueSubscriber[]>([]);
@@ -948,7 +950,7 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
       <ResizableHandle />
       <ResizablePanel
         id="sidebar"
-        defaultSize={320}
+        defaultSize={defaultSidebarOpen ? 320 : 0}
         minSize={260}
         maxSize={420}
         collapsible
