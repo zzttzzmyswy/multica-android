@@ -3,7 +3,6 @@ package execenv
 import (
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -51,52 +50,31 @@ func TestSanitizeName(t *testing.T) {
 	}
 }
 
-func TestDetectGitRepo(t *testing.T) {
+func TestRepoNameFromURL(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
-
-	cmd := exec.Command("git", "init", dir)
-	if err := cmd.Run(); err != nil {
-		t.Skipf("git not available: %v", err)
+	tests := []struct {
+		input, want string
+	}{
+		{"https://github.com/org/my-repo.git", "my-repo"},
+		{"https://github.com/org/my-repo", "my-repo"},
+		{"git@github.com:org/my-repo.git", "my-repo"},
+		{"https://github.com/org/repo/", "repo"},
+		{"my-repo", "my-repo"},
+		{"", "repo"},
 	}
-
-	root, ok := detectGitRepo(dir)
-	if !ok {
-		t.Fatal("expected git repo to be detected")
-	}
-	if root == "" {
-		t.Fatal("expected non-empty git root")
-	}
-
-	// Subdirectory should also detect.
-	subdir := filepath.Join(dir, "sub")
-	os.MkdirAll(subdir, 0o755)
-	root2, ok2 := detectGitRepo(subdir)
-	if !ok2 {
-		t.Fatal("expected subdirectory to detect git repo")
-	}
-	if root2 != root {
-		t.Fatalf("expected same root, got %q vs %q", root2, root)
-	}
-}
-
-func TestDetectGitRepoFalse(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	_, ok := detectGitRepo(dir)
-	if ok {
-		t.Fatal("expected non-git dir to return false")
+	for _, tt := range tests {
+		if got := repoNameFromURL(tt.input); got != tt.want {
+			t.Errorf("repoNameFromURL(%q) = %q, want %q", tt.input, got, tt.want)
+		}
 	}
 }
 
 func TestPrepareDirectoryMode(t *testing.T) {
 	t.Parallel()
 	workspacesRoot := t.TempDir()
-	reposRoot := t.TempDir() // not a git repo
 
 	env, err := Prepare(PrepareParams{
 		WorkspacesRoot: workspacesRoot,
-		RepoPath:       reposRoot,
 		TaskID:         "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 		AgentName:      "Test Agent",
 		Task: TaskContextForEnv{
@@ -110,13 +88,6 @@ func TestPrepareDirectoryMode(t *testing.T) {
 		t.Fatalf("Prepare failed: %v", err)
 	}
 	defer env.Cleanup(true)
-
-	if env.Type != WorkspaceTypeDirectory {
-		t.Fatalf("expected directory type, got %s", env.Type)
-	}
-	if env.BranchName != "" {
-		t.Fatalf("expected empty branch name, got %s", env.BranchName)
-	}
 
 	// Verify directory structure.
 	for _, sub := range []string{"workdir", "output", "logs"} {
@@ -145,67 +116,64 @@ func TestPrepareDirectoryMode(t *testing.T) {
 	if !strings.Contains(string(skillContent), "Be concise.") {
 		t.Fatal("SKILL.md missing content")
 	}
-
 }
 
-func TestPrepareGitWorktreeMode(t *testing.T) {
+func TestPrepareWithRepoContext(t *testing.T) {
 	t.Parallel()
-
-	// Create a temporary git repo with an initial commit.
-	reposRoot := t.TempDir()
-	for _, args := range [][]string{
-		{"init", reposRoot},
-		{"-C", reposRoot, "commit", "--allow-empty", "-m", "initial"},
-	} {
-		cmd := exec.Command("git", args...)
-		cmd.Env = append(os.Environ(),
-			"GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=test@test.com",
-			"GIT_COMMITTER_NAME=test", "GIT_COMMITTER_EMAIL=test@test.com",
-		)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Skipf("git setup failed: %s: %v", out, err)
-		}
-	}
-
 	workspacesRoot := t.TempDir()
 
+	taskCtx := TaskContextForEnv{
+		IssueID: "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+		Repos: []RepoContextForEnv{
+			{URL: "https://github.com/org/backend", Description: "Go backend"},
+			{URL: "https://github.com/org/frontend", Description: "React frontend"},
+		},
+	}
 	env, err := Prepare(PrepareParams{
 		WorkspacesRoot: workspacesRoot,
-		RepoPath:       reposRoot,
 		TaskID:         "b2c3d4e5-f6a7-8901-bcde-f12345678901",
 		AgentName:      "Code Reviewer",
-		Task: TaskContextForEnv{
-			IssueID: "b2c3d4e5-f6a7-8901-bcde-f12345678901",
-		},
+		Provider:       "claude",
+		Task:           taskCtx,
 	}, testLogger())
 	if err != nil {
 		t.Fatalf("Prepare failed: %v", err)
 	}
 	defer env.Cleanup(true)
 
-	if env.Type != WorkspaceTypeGitWorktree {
-		t.Fatalf("expected git_worktree type, got %s", env.Type)
-	}
-	if env.BranchName == "" {
-		t.Fatal("expected non-empty branch name")
-	}
-	if !strings.HasPrefix(env.BranchName, "agent/code-reviewer/") {
-		t.Fatalf("unexpected branch name: %s", env.BranchName)
+	// Inject runtime config (done separately in daemon, replicate here).
+	if err := InjectRuntimeConfig(env.WorkDir, "claude", taskCtx); err != nil {
+		t.Fatalf("InjectRuntimeConfig failed: %v", err)
 	}
 
-	// Verify worktree is listed.
-	cmd := exec.Command("git", "-C", reposRoot, "worktree", "list")
-	out, err := cmd.Output()
+	// Workdir should be empty (no pre-created repo dirs).
+	entries, err := os.ReadDir(env.WorkDir)
 	if err != nil {
-		t.Fatalf("git worktree list failed: %v", err)
+		t.Fatalf("failed to read workdir: %v", err)
 	}
-	if !strings.Contains(string(out), "workdir") {
-		t.Fatalf("worktree not listed: %s", out)
+	for _, e := range entries {
+		name := e.Name()
+		if name != ".agent_context" && name != "CLAUDE.md" && name != ".claude" {
+			t.Errorf("unexpected entry in workdir: %s", name)
+		}
 	}
 
-	// Verify context file exists in workdir.
-	if _, err := os.Stat(filepath.Join(env.WorkDir, ".agent_context", "issue_context.md")); os.IsNotExist(err) {
-		t.Fatal("expected .agent_context/issue_context.md to exist in workdir")
+	// CLAUDE.md should contain repo info.
+	content, err := os.ReadFile(filepath.Join(env.WorkDir, "CLAUDE.md"))
+	if err != nil {
+		t.Fatalf("failed to read CLAUDE.md: %v", err)
+	}
+	s := string(content)
+	for _, want := range []string{
+		"multica repo checkout",
+		"https://github.com/org/backend",
+		"Go backend",
+		"https://github.com/org/frontend",
+		"React frontend",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("CLAUDE.md missing %q", want)
+		}
 	}
 }
 
@@ -348,56 +316,37 @@ func TestWriteContextFilesClaudeNativeSkills(t *testing.T) {
 	}
 }
 
-func TestCleanupGitWorktree(t *testing.T) {
+func TestCleanupPreservesLogs(t *testing.T) {
 	t.Parallel()
-
-	// Create a temp git repo.
-	reposRoot := t.TempDir()
-	for _, args := range [][]string{
-		{"init", reposRoot},
-		{"-C", reposRoot, "commit", "--allow-empty", "-m", "initial"},
-	} {
-		cmd := exec.Command("git", args...)
-		cmd.Env = append(os.Environ(),
-			"GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=test@test.com",
-			"GIT_COMMITTER_NAME=test", "GIT_COMMITTER_EMAIL=test@test.com",
-		)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Skipf("git setup failed: %s: %v", out, err)
-		}
-	}
-
 	workspacesRoot := t.TempDir()
 
 	env, err := Prepare(PrepareParams{
 		WorkspacesRoot: workspacesRoot,
-		RepoPath:       reposRoot,
-		TaskID:         "c3d4e5f6-a7b8-9012-cdef-123456789012",
-		AgentName:      "Cleanup Test",
-		Task:           TaskContextForEnv{IssueID: "cleanup-test-id"},
+		TaskID:         "d4e5f6a7-b8c9-0123-defa-234567890123",
+		AgentName:      "Preserve Test",
+		Task:           TaskContextForEnv{IssueID: "preserve-test-id"},
 	}, testLogger())
 	if err != nil {
 		t.Fatalf("Prepare failed: %v", err)
 	}
 
-	branchName := env.BranchName
-	rootDir := env.RootDir
+	// Write something to logs/.
+	os.WriteFile(filepath.Join(env.RootDir, "logs", "test.log"), []byte("log data"), 0o644)
 
-	// Cleanup with removeAll=true.
-	if err := env.Cleanup(true); err != nil {
+	// Cleanup with removeAll=false.
+	if err := env.Cleanup(false); err != nil {
 		t.Fatalf("Cleanup failed: %v", err)
 	}
 
-	// Verify env root is removed.
-	if _, err := os.Stat(rootDir); !os.IsNotExist(err) {
-		t.Fatal("expected env root to be removed")
+	// workdir should be gone.
+	if _, err := os.Stat(env.WorkDir); !os.IsNotExist(err) {
+		t.Fatal("expected workdir to be removed")
 	}
 
-	// Verify branch is deleted.
-	cmd := exec.Command("git", "-C", reposRoot, "branch", "--list", branchName)
-	out, _ := cmd.Output()
-	if strings.TrimSpace(string(out)) != "" {
-		t.Fatalf("expected branch %s to be deleted", branchName)
+	// logs should still exist.
+	logFile := filepath.Join(env.RootDir, "logs", "test.log")
+	if _, err := os.Stat(logFile); os.IsNotExist(err) {
+		t.Fatal("expected logs/test.log to be preserved")
 	}
 }
 
@@ -435,12 +384,6 @@ func TestInjectRuntimeConfigClaude(t *testing.T) {
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("CLAUDE.md missing %q", want)
-		}
-	}
-	// Skills are now discovered natively — no path references in CLAUDE.md.
-	for _, absent := range []string{"go-conventions/SKILL.md", ".agent_context/skills/"} {
-		if strings.Contains(s, absent) {
-			t.Errorf("CLAUDE.md should NOT contain path %q — skills are discovered natively", absent)
 		}
 	}
 }
@@ -509,41 +452,6 @@ func TestInjectRuntimeConfigUnknownProvider(t *testing.T) {
 	entries, _ := os.ReadDir(dir)
 	if len(entries) != 0 {
 		t.Fatalf("expected empty dir for unknown provider, got %d entries", len(entries))
-	}
-}
-
-func TestCleanupPreservesLogs(t *testing.T) {
-	t.Parallel()
-	workspacesRoot := t.TempDir()
-
-	env, err := Prepare(PrepareParams{
-		WorkspacesRoot: workspacesRoot,
-		RepoPath:       t.TempDir(), // not a git repo
-		TaskID:         "d4e5f6a7-b8c9-0123-defa-234567890123",
-		AgentName:      "Preserve Test",
-		Task:           TaskContextForEnv{IssueID: "preserve-test-id"},
-	}, testLogger())
-	if err != nil {
-		t.Fatalf("Prepare failed: %v", err)
-	}
-
-	// Write something to logs/.
-	os.WriteFile(filepath.Join(env.RootDir, "logs", "test.log"), []byte("log data"), 0o644)
-
-	// Cleanup with removeAll=false.
-	if err := env.Cleanup(false); err != nil {
-		t.Fatalf("Cleanup failed: %v", err)
-	}
-
-	// workdir should be gone.
-	if _, err := os.Stat(env.WorkDir); !os.IsNotExist(err) {
-		t.Fatal("expected workdir to be removed")
-	}
-
-	// logs should still exist.
-	logFile := filepath.Join(env.RootDir, "logs", "test.log")
-	if _, err := os.Stat(logFile); os.IsNotExist(err) {
-		t.Fatal("expected logs/test.log to be preserved")
 	}
 }
 

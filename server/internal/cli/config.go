@@ -46,6 +46,7 @@ func (c *CLIConfig) RemoveWatchedWorkspace(id string) bool {
 	return false
 }
 
+
 // CLIConfigPath returns the default path for the CLI config file.
 func CLIConfigPath() (string, error) {
 	home, err := os.UserHomeDir()

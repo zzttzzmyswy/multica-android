@@ -54,14 +54,37 @@ func buildMetaSkillContent(provider string, ctx TaskContextForEnv) string {
 	b.WriteString("- `multica issue status <id> <status>` — Update issue status (todo, in_progress, in_review, done, blocked)\n")
 	b.WriteString("- `multica issue update <id> [--title X] [--description X] [--priority X]` — Update issue fields\n\n")
 
+	// Inject available repositories section.
+	if len(ctx.Repos) > 0 {
+		b.WriteString("## Repositories\n\n")
+		b.WriteString("The following code repositories are available in this workspace.\n")
+		b.WriteString("Use `multica repo checkout <url>` to check out a repository into your working directory.\n\n")
+		b.WriteString("| URL | Description |\n")
+		b.WriteString("|-----|-------------|\n")
+		for _, repo := range ctx.Repos {
+			desc := repo.Description
+			if desc == "" {
+				desc = "—"
+			}
+			fmt.Fprintf(&b, "| %s | %s |\n", repo.URL, desc)
+		}
+		b.WriteString("\nThe checkout command creates a git worktree with a dedicated branch. You can check out one or more repos as needed.\n\n")
+	}
+
 	b.WriteString("### Workflow\n")
 	b.WriteString("You are responsible for managing the issue status throughout your work.\n\n")
 	fmt.Fprintf(&b, "1. Run `multica issue get %s --output json` to understand your task\n", ctx.IssueID)
 	fmt.Fprintf(&b, "2. Run `multica issue status %s in_progress`\n", ctx.IssueID)
 	b.WriteString("3. Read comments for additional context or human instructions\n")
 	b.WriteString("4. If the task requires code changes:\n")
-	b.WriteString("   a. Create a new branch\n")
-	b.WriteString("   b. Implement the changes and commit\n")
+	if len(ctx.Repos) > 0 {
+		b.WriteString("   a. Run `multica repo checkout <url>` to check out the appropriate repository\n")
+		b.WriteString("   b. `cd` into the checked-out directory\n")
+		b.WriteString("   c. Implement the changes and commit\n")
+	} else {
+		b.WriteString("   a. Create a new branch\n")
+		b.WriteString("   b. Implement the changes and commit\n")
+	}
 	b.WriteString("   c. Push the branch to the remote\n")
 	b.WriteString("   d. Create a pull request (decide the target branch based on the repo's conventions)\n")
 	fmt.Fprintf(&b, "   e. Post the PR link as a comment: `multica issue comment add %s --content \"PR: <url>\"`\n", ctx.IssueID)

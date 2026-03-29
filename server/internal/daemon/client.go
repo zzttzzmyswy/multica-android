@@ -152,14 +152,18 @@ func (c *Client) Deregister(ctx context.Context, runtimeIDs []string) error {
 	}, nil)
 }
 
-func (c *Client) Register(ctx context.Context, req map[string]any) ([]Runtime, error) {
-	var resp struct {
-		Runtimes []Runtime `json:"runtimes"`
-	}
+// RegisterResponse holds the server's response to a daemon registration.
+type RegisterResponse struct {
+	Runtimes []Runtime  `json:"runtimes"`
+	Repos    []RepoData `json:"repos"`
+}
+
+func (c *Client) Register(ctx context.Context, req map[string]any) (*RegisterResponse, error) {
+	var resp RegisterResponse
 	if err := c.postJSON(ctx, "/api/daemon/register", req, &resp); err != nil {
 		return nil, err
 	}
-	return resp.Runtimes, nil
+	return &resp, nil
 }
 
 func (c *Client) postJSON(ctx context.Context, path string, reqBody any, respBody any) error {
