@@ -8,19 +8,10 @@ import { useInboxStore } from "@/features/inbox";
 import { useWorkspaceStore } from "@/features/workspace";
 import { useAuthStore } from "@/features/auth";
 import { createLogger } from "@/shared/logger";
+import { api } from "@/shared/api";
 import type {
-  IssueCreatedPayload,
-  IssueUpdatedPayload,
-  IssueDeletedPayload,
-  AgentStatusPayload,
-  AgentCreatedPayload,
-  InboxNewPayload,
-  InboxReadPayload,
-  InboxArchivedPayload,
-  WorkspaceUpdatedPayload,
-  WorkspaceDeletedPayload,
   MemberAddedPayload,
-  MemberUpdatedPayload,
+  WorkspaceDeletedPayload,
   MemberRemovedPayload,
 } from "@/shared/types";
 
@@ -28,139 +19,99 @@ const logger = createLogger("realtime-sync");
 
 /**
  * Centralized WS → store sync. Called once from WSProvider.
- * Subscribes to all global WS events and dispatches to Zustand stores.
- * Comment events are NOT handled here — they stay per-page on issue detail.
+ *
+ * Uses the "WS as invalidation signal + refetch" pattern:
+ * - onAny handler extracts event prefix and calls the matching store refresh
+ * - Debounce per-prefix prevents rapid-fire refetches (e.g. bulk issue updates)
+ * - Precise handlers only for side effects (toast, navigation, self-check)
+ *
+ * Per-page events (comments, activity, subscribers, daemon) are still handled
+ * by individual components via useWSEvent — not here.
  */
 export function useRealtimeSync(ws: WSClient | null) {
-  // Issue events → useIssueStore
+  // Main sync: onAny → refreshMap with debounce
   useEffect(() => {
     if (!ws) return;
 
-    const unsubs = [
-      ws.on("issue:created", (p) => {
-        const { issue } = p as IssueCreatedPayload;
-        useIssueStore.getState().addIssue(issue);
-      }),
-      ws.on("issue:updated", (p) => {
-        const { issue } = p as IssueUpdatedPayload;
-        useIssueStore.getState().updateIssue(issue.id, issue);
-        useInboxStore.getState().updateIssueStatus(issue.id, issue.status);
-      }),
-      ws.on("issue:deleted", (p) => {
-        const { issue_id } = p as IssueDeletedPayload;
-        useIssueStore.getState().removeIssue(issue_id);
-      }),
-    ];
+    const refreshMap: Record<string, () => void> = {
+      issue: () => void useIssueStore.getState().fetch(),
+      inbox: () => void useInboxStore.getState().fetch(),
+      agent: () => void useWorkspaceStore.getState().refreshAgents(),
+      member: () => void useWorkspaceStore.getState().refreshMembers(),
+      workspace: () => {
+        // Lightweight: only re-fetch workspace list, don't hydrate everything.
+        // workspace:deleted is handled by a precise side-effect handler below.
+        api.listWorkspaces().then((wsList) => {
+          const current = useWorkspaceStore.getState().workspace;
+          const updated = current
+            ? wsList.find((w) => w.id === current.id)
+            : null;
+          if (updated) useWorkspaceStore.getState().updateWorkspace(updated);
+        }).catch((err) => {
+          logger.error("workspace refresh failed", err);
+        });
+      },
+      skill: () => void useWorkspaceStore.getState().refreshSkills(),
+    };
 
-    return () => unsubs.forEach((u) => u());
-  }, [ws]);
+    const timers = new Map<string, ReturnType<typeof setTimeout>>();
+    const debouncedRefresh = (prefix: string, fn: () => void) => {
+      const existing = timers.get(prefix);
+      if (existing) clearTimeout(existing);
+      timers.set(
+        prefix,
+        setTimeout(() => {
+          timers.delete(prefix);
+          fn();
+        }, 100),
+      );
+    };
 
-  // Inbox events → useInboxStore
-  useEffect(() => {
-    if (!ws) return;
+    const unsubAny = ws.onAny((msg) => {
+      const prefix = msg.type.split(":")[0] ?? "";
+      const refresh = refreshMap[prefix];
+      if (refresh) debouncedRefresh(prefix, refresh);
+    });
 
-    const unsubs = [
-      ws.on("inbox:new", (p) => {
-        const { item } = p as InboxNewPayload;
-        const myUserId = useAuthStore.getState().user?.id;
-        // Only add if I'm the recipient (WS broadcasts to all workspace members)
-        if (item.recipient_type === "member" && item.recipient_id === myUserId) {
-          useInboxStore.getState().addItem(item);
-        }
-      }),
-      ws.on("inbox:read", (p) => {
-        const { item_id } = p as InboxReadPayload;
-        useInboxStore.getState().markRead(item_id);
-      }),
-      ws.on("inbox:archived", (p) => {
-        const { item_id } = p as InboxArchivedPayload;
-        useInboxStore.getState().archive(item_id);
-      }),
-      ws.on("inbox:batch-read", () => {
-        useInboxStore.getState().markAllRead();
-      }),
-      ws.on("inbox:batch-archived", () => {
-        useInboxStore.getState().fetch();
-      }),
-    ];
+    // --- Side-effect handlers (toast, navigation, self-check) ---
 
-    return () => unsubs.forEach((u) => u());
-  }, [ws]);
+    const unsubWsDeleted = ws.on("workspace:deleted", (p) => {
+      const { workspace_id } = p as WorkspaceDeletedPayload;
+      const currentWs = useWorkspaceStore.getState().workspace;
+      if (currentWs?.id === workspace_id) {
+        logger.warn("current workspace deleted, switching");
+        toast.info("This workspace was deleted");
+        useWorkspaceStore.getState().refreshWorkspaces();
+      }
+    });
 
-  // Agent events → workspace store
-  useEffect(() => {
-    if (!ws) return;
+    const unsubMemberRemoved = ws.on("member:removed", (p) => {
+      const { user_id } = p as MemberRemovedPayload;
+      const myUserId = useAuthStore.getState().user?.id;
+      if (user_id === myUserId) {
+        logger.warn("removed from workspace, switching");
+        toast.info("You were removed from this workspace");
+        useWorkspaceStore.getState().refreshWorkspaces();
+      }
+    });
 
-    const unsubs = [
-      ws.on("agent:status", (p) => {
-        const { agent } = p as AgentStatusPayload;
-        useWorkspaceStore.getState().updateAgent(agent.id, agent);
-      }),
-      ws.on("agent:created", (p) => {
-        const { agent } = p as AgentCreatedPayload;
-        const agents = useWorkspaceStore.getState().agents;
-        if (!agents.find((a) => a.id === agent.id)) {
-          useWorkspaceStore.getState().refreshAgents();
-        }
-      }),
-      ws.on("agent:deleted", () => {
-        useWorkspaceStore.getState().refreshAgents();
-      }),
-    ];
+    const unsubMemberAdded = ws.on("member:added", (p) => {
+      const { member } = p as MemberAddedPayload;
+      const myUserId = useAuthStore.getState().user?.id;
+      if (member.user_id === myUserId) {
+        // I was invited to a new workspace — refresh workspace list
+        useWorkspaceStore.getState().refreshWorkspaces();
+      }
+    });
 
-    return () => unsubs.forEach((u) => u());
-  }, [ws]);
-
-  // Workspace + member events → useWorkspaceStore
-  useEffect(() => {
-    if (!ws) return;
-
-    const unsubs = [
-      ws.on("workspace:updated", (p) => {
-        const { workspace } = p as WorkspaceUpdatedPayload;
-        logger.debug("workspace:updated", workspace.name);
-        useWorkspaceStore.getState().updateWorkspace(workspace);
-      }),
-      ws.on("workspace:deleted", (p) => {
-        const { workspace_id } = p as WorkspaceDeletedPayload;
-        const currentWs = useWorkspaceStore.getState().workspace;
-        if (currentWs?.id === workspace_id) {
-          logger.warn("current workspace deleted, switching");
-          toast.info("This workspace was deleted");
-          useWorkspaceStore.getState().refreshWorkspaces();
-        }
-      }),
-      ws.on("member:updated", (p) => {
-        const payload = p as MemberUpdatedPayload;
-        logger.debug("member:updated", payload.member.email, payload.member.role);
-        useWorkspaceStore.getState().refreshMembers();
-      }),
-      ws.on("member:added", (p) => {
-        const payload = p as MemberAddedPayload;
-        const myUserId = useAuthStore.getState().user?.id;
-        logger.debug("member:added", payload.member.email);
-        if (payload.member.user_id === myUserId) {
-          // I was invited to a workspace — refresh list so it appears
-          useWorkspaceStore.getState().refreshWorkspaces();
-        } else {
-          useWorkspaceStore.getState().refreshMembers();
-        }
-      }),
-      ws.on("member:removed", (p) => {
-        const payload = p as MemberRemovedPayload;
-        const myUserId = useAuthStore.getState().user?.id;
-        logger.debug("member:removed", payload.user_id);
-        if (payload.user_id === myUserId) {
-          logger.warn("removed from workspace, switching");
-          toast.info("You were removed from this workspace");
-          useWorkspaceStore.getState().refreshWorkspaces();
-        } else {
-          useWorkspaceStore.getState().refreshMembers();
-        }
-      }),
-    ];
-
-    return () => unsubs.forEach((u) => u());
+    return () => {
+      unsubAny();
+      unsubWsDeleted();
+      unsubMemberRemoved();
+      unsubMemberAdded();
+      timers.forEach(clearTimeout);
+      timers.clear();
+    };
   }, [ws]);
 
   // Reconnect → refetch all data to recover missed events
@@ -174,6 +125,8 @@ export function useRealtimeSync(ws: WSClient | null) {
           useIssueStore.getState().fetch(),
           useInboxStore.getState().fetch(),
           useWorkspaceStore.getState().refreshAgents(),
+          useWorkspaceStore.getState().refreshMembers(),
+          useWorkspaceStore.getState().refreshSkills(),
         ]);
       } catch {
         // Silently fail; next reconnect will retry

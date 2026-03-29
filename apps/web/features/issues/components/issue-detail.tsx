@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import {
   Bot,
   Calendar,
+  Check,
   ChevronLeft,
   ChevronRight,
   Link2,
@@ -37,8 +38,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuGroup,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSub,
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
@@ -112,6 +111,8 @@ function formatActivity(
       const formatted = new Date(details.to).toLocaleDateString("en-US", { month: "short", day: "numeric" });
       return `set due date to ${formatted}`;
     }
+    case "title_changed":
+      return `renamed this issue from "${details.from ?? "?"}" to "${details.to ?? "?"}"`;
     case "description_updated":
       return "updated the description";
     case "task_completed":
@@ -978,14 +979,13 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                     <span className="truncate">{STATUS_CONFIG[issue.status].label}</span>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="w-44">
-                    <DropdownMenuRadioGroup value={issue.status} onValueChange={(v) => handleUpdateField({ status: v as IssueStatus })}>
-                      {ALL_STATUSES.map((s) => (
-                        <DropdownMenuRadioItem key={s} value={s}>
-                          <StatusIcon status={s} className="h-3.5 w-3.5" />
-                          {STATUS_CONFIG[s].label}
-                        </DropdownMenuRadioItem>
-                      ))}
-                    </DropdownMenuRadioGroup>
+                    {ALL_STATUSES.map((s) => (
+                      <DropdownMenuItem key={s} onClick={() => handleUpdateField({ status: s })}>
+                        <StatusIcon status={s} className="h-3.5 w-3.5" />
+                        {STATUS_CONFIG[s].label}
+                        {s === issue.status && <Check className="ml-auto h-3.5 w-3.5" />}
+                      </DropdownMenuItem>
+                    ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </PropRow>
@@ -998,14 +998,13 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                     <span className="truncate">{PRIORITY_CONFIG[issue.priority].label}</span>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="w-44">
-                    <DropdownMenuRadioGroup value={issue.priority} onValueChange={(v) => handleUpdateField({ priority: v as IssuePriority })}>
-                      {PRIORITY_ORDER.map((p) => (
-                        <DropdownMenuRadioItem key={p} value={p}>
-                          <PriorityIcon priority={p} />
-                          {PRIORITY_CONFIG[p].label}
-                        </DropdownMenuRadioItem>
-                      ))}
-                    </DropdownMenuRadioGroup>
+                    {PRIORITY_ORDER.map((p) => (
+                      <DropdownMenuItem key={p} onClick={() => handleUpdateField({ priority: p })}>
+                        <PriorityIcon priority={p} />
+                        {PRIORITY_CONFIG[p].label}
+                        {p === issue.priority && <Check className="ml-auto h-3.5 w-3.5" />}
+                      </DropdownMenuItem>
+                    ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </PropRow>

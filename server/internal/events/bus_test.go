@@ -62,6 +62,62 @@ func TestPanicInHandlerDoesNotBreakOthers(t *testing.T) {
 	}
 }
 
+func TestSubscribeAllReceivesAllEventTypes(t *testing.T) {
+	bus := New()
+
+	var received []string
+	bus.SubscribeAll(func(e Event) {
+		received = append(received, e.Type)
+	})
+
+	bus.Publish(Event{Type: "issue:created"})
+	bus.Publish(Event{Type: "comment:deleted"})
+	bus.Publish(Event{Type: "skill:updated"})
+
+	if len(received) != 3 {
+		t.Fatalf("expected 3 events, got %d", len(received))
+	}
+	if received[0] != "issue:created" || received[1] != "comment:deleted" || received[2] != "skill:updated" {
+		t.Fatalf("unexpected events: %v", received)
+	}
+}
+
+func TestSubscribeAllCalledAfterTypeSpecific(t *testing.T) {
+	bus := New()
+
+	var order []string
+	bus.Subscribe("issue:created", func(e Event) {
+		order = append(order, "specific")
+	})
+	bus.SubscribeAll(func(e Event) {
+		order = append(order, "global")
+	})
+
+	bus.Publish(Event{Type: "issue:created"})
+
+	if len(order) != 2 || order[0] != "specific" || order[1] != "global" {
+		t.Fatalf("expected [specific, global], got %v", order)
+	}
+}
+
+func TestSubscribeAllPanicRecovery(t *testing.T) {
+	bus := New()
+
+	var secondCalled bool
+	bus.SubscribeAll(func(e Event) {
+		panic("test panic")
+	})
+	bus.SubscribeAll(func(e Event) {
+		secondCalled = true
+	})
+
+	bus.Publish(Event{Type: "test"})
+
+	if !secondCalled {
+		t.Fatal("second global handler was not called after first panicked")
+	}
+}
+
 func TestEventFieldsPassedThrough(t *testing.T) {
 	bus := New()
 	var received Event

@@ -334,6 +334,7 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 	statusChanged := req.Status != nil && prevIssue.Status != issue.Status
 	priorityChanged := req.Priority != nil && prevIssue.Priority != issue.Priority
 	descriptionChanged := req.Description != nil && textToPtr(prevIssue.Description) != resp.Description
+	titleChanged := req.Title != nil && prevIssue.Title != issue.Title
 	prevDueDate := timestampToPtr(prevIssue.DueDate)
 	dueDateChanged := prevDueDate != resp.DueDate && (prevDueDate == nil) != (resp.DueDate == nil) ||
 		(prevDueDate != nil && resp.DueDate != nil && *prevDueDate != *resp.DueDate)
@@ -345,6 +346,8 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 		"priority_changed":    priorityChanged,
 		"due_date_changed":    dueDateChanged,
 		"description_changed": descriptionChanged,
+		"title_changed":       titleChanged,
+		"prev_title":          prevIssue.Title,
 		"prev_assignee_type":  textToPtr(prevIssue.AssigneeType),
 		"prev_assignee_id":    uuidToPtr(prevIssue.AssigneeID),
 		"prev_status":         prevIssue.Status,

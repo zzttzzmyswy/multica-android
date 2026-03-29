@@ -19,8 +19,9 @@ type Handler func(Event)
 
 // Bus is an in-process synchronous pub/sub event bus.
 type Bus struct {
-	mu        sync.RWMutex
-	listeners map[string][]Handler
+	mu             sync.RWMutex
+	listeners      map[string][]Handler
+	globalHandlers []Handler
 }
 
 // New creates a new event bus.
@@ -38,12 +39,22 @@ func (b *Bus) Subscribe(eventType string, h Handler) {
 	b.listeners[eventType] = append(b.listeners[eventType], h)
 }
 
+// SubscribeAll registers a handler that receives ALL events regardless of type.
+// Global handlers are called after type-specific handlers.
+func (b *Bus) SubscribeAll(h Handler) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.globalHandlers = append(b.globalHandlers, h)
+}
+
 // Publish dispatches an event to all registered handlers for that event type.
+// Type-specific handlers run first, then global (SubscribeAll) handlers.
 // Each handler is called synchronously. Panics in individual handlers are
 // recovered so one failing handler does not prevent others from executing.
 func (b *Bus) Publish(e Event) {
 	b.mu.RLock()
 	handlers := b.listeners[e.Type]
+	globals := b.globalHandlers
 	b.mu.RUnlock()
 
 	for _, h := range handlers {
@@ -51,6 +62,17 @@ func (b *Bus) Publish(e Event) {
 			defer func() {
 				if r := recover(); r != nil {
 					slog.Error("panic in event listener", "event_type", e.Type, "recovered", r)
+				}
+			}()
+			h(e)
+		}()
+	}
+
+	for _, h := range globals {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("panic in global event listener", "event_type", e.Type, "recovered", r)
 				}
 			}()
 			h(e)

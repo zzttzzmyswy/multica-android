@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import {
   Sparkles,
@@ -33,7 +33,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/shared/api";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
-import { useWSEvent } from "@/features/realtime";
+
 import { FileTree } from "./file-tree";
 import { FileViewer } from "./file-viewer";
 
@@ -599,14 +599,6 @@ export default function SkillsPage() {
       setSelectedId(skills[0]!.id);
     }
   }, [skills, selectedId]);
-
-  const handleRefresh = useCallback(() => {
-    refreshSkills();
-  }, [refreshSkills]);
-
-  useWSEvent("skill:created", handleRefresh);
-  useWSEvent("skill:updated", handleRefresh);
-  useWSEvent("skill:deleted", handleRefresh);
 
   const handleCreate = async (data: CreateSkillRequest) => {
     const skill = await api.createSkill(data);

@@ -221,6 +221,57 @@ func TestActivityIssueUpdated_NoChangeFlags(t *testing.T) {
 	}
 }
 
+func TestActivityIssueUpdated_TitleChanged(t *testing.T) {
+	queries := db.New(testPool)
+	bus := events.New()
+	registerActivityListeners(bus, queries)
+
+	issueID := createTestIssue(t, testWorkspaceID, testUserID)
+	t.Cleanup(func() {
+		cleanupActivities(t, issueID)
+		cleanupTestIssue(t, issueID)
+	})
+
+	bus.Publish(events.Event{
+		Type:        protocol.EventIssueUpdated,
+		WorkspaceID: testWorkspaceID,
+		ActorType:   "member",
+		ActorID:     testUserID,
+		Payload: map[string]any{
+			"issue": handler.IssueResponse{
+				ID:          issueID,
+				WorkspaceID: testWorkspaceID,
+				Title:       "renamed issue",
+				Status:      "todo",
+				Priority:    "medium",
+				CreatorType: "member",
+				CreatorID:   testUserID,
+			},
+			"title_changed": true,
+			"prev_title":    "activity test issue",
+		},
+	})
+
+	activities := listActivitiesForIssue(t, queries, issueID)
+	if len(activities) != 1 {
+		t.Fatalf("expected 1 activity, got %d", len(activities))
+	}
+	if activities[0].Action != "title_changed" {
+		t.Fatalf("expected action 'title_changed', got %q", activities[0].Action)
+	}
+
+	var details map[string]string
+	if err := json.Unmarshal(activities[0].Details, &details); err != nil {
+		t.Fatalf("failed to unmarshal details: %v", err)
+	}
+	if details["from"] != "activity test issue" {
+		t.Fatalf("expected from 'activity test issue', got %q", details["from"])
+	}
+	if details["to"] != "renamed issue" {
+		t.Fatalf("expected to 'renamed issue', got %q", details["to"])
+	}
+}
+
 func TestActivityTaskCompleted(t *testing.T) {
 	queries := db.New(testPool)
 	bus := events.New()

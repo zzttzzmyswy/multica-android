@@ -19,21 +19,22 @@ interface IssueState {
   setActiveIssue: (id: string | null) => void;
 }
 
-export const useIssueStore = create<IssueState>((set) => ({
+export const useIssueStore = create<IssueState>((set, get) => ({
   issues: [],
   loading: true,
   activeIssueId: null,
 
   fetch: async () => {
     logger.debug("fetch start");
-    set({ loading: true });
+    const isInitialLoad = get().issues.length === 0;
+    if (isInitialLoad) set({ loading: true });
     try {
       const res = await api.listIssues({ limit: 200 });
       logger.info("fetched", res.issues.length, "issues");
       set({ issues: res.issues, loading: false });
     } catch (err) {
       logger.error("fetch failed", err);
-      set({ loading: false });
+      if (isInitialLoad) set({ loading: false });
     }
   },
 
