@@ -1,10 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useDefaultLayout } from "react-resizable-panels";
 import { useInboxStore } from "@/features/inbox";
-import { useIssueStore } from "@/features/issues";
 import { IssueDetail, StatusIcon, PriorityIcon } from "@/features/issues/components";
 import { STATUS_CONFIG, PRIORITY_CONFIG } from "@/features/issues/config";
 import { useActorName } from "@/features/workspace";
@@ -19,7 +17,7 @@ import {
   BookCheck,
   ListChecks,
 } from "lucide-react";
-import type { InboxItem, InboxItemType, InboxSeverity, IssueStatus, IssuePriority } from "@/shared/types";
+import type { InboxItem, InboxItemType, IssueStatus, IssuePriority } from "@/shared/types";
 import { Button } from "@/components/ui/button";
 import {
   ResizablePanelGroup,
@@ -34,22 +32,11 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import {
-  HoverCard,
-  HoverCardTrigger,
-  HoverCardContent,
-} from "@/components/ui/hover-card";
 import { api } from "@/shared/api";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-const severityOrder: Record<InboxSeverity, number> = {
-  action_required: 0,
-  attention: 1,
-  info: 2,
-};
 
 const typeLabels: Record<InboxItemType, string> = {
   issue_assigned: "Assigned",
@@ -84,29 +71,6 @@ function shortDate(dateStr: string): string {
     month: "short",
     day: "numeric",
   });
-}
-
-// ---------------------------------------------------------------------------
-// InboxHoverContent — shows issue context on hover
-// ---------------------------------------------------------------------------
-
-function InboxHoverContent({ item }: { item: InboxItem }) {
-  const issues = useIssueStore((s) => s.issues);
-  const issue = item.issue_id ? issues.find((i) => i.id === item.issue_id) : null;
-
-  if (!issue) return null;
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-start gap-2">
-        <StatusIcon status={issue.status} className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        <p className="text-sm font-medium line-clamp-2">{issue.title}</p>
-      </div>
-      {issue.description && (
-        <p className="line-clamp-2 text-xs text-muted-foreground">{issue.description}</p>
-      )}
-    </div>
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -159,7 +123,7 @@ function InboxDetailLabel({ item }: { item: InboxItem }) {
       return <span>Removed due date</span>;
     }
     case "new_comment": {
-      if (item.body) return <span className="truncate">{item.body}</span>;
+      if (item.body) return <span>{item.body}</span>;
       return <span>{typeLabels[item.type]}</span>;
     }
     default:
@@ -181,52 +145,43 @@ function InboxListItem({
   onClick: () => void;
 }) {
   return (
-    <HoverCard>
-      <HoverCardTrigger
-        render={
-          <button
-            onClick={onClick}
-            className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-              isSelected ? "bg-accent" : "hover:bg-accent/50"
-            }`}
-          />
-        }
-      >
-        <ActorAvatar
-          actorType={item.actor_type ?? item.recipient_type}
-          actorId={item.actor_id ?? item.recipient_id}
-          size={28}
-        />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-1.5">
-              {!item.read && (
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" />
-              )}
-              <span
-                className={`truncate text-sm ${!item.read ? "font-medium" : "text-muted-foreground"}`}
-              >
-                {item.title}
-              </span>
-            </div>
-            {item.issue_status && (
-              <StatusIcon status={item.issue_status} className="h-3.5 w-3.5 shrink-0" />
+    <button
+      onClick={onClick}
+      className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+        isSelected ? "bg-accent" : "hover:bg-accent/50"
+      }`}
+    >
+      <ActorAvatar
+        actorType={item.actor_type ?? item.recipient_type}
+        actorId={item.actor_id ?? item.recipient_id}
+        size={28}
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1.5">
+            {!item.read && (
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" />
             )}
-          </div>
-          <div className="mt-0.5 flex items-center justify-between gap-2">
-            <p className={`min-w-0 truncate text-xs ${item.read ? "text-muted-foreground/60" : "text-muted-foreground"}`}>
-              <InboxDetailLabel item={item} />
-            </p>
-            <span className={`shrink-0 text-xs ${item.read ? "text-muted-foreground/60" : "text-muted-foreground"}`}>
-              {timeAgo(item.created_at)}
+            <span
+              className={`truncate text-sm ${!item.read ? "font-medium" : "text-muted-foreground"}`}
+            >
+              {item.title}
             </span>
           </div>
+          {item.issue_status && (
+            <StatusIcon status={item.issue_status} className="h-3.5 w-3.5 shrink-0" />
+          )}
         </div>
-      </HoverCardTrigger>
-      <HoverCardContent side="right" align="start" className="w-72">
-        <InboxHoverContent item={item} />
-      </HoverCardContent>
-    </HoverCard>
+        <div className="mt-0.5 flex items-center justify-between gap-2">
+          <p className={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs ${item.read ? "text-muted-foreground/60" : "text-muted-foreground"}`}>
+            <InboxDetailLabel item={item} />
+          </p>
+          <span className={`shrink-0 text-xs ${item.read ? "text-muted-foreground/60" : "text-muted-foreground"}`}>
+            {timeAgo(item.created_at)}
+          </span>
+        </div>
+      </div>
+    </button>
   );
 }
 
@@ -246,39 +201,12 @@ export default function InboxPage() {
     }
   };
 
-  const storeItems = useInboxStore((s) => s.items);
+  const items = useInboxStore((s) => s.dedupedItems());
   const loading = useInboxStore((s) => s.loading);
 
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: "multica_inbox_layout",
   });
-
-  // Group by (issue_id, type, actor_id) and take the latest from each group
-  const items = useMemo(() => {
-    const active = storeItems.filter((i) => !i.archived);
-    const groups = new Map<string, InboxItem[]>();
-    active.forEach((item) => {
-      const key = `${item.issue_id ?? "none"}|${item.type}|${item.actor_id ?? "none"}`;
-      const group = groups.get(key) ?? [];
-      group.push(item);
-      groups.set(key, group);
-    });
-
-    const merged: InboxItem[] = [];
-    groups.forEach((group) => {
-      const sorted = group.sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
-      const latest = sorted[0];
-      if (latest) merged.push(latest);
-    });
-
-    return merged.sort(
-      (a, b) =>
-        severityOrder[a.severity] - severityOrder[b.severity] ||
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
-  }, [storeItems]);
 
   const selected = items.find((i) => i.id === selectedId) ?? null;
   const unreadCount = items.filter((i) => !i.read).length;

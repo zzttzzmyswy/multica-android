@@ -46,6 +46,11 @@ const (
 	// Activity events
 	EventActivityCreated = "activity:created"
 
+	// Skill events
+	EventSkillCreated = "skill:created"
+	EventSkillUpdated = "skill:updated"
+	EventSkillDeleted = "skill:deleted"
+
 	// Daemon events
 	EventDaemonHeartbeat = "daemon:heartbeat"
 	EventDaemonRegister  = "daemon:register"

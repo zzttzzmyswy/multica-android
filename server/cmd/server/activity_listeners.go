@@ -171,6 +171,28 @@ func registerActivityListeners(bus *events.Bus, queries *db.Queries) {
 			}
 		}
 
+		if titleChanged, _ := payload["title_changed"].(bool); titleChanged {
+			prevTitle, _ := payload["prev_title"].(string)
+			details, _ := json.Marshal(map[string]string{
+				"from": prevTitle,
+				"to":   issue.Title,
+			})
+			activity, err := queries.CreateActivity(ctx, db.CreateActivityParams{
+				WorkspaceID: parseUUID(issue.WorkspaceID),
+				IssueID:     parseUUID(issue.ID),
+				ActorType:   util.StrToText(e.ActorType),
+				ActorID:     parseUUID(e.ActorID),
+				Action:      "title_changed",
+				Details:     details,
+			})
+			if err != nil {
+				slog.Error("activity: failed to record title change",
+					"issue_id", issue.ID, "error", err)
+			} else {
+				publishActivityEvent(bus, e, activity)
+			}
+		}
+
 		if descriptionChanged {
 			activity, err := queries.CreateActivity(ctx, db.CreateActivityParams{
 				WorkspaceID: parseUUID(issue.WorkspaceID),

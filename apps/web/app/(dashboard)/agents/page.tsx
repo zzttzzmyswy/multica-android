@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import {
   Bot,
@@ -65,7 +65,7 @@ import { Label } from "@/components/ui/label";
 import { api } from "@/shared/api";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
-import { useWSEvent } from "@/features/realtime";
+
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1152,13 +1152,6 @@ export default function AgentsPage() {
       setSelectedId(agents[0]!.id);
     }
   }, [agents, selectedId]);
-
-  useWSEvent(
-    "agent:status",
-    useCallback(() => {
-      refreshAgents();
-    }, [refreshAgents]),
-  );
 
   const handleCreate = async (data: CreateAgentRequest) => {
     const agent = await api.createAgent(data);

@@ -64,9 +64,7 @@ export function AppSidebar() {
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const switchWorkspace = useWorkspaceStore((s) => s.switchWorkspace);
 
-  const unreadCount = useInboxStore((s) =>
-    s.items.filter((i) => !i.read && !i.archived).length
-  );
+  const unreadCount = useInboxStore((s) => s.unreadCount());
 
   const logout = () => {
     authLogout();

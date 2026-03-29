@@ -7,6 +7,41 @@ import { createLogger } from "@/shared/logger";
 
 const logger = createLogger("inbox-store");
 
+/**
+ * Deduplicate inbox items by issue_id (one entry per issue, Linear-style),
+ * keep latest, sort by time DESC.
+ * Memoized by reference — returns the same array if `items` hasn't changed.
+ */
+let _prevItems: InboxItem[] = [];
+let _prevDeduped: InboxItem[] = [];
+
+function deduplicateInboxItems(items: InboxItem[]): InboxItem[] {
+  if (items === _prevItems) return _prevDeduped;
+  _prevItems = items;
+
+  const active = items.filter((i) => !i.archived);
+  const groups = new Map<string, InboxItem[]>();
+  active.forEach((item) => {
+    const key = item.issue_id ?? item.id;
+    const group = groups.get(key) ?? [];
+    group.push(item);
+    groups.set(key, group);
+  });
+  const merged: InboxItem[] = [];
+  groups.forEach((group) => {
+    const sorted = group.sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+    if (sorted[0]) merged.push(sorted[0]);
+  });
+  _prevDeduped = merged.sort(
+    (a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
+  return _prevDeduped;
+}
+
 interface InboxState {
   items: InboxItem[];
   loading: boolean;
@@ -19,6 +54,7 @@ interface InboxState {
   archiveAll: () => void;
   archiveAllRead: () => void;
   updateIssueStatus: (issueId: string, status: IssueStatus) => void;
+  dedupedItems: () => InboxItem[];
   unreadCount: () => number;
 }
 
@@ -28,14 +64,15 @@ export const useInboxStore = create<InboxState>((set, get) => ({
 
   fetch: async () => {
     logger.debug("fetch start");
-    set({ loading: true });
+    const isInitialLoad = get().items.length === 0;
+    if (isInitialLoad) set({ loading: true });
     try {
       const data = await api.listInbox();
       logger.info("fetched", data.length, "items");
       set({ items: data, loading: false });
     } catch (err) {
       logger.error("fetch failed", err);
-      set({ loading: false });
+      if (isInitialLoad) set({ loading: false });
     }
   },
 
@@ -74,5 +111,7 @@ export const useInboxStore = create<InboxState>((set, get) => ({
         i.issue_id === issueId ? { ...i, issue_status: status } : i
       ),
     })),
-  unreadCount: () => get().items.filter((i) => !i.read && !i.archived).length,
+  dedupedItems: () => deduplicateInboxItems(get().items),
+  unreadCount: () =>
+    get().dedupedItems().filter((i) => !i.read).length,
 }));

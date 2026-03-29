@@ -12,6 +12,7 @@ export class WSClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private hasConnectedBefore = false;
   private onReconnectCallbacks = new Set<() => void>();
+  private anyHandlers = new Set<(msg: WSMessage) => void>();
   private logger: Logger;
 
   constructor(url: string, options?: { logger?: Logger }) {
@@ -54,8 +55,9 @@ export class WSClient {
         for (const handler of eventHandlers) {
           handler(msg.payload);
         }
-      } else {
-        this.logger.debug("unhandled event", msg.type);
+      }
+      for (const handler of this.anyHandlers) {
+        handler(msg);
       }
     };
 
@@ -83,6 +85,9 @@ export class WSClient {
       this.ws = null;
     }
     this.hasConnectedBefore = false;
+    this.handlers.clear();
+    this.anyHandlers.clear();
+    this.onReconnectCallbacks.clear();
   }
 
   on(event: WSEventType, handler: EventHandler) {
@@ -92,6 +97,13 @@ export class WSClient {
     this.handlers.get(event)!.add(handler);
     return () => {
       this.handlers.get(event)?.delete(handler);
+    };
+  }
+
+  onAny(handler: (msg: WSMessage) => void) {
+    this.anyHandlers.add(handler);
+    return () => {
+      this.anyHandlers.delete(handler);
     };
   }
 
