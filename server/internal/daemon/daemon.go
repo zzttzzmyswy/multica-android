@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/multica-ai/multica/server/internal/cli"
@@ -553,7 +554,7 @@ func (d *Daemon) pollLoop(ctx context.Context) error {
 				continue
 			}
 			if task != nil {
-				d.logger.Info("task received", "task_id", task.ID, "issue_id", task.IssueID)
+				d.logger.Info("task received", "task", shortID(task.ID), "issue", task.IssueID)
 				wg.Add(1)
 				go func(t Task) {
 					defer wg.Done()
@@ -590,23 +591,30 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 	rt := d.runtimeIndex[task.RuntimeID]
 	d.mu.Unlock()
 	provider := rt.Provider
-	d.logger.Info("picked task", "task_id", task.ID, "issue_id", task.IssueID, "provider", provider)
+
+	// Task-scoped logger with short ID for readable concurrent logs.
+	taskLog := d.logger.With("task", shortID(task.ID))
+	agentName := "agent"
+	if task.Agent != nil {
+		agentName = task.Agent.Name
+	}
+	taskLog.Info("picked task", "issue", task.IssueID, "agent", agentName, "provider", provider)
 
 	if err := d.client.StartTask(ctx, task.ID); err != nil {
-		d.logger.Error("start task failed", "task_id", task.ID, "error", err)
+		taskLog.Error("start task failed", "error", err)
 		if failErr := d.client.FailTask(ctx, task.ID, fmt.Sprintf("start task failed: %s", err.Error())); failErr != nil {
-			d.logger.Error("fail task after start error", "task_id", task.ID, "error", failErr)
+			taskLog.Error("fail task after start error", "error", failErr)
 		}
 		return
 	}
 
 	_ = d.client.ReportProgress(ctx, task.ID, fmt.Sprintf("Launching %s", provider), 1, 2)
 
-	result, err := d.runTask(ctx, task, provider)
+	result, err := d.runTask(ctx, task, provider, taskLog)
 	if err != nil {
-		d.logger.Error("task failed", "task_id", task.ID, "error", err)
+		taskLog.Error("task failed", "error", err)
 		if failErr := d.client.FailTask(ctx, task.ID, err.Error()); failErr != nil {
-			d.logger.Error("fail task callback failed", "task_id", task.ID, "error", failErr)
+			taskLog.Error("fail task callback failed", "error", failErr)
 		}
 		return
 	}
@@ -617,27 +625,27 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 	// was reassigned). If so, skip reporting results — the server already
 	// moved the task to 'cancelled' so complete/fail would fail anyway.
 	if status, err := d.client.GetTaskStatus(ctx, task.ID); err == nil && status == "cancelled" {
-		d.logger.Info("task was cancelled during execution, discarding result", "task_id", task.ID)
+		taskLog.Info("task cancelled during execution, discarding result")
 		return
 	}
 
 	switch result.Status {
 	case "blocked":
 		if err := d.client.FailTask(ctx, task.ID, result.Comment); err != nil {
-			d.logger.Error("report blocked task failed", "task_id", task.ID, "error", err)
+			taskLog.Error("report blocked task failed", "error", err)
 		}
 	default:
-		d.logger.Info("task completed", "task_id", task.ID, "status", result.Status)
+		taskLog.Info("task completed", "status", result.Status)
 		if err := d.client.CompleteTask(ctx, task.ID, result.Comment, result.BranchName, result.SessionID, result.WorkDir); err != nil {
-			d.logger.Error("complete task failed, falling back to fail", "task_id", task.ID, "error", err)
+			taskLog.Error("complete task failed, falling back to fail", "error", err)
 			if failErr := d.client.FailTask(ctx, task.ID, fmt.Sprintf("complete task failed: %s", err.Error())); failErr != nil {
-				d.logger.Error("fail task fallback also failed", "task_id", task.ID, "error", failErr)
+				taskLog.Error("fail task fallback also failed", "error", failErr)
 			}
 		}
 	}
 }
 
-func (d *Daemon) runTask(ctx context.Context, task Task, provider string) (TaskResult, error) {
+func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLog *slog.Logger) (TaskResult, error) {
 	entry, ok := d.cfg.Agents[provider]
 	if !ok {
 		return TaskResult{}, fmt.Errorf("no agent configured for provider %q", provider)
@@ -717,7 +725,18 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string) (TaskR
 		return TaskResult{}, fmt.Errorf("create agent backend: %w", err)
 	}
 
-	d.logger.Info("starting agent", "provider", provider, "task_id", task.ID, "workdir", env.WorkDir, "reused", task.PriorWorkDir != "" && env.WorkDir == task.PriorWorkDir, "model", entry.Model, "timeout", d.cfg.AgentTimeout.String(), "resume_session", task.PriorSessionID)
+	reused := task.PriorWorkDir != "" && env.WorkDir == task.PriorWorkDir
+	taskLog.Info("starting agent",
+		"provider", provider,
+		"workdir", env.WorkDir,
+		"model", entry.Model,
+		"reused", reused,
+	)
+	if task.PriorSessionID != "" {
+		taskLog.Info("resuming session", "session_id", task.PriorSessionID)
+	}
+
+	taskStart := time.Now()
 
 	session, err := backend.Execute(ctx, prompt, agent.ExecOptions{
 		Cwd:             env.WorkDir,
@@ -729,19 +748,31 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string) (TaskR
 		return TaskResult{}, err
 	}
 
-	// Drain message channel (log tool uses, ignore text since Result has output)
+	// Drain message channel — log tool uses and agent text for visibility.
+	var toolCount atomic.Int32
 	go func() {
 		for msg := range session.Messages {
 			switch msg.Type {
 			case agent.MessageToolUse:
-				d.logger.Debug("tool-use", "provider", provider, "tool", msg.Tool, "call_id", msg.CallID)
+				n := toolCount.Add(1)
+				taskLog.Info(fmt.Sprintf("tool #%d: %s", n, msg.Tool))
+			case agent.MessageText:
+				if msg.Content != "" {
+					taskLog.Debug("agent", "text", truncateLog(msg.Content, 200))
+				}
 			case agent.MessageError:
-				d.logger.Error("agent error", "provider", provider, "content", msg.Content)
+				taskLog.Error("agent error", "content", msg.Content)
 			}
 		}
 	}()
 
 	result := <-session.Result
+	elapsed := time.Since(taskStart).Round(time.Second)
+	taskLog.Info("agent finished",
+		"status", result.Status,
+		"duration", elapsed.String(),
+		"tools", toolCount.Load(),
+	)
 
 	switch result.Status {
 	case "completed":
@@ -797,6 +828,25 @@ func convertReposForEnv(repos []RepoData) []execenv.RepoContextForEnv {
 		result[i] = execenv.RepoContextForEnv{URL: r.URL, Description: r.Description}
 	}
 	return result
+}
+
+// shortID returns the first 8 characters of an ID for readable logs.
+func shortID(id string) string {
+	if len(id) <= 8 {
+		return id
+	}
+	return id[:8]
+}
+
+// truncateLog truncates a string to maxLen, appending "…" if truncated.
+// Also collapses newlines to spaces for single-line log output.
+func truncateLog(s string, maxLen int) string {
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.TrimSpace(s)
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "…"
 }
 
 func convertSkillsForEnv(skills []SkillData) []execenv.SkillContextForEnv {
