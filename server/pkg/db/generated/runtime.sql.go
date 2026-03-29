@@ -105,6 +105,39 @@ func (q *Queries) ListAgentRuntimes(ctx context.Context, workspaceID pgtype.UUID
 	return items, nil
 }
 
+const markStaleRuntimesOffline = `-- name: MarkStaleRuntimesOffline :many
+UPDATE agent_runtime
+SET status = 'offline', updated_at = now()
+WHERE status = 'online'
+  AND last_seen_at < now() - make_interval(secs => $1::double precision)
+RETURNING id, workspace_id
+`
+
+type MarkStaleRuntimesOfflineRow struct {
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+func (q *Queries) MarkStaleRuntimesOffline(ctx context.Context, staleSeconds float64) ([]MarkStaleRuntimesOfflineRow, error) {
+	rows, err := q.db.Query(ctx, markStaleRuntimesOffline, staleSeconds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MarkStaleRuntimesOfflineRow{}
+	for rows.Next() {
+		var i MarkStaleRuntimesOfflineRow
+		if err := rows.Scan(&i.ID, &i.WorkspaceID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setAgentRuntimeOffline = `-- name: SetAgentRuntimeOffline :exec
 UPDATE agent_runtime
 SET status = 'offline', updated_at = now()

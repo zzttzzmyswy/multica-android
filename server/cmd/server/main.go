@@ -65,6 +65,10 @@ func main() {
 		Handler: r,
 	}
 
+	// Start background sweeper to mark stale runtimes as offline.
+	sweepCtx, sweepCancel := context.WithCancel(context.Background())
+	go runRuntimeSweeper(sweepCtx, queries, bus)
+
 	// Graceful shutdown
 	go func() {
 		slog.Info("server starting", "port", port)
@@ -79,6 +83,7 @@ func main() {
 	<-quit
 
 	slog.Info("shutting down server")
+	sweepCancel()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
