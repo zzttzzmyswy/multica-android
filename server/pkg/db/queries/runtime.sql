@@ -44,3 +44,10 @@ RETURNING *;
 UPDATE agent_runtime
 SET status = 'offline', updated_at = now()
 WHERE id = $1;
+
+-- name: MarkStaleRuntimesOffline :many
+UPDATE agent_runtime
+SET status = 'offline', updated_at = now()
+WHERE status = 'online'
+  AND last_seen_at < now() - make_interval(secs => @stale_seconds::double precision)
+RETURNING id, workspace_id;
