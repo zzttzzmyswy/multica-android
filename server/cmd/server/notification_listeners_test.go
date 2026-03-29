@@ -18,6 +18,7 @@ import (
 func inboxItemsForRecipient(t *testing.T, queries *db.Queries, recipientID string) []db.ListInboxItemsRow {
 	t.Helper()
 	items, err := queries.ListInboxItems(context.Background(), db.ListInboxItemsParams{
+		WorkspaceID:   util.ParseUUID(testWorkspaceID),
 		RecipientType: "member",
 		RecipientID:   util.ParseUUID(recipientID),
 		Limit:         100,

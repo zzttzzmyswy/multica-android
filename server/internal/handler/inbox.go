@@ -91,6 +91,7 @@ func (h *Handler) ListInbox(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	workspaceID := r.Header.Get("X-Workspace-ID")
 
 	limit := 50
 	offset := 0
@@ -106,6 +107,7 @@ func (h *Handler) ListInbox(w http.ResponseWriter, r *http.Request) {
 	}
 
 	items, err := h.Queries.ListInboxItems(r.Context(), db.ListInboxItemsParams{
+		WorkspaceID:   parseUUID(workspaceID),
 		RecipientType: "member",
 		RecipientID:   parseUUID(userID),
 		Limit:         int32(limit),
@@ -173,8 +175,10 @@ func (h *Handler) CountUnreadInbox(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	workspaceID := r.Header.Get("X-Workspace-ID")
 
 	count, err := h.Queries.CountUnreadInbox(r.Context(), db.CountUnreadInboxParams{
+		WorkspaceID:   parseUUID(workspaceID),
 		RecipientType: "member",
 		RecipientID:   parseUUID(userID),
 	})
@@ -191,15 +195,18 @@ func (h *Handler) MarkAllInboxRead(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	workspaceID := r.Header.Get("X-Workspace-ID")
 
-	count, err := h.Queries.MarkAllInboxRead(r.Context(), parseUUID(userID))
+	count, err := h.Queries.MarkAllInboxRead(r.Context(), db.MarkAllInboxReadParams{
+		WorkspaceID: parseUUID(workspaceID),
+		RecipientID: parseUUID(userID),
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to mark all inbox read")
 		return
 	}
 
 	slog.Info("inbox: mark all read", append(logger.RequestAttrs(r), "user_id", userID, "count", count)...)
-	workspaceID := r.Header.Get("X-Workspace-ID")
 	h.publish(protocol.EventInboxBatchRead, workspaceID, "member", userID, map[string]any{
 		"recipient_id": userID,
 		"count":        count,
@@ -213,15 +220,18 @@ func (h *Handler) ArchiveAllInbox(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	workspaceID := r.Header.Get("X-Workspace-ID")
 
-	count, err := h.Queries.ArchiveAllInbox(r.Context(), parseUUID(userID))
+	count, err := h.Queries.ArchiveAllInbox(r.Context(), db.ArchiveAllInboxParams{
+		WorkspaceID: parseUUID(workspaceID),
+		RecipientID: parseUUID(userID),
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to archive all inbox")
 		return
 	}
 
 	slog.Info("inbox: archive all", append(logger.RequestAttrs(r), "user_id", userID, "count", count)...)
-	workspaceID := r.Header.Get("X-Workspace-ID")
 	h.publish(protocol.EventInboxBatchArchived, workspaceID, "member", userID, map[string]any{
 		"recipient_id": userID,
 		"count":        count,
@@ -235,15 +245,18 @@ func (h *Handler) ArchiveAllReadInbox(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	workspaceID := r.Header.Get("X-Workspace-ID")
 
-	count, err := h.Queries.ArchiveAllReadInbox(r.Context(), parseUUID(userID))
+	count, err := h.Queries.ArchiveAllReadInbox(r.Context(), db.ArchiveAllReadInboxParams{
+		WorkspaceID: parseUUID(workspaceID),
+		RecipientID: parseUUID(userID),
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to archive all read inbox")
 		return
 	}
 
 	slog.Info("inbox: archive all read", append(logger.RequestAttrs(r), "user_id", userID, "count", count)...)
-	workspaceID := r.Header.Get("X-Workspace-ID")
 	h.publish(protocol.EventInboxBatchArchived, workspaceID, "member", userID, map[string]any{
 		"recipient_id": userID,
 		"count":        count,
@@ -257,15 +270,18 @@ func (h *Handler) ArchiveCompletedInbox(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
+	workspaceID := r.Header.Get("X-Workspace-ID")
 
-	count, err := h.Queries.ArchiveCompletedInbox(r.Context(), parseUUID(userID))
+	count, err := h.Queries.ArchiveCompletedInbox(r.Context(), db.ArchiveCompletedInboxParams{
+		WorkspaceID: parseUUID(workspaceID),
+		RecipientID: parseUUID(userID),
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to archive completed inbox")
 		return
 	}
 
 	slog.Info("inbox: archive completed", append(logger.RequestAttrs(r), "user_id", userID, "count", count)...)
-	workspaceID := r.Header.Get("X-Workspace-ID")
 	h.publish(protocol.EventInboxBatchArchived, workspaceID, "member", userID, map[string]any{
 		"recipient_id": userID,
 		"count":        count,
