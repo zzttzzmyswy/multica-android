@@ -147,6 +147,36 @@ func Prepare(params PrepareParams, logger *slog.Logger) (*Environment, error) {
 	return env, nil
 }
 
+// Reuse wraps an existing workdir into an Environment and refreshes context files.
+// Returns nil if the workdir does not exist (caller should fall back to Prepare).
+func Reuse(workDir, provider string, task TaskContextForEnv, logger *slog.Logger) *Environment {
+	if _, err := os.Stat(workDir); err != nil {
+		return nil
+	}
+
+	env := &Environment{
+		RootDir: filepath.Dir(workDir),
+		WorkDir: workDir,
+		Type:    WorkspaceTypeDirectory,
+		logger:  logger,
+	}
+
+	// Detect if this is a git worktree.
+	if gitRoot, ok := detectGitRepo(workDir); ok {
+		env.Type = WorkspaceTypeGitWorktree
+		env.BranchName = getDefaultBranch(workDir)
+		env.gitRoot = gitRoot
+	}
+
+	// Refresh context files (issue_context.md, skills).
+	if err := writeContextFiles(workDir, provider, task); err != nil {
+		logger.Warn("execenv: refresh context files failed", "error", err)
+	}
+
+	logger.Info("execenv: reusing env", "workdir", workDir, "type", env.Type, "branch", env.BranchName)
+	return env
+}
+
 // Cleanup tears down the execution environment.
 // If removeAll is true, the entire env root is deleted. Otherwise, workdir is
 // removed but output/ and logs/ are preserved for debugging.
