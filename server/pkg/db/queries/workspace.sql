@@ -13,8 +13,8 @@ SELECT * FROM workspace
 WHERE slug = $1;
 
 -- name: CreateWorkspace :one
-INSERT INTO workspace (name, slug, description, context)
-VALUES ($1, $2, $3, $4)
+INSERT INTO workspace (name, slug, description, context, issue_prefix)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: UpdateWorkspace :one
@@ -24,9 +24,15 @@ UPDATE workspace SET
     context = COALESCE(sqlc.narg('context'), context),
     settings = COALESCE(sqlc.narg('settings'), settings),
     repos = COALESCE(sqlc.narg('repos'), repos),
+    issue_prefix = COALESCE(sqlc.narg('issue_prefix'), issue_prefix),
     updated_at = now()
 WHERE id = $1
 RETURNING *;
+
+-- name: IncrementIssueCounter :one
+UPDATE workspace SET issue_counter = issue_counter + 1
+WHERE id = $1
+RETURNING issue_counter;
 
 -- name: DeleteWorkspace :exec
 DELETE FROM workspace WHERE id = $1;

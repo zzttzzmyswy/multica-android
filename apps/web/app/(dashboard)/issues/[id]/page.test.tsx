@@ -134,6 +134,8 @@ vi.mock("@/shared/api", () => ({
 const mockIssue: Issue = {
   id: "issue-1",
   workspace_id: "ws-1",
+  number: 1,
+  identifier: "TES-1",
   title: "Implement authentication",
   description: "Add JWT auth to the backend",
   status: "in_progress",

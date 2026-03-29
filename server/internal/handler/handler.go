@@ -179,6 +179,14 @@ func (h *Handler) loadIssueForUser(w http.ResponseWriter, r *http.Request, issue
 		return db.Issue{}, false
 	}
 
+	// Try identifier format first (e.g., "JIA-42").
+	if issue, ok := h.resolveIssueByIdentifier(r.Context(), issueID, resolveWorkspaceID(r)); ok {
+		if _, ok := h.requireWorkspaceMember(w, r, uuidToString(issue.WorkspaceID), "issue not found"); !ok {
+			return db.Issue{}, false
+		}
+		return issue, true
+	}
+
 	issue, err := h.Queries.GetIssue(r.Context(), parseUUID(issueID))
 	if err != nil {
 		writeError(w, http.StatusNotFound, "issue not found")
@@ -190,6 +198,64 @@ func (h *Handler) loadIssueForUser(w http.ResponseWriter, r *http.Request, issue
 	}
 
 	return issue, true
+}
+
+// resolveIssueByIdentifier tries to look up an issue by "PREFIX-NUMBER" format.
+func (h *Handler) resolveIssueByIdentifier(ctx context.Context, id, workspaceID string) (db.Issue, bool) {
+	parts := splitIdentifier(id)
+	if parts == nil {
+		return db.Issue{}, false
+	}
+	if workspaceID == "" {
+		return db.Issue{}, false
+	}
+	issue, err := h.Queries.GetIssueByNumber(ctx, db.GetIssueByNumberParams{
+		WorkspaceID: parseUUID(workspaceID),
+		Number:      parts.number,
+	})
+	if err != nil {
+		return db.Issue{}, false
+	}
+	return issue, true
+}
+
+type identifierParts struct {
+	prefix string
+	number int32
+}
+
+func splitIdentifier(id string) *identifierParts {
+	idx := -1
+	for i := len(id) - 1; i >= 0; i-- {
+		if id[i] == '-' {
+			idx = i
+			break
+		}
+	}
+	if idx <= 0 || idx >= len(id)-1 {
+		return nil
+	}
+	numStr := id[idx+1:]
+	num := 0
+	for _, c := range numStr {
+		if c < '0' || c > '9' {
+			return nil
+		}
+		num = num*10 + int(c-'0')
+	}
+	if num <= 0 {
+		return nil
+	}
+	return &identifierParts{prefix: id[:idx], number: int32(num)}
+}
+
+// getIssuePrefix fetches the issue_prefix for a workspace.
+func (h *Handler) getIssuePrefix(ctx context.Context, workspaceID pgtype.UUID) string {
+	ws, err := h.Queries.GetWorkspace(ctx, workspaceID)
+	if err != nil {
+		return ""
+	}
+	return ws.IssuePrefix
 }
 
 func (h *Handler) loadAgentForUser(w http.ResponseWriter, r *http.Request, agentID string) (db.Agent, bool) {

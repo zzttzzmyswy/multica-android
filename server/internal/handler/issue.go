@@ -20,6 +20,8 @@ import (
 type IssueResponse struct {
 	ID                 string  `json:"id"`
 	WorkspaceID        string  `json:"workspace_id"`
+	Number             int32   `json:"number"`
+	Identifier         string  `json:"identifier"`
 	Title              string  `json:"title"`
 	Description        *string `json:"description"`
 	Status             string  `json:"status"`
@@ -41,10 +43,13 @@ type agentTriggerSnapshot struct {
 	Config  map[string]any `json:"config"`
 }
 
-func issueToResponse(i db.Issue) IssueResponse {
+func issueToResponse(i db.Issue, issuePrefix string) IssueResponse {
+	identifier := issuePrefix + "-" + strconv.Itoa(int(i.Number))
 	return IssueResponse{
 		ID:            uuidToString(i.ID),
 		WorkspaceID:   uuidToString(i.WorkspaceID),
+		Number:        i.Number,
+		Identifier:    identifier,
 		Title:         i.Title,
 		Description:   textToPtr(i.Description),
 		Status:        i.Status,
@@ -109,9 +114,10 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	prefix := h.getIssuePrefix(ctx, parseUUID(workspaceID))
 	resp := make([]IssueResponse, len(issues))
 	for i, issue := range issues {
-		resp[i] = issueToResponse(issue)
+		resp[i] = issueToResponse(issue, prefix)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -126,7 +132,8 @@ func (h *Handler) GetIssue(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, issueToResponse(issue))
+	prefix := h.getIssuePrefix(r.Context(), issue.WorkspaceID)
+	writeJSON(w, http.StatusOK, issueToResponse(issue, prefix))
 }
 
 type CreateIssueRequest struct {
@@ -196,7 +203,24 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 		dueDate = pgtype.Timestamptz{Time: t, Valid: true}
 	}
 
-	issue, err := h.Queries.CreateIssue(r.Context(), db.CreateIssueParams{
+	// Use a transaction to atomically increment the workspace issue counter
+	// and create the issue with the assigned number.
+	tx, err := h.TxStarter.Begin(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create issue")
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	qtx := h.Queries.WithTx(tx)
+	issueNumber, err := qtx.IncrementIssueCounter(r.Context(), parseUUID(workspaceID))
+	if err != nil {
+		slog.Warn("increment issue counter failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", workspaceID)...)
+		writeError(w, http.StatusInternalServerError, "failed to create issue")
+		return
+	}
+
+	issue, err := qtx.CreateIssue(r.Context(), db.CreateIssueParams{
 		WorkspaceID:        parseUUID(workspaceID),
 		Title:              req.Title,
 		Description:        ptrToText(req.Description),
@@ -209,6 +233,7 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 		ParentIssueID:      parentIssueID,
 		Position:           0,
 		DueDate:            dueDate,
+		Number:             issueNumber,
 	})
 	if err != nil {
 		slog.Warn("create issue failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", workspaceID)...)
@@ -216,7 +241,13 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := issueToResponse(issue)
+	if err := tx.Commit(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create issue")
+		return
+	}
+
+	prefix := h.getIssuePrefix(r.Context(), issue.WorkspaceID)
+	resp := issueToResponse(issue, prefix)
 	slog.Info("issue created", append(logger.RequestAttrs(r), "issue_id", uuidToString(issue.ID), "title", issue.Title, "status", issue.Status, "workspace_id", workspaceID)...)
 	h.publish(protocol.EventIssueCreated, workspaceID, "member", creatorID, map[string]any{"issue": resp})
 
@@ -326,7 +357,8 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := issueToResponse(issue)
+	prefix := h.getIssuePrefix(r.Context(), issue.WorkspaceID)
+	resp := issueToResponse(issue, prefix)
 	slog.Info("issue updated", append(logger.RequestAttrs(r), "issue_id", id, "workspace_id", workspaceID)...)
 
 	assigneeChanged := (req.AssigneeType != nil || req.AssigneeID != nil) &&
