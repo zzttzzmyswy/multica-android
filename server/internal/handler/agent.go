@@ -251,7 +251,7 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		req.Visibility = "workspace"
 	}
 	if req.MaxConcurrentTasks == 0 {
-		req.MaxConcurrentTasks = 1
+		req.MaxConcurrentTasks = 6
 	}
 
 	runtime, err := h.Queries.GetAgentRuntimeForWorkspace(r.Context(), db.GetAgentRuntimeForWorkspaceParams{

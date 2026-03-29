@@ -18,34 +18,37 @@ const (
 	DefaultRuntimeName          = "Local Agent"
 	DefaultConfigReloadInterval = 5 * time.Second
 	DefaultHealthPort           = 19514
+	DefaultMaxConcurrentTasks   = 20
 )
 
 // Config holds all daemon configuration.
 type Config struct {
-	ServerBaseURL     string
-	DaemonID          string
-	DeviceName        string
-	RuntimeName       string
-	Agents            map[string]AgentEntry // "claude" -> entry, "codex" -> entry
-	WorkspacesRoot    string                // base path for execution envs (default: ~/multica_workspaces)
-	KeepEnvAfterTask  bool                  // preserve env after task for debugging
-	HealthPort        int                   // local HTTP port for health checks (default: 19514)
-	PollInterval      time.Duration
-	HeartbeatInterval time.Duration
-	AgentTimeout      time.Duration
+	ServerBaseURL      string
+	DaemonID           string
+	DeviceName         string
+	RuntimeName        string
+	Agents             map[string]AgentEntry // "claude" -> entry, "codex" -> entry
+	WorkspacesRoot     string                // base path for execution envs (default: ~/multica_workspaces)
+	KeepEnvAfterTask   bool                  // preserve env after task for debugging
+	HealthPort         int                   // local HTTP port for health checks (default: 19514)
+	MaxConcurrentTasks int                   // max tasks running in parallel (default: 20)
+	PollInterval       time.Duration
+	HeartbeatInterval  time.Duration
+	AgentTimeout       time.Duration
 }
 
 // Overrides allows CLI flags to override environment variables and defaults.
 // Zero values are ignored and the env/default value is used instead.
 type Overrides struct {
-	ServerURL         string
-	WorkspacesRoot    string
-	PollInterval      time.Duration
-	HeartbeatInterval time.Duration
-	AgentTimeout      time.Duration
-	DaemonID          string
-	DeviceName        string
-	RuntimeName       string
+	ServerURL          string
+	WorkspacesRoot     string
+	PollInterval       time.Duration
+	HeartbeatInterval  time.Duration
+	AgentTimeout       time.Duration
+	MaxConcurrentTasks int
+	DaemonID           string
+	DeviceName         string
+	RuntimeName        string
 }
 
 // LoadConfig builds the daemon configuration from environment variables
@@ -112,6 +115,14 @@ func LoadConfig(overrides Overrides) (Config, error) {
 		agentTimeout = overrides.AgentTimeout
 	}
 
+	maxConcurrentTasks, err := intFromEnv("MULTICA_DAEMON_MAX_CONCURRENT_TASKS", DefaultMaxConcurrentTasks)
+	if err != nil {
+		return Config{}, err
+	}
+	if overrides.MaxConcurrentTasks > 0 {
+		maxConcurrentTasks = overrides.MaxConcurrentTasks
+	}
+
 	// String overrides
 	daemonID := envOrDefault("MULTICA_DAEMON_ID", host)
 	if overrides.DaemonID != "" {
@@ -149,17 +160,18 @@ func LoadConfig(overrides Overrides) (Config, error) {
 	keepEnv := os.Getenv("MULTICA_KEEP_ENV_AFTER_TASK") == "true" || os.Getenv("MULTICA_KEEP_ENV_AFTER_TASK") == "1"
 
 	return Config{
-		ServerBaseURL:     serverBaseURL,
-		DaemonID:          daemonID,
-		DeviceName:        deviceName,
-		RuntimeName:       runtimeName,
-		Agents:            agents,
-		WorkspacesRoot:    workspacesRoot,
-		KeepEnvAfterTask:  keepEnv,
-		HealthPort:        DefaultHealthPort,
-		PollInterval:      pollInterval,
-		HeartbeatInterval: heartbeatInterval,
-		AgentTimeout:      agentTimeout,
+		ServerBaseURL:      serverBaseURL,
+		DaemonID:           daemonID,
+		DeviceName:         deviceName,
+		RuntimeName:        runtimeName,
+		Agents:             agents,
+		WorkspacesRoot:     workspacesRoot,
+		KeepEnvAfterTask:   keepEnv,
+		HealthPort:         DefaultHealthPort,
+		MaxConcurrentTasks: maxConcurrentTasks,
+		PollInterval:       pollInterval,
+		HeartbeatInterval:  heartbeatInterval,
+		AgentTimeout:       agentTimeout,
 	}, nil
 }
 

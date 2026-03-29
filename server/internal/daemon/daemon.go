@@ -503,11 +503,22 @@ func (d *Daemon) usageScanLoop(ctx context.Context) {
 }
 
 func (d *Daemon) pollLoop(ctx context.Context) error {
+	sem := make(chan struct{}, d.cfg.MaxConcurrentTasks)
+	var wg sync.WaitGroup
+
 	pollOffset := 0
 	pollCount := 0
 	for {
 		select {
 		case <-ctx.Done():
+			d.logger.Info("poll loop stopping, waiting for in-flight tasks", "max_wait", "30s")
+			waitDone := make(chan struct{})
+			go func() { wg.Wait(); close(waitDone) }()
+			select {
+			case <-waitDone:
+			case <-time.After(30 * time.Second):
+				d.logger.Warn("timed out waiting for in-flight tasks")
+			}
 			return ctx.Err()
 		default:
 		}
@@ -515,6 +526,7 @@ func (d *Daemon) pollLoop(ctx context.Context) error {
 		runtimeIDs := d.allRuntimeIDs()
 		if len(runtimeIDs) == 0 {
 			if err := sleepWithContext(ctx, d.cfg.PollInterval); err != nil {
+				wg.Wait()
 				return err
 			}
 			continue
@@ -523,21 +535,40 @@ func (d *Daemon) pollLoop(ctx context.Context) error {
 		claimed := false
 		n := len(runtimeIDs)
 		for i := 0; i < n; i++ {
+			// Check if we have capacity before claiming.
+			select {
+			case sem <- struct{}{}:
+				// Acquired a slot.
+			default:
+				// All slots occupied, stop trying to claim.
+				d.logger.Debug("poll: at capacity", "running", d.cfg.MaxConcurrentTasks)
+				goto sleep
+			}
+
 			rid := runtimeIDs[(pollOffset+i)%n]
 			task, err := d.client.ClaimTask(ctx, rid)
 			if err != nil {
+				<-sem // Release the slot.
 				d.logger.Warn("claim task failed", "runtime_id", rid, "error", err)
 				continue
 			}
 			if task != nil {
 				d.logger.Info("task received", "task_id", task.ID, "issue_id", task.IssueID)
-				d.handleTask(ctx, *task)
+				wg.Add(1)
+				go func(t Task) {
+					defer wg.Done()
+					defer func() { <-sem }()
+					d.handleTask(ctx, t)
+				}(*task)
 				claimed = true
 				pollOffset = (pollOffset + i + 1) % n
 				break
 			}
+			// No task for this runtime, release the slot and try next.
+			<-sem
 		}
 
+	sleep:
 		if !claimed {
 			pollCount++
 			if pollCount%20 == 1 {
@@ -545,6 +576,7 @@ func (d *Daemon) pollLoop(ctx context.Context) error {
 			}
 			pollOffset = (pollOffset + 1) % n
 			if err := sleepWithContext(ctx, d.cfg.PollInterval); err != nil {
+				wg.Wait()
 				return err
 			}
 		} else {
@@ -562,6 +594,9 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 
 	if err := d.client.StartTask(ctx, task.ID); err != nil {
 		d.logger.Error("start task failed", "task_id", task.ID, "error", err)
+		if failErr := d.client.FailTask(ctx, task.ID, fmt.Sprintf("start task failed: %s", err.Error())); failErr != nil {
+			d.logger.Error("fail task after start error", "task_id", task.ID, "error", failErr)
+		}
 		return
 	}
 
@@ -594,7 +629,10 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 	default:
 		d.logger.Info("task completed", "task_id", task.ID, "status", result.Status)
 		if err := d.client.CompleteTask(ctx, task.ID, result.Comment, result.BranchName, result.SessionID, result.WorkDir); err != nil {
-			d.logger.Error("complete task failed", "task_id", task.ID, "error", err)
+			d.logger.Error("complete task failed, falling back to fail", "task_id", task.ID, "error", err)
+			if failErr := d.client.FailTask(ctx, task.ID, fmt.Sprintf("complete task failed: %s", err.Error())); failErr != nil {
+				d.logger.Error("fail task fallback also failed", "task_id", task.ID, "error", failErr)
+			}
 		}
 	}
 }

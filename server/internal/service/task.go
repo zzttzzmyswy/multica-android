@@ -209,7 +209,7 @@ func (s *TaskService) FailTask(ctx context.Context, taskID pgtype.UUID, errMsg s
 	})
 	if err != nil {
 		if existing, lookupErr := s.Queries.GetAgentTask(ctx, taskID); lookupErr == nil {
-			slog.Warn("fail task failed: task not in running state",
+			slog.Warn("fail task failed: task not in dispatched/running state",
 				"task_id", util.UUIDToString(taskID),
 				"current_status", existing.Status,
 				"issue_id", util.UUIDToString(existing.IssueID),
