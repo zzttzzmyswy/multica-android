@@ -332,6 +332,9 @@ func (s *TaskService) broadcastTaskDispatch(ctx context.Context, task db.AgentTa
 	if issue, err := s.Queries.GetIssue(ctx, task.IssueID); err == nil {
 		workspaceID = util.UUIDToString(issue.WorkspaceID)
 	}
+	if workspaceID == "" {
+		return // Issue deleted; skip broadcast to avoid global leak
+	}
 	s.Bus.Publish(events.Event{
 		Type:        protocol.EventTaskDispatch,
 		WorkspaceID: workspaceID,
@@ -345,6 +348,9 @@ func (s *TaskService) broadcastTaskEvent(ctx context.Context, eventType string, 
 	workspaceID := ""
 	if issue, err := s.Queries.GetIssue(ctx, task.IssueID); err == nil {
 		workspaceID = util.UUIDToString(issue.WorkspaceID)
+	}
+	if workspaceID == "" {
+		return // Issue deleted; skip broadcast to avoid global leak
 	}
 	s.Bus.Publish(events.Event{
 		Type:        eventType,
