@@ -28,7 +28,7 @@ function CommentInput({ onSubmit }: CommentInputProps) {
   };
 
   return (
-    <div className="rounded-lg border bg-card ring-1 ring-foreground/10">
+    <div className="rounded-lg bg-card ring-1 ring-border">
       <div className="min-h-20 max-h-48 overflow-y-auto px-3 py-2">
         <RichTextEditor
           ref={editorRef}

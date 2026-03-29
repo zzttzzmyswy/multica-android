@@ -152,7 +152,7 @@ function PropRow({
   return (
     <div className="flex min-h-8 items-center gap-2 rounded-md px-2 -mx-2 hover:bg-accent/50 transition-colors">
       <span className="w-16 shrink-0 text-xs text-muted-foreground">{label}</span>
-      <div className="flex min-w-0 flex-1 items-center gap-1.5 text-sm truncate">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 text-xs truncate">
         {children}
       </div>
     </div>
@@ -720,7 +720,7 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
 
         {/* Content — scrollable */}
         <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-3xl px-8 py-8">
+        <div className="mx-auto w-full max-w-4xl px-8 py-8">
           <input
             value={titleDraft}
             onChange={(e) => setTitleDraft(e.target.value)}
