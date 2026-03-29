@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 
+	"strconv"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/events"
@@ -361,13 +363,22 @@ func (s *TaskService) broadcastTaskEvent(ctx context.Context, eventType string, 
 }
 
 func (s *TaskService) broadcastIssueUpdated(issue db.Issue) {
+	prefix := s.getIssuePrefix(issue.WorkspaceID)
 	s.Bus.Publish(events.Event{
 		Type:        protocol.EventIssueUpdated,
 		WorkspaceID: util.UUIDToString(issue.WorkspaceID),
 		ActorType:   "system",
 		ActorID:     "",
-		Payload:     map[string]any{"issue": issueToMap(issue)},
+		Payload:     map[string]any{"issue": issueToMap(issue, prefix)},
 	})
+}
+
+func (s *TaskService) getIssuePrefix(workspaceID pgtype.UUID) string {
+	ws, err := s.Queries.GetWorkspace(context.Background(), workspaceID)
+	if err != nil {
+		return ""
+	}
+	return ws.IssuePrefix
 }
 
 func (s *TaskService) createAgentComment(ctx context.Context, issueID, agentID pgtype.UUID, content, commentType string) {
@@ -410,23 +421,25 @@ func (s *TaskService) createAgentComment(ctx context.Context, issueID, agentID p
 	})
 }
 
-func issueToMap(issue db.Issue) map[string]any {
+func issueToMap(issue db.Issue, issuePrefix string) map[string]any {
 	return map[string]any{
-		"id":             util.UUIDToString(issue.ID),
-		"workspace_id":   util.UUIDToString(issue.WorkspaceID),
-		"title":          issue.Title,
-		"description":    util.TextToPtr(issue.Description),
-		"status":         issue.Status,
-		"priority":       issue.Priority,
-		"assignee_type":  util.TextToPtr(issue.AssigneeType),
-		"assignee_id":    util.UUIDToPtr(issue.AssigneeID),
-		"creator_type":   issue.CreatorType,
-		"creator_id":     util.UUIDToString(issue.CreatorID),
+		"id":              util.UUIDToString(issue.ID),
+		"workspace_id":    util.UUIDToString(issue.WorkspaceID),
+		"number":          issue.Number,
+		"identifier":      issuePrefix + "-" + strconv.Itoa(int(issue.Number)),
+		"title":           issue.Title,
+		"description":     util.TextToPtr(issue.Description),
+		"status":          issue.Status,
+		"priority":        issue.Priority,
+		"assignee_type":   util.TextToPtr(issue.AssigneeType),
+		"assignee_id":     util.UUIDToPtr(issue.AssigneeID),
+		"creator_type":    issue.CreatorType,
+		"creator_id":      util.UUIDToString(issue.CreatorID),
 		"parent_issue_id": util.UUIDToPtr(issue.ParentIssueID),
-		"position":       issue.Position,
-		"due_date":       util.TimestampToPtr(issue.DueDate),
-		"created_at":     util.TimestampToString(issue.CreatedAt),
-		"updated_at":     util.TimestampToString(issue.UpdatedAt),
+		"position":        issue.Position,
+		"due_date":        util.TimestampToPtr(issue.DueDate),
+		"created_at":      util.TimestampToString(issue.CreatedAt),
+		"updated_at":      util.TimestampToString(issue.UpdatedAt),
 	}
 }
 

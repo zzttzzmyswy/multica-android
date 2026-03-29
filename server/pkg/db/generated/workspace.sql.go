@@ -12,9 +12,9 @@ import (
 )
 
 const createWorkspace = `-- name: CreateWorkspace :one
-INSERT INTO workspace (name, slug, description, context)
-VALUES ($1, $2, $3, $4)
-RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos
+INSERT INTO workspace (name, slug, description, context, issue_prefix)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter
 `
 
 type CreateWorkspaceParams struct {
@@ -22,6 +22,7 @@ type CreateWorkspaceParams struct {
 	Slug        string      `json:"slug"`
 	Description pgtype.Text `json:"description"`
 	Context     pgtype.Text `json:"context"`
+	IssuePrefix string      `json:"issue_prefix"`
 }
 
 func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) (Workspace, error) {
@@ -30,6 +31,7 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 		arg.Slug,
 		arg.Description,
 		arg.Context,
+		arg.IssuePrefix,
 	)
 	var i Workspace
 	err := row.Scan(
@@ -42,6 +44,8 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 		&i.UpdatedAt,
 		&i.Context,
 		&i.Repos,
+		&i.IssuePrefix,
+		&i.IssueCounter,
 	)
 	return i, err
 }
@@ -56,7 +60,7 @@ func (q *Queries) DeleteWorkspace(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getWorkspace = `-- name: GetWorkspace :one
-SELECT id, name, slug, description, settings, created_at, updated_at, context, repos FROM workspace
+SELECT id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter FROM workspace
 WHERE id = $1
 `
 
@@ -73,12 +77,14 @@ func (q *Queries) GetWorkspace(ctx context.Context, id pgtype.UUID) (Workspace, 
 		&i.UpdatedAt,
 		&i.Context,
 		&i.Repos,
+		&i.IssuePrefix,
+		&i.IssueCounter,
 	)
 	return i, err
 }
 
 const getWorkspaceBySlug = `-- name: GetWorkspaceBySlug :one
-SELECT id, name, slug, description, settings, created_at, updated_at, context, repos FROM workspace
+SELECT id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter FROM workspace
 WHERE slug = $1
 `
 
@@ -95,12 +101,27 @@ func (q *Queries) GetWorkspaceBySlug(ctx context.Context, slug string) (Workspac
 		&i.UpdatedAt,
 		&i.Context,
 		&i.Repos,
+		&i.IssuePrefix,
+		&i.IssueCounter,
 	)
 	return i, err
 }
 
+const incrementIssueCounter = `-- name: IncrementIssueCounter :one
+UPDATE workspace SET issue_counter = issue_counter + 1
+WHERE id = $1
+RETURNING issue_counter
+`
+
+func (q *Queries) IncrementIssueCounter(ctx context.Context, id pgtype.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, incrementIssueCounter, id)
+	var issue_counter int32
+	err := row.Scan(&issue_counter)
+	return issue_counter, err
+}
+
 const listWorkspaces = `-- name: ListWorkspaces :many
-SELECT w.id, w.name, w.slug, w.description, w.settings, w.created_at, w.updated_at, w.context, w.repos FROM workspace w
+SELECT w.id, w.name, w.slug, w.description, w.settings, w.created_at, w.updated_at, w.context, w.repos, w.issue_prefix, w.issue_counter FROM workspace w
 JOIN member m ON m.workspace_id = w.id
 WHERE m.user_id = $1
 ORDER BY w.created_at ASC
@@ -125,6 +146,8 @@ func (q *Queries) ListWorkspaces(ctx context.Context, userID pgtype.UUID) ([]Wor
 			&i.UpdatedAt,
 			&i.Context,
 			&i.Repos,
+			&i.IssuePrefix,
+			&i.IssueCounter,
 		); err != nil {
 			return nil, err
 		}
@@ -143,9 +166,10 @@ UPDATE workspace SET
     context = COALESCE($4, context),
     settings = COALESCE($5, settings),
     repos = COALESCE($6, repos),
+    issue_prefix = COALESCE($7, issue_prefix),
     updated_at = now()
 WHERE id = $1
-RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos
+RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter
 `
 
 type UpdateWorkspaceParams struct {
@@ -155,6 +179,7 @@ type UpdateWorkspaceParams struct {
 	Context     pgtype.Text `json:"context"`
 	Settings    []byte      `json:"settings"`
 	Repos       []byte      `json:"repos"`
+	IssuePrefix pgtype.Text `json:"issue_prefix"`
 }
 
 func (q *Queries) UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams) (Workspace, error) {
@@ -165,6 +190,7 @@ func (q *Queries) UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams
 		arg.Context,
 		arg.Settings,
 		arg.Repos,
+		arg.IssuePrefix,
 	)
 	var i Workspace
 	err := row.Scan(
@@ -177,6 +203,8 @@ func (q *Queries) UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams
 		&i.UpdatedAt,
 		&i.Context,
 		&i.Repos,
+		&i.IssuePrefix,
+		&i.IssueCounter,
 	)
 	return i, err
 }

@@ -14,6 +14,8 @@ export type IssueAssigneeType = "member" | "agent";
 export interface Issue {
   id: string;
   workspace_id: string;
+  number: number;
+  identifier: string;
   title: string;
   description: string | null;
   status: IssueStatus;
