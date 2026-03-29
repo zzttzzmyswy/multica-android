@@ -375,6 +375,32 @@ func (h *Handler) shouldEnqueueAgentTask(ctx context.Context, issue db.Issue) bo
 	if issue.Status != "todo" {
 		return false
 	}
+	return h.isAgentTriggerEnabled(ctx, issue, "on_assign")
+}
+
+// shouldEnqueueOnComment returns true if a member comment on this issue should
+// trigger the assigned agent. Conditions: issue is assigned to an agent, the
+// agent has on_comment trigger enabled, and no task is already active.
+func (h *Handler) shouldEnqueueOnComment(ctx context.Context, issue db.Issue) bool {
+	// Don't trigger on terminal statuses.
+	if issue.Status == "done" || issue.Status == "cancelled" {
+		return false
+	}
+	if !h.isAgentTriggerEnabled(ctx, issue, "on_comment") {
+		return false
+	}
+	// Don't enqueue if there's already an active task for this issue.
+	hasActive, err := h.Queries.HasActiveTaskForIssue(ctx, issue.ID)
+	if err != nil || hasActive {
+		return false
+	}
+	return true
+}
+
+// isAgentTriggerEnabled checks if an issue is assigned to an agent with a
+// specific trigger type enabled. Returns true if the agent has no triggers
+// configured (default-enabled behavior).
+func (h *Handler) isAgentTriggerEnabled(ctx context.Context, issue db.Issue, triggerType string) bool {
 	if !issue.AssigneeType.Valid || issue.AssigneeType.String != "agent" || !issue.AssigneeID.Valid {
 		return false
 	}
@@ -392,7 +418,7 @@ func (h *Handler) shouldEnqueueAgentTask(ctx context.Context, issue db.Issue) bo
 		return false
 	}
 	for _, trigger := range triggers {
-		if trigger.Type == "on_assign" && trigger.Enabled {
+		if trigger.Type == triggerType && trigger.Enabled {
 			return true
 		}
 	}
