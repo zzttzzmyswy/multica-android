@@ -62,7 +62,7 @@ export function BoardCardContent({
   const showBottom = showAssignee || showDueDate;
 
   return (
-    <div className="rounded-lg border bg-card p-3.5 shadow-[0_1px_2px_0_rgba(0,0,0,0.03)]">
+    <div className="rounded-lg border bg-card p-3.5 shadow-[0_1px_2px_0_rgba(0,0,0,0.03)] transition-shadow group-hover:shadow-md">
       {/* Priority */}
       {showPriority &&
         (editable ? (
@@ -91,7 +91,7 @@ export function BoardCardContent({
 
       {/* Title */}
       <p
-        className={`text-sm font-medium leading-snug line-clamp-2 ${showPriority ? "mt-2" : ""}`}
+        className={`text-sm font-medium leading-snug line-clamp-2 text-muted-foreground transition-colors group-hover:text-foreground ${showPriority ? "mt-2" : ""}`}
       >
         {issue.title}
       </p>
@@ -197,7 +197,7 @@ export function DraggableBoardCard({ issue }: { issue: Issue }) {
     >
       <Link
         href={`/issues/${issue.id}`}
-        className={`block transition-colors hover:opacity-80 ${isDragging ? "pointer-events-none" : ""}`}
+        className={`group block transition-colors ${isDragging ? "pointer-events-none" : ""}`}
       >
         <BoardCardContent issue={issue} editable />
       </Link>
