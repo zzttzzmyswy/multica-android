@@ -1,38 +1,10 @@
-"use client";
-
-import { useState } from "react";
-import { Trash2 } from "lucide-react";
 import type { AgentRuntime } from "@/shared/types";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { formatLastSeen } from "../utils";
-import { useRuntimeStore } from "../store";
 import { RuntimeModeIcon, StatusBadge, InfoField } from "./shared";
 import { PingSection } from "./ping-section";
 import { UsageSection } from "./usage-section";
 
 export function RuntimeDetail({ runtime }: { runtime: AgentRuntime }) {
-  const [showDelete, setShowDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const deleteRuntime = useRuntimeStore((s) => s.deleteRuntime);
-
-  const handleDelete = async () => {
-    setDeleting(true);
-    try {
-      await deleteRuntime(runtime.id);
-    } finally {
-      setDeleting(false);
-      setShowDelete(false);
-    }
-  };
-
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
@@ -49,17 +21,7 @@ export function RuntimeDetail({ runtime }: { runtime: AgentRuntime }) {
             <h2 className="text-sm font-semibold truncate">{runtime.name}</h2>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <StatusBadge status={runtime.status} />
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => setShowDelete(true)}
-            className="text-muted-foreground hover:text-destructive"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+        <StatusBadge status={runtime.status} />
       </div>
 
       {/* Content */}
@@ -123,36 +85,6 @@ export function RuntimeDetail({ runtime }: { runtime: AgentRuntime }) {
           />
         </div>
       </div>
-
-      {/* Delete confirmation dialog */}
-      <Dialog open={showDelete} onOpenChange={setShowDelete}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Runtime</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete &quot;{runtime.name}&quot;? This
-              will remove the runtime and its usage data. This action cannot be
-              undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowDelete(false)}
-              disabled={deleting}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={deleting}
-            >
-              {deleting ? "Deleting..." : "Delete"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

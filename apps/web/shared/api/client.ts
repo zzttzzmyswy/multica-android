@@ -283,10 +283,6 @@ export class ApiClient {
     return this.fetch(`/api/runtimes/${runtimeId}/activity`);
   }
 
-  async deleteRuntime(runtimeId: string): Promise<void> {
-    await this.fetch(`/api/runtimes/${runtimeId}`, { method: "DELETE" });
-  }
-
   async pingRuntime(runtimeId: string): Promise<RuntimePing> {
     return this.fetch(`/api/runtimes/${runtimeId}/ping`, { method: "POST" });
   }

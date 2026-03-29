@@ -192,26 +192,6 @@ func (h *Handler) GetRuntimeTaskActivity(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, resp)
 }
 
-func (h *Handler) DeleteAgentRuntime(w http.ResponseWriter, r *http.Request) {
-	runtimeID := chi.URLParam(r, "runtimeId")
-	workspaceID := resolveWorkspaceID(r)
-
-	if _, ok := h.requireWorkspaceMember(w, r, workspaceID, "runtime not found"); !ok {
-		return
-	}
-
-	err := h.Queries.DeleteAgentRuntime(r.Context(), db.DeleteAgentRuntimeParams{
-		ID:          parseUUID(runtimeID),
-		WorkspaceID: parseUUID(workspaceID),
-	})
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to delete runtime")
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
-}
-
 func (h *Handler) ListAgentRuntimes(w http.ResponseWriter, r *http.Request) {
 	workspaceID := resolveWorkspaceID(r)
 	if _, ok := h.requireWorkspaceMember(w, r, workspaceID, "workspace not found"); !ok {

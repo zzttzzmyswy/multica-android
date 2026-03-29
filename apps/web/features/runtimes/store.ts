@@ -18,8 +18,6 @@ interface RuntimeActions {
   patchRuntime: (id: string, updates: Partial<AgentRuntime>) => void;
   /** Replace the full runtimes list (used on daemon:register events). */
   setRuntimes: (runtimes: AgentRuntime[]) => void;
-  /** Delete a runtime by ID (calls API). */
-  deleteRuntime: (id: string) => Promise<void>;
 }
 
 type RuntimeStore = RuntimeState & RuntimeActions;
@@ -67,18 +65,6 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
       selectedId: selectedId && runtimes.some((r) => r.id === selectedId)
         ? selectedId
         : runtimes[0]?.id ?? "",
-    });
-  },
-
-  deleteRuntime: async (id) => {
-    await api.deleteRuntime(id);
-    const remaining = get().runtimes.filter((r) => r.id !== id);
-    const { selectedId } = get();
-    set({
-      runtimes: remaining,
-      selectedId: selectedId === id
-        ? remaining[0]?.id ?? ""
-        : selectedId,
     });
   },
 }));

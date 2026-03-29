@@ -11,21 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const deleteAgentRuntime = `-- name: DeleteAgentRuntime :exec
-DELETE FROM agent_runtime
-WHERE id = $1 AND workspace_id = $2
-`
-
-type DeleteAgentRuntimeParams struct {
-	ID          pgtype.UUID `json:"id"`
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-}
-
-func (q *Queries) DeleteAgentRuntime(ctx context.Context, arg DeleteAgentRuntimeParams) error {
-	_, err := q.db.Exec(ctx, deleteAgentRuntime, arg.ID, arg.WorkspaceID)
-	return err
-}
-
 const getAgentRuntime = `-- name: GetAgentRuntime :one
 SELECT id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at FROM agent_runtime
 WHERE id = $1
