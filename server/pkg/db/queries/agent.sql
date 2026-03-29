@@ -90,8 +90,18 @@ LIMIT 1;
 -- name: FailAgentTask :one
 UPDATE agent_task_queue
 SET status = 'failed', completed_at = now(), error = $2
-WHERE id = $1 AND status = 'running'
+WHERE id = $1 AND status IN ('dispatched', 'running')
 RETURNING *;
+
+-- name: FailStaleTasks :many
+-- Fails tasks stuck in dispatched/running beyond the given thresholds.
+-- Handles cases where the daemon is alive but the task is orphaned
+-- (e.g. agent process hung, daemon failed to report completion).
+UPDATE agent_task_queue
+SET status = 'failed', completed_at = now(), error = 'task timed out'
+WHERE (status = 'dispatched' AND dispatched_at < now() - make_interval(secs => @dispatch_timeout_secs::double precision))
+   OR (status = 'running' AND started_at < now() - make_interval(secs => @running_timeout_secs::double precision))
+RETURNING id, agent_id, issue_id;
 
 -- name: CountRunningTasks :one
 SELECT count(*) FROM agent_task_queue

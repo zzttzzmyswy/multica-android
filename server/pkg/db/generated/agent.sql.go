@@ -229,7 +229,7 @@ func (q *Queries) DeleteAgent(ctx context.Context, id pgtype.UUID) error {
 const failAgentTask = `-- name: FailAgentTask :one
 UPDATE agent_task_queue
 SET status = 'failed', completed_at = now(), error = $2
-WHERE id = $1 AND status = 'running'
+WHERE id = $1 AND status IN ('dispatched', 'running')
 RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir
 `
 
@@ -259,6 +259,48 @@ func (q *Queries) FailAgentTask(ctx context.Context, arg FailAgentTaskParams) (A
 		&i.WorkDir,
 	)
 	return i, err
+}
+
+const failStaleTasks = `-- name: FailStaleTasks :many
+UPDATE agent_task_queue
+SET status = 'failed', completed_at = now(), error = 'task timed out'
+WHERE (status = 'dispatched' AND dispatched_at < now() - make_interval(secs => $1::double precision))
+   OR (status = 'running' AND started_at < now() - make_interval(secs => $2::double precision))
+RETURNING id, agent_id, issue_id
+`
+
+type FailStaleTasksParams struct {
+	DispatchTimeoutSecs float64 `json:"dispatch_timeout_secs"`
+	RunningTimeoutSecs  float64 `json:"running_timeout_secs"`
+}
+
+type FailStaleTasksRow struct {
+	ID      pgtype.UUID `json:"id"`
+	AgentID pgtype.UUID `json:"agent_id"`
+	IssueID pgtype.UUID `json:"issue_id"`
+}
+
+// Fails tasks stuck in dispatched/running beyond the given thresholds.
+// Handles cases where the daemon is alive but the task is orphaned
+// (e.g. agent process hung, daemon failed to report completion).
+func (q *Queries) FailStaleTasks(ctx context.Context, arg FailStaleTasksParams) ([]FailStaleTasksRow, error) {
+	rows, err := q.db.Query(ctx, failStaleTasks, arg.DispatchTimeoutSecs, arg.RunningTimeoutSecs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FailStaleTasksRow{}
+	for rows.Next() {
+		var i FailStaleTasksRow
+		if err := rows.Scan(&i.ID, &i.AgentID, &i.IssueID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getAgent = `-- name: GetAgent :one

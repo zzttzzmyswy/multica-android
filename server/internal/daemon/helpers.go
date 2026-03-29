@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -26,6 +27,18 @@ func durationFromEnv(key string, fallback time.Duration) (time.Duration, error) 
 		return 0, fmt.Errorf("%s: invalid duration %q: %w", key, value, err)
 	}
 	return d, nil
+}
+
+func intFromEnv(key string, fallback int) (int, error) {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback, nil
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("%s: invalid integer %q: %w", key, value, err)
+	}
+	return n, nil
 }
 
 func sleepWithContext(ctx context.Context, d time.Duration) error {
