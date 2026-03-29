@@ -484,6 +484,10 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                 <ChevronRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
               </>
             )}
+            <span className="truncate text-muted-foreground">
+              {issue.identifier}
+            </span>
+            <ChevronRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
             <span className="truncate">{issue.title}</span>
           </div>
           <div className="flex items-center gap-1 shrink-0">
