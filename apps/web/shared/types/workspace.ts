@@ -13,6 +13,7 @@ export interface Workspace {
   context: string | null;
   settings: Record<string, unknown>;
   repos: WorkspaceRepo[];
+  issue_prefix: string;
   created_at: string;
   updated_at: string;
 }

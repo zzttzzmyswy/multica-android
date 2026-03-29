@@ -15,10 +15,14 @@ WHERE id = $1;
 INSERT INTO issue (
     workspace_id, title, description, status, priority,
     assignee_type, assignee_id, creator_type, creator_id,
-    parent_issue_id, position, due_date
+    parent_issue_id, position, due_date, number
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
 ) RETURNING *;
+
+-- name: GetIssueByNumber :one
+SELECT * FROM issue
+WHERE workspace_id = $1 AND number = $2;
 
 -- name: UpdateIssue :one
 UPDATE issue SET

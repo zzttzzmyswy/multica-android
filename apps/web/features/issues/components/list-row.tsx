@@ -20,7 +20,7 @@ export function ListRow({ issue }: { issue: Issue }) {
     >
       <PriorityIcon priority={issue.priority} />
       <span className="w-16 shrink-0 text-xs text-muted-foreground">
-        {issue.id.slice(0, 8)}
+        {issue.identifier}
       </span>
       <span className="min-w-0 flex-1 truncate">{issue.title}</span>
       {issue.due_date && (

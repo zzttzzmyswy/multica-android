@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -13,6 +14,22 @@ import (
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
+var nonAlpha = regexp.MustCompile(`[^a-zA-Z]`)
+
+// generateIssuePrefix produces a 2-5 char uppercase prefix from a workspace name.
+// Examples: "Jiayuan's Workspace" → "JIA", "My Team" → "MYT", "AB" → "AB".
+func generateIssuePrefix(name string) string {
+	letters := nonAlpha.ReplaceAllString(name, "")
+	if len(letters) == 0 {
+		return "WS"
+	}
+	letters = strings.ToUpper(letters)
+	if len(letters) > 3 {
+		letters = letters[:3]
+	}
+	return letters
+}
+
 type WorkspaceResponse struct {
 	ID          string  `json:"id"`
 	Name        string  `json:"name"`
@@ -21,6 +38,7 @@ type WorkspaceResponse struct {
 	Context     *string `json:"context"`
 	Settings    any     `json:"settings"`
 	Repos       any     `json:"repos"`
+	IssuePrefix string  `json:"issue_prefix"`
 	CreatedAt   string  `json:"created_at"`
 	UpdatedAt   string  `json:"updated_at"`
 }
@@ -48,6 +66,7 @@ func workspaceToResponse(w db.Workspace) WorkspaceResponse {
 		Context:     textToPtr(w.Context),
 		Settings:    settings,
 		Repos:       repos,
+		IssuePrefix: w.IssuePrefix,
 		CreatedAt:   timestampToString(w.CreatedAt),
 		UpdatedAt:   timestampToString(w.UpdatedAt),
 	}
@@ -110,6 +129,7 @@ type CreateWorkspaceRequest struct {
 	Slug        string  `json:"slug"`
 	Description *string `json:"description"`
 	Context     *string `json:"context"`
+	IssuePrefix *string `json:"issue_prefix"`
 }
 
 func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
@@ -138,12 +158,18 @@ func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 
+	issuePrefix := generateIssuePrefix(req.Name)
+	if req.IssuePrefix != nil && strings.TrimSpace(*req.IssuePrefix) != "" {
+		issuePrefix = strings.ToUpper(strings.TrimSpace(*req.IssuePrefix))
+	}
+
 	qtx := h.Queries.WithTx(tx)
 	ws, err := qtx.CreateWorkspace(r.Context(), db.CreateWorkspaceParams{
 		Name:        req.Name,
 		Slug:        req.Slug,
 		Description: ptrToText(req.Description),
 		Context:     ptrToText(req.Context),
+		IssuePrefix: issuePrefix,
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -179,6 +205,7 @@ type UpdateWorkspaceRequest struct {
 	Context     *string `json:"context"`
 	Settings    any     `json:"settings"`
 	Repos       any     `json:"repos"`
+	IssuePrefix *string `json:"issue_prefix"`
 }
 
 func (h *Handler) UpdateWorkspace(w http.ResponseWriter, r *http.Request) {
@@ -217,6 +244,12 @@ func (h *Handler) UpdateWorkspace(w http.ResponseWriter, r *http.Request) {
 	if req.Repos != nil {
 		reposJSON, _ := json.Marshal(req.Repos)
 		params.Repos = reposJSON
+	}
+	if req.IssuePrefix != nil {
+		prefix := strings.ToUpper(strings.TrimSpace(*req.IssuePrefix))
+		if prefix != "" {
+			params.IssuePrefix = pgtype.Text{String: prefix, Valid: true}
+		}
 	}
 
 	ws, err := h.Queries.UpdateWorkspace(r.Context(), params)
