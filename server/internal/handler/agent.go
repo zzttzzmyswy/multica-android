@@ -96,6 +96,7 @@ type AgentTaskResponse struct {
 	Agent          *TaskAgentData `json:"agent,omitempty"`
 	CreatedAt      string         `json:"created_at"`
 	PriorSessionID string         `json:"prior_session_id,omitempty"` // session ID from a previous task on same issue
+	PriorWorkDir   string         `json:"prior_work_dir,omitempty"`   // work_dir from a previous task on same issue
 }
 
 // TaskAgentData holds agent info included in claim responses so the daemon

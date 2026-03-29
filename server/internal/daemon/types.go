@@ -23,6 +23,7 @@ type Task struct {
 	IssueID        string     `json:"issue_id"`
 	Agent          *AgentData `json:"agent,omitempty"`
 	PriorSessionID string     `json:"prior_session_id,omitempty"` // Claude session ID from a previous task on this issue
+	PriorWorkDir   string     `json:"prior_work_dir,omitempty"`   // work_dir from a previous task on this issue
 }
 
 // AgentData holds agent details returned by the claim endpoint.
