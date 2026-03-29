@@ -51,7 +51,8 @@ func (h *Handler) DaemonRegister(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "at least one runtime is required")
 		return
 	}
-	if _, err := h.Queries.GetWorkspace(r.Context(), parseUUID(req.WorkspaceID)); err != nil {
+	ws, err := h.Queries.GetWorkspace(r.Context(), parseUUID(req.WorkspaceID))
+	if err != nil {
 		writeError(w, http.StatusNotFound, "workspace not found")
 		return
 	}
@@ -106,7 +107,16 @@ func (h *Handler) DaemonRegister(w http.ResponseWriter, r *http.Request) {
 		"runtimes": resp,
 	})
 
-	writeJSON(w, http.StatusOK, map[string]any{"runtimes": resp})
+	// Include workspace repos so the daemon can cache them locally.
+	var repos []RepoData
+	if ws.Repos != nil {
+		json.Unmarshal(ws.Repos, &repos)
+	}
+	if repos == nil {
+		repos = []RepoData{}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"runtimes": resp, "repos": repos})
 }
 
 // DaemonDeregister marks runtimes as offline when the daemon shuts down.
@@ -214,6 +224,16 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 			Name:         agent.Name,
 			Instructions: agent.Instructions,
 			Skills:       skills,
+		}
+	}
+
+	// Include workspace repos so the daemon can set up worktrees.
+	if issue, err := h.Queries.GetIssue(r.Context(), task.IssueID); err == nil {
+		if ws, err := h.Queries.GetWorkspace(r.Context(), issue.WorkspaceID); err == nil && ws.Repos != nil {
+			var repos []RepoData
+			if json.Unmarshal(ws.Repos, &repos) == nil && len(repos) > 0 {
+				resp.Repos = repos
+			}
 		}
 	}
 

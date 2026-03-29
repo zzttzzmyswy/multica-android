@@ -11,30 +11,65 @@ import (
 	"time"
 )
 
-// detectGitRepo checks if dir is inside a git repository.
+// detectGitRepo checks if dir is inside a git repository (regular or bare).
 // Returns the git root path and true if found.
 func detectGitRepo(dir string) (string, bool) {
+	// Try regular repo first.
 	cmd := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel")
-	out, err := cmd.Output()
-	if err != nil {
-		return "", false
+	if out, err := cmd.Output(); err == nil {
+		return strings.TrimSpace(string(out)), true
 	}
-	return strings.TrimSpace(string(out)), true
+
+	// Try bare repo: git-dir is "." for bare repos when -C points at the repo.
+	cmd = exec.Command("git", "-C", dir, "rev-parse", "--is-bare-repository")
+	if out, err := cmd.Output(); err == nil && strings.TrimSpace(string(out)) == "true" {
+		return dir, true
+	}
+
+	return "", false
 }
 
-// getDefaultBranch returns the current branch name of the git repo, falling back to HEAD.
-func getDefaultBranch(gitRoot string) string {
-	cmd := exec.Command("git", "-C", gitRoot, "symbolic-ref", "--short", "HEAD")
-	out, err := cmd.Output()
-	if err != nil {
-		return "HEAD"
+// fetchOrigin runs `git fetch origin` to ensure the local repo has the latest remote refs.
+func fetchOrigin(gitRoot string) error {
+	cmd := exec.Command("git", "-C", gitRoot, "fetch", "origin")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git fetch origin: %s: %w", strings.TrimSpace(string(out)), err)
 	}
-	return strings.TrimSpace(string(out))
+	return nil
+}
+
+// getRemoteDefaultBranch returns "origin/<branch>" for the remote's default branch.
+// Falls back to "origin/main", then "HEAD".
+func getRemoteDefaultBranch(gitRoot string) string {
+	// Try symbolic-ref of origin/HEAD (set by `git clone` or `git remote set-head`).
+	cmd := exec.Command("git", "-C", gitRoot, "symbolic-ref", "refs/remotes/origin/HEAD")
+	if out, err := cmd.Output(); err == nil {
+		ref := strings.TrimSpace(string(out))
+		// ref looks like "refs/remotes/origin/main" — return "origin/main".
+		if strings.HasPrefix(ref, "refs/remotes/") {
+			return strings.TrimPrefix(ref, "refs/remotes/")
+		}
+		return ref
+	}
+
+	// Fallback: check if origin/main exists.
+	cmd = exec.Command("git", "-C", gitRoot, "rev-parse", "--verify", "origin/main")
+	if err := cmd.Run(); err == nil {
+		return "origin/main"
+	}
+
+	// Fallback: check if origin/master exists.
+	cmd = exec.Command("git", "-C", gitRoot, "rev-parse", "--verify", "origin/master")
+	if err := cmd.Run(); err == nil {
+		return "origin/master"
+	}
+
+	return "HEAD"
 }
 
 // setupGitWorktree creates a git worktree at worktreePath with a new branch.
 func setupGitWorktree(gitRoot, worktreePath, branchName, baseRef string) error {
-	// Remove the workdir created by Prepare — git worktree add needs to create it.
+	// Remove the workdir created by caller — git worktree add needs to create it.
 	if err := os.Remove(worktreePath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove placeholder workdir: %w", err)
 	}
@@ -110,6 +145,32 @@ func excludeFromGit(worktreePath, pattern string) error {
 		return fmt.Errorf("write exclude pattern: %w", err)
 	}
 	return nil
+}
+
+// repoNameFromURL extracts a short directory name from a git remote URL.
+// e.g. "https://github.com/org/my-repo.git" → "my-repo"
+func repoNameFromURL(url string) string {
+	// Strip trailing slashes and .git suffix.
+	url = strings.TrimRight(url, "/")
+	url = strings.TrimSuffix(url, ".git")
+
+	// Take the last path segment.
+	if i := strings.LastIndex(url, "/"); i >= 0 {
+		url = url[i+1:]
+	}
+	// Also handle SSH-style "host:org/repo".
+	if i := strings.LastIndex(url, ":"); i >= 0 {
+		url = url[i+1:]
+		if j := strings.LastIndex(url, "/"); j >= 0 {
+			url = url[j+1:]
+		}
+	}
+
+	name := strings.TrimSpace(url)
+	if name == "" {
+		return "repo"
+	}
+	return name
 }
 
 // shortID returns the first 8 characters of a UUID string (dashes stripped).

@@ -81,6 +81,13 @@ func agentToResponse(a db.Agent) AgentResponse {
 	}
 }
 
+// RepoData holds repository information included in claim responses so the
+// daemon can set up worktrees for each workspace repo.
+type RepoData struct {
+	URL         string `json:"url"`
+	Description string `json:"description"`
+}
+
 type AgentTaskResponse struct {
 	ID             string         `json:"id"`
 	AgentID        string         `json:"agent_id"`
@@ -94,6 +101,7 @@ type AgentTaskResponse struct {
 	Result         any            `json:"result"`
 	Error          *string        `json:"error"`
 	Agent          *TaskAgentData `json:"agent,omitempty"`
+	Repos          []RepoData     `json:"repos,omitempty"`
 	CreatedAt      string         `json:"created_at"`
 	PriorSessionID string         `json:"prior_session_id,omitempty"` // session ID from a previous task on same issue
 	PriorWorkDir   string         `json:"prior_work_dir,omitempty"`   // work_dir from a previous task on same issue

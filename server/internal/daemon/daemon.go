@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/multica-ai/multica/server/internal/cli"
 	"github.com/multica-ai/multica/server/internal/daemon/execenv"
+	"github.com/multica-ai/multica/server/internal/daemon/repocache"
 	"github.com/multica-ai/multica/server/internal/daemon/usage"
 	"github.com/multica-ai/multica/server/pkg/agent"
 )
@@ -23,9 +25,10 @@ type workspaceState struct {
 
 // Daemon is the local agent runtime that polls for and executes tasks.
 type Daemon struct {
-	cfg    Config
-	client *Client
-	logger *slog.Logger
+	cfg       Config
+	client    *Client
+	repoCache *repocache.Cache
+	logger    *slog.Logger
 
 	mu           sync.Mutex
 	workspaces   map[string]*workspaceState
@@ -35,9 +38,11 @@ type Daemon struct {
 
 // New creates a new Daemon instance.
 func New(cfg Config, logger *slog.Logger) *Daemon {
+	cacheRoot := filepath.Join(cfg.WorkspacesRoot, ".repos")
 	return &Daemon{
 		cfg:          cfg,
 		client:       NewClient(cfg.ServerBaseURL),
+		repoCache:    repocache.New(cacheRoot, logger),
 		logger:       logger,
 		workspaces:   make(map[string]*workspaceState),
 		runtimeIndex: make(map[string]Runtime),
@@ -130,23 +135,31 @@ func (d *Daemon) loadWatchedWorkspaces(ctx context.Context) error {
 
 	var registered int
 	for _, ws := range cfg.WatchedWorkspaces {
-		runtimes, err := d.registerRuntimesForWorkspace(ctx, ws.ID)
+		resp, err := d.registerRuntimesForWorkspace(ctx, ws.ID)
 		if err != nil {
 			d.logger.Error("failed to register runtimes", "workspace_id", ws.ID, "name", ws.Name, "error", err)
 			continue
 		}
-		runtimeIDs := make([]string, len(runtimes))
-		for i, rt := range runtimes {
+		runtimeIDs := make([]string, len(resp.Runtimes))
+		for i, rt := range resp.Runtimes {
 			runtimeIDs[i] = rt.ID
 			d.logger.Info("registered runtime", "workspace_id", ws.ID, "runtime_id", rt.ID, "provider", rt.Provider)
 		}
 		d.mu.Lock()
 		d.workspaces[ws.ID] = &workspaceState{workspaceID: ws.ID, runtimeIDs: runtimeIDs}
-		for _, rt := range runtimes {
+		for _, rt := range resp.Runtimes {
 			d.runtimeIndex[rt.ID] = rt
 		}
 		d.mu.Unlock()
-		d.logger.Info("watching workspace", "workspace_id", ws.ID, "name", ws.Name, "runtimes", len(runtimes))
+
+		// Sync workspace repos to local cache.
+		if d.repoCache != nil && len(resp.Repos) > 0 {
+			if err := d.repoCache.Sync(ws.ID, repoDataToInfo(resp.Repos)); err != nil {
+				d.logger.Warn("repo cache sync failed", "workspace_id", ws.ID, "error", err)
+			}
+		}
+
+		d.logger.Info("watching workspace", "workspace_id", ws.ID, "name", ws.Name, "runtimes", len(resp.Runtimes), "repos", len(resp.Repos))
 		registered++
 	}
 
@@ -188,7 +201,7 @@ func (d *Daemon) providerToRuntimeMap() map[string]string {
 	return m
 }
 
-func (d *Daemon) registerRuntimesForWorkspace(ctx context.Context, workspaceID string) ([]Runtime, error) {
+func (d *Daemon) registerRuntimesForWorkspace(ctx context.Context, workspaceID string) (*RegisterResponse, error) {
 	var runtimes []map[string]string
 	for name, entry := range d.cfg.Agents {
 		version, err := agent.DetectVersion(ctx, entry.Path)
@@ -214,14 +227,14 @@ func (d *Daemon) registerRuntimesForWorkspace(ctx context.Context, workspaceID s
 		"runtimes":     runtimes,
 	}
 
-	rts, err := d.client.Register(ctx, req)
+	resp, err := d.client.Register(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("register runtimes: %w", err)
 	}
-	if len(rts) == 0 {
+	if len(resp.Runtimes) == 0 {
 		return nil, fmt.Errorf("register runtimes: empty response")
 	}
-	return rts, nil
+	return resp, nil
 }
 
 // configWatchLoop periodically checks for config file changes and reloads workspaces.
@@ -286,21 +299,29 @@ func (d *Daemon) reloadWorkspaces(ctx context.Context) {
 	// Register runtimes for newly added workspaces.
 	for id, name := range newIDs {
 		if !currentIDs[id] {
-			runtimes, err := d.registerRuntimesForWorkspace(ctx, id)
+			resp, err := d.registerRuntimesForWorkspace(ctx, id)
 			if err != nil {
 				d.logger.Error("register runtimes for new workspace failed", "workspace_id", id, "error", err)
 				continue
 			}
-			runtimeIDs := make([]string, len(runtimes))
-			for i, rt := range runtimes {
+			runtimeIDs := make([]string, len(resp.Runtimes))
+			for i, rt := range resp.Runtimes {
 				runtimeIDs[i] = rt.ID
 			}
 			d.mu.Lock()
 			d.workspaces[id] = &workspaceState{workspaceID: id, runtimeIDs: runtimeIDs}
-			for _, rt := range runtimes {
+			for _, rt := range resp.Runtimes {
 				d.runtimeIndex[rt.ID] = rt
 			}
 			d.mu.Unlock()
+
+			// Sync workspace repos to local cache.
+			if d.repoCache != nil && len(resp.Repos) > 0 {
+				if err := d.repoCache.Sync(id, repoDataToInfo(resp.Repos)); err != nil {
+					d.logger.Warn("repo cache sync failed", "workspace_id", id, "error", err)
+				}
+			}
+
 			d.logger.Info("now watching workspace", "workspace_id", id, "name", name)
 		}
 	}
@@ -594,11 +615,14 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string) (TaskR
 	}
 
 	// Prepare isolated execution environment.
+	// Repos are passed as metadata only — the agent checks them out on demand
+	// via `multica repo checkout <url>`.
 	taskCtx := execenv.TaskContextForEnv{
 		IssueID:           task.IssueID,
 		AgentName:         agentName,
 		AgentInstructions: instructions,
 		AgentSkills:       convertSkillsForEnv(skills),
+		Repos:             convertReposForEnv(task.Repos),
 	}
 
 	// Try to reuse the workdir from a previous task on the same (agent, issue) pair.
@@ -630,11 +654,15 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string) (TaskR
 
 	prompt := BuildPrompt(task)
 
-	// Pass the daemon's auth credentials so the spawned agent CLI can call
-	// the Multica API (e.g. `multica issue get`, `multica issue comment add`).
+	// Pass the daemon's auth credentials and context so the spawned agent CLI
+	// can call the Multica API and the local daemon (e.g. `multica repo checkout`).
 	agentEnv := map[string]string{
-		"MULTICA_TOKEN":      d.client.Token(),
-		"MULTICA_SERVER_URL": d.cfg.ServerBaseURL,
+		"MULTICA_TOKEN":        d.client.Token(),
+		"MULTICA_SERVER_URL":   d.cfg.ServerBaseURL,
+		"MULTICA_DAEMON_PORT":  fmt.Sprintf("%d", d.cfg.HealthPort),
+		"MULTICA_WORKSPACE_ID": d.workspaceIDForRuntime(task.RuntimeID),
+		"MULTICA_AGENT_NAME":   agentName,
+		"MULTICA_TASK_ID":      task.ID,
 	}
 	// Point Codex to the per-task CODEX_HOME so it discovers skills natively
 	// without polluting the system ~/.codex/skills/.
@@ -650,7 +678,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string) (TaskR
 		return TaskResult{}, fmt.Errorf("create agent backend: %w", err)
 	}
 
-	d.logger.Info("starting agent", "provider", provider, "task_id", task.ID, "workdir", env.WorkDir, "reused", task.PriorWorkDir != "" && env.WorkDir == task.PriorWorkDir, "branch", env.BranchName, "env_type", env.Type, "model", entry.Model, "timeout", d.cfg.AgentTimeout.String(), "resume_session", task.PriorSessionID)
+	d.logger.Info("starting agent", "provider", provider, "task_id", task.ID, "workdir", env.WorkDir, "reused", task.PriorWorkDir != "" && env.WorkDir == task.PriorWorkDir, "model", entry.Model, "timeout", d.cfg.AgentTimeout.String(), "resume_session", task.PriorSessionID)
 
 	session, err := backend.Execute(ctx, prompt, agent.ExecOptions{
 		Cwd:             env.WorkDir,
@@ -682,12 +710,10 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string) (TaskR
 			return TaskResult{}, fmt.Errorf("%s returned empty output", provider)
 		}
 		return TaskResult{
-			Status:     "completed",
-			Comment:    result.Output,
-			BranchName: env.BranchName,
-			EnvType:    string(env.Type),
-			SessionID:  result.SessionID,
-			WorkDir:    env.WorkDir,
+			Status:    "completed",
+			Comment:   result.Output,
+			SessionID: result.SessionID,
+			WorkDir:   env.WorkDir,
 		}, nil
 	case "timeout":
 		return TaskResult{}, fmt.Errorf("%s timed out after %s", provider, d.cfg.AgentTimeout)
@@ -698,6 +724,40 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string) (TaskR
 		}
 		return TaskResult{Status: "blocked", Comment: errMsg}, nil
 	}
+}
+
+// repoDataToInfo converts daemon RepoData to repocache RepoInfo.
+func repoDataToInfo(repos []RepoData) []repocache.RepoInfo {
+	info := make([]repocache.RepoInfo, len(repos))
+	for i, r := range repos {
+		info[i] = repocache.RepoInfo{URL: r.URL, Description: r.Description}
+	}
+	return info
+}
+
+// workspaceIDForRuntime returns the workspace ID that a runtime belongs to.
+func (d *Daemon) workspaceIDForRuntime(runtimeID string) string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, ws := range d.workspaces {
+		for _, rid := range ws.runtimeIDs {
+			if rid == runtimeID {
+				return ws.workspaceID
+			}
+		}
+	}
+	return ""
+}
+
+func convertReposForEnv(repos []RepoData) []execenv.RepoContextForEnv {
+	if len(repos) == 0 {
+		return nil
+	}
+	result := make([]execenv.RepoContextForEnv, len(repos))
+	for i, r := range repos {
+		result[i] = execenv.RepoContextForEnv{URL: r.URL, Description: r.Description}
+	}
+	return result
 }
 
 func convertSkillsForEnv(skills []SkillData) []execenv.SkillContextForEnv {

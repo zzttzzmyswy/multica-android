@@ -1,6 +1,6 @@
 // Package execenv manages isolated per-task execution environments for the daemon.
-// Each task gets its own directory with a git worktree (for code tasks) or plain
-// directory (for non-code tasks), plus injected context files.
+// Each task gets its own directory with injected context files. Repositories are
+// checked out on demand by the agent via `multica repo checkout`.
 package execenv
 
 import (
@@ -10,18 +10,15 @@ import (
 	"path/filepath"
 )
 
-// WorkspaceType indicates how the working directory was set up.
-type WorkspaceType string
-
-const (
-	WorkspaceTypeGitWorktree WorkspaceType = "git_worktree"
-	WorkspaceTypeDirectory   WorkspaceType = "directory"
-)
+// RepoContextForEnv describes a workspace repo available for checkout.
+type RepoContextForEnv struct {
+	URL         string // remote URL
+	Description string // human-readable description
+}
 
 // PrepareParams holds all inputs needed to set up an execution environment.
 type PrepareParams struct {
 	WorkspacesRoot string           // base path for all envs (e.g., ~/multica_workspaces)
-	RepoPath       string           // source git repo path (for worktree creation), provided per-task by server
 	TaskID         string           // task UUID — used for directory name
 	AgentName      string           // for git branch naming only
 	Provider       string           // agent provider ("claude", "codex") — determines skill injection paths
@@ -34,6 +31,7 @@ type TaskContextForEnv struct {
 	AgentName         string
 	AgentInstructions string // agent identity/persona instructions, injected into CLAUDE.md
 	AgentSkills       []SkillContextForEnv
+	Repos             []RepoContextForEnv // workspace repos available for checkout
 }
 
 // SkillContextForEnv represents a skill to be written into the execution environment.
@@ -55,18 +53,15 @@ type Environment struct {
 	RootDir string
 	// WorkDir is the directory to pass as Cwd to the agent ({RootDir}/workdir/).
 	WorkDir string
-	// Type indicates git_worktree or directory.
-	Type WorkspaceType
-	// BranchName is the git branch name (empty for directory type).
-	BranchName string
 	// CodexHome is the path to the per-task CODEX_HOME directory (set only for codex provider).
 	CodexHome string
 
-	gitRoot string      // source repo root (for cleanup)
-	logger  *slog.Logger // for cleanup logging
+	logger *slog.Logger // for cleanup logging
 }
 
 // Prepare creates an isolated execution environment for a task.
+// The workdir starts empty (no repo checkouts). The agent checks out repos
+// on demand via `multica repo checkout <url>`.
 func Prepare(params PrepareParams, logger *slog.Logger) (*Environment, error) {
 	if params.WorkspacesRoot == "" {
 		return nil, fmt.Errorf("execenv: workspaces root is required")
@@ -95,33 +90,7 @@ func Prepare(params PrepareParams, logger *slog.Logger) (*Environment, error) {
 	env := &Environment{
 		RootDir: envRoot,
 		WorkDir: workDir,
-		Type:    WorkspaceTypeDirectory,
 		logger:  logger,
-	}
-
-	// Detect git repo and set up worktree if available.
-	if params.RepoPath != "" {
-		if gitRoot, ok := detectGitRepo(params.RepoPath); ok {
-			branchName := fmt.Sprintf("agent/%s/%s", sanitizeName(params.AgentName), shortID(params.TaskID))
-
-			// Get the default branch as base ref.
-			baseRef := getDefaultBranch(gitRoot)
-
-			if err := setupGitWorktree(gitRoot, workDir, branchName, baseRef); err != nil {
-				logger.Warn("execenv: git worktree setup failed, falling back to directory mode", "error", err)
-			} else {
-				env.Type = WorkspaceTypeGitWorktree
-				env.BranchName = branchName
-				env.gitRoot = gitRoot
-
-				// Exclude injected directories from git tracking.
-				for _, pattern := range []string{".agent_context", ".claude", "CLAUDE.md", "AGENTS.md"} {
-					if err := excludeFromGit(workDir, pattern); err != nil {
-						logger.Warn("execenv: failed to exclude from git", "pattern", pattern, "error", err)
-					}
-				}
-			}
-		}
 	}
 
 	// Write context files into workdir (skills go to provider-native paths).
@@ -143,7 +112,7 @@ func Prepare(params PrepareParams, logger *slog.Logger) (*Environment, error) {
 		env.CodexHome = codexHome
 	}
 
-	logger.Info("execenv: prepared env", "root", envRoot, "type", env.Type, "branch", env.BranchName)
+	logger.Info("execenv: prepared env", "root", envRoot, "repos_available", len(params.Task.Repos))
 	return env, nil
 }
 
@@ -157,15 +126,7 @@ func Reuse(workDir, provider string, task TaskContextForEnv, logger *slog.Logger
 	env := &Environment{
 		RootDir: filepath.Dir(workDir),
 		WorkDir: workDir,
-		Type:    WorkspaceTypeDirectory,
 		logger:  logger,
-	}
-
-	// Detect if this is a git worktree.
-	if gitRoot, ok := detectGitRepo(workDir); ok {
-		env.Type = WorkspaceTypeGitWorktree
-		env.BranchName = getDefaultBranch(workDir)
-		env.gitRoot = gitRoot
 	}
 
 	// Refresh context files (issue_context.md, skills).
@@ -173,7 +134,7 @@ func Reuse(workDir, provider string, task TaskContextForEnv, logger *slog.Logger
 		logger.Warn("execenv: refresh context files failed", "error", err)
 	}
 
-	logger.Info("execenv: reusing env", "workdir", workDir, "type", env.Type, "branch", env.BranchName)
+	logger.Info("execenv: reusing env", "workdir", workDir)
 	return env
 }
 
@@ -183,11 +144,6 @@ func Reuse(workDir, provider string, task TaskContextForEnv, logger *slog.Logger
 func (env *Environment) Cleanup(removeAll bool) error {
 	if env == nil {
 		return nil
-	}
-
-	// Remove git worktree first (must happen before directory deletion).
-	if env.Type == WorkspaceTypeGitWorktree && env.gitRoot != "" {
-		removeGitWorktree(env.gitRoot, env.WorkDir, env.BranchName, env.logger)
 	}
 
 	if removeAll {

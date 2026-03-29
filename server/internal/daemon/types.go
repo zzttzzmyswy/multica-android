@@ -14,6 +14,12 @@ type Runtime struct {
 	Status   string `json:"status"`
 }
 
+// RepoData holds repository information from the workspace.
+type RepoData struct {
+	URL         string `json:"url"`
+	Description string `json:"description"`
+}
+
 // Task represents a claimed task from the server.
 // Agent data (name, skills) is populated by the claim endpoint.
 type Task struct {
@@ -22,6 +28,7 @@ type Task struct {
 	RuntimeID      string     `json:"runtime_id"`
 	IssueID        string     `json:"issue_id"`
 	Agent          *AgentData `json:"agent,omitempty"`
+	Repos          []RepoData `json:"repos,omitempty"`
 	PriorSessionID string     `json:"prior_session_id,omitempty"` // Claude session ID from a previous task on this issue
 	PriorWorkDir   string     `json:"prior_work_dir,omitempty"`   // work_dir from a previous task on this issue
 }
