@@ -624,26 +624,33 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string) (TaskR
 		AgentSkills:       convertSkillsForEnv(skills),
 		Repos:             convertReposForEnv(task.Repos),
 	}
-	env, err := execenv.Prepare(execenv.PrepareParams{
-		WorkspacesRoot: d.cfg.WorkspacesRoot,
-		TaskID:         task.ID,
-		AgentName:      agentName,
-		Provider:       provider,
-		Task:           taskCtx,
-	}, d.logger)
-	if err != nil {
-		return TaskResult{}, fmt.Errorf("prepare execution environment: %w", err)
+
+	// Try to reuse the workdir from a previous task on the same (agent, issue) pair.
+	var env *execenv.Environment
+	if task.PriorWorkDir != "" {
+		env = execenv.Reuse(task.PriorWorkDir, provider, taskCtx, d.logger)
+	}
+	if env == nil {
+		var err error
+		env, err = execenv.Prepare(execenv.PrepareParams{
+			WorkspacesRoot: d.cfg.WorkspacesRoot,
+			TaskID:         task.ID,
+			AgentName:      agentName,
+			Provider:       provider,
+			Task:           taskCtx,
+		}, d.logger)
+		if err != nil {
+			return TaskResult{}, fmt.Errorf("prepare execution environment: %w", err)
+		}
 	}
 
 	// Inject runtime-specific config (meta skill) so the agent discovers .agent_context/.
 	if err := execenv.InjectRuntimeConfig(env.WorkDir, provider, taskCtx); err != nil {
 		d.logger.Warn("execenv: inject runtime config failed (non-fatal)", "error", err)
 	}
-	defer func() {
-		if cleanupErr := env.Cleanup(!d.cfg.KeepEnvAfterTask); cleanupErr != nil {
-			d.logger.Warn("cleanup env failed", "task_id", task.ID, "error", cleanupErr)
-		}
-	}()
+	// NOTE: No cleanup — workdir is preserved for reuse by future tasks on
+	// the same (agent, issue) pair. The work_dir path is stored in DB on
+	// task completion and passed back via PriorWorkDir on the next claim.
 
 	prompt := BuildPrompt(task)
 
@@ -671,7 +678,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string) (TaskR
 		return TaskResult{}, fmt.Errorf("create agent backend: %w", err)
 	}
 
-	d.logger.Info("starting agent", "provider", provider, "task_id", task.ID, "workdir", env.WorkDir, "model", entry.Model, "timeout", d.cfg.AgentTimeout.String(), "resume_session", task.PriorSessionID)
+	d.logger.Info("starting agent", "provider", provider, "task_id", task.ID, "workdir", env.WorkDir, "reused", task.PriorWorkDir != "" && env.WorkDir == task.PriorWorkDir, "model", entry.Model, "timeout", d.cfg.AgentTimeout.String(), "resume_session", task.PriorSessionID)
 
 	session, err := backend.Execute(ctx, prompt, agent.ExecOptions{
 		Cwd:             env.WorkDir,

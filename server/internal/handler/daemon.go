@@ -244,6 +244,9 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 		IssueID: task.IssueID,
 	}); err == nil && prior.SessionID.Valid {
 		resp.PriorSessionID = prior.SessionID.String
+		if prior.WorkDir.Valid {
+			resp.PriorWorkDir = prior.WorkDir.String
+		}
 	}
 
 	slog.Info("task claimed by runtime", "task_id", uuidToString(task.ID), "runtime_id", runtimeID, "agent_id", uuidToString(task.AgentID), "prior_session", resp.PriorSessionID)
