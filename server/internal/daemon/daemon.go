@@ -578,16 +578,19 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string) (TaskR
 
 	agentName := "agent"
 	var skills []SkillData
+	var instructions string
 	if task.Agent != nil {
 		agentName = task.Agent.Name
 		skills = task.Agent.Skills
+		instructions = task.Agent.Instructions
 	}
 
 	// Prepare isolated execution environment.
 	taskCtx := execenv.TaskContextForEnv{
-		IssueID:     task.IssueID,
-		AgentName:   agentName,
-		AgentSkills: convertSkillsForEnv(skills),
+		IssueID:           task.IssueID,
+		AgentName:         agentName,
+		AgentInstructions: instructions,
+		AgentSkills:       convertSkillsForEnv(skills),
 	}
 	env, err := execenv.Prepare(execenv.PrepareParams{
 		WorkspacesRoot: d.cfg.WorkspacesRoot,

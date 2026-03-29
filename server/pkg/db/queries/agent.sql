@@ -11,8 +11,8 @@ WHERE id = $1;
 INSERT INTO agent (
     workspace_id, name, description, avatar_url, runtime_mode,
     runtime_config, runtime_id, visibility, max_concurrent_tasks, owner_id,
-    tools, triggers
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    tools, triggers, instructions
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 RETURNING *;
 
 -- name: UpdateAgent :one
@@ -28,6 +28,7 @@ UPDATE agent SET
     max_concurrent_tasks = COALESCE(sqlc.narg('max_concurrent_tasks'), max_concurrent_tasks),
     tools = COALESCE(sqlc.narg('tools'), tools),
     triggers = COALESCE(sqlc.narg('triggers'), triggers),
+    instructions = COALESCE(sqlc.narg('instructions'), instructions),
     updated_at = now()
 WHERE id = $1
 RETURNING *;
@@ -95,6 +96,11 @@ RETURNING *;
 -- name: CountRunningTasks :one
 SELECT count(*) FROM agent_task_queue
 WHERE agent_id = $1 AND status IN ('dispatched', 'running');
+
+-- name: HasActiveTaskForIssue :one
+-- Returns true if there is any queued, dispatched, or running task for the issue.
+SELECT count(*) > 0 AS has_active FROM agent_task_queue
+WHERE issue_id = $1 AND status IN ('queued', 'dispatched', 'running');
 
 -- name: ListPendingTasksByRuntime :many
 SELECT * FROM agent_task_queue

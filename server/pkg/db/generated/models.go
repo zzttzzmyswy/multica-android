@@ -36,6 +36,7 @@ type Agent struct {
 	Tools              []byte             `json:"tools"`
 	Triggers           []byte             `json:"triggers"`
 	RuntimeID          pgtype.UUID        `json:"runtime_id"`
+	Instructions       string             `json:"instructions"`
 }
 
 type AgentRuntime struct {

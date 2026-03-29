@@ -19,6 +19,7 @@ type AgentResponse struct {
 	RuntimeID          string          `json:"runtime_id"`
 	Name               string          `json:"name"`
 	Description        string          `json:"description"`
+	Instructions       string          `json:"instructions"`
 	AvatarURL          *string         `json:"avatar_url"`
 	RuntimeMode        string          `json:"runtime_mode"`
 	RuntimeConfig      any             `json:"runtime_config"`
@@ -64,6 +65,7 @@ func agentToResponse(a db.Agent) AgentResponse {
 		RuntimeID:          uuidToString(a.RuntimeID),
 		Name:               a.Name,
 		Description:        a.Description,
+		Instructions:       a.Instructions,
 		AvatarURL:          textToPtr(a.AvatarUrl),
 		RuntimeMode:        a.RuntimeMode,
 		RuntimeConfig:      rc,
@@ -97,11 +99,12 @@ type AgentTaskResponse struct {
 }
 
 // TaskAgentData holds agent info included in claim responses so the daemon
-// can set up the execution environment (branch naming, skill files).
+// can set up the execution environment (branch naming, skill files, instructions).
 type TaskAgentData struct {
-	ID     string                    `json:"id"`
-	Name   string                    `json:"name"`
-	Skills []service.AgentSkillData  `json:"skills,omitempty"`
+	ID           string                   `json:"id"`
+	Name         string                   `json:"name"`
+	Instructions string                   `json:"instructions"`
+	Skills       []service.AgentSkillData `json:"skills,omitempty"`
 }
 
 func taskToResponse(t db.AgentTaskQueue) AgentTaskResponse {
@@ -200,6 +203,7 @@ func (h *Handler) GetAgent(w http.ResponseWriter, r *http.Request) {
 type CreateAgentRequest struct {
 	Name               string  `json:"name"`
 	Description        string  `json:"description"`
+	Instructions       string  `json:"instructions"`
 	AvatarURL          *string `json:"avatar_url"`
 	RuntimeID          string  `json:"runtime_id"`
 	RuntimeConfig      any     `json:"runtime_config"`
@@ -269,6 +273,7 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		WorkspaceID:        parseUUID(workspaceID),
 		Name:               req.Name,
 		Description:        req.Description,
+		Instructions:       req.Instructions,
 		AvatarUrl:          ptrToText(req.AvatarURL),
 		RuntimeMode:        runtime.RuntimeMode,
 		RuntimeConfig:      rc,
@@ -301,6 +306,7 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 type UpdateAgentRequest struct {
 	Name               *string `json:"name"`
 	Description        *string `json:"description"`
+	Instructions       *string `json:"instructions"`
 	AvatarURL          *string `json:"avatar_url"`
 	RuntimeID          *string `json:"runtime_id"`
 	RuntimeConfig      any     `json:"runtime_config"`
@@ -335,6 +341,9 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Description != nil {
 		params.Description = pgtype.Text{String: *req.Description, Valid: true}
+	}
+	if req.Instructions != nil {
+		params.Instructions = pgtype.Text{String: *req.Instructions, Valid: true}
 	}
 	if req.AvatarURL != nil {
 		params.AvatarUrl = pgtype.Text{String: *req.AvatarURL, Valid: true}

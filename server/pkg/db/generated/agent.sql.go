@@ -116,9 +116,9 @@ const createAgent = `-- name: CreateAgent :one
 INSERT INTO agent (
     workspace_id, name, description, avatar_url, runtime_mode,
     runtime_config, runtime_id, visibility, max_concurrent_tasks, owner_id,
-    tools, triggers
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-RETURNING id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, tools, triggers, runtime_id
+    tools, triggers, instructions
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+RETURNING id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, tools, triggers, runtime_id, instructions
 `
 
 type CreateAgentParams struct {
@@ -134,6 +134,7 @@ type CreateAgentParams struct {
 	OwnerID            pgtype.UUID `json:"owner_id"`
 	Tools              []byte      `json:"tools"`
 	Triggers           []byte      `json:"triggers"`
+	Instructions       string      `json:"instructions"`
 }
 
 func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent, error) {
@@ -150,6 +151,7 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent
 		arg.OwnerID,
 		arg.Tools,
 		arg.Triggers,
+		arg.Instructions,
 	)
 	var i Agent
 	err := row.Scan(
@@ -169,6 +171,7 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent
 		&i.Tools,
 		&i.Triggers,
 		&i.RuntimeID,
+		&i.Instructions,
 	)
 	return i, err
 }
@@ -259,7 +262,7 @@ func (q *Queries) FailAgentTask(ctx context.Context, arg FailAgentTaskParams) (A
 }
 
 const getAgent = `-- name: GetAgent :one
-SELECT id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, tools, triggers, runtime_id FROM agent
+SELECT id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, tools, triggers, runtime_id, instructions FROM agent
 WHERE id = $1
 `
 
@@ -283,6 +286,7 @@ func (q *Queries) GetAgent(ctx context.Context, id pgtype.UUID) (Agent, error) {
 		&i.Tools,
 		&i.Triggers,
 		&i.RuntimeID,
+		&i.Instructions,
 	)
 	return i, err
 }
@@ -341,6 +345,19 @@ func (q *Queries) GetLastTaskSession(ctx context.Context, arg GetLastTaskSession
 	return i, err
 }
 
+const hasActiveTaskForIssue = `-- name: HasActiveTaskForIssue :one
+SELECT count(*) > 0 AS has_active FROM agent_task_queue
+WHERE issue_id = $1 AND status IN ('queued', 'dispatched', 'running')
+`
+
+// Returns true if there is any queued, dispatched, or running task for the issue.
+func (q *Queries) HasActiveTaskForIssue(ctx context.Context, issueID pgtype.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, hasActiveTaskForIssue, issueID)
+	var has_active bool
+	err := row.Scan(&has_active)
+	return has_active, err
+}
+
 const listAgentTasks = `-- name: ListAgentTasks :many
 SELECT id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir FROM agent_task_queue
 WHERE agent_id = $1
@@ -384,7 +401,7 @@ func (q *Queries) ListAgentTasks(ctx context.Context, agentID pgtype.UUID) ([]Ag
 }
 
 const listAgents = `-- name: ListAgents :many
-SELECT id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, tools, triggers, runtime_id FROM agent
+SELECT id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, tools, triggers, runtime_id, instructions FROM agent
 WHERE workspace_id = $1
 ORDER BY created_at ASC
 `
@@ -415,6 +432,7 @@ func (q *Queries) ListAgents(ctx context.Context, workspaceID pgtype.UUID) ([]Ag
 			&i.Tools,
 			&i.Triggers,
 			&i.RuntimeID,
+			&i.Instructions,
 		); err != nil {
 			return nil, err
 		}
@@ -511,9 +529,10 @@ UPDATE agent SET
     max_concurrent_tasks = COALESCE($10, max_concurrent_tasks),
     tools = COALESCE($11, tools),
     triggers = COALESCE($12, triggers),
+    instructions = COALESCE($13, instructions),
     updated_at = now()
 WHERE id = $1
-RETURNING id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, tools, triggers, runtime_id
+RETURNING id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, tools, triggers, runtime_id, instructions
 `
 
 type UpdateAgentParams struct {
@@ -529,6 +548,7 @@ type UpdateAgentParams struct {
 	MaxConcurrentTasks pgtype.Int4 `json:"max_concurrent_tasks"`
 	Tools              []byte      `json:"tools"`
 	Triggers           []byte      `json:"triggers"`
+	Instructions       pgtype.Text `json:"instructions"`
 }
 
 func (q *Queries) UpdateAgent(ctx context.Context, arg UpdateAgentParams) (Agent, error) {
@@ -545,6 +565,7 @@ func (q *Queries) UpdateAgent(ctx context.Context, arg UpdateAgentParams) (Agent
 		arg.MaxConcurrentTasks,
 		arg.Tools,
 		arg.Triggers,
+		arg.Instructions,
 	)
 	var i Agent
 	err := row.Scan(
@@ -564,6 +585,7 @@ func (q *Queries) UpdateAgent(ctx context.Context, arg UpdateAgentParams) (Agent
 		&i.Tools,
 		&i.Triggers,
 		&i.RuntimeID,
+		&i.Instructions,
 	)
 	return i, err
 }
@@ -571,7 +593,7 @@ func (q *Queries) UpdateAgent(ctx context.Context, arg UpdateAgentParams) (Agent
 const updateAgentStatus = `-- name: UpdateAgentStatus :one
 UPDATE agent SET status = $2, updated_at = now()
 WHERE id = $1
-RETURNING id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, tools, triggers, runtime_id
+RETURNING id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, tools, triggers, runtime_id, instructions
 `
 
 type UpdateAgentStatusParams struct {
@@ -599,6 +621,7 @@ func (q *Queries) UpdateAgentStatus(ctx context.Context, arg UpdateAgentStatusPa
 		&i.Tools,
 		&i.Triggers,
 		&i.RuntimeID,
+		&i.Instructions,
 	)
 	return i, err
 }

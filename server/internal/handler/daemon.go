@@ -210,9 +210,10 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 	if agent, err := h.Queries.GetAgent(r.Context(), task.AgentID); err == nil {
 		skills := h.TaskService.LoadAgentSkills(r.Context(), task.AgentID)
 		resp.Agent = &TaskAgentData{
-			ID:     uuidToString(agent.ID),
-			Name:   agent.Name,
-			Skills: skills,
+			ID:           uuidToString(agent.ID),
+			Name:         agent.Name,
+			Instructions: agent.Instructions,
+			Skills:       skills,
 		}
 	}
 
