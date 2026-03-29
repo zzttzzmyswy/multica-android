@@ -159,6 +159,39 @@ func (h *Handler) GetRuntimeUsage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// GetRuntimeTaskActivity returns hourly task activity distribution for a runtime.
+func (h *Handler) GetRuntimeTaskActivity(w http.ResponseWriter, r *http.Request) {
+	runtimeID := chi.URLParam(r, "runtimeId")
+
+	rt, err := h.Queries.GetAgentRuntime(r.Context(), parseUUID(runtimeID))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "runtime not found")
+		return
+	}
+
+	if _, ok := h.requireWorkspaceMember(w, r, uuidToString(rt.WorkspaceID), "runtime not found"); !ok {
+		return
+	}
+
+	rows, err := h.Queries.GetRuntimeTaskHourlyActivity(r.Context(), parseUUID(runtimeID))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get task activity")
+		return
+	}
+
+	type HourlyActivity struct {
+		Hour  int `json:"hour"`
+		Count int `json:"count"`
+	}
+
+	resp := make([]HourlyActivity, len(rows))
+	for i, row := range rows {
+		resp[i] = HourlyActivity{Hour: int(row.Hour), Count: int(row.Count)}
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
 func (h *Handler) ListAgentRuntimes(w http.ResponseWriter, r *http.Request) {
 	workspaceID := resolveWorkspaceID(r)
 	if _, ok := h.requireWorkspaceMember(w, r, workspaceID, "workspace not found"); !ok {

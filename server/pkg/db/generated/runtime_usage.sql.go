@@ -11,6 +11,39 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getRuntimeTaskHourlyActivity = `-- name: GetRuntimeTaskHourlyActivity :many
+SELECT EXTRACT(HOUR FROM started_at)::int AS hour, COUNT(*)::int AS count
+FROM agent_task_queue
+WHERE runtime_id = $1 AND started_at IS NOT NULL
+GROUP BY hour
+ORDER BY hour
+`
+
+type GetRuntimeTaskHourlyActivityRow struct {
+	Hour  int32 `json:"hour"`
+	Count int32 `json:"count"`
+}
+
+func (q *Queries) GetRuntimeTaskHourlyActivity(ctx context.Context, runtimeID pgtype.UUID) ([]GetRuntimeTaskHourlyActivityRow, error) {
+	rows, err := q.db.Query(ctx, getRuntimeTaskHourlyActivity, runtimeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetRuntimeTaskHourlyActivityRow{}
+	for rows.Next() {
+		var i GetRuntimeTaskHourlyActivityRow
+		if err := rows.Scan(&i.Hour, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getRuntimeUsageSummary = `-- name: GetRuntimeUsageSummary :many
 SELECT provider, model,
     SUM(input_tokens)::bigint AS total_input_tokens,

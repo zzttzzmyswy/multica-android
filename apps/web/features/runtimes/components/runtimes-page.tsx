@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   Monitor,
   Cloud,
@@ -13,8 +13,29 @@ import {
   XCircle,
   Zap,
 } from "lucide-react";
+import {
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  PieChart,
+  Pie,
+  Cell,
+  Label,
+} from "recharts";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 import { useDefaultLayout } from "react-resizable-panels";
-import type { AgentRuntime, RuntimeUsage, RuntimePingStatus } from "@/shared/types";
+import type { AgentRuntime, RuntimeUsage, RuntimeHourlyActivity, RuntimePingStatus } from "@/shared/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -154,6 +175,529 @@ function RuntimeListItem({
 // Usage Section
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Chart configs
+// ---------------------------------------------------------------------------
+
+const tokenChartConfig = {
+  input: { label: "Input", color: "hsl(var(--chart-1))" },
+  output: { label: "Output", color: "hsl(var(--chart-2))" },
+  cacheRead: { label: "Cache Read", color: "hsl(var(--chart-3))" },
+  cacheWrite: { label: "Cache Write", color: "hsl(var(--chart-4))" },
+} satisfies ChartConfig;
+
+const costChartConfig = {
+  cost: { label: "Cost", color: "hsl(var(--chart-1))" },
+} satisfies ChartConfig;
+
+const MODEL_COLORS = [
+  "hsl(var(--chart-1))",
+  "hsl(var(--chart-2))",
+  "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))",
+  "hsl(var(--chart-5))",
+];
+
+// ---------------------------------------------------------------------------
+// Data aggregation helpers
+// ---------------------------------------------------------------------------
+
+interface DailyTokenData {
+  date: string;
+  label: string;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+}
+
+interface DailyCostData {
+  date: string;
+  label: string;
+  cost: number;
+}
+
+interface ModelDistribution {
+  model: string;
+  tokens: number;
+  cost: number;
+}
+
+function aggregateByDate(usage: RuntimeUsage[]): {
+  dailyTokens: DailyTokenData[];
+  dailyCost: DailyCostData[];
+  modelDist: ModelDistribution[];
+} {
+  // Aggregate tokens by date
+  const dateMap = new Map<string, Omit<DailyTokenData, "label">>();
+  const costMap = new Map<string, number>();
+  const modelMap = new Map<string, { tokens: number; cost: number }>();
+
+  for (const u of usage) {
+    const existing = dateMap.get(u.date) ?? {
+      date: u.date,
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+    };
+    existing.input += u.input_tokens;
+    existing.output += u.output_tokens;
+    existing.cacheRead += u.cache_read_tokens;
+    existing.cacheWrite += u.cache_write_tokens;
+    dateMap.set(u.date, existing);
+
+    const dayCost = (costMap.get(u.date) ?? 0) + estimateCost(u);
+    costMap.set(u.date, dayCost);
+
+    const modelName = u.model || u.provider;
+    const m = modelMap.get(modelName) ?? { tokens: 0, cost: 0 };
+    m.tokens += u.input_tokens + u.output_tokens + u.cache_read_tokens + u.cache_write_tokens;
+    m.cost += estimateCost(u);
+    modelMap.set(modelName, m);
+  }
+
+  const formatLabel = (d: string) => {
+    const date = new Date(d + "T00:00:00");
+    return `${date.getMonth() + 1}/${date.getDate()}`;
+  };
+
+  const dailyTokens = [...dateMap.values()]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((d) => ({ ...d, label: formatLabel(d.date) }));
+
+  const dailyCost = [...costMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, cost]) => ({ date, label: formatLabel(date), cost: Math.round(cost * 100) / 100 }));
+
+  const modelDist = [...modelMap.entries()]
+    .map(([model, data]) => ({ model, ...data }))
+    .sort((a, b) => b.tokens - a.tokens);
+
+  return { dailyTokens, dailyCost, modelDist };
+}
+
+// ---------------------------------------------------------------------------
+// Chart Components
+// ---------------------------------------------------------------------------
+
+function DailyTokenChart({ data }: { data: DailyTokenData[] }) {
+  return (
+    <div className="rounded-lg border p-4">
+      <h4 className="text-xs font-medium text-muted-foreground mb-3">Daily Token Usage</h4>
+      <ChartContainer config={tokenChartConfig} className="aspect-[2.5/1] w-full">
+        <AreaChart data={data} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
+          <CartesianGrid vertical={false} />
+          <XAxis
+            dataKey="label"
+            tickLine={false}
+            axisLine={false}
+            tickMargin={8}
+            interval="preserveStartEnd"
+          />
+          <YAxis
+            tickLine={false}
+            axisLine={false}
+            tickMargin={8}
+            tickFormatter={(v: number) => formatTokens(v)}
+            width={50}
+          />
+          <ChartTooltip
+            content={
+              <ChartTooltipContent
+                formatter={(value) =>
+                  typeof value === "number" ? formatTokens(value) : String(value)
+                }
+              />
+            }
+          />
+          <ChartLegend content={<ChartLegendContent />} />
+          <Area
+            type="monotone"
+            dataKey="input"
+            stackId="1"
+            stroke="var(--color-input)"
+            fill="var(--color-input)"
+            fillOpacity={0.4}
+          />
+          <Area
+            type="monotone"
+            dataKey="output"
+            stackId="1"
+            stroke="var(--color-output)"
+            fill="var(--color-output)"
+            fillOpacity={0.4}
+          />
+          <Area
+            type="monotone"
+            dataKey="cacheRead"
+            stackId="1"
+            stroke="var(--color-cacheRead)"
+            fill="var(--color-cacheRead)"
+            fillOpacity={0.4}
+          />
+          <Area
+            type="monotone"
+            dataKey="cacheWrite"
+            stackId="1"
+            stroke="var(--color-cacheWrite)"
+            fill="var(--color-cacheWrite)"
+            fillOpacity={0.4}
+          />
+        </AreaChart>
+      </ChartContainer>
+    </div>
+  );
+}
+
+function DailyCostChart({ data }: { data: DailyCostData[] }) {
+  if (data.every((d) => d.cost === 0)) return null;
+
+  return (
+    <div className="rounded-lg border p-4">
+      <h4 className="text-xs font-medium text-muted-foreground mb-3">Daily Estimated Cost</h4>
+      <ChartContainer config={costChartConfig} className="aspect-[2.5/1] w-full">
+        <BarChart data={data} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
+          <CartesianGrid vertical={false} />
+          <XAxis
+            dataKey="label"
+            tickLine={false}
+            axisLine={false}
+            tickMargin={8}
+            interval="preserveStartEnd"
+          />
+          <YAxis
+            tickLine={false}
+            axisLine={false}
+            tickMargin={8}
+            tickFormatter={(v: number) => `$${v}`}
+            width={50}
+          />
+          <ChartTooltip
+            content={
+              <ChartTooltipContent
+                formatter={(value) =>
+                  typeof value === "number" ? `$${value.toFixed(2)}` : String(value)
+                }
+              />
+            }
+          />
+          <Bar dataKey="cost" fill="var(--color-cost)" radius={[3, 3, 0, 0]} />
+        </BarChart>
+      </ChartContainer>
+    </div>
+  );
+}
+
+function ModelDistributionChart({ data }: { data: ModelDistribution[] }) {
+  if (data.length === 0) return null;
+
+  const totalTokens = data.reduce((sum, d) => sum + d.tokens, 0);
+  const chartConfig = Object.fromEntries(
+    data.map((d, i) => [
+      d.model,
+      { label: d.model, color: MODEL_COLORS[i % MODEL_COLORS.length] },
+    ]),
+  ) satisfies ChartConfig;
+
+  return (
+    <div className="rounded-lg border p-4">
+      <h4 className="text-xs font-medium text-muted-foreground mb-3">Token Usage by Model</h4>
+      <ChartContainer config={chartConfig} className="mx-auto aspect-square max-h-[200px]">
+        <PieChart>
+          <ChartTooltip
+            content={
+              <ChartTooltipContent
+                formatter={(value) =>
+                  typeof value === "number" ? formatTokens(value) : String(value)
+                }
+                nameKey="model"
+              />
+            }
+          />
+          <Pie
+            data={data}
+            dataKey="tokens"
+            nameKey="model"
+            innerRadius={50}
+            outerRadius={80}
+            paddingAngle={2}
+          >
+            {data.map((entry, i) => (
+              <Cell
+                key={entry.model}
+                fill={MODEL_COLORS[i % MODEL_COLORS.length]}
+              />
+            ))}
+            <Label
+              content={({ viewBox }) => {
+                if (viewBox && "cx" in viewBox && "cy" in viewBox) {
+                  return (
+                    <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
+                      <tspan x={viewBox.cx} y={viewBox.cy} className="fill-foreground text-lg font-bold">
+                        {formatTokens(totalTokens)}
+                      </tspan>
+                      <tspan x={viewBox.cx} y={(viewBox.cy ?? 0) + 18} className="fill-muted-foreground text-xs">
+                        tokens
+                      </tspan>
+                    </text>
+                  );
+                }
+                return null;
+              }}
+            />
+          </Pie>
+        </PieChart>
+      </ChartContainer>
+      {/* Model legend with cost */}
+      <div className="mt-3 space-y-1.5">
+        {data.map((d, i) => (
+          <div key={d.model} className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <div
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: MODEL_COLORS[i % MODEL_COLORS.length] }}
+              />
+              <span className="truncate font-mono">{d.model}</span>
+            </div>
+            <div className="flex items-center gap-3 shrink-0 text-muted-foreground tabular-nums">
+              <span>{formatTokens(d.tokens)}</span>
+              {d.cost > 0 && <span>${d.cost.toFixed(2)}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Activity Heatmap (GitHub-style)
+// ---------------------------------------------------------------------------
+
+const HEATMAP_WEEKS = 13;
+const CELL_SIZE = 11;
+const CELL_GAP = 2;
+const DAY_LABELS = ["", "Mon", "", "Wed", "", "Fri", ""];
+
+function getHeatmapColor(level: number): string {
+  // 5 levels: 0=empty, 1-4=increasing intensity
+  const colors = [
+    "var(--color-muted, hsl(var(--muted)))",
+    "hsl(var(--chart-3) / 0.3)",
+    "hsl(var(--chart-3) / 0.5)",
+    "hsl(var(--chart-3) / 0.75)",
+    "hsl(var(--chart-3) / 1)",
+  ];
+  return colors[level] ?? colors[0]!;
+}
+
+function ActivityHeatmap({ usage }: { usage: RuntimeUsage[] }) {
+  const { cells, monthLabels } = useMemo(() => {
+    // Build a map of date -> total tokens
+    const dateTokens = new Map<string, number>();
+    for (const u of usage) {
+      const total = u.input_tokens + u.output_tokens + u.cache_read_tokens + u.cache_write_tokens;
+      dateTokens.set(u.date, (dateTokens.get(u.date) ?? 0) + total);
+    }
+
+    // Generate all dates for the last HEATMAP_WEEKS weeks
+    const today = new Date();
+    const todayDay = today.getDay(); // 0=Sun
+    // Start from the beginning of the week, HEATMAP_WEEKS weeks ago
+    const startOffset = todayDay + (HEATMAP_WEEKS - 1) * 7;
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() - startOffset);
+
+    const allCells: { date: string; dayOfWeek: number; week: number; tokens: number }[] = [];
+    const d = new Date(startDate);
+    for (let i = 0; i <= startOffset; i++) {
+      const dateStr = d.toISOString().slice(0, 10);
+      const dayOfWeek = d.getDay(); // 0=Sun .. 6=Sat
+      const week = Math.floor(i / 7);
+      allCells.push({ date: dateStr, dayOfWeek, week, tokens: dateTokens.get(dateStr) ?? 0 });
+      d.setDate(d.getDate() + 1);
+    }
+
+    // Compute intensity levels (quantiles)
+    const nonZero = allCells.filter((c) => c.tokens > 0).map((c) => c.tokens);
+    nonZero.sort((a, b) => a - b);
+    const getLevel = (tokens: number) => {
+      if (tokens === 0) return 0;
+      if (nonZero.length <= 1) return 4;
+      const p = nonZero.indexOf(tokens) / (nonZero.length - 1);
+      if (p <= 0.25) return 1;
+      if (p <= 0.5) return 2;
+      if (p <= 0.75) return 3;
+      return 4;
+    };
+
+    const cellsWithLevel = allCells.map((c) => ({ ...c, level: getLevel(c.tokens) }));
+
+    // Month labels: find the first day of each month that appears
+    const months: { label: string; week: number }[] = [];
+    let lastMonth = -1;
+    for (const c of cellsWithLevel) {
+      const month = new Date(c.date + "T00:00:00").getMonth();
+      if (month !== lastMonth && c.dayOfWeek === 0) {
+        months.push({
+          label: new Date(c.date + "T00:00:00").toLocaleString("en", { month: "short" }),
+          week: c.week,
+        });
+        lastMonth = month;
+      }
+    }
+
+    return { cells: cellsWithLevel, monthLabels: months };
+  }, [usage]);
+
+  const labelWidth = 28;
+  const svgWidth = labelWidth + HEATMAP_WEEKS * (CELL_SIZE + CELL_GAP);
+  const svgHeight = 14 + 7 * (CELL_SIZE + CELL_GAP);
+
+  return (
+    <div className="rounded-lg border p-4">
+      <h4 className="text-xs font-medium text-muted-foreground mb-3">Activity</h4>
+      <div className="overflow-x-auto">
+        <svg width={svgWidth} height={svgHeight} className="block">
+          {/* Month labels */}
+          {monthLabels.map((m) => (
+            <text
+              key={`${m.label}-${m.week}`}
+              x={labelWidth + m.week * (CELL_SIZE + CELL_GAP)}
+              y={10}
+              className="fill-muted-foreground"
+              fontSize={9}
+            >
+              {m.label}
+            </text>
+          ))}
+          {/* Day labels */}
+          {DAY_LABELS.map((label, i) =>
+            label ? (
+              <text
+                key={i}
+                x={0}
+                y={14 + i * (CELL_SIZE + CELL_GAP) + CELL_SIZE - 1}
+                className="fill-muted-foreground"
+                fontSize={9}
+              >
+                {label}
+              </text>
+            ) : null,
+          )}
+          {/* Cells */}
+          {cells.map((c) => (
+            <rect
+              key={c.date}
+              x={labelWidth + c.week * (CELL_SIZE + CELL_GAP)}
+              y={14 + c.dayOfWeek * (CELL_SIZE + CELL_GAP)}
+              width={CELL_SIZE}
+              height={CELL_SIZE}
+              rx={2}
+              fill={getHeatmapColor(c.level)}
+              className="transition-colors"
+            >
+              <title>
+                {c.date}: {c.tokens > 0 ? formatTokens(c.tokens) + " tokens" : "No activity"}
+              </title>
+            </rect>
+          ))}
+        </svg>
+      </div>
+      {/* Legend */}
+      <div className="mt-2 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
+        <span>Less</span>
+        {[0, 1, 2, 3, 4].map((level) => (
+          <div
+            key={level}
+            className="h-[10px] w-[10px] rounded-[2px]"
+            style={{ backgroundColor: getHeatmapColor(level) }}
+          />
+        ))}
+        <span>More</span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Hourly Activity Distribution
+// ---------------------------------------------------------------------------
+
+const hourlyChartConfig = {
+  count: { label: "Tasks", color: "hsl(var(--chart-2))" },
+} satisfies ChartConfig;
+
+function HourlyActivityChart({ runtimeId }: { runtimeId: string }) {
+  const [data, setData] = useState<RuntimeHourlyActivity[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    api
+      .getRuntimeTaskActivity(runtimeId)
+      .then(setData)
+      .catch(() => setData([]))
+      .finally(() => setLoading(false));
+  }, [runtimeId]);
+
+  // Fill all 24 hours
+  const chartData = useMemo(() => {
+    const map = new Map(data.map((d) => [d.hour, d.count]));
+    return Array.from({ length: 24 }, (_, i) => ({
+      hour: i,
+      label: `${i.toString().padStart(2, "0")}:00`,
+      count: map.get(i) ?? 0,
+    }));
+  }, [data]);
+
+  const hasData = chartData.some((d) => d.count > 0);
+
+  return (
+    <div className="rounded-lg border p-4">
+      <h4 className="text-xs font-medium text-muted-foreground mb-3">Hourly Distribution</h4>
+      {loading ? (
+        <div className="flex h-[140px] items-center justify-center text-xs text-muted-foreground">
+          Loading...
+        </div>
+      ) : !hasData ? (
+        <div className="flex h-[140px] flex-col items-center justify-center">
+          <BarChart3 className="h-5 w-5 text-muted-foreground/40" />
+          <p className="mt-2 text-xs text-muted-foreground">No task data yet</p>
+        </div>
+      ) : (
+        <ChartContainer config={hourlyChartConfig} className="aspect-[2.5/1] w-full">
+          <BarChart data={chartData} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
+            <CartesianGrid vertical={false} />
+            <XAxis
+              dataKey="label"
+              tickLine={false}
+              axisLine={false}
+              tickMargin={8}
+              interval={2}
+              fontSize={10}
+            />
+            <YAxis
+              tickLine={false}
+              axisLine={false}
+              tickMargin={8}
+              width={30}
+              allowDecimals={false}
+            />
+            <ChartTooltip content={<ChartTooltipContent />} />
+            <Bar dataKey="count" fill="var(--color-count)" radius={[2, 2, 0, 0]} />
+          </BarChart>
+        </ChartContainer>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Usage Section
+// ---------------------------------------------------------------------------
+
 function UsageSection({ runtimeId }: { runtimeId: string }) {
   const [usage, setUsage] = useState<RuntimeUsage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -161,7 +705,7 @@ function UsageSection({ runtimeId }: { runtimeId: string }) {
   useEffect(() => {
     setLoading(true);
     api
-      .getRuntimeUsage(runtimeId, { days: 30 })
+      .getRuntimeUsage(runtimeId, { days: 90 })
       .then(setUsage)
       .catch(() => setUsage([]))
       .finally(() => setLoading(false));
@@ -184,8 +728,14 @@ function UsageSection({ runtimeId }: { runtimeId: string }) {
     );
   }
 
-  // Compute totals
-  const totals = usage.reduce(
+  // Filter last 30 days for summary / detail charts
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const cutoff = thirtyDaysAgo.toISOString().slice(0, 10);
+  const recent = usage.filter((u) => u.date >= cutoff);
+
+  // Compute totals (30d)
+  const totals = recent.reduce(
     (acc, u) => ({
       input: acc.input + u.input_tokens,
       output: acc.output + u.output_tokens,
@@ -196,9 +746,11 @@ function UsageSection({ runtimeId }: { runtimeId: string }) {
     { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 },
   );
 
+  const { dailyTokens, dailyCost, modelDist } = aggregateByDate(recent);
+
   // Group by date for the table
   const byDate = new Map<string, RuntimeUsage[]>();
-  for (const u of usage) {
+  for (const u of recent) {
     const existing = byDate.get(u.date) ?? [];
     existing.push(u);
     byDate.set(u.date, existing);
@@ -224,6 +776,20 @@ function UsageSection({ runtimeId }: { runtimeId: string }) {
           </span>
         </div>
       )}
+
+      {/* Heatmap + Hourly — 2-col on wide screens */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <ActivityHeatmap usage={usage} />
+        <HourlyActivityChart runtimeId={runtimeId} />
+      </div>
+
+      {/* Token & Cost charts — 2-col on wide screens */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <DailyTokenChart data={dailyTokens} />
+        <DailyCostChart data={dailyCost} />
+      </div>
+
+      <ModelDistributionChart data={modelDist} />
 
       {/* Daily breakdown table */}
       <div className="rounded-lg border">

@@ -18,6 +18,7 @@ export type {
   UpdateSkillRequest,
   SetAgentSkillsRequest,
   RuntimeUsage,
+  RuntimeHourlyActivity,
   RuntimePing,
   RuntimePingStatus,
 } from "./agent";

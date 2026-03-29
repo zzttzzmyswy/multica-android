@@ -29,6 +29,7 @@ import type {
   CreatePersonalAccessTokenRequest,
   CreatePersonalAccessTokenResponse,
   RuntimeUsage,
+  RuntimeHourlyActivity,
   RuntimePing,
   TimelineEntry,
 } from "@/shared/types";
@@ -276,6 +277,10 @@ export class ApiClient {
     const search = new URLSearchParams();
     if (params?.days) search.set("days", String(params.days));
     return this.fetch(`/api/runtimes/${runtimeId}/usage?${search}`);
+  }
+
+  async getRuntimeTaskActivity(runtimeId: string): Promise<RuntimeHourlyActivity[]> {
+    return this.fetch(`/api/runtimes/${runtimeId}/activity`);
   }
 
   async pingRuntime(runtimeId: string): Promise<RuntimePing> {
