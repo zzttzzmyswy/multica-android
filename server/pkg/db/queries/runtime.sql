@@ -51,3 +51,7 @@ SET status = 'offline', updated_at = now()
 WHERE status = 'online'
   AND last_seen_at < now() - make_interval(secs => @stale_seconds::double precision)
 RETURNING id, workspace_id;
+
+-- name: DeleteAgentRuntime :exec
+DELETE FROM agent_runtime
+WHERE id = $1 AND workspace_id = $2;

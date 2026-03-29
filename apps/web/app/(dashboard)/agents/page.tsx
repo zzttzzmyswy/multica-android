@@ -65,6 +65,7 @@ import { Label } from "@/components/ui/label";
 import { api } from "@/shared/api";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
+import { useRuntimeStore } from "@/features/runtimes";
 
 
 // ---------------------------------------------------------------------------
@@ -1130,21 +1131,15 @@ export default function AgentsPage() {
   const refreshAgents = useWorkspaceStore((s) => s.refreshAgents);
   const [selectedId, setSelectedId] = useState<string>("");
   const [showCreate, setShowCreate] = useState(false);
-  const [runtimes, setRuntimes] = useState<RuntimeDevice[]>([]);
+  const runtimes = useRuntimeStore((s) => s.runtimes);
+  const fetchRuntimes = useRuntimeStore((s) => s.fetchRuntimes);
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: "multica_agents_layout",
   });
 
   useEffect(() => {
-    if (!workspace) {
-      setRuntimes([]);
-      return;
-    }
-    api
-      .listRuntimes({ workspace_id: workspace.id })
-      .then(setRuntimes)
-      .catch(() => setRuntimes([]));
-  }, [workspace]);
+    if (workspace) fetchRuntimes();
+  }, [workspace, fetchRuntimes]);
 
   // Select first agent on initial load
   useEffect(() => {
