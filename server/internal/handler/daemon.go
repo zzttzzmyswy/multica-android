@@ -325,6 +325,18 @@ func (h *Handler) CompleteTask(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, taskToResponse(*task))
 }
 
+// GetTaskStatus returns the current status of a task.
+// Used by the daemon to check whether a task was cancelled mid-execution.
+func (h *Handler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
+	taskID := chi.URLParam(r, "taskId")
+	task, err := h.Queries.GetAgentTask(r.Context(), parseUUID(taskID))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": task.Status})
+}
+
 // FailTask marks a running task as failed.
 type TaskFailRequest struct {
 	Error string `json:"error"`

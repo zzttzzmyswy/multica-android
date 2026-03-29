@@ -389,9 +389,11 @@ func (h *Handler) shouldEnqueueOnComment(ctx context.Context, issue db.Issue) bo
 	if !h.isAgentTriggerEnabled(ctx, issue, "on_comment") {
 		return false
 	}
-	// Don't enqueue if there's already an active task for this issue.
-	hasActive, err := h.Queries.HasActiveTaskForIssue(ctx, issue.ID)
-	if err != nil || hasActive {
+	// Coalescing queue: allow enqueue when a task is running (so the agent
+	// picks up new comments on the next cycle) but skip if a pending task
+	// already exists (natural dedup for rapid-fire comments).
+	hasPending, err := h.Queries.HasPendingTaskForIssue(ctx, issue.ID)
+	if err != nil || hasPending {
 		return false
 	}
 	return true

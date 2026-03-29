@@ -103,6 +103,18 @@ func (c *Client) FailTask(ctx context.Context, taskID, errMsg string) error {
 	}, nil)
 }
 
+// GetTaskStatus returns the current status of a task. Used by the daemon to
+// detect if a task was cancelled while it was executing.
+func (c *Client) GetTaskStatus(ctx context.Context, taskID string) (string, error) {
+	var resp struct {
+		Status string `json:"status"`
+	}
+	if err := c.getJSON(ctx, fmt.Sprintf("/api/daemon/tasks/%s/status", taskID), &resp); err != nil {
+		return "", err
+	}
+	return resp.Status, nil
+}
+
 func (c *Client) ReportUsage(ctx context.Context, runtimeID string, entries []map[string]any) error {
 	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/runtimes/%s/usage", runtimeID), map[string]any{
 		"entries": entries,

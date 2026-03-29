@@ -557,6 +557,14 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 
 	_ = d.client.ReportProgress(ctx, task.ID, "Finishing task", 2, 2)
 
+	// Check if the task was cancelled while it was running (e.g. issue
+	// was reassigned). If so, skip reporting results — the server already
+	// moved the task to 'cancelled' so complete/fail would fail anyway.
+	if status, err := d.client.GetTaskStatus(ctx, task.ID); err == nil && status == "cancelled" {
+		d.logger.Info("task was cancelled during execution, discarding result", "task_id", task.ID)
+		return
+	}
+
 	switch result.Status {
 	case "blocked":
 		if err := d.client.FailTask(ctx, task.ID, result.Comment); err != nil {

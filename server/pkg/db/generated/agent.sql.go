@@ -358,6 +358,22 @@ func (q *Queries) HasActiveTaskForIssue(ctx context.Context, issueID pgtype.UUID
 	return has_active, err
 }
 
+const hasPendingTaskForIssue = `-- name: HasPendingTaskForIssue :one
+SELECT count(*) > 0 AS has_pending FROM agent_task_queue
+WHERE issue_id = $1 AND status IN ('queued', 'dispatched')
+`
+
+// Returns true if there is a queued or dispatched (but not yet running) task for the issue.
+// Used by the coalescing queue: allow enqueue when a task is running (so
+// the agent picks up new comments on the next cycle) but skip if a pending
+// task already exists (natural dedup).
+func (q *Queries) HasPendingTaskForIssue(ctx context.Context, issueID pgtype.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, hasPendingTaskForIssue, issueID)
+	var has_pending bool
+	err := row.Scan(&has_pending)
+	return has_pending, err
+}
+
 const listAgentTasks = `-- name: ListAgentTasks :many
 SELECT id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir FROM agent_task_queue
 WHERE agent_id = $1
