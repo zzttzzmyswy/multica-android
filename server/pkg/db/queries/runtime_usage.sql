@@ -25,3 +25,10 @@ FROM runtime_usage
 WHERE runtime_id = $1
 GROUP BY provider, model
 ORDER BY provider, model;
+
+-- name: GetRuntimeTaskHourlyActivity :many
+SELECT EXTRACT(HOUR FROM started_at)::int AS hour, COUNT(*)::int AS count
+FROM agent_task_queue
+WHERE runtime_id = $1 AND started_at IS NOT NULL
+GROUP BY hour
+ORDER BY hour;

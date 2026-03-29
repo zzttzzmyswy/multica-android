@@ -166,3 +166,8 @@ export interface RuntimeUsage {
   cache_read_tokens: number;
   cache_write_tokens: number;
 }
+
+export interface RuntimeHourlyActivity {
+  hour: number;
+  count: number;
+}
