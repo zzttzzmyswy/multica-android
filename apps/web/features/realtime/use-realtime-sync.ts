@@ -96,11 +96,13 @@ export function useRealtimeSync(ws: WSClient | null) {
     });
 
     const unsubMemberAdded = ws.on("member:added", (p) => {
-      const { member } = p as MemberAddedPayload;
+      const { member, workspace_name } = p as MemberAddedPayload;
       const myUserId = useAuthStore.getState().user?.id;
       if (member.user_id === myUserId) {
-        // I was invited to a new workspace — refresh workspace list
         useWorkspaceStore.getState().refreshWorkspaces();
+        toast.info(
+          `You were invited to ${workspace_name ?? "a workspace"}`,
+        );
       }
     });
 

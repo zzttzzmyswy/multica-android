@@ -422,7 +422,11 @@ func (h *Handler) CreateMember(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("member added", append(logger.RequestAttrs(r), "member_id", uuidToString(member.ID), "workspace_id", workspaceID, "email", email, "role", role)...)
 	userID := requestUserID(r)
-	h.publish(protocol.EventMemberAdded, workspaceID, "member", userID, map[string]any{"member": memberWithUserResponse(member, user)})
+	eventPayload := map[string]any{"member": memberWithUserResponse(member, user)}
+	if ws, err := h.Queries.GetWorkspace(r.Context(), parseUUID(workspaceID)); err == nil {
+		eventPayload["workspace_name"] = ws.Name
+	}
+	h.publish(protocol.EventMemberAdded, workspaceID, "member", userID, eventPayload)
 
 	writeJSON(w, http.StatusCreated, memberWithUserResponse(member, user))
 }

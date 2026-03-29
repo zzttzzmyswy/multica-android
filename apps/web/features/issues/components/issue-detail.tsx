@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useDefaultLayout, usePanelRef } from "react-resizable-panels";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -152,7 +152,7 @@ function PropRow({
   return (
     <div className="flex min-h-8 items-center gap-2 rounded-md px-2 -mx-2 hover:bg-accent/50 transition-colors">
       <span className="w-16 shrink-0 text-xs text-muted-foreground">{label}</span>
-      <div className="flex min-w-0 flex-1 items-center gap-1.5 text-sm truncate">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 text-xs truncate">
         {children}
       </div>
     </div>
@@ -198,8 +198,8 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
+  const titleFocusedRef = useRef(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(true);
@@ -210,17 +210,22 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
   useEffect(() => {
     if (storeIssue) {
       setIssue(storeIssue);
+      if (!titleFocusedRef.current) {
+        setTitleDraft(storeIssue.title);
+      }
     }
   }, [storeIssue]);
 
   useEffect(() => {
     setIssue(null);
+    setTitleDraft("");
     setTimeline([]);
     setSubscribers([]);
     setLoading(true);
     Promise.all([api.getIssue(id), api.listTimeline(id), api.listIssueSubscribers(id)])
       .then(([iss, entries, subs]) => {
         setIssue(iss);
+        setTitleDraft(iss.title);
         setTimeline(entries);
         setSubscribers(subs);
       })
@@ -479,10 +484,6 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
                 <ChevronRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
               </>
             )}
-            <span className="truncate text-muted-foreground">
-              {issue.identifier}
-            </span>
-            <ChevronRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
             <span className="truncate">{issue.title}</span>
           </div>
           <div className="flex items-center gap-1 shrink-0">
@@ -719,34 +720,28 @@ export function IssueDetail({ issueId, onDelete }: IssueDetailProps) {
 
         {/* Content — scrollable */}
         <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-3xl px-8 py-8">
-          {editingTitle ? (
-            <Input
-              autoFocus
-              value={titleDraft}
-              onChange={(e) => setTitleDraft(e.target.value)}
-              onBlur={() => {
-                if (titleDraft.trim()) handleUpdateField({ title: titleDraft.trim() });
-                setEditingTitle(false);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  if (titleDraft.trim()) handleUpdateField({ title: titleDraft.trim() });
-                  setEditingTitle(false);
-                } else if (e.key === "Escape") {
-                  setEditingTitle(false);
-                }
-              }}
-              className="text-2xl font-bold leading-snug tracking-tight"
-            />
-          ) : (
-            <h1
-              className="text-2xl font-bold leading-snug tracking-tight cursor-pointer hover:bg-accent/50 rounded px-1 -mx-1"
-              onClick={() => { setTitleDraft(issue.title); setEditingTitle(true); }}
-            >
-              {issue.title}
-            </h1>
-          )}
+        <div className="mx-auto w-full max-w-4xl px-8 py-8">
+          <input
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onFocus={() => { titleFocusedRef.current = true; }}
+            onBlur={() => {
+              titleFocusedRef.current = false;
+              const trimmed = titleDraft.trim();
+              if (trimmed && trimmed !== issue.title) handleUpdateField({ title: trimmed });
+              else setTitleDraft(issue.title);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                (e.target as HTMLInputElement).blur();
+              } else if (e.key === "Escape") {
+                setTitleDraft(issue.title);
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+            className="w-full bg-transparent text-2xl font-bold leading-snug tracking-tight outline-none placeholder:text-muted-foreground"
+          />
 
           <RichTextEditor
             defaultValue={issue.description || ""}

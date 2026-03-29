@@ -96,7 +96,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     // Clear stale data from other stores before switching
     useIssueStore.getState().setIssues([]);
     useInboxStore.getState().setItems([]);
-    set({ agents: [], skills: [] });
+    set({ members: [], agents: [], skills: [] });
 
     await hydrateWorkspace(workspaces, ws.id);
   },

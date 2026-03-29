@@ -3,9 +3,9 @@ SELECT i.*,
        iss.status as issue_status
 FROM inbox_item i
 LEFT JOIN issue iss ON iss.id = i.issue_id
-WHERE i.recipient_type = $1 AND i.recipient_id = $2 AND i.archived = false
+WHERE i.workspace_id = $1 AND i.recipient_type = $2 AND i.recipient_id = $3 AND i.archived = false
 ORDER BY i.created_at DESC
-LIMIT $3 OFFSET $4;
+LIMIT $4 OFFSET $5;
 
 -- name: GetInboxItem :one
 SELECT * FROM inbox_item
@@ -31,21 +31,21 @@ RETURNING *;
 
 -- name: CountUnreadInbox :one
 SELECT count(*) FROM inbox_item
-WHERE recipient_type = $1 AND recipient_id = $2 AND read = false AND archived = false;
+WHERE workspace_id = $1 AND recipient_type = $2 AND recipient_id = $3 AND read = false AND archived = false;
 
 -- name: MarkAllInboxRead :execrows
 UPDATE inbox_item SET read = true
-WHERE recipient_type = 'member' AND recipient_id = $1 AND archived = false AND read = false;
+WHERE workspace_id = $1 AND recipient_type = 'member' AND recipient_id = $2 AND archived = false AND read = false;
 
 -- name: ArchiveAllInbox :execrows
 UPDATE inbox_item SET archived = true
-WHERE recipient_type = 'member' AND recipient_id = $1 AND archived = false;
+WHERE workspace_id = $1 AND recipient_type = 'member' AND recipient_id = $2 AND archived = false;
 
 -- name: ArchiveAllReadInbox :execrows
 UPDATE inbox_item SET archived = true
-WHERE recipient_type = 'member' AND recipient_id = $1 AND read = true AND archived = false;
+WHERE workspace_id = $1 AND recipient_type = 'member' AND recipient_id = $2 AND read = true AND archived = false;
 
 -- name: ArchiveCompletedInbox :execrows
-UPDATE inbox_item SET archived = true
-WHERE recipient_type = 'member' AND recipient_id = $1 AND archived = false
-  AND issue_id IN (SELECT id FROM issue WHERE status IN ('done', 'cancelled'));
+UPDATE inbox_item i SET archived = true
+WHERE i.workspace_id = $1 AND i.recipient_type = 'member' AND i.recipient_id = $2 AND i.archived = false
+  AND i.issue_id IN (SELECT id FROM issue WHERE status IN ('done', 'cancelled'));

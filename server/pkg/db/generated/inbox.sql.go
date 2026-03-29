@@ -13,11 +13,16 @@ import (
 
 const archiveAllInbox = `-- name: ArchiveAllInbox :execrows
 UPDATE inbox_item SET archived = true
-WHERE recipient_type = 'member' AND recipient_id = $1 AND archived = false
+WHERE workspace_id = $1 AND recipient_type = 'member' AND recipient_id = $2 AND archived = false
 `
 
-func (q *Queries) ArchiveAllInbox(ctx context.Context, recipientID pgtype.UUID) (int64, error) {
-	result, err := q.db.Exec(ctx, archiveAllInbox, recipientID)
+type ArchiveAllInboxParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	RecipientID pgtype.UUID `json:"recipient_id"`
+}
+
+func (q *Queries) ArchiveAllInbox(ctx context.Context, arg ArchiveAllInboxParams) (int64, error) {
+	result, err := q.db.Exec(ctx, archiveAllInbox, arg.WorkspaceID, arg.RecipientID)
 	if err != nil {
 		return 0, err
 	}
@@ -26,11 +31,16 @@ func (q *Queries) ArchiveAllInbox(ctx context.Context, recipientID pgtype.UUID) 
 
 const archiveAllReadInbox = `-- name: ArchiveAllReadInbox :execrows
 UPDATE inbox_item SET archived = true
-WHERE recipient_type = 'member' AND recipient_id = $1 AND read = true AND archived = false
+WHERE workspace_id = $1 AND recipient_type = 'member' AND recipient_id = $2 AND read = true AND archived = false
 `
 
-func (q *Queries) ArchiveAllReadInbox(ctx context.Context, recipientID pgtype.UUID) (int64, error) {
-	result, err := q.db.Exec(ctx, archiveAllReadInbox, recipientID)
+type ArchiveAllReadInboxParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	RecipientID pgtype.UUID `json:"recipient_id"`
+}
+
+func (q *Queries) ArchiveAllReadInbox(ctx context.Context, arg ArchiveAllReadInboxParams) (int64, error) {
+	result, err := q.db.Exec(ctx, archiveAllReadInbox, arg.WorkspaceID, arg.RecipientID)
 	if err != nil {
 		return 0, err
 	}
@@ -38,13 +48,18 @@ func (q *Queries) ArchiveAllReadInbox(ctx context.Context, recipientID pgtype.UU
 }
 
 const archiveCompletedInbox = `-- name: ArchiveCompletedInbox :execrows
-UPDATE inbox_item SET archived = true
-WHERE recipient_type = 'member' AND recipient_id = $1 AND archived = false
-  AND issue_id IN (SELECT id FROM issue WHERE status IN ('done', 'cancelled'))
+UPDATE inbox_item i SET archived = true
+WHERE i.workspace_id = $1 AND i.recipient_type = 'member' AND i.recipient_id = $2 AND i.archived = false
+  AND i.issue_id IN (SELECT id FROM issue WHERE status IN ('done', 'cancelled'))
 `
 
-func (q *Queries) ArchiveCompletedInbox(ctx context.Context, recipientID pgtype.UUID) (int64, error) {
-	result, err := q.db.Exec(ctx, archiveCompletedInbox, recipientID)
+type ArchiveCompletedInboxParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	RecipientID pgtype.UUID `json:"recipient_id"`
+}
+
+func (q *Queries) ArchiveCompletedInbox(ctx context.Context, arg ArchiveCompletedInboxParams) (int64, error) {
+	result, err := q.db.Exec(ctx, archiveCompletedInbox, arg.WorkspaceID, arg.RecipientID)
 	if err != nil {
 		return 0, err
 	}
@@ -82,16 +97,17 @@ func (q *Queries) ArchiveInboxItem(ctx context.Context, id pgtype.UUID) (InboxIt
 
 const countUnreadInbox = `-- name: CountUnreadInbox :one
 SELECT count(*) FROM inbox_item
-WHERE recipient_type = $1 AND recipient_id = $2 AND read = false AND archived = false
+WHERE workspace_id = $1 AND recipient_type = $2 AND recipient_id = $3 AND read = false AND archived = false
 `
 
 type CountUnreadInboxParams struct {
+	WorkspaceID   pgtype.UUID `json:"workspace_id"`
 	RecipientType string      `json:"recipient_type"`
 	RecipientID   pgtype.UUID `json:"recipient_id"`
 }
 
 func (q *Queries) CountUnreadInbox(ctx context.Context, arg CountUnreadInboxParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countUnreadInbox, arg.RecipientType, arg.RecipientID)
+	row := q.db.QueryRow(ctx, countUnreadInbox, arg.WorkspaceID, arg.RecipientType, arg.RecipientID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -188,12 +204,13 @@ SELECT i.id, i.workspace_id, i.recipient_type, i.recipient_id, i.type, i.severit
        iss.status as issue_status
 FROM inbox_item i
 LEFT JOIN issue iss ON iss.id = i.issue_id
-WHERE i.recipient_type = $1 AND i.recipient_id = $2 AND i.archived = false
+WHERE i.workspace_id = $1 AND i.recipient_type = $2 AND i.recipient_id = $3 AND i.archived = false
 ORDER BY i.created_at DESC
-LIMIT $3 OFFSET $4
+LIMIT $4 OFFSET $5
 `
 
 type ListInboxItemsParams struct {
+	WorkspaceID   pgtype.UUID `json:"workspace_id"`
 	RecipientType string      `json:"recipient_type"`
 	RecipientID   pgtype.UUID `json:"recipient_id"`
 	Limit         int32       `json:"limit"`
@@ -221,6 +238,7 @@ type ListInboxItemsRow struct {
 
 func (q *Queries) ListInboxItems(ctx context.Context, arg ListInboxItemsParams) ([]ListInboxItemsRow, error) {
 	rows, err := q.db.Query(ctx, listInboxItems,
+		arg.WorkspaceID,
 		arg.RecipientType,
 		arg.RecipientID,
 		arg.Limit,
@@ -263,11 +281,16 @@ func (q *Queries) ListInboxItems(ctx context.Context, arg ListInboxItemsParams) 
 
 const markAllInboxRead = `-- name: MarkAllInboxRead :execrows
 UPDATE inbox_item SET read = true
-WHERE recipient_type = 'member' AND recipient_id = $1 AND archived = false AND read = false
+WHERE workspace_id = $1 AND recipient_type = 'member' AND recipient_id = $2 AND archived = false AND read = false
 `
 
-func (q *Queries) MarkAllInboxRead(ctx context.Context, recipientID pgtype.UUID) (int64, error) {
-	result, err := q.db.Exec(ctx, markAllInboxRead, recipientID)
+type MarkAllInboxReadParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	RecipientID pgtype.UUID `json:"recipient_id"`
+}
+
+func (q *Queries) MarkAllInboxRead(ctx context.Context, arg MarkAllInboxReadParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markAllInboxRead, arg.WorkspaceID, arg.RecipientID)
 	if err != nil {
 		return 0, err
 	}

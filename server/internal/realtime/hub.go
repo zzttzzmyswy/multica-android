@@ -155,6 +155,60 @@ func (h *Hub) BroadcastToWorkspace(workspaceID string, message []byte) {
 	}
 }
 
+// SendToUser sends a message to all connections belonging to a specific user,
+// regardless of which workspace room they are in. Connections in excludeWorkspace
+// are skipped (they already receive the message via BroadcastToWorkspace).
+func (h *Hub) SendToUser(userID string, message []byte, excludeWorkspace ...string) {
+	exclude := ""
+	if len(excludeWorkspace) > 0 {
+		exclude = excludeWorkspace[0]
+	}
+
+	h.mu.RLock()
+	type target struct {
+		client      *Client
+		workspaceID string
+	}
+	var targets []target
+	for wsID, clients := range h.rooms {
+		if wsID == exclude {
+			continue
+		}
+		for client := range clients {
+			if client.userID == userID {
+				targets = append(targets, target{client, wsID})
+			}
+		}
+	}
+	h.mu.RUnlock()
+
+	var slow []target
+	for _, t := range targets {
+		select {
+		case t.client.send <- message:
+		default:
+			slow = append(slow, t)
+		}
+	}
+
+	// Remove slow clients under write lock (same pattern as BroadcastToWorkspace)
+	if len(slow) > 0 {
+		h.mu.Lock()
+		for _, t := range slow {
+			if room, ok := h.rooms[t.workspaceID]; ok {
+				if _, exists := room[t.client]; exists {
+					delete(room, t.client)
+					close(t.client.send)
+					if len(room) == 0 {
+						delete(h.rooms, t.workspaceID)
+					}
+				}
+			}
+		}
+		h.mu.Unlock()
+	}
+}
+
 // Broadcast sends a message to all connected clients (used for daemon events).
 func (h *Hub) Broadcast(message []byte) {
 	h.broadcast <- message
