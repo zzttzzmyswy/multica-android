@@ -384,6 +384,8 @@ export default function InboxPage() {
         {selected?.issue_id ? (
           <IssueDetail
             issueId={selected.issue_id}
+            defaultSidebarOpen={false}
+            layoutId="multica_inbox_issue_detail_layout"
             onDelete={() => {
               handleArchive(selected.id);
             }}
