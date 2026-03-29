@@ -74,9 +74,17 @@ RETURNING *;
 
 -- name: CompleteAgentTask :one
 UPDATE agent_task_queue
-SET status = 'completed', completed_at = now(), result = $2
+SET status = 'completed', completed_at = now(), result = $2, session_id = $3, work_dir = $4
 WHERE id = $1 AND status = 'running'
 RETURNING *;
+
+-- name: GetLastTaskSession :one
+-- Returns the session_id and work_dir from the most recent completed task
+-- for a given (agent_id, issue_id) pair, used for session resumption.
+SELECT session_id, work_dir FROM agent_task_queue
+WHERE agent_id = $1 AND issue_id = $2 AND status = 'completed' AND session_id IS NOT NULL
+ORDER BY completed_at DESC
+LIMIT 1;
 
 -- name: FailAgentTask :one
 UPDATE agent_task_queue

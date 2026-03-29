@@ -17,11 +17,12 @@ type Runtime struct {
 // Task represents a claimed task from the server.
 // Agent data (name, skills) is populated by the claim endpoint.
 type Task struct {
-	ID        string     `json:"id"`
-	AgentID   string     `json:"agent_id"`
-	RuntimeID string     `json:"runtime_id"`
-	IssueID   string     `json:"issue_id"`
-	Agent     *AgentData `json:"agent,omitempty"`
+	ID             string     `json:"id"`
+	AgentID        string     `json:"agent_id"`
+	RuntimeID      string     `json:"runtime_id"`
+	IssueID        string     `json:"issue_id"`
+	Agent          *AgentData `json:"agent,omitempty"`
+	PriorSessionID string     `json:"prior_session_id,omitempty"` // Claude session ID from a previous task on this issue
 }
 
 // AgentData holds agent details returned by the claim endpoint.
@@ -50,4 +51,6 @@ type TaskResult struct {
 	Comment    string `json:"comment"`
 	BranchName string `json:"branch_name,omitempty"`
 	EnvType    string `json:"env_type,omitempty"`
+	SessionID  string `json:"session_id,omitempty"` // Claude session ID for future resumption
+	WorkDir    string `json:"work_dir,omitempty"`   // working directory used during execution
 }

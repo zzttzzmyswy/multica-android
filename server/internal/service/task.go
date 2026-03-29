@@ -144,10 +144,12 @@ func (s *TaskService) StartTask(ctx context.Context, taskID pgtype.UUID) (*db.Ag
 
 // CompleteTask marks a task as completed.
 // Issue status is NOT changed here — the agent manages it via the CLI.
-func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, result []byte) (*db.AgentTaskQueue, error) {
+func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, result []byte, sessionID, workDir string) (*db.AgentTaskQueue, error) {
 	task, err := s.Queries.CompleteAgentTask(ctx, db.CompleteAgentTaskParams{
-		ID:     taskID,
-		Result: result,
+		ID:        taskID,
+		Result:    result,
+		SessionID: pgtype.Text{String: sessionID, Valid: sessionID != ""},
+		WorkDir:   pgtype.Text{String: workDir, Valid: workDir != ""},
 	})
 	if err != nil {
 		// Log the current task state to help debug why the update matched no rows.

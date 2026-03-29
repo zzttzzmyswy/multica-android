@@ -80,19 +80,20 @@ func agentToResponse(a db.Agent) AgentResponse {
 }
 
 type AgentTaskResponse struct {
-	ID           string         `json:"id"`
-	AgentID      string         `json:"agent_id"`
-	RuntimeID    string         `json:"runtime_id"`
-	IssueID      string         `json:"issue_id"`
-	Status       string         `json:"status"`
-	Priority     int32          `json:"priority"`
-	DispatchedAt *string        `json:"dispatched_at"`
-	StartedAt    *string        `json:"started_at"`
-	CompletedAt  *string        `json:"completed_at"`
-	Result       any            `json:"result"`
-	Error        *string        `json:"error"`
-	Agent        *TaskAgentData `json:"agent,omitempty"`
-	CreatedAt    string         `json:"created_at"`
+	ID             string         `json:"id"`
+	AgentID        string         `json:"agent_id"`
+	RuntimeID      string         `json:"runtime_id"`
+	IssueID        string         `json:"issue_id"`
+	Status         string         `json:"status"`
+	Priority       int32          `json:"priority"`
+	DispatchedAt   *string        `json:"dispatched_at"`
+	StartedAt      *string        `json:"started_at"`
+	CompletedAt    *string        `json:"completed_at"`
+	Result         any            `json:"result"`
+	Error          *string        `json:"error"`
+	Agent          *TaskAgentData `json:"agent,omitempty"`
+	CreatedAt      string         `json:"created_at"`
+	PriorSessionID string         `json:"prior_session_id,omitempty"` // session ID from a previous task on same issue
 }
 
 // TaskAgentData holds agent info included in claim responses so the daemon

@@ -564,7 +564,7 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 		}
 	default:
 		d.logger.Info("task completed", "task_id", task.ID, "status", result.Status)
-		if err := d.client.CompleteTask(ctx, task.ID, result.Comment, result.BranchName); err != nil {
+		if err := d.client.CompleteTask(ctx, task.ID, result.Comment, result.BranchName, result.SessionID, result.WorkDir); err != nil {
 			d.logger.Error("complete task failed", "task_id", task.ID, "error", err)
 		}
 	}
@@ -632,12 +632,13 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string) (TaskR
 		return TaskResult{}, fmt.Errorf("create agent backend: %w", err)
 	}
 
-	d.logger.Info("starting agent", "provider", provider, "task_id", task.ID, "workdir", env.WorkDir, "branch", env.BranchName, "env_type", env.Type, "model", entry.Model, "timeout", d.cfg.AgentTimeout.String())
+	d.logger.Info("starting agent", "provider", provider, "task_id", task.ID, "workdir", env.WorkDir, "branch", env.BranchName, "env_type", env.Type, "model", entry.Model, "timeout", d.cfg.AgentTimeout.String(), "resume_session", task.PriorSessionID)
 
 	session, err := backend.Execute(ctx, prompt, agent.ExecOptions{
-		Cwd:     env.WorkDir,
-		Model:   entry.Model,
-		Timeout: d.cfg.AgentTimeout,
+		Cwd:             env.WorkDir,
+		Model:           entry.Model,
+		Timeout:         d.cfg.AgentTimeout,
+		ResumeSessionID: task.PriorSessionID,
 	})
 	if err != nil {
 		return TaskResult{}, err
@@ -667,6 +668,8 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string) (TaskR
 			Comment:    result.Output,
 			BranchName: env.BranchName,
 			EnvType:    string(env.Type),
+			SessionID:  result.SessionID,
+			WorkDir:    env.WorkDir,
 		}, nil
 	case "timeout":
 		return TaskResult{}, fmt.Errorf("%s timed out after %s", provider, d.cfg.AgentTimeout)
