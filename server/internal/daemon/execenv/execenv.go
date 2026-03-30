@@ -19,6 +19,7 @@ type RepoContextForEnv struct {
 // PrepareParams holds all inputs needed to set up an execution environment.
 type PrepareParams struct {
 	WorkspacesRoot string           // base path for all envs (e.g., ~/multica_workspaces)
+	WorkspaceID    string           // workspace UUID — tasks are grouped under this
 	TaskID         string           // task UUID — used for directory name
 	AgentName      string           // for git branch naming only
 	Provider       string           // agent provider ("claude", "codex") — determines skill injection paths
@@ -66,11 +67,14 @@ func Prepare(params PrepareParams, logger *slog.Logger) (*Environment, error) {
 	if params.WorkspacesRoot == "" {
 		return nil, fmt.Errorf("execenv: workspaces root is required")
 	}
+	if params.WorkspaceID == "" {
+		return nil, fmt.Errorf("execenv: workspace ID is required")
+	}
 	if params.TaskID == "" {
 		return nil, fmt.Errorf("execenv: task ID is required")
 	}
 
-	envRoot := filepath.Join(params.WorkspacesRoot, shortID(params.TaskID))
+	envRoot := filepath.Join(params.WorkspacesRoot, params.WorkspaceID, shortID(params.TaskID))
 
 	// Remove existing env if present (defensive — task IDs are unique).
 	if _, err := os.Stat(envRoot); err == nil {

@@ -75,6 +75,7 @@ func TestPrepareDirectoryMode(t *testing.T) {
 
 	env, err := Prepare(PrepareParams{
 		WorkspacesRoot: workspacesRoot,
+		WorkspaceID:    "ws-test-001",
 		TaskID:         "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 		AgentName:      "Test Agent",
 		Task: TaskContextForEnv{
@@ -131,6 +132,7 @@ func TestPrepareWithRepoContext(t *testing.T) {
 	}
 	env, err := Prepare(PrepareParams{
 		WorkspacesRoot: workspacesRoot,
+		WorkspaceID:    "ws-test-002",
 		TaskID:         "b2c3d4e5-f6a7-8901-bcde-f12345678901",
 		AgentName:      "Code Reviewer",
 		Provider:       "claude",
@@ -322,6 +324,7 @@ func TestCleanupPreservesLogs(t *testing.T) {
 
 	env, err := Prepare(PrepareParams{
 		WorkspacesRoot: workspacesRoot,
+		WorkspaceID:    "ws-test-003",
 		TaskID:         "d4e5f6a7-b8c9-0123-defa-234567890123",
 		AgentName:      "Preserve Test",
 		Task:           TaskContextForEnv{IssueID: "preserve-test-id"},
