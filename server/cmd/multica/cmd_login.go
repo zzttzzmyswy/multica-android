@@ -41,7 +41,7 @@ func runLogin(cmd *cobra.Command, args []string) error {
 
 func autoWatchWorkspaces(cmd *cobra.Command) error {
 	serverURL := resolveServerURL(cmd)
-	token := resolveToken()
+	token := resolveToken(cmd)
 	if token == "" {
 		return fmt.Errorf("not authenticated")
 	}
@@ -63,7 +63,8 @@ func autoWatchWorkspaces(cmd *cobra.Command) error {
 		return nil
 	}
 
-	cfg, err := cli.LoadCLIConfig()
+	profile := resolveProfile(cmd)
+	cfg, err := cli.LoadCLIConfigForProfile(profile)
 	if err != nil {
 		return err
 	}
@@ -80,7 +81,7 @@ func autoWatchWorkspaces(cmd *cobra.Command) error {
 		cfg.WorkspaceID = workspaces[0].ID
 	}
 
-	if err := cli.SaveCLIConfig(cfg); err != nil {
+	if err := cli.SaveCLIConfigForProfile(cfg, profile); err != nil {
 		return err
 	}
 

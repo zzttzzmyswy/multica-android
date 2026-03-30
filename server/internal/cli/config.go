@@ -47,19 +47,46 @@ func (c *CLIConfig) RemoveWatchedWorkspace(id string) bool {
 	return false
 }
 
-
 // CLIConfigPath returns the default path for the CLI config file.
 func CLIConfigPath() (string, error) {
+	return CLIConfigPathForProfile("")
+}
+
+// CLIConfigPathForProfile returns the config file path for the given profile.
+// An empty profile returns the default path (~/.multica/config.json).
+// A named profile returns ~/.multica/profiles/<name>/config.json.
+func CLIConfigPathForProfile(profile string) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve CLI config path: %w", err)
 	}
-	return filepath.Join(home, defaultCLIConfigPath), nil
+	if profile == "" {
+		return filepath.Join(home, defaultCLIConfigPath), nil
+	}
+	return filepath.Join(home, ".multica", "profiles", profile, "config.json"), nil
 }
 
-// LoadCLIConfig reads the CLI config from disk.
+// ProfileDir returns the base directory for a profile's state files (pid, log).
+// An empty profile returns ~/.multica/. A named profile returns ~/.multica/profiles/<name>/.
+func ProfileDir(profile string) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve profile dir: %w", err)
+	}
+	if profile == "" {
+		return filepath.Join(home, ".multica"), nil
+	}
+	return filepath.Join(home, ".multica", "profiles", profile), nil
+}
+
+// LoadCLIConfig reads the CLI config from disk (default profile).
 func LoadCLIConfig() (CLIConfig, error) {
-	path, err := CLIConfigPath()
+	return LoadCLIConfigForProfile("")
+}
+
+// LoadCLIConfigForProfile reads the CLI config for the given profile.
+func LoadCLIConfigForProfile(profile string) (CLIConfig, error) {
+	path, err := CLIConfigPathForProfile(profile)
 	if err != nil {
 		return CLIConfig{}, err
 	}
@@ -77,9 +104,14 @@ func LoadCLIConfig() (CLIConfig, error) {
 	return cfg, nil
 }
 
-// SaveCLIConfig writes the CLI config to disk atomically (write to temp, then rename).
+// SaveCLIConfig writes the CLI config to disk atomically (default profile).
 func SaveCLIConfig(cfg CLIConfig) error {
-	path, err := CLIConfigPath()
+	return SaveCLIConfigForProfile(cfg, "")
+}
+
+// SaveCLIConfigForProfile writes the CLI config for the given profile.
+func SaveCLIConfigForProfile(cfg CLIConfig, profile string) error {
+	path, err := CLIConfigPathForProfile(profile)
 	if err != nil {
 		return err
 	}

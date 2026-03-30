@@ -62,7 +62,11 @@ func (d *Daemon) Run(ctx context.Context) error {
 	for name := range d.cfg.Agents {
 		agentNames = append(agentNames, name)
 	}
-	d.logger.Info("starting daemon", "agents", agentNames, "server", d.cfg.ServerBaseURL)
+	logFields := []any{"agents", agentNames, "server", d.cfg.ServerBaseURL}
+	if d.cfg.Profile != "" {
+		logFields = append(logFields, "profile", d.cfg.Profile)
+	}
+	d.logger.Info("starting daemon", logFields...)
 
 	// Load auth token from CLI config.
 	if err := d.resolveAuth(); err != nil {
@@ -111,15 +115,19 @@ func (d *Daemon) deregisterRuntimes() {
 	}
 }
 
-// resolveAuth loads the auth token from the CLI config.
+// resolveAuth loads the auth token from the CLI config for the active profile.
 func (d *Daemon) resolveAuth() error {
-	cfg, err := cli.LoadCLIConfig()
+	cfg, err := cli.LoadCLIConfigForProfile(d.cfg.Profile)
 	if err != nil {
 		return fmt.Errorf("load CLI config: %w", err)
 	}
 	if cfg.Token == "" {
-		d.logger.Warn("not authenticated — run 'multica login' to authenticate, then restart the daemon")
-		return fmt.Errorf("not authenticated: run 'multica login' first")
+		loginHint := "'multica login'"
+		if d.cfg.Profile != "" {
+			loginHint = fmt.Sprintf("'multica login --profile %s'", d.cfg.Profile)
+		}
+		d.logger.Warn("not authenticated — run " + loginHint + " to authenticate, then restart the daemon")
+		return fmt.Errorf("not authenticated: run %s first", loginHint)
 	}
 	d.client.SetToken(cfg.Token)
 	d.logger.Info("authenticated")
@@ -128,7 +136,7 @@ func (d *Daemon) resolveAuth() error {
 
 // loadWatchedWorkspaces reads watched workspaces from CLI config and registers runtimes.
 func (d *Daemon) loadWatchedWorkspaces(ctx context.Context) error {
-	cfg, err := cli.LoadCLIConfig()
+	cfg, err := cli.LoadCLIConfigForProfile(d.cfg.Profile)
 	if err != nil {
 		return fmt.Errorf("load CLI config: %w", err)
 	}
@@ -247,7 +255,7 @@ func (d *Daemon) registerRuntimesForWorkspace(ctx context.Context, workspaceID s
 
 // configWatchLoop periodically checks for config file changes and reloads workspaces.
 func (d *Daemon) configWatchLoop(ctx context.Context) {
-	configPath, err := cli.CLIConfigPath()
+	configPath, err := cli.CLIConfigPathForProfile(d.cfg.Profile)
 	if err != nil {
 		d.logger.Warn("cannot watch config file", "error", err)
 		return
@@ -311,7 +319,7 @@ func (d *Daemon) syncWorkspacesFromAPI(ctx context.Context) {
 		return
 	}
 
-	cfg, err := cli.LoadCLIConfig()
+	cfg, err := cli.LoadCLIConfigForProfile(d.cfg.Profile)
 	if err != nil {
 		d.logger.Warn("workspace sync: failed to load config", "error", err)
 		return
@@ -329,7 +337,7 @@ func (d *Daemon) syncWorkspacesFromAPI(ctx context.Context) {
 		return
 	}
 
-	if err := cli.SaveCLIConfig(cfg); err != nil {
+	if err := cli.SaveCLIConfigForProfile(cfg, d.cfg.Profile); err != nil {
 		d.logger.Warn("workspace sync: failed to save config", "error", err)
 		return
 	}
@@ -343,7 +351,7 @@ func (d *Daemon) reloadWorkspaces(ctx context.Context) {
 	d.reloading.Lock()
 	defer d.reloading.Unlock()
 
-	cfg, err := cli.LoadCLIConfig()
+	cfg, err := cli.LoadCLIConfigForProfile(d.cfg.Profile)
 	if err != nil {
 		d.logger.Warn("reload config failed", "error", err)
 		return
