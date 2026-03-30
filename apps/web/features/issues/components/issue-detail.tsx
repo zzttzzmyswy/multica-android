@@ -844,7 +844,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
             </div>
 
             {/* Timeline entries */}
-            <div className="mt-4 space-y-2">
+            <div className="mt-4 flex flex-col gap-3">
               {(() => {
                 const topLevel = timeline.filter((e) => e.type === "activity" || !e.parent_id);
                 const repliesByParent = new Map<string, TimelineEntry[]>();
@@ -888,7 +888,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                   }
 
                   return (
-                    <div key={group.entries[0]!.id} className="px-4">
+                    <div key={group.entries[0]!.id} className="px-4 flex flex-col gap-3">
                       {group.entries.map((entry, idx) => {
                         const details = (entry.details ?? {}) as Record<string, string>;
                         const isStatusChange = entry.action === "status_changed";
@@ -908,12 +908,14 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                         }
 
                         return (
-                          <div key={entry.id} className="flex text-xs text-muted-foreground">
-                            <div className="mr-2.5 flex w-3.5 shrink-0 flex-col items-center">
+                          <div key={entry.id} className="relative flex text-xs text-muted-foreground">
+                            <div className="mr-2.5 flex w-3.5 shrink-0 justify-center">
                               <div className="flex h-5 items-center">{leadIcon}</div>
-                              {!isLast && <div className="w-px flex-1 bg-border" />}
                             </div>
-                            <div className={`flex flex-1 items-baseline gap-1 ${!isLast ? "pb-3" : ""}`}>
+                            {!isLast && (
+                              <div className="absolute left-[7px] top-5 h-3 w-px bg-border" />
+                            )}
+                            <div className="flex flex-1 items-baseline gap-1">
                               <span className="font-medium">{getActorName(entry.actor_type, entry.actor_id)}</span>
                               <span>{formatActivity(entry, getActorName)}</span>
                               <Tooltip>
