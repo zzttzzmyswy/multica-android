@@ -85,6 +85,9 @@ func (d *Daemon) Run(ctx context.Context) error {
 	// Start config watcher for hot-reload.
 	go d.configWatchLoop(ctx)
 
+	// Start workspace sync loop to discover newly created workspaces.
+	go d.workspaceSyncLoop(ctx)
+
 	go d.heartbeatLoop(ctx)
 	go d.usageScanLoop(ctx)
 	go d.serveHealth(ctx, healthLn, time.Now())
@@ -274,6 +277,60 @@ func (d *Daemon) configWatchLoop(ctx context.Context) {
 			d.reloadWorkspaces(ctx)
 		}
 	}
+}
+
+// workspaceSyncLoop periodically fetches the user's workspaces from the API
+// and adds any new ones to the CLI config. The configWatchLoop will then
+// detect the config change and register runtimes for the new workspaces.
+func (d *Daemon) workspaceSyncLoop(ctx context.Context) {
+	ticker := time.NewTicker(DefaultWorkspaceSyncInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			d.syncWorkspacesFromAPI(ctx)
+		}
+	}
+}
+
+// syncWorkspacesFromAPI fetches all workspaces the user belongs to and adds
+// any missing ones to the CLI config's watched list.
+func (d *Daemon) syncWorkspacesFromAPI(ctx context.Context) {
+	apiCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
+	workspaces, err := d.client.ListWorkspaces(apiCtx)
+	if err != nil {
+		d.logger.Debug("workspace sync: failed to list workspaces", "error", err)
+		return
+	}
+
+	cfg, err := cli.LoadCLIConfig()
+	if err != nil {
+		d.logger.Warn("workspace sync: failed to load config", "error", err)
+		return
+	}
+
+	var added int
+	for _, ws := range workspaces {
+		if cfg.AddWatchedWorkspace(ws.ID, ws.Name) {
+			added++
+			d.logger.Info("workspace sync: discovered new workspace", "workspace_id", ws.ID, "name", ws.Name)
+		}
+	}
+
+	if added == 0 {
+		return
+	}
+
+	if err := cli.SaveCLIConfig(cfg); err != nil {
+		d.logger.Warn("workspace sync: failed to save config", "error", err)
+		return
+	}
+	d.logger.Info("workspace sync: added new workspace(s) to config", "count", added)
 }
 
 // reloadWorkspaces reconciles the active workspace set with the config file.

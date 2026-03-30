@@ -146,6 +146,21 @@ func (c *Client) ReportPingResult(ctx context.Context, runtimeID, pingID string,
 	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/runtimes/%s/ping/%s/result", runtimeID, pingID), result, nil)
 }
 
+// WorkspaceInfo holds minimal workspace metadata returned by the API.
+type WorkspaceInfo struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// ListWorkspaces fetches all workspaces the authenticated user belongs to.
+func (c *Client) ListWorkspaces(ctx context.Context) ([]WorkspaceInfo, error) {
+	var workspaces []WorkspaceInfo
+	if err := c.getJSON(ctx, "/api/workspaces", &workspaces); err != nil {
+		return nil, err
+	}
+	return workspaces, nil
+}
+
 func (c *Client) Deregister(ctx context.Context, runtimeIDs []string) error {
 	return c.postJSON(ctx, "/api/daemon/deregister", map[string]any{
 		"runtime_ids": runtimeIDs,
