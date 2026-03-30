@@ -164,6 +164,8 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 					r.Get("/subscribers", h.ListIssueSubscribers)
 					r.Post("/subscribe", h.SubscribeToIssue)
 					r.Post("/unsubscribe", h.UnsubscribeFromIssue)
+					r.Post("/reactions", h.AddIssueReaction)
+					r.Delete("/reactions", h.RemoveIssueReaction)
 				})
 			})
 
@@ -171,6 +173,8 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 			r.Route("/api/comments/{commentId}", func(r chi.Router) {
 				r.Put("/", h.UpdateComment)
 				r.Delete("/", h.DeleteComment)
+				r.Post("/reactions", h.AddReaction)
+				r.Delete("/reactions", h.RemoveReaction)
 			})
 
 			// Agents
