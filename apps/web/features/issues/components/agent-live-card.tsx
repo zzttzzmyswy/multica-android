@@ -8,6 +8,7 @@ import type { TaskMessagePayload, TaskCompletedPayload, TaskFailedPayload } from
 import type { AgentTask } from "@/shared/types/agent";
 import { cn } from "@/lib/utils";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { redactSecrets } from "../utils/redact";
 
 // ─── Shared types & helpers ─────────────────────────────────────────────────
 
@@ -83,9 +84,9 @@ function buildTimeline(msgs: TaskMessagePayload[]): TimelineItem[] {
       seq: msg.seq,
       type: msg.type,
       tool: msg.tool,
-      content: msg.content,
+      content: msg.content ? redactSecrets(msg.content) : msg.content,
       input: msg.input,
-      output: msg.output,
+      output: msg.output ? redactSecrets(msg.output) : msg.output,
     });
   }
   return items.sort((a, b) => a.seq - b.seq);
@@ -425,7 +426,7 @@ function ToolCallRow({ item }: { item: TimelineItem }) {
       {hasInput && (
         <CollapsibleContent>
           <pre className="ml-[18px] mt-0.5 max-h-32 overflow-auto rounded bg-muted/50 p-2 text-[11px] text-muted-foreground whitespace-pre-wrap break-all">
-            {JSON.stringify(item.input, null, 2)}
+            {redactSecrets(JSON.stringify(item.input, null, 2))}
           </pre>
         </CollapsibleContent>
       )}

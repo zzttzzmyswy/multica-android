@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
+	"github.com/multica-ai/multica/server/pkg/redact"
 )
 
 // ---------------------------------------------------------------------------
@@ -430,6 +431,11 @@ func (h *Handler) ReportTaskMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, msg := range req.Messages {
+		// Redact sensitive information before persisting or broadcasting.
+		msg.Content = redact.Text(msg.Content)
+		msg.Output = redact.Text(msg.Output)
+		msg.Input = redact.InputMap(msg.Input)
+
 		var inputJSON []byte
 		if msg.Input != nil {
 			inputJSON, _ = json.Marshal(msg.Input)
