@@ -16,8 +16,9 @@ const (
 	DefaultHeartbeatInterval    = 15 * time.Second
 	DefaultAgentTimeout         = 2 * time.Hour
 	DefaultRuntimeName          = "Local Agent"
-	DefaultConfigReloadInterval = 5 * time.Second
-	DefaultHealthPort           = 19514
+	DefaultConfigReloadInterval  = 5 * time.Second
+	DefaultWorkspaceSyncInterval = 30 * time.Second
+	DefaultHealthPort            = 19514
 	DefaultMaxConcurrentTasks   = 20
 )
 
