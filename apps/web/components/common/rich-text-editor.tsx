@@ -47,6 +47,41 @@ interface RichTextEditorRef {
 // Stores as: [@Label](mention://type/id)
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Link extension — always serialize as [text](url), never <url> autolinks;
+// support Cmd+Click / Ctrl+Click to open in new tab.
+// ---------------------------------------------------------------------------
+
+const LinkExtension = Link.configure({
+  openOnClick: true,
+  autolink: true,
+  HTMLAttributes: {
+    class: "text-primary hover:underline cursor-pointer",
+  },
+}).extend({
+  addStorage() {
+    return {
+      markdown: {
+        serialize: {
+          open() {
+            return "[";
+          },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          close(_state: any, mark: any) {
+            const href = (mark.attrs.href as string).replace(/[\(\)"]/g, "\\$&");
+            const title = mark.attrs.title
+              ? ` "${(mark.attrs.title as string).replace(/"/g, '\\"')}"`
+              : "";
+            return `](${href}${title})`;
+          },
+          mixable: true,
+        },
+        parse: {},
+      },
+    };
+  },
+});
+
 const MentionExtension = Mention.configure({
   HTMLAttributes: { class: "mention" },
   suggestion: createMentionSuggestion(),
@@ -146,13 +181,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
         Placeholder.configure({
           placeholder: placeholderText,
         }),
-        Link.configure({
-          openOnClick: false,
-          autolink: true,
-          HTMLAttributes: {
-            class: "text-primary hover:underline cursor-pointer",
-          },
-        }),
+        LinkExtension,
         Typography,
         MentionExtension,
         Markdown.configure({
@@ -170,6 +199,20 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
         }, debounceMs);
       },
       editorProps: {
+        handleDOMEvents: {
+          click(_view, event) {
+            if (event.metaKey || event.ctrlKey) {
+              const link = (event.target as HTMLElement).closest("a");
+              const href = link?.getAttribute("href");
+              if (href && !href.startsWith("mention://")) {
+                window.open(href, "_blank", "noopener,noreferrer");
+                event.preventDefault();
+                return true;
+              }
+            }
+            return false;
+          },
+        },
         attributes: {
           class: cn("rich-text-editor text-sm outline-none", className),
         },
