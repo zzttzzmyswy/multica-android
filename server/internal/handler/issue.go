@@ -18,23 +18,24 @@ import (
 
 // IssueResponse is the JSON response for an issue.
 type IssueResponse struct {
-	ID                 string  `json:"id"`
-	WorkspaceID        string  `json:"workspace_id"`
-	Number             int32   `json:"number"`
-	Identifier         string  `json:"identifier"`
-	Title              string  `json:"title"`
-	Description        *string `json:"description"`
-	Status             string  `json:"status"`
-	Priority           string  `json:"priority"`
-	AssigneeType       *string `json:"assignee_type"`
-	AssigneeID         *string `json:"assignee_id"`
-	CreatorType        string  `json:"creator_type"`
-	CreatorID          string  `json:"creator_id"`
-	ParentIssueID      *string `json:"parent_issue_id"`
-	Position           float64 `json:"position"`
-	DueDate            *string `json:"due_date"`
-	CreatedAt          string  `json:"created_at"`
-	UpdatedAt          string  `json:"updated_at"`
+	ID                 string                  `json:"id"`
+	WorkspaceID        string                  `json:"workspace_id"`
+	Number             int32                   `json:"number"`
+	Identifier         string                  `json:"identifier"`
+	Title              string                  `json:"title"`
+	Description        *string                 `json:"description"`
+	Status             string                  `json:"status"`
+	Priority           string                  `json:"priority"`
+	AssigneeType       *string                 `json:"assignee_type"`
+	AssigneeID         *string                 `json:"assignee_id"`
+	CreatorType        string                  `json:"creator_type"`
+	CreatorID          string                  `json:"creator_id"`
+	ParentIssueID      *string                 `json:"parent_issue_id"`
+	Position           float64                 `json:"position"`
+	DueDate            *string                 `json:"due_date"`
+	CreatedAt          string                  `json:"created_at"`
+	UpdatedAt          string                  `json:"updated_at"`
+	Reactions          []IssueReactionResponse `json:"reactions,omitempty"`
 }
 
 type agentTriggerSnapshot struct {
@@ -130,7 +131,18 @@ func (h *Handler) GetIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	prefix := h.getIssuePrefix(r.Context(), issue.WorkspaceID)
-	writeJSON(w, http.StatusOK, issueToResponse(issue, prefix))
+	resp := issueToResponse(issue, prefix)
+
+	// Fetch issue reactions.
+	reactions, err := h.Queries.ListIssueReactions(r.Context(), issue.ID)
+	if err == nil && len(reactions) > 0 {
+		resp.Reactions = make([]IssueReactionResponse, len(reactions))
+		for i, rx := range reactions {
+			resp.Reactions[i] = issueReactionToResponse(rx)
+		}
+	}
+
+	writeJSON(w, http.StatusOK, resp)
 }
 
 type CreateIssueRequest struct {
