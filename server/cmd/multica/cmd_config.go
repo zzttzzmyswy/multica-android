@@ -34,24 +34,29 @@ func init() {
 	configCmd.AddCommand(configSetCmd)
 }
 
-func runConfigShow(_ *cobra.Command, _ []string) error {
-	cfg, err := cli.LoadCLIConfig()
+func runConfigShow(cmd *cobra.Command, _ []string) error {
+	profile := resolveProfile(cmd)
+	cfg, err := cli.LoadCLIConfigForProfile(profile)
 	if err != nil {
 		return err
 	}
 
-	path, _ := cli.CLIConfigPath()
+	path, _ := cli.CLIConfigPathForProfile(profile)
 	fmt.Fprintf(os.Stdout, "Config file: %s\n", path)
+	if profile != "" {
+		fmt.Fprintf(os.Stdout, "Profile:      %s\n", profile)
+	}
 	fmt.Fprintf(os.Stdout, "server_url:   %s\n", valueOrDefault(cfg.ServerURL, "(not set)"))
 	fmt.Fprintf(os.Stdout, "app_url:      %s\n", valueOrDefault(cfg.AppURL, "(not set)"))
 	fmt.Fprintf(os.Stdout, "workspace_id: %s\n", valueOrDefault(cfg.WorkspaceID, "(not set)"))
 	return nil
 }
 
-func runConfigSet(_ *cobra.Command, args []string) error {
+func runConfigSet(cmd *cobra.Command, args []string) error {
 	key, value := args[0], args[1]
 
-	cfg, err := cli.LoadCLIConfig()
+	profile := resolveProfile(cmd)
+	cfg, err := cli.LoadCLIConfigForProfile(profile)
 	if err != nil {
 		return err
 	}
@@ -67,7 +72,7 @@ func runConfigSet(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("unknown config key %q (supported: server_url, app_url, workspace_id)", key)
 	}
 
-	if err := cli.SaveCLIConfig(cfg); err != nil {
+	if err := cli.SaveCLIConfigForProfile(cfg, profile); err != nil {
 		return err
 	}
 

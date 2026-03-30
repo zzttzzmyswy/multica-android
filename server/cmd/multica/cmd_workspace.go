@@ -65,7 +65,7 @@ func init() {
 
 func runWorkspaceList(cmd *cobra.Command, _ []string) error {
 	serverURL := resolveServerURL(cmd)
-	token := resolveToken()
+	token := resolveToken(cmd)
 	if token == "" {
 		return fmt.Errorf("not authenticated: run 'multica login' first")
 	}
@@ -88,7 +88,8 @@ func runWorkspaceList(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Load watched set for marking.
-	cfg, _ := cli.LoadCLIConfig()
+	profile := resolveProfile(cmd)
+	cfg, _ := cli.LoadCLIConfigForProfile(profile)
 	watched := make(map[string]bool)
 	for _, w := range cfg.WatchedWorkspaces {
 		watched[w.ID] = true
@@ -201,7 +202,7 @@ func runWatch(cmd *cobra.Command, args []string) error {
 	workspaceID := args[0]
 
 	serverURL := resolveServerURL(cmd)
-	token := resolveToken()
+	token := resolveToken(cmd)
 	if token == "" {
 		return fmt.Errorf("not authenticated: run 'multica login' first")
 	}
@@ -218,7 +219,8 @@ func runWatch(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("workspace not found: %w", err)
 	}
 
-	cfg, err := cli.LoadCLIConfig()
+	profile := resolveProfile(cmd)
+	cfg, err := cli.LoadCLIConfigForProfile(profile)
 	if err != nil {
 		return err
 	}
@@ -233,7 +235,7 @@ func runWatch(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "Set default workspace to %s (%s)\n", ws.ID, ws.Name)
 	}
 
-	if err := cli.SaveCLIConfig(cfg); err != nil {
+	if err := cli.SaveCLIConfigForProfile(cfg, profile); err != nil {
 		return err
 	}
 
@@ -241,10 +243,11 @@ func runWatch(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runUnwatch(_ *cobra.Command, args []string) error {
+func runUnwatch(cmd *cobra.Command, args []string) error {
 	workspaceID := args[0]
 
-	cfg, err := cli.LoadCLIConfig()
+	profile := resolveProfile(cmd)
+	cfg, err := cli.LoadCLIConfigForProfile(profile)
 	if err != nil {
 		return err
 	}
@@ -253,7 +256,7 @@ func runUnwatch(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("workspace %s is not being watched", workspaceID)
 	}
 
-	if err := cli.SaveCLIConfig(cfg); err != nil {
+	if err := cli.SaveCLIConfigForProfile(cfg, profile); err != nil {
 		return err
 	}
 

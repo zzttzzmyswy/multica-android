@@ -28,6 +28,7 @@ type Config struct {
 	DaemonID           string
 	DeviceName         string
 	RuntimeName        string
+	Profile            string                // profile name (empty = default)
 	Agents             map[string]AgentEntry // "claude" -> entry, "codex" -> entry
 	WorkspacesRoot     string                // base path for execution envs (default: ~/multica_workspaces)
 	KeepEnvAfterTask   bool                  // preserve env after task for debugging
@@ -50,6 +51,8 @@ type Overrides struct {
 	DaemonID           string
 	DeviceName         string
 	RuntimeName        string
+	Profile            string // profile name (empty = default)
+	HealthPort         int    // health check port (0 = use default)
 }
 
 // LoadConfig builds the daemon configuration from environment variables
@@ -124,10 +127,18 @@ func LoadConfig(overrides Overrides) (Config, error) {
 		maxConcurrentTasks = overrides.MaxConcurrentTasks
 	}
 
+	// Profile
+	profile := overrides.Profile
+
 	// String overrides
 	daemonID := envOrDefault("MULTICA_DAEMON_ID", host)
 	if overrides.DaemonID != "" {
 		daemonID = overrides.DaemonID
+	}
+	// Suffix daemon ID with profile name to avoid collisions when multiple
+	// daemons register against the same server.
+	if profile != "" && !strings.HasSuffix(daemonID, "-"+profile) {
+		daemonID = daemonID + "-" + profile
 	}
 
 	deviceName := envOrDefault("MULTICA_DAEMON_DEVICE_NAME", host)
@@ -140,7 +151,7 @@ func LoadConfig(overrides Overrides) (Config, error) {
 		runtimeName = overrides.RuntimeName
 	}
 
-	// Workspaces root: override > env > default (~/multica_workspaces)
+	// Workspaces root: override > env > default (~/multica_workspaces or ~/multica_workspaces_<profile>)
 	workspacesRoot := strings.TrimSpace(os.Getenv("MULTICA_WORKSPACES_ROOT"))
 	if overrides.WorkspacesRoot != "" {
 		workspacesRoot = overrides.WorkspacesRoot
@@ -150,11 +161,21 @@ func LoadConfig(overrides Overrides) (Config, error) {
 		if err != nil {
 			return Config{}, fmt.Errorf("resolve home directory: %w (set MULTICA_WORKSPACES_ROOT to override)", err)
 		}
-		workspacesRoot = filepath.Join(home, "multica_workspaces")
+		if profile != "" {
+			workspacesRoot = filepath.Join(home, "multica_workspaces_"+profile)
+		} else {
+			workspacesRoot = filepath.Join(home, "multica_workspaces")
+		}
 	}
 	workspacesRoot, err = filepath.Abs(workspacesRoot)
 	if err != nil {
 		return Config{}, fmt.Errorf("resolve absolute workspaces root: %w", err)
+	}
+
+	// Health port: override > default
+	healthPort := DefaultHealthPort
+	if overrides.HealthPort > 0 {
+		healthPort = overrides.HealthPort
 	}
 
 	// Keep env after task: env > default (false)
@@ -165,10 +186,11 @@ func LoadConfig(overrides Overrides) (Config, error) {
 		DaemonID:           daemonID,
 		DeviceName:         deviceName,
 		RuntimeName:        runtimeName,
+		Profile:            profile,
 		Agents:             agents,
 		WorkspacesRoot:     workspacesRoot,
 		KeepEnvAfterTask:   keepEnv,
-		HealthPort:         DefaultHealthPort,
+		HealthPort:         healthPort,
 		MaxConcurrentTasks: maxConcurrentTasks,
 		PollInterval:       pollInterval,
 		HeartbeatInterval:  heartbeatInterval,

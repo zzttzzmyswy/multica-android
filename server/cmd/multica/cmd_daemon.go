@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -74,21 +73,37 @@ func init() {
 	daemonCmd.AddCommand(daemonLogsCmd)
 }
 
-// daemonDir returns the path to ~/.multica/.
-func daemonDir() string {
-	home, err := os.UserHomeDir()
+// daemonDirForProfile returns the state directory for the given profile.
+// Empty profile → ~/.multica/, named profile → ~/.multica/profiles/<name>/.
+func daemonDirForProfile(profile string) string {
+	dir, err := cli.ProfileDir(profile)
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".multica")
+	return dir
 }
 
-func daemonPIDPath() string {
-	return filepath.Join(daemonDir(), "daemon.pid")
+func daemonPIDPathForProfile(profile string) string {
+	return daemonDirForProfile(profile) + "/daemon.pid"
 }
 
-func daemonLogPath() string {
-	return filepath.Join(daemonDir(), "daemon.log")
+func daemonLogPathForProfile(profile string) string {
+	return daemonDirForProfile(profile) + "/daemon.log"
+}
+
+// healthPortForProfile returns the health check port for the given profile.
+// Default profile uses the standard port (19514). Named profiles get a
+// deterministic offset derived from the profile name.
+func healthPortForProfile(profile string) int {
+	if profile == "" {
+		return daemon.DefaultHealthPort
+	}
+	// Simple hash: sum of bytes mod 1000, offset from base+1.
+	var h int
+	for _, b := range []byte(profile) {
+		h += int(b)
+	}
+	return daemon.DefaultHealthPort + 1 + (h % 1000)
 }
 
 // --- daemon start ---
@@ -102,12 +117,19 @@ func runDaemonStart(cmd *cobra.Command, _ []string) error {
 }
 
 func runDaemonBackground(cmd *cobra.Command) error {
+	profile := resolveProfile(cmd)
+	healthPort := healthPortForProfile(profile)
+
 	// Check if daemon is already running.
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	health := checkDaemonHealth(ctx)
+	health := checkDaemonHealthOnPort(ctx, healthPort)
 	if health["status"] == "running" {
-		return fmt.Errorf("daemon is already running (pid %v)", health["pid"])
+		label := "daemon"
+		if profile != "" {
+			label = fmt.Sprintf("daemon [%s]", profile)
+		}
+		return fmt.Errorf("%s is already running (pid %v)", label, health["pid"])
 	}
 
 	// Resolve current executable.
@@ -120,12 +142,12 @@ func runDaemonBackground(cmd *cobra.Command) error {
 	args := buildDaemonStartArgs(cmd)
 
 	// Ensure daemon directory exists.
-	dir := daemonDir()
+	dir := daemonDirForProfile(profile)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("create daemon directory: %w", err)
 	}
 
-	logPath := daemonLogPath()
+	logPath := daemonLogPathForProfile(profile)
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return fmt.Errorf("open log file %s: %w", logPath, err)
@@ -146,7 +168,7 @@ func runDaemonBackground(cmd *cobra.Command) error {
 	child.Process.Release()
 
 	// Write PID file.
-	pidPath := daemonPIDPath()
+	pidPath := daemonPIDPathForProfile(profile)
 	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(child.Process.Pid)), 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: could not write PID file: %v\n", err)
 	}
@@ -155,13 +177,17 @@ func runDaemonBackground(cmd *cobra.Command) error {
 	time.Sleep(2 * time.Second)
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel2()
-	health = checkDaemonHealth(ctx2)
+	health = checkDaemonHealthOnPort(ctx2, healthPort)
 	if health["status"] != "running" {
 		fmt.Fprintf(os.Stderr, "Daemon may not have started successfully. Check logs:\n  %s\n", logPath)
 		return nil
 	}
 
-	fmt.Fprintf(os.Stderr, "Daemon started (pid %d)\n", child.Process.Pid)
+	if profile != "" {
+		fmt.Fprintf(os.Stderr, "Daemon [%s] started (pid %d)\n", profile, child.Process.Pid)
+	} else {
+		fmt.Fprintf(os.Stderr, "Daemon started (pid %d)\n", child.Process.Pid)
+	}
 	fmt.Fprintf(os.Stderr, "Logs: %s\n", logPath)
 	return nil
 }
@@ -196,14 +222,19 @@ func buildDaemonStartArgs(cmd *cobra.Command) []string {
 	if v, _ := cmd.Flags().GetString("server-url"); v != "" {
 		args = append(args, "--server-url", v)
 	}
+	if v := resolveProfile(cmd); v != "" {
+		args = append(args, "--profile", v)
+	}
 
 	return args
 }
 
 func runDaemonForeground(cmd *cobra.Command) error {
+	profile := resolveProfile(cmd)
+
 	serverURL := cli.FlagOrEnv(cmd, "server-url", "MULTICA_SERVER_URL", "")
 	if serverURL == "" {
-		if c, err := cli.LoadCLIConfig(); err == nil && c.ServerURL != "" {
+		if c, err := cli.LoadCLIConfigForProfile(profile); err == nil && c.ServerURL != "" {
 			serverURL = c.ServerURL
 		}
 	}
@@ -212,6 +243,8 @@ func runDaemonForeground(cmd *cobra.Command) error {
 		DaemonID:    flagString(cmd, "daemon-id"),
 		DeviceName:  flagString(cmd, "device-name"),
 		RuntimeName: flagString(cmd, "runtime-name"),
+		Profile:     profile,
+		HealthPort:  healthPortForProfile(profile),
 	}
 	if d, _ := cmd.Flags().GetDuration("poll-interval"); d > 0 {
 		overrides.PollInterval = d
@@ -238,11 +271,11 @@ func runDaemonForeground(cmd *cobra.Command) error {
 	d := daemon.New(cfg, logger)
 
 	// Write PID file so "daemon stop" can find us.
-	if dir := daemonDir(); dir != "" {
+	if dir := daemonDirForProfile(profile); dir != "" {
 		os.MkdirAll(dir, 0o755)
-		os.WriteFile(daemonPIDPath(), []byte(strconv.Itoa(os.Getpid())), 0o644)
+		os.WriteFile(daemonPIDPathForProfile(profile), []byte(strconv.Itoa(os.Getpid())), 0o644)
 	}
-	defer os.Remove(daemonPIDPath())
+	defer os.Remove(daemonPIDPathForProfile(profile))
 
 	if err := d.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		return err
@@ -252,13 +285,20 @@ func runDaemonForeground(cmd *cobra.Command) error {
 
 // --- daemon stop ---
 
-func runDaemonStop(_ *cobra.Command, _ []string) error {
+func runDaemonStop(cmd *cobra.Command, _ []string) error {
+	profile := resolveProfile(cmd)
+	healthPort := healthPortForProfile(profile)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	health := checkDaemonHealth(ctx)
+	health := checkDaemonHealthOnPort(ctx, healthPort)
 	if health["status"] != "running" {
-		fmt.Fprintln(os.Stderr, "Daemon is not running.")
+		label := "Daemon"
+		if profile != "" {
+			label = fmt.Sprintf("Daemon [%s]", profile)
+		}
+		fmt.Fprintf(os.Stderr, "%s is not running.\n", label)
 		return nil
 	}
 
@@ -282,10 +322,10 @@ func runDaemonStop(_ *cobra.Command, _ []string) error {
 	for i := 0; i < 10; i++ {
 		time.Sleep(500 * time.Millisecond)
 		ctx2, cancel2 := context.WithTimeout(context.Background(), 1*time.Second)
-		h := checkDaemonHealth(ctx2)
+		h := checkDaemonHealthOnPort(ctx2, healthPort)
 		cancel2()
 		if h["status"] != "running" {
-			os.Remove(daemonPIDPath())
+			os.Remove(daemonPIDPathForProfile(profile))
 			fmt.Fprintln(os.Stderr, "Daemon stopped.")
 			return nil
 		}
@@ -298,22 +338,30 @@ func runDaemonStop(_ *cobra.Command, _ []string) error {
 // --- daemon status ---
 
 func runDaemonStatus(cmd *cobra.Command, _ []string) error {
+	profile := resolveProfile(cmd)
+	healthPort := healthPortForProfile(profile)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	health := checkDaemonHealth(ctx)
+	health := checkDaemonHealthOnPort(ctx, healthPort)
 
 	output, _ := cmd.Flags().GetString("output")
 	if output == "json" {
 		return cli.PrintJSON(os.Stdout, health)
 	}
 
+	label := "Daemon"
+	if profile != "" {
+		label = fmt.Sprintf("Daemon [%s]", profile)
+	}
+
 	if health["status"] != "running" {
-		fmt.Fprintln(os.Stdout, "Daemon: stopped")
+		fmt.Fprintf(os.Stdout, "%s: stopped\n", label)
 		return nil
 	}
 
-	fmt.Fprintf(os.Stdout, "Daemon:      running (pid %v, uptime %v)\n", health["pid"], health["uptime"])
+	fmt.Fprintf(os.Stdout, "%s:      running (pid %v, uptime %v)\n", label, health["pid"], health["uptime"])
 	if agents, ok := health["agents"].([]any); ok && len(agents) > 0 {
 		parts := make([]string, len(agents))
 		for i, a := range agents {
@@ -330,7 +378,8 @@ func runDaemonStatus(cmd *cobra.Command, _ []string) error {
 // --- daemon logs ---
 
 func runDaemonLogs(cmd *cobra.Command, _ []string) error {
-	logPath := daemonLogPath()
+	profile := resolveProfile(cmd)
+	logPath := daemonLogPathForProfile(profile)
 	if _, err := os.Stat(logPath); os.IsNotExist(err) {
 		return fmt.Errorf("no log file found at %s\nThe daemon may not have been started in background mode", logPath)
 	}
@@ -350,9 +399,9 @@ func runDaemonLogs(cmd *cobra.Command, _ []string) error {
 	return tail.Run()
 }
 
-// checkDaemonHealth calls the daemon's local health endpoint.
-func checkDaemonHealth(ctx context.Context) map[string]any {
-	addr := fmt.Sprintf("http://127.0.0.1:%d/health", daemon.DefaultHealthPort)
+// checkDaemonHealthOnPort calls the daemon's local health endpoint on the given port.
+func checkDaemonHealthOnPort(ctx context.Context, port int) map[string]any {
+	addr := fmt.Sprintf("http://127.0.0.1:%d/health", port)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, addr, nil)
 	if err != nil {
 		return map[string]any{"status": "stopped"}

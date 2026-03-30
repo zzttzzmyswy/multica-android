@@ -30,10 +30,16 @@ func init() {
 	agentListCmd.Flags().String("output", "table", "Output format: table or json")
 }
 
+// resolveProfile returns the --profile flag value (empty string means default profile).
+func resolveProfile(cmd *cobra.Command) string {
+	val, _ := cmd.Flags().GetString("profile")
+	return val
+}
+
 func newAPIClient(cmd *cobra.Command) (*cli.APIClient, error) {
 	serverURL := resolveServerURL(cmd)
 	workspaceID := resolveWorkspaceID(cmd)
-	token := resolveToken()
+	token := resolveToken(cmd)
 
 	if serverURL == "" {
 		return nil, fmt.Errorf("server URL not set: use --server-url flag, MULTICA_SERVER_URL env, or 'multica config set server_url <url>'")
@@ -55,7 +61,8 @@ func resolveServerURL(cmd *cobra.Command) string {
 	if val != "" {
 		return normalizeAPIBaseURL(val)
 	}
-	cfg, err := cli.LoadCLIConfig()
+	profile := resolveProfile(cmd)
+	cfg, err := cli.LoadCLIConfigForProfile(profile)
 	if err != nil {
 		return "http://localhost:8080"
 	}
@@ -78,7 +85,8 @@ func resolveWorkspaceID(cmd *cobra.Command) string {
 	if val != "" {
 		return val
 	}
-	cfg, _ := cli.LoadCLIConfig()
+	profile := resolveProfile(cmd)
+	cfg, _ := cli.LoadCLIConfigForProfile(profile)
 	return cfg.WorkspaceID
 }
 

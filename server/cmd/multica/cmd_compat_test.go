@@ -37,11 +37,12 @@ func TestLegacyCompatibilityCommandsRemainAvailable(t *testing.T) {
 
 func TestRunConfigSetPersistsValues(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
+	cmd := testCmd()
 
-	if err := runConfigSet(nil, []string{"server_url", "http://example.com"}); err != nil {
+	if err := runConfigSet(cmd, []string{"server_url", "http://example.com"}); err != nil {
 		t.Fatalf("runConfigSet(server_url) error = %v", err)
 	}
-	if err := runConfigSet(nil, []string{"workspace_id", "ws-123"}); err != nil {
+	if err := runConfigSet(cmd, []string{"workspace_id", "ws-123"}); err != nil {
 		t.Fatalf("runConfigSet(workspace_id) error = %v", err)
 	}
 
