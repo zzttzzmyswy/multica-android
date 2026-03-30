@@ -281,12 +281,17 @@ func splitIdentifier(id string) *identifierParts {
 }
 
 // getIssuePrefix fetches the issue_prefix for a workspace.
+// Falls back to generating a prefix from the workspace name if the stored
+// prefix is empty (e.g. workspaces created before the prefix was introduced).
 func (h *Handler) getIssuePrefix(ctx context.Context, workspaceID pgtype.UUID) string {
 	ws, err := h.Queries.GetWorkspace(ctx, workspaceID)
 	if err != nil {
 		return ""
 	}
-	return ws.IssuePrefix
+	if ws.IssuePrefix != "" {
+		return ws.IssuePrefix
+	}
+	return generateIssuePrefix(ws.Name)
 }
 
 func (h *Handler) loadAgentForUser(w http.ResponseWriter, r *http.Request, agentID string) (db.Agent, bool) {
