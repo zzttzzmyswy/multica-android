@@ -19,6 +19,7 @@ type WatchedWorkspace struct {
 // CLIConfig holds persistent CLI settings.
 type CLIConfig struct {
 	ServerURL          string             `json:"server_url,omitempty"`
+	AppURL             string             `json:"app_url,omitempty"`
 	WorkspaceID        string             `json:"workspace_id,omitempty"`
 	Token              string             `json:"token,omitempty"`
 	WatchedWorkspaces  []WatchedWorkspace `json:"watched_workspaces,omitempty"`

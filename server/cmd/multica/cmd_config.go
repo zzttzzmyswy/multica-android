@@ -24,7 +24,7 @@ var configShowCmd = &cobra.Command{
 var configSetCmd = &cobra.Command{
 	Use:   "set <key> <value>",
 	Short: "Set a CLI configuration value",
-	Long:  "Supported keys: server_url, workspace_id",
+	Long:  "Supported keys: server_url, app_url, workspace_id",
 	Args:  cobra.ExactArgs(2),
 	RunE:  runConfigSet,
 }
@@ -43,6 +43,7 @@ func runConfigShow(_ *cobra.Command, _ []string) error {
 	path, _ := cli.CLIConfigPath()
 	fmt.Fprintf(os.Stdout, "Config file: %s\n", path)
 	fmt.Fprintf(os.Stdout, "server_url:   %s\n", valueOrDefault(cfg.ServerURL, "(not set)"))
+	fmt.Fprintf(os.Stdout, "app_url:      %s\n", valueOrDefault(cfg.AppURL, "(not set)"))
 	fmt.Fprintf(os.Stdout, "workspace_id: %s\n", valueOrDefault(cfg.WorkspaceID, "(not set)"))
 	return nil
 }
@@ -58,10 +59,12 @@ func runConfigSet(_ *cobra.Command, args []string) error {
 	switch key {
 	case "server_url":
 		cfg.ServerURL = value
+	case "app_url":
+		cfg.AppURL = value
 	case "workspace_id":
 		cfg.WorkspaceID = value
 	default:
-		return fmt.Errorf("unknown config key %q (supported: server_url, workspace_id)", key)
+		return fmt.Errorf("unknown config key %q (supported: server_url, app_url, workspace_id)", key)
 	}
 
 	if err := cli.SaveCLIConfig(cfg); err != nil {

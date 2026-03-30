@@ -66,6 +66,10 @@ func resolveAppURL() string {
 			return strings.TrimRight(val, "/")
 		}
 	}
+	cfg, err := cli.LoadCLIConfig()
+	if err == nil && cfg.AppURL != "" {
+		return strings.TrimRight(cfg.AppURL, "/")
+	}
 	return "http://localhost:3000"
 }
 
@@ -203,6 +207,7 @@ func runAuthLoginBrowser(cmd *cobra.Command) error {
 	cfg, _ := cli.LoadCLIConfig()
 	cfg.Token = patResp.Token
 	cfg.ServerURL = serverURL
+	cfg.AppURL = appURL
 	if err := cli.SaveCLIConfig(cfg); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
