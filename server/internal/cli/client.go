@@ -22,6 +22,7 @@ type APIClient struct {
 	WorkspaceID string
 	Token       string
 	AgentID     string // When set, requests are attributed to this agent instead of the user.
+	TaskID      string // When set, sent as X-Task-ID for agent-task validation.
 	HTTPClient  *http.Client
 }
 
@@ -44,6 +45,9 @@ func (c *APIClient) setHeaders(req *http.Request) {
 	}
 	if c.AgentID != "" {
 		req.Header.Set("X-Agent-ID", c.AgentID)
+	}
+	if c.TaskID != "" {
+		req.Header.Set("X-Task-ID", c.TaskID)
 	}
 }
 

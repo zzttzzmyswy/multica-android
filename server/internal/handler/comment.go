@@ -102,16 +102,7 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Determine author identity: agent (via X-Agent-ID header) or member.
-	authorType := "member"
-	authorID := userID
-	if agentID := r.Header.Get("X-Agent-ID"); agentID != "" {
-		// Validate the agent exists in this workspace.
-		agent, err := h.Queries.GetAgent(r.Context(), parseUUID(agentID))
-		if err == nil && uuidToString(agent.WorkspaceID) == uuidToString(issue.WorkspaceID) {
-			authorType = "agent"
-			authorID = agentID
-		}
-	}
+	authorType, authorID := h.resolveActor(r, userID, uuidToString(issue.WorkspaceID))
 
 	comment, err := h.Queries.CreateComment(r.Context(), db.CreateCommentParams{
 		IssueID:    issue.ID,
@@ -205,8 +196,9 @@ func (h *Handler) UpdateComment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := commentToResponse(comment)
+	actorType, actorID := h.resolveActor(r, userID, uuidToString(issue.WorkspaceID))
 	slog.Info("comment updated", append(logger.RequestAttrs(r), "comment_id", commentId)...)
-	h.publish(protocol.EventCommentUpdated, uuidToString(issue.WorkspaceID), "member", userID, map[string]any{"comment": resp})
+	h.publish(protocol.EventCommentUpdated, uuidToString(issue.WorkspaceID), actorType, actorID, map[string]any{"comment": resp})
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -250,8 +242,9 @@ func (h *Handler) DeleteComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	actorType, actorID := h.resolveActor(r, userID, uuidToString(issue.WorkspaceID))
 	slog.Info("comment deleted", append(logger.RequestAttrs(r), "comment_id", commentId, "issue_id", uuidToString(comment.IssueID))...)
-	h.publish(protocol.EventCommentDeleted, uuidToString(issue.WorkspaceID), "member", userID, map[string]any{
+	h.publish(protocol.EventCommentDeleted, uuidToString(issue.WorkspaceID), actorType, actorID, map[string]any{
 		"comment_id": commentId,
 		"issue_id":   uuidToString(comment.IssueID),
 	})

@@ -609,6 +609,117 @@ func TestVerifyCodeCreatesWorkspace(t *testing.T) {
 	}
 }
 
+func TestResolveActor(t *testing.T) {
+	ctx := context.Background()
+
+	// Look up the agent created by the test fixture.
+	var agentID string
+	err := testPool.QueryRow(ctx,
+		`SELECT id FROM agent WHERE workspace_id = $1 AND name = $2`,
+		testWorkspaceID, "Handler Test Agent",
+	).Scan(&agentID)
+	if err != nil {
+		t.Fatalf("failed to find test agent: %v", err)
+	}
+
+	// Create a task for the agent so we can test X-Task-ID validation.
+	var issueID string
+	err = testPool.QueryRow(ctx,
+		`INSERT INTO issue (workspace_id, title, status, priority, creator_type, creator_id, number, position)
+		 VALUES ($1, 'resolveActor test', 'todo', 'none', 'member', $2, 9999, 0)
+		 RETURNING id`, testWorkspaceID, testUserID,
+	).Scan(&issueID)
+	if err != nil {
+		t.Fatalf("failed to create test issue: %v", err)
+	}
+
+	// Look up runtime_id for the agent.
+	var runtimeID string
+	err = testPool.QueryRow(ctx, `SELECT runtime_id FROM agent WHERE id = $1`, agentID).Scan(&runtimeID)
+	if err != nil {
+		t.Fatalf("failed to get agent runtime_id: %v", err)
+	}
+
+	var taskID string
+	err = testPool.QueryRow(ctx,
+		`INSERT INTO agent_task_queue (agent_id, runtime_id, issue_id, status, priority)
+		 VALUES ($1, $2, $3, 'queued', 0)
+		 RETURNING id`, agentID, runtimeID, issueID,
+	).Scan(&taskID)
+	if err != nil {
+		t.Fatalf("failed to create test task: %v", err)
+	}
+
+	t.Cleanup(func() {
+		testPool.Exec(ctx, `DELETE FROM agent_task_queue WHERE id = $1`, taskID)
+		testPool.Exec(ctx, `DELETE FROM issue WHERE id = $1`, issueID)
+	})
+
+	tests := []struct {
+		name            string
+		agentIDHeader   string
+		taskIDHeader    string
+		wantActorType   string
+		wantIsAgent     bool
+	}{
+		{
+			name:          "no headers returns member",
+			wantActorType: "member",
+		},
+		{
+			name:          "valid agent ID returns agent",
+			agentIDHeader: agentID,
+			wantActorType: "agent",
+			wantIsAgent:   true,
+		},
+		{
+			name:          "non-existent agent ID returns member",
+			agentIDHeader: "00000000-0000-0000-0000-000000000099",
+			wantActorType: "member",
+		},
+		{
+			name:          "valid agent + valid task returns agent",
+			agentIDHeader: agentID,
+			taskIDHeader:  taskID,
+			wantActorType: "agent",
+			wantIsAgent:   true,
+		},
+		{
+			name:          "valid agent + wrong task returns member",
+			agentIDHeader: agentID,
+			taskIDHeader:  "00000000-0000-0000-0000-000000000099",
+			wantActorType: "member",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := newRequest("GET", "/test", nil)
+			if tt.agentIDHeader != "" {
+				req.Header.Set("X-Agent-ID", tt.agentIDHeader)
+			}
+			if tt.taskIDHeader != "" {
+				req.Header.Set("X-Task-ID", tt.taskIDHeader)
+			}
+
+			actorType, actorID := testHandler.resolveActor(req, testUserID, testWorkspaceID)
+
+			if actorType != tt.wantActorType {
+				t.Errorf("actorType = %q, want %q", actorType, tt.wantActorType)
+			}
+			if tt.wantIsAgent {
+				if actorID != tt.agentIDHeader {
+					t.Errorf("actorID = %q, want agent %q", actorID, tt.agentIDHeader)
+				}
+			} else {
+				if actorID != testUserID {
+					t.Errorf("actorID = %q, want user %q", actorID, testUserID)
+				}
+			}
+		})
+	}
+}
+
 func TestDaemonRegisterMissingWorkspaceReturns404(t *testing.T) {
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/api/daemon/register", bytes.NewBufferString(`{

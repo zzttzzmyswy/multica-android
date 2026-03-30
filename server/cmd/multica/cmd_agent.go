@@ -44,6 +44,9 @@ func newAPIClient(cmd *cobra.Command) (*cli.APIClient, error) {
 	if agentID := os.Getenv("MULTICA_AGENT_ID"); agentID != "" {
 		client.AgentID = agentID
 	}
+	if taskID := os.Getenv("MULTICA_TASK_ID"); taskID != "" {
+		client.TaskID = taskID
+	}
 	return client, nil
 }
 

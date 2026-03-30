@@ -221,14 +221,7 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Determine creator identity: agent (via X-Agent-ID header) or member.
-	creatorType := "member"
-	actualCreatorID := creatorID
-	if agentID := r.Header.Get("X-Agent-ID"); agentID != "" {
-		if agent, err := h.Queries.GetAgent(r.Context(), parseUUID(agentID)); err == nil && uuidToString(agent.WorkspaceID) == workspaceID {
-			creatorType = "agent"
-			actualCreatorID = agentID
-		}
-	}
+	creatorType, actualCreatorID := h.resolveActor(r, creatorID, workspaceID)
 
 	issue, err := qtx.CreateIssue(r.Context(), db.CreateIssueParams{
 		WorkspaceID:        parseUUID(workspaceID),
@@ -382,14 +375,7 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 		(prevDueDate != nil && resp.DueDate != nil && *prevDueDate != *resp.DueDate)
 
 	// Determine actor identity: agent (via X-Agent-ID header) or member.
-	actorType := "member"
-	actorID := userID
-	if agentID := r.Header.Get("X-Agent-ID"); agentID != "" {
-		if agent, err := h.Queries.GetAgent(r.Context(), parseUUID(agentID)); err == nil && uuidToString(agent.WorkspaceID) == workspaceID {
-			actorType = "agent"
-			actorID = agentID
-		}
-	}
+	actorType, actorID := h.resolveActor(r, userID, workspaceID)
 
 	h.publish(protocol.EventIssueUpdated, workspaceID, actorType, actorID, map[string]any{
 		"issue":               resp,
@@ -495,7 +481,8 @@ func (h *Handler) DeleteIssue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := requestUserID(r)
-	h.publish(protocol.EventIssueDeleted, uuidToString(issue.WorkspaceID), "member", userID, map[string]any{"issue_id": id})
+	actorType, actorID := h.resolveActor(r, userID, uuidToString(issue.WorkspaceID))
+	h.publish(protocol.EventIssueDeleted, uuidToString(issue.WorkspaceID), actorType, actorID, map[string]any{"issue_id": id})
 	slog.Info("issue deleted", append(logger.RequestAttrs(r), "issue_id", id, "workspace_id", uuidToString(issue.WorkspaceID))...)
 	w.WriteHeader(http.StatusNoContent)
 }
