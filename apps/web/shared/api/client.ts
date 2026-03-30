@@ -34,6 +34,7 @@ import type {
   RuntimeHourlyActivity,
   RuntimePing,
   TimelineEntry,
+  TaskMessagePayload,
 } from "@/shared/types";
 import { type Logger, noopLogger } from "@/shared/logger";
 
@@ -337,6 +338,18 @@ export class ApiClient {
 
   async listAgentTasks(agentId: string): Promise<AgentTask[]> {
     return this.fetch(`/api/agents/${agentId}/tasks`);
+  }
+
+  async getActiveTaskForIssue(issueId: string): Promise<{ task: AgentTask | null }> {
+    return this.fetch(`/api/issues/${issueId}/active-task`);
+  }
+
+  async listTaskMessages(taskId: string): Promise<TaskMessagePayload[]> {
+    return this.fetch(`/api/daemon/tasks/${taskId}/messages`);
+  }
+
+  async listTasksByIssue(issueId: string): Promise<AgentTask[]> {
+    return this.fetch(`/api/issues/${issueId}/task-runs`);
   }
 
   async getDaemonPairingSession(token: string): Promise<DaemonPairingSession> {

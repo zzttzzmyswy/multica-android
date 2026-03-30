@@ -99,6 +99,8 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 		r.Post("/tasks/{taskId}/progress", h.ReportTaskProgress)
 		r.Post("/tasks/{taskId}/complete", h.CompleteTask)
 		r.Post("/tasks/{taskId}/fail", h.FailTask)
+		r.Post("/tasks/{taskId}/messages", h.ReportTaskMessages)
+		r.Get("/tasks/{taskId}/messages", h.ListTaskMessages)
 	})
 
 	// Protected API routes
@@ -164,6 +166,8 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 					r.Get("/subscribers", h.ListIssueSubscribers)
 					r.Post("/subscribe", h.SubscribeToIssue)
 					r.Post("/unsubscribe", h.UnsubscribeFromIssue)
+					r.Get("/active-task", h.GetActiveTaskForIssue)
+					r.Get("/task-runs", h.ListTasksByIssue)
 					r.Post("/reactions", h.AddIssueReaction)
 					r.Delete("/reactions", h.RemoveIssueReaction)
 				})

@@ -94,6 +94,7 @@
 
 /* Code blocks */
 .rich-text-editor pre {
+  font-family: var(--font-mono, ui-monospace, monospace);
   background: var(--muted);
   border-radius: var(--radius);
   padding: 0.75rem 1rem;

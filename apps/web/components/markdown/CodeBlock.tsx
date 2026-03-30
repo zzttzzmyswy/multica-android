@@ -141,7 +141,7 @@ export function CodeBlock({
   if (mode === 'terminal') {
     return (
       <pre className={cn('font-mono text-sm whitespace-pre-wrap', className)}>
-        <code>{code}</code>
+        <code className="font-mono">{code}</code>
       </pre>
     )
   }
@@ -151,7 +151,7 @@ export function CodeBlock({
     if (isLoading || !highlighted) {
       return (
         <pre className={cn('font-mono text-sm whitespace-pre-wrap', className)}>
-          <code>{code}</code>
+          <code className="font-mono">{code}</code>
         </pre>
       )
     }
@@ -159,7 +159,7 @@ export function CodeBlock({
     return (
       <div
         className={cn(
-          'font-mono text-sm [&_pre]:!bg-transparent [&_pre]:!p-0 [&_pre]:whitespace-pre-wrap [&_pre]:break-all [&_code]:!bg-transparent',
+          'font-mono text-sm [&_pre]:!bg-transparent [&_pre]:!p-0 [&_pre]:whitespace-pre-wrap [&_pre]:break-all [&_code]:!bg-transparent [&_code]:font-mono [&_pre]:font-mono',
           className
         )}
         dangerouslySetInnerHTML={{ __html: highlighted }}
@@ -206,11 +206,11 @@ export function CodeBlock({
       <div className="p-3 overflow-x-auto">
         {isLoading || !highlighted ? (
           <pre className="font-mono text-sm whitespace-pre-wrap break-all">
-            <code>{code}</code>
+            <code className="font-mono">{code}</code>
           </pre>
         ) : (
           <div
-            className="font-mono text-sm [&_pre]:!bg-transparent [&_pre]:!m-0 [&_pre]:!p-0 [&_pre]:whitespace-pre-wrap [&_pre]:break-all [&_code]:!bg-transparent"
+            className="font-mono text-sm [&_pre]:!bg-transparent [&_pre]:!m-0 [&_pre]:!p-0 [&_pre]:whitespace-pre-wrap [&_pre]:break-all [&_code]:!bg-transparent [&_code]:font-mono [&_pre]:font-mono"
             dangerouslySetInnerHTML={{ __html: highlighted }}
           />
         )}

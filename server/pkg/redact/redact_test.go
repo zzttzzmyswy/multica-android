@@ -126,6 +126,83 @@ func TestNoFalsePositivesOnNormalText(t *testing.T) {
 	}
 }
 
+func TestRedactGitLabToken(t *testing.T) {
+	t.Parallel()
+	input := "GITLAB_TOKEN=glpat-AbCdEfGhIjKlMnOpQrStUvWx"
+	got := Text(input)
+	if strings.Contains(got, "glpat-") {
+		t.Fatalf("GitLab token not redacted: %s", got)
+	}
+}
+
+func TestRedactJWT(t *testing.T) {
+	t.Parallel()
+	input := "token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+	got := Text(input)
+	if strings.Contains(got, "eyJhbGci") {
+		t.Fatalf("JWT not redacted: %s", got)
+	}
+}
+
+func TestRedactConnectionString(t *testing.T) {
+	t.Parallel()
+	input := "connecting to postgres://admin:s3cret@db.example.com:5432/mydb"
+	got := Text(input)
+	if strings.Contains(got, "s3cret") {
+		t.Fatalf("connection string password not redacted: %s", got)
+	}
+}
+
+func TestRedactPasswordEnvVar(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		input string
+	}{
+		{"PASSWORD", "PASSWORD=hunter2"},
+		{"SECRET", "SECRET=mysecretvalue"},
+		{"TOKEN", "TOKEN=abc123xyz"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Text(tc.input)
+			if !strings.Contains(got, "[REDACTED CREDENTIAL]") {
+				t.Fatalf("expected credential redaction for %s, got: %s", tc.name, got)
+			}
+		})
+	}
+}
+
+func TestInputMap(t *testing.T) {
+	t.Parallel()
+	m := map[string]any{
+		"command":   "echo sk-proj-abc123def456ghi789jkl012mno345",
+		"file_path": "/tmp/test.txt",
+		"count":     42,
+	}
+	got := InputMap(m)
+	if s, ok := got["command"].(string); ok {
+		if strings.Contains(s, "sk-proj") {
+			t.Fatalf("API key in input map not redacted: %s", s)
+		}
+	}
+	// Non-string values preserved
+	if got["count"] != 42 {
+		t.Fatalf("non-string value altered: %v", got["count"])
+	}
+	// Clean strings unchanged
+	if got["file_path"] != "/tmp/test.txt" {
+		t.Fatalf("clean string altered: %v", got["file_path"])
+	}
+}
+
+func TestInputMapNil(t *testing.T) {
+	t.Parallel()
+	if got := InputMap(nil); got != nil {
+		t.Fatalf("expected nil, got: %v", got)
+	}
+}
+
 func TestRedactMultipleSecrets(t *testing.T) {
 	t.Parallel()
 	input := "Keys: AKIAIOSFODNN7EXAMPLE and ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmn"

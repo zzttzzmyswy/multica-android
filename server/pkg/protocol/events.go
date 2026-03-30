@@ -26,6 +26,7 @@ const (
 	EventTaskProgress  = "task:progress"
 	EventTaskCompleted = "task:completed"
 	EventTaskFailed    = "task:failed"
+	EventTaskMessage   = "task:message"
 
 	// Inbox events
 	EventInboxNew           = "inbox:new"
