@@ -43,13 +43,15 @@ export function BoardColumn({
   );
 
   return (
-    <div className="flex w-[280px] shrink-0 flex-col rounded-xl bg-muted/40 p-2">
+    <div className={`flex w-[280px] shrink-0 flex-col rounded-xl ${cfg.columnBg} p-2`}>
       <div className="mb-2 flex items-center justify-between px-1.5">
-        {/* Left: icon + label + count */}
+        {/* Left: status badge + count */}
         <div className="flex items-center gap-2">
-          <StatusIcon status={status} className="h-3.5 w-3.5" />
-          <span className="text-sm font-medium">{cfg.label}</span>
-          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-xs text-muted-foreground">
+          <span className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs font-semibold ${cfg.badgeBg} ${cfg.badgeText}`}>
+            <StatusIcon status={status} className="h-3 w-3" inheritColor />
+            {cfg.label}
+          </span>
+          <span className="text-xs text-muted-foreground">
             {issues.length}
           </span>
         </div>

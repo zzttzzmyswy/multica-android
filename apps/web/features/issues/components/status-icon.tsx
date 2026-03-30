@@ -160,9 +160,11 @@ const STATUS_RENDERERS: Record<IssueStatus, () => React.ReactNode> = {
 export function StatusIcon({
   status,
   className = "h-4 w-4",
+  inheritColor = false,
 }: {
   status: IssueStatus;
   className?: string;
+  inheritColor?: boolean;
 }) {
   const cfg = STATUS_CONFIG[status];
   const Renderer = STATUS_RENDERERS[status];
@@ -171,7 +173,7 @@ export function StatusIcon({
     <svg
       viewBox="0 0 14 14"
       fill="none"
-      className={`${className} ${cfg.iconColor} shrink-0`}
+      className={`${className} ${inheritColor ? "" : cfg.iconColor} shrink-0`}
     >
       <Renderer />
     </svg>

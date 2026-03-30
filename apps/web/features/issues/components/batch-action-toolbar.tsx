@@ -149,8 +149,10 @@ export function BatchActionToolbar() {
                   }}
                   className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent transition-colors"
                 >
-                  <PriorityIcon priority={p} />
-                  <span>{cfg.label}</span>
+                  <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${cfg.badgeBg} ${cfg.badgeText}`}>
+                    <PriorityIcon priority={p} className="h-3 w-3" inheritColor />
+                    {cfg.label}
+                  </span>
                 </button>
               );
             })}

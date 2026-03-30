@@ -96,9 +96,11 @@ export function ListView({
                 </div>
                 <Accordion.Trigger className="group/trigger flex flex-1 items-center gap-2 px-2 h-full text-left outline-none">
                   <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-aria-expanded/trigger:rotate-90" />
-                  <StatusIcon status={status} className="h-3.5 w-3.5" />
-                  <span className="text-sm font-medium">{cfg.label}</span>
-                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-xs text-muted-foreground">
+                  <span className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs font-semibold ${cfg.badgeBg} ${cfg.badgeText}`}>
+                    <StatusIcon status={status} className="h-3 w-3" inheritColor />
+                    {cfg.label}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
                     {statusIssues.length}
                   </span>
                 </Accordion.Trigger>

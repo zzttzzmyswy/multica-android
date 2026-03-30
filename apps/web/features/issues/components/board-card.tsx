@@ -62,37 +62,12 @@ export function BoardCardContent({
   const showBottom = showAssignee || showDueDate;
 
   return (
-    <div className="rounded-lg border bg-card p-3.5 shadow-[0_1px_2px_0_rgba(0,0,0,0.03)] transition-shadow group-hover:shadow-md">
-      {/* Priority */}
-      {showPriority &&
-        (editable ? (
-          <PickerWrapper>
-            <PriorityPicker
-              priority={issue.priority}
-              onUpdate={handleUpdate}
-              trigger={
-                <>
-                  <PriorityIcon priority={issue.priority} />
-                  <span className={`text-xs font-medium ${priorityCfg.color}`}>
-                    {priorityCfg.label}
-                  </span>
-                </>
-              }
-            />
-          </PickerWrapper>
-        ) : (
-          <div className="flex items-center gap-1.5">
-            <PriorityIcon priority={issue.priority} />
-            <span className={`text-xs font-medium ${priorityCfg.color}`}>
-              {priorityCfg.label}
-            </span>
-          </div>
-        ))}
+    <div className="rounded-lg border bg-card p-3.5 shadow-[0_1px_2px_0_rgba(0,0,0,0.03)] transition-shadow group-hover:shadow-sm">
+      {/* Row 1: Identifier */}
+      <p className="text-xs text-muted-foreground">{issue.identifier}</p>
 
-      {/* Title */}
-      <p
-        className={`text-sm font-medium leading-snug line-clamp-2 ${showPriority ? "mt-2" : ""}`}
-      >
+      {/* Row 2: Title */}
+      <p className="mt-1 text-sm font-medium leading-snug line-clamp-2">
         {issue.title}
       </p>
 
@@ -103,66 +78,87 @@ export function BoardCardContent({
         </p>
       )}
 
-      {/* Bottom: assignee + due date */}
-      {showBottom && (
-        <div className="mt-3 flex items-center justify-between">
-          <div className="flex items-center">
-            {showAssignee &&
-              (editable ? (
-                <PickerWrapper>
-                  <AssigneePicker
-                    assigneeType={issue.assignee_type}
-                    assigneeId={issue.assignee_id}
-                    onUpdate={handleUpdate}
-                    trigger={
-                      <ActorAvatar
-                        actorType={issue.assignee_type!}
-                        actorId={issue.assignee_id!}
-                        size={22}
-                      />
-                    }
-                  />
-                </PickerWrapper>
-              ) : (
-                <ActorAvatar
-                  actorType={issue.assignee_type!}
-                  actorId={issue.assignee_id!}
-                  size={22}
-                />
-              ))}
-          </div>
-          {showDueDate &&
+      {/* Row 3: Assignee, priority badge, due date */}
+      {(showAssignee || showPriority || showDueDate) && (
+        <div className="mt-3 flex items-center gap-2">
+          {showAssignee &&
             (editable ? (
               <PickerWrapper>
-                <DueDatePicker
-                  dueDate={issue.due_date}
+                <AssigneePicker
+                  assigneeType={issue.assignee_type}
+                  assigneeId={issue.assignee_id}
                   onUpdate={handleUpdate}
                   trigger={
-                    <span
-                      className={`flex items-center gap-1 text-xs ${
-                        new Date(issue.due_date!) < new Date()
-                          ? "text-destructive"
-                          : "text-muted-foreground"
-                      }`}
-                    >
-                      <CalendarDays className="size-3" />
-                      {formatDate(issue.due_date!)}
+                    <ActorAvatar
+                      actorType={issue.assignee_type!}
+                      actorId={issue.assignee_id!}
+                      size={22}
+                    />
+                  }
+                />
+              </PickerWrapper>
+            ) : (
+              <ActorAvatar
+                actorType={issue.assignee_type!}
+                actorId={issue.assignee_id!}
+                size={22}
+              />
+            ))}
+          {showPriority &&
+            (editable ? (
+              <PickerWrapper>
+                <PriorityPicker
+                  priority={issue.priority}
+                  onUpdate={handleUpdate}
+                  trigger={
+                    <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${priorityCfg.badgeBg} ${priorityCfg.badgeText}`}>
+                      <PriorityIcon priority={issue.priority} className="h-3 w-3" inheritColor />
+                      {priorityCfg.label}
                     </span>
                   }
                 />
               </PickerWrapper>
             ) : (
-              <span
-                className={`flex items-center gap-1 text-xs ${
-                  new Date(issue.due_date!) < new Date()
-                    ? "text-destructive"
-                    : "text-muted-foreground"
-                }`}
-              >
-                <CalendarDays className="size-3" />
-                {formatDate(issue.due_date!)}
+              <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${priorityCfg.badgeBg} ${priorityCfg.badgeText}`}>
+                <PriorityIcon priority={issue.priority} className="h-3 w-3" inheritColor />
+                {priorityCfg.label}
               </span>
             ))}
+          {showDueDate && (
+            <div className="ml-auto">
+              {editable ? (
+                <PickerWrapper>
+                  <DueDatePicker
+                    dueDate={issue.due_date}
+                    onUpdate={handleUpdate}
+                    trigger={
+                      <span
+                        className={`flex items-center gap-1 text-xs ${
+                          new Date(issue.due_date!) < new Date()
+                            ? "text-destructive"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        <CalendarDays className="size-3" />
+                        {formatDate(issue.due_date!)}
+                      </span>
+                    }
+                  />
+                </PickerWrapper>
+              ) : (
+                <span
+                  className={`flex items-center gap-1 text-xs ${
+                    new Date(issue.due_date!) < new Date()
+                      ? "text-destructive"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  <CalendarDays className="size-3" />
+                  {formatDate(issue.due_date!)}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

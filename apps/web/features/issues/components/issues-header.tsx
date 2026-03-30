@@ -310,7 +310,6 @@ export function IssuesHeader() {
         </span>
         {/* New issue */}
         <Button
-          variant="outline"
           size="sm"
           onClick={() => useModalStore.getState().open("create-issue")}
         >

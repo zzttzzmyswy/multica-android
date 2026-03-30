@@ -248,8 +248,10 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
             <DropdownMenuContent align="start" className="w-44">
               {PRIORITY_ORDER.map((p) => (
                 <DropdownMenuItem key={p} onClick={() => updatePriority(p)}>
-                  <PriorityIcon priority={p} />
-                  <span>{PRIORITY_CONFIG[p].label}</span>
+                  <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${PRIORITY_CONFIG[p].badgeBg} ${PRIORITY_CONFIG[p].badgeText}`}>
+                    <PriorityIcon priority={p} className="h-3 w-3" inheritColor />
+                    {PRIORITY_CONFIG[p].label}
+                  </span>
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
