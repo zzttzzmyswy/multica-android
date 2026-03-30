@@ -43,8 +43,10 @@ export function PriorityPicker({
               setOpen(false);
             }}
           >
-            <PriorityIcon priority={p} />
-            <span>{c.label}</span>
+            <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${c.badgeBg} ${c.badgeText}`}>
+              <PriorityIcon priority={p} className="h-3 w-3" inheritColor />
+              {c.label}
+            </span>
           </PickerItem>
         );
       })}

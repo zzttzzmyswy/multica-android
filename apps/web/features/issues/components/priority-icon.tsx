@@ -4,9 +4,11 @@ import { PRIORITY_CONFIG } from "@/features/issues/config";
 export function PriorityIcon({
   priority,
   className = "",
+  inheritColor = false,
 }: {
   priority: IssuePriority;
   className?: string;
+  inheritColor?: boolean;
 }) {
   const cfg = PRIORITY_CONFIG[priority];
 
@@ -15,7 +17,7 @@ export function PriorityIcon({
     return (
       <svg
         viewBox="0 0 16 16"
-        className={`h-3.5 w-3.5 text-muted-foreground shrink-0 ${className}`}
+        className={`h-3.5 w-3.5 ${inheritColor ? "" : "text-muted-foreground"} shrink-0 ${className}`}
         fill="none"
         stroke="currentColor"
         strokeWidth="1.5"
@@ -31,7 +33,7 @@ export function PriorityIcon({
   return (
     <svg
       viewBox="0 0 16 16"
-      className={`h-3.5 w-3.5 ${cfg.color} shrink-0 ${className}`}
+      className={`h-3.5 w-3.5 ${inheritColor ? "" : cfg.color} shrink-0 ${className}`}
       fill="currentColor"
       style={isUrgent ? { animation: "priority-pulse 2s ease-in-out infinite" } : undefined}
     >

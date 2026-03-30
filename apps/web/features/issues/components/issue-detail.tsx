@@ -744,8 +744,10 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                         key={p}
                         onClick={() => handleUpdateField({ priority: p })}
                       >
-                        <PriorityIcon priority={p} />
-                        {PRIORITY_CONFIG[p].label}
+                        <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${PRIORITY_CONFIG[p].badgeBg} ${PRIORITY_CONFIG[p].badgeText}`}>
+                          <PriorityIcon priority={p} className="h-3 w-3" inheritColor />
+                          {PRIORITY_CONFIG[p].label}
+                        </span>
                         {issue.priority === p && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
                       </DropdownMenuItem>
                     ))}
@@ -1213,8 +1215,10 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                   <DropdownMenuContent align="start" className="w-44">
                     {PRIORITY_ORDER.map((p) => (
                       <DropdownMenuItem key={p} onClick={() => handleUpdateField({ priority: p })}>
-                        <PriorityIcon priority={p} />
-                        {PRIORITY_CONFIG[p].label}
+                        <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${PRIORITY_CONFIG[p].badgeBg} ${PRIORITY_CONFIG[p].badgeText}`}>
+                          <PriorityIcon priority={p} className="h-3 w-3" inheritColor />
+                          {PRIORITY_CONFIG[p].label}
+                        </span>
                         {p === issue.priority && <Check className="ml-auto h-3.5 w-3.5" />}
                       </DropdownMenuItem>
                     ))}
