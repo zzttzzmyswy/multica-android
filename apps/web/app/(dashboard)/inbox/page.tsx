@@ -1,6 +1,6 @@
 "use client";
 
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useDefaultLayout } from "react-resizable-panels";
 import { useInboxStore } from "@/features/inbox";
 import { IssueDetail, StatusIcon, PriorityIcon } from "@/features/issues/components";
@@ -191,14 +191,10 @@ function InboxListItem({
 
 export default function InboxPage() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const selectedId = searchParams.get("id") ?? "";
   const setSelectedId = (id: string) => {
-    if (id) {
-      router.replace(`/inbox?id=${id}`, { scroll: false });
-    } else {
-      router.replace("/inbox", { scroll: false });
-    }
+    const url = id ? `/inbox?id=${id}` : "/inbox";
+    window.history.replaceState(null, "", url);
   };
 
   const items = useInboxStore((s) => s.dedupedItems());
