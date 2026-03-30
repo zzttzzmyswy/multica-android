@@ -283,6 +283,9 @@ func (d *Daemon) configWatchLoop(ctx context.Context) {
 // and adds any new ones to the CLI config. The configWatchLoop will then
 // detect the config change and register runtimes for the new workspaces.
 func (d *Daemon) workspaceSyncLoop(ctx context.Context) {
+	// Run immediately on startup before entering the periodic loop.
+	d.syncWorkspacesFromAPI(ctx)
+
 	ticker := time.NewTicker(DefaultWorkspaceSyncInterval)
 	defer ticker.Stop()
 
