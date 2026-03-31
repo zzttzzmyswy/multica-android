@@ -331,10 +331,10 @@ describe("IssueDetailPage", () => {
     await user.click(submitBtn);
 
     await waitFor(() => {
-      expect(mockCreateComment).toHaveBeenCalledWith(
-        "issue-1",
-        "New test comment",
-      );
+      expect(mockCreateComment).toHaveBeenCalled();
+      const [issueId, content] = mockCreateComment.mock.calls[0]!;
+      expect(issueId).toBe("issue-1");
+      expect(content).toBe("New test comment");
     });
 
     await waitFor(() => {
