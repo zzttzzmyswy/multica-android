@@ -217,11 +217,13 @@ export default function InboxPage() {
   const handleSelect = async (item: InboxItem) => {
     setSelectedId(item.id);
     if (!item.read) {
+      useInboxStore.getState().markRead(item.id);
       try {
         await api.markInboxRead(item.id);
-        useInboxStore.getState().markRead(item.id);
       } catch {
-        // silent — selection still works even if mark-read fails
+        // Rollback: refetch to get server truth
+        useInboxStore.getState().fetch();
+        toast.error("Failed to mark as read");
       }
     }
   };
