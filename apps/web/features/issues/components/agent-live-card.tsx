@@ -97,12 +97,10 @@ function buildTimeline(msgs: TaskMessagePayload[]): TimelineItem[] {
 
 interface AgentLiveCardProps {
   issueId: string;
-  assigneeType: string | null;
-  assigneeId: string | null;
   agentName?: string;
 }
 
-export function AgentLiveCard({ issueId, assigneeType, assigneeId, agentName }: AgentLiveCardProps) {
+export function AgentLiveCard({ issueId, agentName }: AgentLiveCardProps) {
   const { getActorName } = useActorName();
   const [activeTask, setActiveTask] = useState<AgentTask | null>(null);
   const [items, setItems] = useState<TimelineItem[]>([]);
@@ -113,11 +111,6 @@ export function AgentLiveCard({ issueId, assigneeType, assigneeId, agentName }: 
 
   // Check for active task on mount
   useEffect(() => {
-    if (assigneeType !== "agent" || !assigneeId) {
-      setActiveTask(null);
-      return;
-    }
-
     let cancelled = false;
     api.getActiveTaskForIssue(issueId).then(({ task }) => {
       if (!cancelled) {
@@ -135,7 +128,7 @@ export function AgentLiveCard({ issueId, assigneeType, assigneeId, agentName }: 
     }).catch(() => {});
 
     return () => { cancelled = true; };
-  }, [issueId, assigneeType, assigneeId]);
+  }, [issueId]);
 
   // Handle real-time task messages
   useWSEvent(
@@ -280,17 +273,15 @@ export function AgentLiveCard({ issueId, assigneeType, assigneeId, agentName }: 
 
 interface TaskRunHistoryProps {
   issueId: string;
-  assigneeType: string | null;
 }
 
-export function TaskRunHistory({ issueId, assigneeType }: TaskRunHistoryProps) {
+export function TaskRunHistory({ issueId }: TaskRunHistoryProps) {
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (assigneeType !== "agent") return;
     api.listTasksByIssue(issueId).then(setTasks).catch(() => {});
-  }, [issueId, assigneeType]);
+  }, [issueId]);
 
   // Refresh when a task completes
   useWSEvent(
