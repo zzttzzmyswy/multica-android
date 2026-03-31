@@ -21,8 +21,6 @@ func inboxItemsForRecipient(t *testing.T, queries *db.Queries, recipientID strin
 		WorkspaceID:   util.ParseUUID(testWorkspaceID),
 		RecipientType: "member",
 		RecipientID:   util.ParseUUID(recipientID),
-		Limit:         100,
-		Offset:        0,
 	})
 	if err != nil {
 		t.Fatalf("ListInboxItems: %v", err)
