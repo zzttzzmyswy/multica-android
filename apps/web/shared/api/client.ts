@@ -35,6 +35,7 @@ import type {
   RuntimePing,
   TimelineEntry,
   TaskMessagePayload,
+  Attachment,
 } from "@/shared/types";
 import { type Logger, noopLogger } from "@/shared/logger";
 
@@ -520,10 +521,12 @@ export class ApiClient {
     await this.fetch(`/api/tokens/${id}`, { method: "DELETE" });
   }
 
-  // File Upload
-  async uploadFile(file: File): Promise<{ filename: string; link: string }> {
+  // File Upload & Attachments
+  async uploadFile(file: File, opts?: { issueId?: string; commentId?: string }): Promise<Attachment> {
     const formData = new FormData();
     formData.append("file", file);
+    if (opts?.issueId) formData.append("issue_id", opts.issueId);
+    if (opts?.commentId) formData.append("comment_id", opts.commentId);
 
     const headers: Record<string, string> = {};
     if (this.token) headers["Authorization"] = `Bearer ${this.token}`;
@@ -556,6 +559,14 @@ export class ApiClient {
       throw new Error(message);
     }
 
-    return res.json() as Promise<{ filename: string; link: string }>;
+    return res.json() as Promise<Attachment>;
+  }
+
+  async listAttachments(issueId: string): Promise<Attachment[]> {
+    return this.fetch(`/api/issues/${issueId}/attachments`);
+  }
+
+  async deleteAttachment(id: string): Promise<void> {
+    await this.fetch(`/api/attachments/${id}`, { method: "DELETE" });
   }
 }

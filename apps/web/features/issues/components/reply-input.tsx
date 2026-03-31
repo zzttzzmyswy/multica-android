@@ -13,6 +13,7 @@ import { toast } from "sonner";
 // ---------------------------------------------------------------------------
 
 interface ReplyInputProps {
+  issueId: string;
   placeholder?: string;
   avatarType: string;
   avatarId: string;
@@ -25,6 +26,7 @@ interface ReplyInputProps {
 // ---------------------------------------------------------------------------
 
 function ReplyInput({
+  issueId,
   placeholder = "Leave a reply...",
   avatarType,
   avatarId,
@@ -39,7 +41,7 @@ function ReplyInput({
 
   const handleUpload = async (file: File) => {
     try {
-      const result = await upload(file);
+      const result = await upload(file, { issueId });
       return result;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");

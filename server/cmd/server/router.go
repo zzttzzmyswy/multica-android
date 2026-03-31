@@ -175,8 +175,12 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 					r.Get("/task-runs", h.ListTasksByIssue)
 					r.Post("/reactions", h.AddIssueReaction)
 					r.Delete("/reactions", h.RemoveIssueReaction)
+					r.Get("/attachments", h.ListAttachments)
 				})
 			})
+
+			// Attachments
+			r.Delete("/api/attachments/{id}", h.DeleteAttachment)
 
 			// Comments
 			r.Route("/api/comments/{commentId}", func(r chi.Router) {

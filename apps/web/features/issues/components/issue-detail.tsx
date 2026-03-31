@@ -254,13 +254,13 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   const handleDescriptionUpload = useCallback(
     async (file: File) => {
       try {
-        return await uploadFile(file);
+        return await uploadFile(file, { issueId: id });
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Upload failed");
         return null;
       }
     },
-    [uploadFile],
+    [uploadFile, id],
   );
 
   const handleDelete = async () => {
@@ -756,6 +756,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                     return (
                       <CommentCard
                         key={entry.id}
+                        issueId={id}
                         entry={entry}
                         allReplies={repliesByParent}
                         currentUserId={user?.id}
@@ -818,7 +819,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
 
             {/* Bottom comment input — no avatar, full width */}
             <div className="mt-4">
-              <CommentInput onSubmit={submitComment} />
+              <CommentInput issueId={id} onSubmit={submitComment} />
             </div>
           </div>
         </div>

@@ -8,10 +8,11 @@ import { useFileUpload } from "@/hooks/use-file-upload";
 import { toast } from "sonner";
 
 interface CommentInputProps {
+  issueId: string;
   onSubmit: (content: string) => Promise<void>;
 }
 
-function CommentInput({ onSubmit }: CommentInputProps) {
+function CommentInput({ issueId, onSubmit }: CommentInputProps) {
   const editorRef = useRef<RichTextEditorRef>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isEmpty, setIsEmpty] = useState(true);
@@ -20,7 +21,7 @@ function CommentInput({ onSubmit }: CommentInputProps) {
 
   const handleUpload = async (file: File) => {
     try {
-      const result = await upload(file);
+      const result = await upload(file, { issueId });
       return result;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");

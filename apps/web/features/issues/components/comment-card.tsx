@@ -26,6 +26,7 @@ import type { TimelineEntry } from "@/shared/types";
 // ---------------------------------------------------------------------------
 
 interface CommentCardProps {
+  issueId: string;
   entry: TimelineEntry;
   allReplies: Map<string, TimelineEntry[]>;
   currentUserId?: string;
@@ -165,6 +166,7 @@ function CommentRow({
 // ---------------------------------------------------------------------------
 
 function CommentCard({
+  issueId,
   entry,
   allReplies,
   currentUserId,
@@ -213,6 +215,7 @@ function CommentCard({
       {/* Reply input — always visible at bottom */}
       <div className="border-t border-border/50 px-4 py-2.5">
         <ReplyInput
+          issueId={issueId}
           placeholder="Leave a reply..."
           size="sm"
           avatarType="member"

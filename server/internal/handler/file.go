@@ -9,26 +9,29 @@ import (
 	"net/http"
 	"path"
 	"strings"
+
+	"github.com/go-chi/chi/v5"
+	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
 const maxUploadSize = 10 << 20 // 10 MB
 
 // Allowed MIME type prefixes and exact types for uploads.
 var allowedContentTypes = map[string]bool{
-	"image/png":         true,
-	"image/jpeg":        true,
-	"image/gif":         true,
-	"image/webp":        true,
-	"image/svg+xml":     true,
-	"application/pdf":   true,
-	"text/plain":        true,
-	"text/csv":          true,
-	"application/json":  true,
-	"video/mp4":         true,
-	"video/webm":        true,
-	"audio/mpeg":        true,
-	"audio/wav":         true,
-	"application/zip":   true,
+	"image/png":        true,
+	"image/jpeg":       true,
+	"image/gif":        true,
+	"image/webp":       true,
+	"image/svg+xml":    true,
+	"application/pdf":  true,
+	"text/plain":       true,
+	"text/csv":         true,
+	"application/json": true,
+	"video/mp4":        true,
+	"video/webm":       true,
+	"audio/mpeg":       true,
+	"audio/wav":        true,
+	"application/zip":  true,
 }
 
 func isContentTypeAllowed(ct string) bool {
@@ -38,11 +41,63 @@ func isContentTypeAllowed(ct string) bool {
 	return allowedContentTypes[ct]
 }
 
+// ---------------------------------------------------------------------------
+// Response types
+// ---------------------------------------------------------------------------
+
+type AttachmentResponse struct {
+	ID           string  `json:"id"`
+	WorkspaceID  string  `json:"workspace_id"`
+	IssueID      *string `json:"issue_id"`
+	CommentID    *string `json:"comment_id"`
+	UploaderType string  `json:"uploader_type"`
+	UploaderID   string  `json:"uploader_id"`
+	Filename     string  `json:"filename"`
+	URL          string  `json:"url"`
+	ContentType  string  `json:"content_type"`
+	SizeBytes    int64   `json:"size_bytes"`
+	CreatedAt    string  `json:"created_at"`
+}
+
+func attachmentToResponse(a db.Attachment) AttachmentResponse {
+	resp := AttachmentResponse{
+		ID:           uuidToString(a.ID),
+		WorkspaceID:  uuidToString(a.WorkspaceID),
+		UploaderType: a.UploaderType,
+		UploaderID:   uuidToString(a.UploaderID),
+		Filename:     a.Filename,
+		URL:          a.Url,
+		ContentType:  a.ContentType,
+		SizeBytes:    a.SizeBytes,
+		CreatedAt:    a.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+	}
+	if a.IssueID.Valid {
+		s := uuidToString(a.IssueID)
+		resp.IssueID = &s
+	}
+	if a.CommentID.Valid {
+		s := uuidToString(a.CommentID)
+		resp.CommentID = &s
+	}
+	return resp
+}
+
+// ---------------------------------------------------------------------------
+// UploadFile — POST /api/upload-file
+// ---------------------------------------------------------------------------
+
 func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	if h.Storage == nil {
 		writeError(w, http.StatusServiceUnavailable, "file upload not configured")
 		return
 	}
+
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return
+	}
+
+	workspaceID := resolveWorkspaceID(r)
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
 
@@ -98,8 +153,119 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// If workspace context is available, create an attachment record.
+	if workspaceID != "" {
+		uploaderType, uploaderID := h.resolveActor(r, userID, workspaceID)
+
+		params := db.CreateAttachmentParams{
+			WorkspaceID:  parseUUID(workspaceID),
+			UploaderType: uploaderType,
+			UploaderID:   parseUUID(uploaderID),
+			Filename:     header.Filename,
+			Url:          link,
+			ContentType:  contentType,
+			SizeBytes:    int64(len(data)),
+		}
+
+		// Optional issue_id / comment_id from form fields
+		if issueID := r.FormValue("issue_id"); issueID != "" {
+			params.IssueID = parseUUID(issueID)
+		}
+		if commentID := r.FormValue("comment_id"); commentID != "" {
+			params.CommentID = parseUUID(commentID)
+		}
+
+		att, err := h.Queries.CreateAttachment(r.Context(), params)
+		if err != nil {
+			slog.Error("failed to create attachment record", "error", err)
+			// S3 upload succeeded but DB record failed — still return the link
+			// so the file is usable. Log the error for investigation.
+		} else {
+			writeJSON(w, http.StatusOK, attachmentToResponse(att))
+			return
+		}
+	}
+
+	// Fallback response (no workspace context, e.g. avatar upload)
 	writeJSON(w, http.StatusOK, map[string]string{
 		"filename": header.Filename,
 		"link":     link,
 	})
+}
+
+// ---------------------------------------------------------------------------
+// ListAttachments — GET /api/issues/{id}/attachments
+// ---------------------------------------------------------------------------
+
+func (h *Handler) ListAttachments(w http.ResponseWriter, r *http.Request) {
+	issueID := chi.URLParam(r, "id")
+	issue, ok := h.loadIssueForUser(w, r, issueID)
+	if !ok {
+		return
+	}
+
+	attachments, err := h.Queries.ListAttachmentsByIssue(r.Context(), db.ListAttachmentsByIssueParams{
+		IssueID:     issue.ID,
+		WorkspaceID: issue.WorkspaceID,
+	})
+	if err != nil {
+		slog.Error("failed to list attachments", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to list attachments")
+		return
+	}
+
+	resp := make([]AttachmentResponse, len(attachments))
+	for i, a := range attachments {
+		resp[i] = attachmentToResponse(a)
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// ---------------------------------------------------------------------------
+// DeleteAttachment — DELETE /api/attachments/{id}
+// ---------------------------------------------------------------------------
+
+func (h *Handler) DeleteAttachment(w http.ResponseWriter, r *http.Request) {
+	attachmentID := chi.URLParam(r, "id")
+	workspaceID := resolveWorkspaceID(r)
+	if workspaceID == "" {
+		writeError(w, http.StatusBadRequest, "workspace_id is required")
+		return
+	}
+
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return
+	}
+
+	att, err := h.Queries.GetAttachment(r.Context(), db.GetAttachmentParams{
+		ID:          parseUUID(attachmentID),
+		WorkspaceID: parseUUID(workspaceID),
+	})
+	if err != nil {
+		writeError(w, http.StatusNotFound, "attachment not found")
+		return
+	}
+
+	// Only the uploader (or workspace admin) can delete
+	uploaderID := uuidToString(att.UploaderID)
+	isUploader := att.UploaderType == "member" && uploaderID == userID
+	member, hasMember := ctxMember(r.Context())
+	isAdmin := hasMember && (member.Role == "admin" || member.Role == "owner")
+
+	if !isUploader && !isAdmin {
+		writeError(w, http.StatusForbidden, "not authorized to delete this attachment")
+		return
+	}
+
+	if err := h.Queries.DeleteAttachment(r.Context(), db.DeleteAttachmentParams{
+		ID:          att.ID,
+		WorkspaceID: att.WorkspaceID,
+	}); err != nil {
+		slog.Error("failed to delete attachment", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to delete attachment")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }

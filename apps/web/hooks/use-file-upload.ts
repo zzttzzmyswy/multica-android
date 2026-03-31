@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { api } from "@/shared/api";
+import type { Attachment } from "@/shared/types";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -32,11 +33,16 @@ export interface UploadResult {
   link: string;
 }
 
+export interface UploadContext {
+  issueId?: string;
+  commentId?: string;
+}
+
 export function useFileUpload() {
   const [uploading, setUploading] = useState(false);
 
   const upload = useCallback(
-    async (file: File): Promise<UploadResult | null> => {
+    async (file: File, ctx?: UploadContext): Promise<UploadResult | null> => {
       if (file.size > MAX_FILE_SIZE) {
         throw new Error("File exceeds 10 MB limit");
       }
@@ -46,7 +52,11 @@ export function useFileUpload() {
 
       setUploading(true);
       try {
-        return await api.uploadFile(file);
+        const att: Attachment = await api.uploadFile(file, {
+          issueId: ctx?.issueId,
+          commentId: ctx?.commentId,
+        });
+        return { filename: att.filename, link: att.url };
       } finally {
         setUploading(false);
       }
