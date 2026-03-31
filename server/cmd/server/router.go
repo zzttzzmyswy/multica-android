@@ -83,11 +83,9 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 	r.Post("/auth/send-code", h.SendCode)
 	r.Post("/auth/verify-code", h.VerifyCode)
 
-	// Daemon API routes (no user auth; daemon auth deferred to later)
+	// Daemon API routes (all require a valid token)
 	r.Route("/api/daemon", func(r chi.Router) {
-		r.Post("/pairing-sessions", h.CreateDaemonPairingSession)
-		r.Get("/pairing-sessions/{token}", h.GetDaemonPairingSession)
-		r.Post("/pairing-sessions/{token}/claim", h.ClaimDaemonPairingSession)
+		r.Use(middleware.Auth(queries))
 
 		r.Post("/register", h.DaemonRegister)
 		r.Post("/deregister", h.DaemonDeregister)
@@ -149,8 +147,6 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 			r.Post("/", h.CreatePersonalAccessToken)
 			r.Delete("/{id}", h.RevokePersonalAccessToken)
 		})
-
-		r.Post("/api/daemon/pairing-sessions/{token}/approve", h.ApproveDaemonPairingSession)
 
 		// --- Workspace-scoped routes (all require workspace membership) ---
 		r.Group(func(r chi.Router) {
