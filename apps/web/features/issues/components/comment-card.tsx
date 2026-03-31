@@ -245,17 +245,17 @@ function CommentCard({
         {/* Header — always visible, acts as toggle */}
         <div className="px-4 py-3">
           <div className="flex items-center gap-2.5">
-            <CollapsibleTrigger className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
+            <CollapsibleTrigger className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
               <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-90")} />
             </CollapsibleTrigger>
             <ActorAvatar actorType={entry.actor_type} actorId={entry.actor_id} size={24} />
-            <span className="text-sm font-medium">
+            <span className="shrink-0 text-sm font-medium">
               {getActorName(entry.actor_type, entry.actor_id)}
             </span>
             <Tooltip>
               <TooltipTrigger
                 render={
-                  <span className="text-xs text-muted-foreground cursor-default">
+                  <span className="shrink-0 text-xs text-muted-foreground cursor-default">
                     {timeAgo(entry.created_at)}
                   </span>
                 }
@@ -266,12 +266,12 @@ function CommentCard({
             </Tooltip>
 
             {!open && contentPreview && (
-              <span className="text-xs text-muted-foreground truncate">
-                {contentPreview}{(entry.content ?? "").length > 80 ? "..." : ""}
+              <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                {contentPreview}
               </span>
             )}
             {!open && replyCount > 0 && (
-              <span className="text-xs text-muted-foreground shrink-0 ml-auto">
+              <span className="shrink-0 text-xs text-muted-foreground">
                 {replyCount} {replyCount === 1 ? "reply" : "replies"}
               </span>
             )}
