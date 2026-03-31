@@ -219,9 +219,9 @@ function InboxListItem({
 
 export default function InboxPage() {
   const searchParams = useSearchParams();
-  const selectedId = searchParams.get("id") ?? "";
-  const setSelectedId = (id: string) => {
-    const url = id ? `/inbox?id=${id}` : "/inbox";
+  const selectedKey = searchParams.get("issue") ?? "";
+  const setSelectedKey = (key: string) => {
+    const url = key ? `/inbox?issue=${key}` : "/inbox";
     window.history.replaceState(null, "", url);
   };
 
@@ -232,12 +232,12 @@ export default function InboxPage() {
     id: "multica_inbox_layout",
   });
 
-  const selected = items.find((i) => i.id === selectedId) ?? null;
+  const selected = items.find((i) => (i.issue_id ?? i.id) === selectedKey) ?? null;
   const unreadCount = items.filter((i) => !i.read).length;
 
   // Click-to-read: select + auto-mark-read
   const handleSelect = async (item: InboxItem) => {
-    setSelectedId(item.id);
+    setSelectedKey(item.issue_id ?? item.id);
     if (!item.read) {
       useInboxStore.getState().markRead(item.id);
       try {
@@ -254,7 +254,8 @@ export default function InboxPage() {
     try {
       await api.archiveInbox(id);
       useInboxStore.getState().archive(id);
-      if (selectedId === id) setSelectedId("");
+      const archived = items.find((i) => i.id === id);
+      if (archived && (archived.issue_id ?? archived.id) === selectedKey) setSelectedKey("");
     } catch {
       toast.error("Failed to archive");
     }
@@ -274,7 +275,7 @@ export default function InboxPage() {
   const handleArchiveAll = async () => {
     try {
       useInboxStore.getState().archiveAll();
-      setSelectedId("");
+      setSelectedKey("");
       await api.archiveAllInbox();
     } catch {
       toast.error("Failed to archive all");
@@ -284,9 +285,9 @@ export default function InboxPage() {
 
   const handleArchiveAllRead = async () => {
     try {
-      const readIds = items.filter((i) => i.read).map((i) => i.id);
+      const readKeys = items.filter((i) => i.read).map((i) => i.issue_id ?? i.id);
       useInboxStore.getState().archiveAllRead();
-      if (readIds.includes(selectedId)) setSelectedId("");
+      if (readKeys.includes(selectedKey)) setSelectedKey("");
       await api.archiveAllReadInbox();
     } catch {
       toast.error("Failed to archive read items");
@@ -297,7 +298,7 @@ export default function InboxPage() {
   const handleArchiveCompleted = async () => {
     try {
       await api.archiveCompletedInbox();
-      setSelectedId("");
+      setSelectedKey("");
       await useInboxStore.getState().fetch();
     } catch {
       toast.error("Failed to archive completed");
@@ -395,7 +396,7 @@ export default function InboxPage() {
               <InboxListItem
                 key={item.id}
                 item={item}
-                isSelected={item.id === selectedId}
+                isSelected={(item.issue_id ?? item.id) === selectedKey}
                 onClick={() => handleSelect(item)}
                 onArchive={() => handleArchive(item.id)}
               />
