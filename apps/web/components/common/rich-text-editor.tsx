@@ -203,10 +203,10 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
     const onUpdateRef = useRef(onUpdate);
     const onSubmitRef = useRef(onSubmit);
 
-    // Helper to get markdown from tiptap-markdown storage
+    // Helper to get markdown from @tiptap/markdown extension
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const getEditorMarkdown = (ed: any): string =>
-      ed?.storage?.markdown?.getMarkdown?.() ?? "";
+      ed?.getMarkdown?.() ?? "";
 
     // Keep refs in sync without recreating editor
     onUpdateRef.current = onUpdate;
