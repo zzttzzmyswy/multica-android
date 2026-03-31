@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Copy, MoreHorizontal, Pencil, Trash2, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,9 +13,11 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { ReactionBar } from "@/components/common/reaction-bar";
 import { Markdown } from "@/components/markdown";
+import { cn } from "@/lib/utils";
 import { useActorName } from "@/features/workspace";
 import { timeAgo } from "@/shared/utils";
 import { ReplyInput } from "./reply-input";
@@ -189,6 +191,8 @@ function CommentCard({
   onDelete,
   onToggleReaction,
 }: CommentCardProps) {
+  const [repliesOpen, setRepliesOpen] = useState(true);
+
   // Collect all nested replies recursively into a flat list
   const allNestedReplies: TimelineEntry[] = [];
   const collectReplies = (parentId: string) => {
@@ -199,6 +203,8 @@ function CommentCard({
     }
   };
   collectReplies(entry.id);
+
+  const replyCount = allNestedReplies.length;
 
   return (
     <Card className={`!py-0 !gap-0 overflow-hidden${entry.id.startsWith("temp-") ? " opacity-60" : ""}`}>
@@ -213,18 +219,32 @@ function CommentCard({
         />
       </div>
 
-      {/* Replies — flat, separated by border */}
-      {allNestedReplies.map((reply) => (
-        <div key={reply.id} className="border-t border-border/50 px-4">
-          <CommentRow
-            entry={reply}
-            currentUserId={currentUserId}
-            onEdit={onEdit}
-            onDelete={onDelete}
-            onToggleReaction={onToggleReaction}
-          />
-        </div>
-      ))}
+      {/* Replies — collapsible when there are replies */}
+      {replyCount > 0 && (
+        <Collapsible open={repliesOpen} onOpenChange={setRepliesOpen}>
+          <div className="border-t border-border/50 px-4">
+            <CollapsibleTrigger className="flex w-full items-center gap-1.5 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+              <ChevronRight className={cn("h-3 w-3 transition-transform", repliesOpen && "rotate-90")} />
+              <span>
+                {replyCount} {replyCount === 1 ? "reply" : "replies"}
+              </span>
+            </CollapsibleTrigger>
+          </div>
+          <CollapsibleContent>
+            {allNestedReplies.map((reply) => (
+              <div key={reply.id} className="border-t border-border/50 px-4">
+                <CommentRow
+                  entry={reply}
+                  currentUserId={currentUserId}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  onToggleReaction={onToggleReaction}
+                />
+              </div>
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
+      )}
 
       {/* Reply input — always visible at bottom */}
       <div className="border-t border-border/50 px-4 py-2.5">
