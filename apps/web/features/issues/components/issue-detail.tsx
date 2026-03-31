@@ -672,15 +672,13 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
             <div className="mt-4">
               <AgentLiveCard
                 issueId={id}
-                assigneeType={issue.assignee_type}
-                assigneeId={issue.assignee_id}
                 agentName={issue.assignee_type === "agent" && issue.assignee_id ? getActorName("agent", issue.assignee_id) : undefined}
               />
             </div>
 
             {/* Agent execution history */}
             <div className="mt-3">
-              <TaskRunHistory issueId={id} assigneeType={issue.assignee_type} />
+              <TaskRunHistory issueId={id} />
             </div>
 
             {/* Timeline entries */}

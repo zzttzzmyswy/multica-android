@@ -477,11 +477,19 @@ func (h *Handler) ReportTaskMessages(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListTaskMessages(w http.ResponseWriter, r *http.Request) {
 	taskID := chi.URLParam(r, "taskId")
 
+	task, err := h.Queries.GetAgentTask(r.Context(), parseUUID(taskID))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
+	}
+
 	messages, err := h.Queries.ListTaskMessages(r.Context(), parseUUID(taskID))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list task messages")
 		return
 	}
+
+	issueID := uuidToString(task.IssueID)
 
 	resp := make([]protocol.TaskMessagePayload, len(messages))
 	for i, m := range messages {
@@ -491,6 +499,7 @@ func (h *Handler) ListTaskMessages(w http.ResponseWriter, r *http.Request) {
 		}
 		resp[i] = protocol.TaskMessagePayload{
 			TaskID:  taskID,
+			IssueID: issueID,
 			Seq:     int(m.Seq),
 			Type:    m.Type,
 			Tool:    m.Tool.String,
