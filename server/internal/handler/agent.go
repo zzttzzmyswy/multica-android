@@ -104,8 +104,9 @@ type AgentTaskResponse struct {
 	Agent          *TaskAgentData `json:"agent,omitempty"`
 	Repos          []RepoData     `json:"repos,omitempty"`
 	CreatedAt      string         `json:"created_at"`
-	PriorSessionID string         `json:"prior_session_id,omitempty"` // session ID from a previous task on same issue
-	PriorWorkDir   string         `json:"prior_work_dir,omitempty"`   // work_dir from a previous task on same issue
+	PriorSessionID   string         `json:"prior_session_id,omitempty"`    // session ID from a previous task on same issue
+	PriorWorkDir     string         `json:"prior_work_dir,omitempty"`     // work_dir from a previous task on same issue
+	TriggerCommentID *string        `json:"trigger_comment_id,omitempty"` // comment that triggered this task
 }
 
 // TaskAgentData holds agent info included in claim responses so the daemon
@@ -133,8 +134,9 @@ func taskToResponse(t db.AgentTaskQueue) AgentTaskResponse {
 		StartedAt:    timestampToPtr(t.StartedAt),
 		CompletedAt:  timestampToPtr(t.CompletedAt),
 		Result:       result,
-		Error:        textToPtr(t.Error),
-		CreatedAt:    timestampToString(t.CreatedAt),
+		Error:            textToPtr(t.Error),
+		CreatedAt:        timestampToString(t.CreatedAt),
+		TriggerCommentID: uuidToPtr(t.TriggerCommentID),
 	}
 }
 
@@ -326,22 +328,21 @@ type UpdateAgentRequest struct {
 }
 
 // canManageAgent checks whether the current user can update or delete an agent.
-// Workspace-visible agents require owner/admin role. Private agents additionally
-// require the user to be the agent's owner (or a workspace owner/admin).
+// Workspace-visible agents can be managed by any workspace member.
+// Private agents can only be managed by their owner or workspace owner/admin.
 func (h *Handler) canManageAgent(w http.ResponseWriter, r *http.Request, agent db.Agent) bool {
 	wsID := uuidToString(agent.WorkspaceID)
 	member, ok := h.requireWorkspaceRole(w, r, wsID, "agent not found", "owner", "admin", "member")
 	if !ok {
 		return false
 	}
+	if agent.Visibility != "private" {
+		return true
+	}
 	isAdmin := roleAllowed(member.Role, "owner", "admin")
 	isAgentOwner := uuidToString(agent.OwnerID) == requestUserID(r)
-	if agent.Visibility == "private" && !isAdmin && !isAgentOwner {
+	if !isAdmin && !isAgentOwner {
 		writeError(w, http.StatusForbidden, "only the agent owner can manage this private agent")
-		return false
-	}
-	if agent.Visibility != "private" && !isAdmin && !isAgentOwner {
-		writeError(w, http.StatusForbidden, "insufficient permissions")
 		return false
 	}
 	return true

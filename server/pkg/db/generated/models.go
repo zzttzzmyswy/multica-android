@@ -61,21 +61,36 @@ type AgentSkill struct {
 }
 
 type AgentTaskQueue struct {
+	ID               pgtype.UUID        `json:"id"`
+	AgentID          pgtype.UUID        `json:"agent_id"`
+	IssueID          pgtype.UUID        `json:"issue_id"`
+	Status           string             `json:"status"`
+	Priority         int32              `json:"priority"`
+	DispatchedAt     pgtype.Timestamptz `json:"dispatched_at"`
+	StartedAt        pgtype.Timestamptz `json:"started_at"`
+	CompletedAt      pgtype.Timestamptz `json:"completed_at"`
+	Result           []byte             `json:"result"`
+	Error            pgtype.Text        `json:"error"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	Context          []byte             `json:"context"`
+	RuntimeID        pgtype.UUID        `json:"runtime_id"`
+	SessionID        pgtype.Text        `json:"session_id"`
+	WorkDir          pgtype.Text        `json:"work_dir"`
+	TriggerCommentID pgtype.UUID        `json:"trigger_comment_id"`
+}
+
+type Attachment struct {
 	ID           pgtype.UUID        `json:"id"`
-	AgentID      pgtype.UUID        `json:"agent_id"`
+	WorkspaceID  pgtype.UUID        `json:"workspace_id"`
 	IssueID      pgtype.UUID        `json:"issue_id"`
-	Status       string             `json:"status"`
-	Priority     int32              `json:"priority"`
-	DispatchedAt pgtype.Timestamptz `json:"dispatched_at"`
-	StartedAt    pgtype.Timestamptz `json:"started_at"`
-	CompletedAt  pgtype.Timestamptz `json:"completed_at"`
-	Result       []byte             `json:"result"`
-	Error        pgtype.Text        `json:"error"`
+	CommentID    pgtype.UUID        `json:"comment_id"`
+	UploaderType string             `json:"uploader_type"`
+	UploaderID   pgtype.UUID        `json:"uploader_id"`
+	Filename     string             `json:"filename"`
+	Url          string             `json:"url"`
+	ContentType  string             `json:"content_type"`
+	SizeBytes    int64              `json:"size_bytes"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	Context      []byte             `json:"context"`
-	RuntimeID    pgtype.UUID        `json:"runtime_id"`
-	SessionID    pgtype.Text        `json:"session_id"`
-	WorkDir      pgtype.Text        `json:"work_dir"`
 }
 
 type Comment struct {

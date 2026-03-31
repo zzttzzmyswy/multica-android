@@ -32,7 +32,7 @@ func NewTaskService(q *db.Queries, hub *realtime.Hub, bus *events.Bus) *TaskServ
 // EnqueueTaskForIssue creates a queued task for an agent-assigned issue.
 // No context snapshot is stored — the agent fetches all data it needs at
 // runtime via the multica CLI.
-func (s *TaskService) EnqueueTaskForIssue(ctx context.Context, issue db.Issue) (db.AgentTaskQueue, error) {
+func (s *TaskService) EnqueueTaskForIssue(ctx context.Context, issue db.Issue, triggerCommentID ...pgtype.UUID) (db.AgentTaskQueue, error) {
 	if !issue.AssigneeID.Valid {
 		slog.Error("task enqueue failed", "issue_id", util.UUIDToString(issue.ID), "error", "issue has no assignee")
 		return db.AgentTaskQueue{}, fmt.Errorf("issue has no assignee")
@@ -48,11 +48,17 @@ func (s *TaskService) EnqueueTaskForIssue(ctx context.Context, issue db.Issue) (
 		return db.AgentTaskQueue{}, fmt.Errorf("agent has no runtime")
 	}
 
+	var commentID pgtype.UUID
+	if len(triggerCommentID) > 0 {
+		commentID = triggerCommentID[0]
+	}
+
 	task, err := s.Queries.CreateAgentTask(ctx, db.CreateAgentTaskParams{
-		AgentID:   issue.AssigneeID,
-		RuntimeID: agent.RuntimeID,
-		IssueID:   issue.ID,
-		Priority:  priorityToInt(issue.Priority),
+		AgentID:          issue.AssigneeID,
+		RuntimeID:        agent.RuntimeID,
+		IssueID:          issue.ID,
+		Priority:         priorityToInt(issue.Priority),
+		TriggerCommentID: commentID,
 	})
 	if err != nil {
 		slog.Error("task enqueue failed", "issue_id", util.UUIDToString(issue.ID), "error", err)
@@ -60,6 +66,36 @@ func (s *TaskService) EnqueueTaskForIssue(ctx context.Context, issue db.Issue) (
 	}
 
 	slog.Info("task enqueued", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(issue.ID), "agent_id", util.UUIDToString(issue.AssigneeID))
+	return task, nil
+}
+
+// EnqueueTaskForMention creates a queued task for a mentioned agent on an issue.
+// Unlike EnqueueTaskForIssue, this takes an explicit agent ID rather than
+// deriving it from the issue assignee.
+func (s *TaskService) EnqueueTaskForMention(ctx context.Context, issue db.Issue, agentID pgtype.UUID, triggerCommentID pgtype.UUID) (db.AgentTaskQueue, error) {
+	agent, err := s.Queries.GetAgent(ctx, agentID)
+	if err != nil {
+		slog.Error("mention task enqueue failed: agent not found", "issue_id", util.UUIDToString(issue.ID), "agent_id", util.UUIDToString(agentID), "error", err)
+		return db.AgentTaskQueue{}, fmt.Errorf("load agent: %w", err)
+	}
+	if !agent.RuntimeID.Valid {
+		slog.Error("mention task enqueue failed: agent has no runtime", "issue_id", util.UUIDToString(issue.ID), "agent_id", util.UUIDToString(agentID))
+		return db.AgentTaskQueue{}, fmt.Errorf("agent has no runtime")
+	}
+
+	task, err := s.Queries.CreateAgentTask(ctx, db.CreateAgentTaskParams{
+		AgentID:          agentID,
+		RuntimeID:        agent.RuntimeID,
+		IssueID:          issue.ID,
+		Priority:         priorityToInt(issue.Priority),
+		TriggerCommentID: triggerCommentID,
+	})
+	if err != nil {
+		slog.Error("mention task enqueue failed", "issue_id", util.UUIDToString(issue.ID), "agent_id", util.UUIDToString(agentID), "error", err)
+		return db.AgentTaskQueue{}, fmt.Errorf("create task: %w", err)
+	}
+
+	slog.Info("mention task enqueued", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(issue.ID), "agent_id", util.UUIDToString(agentID))
 	return task, nil
 }
 
@@ -185,10 +221,15 @@ func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, resu
 
 	slog.Info("task completed", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID))
 
-	var payload protocol.TaskCompletedPayload
-	if err := json.Unmarshal(result, &payload); err == nil {
-		if payload.Output != "" {
-			s.createAgentComment(ctx, task.IssueID, task.AgentID, redact.Text(payload.Output), "comment")
+	// Post agent output as a comment, but only for assignment-triggered tasks.
+	// Comment-triggered tasks: the agent replies via CLI with --parent, so
+	// posting here would create a duplicate.
+	if !task.TriggerCommentID.Valid {
+		var payload protocol.TaskCompletedPayload
+		if err := json.Unmarshal(result, &payload); err == nil {
+			if payload.Output != "" {
+				s.createAgentComment(ctx, task.IssueID, task.AgentID, redact.Text(payload.Output), "comment", task.TriggerCommentID)
+			}
 		}
 	}
 
@@ -228,7 +269,7 @@ func (s *TaskService) FailTask(ctx context.Context, taskID pgtype.UUID, errMsg s
 	slog.Warn("task failed", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(task.IssueID), "error", errMsg)
 
 	if errMsg != "" {
-		s.createAgentComment(ctx, task.IssueID, task.AgentID, redact.Text(errMsg), "system")
+		s.createAgentComment(ctx, task.IssueID, task.AgentID, redact.Text(errMsg), "system", task.TriggerCommentID)
 	}
 	// Reconcile agent status
 	s.ReconcileAgentStatus(ctx, task.AgentID)
@@ -401,7 +442,7 @@ func (s *TaskService) getIssuePrefix(workspaceID pgtype.UUID) string {
 	return ws.IssuePrefix
 }
 
-func (s *TaskService) createAgentComment(ctx context.Context, issueID, agentID pgtype.UUID, content, commentType string) {
+func (s *TaskService) createAgentComment(ctx context.Context, issueID, agentID pgtype.UUID, content, commentType string, parentID pgtype.UUID) {
 	if content == "" {
 		return
 	}
@@ -411,6 +452,7 @@ func (s *TaskService) createAgentComment(ctx context.Context, issueID, agentID p
 		AuthorID:   agentID,
 		Content:    content,
 		Type:       commentType,
+		ParentID:   parentID,
 	})
 	if err != nil {
 		return
@@ -433,6 +475,7 @@ func (s *TaskService) createAgentComment(ctx context.Context, issueID, agentID p
 				"author_id":   util.UUIDToString(comment.AuthorID),
 				"content":     comment.Content,
 				"type":        comment.Type,
+				"parent_id":   util.UUIDToPtr(comment.ParentID),
 				"created_at":  comment.CreatedAt.Time.Format("2006-01-02T15:04:05Z"),
 			},
 			"issue_title":  issue.Title,

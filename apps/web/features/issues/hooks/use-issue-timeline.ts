@@ -189,7 +189,7 @@ export function useIssueTimeline(issueId: string, userId?: string) {
         setSubmitting(false);
       }
     },
-    [issueId, userId, submitting],
+    [issueId, userId],
   );
 
   const submitReply = useCallback(

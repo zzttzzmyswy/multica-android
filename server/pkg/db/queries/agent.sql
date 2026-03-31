@@ -46,8 +46,8 @@ WHERE agent_id = $1
 ORDER BY created_at DESC;
 
 -- name: CreateAgentTask :one
-INSERT INTO agent_task_queue (agent_id, runtime_id, issue_id, status, priority)
-VALUES ($1, $2, $3, 'queued', $4)
+INSERT INTO agent_task_queue (agent_id, runtime_id, issue_id, status, priority, trigger_comment_id)
+VALUES ($1, $2, $3, 'queued', $4, sqlc.narg(trigger_comment_id))
 RETURNING *;
 
 -- name: CancelAgentTasksByIssue :exec
@@ -123,6 +123,12 @@ WHERE issue_id = $1 AND status IN ('queued', 'dispatched', 'running');
 -- task already exists (natural dedup).
 SELECT count(*) > 0 AS has_pending FROM agent_task_queue
 WHERE issue_id = $1 AND status IN ('queued', 'dispatched');
+
+-- name: HasPendingTaskForIssueAndAgent :one
+-- Returns true if a specific agent already has a queued or dispatched task
+-- for the given issue. Used by @mention trigger dedup.
+SELECT count(*) > 0 AS has_pending FROM agent_task_queue
+WHERE issue_id = $1 AND agent_id = $2 AND status IN ('queued', 'dispatched');
 
 -- name: ListPendingTasksByRuntime :many
 SELECT * FROM agent_task_queue

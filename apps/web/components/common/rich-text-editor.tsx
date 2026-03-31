@@ -12,9 +12,12 @@ import Placeholder from "@tiptap/extension-placeholder";
 import Link from "@tiptap/extension-link";
 import Typography from "@tiptap/extension-typography";
 import Mention from "@tiptap/extension-mention";
+import Image from "@tiptap/extension-image";
 import { Markdown } from "@tiptap/markdown";
 import { Extension, mergeAttributes } from "@tiptap/core";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { cn } from "@/lib/utils";
+import type { UploadResult } from "@/shared/hooks/use-file-upload";
 import { createMentionSuggestion } from "./mention-suggestion";
 import "./rich-text-editor.css";
 
@@ -30,12 +33,14 @@ interface RichTextEditorProps {
   className?: string;
   debounceMs?: number;
   onSubmit?: () => void;
+  onUploadFile?: (file: File) => Promise<UploadResult | null>;
 }
 
 interface RichTextEditorRef {
   getMarkdown: () => string;
   clearContent: () => void;
   focus: () => void;
+  insertFile: (filename: string, url: string, isImage: boolean) => void;
 }
 
 const LinkExtension = Link.configure({
@@ -125,6 +130,77 @@ function createSubmitExtension(onSubmit: () => void) {
 }
 
 // ---------------------------------------------------------------------------
+// File upload extension (paste + drop)
+// ---------------------------------------------------------------------------
+
+function createFileUploadExtension(
+  onUploadFileRef: React.RefObject<((file: File) => Promise<UploadResult | null>) | undefined>,
+) {
+  return Extension.create({
+    name: "fileUpload",
+    addProseMirrorPlugins() {
+      const { editor } = this;
+
+      const handleFiles = async (files: FileList, pos?: number) => {
+        const handler = onUploadFileRef.current;
+        if (!handler) return false;
+
+        let handled = false;
+        for (const file of Array.from(files)) {
+          handled = true;
+          try {
+            const result = await handler(file);
+            if (!result) continue;
+
+            const isImage = file.type.startsWith("image/");
+            if (isImage) {
+              editor
+                .chain()
+                .focus()
+                .setImage({ src: result.link, alt: result.filename })
+                .run();
+            } else {
+              // Insert as a markdown link
+              const linkText = `[${result.filename}](${result.link})`;
+              if (pos !== undefined) {
+                editor.chain().focus().insertContentAt(pos, linkText).run();
+              } else {
+                editor.chain().focus().insertContent(linkText).run();
+              }
+            }
+          } catch {
+            // Upload errors handled by the hook/caller via toast
+          }
+        }
+        return handled;
+      };
+
+      return [
+        new Plugin({
+          key: new PluginKey("fileUpload"),
+          props: {
+            handlePaste(_view, event) {
+              const files = event.clipboardData?.files;
+              if (!files?.length) return false;
+              if (!onUploadFileRef.current) return false;
+              handleFiles(files);
+              return true;
+            },
+            handleDrop(_view, event) {
+              const files = (event as DragEvent).dataTransfer?.files;
+              if (!files?.length) return false;
+              if (!onUploadFileRef.current) return false;
+              handleFiles(files);
+              return true;
+            },
+          },
+        }),
+      ];
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -138,16 +214,19 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
       className,
       debounceMs = 300,
       onSubmit,
+      onUploadFile,
     },
     ref,
   ) {
     const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
     const onUpdateRef = useRef(onUpdate);
     const onSubmitRef = useRef(onSubmit);
+    const onUploadFileRef = useRef(onUploadFile);
 
     // Keep refs in sync without recreating editor
     onUpdateRef.current = onUpdate;
     onSubmitRef.current = onSubmit;
+    onUploadFileRef.current = onUploadFile;
 
     const editor = useEditor({
       immediatelyRender: false,
@@ -165,8 +244,14 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
         LinkExtension,
         Typography,
         MentionExtension,
+        Image.configure({
+          inline: false,
+          allowBase64: false,
+          HTMLAttributes: { style: "max-width: 100%; height: auto;" },
+        }),
         Markdown,
         createSubmitExtension(() => onSubmitRef.current?.()),
+        createFileUploadExtension(onUploadFileRef),
       ],
       onUpdate: ({ editor: ed }) => {
         if (!onUpdateRef.current) return;
@@ -210,6 +295,14 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
       },
       focus: () => {
         editor?.commands.focus();
+      },
+      insertFile: (filename: string, url: string, isImage: boolean) => {
+        if (!editor) return;
+        if (isImage) {
+          editor.chain().focus().setImage({ src: url, alt: filename }).run();
+        } else {
+          editor.chain().focus().insertContent(`[${filename}](${url})`).run();
+        }
       },
     }));
 
