@@ -309,11 +309,11 @@ export default function InboxPage() {
     return (
       <ResizablePanelGroup orientation="horizontal" className="flex-1 min-h-0" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged}>
         <ResizablePanel id="list" defaultSize={320} minSize={240} maxSize={480} groupResizeBehavior="preserve-pixel-size">
-          <div className="overflow-y-auto border-r h-full">
-            <div className="flex h-12 items-center border-b px-4">
+          <div className="flex flex-col border-r h-full">
+            <div className="flex h-12 shrink-0 items-center border-b px-4">
               <Skeleton className="h-5 w-16" />
             </div>
-            <div className="space-y-1 p-2">
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-1 p-2">
               {Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 px-4 py-2.5">
                   <Skeleton className="h-7 w-7 shrink-0 rounded-full" />
@@ -341,8 +341,8 @@ export default function InboxPage() {
     <ResizablePanelGroup orientation="horizontal" className="flex-1 min-h-0" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged}>
       <ResizablePanel id="list" defaultSize={320} minSize={240} maxSize={480} groupResizeBehavior="preserve-pixel-size">
       {/* Left column — inbox list */}
-      <div className="overflow-y-auto border-r h-full">
-        <div className="flex h-12 items-center justify-between border-b px-4">
+      <div className="flex flex-col border-r h-full">
+        <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
           <div className="flex items-center gap-2">
             <h1 className="text-sm font-semibold">Inbox</h1>
             {unreadCount > 0 && (
@@ -385,6 +385,7 @@ export default function InboxPage() {
           </DropdownMenu>
         </div>
 
+        <div className="flex-1 min-h-0 overflow-y-auto">
         {items.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <Inbox className="mb-3 h-8 w-8 text-muted-foreground/50" />
@@ -403,6 +404,7 @@ export default function InboxPage() {
             ))}
           </div>
         )}
+        </div>
       </div>
       </ResizablePanel>
       <ResizableHandle />
