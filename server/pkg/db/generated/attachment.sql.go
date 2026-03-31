@@ -144,6 +144,44 @@ func (q *Queries) ListAttachmentsByComment(ctx context.Context, arg ListAttachme
 	return items, nil
 }
 
+const listAttachmentsByCommentIDs = `-- name: ListAttachmentsByCommentIDs :many
+SELECT id, workspace_id, issue_id, comment_id, uploader_type, uploader_id, filename, url, content_type, size_bytes, created_at FROM attachment
+WHERE comment_id = ANY($1::uuid[])
+ORDER BY created_at ASC
+`
+
+func (q *Queries) ListAttachmentsByCommentIDs(ctx context.Context, dollar_1 []pgtype.UUID) ([]Attachment, error) {
+	rows, err := q.db.Query(ctx, listAttachmentsByCommentIDs, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Attachment{}
+	for rows.Next() {
+		var i Attachment
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.IssueID,
+			&i.CommentID,
+			&i.UploaderType,
+			&i.UploaderID,
+			&i.Filename,
+			&i.Url,
+			&i.ContentType,
+			&i.SizeBytes,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAttachmentsByIssue = `-- name: ListAttachmentsByIssue :many
 SELECT id, workspace_id, issue_id, comment_id, uploader_type, uploader_id, filename, url, content_type, size_bytes, created_at FROM attachment
 WHERE issue_id = $1 AND workspace_id = $2

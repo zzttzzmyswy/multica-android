@@ -17,5 +17,10 @@ ORDER BY created_at ASC;
 SELECT * FROM attachment
 WHERE id = $1 AND workspace_id = $2;
 
+-- name: ListAttachmentsByCommentIDs :many
+SELECT * FROM attachment
+WHERE comment_id = ANY($1::uuid[])
+ORDER BY created_at ASC;
+
 -- name: DeleteAttachment :exec
 DELETE FROM attachment WHERE id = $1 AND workspace_id = $2;

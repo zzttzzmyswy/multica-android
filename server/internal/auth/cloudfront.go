@@ -172,6 +172,29 @@ func (s *CloudFrontSigner) SignedCookies(expiry time.Time) []*http.Cookie {
 	}
 }
 
+// SignedURL generates a CloudFront signed URL for the given resource URL.
+// Used by CLI/API clients that don't have browser cookies.
+func (s *CloudFrontSigner) SignedURL(rawURL string, expiry time.Time) string {
+	policy := fmt.Sprintf(`{"Statement":[{"Resource":"%s","Condition":{"DateLessThan":{"AWS:EpochTime":%d}}}]}`, rawURL, expiry.Unix())
+
+	encodedPolicy := cfBase64Encode([]byte(policy))
+
+	h := sha1.New()
+	h.Write([]byte(policy))
+	sig, err := rsa.SignPKCS1v15(rand.Reader, s.privateKey, crypto.SHA1, h.Sum(nil))
+	if err != nil {
+		slog.Error("failed to sign CloudFront URL", "error", err)
+		return rawURL
+	}
+	encodedSig := cfBase64Encode(sig)
+
+	separator := "?"
+	if strings.Contains(rawURL, "?") {
+		separator = "&"
+	}
+	return fmt.Sprintf("%s%sPolicy=%s&Signature=%s&Key-Pair-Id=%s", rawURL, separator, encodedPolicy, encodedSig, s.keyPairID)
+}
+
 // cfBase64Encode applies CloudFront's URL-safe base64 encoding.
 func cfBase64Encode(data []byte) string {
 	encoded := base64.StdEncoding.EncodeToString(data)

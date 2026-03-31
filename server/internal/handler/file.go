@@ -9,8 +9,10 @@ import (
 	"net/http"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -54,12 +56,13 @@ type AttachmentResponse struct {
 	UploaderID   string  `json:"uploader_id"`
 	Filename     string  `json:"filename"`
 	URL          string  `json:"url"`
+	DownloadURL  string  `json:"download_url"`
 	ContentType  string  `json:"content_type"`
 	SizeBytes    int64   `json:"size_bytes"`
 	CreatedAt    string  `json:"created_at"`
 }
 
-func attachmentToResponse(a db.Attachment) AttachmentResponse {
+func (h *Handler) attachmentToResponse(a db.Attachment) AttachmentResponse {
 	resp := AttachmentResponse{
 		ID:           uuidToString(a.ID),
 		WorkspaceID:  uuidToString(a.WorkspaceID),
@@ -67,9 +70,13 @@ func attachmentToResponse(a db.Attachment) AttachmentResponse {
 		UploaderID:   uuidToString(a.UploaderID),
 		Filename:     a.Filename,
 		URL:          a.Url,
+		DownloadURL:  a.Url,
 		ContentType:  a.ContentType,
 		SizeBytes:    a.SizeBytes,
 		CreatedAt:    a.CreatedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+	}
+	if h.CFSigner != nil {
+		resp.DownloadURL = h.CFSigner.SignedURL(a.Url, time.Now().Add(5*time.Minute))
 	}
 	if a.IssueID.Valid {
 		s := uuidToString(a.IssueID)
@@ -80,6 +87,23 @@ func attachmentToResponse(a db.Attachment) AttachmentResponse {
 		resp.CommentID = &s
 	}
 	return resp
+}
+
+// groupAttachments loads attachments for multiple comments and groups them by comment ID.
+func (h *Handler) groupAttachments(r *http.Request, commentIDs []pgtype.UUID) map[string][]AttachmentResponse {
+	if len(commentIDs) == 0 {
+		return nil
+	}
+	attachments, err := h.Queries.ListAttachmentsByCommentIDs(r.Context(), commentIDs)
+	if err != nil {
+		return nil
+	}
+	grouped := make(map[string][]AttachmentResponse, len(commentIDs))
+	for _, a := range attachments {
+		cid := uuidToString(a.CommentID)
+		grouped[cid] = append(grouped[cid], h.attachmentToResponse(a))
+	}
+	return grouped
 }
 
 // ---------------------------------------------------------------------------
@@ -181,7 +205,7 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 			// S3 upload succeeded but DB record failed — still return the link
 			// so the file is usable. Log the error for investigation.
 		} else {
-			writeJSON(w, http.StatusOK, attachmentToResponse(att))
+			writeJSON(w, http.StatusOK, h.attachmentToResponse(att))
 			return
 		}
 	}
@@ -216,7 +240,7 @@ func (h *Handler) ListAttachments(w http.ResponseWriter, r *http.Request) {
 
 	resp := make([]AttachmentResponse, len(attachments))
 	for i, a := range attachments {
-		resp[i] = attachmentToResponse(a)
+		resp[i] = h.attachmentToResponse(a)
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
