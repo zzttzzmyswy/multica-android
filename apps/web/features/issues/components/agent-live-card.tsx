@@ -8,6 +8,7 @@ import type { TaskMessagePayload, TaskCompletedPayload, TaskFailedPayload } from
 import type { AgentTask } from "@/shared/types/agent";
 import { cn } from "@/lib/utils";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useActorName } from "@/features/workspace";
 import { redactSecrets } from "../utils/redact";
 
 // ─── Shared types & helpers ─────────────────────────────────────────────────
@@ -102,6 +103,7 @@ interface AgentLiveCardProps {
 }
 
 export function AgentLiveCard({ issueId, assigneeType, assigneeId, agentName }: AgentLiveCardProps) {
+  const { getActorName } = useActorName();
   const [activeTask, setActiveTask] = useState<AgentTask | null>(null);
   const [items, setItems] = useState<TimelineItem[]>([]);
   const [elapsed, setElapsed] = useState("");
@@ -233,7 +235,7 @@ export function AgentLiveCard({ issueId, assigneeType, assigneeId, agentName }: 
         </div>
         <div className="flex items-center gap-1.5 text-xs font-medium min-w-0">
           <Loader2 className="h-3 w-3 animate-spin text-info shrink-0" />
-          <span className="truncate">{agentName ?? "Agent"} is working</span>
+          <span className="truncate">{(activeTask?.agent_id ? getActorName("agent", activeTask.agent_id) : agentName) ?? "Agent"} is working</span>
         </div>
         <span className="ml-auto text-xs text-muted-foreground tabular-nums shrink-0">{elapsed}</span>
         {toolCount > 0 && (
