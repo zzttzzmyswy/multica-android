@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RichTextEditor, type RichTextEditorRef } from "@/components/common/rich-text-editor";
 
@@ -44,7 +44,7 @@ function CommentInput({ onSubmit }: CommentInputProps) {
           disabled={isEmpty || submitting}
           onClick={handleSubmit}
         >
-          <ArrowUp className="h-4 w-4" />
+          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
         </Button>
       </div>
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RichTextEditor, type RichTextEditorRef } from "@/components/common/rich-text-editor";
 import { ActorAvatar } from "@/components/common/actor-avatar";
@@ -83,7 +83,7 @@ function ReplyInput({
                 onClick={handleSubmit}
                 tabIndex={isEmpty ? -1 : 0}
               >
-                <ArrowUp className="h-3.5 w-3.5" />
+                {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowUp className="h-3.5 w-3.5" />}
               </Button>
             </div>
           </div>
