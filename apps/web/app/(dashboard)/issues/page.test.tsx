@@ -105,6 +105,9 @@ const mockViewState = {
   viewMode: "board" as const,
   statusFilters: [] as string[],
   priorityFilters: [] as string[],
+  assigneeFilters: [] as { type: string; id: string }[],
+  includeNoAssignee: false,
+  creatorFilters: [] as { type: string; id: string }[],
   sortBy: "position" as const,
   sortDirection: "asc" as const,
   cardProperties: { priority: true, description: true, assignee: true, dueDate: true },
@@ -112,6 +115,9 @@ const mockViewState = {
   setViewMode: vi.fn(),
   toggleStatusFilter: vi.fn(),
   togglePriorityFilter: vi.fn(),
+  toggleAssigneeFilter: vi.fn(),
+  toggleNoAssignee: vi.fn(),
+  toggleCreatorFilter: vi.fn(),
   hideStatus: vi.fn(),
   showStatus: vi.fn(),
   clearFilters: vi.fn(),
@@ -122,6 +128,7 @@ const mockViewState = {
 };
 
 vi.mock("@/features/issues/stores/view-store", () => ({
+  initFilterWorkspaceSync: vi.fn(),
   useIssueViewStore: Object.assign(
     (selector?: any) => (selector ? selector(mockViewState) : mockViewState),
     { getState: () => mockViewState, setState: vi.fn() },

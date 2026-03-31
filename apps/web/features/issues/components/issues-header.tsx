@@ -1,15 +1,22 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  Bot,
+  Check,
   ChevronDown,
+  CircleDot,
   Columns3,
   Filter,
   List,
   Plus,
+  SignalHigh,
   SlidersHorizontal,
+  User,
+  UserMinus,
+  UserPen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useIssueStore } from "@/features/issues/store";
@@ -22,6 +29,9 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import {
   Popover,
@@ -37,46 +47,267 @@ import {
   PRIORITY_CONFIG,
 } from "@/features/issues/config";
 import { StatusIcon, PriorityIcon } from "@/features/issues/components";
+import { useWorkspaceStore, useActorName } from "@/features/workspace";
 import {
   useIssueViewStore,
   SORT_OPTIONS,
   CARD_PROPERTY_OPTIONS,
+  type ActorFilterValue,
 } from "@/features/issues/stores/view-store";
+import { filterIssues } from "@/features/issues/utils/filter";
+import type { Issue } from "@/shared/types";
+
+// ---------------------------------------------------------------------------
+// HoverCheck — shadcn official pattern (PR #6862)
+// Uses data-selected attr instead of Checkbox component to avoid
+// DropdownMenuCheckboxItem's focus:**:text-accent-foreground cascade.
+// ---------------------------------------------------------------------------
+
+const FILTER_ITEM_CLASS =
+  "group/fitem pr-1.5! [&>[data-slot=dropdown-menu-checkbox-item-indicator]]:hidden";
+
+function HoverCheck({ checked }: { checked: boolean }) {
+  return (
+    <div
+      className="border-input data-[selected=true]:border-primary data-[selected=true]:bg-primary data-[selected=true]:text-primary-foreground pointer-events-none size-4 shrink-0 rounded-[4px] border transition-all select-none *:[svg]:opacity-0 data-[selected=true]:*:[svg]:opacity-100 opacity-0 group-hover/fitem:opacity-100 group-focus/fitem:opacity-100 data-[selected=true]:opacity-100"
+      data-selected={checked}
+    >
+      <Check className="size-3.5 text-current" />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function getActiveFilterCount(state: {
+  statusFilters: string[];
+  priorityFilters: string[];
+  assigneeFilters: ActorFilterValue[];
+  includeNoAssignee: boolean;
+  creatorFilters: ActorFilterValue[];
+}) {
+  let count = 0;
+  if (state.statusFilters.length > 0) count++;
+  if (state.priorityFilters.length > 0) count++;
+  if (state.assigneeFilters.length > 0 || state.includeNoAssignee) count++;
+  if (state.creatorFilters.length > 0) count++;
+  return count;
+}
+
+function useIssueCounts(allIssues: Issue[]) {
+  return useMemo(() => {
+    const status = new Map<string, number>();
+    const priority = new Map<string, number>();
+    const assignee = new Map<string, number>();
+    const creator = new Map<string, number>();
+    let noAssignee = 0;
+
+    for (const issue of allIssues) {
+      status.set(issue.status, (status.get(issue.status) ?? 0) + 1);
+      priority.set(issue.priority, (priority.get(issue.priority) ?? 0) + 1);
+
+      if (!issue.assignee_id) {
+        noAssignee++;
+      } else {
+        const aKey = `${issue.assignee_type}:${issue.assignee_id}`;
+        assignee.set(aKey, (assignee.get(aKey) ?? 0) + 1);
+      }
+
+      const cKey = `${issue.creator_type}:${issue.creator_id}`;
+      creator.set(cKey, (creator.get(cKey) ?? 0) + 1);
+    }
+
+    return { status, priority, assignee, creator, noAssignee };
+  }, [allIssues]);
+}
+
+// ---------------------------------------------------------------------------
+// Actor sub-menu content (shared between Assignee and Creator)
+// ---------------------------------------------------------------------------
+
+function ActorSubContent({
+  counts,
+  selected,
+  onToggle,
+  showNoAssignee,
+  includeNoAssignee,
+  onToggleNoAssignee,
+  noAssigneeCount,
+}: {
+  counts: Map<string, number>;
+  selected: ActorFilterValue[];
+  onToggle: (value: ActorFilterValue) => void;
+  showNoAssignee?: boolean;
+  includeNoAssignee?: boolean;
+  onToggleNoAssignee?: () => void;
+  noAssigneeCount?: number;
+}) {
+  const [search, setSearch] = useState("");
+  const members = useWorkspaceStore((s) => s.members);
+  const agents = useWorkspaceStore((s) => s.agents);
+  const { getActorInitials } = useActorName();
+
+  const query = search.toLowerCase();
+  const filteredMembers = members.filter((m) =>
+    m.name.toLowerCase().includes(query),
+  );
+  const filteredAgents = agents.filter((a) =>
+    a.name.toLowerCase().includes(query),
+  );
+
+  const isSelected = (type: "member" | "agent", id: string) =>
+    selected.some((f) => f.type === type && f.id === id);
+
+  return (
+    <>
+      <div className="px-2 py-1.5 border-b border-foreground/5">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Filter..."
+          className="w-full bg-transparent text-sm placeholder:text-muted-foreground outline-none"
+          autoFocus
+        />
+      </div>
+
+      <div className="max-h-64 overflow-y-auto p-1">
+        {showNoAssignee &&
+          (!query || "no assignee".includes(query) || "unassigned".includes(query)) && (
+            <DropdownMenuCheckboxItem
+              checked={includeNoAssignee ?? false}
+              onCheckedChange={() => onToggleNoAssignee?.()}
+              className={FILTER_ITEM_CLASS}
+            >
+              <HoverCheck checked={includeNoAssignee ?? false} />
+              <UserMinus className="size-3.5 text-muted-foreground" />
+              No assignee
+              {(noAssigneeCount ?? 0) > 0 && (
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {noAssigneeCount}
+                </span>
+              )}
+            </DropdownMenuCheckboxItem>
+          )}
+
+        {filteredMembers.length > 0 && (
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Members</DropdownMenuLabel>
+            {filteredMembers.map((m) => {
+              const checked = isSelected("member", m.user_id);
+              const count = counts.get(`member:${m.user_id}`) ?? 0;
+              return (
+                <DropdownMenuCheckboxItem
+                  key={m.user_id}
+                  checked={checked}
+                  onCheckedChange={() =>
+                    onToggle({ type: "member", id: m.user_id })
+                  }
+                  className={FILTER_ITEM_CLASS}
+                >
+                  <HoverCheck checked={checked} />
+                  <div className="inline-flex size-4.5 shrink-0 items-center justify-center rounded-full bg-muted text-[8px] font-medium text-muted-foreground">
+                    {getActorInitials("member", m.user_id)}
+                  </div>
+                  <span className="truncate">{m.name}</span>
+                  {count > 0 && (
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      {count}
+                    </span>
+                  )}
+                </DropdownMenuCheckboxItem>
+              );
+            })}
+          </DropdownMenuGroup>
+        )}
+
+        {filteredAgents.length > 0 && (
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Agents</DropdownMenuLabel>
+            {filteredAgents.map((a) => {
+              const checked = isSelected("agent", a.id);
+              const count = counts.get(`agent:${a.id}`) ?? 0;
+              return (
+                <DropdownMenuCheckboxItem
+                  key={a.id}
+                  checked={checked}
+                  onCheckedChange={() =>
+                    onToggle({ type: "agent", id: a.id })
+                  }
+                  className={FILTER_ITEM_CLASS}
+                >
+                  <HoverCheck checked={checked} />
+                  <div className="inline-flex size-4.5 shrink-0 items-center justify-center rounded-full bg-info/10 text-info">
+                    <Bot className="size-2.5" />
+                  </div>
+                  <span className="truncate">{a.name}</span>
+                  {count > 0 && (
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      {count}
+                    </span>
+                  )}
+                </DropdownMenuCheckboxItem>
+              );
+            })}
+          </DropdownMenuGroup>
+        )}
+
+        {filteredMembers.length === 0 && filteredAgents.length === 0 && search && (
+          <div className="px-2 py-3 text-center text-sm text-muted-foreground">
+            No results
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// IssuesHeader
+// ---------------------------------------------------------------------------
 
 export function IssuesHeader() {
   const viewMode = useIssueViewStore((s) => s.viewMode);
   const statusFilters = useIssueViewStore((s) => s.statusFilters);
   const priorityFilters = useIssueViewStore((s) => s.priorityFilters);
+  const assigneeFilters = useIssueViewStore((s) => s.assigneeFilters);
+  const includeNoAssignee = useIssueViewStore((s) => s.includeNoAssignee);
+  const creatorFilters = useIssueViewStore((s) => s.creatorFilters);
   const sortBy = useIssueViewStore((s) => s.sortBy);
   const sortDirection = useIssueViewStore((s) => s.sortDirection);
   const cardProperties = useIssueViewStore((s) => s.cardProperties);
   const setViewMode = useIssueViewStore((s) => s.setViewMode);
   const toggleStatusFilter = useIssueViewStore((s) => s.toggleStatusFilter);
   const togglePriorityFilter = useIssueViewStore((s) => s.togglePriorityFilter);
+  const toggleAssigneeFilter = useIssueViewStore((s) => s.toggleAssigneeFilter);
+  const toggleNoAssignee = useIssueViewStore((s) => s.toggleNoAssignee);
+  const toggleCreatorFilter = useIssueViewStore((s) => s.toggleCreatorFilter);
+  const clearFilters = useIssueViewStore((s) => s.clearFilters);
   const setSortBy = useIssueViewStore((s) => s.setSortBy);
   const setSortDirection = useIssueViewStore((s) => s.setSortDirection);
   const toggleCardProperty = useIssueViewStore((s) => s.toggleCardProperty);
-  const clearFilters = useIssueViewStore((s) => s.clearFilters);
 
   const allIssues = useIssueStore((s) => s.issues);
+  const counts = useIssueCounts(allIssues);
 
-  const filteredCount = useMemo(() => {
-    return allIssues.filter((i) => {
-      if (statusFilters.length > 0 && !statusFilters.includes(i.status))
-        return false;
-      if (
-        priorityFilters.length > 0 &&
-        !priorityFilters.includes(i.priority)
-      )
-        return false;
-      return true;
-    }).length;
-  }, [allIssues, statusFilters, priorityFilters]);
+  const filteredCount = useMemo(
+    () => filterIssues(allIssues, { statusFilters, priorityFilters, assigneeFilters, includeNoAssignee, creatorFilters }).length,
+    [allIssues, statusFilters, priorityFilters, assigneeFilters, includeNoAssignee, creatorFilters],
+  );
+
+  const filterCount = getActiveFilterCount({
+    statusFilters,
+    priorityFilters,
+    assigneeFilters,
+    includeNoAssignee,
+    creatorFilters,
+  });
 
   const sortLabel =
     SORT_OPTIONS.find((o) => o.value === sortBy)?.label ?? "Manual";
-  const hasActiveFilters =
-    statusFilters.length > 0 || priorityFilters.length > 0;
+  const hasActiveFilters = filterCount > 0;
 
   return (
     <div className="flex h-12 shrink-0 items-center justify-between px-4">
@@ -106,9 +337,9 @@ export function IssuesHeader() {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Filter */}
-        <Popover>
-          <PopoverTrigger
+        {/* Filter — DropdownMenu with sub-menus */}
+        <DropdownMenu>
+          <DropdownMenuTrigger
             render={
               <Button
                 variant="outline"
@@ -119,107 +350,140 @@ export function IssuesHeader() {
                 Filter
                 {hasActiveFilters && (
                   <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
-                    {statusFilters.length + priorityFilters.length}
+                    {filterCount}
                   </span>
                 )}
               </Button>
             }
           />
-          <PopoverContent align="start" className="w-64 p-0">
+          <DropdownMenuContent align="start" className="w-44">
             {/* Status */}
-            <div className="border-b px-3 py-2.5">
-              <span className="text-xs font-medium text-muted-foreground">
-                Status
-              </span>
-              <div className="mt-1.5 space-y-0.5">
-                {ALL_STATUSES.map((s) => (
-                  <label
-                    key={s}
-                    className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 hover:bg-accent"
-                    onClick={() => toggleStatusFilter(s)}
-                  >
-                    <div
-                      className={`flex h-4 w-4 items-center justify-center rounded border ${
-                        statusFilters.length === 0 || statusFilters.includes(s)
-                          ? "border-primary bg-primary"
-                          : "border-input"
-                      }`}
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <CircleDot className="size-3.5" />
+                <span className="flex-1">Status</span>
+                {statusFilters.length > 0 && (
+                  <span className="text-xs text-primary font-medium">
+                    {statusFilters.length}
+                  </span>
+                )}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-auto min-w-48">
+                {ALL_STATUSES.map((s) => {
+                  const checked = statusFilters.includes(s);
+                  const count = counts.status.get(s) ?? 0;
+                  return (
+                    <DropdownMenuCheckboxItem
+                      key={s}
+                      checked={checked}
+                      onCheckedChange={() => toggleStatusFilter(s)}
+                      className={FILTER_ITEM_CLASS}
                     >
-                      {(statusFilters.length === 0 ||
-                        statusFilters.includes(s)) && (
-                        <svg
-                          viewBox="0 0 12 12"
-                          className="h-3 w-3 text-primary-foreground"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                        >
-                          <path d="M2 6l3 3 5-5" />
-                        </svg>
+                      <HoverCheck checked={checked} />
+                      <StatusIcon status={s} className="h-3.5 w-3.5" />
+                      {STATUS_CONFIG[s].label}
+                      {count > 0 && (
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          {count} {count === 1 ? "issue" : "issues"}
+                        </span>
                       )}
-                    </div>
-                    <StatusIcon status={s} className="h-3.5 w-3.5" />
-                    <span className="text-sm">{STATUS_CONFIG[s].label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
+                    </DropdownMenuCheckboxItem>
+                  );
+                })}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
 
             {/* Priority */}
-            <div className="border-b px-3 py-2.5">
-              <span className="text-xs font-medium text-muted-foreground">
-                Priority
-              </span>
-              <div className="mt-1.5 space-y-0.5">
-                {PRIORITY_ORDER.map((p) => (
-                  <label
-                    key={p}
-                    className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 hover:bg-accent"
-                    onClick={() => togglePriorityFilter(p)}
-                  >
-                    <div
-                      className={`flex h-4 w-4 items-center justify-center rounded border ${
-                        priorityFilters.length === 0 ||
-                        priorityFilters.includes(p)
-                          ? "border-primary bg-primary"
-                          : "border-input"
-                      }`}
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <SignalHigh className="size-3.5" />
+                <span className="flex-1">Priority</span>
+                {priorityFilters.length > 0 && (
+                  <span className="text-xs text-primary font-medium">
+                    {priorityFilters.length}
+                  </span>
+                )}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-auto min-w-44">
+                {PRIORITY_ORDER.map((p) => {
+                  const checked = priorityFilters.includes(p);
+                  const count = counts.priority.get(p) ?? 0;
+                  return (
+                    <DropdownMenuCheckboxItem
+                      key={p}
+                      checked={checked}
+                      onCheckedChange={() => togglePriorityFilter(p)}
+                      className={FILTER_ITEM_CLASS}
                     >
-                      {(priorityFilters.length === 0 ||
-                        priorityFilters.includes(p)) && (
-                        <svg
-                          viewBox="0 0 12 12"
-                          className="h-3 w-3 text-primary-foreground"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                        >
-                          <path d="M2 6l3 3 5-5" />
-                        </svg>
+                      <HoverCheck checked={checked} />
+                      <PriorityIcon priority={p} />
+                      {PRIORITY_CONFIG[p].label}
+                      {count > 0 && (
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          {count} {count === 1 ? "issue" : "issues"}
+                        </span>
                       )}
-                    </div>
-                    <PriorityIcon priority={p} />
-                    <span className="text-sm">{PRIORITY_CONFIG[p].label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
+                    </DropdownMenuCheckboxItem>
+                  );
+                })}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+
+            {/* Assignee */}
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <User className="size-3.5" />
+                <span className="flex-1">Assignee</span>
+                {(assigneeFilters.length > 0 || includeNoAssignee) && (
+                  <span className="text-xs text-primary font-medium">
+                    {assigneeFilters.length + (includeNoAssignee ? 1 : 0)}
+                  </span>
+                )}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-auto min-w-52 p-0">
+                <ActorSubContent
+                  counts={counts.assignee}
+                  selected={assigneeFilters}
+                  onToggle={toggleAssigneeFilter}
+                  showNoAssignee
+                  includeNoAssignee={includeNoAssignee}
+                  onToggleNoAssignee={toggleNoAssignee}
+                  noAssigneeCount={counts.noAssignee}
+                />
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+
+            {/* Creator */}
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <UserPen className="size-3.5" />
+                <span className="flex-1">Creator</span>
+                {creatorFilters.length > 0 && (
+                  <span className="text-xs text-primary font-medium">
+                    {creatorFilters.length}
+                  </span>
+                )}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-auto min-w-52 p-0">
+                <ActorSubContent
+                  counts={counts.creator}
+                  selected={creatorFilters}
+                  onToggle={toggleCreatorFilter}
+                />
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
 
             {/* Reset */}
             {hasActiveFilters && (
-              <div className="px-3 py-2">
-                <Button
-                  variant="link"
-                  size="xs"
-                  className="text-muted-foreground hover:text-foreground"
-                  onClick={clearFilters}
-                >
-                  Reset filters
-                </Button>
-              </div>
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={clearFilters}>
+                  Reset all filters
+                </DropdownMenuItem>
+              </>
             )}
-          </PopoverContent>
-        </Popover>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Display settings */}
         <Popover>
@@ -232,7 +496,6 @@ export function IssuesHeader() {
             }
           />
           <PopoverContent align="start" className="w-64 p-0">
-            {/* Ordering section */}
             <div className="border-b px-3 py-2.5">
               <span className="text-xs font-medium text-muted-foreground">
                 Ordering
@@ -279,7 +542,6 @@ export function IssuesHeader() {
               </div>
             </div>
 
-            {/* Card properties section */}
             <div className="px-3 py-2.5">
               <span className="text-xs font-medium text-muted-foreground">
                 Card properties
@@ -308,7 +570,6 @@ export function IssuesHeader() {
         <span className="text-xs text-muted-foreground">
           {filteredCount} {filteredCount === 1 ? "Issue" : "Issues"}
         </span>
-        {/* New issue */}
         <Button
           size="sm"
           onClick={() => useModalStore.getState().open("create-issue")}
