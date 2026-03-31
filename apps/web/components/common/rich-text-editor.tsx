@@ -13,7 +13,7 @@ import Link from "@tiptap/extension-link";
 import Typography from "@tiptap/extension-typography";
 import Mention from "@tiptap/extension-mention";
 import Image from "@tiptap/extension-image";
-import { Markdown } from "tiptap-markdown";
+import { Markdown } from "@tiptap/markdown";
 import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { cn } from "@/lib/utils";
@@ -238,10 +238,10 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
     const onSubmitRef = useRef(onSubmit);
     const onUploadFileRef = useRef(onUploadFile);
 
-    // Helper to get markdown from tiptap-markdown storage
+    // Helper to get markdown from @tiptap/markdown extension
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const getEditorMarkdown = (ed: any): string =>
-      ed?.storage?.markdown?.getMarkdown?.() ?? "";
+      ed?.getMarkdown?.() ?? "";
 
     // Keep refs in sync without recreating editor
     onUpdateRef.current = onUpdate;
@@ -268,11 +268,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
           allowBase64: false,
           HTMLAttributes: { style: "max-width: 100%; height: auto;" },
         }),
-        Markdown.configure({
-          html: false,
-          transformPastedText: true,
-          transformCopiedText: true,
-        }),
+        Markdown,
         createSubmitExtension(() => onSubmitRef.current?.()),
         createFileUploadExtension(onUploadFileRef),
       ],
