@@ -162,10 +162,44 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
     const onUpdateRef = useRef(onUpdate);
     const onSubmitRef = useRef(onSubmit);
 
-    // Helper to get markdown from @tiptap/markdown extension
+    // Helper to get markdown from @tiptap/markdown extension.
+    // Post-processes mention shortcodes [@ id="..." label="..."] → markdown
+    // links, using the Tiptap JSON doc for type info, in case the
+    // renderMarkdown override doesn't take effect.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const getEditorMarkdown = (ed: any): string =>
-      ed?.getMarkdown?.() ?? "";
+    const getEditorMarkdown = (ed: any): string => {
+      const md: string = ed?.getMarkdown?.() ?? "";
+      if (!md || !md.includes("[@ ")) return md;
+
+      // Build type map from editor JSON (which always has the type attr)
+      const json = ed?.getJSON?.();
+      const typeMap = new Map<string, string>();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      function walk(node: any) {
+        if (node?.type === "mention" && node.attrs?.id) {
+          typeMap.set(node.attrs.id, node.attrs.type || "member");
+        }
+        if (node?.content) node.content.forEach(walk);
+      }
+      if (json) walk(json);
+
+      return md.replace(
+        /\[@\s+([^\]]*)\]/g,
+        (match: string, attrString: string) => {
+          const attrs: Record<string, string> = {};
+          const re = /(\w+)="([^"]*)"/g;
+          let m;
+          while ((m = re.exec(attrString)) !== null) {
+            if (m[1] && m[2] !== undefined) attrs[m[1]] = m[2];
+          }
+          const { id, label } = attrs;
+          if (!id || !label) return match;
+          const type = typeMap.get(id) || "member";
+          const display = type === "issue" ? label : `@${label}`;
+          return `[${display}](mention://${type}/${id})`;
+        },
+      );
+    };
 
     // Keep refs in sync without recreating editor
     onUpdateRef.current = onUpdate;
