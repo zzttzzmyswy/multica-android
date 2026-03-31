@@ -61,10 +61,7 @@ function createComponents(
       // Mention links: mention://member/id or mention://agent/id
       if (href?.startsWith('mention://')) {
         return (
-          <span
-            className="text-primary font-medium"
-            style={{ background: 'color-mix(in srgb, var(--primary) 8%, transparent)', padding: '0 0.2em', borderRadius: 'calc(var(--radius) * 0.5)' }}
-          >
+          <span className="text-brand font-medium mx-0.5">
             {children}
           </span>
         )

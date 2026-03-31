@@ -127,18 +127,20 @@
 /* Links */
 .rich-text-editor a {
   color: var(--primary);
+  text-decoration: none;
+}
+
+.rich-text-editor a:hover {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
 /* Mentions */
 .rich-text-editor .mention {
-  color: var(--primary);
-  background: color-mix(in srgb, var(--primary) 8%, transparent);
-  padding: 0 0.2em;
-  border-radius: calc(var(--radius) * 0.5);
+  color: var(--brand);
   font-weight: 500;
   text-decoration: none;
+  margin: 0 0.125rem;
 }
 
 /* Strong / emphasis */

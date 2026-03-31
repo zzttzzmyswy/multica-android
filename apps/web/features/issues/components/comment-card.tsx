@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Copy, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -18,6 +18,7 @@ import { ReactionBar } from "@/components/common/reaction-bar";
 import { Markdown } from "@/components/markdown";
 import { useActorName } from "@/features/workspace";
 import { timeAgo } from "@/shared/utils";
+import { RichTextEditor, type RichTextEditorRef } from "@/components/common/rich-text-editor";
 import { ReplyInput } from "./reply-input";
 import type { TimelineEntry } from "@/shared/types";
 
@@ -54,28 +55,28 @@ function CommentRow({
 }) {
   const { getActorName } = useActorName();
   const [editing, setEditing] = useState(false);
-  const [editContent, setEditContent] = useState("");
+  const editEditorRef = useRef<RichTextEditorRef>(null);
 
   const isOwn = entry.actor_type === "member" && entry.actor_id === currentUserId;
   const isTemp = entry.id.startsWith("temp-");
 
   const startEdit = () => {
-    setEditContent(entry.content ?? "");
     setEditing(true);
   };
 
   const cancelEdit = () => {
     setEditing(false);
-    setEditContent("");
   };
 
   const saveEdit = async () => {
-    const trimmed = editContent.trim();
+    const trimmed = editEditorRef.current
+      ?.getMarkdown()
+      ?.replace(/(\n\s*)+$/, "")
+      .trim();
     if (!trimmed) return;
     try {
       await onEdit(entry.id, trimmed);
       setEditing(false);
-      setEditContent("");
     } catch {
       toast.error("Failed to update comment");
     }
@@ -140,23 +141,24 @@ function CommentRow({
       </div>
 
       {editing ? (
-        <form
-          onSubmit={(e) => { e.preventDefault(); saveEdit(); }}
+        <div
           className="mt-2 pl-8"
+          onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); }}
         >
-          <input
-            autoFocus
-            value={editContent}
-            onChange={(e) => setEditContent(e.target.value)}
-            aria-label="Edit comment"
-            className="w-full text-sm bg-transparent border-b border-border outline-none py-1"
-            onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); }}
-          />
-          <div className="flex gap-2 mt-1.5">
-            <Button size="sm" type="submit">Save</Button>
-            <Button size="sm" variant="ghost" type="button" onClick={cancelEdit}>Cancel</Button>
+          <div className="max-h-48 overflow-y-auto rounded-md border border-border px-3 py-2">
+            <RichTextEditor
+              ref={editEditorRef}
+              defaultValue={entry.content ?? ""}
+              placeholder="Edit comment..."
+              onSubmit={saveEdit}
+              debounceMs={100}
+            />
           </div>
-        </form>
+          <div className="flex gap-2 mt-1.5">
+            <Button size="sm" onClick={saveEdit}>Save</Button>
+            <Button size="sm" variant="ghost" onClick={cancelEdit}>Cancel</Button>
+          </div>
+        </div>
       ) : (
         <>
           <div className="mt-1.5 pl-8 text-sm leading-relaxed text-foreground/85">
