@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Trash2, Bot, UserMinus } from "lucide-react";
+import { X, Trash2, Bot, Lock, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,8 +19,9 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
-import type { UpdateIssueRequest } from "@/shared/types";
+import type { Agent, UpdateIssueRequest } from "@/shared/types";
 import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
+import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore, useActorName } from "@/features/workspace";
 import { useIssueStore } from "@/features/issues/store";
 import { useIssueSelectionStore } from "@/features/issues/stores/selection-store";
@@ -206,6 +207,13 @@ export function BatchActionToolbar() {
   );
 }
 
+function canAssignAgent(agent: Agent, userId: string | undefined, memberRole: string | undefined): boolean {
+  if (agent.visibility !== "private") return true;
+  if (agent.owner_id === userId) return true;
+  if (memberRole === "owner" || memberRole === "admin") return true;
+  return false;
+}
+
 function BatchAssigneePicker({
   open,
   onOpenChange,
@@ -218,9 +226,13 @@ function BatchAssigneePicker({
   loading: boolean;
 }) {
   const [filter, setFilter] = useState("");
+  const user = useAuthStore((s) => s.user);
   const members = useWorkspaceStore((s) => s.members);
   const agents = useWorkspaceStore((s) => s.agents);
   const { getActorInitials } = useActorName();
+
+  const currentMember = members.find((m) => m.user_id === user?.id);
+  const memberRole = currentMember?.role;
 
   const query = filter.toLowerCase();
   const filteredMembers = members.filter((m) =>
@@ -297,22 +309,30 @@ function BatchAssigneePicker({
               <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Agents
               </div>
-              {filteredAgents.map((a) => (
-                <button
-                  key={a.id}
-                  type="button"
-                  onClick={() => {
-                    onUpdate({ assignee_type: "agent", assignee_id: a.id });
-                    onOpenChange(false);
-                  }}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent transition-colors"
-                >
-                  <div className="inline-flex size-4.5 shrink-0 items-center justify-center rounded-full bg-info/10 text-info">
-                    <Bot className="size-2.5" />
-                  </div>
-                  <span>{a.name}</span>
-                </button>
-              ))}
+              {filteredAgents.map((a) => {
+                const allowed = canAssignAgent(a, user?.id, memberRole);
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    disabled={!allowed}
+                    onClick={() => {
+                      if (!allowed) return;
+                      onUpdate({ assignee_type: "agent", assignee_id: a.id });
+                      onOpenChange(false);
+                    }}
+                    className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${allowed ? "hover:bg-accent" : "opacity-50 cursor-not-allowed"}`}
+                  >
+                    <div className={`inline-flex size-4.5 shrink-0 items-center justify-center rounded-full ${allowed ? "bg-info/10 text-info" : "bg-muted text-muted-foreground"}`}>
+                      <Bot className="size-2.5" />
+                    </div>
+                    <span className={allowed ? "" : "text-muted-foreground"}>{a.name}</span>
+                    {a.visibility === "private" && (
+                      <Lock className="ml-auto h-3 w-3 text-muted-foreground" />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
