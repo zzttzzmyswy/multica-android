@@ -107,6 +107,7 @@ export class ApiClient {
     const res = await fetch(`${this.baseUrl}${path}`, {
       ...init,
       headers,
+      credentials: "include",
     });
 
     if (!res.ok) {
@@ -527,6 +528,7 @@ export class ApiClient {
       method: "POST",
       headers: this.authHeaders(),
       body: formData,
+      credentials: "include",
     });
 
     if (!res.ok) {
