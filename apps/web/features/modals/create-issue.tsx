@@ -24,8 +24,8 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { RichTextEditor, type RichTextEditorRef } from "@/components/common/rich-text-editor";
+import { TitleEditor } from "@/components/common/title-editor";
 import { StatusIcon, PriorityIcon } from "@/features/issues/components";
 import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
 import { useWorkspaceStore, useActorName } from "@/features/workspace";
@@ -186,19 +186,13 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
 
         {/* Title */}
         <div className="px-5 pb-2 shrink-0">
-          <Input
+          <TitleEditor
             autoFocus
-            type="text"
-            value={title}
-            onChange={(e) => updateTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSubmit();
-              }
-            }}
+            defaultValue={draft.title}
             placeholder="Issue title"
-            className="border-none shadow-none px-0 text-lg font-semibold focus-visible:ring-0 dark:bg-transparent"
+            className="text-lg font-semibold"
+            onChange={(v) => updateTitle(v)}
+            onSubmit={handleSubmit}
           />
         </div>
 

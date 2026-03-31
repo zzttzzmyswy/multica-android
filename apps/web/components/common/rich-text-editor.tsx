@@ -14,7 +14,7 @@ import Typography from "@tiptap/extension-typography";
 import Mention from "@tiptap/extension-mention";
 import Image from "@tiptap/extension-image";
 import { Markdown } from "@tiptap/markdown";
-import { Extension } from "@tiptap/core";
+import { Extension, mergeAttributes } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { cn } from "@/lib/utils";
 import type { UploadResult } from "@/shared/hooks/use-file-upload";
@@ -43,47 +43,11 @@ interface RichTextEditorRef {
   insertFile: (filename: string, url: string, isImage: boolean) => void;
 }
 
-// ---------------------------------------------------------------------------
-// Submit shortcut extension (Mod+Enter)
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Mention extension configured for markdown serialization
-// Stores as: [@Label](mention://type/id)
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Link extension — always serialize as [text](url), never <url> autolinks;
-// support Cmd+Click / Ctrl+Click to open in new tab.
-// ---------------------------------------------------------------------------
-
 const LinkExtension = Link.configure({
   openOnClick: true,
   autolink: true,
   HTMLAttributes: {
     class: "text-primary hover:underline cursor-pointer",
-  },
-}).extend({
-  addStorage() {
-    return {
-      markdown: {
-        serialize: {
-          open() {
-            return "[";
-          },
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          close(_state: any, mark: any) {
-            const href = (mark.attrs.href as string).replace(/[\(\)"]/g, "\\$&");
-            const title = mark.attrs.title
-              ? ` "${(mark.attrs.title as string).replace(/"/g, '\\"')}"`
-              : "";
-            return `](${href}${title})`;
-          },
-          mixable: true,
-        },
-        parse: {},
-      },
-    };
   },
 });
 
@@ -93,13 +57,16 @@ const MentionExtension = Mention.configure({
 }).extend({
   renderHTML({ node, HTMLAttributes }) {
     return [
-      "a",
-      {
-        ...HTMLAttributes,
-        href: `mention://${node.attrs.type ?? "member"}/${node.attrs.id}`,
-        "data-mention-type": node.attrs.type ?? "member",
-        "data-mention-id": node.attrs.id,
-      },
+      "span",
+      mergeAttributes(
+        { "data-type": "mention" },
+        this.options.HTMLAttributes,
+        HTMLAttributes,
+        {
+          "data-mention-type": node.attrs.type ?? "member",
+          "data-mention-id": node.attrs.id,
+        },
+      ),
       `@${node.attrs.label ?? node.attrs.id}`,
     ];
   },
@@ -108,21 +75,39 @@ const MentionExtension = Mention.configure({
       ...this.parent?.(),
       type: {
         default: "member",
-        parseHTML: (el: HTMLElement) => el.getAttribute("data-mention-type") ?? "member",
+        parseHTML: (el: HTMLElement) =>
+          el.getAttribute("data-mention-type") ?? "member",
+        renderHTML: () => ({}),
       },
     };
   },
-  addStorage() {
-    return {
-      markdown: {
-        serialize(state: { write: (s: string) => void }, node: { attrs: { label?: string; type?: string; id?: string } }) {
-          state.write(
-            `[@${node.attrs.label ?? node.attrs.id}](mention://${node.attrs.type ?? "member"}/${node.attrs.id})`,
-          );
-        },
-        parse: {},
-      },
-    };
+  // @tiptap/markdown: custom tokenizer to parse [@Label](mention://type/id)
+  markdownTokenizer: {
+    name: "mention",
+    level: "inline" as const,
+    start(src: string) {
+      return src.search(/\[@[^\]]+\]\(mention:\/\//);
+    },
+    tokenize(src: string) {
+      const match = src.match(
+        /^\[@([^\]]+)\]\(mention:\/\/(\w+)\/([^)]+)\)/,
+      );
+      if (!match) return undefined;
+      return {
+        type: "mention",
+        raw: match[0],
+        attributes: { label: match[1], type: match[2], id: match[3] },
+      };
+    },
+  },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  parseMarkdown: (token: any, helpers: any) => {
+    return helpers.createNode("mention", token.attributes);
+  },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  renderMarkdown: (node: any) => {
+    const { id, label, type = "member" } = node.attrs || {};
+    return `[@${label ?? id}](mention://${type}/${id})`;
   },
 });
 
@@ -238,11 +223,6 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
     const onSubmitRef = useRef(onSubmit);
     const onUploadFileRef = useRef(onUploadFile);
 
-    // Helper to get markdown from @tiptap/markdown extension
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const getEditorMarkdown = (ed: any): string =>
-      ed?.getMarkdown?.() ?? "";
-
     // Keep refs in sync without recreating editor
     onUpdateRef.current = onUpdate;
     onSubmitRef.current = onSubmit;
@@ -251,7 +231,8 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
     const editor = useEditor({
       immediatelyRender: false,
       editable,
-      content: defaultValue,
+      content: defaultValue || "",
+      contentType: defaultValue ? "markdown" : undefined,
       extensions: [
         StarterKit.configure({
           heading: { levels: [1, 2, 3] },
@@ -276,7 +257,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
         if (!onUpdateRef.current) return;
         if (debounceRef.current) clearTimeout(debounceRef.current);
         debounceRef.current = setTimeout(() => {
-          onUpdateRef.current?.(getEditorMarkdown(ed));
+          onUpdateRef.current?.(ed.getMarkdown());
         }, debounceMs);
       },
       editorProps: {
@@ -308,7 +289,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
     }, []);
 
     useImperativeHandle(ref, () => ({
-      getMarkdown: () => getEditorMarkdown(editor),
+      getMarkdown: () => editor?.getMarkdown() ?? "",
       clearContent: () => {
         editor?.commands.clearContent();
       },
