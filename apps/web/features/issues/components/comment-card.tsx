@@ -191,7 +191,8 @@ function CommentCard({
   onDelete,
   onToggleReaction,
 }: CommentCardProps) {
-  const [repliesOpen, setRepliesOpen] = useState(true);
+  const { getActorName } = useActorName();
+  const [open, setOpen] = useState(true);
 
   // Collect all nested replies recursively into a flat list
   const allNestedReplies: TimelineEntry[] = [];
@@ -205,57 +206,72 @@ function CommentCard({
   collectReplies(entry.id);
 
   const replyCount = allNestedReplies.length;
+  const contentPreview = (entry.content ?? "").replace(/\n/g, " ").slice(0, 80);
 
   return (
     <Card className={`!py-0 !gap-0 overflow-hidden${entry.id.startsWith("temp-") ? " opacity-60" : ""}`}>
-      {/* Parent comment */}
-      <div className="px-4">
-        <CommentRow
-          entry={entry}
-          currentUserId={currentUserId}
-          onEdit={onEdit}
-          onDelete={onDelete}
-          onToggleReaction={onToggleReaction}
-        />
-      </div>
-
-      {/* Replies — collapsible when there are replies */}
-      {replyCount > 0 && (
-        <Collapsible open={repliesOpen} onOpenChange={setRepliesOpen}>
-          <div className="border-t border-border/50 px-4">
-            <CollapsibleTrigger className="flex w-full items-center gap-1.5 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
-              <ChevronRight className={cn("h-3 w-3 transition-transform", repliesOpen && "rotate-90")} />
-              <span>
+      <Collapsible open={open} onOpenChange={setOpen}>
+        {/* Collapsed header — always visible */}
+        <div className="px-4">
+          <CollapsibleTrigger className="flex w-full items-center gap-2 py-2.5 text-left">
+            <ChevronRight className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform", open && "rotate-90")} />
+            <ActorAvatar actorType={entry.actor_type} actorId={entry.actor_id} size={20} />
+            <span className="text-sm font-medium shrink-0">
+              {getActorName(entry.actor_type, entry.actor_id)}
+            </span>
+            <span className="text-xs text-muted-foreground shrink-0">
+              {timeAgo(entry.created_at)}
+            </span>
+            {!open && contentPreview && (
+              <span className="text-xs text-muted-foreground truncate ml-1">
+                {contentPreview}{(entry.content ?? "").length > 80 ? "..." : ""}
+              </span>
+            )}
+            {!open && replyCount > 0 && (
+              <span className="text-xs text-muted-foreground shrink-0 ml-auto">
                 {replyCount} {replyCount === 1 ? "reply" : "replies"}
               </span>
-            </CollapsibleTrigger>
-          </div>
-          <CollapsibleContent>
-            {allNestedReplies.map((reply) => (
-              <div key={reply.id} className="border-t border-border/50 px-4">
-                <CommentRow
-                  entry={reply}
-                  currentUserId={currentUserId}
-                  onEdit={onEdit}
-                  onDelete={onDelete}
-                  onToggleReaction={onToggleReaction}
-                />
-              </div>
-            ))}
-          </CollapsibleContent>
-        </Collapsible>
-      )}
+            )}
+          </CollapsibleTrigger>
+        </div>
 
-      {/* Reply input — always visible at bottom */}
-      <div className="border-t border-border/50 px-4 py-2.5">
-        <ReplyInput
-          placeholder="Leave a reply..."
-          size="sm"
-          avatarType="member"
-          avatarId={currentUserId ?? ""}
-          onSubmit={(content) => onReply(entry.id, content)}
-        />
-      </div>
+        {/* Expanded content */}
+        <CollapsibleContent>
+          <div className="px-4">
+            <CommentRow
+              entry={entry}
+              currentUserId={currentUserId}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onToggleReaction={onToggleReaction}
+            />
+          </div>
+
+          {/* Replies */}
+          {allNestedReplies.map((reply) => (
+            <div key={reply.id} className="border-t border-border/50 px-4">
+              <CommentRow
+                entry={reply}
+                currentUserId={currentUserId}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onToggleReaction={onToggleReaction}
+              />
+            </div>
+          ))}
+
+          {/* Reply input */}
+          <div className="border-t border-border/50 px-4 py-2.5">
+            <ReplyInput
+              placeholder="Leave a reply..."
+              size="sm"
+              avatarType="member"
+              avatarId={currentUserId ?? ""}
+              onSubmit={(content) => onReply(entry.id, content)}
+            />
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
     </Card>
   );
 }
