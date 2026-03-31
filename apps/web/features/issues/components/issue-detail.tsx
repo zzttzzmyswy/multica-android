@@ -69,6 +69,7 @@ import { useIssueTimeline } from "@/features/issues/hooks/use-issue-timeline";
 import { useIssueReactions } from "@/features/issues/hooks/use-issue-reactions";
 import { useIssueSubscribers } from "@/features/issues/hooks/use-issue-subscribers";
 import { ReactionBar } from "@/components/common/reaction-bar";
+import { useFileUpload } from "@/hooks/use-file-upload";
 import { timeAgo } from "@/shared/utils";
 
 function shortDate(date: string | null): string {
@@ -179,6 +180,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   const prevIssue = currentIndex > 0 ? allIssues[currentIndex - 1] : null;
   const nextIssue = currentIndex < allIssues.length - 1 ? allIssues[currentIndex + 1] : null;
   const { getActorName, getActorInitials } = useActorName();
+  const { upload: uploadFile } = useFileUpload();
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: layoutId,
   });
@@ -247,6 +249,18 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
       });
     },
     [issue, id],
+  );
+
+  const handleDescriptionUpload = useCallback(
+    async (file: File) => {
+      try {
+        return await uploadFile(file);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Upload failed");
+        return null;
+      }
+    },
+    [uploadFile],
   );
 
   const handleDelete = async () => {
@@ -574,6 +588,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
             defaultValue={issue.description || ""}
             placeholder="Add description..."
             onUpdate={(md) => handleUpdateField({ description: md || undefined })}
+            onUploadFile={handleDescriptionUpload}
             debounceMs={1500}
             className="mt-5"
           />

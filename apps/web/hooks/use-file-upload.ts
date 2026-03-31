@@ -1,0 +1,58 @@
+"use client";
+
+import { useState, useCallback } from "react";
+import { api } from "@/shared/api";
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
+const ALLOWED_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "image/svg+xml",
+  "application/pdf",
+  "text/plain",
+  "text/csv",
+  "application/json",
+  "video/mp4",
+  "video/webm",
+  "audio/mpeg",
+  "audio/wav",
+  "application/zip",
+]);
+
+function isAllowedType(type: string): boolean {
+  const mediaType = type.split(";")[0] ?? "";
+  return ALLOWED_TYPES.has(mediaType.trim().toLowerCase());
+}
+
+export interface UploadResult {
+  filename: string;
+  link: string;
+}
+
+export function useFileUpload() {
+  const [uploading, setUploading] = useState(false);
+
+  const upload = useCallback(
+    async (file: File): Promise<UploadResult | null> => {
+      if (file.size > MAX_FILE_SIZE) {
+        throw new Error("File exceeds 10 MB limit");
+      }
+      if (!isAllowedType(file.type)) {
+        throw new Error(`File type not allowed: ${file.type}`);
+      }
+
+      setUploading(true);
+      try {
+        return await api.uploadFile(file);
+      } finally {
+        setUploading(false);
+      }
+    },
+    [],
+  );
+
+  return { upload, uploading };
+}

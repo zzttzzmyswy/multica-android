@@ -1,10 +1,12 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RichTextEditor, type RichTextEditorRef } from "@/components/common/rich-text-editor";
 import { ActorAvatar } from "@/components/common/actor-avatar";
+import { useFileUpload } from "@/hooks/use-file-upload";
+import { toast } from "sonner";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -30,8 +32,30 @@ function ReplyInput({
   size = "default",
 }: ReplyInputProps) {
   const editorRef = useRef<RichTextEditorRef>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isEmpty, setIsEmpty] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const { upload, uploading } = useFileUpload();
+
+  const handleUpload = async (file: File) => {
+    try {
+      const result = await upload(file);
+      return result;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed");
+      return null;
+    }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    const result = await handleUpload(file);
+    if (result) {
+      editorRef.current?.insertFile(result.filename, result.link, file.type.startsWith("image/"));
+    }
+  };
 
   const handleSubmit = async () => {
     const content = editorRef.current?.getMarkdown()?.replace(/(\n\s*)+$/, "").trim();
@@ -67,6 +91,7 @@ function ReplyInput({
             placeholder={placeholder}
             onUpdate={(md) => setIsEmpty(!md.trim())}
             onSubmit={handleSubmit}
+            onUploadFile={handleUpload}
             debounceMs={100}
           />
         </div>
@@ -76,7 +101,23 @@ function ReplyInput({
           }`}
         >
           <div className="overflow-hidden">
-            <div className="flex items-center justify-end pt-1">
+            <div className="flex items-center justify-end gap-1 pt-1">
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                tabIndex={isEmpty ? -1 : 0}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <Paperclip className="h-3.5 w-3.5" />
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onChange={handleFileSelect}
+              />
               <Button
                 size="icon-xs"
                 disabled={isEmpty || submitting}

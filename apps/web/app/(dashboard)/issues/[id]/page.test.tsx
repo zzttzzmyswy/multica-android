@@ -58,6 +58,7 @@ vi.mock("@/features/workspace", () => ({
       if (type === "agent") return "CA";
       return "??";
     },
+    getActorAvatarUrl: () => null,
   }),
 }));
 

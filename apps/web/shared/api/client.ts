@@ -519,4 +519,43 @@ export class ApiClient {
   async revokePersonalAccessToken(id: string): Promise<void> {
     await this.fetch(`/api/tokens/${id}`, { method: "DELETE" });
   }
+
+  // File Upload
+  async uploadFile(file: File): Promise<{ filename: string; link: string }> {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const headers: Record<string, string> = {};
+    if (this.token) headers["Authorization"] = `Bearer ${this.token}`;
+    if (this.workspaceId) headers["X-Workspace-ID"] = this.workspaceId;
+
+    const res = await fetch(`${this.baseUrl}/api/upload-file`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    if (!res.ok) {
+      if (res.status === 401 && typeof window !== "undefined") {
+        localStorage.removeItem("multica_token");
+        localStorage.removeItem("multica_workspace_id");
+        this.token = null;
+        this.workspaceId = null;
+        if (window.location.pathname !== "/login") {
+          window.location.href = "/login";
+        }
+      }
+
+      let message = `Upload failed: ${res.status}`;
+      try {
+        const data = (await res.json()) as { error?: string };
+        if (typeof data.error === "string" && data.error) message = data.error;
+      } catch {
+        // Ignore non-JSON error bodies.
+      }
+      throw new Error(message);
+    }
+
+    return res.json() as Promise<{ filename: string; link: string }>;
+  }
 }
