@@ -1,9 +1,10 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ArrowUp, Loader2, Paperclip } from "lucide-react";
+import { ArrowUp, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RichTextEditor, type RichTextEditorRef } from "@/components/common/rich-text-editor";
+import { FileUploadButton } from "@/components/common/file-upload-button";
 import { useFileUpload } from "@/shared/hooks/use-file-upload";
 
 interface CommentInputProps {
@@ -13,7 +14,6 @@ interface CommentInputProps {
 
 function CommentInput({ issueId, onSubmit }: CommentInputProps) {
   const editorRef = useRef<RichTextEditorRef>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const attachmentIdsRef = useRef<string[]>([]);
   const [isEmpty, setIsEmpty] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -23,16 +23,6 @@ function CommentInput({ issueId, onSubmit }: CommentInputProps) {
     const result = await uploadWithToast(file, { issueId });
     if (result) attachmentIdsRef.current.push(result.id);
     return result;
-  };
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = "";
-    const result = await handleUpload(file);
-    if (result) {
-      editorRef.current?.insertFile(result.filename, result.link, file.type.startsWith("image/"));
-    }
   };
 
   const handleSubmit = async () => {
@@ -51,8 +41,8 @@ function CommentInput({ issueId, onSubmit }: CommentInputProps) {
   };
 
   return (
-    <div className="relative rounded-lg bg-card ring-1 ring-border">
-      <div className="min-h-20 max-h-48 overflow-y-auto px-3 py-2 pb-8">
+    <div className="relative flex max-h-56 flex-col rounded-lg bg-card pb-8 ring-1 ring-border">
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2">
         <RichTextEditor
           ref={editorRef}
           placeholder="Leave a comment..."
@@ -62,28 +52,25 @@ function CommentInput({ issueId, onSubmit }: CommentInputProps) {
           debounceMs={100}
         />
       </div>
-      <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => fileInputRef.current?.click()}
+      <div className="absolute bottom-1 right-1.5 flex items-center gap-1">
+        <FileUploadButton
+          size="sm"
+          onUpload={handleUpload}
+          onInsert={(result, isImage) =>
+            editorRef.current?.insertFile(result.filename, result.link, isImage)
+          }
           disabled={uploading}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <Paperclip className="h-4 w-4" />
-        </Button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          className="hidden"
-          onChange={handleFileSelect}
         />
         <Button
-          size="icon-sm"
+          size="icon-xs"
           disabled={isEmpty || submitting}
           onClick={handleSubmit}
         >
-          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
+          {submitting ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <ArrowUp className="h-3.5 w-3.5" />
+          )}
         </Button>
       </div>
     </div>

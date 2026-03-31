@@ -6,8 +6,10 @@ import {
   useImperativeHandle,
   useRef,
 } from "react";
-import { useEditor, EditorContent } from "@tiptap/react";
+import { useEditor, EditorContent, ReactNodeViewRenderer } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import { common, createLowlight } from "lowlight";
 import Placeholder from "@tiptap/extension-placeholder";
 import Link from "@tiptap/extension-link";
 import Typography from "@tiptap/extension-typography";
@@ -16,10 +18,14 @@ import Image from "@tiptap/extension-image";
 import { Markdown } from "@tiptap/markdown";
 import { Extension, mergeAttributes } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { Slice } from "@tiptap/pm/model";
 import { cn } from "@/lib/utils";
 import type { UploadResult } from "@/shared/hooks/use-file-upload";
 import { createMentionSuggestion } from "./mention-suggestion";
+import { CodeBlockView } from "./code-block-view";
 import "./rich-text-editor.css";
+
+const lowlight = createLowlight(common);
 
 // ---------------------------------------------------------------------------
 // Types
@@ -33,6 +39,7 @@ interface RichTextEditorProps {
   className?: string;
   debounceMs?: number;
   onSubmit?: () => void;
+  onBlur?: () => void;
   onUploadFile?: (file: File) => Promise<UploadResult | null>;
 }
 
@@ -130,8 +137,55 @@ function createSubmitExtension(onSubmit: () => void) {
 }
 
 // ---------------------------------------------------------------------------
-// File upload extension (paste + drop)
+// Markdown paste extension — parse pasted markdown text as rich text
 // ---------------------------------------------------------------------------
+
+function createMarkdownPasteExtension() {
+  return Extension.create({
+    name: "markdownPaste",
+    addProseMirrorPlugins() {
+      const { editor } = this;
+      return [
+        new Plugin({
+          key: new PluginKey("markdownPaste"),
+          props: {
+            clipboardTextParser(text, _context, plainText) {
+              if (!plainText && editor.markdown) {
+                const json = editor.markdown.parse(text);
+                const node = editor.schema.nodeFromJSON(json);
+                return Slice.maxOpen(node.content);
+              }
+              // Plain text fallback
+              const p = editor.schema.nodes.paragraph!;
+              const doc = editor.schema.nodes.doc!;
+              const paragraph = p.create(null, text ? editor.schema.text(text) : undefined);
+              return new Slice(doc.create(null, paragraph).content, 0, 0);
+            },
+          },
+        }),
+      ];
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// File upload extension (paste + drop) with blob URL instant preview
+// ---------------------------------------------------------------------------
+
+function removeImageBySrc(editor: ReturnType<typeof useEditor>, src: string) {
+  if (!editor) return;
+  const { tr } = editor.state;
+  let deleted = false;
+  editor.state.doc.descendants((node, pos) => {
+    if (deleted) return false;
+    if (node.type.name === "image" && node.attrs.src === src) {
+      tr.delete(pos, pos + node.nodeSize);
+      deleted = true;
+      return false;
+    }
+  });
+  if (deleted) editor.view.dispatch(tr);
+}
 
 function createFileUploadExtension(
   onUploadFileRef: React.RefObject<((file: File) => Promise<UploadResult | null>) | undefined>,
@@ -148,28 +202,67 @@ function createFileUploadExtension(
         let handled = false;
         for (const file of Array.from(files)) {
           handled = true;
-          try {
-            const result = await handler(file);
-            if (!result) continue;
+          const isImage = file.type.startsWith("image/");
 
-            const isImage = file.type.startsWith("image/");
-            if (isImage) {
+          if (isImage) {
+            // Instant preview via blob URL, then replace with real URL after upload
+            const blobUrl = URL.createObjectURL(file);
+            if (pos !== undefined) {
               editor
                 .chain()
                 .focus()
-                .setImage({ src: result.link, alt: result.filename })
+                .insertContentAt(pos, {
+                  type: "image",
+                  attrs: { src: blobUrl, alt: file.name },
+                })
                 .run();
             } else {
-              // Insert as a markdown link
+              editor
+                .chain()
+                .focus()
+                .setImage({ src: blobUrl, alt: file.name })
+                .run();
+            }
+
+            try {
+              const result = await handler(file);
+              if (result) {
+                const { tr } = editor.state;
+                editor.state.doc.descendants((node, nodePos) => {
+                  if (
+                    node.type.name === "image" &&
+                    node.attrs.src === blobUrl
+                  ) {
+                    tr.setNodeMarkup(nodePos, undefined, {
+                      ...node.attrs,
+                      src: result.link,
+                      alt: result.filename,
+                    });
+                  }
+                });
+                editor.view.dispatch(tr);
+              } else {
+                removeImageBySrc(editor, blobUrl);
+              }
+            } catch {
+              removeImageBySrc(editor, blobUrl);
+            } finally {
+              URL.revokeObjectURL(blobUrl);
+            }
+          } else {
+            // Non-image: upload first, then insert link
+            try {
+              const result = await handler(file);
+              if (!result) continue;
               const linkText = `[${result.filename}](${result.link})`;
               if (pos !== undefined) {
                 editor.chain().focus().insertContentAt(pos, linkText).run();
               } else {
                 editor.chain().focus().insertContent(linkText).run();
               }
+            } catch {
+              // Upload errors handled by the hook/caller via toast
             }
-          } catch {
-            // Upload errors handled by the hook/caller via toast
           }
         }
         return handled;
@@ -214,6 +307,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
       className,
       debounceMs = 300,
       onSubmit,
+      onBlur,
       onUploadFile,
     },
     ref,
@@ -221,6 +315,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
     const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
     const onUpdateRef = useRef(onUpdate);
     const onSubmitRef = useRef(onSubmit);
+    const onBlurRef = useRef(onBlur);
     const onUploadFileRef = useRef(onUploadFile);
 
     // Helper to get markdown from @tiptap/markdown extension.
@@ -265,6 +360,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
     // Keep refs in sync without recreating editor
     onUpdateRef.current = onUpdate;
     onSubmitRef.current = onSubmit;
+    onBlurRef.current = onBlur;
     onUploadFileRef.current = onUploadFile;
 
     const editor = useEditor({
@@ -276,7 +372,13 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
         StarterKit.configure({
           heading: { levels: [1, 2, 3] },
           link: false,
+          codeBlock: false,
         }),
+        CodeBlockLowlight.extend({
+          addNodeView() {
+            return ReactNodeViewRenderer(CodeBlockView);
+          },
+        }).configure({ lowlight }),
         Placeholder.configure({
           placeholder: placeholderText,
         }),
@@ -289,6 +391,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
           HTMLAttributes: { style: "max-width: 100%; height: auto;" },
         }),
         Markdown,
+        createMarkdownPasteExtension(),
         createSubmitExtension(() => onSubmitRef.current?.()),
         createFileUploadExtension(onUploadFileRef),
       ],
@@ -298,6 +401,9 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
         debounceRef.current = setTimeout(() => {
           onUpdateRef.current?.(ed.getMarkdown());
         }, debounceMs);
+      },
+      onBlur: () => {
+        onBlurRef.current?.();
       },
       editorProps: {
         handleDOMEvents: {

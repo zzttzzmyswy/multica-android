@@ -109,6 +109,63 @@
   line-height: 1.6;
 }
 
+/* Syntax highlighting — lowlight (hljs) */
+.rich-text-editor .hljs-keyword,
+.rich-text-editor .hljs-selector-tag,
+.rich-text-editor .hljs-built_in { color: oklch(0.55 0.16 255); }
+
+.rich-text-editor .hljs-string,
+.rich-text-editor .hljs-addition { color: oklch(0.55 0.14 155); }
+
+.rich-text-editor .hljs-comment,
+.rich-text-editor .hljs-quote { color: var(--muted-foreground); font-style: italic; }
+
+.rich-text-editor .hljs-number,
+.rich-text-editor .hljs-literal { color: oklch(0.58 0.16 30); }
+
+.rich-text-editor .hljs-title,
+.rich-text-editor .hljs-section,
+.rich-text-editor .hljs-title\.function_ { color: oklch(0.55 0.14 280); }
+
+.rich-text-editor .hljs-attr,
+.rich-text-editor .hljs-attribute { color: oklch(0.58 0.12 60); }
+
+.rich-text-editor .hljs-variable,
+.rich-text-editor .hljs-template-variable { color: oklch(0.58 0.14 20); }
+
+.rich-text-editor .hljs-type,
+.rich-text-editor .hljs-title\.class_ { color: oklch(0.55 0.14 200); }
+
+.rich-text-editor .hljs-deletion { color: oklch(0.55 0.2 25); }
+
+.rich-text-editor .hljs-meta { color: var(--muted-foreground); }
+
+/* Dark mode overrides */
+.dark .rich-text-editor .hljs-keyword,
+.dark .rich-text-editor .hljs-selector-tag,
+.dark .rich-text-editor .hljs-built_in { color: oklch(0.7 0.14 255); }
+
+.dark .rich-text-editor .hljs-string,
+.dark .rich-text-editor .hljs-addition { color: oklch(0.7 0.14 155); }
+
+.dark .rich-text-editor .hljs-number,
+.dark .rich-text-editor .hljs-literal { color: oklch(0.72 0.14 30); }
+
+.dark .rich-text-editor .hljs-title,
+.dark .rich-text-editor .hljs-section,
+.dark .rich-text-editor .hljs-title\.function_ { color: oklch(0.72 0.12 280); }
+
+.dark .rich-text-editor .hljs-attr,
+.dark .rich-text-editor .hljs-attribute { color: oklch(0.72 0.1 60); }
+
+.dark .rich-text-editor .hljs-variable,
+.dark .rich-text-editor .hljs-template-variable { color: oklch(0.72 0.12 20); }
+
+.dark .rich-text-editor .hljs-type,
+.dark .rich-text-editor .hljs-title\.class_ { color: oklch(0.72 0.12 200); }
+
+.dark .rich-text-editor .hljs-deletion { color: oklch(0.7 0.18 25); }
+
 /* Blockquotes */
 .rich-text-editor blockquote {
   border-left: 2px solid var(--border);
@@ -155,4 +212,16 @@
 .rich-text-editor s {
   text-decoration: line-through;
   color: var(--muted-foreground);
+}
+
+/* Uploading image placeholder (blob: URLs = in-flight uploads) */
+.rich-text-editor img[src^="blob:"] {
+  opacity: 0.5;
+  border-radius: var(--radius);
+  animation: rte-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes rte-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.3; }
 }

@@ -33,6 +33,8 @@ import { useWorkspaceStore, useActorName } from "@/features/workspace";
 import { useIssueStore } from "@/features/issues";
 import { useIssueDraftStore } from "@/features/issues/stores/draft-store";
 import { api } from "@/shared/api";
+import { useFileUpload } from "@/shared/hooks/use-file-upload";
+import { FileUploadButton } from "@/components/common/file-upload-button";
 
 // ---------------------------------------------------------------------------
 // Pill trigger — shared rounded-full button style for toolbar
@@ -89,6 +91,10 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
 
   // Due date popover
   const [dueDateOpen, setDueDateOpen] = useState(false);
+
+  // File upload
+  const { uploadWithToast } = useFileUpload();
+  const handleUpload = (file: File) => uploadWithToast(file);
 
   const assigneeQuery = assigneeFilter.toLowerCase();
   const filteredMembers = members.filter((m) => m.name.toLowerCase().includes(assigneeQuery));
@@ -229,6 +235,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
             defaultValue={draft.description}
             placeholder="Add description..."
             onUpdate={(md) => setDraft({ description: md })}
+            onUploadFile={handleUpload}
             debounceMs={500}
           />
         </div>
@@ -420,7 +427,11 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end px-4 py-3 border-t shrink-0">
+        <div className="flex items-center justify-between px-4 py-3 border-t shrink-0">
+          <FileUploadButton
+            onUpload={handleUpload}
+            onInsert={(result, isImage) => descEditorRef.current?.insertFile(result.filename, result.link, isImage)}
+          />
           <Button size="sm" onClick={handleSubmit} disabled={!title.trim() || submitting}>
             {submitting ? "Creating..." : "Create Issue"}
           </Button>
