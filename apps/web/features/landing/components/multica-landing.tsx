@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { MulticaIcon } from "@/components/multica-icon";
@@ -7,76 +10,309 @@ const githubUrl = "https://github.com/multica-ai/multica";
 
 export function MulticaLanding() {
   return (
-    <div className="relative min-h-full overflow-hidden bg-[#05070b] text-white">
-      <LandingBackdrop />
+    <>
+      <div className="relative min-h-full overflow-hidden bg-[#05070b] text-white">
+        <LandingBackdrop />
 
-      <header className="absolute inset-x-0 top-0 z-30 bg-transparent">
-        <div className="mx-auto flex h-[76px] max-w-[1320px] items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link href="#product" className="flex items-center gap-3">
-            <MulticaIcon className="size-5 text-white" noSpin />
-            <span className="text-[18px] font-semibold tracking-[0.04em] text-white/92 lowercase sm:text-[20px]">
-              multica
-            </span>
-          </Link>
-
-          <div className="flex items-center gap-2.5 sm:gap-3">
-            <Link
-              href={githubUrl}
-              target="_blank"
-              rel="noreferrer"
-              className={headerButtonClassName("ghost")}
-            >
-              <GitHubMark className="size-3.5" />
-              GitHub
+        <header className="absolute inset-x-0 top-0 z-30 bg-transparent">
+          <div className="mx-auto flex h-[76px] max-w-[1320px] items-center justify-between px-4 sm:px-6 lg:px-8">
+            <Link href="#product" className="flex items-center gap-3">
+              <MulticaIcon className="size-5 text-white" noSpin />
+              <span className="text-[18px] font-semibold tracking-[0.04em] text-white/92 lowercase sm:text-[20px]">
+                multica
+              </span>
             </Link>
-            <Link href="/login" className={headerButtonClassName("solid")}>
-              Log in
-            </Link>
-          </div>
-        </div>
-      </header>
 
-      <main className="relative z-10">
-        <section
-          id="product"
-          className="mx-auto max-w-[1320px] px-4 pb-16 pt-28 sm:px-6 sm:pt-32 lg:px-8 lg:pb-24 lg:pt-36"
-        >
-          <div className="mx-auto max-w-[1120px] text-center">
-            <h1 className="font-[family-name:var(--font-serif)] text-[3.65rem] leading-[0.93] tracking-[-0.038em] text-white drop-shadow-[0_10px_34px_rgba(0,0,0,0.32)] sm:text-[4.85rem] lg:text-[6.4rem]">
-              Your next 10 hires
-              <br />
-              won&apos;t be human.
-            </h1>
-
-            <p className="mx-auto mt-7 max-w-[820px] text-[15px] leading-7 text-white/84 sm:text-[17px]">
-              Multica is project management for human + agent teams. Assign
-              tasks, manage runtimes, compound skills, all in one place.
-            </p>
-
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-              <Link href="/login" className={heroButtonClassName("solid")}>
-                Start free trial
-              </Link>
+            <div className="flex items-center gap-2.5 sm:gap-3">
               <Link
                 href={githubUrl}
                 target="_blank"
                 rel="noreferrer"
-                className={heroButtonClassName("ghost")}
+                className={headerButtonClassName("ghost")}
               >
-                <GitHubMark className="size-4" />
+                <GitHubMark className="size-3.5" />
                 GitHub
               </Link>
+              <Link href="/login" className={headerButtonClassName("solid")}>
+                Log in
+              </Link>
+            </div>
+          </div>
+        </header>
+
+        <main className="relative z-10">
+          <section
+            id="product"
+            className="mx-auto max-w-[1320px] px-4 pb-16 pt-28 sm:px-6 sm:pt-32 lg:px-8 lg:pb-24 lg:pt-36"
+          >
+            <div className="mx-auto max-w-[1120px] text-center">
+              <h1 className="font-[family-name:var(--font-serif)] text-[3.65rem] leading-[0.93] tracking-[-0.038em] text-white drop-shadow-[0_10px_34px_rgba(0,0,0,0.32)] sm:text-[4.85rem] lg:text-[6.4rem]">
+                Your next 10 hires
+                <br />
+                won&apos;t be human.
+              </h1>
+
+              <p className="mx-auto mt-7 max-w-[820px] text-[15px] leading-7 text-white/84 sm:text-[17px]">
+                Multica is project management for human + agent teams. Assign
+                tasks, manage runtimes, compound skills, all in one place.
+              </p>
+
+              <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+                <Link href="/login" className={heroButtonClassName("solid")}>
+                  Start free trial
+                </Link>
+                <Link
+                  href={githubUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={heroButtonClassName("ghost")}
+                >
+                  <GitHubMark className="size-4" />
+                  GitHub
+                </Link>
+              </div>
+
             </div>
 
             <div id="preview" className="mt-14 sm:mt-16">
-              <ProductImagePlaceholder />
+              <ProductImage />
             </div>
-          </div>
-        </section>
-      </main>
-    </div>
+          </section>
+        </main>
+      </div>
+
+      <FeaturesSection />
+    </>
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Features Section                                                          */
+/* -------------------------------------------------------------------------- */
+
+const features = [
+  {
+    label: "TEAMMATES",
+    title: "Assign to an agent like you'd assign to a colleague",
+    description:
+      "Agents aren't passive tools — they're active participants. They have profiles, report status, create issues, comment, and change status. Your activity feed shows humans and agents working side by side.",
+    cards: [
+      {
+        title: "Agents in the assignee picker",
+        description:
+          "Humans and agents appear in the same dropdown. Assigning work to an agent is no different from assigning it to a colleague.",
+      },
+      {
+        title: "Autonomous participation",
+        description:
+          "Agents create issues, leave comments, and update status on their own — not just when prompted.",
+      },
+      {
+        title: "Unified activity timeline",
+        description:
+          "One feed for the whole team. Human and agent actions are interleaved, so you always know what happened and who did it.",
+      },
+    ],
+  },
+  {
+    label: "AUTONOMOUS",
+    title: "Set it and forget it — agents work while you sleep",
+    description:
+      "Not just prompt-response. Full task lifecycle management: enqueue, claim, start, complete or fail. Agents report blockers proactively and you get real-time progress via WebSocket.",
+    cards: [
+      {
+        title: "Complete task lifecycle",
+        description:
+          "Every task flows through enqueue → claim → start → complete/fail. No silent failures — every transition is tracked and broadcast.",
+      },
+      {
+        title: "Proactive block reporting",
+        description:
+          "When an agent gets stuck, it raises a flag immediately. No more checking back hours later to find nothing happened.",
+      },
+      {
+        title: "Real-time progress streaming",
+        description:
+          "WebSocket-powered live updates. Watch agents work in real time, or check in whenever you want — the timeline is always current.",
+      },
+    ],
+  },
+  {
+    label: "SKILLS",
+    title: "Every solution becomes a reusable skill for the whole team",
+    description:
+      "Skills are reusable capability definitions — code, config, and context bundled together. Write a skill once, and every agent on your team can use it. Your skill library compounds over time.",
+    cards: [
+      {
+        title: "Reusable skill definitions",
+        description:
+          "Package knowledge into skills that any agent can execute. Deploy to staging, write migrations, review PRs — all codified.",
+      },
+      {
+        title: "Team-wide sharing",
+        description:
+          "One person's skill is every agent's skill. Build once, benefit everywhere across your team.",
+      },
+      {
+        title: "Compound growth",
+        description:
+          "Day 1: you teach an agent to deploy. Day 30: every agent deploys, writes tests, and does code review. Your team's capabilities grow exponentially.",
+      },
+    ],
+  },
+  {
+    label: "RUNTIMES",
+    title: "One dashboard for all your compute",
+    description:
+      "Local daemons and cloud runtimes, managed from a single panel. Real-time monitoring of online/offline status, usage charts, and activity heatmaps. Auto-detects local CLIs — plug in and go.",
+    cards: [
+      {
+        title: "Unified runtime panel",
+        description:
+          "Local daemons and cloud runtimes in one view. No context switching between different management interfaces.",
+      },
+      {
+        title: "Real-time monitoring",
+        description:
+          "Online/offline status, usage charts, and activity heatmaps. Know exactly what your compute is doing at any moment.",
+      },
+      {
+        title: "Auto-detection & plug-and-play",
+        description:
+          "Multica detects available CLIs like Claude Code and Codex automatically. Connect a machine, and it's ready to work.",
+      },
+    ],
+  },
+];
+
+function FeaturesSection() {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const panelRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const idx = Number(entry.target.getAttribute("data-index"));
+            if (!isNaN(idx)) setActiveIndex(idx);
+          }
+        }
+      },
+      { rootMargin: "-20% 0px -60% 0px", threshold: 0 },
+    );
+
+    panelRefs.current.forEach((el) => {
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
+  const scrollToPanel = (index: number) => {
+    panelRefs.current[index]?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
+
+  return (
+    <section id="features" className="bg-white text-[#0a0d12]">
+      <div className="mx-auto max-w-[1320px] px-4 sm:px-6 lg:px-8">
+        <div className="relative lg:flex lg:gap-20">
+          {/* Sticky left nav */}
+          <nav className="hidden lg:block lg:w-[180px] lg:shrink-0">
+            <div className="sticky top-28 flex flex-col gap-0 py-28">
+              {features.map((f, i) => (
+                <button
+                  key={f.label}
+                  onClick={() => scrollToPanel(i)}
+                  className={cn(
+                    "group flex items-center gap-3 rounded-lg px-4 py-3 text-left text-[11px] font-semibold tracking-[0.12em] transition-colors",
+                    i === activeIndex
+                      ? "text-[#0a0d12]"
+                      : "text-[#0a0d12]/36 hover:text-[#0a0d12]/60",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "size-2 shrink-0 rounded-full transition-colors",
+                      i === activeIndex ? "bg-[#0a0d12]" : "bg-transparent",
+                    )}
+                  />
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </nav>
+
+          {/* Scrollable feature panels */}
+          <div className="flex-1">
+            {features.map((feature, i) => (
+              <div
+                key={feature.label}
+                ref={(el) => {
+                  panelRefs.current[i] = el;
+                }}
+                data-index={i}
+                className={cn(
+                  "py-20 lg:py-28",
+                  i < features.length - 1 && "border-b border-[#0a0d12]/8",
+                )}
+              >
+                {/* Title + description */}
+                <h2 className="font-[family-name:var(--font-serif)] text-[2.6rem] leading-[1.05] tracking-[-0.03em] text-[#0a0d12] sm:text-[3.4rem] lg:text-[4.2rem]">
+                  {feature.title}
+                </h2>
+                <p className="mt-5 max-w-[640px] text-[15px] leading-7 text-[#0a0d12]/60 sm:text-[16px]">
+                  {feature.description}
+                </p>
+
+                {/* Image placeholder */}
+                <div className="mt-14 sm:mt-18">
+                  <div className="relative overflow-hidden rounded-[20px] border border-[#0a0d12]/8 bg-[#f5f5f5]">
+                    <div className="aspect-[16/9] w-full" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="flex flex-col items-center gap-4 text-center">
+                        <div className="grid size-14 place-items-center rounded-2xl border border-[#0a0d12]/8 bg-white shadow-sm">
+                          <ImageIcon className="size-6 text-[#0a0d12]/30" />
+                        </div>
+                        <p className="text-[13px] text-[#0a0d12]/36">
+                          {feature.label.toLowerCase()} visual
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Feature cards */}
+                <div className="mt-14 grid gap-8 sm:mt-18 md:grid-cols-3 md:gap-10">
+                  {feature.cards.map((card) => (
+                    <div key={card.title}>
+                      <h3 className="text-[15px] font-semibold leading-snug text-[#0a0d12] sm:text-[16px]">
+                        {card.title}
+                      </h3>
+                      <p className="mt-2.5 text-[14px] leading-[1.7] text-[#0a0d12]/56 sm:text-[15px]">
+                        {card.description}
+                      </p>
+                      <button className="mt-4 text-[13px] font-semibold text-[#0a0d12] underline decoration-[#0a0d12]/24 underline-offset-[3px] transition-colors hover:decoration-[#0a0d12]/60">
+                        Learn more
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Shared components                                                         */
+/* -------------------------------------------------------------------------- */
 
 function LandingBackdrop() {
   return (
@@ -88,7 +324,6 @@ function LandingBackdrop() {
         priority
         className="object-cover object-center"
       />
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,5,8,0)_0%,rgba(3,5,8,0)_42%,rgba(3,5,8,0.58)_100%)]" />
     </div>
   );
 }
@@ -106,43 +341,37 @@ function GitHubMark({ className }: { className?: string }) {
   );
 }
 
-function ProductImagePlaceholder() {
+function ImageIcon({ className }: { className?: string }) {
   return (
-    <div className="mx-auto max-w-[1180px]">
-      <div className="relative overflow-hidden rounded-[24px] border border-dashed border-white/14 bg-[linear-gradient(135deg,rgba(255,255,255,0.08)_0%,rgba(255,255,255,0.03)_100%)] shadow-[0_38px_120px_-42px_rgba(0,0,0,0.9)]">
-        <div className="aspect-[16/9] w-full" />
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="3.5" y="5" width="17" height="14" rx="2.5" />
+      <circle cx="9" cy="10" r="1.6" />
+      <path d="m20.5 16-4.8-4.8a1 1 0 0 0-1.4 0L8 17.5" />
+      <path d="m11.5 14.5 1.8-1.8a1 1 0 0 1 1.4 0l2.8 2.8" />
+    </svg>
+  );
+}
 
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(125,211,252,0.16),transparent_28%),radial-gradient(circle_at_72%_64%,rgba(167,139,250,0.14),transparent_30%)]" />
-        <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:32px_32px]" />
 
-        <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
-          <div className="grid size-18 place-items-center rounded-[22px] border border-white/12 bg-black/22 shadow-[0_18px_40px_-24px_rgba(0,0,0,0.75)]">
-            <svg
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              className="size-8 text-white/82"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect x="3.5" y="5" width="17" height="14" rx="2.5" />
-              <circle cx="9" cy="10" r="1.6" />
-              <path d="m20.5 16-4.8-4.8a1 1 0 0 0-1.4 0L8 17.5" />
-              <path d="m11.5 14.5 1.8-1.8a1 1 0 0 1 1.4 0l2.8 2.8" />
-            </svg>
-          </div>
-
-          <h2 className="mt-6 text-[1.8rem] font-semibold tracking-[-0.04em] text-white sm:text-[2.2rem]">
-            Real product screenshot goes here
-          </h2>
-
-          <p className="mt-3 max-w-[520px] text-[14px] leading-7 text-white/68 sm:text-[15px]">
-            Keeping the space and visual weight of the hero preview, while
-            leaving the center as a clean image placeholder for now.
-          </p>
-        </div>
+function ProductImage() {
+  return (
+    <div>
+      <div className="relative overflow-hidden rounded-xl border border-white/14">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/images/landing-hero.png"
+          alt="Multica board view — issues managed by humans and agents"
+          className="block w-full"
+        />
       </div>
     </div>
   );
