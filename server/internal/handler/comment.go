@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/logger"
+	"github.com/multica-ai/multica/server/internal/util"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
@@ -158,7 +160,59 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Trigger @mentioned agents: parse agent mentions and enqueue tasks for each.
+	h.enqueueMentionedAgentTasks(r.Context(), issue, comment, authorType, authorID)
+
 	writeJSON(w, http.StatusCreated, resp)
+}
+
+// enqueueMentionedAgentTasks parses @agent mentions from comment content and
+// enqueues a task for each mentioned agent. Skips self-mentions, agents that
+// are already the issue's assignee (handled by on_comment), and agents with
+// on_mention trigger disabled.
+func (h *Handler) enqueueMentionedAgentTasks(ctx context.Context, issue db.Issue, comment db.Comment, authorType, authorID string) {
+	// Don't trigger on terminal statuses.
+	if issue.Status == "done" || issue.Status == "cancelled" {
+		return
+	}
+
+	mentions := util.ParseMentions(comment.Content)
+	for _, m := range mentions {
+		if m.Type != "agent" {
+			continue
+		}
+		// Prevent self-trigger: skip if the comment author is this agent.
+		if authorType == "agent" && authorID == m.ID {
+			continue
+		}
+		agentUUID := parseUUID(m.ID)
+		// Prevent duplicate: skip if this agent is the issue's assignee
+		// (already handled by the on_comment trigger above).
+		if issue.AssigneeType.Valid && issue.AssigneeType.String == "agent" &&
+			issue.AssigneeID.Valid && uuidToString(issue.AssigneeID) == m.ID {
+			continue
+		}
+		// Check if the agent has on_mention trigger enabled.
+		if !h.isAgentMentionTriggerEnabled(ctx, agentUUID) {
+			continue
+		}
+		// Dedup: skip if this agent already has a pending task for this issue.
+		hasPending, err := h.Queries.HasPendingTaskForIssueAndAgent(ctx, db.HasPendingTaskForIssueAndAgentParams{
+			IssueID: issue.ID,
+			AgentID: agentUUID,
+		})
+		if err != nil || hasPending {
+			continue
+		}
+		// Resolve thread root for reply threading.
+		replyTo := comment.ID
+		if comment.ParentID.Valid {
+			replyTo = comment.ParentID
+		}
+		if _, err := h.TaskService.EnqueueTaskForMention(ctx, issue, agentUUID, replyTo); err != nil {
+			slog.Warn("enqueue mention agent task failed", "issue_id", uuidToString(issue.ID), "agent_id", m.ID, "error", err)
+		}
+	}
 }
 
 func (h *Handler) UpdateComment(w http.ResponseWriter, r *http.Request) {

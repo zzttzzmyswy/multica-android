@@ -515,6 +515,30 @@ func (h *Handler) isAgentTriggerEnabled(ctx context.Context, issue db.Issue, tri
 	return false
 }
 
+// isAgentMentionTriggerEnabled checks if a specific agent has the on_mention
+// trigger enabled. Unlike isAgentTriggerEnabled, this takes an explicit agent
+// ID rather than deriving it from the issue assignee.
+func (h *Handler) isAgentMentionTriggerEnabled(ctx context.Context, agentID pgtype.UUID) bool {
+	agent, err := h.Queries.GetAgent(ctx, agentID)
+	if err != nil || !agent.RuntimeID.Valid {
+		return false
+	}
+	if agent.Triggers == nil || len(agent.Triggers) == 0 {
+		return true // No config = all triggers enabled by default
+	}
+
+	var triggers []agentTriggerSnapshot
+	if err := json.Unmarshal(agent.Triggers, &triggers); err != nil {
+		return false
+	}
+	for _, trigger := range triggers {
+		if trigger.Type == "on_mention" {
+			return trigger.Enabled
+		}
+	}
+	return true // on_mention not configured = enabled by default
+}
+
 func (h *Handler) DeleteIssue(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	issue, ok := h.loadIssueForUser(w, r, id)
