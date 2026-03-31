@@ -15,7 +15,6 @@ import {
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { ReactionBar } from "@/components/common/reaction-bar";
-import { Markdown } from "@/components/markdown";
 import { useActorName } from "@/features/workspace";
 import { timeAgo } from "@/shared/utils";
 import { RichTextEditor, type RichTextEditorRef } from "@/components/common/rich-text-editor";
@@ -162,7 +161,7 @@ function CommentRow({
       ) : (
         <>
           <div className="mt-1.5 pl-8 text-sm leading-relaxed text-foreground/85">
-            <Markdown mode="minimal">{entry.content ?? ""}</Markdown>
+            <RichTextEditor defaultValue={entry.content ?? ""} editable={false} />
           </div>
           {!isTemp && (
             <ReactionBar

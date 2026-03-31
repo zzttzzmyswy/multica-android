@@ -126,7 +126,7 @@
 
 /* Links */
 .rich-text-editor a {
-  color: var(--primary);
+  color: var(--brand);
   text-decoration: none;
 }
 
@@ -137,8 +137,8 @@
 
 /* Mentions */
 .rich-text-editor .mention {
-  color: var(--brand);
-  font-weight: 500;
+  color: var(--primary);
+  font-weight: 600;
   text-decoration: none;
   margin: 0 0.125rem;
 }

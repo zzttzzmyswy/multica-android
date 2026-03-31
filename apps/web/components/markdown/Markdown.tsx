@@ -3,6 +3,7 @@ import ReactMarkdown, { type Components } from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
 import remarkGfm from 'remark-gfm'
 import { cn } from '@/lib/utils'
+import { MentionHoverCard } from '@/components/common/mention-hover-card'
 import { CodeBlock, InlineCode } from './CodeBlock'
 import { preprocessLinks } from './linkify'
 
@@ -60,10 +61,15 @@ function createComponents(
     a: ({ href, children }) => {
       // Mention links: mention://member/id or mention://agent/id
       if (href?.startsWith('mention://')) {
+        const parts = href.replace('mention://', '').split('/')
+        const mentionType = parts[0] ?? 'member'
+        const mentionId = parts[1] ?? ''
         return (
-          <span className="text-brand font-medium mx-0.5">
-            {children}
-          </span>
+          <MentionHoverCard type={mentionType} id={mentionId}>
+            <span className="text-primary font-semibold mx-0.5">
+              {children}
+            </span>
+          </MentionHoverCard>
         )
       }
 
