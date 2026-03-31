@@ -68,13 +68,29 @@ func NewS3StorageFromEnv() *S3Storage {
 	}
 }
 
+// sanitizeFilename removes characters that could cause header injection in Content-Disposition.
+func sanitizeFilename(name string) string {
+	var b strings.Builder
+	b.Grow(len(name))
+	for _, r := range name {
+		// Strip control chars, newlines, null bytes, quotes, semicolons, backslashes
+		if r < 0x20 || r == 0x7f || r == '"' || r == ';' || r == '\\' || r == '\x00' {
+			b.WriteRune('_')
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
 func (s *S3Storage) Upload(ctx context.Context, key string, data []byte, contentType string, filename string) (string, error) {
+	safe := sanitizeFilename(filename)
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:             aws.String(s.bucket),
 		Key:                aws.String(key),
 		Body:               bytes.NewReader(data),
 		ContentType:        aws.String(contentType),
-		ContentDisposition: aws.String(fmt.Sprintf(`inline; filename="%s"`, strings.ReplaceAll(filename, `"`, "'"))),
+		ContentDisposition: aws.String(fmt.Sprintf(`inline; filename="%s"`, safe)),
 		CacheControl:       aws.String("max-age=432000,public"),
 		StorageClass:       types.StorageClassIntelligentTiering,
 	})

@@ -17,7 +17,7 @@ import { Markdown } from "tiptap-markdown";
 import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { cn } from "@/lib/utils";
-import type { UploadResult } from "@/hooks/use-file-upload";
+import type { UploadResult } from "@/shared/hooks/use-file-upload";
 import { createMentionSuggestion } from "./mention-suggestion";
 import "./rich-text-editor.css";
 
@@ -263,7 +263,11 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
         LinkExtension,
         Typography,
         MentionExtension,
-        Image.configure({ inline: false, allowBase64: false }),
+        Image.configure({
+          inline: false,
+          allowBase64: false,
+          HTMLAttributes: { style: "max-width: 100%; height: auto;" },
+        }),
         Markdown.configure({
           html: false,
           transformPastedText: true,

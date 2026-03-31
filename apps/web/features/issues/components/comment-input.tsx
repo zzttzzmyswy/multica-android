@@ -4,8 +4,7 @@ import { useRef, useState } from "react";
 import { ArrowUp, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RichTextEditor, type RichTextEditorRef } from "@/components/common/rich-text-editor";
-import { useFileUpload } from "@/hooks/use-file-upload";
-import { toast } from "sonner";
+import { useFileUpload } from "@/shared/hooks/use-file-upload";
 
 interface CommentInputProps {
   issueId: string;
@@ -17,17 +16,9 @@ function CommentInput({ issueId, onSubmit }: CommentInputProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isEmpty, setIsEmpty] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const { upload, uploading } = useFileUpload();
+  const { uploadWithToast, uploading } = useFileUpload();
 
-  const handleUpload = async (file: File) => {
-    try {
-      const result = await upload(file, { issueId });
-      return result;
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Upload failed");
-      return null;
-    }
-  };
+  const handleUpload = (file: File) => uploadWithToast(file, { issueId });
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

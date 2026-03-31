@@ -96,6 +96,7 @@ func (h *Handler) groupAttachments(r *http.Request, commentIDs []pgtype.UUID) ma
 	}
 	attachments, err := h.Queries.ListAttachmentsByCommentIDs(r.Context(), commentIDs)
 	if err != nil {
+		slog.Error("failed to load attachments for comments", "error", err)
 		return nil
 	}
 	grouped := make(map[string][]AttachmentResponse, len(commentIDs))

@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import { useAuthStore } from "@/features/auth";
 import { api } from "@/shared/api";
-import { useFileUpload } from "@/hooks/use-file-upload";
+import { useFileUpload } from "@/shared/hooks/use-file-upload";
 
 export function AccountTab() {
   const user = useAuthStore((s) => s.user);

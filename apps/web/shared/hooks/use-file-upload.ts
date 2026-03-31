@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { toast } from "sonner";
 import { api } from "@/shared/api";
 import type { Attachment } from "@/shared/types";
 
@@ -24,6 +25,8 @@ const ALLOWED_TYPES = new Set([
 ]);
 
 function isAllowedType(type: string): boolean {
+  // Empty MIME type (browser couldn't determine) — let the server sniff and decide.
+  if (!type) return true;
   const mediaType = type.split(";")[0] ?? "";
   return ALLOWED_TYPES.has(mediaType.trim().toLowerCase());
 }
@@ -64,5 +67,17 @@ export function useFileUpload() {
     [],
   );
 
-  return { upload, uploading };
+  const uploadWithToast = useCallback(
+    async (file: File, ctx?: UploadContext): Promise<UploadResult | null> => {
+      try {
+        return await upload(file, ctx);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Upload failed");
+        return null;
+      }
+    },
+    [upload],
+  );
+
+  return { upload, uploadWithToast, uploading };
 }
