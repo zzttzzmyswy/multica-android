@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, memo } from "react";
+import { useState, useEffect, useCallback, useRef, memo } from "react";
 import { useDefaultLayout, usePanelRef } from "react-resizable-panels";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { RichTextEditor } from "@/components/common/rich-text-editor";
+import { FileUploadButton } from "@/components/common/file-upload-button";
 import { TitleEditor } from "@/components/common/title-editor";
 import {
   Tooltip,
@@ -242,6 +243,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
     [issue, id],
   );
 
+  const descEditorRef = useRef<import("@/components/common/rich-text-editor").RichTextEditorRef>(null);
   const handleDescriptionUpload = useCallback(
     (file: File) => uploadWithToast(file, { issueId: id }),
     [uploadWithToast, id],
@@ -557,6 +559,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
           />
 
           <RichTextEditor
+            ref={descEditorRef}
             key={id}
             defaultValue={issue.description || ""}
             placeholder="Add description..."
@@ -566,12 +569,18 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
             className="mt-5"
           />
 
-          <ReactionBar
-            reactions={issueReactions}
-            currentUserId={user?.id}
-            onToggle={handleToggleIssueReaction}
-            className="mt-3"
-          />
+          <div className="flex items-center gap-1 mt-3">
+            <ReactionBar
+              reactions={issueReactions}
+              currentUserId={user?.id}
+              onToggle={handleToggleIssueReaction}
+            />
+            <FileUploadButton
+              size="sm"
+              onUpload={handleDescriptionUpload}
+              onInsert={(result, isImage) => descEditorRef.current?.insertFile(result.filename, result.link, isImage)}
+            />
+          </div>
 
           <div className="my-8 border-t" />
 

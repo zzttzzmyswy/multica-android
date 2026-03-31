@@ -16,11 +16,13 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { ReactionBar } from "@/components/common/reaction-bar";
+import { QuickEmojiPicker } from "@/components/common/quick-emoji-picker";
 import { cn } from "@/lib/utils";
 import { useActorName } from "@/features/workspace";
 import { timeAgo } from "@/shared/utils";
 import { RichTextEditor, type RichTextEditorRef } from "@/components/common/rich-text-editor";
-import { Markdown } from "@/components/markdown";
+import { FileUploadButton } from "@/components/common/file-upload-button";
+import { useFileUpload } from "@/shared/hooks/use-file-upload";
 import { ReplyInput } from "./reply-input";
 import type { TimelineEntry } from "@/shared/types";
 
@@ -44,12 +46,14 @@ interface CommentCardProps {
 // ---------------------------------------------------------------------------
 
 function CommentRow({
+  issueId,
   entry,
   currentUserId,
   onEdit,
   onDelete,
   onToggleReaction,
 }: {
+  issueId: string;
   entry: TimelineEntry;
   currentUserId?: string;
   onEdit: (commentId: string, content: string) => Promise<void>;
@@ -59,24 +63,32 @@ function CommentRow({
   const { getActorName } = useActorName();
   const [editing, setEditing] = useState(false);
   const editEditorRef = useRef<RichTextEditorRef>(null);
+  const cancelledRef = useRef(false);
+  const { uploadWithToast } = useFileUpload();
 
   const isOwn = entry.actor_type === "member" && entry.actor_id === currentUserId;
   const isTemp = entry.id.startsWith("temp-");
 
   const startEdit = () => {
+    cancelledRef.current = false;
     setEditing(true);
   };
 
   const cancelEdit = () => {
+    cancelledRef.current = true;
     setEditing(false);
   };
 
   const saveEdit = async () => {
+    if (cancelledRef.current) return;
     const trimmed = editEditorRef.current
       ?.getMarkdown()
       ?.replace(/(\n\s*)+$/, "")
       .trim();
-    if (!trimmed) return;
+    if (!trimmed || trimmed === (entry.content ?? "").trim()) {
+      setEditing(false);
+      return;
+    }
     try {
       await onEdit(entry.id, trimmed);
       setEditing(false);
@@ -108,10 +120,15 @@ function CommentRow({
         </Tooltip>
 
         {!isTemp && (
+          <div className="ml-auto flex items-center gap-0.5">
+            <QuickEmojiPicker
+              onSelect={(emoji) => onToggleReaction(entry.id, emoji)}
+              align="end"
+            />
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
-                <Button variant="ghost" size="icon-xs" className="ml-auto text-muted-foreground">
+                <Button variant="ghost" size="icon-xs" className="text-muted-foreground">
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               }
@@ -140,15 +157,16 @@ function CommentRow({
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         )}
       </div>
 
       {editing ? (
         <div
-          className="mt-2 pl-8"
+          className="mt-1.5 pl-8"
           onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); }}
         >
-          <div className="max-h-48 overflow-y-auto rounded-md border border-border px-3 py-2">
+          <div className="max-h-48 overflow-y-auto text-sm leading-relaxed">
             <RichTextEditor
               ref={editEditorRef}
               defaultValue={entry.content ?? ""}
@@ -157,21 +175,29 @@ function CommentRow({
               debounceMs={100}
             />
           </div>
-          <div className="flex gap-2 mt-1.5">
-            <Button size="sm" onClick={saveEdit}>Save</Button>
-            <Button size="sm" variant="ghost" onClick={cancelEdit}>Cancel</Button>
+          <div className="flex items-center justify-between mt-2">
+            <FileUploadButton
+              size="sm"
+              onUpload={(file) => uploadWithToast(file, { issueId })}
+              onInsert={(result, isImage) => editEditorRef.current?.insertFile(result.filename, result.link, isImage)}
+            />
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="ghost" onClick={cancelEdit}>Cancel</Button>
+              <Button size="sm" variant="outline" onClick={saveEdit}>Save</Button>
+            </div>
           </div>
         </div>
       ) : (
         <>
           <div className="mt-1.5 pl-8 text-sm leading-relaxed text-foreground/85">
-            <Markdown mode="minimal">{entry.content ?? ""}</Markdown>
+            <RichTextEditor defaultValue={entry.content ?? ""} editable={false} />
           </div>
           {!isTemp && (
             <ReactionBar
               reactions={reactions}
               currentUserId={currentUserId}
               onToggle={(emoji) => onToggleReaction(entry.id, emoji)}
+              hideAddButton
               className="mt-1.5 pl-8"
             />
           )}
@@ -196,27 +222,35 @@ function CommentCard({
   onToggleReaction,
 }: CommentCardProps) {
   const { getActorName } = useActorName();
+  const { uploadWithToast } = useFileUpload();
   const [open, setOpen] = useState(true);
   const [editing, setEditing] = useState(false);
   const editEditorRef = useRef<RichTextEditorRef>(null);
+  const cancelledRef = useRef(false);
 
   const isOwn = entry.actor_type === "member" && entry.actor_id === currentUserId;
   const isTemp = entry.id.startsWith("temp-");
 
   const startEdit = () => {
+    cancelledRef.current = false;
     setEditing(true);
   };
 
   const cancelEdit = () => {
+    cancelledRef.current = true;
     setEditing(false);
   };
 
   const saveEdit = async () => {
+    if (cancelledRef.current) return;
     const trimmed = editEditorRef.current
       ?.getMarkdown()
       ?.replace(/(\n\s*)+$/, "")
       .trim();
-    if (!trimmed) return;
+    if (!trimmed || trimmed === (entry.content ?? "").trim()) {
+      setEditing(false);
+      return;
+    }
     try {
       await onEdit(entry.id, trimmed);
       setEditing(false);
@@ -278,10 +312,15 @@ function CommentCard({
             )}
 
             {open && !isTemp && (
+              <div className="ml-auto flex items-center gap-0.5">
+                <QuickEmojiPicker
+                  onSelect={(emoji) => onToggleReaction(entry.id, emoji)}
+                  align="end"
+                />
               <DropdownMenu>
                 <DropdownMenuTrigger
                   render={
-                    <Button variant="ghost" size="icon-xs" className="ml-auto text-muted-foreground">
+                    <Button variant="ghost" size="icon-xs" className="text-muted-foreground">
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   }
@@ -310,6 +349,7 @@ function CommentCard({
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
+              </div>
             )}
           </div>
         </div>
@@ -323,7 +363,7 @@ function CommentCard({
                 className="pl-10"
                 onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); }}
               >
-                <div className="max-h-48 overflow-y-auto rounded-md border border-border px-3 py-2">
+                <div className="max-h-48 overflow-y-auto text-sm leading-relaxed">
                   <RichTextEditor
                     ref={editEditorRef}
                     defaultValue={entry.content ?? ""}
@@ -332,15 +372,22 @@ function CommentCard({
                     debounceMs={100}
                   />
                 </div>
-                <div className="flex gap-2 mt-1.5">
-                  <Button size="sm" onClick={saveEdit}>Save</Button>
-                  <Button size="sm" variant="ghost" onClick={cancelEdit}>Cancel</Button>
+                <div className="flex items-center justify-between mt-2">
+                  <FileUploadButton
+                    size="sm"
+                    onUpload={(file) => uploadWithToast(file, { issueId })}
+                    onInsert={(result, isImage) => editEditorRef.current?.insertFile(result.filename, result.link, isImage)}
+                  />
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="ghost" onClick={cancelEdit}>Cancel</Button>
+                    <Button size="sm" variant="outline" onClick={saveEdit}>Save</Button>
+                  </div>
                 </div>
               </div>
             ) : (
               <>
                 <div className="pl-10 text-sm leading-relaxed text-foreground/85">
-                  <Markdown mode="minimal">{entry.content ?? ""}</Markdown>
+                  <RichTextEditor defaultValue={entry.content ?? ""} editable={false} />
                 </div>
                 {!isTemp && (
                   <ReactionBar
@@ -358,6 +405,7 @@ function CommentCard({
           {allNestedReplies.map((reply) => (
             <div key={reply.id} className="border-t border-border/50 px-4">
               <CommentRow
+                issueId={issueId}
                 entry={reply}
                 currentUserId={currentUserId}
                 onEdit={onEdit}
