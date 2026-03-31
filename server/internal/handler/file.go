@@ -89,7 +89,7 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	key := "uploads/" + hex.EncodeToString(b) + path.Ext(header.Filename)
+	key := hex.EncodeToString(b) + path.Ext(header.Filename)
 
 	link, err := h.Storage.Upload(r.Context(), key, data, contentType, header.Filename)
 	if err != nil {
