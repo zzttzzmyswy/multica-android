@@ -6,7 +6,8 @@ import { ChevronRight } from "lucide-react";
 import type { IssueStatus } from "@/shared/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIssueStore } from "@/features/issues/store";
-import { useIssueViewStore } from "@/features/issues/stores/view-store";
+import { useIssueViewStore, initFilterWorkspaceSync } from "@/features/issues/stores/view-store";
+import { filterIssues } from "@/features/issues/utils/filter";
 import { useWorkspaceStore } from "@/features/workspace";
 import { WorkspaceAvatar } from "@/features/workspace";
 import { api } from "@/shared/api";
@@ -32,23 +33,22 @@ export function IssuesPage() {
   const viewMode = useIssueViewStore((s) => s.viewMode);
   const statusFilters = useIssueViewStore((s) => s.statusFilters);
   const priorityFilters = useIssueViewStore((s) => s.priorityFilters);
+  const assigneeFilters = useIssueViewStore((s) => s.assigneeFilters);
+  const includeNoAssignee = useIssueViewStore((s) => s.includeNoAssignee);
+  const creatorFilters = useIssueViewStore((s) => s.creatorFilters);
+
+  useEffect(() => {
+    initFilterWorkspaceSync();
+  }, []);
 
   useEffect(() => {
     useIssueSelectionStore.getState().clear();
   }, [viewMode]);
 
-  const issues = useMemo(() => {
-    return allIssues.filter((issue) => {
-      if (statusFilters.length > 0 && !statusFilters.includes(issue.status))
-        return false;
-      if (
-        priorityFilters.length > 0 &&
-        !priorityFilters.includes(issue.priority)
-      )
-        return false;
-      return true;
-    });
-  }, [allIssues, statusFilters, priorityFilters]);
+  const issues = useMemo(
+    () => filterIssues(allIssues, { statusFilters, priorityFilters, assigneeFilters, includeNoAssignee, creatorFilters }),
+    [allIssues, statusFilters, priorityFilters, assigneeFilters, includeNoAssignee, creatorFilters],
+  );
 
   const visibleStatuses = useMemo(() => {
     if (statusFilters.length > 0)
