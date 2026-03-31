@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ImageIcon } from "./shared";
+import { useLocale } from "../i18n";
+import type { LandingDict } from "../i18n";
 import { StatusIcon } from "@/features/issues/components/status-icon";
 import { PriorityIcon } from "@/features/issues/components/priority-icon";
 import { STATUS_CONFIG } from "@/features/issues/config/status";
@@ -945,109 +947,21 @@ function RuntimesVisual() {
   );
 }
 
-const features = [
-  {
-    label: "TEAMMATES",
-    title: "Assign to an agent like you'd assign to a colleague",
-    description:
-      "Agents aren't passive tools — they're active participants. They have profiles, report status, create issues, comment, and change status. Your activity feed shows humans and agents working side by side.",
-    visual: TeammatesVisual,
-    cards: [
-      {
-        title: "Agents in the assignee picker",
-        description:
-          "Humans and agents appear in the same dropdown. Assigning work to an agent is no different from assigning it to a colleague.",
-      },
-      {
-        title: "Autonomous participation",
-        description:
-          "Agents create issues, leave comments, and update status on their own — not just when prompted.",
-      },
-      {
-        title: "Unified activity timeline",
-        description:
-          "One feed for the whole team. Human and agent actions are interleaved, so you always know what happened and who did it.",
-      },
-    ],
-  },
-  {
-    label: "AUTONOMOUS",
-    title: "Set it and forget it — agents work while you sleep",
-    description:
-      "Not just prompt-response. Full task lifecycle management: enqueue, claim, start, complete or fail. Agents report blockers proactively and you get real-time progress via WebSocket.",
-    visual: AutonomousVisual,
-    bgImage: "/images/feature-bg-2.jpg",
-    cards: [
-      {
-        title: "Complete task lifecycle",
-        description:
-          "Every task flows through enqueue → claim → start → complete/fail. No silent failures — every transition is tracked and broadcast.",
-      },
-      {
-        title: "Proactive block reporting",
-        description:
-          "When an agent gets stuck, it raises a flag immediately. No more checking back hours later to find nothing happened.",
-      },
-      {
-        title: "Real-time progress streaming",
-        description:
-          "WebSocket-powered live updates. Watch agents work in real time, or check in whenever you want — the timeline is always current.",
-      },
-    ],
-  },
-  {
-    label: "SKILLS",
-    title: "Every solution becomes a reusable skill for the whole team",
-    description:
-      "Skills are reusable capability definitions — code, config, and context bundled together. Write a skill once, and every agent on your team can use it. Your skill library compounds over time.",
-    visual: SkillsVisual,
-    bgImage: "/images/feature-bg-3.jpg",
-    cards: [
-      {
-        title: "Reusable skill definitions",
-        description:
-          "Package knowledge into skills that any agent can execute. Deploy to staging, write migrations, review PRs — all codified.",
-      },
-      {
-        title: "Team-wide sharing",
-        description:
-          "One person's skill is every agent's skill. Build once, benefit everywhere across your team.",
-      },
-      {
-        title: "Compound growth",
-        description:
-          "Day 1: you teach an agent to deploy. Day 30: every agent deploys, writes tests, and does code review. Your team's capabilities grow exponentially.",
-      },
-    ],
-  },
-  {
-    label: "RUNTIMES",
-    title: "One dashboard for all your compute",
-    description:
-      "Local daemons and cloud runtimes, managed from a single panel. Real-time monitoring of online/offline status, usage charts, and activity heatmaps. Auto-detects local CLIs — plug in and go.",
-    visual: RuntimesVisual,
-    bgImage: "/images/feature-bg-4.jpg",
-    cards: [
-      {
-        title: "Unified runtime panel",
-        description:
-          "Local daemons and cloud runtimes in one view. No context switching between different management interfaces.",
-      },
-      {
-        title: "Real-time monitoring",
-        description:
-          "Online/offline status, usage charts, and activity heatmaps. Know exactly what your compute is doing at any moment.",
-      },
-      {
-        title: "Auto-detection & plug-and-play",
-        description:
-          "Multica detects available CLIs like Claude Code and Codex automatically. Connect a machine, and it's ready to work.",
-      },
-    ],
-  },
-];
+function buildFeatures(t: LandingDict) {
+  const keys = ["teammates", "autonomous", "skills", "runtimes"] as const;
+  const visuals = [TeammatesVisual, AutonomousVisual, SkillsVisual, RuntimesVisual];
+  const bgImages = [undefined, "/images/feature-bg-2.jpg", "/images/feature-bg-3.jpg", "/images/feature-bg-4.jpg"];
+
+  return keys.map((key, i) => ({
+    ...t.features[key],
+    visual: visuals[i]!,
+    bgImage: bgImages[i],
+  }));
+}
 
 export function FeaturesSection() {
+  const { t } = useLocale();
+  const features = buildFeatures(t);
   const [activeIndex, setActiveIndex] = useState(0);
   const panelRefs = useRef<(HTMLDivElement | null)[]>([]);
 

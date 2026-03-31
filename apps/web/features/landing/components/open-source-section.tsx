@@ -1,30 +1,12 @@
+"use client";
+
 import Link from "next/link";
+import { useLocale } from "../i18n";
 import { GitHubMark, githubUrl } from "./shared";
 
-const openSourceHighlights = [
-  {
-    title: "Self-host anywhere",
-    description:
-      "Run Multica on your own infrastructure. Docker Compose, single binary, or Kubernetes — your data never leaves your network.",
-  },
-  {
-    title: "No vendor lock-in",
-    description:
-      "Bring your own LLM provider, swap agent backends, extend the API. You own the stack, top to bottom.",
-  },
-  {
-    title: "Transparent by default",
-    description:
-      "Every line of code is auditable. See exactly how your agents make decisions, how tasks are routed, and where your data flows.",
-  },
-  {
-    title: "Community-driven",
-    description:
-      "Built with the community, not just for it. Contribute skills, integrations, and agent backends that benefit everyone.",
-  },
-];
-
 export function OpenSourceSection() {
+  const { t } = useLocale();
+
   return (
     <section id="open-source" className="bg-white text-[#0a0d12]">
       <div className="mx-auto max-w-[1320px] px-4 py-24 sm:px-6 sm:py-32 lg:px-8 lg:py-40">
@@ -32,17 +14,15 @@ export function OpenSourceSection() {
           {/* Left column — heading + CTA */}
           <div className="lg:w-[480px] lg:shrink-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#0a0d12]/40">
-              Open source
+              {t.openSource.label}
             </p>
             <h2 className="mt-4 font-[family-name:var(--font-serif)] text-[2.6rem] leading-[1.05] tracking-[-0.03em] sm:text-[3.4rem] lg:text-[4.2rem]">
-              Open source
+              {t.openSource.headlineLine1}
               <br />
-              for all.
+              {t.openSource.headlineLine2}
             </h2>
             <p className="mt-6 max-w-[420px] text-[15px] leading-7 text-[#0a0d12]/60 sm:text-[16px]">
-              Multica is fully open source. Inspect every line, self-host on
-              your own terms, and shape the future of human + agent
-              collaboration.
+              {t.openSource.description}
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link
@@ -52,7 +32,7 @@ export function OpenSourceSection() {
                 className="inline-flex items-center justify-center gap-2.5 rounded-[12px] bg-[#0a0d12] px-5 py-3 text-[14px] font-semibold text-white transition-colors hover:bg-[#0a0d12]/88"
               >
                 <GitHubMark className="size-4" />
-                Star on GitHub
+                {t.openSource.cta}
               </Link>
             </div>
           </div>
@@ -60,7 +40,7 @@ export function OpenSourceSection() {
           {/* Right column — highlight grid */}
           <div className="flex-1">
             <div className="grid gap-px overflow-hidden rounded-2xl border border-[#0a0d12]/8 bg-[#0a0d12]/8 sm:grid-cols-2">
-              {openSourceHighlights.map((item) => (
+              {t.openSource.highlights.map((item) => (
                 <div key={item.title} className="bg-white p-8 lg:p-10">
                   <h3 className="text-[17px] font-semibold leading-snug text-[#0a0d12] sm:text-[18px]">
                     {item.title}

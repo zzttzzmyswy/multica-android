@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { MulticaIcon } from "@/components/multica-icon";
 import { cn } from "@/lib/utils";
+import { useLocale } from "../i18n";
 import { GitHubMark, githubUrl, headerButtonClassName } from "./shared";
 
 export function LandingHeader({
@@ -10,11 +11,15 @@ export function LandingHeader({
 }: {
   variant?: "dark" | "light";
 }) {
+  const { t } = useLocale();
+
   return (
     <header
       className={cn(
         "inset-x-0 top-0 z-30",
-        variant === "dark" ? "absolute bg-transparent" : "border-b border-[#0a0d12]/8 bg-white",
+        variant === "dark"
+          ? "absolute bg-transparent"
+          : "border-b border-[#0a0d12]/8 bg-white",
       )}
     >
       <div className="mx-auto flex h-[76px] max-w-[1320px] items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -44,13 +49,13 @@ export function LandingHeader({
             className={headerButtonClassName("ghost", variant)}
           >
             <GitHubMark className="size-3.5" />
-            GitHub
+            {t.header.github}
           </Link>
           <Link
             href="/login"
             className={headerButtonClassName("solid", variant)}
           >
-            Log in
+            {t.header.login}
           </Link>
         </div>
       </div>

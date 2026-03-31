@@ -2,28 +2,13 @@
 
 import Link from "next/link";
 import { MulticaIcon } from "@/components/multica-icon";
-import { githubUrl } from "./shared";
-
-
-const footerLinks = {
-  Product: [
-    { label: "Features", href: "#features" },
-    { label: "How it Works", href: "#how-it-works" },
-    { label: "Changelog", href: "/changelog" },
-  ],
-  Resources: [
-    { label: "Documentation", href: githubUrl },
-    { label: "API", href: githubUrl },
-    { label: "Community", href: githubUrl },
-  ],
-  Company: [
-    { label: "About", href: "/about" },
-    { label: "Open Source", href: "#open-source" },
-    { label: "GitHub", href: githubUrl },
-  ],
-};
+import { cn } from "@/lib/utils";
+import { useLocale, locales, localeLabels } from "../i18n";
 
 export function LandingFooter() {
+  const { t, locale, setLocale } = useLocale();
+  const groups = Object.values(t.footer.groups);
+
   return (
     <footer className="bg-[#0a0d12] text-white">
       <div className="mx-auto max-w-[1320px] px-4 sm:px-6 lg:px-8">
@@ -38,28 +23,27 @@ export function LandingFooter() {
               </span>
             </Link>
             <p className="mt-4 max-w-[300px] text-[14px] leading-[1.7] text-white/50 sm:text-[15px]">
-              Project management for human + agent teams. Open source,
-              self-hostable, built for the future of work.
+              {t.footer.tagline}
             </p>
             <div className="mt-6">
               <Link
                 href="/login"
                 className="inline-flex items-center justify-center rounded-[11px] bg-white px-5 py-2.5 text-[13px] font-semibold text-[#0a0d12] transition-colors hover:bg-white/88"
               >
-                Get started
+                {t.footer.cta}
               </Link>
             </div>
           </div>
 
           {/* Right — link columns */}
           <div className="grid flex-1 grid-cols-2 gap-8 sm:grid-cols-4">
-            {Object.entries(footerLinks).map(([group, links]) => (
-              <div key={group}>
+            {groups.map((group) => (
+              <div key={group.label}>
                 <h4 className="text-[12px] font-semibold uppercase tracking-[0.1em] text-white/40">
-                  {group}
+                  {group.label}
                 </h4>
                 <ul className="mt-4 flex flex-col gap-2.5">
-                  {links.map((link) => (
+                  {group.links.map((link) => (
                     <li key={link.label}>
                       <Link
                         href={link.href}
@@ -78,11 +62,31 @@ export function LandingFooter() {
           </div>
         </div>
 
-        {/* Bottom: copyright */}
+        {/* Bottom: copyright + language switcher */}
         <div className="flex items-center justify-between py-6">
           <p className="text-[13px] text-white/36">
-            &copy; {new Date().getFullYear()} Multica. All rights reserved.
+            {t.footer.copyright.replace(
+              "{year}",
+              String(new Date().getFullYear()),
+            )}
           </p>
+          <div className="flex items-center">
+            {locales.map((l, i) => (
+              <button
+                key={l}
+                onClick={() => setLocale(l)}
+                className={cn(
+                  "px-1.5 py-1 text-[12px] font-medium transition-colors",
+                  l === locale
+                    ? "text-white/70"
+                    : "text-white/30 hover:text-white/50",
+                  i > 0 && "border-l border-white/16",
+                )}
+              >
+                {localeLabels[l]}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Giant logo */}

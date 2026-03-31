@@ -1,5 +1,8 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useLocale } from "../i18n";
 import {
   ClaudeCodeLogo,
   CodexLogo,
@@ -9,6 +12,8 @@ import {
 } from "./shared";
 
 export function LandingHero() {
+  const { t } = useLocale();
+
   return (
     <div className="relative min-h-full overflow-hidden bg-[#05070b] text-white">
       <LandingBackdrop />
@@ -20,20 +25,18 @@ export function LandingHero() {
         >
           <div className="mx-auto max-w-[1120px] text-center">
             <h1 className="font-[family-name:var(--font-serif)] text-[3.65rem] leading-[0.93] tracking-[-0.038em] text-white drop-shadow-[0_10px_34px_rgba(0,0,0,0.32)] sm:text-[4.85rem] lg:text-[6.4rem]">
-              Your next 10 hires
+              {t.hero.headlineLine1}
               <br />
-              won&apos;t be human.
+              {t.hero.headlineLine2}
             </h1>
 
             <p className="mx-auto mt-7 max-w-[820px] text-[15px] leading-7 text-white/84 sm:text-[17px]">
-              Multica is an open-source platform that turns coding agents into
-              real teammates. Assign tasks, track progress, compound skills —
-              manage your human + agent workforce in one place.
+              {t.hero.subheading}
             </p>
 
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
               <Link href="/login" className={heroButtonClassName("solid")}>
-                Start free trial
+                {t.hero.cta}
               </Link>
               <Link
                 href={githubUrl}
@@ -48,7 +51,9 @@ export function LandingHero() {
           </div>
 
           <div className="mt-10 flex items-center justify-center gap-8">
-            <span className="text-[15px] text-white/50">Works with</span>
+            <span className="text-[15px] text-white/50">
+              {t.hero.worksWith}
+            </span>
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2.5 text-white/80">
                 <ClaudeCodeLogo className="size-5" />
@@ -62,7 +67,7 @@ export function LandingHero() {
           </div>
 
           <div id="preview" className="mt-10 sm:mt-12">
-            <ProductImage />
+            <ProductImage alt={t.hero.imageAlt} />
           </div>
         </section>
       </main>
@@ -84,14 +89,14 @@ function LandingBackdrop() {
   );
 }
 
-function ProductImage() {
+function ProductImage({ alt }: { alt: string }) {
   return (
     <div>
       <div className="relative overflow-hidden border border-white/14">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/images/landing-hero.png"
-          alt="Multica board view — issues managed by humans and agents"
+          alt={alt}
           className="block w-full"
         />
       </div>
