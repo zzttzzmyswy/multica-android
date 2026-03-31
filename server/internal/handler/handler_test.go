@@ -53,7 +53,7 @@ func TestMain(m *testing.M) {
 	go hub.Run()
 	bus := events.New()
 	emailSvc := service.NewEmailService()
-	testHandler = New(queries, pool, hub, bus, emailSvc)
+	testHandler = New(queries, pool, hub, bus, emailSvc, nil, nil)
 	testPool = pool
 
 	testUserID, testWorkspaceID, err = setupHandlerTestFixture(ctx, pool)
@@ -729,6 +729,7 @@ func TestDaemonRegisterMissingWorkspaceReturns404(t *testing.T) {
 		"runtimes":[{"name":"Local Codex","type":"codex","version":"1.0.0","status":"online"}]
 	}`))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", testUserID)
 
 	testHandler.DaemonRegister(w, req)
 	if w.Code != http.StatusNotFound {

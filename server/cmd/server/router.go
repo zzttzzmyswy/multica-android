@@ -12,11 +12,13 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/multica-ai/multica/server/internal/auth"
 	"github.com/multica-ai/multica/server/internal/events"
 	"github.com/multica-ai/multica/server/internal/handler"
 	"github.com/multica-ai/multica/server/internal/middleware"
 	"github.com/multica-ai/multica/server/internal/realtime"
 	"github.com/multica-ai/multica/server/internal/service"
+	"github.com/multica-ai/multica/server/internal/storage"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -47,7 +49,9 @@ func allowedOrigins() []string {
 func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Router {
 	queries := db.New(pool)
 	emailSvc := service.NewEmailService()
-	h := handler.New(queries, pool, hub, bus, emailSvc)
+	s3 := storage.NewS3StorageFromEnv()
+	cfSigner := auth.NewCloudFrontSignerFromEnv()
+	h := handler.New(queries, pool, hub, bus, emailSvc, s3, cfSigner)
 
 	r := chi.NewRouter()
 
@@ -79,43 +83,37 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 	r.Post("/auth/send-code", h.SendCode)
 	r.Post("/auth/verify-code", h.VerifyCode)
 
-	// Daemon API routes
+	// Daemon API routes (all require a valid token)
 	r.Route("/api/daemon", func(r chi.Router) {
-		// Pairing routes — no auth required (daemon doesn't have a token yet).
-		r.Post("/pairing-sessions", h.CreateDaemonPairingSession)
-		r.Get("/pairing-sessions/{token}", h.GetDaemonPairingSession)
-		r.Post("/pairing-sessions/{token}/claim", h.ClaimDaemonPairingSession)
+		r.Use(middleware.Auth(queries))
 
-		// Authenticated daemon routes — require daemon token (mdt_) or user JWT/PAT.
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.DaemonAuth(queries))
+		r.Post("/register", h.DaemonRegister)
+		r.Post("/deregister", h.DaemonDeregister)
+		r.Post("/heartbeat", h.DaemonHeartbeat)
 
-			r.Post("/register", h.DaemonRegister)
-			r.Post("/deregister", h.DaemonDeregister)
-			r.Post("/heartbeat", h.DaemonHeartbeat)
+		r.Post("/runtimes/{runtimeId}/tasks/claim", h.ClaimTaskByRuntime)
+		r.Get("/runtimes/{runtimeId}/tasks/pending", h.ListPendingTasksByRuntime)
+		r.Post("/runtimes/{runtimeId}/usage", h.ReportRuntimeUsage)
+		r.Post("/runtimes/{runtimeId}/ping/{pingId}/result", h.ReportPingResult)
 
-			r.Post("/runtimes/{runtimeId}/tasks/claim", h.ClaimTaskByRuntime)
-			r.Get("/runtimes/{runtimeId}/tasks/pending", h.ListPendingTasksByRuntime)
-			r.Post("/runtimes/{runtimeId}/usage", h.ReportRuntimeUsage)
-			r.Post("/runtimes/{runtimeId}/ping/{pingId}/result", h.ReportPingResult)
-
-			r.Get("/tasks/{taskId}/status", h.GetTaskStatus)
-			r.Post("/tasks/{taskId}/start", h.StartTask)
-			r.Post("/tasks/{taskId}/progress", h.ReportTaskProgress)
-			r.Post("/tasks/{taskId}/complete", h.CompleteTask)
-			r.Post("/tasks/{taskId}/fail", h.FailTask)
-			r.Post("/tasks/{taskId}/messages", h.ReportTaskMessages)
-			r.Get("/tasks/{taskId}/messages", h.ListTaskMessages)
-		})
+		r.Get("/tasks/{taskId}/status", h.GetTaskStatus)
+		r.Post("/tasks/{taskId}/start", h.StartTask)
+		r.Post("/tasks/{taskId}/progress", h.ReportTaskProgress)
+		r.Post("/tasks/{taskId}/complete", h.CompleteTask)
+		r.Post("/tasks/{taskId}/fail", h.FailTask)
+		r.Post("/tasks/{taskId}/messages", h.ReportTaskMessages)
+		r.Get("/tasks/{taskId}/messages", h.ListTaskMessages)
 	})
 
 	// Protected API routes
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Auth(queries))
+		r.Use(middleware.RefreshCloudFrontCookies(cfSigner))
 
 		// --- User-scoped routes (no workspace context required) ---
 		r.Get("/api/me", h.GetMe)
 		r.Patch("/api/me", h.UpdateMe)
+		r.Post("/api/upload-file", h.UploadFile)
 
 		r.Route("/api/workspaces", func(r chi.Router) {
 			r.Get("/", h.ListWorkspaces)
@@ -150,8 +148,6 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 			r.Delete("/{id}", h.RevokePersonalAccessToken)
 		})
 
-		r.Post("/api/daemon/pairing-sessions/{token}/approve", h.ApproveDaemonPairingSession)
-
 		// --- Workspace-scoped routes (all require workspace membership) ---
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireWorkspaceMember(queries))
@@ -176,8 +172,12 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 					r.Get("/task-runs", h.ListTasksByIssue)
 					r.Post("/reactions", h.AddIssueReaction)
 					r.Delete("/reactions", h.RemoveIssueReaction)
+					r.Get("/attachments", h.ListAttachments)
 				})
 			})
+
+			// Attachments
+			r.Delete("/api/attachments/{id}", h.DeleteAttachment)
 
 			// Comments
 			r.Route("/api/comments/{commentId}", func(r chi.Router) {

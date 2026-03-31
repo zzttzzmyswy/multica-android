@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -8,38 +9,44 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/logger"
+	"github.com/multica-ai/multica/server/internal/util"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
 type CommentResponse struct {
-	ID         string             `json:"id"`
-	IssueID    string             `json:"issue_id"`
-	AuthorType string             `json:"author_type"`
-	AuthorID   string             `json:"author_id"`
-	Content    string             `json:"content"`
-	Type       string             `json:"type"`
-	ParentID   *string            `json:"parent_id"`
-	CreatedAt  string             `json:"created_at"`
-	UpdatedAt  string             `json:"updated_at"`
-	Reactions  []ReactionResponse `json:"reactions"`
+	ID          string               `json:"id"`
+	IssueID     string               `json:"issue_id"`
+	AuthorType  string               `json:"author_type"`
+	AuthorID    string               `json:"author_id"`
+	Content     string               `json:"content"`
+	Type        string               `json:"type"`
+	ParentID    *string              `json:"parent_id"`
+	CreatedAt   string               `json:"created_at"`
+	UpdatedAt   string               `json:"updated_at"`
+	Reactions   []ReactionResponse   `json:"reactions"`
+	Attachments []AttachmentResponse `json:"attachments"`
 }
 
-func commentToResponse(c db.Comment, reactions []ReactionResponse) CommentResponse {
+func commentToResponse(c db.Comment, reactions []ReactionResponse, attachments []AttachmentResponse) CommentResponse {
 	if reactions == nil {
 		reactions = []ReactionResponse{}
 	}
+	if attachments == nil {
+		attachments = []AttachmentResponse{}
+	}
 	return CommentResponse{
-		ID:         uuidToString(c.ID),
-		IssueID:    uuidToString(c.IssueID),
-		AuthorType: c.AuthorType,
-		AuthorID:   uuidToString(c.AuthorID),
-		Content:    c.Content,
-		Type:       c.Type,
-		ParentID:   uuidToPtr(c.ParentID),
-		CreatedAt:  timestampToString(c.CreatedAt),
-		UpdatedAt:  timestampToString(c.UpdatedAt),
-		Reactions:  reactions,
+		ID:          uuidToString(c.ID),
+		IssueID:     uuidToString(c.IssueID),
+		AuthorType:  c.AuthorType,
+		AuthorID:    uuidToString(c.AuthorID),
+		Content:     c.Content,
+		Type:        c.Type,
+		ParentID:    uuidToPtr(c.ParentID),
+		CreatedAt:   timestampToString(c.CreatedAt),
+		UpdatedAt:   timestampToString(c.UpdatedAt),
+		Reactions:   reactions,
+		Attachments: attachments,
 	}
 }
 
@@ -64,10 +71,12 @@ func (h *Handler) ListComments(w http.ResponseWriter, r *http.Request) {
 		commentIDs[i] = c.ID
 	}
 	grouped := h.groupReactions(r, commentIDs)
+	groupedAtt := h.groupAttachments(r, commentIDs)
 
 	resp := make([]CommentResponse, len(comments))
 	for i, c := range comments {
-		resp[i] = commentToResponse(c, grouped[uuidToString(c.ID)])
+		cid := uuidToString(c.ID)
+		resp[i] = commentToResponse(c, grouped[cid], groupedAtt[cid])
 	}
 
 	writeJSON(w, http.StatusOK, resp)
@@ -133,7 +142,7 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := commentToResponse(comment, nil)
+	resp := commentToResponse(comment, nil, nil)
 	slog.Info("comment created", append(logger.RequestAttrs(r), "comment_id", uuidToString(comment.ID), "issue_id", issueID)...)
 	h.publish(protocol.EventCommentCreated, uuidToString(issue.WorkspaceID), authorType, authorID, map[string]any{
 		"comment":             resp,
@@ -145,7 +154,10 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 
 	// If the issue is assigned to an agent with on_comment trigger, enqueue a new task.
 	// Skip when the comment comes from the assigned agent itself to avoid loops.
-	if authorType == "member" && h.shouldEnqueueOnComment(r.Context(), issue) {
+	// Also skip when the comment @mentions others but not the assignee agent —
+	// the user is talking to someone else, not requesting work from the assignee.
+	if authorType == "member" && h.shouldEnqueueOnComment(r.Context(), issue) &&
+		!h.commentMentionsOthersButNotAssignee(comment.Content, issue) {
 		// Resolve thread root: if the comment is a reply, agent should reply
 		// to the thread root (matching frontend behavior where all replies
 		// in a thread share the same top-level parent).
@@ -158,7 +170,80 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Trigger @mentioned agents: parse agent mentions and enqueue tasks for each.
+	h.enqueueMentionedAgentTasks(r.Context(), issue, comment, authorType, authorID)
+
 	writeJSON(w, http.StatusCreated, resp)
+}
+
+// commentMentionsOthersButNotAssignee returns true if the comment @mentions
+// anyone but does NOT @mention the issue's assignee agent. This is used to
+// suppress the on_comment trigger when the user is directing their comment at
+// someone else (e.g. sharing results with a colleague, asking another agent).
+func (h *Handler) commentMentionsOthersButNotAssignee(content string, issue db.Issue) bool {
+	mentions := util.ParseMentions(content)
+	if len(mentions) == 0 {
+		return false // No mentions — normal on_comment behavior
+	}
+	if !issue.AssigneeID.Valid {
+		return true // No assignee — mentions target others
+	}
+	assigneeID := uuidToString(issue.AssigneeID)
+	for _, m := range mentions {
+		if m.ID == assigneeID {
+			return false // Assignee is mentioned — allow trigger
+		}
+	}
+	return true // Others mentioned but not assignee — suppress trigger
+}
+
+// enqueueMentionedAgentTasks parses @agent mentions from comment content and
+// enqueues a task for each mentioned agent. Skips self-mentions, agents that
+// are already the issue's assignee (handled by on_comment), and agents with
+// on_mention trigger disabled.
+func (h *Handler) enqueueMentionedAgentTasks(ctx context.Context, issue db.Issue, comment db.Comment, authorType, authorID string) {
+	// Don't trigger on terminal statuses.
+	if issue.Status == "done" || issue.Status == "cancelled" {
+		return
+	}
+
+	mentions := util.ParseMentions(comment.Content)
+	for _, m := range mentions {
+		if m.Type != "agent" {
+			continue
+		}
+		// Prevent self-trigger: skip if the comment author is this agent.
+		if authorType == "agent" && authorID == m.ID {
+			continue
+		}
+		agentUUID := parseUUID(m.ID)
+		// Prevent duplicate: skip if this agent is the issue's assignee
+		// (already handled by the on_comment trigger above).
+		if issue.AssigneeType.Valid && issue.AssigneeType.String == "agent" &&
+			issue.AssigneeID.Valid && uuidToString(issue.AssigneeID) == m.ID {
+			continue
+		}
+		// Check if the agent has on_mention trigger enabled.
+		if !h.isAgentMentionTriggerEnabled(ctx, agentUUID) {
+			continue
+		}
+		// Dedup: skip if this agent already has a pending task for this issue.
+		hasPending, err := h.Queries.HasPendingTaskForIssueAndAgent(ctx, db.HasPendingTaskForIssueAndAgentParams{
+			IssueID: issue.ID,
+			AgentID: agentUUID,
+		})
+		if err != nil || hasPending {
+			continue
+		}
+		// Resolve thread root for reply threading.
+		replyTo := comment.ID
+		if comment.ParentID.Valid {
+			replyTo = comment.ParentID
+		}
+		if _, err := h.TaskService.EnqueueTaskForMention(ctx, issue, agentUUID, replyTo); err != nil {
+			slog.Warn("enqueue mention agent task failed", "issue_id", uuidToString(issue.ID), "agent_id", m.ID, "error", err)
+		}
+	}
 }
 
 func (h *Handler) UpdateComment(w http.ResponseWriter, r *http.Request) {
@@ -215,9 +300,11 @@ func (h *Handler) UpdateComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch reactions for the updated comment.
+	// Fetch reactions and attachments for the updated comment.
 	grouped := h.groupReactions(r, []pgtype.UUID{comment.ID})
-	resp := commentToResponse(comment, grouped[uuidToString(comment.ID)])
+	groupedAtt := h.groupAttachments(r, []pgtype.UUID{comment.ID})
+	cid := uuidToString(comment.ID)
+	resp := commentToResponse(comment, grouped[cid], groupedAtt[cid])
 	slog.Info("comment updated", append(logger.RequestAttrs(r), "comment_id", commentId)...)
 	h.publish(protocol.EventCommentUpdated, workspaceID, actorType, actorID, map[string]any{"comment": resp})
 	writeJSON(w, http.StatusOK, resp)

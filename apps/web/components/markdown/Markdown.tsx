@@ -66,6 +66,15 @@ function createComponents(
   onFileClick?: (path: string) => void
 ): Partial<Components> {
   const baseComponents: Partial<Components> = {
+    // Images: render uploaded images with constrained sizing
+    img: ({ src, alt }) => (
+      <img
+        src={src}
+        alt={alt ?? ""}
+        className="max-w-full h-auto rounded-md my-2"
+        loading="lazy"
+      />
+    ),
     // Links: Make clickable with callbacks, or render as mention
     a: ({ href, children }) => {
       // Mention links: mention://member/id, mention://agent/id, mention://issue/id
@@ -76,10 +85,7 @@ function createComponents(
           return <IssueMentionCard issueId={mentionMatch[2]} fallbackLabel={label} />
         }
         return (
-          <span
-            className="text-primary font-medium"
-            style={{ background: 'color-mix(in srgb, var(--primary) 8%, transparent)', padding: '0 0.2em', borderRadius: 'calc(var(--radius) * 0.5)' }}
-          >
+          <span className="text-primary font-semibold mx-0.5">
             {children}
           </span>
         )

@@ -12,9 +12,12 @@ import Placeholder from "@tiptap/extension-placeholder";
 import Link from "@tiptap/extension-link";
 import Typography from "@tiptap/extension-typography";
 import Mention from "@tiptap/extension-mention";
+import Image from "@tiptap/extension-image";
 import { Markdown } from "@tiptap/markdown";
-import { Extension } from "@tiptap/core";
+import { Extension, mergeAttributes } from "@tiptap/core";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { cn } from "@/lib/utils";
+import type { UploadResult } from "@/shared/hooks/use-file-upload";
 import { createMentionSuggestion } from "./mention-suggestion";
 import "./rich-text-editor.css";
 
@@ -30,55 +33,21 @@ interface RichTextEditorProps {
   className?: string;
   debounceMs?: number;
   onSubmit?: () => void;
+  onUploadFile?: (file: File) => Promise<UploadResult | null>;
 }
 
 interface RichTextEditorRef {
   getMarkdown: () => string;
   clearContent: () => void;
   focus: () => void;
+  insertFile: (filename: string, url: string, isImage: boolean) => void;
 }
-
-// ---------------------------------------------------------------------------
-// Submit shortcut extension (Mod+Enter)
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Mention extension configured for markdown serialization
-// Stores as: [@Label](mention://type/id)
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Link extension — always serialize as [text](url), never <url> autolinks;
-// support Cmd+Click / Ctrl+Click to open in new tab.
-// ---------------------------------------------------------------------------
 
 const LinkExtension = Link.configure({
   openOnClick: true,
   autolink: true,
   HTMLAttributes: {
     class: "text-primary hover:underline cursor-pointer",
-  },
-}).extend({
-  addStorage() {
-    return {
-      markdown: {
-        serialize: {
-          open() {
-            return "[";
-          },
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          close(_state: any, mark: any) {
-            const href = (mark.attrs.href as string).replace(/[\(\)"]/g, "\\$&");
-            const title = mark.attrs.title
-              ? ` "${(mark.attrs.title as string).replace(/"/g, '\\"')}"`
-              : "";
-            return `](${href}${title})`;
-          },
-          mixable: true,
-        },
-        parse: {},
-      },
-    };
   },
 });
 
@@ -87,17 +56,18 @@ const MentionExtension = Mention.configure({
   suggestion: createMentionSuggestion(),
 }).extend({
   renderHTML({ node, HTMLAttributes }) {
-    const type = node.attrs.type ?? "member";
-    const label = node.attrs.label ?? node.attrs.id;
     return [
-      "a",
-      {
-        ...HTMLAttributes,
-        href: `mention://${type}/${node.attrs.id}`,
-        "data-mention-type": type,
-        "data-mention-id": node.attrs.id,
-      },
-      type === "issue" ? label : `@${label}`,
+      "span",
+      mergeAttributes(
+        { "data-type": "mention" },
+        this.options.HTMLAttributes,
+        HTMLAttributes,
+        {
+          "data-mention-type": node.attrs.type ?? "member",
+          "data-mention-id": node.attrs.id,
+        },
+      ),
+      `@${node.attrs.label ?? node.attrs.id}`,
     ];
   },
   addAttributes() {
@@ -105,21 +75,39 @@ const MentionExtension = Mention.configure({
       ...this.parent?.(),
       type: {
         default: "member",
-        parseHTML: (el: HTMLElement) => el.getAttribute("data-mention-type") ?? "member",
-      },
-      description: {
-        default: null,
-        parseHTML: (el: HTMLElement) => el.getAttribute("data-mention-description"),
+        parseHTML: (el: HTMLElement) =>
+          el.getAttribute("data-mention-type") ?? "member",
+        renderHTML: () => ({}),
       },
     };
   },
-  // @tiptap/markdown 3.x uses renderMarkdown as a top-level extension field
+  // @tiptap/markdown: custom tokenizer to parse [@Label](mention://type/id)
+  markdownTokenizer: {
+    name: "mention",
+    level: "inline" as const,
+    start(src: string) {
+      return src.search(/\[@[^\]]+\]\(mention:\/\//);
+    },
+    tokenize(src: string) {
+      const match = src.match(
+        /^\[@([^\]]+)\]\(mention:\/\/(\w+)\/([^)]+)\)/,
+      );
+      if (!match) return undefined;
+      return {
+        type: "mention",
+        raw: match[0],
+        attributes: { label: match[1], type: match[2], id: match[3] },
+      };
+    },
+  },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  renderMarkdown(node: any) {
-    const type = node.attrs?.type ?? "member";
-    const label = node.attrs?.label ?? node.attrs?.id;
-    const display = type === "issue" ? label : `@${label}`;
-    return `[${display}](mention://${type}/${node.attrs?.id})`;
+  parseMarkdown: (token: any, helpers: any) => {
+    return helpers.createNode("mention", token.attributes);
+  },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  renderMarkdown: (node: any) => {
+    const { id, label, type = "member" } = node.attrs || {};
+    return `[@${label ?? id}](mention://${type}/${id})`;
   },
 });
 
@@ -142,6 +130,77 @@ function createSubmitExtension(onSubmit: () => void) {
 }
 
 // ---------------------------------------------------------------------------
+// File upload extension (paste + drop)
+// ---------------------------------------------------------------------------
+
+function createFileUploadExtension(
+  onUploadFileRef: React.RefObject<((file: File) => Promise<UploadResult | null>) | undefined>,
+) {
+  return Extension.create({
+    name: "fileUpload",
+    addProseMirrorPlugins() {
+      const { editor } = this;
+
+      const handleFiles = async (files: FileList, pos?: number) => {
+        const handler = onUploadFileRef.current;
+        if (!handler) return false;
+
+        let handled = false;
+        for (const file of Array.from(files)) {
+          handled = true;
+          try {
+            const result = await handler(file);
+            if (!result) continue;
+
+            const isImage = file.type.startsWith("image/");
+            if (isImage) {
+              editor
+                .chain()
+                .focus()
+                .setImage({ src: result.link, alt: result.filename })
+                .run();
+            } else {
+              // Insert as a markdown link
+              const linkText = `[${result.filename}](${result.link})`;
+              if (pos !== undefined) {
+                editor.chain().focus().insertContentAt(pos, linkText).run();
+              } else {
+                editor.chain().focus().insertContent(linkText).run();
+              }
+            }
+          } catch {
+            // Upload errors handled by the hook/caller via toast
+          }
+        }
+        return handled;
+      };
+
+      return [
+        new Plugin({
+          key: new PluginKey("fileUpload"),
+          props: {
+            handlePaste(_view, event) {
+              const files = event.clipboardData?.files;
+              if (!files?.length) return false;
+              if (!onUploadFileRef.current) return false;
+              handleFiles(files);
+              return true;
+            },
+            handleDrop(_view, event) {
+              const files = (event as DragEvent).dataTransfer?.files;
+              if (!files?.length) return false;
+              if (!onUploadFileRef.current) return false;
+              handleFiles(files);
+              return true;
+            },
+          },
+        }),
+      ];
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -155,26 +214,25 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
       className,
       debounceMs = 300,
       onSubmit,
+      onUploadFile,
     },
     ref,
   ) {
     const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
     const onUpdateRef = useRef(onUpdate);
     const onSubmitRef = useRef(onSubmit);
-
-    // Helper to get markdown from @tiptap/markdown extension
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const getEditorMarkdown = (ed: any): string =>
-      ed?.getMarkdown?.() ?? "";
+    const onUploadFileRef = useRef(onUploadFile);
 
     // Keep refs in sync without recreating editor
     onUpdateRef.current = onUpdate;
     onSubmitRef.current = onSubmit;
+    onUploadFileRef.current = onUploadFile;
 
     const editor = useEditor({
       immediatelyRender: false,
       editable,
-      content: defaultValue,
+      content: defaultValue || "",
+      contentType: defaultValue ? "markdown" : undefined,
       extensions: [
         StarterKit.configure({
           heading: { levels: [1, 2, 3] },
@@ -186,14 +244,20 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
         LinkExtension,
         Typography,
         MentionExtension,
+        Image.configure({
+          inline: false,
+          allowBase64: false,
+          HTMLAttributes: { style: "max-width: 100%; height: auto;" },
+        }),
         Markdown,
         createSubmitExtension(() => onSubmitRef.current?.()),
+        createFileUploadExtension(onUploadFileRef),
       ],
       onUpdate: ({ editor: ed }) => {
         if (!onUpdateRef.current) return;
         if (debounceRef.current) clearTimeout(debounceRef.current);
         debounceRef.current = setTimeout(() => {
-          onUpdateRef.current?.(getEditorMarkdown(ed));
+          onUpdateRef.current?.(ed.getMarkdown());
         }, debounceMs);
       },
       editorProps: {
@@ -225,12 +289,20 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
     }, []);
 
     useImperativeHandle(ref, () => ({
-      getMarkdown: () => getEditorMarkdown(editor),
+      getMarkdown: () => editor?.getMarkdown() ?? "",
       clearContent: () => {
         editor?.commands.clearContent();
       },
       focus: () => {
         editor?.commands.focus();
+      },
+      insertFile: (filename: string, url: string, isImage: boolean) => {
+        if (!editor) return;
+        if (isImage) {
+          editor.chain().focus().setImage({ src: url, alt: filename }).run();
+        } else {
+          editor.chain().focus().insertContent(`[${filename}](${url})`).run();
+        }
       },
     }));
 

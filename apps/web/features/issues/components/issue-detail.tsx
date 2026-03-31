@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, memo } from "react";
+import { useState, useEffect, useCallback, memo } from "react";
 import { useDefaultLayout, usePanelRef } from "react-resizable-panels";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -43,8 +43,8 @@ import {
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
-import { Input } from "@/components/ui/input";
 import { RichTextEditor } from "@/components/common/rich-text-editor";
+import { TitleEditor } from "@/components/common/title-editor";
 import {
   Tooltip,
   TooltipTrigger,
@@ -69,6 +69,7 @@ import { useIssueTimeline } from "@/features/issues/hooks/use-issue-timeline";
 import { useIssueReactions } from "@/features/issues/hooks/use-issue-reactions";
 import { useIssueSubscribers } from "@/features/issues/hooks/use-issue-subscribers";
 import { ReactionBar } from "@/components/common/reaction-bar";
+import { useFileUpload } from "@/shared/hooks/use-file-upload";
 import { timeAgo } from "@/shared/utils";
 
 function shortDate(date: string | null): string {
@@ -179,14 +180,13 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   const prevIssue = currentIndex > 0 ? allIssues[currentIndex - 1] : null;
   const nextIssue = currentIndex < allIssues.length - 1 ? allIssues[currentIndex + 1] : null;
   const { getActorName, getActorInitials } = useActorName();
+  const { uploadWithToast } = useFileUpload();
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: layoutId,
   });
   const sidebarRef = usePanelRef();
   const [sidebarOpen, setSidebarOpen] = useState(defaultSidebarOpen);
   const [deleting, setDeleting] = useState(false);
-  const [titleDraft, setTitleDraft] = useState("");
-  const titleFocusedRef = useRef(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(true);
@@ -210,13 +210,6 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
       .catch(console.error)
       .finally(() => setIssueLoading(false));
   }, [id, !!issue]);
-
-  // Sync titleDraft when issue title changes (from WS or other views)
-  useEffect(() => {
-    if (issue && !titleFocusedRef.current) {
-      setTitleDraft(issue.title);
-    }
-  }, [issue?.title]);
 
   // Custom hooks — encapsulate timeline, reactions, subscribers
   const {
@@ -247,6 +240,11 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
       });
     },
     [issue, id],
+  );
+
+  const handleDescriptionUpload = useCallback(
+    (file: File) => uploadWithToast(file, { issueId: id }),
+    [uploadWithToast, id],
   );
 
   const handleDelete = async () => {
@@ -547,26 +545,15 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
         {/* Content — scrollable */}
         <div className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-4xl px-8 py-8">
-          <input
-            value={titleDraft}
-            onChange={(e) => setTitleDraft(e.target.value)}
-            onFocus={() => { titleFocusedRef.current = true; }}
-            onBlur={() => {
-              titleFocusedRef.current = false;
-              const trimmed = titleDraft.trim();
+          <TitleEditor
+            key={`title-${id}`}
+            defaultValue={issue.title}
+            placeholder="Issue title"
+            className="w-full text-2xl font-bold leading-snug tracking-tight"
+            onBlur={(value) => {
+              const trimmed = value.trim();
               if (trimmed && trimmed !== issue.title) handleUpdateField({ title: trimmed });
-              else setTitleDraft(issue.title);
             }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                (e.target as HTMLInputElement).blur();
-              } else if (e.key === "Escape") {
-                setTitleDraft(issue.title);
-                (e.target as HTMLInputElement).blur();
-              }
-            }}
-            className="w-full bg-transparent text-2xl font-bold leading-snug tracking-tight outline-none placeholder:text-muted-foreground"
           />
 
           <RichTextEditor
@@ -574,6 +561,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
             defaultValue={issue.description || ""}
             placeholder="Add description..."
             onUpdate={(md) => handleUpdateField({ description: md || undefined })}
+            onUploadFile={handleDescriptionUpload}
             debounceMs={1500}
             className="mt-5"
           />
@@ -741,6 +729,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                     return (
                       <CommentCard
                         key={entry.id}
+                        issueId={id}
                         entry={entry}
                         allReplies={repliesByParent}
                         currentUserId={user?.id}
@@ -803,7 +792,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
 
             {/* Bottom comment input — no avatar, full width */}
             <div className="mt-4">
-              <CommentInput onSubmit={submitComment} />
+              <CommentInput issueId={id} onSubmit={submitComment} />
             </div>
           </div>
         </div>

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Copy, MoreHorizontal, Pencil, Trash2, ChevronRight } from "lucide-react";
+import { useRef, useState } from "react";
+import { ChevronRight, Copy, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,10 +16,10 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { ReactionBar } from "@/components/common/reaction-bar";
-import { Markdown } from "@/components/markdown";
 import { cn } from "@/lib/utils";
 import { useActorName } from "@/features/workspace";
 import { timeAgo } from "@/shared/utils";
+import { RichTextEditor, type RichTextEditorRef } from "@/components/common/rich-text-editor";
 import { ReplyInput } from "./reply-input";
 import type { TimelineEntry } from "@/shared/types";
 
@@ -28,6 +28,7 @@ import type { TimelineEntry } from "@/shared/types";
 // ---------------------------------------------------------------------------
 
 interface CommentCardProps {
+  issueId: string;
   entry: TimelineEntry;
   allReplies: Map<string, TimelineEntry[]>;
   currentUserId?: string;
@@ -56,28 +57,28 @@ function CommentRow({
 }) {
   const { getActorName } = useActorName();
   const [editing, setEditing] = useState(false);
-  const [editContent, setEditContent] = useState("");
+  const editEditorRef = useRef<RichTextEditorRef>(null);
 
   const isOwn = entry.actor_type === "member" && entry.actor_id === currentUserId;
   const isTemp = entry.id.startsWith("temp-");
 
   const startEdit = () => {
-    setEditContent(entry.content ?? "");
     setEditing(true);
   };
 
   const cancelEdit = () => {
     setEditing(false);
-    setEditContent("");
   };
 
   const saveEdit = async () => {
-    const trimmed = editContent.trim();
+    const trimmed = editEditorRef.current
+      ?.getMarkdown()
+      ?.replace(/(\n\s*)+$/, "")
+      .trim();
     if (!trimmed) return;
     try {
       await onEdit(entry.id, trimmed);
       setEditing(false);
-      setEditContent("");
     } catch {
       toast.error("Failed to update comment");
     }
@@ -142,27 +143,28 @@ function CommentRow({
       </div>
 
       {editing ? (
-        <form
-          onSubmit={(e) => { e.preventDefault(); saveEdit(); }}
+        <div
           className="mt-2 pl-8"
+          onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); }}
         >
-          <input
-            autoFocus
-            value={editContent}
-            onChange={(e) => setEditContent(e.target.value)}
-            aria-label="Edit comment"
-            className="w-full text-sm bg-transparent border-b border-border outline-none py-1"
-            onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); }}
-          />
-          <div className="flex gap-2 mt-1.5">
-            <Button size="sm" type="submit">Save</Button>
-            <Button size="sm" variant="ghost" type="button" onClick={cancelEdit}>Cancel</Button>
+          <div className="max-h-48 overflow-y-auto rounded-md border border-border px-3 py-2">
+            <RichTextEditor
+              ref={editEditorRef}
+              defaultValue={entry.content ?? ""}
+              placeholder="Edit comment..."
+              onSubmit={saveEdit}
+              debounceMs={100}
+            />
           </div>
-        </form>
+          <div className="flex gap-2 mt-1.5">
+            <Button size="sm" onClick={saveEdit}>Save</Button>
+            <Button size="sm" variant="ghost" onClick={cancelEdit}>Cancel</Button>
+          </div>
+        </div>
       ) : (
         <>
           <div className="mt-1.5 pl-8 text-sm leading-relaxed text-foreground/85">
-            <Markdown mode="minimal">{entry.content ?? ""}</Markdown>
+            <RichTextEditor defaultValue={entry.content ?? ""} editable={false} />
           </div>
           {!isTemp && (
             <ReactionBar
@@ -183,6 +185,7 @@ function CommentRow({
 // ---------------------------------------------------------------------------
 
 function CommentCard({
+  issueId,
   entry,
   allReplies,
   currentUserId,
@@ -194,28 +197,28 @@ function CommentCard({
   const { getActorName } = useActorName();
   const [open, setOpen] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [editContent, setEditContent] = useState("");
+  const editEditorRef = useRef<RichTextEditorRef>(null);
 
   const isOwn = entry.actor_type === "member" && entry.actor_id === currentUserId;
   const isTemp = entry.id.startsWith("temp-");
 
   const startEdit = () => {
-    setEditContent(entry.content ?? "");
     setEditing(true);
   };
 
   const cancelEdit = () => {
     setEditing(false);
-    setEditContent("");
   };
 
   const saveEdit = async () => {
-    const trimmed = editContent.trim();
+    const trimmed = editEditorRef.current
+      ?.getMarkdown()
+      ?.replace(/(\n\s*)+$/, "")
+      .trim();
     if (!trimmed) return;
     try {
       await onEdit(entry.id, trimmed);
       setEditing(false);
-      setEditContent("");
     } catch {
       toast.error("Failed to update comment");
     }
@@ -242,17 +245,17 @@ function CommentCard({
         {/* Header — always visible, acts as toggle */}
         <div className="px-4 py-3">
           <div className="flex items-center gap-2.5">
-            <CollapsibleTrigger className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
+            <CollapsibleTrigger className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
               <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-90")} />
             </CollapsibleTrigger>
             <ActorAvatar actorType={entry.actor_type} actorId={entry.actor_id} size={24} />
-            <span className="text-sm font-medium">
+            <span className="shrink-0 text-sm font-medium">
               {getActorName(entry.actor_type, entry.actor_id)}
             </span>
             <Tooltip>
               <TooltipTrigger
                 render={
-                  <span className="text-xs text-muted-foreground cursor-default">
+                  <span className="shrink-0 text-xs text-muted-foreground cursor-default">
                     {timeAgo(entry.created_at)}
                   </span>
                 }
@@ -263,12 +266,12 @@ function CommentCard({
             </Tooltip>
 
             {!open && contentPreview && (
-              <span className="text-xs text-muted-foreground truncate">
-                {contentPreview}{(entry.content ?? "").length > 80 ? "..." : ""}
+              <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                {contentPreview}
               </span>
             )}
             {!open && replyCount > 0 && (
-              <span className="text-xs text-muted-foreground shrink-0 ml-auto">
+              <span className="shrink-0 text-xs text-muted-foreground">
                 {replyCount} {replyCount === 1 ? "reply" : "replies"}
               </span>
             )}
@@ -315,27 +318,28 @@ function CommentCard({
           {/* Parent comment body */}
           <div className="px-4 pb-3">
             {editing ? (
-              <form
-                onSubmit={(e) => { e.preventDefault(); saveEdit(); }}
+              <div
                 className="pl-10"
+                onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); }}
               >
-                <input
-                  autoFocus
-                  value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
-                  aria-label="Edit comment"
-                  className="w-full text-sm bg-transparent border-b border-border outline-none py-1"
-                  onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); }}
-                />
-                <div className="flex gap-2 mt-1.5">
-                  <Button size="sm" type="submit">Save</Button>
-                  <Button size="sm" variant="ghost" type="button" onClick={cancelEdit}>Cancel</Button>
+                <div className="max-h-48 overflow-y-auto rounded-md border border-border px-3 py-2">
+                  <RichTextEditor
+                    ref={editEditorRef}
+                    defaultValue={entry.content ?? ""}
+                    placeholder="Edit comment..."
+                    onSubmit={saveEdit}
+                    debounceMs={100}
+                  />
                 </div>
-              </form>
+                <div className="flex gap-2 mt-1.5">
+                  <Button size="sm" onClick={saveEdit}>Save</Button>
+                  <Button size="sm" variant="ghost" onClick={cancelEdit}>Cancel</Button>
+                </div>
+              </div>
             ) : (
               <>
                 <div className="pl-10 text-sm leading-relaxed text-foreground/85">
-                  <Markdown mode="minimal">{entry.content ?? ""}</Markdown>
+                  <RichTextEditor defaultValue={entry.content ?? ""} editable={false} />
                 </div>
                 {!isTemp && (
                   <ReactionBar
@@ -365,6 +369,7 @@ function CommentCard({
           {/* Reply input */}
           <div className="border-t border-border/50 px-4 py-2.5">
             <ReplyInput
+              issueId={issueId}
               placeholder="Leave a reply..."
               size="sm"
               avatarType="member"
