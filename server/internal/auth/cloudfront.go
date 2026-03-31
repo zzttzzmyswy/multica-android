@@ -137,11 +137,6 @@ func parseRSAPrivateKey(pemBytes []byte) (*rsa.PrivateKey, error) {
 	return rsaKey, nil
 }
 
-// Domain returns the CDN domain (e.g. "static.multica.ai").
-func (s *CloudFrontSigner) Domain() string {
-	return s.domain
-}
-
 // SignedCookies generates the three CloudFront signed cookies with the given expiry.
 func (s *CloudFrontSigner) SignedCookies(expiry time.Time) []*http.Cookie {
 	policy := fmt.Sprintf(`{"Statement":[{"Resource":"https://%s/*","Condition":{"DateLessThan":{"AWS:EpochTime":%d}}}]}`, s.domain, expiry.Unix())

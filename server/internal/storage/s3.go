@@ -67,15 +67,15 @@ func NewS3StorageFromEnv() *S3Storage {
 	}
 }
 
-func (s *S3Storage) Upload(ctx context.Context, key string, data []byte, contentType string, metadata map[string]string) (string, error) {
+func (s *S3Storage) Upload(ctx context.Context, key string, data []byte, contentType string, filename string) (string, error) {
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:       aws.String(s.bucket),
-		Key:          aws.String(key),
-		Body:         bytes.NewReader(data),
-		ContentType:  aws.String(contentType),
-		CacheControl: aws.String("max-age=432000,public"),
-		StorageClass: types.StorageClassIntelligentTiering,
-		Metadata:     metadata,
+		Bucket:             aws.String(s.bucket),
+		Key:                aws.String(key),
+		Body:               bytes.NewReader(data),
+		ContentType:        aws.String(contentType),
+		ContentDisposition: aws.String(fmt.Sprintf(`inline; filename="%s"`, filename)),
+		CacheControl:       aws.String("max-age=432000,public"),
+		StorageClass:       types.StorageClassIntelligentTiering,
 	})
 	if err != nil {
 		return "", fmt.Errorf("s3 PutObject: %w", err)
