@@ -1,6 +1,6 @@
 import * as React from 'react'
 import Link from 'next/link'
-import ReactMarkdown, { type Components } from 'react-markdown'
+import ReactMarkdown, { type Components, defaultUrlTransform } from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
 import remarkGfm from 'remark-gfm'
 import { cn } from '@/lib/utils'
@@ -42,6 +42,15 @@ export interface MarkdownProps {
    * Callback when a file path is clicked
    */
   onFileClick?: (path: string) => void
+}
+
+/**
+ * Custom URL transform that allows mention:// protocol (used for @mentions)
+ * while keeping the default security for all other URLs.
+ */
+function urlTransform(url: string): string {
+  if (url.startsWith('mention://')) return url
+  return defaultUrlTransform(url)
 }
 
 // File path detection regex - matches paths starting with /, ~/, or ./
@@ -298,6 +307,7 @@ export function Markdown({
       <ReactMarkdown
         remarkPlugins={[[remarkGfm, { singleTilde: false }]]}
         rehypePlugins={[rehypeRaw]}
+        urlTransform={urlTransform}
         components={components}
       >
         {processedContent}
