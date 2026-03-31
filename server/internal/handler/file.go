@@ -59,9 +59,21 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	contentType := header.Header.Get("Content-Type")
+	// Sniff actual content type from file bytes instead of trusting the client header.
+	buf := make([]byte, 512)
+	n, err := file.Read(buf)
+	if err != nil && err != io.EOF {
+		writeError(w, http.StatusBadRequest, "failed to read file")
+		return
+	}
+	contentType := http.DetectContentType(buf[:n])
 	if !isContentTypeAllowed(contentType) {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("file type not allowed: %s", contentType))
+		return
+	}
+	// Seek back so the full file is uploaded.
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to read file")
 		return
 	}
 
@@ -77,7 +89,7 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	key := hex.EncodeToString(b) + path.Ext(header.Filename)
+	key := "uploads/" + hex.EncodeToString(b) + path.Ext(header.Filename)
 
 	link, err := h.Storage.Upload(r.Context(), key, data, contentType, header.Filename)
 	if err != nil {

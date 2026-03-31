@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -73,7 +74,7 @@ func (s *S3Storage) Upload(ctx context.Context, key string, data []byte, content
 		Key:                aws.String(key),
 		Body:               bytes.NewReader(data),
 		ContentType:        aws.String(contentType),
-		ContentDisposition: aws.String(fmt.Sprintf(`inline; filename="%s"`, filename)),
+		ContentDisposition: aws.String(fmt.Sprintf(`inline; filename="%s"`, strings.ReplaceAll(filename, `"`, "'"))),
 		CacheControl:       aws.String("max-age=432000,public"),
 		StorageClass:       types.StorageClassIntelligentTiering,
 	})
