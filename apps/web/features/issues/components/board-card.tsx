@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, memo } from "react";
 import Link from "next/link";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -35,7 +35,7 @@ function PickerWrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function BoardCardContent({
+export const BoardCardContent = memo(function BoardCardContent({
   issue,
   editable = false,
 }: {
@@ -163,9 +163,9 @@ export function BoardCardContent({
       )}
     </div>
   );
-}
+});
 
-export function DraggableBoardCard({ issue }: { issue: Issue }) {
+export const DraggableBoardCard = memo(function DraggableBoardCard({ issue }: { issue: Issue }) {
   const {
     attributes,
     listeners,
@@ -199,4 +199,4 @@ export function DraggableBoardCard({ issue }: { issue: Issue }) {
       </Link>
     </div>
   );
-}
+});
