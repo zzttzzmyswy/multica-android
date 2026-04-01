@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Bot } from "lucide-react";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { useWorkspaceStore } from "@/features/workspace";
@@ -49,9 +48,7 @@ function MentionHoverCard({ type, id, children }: MentionHoverCardProps) {
         </HoverCardTrigger>
         <HoverCardContent align="start" className="w-auto min-w-48 max-w-72">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
-              <Bot className="h-4 w-4 text-muted-foreground" />
-            </div>
+            <ActorAvatar actorType="agent" actorId={id} size={32} />
             <div className="min-w-0">
               <p className="text-sm font-medium truncate">{agent.name}</p>
               {agent.description && (

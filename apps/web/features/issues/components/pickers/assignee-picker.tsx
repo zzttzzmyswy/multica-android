@@ -25,13 +25,23 @@ export function AssigneePicker({
   assigneeId,
   onUpdate,
   trigger: customTrigger,
+  triggerRender,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  align,
 }: {
   assigneeType: IssueAssigneeType | null;
   assigneeId: string | null;
   onUpdate: (updates: Partial<UpdateIssueRequest>) => void;
   trigger?: React.ReactNode;
+  triggerRender?: React.ReactElement;
+  open?: boolean;
+  onOpenChange?: (v: boolean) => void;
+  align?: "start" | "center" | "end";
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = controlledOnOpenChange ?? setInternalOpen;
   const [filter, setFilter] = useState("");
   const user = useAuthStore((s) => s.user);
   const members = useWorkspaceStore((s) => s.members);
@@ -65,6 +75,8 @@ export function AssigneePicker({
         if (!v) setFilter("");
       }}
       width="w-52"
+      align={align}
+      triggerRender={triggerRender}
       searchable
       searchPlaceholder="Assign to..."
       onSearchChange={setFilter}
