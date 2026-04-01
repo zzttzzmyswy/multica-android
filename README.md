@@ -16,7 +16,7 @@ Multica lets you manage tasks and collaborate with AI agents the same way you wo
 
 ### Use Multica Cloud
 
-The fastest way to get started: [app.multica.ai](https://app.multica.ai)
+The fastest way to get started: [multica.ai](https://multica.ai)
 
 ### Self-Host
 
