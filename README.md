@@ -16,7 +16,7 @@ Multica lets you manage tasks and collaborate with AI agents the same way you wo
 
 ### Use Multica Cloud
 
-The fastest way to get started: [app.multica.ai](https://app.multica.ai)
+The fastest way to get started: [multica.ai](https://multica.ai)
 
 ### Self-Host
 
@@ -42,43 +42,19 @@ make start
 
 The `multica` CLI connects your local machine to Multica — authenticate, manage workspaces, and run the agent daemon.
 
-### Install
-
 ```bash
+# Install
 brew tap multica-ai/tap
 brew install multica-cli
-```
 
-Or build from source:
-
-```bash
-make build
-cp server/bin/multica /usr/local/bin/multica
-```
-
-### Connect Your Agent Runtime
-
-```bash
-# 1. Authenticate
+# Authenticate and start
 multica login
-
-# 2. Watch your workspace
-multica workspace watch <workspace-id>
-
-# 3. Start the local agent daemon
 multica daemon start
 ```
 
 The daemon auto-detects available agent CLIs (`claude`, `codex`) on your PATH. When an agent is assigned a task, the daemon creates an isolated environment, runs the agent, and reports results back.
 
-### Other Commands
-
-```bash
-multica workspace list        # List workspaces (watched ones marked with *)
-multica agent list            # List agents in the current workspace
-multica daemon status         # Show daemon status
-multica version               # Show CLI version
-```
+See the [CLI and Daemon Guide](CLI_AND_DAEMON.md) for the full command reference, daemon configuration, and advanced usage.
 
 ## Architecture
 
@@ -101,7 +77,7 @@ multica version               # Show CLI version
 
 ## Development
 
-For contributors working on the Multica codebase, see the [Local Development Guide](LOCAL_DEVELOPMENT.md).
+For contributors working on the Multica codebase, see the [Contributing Guide](CONTRIBUTING.md).
 
 ### Prerequisites
 
@@ -119,7 +95,7 @@ make setup
 make start
 ```
 
-See [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md) for the full development workflow, worktree support, testing, and troubleshooting.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development workflow, worktree support, testing, and troubleshooting.
 
 ## License
 

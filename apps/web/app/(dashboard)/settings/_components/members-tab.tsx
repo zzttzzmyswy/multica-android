@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Crown, Shield, User, Plus, MoreHorizontal, UserMinus, Users } from "lucide-react";
+import { ActorAvatar } from "@/components/common/actor-avatar";
 import type { MemberWithUser, MemberRole } from "@/shared/types";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -70,14 +71,7 @@ function MemberRow({
 
   return (
     <div className="flex items-center gap-3 px-4 py-3">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">
-        {member.name
-          .split(" ")
-          .map((w) => w[0])
-          .join("")
-          .toUpperCase()
-          .slice(0, 2)}
-      </div>
+      <ActorAvatar actorType="member" actorId={member.user_id} size={32} />
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium truncate">{member.name}</div>
         <div className="text-xs text-muted-foreground truncate">{member.email}</div>

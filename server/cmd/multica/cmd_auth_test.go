@@ -35,13 +35,13 @@ func TestResolveAppURL(t *testing.T) {
 		}
 	})
 
-	t.Run("defaults to localhost 3000", func(t *testing.T) {
+	t.Run("defaults to production", func(t *testing.T) {
 		t.Setenv("MULTICA_APP_URL", "")
 		t.Setenv("FRONTEND_ORIGIN", "")
 		t.Setenv("HOME", t.TempDir()) // avoid reading real config
 
-		if got := resolveAppURL(cmd); got != "http://localhost:3000" {
-			t.Fatalf("resolveAppURL() = %q, want %q", got, "http://localhost:3000")
+		if got := resolveAppURL(cmd); got != "https://multica.ai" {
+			t.Fatalf("resolveAppURL() = %q, want %q", got, "https://multica.ai")
 		}
 	})
 }

@@ -74,6 +74,7 @@ import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
 import { useRuntimeStore } from "@/features/runtimes";
 import { useIssueStore } from "@/features/issues";
+import { ActorAvatar } from "@/components/common/actor-avatar";
 
 
 // ---------------------------------------------------------------------------
@@ -97,14 +98,6 @@ const taskStatusConfig: Record<string, { label: string; icon: typeof CheckCircle
   cancelled: { label: "Cancelled", icon: XCircle, color: "text-muted-foreground" },
 };
 
-function getInitials(name: string): string {
-  return name
-    .split(/[\s-]+/)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-}
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -341,9 +334,7 @@ function AgentListItem({
         isSelected ? "bg-accent" : "hover:bg-accent/50"
       }`}
     >
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-xs font-semibold">
-        {getInitials(agent.name)}
-      </div>
+      <ActorAvatar actorType="agent" actorId={agent.id} size={32} className="rounded-lg" />
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
@@ -1322,9 +1313,7 @@ function AgentDetail({
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-bold">
-          {getInitials(agent.name)}
-        </div>
+        <ActorAvatar actorType="agent" actorId={agent.id} size={28} className="rounded-md" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold truncate">{agent.name}</h2>

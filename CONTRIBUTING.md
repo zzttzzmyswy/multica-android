@@ -1,6 +1,6 @@
-# Local Development Guide
+# Contributing Guide
 
-This guide documents the intended local development workflow for Multica.
+This guide documents the local development workflow for contributors working on the Multica codebase.
 
 It covers:
 

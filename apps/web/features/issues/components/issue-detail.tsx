@@ -53,7 +53,7 @@ import {
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
-import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount } from "@/components/ui/avatar";
+import { AvatarGroup, AvatarGroupCount } from "@/components/ui/avatar";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import type { UpdateIssueRequest, IssueStatus, IssuePriority, TimelineEntry } from "@/shared/types";
 import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
@@ -180,7 +180,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   const currentIndex = allIssues.findIndex((i) => i.id === id);
   const prevIssue = currentIndex > 0 ? allIssues[currentIndex - 1] : null;
   const nextIssue = currentIndex < allIssues.length - 1 ? allIssues[currentIndex + 1] : null;
-  const { getActorName, getActorInitials } = useActorName();
+  const { getActorName } = useActorName();
   const { uploadWithToast } = useFileUpload();
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: layoutId,
@@ -598,9 +598,12 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                     {subscribers.length > 0 ? (
                       <AvatarGroup>
                         {subscribers.slice(0, 4).map((sub) => (
-                          <Avatar key={`${sub.user_type}-${sub.user_id}`} size="sm">
-                            <AvatarFallback>{getActorInitials(sub.user_type, sub.user_id)}</AvatarFallback>
-                          </Avatar>
+                          <ActorAvatar
+                            key={`${sub.user_type}-${sub.user_id}`}
+                            actorType={sub.user_type}
+                            actorId={sub.user_id}
+                            size={24}
+                          />
                         ))}
                         {subscribers.length > 4 && (
                           <AvatarGroupCount>+{subscribers.length - 4}</AvatarGroupCount>
