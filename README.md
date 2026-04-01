@@ -66,7 +66,7 @@ See the [CLI and Daemon Guide](CLI_AND_DAEMON.md) for the full command reference
                             │
                      ┌──────┴───────┐
                      │ Agent Daemon │  (runs on your machine)
-                     │ Claude / Codex│
+                     │ Claude/Codex │
                      └──────────────┘
 ```
 
