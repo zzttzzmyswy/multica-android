@@ -48,7 +48,9 @@ func buildMetaSkillContent(provider string, ctx TaskContextForEnv) string {
 	b.WriteString("- `multica issue list [--status X] [--priority X] [--assignee X] --output json` — List issues in workspace\n")
 	b.WriteString("- `multica issue comment list <issue-id> --output json` — List all comments on an issue (includes id, parent_id for threading)\n")
 	b.WriteString("- `multica workspace get --output json` — Get workspace details and context\n")
-	b.WriteString("- `multica agent list --output json` — List agents in workspace\n\n")
+	b.WriteString("- `multica agent list --output json` — List agents in workspace\n")
+	b.WriteString("- `multica issue runs <issue-id> --output json` — List all execution runs for an issue (status, timestamps, errors)\n")
+	b.WriteString("- `multica issue run-messages <task-id> [--since <seq>] --output json` — List messages for a specific execution run (supports incremental fetch)\n\n")
 
 	b.WriteString("### Write\n")
 	b.WriteString("- `multica issue comment add <issue-id> --content \"...\" [--parent <comment-id>]` — Post a comment (use --parent to reply to a specific comment)\n")
