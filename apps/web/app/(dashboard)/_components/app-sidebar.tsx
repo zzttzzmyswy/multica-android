@@ -132,6 +132,7 @@ export function AppSidebar() {
                         key={ws.id}
                         onClick={() => {
                           if (ws.id !== workspace?.id) {
+                            router.push("/issues");
                             switchWorkspace(ws.id);
                           }
                         }}
