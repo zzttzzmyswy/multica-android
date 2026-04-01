@@ -13,7 +13,7 @@ import {
   PickerEmpty,
 } from "./property-picker";
 
-function canAssignAgent(agent: Agent, userId: string | undefined, memberRole: string | undefined): boolean {
+export function canAssignAgent(agent: Agent, userId: string | undefined, memberRole: string | undefined): boolean {
   if (agent.visibility !== "private") return true;
   if (agent.owner_id === userId) return true;
   if (memberRole === "owner" || memberRole === "admin") return true;
@@ -25,13 +25,23 @@ export function AssigneePicker({
   assigneeId,
   onUpdate,
   trigger: customTrigger,
+  triggerRender,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  align,
 }: {
   assigneeType: IssueAssigneeType | null;
   assigneeId: string | null;
   onUpdate: (updates: Partial<UpdateIssueRequest>) => void;
   trigger?: React.ReactNode;
+  triggerRender?: React.ReactElement;
+  open?: boolean;
+  onOpenChange?: (v: boolean) => void;
+  align?: "start" | "center" | "end";
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = controlledOnOpenChange ?? setInternalOpen;
   const [filter, setFilter] = useState("");
   const user = useAuthStore((s) => s.user);
   const members = useWorkspaceStore((s) => s.members);
@@ -65,9 +75,11 @@ export function AssigneePicker({
         if (!v) setFilter("");
       }}
       width="w-52"
+      align={align}
       searchable
       searchPlaceholder="Assign to..."
       onSearchChange={setFilter}
+      triggerRender={triggerRender}
       trigger={
         customTrigger ? customTrigger : assigneeType && assigneeId ? (
           <>

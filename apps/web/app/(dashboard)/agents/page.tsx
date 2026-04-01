@@ -75,6 +75,7 @@ import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
 import { useRuntimeStore } from "@/features/runtimes";
 import { useIssueStore } from "@/features/issues";
+import { ActorAvatar } from "@/components/common/actor-avatar";
 import { useFileUpload } from "@/shared/hooks/use-file-upload";
 
 
@@ -99,14 +100,6 @@ const taskStatusConfig: Record<string, { label: string; icon: typeof CheckCircle
   cancelled: { label: "Cancelled", icon: XCircle, color: "text-muted-foreground" },
 };
 
-function getInitials(name: string): string {
-  return name
-    .split(/[\s-]+/)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-}
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -343,13 +336,7 @@ function AgentListItem({
         isSelected ? "bg-accent" : "hover:bg-accent/50"
       }`}
     >
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-xs font-semibold overflow-hidden">
-        {agent.avatar_url ? (
-          <img src={agent.avatar_url} alt={agent.name} className="h-full w-full object-cover" />
-        ) : (
-          getInitials(agent.name)
-        )}
-      </div>
+      <ActorAvatar actorType="agent" actorId={agent.id} size={32} className="rounded-lg" />
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
@@ -1231,17 +1218,7 @@ function SettingsTab({
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
           >
-            {agent.avatar_url ? (
-              <img
-                src={agent.avatar_url}
-                alt={agent.name}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <span className="flex h-full w-full items-center justify-center text-lg font-semibold text-muted-foreground">
-                {getInitials(agent.name)}
-              </span>
-            )}
+            <ActorAvatar actorType="agent" actorId={agent.id} size={64} className="rounded-none" />
             <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
               {uploading ? (
                 <Loader2 className="h-5 w-5 animate-spin text-white" />
@@ -1385,13 +1362,7 @@ function AgentDetail({
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-bold overflow-hidden">
-          {agent.avatar_url ? (
-            <img src={agent.avatar_url} alt={agent.name} className="h-full w-full object-cover" />
-          ) : (
-            getInitials(agent.name)
-          )}
-        </div>
+        <ActorAvatar actorType="agent" actorId={agent.id} size={28} className="rounded-md" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold truncate">{agent.name}</h2>
