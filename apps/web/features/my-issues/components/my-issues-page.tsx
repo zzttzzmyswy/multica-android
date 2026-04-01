@@ -31,6 +31,7 @@ export function MyIssuesPage() {
   const viewMode = useStore(myIssuesViewStore, (s) => s.viewMode);
   const statusFilters = useStore(myIssuesViewStore, (s) => s.statusFilters);
   const priorityFilters = useStore(myIssuesViewStore, (s) => s.priorityFilters);
+  const scope = useStore(myIssuesViewStore, (s) => s.scope);
 
   useEffect(() => {
     registerViewStoreForWorkspaceSync(myIssuesViewStore);
@@ -38,7 +39,7 @@ export function MyIssuesPage() {
 
   useEffect(() => {
     useIssueSelectionStore.getState().clear();
-  }, [viewMode]);
+  }, [viewMode, scope]);
 
   const myAgentIds = useMemo(() => {
     if (!user) return new Set<string>();
@@ -47,18 +48,39 @@ export function MyIssuesPage() {
     );
   }, [agents, user]);
 
-  // Pre-filter: union of (assigned to me + my agents + created by me)
-  const myIssues = useMemo(() => {
+  // Per-scope issue lists
+  const assignedToMe = useMemo(() => {
+    if (!user) return [];
+    return allIssues.filter(
+      (i) => i.assignee_type === "member" && i.assignee_id === user.id,
+    );
+  }, [allIssues, user]);
+
+  const myAgentIssues = useMemo(() => {
     if (!user) return [];
     return allIssues.filter(
       (i) =>
-        (i.assignee_type === "member" && i.assignee_id === user.id) ||
-        (i.assignee_type === "agent" &&
-          i.assignee_id &&
-          myAgentIds.has(i.assignee_id)) ||
-        (i.creator_type === "member" && i.creator_id === user.id),
+        i.assignee_type === "agent" &&
+        i.assignee_id &&
+        myAgentIds.has(i.assignee_id),
     );
   }, [allIssues, user, myAgentIds]);
+
+  const createdByMe = useMemo(() => {
+    if (!user) return [];
+    return allIssues.filter(
+      (i) => i.creator_type === "member" && i.creator_id === user.id,
+    );
+  }, [allIssues, user]);
+
+  const myIssues = useMemo(() => {
+    switch (scope) {
+      case "assigned": return assignedToMe;
+      case "agents": return myAgentIssues;
+      case "created": return createdByMe;
+      default: return assignedToMe;
+    }
+  }, [scope, assignedToMe, myAgentIssues, createdByMe]);
 
   // Apply status/priority filters from view store
   const issues = useMemo(
@@ -144,7 +166,7 @@ export function MyIssuesPage() {
         <span className="text-sm font-medium">My Issues</span>
       </div>
 
-      {/* Header 2: View toggle + filters */}
+      {/* Header: scope tabs (left) + controls (right) */}
       <MyIssuesHeader allIssues={myIssues} />
 
       {/* Content: scrollable */}

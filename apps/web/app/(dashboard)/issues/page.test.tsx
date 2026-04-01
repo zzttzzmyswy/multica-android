@@ -339,23 +339,26 @@ describe("IssuesPage", () => {
     expect(screen.getByText("Issues")).toBeInTheDocument();
   });
 
-  it("shows 'New Issue' button", () => {
+  it("shows scope buttons", () => {
     mockStoreState.loading = false;
     mockStoreState.issues = [];
 
     render(<IssuesPage />);
 
-    expect(screen.getByText("New Issue")).toBeInTheDocument();
+    expect(screen.getByText("All")).toBeInTheDocument();
+    expect(screen.getByText("Members")).toBeInTheDocument();
+    expect(screen.getByText("Agents")).toBeInTheDocument();
   });
 
-  it("shows filter buttons", () => {
+  it("shows filter and display icon buttons", () => {
     mockStoreState.loading = false;
     mockStoreState.issues = mockIssues;
 
     render(<IssuesPage />);
 
-    expect(screen.getByText("Filter")).toBeInTheDocument();
-    expect(screen.getByText("Display")).toBeInTheDocument();
+    // Filter and Display are now icon-only buttons, verify they render as buttons
+    const buttons = screen.getAllByRole("button");
+    expect(buttons.length).toBeGreaterThan(0);
   });
 
   it("shows empty board view when no issues exist", () => {

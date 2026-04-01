@@ -10,7 +10,6 @@ import {
   Columns3,
   Filter,
   List,
-  Plus,
   SignalHigh,
   SlidersHorizontal,
   User,
@@ -18,7 +17,6 @@ import {
   UserPen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useIssueStore } from "@/features/issues/store";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -38,7 +36,6 @@ import {
   PopoverContent,
 } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
-import { useModalStore } from "@/features/modals";
 import {
   ALL_STATUSES,
   STATUS_CONFIG,
@@ -54,13 +51,16 @@ import {
   CARD_PROPERTY_OPTIONS,
   type ActorFilterValue,
 } from "@/features/issues/stores/view-store";
+import {
+  useIssuesScopeStore,
+  type IssuesScope,
+} from "@/features/issues/stores/issues-scope-store";
 import { filterIssues } from "@/features/issues/utils/filter";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import type { Issue } from "@/shared/types";
 
 // ---------------------------------------------------------------------------
 // HoverCheck — shadcn official pattern (PR #6862)
-// Uses data-selected attr instead of Checkbox component to avoid
-// DropdownMenuCheckboxItem's focus:**:text-accent-foreground cascade.
 // ---------------------------------------------------------------------------
 
 const FILTER_ITEM_CLASS =
@@ -122,6 +122,16 @@ function useIssueCounts(allIssues: Issue[]) {
     return { status, priority, assignee, creator, noAssignee };
   }, [allIssues]);
 }
+
+// ---------------------------------------------------------------------------
+// Scope config
+// ---------------------------------------------------------------------------
+
+const SCOPES: { value: IssuesScope; label: string; description: string }[] = [
+  { value: "all", label: "All", description: "All issues in this workspace" },
+  { value: "members", label: "Members", description: "Issues assigned to team members" },
+  { value: "agents", label: "Agents", description: "Issues assigned to AI agents" },
+];
 
 // ---------------------------------------------------------------------------
 // Actor sub-menu content (shared between Assignee and Creator)
@@ -262,7 +272,10 @@ function ActorSubContent({
 // IssuesHeader
 // ---------------------------------------------------------------------------
 
-export function IssuesHeader() {
+export function IssuesHeader({ scopedIssues }: { scopedIssues: Issue[] }) {
+  const scope = useIssuesScopeStore((s) => s.scope);
+  const setScope = useIssuesScopeStore((s) => s.setScope);
+
   const viewMode = useIssueViewStore((s) => s.viewMode);
   const statusFilters = useIssueViewStore((s) => s.statusFilters);
   const priorityFilters = useIssueViewStore((s) => s.priorityFilters);
@@ -274,74 +287,69 @@ export function IssuesHeader() {
   const cardProperties = useIssueViewStore((s) => s.cardProperties);
   const act = useIssueViewStore.getState();
 
-  const allIssues = useIssueStore((s) => s.issues);
-  const counts = useIssueCounts(allIssues);
+  const counts = useIssueCounts(scopedIssues);
 
-  const filteredCount = useMemo(
-    () => filterIssues(allIssues, { statusFilters, priorityFilters, assigneeFilters, includeNoAssignee, creatorFilters }).length,
-    [allIssues, statusFilters, priorityFilters, assigneeFilters, includeNoAssignee, creatorFilters],
-  );
-
-  const filterCount = getActiveFilterCount({
-    statusFilters,
-    priorityFilters,
-    assigneeFilters,
-    includeNoAssignee,
-    creatorFilters,
-  });
+  const hasActiveFilters =
+    getActiveFilterCount({
+      statusFilters,
+      priorityFilters,
+      assigneeFilters,
+      includeNoAssignee,
+      creatorFilters,
+    }) > 0;
 
   const sortLabel =
     SORT_OPTIONS.find((o) => o.value === sortBy)?.label ?? "Manual";
-  const hasActiveFilters = filterCount > 0;
 
   return (
     <div className="flex h-12 shrink-0 items-center justify-between px-4">
-      <div className="flex items-center gap-2">
-        {/* View toggle */}
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button variant="outline" size="sm">
-                {viewMode === "board" ? <Columns3 className="size-3.5" /> : <List className="size-3.5" />}
-                {viewMode === "board" ? "Board" : "List"}
-              </Button>
-            }
-          />
-          <DropdownMenuContent align="start" className="w-auto">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>View</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => act.setViewMode("board")}>
-                <Columns3 />
-                Board
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => act.setViewMode("list")}>
-                <List />
-                List
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      {/* Left: scope buttons */}
+      <div className="flex items-center gap-1">
+        {SCOPES.map((s) => (
+          <Tooltip key={s.value}>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={
+                    scope === s.value
+                      ? "bg-accent text-accent-foreground hover:bg-accent/80"
+                      : "text-muted-foreground"
+                  }
+                  onClick={() => setScope(s.value)}
+                >
+                  {s.label}
+                </Button>
+              }
+            />
+            <TooltipContent side="bottom">{s.description}</TooltipContent>
+          </Tooltip>
+        ))}
+      </div>
 
-        {/* Filter — DropdownMenu with sub-menus */}
+      {/* Right: filter + display + view toggle */}
+      <div className="flex items-center gap-1">
+        {/* Filter */}
         <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="outline"
-                size="sm"
-                className={hasActiveFilters ? "border-primary/50 text-primary" : ""}
-              >
-                <Filter className="size-3.5" />
-                Filter
-                {hasActiveFilters && (
-                  <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-xs font-medium text-primary-foreground">
-                    {filterCount}
-                  </span>
-                )}
-              </Button>
-            }
-          />
-          <DropdownMenuContent align="start" className="w-auto">
+          <Tooltip>
+            <DropdownMenuTrigger
+              render={
+                <TooltipTrigger
+                  render={
+                    <Button variant="outline" size="icon-sm" className="relative">
+                      <Filter className="size-4" />
+                      {hasActiveFilters && (
+                        <span className="absolute top-0 right-0 size-1.5 rounded-full bg-brand" />
+                      )}
+                    </Button>
+                  }
+                />
+              }
+            />
+            <TooltipContent side="bottom">Filter</TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="end" className="w-auto">
             {/* Status */}
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
@@ -472,15 +480,21 @@ export function IssuesHeader() {
 
         {/* Display settings */}
         <Popover>
-          <PopoverTrigger
-            render={
-              <Button variant="outline" size="sm">
-                <SlidersHorizontal className="size-3.5" />
-                Display
-              </Button>
-            }
-          />
-          <PopoverContent align="start" className="w-64 p-0">
+          <Tooltip>
+            <PopoverTrigger
+              render={
+                <TooltipTrigger
+                  render={
+                    <Button variant="outline" size="icon-sm">
+                      <SlidersHorizontal className="size-4" />
+                    </Button>
+                  }
+                />
+              }
+            />
+            <TooltipContent side="bottom">Display settings</TooltipContent>
+          </Tooltip>
+          <PopoverContent align="end" className="w-64 p-0">
             <div className="border-b px-3 py-2.5">
               <span className="text-xs font-medium text-muted-foreground">
                 Ordering
@@ -549,19 +563,43 @@ export function IssuesHeader() {
             </div>
           </PopoverContent>
         </Popover>
-      </div>
 
-      <div className="flex items-center gap-3">
-        <span className="text-xs text-muted-foreground">
-          {filteredCount} {filteredCount === 1 ? "Issue" : "Issues"}
-        </span>
-        <Button
-          size="sm"
-          onClick={() => useModalStore.getState().open("create-issue")}
-        >
-          <Plus />
-          New Issue
-        </Button>
+        {/* View toggle */}
+        <DropdownMenu>
+          <Tooltip>
+            <DropdownMenuTrigger
+              render={
+                <TooltipTrigger
+                  render={
+                    <Button variant="outline" size="icon-sm">
+                      {viewMode === "board" ? (
+                        <Columns3 className="size-4" />
+                      ) : (
+                        <List className="size-4" />
+                      )}
+                    </Button>
+                  }
+                />
+              }
+            />
+            <TooltipContent side="bottom">
+              {viewMode === "board" ? "Board view" : "List view"}
+            </TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="end" className="w-auto">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>View</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => act.setViewMode("board")}>
+                <Columns3 />
+                Board
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => act.setViewMode("list")}>
+                <List />
+                List
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );
