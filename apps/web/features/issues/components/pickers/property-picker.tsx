@@ -16,6 +16,7 @@ export function PropertyPicker({
   open,
   onOpenChange,
   trigger,
+  triggerRender,
   width = "w-48",
   align = "end",
   searchable = false,
@@ -26,6 +27,7 @@ export function PropertyPicker({
   open: boolean;
   onOpenChange: (v: boolean) => void;
   trigger: React.ReactNode;
+  triggerRender?: React.ReactElement;
   width?: string;
   align?: "start" | "center" | "end";
   searchable?: boolean;
@@ -48,7 +50,10 @@ export function PropertyPicker({
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger className="flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 hover:bg-accent/30 transition-colors overflow-hidden">
+      <PopoverTrigger
+        className={triggerRender ? undefined : "flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 hover:bg-accent/30 transition-colors overflow-hidden"}
+        render={triggerRender}
+      >
         {trigger}
       </PopoverTrigger>
       <PopoverContent align={align} className={`${width} gap-0 p-0`}>
