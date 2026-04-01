@@ -87,6 +87,22 @@ var issueCommentDeleteCmd = &cobra.Command{
 	RunE:  runIssueCommentDelete,
 }
 
+// Execution history subcommands.
+
+var issueRunsCmd = &cobra.Command{
+	Use:   "runs <issue-id>",
+	Short: "List execution history for an issue",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runIssueRuns,
+}
+
+var issueRunMessagesCmd = &cobra.Command{
+	Use:   "run-messages <task-id>",
+	Short: "List messages for an execution",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runIssueRunMessages,
+}
+
 var validIssueStatuses = []string{
 	"backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled",
 }
@@ -99,6 +115,8 @@ func init() {
 	issueCmd.AddCommand(issueAssignCmd)
 	issueCmd.AddCommand(issueStatusCmd)
 	issueCmd.AddCommand(issueCommentCmd)
+	issueCmd.AddCommand(issueRunsCmd)
+	issueCmd.AddCommand(issueRunMessagesCmd)
 
 	issueCommentCmd.AddCommand(issueCommentListCmd)
 	issueCommentCmd.AddCommand(issueCommentAddCmd)
@@ -144,6 +162,13 @@ func init() {
 
 	// issue comment list
 	issueCommentListCmd.Flags().String("output", "table", "Output format: table or json")
+
+	// issue runs
+	issueRunsCmd.Flags().String("output", "table", "Output format: table or json")
+
+	// issue run-messages
+	issueRunMessagesCmd.Flags().String("output", "json", "Output format: table or json")
+	issueRunMessagesCmd.Flags().Int("since", 0, "Only return messages after this sequence number")
 
 	// issue comment add
 	issueCommentAddCmd.Flags().String("content", "", "Comment content (required)")
@@ -622,6 +647,108 @@ func runIssueCommentDelete(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Fprintf(os.Stderr, "Comment %s deleted.\n", truncateID(args[0]))
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Execution history commands
+// ---------------------------------------------------------------------------
+
+func runIssueRuns(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient(cmd)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	var runs []map[string]any
+	if err := client.GetJSON(ctx, "/api/issues/"+args[0]+"/task-runs", &runs); err != nil {
+		return fmt.Errorf("list runs: %w", err)
+	}
+
+	output, _ := cmd.Flags().GetString("output")
+	if output == "json" {
+		return cli.PrintJSON(os.Stdout, runs)
+	}
+
+	headers := []string{"ID", "AGENT", "STATUS", "STARTED", "COMPLETED", "ERROR"}
+	rows := make([][]string, 0, len(runs))
+	for _, r := range runs {
+		started := strVal(r, "started_at")
+		if len(started) >= 16 {
+			started = started[:16]
+		}
+		completed := strVal(r, "completed_at")
+		if len(completed) >= 16 {
+			completed = completed[:16]
+		}
+		errMsg := strVal(r, "error")
+		if utf8.RuneCountInString(errMsg) > 50 {
+			runes := []rune(errMsg)
+			errMsg = string(runes[:47]) + "..."
+		}
+		rows = append(rows, []string{
+			truncateID(strVal(r, "id")),
+			truncateID(strVal(r, "agent_id")),
+			strVal(r, "status"),
+			started,
+			completed,
+			errMsg,
+		})
+	}
+	cli.PrintTable(os.Stdout, headers, rows)
+	return nil
+}
+
+func runIssueRunMessages(cmd *cobra.Command, args []string) error {
+	client, err := newAPIClient(cmd)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	path := "/api/daemon/tasks/" + args[0] + "/messages"
+	if since, _ := cmd.Flags().GetInt("since"); since > 0 {
+		path += fmt.Sprintf("?since=%d", since)
+	}
+
+	var messages []map[string]any
+	if err := client.GetJSON(ctx, path, &messages); err != nil {
+		return fmt.Errorf("list run messages: %w", err)
+	}
+
+	output, _ := cmd.Flags().GetString("output")
+	if output == "json" {
+		return cli.PrintJSON(os.Stdout, messages)
+	}
+
+	headers := []string{"SEQ", "TYPE", "TOOL", "CONTENT"}
+	rows := make([][]string, 0, len(messages))
+	for _, m := range messages {
+		content := strVal(m, "content")
+		if content == "" {
+			content = strVal(m, "output")
+		}
+		if utf8.RuneCountInString(content) > 80 {
+			runes := []rune(content)
+			content = string(runes[:77]) + "..."
+		}
+		seq := ""
+		if v, ok := m["seq"]; ok {
+			seq = fmt.Sprintf("%v", v)
+		}
+		rows = append(rows, []string{
+			seq,
+			strVal(m, "type"),
+			strVal(m, "tool"),
+			content,
+		})
+	}
+	cli.PrintTable(os.Stdout, headers, rows)
 	return nil
 }
 
