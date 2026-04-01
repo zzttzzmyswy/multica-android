@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
-  Bot,
   Check,
   ChevronDown,
   CircleDot,
@@ -47,7 +46,8 @@ import {
   PRIORITY_CONFIG,
 } from "@/features/issues/config";
 import { StatusIcon, PriorityIcon } from "@/features/issues/components";
-import { useWorkspaceStore, useActorName } from "@/features/workspace";
+import { useWorkspaceStore } from "@/features/workspace";
+import { ActorAvatar } from "@/components/common/actor-avatar";
 import {
   useIssueViewStore,
   SORT_OPTIONS,
@@ -147,8 +147,6 @@ function ActorSubContent({
   const [search, setSearch] = useState("");
   const members = useWorkspaceStore((s) => s.members);
   const agents = useWorkspaceStore((s) => s.agents);
-  const { getActorInitials } = useActorName();
-
   const query = search.toLowerCase();
   const filteredMembers = members.filter((m) =>
     m.name.toLowerCase().includes(query),
@@ -208,9 +206,7 @@ function ActorSubContent({
                   className={FILTER_ITEM_CLASS}
                 >
                   <HoverCheck checked={checked} />
-                  <div className="inline-flex size-4.5 shrink-0 items-center justify-center rounded-full bg-muted text-[8px] font-medium text-muted-foreground">
-                    {getActorInitials("member", m.user_id)}
-                  </div>
+                  <ActorAvatar actorType="member" actorId={m.user_id} size={18} />
                   <span className="truncate">{m.name}</span>
                   {count > 0 && (
                     <span className="ml-auto text-xs text-muted-foreground">
@@ -239,9 +235,7 @@ function ActorSubContent({
                   className={FILTER_ITEM_CLASS}
                 >
                   <HoverCheck checked={checked} />
-                  <div className="inline-flex size-4.5 shrink-0 items-center justify-center rounded-full bg-info/10 text-info">
-                    <Bot className="size-2.5" />
-                  </div>
+                  <ActorAvatar actorType="agent" actorId={a.id} size={18} />
                   <span className="truncate">{a.name}</span>
                   {count > 0 && (
                     <span className="ml-auto text-xs text-muted-foreground">

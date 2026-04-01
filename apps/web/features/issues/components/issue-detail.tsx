@@ -5,7 +5,6 @@ import { useDefaultLayout, usePanelRef } from "react-resizable-panels";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Bot,
   Calendar,
   Check,
   ChevronLeft,
@@ -58,7 +57,7 @@ import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount } from "@/compone
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import type { UpdateIssueRequest, IssueStatus, IssuePriority, TimelineEntry } from "@/shared/types";
 import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
-import { StatusIcon, PriorityIcon, DueDatePicker } from "@/features/issues/components";
+import { StatusIcon, PriorityIcon, DueDatePicker, AssigneePicker, canAssignAgent } from "@/features/issues/components";
 import { CommentCard } from "./comment-card";
 import { CommentInput } from "./comment-input";
 import { AgentLiveCard, TaskRunHistory } from "./agent-live-card";
@@ -174,6 +173,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   const workspace = useWorkspaceStore((s) => s.workspace);
   const members = useWorkspaceStore((s) => s.members);
   const agents = useWorkspaceStore((s) => s.agents);
+  const currentMemberRole = members.find((m) => m.user_id === user?.id)?.role;
 
   // Issue navigation
   const allIssues = useIssueStore((s) => s.issues);
@@ -421,21 +421,17 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                         key={m.user_id}
                         onClick={() => handleUpdateField({ assignee_type: "member", assignee_id: m.user_id })}
                       >
-                        <div className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-[8px] font-medium text-muted-foreground">
-                          {getActorInitials("member", m.user_id)}
-                        </div>
+                        <ActorAvatar actorType="member" actorId={m.user_id} size={16} />
                         {m.name}
                         {issue.assignee_type === "member" && issue.assignee_id === m.user_id && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
                       </DropdownMenuItem>
                     ))}
-                    {agents.map((a) => (
+                    {agents.filter((a) => canAssignAgent(a, user?.id, currentMemberRole)).map((a) => (
                       <DropdownMenuItem
                         key={a.id}
                         onClick={() => handleUpdateField({ assignee_type: "agent", assignee_id: a.id })}
                       >
-                        <div className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-info/10 text-info">
-                          <Bot className="size-2.5" />
-                        </div>
+                        <ActorAvatar actorType="agent" actorId={a.id} size={16} />
                         {a.name}
                         {issue.assignee_type === "agent" && issue.assignee_id === a.id && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
                       </DropdownMenuItem>
@@ -873,60 +869,12 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
 
               {/* Assignee */}
               <PropRow label="Assignee">
-                <DropdownMenu>
-                  <DropdownMenuTrigger className="flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 hover:bg-accent/30 transition-colors overflow-hidden">
-                    {issue.assignee_type && issue.assignee_id ? (
-                      <>
-                        <ActorAvatar
-                          actorType={issue.assignee_type}
-                          actorId={issue.assignee_id}
-                          size={18}
-                        />
-                        <span className="truncate">{getActorName(issue.assignee_type, issue.assignee_id)}</span>
-                      </>
-                    ) : (
-                      <span className="text-muted-foreground">Unassigned</span>
-                    )}
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-52">
-                    <DropdownMenuItem onClick={() => handleUpdateField({ assignee_type: null, assignee_id: null })}>
-                      <UserMinus className="h-3.5 w-3.5 text-muted-foreground" />
-                      Unassigned
-                    </DropdownMenuItem>
-                    {members.length > 0 && (
-                      <>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuGroup>
-                          <DropdownMenuLabel>Members</DropdownMenuLabel>
-                          {members.map((m) => (
-                            <DropdownMenuItem key={m.user_id} onClick={() => handleUpdateField({ assignee_type: "member", assignee_id: m.user_id })}>
-                              <div className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-[8px] font-medium text-muted-foreground">
-                                {getActorInitials("member", m.user_id)}
-                              </div>
-                              {m.name}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuGroup>
-                      </>
-                    )}
-                    {agents.length > 0 && (
-                      <>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuGroup>
-                          <DropdownMenuLabel>Agents</DropdownMenuLabel>
-                          {agents.map((a) => (
-                            <DropdownMenuItem key={a.id} onClick={() => handleUpdateField({ assignee_type: "agent", assignee_id: a.id })}>
-                              <div className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-info/10 text-info">
-                                <Bot className="size-2.5" />
-                              </div>
-                              {a.name}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuGroup>
-                      </>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <AssigneePicker
+                  assigneeType={issue.assignee_type}
+                  assigneeId={issue.assignee_id}
+                  onUpdate={handleUpdateField}
+                  align="start"
+                />
               </PropRow>
 
               {/* Due date */}

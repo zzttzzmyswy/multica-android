@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Bot, Lock, UserMinus } from "lucide-react";
+import { Lock, UserMinus } from "lucide-react";
 import type { Agent, IssueAssigneeType, UpdateIssueRequest } from "@/shared/types";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore, useActorName } from "@/features/workspace";
+import { ActorAvatar } from "@/components/common/actor-avatar";
 import {
   PropertyPicker,
   PickerItem,
@@ -12,7 +13,7 @@ import {
   PickerEmpty,
 } from "./property-picker";
 
-function canAssignAgent(agent: Agent, userId: string | undefined, memberRole: string | undefined): boolean {
+export function canAssignAgent(agent: Agent, userId: string | undefined, memberRole: string | undefined): boolean {
   if (agent.visibility !== "private") return true;
   if (agent.owner_id === userId) return true;
   if (memberRole === "owner" || memberRole === "admin") return true;
@@ -24,18 +25,28 @@ export function AssigneePicker({
   assigneeId,
   onUpdate,
   trigger: customTrigger,
+  triggerRender,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  align,
 }: {
   assigneeType: IssueAssigneeType | null;
   assigneeId: string | null;
   onUpdate: (updates: Partial<UpdateIssueRequest>) => void;
   trigger?: React.ReactNode;
+  triggerRender?: React.ReactElement;
+  open?: boolean;
+  onOpenChange?: (v: boolean) => void;
+  align?: "start" | "center" | "end";
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = controlledOnOpenChange ?? setInternalOpen;
   const [filter, setFilter] = useState("");
   const user = useAuthStore((s) => s.user);
   const members = useWorkspaceStore((s) => s.members);
   const agents = useWorkspaceStore((s) => s.agents);
-  const { getActorName, getActorInitials } = useActorName();
+  const { getActorName } = useActorName();
 
   const currentMember = members.find((m) => m.user_id === user?.id);
   const memberRole = currentMember?.role;
@@ -64,25 +75,15 @@ export function AssigneePicker({
         if (!v) setFilter("");
       }}
       width="w-52"
+      align={align}
       searchable
       searchPlaceholder="Assign to..."
       onSearchChange={setFilter}
+      triggerRender={triggerRender}
       trigger={
         customTrigger ? customTrigger : assigneeType && assigneeId ? (
           <>
-            <div
-              className={`inline-flex shrink-0 items-center justify-center rounded-full font-medium text-[8px] size-4.5 ${
-                assigneeType === "agent"
-                  ? "bg-info/10 text-info"
-                  : "bg-muted text-muted-foreground"
-              }`}
-            >
-              {assigneeType === "agent" ? (
-                <Bot className="size-2.5" />
-              ) : (
-                getActorInitials(assigneeType, assigneeId)
-              )}
-            </div>
+            <ActorAvatar actorType={assigneeType} actorId={assigneeId} size={18} />
             <span className="truncate">{triggerLabel}</span>
           </>
         ) : (
@@ -117,9 +118,7 @@ export function AssigneePicker({
                 setOpen(false);
               }}
             >
-              <div className="inline-flex size-4.5 shrink-0 items-center justify-center rounded-full bg-muted text-[8px] font-medium text-muted-foreground">
-                {getActorInitials("member", m.user_id)}
-              </div>
+              <ActorAvatar actorType="member" actorId={m.user_id} size={18} />
               <span>{m.name}</span>
             </PickerItem>
           ))}
@@ -145,9 +144,7 @@ export function AssigneePicker({
                   setOpen(false);
                 }}
               >
-                <div className={`inline-flex size-4.5 shrink-0 items-center justify-center rounded-full ${allowed ? "bg-info/10 text-info" : "bg-muted text-muted-foreground"}`}>
-                  <Bot className="size-2.5" />
-                </div>
+                <ActorAvatar actorType="agent" actorId={a.id} size={18} />
                 <span className={allowed ? "" : "text-muted-foreground"}>{a.name}</span>
                 {a.visibility === "private" && (
                   <Lock className="ml-auto h-3 w-3 text-muted-foreground" />
