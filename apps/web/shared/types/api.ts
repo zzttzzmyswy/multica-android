@@ -31,7 +31,6 @@ export interface ListIssuesParams {
   status?: IssueStatus;
   priority?: IssuePriority;
   assignee_id?: string;
-  search?: string;
 }
 
 export interface ListIssuesResponse {

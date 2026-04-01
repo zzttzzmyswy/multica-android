@@ -99,10 +99,6 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 	if a := r.URL.Query().Get("assignee_id"); a != "" {
 		assigneeFilter = parseUUID(a)
 	}
-	var searchFilter pgtype.Text
-	if s := r.URL.Query().Get("search"); s != "" {
-		searchFilter = pgtype.Text{String: s, Valid: true}
-	}
 
 	issues, err := h.Queries.ListIssues(ctx, db.ListIssuesParams{
 		WorkspaceID: parseUUID(workspaceID),
@@ -111,7 +107,6 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 		Status:      statusFilter,
 		Priority:    priorityFilter,
 		AssigneeID:  assigneeFilter,
-		Search:      searchFilter,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list issues")
