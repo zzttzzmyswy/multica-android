@@ -15,6 +15,7 @@ import {
   BookOpenText,
   SquarePen,
   CircleUser,
+  Search,
 } from "lucide-react";
 import { WorkspaceAvatar } from "@/features/workspace";
 import { useIssueDraftStore } from "@/features/issues/stores/draft-store";
@@ -155,16 +156,27 @@ export function AppSidebar() {
                 </DropdownMenu>
               </SidebarMenuItem>
             </SidebarMenu>
-            <Tooltip>
-              <TooltipTrigger
-                className="relative flex h-7 w-7 items-center justify-center rounded-lg bg-background text-foreground shadow-sm hover:bg-accent"
-                onClick={() => useModalStore.getState().open("create-issue")}
-              >
-                <SquarePen className="size-3.5" />
-                <DraftDot />
-              </TooltipTrigger>
-              <TooltipContent side="bottom">New issue</TooltipContent>
-            </Tooltip>
+            <div className="flex items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
+                  onClick={() => useModalStore.getState().open("search-issues")}
+                >
+                  <Search className="size-3.5" />
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Search issues</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger
+                  className="relative flex h-7 w-7 items-center justify-center rounded-lg bg-background text-foreground shadow-sm hover:bg-accent"
+                  onClick={() => useModalStore.getState().open("create-issue")}
+                >
+                  <SquarePen className="size-3.5" />
+                  <DraftDot />
+                </TooltipTrigger>
+                <TooltipContent side="bottom">New issue</TooltipContent>
+              </Tooltip>
+            </div>
           </div>
         </SidebarHeader>
 
