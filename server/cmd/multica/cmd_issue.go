@@ -147,6 +147,7 @@ func init() {
 	// issue comment add
 	issueCommentAddCmd.Flags().String("content", "", "Comment content (required)")
 	issueCommentAddCmd.Flags().String("parent", "", "Parent comment ID (reply to a specific comment)")
+	issueCommentAddCmd.Flags().StringSlice("attachment", nil, "File path(s) to attach (can be specified multiple times)")
 	issueCommentAddCmd.Flags().String("output", "json", "Output format: table or json")
 }
 
@@ -540,19 +541,45 @@ func runIssueCommentAdd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	issueID := args[0]
+
+	// Use a longer timeout when attachments are present (file uploads can be slow).
+	timeout := 15 * time.Second
+	attachments, _ := cmd.Flags().GetStringSlice("attachment")
+	if len(attachments) > 0 {
+		timeout = 60 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
+
+	// Upload attachments and collect their IDs.
+	var attachmentIDs []string
+	for _, filePath := range attachments {
+		data, readErr := os.ReadFile(filePath)
+		if readErr != nil {
+			return fmt.Errorf("read attachment %s: %w", filePath, readErr)
+		}
+		id, uploadErr := client.UploadFile(ctx, data, filePath, issueID)
+		if uploadErr != nil {
+			return fmt.Errorf("upload attachment %s: %w", filePath, uploadErr)
+		}
+		attachmentIDs = append(attachmentIDs, id)
+		fmt.Fprintf(os.Stderr, "Uploaded %s\n", filePath)
+	}
 
 	body := map[string]any{"content": content}
 	if parentID, _ := cmd.Flags().GetString("parent"); parentID != "" {
 		body["parent_id"] = parentID
 	}
+	if len(attachmentIDs) > 0 {
+		body["attachment_ids"] = attachmentIDs
+	}
 	var result map[string]any
-	if err := client.PostJSON(ctx, "/api/issues/"+args[0]+"/comments", body, &result); err != nil {
+	if err := client.PostJSON(ctx, "/api/issues/"+issueID+"/comments", body, &result); err != nil {
 		return fmt.Errorf("add comment: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "Comment added to issue %s.\n", truncateID(args[0]))
+	fmt.Fprintf(os.Stderr, "Comment added to issue %s.\n", truncateID(issueID))
 
 	output, _ := cmd.Flags().GetString("output")
 	if output == "table" {
