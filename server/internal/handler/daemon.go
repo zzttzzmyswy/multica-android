@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -483,7 +484,20 @@ func (h *Handler) ListTaskMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	messages, err := h.Queries.ListTaskMessages(r.Context(), parseUUID(taskID))
+	var messages []db.TaskMessage
+	if sinceStr := r.URL.Query().Get("since"); sinceStr != "" {
+		sinceSeq, parseErr := strconv.Atoi(sinceStr)
+		if parseErr != nil {
+			writeError(w, http.StatusBadRequest, "invalid since parameter")
+			return
+		}
+		messages, err = h.Queries.ListTaskMessagesSince(r.Context(), db.ListTaskMessagesSinceParams{
+			TaskID: parseUUID(taskID),
+			Seq:    int32(sinceSeq),
+		})
+	} else {
+		messages, err = h.Queries.ListTaskMessages(r.Context(), parseUUID(taskID))
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list task messages")
 		return
