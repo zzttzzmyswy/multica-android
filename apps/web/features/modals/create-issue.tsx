@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Bot, CalendarDays, ChevronRight, Maximize2, Minimize2, UserMinus, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { CalendarDays, Check, ChevronRight, Maximize2, Minimize2, UserMinus, X as XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { IssueStatus, IssuePriority, IssueAssigneeType } from "@/shared/types";
@@ -24,14 +25,17 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { RichTextEditor, type RichTextEditorRef } from "@/components/common/rich-text-editor";
+import { TitleEditor } from "@/components/common/title-editor";
 import { StatusIcon, PriorityIcon } from "@/features/issues/components";
 import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
 import { useWorkspaceStore, useActorName } from "@/features/workspace";
 import { useIssueStore } from "@/features/issues";
 import { useIssueDraftStore } from "@/features/issues/stores/draft-store";
 import { api } from "@/shared/api";
+import { useFileUpload } from "@/shared/hooks/use-file-upload";
+import { FileUploadButton } from "@/components/common/file-upload-button";
+import { ActorAvatar } from "@/components/common/actor-avatar";
 
 // ---------------------------------------------------------------------------
 // Pill trigger — shared rounded-full button style for toolbar
@@ -62,10 +66,11 @@ function PillButton({
 // ---------------------------------------------------------------------------
 
 export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?: Record<string, unknown> | null }) {
+  const router = useRouter();
   const workspaceName = useWorkspaceStore((s) => s.workspace?.name);
   const members = useWorkspaceStore((s) => s.members);
   const agents = useWorkspaceStore((s) => s.agents);
-  const { getActorName, getActorInitials } = useActorName();
+  const { getActorName } = useActorName();
 
   const draft = useIssueDraftStore((s) => s.draft);
   const setDraft = useIssueDraftStore((s) => s.setDraft);
@@ -87,6 +92,10 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
 
   // Due date popover
   const [dueDateOpen, setDueDateOpen] = useState(false);
+
+  // File upload
+  const { uploadWithToast } = useFileUpload();
+  const handleUpload = (file: File) => uploadWithToast(file);
 
   const assigneeQuery = assigneeFilter.toLowerCase();
   const filteredMembers = members.filter((m) => m.name.toLowerCase().includes(assigneeQuery));
@@ -125,6 +134,30 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
       useIssueStore.getState().addIssue(issue);
       clearDraft();
       onClose();
+      toast.custom((t) => (
+        <div className="bg-popover text-popover-foreground border rounded-lg shadow-lg p-4 w-[360px]">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center justify-center size-5 rounded-full bg-emerald-500/15 text-emerald-500">
+              <Check className="size-3" />
+            </div>
+            <span className="text-sm font-medium">Issue created</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground ml-7">
+            <StatusIcon status={issue.status} className="size-3.5 shrink-0" />
+            <span className="truncate">{issue.identifier} – {issue.title}</span>
+          </div>
+          <button
+            type="button"
+            className="ml-7 mt-2 text-sm text-primary hover:underline cursor-pointer"
+            onClick={() => {
+              router.push(`/issues/${issue.id}`);
+              toast.dismiss(t);
+            }}
+          >
+            View issue
+          </button>
+        </div>
+      ), { duration: 5000 });
     } catch {
       toast.error("Failed to create issue");
     } finally {
@@ -175,7 +208,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
                     onClick={onClose}
                     className="rounded-sm p-1.5 opacity-70 hover:opacity-100 hover:bg-accent/60 transition-all cursor-pointer"
                   >
-                    <X className="size-4" />
+                    <XIcon className="size-4" />
                   </button>
                 }
               />
@@ -186,19 +219,13 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
 
         {/* Title */}
         <div className="px-5 pb-2 shrink-0">
-          <Input
+          <TitleEditor
             autoFocus
-            type="text"
-            value={title}
-            onChange={(e) => updateTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSubmit();
-              }
-            }}
+            defaultValue={draft.title}
             placeholder="Issue title"
-            className="border-none shadow-none px-0 text-lg font-semibold focus-visible:ring-0 dark:bg-transparent"
+            className="text-lg font-semibold"
+            onChange={(v) => updateTitle(v)}
+            onSubmit={handleSubmit}
           />
         </div>
 
@@ -209,6 +236,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
             defaultValue={draft.description}
             placeholder="Add description..."
             onUpdate={(md) => setDraft({ description: md })}
+            onUploadFile={handleUpload}
             debounceMs={500}
           />
         </div>
@@ -264,14 +292,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
                 <PillButton>
                   {assigneeType && assigneeId ? (
                     <>
-                      <div
-                        className={cn(
-                          "inline-flex shrink-0 items-center justify-center rounded-full font-medium text-[8px] size-4",
-                          assigneeType === "agent" ? "bg-info/10 text-info" : "bg-muted text-muted-foreground",
-                        )}
-                      >
-                        {assigneeType === "agent" ? <Bot className="size-2.5" /> : getActorInitials(assigneeType, assigneeId)}
-                      </div>
+                      <ActorAvatar actorType={assigneeType} actorId={assigneeId} size={16} />
                       <span>{assigneeLabel}</span>
                     </>
                   ) : (
@@ -318,9 +339,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
                         }}
                         className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent transition-colors"
                       >
-                        <div className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-[8px] font-medium text-muted-foreground">
-                          {getActorInitials("member", m.user_id)}
-                        </div>
+                        <ActorAvatar actorType="member" actorId={m.user_id} size={16} />
                         <span>{m.name}</span>
                       </button>
                     ))}
@@ -341,9 +360,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
                         }}
                         className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent transition-colors"
                       >
-                        <div className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-info/10 text-info">
-                          <Bot className="size-2.5" />
-                        </div>
+                        <ActorAvatar actorType="agent" actorId={a.id} size={16} />
                         <span>{a.name}</span>
                       </button>
                     ))}
@@ -400,7 +417,11 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end px-4 py-3 border-t shrink-0">
+        <div className="flex items-center justify-between px-4 py-3 border-t shrink-0">
+          <FileUploadButton
+            onUpload={handleUpload}
+            onInsert={(result, isImage) => descEditorRef.current?.insertFile(result.filename, result.link, isImage)}
+          />
           <Button size="sm" onClick={handleSubmit} disabled={!title.trim() || submitting}>
             {submitting ? "Creating..." : "Create Issue"}
           </Button>

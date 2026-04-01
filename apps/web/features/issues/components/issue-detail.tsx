@@ -5,7 +5,6 @@ import { useDefaultLayout, usePanelRef } from "react-resizable-panels";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Bot,
   Calendar,
   Check,
   ChevronLeft,
@@ -43,8 +42,9 @@ import {
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
-import { Input } from "@/components/ui/input";
 import { RichTextEditor } from "@/components/common/rich-text-editor";
+import { FileUploadButton } from "@/components/common/file-upload-button";
+import { TitleEditor } from "@/components/common/title-editor";
 import {
   Tooltip,
   TooltipTrigger,
@@ -69,6 +69,7 @@ import { useIssueTimeline } from "@/features/issues/hooks/use-issue-timeline";
 import { useIssueReactions } from "@/features/issues/hooks/use-issue-reactions";
 import { useIssueSubscribers } from "@/features/issues/hooks/use-issue-subscribers";
 import { ReactionBar } from "@/components/common/reaction-bar";
+import { useFileUpload } from "@/shared/hooks/use-file-upload";
 import { timeAgo } from "@/shared/utils";
 
 function shortDate(date: string | null): string {
@@ -179,14 +180,13 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   const prevIssue = currentIndex > 0 ? allIssues[currentIndex - 1] : null;
   const nextIssue = currentIndex < allIssues.length - 1 ? allIssues[currentIndex + 1] : null;
   const { getActorName, getActorInitials } = useActorName();
+  const { uploadWithToast } = useFileUpload();
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: layoutId,
   });
   const sidebarRef = usePanelRef();
   const [sidebarOpen, setSidebarOpen] = useState(defaultSidebarOpen);
   const [deleting, setDeleting] = useState(false);
-  const [titleDraft, setTitleDraft] = useState("");
-  const titleFocusedRef = useRef(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(true);
@@ -210,13 +210,6 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
       .catch(console.error)
       .finally(() => setIssueLoading(false));
   }, [id, !!issue]);
-
-  // Sync titleDraft when issue title changes (from WS or other views)
-  useEffect(() => {
-    if (issue && !titleFocusedRef.current) {
-      setTitleDraft(issue.title);
-    }
-  }, [issue?.title]);
 
   // Custom hooks — encapsulate timeline, reactions, subscribers
   const {
@@ -247,6 +240,12 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
       });
     },
     [issue, id],
+  );
+
+  const descEditorRef = useRef<import("@/components/common/rich-text-editor").RichTextEditorRef>(null);
+  const handleDescriptionUpload = useCallback(
+    (file: File) => uploadWithToast(file, { issueId: id }),
+    [uploadWithToast, id],
   );
 
   const handleDelete = async () => {
@@ -421,9 +420,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                         key={m.user_id}
                         onClick={() => handleUpdateField({ assignee_type: "member", assignee_id: m.user_id })}
                       >
-                        <div className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-[8px] font-medium text-muted-foreground">
-                          {getActorInitials("member", m.user_id)}
-                        </div>
+                        <ActorAvatar actorType="member" actorId={m.user_id} size={16} />
                         {m.name}
                         {issue.assignee_type === "member" && issue.assignee_id === m.user_id && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
                       </DropdownMenuItem>
@@ -433,9 +430,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                         key={a.id}
                         onClick={() => handleUpdateField({ assignee_type: "agent", assignee_id: a.id })}
                       >
-                        <div className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-info/10 text-info">
-                          <Bot className="size-2.5" />
-                        </div>
+                        <ActorAvatar actorType="agent" actorId={a.id} size={16} />
                         {a.name}
                         {issue.assignee_type === "agent" && issue.assignee_id === a.id && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
                       </DropdownMenuItem>
@@ -547,43 +542,40 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
         {/* Content — scrollable */}
         <div className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-4xl px-8 py-8">
-          <input
-            value={titleDraft}
-            onChange={(e) => setTitleDraft(e.target.value)}
-            onFocus={() => { titleFocusedRef.current = true; }}
-            onBlur={() => {
-              titleFocusedRef.current = false;
-              const trimmed = titleDraft.trim();
+          <TitleEditor
+            key={`title-${id}`}
+            defaultValue={issue.title}
+            placeholder="Issue title"
+            className="w-full text-2xl font-bold leading-snug tracking-tight"
+            onBlur={(value) => {
+              const trimmed = value.trim();
               if (trimmed && trimmed !== issue.title) handleUpdateField({ title: trimmed });
-              else setTitleDraft(issue.title);
             }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                (e.target as HTMLInputElement).blur();
-              } else if (e.key === "Escape") {
-                setTitleDraft(issue.title);
-                (e.target as HTMLInputElement).blur();
-              }
-            }}
-            className="w-full bg-transparent text-2xl font-bold leading-snug tracking-tight outline-none placeholder:text-muted-foreground"
           />
 
           <RichTextEditor
+            ref={descEditorRef}
             key={id}
             defaultValue={issue.description || ""}
             placeholder="Add description..."
             onUpdate={(md) => handleUpdateField({ description: md || undefined })}
+            onUploadFile={handleDescriptionUpload}
             debounceMs={1500}
             className="mt-5"
           />
 
-          <ReactionBar
-            reactions={issueReactions}
-            currentUserId={user?.id}
-            onToggle={handleToggleIssueReaction}
-            className="mt-3"
-          />
+          <div className="flex items-center gap-1 mt-3">
+            <ReactionBar
+              reactions={issueReactions}
+              currentUserId={user?.id}
+              onToggle={handleToggleIssueReaction}
+            />
+            <FileUploadButton
+              size="sm"
+              onUpload={handleDescriptionUpload}
+              onInsert={(result, isImage) => descEditorRef.current?.insertFile(result.filename, result.link, isImage)}
+            />
+          </div>
 
           <div className="my-8 border-t" />
 
@@ -675,15 +667,13 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
             <div className="mt-4">
               <AgentLiveCard
                 issueId={id}
-                assigneeType={issue.assignee_type}
-                assigneeId={issue.assignee_id}
                 agentName={issue.assignee_type === "agent" && issue.assignee_id ? getActorName("agent", issue.assignee_id) : undefined}
               />
             </div>
 
             {/* Agent execution history */}
             <div className="mt-3">
-              <TaskRunHistory issueId={id} assigneeType={issue.assignee_type} />
+              <TaskRunHistory issueId={id} />
             </div>
 
             {/* Timeline entries */}
@@ -741,6 +731,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                     return (
                       <CommentCard
                         key={entry.id}
+                        issueId={id}
                         entry={entry}
                         allReplies={repliesByParent}
                         currentUserId={user?.id}
@@ -803,7 +794,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
 
             {/* Bottom comment input — no avatar, full width */}
             <div className="mt-4">
-              <CommentInput onSubmit={submitComment} />
+              <CommentInput issueId={id} onSubmit={submitComment} />
             </div>
           </div>
         </div>
@@ -904,9 +895,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                           <DropdownMenuLabel>Members</DropdownMenuLabel>
                           {members.map((m) => (
                             <DropdownMenuItem key={m.user_id} onClick={() => handleUpdateField({ assignee_type: "member", assignee_id: m.user_id })}>
-                              <div className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-[8px] font-medium text-muted-foreground">
-                                {getActorInitials("member", m.user_id)}
-                              </div>
+                              <ActorAvatar actorType="member" actorId={m.user_id} size={16} />
                               {m.name}
                             </DropdownMenuItem>
                           ))}
@@ -920,9 +909,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                           <DropdownMenuLabel>Agents</DropdownMenuLabel>
                           {agents.map((a) => (
                             <DropdownMenuItem key={a.id} onClick={() => handleUpdateField({ assignee_type: "agent", assignee_id: a.id })}>
-                              <div className="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-info/10 text-info">
-                                <Bot className="size-2.5" />
-                              </div>
+                              <ActorAvatar actorType="agent" actorId={a.id} size={16} />
                               {a.name}
                             </DropdownMenuItem>
                           ))}

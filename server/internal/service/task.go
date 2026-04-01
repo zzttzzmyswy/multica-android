@@ -69,6 +69,36 @@ func (s *TaskService) EnqueueTaskForIssue(ctx context.Context, issue db.Issue, t
 	return task, nil
 }
 
+// EnqueueTaskForMention creates a queued task for a mentioned agent on an issue.
+// Unlike EnqueueTaskForIssue, this takes an explicit agent ID rather than
+// deriving it from the issue assignee.
+func (s *TaskService) EnqueueTaskForMention(ctx context.Context, issue db.Issue, agentID pgtype.UUID, triggerCommentID pgtype.UUID) (db.AgentTaskQueue, error) {
+	agent, err := s.Queries.GetAgent(ctx, agentID)
+	if err != nil {
+		slog.Error("mention task enqueue failed: agent not found", "issue_id", util.UUIDToString(issue.ID), "agent_id", util.UUIDToString(agentID), "error", err)
+		return db.AgentTaskQueue{}, fmt.Errorf("load agent: %w", err)
+	}
+	if !agent.RuntimeID.Valid {
+		slog.Error("mention task enqueue failed: agent has no runtime", "issue_id", util.UUIDToString(issue.ID), "agent_id", util.UUIDToString(agentID))
+		return db.AgentTaskQueue{}, fmt.Errorf("agent has no runtime")
+	}
+
+	task, err := s.Queries.CreateAgentTask(ctx, db.CreateAgentTaskParams{
+		AgentID:          agentID,
+		RuntimeID:        agent.RuntimeID,
+		IssueID:          issue.ID,
+		Priority:         priorityToInt(issue.Priority),
+		TriggerCommentID: triggerCommentID,
+	})
+	if err != nil {
+		slog.Error("mention task enqueue failed", "issue_id", util.UUIDToString(issue.ID), "agent_id", util.UUIDToString(agentID), "error", err)
+		return db.AgentTaskQueue{}, fmt.Errorf("create task: %w", err)
+	}
+
+	slog.Info("mention task enqueued", "task_id", util.UUIDToString(task.ID), "issue_id", util.UUIDToString(issue.ID), "agent_id", util.UUIDToString(agentID))
+	return task, nil
+}
+
 // CancelTasksForIssue cancels all active tasks for an issue.
 func (s *TaskService) CancelTasksForIssue(ctx context.Context, issueID pgtype.UUID) error {
 	return s.Queries.CancelAgentTasksByIssue(ctx, issueID)

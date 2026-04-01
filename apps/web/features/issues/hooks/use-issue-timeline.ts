@@ -174,60 +174,34 @@ export function useIssueTimeline(issueId: string, userId?: string) {
   // --- Mutation functions ---
 
   const submitComment = useCallback(
-    async (content: string) => {
+    async (content: string, attachmentIds?: string[]) => {
       if (!content.trim() || submitting || !userId) return;
-      const tempId = "temp-" + Date.now();
-      const tempEntry: TimelineEntry = {
-        type: "comment",
-        id: tempId,
-        actor_type: "member",
-        actor_id: userId,
-        content,
-        parent_id: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        comment_type: "comment",
-      };
-      setTimeline((prev) => [...prev, tempEntry]);
       setSubmitting(true);
       try {
-        const comment = await api.createComment(issueId, content);
-        setTimeline((prev) =>
-          prev.map((e) => (e.id === tempId ? commentToTimelineEntry(comment) : e)),
-        );
+        const comment = await api.createComment(issueId, content, undefined, undefined, attachmentIds);
+        setTimeline((prev) => {
+          if (prev.some((e) => e.id === comment.id)) return prev;
+          return [...prev, commentToTimelineEntry(comment)];
+        });
       } catch {
-        setTimeline((prev) => prev.filter((e) => e.id !== tempId));
         toast.error("Failed to send comment");
       } finally {
         setSubmitting(false);
       }
     },
-    [issueId, userId, submitting],
+    [issueId, userId],
   );
 
   const submitReply = useCallback(
-    async (parentId: string, content: string) => {
+    async (parentId: string, content: string, attachmentIds?: string[]) => {
       if (!content.trim() || !userId) return;
-      const tempId = "temp-" + Date.now();
-      const tempEntry: TimelineEntry = {
-        type: "comment",
-        id: tempId,
-        actor_type: "member",
-        actor_id: userId,
-        content,
-        parent_id: parentId,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        comment_type: "comment",
-      };
-      setTimeline((prev) => [...prev, tempEntry]);
       try {
-        const comment = await api.createComment(issueId, content, "comment", parentId);
-        setTimeline((prev) =>
-          prev.map((e) => (e.id === tempId ? commentToTimelineEntry(comment) : e)),
-        );
+        const comment = await api.createComment(issueId, content, "comment", parentId, attachmentIds);
+        setTimeline((prev) => {
+          if (prev.some((e) => e.id === comment.id)) return prev;
+          return [...prev, commentToTimelineEntry(comment)];
+        });
       } catch {
-        setTimeline((prev) => prev.filter((e) => e.id !== tempId));
         toast.error("Failed to send reply");
       }
     },

@@ -1,16 +1,8 @@
 "use client";
 
-import { useState, lazy, Suspense } from "react";
-import { SmilePlus } from "lucide-react";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { QuickEmojiPicker } from "@/components/common/quick-emoji-picker";
 import { useActorName } from "@/features/workspace";
-
-const EmojiPicker = lazy(() =>
-  import("@/components/common/emoji-picker").then((m) => ({ default: m.EmojiPicker })),
-);
-
-const QUICK_EMOJIS = ["👍", "👎", "❤️", "😄", "🎉", "😕", "🚀", "👀"];
 
 interface ReactionItem {
   id: string;
@@ -48,21 +40,16 @@ export function ReactionBar({
   currentUserId,
   onToggle,
   className,
+  hideAddButton,
 }: {
   reactions: ReactionItem[];
   currentUserId?: string;
   onToggle: (emoji: string) => void;
   className?: string;
+  hideAddButton?: boolean;
 }) {
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [showFullPicker, setShowFullPicker] = useState(false);
   const grouped = groupReactions(reactions, currentUserId);
   const { getActorName } = useActorName();
-
-  const handlePickerOpenChange = (open: boolean) => {
-    setPickerOpen(open);
-    if (!open) setShowFullPicker(false);
-  };
 
   return (
     <div className={`flex flex-wrap items-center gap-1.5 ${className ?? ""}`}>
@@ -73,10 +60,10 @@ export function ReactionBar({
               <button
                 type="button"
                 onClick={() => onToggle(g.emoji)}
-                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors hover:bg-accent ${
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors hover:bg-brand/15 ${
                   g.reacted
-                    ? "border-primary/40 bg-primary/10 text-primary"
-                    : "border-border text-muted-foreground"
+                    ? "border-brand/30 bg-brand/8 text-brand"
+                    : "border-brand/10 bg-brand/4 text-muted-foreground"
                 }`}
               >
                 <span>{g.emoji}</span>
@@ -89,56 +76,7 @@ export function ReactionBar({
           </TooltipContent>
         </Tooltip>
       ))}
-      <Popover open={pickerOpen} onOpenChange={handlePickerOpenChange}>
-        <PopoverTrigger
-          render={
-            <button
-              type="button"
-              className="inline-flex items-center justify-center h-6 w-6 rounded-full text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-            >
-              <SmilePlus className="h-3.5 w-3.5" />
-            </button>
-          }
-        />
-        <PopoverContent align="start" className="w-auto p-0">
-          {showFullPicker ? (
-            <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading...</div>}>
-              <EmojiPicker
-                onSelect={(emoji) => {
-                  onToggle(emoji);
-                  setPickerOpen(false);
-                  setShowFullPicker(false);
-                }}
-              />
-            </Suspense>
-          ) : (
-            <div className="p-2">
-              <div className="flex gap-1">
-                {QUICK_EMOJIS.map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => {
-                      onToggle(emoji);
-                      setPickerOpen(false);
-                    }}
-                    className="h-8 w-8 flex items-center justify-center rounded hover:bg-accent text-base transition-colors"
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowFullPicker(true)}
-                className="mt-1.5 w-full text-xs text-muted-foreground hover:text-foreground text-center py-1 rounded hover:bg-accent transition-colors"
-              >
-                More emojis...
-              </button>
-            </div>
-          )}
-        </PopoverContent>
-      </Popover>
+      {!hideAddButton && <QuickEmojiPicker onSelect={onToggle} />}
     </div>
   );
 }

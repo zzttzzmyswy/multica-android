@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"regexp"
 
 	"github.com/multica-ai/multica/server/internal/events"
 	"github.com/multica-ai/multica/server/internal/handler"
@@ -13,14 +12,11 @@ import (
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
-// mention represents a parsed @mention from markdown content.
+// mention represents a parsed @mention from markdown content (local alias).
 type mention struct {
 	Type string // "member" or "agent"
 	ID   string // user_id or agent_id
 }
-
-// mentionRe matches [@Label](mention://type/id) in markdown.
-var mentionRe = regexp.MustCompile(`\[@[^\]]*\]\(mention://(member|agent)/([0-9a-fA-F-]+)\)`)
 
 // statusLabels maps DB status values to human-readable labels for notifications.
 var statusLabels = map[string]string{
@@ -59,17 +55,12 @@ func priorityLabel(p string) string {
 var emptyDetails = []byte("{}")
 
 // parseMentions extracts mentions from markdown content.
+// Delegates to the shared util.ParseMentions and converts to the local type.
 func parseMentions(content string) []mention {
-	matches := mentionRe.FindAllStringSubmatch(content, -1)
-	seen := make(map[string]bool)
-	var result []mention
-	for _, m := range matches {
-		key := m[1] + ":" + m[2]
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-		result = append(result, mention{Type: m[1], ID: m[2]})
+	parsed := util.ParseMentions(content)
+	result := make([]mention, len(parsed))
+	for i, m := range parsed {
+		result[i] = mention{Type: m.Type, ID: m.ID}
 	}
 	return result
 }

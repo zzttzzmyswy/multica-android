@@ -145,15 +145,17 @@ function InboxListItem({
   item,
   isSelected,
   onClick,
+  onArchive,
 }: {
   item: InboxItem;
   isSelected: boolean;
   onClick: () => void;
+  onArchive: () => void;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+      className={`group flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${
         isSelected ? "bg-accent" : "hover:bg-accent/50"
       }`}
     >
@@ -174,9 +176,29 @@ function InboxListItem({
               {item.title}
             </span>
           </div>
-          {item.issue_status && (
-            <StatusIcon status={item.issue_status} className="h-3.5 w-3.5 shrink-0" />
-          )}
+          <div className="flex shrink-0 items-center gap-1">
+            <span
+              role="button"
+              tabIndex={-1}
+              title="Archive"
+              onClick={(e) => {
+                e.stopPropagation();
+                onArchive();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.stopPropagation();
+                  onArchive();
+                }
+              }}
+              className="hidden rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground group-hover:inline-flex"
+            >
+              <Archive className="h-3.5 w-3.5" />
+            </span>
+            {item.issue_status && (
+              <StatusIcon status={item.issue_status} className="h-3.5 w-3.5 shrink-0" />
+            )}
+          </div>
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-2">
           <p className={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs ${item.read ? "text-muted-foreground/60" : "text-muted-foreground"}`}>
@@ -197,9 +219,9 @@ function InboxListItem({
 
 export default function InboxPage() {
   const searchParams = useSearchParams();
-  const selectedId = searchParams.get("id") ?? "";
-  const setSelectedId = (id: string) => {
-    const url = id ? `/inbox?id=${id}` : "/inbox";
+  const selectedKey = searchParams.get("issue") ?? "";
+  const setSelectedKey = (key: string) => {
+    const url = key ? `/inbox?issue=${key}` : "/inbox";
     window.history.replaceState(null, "", url);
   };
 
@@ -210,12 +232,12 @@ export default function InboxPage() {
     id: "multica_inbox_layout",
   });
 
-  const selected = items.find((i) => i.id === selectedId) ?? null;
+  const selected = items.find((i) => (i.issue_id ?? i.id) === selectedKey) ?? null;
   const unreadCount = items.filter((i) => !i.read).length;
 
   // Click-to-read: select + auto-mark-read
   const handleSelect = async (item: InboxItem) => {
-    setSelectedId(item.id);
+    setSelectedKey(item.issue_id ?? item.id);
     if (!item.read) {
       useInboxStore.getState().markRead(item.id);
       try {
@@ -232,7 +254,8 @@ export default function InboxPage() {
     try {
       await api.archiveInbox(id);
       useInboxStore.getState().archive(id);
-      if (selectedId === id) setSelectedId("");
+      const archived = items.find((i) => i.id === id);
+      if (archived && (archived.issue_id ?? archived.id) === selectedKey) setSelectedKey("");
     } catch {
       toast.error("Failed to archive");
     }
@@ -252,7 +275,7 @@ export default function InboxPage() {
   const handleArchiveAll = async () => {
     try {
       useInboxStore.getState().archiveAll();
-      setSelectedId("");
+      setSelectedKey("");
       await api.archiveAllInbox();
     } catch {
       toast.error("Failed to archive all");
@@ -262,9 +285,9 @@ export default function InboxPage() {
 
   const handleArchiveAllRead = async () => {
     try {
-      const readIds = items.filter((i) => i.read).map((i) => i.id);
+      const readKeys = items.filter((i) => i.read).map((i) => i.issue_id ?? i.id);
       useInboxStore.getState().archiveAllRead();
-      if (readIds.includes(selectedId)) setSelectedId("");
+      if (readKeys.includes(selectedKey)) setSelectedKey("");
       await api.archiveAllReadInbox();
     } catch {
       toast.error("Failed to archive read items");
@@ -275,7 +298,7 @@ export default function InboxPage() {
   const handleArchiveCompleted = async () => {
     try {
       await api.archiveCompletedInbox();
-      setSelectedId("");
+      setSelectedKey("");
       await useInboxStore.getState().fetch();
     } catch {
       toast.error("Failed to archive completed");
@@ -286,11 +309,11 @@ export default function InboxPage() {
     return (
       <ResizablePanelGroup orientation="horizontal" className="flex-1 min-h-0" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged}>
         <ResizablePanel id="list" defaultSize={320} minSize={240} maxSize={480} groupResizeBehavior="preserve-pixel-size">
-          <div className="overflow-y-auto border-r h-full">
-            <div className="flex h-12 items-center border-b px-4">
+          <div className="flex flex-col border-r h-full">
+            <div className="flex h-12 shrink-0 items-center border-b px-4">
               <Skeleton className="h-5 w-16" />
             </div>
-            <div className="space-y-1 p-2">
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-1 p-2">
               {Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 px-4 py-2.5">
                   <Skeleton className="h-7 w-7 shrink-0 rounded-full" />
@@ -318,8 +341,8 @@ export default function InboxPage() {
     <ResizablePanelGroup orientation="horizontal" className="flex-1 min-h-0" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged}>
       <ResizablePanel id="list" defaultSize={320} minSize={240} maxSize={480} groupResizeBehavior="preserve-pixel-size">
       {/* Left column — inbox list */}
-      <div className="overflow-y-auto border-r h-full">
-        <div className="flex h-12 items-center justify-between border-b px-4">
+      <div className="flex flex-col border-r h-full">
+        <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
           <div className="flex items-center gap-2">
             <h1 className="text-sm font-semibold">Inbox</h1>
             {unreadCount > 0 && (
@@ -362,6 +385,7 @@ export default function InboxPage() {
           </DropdownMenu>
         </div>
 
+        <div className="flex-1 min-h-0 overflow-y-auto">
         {items.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <Inbox className="mb-3 h-8 w-8 text-muted-foreground/50" />
@@ -373,12 +397,14 @@ export default function InboxPage() {
               <InboxListItem
                 key={item.id}
                 item={item}
-                isSelected={item.id === selectedId}
+                isSelected={(item.issue_id ?? item.id) === selectedKey}
                 onClick={() => handleSelect(item)}
+                onArchive={() => handleArchive(item.id)}
               />
             ))}
           </div>
         )}
+        </div>
       </div>
       </ResizablePanel>
       <ResizableHandle />
@@ -387,6 +413,7 @@ export default function InboxPage() {
       <div className="flex flex-col min-h-0 h-full">
         {selected?.issue_id ? (
           <IssueDetail
+            key={selected.issue_id}
             issueId={selected.issue_id}
             defaultSidebarOpen={false}
             layoutId="multica_inbox_issue_detail_layout"

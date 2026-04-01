@@ -79,6 +79,20 @@ type AgentTaskQueue struct {
 	TriggerCommentID pgtype.UUID        `json:"trigger_comment_id"`
 }
 
+type Attachment struct {
+	ID           pgtype.UUID        `json:"id"`
+	WorkspaceID  pgtype.UUID        `json:"workspace_id"`
+	IssueID      pgtype.UUID        `json:"issue_id"`
+	CommentID    pgtype.UUID        `json:"comment_id"`
+	UploaderType string             `json:"uploader_type"`
+	UploaderID   pgtype.UUID        `json:"uploader_id"`
+	Filename     string             `json:"filename"`
+	Url          string             `json:"url"`
+	ContentType  string             `json:"content_type"`
+	SizeBytes    int64              `json:"size_bytes"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
 type Comment struct {
 	ID          pgtype.UUID        `json:"id"`
 	IssueID     pgtype.UUID        `json:"issue_id"`
@@ -113,22 +127,13 @@ type DaemonConnection struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
-type DaemonPairingSession struct {
-	ID             pgtype.UUID        `json:"id"`
-	Token          string             `json:"token"`
-	DaemonID       string             `json:"daemon_id"`
-	DeviceName     string             `json:"device_name"`
-	RuntimeName    string             `json:"runtime_name"`
-	RuntimeType    string             `json:"runtime_type"`
-	RuntimeVersion string             `json:"runtime_version"`
-	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
-	ApprovedBy     pgtype.UUID        `json:"approved_by"`
-	Status         string             `json:"status"`
-	ApprovedAt     pgtype.Timestamptz `json:"approved_at"`
-	ClaimedAt      pgtype.Timestamptz `json:"claimed_at"`
-	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+type DaemonToken struct {
+	ID          pgtype.UUID        `json:"id"`
+	TokenHash   string             `json:"token_hash"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	DaemonID    string             `json:"daemon_id"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
 type InboxItem struct {

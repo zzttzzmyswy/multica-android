@@ -33,9 +33,16 @@ func registerSubscriberListeners(bus *events.Bus, queries *db.Queries) {
 			!(*issue.AssigneeType == issue.CreatorType && *issue.AssigneeID == issue.CreatorID) {
 			addSubscriber(bus, queries, e.WorkspaceID, issue.ID, *issue.AssigneeType, *issue.AssigneeID, "assignee")
 		}
+
+		// Subscribe @mentioned users in description
+		if issue.Description != nil && *issue.Description != "" {
+			for _, m := range parseMentions(*issue.Description) {
+				addSubscriber(bus, queries, e.WorkspaceID, issue.ID, m.Type, m.ID, "mentioned")
+			}
+		}
 	})
 
-	// issue:updated — subscribe new assignee if assignee changed
+	// issue:updated — subscribe new assignee or @mentioned users
 	bus.Subscribe(protocol.EventIssueUpdated, func(e events.Event) {
 		payload, ok := e.Payload.(map[string]any)
 		if !ok {
@@ -45,13 +52,30 @@ func registerSubscriberListeners(bus *events.Bus, queries *db.Queries) {
 		if !ok {
 			return
 		}
-		assigneeChanged, _ := payload["assignee_changed"].(bool)
-		if !assigneeChanged {
-			return
+
+		// Subscribe new assignee if assignee changed
+		if assigneeChanged, _ := payload["assignee_changed"].(bool); assigneeChanged {
+			if issue.AssigneeType != nil && issue.AssigneeID != nil {
+				addSubscriber(bus, queries, e.WorkspaceID, issue.ID, *issue.AssigneeType, *issue.AssigneeID, "assignee")
+			}
 		}
 
-		if issue.AssigneeType != nil && issue.AssigneeID != nil {
-			addSubscriber(bus, queries, e.WorkspaceID, issue.ID, *issue.AssigneeType, *issue.AssigneeID, "assignee")
+		// Subscribe newly @mentioned users in description
+		if descriptionChanged, _ := payload["description_changed"].(bool); descriptionChanged && issue.Description != nil {
+			newMentions := parseMentions(*issue.Description)
+			if len(newMentions) > 0 {
+				prevMentioned := map[string]bool{}
+				if prevDescription, _ := payload["prev_description"].(*string); prevDescription != nil {
+					for _, m := range parseMentions(*prevDescription) {
+						prevMentioned[m.Type+":"+m.ID] = true
+					}
+				}
+				for _, m := range newMentions {
+					if !prevMentioned[m.Type+":"+m.ID] {
+						addSubscriber(bus, queries, e.WorkspaceID, issue.ID, m.Type, m.ID, "mentioned")
+					}
+				}
+			}
 		}
 	})
 

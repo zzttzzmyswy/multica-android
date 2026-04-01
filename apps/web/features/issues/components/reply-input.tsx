@@ -1,20 +1,23 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { ArrowUp } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useRef, useState, useEffect } from "react";
+import { ArrowUp, Loader2 } from "lucide-react";
 import { RichTextEditor, type RichTextEditorRef } from "@/components/common/rich-text-editor";
+import { FileUploadButton } from "@/components/common/file-upload-button";
 import { ActorAvatar } from "@/components/common/actor-avatar";
+import { useFileUpload } from "@/shared/hooks/use-file-upload";
+import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 interface ReplyInputProps {
+  issueId: string;
   placeholder?: string;
   avatarType: string;
   avatarId: string;
-  onSubmit: (content: string) => Promise<void>;
+  onSubmit: (content: string, attachmentIds?: string[]) => Promise<void>;
   size?: "sm" | "default";
 }
 
@@ -23,6 +26,7 @@ interface ReplyInputProps {
 // ---------------------------------------------------------------------------
 
 function ReplyInput({
+  issueId,
   placeholder = "Leave a reply...",
   avatarType,
   avatarId,
@@ -30,16 +34,39 @@ function ReplyInput({
   size = "default",
 }: ReplyInputProps) {
   const editorRef = useRef<RichTextEditorRef>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
+  const attachmentIdsRef = useRef<string[]>([]);
   const [isEmpty, setIsEmpty] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const { uploadWithToast, uploading } = useFileUpload();
+
+  useEffect(() => {
+    const el = measureRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) setIsExpanded(entry.contentRect.height > 32);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const handleUpload = async (file: File) => {
+    const result = await uploadWithToast(file, { issueId });
+    if (result) attachmentIdsRef.current.push(result.id);
+    return result;
+  };
 
   const handleSubmit = async () => {
     const content = editorRef.current?.getMarkdown()?.replace(/(\n\s*)+$/, "").trim();
     if (!content || submitting) return;
     setSubmitting(true);
     try {
-      await onSubmit(content);
+      const ids = attachmentIdsRef.current.length > 0 ? [...attachmentIdsRef.current] : undefined;
+      await onSubmit(content, ids);
       editorRef.current?.clearContent();
+      attachmentIdsRef.current = [];
       setIsEmpty(true);
     } finally {
       setSubmitting(false);
@@ -49,44 +76,53 @@ function ReplyInput({
   const avatarSize = size === "sm" ? 22 : 28;
 
   return (
-    <div className="flex items-start gap-2.5">
+    <div className="group/editor flex items-start gap-2.5">
       <ActorAvatar
         actorType={avatarType}
         actorId={avatarId}
         size={avatarSize}
         className="mt-0.5 shrink-0"
       />
-      <div className="min-w-0 flex-1">
-        <div
-          className={`overflow-y-auto text-sm ${
-            size === "sm" ? "max-h-32" : "max-h-48"
-          }`}
-        >
-          <RichTextEditor
-            ref={editorRef}
-            placeholder={placeholder}
-            onUpdate={(md) => setIsEmpty(!md.trim())}
-            onSubmit={handleSubmit}
-            debounceMs={100}
-          />
-        </div>
-        <div
-          className={`grid transition-all duration-150 ${
-            isEmpty ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"
-          }`}
-        >
-          <div className="overflow-hidden">
-            <div className="flex items-center justify-end pt-1">
-              <Button
-                size="icon-xs"
-                disabled={isEmpty || submitting}
-                onClick={handleSubmit}
-                tabIndex={isEmpty ? -1 : 0}
-              >
-                <ArrowUp className="h-3.5 w-3.5" />
-              </Button>
-            </div>
+      <div
+        className={cn(
+          "relative min-w-0 flex-1 flex flex-col",
+          size === "sm" ? "max-h-40" : "max-h-56",
+          isExpanded && "pb-7",
+        )}
+      >
+        <div className="flex-1 min-h-0 overflow-y-auto pr-14">
+          <div ref={measureRef}>
+            <RichTextEditor
+              ref={editorRef}
+              placeholder={placeholder}
+              onUpdate={(md) => setIsEmpty(!md.trim())}
+              onSubmit={handleSubmit}
+              onUploadFile={handleUpload}
+              debounceMs={100}
+            />
           </div>
+        </div>
+        <div className="absolute bottom-0 right-0 flex items-center gap-1 text-muted-foreground transition-colors group-focus-within/editor:text-foreground">
+          <FileUploadButton
+            size="sm"
+            onUpload={handleUpload}
+            onInsert={(result, isImage) =>
+              editorRef.current?.insertFile(result.filename, result.link, isImage)
+            }
+            disabled={uploading}
+          />
+          <button
+            type="button"
+            disabled={isEmpty || submitting}
+            onClick={handleSubmit}
+            className="inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-50 disabled:pointer-events-none"
+          >
+            {submitting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <ArrowUp className="h-3.5 w-3.5" />
+            )}
+          </button>
         </div>
       </div>
     </div>
