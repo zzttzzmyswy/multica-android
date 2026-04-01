@@ -7,6 +7,7 @@ import type { IssueStatus } from "@/shared/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIssueStore } from "@/features/issues/store";
 import { useIssueViewStore, initFilterWorkspaceSync } from "@/features/issues/stores/view-store";
+import { useIssuesScopeStore } from "@/features/issues/stores/issues-scope-store";
 import { ViewStoreProvider } from "@/features/issues/stores/view-store-context";
 import { filterIssues } from "@/features/issues/utils/filter";
 import { BOARD_STATUSES } from "@/features/issues/config";
@@ -23,6 +24,7 @@ export function IssuesPage() {
   const allIssues = useIssueStore((s) => s.issues);
   const loading = useIssueStore((s) => s.loading);
   const workspace = useWorkspaceStore((s) => s.workspace);
+  const scope = useIssuesScopeStore((s) => s.scope);
   const viewMode = useIssueViewStore((s) => s.viewMode);
   const statusFilters = useIssueViewStore((s) => s.statusFilters);
   const priorityFilters = useIssueViewStore((s) => s.priorityFilters);
@@ -36,11 +38,20 @@ export function IssuesPage() {
 
   useEffect(() => {
     useIssueSelectionStore.getState().clear();
-  }, [viewMode]);
+  }, [viewMode, scope]);
+
+  // Scope pre-filter: narrow by assignee type
+  const scopedIssues = useMemo(() => {
+    if (scope === "members")
+      return allIssues.filter((i) => i.assignee_type === "member");
+    if (scope === "agents")
+      return allIssues.filter((i) => i.assignee_type === "agent");
+    return allIssues;
+  }, [allIssues, scope]);
 
   const issues = useMemo(
-    () => filterIssues(allIssues, { statusFilters, priorityFilters, assigneeFilters, includeNoAssignee, creatorFilters }),
-    [allIssues, statusFilters, priorityFilters, assigneeFilters, includeNoAssignee, creatorFilters],
+    () => filterIssues(scopedIssues, { statusFilters, priorityFilters, assigneeFilters, includeNoAssignee, creatorFilters }),
+    [scopedIssues, statusFilters, priorityFilters, assigneeFilters, includeNoAssignee, creatorFilters],
   );
 
   const visibleStatuses = useMemo(() => {
@@ -115,8 +126,8 @@ export function IssuesPage() {
         <span className="text-sm font-medium">Issues</span>
       </div>
 
-      {/* Header 2: View toggle + filters */}
-      <IssuesHeader />
+      {/* Header 2: Scope tabs + filters */}
+      <IssuesHeader scopedIssues={scopedIssues} />
 
       {/* Content: scrollable */}
       <ViewStoreProvider store={useIssueViewStore}>
@@ -124,7 +135,7 @@ export function IssuesPage() {
           {viewMode === "board" ? (
             <BoardView
               issues={issues}
-              allIssues={allIssues}
+              allIssues={scopedIssues}
               visibleStatuses={visibleStatuses}
               hiddenStatuses={hiddenStatuses}
               onMoveIssue={handleMoveIssue}

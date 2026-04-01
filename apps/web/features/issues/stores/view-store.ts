@@ -63,7 +63,7 @@ export interface IssueViewState {
   toggleListCollapsed: (status: IssueStatus) => void;
 }
 
-const viewStoreSlice = (set: StoreApi<IssueViewState>["setState"]): IssueViewState => ({
+export const viewStoreSlice = (set: StoreApi<IssueViewState>["setState"]): IssueViewState => ({
   viewMode: "board",
   statusFilters: [],
   priorityFilters: [],
@@ -162,7 +162,7 @@ const viewStoreSlice = (set: StoreApi<IssueViewState>["setState"]): IssueViewSta
     })),
 });
 
-const viewStorePersistOptions = (name: string) => ({
+export const viewStorePersistOptions = (name: string) => ({
   name,
   partialize: (state: IssueViewState) => ({
     viewMode: state.viewMode,
