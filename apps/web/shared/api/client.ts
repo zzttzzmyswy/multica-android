@@ -163,6 +163,7 @@ export class ApiClient {
     if (params?.status) search.set("status", params.status);
     if (params?.priority) search.set("priority", params.priority);
     if (params?.assignee_id) search.set("assignee_id", params.assignee_id);
+    if (params?.search) search.set("search", params.search);
     return this.fetch(`/api/issues?${search}`);
   }
 

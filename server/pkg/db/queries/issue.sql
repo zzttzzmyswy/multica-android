@@ -4,6 +4,7 @@ WHERE workspace_id = $1
   AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status'))
   AND (sqlc.narg('priority')::text IS NULL OR priority = sqlc.narg('priority'))
   AND (sqlc.narg('assignee_id')::uuid IS NULL OR assignee_id = sqlc.narg('assignee_id'))
+  AND (sqlc.narg('search')::text IS NULL OR title ILIKE '%' || sqlc.narg('search') || '%')
 ORDER BY position ASC, created_at DESC
 LIMIT $2 OFFSET $3;
 

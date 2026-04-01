@@ -195,6 +195,7 @@ WHERE workspace_id = $1
   AND ($4::text IS NULL OR status = $4)
   AND ($5::text IS NULL OR priority = $5)
   AND ($6::uuid IS NULL OR assignee_id = $6)
+  AND ($7::text IS NULL OR title ILIKE '%' || $7 || '%')
 ORDER BY position ASC, created_at DESC
 LIMIT $2 OFFSET $3
 `
@@ -206,6 +207,7 @@ type ListIssuesParams struct {
 	Status      pgtype.Text `json:"status"`
 	Priority    pgtype.Text `json:"priority"`
 	AssigneeID  pgtype.UUID `json:"assignee_id"`
+	Search      pgtype.Text `json:"search"`
 }
 
 func (q *Queries) ListIssues(ctx context.Context, arg ListIssuesParams) ([]Issue, error) {
@@ -216,6 +218,7 @@ func (q *Queries) ListIssues(ctx context.Context, arg ListIssuesParams) ([]Issue
 		arg.Status,
 		arg.Priority,
 		arg.AssigneeID,
+		arg.Search,
 	)
 	if err != nil {
 		return nil, err
