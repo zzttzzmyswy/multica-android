@@ -44,6 +44,17 @@ type agentTriggerSnapshot struct {
 	Config  map[string]any `json:"config"`
 }
 
+// defaultAgentTriggers returns the default trigger config for new agents:
+// all three triggers explicitly enabled.
+func defaultAgentTriggers() []byte {
+	b, _ := json.Marshal([]agentTriggerSnapshot{
+		{Type: "on_assign", Enabled: true},
+		{Type: "on_comment", Enabled: true},
+		{Type: "on_mention", Enabled: true},
+	})
+	return b
+}
+
 func issueToResponse(i db.Issue, issuePrefix string) IssueResponse {
 	identifier := issuePrefix + "-" + strconv.Itoa(int(i.Number))
 	return IssueResponse{
@@ -459,6 +470,10 @@ func (h *Handler) canAssignAgent(ctx context.Context, r *http.Request, agentID, 
 	return false, "cannot assign to private agent"
 }
 
+// shouldEnqueueAgentTask returns true when an issue assignment should trigger
+// the assigned agent. Only fires for "todo" status — assignment means "start
+// fresh work", so the agent shouldn't be triggered on issues already in
+// progress, blocked, or done.
 func (h *Handler) shouldEnqueueAgentTask(ctx context.Context, issue db.Issue) bool {
 	if issue.Status != "todo" {
 		return false
@@ -467,10 +482,11 @@ func (h *Handler) shouldEnqueueAgentTask(ctx context.Context, issue db.Issue) bo
 }
 
 // shouldEnqueueOnComment returns true if a member comment on this issue should
-// trigger the assigned agent. Conditions: issue is assigned to an agent, the
-// agent has on_comment trigger enabled, and no task is already active.
+// trigger the assigned agent. Unlike on_assign (todo only), on_comment fires
+// for any non-terminal status — comments are conversational and can happen at
+// any stage of active work (todo, in_progress, in_review, blocked).
 func (h *Handler) shouldEnqueueOnComment(ctx context.Context, issue db.Issue) bool {
-	// Don't trigger on terminal statuses.
+	// Don't trigger on terminal statuses (done, cancelled).
 	if issue.Status == "done" || issue.Status == "cancelled" {
 		return false
 	}
@@ -489,7 +505,7 @@ func (h *Handler) shouldEnqueueOnComment(ctx context.Context, issue db.Issue) bo
 
 // isAgentTriggerEnabled checks if an issue is assigned to an agent with a
 // specific trigger type enabled. Returns true if the agent has no triggers
-// configured (default-enabled behavior).
+// configured (default-enabled behavior for backwards compatibility).
 func (h *Handler) isAgentTriggerEnabled(ctx context.Context, issue db.Issue, triggerType string) bool {
 	if !issue.AssigneeType.Valid || issue.AssigneeType.String != "agent" || !issue.AssigneeID.Valid {
 		return false
@@ -499,20 +515,8 @@ func (h *Handler) isAgentTriggerEnabled(ctx context.Context, issue db.Issue, tri
 	if err != nil || !agent.RuntimeID.Valid {
 		return false
 	}
-	if agent.Triggers == nil || len(agent.Triggers) == 0 {
-		return true
-	}
 
-	var triggers []agentTriggerSnapshot
-	if err := json.Unmarshal(agent.Triggers, &triggers); err != nil {
-		return false
-	}
-	for _, trigger := range triggers {
-		if trigger.Type == triggerType && trigger.Enabled {
-			return true
-		}
-	}
-	return false
+	return agentHasTriggerEnabled(agent.Triggers, triggerType)
 }
 
 // isAgentMentionTriggerEnabled checks if a specific agent has the on_mention
@@ -523,20 +527,32 @@ func (h *Handler) isAgentMentionTriggerEnabled(ctx context.Context, agentID pgty
 	if err != nil || !agent.RuntimeID.Valid {
 		return false
 	}
-	if agent.Triggers == nil || len(agent.Triggers) == 0 {
-		return true // No config = all triggers enabled by default
+
+	return agentHasTriggerEnabled(agent.Triggers, "on_mention")
+}
+
+// agentHasTriggerEnabled checks if a trigger type is enabled in the agent's
+// trigger config. Returns true (default-enabled) when the triggers list is
+// empty or does not contain the requested type — for backwards compatibility
+// with agents created before explicit trigger config was introduced.
+func agentHasTriggerEnabled(raw []byte, triggerType string) bool {
+	if raw == nil || len(raw) == 0 {
+		return true
 	}
 
 	var triggers []agentTriggerSnapshot
-	if err := json.Unmarshal(agent.Triggers, &triggers); err != nil {
+	if err := json.Unmarshal(raw, &triggers); err != nil {
 		return false
 	}
+	if len(triggers) == 0 {
+		return true // Empty array = default-enabled (backwards compat)
+	}
 	for _, trigger := range triggers {
-		if trigger.Type == "on_mention" {
+		if trigger.Type == triggerType {
 			return trigger.Enabled
 		}
 	}
-	return true // on_mention not configured = enabled by default
+	return true // Trigger type not configured = enabled by default
 }
 
 func (h *Handler) DeleteIssue(w http.ResponseWriter, r *http.Request) {
