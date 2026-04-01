@@ -64,12 +64,12 @@ func resolveServerURL(cmd *cobra.Command) string {
 	profile := resolveProfile(cmd)
 	cfg, err := cli.LoadCLIConfigForProfile(profile)
 	if err != nil {
-		return "http://localhost:8080"
+		return "https://api.multica.ai"
 	}
 	if cfg.ServerURL != "" {
 		return normalizeAPIBaseURL(cfg.ServerURL)
 	}
-	return "http://localhost:8080"
+	return "https://api.multica.ai"
 }
 
 func normalizeAPIBaseURL(raw string) string {
