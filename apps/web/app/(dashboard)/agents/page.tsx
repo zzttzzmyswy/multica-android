@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import {
   Bot,
@@ -28,6 +28,7 @@ import {
   Globe,
   Lock,
   Settings,
+  Camera,
 } from "lucide-react";
 import type {
   Agent,
@@ -75,6 +76,7 @@ import { useWorkspaceStore } from "@/features/workspace";
 import { useRuntimeStore } from "@/features/runtimes";
 import { useIssueStore } from "@/features/issues";
 import { ActorAvatar } from "@/components/common/actor-avatar";
+import { useFileUpload } from "@/shared/hooks/use-file-upload";
 
 
 // ---------------------------------------------------------------------------
@@ -1164,6 +1166,22 @@ function SettingsTab({
   const [visibility, setVisibility] = useState<AgentVisibility>(agent.visibility);
   const [maxTasks, setMaxTasks] = useState(agent.max_concurrent_tasks);
   const [saving, setSaving] = useState(false);
+  const { upload, uploading } = useFileUpload();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    try {
+      const result = await upload(file);
+      if (!result) return;
+      await onSave({ avatar_url: result.link });
+      toast.success("Avatar updated");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to upload avatar");
+    }
+  };
 
   const dirty =
     name !== agent.name ||
@@ -1191,6 +1209,37 @@ function SettingsTab({
 
   return (
     <div className="max-w-lg space-y-6">
+      <div>
+        <Label className="text-xs text-muted-foreground">Avatar</Label>
+        <div className="mt-1.5 flex items-center gap-4">
+          <button
+            type="button"
+            className="group relative h-16 w-16 shrink-0 rounded-full bg-muted overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+          >
+            <ActorAvatar actorType="agent" actorId={agent.id} size={64} className="rounded-none" />
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+              {uploading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-white" />
+              ) : (
+                <Camera className="h-5 w-5 text-white" />
+              )}
+            </div>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleAvatarUpload}
+          />
+          <div className="text-xs text-muted-foreground">
+            Click to upload avatar
+          </div>
+        </div>
+      </div>
+
       <div>
         <Label className="text-xs text-muted-foreground">Name</Label>
         <Input
