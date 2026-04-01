@@ -47,7 +47,7 @@ brews:
     directory: Formula
     homepage: "https://github.com/multica-ai/multica"
     description: "Multica CLI — local agent runtime and management tool for the Multica platform"
-    license: "MIT"
+    license: "Apache-2.0"
     install: |
       bin.install "multica"
     test: |
