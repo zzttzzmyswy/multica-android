@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100" role="img" aria-label="Multica">
+  <polygon
+    fill="#f9fafb"
+    points="25,51.1 25,80 35,80 35,51.1 61.8,77.9 68.9,70.8 42.1,44 80,44 80,34 42.1,34 68.9,7.2 61.8,0.1 35,26.9 35,-11 25,-11 25,26.9 -1.8,0.1 -8.9,7.2 17.9,34 -20,34 -20,44 17.9,44 -8.9,70.8 -1.8,77.9"
+    transform="translate(30, 20) scale(0.75)"
+  />
+  <text x="95" y="62" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="48" font-weight="700" fill="#f9fafb" letter-spacing="-1">Multica</text>
+</svg>
