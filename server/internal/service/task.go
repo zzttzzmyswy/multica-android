@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/events"
+	"github.com/multica-ai/multica/server/internal/mention"
 	"github.com/multica-ai/multica/server/internal/realtime"
 	"github.com/multica-ai/multica/server/internal/util"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
@@ -454,6 +455,13 @@ func (s *TaskService) createAgentComment(ctx context.Context, issueID, agentID p
 	if content == "" {
 		return
 	}
+	// Look up issue to get workspace ID for mention expansion and broadcasting.
+	issue, err := s.Queries.GetIssue(ctx, issueID)
+	if err != nil {
+		return
+	}
+	// Expand bare issue identifiers (e.g. MUL-117) into mention links.
+	content = mention.ExpandIssueIdentifiers(ctx, s.Queries, issue.WorkspaceID, content)
 	comment, err := s.Queries.CreateComment(ctx, db.CreateCommentParams{
 		IssueID:    issueID,
 		AuthorType: "agent",
@@ -462,11 +470,6 @@ func (s *TaskService) createAgentComment(ctx context.Context, issueID, agentID p
 		Type:       commentType,
 		ParentID:   parentID,
 	})
-	if err != nil {
-		return
-	}
-	// Look up issue to get workspace ID for broadcasting
-	issue, err := s.Queries.GetIssue(ctx, issueID)
 	if err != nil {
 		return
 	}

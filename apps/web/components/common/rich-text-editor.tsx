@@ -63,6 +63,8 @@ const MentionExtension = Mention.configure({
   suggestion: createMentionSuggestion(),
 }).extend({
   renderHTML({ node, HTMLAttributes }) {
+    const type = node.attrs.type ?? "member";
+    const prefix = type === "issue" ? "" : "@";
     return [
       "span",
       mergeAttributes(
@@ -74,7 +76,7 @@ const MentionExtension = Mention.configure({
           "data-mention-id": node.attrs.id,
         },
       ),
-      `@${node.attrs.label ?? node.attrs.id}`,
+      `${prefix}${node.attrs.label ?? node.attrs.id}`,
     ];
   },
   addAttributes() {
@@ -89,15 +91,16 @@ const MentionExtension = Mention.configure({
     };
   },
   // @tiptap/markdown: custom tokenizer to parse [@Label](mention://type/id)
+  // and [Label](mention://issue/id) (issue mentions have no @ prefix)
   markdownTokenizer: {
     name: "mention",
     level: "inline" as const,
     start(src: string) {
-      return src.search(/\[@[^\]]+\]\(mention:\/\//);
+      return src.search(/\[@?[^\]]+\]\(mention:\/\//);
     },
     tokenize(src: string) {
       const match = src.match(
-        /^\[@([^\]]+)\]\(mention:\/\/(\w+)\/([^)]+)\)/,
+        /^\[@?([^\]]+)\]\(mention:\/\/(\w+)\/([^)]+)\)/,
       );
       if (!match) return undefined;
       return {
@@ -114,7 +117,8 @@ const MentionExtension = Mention.configure({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   renderMarkdown: (node: any) => {
     const { id, label, type = "member" } = node.attrs || {};
-    return `[@${label ?? id}](mention://${type}/${id})`;
+    const prefix = type === "issue" ? "" : "@";
+    return `[${prefix}${label ?? id}](mention://${type}/${id})`;
   },
 });
 

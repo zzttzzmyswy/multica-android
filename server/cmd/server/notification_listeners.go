@@ -14,9 +14,10 @@ import (
 
 // mention represents a parsed @mention from markdown content (local alias).
 type mention struct {
-	Type string // "member", "agent", or "all"
-	ID   string // user_id, agent_id, or "all"
+	Type string // "member", "agent", "issue", or "all"
+	ID   string // user_id, agent_id, issue_id, or "all"
 }
+
 
 // statusLabels maps DB status values to human-readable labels for notifications.
 var statusLabels = map[string]string{
