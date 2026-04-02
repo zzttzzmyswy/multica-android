@@ -32,6 +32,8 @@ type AgentResponse struct {
 	Triggers           any             `json:"triggers"`
 	CreatedAt          string          `json:"created_at"`
 	UpdatedAt          string          `json:"updated_at"`
+	ArchivedAt         *string         `json:"archived_at"`
+	ArchivedBy         *string         `json:"archived_by"`
 }
 
 func agentToResponse(a db.Agent) AgentResponse {
@@ -78,6 +80,8 @@ func agentToResponse(a db.Agent) AgentResponse {
 		Triggers:           triggers,
 		CreatedAt:          timestampToString(a.CreatedAt),
 		UpdatedAt:          timestampToString(a.UpdatedAt),
+		ArchivedAt:         timestampToPtr(a.ArchivedAt),
+		ArchivedBy:         uuidToPtr(a.ArchivedBy),
 	}
 }
 
@@ -146,7 +150,13 @@ func (h *Handler) ListAgents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	agents, err := h.Queries.ListAgents(r.Context(), parseUUID(workspaceID))
+	var agents []db.Agent
+	var err error
+	if r.URL.Query().Get("include_archived") == "true" {
+		agents, err = h.Queries.ListAllAgents(r.Context(), parseUUID(workspaceID))
+	} else {
+		agents, err = h.Queries.ListAgents(r.Context(), parseUUID(workspaceID))
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list agents")
 		return
@@ -317,7 +327,7 @@ type UpdateAgentRequest struct {
 	Triggers           any     `json:"triggers"`
 }
 
-// canManageAgent checks whether the current user can update or delete an agent.
+// canManageAgent checks whether the current user can update or archive an agent.
 // Only the agent owner or workspace owner/admin can manage any agent,
 // regardless of whether it is public or private.
 func (h *Handler) canManageAgent(w http.ResponseWriter, r *http.Request, agent db.Agent) bool {
@@ -415,30 +425,72 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-func (h *Handler) DeleteAgent(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ArchiveAgent(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	agent, ok := h.loadAgentForUser(w, r, id)
 	if !ok {
 		return
 	}
-	wsID := uuidToString(agent.WorkspaceID)
-
 	if !h.canManageAgent(w, r, agent) {
 		return
 	}
-
-	err := h.Queries.DeleteAgent(r.Context(), parseUUID(id))
-	if err != nil {
-		slog.Warn("delete agent failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
-		writeError(w, http.StatusInternalServerError, "failed to delete agent")
+	if agent.ArchivedAt.Valid {
+		writeError(w, http.StatusConflict, "agent is already archived")
 		return
 	}
 
-	slog.Info("agent deleted", append(logger.RequestAttrs(r), "agent_id", id, "workspace_id", wsID)...)
+	userID := requestUserID(r)
+	archived, err := h.Queries.ArchiveAgent(r.Context(), db.ArchiveAgentParams{
+		ID:         parseUUID(id),
+		ArchivedBy: parseUUID(userID),
+	})
+	if err != nil {
+		slog.Warn("archive agent failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
+		writeError(w, http.StatusInternalServerError, "failed to archive agent")
+		return
+	}
+
+	// Cancel all pending/active tasks for this agent.
+	if err := h.Queries.CancelAgentTasksByAgent(r.Context(), parseUUID(id)); err != nil {
+		slog.Warn("cancel agent tasks on archive failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
+	}
+
+	wsID := uuidToString(archived.WorkspaceID)
+	slog.Info("agent archived", append(logger.RequestAttrs(r), "agent_id", id, "workspace_id", wsID)...)
+	resp := agentToResponse(archived)
+	actorType, actorID := h.resolveActor(r, userID, wsID)
+	h.publish(protocol.EventAgentArchived, wsID, actorType, actorID, map[string]any{"agent": resp})
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handler) RestoreAgent(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	agent, ok := h.loadAgentForUser(w, r, id)
+	if !ok {
+		return
+	}
+	if !h.canManageAgent(w, r, agent) {
+		return
+	}
+	if !agent.ArchivedAt.Valid {
+		writeError(w, http.StatusConflict, "agent is not archived")
+		return
+	}
+
+	restored, err := h.Queries.RestoreAgent(r.Context(), parseUUID(id))
+	if err != nil {
+		slog.Warn("restore agent failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
+		writeError(w, http.StatusInternalServerError, "failed to restore agent")
+		return
+	}
+
+	wsID := uuidToString(restored.WorkspaceID)
+	slog.Info("agent restored", append(logger.RequestAttrs(r), "agent_id", id, "workspace_id", wsID)...)
+	resp := agentToResponse(restored)
 	userID := requestUserID(r)
 	actorType, actorID := h.resolveActor(r, userID, wsID)
-	h.publish(protocol.EventAgentDeleted, wsID, actorType, actorID, map[string]any{"agent_id": id, "workspace_id": wsID})
-	w.WriteHeader(http.StatusNoContent)
+	h.publish(protocol.EventAgentRestored, wsID, actorType, actorID, map[string]any{"agent": resp})
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *Handler) ListAgentTasks(w http.ResponseWriter, r *http.Request) {

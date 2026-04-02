@@ -15,7 +15,8 @@ export type WSEventType =
   | "comment:deleted"
   | "agent:status"
   | "agent:created"
-  | "agent:deleted"
+  | "agent:archived"
+  | "agent:restored"
   | "task:dispatch"
   | "task:progress"
   | "task:completed"
@@ -71,9 +72,12 @@ export interface AgentCreatedPayload {
   agent: Agent;
 }
 
-export interface AgentDeletedPayload {
-  agent_id: string;
-  workspace_id: string;
+export interface AgentArchivedPayload {
+  agent: Agent;
+}
+
+export interface AgentRestoredPayload {
+  agent: Agent;
 }
 
 export interface InboxNewPayload {

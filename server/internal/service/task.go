@@ -44,6 +44,10 @@ func (s *TaskService) EnqueueTaskForIssue(ctx context.Context, issue db.Issue, t
 		slog.Error("task enqueue failed", "issue_id", util.UUIDToString(issue.ID), "error", err)
 		return db.AgentTaskQueue{}, fmt.Errorf("load agent: %w", err)
 	}
+	if agent.ArchivedAt.Valid {
+		slog.Debug("task enqueue skipped: agent is archived", "issue_id", util.UUIDToString(issue.ID), "agent_id", util.UUIDToString(agent.ID))
+		return db.AgentTaskQueue{}, fmt.Errorf("agent is archived")
+	}
 	if !agent.RuntimeID.Valid {
 		slog.Error("task enqueue failed", "issue_id", util.UUIDToString(issue.ID), "error", "agent has no runtime")
 		return db.AgentTaskQueue{}, fmt.Errorf("agent has no runtime")
@@ -78,6 +82,10 @@ func (s *TaskService) EnqueueTaskForMention(ctx context.Context, issue db.Issue,
 	if err != nil {
 		slog.Error("mention task enqueue failed: agent not found", "issue_id", util.UUIDToString(issue.ID), "agent_id", util.UUIDToString(agentID), "error", err)
 		return db.AgentTaskQueue{}, fmt.Errorf("load agent: %w", err)
+	}
+	if agent.ArchivedAt.Valid {
+		slog.Debug("mention task enqueue skipped: agent is archived", "issue_id", util.UUIDToString(issue.ID), "agent_id", util.UUIDToString(agentID))
+		return db.AgentTaskQueue{}, fmt.Errorf("agent is archived")
 	}
 	if !agent.RuntimeID.Valid {
 		slog.Error("mention task enqueue failed: agent has no runtime", "issue_id", util.UUIDToString(issue.ID), "agent_id", util.UUIDToString(agentID))
@@ -549,5 +557,7 @@ func agentToMap(a db.Agent) map[string]any {
 		"triggers":             triggers,
 		"created_at":           util.TimestampToString(a.CreatedAt),
 		"updated_at":           util.TimestampToString(a.UpdatedAt),
+		"archived_at":          util.TimestampToPtr(a.ArchivedAt),
+		"archived_by":          util.UUIDToPtr(a.ArchivedBy),
 	}
 }

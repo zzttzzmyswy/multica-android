@@ -1,5 +1,10 @@
 -- name: ListAgents :many
 SELECT * FROM agent
+WHERE workspace_id = $1 AND archived_at IS NULL
+ORDER BY created_at ASC;
+
+-- name: ListAllAgents :many
+SELECT * FROM agent
 WHERE workspace_id = $1
 ORDER BY created_at ASC;
 
@@ -37,8 +42,15 @@ UPDATE agent SET
 WHERE id = $1
 RETURNING *;
 
--- name: DeleteAgent :exec
-DELETE FROM agent WHERE id = $1;
+-- name: ArchiveAgent :one
+UPDATE agent SET archived_at = now(), archived_by = $2, updated_at = now()
+WHERE id = $1
+RETURNING *;
+
+-- name: RestoreAgent :one
+UPDATE agent SET archived_at = NULL, archived_by = NULL, updated_at = now()
+WHERE id = $1
+RETURNING *;
 
 -- name: ListAgentTasks :many
 SELECT * FROM agent_task_queue
@@ -54,6 +66,11 @@ RETURNING *;
 UPDATE agent_task_queue
 SET status = 'cancelled'
 WHERE issue_id = $1 AND status IN ('queued', 'dispatched', 'running');
+
+-- name: CancelAgentTasksByAgent :exec
+UPDATE agent_task_queue
+SET status = 'cancelled'
+WHERE agent_id = $1 AND status IN ('queued', 'dispatched', 'running');
 
 -- name: GetAgentTask :one
 SELECT * FROM agent_task_queue

@@ -17,9 +17,10 @@ const (
 	EventIssueReactionRemoved   = "issue_reaction:removed"
 
 	// Agent events
-	EventAgentStatus  = "agent:status"
-	EventAgentCreated = "agent:created"
-	EventAgentDeleted = "agent:deleted"
+	EventAgentStatus   = "agent:status"
+	EventAgentCreated  = "agent:created"
+	EventAgentArchived = "agent:archived"
+	EventAgentRestored = "agent:restored"
 
 	// Task events (server <-> daemon)
 	EventTaskDispatch  = "task:dispatch"

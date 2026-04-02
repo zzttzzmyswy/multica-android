@@ -82,7 +82,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         toast.error("Failed to load members");
         return [] as MemberWithUser[];
       }),
-      api.listAgents({ workspace_id: nextWorkspace.id }).catch((e) => {
+      api.listAgents({ workspace_id: nextWorkspace.id, include_archived: true }).catch((e) => {
         logger.error("failed to load agents", e);
         toast.error("Failed to load agents");
         return [] as Agent[];
@@ -154,7 +154,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     const { workspace } = get();
     if (!workspace) return;
     try {
-      const agents = await api.listAgents({ workspace_id: workspace.id });
+      const agents = await api.listAgents({ workspace_id: workspace.id, include_archived: true });
       set({ agents });
     } catch (e) {
       logger.error("failed to refresh agents", e);

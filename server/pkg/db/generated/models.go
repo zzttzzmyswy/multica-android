@@ -37,6 +37,8 @@ type Agent struct {
 	Triggers           []byte             `json:"triggers"`
 	RuntimeID          pgtype.UUID        `json:"runtime_id"`
 	Instructions       string             `json:"instructions"`
+	ArchivedAt         pgtype.Timestamptz `json:"archived_at"`
+	ArchivedBy         pgtype.UUID        `json:"archived_by"`
 }
 
 type AgentRuntime struct {

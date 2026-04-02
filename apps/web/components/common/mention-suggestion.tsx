@@ -235,7 +235,7 @@ export function createMentionSuggestion(): Omit<
         }));
 
       const agentItems: MentionItem[] = agents
-        .filter((a) => a.name.toLowerCase().includes(q))
+        .filter((a) => !a.archived_at && a.name.toLowerCase().includes(q))
         .map((a) => ({ id: a.id, label: a.name, type: "agent" as const }));
 
       const issueItems: MentionItem[] = issues

@@ -466,6 +466,9 @@ func (h *Handler) canAssignAgent(ctx context.Context, r *http.Request, agentID, 
 	if err != nil {
 		return false, "agent not found"
 	}
+	if agent.ArchivedAt.Valid {
+		return false, "cannot assign to archived agent"
+	}
 	if agent.Visibility != "private" {
 		return true, ""
 	}
@@ -521,7 +524,7 @@ func (h *Handler) isAgentTriggerEnabled(ctx context.Context, issue db.Issue, tri
 	}
 
 	agent, err := h.Queries.GetAgent(ctx, issue.AssigneeID)
-	if err != nil || !agent.RuntimeID.Valid {
+	if err != nil || !agent.RuntimeID.Valid || agent.ArchivedAt.Valid {
 		return false
 	}
 
