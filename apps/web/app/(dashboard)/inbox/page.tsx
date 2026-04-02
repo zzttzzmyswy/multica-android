@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { useDefaultLayout } from "react-resizable-panels";
 import { useInboxStore } from "@/features/inbox";
@@ -219,11 +220,20 @@ function InboxListItem({
 
 export default function InboxPage() {
   const searchParams = useSearchParams();
-  const selectedKey = searchParams.get("issue") ?? "";
-  const setSelectedKey = (key: string) => {
+  const urlIssue = searchParams.get("issue") ?? "";
+
+  const [selectedKey, setSelectedKeyState] = useState(() => urlIssue);
+
+  // Sync from URL when searchParams change (e.g. Next.js navigation)
+  useEffect(() => {
+    setSelectedKeyState(urlIssue);
+  }, [urlIssue]);
+
+  const setSelectedKey = useCallback((key: string) => {
+    setSelectedKeyState(key);
     const url = key ? `/inbox?issue=${key}` : "/inbox";
     window.history.replaceState(null, "", url);
-  };
+  }, []);
 
   const items = useInboxStore((s) => s.dedupedItems());
   const loading = useInboxStore((s) => s.loading);
