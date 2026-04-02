@@ -328,21 +328,18 @@ type UpdateAgentRequest struct {
 }
 
 // canManageAgent checks whether the current user can update or delete an agent.
-// Workspace-visible agents can be managed by any workspace member.
-// Private agents can only be managed by their owner or workspace owner/admin.
+// Only the agent owner or workspace owner/admin can manage any agent,
+// regardless of whether it is public or private.
 func (h *Handler) canManageAgent(w http.ResponseWriter, r *http.Request, agent db.Agent) bool {
 	wsID := uuidToString(agent.WorkspaceID)
 	member, ok := h.requireWorkspaceRole(w, r, wsID, "agent not found", "owner", "admin", "member")
 	if !ok {
 		return false
 	}
-	if agent.Visibility != "private" {
-		return true
-	}
 	isAdmin := roleAllowed(member.Role, "owner", "admin")
 	isAgentOwner := uuidToString(agent.OwnerID) == requestUserID(r)
 	if !isAdmin && !isAgentOwner {
-		writeError(w, http.StatusForbidden, "only the agent owner can manage this private agent")
+		writeError(w, http.StatusForbidden, "only the agent owner can manage this agent")
 		return false
 	}
 	return true
