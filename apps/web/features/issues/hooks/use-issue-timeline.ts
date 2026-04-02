@@ -41,7 +41,10 @@ export function useIssueTimeline(issueId: string, userId?: string) {
     api
       .listTimeline(issueId)
       .then((entries) => setTimeline(entries))
-      .catch(console.error)
+      .catch((e) => {
+        console.error(e);
+        toast.error("Failed to load activity");
+      })
       .finally(() => setLoading(false));
   }, [issueId]);
 

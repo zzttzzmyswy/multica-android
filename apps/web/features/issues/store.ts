@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import type { Issue } from "@/shared/types";
+import { toast } from "sonner";
 import { api } from "@/shared/api";
 import { createLogger } from "@/shared/logger";
 
@@ -34,6 +35,7 @@ export const useIssueStore = create<IssueState>((set, get) => ({
       set({ issues: res.issues, loading: false });
     } catch (err) {
       logger.error("fetch failed", err);
+      toast.error("Failed to load issues");
       if (isInitialLoad) set({ loading: false });
     }
   },

@@ -7,8 +7,8 @@ import type {
   SubscriberRemovedPayload,
 } from "@/shared/types";
 import { api } from "@/shared/api";
-import { useWSEvent, useWSReconnect } from "@/features/realtime";
 import { toast } from "sonner";
+import { useWSEvent, useWSReconnect } from "@/features/realtime";
 
 export function useIssueSubscribers(issueId: string, userId?: string) {
   const [subscribers, setSubscribers] = useState<IssueSubscriber[]>([]);
@@ -21,7 +21,10 @@ export function useIssueSubscribers(issueId: string, userId?: string) {
     api
       .listIssueSubscribers(issueId)
       .then((subs) => setSubscribers(subs))
-      .catch(console.error)
+      .catch((e) => {
+        console.error(e);
+        toast.error("Failed to load subscribers");
+      })
       .finally(() => setLoading(false));
   }, [issueId]);
 

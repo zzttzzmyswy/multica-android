@@ -70,6 +70,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/shared/api";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
@@ -380,6 +381,8 @@ function InstructionsTab({
     setSaving(true);
     try {
       await onSave(value);
+    } catch {
+      // toast handled by parent
     } finally {
       setSaving(false);
     }
@@ -446,6 +449,8 @@ function SkillsTab({
       const newIds = [...agent.skills.map((s) => s.id), skillId];
       await api.setAgentSkills(agent.id, { skill_ids: newIds });
       await refreshAgents();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to add skill");
     } finally {
       setSaving(false);
       setShowPicker(false);
@@ -458,6 +463,8 @@ function SkillsTab({
       const newIds = agent.skills.filter((s) => s.id !== skillId).map((s) => s.id);
       await api.setAgentSkills(agent.id, { skill_ids: newIds });
       await refreshAgents();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to remove skill");
     } finally {
       setSaving(false);
     }
@@ -701,6 +708,8 @@ function ToolsTab({
     setSaving(true);
     try {
       await onSave(tools);
+    } catch {
+      // toast handled by parent
     } finally {
       setSaving(false);
     }
@@ -845,6 +854,8 @@ function TriggersTab({
     setSaving(true);
     try {
       await onSave(triggers);
+    } catch {
+      // toast handled by parent
     } finally {
       setSaving(false);
     }
@@ -1050,8 +1061,17 @@ function TasksTab({ agent }: { agent: Agent }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-        Loading tasks...
+      <div className="space-y-2">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-3 rounded-lg border px-4 py-3">
+            <Skeleton className="h-4 w-4 rounded shrink-0" />
+            <div className="flex-1 space-y-1.5">
+              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-3 w-1/3" />
+            </div>
+            <Skeleton className="h-4 w-16" />
+          </div>
+        ))}
       </div>
     );
   }
@@ -1522,25 +1542,68 @@ export default function AgentsPage() {
   };
 
   const handleUpdate = async (id: string, data: Record<string, unknown>) => {
-    await api.updateAgent(id, data as UpdateAgentRequest);
-    await refreshAgents();
+    try {
+      await api.updateAgent(id, data as UpdateAgentRequest);
+      await refreshAgents();
+      toast.success("Agent updated");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update agent");
+      throw e;
+    }
   };
 
   const handleDelete = async (id: string) => {
-    await api.deleteAgent(id);
-    if (selectedId === id) {
-      const remaining = agents.filter((a) => a.id !== id);
-      setSelectedId(remaining[0]?.id ?? "");
+    try {
+      await api.deleteAgent(id);
+      if (selectedId === id) {
+        const remaining = agents.filter((a) => a.id !== id);
+        setSelectedId(remaining[0]?.id ?? "");
+      }
+      await refreshAgents();
+      toast.success("Agent deleted");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete agent");
     }
-    await refreshAgents();
   };
 
   const selected = agents.find((a) => a.id === selectedId) ?? null;
 
   if (isLoading) {
     return (
-      <div className="flex flex-1 min-h-0 items-center justify-center text-sm text-muted-foreground">
-        Loading...
+      <div className="flex flex-1 min-h-0">
+        {/* List skeleton */}
+        <div className="w-72 border-r">
+          <div className="flex h-12 items-center justify-between border-b px-4">
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-6 w-6 rounded" />
+          </div>
+          <div className="divide-y">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 px-4 py-3">
+                <Skeleton className="h-8 w-8 rounded-full" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-3 w-16" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Detail skeleton */}
+        <div className="flex-1 p-6 space-y-6">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-10 w-10 rounded-full" />
+            <div className="space-y-1.5">
+              <Skeleton className="h-5 w-32" />
+              <Skeleton className="h-3 w-20" />
+            </div>
+          </div>
+          <div className="space-y-3">
+            <Skeleton className="h-8 w-full rounded-lg" />
+            <Skeleton className="h-8 w-full rounded-lg" />
+            <Skeleton className="h-8 w-3/4 rounded-lg" />
+          </div>
+        </div>
       </div>
     );
   }

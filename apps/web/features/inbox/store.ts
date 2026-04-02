@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import type { InboxItem, IssueStatus } from "@/shared/types";
+import { toast } from "sonner";
 import { api } from "@/shared/api";
 import { createLogger } from "@/shared/logger";
 
@@ -72,6 +73,7 @@ export const useInboxStore = create<InboxState>((set, get) => ({
       set({ items: data, loading: false });
     } catch (err) {
       logger.error("fetch failed", err);
+      toast.error("Failed to load inbox");
       if (isInitialLoad) set({ loading: false });
     }
   },
