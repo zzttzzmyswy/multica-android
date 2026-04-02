@@ -142,8 +142,7 @@ func taskToResponse(t db.AgentTaskQueue) AgentTaskResponse {
 
 func (h *Handler) ListAgents(w http.ResponseWriter, r *http.Request) {
 	workspaceID := resolveWorkspaceID(r)
-	member, ok := h.workspaceMember(w, r, workspaceID)
-	if !ok {
+	if _, ok := h.workspaceMember(w, r, workspaceID); !ok {
 		return
 	}
 
@@ -152,9 +151,6 @@ func (h *Handler) ListAgents(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to list agents")
 		return
 	}
-
-	userID := requestUserID(r)
-	isAdmin := roleAllowed(member.Role, "owner", "admin")
 
 	// Batch-load skills for all agents to avoid N+1.
 	skillRows, err := h.Queries.ListAgentSkillsByWorkspace(r.Context(), parseUUID(workspaceID))
@@ -172,20 +168,14 @@ func (h *Handler) ListAgents(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// Filter private agents: only visible to owner_id or workspace admin
-	var visible []AgentResponse
+	// All agents (including private) are visible to workspace members.
+	visible := make([]AgentResponse, 0, len(agents))
 	for _, a := range agents {
-		if a.Visibility == "private" && !isAdmin && uuidToString(a.OwnerID) != userID {
-			continue
-		}
 		resp := agentToResponse(a)
 		if skills, ok := skillMap[resp.ID]; ok {
 			resp.Skills = skills
 		}
 		visible = append(visible, resp)
-	}
-	if visible == nil {
-		visible = []AgentResponse{}
 	}
 
 	writeJSON(w, http.StatusOK, visible)
