@@ -50,9 +50,10 @@ interface RichTextEditorRef {
   insertFile: (filename: string, url: string, isImage: boolean) => void;
 }
 
-const LinkExtension = Link.configure({
+const LinkExtension = Link.extend({ inclusive: false }).configure({
   openOnClick: true,
   autolink: true,
+  linkOnPaste: false,
   HTMLAttributes: {
     class: "text-primary hover:underline cursor-pointer",
   },
