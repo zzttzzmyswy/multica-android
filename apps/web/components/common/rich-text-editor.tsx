@@ -13,14 +13,14 @@ import { common, createLowlight } from "lowlight";
 import Placeholder from "@tiptap/extension-placeholder";
 import Link from "@tiptap/extension-link";
 import Typography from "@tiptap/extension-typography";
-import Mention from "@tiptap/extension-mention";
 import Image from "@tiptap/extension-image";
 import { Markdown } from "@tiptap/markdown";
-import { Extension, mergeAttributes } from "@tiptap/core";
+import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Slice } from "@tiptap/pm/model";
 import { cn } from "@/lib/utils";
 import type { UploadResult } from "@/shared/hooks/use-file-upload";
+import { BaseMentionExtension } from "./mention-extension";
 import { createMentionSuggestion } from "./mention-suggestion";
 import { CodeBlockView } from "./code-block-view";
 import "./rich-text-editor.css";
@@ -58,68 +58,9 @@ const LinkExtension = Link.configure({
   },
 });
 
-const MentionExtension = Mention.configure({
+const MentionExtension = BaseMentionExtension.configure({
   HTMLAttributes: { class: "mention" },
   suggestion: createMentionSuggestion(),
-}).extend({
-  renderHTML({ node, HTMLAttributes }) {
-    const type = node.attrs.type ?? "member";
-    const prefix = type === "issue" ? "" : "@";
-    return [
-      "span",
-      mergeAttributes(
-        { "data-type": "mention" },
-        this.options.HTMLAttributes,
-        HTMLAttributes,
-        {
-          "data-mention-type": node.attrs.type ?? "member",
-          "data-mention-id": node.attrs.id,
-        },
-      ),
-      `${prefix}${node.attrs.label ?? node.attrs.id}`,
-    ];
-  },
-  addAttributes() {
-    return {
-      ...this.parent?.(),
-      type: {
-        default: "member",
-        parseHTML: (el: HTMLElement) =>
-          el.getAttribute("data-mention-type") ?? "member",
-        renderHTML: () => ({}),
-      },
-    };
-  },
-  // @tiptap/markdown: custom tokenizer to parse [@Label](mention://type/id)
-  // and [Label](mention://issue/id) (issue mentions have no @ prefix)
-  markdownTokenizer: {
-    name: "mention",
-    level: "inline" as const,
-    start(src: string) {
-      return src.search(/\[@?[^\]]+\]\(mention:\/\//);
-    },
-    tokenize(src: string) {
-      const match = src.match(
-        /^\[@?([^\]]+)\]\(mention:\/\/(\w+)\/([^)]+)\)/,
-      );
-      if (!match) return undefined;
-      return {
-        type: "mention",
-        raw: match[0],
-        attributes: { label: match[1], type: match[2] ?? "member", id: match[3] },
-      };
-    },
-  },
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  parseMarkdown: (token: any, helpers: any) => {
-    return helpers.createNode("mention", token.attributes);
-  },
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  renderMarkdown: (node: any) => {
-    const { id, label, type = "member" } = node.attrs || {};
-    const prefix = type === "issue" ? "" : "@";
-    return `[${prefix}${label ?? id}](mention://${type}/${id})`;
-  },
 });
 
 // ---------------------------------------------------------------------------
@@ -209,23 +150,13 @@ function createFileUploadExtension(
           const isImage = file.type.startsWith("image/");
 
           if (isImage) {
-            // Instant preview via blob URL, then replace with real URL after upload
+            // Instant preview via blob URL with uploading flag for CSS styling
             const blobUrl = URL.createObjectURL(file);
+            const imgAttrs = { src: blobUrl, alt: file.name, uploading: true };
             if (pos !== undefined) {
-              editor
-                .chain()
-                .focus()
-                .insertContentAt(pos, {
-                  type: "image",
-                  attrs: { src: blobUrl, alt: file.name },
-                })
-                .run();
+              editor.chain().focus().insertContentAt(pos, { type: "image", attrs: imgAttrs }).run();
             } else {
-              editor
-                .chain()
-                .focus()
-                .setImage({ src: blobUrl, alt: file.name })
-                .run();
+              editor.chain().focus().setImage(imgAttrs).run();
             }
 
             try {
@@ -233,14 +164,12 @@ function createFileUploadExtension(
               if (result) {
                 const { tr } = editor.state;
                 editor.state.doc.descendants((node, nodePos) => {
-                  if (
-                    node.type.name === "image" &&
-                    node.attrs.src === blobUrl
-                  ) {
+                  if (node.type.name === "image" && node.attrs.src === blobUrl) {
                     tr.setNodeMarkup(nodePos, undefined, {
                       ...node.attrs,
                       src: result.link,
                       alt: result.filename,
+                      uploading: false,
                     });
                   }
                 });
@@ -389,7 +318,18 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
         LinkExtension,
         Typography,
         MentionExtension,
-        Image.configure({
+        Image.extend({
+          addAttributes() {
+            return {
+              ...this.parent?.(),
+              uploading: {
+                default: false,
+                renderHTML: (attrs) => (attrs.uploading ? { "data-uploading": "" } : {}),
+                parseHTML: (el) => el.hasAttribute("data-uploading"),
+              },
+            };
+          },
+        }).configure({
           inline: false,
           allowBase64: false,
           HTMLAttributes: { style: "max-width: 100%; height: auto;" },
