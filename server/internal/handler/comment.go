@@ -245,11 +245,14 @@ func (h *Handler) isReplyToMemberThread(parent *db.Comment, content string, issu
 
 // enqueueMentionedAgentTasks parses @agent mentions from comment content and
 // enqueues a task for each mentioned agent. Skips self-mentions, agents that
-// are already the issue's assignee (handled by on_comment), and agents with
-// on_mention trigger disabled.
+// are already the issue's assignee (handled by on_comment), agents with
+// on_mention trigger disabled, and private agents mentioned by non-owner
+// members (only the agent owner or workspace admin/owner can mention a
+// private agent).
 // Note: no status gate here — @mention is an explicit action and should work
 // even on done/cancelled issues (the agent can reopen the issue if needed).
 func (h *Handler) enqueueMentionedAgentTasks(ctx context.Context, issue db.Issue, comment db.Comment, authorType, authorID string) {
+	wsID := uuidToString(issue.WorkspaceID)
 	mentions := util.ParseMentions(comment.Content)
 	for _, m := range mentions {
 		if m.Type != "agent" {
@@ -266,8 +269,23 @@ func (h *Handler) enqueueMentionedAgentTasks(ctx context.Context, issue db.Issue
 			issue.AssigneeID.Valid && uuidToString(issue.AssigneeID) == m.ID {
 			continue
 		}
+		// Load the agent to check visibility and trigger config.
+		agent, err := h.Queries.GetAgent(ctx, agentUUID)
+		if err != nil || !agent.RuntimeID.Valid {
+			continue
+		}
+		// Private agents can only be mentioned by the agent owner or workspace admin/owner.
+		if agent.Visibility == "private" && authorType == "member" {
+			isOwner := uuidToString(agent.OwnerID) == authorID
+			if !isOwner {
+				member, err := h.getWorkspaceMember(ctx, authorID, wsID)
+				if err != nil || !roleAllowed(member.Role, "owner", "admin") {
+					continue
+				}
+			}
+		}
 		// Check if the agent has on_mention trigger enabled.
-		if !h.isAgentMentionTriggerEnabled(ctx, agentUUID) {
+		if !agentHasTriggerEnabled(agent.Triggers, "on_mention") {
 			continue
 		}
 		// Dedup: skip if this agent already has a pending task for this issue.
