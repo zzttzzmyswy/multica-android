@@ -254,6 +254,7 @@ func (d *Daemon) registerRuntimesForWorkspace(ctx context.Context, workspaceID s
 		"workspace_id": workspaceID,
 		"daemon_id":    d.cfg.DaemonID,
 		"device_name":  d.cfg.DeviceName,
+		"cli_version":  d.cfg.CLIVersion,
 		"runtimes":     runtimes,
 	}
 

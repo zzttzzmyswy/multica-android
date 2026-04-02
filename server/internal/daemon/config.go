@@ -28,6 +28,7 @@ type Config struct {
 	DaemonID           string
 	DeviceName         string
 	RuntimeName        string
+	CLIVersion         string                // multica CLI version (e.g. "0.1.13")
 	Profile            string                // profile name (empty = default)
 	Agents             map[string]AgentEntry // "claude" -> entry, "codex" -> entry
 	WorkspacesRoot     string                // base path for execution envs (default: ~/multica_workspaces)

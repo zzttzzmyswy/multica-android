@@ -6,8 +6,12 @@ import { UpdateSection } from "./update-section";
 import { UsageSection } from "./usage-section";
 
 function getCliVersion(metadata: Record<string, unknown>): string | null {
-  if (metadata && typeof metadata.version === "string" && metadata.version) {
-    return metadata.version;
+  if (
+    metadata &&
+    typeof metadata.cli_version === "string" &&
+    metadata.cli_version
+  ) {
+    return metadata.cli_version;
   }
   return null;
 }
