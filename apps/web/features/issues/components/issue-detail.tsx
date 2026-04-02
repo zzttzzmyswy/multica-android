@@ -667,8 +667,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
             )}
             <FileUploadButton
               size="sm"
-              onUpload={handleDescriptionUpload}
-              onInsert={(result, isImage) => descEditorRef.current?.insertFile(result.filename, result.link, isImage)}
+              onSelect={(file) => descEditorRef.current?.uploadFile(file)}
             />
           </div>
 

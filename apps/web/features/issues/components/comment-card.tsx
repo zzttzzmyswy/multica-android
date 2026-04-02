@@ -228,14 +228,14 @@ function CommentRow({
               defaultValue={entry.content ?? ""}
               placeholder="Edit comment..."
               onSubmit={saveEdit}
+              onUploadFile={(file) => uploadWithToast(file, { issueId })}
               debounceMs={100}
             />
           </div>
           <div className="flex items-center justify-between mt-2">
             <FileUploadButton
               size="sm"
-              onUpload={(file) => uploadWithToast(file, { issueId })}
-              onInsert={(result, isImage) => editEditorRef.current?.insertFile(result.filename, result.link, isImage)}
+              onSelect={(file) => editEditorRef.current?.uploadFile(file)}
             />
             <div className="flex items-center gap-2">
               <Button size="sm" variant="ghost" onClick={cancelEdit}>Cancel</Button>
@@ -441,8 +441,7 @@ function CommentCard({
                 <div className="flex items-center justify-between mt-2">
                   <FileUploadButton
                     size="sm"
-                    onUpload={(file) => uploadWithToast(file, { issueId })}
-                    onInsert={(result, isImage) => editEditorRef.current?.insertFile(result.filename, result.link, isImage)}
+                    onSelect={(file) => editEditorRef.current?.uploadFile(file)}
                   />
                   <div className="flex items-center gap-2">
                     <Button size="sm" variant="ghost" onClick={cancelEdit}>Cancel</Button>

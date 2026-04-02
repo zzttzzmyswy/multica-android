@@ -235,8 +235,8 @@
   display: inline;
 }
 
-/* Images in readonly mode */
-.rich-text-editor.readonly img {
+/* Images — shared styling for both editing and readonly */
+.rich-text-editor img {
   border-radius: var(--radius);
   margin: 0.5rem 0;
 }

@@ -35,11 +35,10 @@ function ReplyInput({
 }: ReplyInputProps) {
   const editorRef = useRef<RichTextEditorRef>(null);
   const measureRef = useRef<HTMLDivElement>(null);
-  const attachmentIdsRef = useRef<string[]>([]);
   const [isEmpty, setIsEmpty] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const { uploadWithToast, uploading } = useFileUpload();
+  const { uploadWithToast } = useFileUpload();
 
   useEffect(() => {
     const el = measureRef.current;
@@ -53,9 +52,7 @@ function ReplyInput({
   }, []);
 
   const handleUpload = async (file: File) => {
-    const result = await uploadWithToast(file, { issueId });
-    if (result) attachmentIdsRef.current.push(result.id);
-    return result;
+    return await uploadWithToast(file, { issueId });
   };
 
   const handleSubmit = async () => {
@@ -63,10 +60,8 @@ function ReplyInput({
     if (!content || submitting) return;
     setSubmitting(true);
     try {
-      const ids = attachmentIdsRef.current.length > 0 ? [...attachmentIdsRef.current] : undefined;
-      await onSubmit(content, ids);
+      await onSubmit(content);
       editorRef.current?.clearContent();
-      attachmentIdsRef.current = [];
       setIsEmpty(true);
     } finally {
       setSubmitting(false);
@@ -105,11 +100,7 @@ function ReplyInput({
         <div className="absolute bottom-0 right-0 flex items-center gap-1 text-muted-foreground transition-colors group-focus-within/editor:text-foreground">
           <FileUploadButton
             size="sm"
-            onUpload={handleUpload}
-            onInsert={(result, isImage) =>
-              editorRef.current?.insertFile(result.filename, result.link, isImage)
-            }
-            disabled={uploading}
+            onSelect={(file) => editorRef.current?.uploadFile(file)}
           />
           <button
             type="button"
