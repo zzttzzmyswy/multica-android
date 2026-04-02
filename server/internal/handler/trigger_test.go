@@ -86,6 +86,16 @@ func TestCommentMentionsOthersButNotAssignee(t *testing.T) {
 			content: fmt.Sprintf("[@All](mention://all/all) [@Agent](mention://agent/%s) fyi", agentAssigneeID),
 			want:    true,
 		},
+		{
+			name:    "issue mention only → allow trigger (cross-reference, not @person)",
+			content: "[PAN-1](mention://issue/44c266e7-f6dd-4be3-9140-5ac40233f79c) is related",
+			want:    false,
+		},
+		{
+			name:    "issue mention + other agent → suppress (agent mention matters)",
+			content: fmt.Sprintf("[PAN-1](mention://issue/44c266e7-f6dd-4be3-9140-5ac40233f79c) cc [@Other](mention://agent/%s)", otherAgentID),
+			want:    true,
+		},
 	}
 
 	for _, tt := range tests {
