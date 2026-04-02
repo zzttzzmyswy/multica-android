@@ -47,7 +47,8 @@ interface RichTextEditorRef {
   getMarkdown: () => string;
   clearContent: () => void;
   focus: () => void;
-  insertFile: (filename: string, url: string, isImage: boolean) => void;
+  /** Upload a file and insert it into the editor (blob preview → upload → replace). */
+  uploadFile: (file: File) => void;
 }
 
 const LinkExtension = Link.extend({ inclusive: false }).configure({
@@ -133,6 +134,64 @@ function removeImageBySrc(editor: ReturnType<typeof useEditor>, src: string) {
   if (deleted) editor.view.dispatch(tr);
 }
 
+/**
+ * Shared upload flow: insert blob preview → upload → replace with real URL.
+ * Used by both paste/drop (at cursor) and button upload (at end of doc).
+ */
+async function uploadAndInsertFile(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  editor: any,
+  file: File,
+  handler: (file: File) => Promise<UploadResult | null>,
+  pos?: number,
+) {
+  const isImage = file.type.startsWith("image/");
+
+  if (isImage) {
+    const blobUrl = URL.createObjectURL(file);
+    const imgAttrs = { src: blobUrl, alt: file.name, uploading: true };
+    if (pos !== undefined) {
+      editor.chain().focus().insertContentAt(pos, { type: "image", attrs: imgAttrs }).run();
+    } else {
+      editor.chain().focus().setImage(imgAttrs).run();
+    }
+
+    try {
+      const result = await handler(file);
+      if (result) {
+        const { tr } = editor.state;
+        editor.state.doc.descendants((node: { type: { name: string }; attrs: { src: string } }, nodePos: number) => {
+          if (node.type.name === "image" && node.attrs.src === blobUrl) {
+            tr.setNodeMarkup(nodePos, undefined, {
+              ...node.attrs,
+              src: result.link,
+              alt: result.filename,
+              uploading: false,
+            });
+          }
+        });
+        editor.view.dispatch(tr);
+      } else {
+        removeImageBySrc(editor, blobUrl);
+      }
+    } catch {
+      removeImageBySrc(editor, blobUrl);
+    } finally {
+      URL.revokeObjectURL(blobUrl);
+    }
+  } else {
+    // Non-image: upload first, then insert link
+    const result = await handler(file);
+    if (!result) return;
+    const linkText = `[${result.filename}](${result.link})`;
+    if (pos !== undefined) {
+      editor.chain().focus().insertContentAt(pos, linkText).run();
+    } else {
+      editor.chain().focus().insertContent(linkText).run();
+    }
+  }
+}
+
 function createFileUploadExtension(
   onUploadFileRef: React.RefObject<((file: File) => Promise<UploadResult | null>) | undefined>,
 ) {
@@ -141,65 +200,13 @@ function createFileUploadExtension(
     addProseMirrorPlugins() {
       const { editor } = this;
 
-      const handleFiles = async (files: FileList, pos?: number) => {
+      const handleFiles = async (files: FileList) => {
         const handler = onUploadFileRef.current;
         if (!handler) return false;
-
-        let handled = false;
         for (const file of Array.from(files)) {
-          handled = true;
-          const isImage = file.type.startsWith("image/");
-
-          if (isImage) {
-            // Instant preview via blob URL with uploading flag for CSS styling
-            const blobUrl = URL.createObjectURL(file);
-            const imgAttrs = { src: blobUrl, alt: file.name, uploading: true };
-            if (pos !== undefined) {
-              editor.chain().focus().insertContentAt(pos, { type: "image", attrs: imgAttrs }).run();
-            } else {
-              editor.chain().focus().setImage(imgAttrs).run();
-            }
-
-            try {
-              const result = await handler(file);
-              if (result) {
-                const { tr } = editor.state;
-                editor.state.doc.descendants((node, nodePos) => {
-                  if (node.type.name === "image" && node.attrs.src === blobUrl) {
-                    tr.setNodeMarkup(nodePos, undefined, {
-                      ...node.attrs,
-                      src: result.link,
-                      alt: result.filename,
-                      uploading: false,
-                    });
-                  }
-                });
-                editor.view.dispatch(tr);
-              } else {
-                removeImageBySrc(editor, blobUrl);
-              }
-            } catch {
-              removeImageBySrc(editor, blobUrl);
-            } finally {
-              URL.revokeObjectURL(blobUrl);
-            }
-          } else {
-            // Non-image: upload first, then insert link
-            try {
-              const result = await handler(file);
-              if (!result) continue;
-              const linkText = `[${result.filename}](${result.link})`;
-              if (pos !== undefined) {
-                editor.chain().focus().insertContentAt(pos, linkText).run();
-              } else {
-                editor.chain().focus().insertContent(linkText).run();
-              }
-            } catch {
-              // Upload errors handled by the hook/caller via toast
-            }
-          }
+          await uploadAndInsertFile(editor, file, handler);
         }
-        return handled;
+        return true;
       };
 
       return [
@@ -386,13 +393,11 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
       focus: () => {
         editor?.commands.focus();
       },
-      insertFile: (filename: string, url: string, isImage: boolean) => {
-        if (!editor) return;
-        if (isImage) {
-          editor.chain().focus().setImage({ src: url, alt: filename }).run();
-        } else {
-          editor.chain().focus().insertContent(`[${filename}](${url})`).run();
-        }
+      uploadFile: (file: File) => {
+        if (!editor || !onUploadFileRef.current) return;
+        // Insert at end of doc to avoid replacing selection
+        const endPos = editor.state.doc.content.size;
+        uploadAndInsertFile(editor, file, onUploadFileRef.current, endPos);
       },
     }));
 

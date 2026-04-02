@@ -14,15 +14,12 @@ interface CommentInputProps {
 
 function CommentInput({ issueId, onSubmit }: CommentInputProps) {
   const editorRef = useRef<RichTextEditorRef>(null);
-  const attachmentIdsRef = useRef<string[]>([]);
   const [isEmpty, setIsEmpty] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const { uploadWithToast, uploading } = useFileUpload();
+  const { uploadWithToast } = useFileUpload();
 
   const handleUpload = async (file: File) => {
-    const result = await uploadWithToast(file, { issueId });
-    if (result) attachmentIdsRef.current.push(result.id);
-    return result;
+    return await uploadWithToast(file, { issueId });
   };
 
   const handleSubmit = async () => {
@@ -30,10 +27,8 @@ function CommentInput({ issueId, onSubmit }: CommentInputProps) {
     if (!content || submitting) return;
     setSubmitting(true);
     try {
-      const ids = attachmentIdsRef.current.length > 0 ? [...attachmentIdsRef.current] : undefined;
-      await onSubmit(content, ids);
+      await onSubmit(content);
       editorRef.current?.clearContent();
-      attachmentIdsRef.current = [];
       setIsEmpty(true);
     } finally {
       setSubmitting(false);
@@ -55,11 +50,7 @@ function CommentInput({ issueId, onSubmit }: CommentInputProps) {
       <div className="absolute bottom-1 right-1.5 flex items-center gap-1">
         <FileUploadButton
           size="sm"
-          onUpload={handleUpload}
-          onInsert={(result, isImage) =>
-            editorRef.current?.insertFile(result.filename, result.link, isImage)
-          }
-          disabled={uploading}
+          onSelect={(file) => editorRef.current?.uploadFile(file)}
         />
         <Button
           size="icon-xs"
