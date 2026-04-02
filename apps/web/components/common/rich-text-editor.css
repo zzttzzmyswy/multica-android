@@ -241,14 +241,14 @@
   margin: 0.5rem 0;
 }
 
-/* Uploading image placeholder (blob: URLs = in-flight uploads) */
-.rich-text-editor img[src^="blob:"] {
+/* Uploading image placeholder — data-uploading attribute managed by ProseMirror schema */
+.rich-text-editor img[data-uploading] {
   opacity: 0.5;
   border-radius: var(--radius);
-  animation: rte-pulse 1.5s ease-in-out infinite;
+  animation: rte-upload-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-@keyframes rte-pulse {
+@keyframes rte-upload-pulse {
   0%, 100% { opacity: 0.5; }
   50% { opacity: 0.3; }
 }

@@ -150,23 +150,13 @@ function createFileUploadExtension(
           const isImage = file.type.startsWith("image/");
 
           if (isImage) {
-            // Instant preview via blob URL, then replace with real URL after upload
+            // Instant preview via blob URL with uploading flag for CSS styling
             const blobUrl = URL.createObjectURL(file);
+            const imgAttrs = { src: blobUrl, alt: file.name, uploading: true };
             if (pos !== undefined) {
-              editor
-                .chain()
-                .focus()
-                .insertContentAt(pos, {
-                  type: "image",
-                  attrs: { src: blobUrl, alt: file.name },
-                })
-                .run();
+              editor.chain().focus().insertContentAt(pos, { type: "image", attrs: imgAttrs }).run();
             } else {
-              editor
-                .chain()
-                .focus()
-                .setImage({ src: blobUrl, alt: file.name })
-                .run();
+              editor.chain().focus().setImage(imgAttrs).run();
             }
 
             try {
@@ -174,14 +164,12 @@ function createFileUploadExtension(
               if (result) {
                 const { tr } = editor.state;
                 editor.state.doc.descendants((node, nodePos) => {
-                  if (
-                    node.type.name === "image" &&
-                    node.attrs.src === blobUrl
-                  ) {
+                  if (node.type.name === "image" && node.attrs.src === blobUrl) {
                     tr.setNodeMarkup(nodePos, undefined, {
                       ...node.attrs,
                       src: result.link,
                       alt: result.filename,
+                      uploading: false,
                     });
                   }
                 });
@@ -330,7 +318,18 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
         LinkExtension,
         Typography,
         MentionExtension,
-        Image.configure({
+        Image.extend({
+          addAttributes() {
+            return {
+              ...this.parent?.(),
+              uploading: {
+                default: false,
+                renderHTML: (attrs) => (attrs.uploading ? { "data-uploading": "" } : {}),
+                parseHTML: (el) => el.hasAttribute("data-uploading"),
+              },
+            };
+          },
+        }).configure({
           inline: false,
           allowBase64: false,
           HTMLAttributes: { style: "max-width: 100%; height: auto;" },
