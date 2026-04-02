@@ -22,6 +22,17 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { api } from "@/shared/api";
 
@@ -33,13 +44,17 @@ export function TokensTab() {
   const [newToken, setNewToken] = useState<string | null>(null);
   const [tokenCopied, setTokenCopied] = useState(false);
   const [tokenRevoking, setTokenRevoking] = useState<string | null>(null);
+  const [revokeConfirmId, setRevokeConfirmId] = useState<string | null>(null);
+  const [tokensLoading, setTokensLoading] = useState(true);
 
   const loadTokens = useCallback(async () => {
     try {
       const list = await api.listPersonalAccessTokens();
       setTokens(list);
-    } catch {
-      // ignore — tokens section simply stays empty
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load tokens");
+    } finally {
+      setTokensLoading(false);
     }
   }, []);
 
@@ -117,7 +132,21 @@ export function TokensTab() {
           </CardContent>
         </Card>
 
-        {tokens.length > 0 && (
+        {tokensLoading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <Card key={i}>
+                <CardContent className="flex items-center gap-3">
+                  <div className="flex-1 space-y-1.5">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-48" />
+                  </div>
+                  <Skeleton className="h-8 w-8 rounded" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : tokens.length > 0 && (
           <div className="space-y-2">
             {tokens.map((t) => (
               <Card key={t.id}>
@@ -135,7 +164,7 @@ export function TokensTab() {
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          onClick={() => handleRevokeToken(t.id)}
+                          onClick={() => setRevokeConfirmId(t.id)}
                           disabled={tokenRevoking === t.id}
                           aria-label={`Revoke ${t.name}`}
                         >
@@ -151,6 +180,29 @@ export function TokensTab() {
           </div>
         )}
       </section>
+
+      <AlertDialog open={!!revokeConfirmId} onOpenChange={(v) => { if (!v) setRevokeConfirmId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke token</AlertDialogTitle>
+            <AlertDialogDescription>
+              This token will be permanently revoked and can no longer be used. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={async () => {
+                if (revokeConfirmId) await handleRevokeToken(revokeConfirmId);
+                setRevokeConfirmId(null);
+              }}
+            >
+              Revoke
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={!!newToken} onOpenChange={(v) => { if (!v) { setNewToken(null); setTokenCopied(false); } }}>
         <DialogContent>

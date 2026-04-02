@@ -145,8 +145,8 @@ export function useRealtimeSync(ws: WSClient | null) {
           useWorkspaceStore.getState().refreshMembers(),
           useWorkspaceStore.getState().refreshSkills(),
         ]);
-      } catch {
-        // Silently fail; next reconnect will retry
+      } catch (e) {
+        logger.error("reconnect refetch failed", e);
       }
     });
 

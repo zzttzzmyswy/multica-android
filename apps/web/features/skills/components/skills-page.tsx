@@ -30,6 +30,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/shared/api";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
@@ -352,6 +354,7 @@ function SkillDetail({
   );
   const [selectedPath, setSelectedPath] = useState(SKILL_MD);
   const [saving, setSaving] = useState(false);
+  const [loadingFiles, setLoadingFiles] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showAddFile, setShowAddFile] = useState(false);
 
@@ -365,10 +368,13 @@ function SkillDetail({
   // Fetch full skill (with files) on selection change
   useEffect(() => {
     setSelectedPath(SKILL_MD);
+    setLoadingFiles(true);
     api.getSkill(skill.id).then((full) => {
       useWorkspaceStore.getState().upsertSkill(full);
       setFiles((full.files ?? []).map((f) => ({ path: f.path, content: f.content })));
-    });
+    }).catch((e) => {
+      toast.error(e instanceof Error ? e.message : "Failed to load skill files");
+    }).finally(() => setLoadingFiles(false));
   }, [skill.id]);
 
   // Build the virtual file map
@@ -392,6 +398,8 @@ function SkillDetail({
         content,
         files: files.filter((f) => f.path.trim()),
       });
+    } catch {
+      // toast handled by parent
     } finally {
       setSaving(false);
     }
@@ -514,22 +522,40 @@ function SkillDetail({
             </div>
           </div>
           <div className="flex-1 overflow-y-auto">
-            <FileTree
-              filePaths={filePaths}
-              selectedPath={selectedPath}
-              onSelect={setSelectedPath}
-            />
+            {loadingFiles ? (
+              <div className="p-3 space-y-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+              </div>
+            ) : (
+              <FileTree
+                filePaths={filePaths}
+                selectedPath={selectedPath}
+                onSelect={setSelectedPath}
+              />
+            )}
           </div>
         </div>
 
         {/* File viewer */}
         <div className="flex-1 min-w-0">
+          {loadingFiles ? (
+            <div className="p-4 space-y-3">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-5/6" />
+              <Skeleton className="h-4 w-4/6" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-3/4" />
+            </div>
+          ) : (
           <FileViewer
             key={selectedPath}
             path={selectedPath}
             content={selectedContent}
             onChange={handleFileContentChange}
           />
+          )}
         </div>
       </div>
 
@@ -604,34 +630,83 @@ export default function SkillsPage() {
     const skill = await api.createSkill(data);
     upsertSkill(skill);
     setSelectedId(skill.id);
+    toast.success("Skill created");
   };
 
   const handleImport = async (url: string) => {
     const skill = await api.importSkill({ url });
     upsertSkill(skill);
     setSelectedId(skill.id);
+    toast.success("Skill imported");
   };
 
   const handleUpdate = async (id: string, data: UpdateSkillRequest) => {
-    const updated = await api.updateSkill(id, data);
-    upsertSkill(updated);
+    try {
+      const updated = await api.updateSkill(id, data);
+      upsertSkill(updated);
+      toast.success("Skill saved");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to save skill");
+      throw e;
+    }
   };
 
   const handleDelete = async (id: string) => {
-    await api.deleteSkill(id);
-    if (selectedId === id) {
-      const remaining = skills.filter((s) => s.id !== id);
-      setSelectedId(remaining[0]?.id ?? "");
+    try {
+      await api.deleteSkill(id);
+      if (selectedId === id) {
+        const remaining = skills.filter((s) => s.id !== id);
+        setSelectedId(remaining[0]?.id ?? "");
+      }
+      removeSkill(id);
+      toast.success("Skill deleted");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete skill");
     }
-    removeSkill(id);
   };
 
   const selected = skills.find((s) => s.id === selectedId) ?? null;
 
   if (isLoading) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        Loading...
+      <div className="flex flex-1 min-h-0">
+        {/* List skeleton */}
+        <div className="w-72 border-r">
+          <div className="flex h-12 items-center justify-between border-b px-4">
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-6 w-6 rounded" />
+          </div>
+          <div className="divide-y">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 px-4 py-3">
+                <Skeleton className="h-8 w-8 rounded-lg" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-3 w-40" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Detail skeleton */}
+        <div className="flex-1 flex flex-col">
+          <div className="flex items-center gap-3 border-b px-4 py-3">
+            <Skeleton className="h-8 w-8 rounded-lg" />
+            <Skeleton className="h-8 w-40" />
+            <Skeleton className="h-8 w-56" />
+          </div>
+          <div className="flex flex-1 min-h-0">
+            <div className="w-48 border-r p-3 space-y-2">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-3/4" />
+            </div>
+            <div className="flex-1 p-4 space-y-2">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-5/6" />
+              <Skeleton className="h-4 w-2/3" />
+            </div>
+          </div>
+        </div>
       </div>
     );
   }

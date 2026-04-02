@@ -7,8 +7,8 @@ import type {
   IssueReactionRemovedPayload,
 } from "@/shared/types";
 import { api } from "@/shared/api";
-import { useWSEvent, useWSReconnect } from "@/features/realtime";
 import { toast } from "sonner";
+import { useWSEvent, useWSReconnect } from "@/features/realtime";
 
 export function useIssueReactions(issueId: string, userId?: string) {
   const [reactions, setReactions] = useState<IssueReaction[]>([]);
@@ -21,7 +21,10 @@ export function useIssueReactions(issueId: string, userId?: string) {
     api
       .getIssue(issueId)
       .then((iss) => setReactions(iss.reactions ?? []))
-      .catch(console.error)
+      .catch((e) => {
+        console.error(e);
+        toast.error("Failed to load reactions");
+      })
       .finally(() => setLoading(false));
   }, [issueId]);
 

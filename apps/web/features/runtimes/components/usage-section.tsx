@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { BarChart3 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { RuntimeUsage } from "@/shared/types";
 import { api } from "@/shared/api";
 import { formatTokens, estimateCost, aggregateByDate } from "../utils";
@@ -38,7 +39,22 @@ export function UsageSection({ runtimeId }: { runtimeId: string }) {
 
   if (loading) {
     return (
-      <div className="text-xs text-muted-foreground">Loading usage...</div>
+      <div className="space-y-4">
+        <div className="flex items-center gap-1">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-8 w-12 rounded-md" />
+          ))}
+        </div>
+        <div className="grid grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 rounded-lg" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <Skeleton className="h-64 rounded-lg" />
+          <Skeleton className="h-64 rounded-lg" />
+        </div>
+      </div>
     );
   }
 

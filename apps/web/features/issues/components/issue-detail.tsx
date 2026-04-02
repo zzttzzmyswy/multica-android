@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -214,23 +215,26 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
       .then((iss) => {
         useIssueStore.getState().addIssue(iss);
       })
-      .catch(console.error)
+      .catch((e) => {
+        console.error(e);
+        toast.error("Failed to load issue");
+      })
       .finally(() => setIssueLoading(false));
   }, [id, !!issue]);
 
   // Custom hooks — encapsulate timeline, reactions, subscribers
   const {
-    timeline, submitting, submitComment, submitReply,
+    timeline, loading: timelineLoading, submitting, submitComment, submitReply,
     editComment, deleteComment, toggleReaction: handleToggleReaction,
   } = useIssueTimeline(id, user?.id);
 
   const {
-    reactions: issueReactions,
+    reactions: issueReactions, loading: reactionsLoading,
     toggleReaction: handleToggleIssueReaction,
   } = useIssueReactions(id, user?.id);
 
   const {
-    subscribers, isSubscribed, toggleSubscribe: handleToggleSubscribe, toggleSubscriber,
+    subscribers, loading: subscribersLoading, isSubscribed, toggleSubscribe: handleToggleSubscribe, toggleSubscriber,
   } = useIssueSubscribers(id, user?.id);
 
   const loading = issueLoading;
@@ -305,8 +309,51 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
 
   if (loading) {
     return (
-      <div className="flex flex-1 min-h-0 items-center justify-center text-sm text-muted-foreground">
-        Loading...
+      <div className="flex flex-1 min-h-0 flex-col">
+        {/* Header skeleton */}
+        <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-4 w-4" />
+          <Skeleton className="h-4 w-24" />
+        </div>
+        <div className="flex flex-1 min-h-0">
+          {/* Content skeleton */}
+          <div className="flex-1 p-8 space-y-6">
+            <Skeleton className="h-8 w-3/4" />
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-5/6" />
+              <Skeleton className="h-4 w-2/3" />
+            </div>
+            <Skeleton className="h-px w-full" />
+            <div className="space-y-3">
+              <Skeleton className="h-4 w-20" />
+              <div className="flex items-start gap-3">
+                <Skeleton className="h-8 w-8 rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-16 w-full rounded-lg" />
+                </div>
+              </div>
+            </div>
+          </div>
+          {/* Sidebar skeleton */}
+          <div className="w-64 border-l p-4 space-y-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center justify-between">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-5 w-24" />
+              </div>
+            ))}
+            <Skeleton className="h-px w-full" />
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex items-center justify-between">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-4 w-28" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -606,11 +653,18 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
           />
 
           <div className="flex items-center gap-1 mt-3">
-            <ReactionBar
-              reactions={issueReactions}
-              currentUserId={user?.id}
-              onToggle={handleToggleIssueReaction}
-            />
+            {reactionsLoading ? (
+              <div className="flex items-center gap-1">
+                <Skeleton className="h-7 w-14 rounded-full" />
+                <Skeleton className="h-7 w-14 rounded-full" />
+              </div>
+            ) : (
+              <ReactionBar
+                reactions={issueReactions}
+                currentUserId={user?.id}
+                onToggle={handleToggleIssueReaction}
+              />
+            )}
             <FileUploadButton
               size="sm"
               onUpload={handleDescriptionUpload}
@@ -627,6 +681,15 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                 <h2 className="text-base font-semibold">Activity</h2>
               </div>
               <div className="flex items-center gap-2">
+                {subscribersLoading ? (
+                  <div className="flex items-center gap-1">
+                    <Skeleton className="h-4 w-16" />
+                    <div className="flex -space-x-1">
+                      <Skeleton className="h-6 w-6 rounded-full" />
+                      <Skeleton className="h-6 w-6 rounded-full" />
+                    </div>
+                  </div>
+                ) : (<>
                 <button
                   onClick={handleToggleSubscribe}
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -704,6 +767,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                     </Command>
                   </PopoverContent>
                 </Popover>
+                </>)}
               </div>
             </div>
 
@@ -722,7 +786,19 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
 
             {/* Timeline entries */}
             <div className="mt-4 flex flex-col gap-3">
-              {(() => {
+              {timelineLoading ? (
+                <div className="space-y-4">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="flex items-start gap-3 px-4">
+                      <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-16 w-full rounded-lg" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (() => {
                 const topLevel = timeline.filter((e) => e.type === "activity" || !e.parent_id);
                 const repliesByParent = new Map<string, TimelineEntry[]>();
                 for (const e of timeline) {
@@ -773,9 +849,8 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                   if (group.type === "comment") {
                     const entry = group.entries[0]!;
                     return (
-                      <div id={`comment-${entry.id}`}>
+                      <div key={entry.id} id={`comment-${entry.id}`}>
                         <CommentCard
-                          key={entry.id}
                           issueId={id}
                           entry={entry}
                           allReplies={repliesByParent}

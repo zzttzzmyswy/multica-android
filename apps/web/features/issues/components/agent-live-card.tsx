@@ -7,6 +7,7 @@ import { useWSEvent } from "@/features/realtime";
 import type { TaskMessagePayload, TaskCompletedPayload, TaskFailedPayload, TaskCancelledPayload } from "@/shared/types/events";
 import type { AgentTask } from "@/shared/types/agent";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useActorName } from "@/features/workspace";
 import { redactSecrets } from "../utils/redact";
@@ -123,10 +124,10 @@ export function AgentLiveCard({ issueId, agentName }: AgentLiveCardProps) {
               setItems(timeline);
               for (const m of msgs) seenSeqs.current.add(`${m.task_id}:${m.seq}`);
             }
-          }).catch(() => {});
+          }).catch(console.error);
         }
       }
-    }).catch(() => {});
+    }).catch(console.error);
 
     return () => { cancelled = true; };
   }, [issueId]);
@@ -207,7 +208,7 @@ export function AgentLiveCard({ issueId, agentName }: AgentLiveCardProps) {
           setItems([]);
           seenSeqs.current.clear();
         }
-      }).catch(() => {});
+      }).catch(console.error);
     }, [issueId, activeTask]),
   );
 
@@ -238,7 +239,8 @@ export function AgentLiveCard({ issueId, agentName }: AgentLiveCardProps) {
     setCancelling(true);
     try {
       await api.cancelTask(issueId, activeTask.id);
-    } catch {
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to cancel task");
       setCancelling(false);
     }
   }, [activeTask, issueId, cancelling]);
@@ -321,7 +323,7 @@ export function TaskRunHistory({ issueId }: TaskRunHistoryProps) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    api.listTasksByIssue(issueId).then(setTasks).catch(() => {});
+    api.listTasksByIssue(issueId).then(setTasks).catch(console.error);
   }, [issueId]);
 
   // Refresh when a task completes
@@ -330,7 +332,7 @@ export function TaskRunHistory({ issueId }: TaskRunHistoryProps) {
     useCallback((payload: unknown) => {
       const p = payload as TaskCompletedPayload;
       if (p.issue_id !== issueId) return;
-      api.listTasksByIssue(issueId).then(setTasks).catch(() => {});
+      api.listTasksByIssue(issueId).then(setTasks).catch(console.error);
     }, [issueId]),
   );
 
@@ -339,7 +341,7 @@ export function TaskRunHistory({ issueId }: TaskRunHistoryProps) {
     useCallback((payload: unknown) => {
       const p = payload as TaskFailedPayload;
       if (p.issue_id !== issueId) return;
-      api.listTasksByIssue(issueId).then(setTasks).catch(() => {});
+      api.listTasksByIssue(issueId).then(setTasks).catch(console.error);
     }, [issueId]),
   );
 
@@ -349,7 +351,7 @@ export function TaskRunHistory({ issueId }: TaskRunHistoryProps) {
     useCallback((payload: unknown) => {
       const p = payload as TaskCancelledPayload;
       if (p.issue_id !== issueId) return;
-      api.listTasksByIssue(issueId).then(setTasks).catch(() => {});
+      api.listTasksByIssue(issueId).then(setTasks).catch(console.error);
     }, [issueId]),
   );
 
@@ -382,7 +384,10 @@ function TaskRunEntry({ task }: { task: AgentTask }) {
     if (items !== null) return; // already loaded
     api.listTaskMessages(task.id).then((msgs) => {
       setItems(buildTimeline(msgs));
-    }).catch(() => setItems([]));
+    }).catch((e) => {
+      console.error(e);
+      setItems([]);
+    });
   }, [task.id, items]);
 
   useEffect(() => {

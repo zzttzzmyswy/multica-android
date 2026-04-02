@@ -13,6 +13,16 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { ReactionBar } from "@/components/common/reaction-bar";
@@ -45,6 +55,43 @@ interface CommentCardProps {
 }
 
 // ---------------------------------------------------------------------------
+// Shared delete confirmation dialog
+// ---------------------------------------------------------------------------
+
+function DeleteCommentDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+  hasReplies,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => void;
+  hasReplies?: boolean;
+}) {
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete comment</AlertDialogTitle>
+          <AlertDialogDescription>
+            {hasReplies
+              ? "This comment and all its replies will be permanently deleted. This cannot be undone."
+              : "This comment will be permanently deleted. This cannot be undone."}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction variant="destructive" onClick={onConfirm}>
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Single comment row (used for both parent and replies within the same Card)
 // ---------------------------------------------------------------------------
 
@@ -71,6 +118,7 @@ function CommentRow({
 
   const isOwn = entry.actor_type === "member" && entry.actor_id === currentUserId;
   const isTemp = entry.id.startsWith("temp-");
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const startEdit = () => {
     cancelledRef.current = false;
@@ -152,7 +200,7 @@ function CommentRow({
                     Edit
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => onDelete(entry.id)} variant="destructive">
+                  <DropdownMenuItem onClick={() => setConfirmDelete(true)} variant="destructive">
                     <Trash2 className="h-3.5 w-3.5" />
                     Delete
                   </DropdownMenuItem>
@@ -160,6 +208,11 @@ function CommentRow({
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+          <DeleteCommentDialog
+            open={confirmDelete}
+            onOpenChange={setConfirmDelete}
+            onConfirm={() => onDelete(entry.id)}
+          />
           </div>
         )}
       </div>
@@ -234,6 +287,7 @@ function CommentCard({
 
   const isOwn = entry.actor_type === "member" && entry.actor_id === currentUserId;
   const isTemp = entry.id.startsWith("temp-");
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const startEdit = () => {
     cancelledRef.current = false;
@@ -347,7 +401,7 @@ function CommentCard({
                         Edit
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => onDelete(entry.id)} variant="destructive">
+                      <DropdownMenuItem onClick={() => setConfirmDelete(true)} variant="destructive">
                         <Trash2 className="h-3.5 w-3.5" />
                         Delete
                       </DropdownMenuItem>
@@ -355,6 +409,12 @@ function CommentCard({
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
+              <DeleteCommentDialog
+                open={confirmDelete}
+                onOpenChange={setConfirmDelete}
+                onConfirm={() => onDelete(entry.id)}
+                hasReplies
+              />
               </div>
             )}
           </div>
