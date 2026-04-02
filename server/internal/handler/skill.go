@@ -959,7 +959,7 @@ func (h *Handler) SetAgentSkills(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, ok := h.requireWorkspaceRole(w, r, uuidToString(agent.WorkspaceID), "agent not found", "owner", "admin"); !ok {
+	if !h.canManageAgent(w, r, agent) {
 		return
 	}
 
