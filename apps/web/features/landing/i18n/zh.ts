@@ -273,6 +273,23 @@ export const zh: LandingDict = {
     subtitle: "Multica \u7684\u6700\u65b0\u66f4\u65b0\u548c\u6539\u8fdb\u3002",
     entries: [
       {
+        version: "0.1.5",
+        date: "2026-04-02",
+        title: "提及与权限",
+        changes: [
+          "评论中支持 @提及 Issue，服务端自动展开",
+          "支持 @all 提及工作区所有成员",
+          "收件箱通知点击后自动滚动到对应评论",
+          "仓库管理独立为设置页单独标签页",
+          "支持从网页端运行时页面更新 CLI，非 Homebrew 安装支持直接下载更新",
+          "新增 CLI 命令查看 Issue 执行记录和运行消息",
+          "Agent 权限模型优化——所有者和管理员管理 Agent，成员可管理自己 Agent 的技能",
+          "每个 Issue 串行执行，防止并发任务冲突",
+          "文件上传支持所有文件类型",
+          "README 重新设计，新增快速入门指南",
+        ],
+      },
+      {
         version: "0.1.4",
         date: "2026-04-01",
         title: "\u6211\u7684 Issue \u4e0e\u56fd\u9645\u5316",
