@@ -556,8 +556,19 @@ func runIssueCommentList(cmd *cobra.Command, args []string) error {
 	}
 
 	var comments []map[string]any
-	if err := client.GetJSON(ctx, path, &comments); err != nil {
-		return fmt.Errorf("list comments: %w", err)
+	isPaginated := len(params) > 0
+	if isPaginated {
+		headers, getErr := client.GetJSONWithHeaders(ctx, path, &comments)
+		if getErr != nil {
+			return fmt.Errorf("list comments: %w", getErr)
+		}
+		if total := headers.Get("X-Total-Count"); total != "" {
+			fmt.Fprintf(os.Stderr, "Showing %d of %s comments.\n", len(comments), total)
+		}
+	} else {
+		if err := client.GetJSON(ctx, path, &comments); err != nil {
+			return fmt.Errorf("list comments: %w", err)
+		}
 	}
 
 	output, _ := cmd.Flags().GetString("output")

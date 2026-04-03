@@ -109,11 +109,16 @@ func (h *Handler) ListComments(w http.ResponseWriter, r *http.Request) {
 			Offset:      offset,
 		})
 	case sinceTime.Valid:
-		comments, err = h.Queries.ListCommentsSince(r.Context(), db.ListCommentsSinceParams{
+		// Apply a server-side cap to prevent unbounded result sets when
+		// --since is used without --limit.
+		comments, err = h.Queries.ListCommentsSincePaginated(r.Context(), db.ListCommentsSincePaginatedParams{
 			IssueID:     issue.ID,
 			WorkspaceID: issue.WorkspaceID,
 			CreatedAt:   sinceTime,
+			Limit:       500,
+			Offset:      0,
 		})
+		hasPagination = true
 	case hasPagination:
 		if limit == 0 {
 			limit = 50
