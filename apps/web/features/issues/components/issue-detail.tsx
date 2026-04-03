@@ -513,7 +513,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                         {issue.assignee_type === "member" && issue.assignee_id === m.user_id && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
                       </DropdownMenuItem>
                     ))}
-                    {agents.filter((a) => canAssignAgent(a, user?.id, currentMemberRole)).map((a) => (
+                    {agents.filter((a) => !a.archived_at && canAssignAgent(a, user?.id, currentMemberRole)).map((a) => (
                       <DropdownMenuItem
                         key={a.id}
                         onClick={() => handleUpdateField({ assignee_type: "agent", assignee_id: a.id })}
@@ -742,9 +742,9 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                             })}
                           </CommandGroup>
                         )}
-                        {agents.length > 0 && (
+                        {agents.filter((a) => !a.archived_at).length > 0 && (
                           <CommandGroup heading="Agents">
-                            {agents.map((a) => {
+                            {agents.filter((a) => !a.archived_at).map((a) => {
                               const sub = subscribers.find((s) => s.user_type === "agent" && s.user_id === a.id);
                               const isSubbed = !!sub;
                               return (
@@ -771,12 +771,11 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
             </div>
 
             {/* Agent live output */}
-            <div className="mt-4">
-              <AgentLiveCard
-                issueId={id}
-                agentName={issue.assignee_type === "agent" && issue.assignee_id ? getActorName("agent", issue.assignee_id) : undefined}
-              />
-            </div>
+            <AgentLiveCard
+              issueId={id}
+              agentName={issue.assignee_type === "agent" && issue.assignee_id ? getActorName("agent", issue.assignee_id) : undefined}
+              scrollContainerRef={scrollContainerRef}
+            />
 
             {/* Agent execution history */}
             <div className="mt-3">

@@ -230,6 +230,20 @@ func TestCommentTriggerOnComment(t *testing.T) {
 			t.Errorf("expected 1 pending task (assignee mentioned in member thread), got %d", n)
 		}
 	})
+
+	t.Run("reply to member thread that @mentioned assignee triggers without re-mention", func(t *testing.T) {
+		clearTasks(t, issueID)
+		// Member starts a thread that @mentions the assignee agent.
+		content := fmt.Sprintf("[@Agent](mention://agent/%s) can you review this?", agentID)
+		threadID := postComment(t, issueID, content, nil)
+		// Clear the task created by the top-level mention.
+		clearTasks(t, issueID)
+		// Reply in the thread WITHOUT re-mentioning the assignee.
+		postComment(t, issueID, "Here is more context for you", strPtr(threadID))
+		if n := countPendingTasks(t, issueID); n != 1 {
+			t.Errorf("expected 1 pending task (assignee mentioned in thread root), got %d", n)
+		}
+	})
 }
 
 // TestCommentTriggerAtAllSuppression verifies that @all mentions do not

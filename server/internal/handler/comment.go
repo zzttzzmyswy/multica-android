@@ -227,6 +227,8 @@ func (h *Handler) commentMentionsOthersButNotAssignee(content string, issue db.I
 // continuing a human conversation — not requesting work from the assigned agent.
 // Replying to an agent-started thread, or explicitly @mentioning the assignee
 // in the reply, still triggers on_comment as expected.
+// If the parent (thread root) itself @mentions the assignee, the thread is
+// considered a conversation with the agent, so replies are allowed to trigger.
 func (h *Handler) isReplyToMemberThread(parent *db.Comment, content string, issue db.Issue) bool {
 	if parent == nil {
 		return false // Not a reply — normal top-level comment
@@ -235,14 +237,22 @@ func (h *Handler) isReplyToMemberThread(parent *db.Comment, content string, issu
 		return false // Thread started by an agent — allow trigger
 	}
 	// Thread was started by a member. Suppress on_comment unless the reply
-	// explicitly @mentions the assignee agent.
+	// or the parent explicitly @mentions the assignee agent.
 	if !issue.AssigneeID.Valid {
 		return true // No assignee to mention
 	}
 	assigneeID := uuidToString(issue.AssigneeID)
+	// Check current comment mentions.
 	for _, m := range util.ParseMentions(content) {
 		if m.ID == assigneeID {
-			return false // Assignee explicitly mentioned — allow trigger
+			return false // Assignee explicitly mentioned in reply — allow trigger
+		}
+	}
+	// Check parent (thread root) mentions — if the thread was started by
+	// mentioning the assignee, replies continue that conversation.
+	for _, m := range util.ParseMentions(parent.Content) {
+		if m.ID == assigneeID {
+			return false // Assignee mentioned in thread root — allow trigger
 		}
 	}
 	return true // Reply to member thread without mentioning agent — suppress
