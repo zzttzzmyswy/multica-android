@@ -90,9 +90,17 @@ export const useInboxStore = create<InboxState>((set, get) => ({
       items: s.items.map((i) => (i.id === id ? { ...i, read: true } : i)),
     })),
   archive: (id) =>
-    set((s) => ({
-      items: s.items.map((i) => (i.id === id ? { ...i, archived: true } : i)),
-    })),
+    set((s) => {
+      const target = s.items.find((i) => i.id === id);
+      const issueId = target?.issue_id;
+      return {
+        items: s.items.map((i) =>
+          i.id === id || (issueId && i.issue_id === issueId)
+            ? { ...i, archived: true }
+            : i,
+        ),
+      };
+    }),
   markAllRead: () =>
     set((s) => ({
       items: s.items.map((i) => (!i.archived ? { ...i, read: true } : i)),
