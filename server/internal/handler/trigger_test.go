@@ -117,8 +117,20 @@ func TestIsReplyToMemberThread(t *testing.T) {
 	h := &Handler{}
 	issue := issueWithAgentAssignee()
 
-	memberParent := &db.Comment{AuthorType: "member", AuthorID: testUUID(memberID)}
-	agentParent := &db.Comment{AuthorType: "agent", AuthorID: testUUID(agentAssigneeID)}
+	memberParent := &db.Comment{AuthorType: "member", AuthorID: testUUID(memberID), Content: "plain thread starter"}
+	agentParent := &db.Comment{AuthorType: "agent", AuthorID: testUUID(agentAssigneeID), Content: "agent thread starter"}
+	// Member-started thread root that @mentions the assignee agent.
+	memberParentMentioningAssignee := &db.Comment{
+		AuthorType: "member",
+		AuthorID:   testUUID(memberID),
+		Content:    fmt.Sprintf("[@Agent](mention://agent/%s) can you look at this?", agentAssigneeID),
+	}
+	// Member-started thread root that @mentions a non-assignee agent.
+	memberParentMentioningOther := &db.Comment{
+		AuthorType: "member",
+		AuthorID:   testUUID(memberID),
+		Content:    fmt.Sprintf("[@Other](mention://agent/%s) what do you think?", otherAgentID),
+	}
 
 	tests := []struct {
 		name    string
@@ -168,6 +180,18 @@ func TestIsReplyToMemberThread(t *testing.T) {
 			content: fmt.Sprintf("[@Other](mention://agent/%s) take a look", otherAgentID),
 			want:    true,
 		},
+		{
+			name:    "reply to member thread that @mentioned assignee, no re-mention → allow",
+			parent:  memberParentMentioningAssignee,
+			content: "here is more context for you",
+			want:    false,
+		},
+		{
+			name:    "reply to member thread that @mentioned other agent, no re-mention → suppress",
+			parent:  memberParentMentioningOther,
+			content: "here is more context",
+			want:    true, // parent mentioned other agent, not assignee — still suppress on_comment
+		},
 	}
 
 	for _, tt := range tests {
@@ -188,8 +212,13 @@ func TestOnCommentTriggerDecision(t *testing.T) {
 	h := &Handler{}
 	issue := issueWithAgentAssignee()
 
-	memberParent := &db.Comment{AuthorType: "member", AuthorID: testUUID(memberID)}
-	agentParent := &db.Comment{AuthorType: "agent", AuthorID: testUUID(agentAssigneeID)}
+	memberParent := &db.Comment{AuthorType: "member", AuthorID: testUUID(memberID), Content: "plain thread starter"}
+	agentParent := &db.Comment{AuthorType: "agent", AuthorID: testUUID(agentAssigneeID), Content: "agent thread starter"}
+	memberParentMentioningAssignee := &db.Comment{
+		AuthorType: "member",
+		AuthorID:   testUUID(memberID),
+		Content:    fmt.Sprintf("[@Agent](mention://agent/%s) help me", agentAssigneeID),
+	}
 
 	// Simulates the combined check from CreateComment:
 	//   !commentMentionsOthersButNotAssignee && !isReplyToMemberThread
@@ -213,6 +242,7 @@ func TestOnCommentTriggerDecision(t *testing.T) {
 		{"reply member thread, no mention", memberParent, "agreed", false},
 		{"reply member thread, mention other member", memberParent, fmt.Sprintf("[@Bob](mention://member/%s) ok", memberID), false},
 		{"reply member thread, mention assignee", memberParent, fmt.Sprintf("[@Agent](mention://agent/%s) help", agentAssigneeID), true},
+		{"reply member thread that @mentioned assignee, no re-mention", memberParentMentioningAssignee, "here is more info", true},
 		{"top-level, @all broadcast", nil, "[@All](mention://all/all) heads up team", false},
 		{"reply agent thread, @all broadcast", agentParent, "[@All](mention://all/all) update for everyone", false},
 		{"reply member thread, @all broadcast", memberParent, "[@All](mention://all/all) fyi", false},
