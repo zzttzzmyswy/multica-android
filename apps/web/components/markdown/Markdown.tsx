@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm'
 import { cn } from '@/lib/utils'
 import { CodeBlock, InlineCode } from './CodeBlock'
 import { preprocessLinks } from './linkify'
+import { preprocessMentionShortcodes } from './mentions'
 import { IssueMentionCard } from '@/features/issues/components/issue-mention-card'
 
 /**
@@ -53,27 +54,6 @@ function urlTransform(url: string): string {
   return defaultUrlTransform(url)
 }
 
-/**
- * Convert legacy mention shortcodes [@ id="UUID" label="LABEL"] to markdown
- * link format [@LABEL](mention://member/UUID) so they render as styled mentions.
- */
-function preprocessMentionShortcodes(text: string): string {
-  if (!text.includes('[@ ')) return text
-  return text.replace(
-    /\[@\s+([^\]]*)\]/g,
-    (match, attrString: string) => {
-      const attrs: Record<string, string> = {}
-      const re = /(\w+)="([^"]*)"/g
-      let m
-      while ((m = re.exec(attrString)) !== null) {
-        if (m[1] && m[2] !== undefined) attrs[m[1]] = m[2]
-      }
-      const { id, label } = attrs
-      if (!id || !label) return match
-      return `[@${label}](mention://member/${id})`
-    }
-  )
-}
 
 // File path detection regex - matches paths starting with /, ~/, or ./
 const FILE_PATH_REGEX =

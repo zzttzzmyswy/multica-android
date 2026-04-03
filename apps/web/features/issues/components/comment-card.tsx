@@ -30,8 +30,7 @@ import { QuickEmojiPicker } from "@/components/common/quick-emoji-picker";
 import { cn } from "@/lib/utils";
 import { useActorName } from "@/features/workspace";
 import { timeAgo } from "@/shared/utils";
-import { RichTextEditor, type RichTextEditorRef } from "@/components/common/rich-text-editor";
-import { ReadonlyEditor } from "@/components/common/readonly-editor";
+import { ContentEditor, type ContentEditorRef, copyMarkdown } from "@/features/editor";
 import { FileUploadButton } from "@/components/common/file-upload-button";
 import { useFileUpload } from "@/shared/hooks/use-file-upload";
 import { ReplyInput } from "./reply-input";
@@ -112,7 +111,7 @@ function CommentRow({
 }) {
   const { getActorName } = useActorName();
   const [editing, setEditing] = useState(false);
-  const editEditorRef = useRef<RichTextEditorRef>(null);
+  const editEditorRef = useRef<ContentEditorRef>(null);
   const cancelledRef = useRef(false);
   const { uploadWithToast } = useFileUpload();
 
@@ -186,7 +185,7 @@ function CommentRow({
             />
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => {
-                navigator.clipboard.writeText(entry.content ?? "");
+                copyMarkdown(entry.content ?? "");
                 toast.success("Copied");
               }}>
                 <Copy className="h-3.5 w-3.5" />
@@ -223,7 +222,7 @@ function CommentRow({
           onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); }}
         >
           <div className="max-h-48 overflow-y-auto text-sm leading-relaxed">
-            <RichTextEditor
+            <ContentEditor
               ref={editEditorRef}
               defaultValue={entry.content ?? ""}
               placeholder="Edit comment..."
@@ -246,7 +245,7 @@ function CommentRow({
       ) : (
         <>
           <div className="mt-1.5 pl-8 text-sm leading-relaxed text-foreground/85">
-            <ReadonlyEditor content={entry.content ?? ""} />
+            <ContentEditor defaultValue={entry.content ?? ""} editable={false} />
           </div>
           {!isTemp && (
             <ReactionBar
@@ -282,7 +281,7 @@ function CommentCard({
   const { uploadWithToast } = useFileUpload();
   const [open, setOpen] = useState(true);
   const [editing, setEditing] = useState(false);
-  const editEditorRef = useRef<RichTextEditorRef>(null);
+  const editEditorRef = useRef<ContentEditorRef>(null);
   const cancelledRef = useRef(false);
 
   const isOwn = entry.actor_type === "member" && entry.actor_id === currentUserId;
@@ -387,7 +386,7 @@ function CommentCard({
                 />
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={() => {
-                    navigator.clipboard.writeText(entry.content ?? "");
+                    copyMarkdown(entry.content ?? "");
                     toast.success("Copied");
                   }}>
                     <Copy className="h-3.5 w-3.5" />
@@ -430,7 +429,7 @@ function CommentCard({
                 onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); }}
               >
                 <div className="max-h-48 overflow-y-auto text-sm leading-relaxed">
-                  <RichTextEditor
+                  <ContentEditor
                     ref={editEditorRef}
                     defaultValue={entry.content ?? ""}
                     placeholder="Edit comment..."
@@ -452,7 +451,7 @@ function CommentCard({
             ) : (
               <>
                 <div className="pl-10 text-sm leading-relaxed text-foreground/85">
-                  <ReadonlyEditor content={entry.content ?? ""} />
+                  <ContentEditor defaultValue={entry.content ?? ""} editable={false} />
                 </div>
                 {!isTemp && (
                   <ReactionBar

@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { ArrowUp, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { RichTextEditor, type RichTextEditorRef } from "@/components/common/rich-text-editor";
+import { ContentEditor, type ContentEditorRef } from "@/features/editor";
 import { FileUploadButton } from "@/components/common/file-upload-button";
 import { useFileUpload } from "@/shared/hooks/use-file-upload";
 
@@ -13,7 +13,7 @@ interface CommentInputProps {
 }
 
 function CommentInput({ issueId, onSubmit }: CommentInputProps) {
-  const editorRef = useRef<RichTextEditorRef>(null);
+  const editorRef = useRef<ContentEditorRef>(null);
   const [isEmpty, setIsEmpty] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const { uploadWithToast } = useFileUpload();
@@ -38,7 +38,7 @@ function CommentInput({ issueId, onSubmit }: CommentInputProps) {
   return (
     <div className="relative flex max-h-56 flex-col rounded-lg bg-card pb-8 ring-1 ring-border">
       <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2">
-        <RichTextEditor
+        <ContentEditor
           ref={editorRef}
           placeholder="Leave a comment..."
           onUpdate={(md) => setIsEmpty(!md.trim())}
