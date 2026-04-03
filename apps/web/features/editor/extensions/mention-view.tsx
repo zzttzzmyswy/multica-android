@@ -38,27 +38,24 @@ function IssueMention({
     window.open(`/issues/${issueId}`, "_blank", "noopener,noreferrer");
   };
 
+  const cardClass =
+    "issue-mention inline-flex items-center gap-1.5 rounded-md border mx-0.5 px-2 py-0.5 text-xs hover:bg-accent transition-colors cursor-pointer max-w-72";
+
   if (!issue) {
     return (
-      <a
-        href={`/issues/${issueId}`}
-        onClick={handleClick}
-        className="issue-mention text-primary font-medium cursor-pointer hover:underline"
-      >
-        {fallbackLabel ?? issueId.slice(0, 8)}
+      <a href={`/issues/${issueId}`} onClick={handleClick} className={cardClass}>
+        <span className="font-medium text-muted-foreground">
+          {fallbackLabel ?? issueId.slice(0, 8)}
+        </span>
       </a>
     );
   }
 
   return (
-    <a
-      href={`/issues/${issueId}`}
-      onClick={handleClick}
-      className="issue-mention inline-flex items-center gap-2 rounded-md border mx-0.5 px-2.5 py-px text-xs leading-relaxed hover:bg-accent transition-colors cursor-pointer"
-    >
-      <StatusIcon status={issue.status} className="h-3.5 w-3.5" />
-      <span className="font-medium text-muted-foreground">{issue.identifier}</span>
-      <span className="text-foreground">{issue.title}</span>
+    <a href={`/issues/${issueId}`} onClick={handleClick} className={cardClass}>
+      <StatusIcon status={issue.status} className="h-3.5 w-3.5 shrink-0" />
+      <span className="font-medium text-muted-foreground shrink-0">{issue.identifier}</span>
+      <span className="text-foreground truncate">{issue.title}</span>
     </a>
   );
 }
