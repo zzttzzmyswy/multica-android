@@ -771,12 +771,11 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
             </div>
 
             {/* Agent live output */}
-            <div className="mt-4">
-              <AgentLiveCard
-                issueId={id}
-                agentName={issue.assignee_type === "agent" && issue.assignee_id ? getActorName("agent", issue.assignee_id) : undefined}
-              />
-            </div>
+            <AgentLiveCard
+              issueId={id}
+              agentName={issue.assignee_type === "agent" && issue.assignee_id ? getActorName("agent", issue.assignee_id) : undefined}
+              scrollContainerRef={scrollContainerRef}
+            />
 
             {/* Agent execution history */}
             <div className="mt-3">

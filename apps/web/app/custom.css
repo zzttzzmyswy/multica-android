@@ -30,3 +30,12 @@
   background-color: var(--sidebar-accent);
   color: var(--sidebar-accent-foreground);
 }
+
+/* Sonner toast: align icon to first line of text, not vertically centered */
+[data-sonner-toast] {
+  align-items: flex-start !important;
+}
+
+[data-sonner-toast] [data-icon] {
+  margin-top: 2.5px;
+}
