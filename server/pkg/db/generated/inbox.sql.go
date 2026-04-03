@@ -66,6 +66,31 @@ func (q *Queries) ArchiveCompletedInbox(ctx context.Context, arg ArchiveComplete
 	return result.RowsAffected(), nil
 }
 
+const archiveInboxByIssue = `-- name: ArchiveInboxByIssue :execrows
+UPDATE inbox_item SET archived = true
+WHERE workspace_id = $1 AND recipient_type = $2 AND recipient_id = $3 AND issue_id = $4 AND archived = false
+`
+
+type ArchiveInboxByIssueParams struct {
+	WorkspaceID   pgtype.UUID `json:"workspace_id"`
+	RecipientType string      `json:"recipient_type"`
+	RecipientID   pgtype.UUID `json:"recipient_id"`
+	IssueID       pgtype.UUID `json:"issue_id"`
+}
+
+func (q *Queries) ArchiveInboxByIssue(ctx context.Context, arg ArchiveInboxByIssueParams) (int64, error) {
+	result, err := q.db.Exec(ctx, archiveInboxByIssue,
+		arg.WorkspaceID,
+		arg.RecipientType,
+		arg.RecipientID,
+		arg.IssueID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const archiveInboxItem = `-- name: ArchiveInboxItem :one
 UPDATE inbox_item SET archived = true
 WHERE id = $1
