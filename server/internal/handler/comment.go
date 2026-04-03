@@ -202,8 +202,16 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 // is announcing to everyone, not specifically requesting work from the agent.
 func (h *Handler) commentMentionsOthersButNotAssignee(content string, issue db.Issue) bool {
 	mentions := util.ParseMentions(content)
+	// Filter out issue mentions — they are cross-references, not @people.
+	filtered := mentions[:0]
+	for _, m := range mentions {
+		if m.Type != "issue" {
+			filtered = append(filtered, m)
+		}
+	}
+	mentions = filtered
 	if len(mentions) == 0 {
-		return false // No mentions — normal on_comment behavior
+		return false // No mentions (or only issue refs) — normal on_comment behavior
 	}
 	// @all is a broadcast to all members — suppress agent trigger.
 	if util.HasMentionAll(mentions) {
