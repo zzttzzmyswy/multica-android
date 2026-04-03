@@ -1,4 +1,29 @@
-/* Rich text editor: ProseMirror styles using shadcn design tokens */
+/*
+ * ContentEditor typography — ProseMirror styles using shadcn design tokens.
+ *
+ * Design tier: "Compact" (same tier as Linear, Slack). Optimized for short-form
+ * content (issue descriptions, comments) that users scan, not long-form reading.
+ *
+ * Typography values benchmarked against (April 2026):
+ *   - github-markdown-css (GitHub's markdown renderer)
+ *   - @tailwindcss/typography prose-sm preset
+ *   - Linear's editor (Tiptap-based, 14px body)
+ *
+ * Key decisions:
+ *   Body: 14px (text-sm), line-height 1.625 (between GitHub 1.5 and Tailwind 1.714)
+ *   Headings: h1=22px (1.57x), h2=18px (1.29x), h3=15px (1.07x) — compact but
+ *     with clear hierarchy. Previous h3 was 14px (same as body = no differentiation).
+ *   Paragraph spacing: 10px (was 8px; GitHub uses 10px, Tailwind prose-sm uses 16px)
+ *   List indent: 20px for ul (was 16px; standard is 22-32px)
+ *   Code block margin: 12px (was 8px; gives breathing room between code and prose)
+ *   Blockquote border: 3px (was 2px; GitHub/Tailwind both use 4px)
+ *   Links: var(--brand) blue with 40% opacity underline (was var(--primary) near-black)
+ *
+ * Inline elements (mention cards, inline code) that exceed line-height:
+ *   The browser auto-expands the line box for lines containing taller inline
+ *   elements. Controlled via vertical-align on [data-node-view-wrapper] and
+ *   box-decoration-break: clone on inline code.
+ */
 
 .rich-text-editor.ProseMirror {
   color: var(--foreground);

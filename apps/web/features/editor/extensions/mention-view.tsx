@@ -1,5 +1,23 @@
 "use client";
 
+/**
+ * MentionView — NodeView for rendering @mentions inline in the editor.
+ *
+ * Member/agent mentions: plain "@Name" text with .mention class styling.
+ * Issue mentions: inline card with StatusIcon + identifier + title.
+ *
+ * Issue card sizing: must fit within the paragraph line box (14px * 1.625
+ * = 22.75px). Card uses text-xs (12px) + py-0.5 + border ≈ 22px total.
+ * vertical-align: middle is set on the [data-node-view-wrapper] in CSS
+ * (not on the <a> tag) because the wrapper is the outermost inline element
+ * that participates in line box calculation. Setting it on the inner <a>
+ * had no effect since the wrapper was already positioned.
+ *
+ * Fallback: when issue is not in the Zustand store (deleted or other
+ * workspace), the same card style is used with just the identifier from
+ * fallbackLabel — no visual degradation to a plain text link.
+ */
+
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 import { useIssueStore } from "@/features/issues/store";

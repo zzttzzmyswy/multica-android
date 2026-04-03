@@ -1,3 +1,24 @@
+/**
+ * Shared extension factory for ContentEditor.
+ *
+ * One function builds the extension array for BOTH edit and readonly modes.
+ * This ensures visual consistency — the same extensions parse and render
+ * content identically regardless of mode.
+ *
+ * Split:
+ * - Both modes: StarterKit, CodeBlock, Link, Image, Table, Markdown, Mention
+ * - Edit only: Typography, Placeholder, markdownPaste, submitShortcut,
+ *   fileUpload, Mention suggestion popup
+ *
+ * Link config differs: edit mode has autolink (detects URLs while typing),
+ * readonly does not (prevents false positives on display).
+ *
+ * Mention suggestion is only attached in edit mode — readonly doesn't need
+ * the autocomplete popup.
+ *
+ * All link styling is controlled by content-editor.css (var(--brand) color),
+ * not Tailwind HTMLAttributes, to keep a single source of truth.
+ */
 import type { RefObject } from "react";
 import StarterKit from "@tiptap/starter-kit";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";

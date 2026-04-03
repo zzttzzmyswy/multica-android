@@ -1,3 +1,27 @@
+/**
+ * Markdown paste extension — ensures pasted text is parsed as Markdown.
+ *
+ * Problem: The browser clipboard can contain BOTH text/plain and text/html.
+ * ProseMirror always prefers text/html when present (hardcoded in
+ * parseFromClipboard: `let asText = !html`). When copying from VS Code,
+ * text editors, or .md files, the OS wraps text in <pre>/<div> HTML tags.
+ * ProseMirror parses these as code blocks — wrong.
+ *
+ * Solution: Use `handlePaste` (the only ProseMirror prop that runs for ALL
+ * paste events and has access to raw ClipboardEvent). We check for
+ * `data-pm-slice` in the HTML — this attribute is added by ProseMirror's
+ * own clipboard serializer. If present, the source is another ProseMirror
+ * editor and its HTML is structurally correct — let ProseMirror handle it.
+ * Otherwise, ignore the HTML and parse text/plain as Markdown.
+ *
+ * Why not clipboardTextParser? It only runs when there's NO text/html on
+ * the clipboard (ProseMirror source: `let asText = !!text && !html`).
+ *
+ * Why not heuristic detection (looksLikeMarkdown / hasRichHtml)? Unreliable.
+ * VS Code's HTML contains <code> tags that fool rich-content detectors.
+ * Markdown pattern matching has too many edge cases. The data-pm-slice
+ * check is deterministic — no false positives.
+ */
 import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Slice } from "@tiptap/pm/model";

@@ -1,5 +1,30 @@
 "use client";
 
+/**
+ * ContentEditor — the single rich-text editor for the entire application.
+ *
+ * Architecture decisions (April 2026 refactor):
+ *
+ * 1. ONE COMPONENT for both editing and readonly display. The `editable` prop
+ *    controls the mode. Previously we had RichTextEditor + ReadonlyEditor as
+ *    separate components with duplicated extension configs — this caused
+ *    visual inconsistency between edit and display modes.
+ *
+ * 2. ONE MARKDOWN PIPELINE via @tiptap/markdown. Content is loaded with
+ *    `contentType: 'markdown'` and saved with `editor.getMarkdown()`.
+ *    Previously we had a custom `markdownToHtml()` pipeline (Marked library)
+ *    for loading and regex post-processing for saving — two asymmetric paths
+ *    that caused roundtrip inconsistencies. The @tiptap/markdown extension
+ *    (v3.21.0+) handles table cell <p> wrapping and custom mention tokenizers
+ *    natively, eliminating the need for the HTML detour.
+ *
+ * 3. PREPROCESSING is minimal: only legacy mention shortcode migration and
+ *    URL linkification (preprocessMarkdown). No HTML conversion.
+ *
+ * Tech: Tiptap v3.22.1 (ProseMirror wrapper), @tiptap/markdown for
+ * bidirectional Markdown ↔ ProseMirror JSON conversion.
+ */
+
 import {
   forwardRef,
   useEffect,
