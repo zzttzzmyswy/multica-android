@@ -273,6 +273,23 @@ export const en: LandingDict = {
     subtitle: "New updates and improvements to Multica.",
     entries: [
       {
+        version: "0.1.5",
+        date: "2026-04-02",
+        title: "Mentions & Permissions",
+        changes: [
+          "@mention issues in comments with server-side auto-expansion",
+          "@all mention to notify every workspace member",
+          "Inbox auto-scrolls to the referenced comment from a notification",
+          "Repositories extracted into a standalone settings tab",
+          "CLI update support from the web runtime page and direct download for non-Homebrew installs",
+          "CLI commands for viewing issue execution runs and run messages",
+          "Agent permission model — owners and admins manage agents, members manage skills on their own agents",
+          "Per-issue serial execution to prevent concurrent task collisions",
+          "File upload now supports all file types",
+          "README redesign with quickstart guide",
+        ],
+      },
+      {
         version: "0.1.4",
         date: "2026-04-01",
         title: "My Issues & i18n",
