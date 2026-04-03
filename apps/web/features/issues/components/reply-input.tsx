@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import { ArrowUp, Loader2 } from "lucide-react";
-import { RichTextEditor, type RichTextEditorRef } from "@/components/common/rich-text-editor";
+import { ContentEditor, type ContentEditorRef } from "@/features/editor";
 import { FileUploadButton } from "@/components/common/file-upload-button";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { useFileUpload } from "@/shared/hooks/use-file-upload";
@@ -33,7 +33,7 @@ function ReplyInput({
   onSubmit,
   size = "default",
 }: ReplyInputProps) {
-  const editorRef = useRef<RichTextEditorRef>(null);
+  const editorRef = useRef<ContentEditorRef>(null);
   const measureRef = useRef<HTMLDivElement>(null);
   const [isEmpty, setIsEmpty] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -87,7 +87,7 @@ function ReplyInput({
       >
         <div className="flex-1 min-h-0 overflow-y-auto pr-14">
           <div ref={measureRef}>
-            <RichTextEditor
+            <ContentEditor
               ref={editorRef}
               placeholder={placeholder}
               onUpdate={(md) => setIsEmpty(!md.trim())}

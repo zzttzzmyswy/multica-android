@@ -104,9 +104,9 @@ vi.mock("@/components/ui/calendar", () => ({
   Calendar: () => null,
 }));
 
-// Mock RichTextEditor (Tiptap needs real DOM)
-vi.mock("@/components/common/rich-text-editor", () => ({
-  RichTextEditor: forwardRef(({ defaultValue, onUpdate, placeholder, onSubmit }: any, ref: any) => {
+// Mock ContentEditor (Tiptap needs real DOM)
+vi.mock("@/features/editor", () => ({
+  ContentEditor: forwardRef(({ defaultValue, onUpdate, placeholder, onSubmit }: any, ref: any) => {
     const valueRef = useRef(defaultValue || "");
     const [value, setValue] = useState(defaultValue || "");
     useImperativeHandle(ref, () => ({
@@ -129,6 +129,27 @@ vi.mock("@/components/common/rich-text-editor", () => ({
         }}
         placeholder={placeholder}
         data-testid="rich-text-editor"
+      />
+    );
+  }),
+  TitleEditor: forwardRef(({ defaultValue, placeholder, onBlur, onChange }: any, ref: any) => {
+    const valueRef = useRef(defaultValue || "");
+    const [value, setValue] = useState(defaultValue || "");
+    useImperativeHandle(ref, () => ({
+      getText: () => valueRef.current,
+      focus: () => {},
+    }));
+    return (
+      <input
+        value={value}
+        onChange={(e) => {
+          valueRef.current = e.target.value;
+          setValue(e.target.value);
+          onChange?.(e.target.value);
+        }}
+        onBlur={() => onBlur?.(valueRef.current)}
+        placeholder={placeholder}
+        data-testid="title-editor"
       />
     );
   }),

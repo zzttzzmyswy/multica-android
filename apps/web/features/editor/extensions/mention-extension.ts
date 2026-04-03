@@ -3,19 +3,6 @@ import { mergeAttributes } from "@tiptap/core";
 import { ReactNodeViewRenderer } from "@tiptap/react";
 import { MentionView } from "./mention-view";
 
-/**
- * BaseMentionExtension — shared mention extension for both editing and readonly modes.
- *
- * Includes: NodeView (MentionView), renderHTML, addAttributes, markdownTokenizer,
- * parseMarkdown, renderMarkdown.
- *
- * MentionView renders identically in both modes (issue → inline card, member/agent → span).
- * Only difference: in readonly mode, issue mentions are clickable links.
- *
- * Usage:
- *   Editing:  BaseMentionExtension.configure({ suggestion: createMentionSuggestion() })
- *   Readonly: BaseMentionExtension.configure({})
- */
 export const BaseMentionExtension = Mention.extend({
   addNodeView() {
     return ReactNodeViewRenderer(MentionView);
@@ -48,7 +35,6 @@ export const BaseMentionExtension = Mention.extend({
       },
     };
   },
-  // @tiptap/markdown: custom tokenizer to parse [@Label](mention://type/id)
   markdownTokenizer: {
     name: "mention",
     level: "inline" as const,
@@ -56,7 +42,6 @@ export const BaseMentionExtension = Mention.extend({
       return src.search(/\[@?[^\]]+\]\(mention:\/\//);
     },
     tokenize(src: string) {
-      // Matches both [@Label](mention://type/id) and [Label](mention://issue/id)
       const match = src.match(
         /^\[@?([^\]]+)\]\(mention:\/\/(\w+)\/([^)]+)\)/,
       );
@@ -68,11 +53,9 @@ export const BaseMentionExtension = Mention.extend({
       };
     },
   },
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   parseMarkdown: (token: any, helpers: any) => {
     return helpers.createNode("mention", token.attributes);
   },
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   renderMarkdown: (node: any) => {
     const { id, label, type = "member" } = node.attrs || {};
     const prefix = type === "issue" ? "" : "@";

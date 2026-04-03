@@ -44,9 +44,9 @@ import {
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
-import { RichTextEditor } from "@/components/common/rich-text-editor";
+import { ContentEditor, type ContentEditorRef } from "@/features/editor";
 import { FileUploadButton } from "@/components/common/file-upload-button";
-import { TitleEditor } from "@/components/common/title-editor";
+import { TitleEditor } from "@/features/editor";
 import {
   Tooltip,
   TooltipTrigger,
@@ -287,7 +287,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
     [issue, id],
   );
 
-  const descEditorRef = useRef<import("@/components/common/rich-text-editor").RichTextEditorRef>(null);
+  const descEditorRef = useRef<ContentEditorRef>(null);
   const handleDescriptionUpload = useCallback(
     (file: File) => uploadWithToast(file, { issueId: id }),
     [uploadWithToast, id],
@@ -641,7 +641,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
             }}
           />
 
-          <RichTextEditor
+          <ContentEditor
             ref={descEditorRef}
             key={id}
             defaultValue={issue.description || ""}

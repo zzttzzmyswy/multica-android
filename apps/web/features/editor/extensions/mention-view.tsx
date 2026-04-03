@@ -5,12 +5,6 @@ import type { NodeViewProps } from "@tiptap/react";
 import { useIssueStore } from "@/features/issues/store";
 import { StatusIcon } from "@/features/issues/components/status-icon";
 
-/**
- * MentionView — shared NodeView for mention nodes (both editing and readonly).
- *
- * Rendering and behavior are identical in both modes.
- * Issue mentions are always clickable (open in new tab).
- */
 export function MentionView({ node }: NodeViewProps) {
   const { type, id, label } = node.attrs;
 
@@ -28,10 +22,6 @@ export function MentionView({ node }: NodeViewProps) {
     </NodeViewWrapper>
   );
 }
-
-// ---------------------------------------------------------------------------
-// IssueMention — inline card, always opens in new tab
-// ---------------------------------------------------------------------------
 
 function IssueMention({
   issueId,

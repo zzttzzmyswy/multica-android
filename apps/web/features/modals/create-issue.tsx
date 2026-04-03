@@ -25,8 +25,8 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
-import { RichTextEditor, type RichTextEditorRef } from "@/components/common/rich-text-editor";
-import { TitleEditor } from "@/components/common/title-editor";
+import { ContentEditor, type ContentEditorRef } from "@/features/editor";
+import { TitleEditor } from "@/features/editor";
 import { StatusIcon, PriorityIcon } from "@/features/issues/components";
 import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
 import { useWorkspaceStore, useActorName } from "@/features/workspace";
@@ -77,7 +77,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
   const clearDraft = useIssueDraftStore((s) => s.clearDraft);
 
   const [title, setTitle] = useState(draft.title);
-  const descEditorRef = useRef<RichTextEditorRef>(null);
+  const descEditorRef = useRef<ContentEditorRef>(null);
   const [status, setStatus] = useState<IssueStatus>((data?.status as IssueStatus) || draft.status);
   const [priority, setPriority] = useState<IssuePriority>(draft.priority);
   const [submitting, setSubmitting] = useState(false);
@@ -231,7 +231,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
 
         {/* Description — takes remaining space */}
         <div className="flex-1 min-h-0 overflow-y-auto px-5">
-          <RichTextEditor
+          <ContentEditor
             ref={descEditorRef}
             defaultValue={draft.description}
             placeholder="Add description..."
