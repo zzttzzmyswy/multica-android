@@ -125,6 +125,9 @@
   color: color-mix(in srgb, var(--foreground) 75%, transparent);
   padding: 0.125rem 0.375rem;
   border-radius: var(--radius-sm);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  line-height: 2;
 }
 
 /* Code blocks */
