@@ -54,7 +54,7 @@ function IssueMention({
     <a
       href={`/issues/${issueId}`}
       onClick={handleClick}
-      className="issue-mention inline-flex items-center align-middle gap-1.5 rounded-md border px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
+      className="issue-mention inline-flex items-center align-text-bottom gap-2 rounded-md border mx-0.5 px-2.5 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
     >
       <StatusIcon status={issue.status} className="h-3.5 w-3.5" />
       <span className="font-medium text-muted-foreground">{issue.identifier}</span>
