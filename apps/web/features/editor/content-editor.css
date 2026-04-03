@@ -287,14 +287,15 @@
 
 /* Links */
 .rich-text-editor a {
-  color: var(--primary);
-  text-decoration: none;
+  color: var(--brand);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--brand) 40%, transparent);
+  text-underline-offset: 2px;
   cursor: pointer;
 }
 
 .rich-text-editor a:hover {
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration-color: var(--brand);
 }
 
 /* Issue mention cards — inline cards that sit within text flow */

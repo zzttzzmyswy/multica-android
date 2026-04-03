@@ -27,17 +27,11 @@ const LinkEditable = Link.extend({ inclusive: false }).configure({
   openOnClick: true,
   autolink: true,
   linkOnPaste: false,
-  HTMLAttributes: {
-    class: "text-primary hover:underline cursor-pointer",
-  },
 });
 
 const LinkReadonly = Link.configure({
   openOnClick: false,
   autolink: false,
-  HTMLAttributes: {
-    class: "text-primary hover:underline cursor-pointer",
-  },
 });
 
 const ImageExtension = Image.extend({
