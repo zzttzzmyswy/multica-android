@@ -113,6 +113,7 @@ func init() {
 	agentCreateCmd.Flags().String("description", "", "Agent description")
 	agentCreateCmd.Flags().String("instructions", "", "Agent instructions")
 	agentCreateCmd.Flags().String("runtime-id", "", "Runtime ID (required)")
+	agentCreateCmd.Flags().String("runtime-config", "", "Runtime config as JSON string")
 	agentCreateCmd.Flags().String("visibility", "private", "Visibility: private or workspace")
 	agentCreateCmd.Flags().Int32("max-concurrent-tasks", 6, "Maximum concurrent tasks")
 	agentCreateCmd.Flags().String("output", "json", "Output format: table or json")
@@ -122,6 +123,7 @@ func init() {
 	agentUpdateCmd.Flags().String("description", "", "New description")
 	agentUpdateCmd.Flags().String("instructions", "", "New instructions")
 	agentUpdateCmd.Flags().String("runtime-id", "", "New runtime ID")
+	agentUpdateCmd.Flags().String("runtime-config", "", "New runtime config as JSON string")
 	agentUpdateCmd.Flags().String("visibility", "", "New visibility: private or workspace")
 	agentUpdateCmd.Flags().String("status", "", "New status")
 	agentUpdateCmd.Flags().Int32("max-concurrent-tasks", 0, "New max concurrent tasks")
@@ -314,6 +316,14 @@ func runAgentCreate(cmd *cobra.Command, _ []string) error {
 	if v, _ := cmd.Flags().GetString("instructions"); v != "" {
 		body["instructions"] = v
 	}
+	if cmd.Flags().Changed("runtime-config") {
+		v, _ := cmd.Flags().GetString("runtime-config")
+		var rc any
+		if err := json.Unmarshal([]byte(v), &rc); err != nil {
+			return fmt.Errorf("--runtime-config must be valid JSON: %w", err)
+		}
+		body["runtime_config"] = rc
+	}
 	if cmd.Flags().Changed("visibility") {
 		v, _ := cmd.Flags().GetString("visibility")
 		body["visibility"] = v
@@ -363,6 +373,14 @@ func runAgentUpdate(cmd *cobra.Command, args []string) error {
 		v, _ := cmd.Flags().GetString("runtime-id")
 		body["runtime_id"] = v
 	}
+	if cmd.Flags().Changed("runtime-config") {
+		v, _ := cmd.Flags().GetString("runtime-config")
+		var rc any
+		if err := json.Unmarshal([]byte(v), &rc); err != nil {
+			return fmt.Errorf("--runtime-config must be valid JSON: %w", err)
+		}
+		body["runtime_config"] = rc
+	}
 	if cmd.Flags().Changed("visibility") {
 		v, _ := cmd.Flags().GetString("visibility")
 		body["visibility"] = v
@@ -377,7 +395,7 @@ func runAgentUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(body) == 0 {
-		return fmt.Errorf("no fields to update; use --name, --description, --instructions, --runtime-id, --visibility, --status, or --max-concurrent-tasks")
+		return fmt.Errorf("no fields to update; use --name, --description, --instructions, --runtime-id, --runtime-config, --visibility, --status, or --max-concurrent-tasks")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -518,10 +536,10 @@ func runAgentSkillsSet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	skillIDs, _ := cmd.Flags().GetStringSlice("skill-ids")
-	if len(skillIDs) == 0 {
-		return fmt.Errorf("--skill-ids is required (comma-separated skill IDs, or empty string to clear)")
+	if !cmd.Flags().Changed("skill-ids") {
+		return fmt.Errorf("--skill-ids is required (comma-separated skill IDs; use --skill-ids '' to clear all)")
 	}
+	skillIDs, _ := cmd.Flags().GetStringSlice("skill-ids")
 	// Allow passing empty string to clear all skills.
 	cleanIDs := make([]string, 0, len(skillIDs))
 	for _, id := range skillIDs {

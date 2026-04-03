@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -106,15 +109,18 @@ func init() {
 	skillCreateCmd.Flags().String("name", "", "Skill name (required)")
 	skillCreateCmd.Flags().String("description", "", "Skill description")
 	skillCreateCmd.Flags().String("content", "", "Skill content (SKILL.md body)")
+	skillCreateCmd.Flags().String("config", "", "Skill config as JSON string")
 	skillCreateCmd.Flags().String("output", "json", "Output format: table or json")
 
 	// skill update
 	skillUpdateCmd.Flags().String("name", "", "New name")
 	skillUpdateCmd.Flags().String("description", "", "New description")
 	skillUpdateCmd.Flags().String("content", "", "New content")
+	skillUpdateCmd.Flags().String("config", "", "New config as JSON string")
 	skillUpdateCmd.Flags().String("output", "json", "Output format: table or json")
 
-	// skill delete (no extra flags)
+	// skill delete
+	skillDeleteCmd.Flags().Bool("yes", false, "Skip confirmation prompt")
 
 	// skill import
 	skillImportCmd.Flags().String("url", "", "URL to import from (required)")
@@ -216,6 +222,14 @@ func runSkillCreate(cmd *cobra.Command, _ []string) error {
 	if v, _ := cmd.Flags().GetString("content"); v != "" {
 		body["content"] = v
 	}
+	if cmd.Flags().Changed("config") {
+		v, _ := cmd.Flags().GetString("config")
+		var config any
+		if err := json.Unmarshal([]byte(v), &config); err != nil {
+			return fmt.Errorf("--config must be valid JSON: %w", err)
+		}
+		body["config"] = config
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -253,9 +267,17 @@ func runSkillUpdate(cmd *cobra.Command, args []string) error {
 		v, _ := cmd.Flags().GetString("content")
 		body["content"] = v
 	}
+	if cmd.Flags().Changed("config") {
+		v, _ := cmd.Flags().GetString("config")
+		var config any
+		if err := json.Unmarshal([]byte(v), &config); err != nil {
+			return fmt.Errorf("--config must be valid JSON: %w", err)
+		}
+		body["config"] = config
+	}
 
 	if len(body) == 0 {
-		return fmt.Errorf("no fields to update; use --name, --description, or --content")
+		return fmt.Errorf("no fields to update; use --name, --description, --content, or --config")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -276,6 +298,18 @@ func runSkillUpdate(cmd *cobra.Command, args []string) error {
 }
 
 func runSkillDelete(cmd *cobra.Command, args []string) error {
+	yes, _ := cmd.Flags().GetBool("yes")
+	if !yes {
+		fmt.Printf("Are you sure you want to delete skill %s? This cannot be undone. [y/N] ", args[0])
+		reader := bufio.NewReader(os.Stdin)
+		answer, _ := reader.ReadString('\n')
+		answer = strings.TrimSpace(strings.ToLower(answer))
+		if answer != "y" && answer != "yes" {
+			fmt.Println("Aborted.")
+			return nil
+		}
+	}
+
 	client, err := newAPIClient(cmd)
 	if err != nil {
 		return err

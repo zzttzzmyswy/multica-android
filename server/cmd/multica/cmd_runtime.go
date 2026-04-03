@@ -123,6 +123,9 @@ func runRuntimeUsage(cmd *cobra.Command, args []string) error {
 	}
 
 	days, _ := cmd.Flags().GetInt("days")
+	if days < 1 || days > 365 {
+		return fmt.Errorf("--days must be between 1 and 365")
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -216,7 +219,7 @@ func runRuntimePing(cmd *cobra.Command, args []string) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("timed out waiting for ping")
+			return fmt.Errorf("timed out waiting for ping (last status: %s)", strVal(ping, "status"))
 		case <-time.After(1 * time.Second):
 		}
 
@@ -278,7 +281,7 @@ func runRuntimeUpdate(cmd *cobra.Command, args []string) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("timed out waiting for update")
+			return fmt.Errorf("timed out waiting for update (last status: %s)", strVal(update, "status"))
 		case <-time.After(2 * time.Second):
 		}
 
