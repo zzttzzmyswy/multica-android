@@ -3,6 +3,27 @@ SELECT * FROM comment
 WHERE issue_id = $1 AND workspace_id = $2
 ORDER BY created_at ASC;
 
+-- name: ListCommentsPaginated :many
+SELECT * FROM comment
+WHERE issue_id = $1 AND workspace_id = $2
+ORDER BY created_at ASC
+LIMIT $3 OFFSET $4;
+
+-- name: ListCommentsSince :many
+SELECT * FROM comment
+WHERE issue_id = $1 AND workspace_id = $2 AND created_at > $3
+ORDER BY created_at ASC;
+
+-- name: ListCommentsSincePaginated :many
+SELECT * FROM comment
+WHERE issue_id = $1 AND workspace_id = $2 AND created_at > $3
+ORDER BY created_at ASC
+LIMIT $4 OFFSET $5;
+
+-- name: CountComments :one
+SELECT count(*) FROM comment
+WHERE issue_id = $1 AND workspace_id = $2;
+
 -- name: GetComment :one
 SELECT * FROM comment
 WHERE id = $1;

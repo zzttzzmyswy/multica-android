@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -58,10 +60,81 @@ func (h *Handler) ListComments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	comments, err := h.Queries.ListComments(r.Context(), db.ListCommentsParams{
-		IssueID:     issue.ID,
-		WorkspaceID: issue.WorkspaceID,
-	})
+	// Parse optional pagination query params.
+	q := r.URL.Query()
+	var limit, offset int32
+	var hasPagination bool
+	if v := q.Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			writeError(w, http.StatusBadRequest, "invalid limit parameter")
+			return
+		}
+		limit = int32(n)
+		hasPagination = true
+	}
+	if v := q.Get("offset"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			writeError(w, http.StatusBadRequest, "invalid offset parameter")
+			return
+		}
+		offset = int32(n)
+		hasPagination = true
+	}
+
+	var sinceTime pgtype.Timestamptz
+	if v := q.Get("since"); v != "" {
+		t, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid since parameter; expected RFC3339 format")
+			return
+		}
+		sinceTime = pgtype.Timestamptz{Time: t, Valid: true}
+	}
+
+	var comments []db.Comment
+	var err error
+
+	switch {
+	case sinceTime.Valid && hasPagination:
+		if limit == 0 {
+			limit = 50
+		}
+		comments, err = h.Queries.ListCommentsSincePaginated(r.Context(), db.ListCommentsSincePaginatedParams{
+			IssueID:     issue.ID,
+			WorkspaceID: issue.WorkspaceID,
+			CreatedAt:   sinceTime,
+			Limit:       limit,
+			Offset:      offset,
+		})
+	case sinceTime.Valid:
+		// Apply a server-side cap to prevent unbounded result sets when
+		// --since is used without --limit.
+		comments, err = h.Queries.ListCommentsSincePaginated(r.Context(), db.ListCommentsSincePaginatedParams{
+			IssueID:     issue.ID,
+			WorkspaceID: issue.WorkspaceID,
+			CreatedAt:   sinceTime,
+			Limit:       500,
+			Offset:      0,
+		})
+		hasPagination = true
+	case hasPagination:
+		if limit == 0 {
+			limit = 50
+		}
+		comments, err = h.Queries.ListCommentsPaginated(r.Context(), db.ListCommentsPaginatedParams{
+			IssueID:     issue.ID,
+			WorkspaceID: issue.WorkspaceID,
+			Limit:       limit,
+			Offset:      offset,
+		})
+	default:
+		comments, err = h.Queries.ListComments(r.Context(), db.ListCommentsParams{
+			IssueID:     issue.ID,
+			WorkspaceID: issue.WorkspaceID,
+		})
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list comments")
 		return
@@ -78,6 +151,17 @@ func (h *Handler) ListComments(w http.ResponseWriter, r *http.Request) {
 	for i, c := range comments {
 		cid := uuidToString(c.ID)
 		resp[i] = commentToResponse(c, grouped[cid], groupedAtt[cid])
+	}
+
+	// Include total count in response header when paginating.
+	if hasPagination {
+		total, countErr := h.Queries.CountComments(r.Context(), db.CountCommentsParams{
+			IssueID:     issue.ID,
+			WorkspaceID: issue.WorkspaceID,
+		})
+		if countErr == nil {
+			w.Header().Set("X-Total-Count", strconv.FormatInt(total, 10))
+		}
 	}
 
 	writeJSON(w, http.StatusOK, resp)
