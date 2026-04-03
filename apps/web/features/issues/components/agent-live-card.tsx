@@ -8,6 +8,7 @@ import type { TaskMessagePayload, TaskCompletedPayload, TaskFailedPayload, TaskC
 import type { AgentTask } from "@/shared/types/agent";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { ActorAvatar } from "@/components/common/actor-avatar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useActorName } from "@/features/workspace";
 import { redactSecrets } from "../utils/redact";
@@ -293,12 +294,16 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
       >
         {/* Header */}
         <div className="flex items-center gap-2 px-3 py-2">
-          <div className={cn(
-            "flex items-center justify-center h-5 w-5 rounded-full shrink-0",
-            isStuck ? "bg-brand/15 text-brand" : "bg-info/10 text-info",
-          )}>
-            <Bot className="h-3 w-3" />
-          </div>
+          {activeTask.agent_id ? (
+            <ActorAvatar actorType="agent" actorId={activeTask.agent_id} size={20} />
+          ) : (
+            <div className={cn(
+              "flex items-center justify-center h-5 w-5 rounded-full shrink-0",
+              isStuck ? "bg-brand/15 text-brand" : "bg-info/10 text-info",
+            )}>
+              <Bot className="h-3 w-3" />
+            </div>
+          )}
           <div className="flex items-center gap-1.5 text-xs font-medium min-w-0">
             <Loader2 className={cn("h-3 w-3 animate-spin shrink-0", isStuck ? "text-brand" : "text-info")} />
             <span className="truncate">{name} is working</span>
