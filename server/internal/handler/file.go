@@ -2,8 +2,6 @@ package handler
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
@@ -12,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
@@ -134,13 +133,14 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		slog.Error("failed to generate file key", "error", err)
+	// Generate a UUIDv7 to use as both the attachment ID and S3 key.
+	id, err := uuid.NewV7()
+	if err != nil {
+		slog.Error("failed to generate uuid", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	key := hex.EncodeToString(b) + path.Ext(header.Filename)
+	key := id.String() + path.Ext(header.Filename)
 
 	link, err := h.Storage.Upload(r.Context(), key, data, contentType, header.Filename)
 	if err != nil {
@@ -154,6 +154,7 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		uploaderType, uploaderID := h.resolveActor(r, userID, workspaceID)
 
 		params := db.CreateAttachmentParams{
+			ID:           pgtype.UUID{Bytes: id, Valid: true},
 			WorkspaceID:  parseUUID(workspaceID),
 			UploaderType: uploaderType,
 			UploaderID:   parseUUID(uploaderID),
@@ -294,6 +295,22 @@ func (h *Handler) DeleteAttachment(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------------------
 // Attachment linking
 // ---------------------------------------------------------------------------
+
+// linkAttachmentsByIssueIDs links the given attachment IDs to an issue.
+// Only updates attachments that have no issue_id yet.
+func (h *Handler) linkAttachmentsByIssueIDs(ctx context.Context, issueID, workspaceID pgtype.UUID, ids []string) {
+	uuids := make([]pgtype.UUID, len(ids))
+	for i, id := range ids {
+		uuids[i] = parseUUID(id)
+	}
+	if err := h.Queries.LinkAttachmentsToIssue(ctx, db.LinkAttachmentsToIssueParams{
+		IssueID:     issueID,
+		WorkspaceID: workspaceID,
+		Column3:     uuids,
+	}); err != nil {
+		slog.Error("failed to link attachments to issue", "error", err)
+	}
+}
 
 // linkAttachmentsByIDs links the given attachment IDs to a comment.
 // Only updates attachments that belong to the same issue and have no comment_id yet.
