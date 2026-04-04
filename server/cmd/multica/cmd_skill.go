@@ -28,7 +28,7 @@ var skillListCmd = &cobra.Command{
 var skillGetCmd = &cobra.Command{
 	Use:   "get <id>",
 	Short: "Get skill details (includes files)",
-	Args:  cobra.ExactArgs(1),
+	Args:  exactArgs(1),
 	RunE:  runSkillGet,
 }
 
@@ -41,14 +41,14 @@ var skillCreateCmd = &cobra.Command{
 var skillUpdateCmd = &cobra.Command{
 	Use:   "update <id>",
 	Short: "Update a skill",
-	Args:  cobra.ExactArgs(1),
+	Args:  exactArgs(1),
 	RunE:  runSkillUpdate,
 }
 
 var skillDeleteCmd = &cobra.Command{
 	Use:   "delete <id>",
 	Short: "Delete a skill",
-	Args:  cobra.ExactArgs(1),
+	Args:  exactArgs(1),
 	RunE:  runSkillDelete,
 }
 
@@ -68,21 +68,21 @@ var skillFilesCmd = &cobra.Command{
 var skillFilesListCmd = &cobra.Command{
 	Use:   "list <skill-id>",
 	Short: "List files for a skill",
-	Args:  cobra.ExactArgs(1),
+	Args:  exactArgs(1),
 	RunE:  runSkillFilesList,
 }
 
 var skillFilesUpsertCmd = &cobra.Command{
 	Use:   "upsert <skill-id>",
 	Short: "Create or update a skill file",
-	Args:  cobra.ExactArgs(1),
+	Args:  exactArgs(1),
 	RunE:  runSkillFilesUpsert,
 }
 
 var skillFilesDeleteCmd = &cobra.Command{
 	Use:   "delete <skill-id> <file-id>",
 	Short: "Delete a skill file",
-	Args:  cobra.ExactArgs(2),
+	Args:  exactArgs(2),
 	RunE:  runSkillFilesDelete,
 }
 
