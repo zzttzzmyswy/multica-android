@@ -15,6 +15,27 @@ const (
 	groupAdditional = "additional"
 )
 
+// errSilent is returned when the error message has already been printed.
+var errSilent = fmt.Errorf("")
+
+// exactArgs returns a cobra.PositionalArgs that validates the arg count
+// and prints help on failure, so users see usage context with the error.
+func exactArgs(n int) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if len(args) != n {
+			if n == 1 {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Error: accepts 1 arg, received %d\n\n", len(args))
+			} else {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Error: accepts %d args, received %d\n\n", n, len(args))
+			}
+			cmd.Help()
+			return errSilent
+		}
+		return nil
+	}
+}
+
+
 // initHelp configures the root command to use gh-style help output.
 func initHelp(root *cobra.Command) {
 	root.SetHelpTemplate(rootHelpTemplate)
@@ -120,6 +141,11 @@ COMMANDS
 {{formatCommandList .Commands}}
 INHERITED FLAGS
   --help   Show help for command
+{{- if .Example}}
+
+EXAMPLES
+{{.Example}}
+{{- end}}
 
 LEARN MORE
   Use ` + "`{{.CommandPath}} <command> --help`" + ` for more information about a command.
@@ -136,6 +162,11 @@ FLAGS
 {{- end}}
 INHERITED FLAGS
   --help   Show help for command
+{{- if .Example}}
+
+EXAMPLES
+{{.Example}}
+{{- end}}
 
 LEARN MORE
   Use ` + "`multica <command> <subcommand> --help`" + ` for more information about a command.

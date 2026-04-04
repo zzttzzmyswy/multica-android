@@ -28,7 +28,7 @@ var issueListCmd = &cobra.Command{
 var issueGetCmd = &cobra.Command{
 	Use:   "get <id>",
 	Short: "Get issue details",
-	Args:  cobra.ExactArgs(1),
+	Args:  exactArgs(1),
 	RunE:  runIssueGet,
 }
 
@@ -41,21 +41,21 @@ var issueCreateCmd = &cobra.Command{
 var issueUpdateCmd = &cobra.Command{
 	Use:   "update <id>",
 	Short: "Update an issue",
-	Args:  cobra.ExactArgs(1),
+	Args:  exactArgs(1),
 	RunE:  runIssueUpdate,
 }
 
 var issueAssignCmd = &cobra.Command{
 	Use:   "assign <id>",
 	Short: "Assign an issue to a member or agent",
-	Args:  cobra.ExactArgs(1),
+	Args:  exactArgs(1),
 	RunE:  runIssueAssign,
 }
 
 var issueStatusCmd = &cobra.Command{
 	Use:   "status <id> <status>",
 	Short: "Change issue status",
-	Args:  cobra.ExactArgs(2),
+	Args:  exactArgs(2),
 	RunE:  runIssueStatus,
 }
 
@@ -69,21 +69,21 @@ var issueCommentCmd = &cobra.Command{
 var issueCommentListCmd = &cobra.Command{
 	Use:   "list <issue-id>",
 	Short: "List comments on an issue",
-	Args:  cobra.ExactArgs(1),
+	Args:  exactArgs(1),
 	RunE:  runIssueCommentList,
 }
 
 var issueCommentAddCmd = &cobra.Command{
 	Use:   "add <issue-id>",
 	Short: "Add a comment to an issue",
-	Args:  cobra.ExactArgs(1),
+	Args:  exactArgs(1),
 	RunE:  runIssueCommentAdd,
 }
 
 var issueCommentDeleteCmd = &cobra.Command{
 	Use:   "delete <comment-id>",
 	Short: "Delete a comment",
-	Args:  cobra.ExactArgs(1),
+	Args:  exactArgs(1),
 	RunE:  runIssueCommentDelete,
 }
 
@@ -92,14 +92,14 @@ var issueCommentDeleteCmd = &cobra.Command{
 var issueRunsCmd = &cobra.Command{
 	Use:   "runs <issue-id>",
 	Short: "List execution history for an issue",
-	Args:  cobra.ExactArgs(1),
+	Args:  exactArgs(1),
 	RunE:  runIssueRuns,
 }
 
 var issueRunMessagesCmd = &cobra.Command{
 	Use:   "run-messages <task-id>",
 	Short: "List messages for an execution",
-	Args:  cobra.ExactArgs(1),
+	Args:  exactArgs(1),
 	RunE:  runIssueRunMessages,
 }
 
