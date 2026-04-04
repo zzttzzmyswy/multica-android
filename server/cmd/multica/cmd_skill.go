@@ -16,7 +16,7 @@ import (
 
 var skillCmd = &cobra.Command{
 	Use:   "skill",
-	Short: "Manage skills",
+	Short: "Work with skills",
 }
 
 var skillListCmd = &cobra.Command{
@@ -62,7 +62,7 @@ var skillImportCmd = &cobra.Command{
 
 var skillFilesCmd = &cobra.Command{
 	Use:   "files",
-	Short: "Manage skill files",
+	Short: "Work with skill files",
 }
 
 var skillFilesListCmd = &cobra.Command{

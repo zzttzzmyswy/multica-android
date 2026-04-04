@@ -16,7 +16,7 @@ import (
 
 var issueCmd = &cobra.Command{
 	Use:   "issue",
-	Short: "Manage issues",
+	Short: "Work with issues",
 }
 
 var issueListCmd = &cobra.Command{
@@ -63,7 +63,7 @@ var issueStatusCmd = &cobra.Command{
 
 var issueCommentCmd = &cobra.Command{
 	Use:   "comment",
-	Short: "Manage issue comments",
+	Short: "Work with issue comments",
 }
 
 var issueCommentListCmd = &cobra.Command{

@@ -15,7 +15,7 @@ import (
 
 var workspaceCmd = &cobra.Command{
 	Use:   "workspace",
-	Short: "Manage workspaces",
+	Short: "Work with workspaces",
 }
 
 var workspaceListCmd = &cobra.Command{
