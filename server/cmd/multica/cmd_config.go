@@ -11,7 +11,7 @@ import (
 
 var configCmd = &cobra.Command{
 	Use:   "config",
-	Short: "Show CLI configuration",
+	Short: "Manage configuration for multica",
 	RunE:  runConfigShow,
 }
 

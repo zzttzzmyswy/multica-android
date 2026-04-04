@@ -14,7 +14,7 @@ import (
 
 var attachmentCmd = &cobra.Command{
 	Use:   "attachment",
-	Short: "Manage attachments",
+	Short: "Work with attachments",
 }
 
 var attachmentDownloadCmd = &cobra.Command{

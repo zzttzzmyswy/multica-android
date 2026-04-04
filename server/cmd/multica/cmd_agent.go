@@ -17,7 +17,7 @@ import (
 
 var agentCmd = &cobra.Command{
 	Use:   "agent",
-	Short: "Manage agents",
+	Short: "Work with agents",
 }
 
 var agentListCmd = &cobra.Command{

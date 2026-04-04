@@ -14,7 +14,7 @@ import (
 
 var repoCmd = &cobra.Command{
 	Use:   "repo",
-	Short: "Manage repositories",
+	Short: "Work with repositories",
 }
 
 var repoCheckoutCmd = &cobra.Command{
