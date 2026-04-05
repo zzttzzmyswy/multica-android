@@ -233,7 +233,6 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
 
   clearWorkspace: () => {
     api.setWorkspaceId(null);
-    localStorage.removeItem("multica_workspace_id");
     set({ workspace: null, workspaces: [], members: [], agents: [], skills: [] });
   },
 }));

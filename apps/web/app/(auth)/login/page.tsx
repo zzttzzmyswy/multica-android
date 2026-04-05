@@ -153,7 +153,8 @@ function LoginPageContent() {
 
         await verifyCode(email, value);
         const wsList = await api.listWorkspaces();
-        await hydrateWorkspace(wsList);
+        const lastWsId = localStorage.getItem("multica_workspace_id");
+        await hydrateWorkspace(wsList, lastWsId);
         router.push(searchParams.get("next") || "/issues");
       } catch (err) {
         setError(

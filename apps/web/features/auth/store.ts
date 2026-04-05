@@ -36,7 +36,6 @@ export const useAuthStore = create<AuthState>((set) => ({
       api.setToken(null);
       api.setWorkspaceId(null);
       localStorage.removeItem("multica_token");
-      localStorage.removeItem("multica_workspace_id");
       set({ user: null, isLoading: false });
     }
   },
@@ -56,7 +55,6 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: () => {
     localStorage.removeItem("multica_token");
-    localStorage.removeItem("multica_workspace_id");
     api.setToken(null);
     api.setWorkspaceId(null);
     clearLoggedInCookie();
