@@ -12,12 +12,13 @@ import (
 )
 
 const createAttachment = `-- name: CreateAttachment :one
-INSERT INTO attachment (workspace_id, issue_id, comment_id, uploader_type, uploader_id, filename, url, content_type, size_bytes)
-VALUES ($1, $8, $9, $2, $3, $4, $5, $6, $7)
+INSERT INTO attachment (id, workspace_id, issue_id, comment_id, uploader_type, uploader_id, filename, url, content_type, size_bytes)
+VALUES ($1, $2, $9, $10, $3, $4, $5, $6, $7, $8)
 RETURNING id, workspace_id, issue_id, comment_id, uploader_type, uploader_id, filename, url, content_type, size_bytes, created_at
 `
 
 type CreateAttachmentParams struct {
+	ID           pgtype.UUID `json:"id"`
 	WorkspaceID  pgtype.UUID `json:"workspace_id"`
 	UploaderType string      `json:"uploader_type"`
 	UploaderID   pgtype.UUID `json:"uploader_id"`
@@ -31,6 +32,7 @@ type CreateAttachmentParams struct {
 
 func (q *Queries) CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (Attachment, error) {
 	row := q.db.QueryRow(ctx, createAttachment,
+		arg.ID,
 		arg.WorkspaceID,
 		arg.UploaderType,
 		arg.UploaderID,
@@ -117,6 +119,25 @@ type LinkAttachmentsToCommentParams struct {
 
 func (q *Queries) LinkAttachmentsToComment(ctx context.Context, arg LinkAttachmentsToCommentParams) error {
 	_, err := q.db.Exec(ctx, linkAttachmentsToComment, arg.CommentID, arg.IssueID, arg.Column3)
+	return err
+}
+
+const linkAttachmentsToIssue = `-- name: LinkAttachmentsToIssue :exec
+UPDATE attachment
+SET issue_id = $1
+WHERE workspace_id = $2
+  AND issue_id IS NULL
+  AND id = ANY($3::uuid[])
+`
+
+type LinkAttachmentsToIssueParams struct {
+	IssueID     pgtype.UUID   `json:"issue_id"`
+	WorkspaceID pgtype.UUID   `json:"workspace_id"`
+	Column3     []pgtype.UUID `json:"column_3"`
+}
+
+func (q *Queries) LinkAttachmentsToIssue(ctx context.Context, arg LinkAttachmentsToIssueParams) error {
+	_, err := q.db.Exec(ctx, linkAttachmentsToIssue, arg.IssueID, arg.WorkspaceID, arg.Column3)
 	return err
 }
 

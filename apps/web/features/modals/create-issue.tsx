@@ -93,9 +93,16 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
   // Due date popover
   const [dueDateOpen, setDueDateOpen] = useState(false);
 
-  // File upload
+  // File upload — collect attachment IDs so we can link them after issue creation.
+  const [attachmentIds, setAttachmentIds] = useState<string[]>([]);
   const { uploadWithToast } = useFileUpload();
-  const handleUpload = (file: File) => uploadWithToast(file);
+  const handleUpload = async (file: File) => {
+    const result = await uploadWithToast(file);
+    if (result) {
+      setAttachmentIds((prev) => [...prev, result.id]);
+    }
+    return result;
+  };
 
   const assigneeQuery = assigneeFilter.toLowerCase();
   const filteredMembers = members.filter((m) => m.name.toLowerCase().includes(assigneeQuery));
@@ -130,6 +137,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
         assignee_type: assigneeType,
         assignee_id: assigneeId,
         due_date: dueDate || undefined,
+        attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
       });
       useIssueStore.getState().addIssue(issue);
       clearDraft();

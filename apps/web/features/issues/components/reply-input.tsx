@@ -38,6 +38,7 @@ function ReplyInput({
   const [isEmpty, setIsEmpty] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [attachmentIds, setAttachmentIds] = useState<string[]>([]);
   const { uploadWithToast } = useFileUpload();
 
   useEffect(() => {
@@ -52,7 +53,11 @@ function ReplyInput({
   }, []);
 
   const handleUpload = async (file: File) => {
-    return await uploadWithToast(file, { issueId });
+    const result = await uploadWithToast(file, { issueId });
+    if (result) {
+      setAttachmentIds((prev) => [...prev, result.id]);
+    }
+    return result;
   };
 
   const handleSubmit = async () => {
@@ -60,9 +65,10 @@ function ReplyInput({
     if (!content || submitting) return;
     setSubmitting(true);
     try {
-      await onSubmit(content);
+      await onSubmit(content, attachmentIds.length > 0 ? attachmentIds : undefined);
       editorRef.current?.clearContent();
       setIsEmpty(true);
+      setAttachmentIds([]);
     } finally {
       setSubmitting(false);
     }
