@@ -8,7 +8,7 @@ The `multica` CLI connects your local machine to Multica. It handles authenticat
 
 ```bash
 brew tap multica-ai/tap
-brew install multica-cli
+brew install multica
 ```
 
 ### Build from Source

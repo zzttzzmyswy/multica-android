@@ -70,6 +70,14 @@ make start                                         # 启动应用
 
 `multica` CLI 将你的本地机器连接到 Multica — 用于认证、管理工作区和运行 Agent daemon。
 
+**方式 A — 将以下指令粘贴给你的 coding agent（Claude Code、Codex 等）：**
+
+```
+Fetch https://github.com/multica-ai/multica/blob/main/CLI_INSTALL.md and follow the instructions to install Multica CLI, log in, and start the daemon on this machine.
+```
+
+**方式 B — 手动安装：**
+
 ```bash
 # 安装
 brew tap multica-ai/tap
