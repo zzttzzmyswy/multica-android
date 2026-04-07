@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import type { Comment, TimelineEntry } from "@/shared/types";
+import { useState, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { Comment, TimelineEntry, Reaction } from "@/shared/types";
 import type {
   CommentCreatedPayload,
   CommentUpdatedPayload,
@@ -10,7 +11,13 @@ import type {
   ReactionAddedPayload,
   ReactionRemovedPayload,
 } from "@/shared/types";
-import { api } from "@/shared/api";
+import { issueTimelineOptions, issueKeys } from "@core/issues/queries";
+import {
+  useCreateComment,
+  useUpdateComment,
+  useDeleteComment,
+  useToggleCommentReaction,
+} from "@core/issues/mutations";
 import { useWSEvent, useWSReconnect } from "@/features/realtime";
 import { toast } from "sonner";
 
@@ -30,29 +37,22 @@ function commentToTimelineEntry(c: Comment): TimelineEntry {
 }
 
 export function useIssueTimeline(issueId: string, userId?: string) {
-  const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
+  const qc = useQueryClient();
+  const { data: timeline = [], isLoading: loading } = useQuery(
+    issueTimelineOptions(issueId),
+  );
   const [submitting, setSubmitting] = useState(false);
-  const [loading, setLoading] = useState(true);
 
-  // Initial fetch + reset on id change
-  useEffect(() => {
-    setTimeline([]);
-    setLoading(true);
-    api
-      .listTimeline(issueId)
-      .then((entries) => setTimeline(entries))
-      .catch((e) => {
-        console.error(e);
-        toast.error("Failed to load activity");
-      })
-      .finally(() => setLoading(false));
-  }, [issueId]);
+  const createCommentMutation = useCreateComment(issueId);
+  const updateCommentMutation = useUpdateComment(issueId);
+  const deleteCommentMutation = useDeleteComment(issueId);
+  const toggleReactionMutation = useToggleCommentReaction(issueId);
 
   // Reconnect recovery
   useWSReconnect(
     useCallback(() => {
-      api.listTimeline(issueId).then(setTimeline).catch(console.error);
-    }, [issueId]),
+      qc.invalidateQueries({ queryKey: issueKeys.timeline(issueId) });
+    }, [qc, issueId]),
   );
 
   // --- WS event handlers ---
@@ -63,13 +63,21 @@ export function useIssueTimeline(issueId: string, userId?: string) {
       (payload: unknown) => {
         const { comment } = payload as CommentCreatedPayload;
         if (comment.issue_id !== issueId) return;
-        if (comment.author_type === "member" && comment.author_id === userId) return;
-        setTimeline((prev) => {
-          if (prev.some((e) => e.id === comment.id)) return prev;
-          return [...prev, commentToTimelineEntry(comment)];
-        });
+        if (
+          comment.author_type === "member" &&
+          comment.author_id === userId
+        )
+          return;
+        qc.setQueryData<TimelineEntry[]>(
+          issueKeys.timeline(issueId),
+          (old) => {
+            if (!old) return old;
+            if (old.some((e) => e.id === comment.id)) return old;
+            return [...old, commentToTimelineEntry(comment)];
+          },
+        );
       },
-      [issueId, userId],
+      [qc, issueId, userId],
     ),
   );
 
@@ -79,12 +87,16 @@ export function useIssueTimeline(issueId: string, userId?: string) {
       (payload: unknown) => {
         const { comment } = payload as CommentUpdatedPayload;
         if (comment.issue_id === issueId) {
-          setTimeline((prev) =>
-            prev.map((e) => (e.id === comment.id ? commentToTimelineEntry(comment) : e)),
+          qc.setQueryData<TimelineEntry[]>(
+            issueKeys.timeline(issueId),
+            (old) =>
+              old?.map((e) =>
+                e.id === comment.id ? commentToTimelineEntry(comment) : e,
+              ),
           );
         }
       },
-      [issueId],
+      [qc, issueId],
     ),
   );
 
@@ -94,23 +106,31 @@ export function useIssueTimeline(issueId: string, userId?: string) {
       (payload: unknown) => {
         const { comment_id, issue_id } = payload as CommentDeletedPayload;
         if (issue_id === issueId) {
-          setTimeline((prev) => {
-            const idsToRemove = new Set<string>([comment_id]);
-            let added = true;
-            while (added) {
-              added = false;
-              for (const e of prev) {
-                if (e.parent_id && idsToRemove.has(e.parent_id) && !idsToRemove.has(e.id)) {
-                  idsToRemove.add(e.id);
-                  added = true;
+          qc.setQueryData<TimelineEntry[]>(
+            issueKeys.timeline(issueId),
+            (old) => {
+              if (!old) return old;
+              const idsToRemove = new Set<string>([comment_id]);
+              let added = true;
+              while (added) {
+                added = false;
+                for (const e of old) {
+                  if (
+                    e.parent_id &&
+                    idsToRemove.has(e.parent_id) &&
+                    !idsToRemove.has(e.id)
+                  ) {
+                    idsToRemove.add(e.id);
+                    added = true;
+                  }
                 }
               }
-            }
-            return prev.filter((e) => !idsToRemove.has(e.id));
-          });
+              return old.filter((e) => !idsToRemove.has(e.id));
+            },
+          );
         }
       },
-      [issueId],
+      [qc, issueId],
     ),
   );
 
@@ -122,12 +142,16 @@ export function useIssueTimeline(issueId: string, userId?: string) {
         if (p.issue_id !== issueId) return;
         const entry = p.entry;
         if (!entry || !entry.id) return;
-        setTimeline((prev) => {
-          if (prev.some((e) => e.id === entry.id)) return prev;
-          return [...prev, entry];
-        });
+        qc.setQueryData<TimelineEntry[]>(
+          issueKeys.timeline(issueId),
+          (old) => {
+            if (!old) return old;
+            if (old.some((e) => e.id === entry.id)) return old;
+            return [...old, entry];
+          },
+        );
       },
-      [issueId],
+      [qc, issueId],
     ),
   );
 
@@ -137,17 +161,23 @@ export function useIssueTimeline(issueId: string, userId?: string) {
       (payload: unknown) => {
         const { reaction, issue_id } = payload as ReactionAddedPayload;
         if (issue_id !== issueId) return;
-        if (reaction.actor_type === "member" && reaction.actor_id === userId) return;
-        setTimeline((prev) =>
-          prev.map((e) => {
-            if (e.id !== reaction.comment_id) return e;
-            const existing = e.reactions ?? [];
-            if (existing.some((r) => r.id === reaction.id)) return e;
-            return { ...e, reactions: [...existing, reaction] };
-          }),
+        if (
+          reaction.actor_type === "member" &&
+          reaction.actor_id === userId
+        )
+          return;
+        qc.setQueryData<TimelineEntry[]>(
+          issueKeys.timeline(issueId),
+          (old) =>
+            old?.map((e) => {
+              if (e.id !== reaction.comment_id) return e;
+              const existing = e.reactions ?? [];
+              if (existing.some((r) => r.id === reaction.id)) return e;
+              return { ...e, reactions: [...existing, reaction] };
+            }),
         );
       },
-      [issueId, userId],
+      [qc, issueId, userId],
     ),
   );
 
@@ -158,19 +188,26 @@ export function useIssueTimeline(issueId: string, userId?: string) {
         const p = payload as ReactionRemovedPayload;
         if (p.issue_id !== issueId) return;
         if (p.actor_type === "member" && p.actor_id === userId) return;
-        setTimeline((prev) =>
-          prev.map((e) => {
-            if (e.id !== p.comment_id) return e;
-            return {
-              ...e,
-              reactions: (e.reactions ?? []).filter(
-                (r) => !(r.emoji === p.emoji && r.actor_type === p.actor_type && r.actor_id === p.actor_id),
-              ),
-            };
-          }),
+        qc.setQueryData<TimelineEntry[]>(
+          issueKeys.timeline(issueId),
+          (old) =>
+            old?.map((e) => {
+              if (e.id !== p.comment_id) return e;
+              return {
+                ...e,
+                reactions: (e.reactions ?? []).filter(
+                  (r) =>
+                    !(
+                      r.emoji === p.emoji &&
+                      r.actor_type === p.actor_type &&
+                      r.actor_id === p.actor_id
+                    ),
+                ),
+              };
+            }),
         );
       },
-      [issueId, userId],
+      [qc, issueId, userId],
     ),
   );
 
@@ -181,10 +218,9 @@ export function useIssueTimeline(issueId: string, userId?: string) {
       if (!content.trim() || submitting || !userId) return;
       setSubmitting(true);
       try {
-        const comment = await api.createComment(issueId, content, undefined, undefined, attachmentIds);
-        setTimeline((prev) => {
-          if (prev.some((e) => e.id === comment.id)) return prev;
-          return [...prev, commentToTimelineEntry(comment)];
+        await createCommentMutation.mutateAsync({
+          content,
+          attachmentIds,
         });
       } catch {
         toast.error("Failed to send comment");
@@ -192,147 +228,61 @@ export function useIssueTimeline(issueId: string, userId?: string) {
         setSubmitting(false);
       }
     },
-    [issueId, userId],
+    [userId, submitting, createCommentMutation],
   );
 
   const submitReply = useCallback(
     async (parentId: string, content: string, attachmentIds?: string[]) => {
       if (!content.trim() || !userId) return;
       try {
-        const comment = await api.createComment(issueId, content, "comment", parentId, attachmentIds);
-        setTimeline((prev) => {
-          if (prev.some((e) => e.id === comment.id)) return prev;
-          return [...prev, commentToTimelineEntry(comment)];
+        await createCommentMutation.mutateAsync({
+          content,
+          type: "comment",
+          parentId,
+          attachmentIds,
         });
       } catch {
         toast.error("Failed to send reply");
       }
     },
-    [issueId, userId],
+    [userId, createCommentMutation],
   );
 
   const editComment = useCallback(
     async (commentId: string, content: string) => {
-      // Optimistic: update content immediately
-      let prevContent: string | undefined;
-      setTimeline((prev) =>
-        prev.map((e) => {
-          if (e.id !== commentId) return e;
-          prevContent = e.content;
-          return { ...e, content, updated_at: new Date().toISOString() };
-        }),
-      );
       try {
-        const updated = await api.updateComment(commentId, content);
-        setTimeline((prev) =>
-          prev.map((e) => (e.id === updated.id ? commentToTimelineEntry(updated) : e)),
-        );
+        await updateCommentMutation.mutateAsync({ commentId, content });
       } catch {
-        // Rollback
-        if (prevContent !== undefined) {
-          setTimeline((prev) =>
-            prev.map((e) => (e.id === commentId ? { ...e, content: prevContent! } : e)),
-          );
-        }
         toast.error("Failed to update comment");
       }
     },
-    [],
+    [updateCommentMutation],
   );
 
   const deleteComment = useCallback(
     async (commentId: string) => {
-      // Capture entries for rollback
-      let removedEntries: TimelineEntry[] = [];
-      setTimeline((prev) => {
-        const idsToRemove = new Set<string>([commentId]);
-        let added = true;
-        while (added) {
-          added = false;
-          for (const e of prev) {
-            if (e.parent_id && idsToRemove.has(e.parent_id) && !idsToRemove.has(e.id)) {
-              idsToRemove.add(e.id);
-              added = true;
-            }
-          }
-        }
-        removedEntries = prev.filter((e) => idsToRemove.has(e.id));
-        return prev.filter((e) => !idsToRemove.has(e.id));
-      });
       try {
-        await api.deleteComment(commentId);
+        await deleteCommentMutation.mutateAsync(commentId);
       } catch {
-        // Rollback: re-add removed entries
-        setTimeline((prev) => [...prev, ...removedEntries]);
         toast.error("Failed to delete comment");
       }
     },
-    [],
+    [deleteCommentMutation],
   );
 
   const toggleReaction = useCallback(
     async (commentId: string, emoji: string) => {
       if (!userId) return;
       const entry = timeline.find((e) => e.id === commentId);
-      const existing = (entry?.reactions ?? []).find(
-        (r) => r.emoji === emoji && r.actor_type === "member" && r.actor_id === userId,
+      const existing: Reaction | undefined = (entry?.reactions ?? []).find(
+        (r) =>
+          r.emoji === emoji &&
+          r.actor_type === "member" &&
+          r.actor_id === userId,
       );
-      if (existing) {
-        setTimeline((prev) =>
-          prev.map((e) => {
-            if (e.id !== commentId) return e;
-            return { ...e, reactions: (e.reactions ?? []).filter((r) => r.id !== existing.id) };
-          }),
-        );
-        try {
-          await api.removeReaction(commentId, emoji);
-        } catch {
-          setTimeline((prev) =>
-            prev.map((e) => {
-              if (e.id !== commentId) return e;
-              return { ...e, reactions: [...(e.reactions ?? []), existing] };
-            }),
-          );
-          toast.error("Failed to remove reaction");
-        }
-      } else {
-        const tempReaction = {
-          id: `temp-${Date.now()}`,
-          comment_id: commentId,
-          actor_type: "member",
-          actor_id: userId,
-          emoji,
-          created_at: new Date().toISOString(),
-        };
-        setTimeline((prev) =>
-          prev.map((e) => {
-            if (e.id !== commentId) return e;
-            return { ...e, reactions: [...(e.reactions ?? []), tempReaction] };
-          }),
-        );
-        try {
-          const reaction = await api.addReaction(commentId, emoji);
-          setTimeline((prev) =>
-            prev.map((e) => {
-              if (e.id !== commentId) return e;
-              return {
-                ...e,
-                reactions: (e.reactions ?? []).map((r) => (r.id === tempReaction.id ? reaction : r)),
-              };
-            }),
-          );
-        } catch {
-          setTimeline((prev) =>
-            prev.map((e) => {
-              if (e.id !== commentId) return e;
-              return { ...e, reactions: (e.reactions ?? []).filter((r) => r.id !== tempReaction.id) };
-            }),
-          );
-          toast.error("Failed to add reaction");
-        }
-      }
+      toggleReactionMutation.mutate({ commentId, emoji, existing });
     },
-    [userId, timeline],
+    [userId, timeline, toggleReactionMutation],
   );
 
   return {

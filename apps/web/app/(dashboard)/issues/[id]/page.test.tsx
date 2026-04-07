@@ -2,6 +2,7 @@ import { Suspense, forwardRef, useRef, useState, useImperativeHandle } from "rea
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, act, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Issue, Comment, TimelineEntry } from "@/shared/types";
 
 // Mock next/navigation
@@ -235,14 +236,26 @@ const mockTimeline: TimelineEntry[] = [
 
 import IssueDetailPage from "./page";
 
+function createTestQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: 0 },
+      mutations: { retry: false },
+    },
+  });
+}
+
 // React 19 use(Promise) needs the promise to resolve within act + Suspense
 async function renderPage(id = "issue-1") {
+  const queryClient = createTestQueryClient();
   let result: ReturnType<typeof render>;
   await act(async () => {
     result = render(
-      <Suspense fallback={<div>Suspense loading...</div>}>
-        <IssueDetailPage params={Promise.resolve({ id })} />
-      </Suspense>,
+      <QueryClientProvider client={queryClient}>
+        <Suspense fallback={<div>Suspense loading...</div>}>
+          <IssueDetailPage params={Promise.resolve({ id })} />
+        </Suspense>
+      </QueryClientProvider>,
     );
   });
   return result!;

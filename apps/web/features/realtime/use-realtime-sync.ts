@@ -9,6 +9,13 @@ import { useWorkspaceStore } from "@/features/workspace";
 import { useAuthStore } from "@/features/auth";
 import { createLogger } from "@/shared/logger";
 import { api } from "@/shared/api";
+import { getQueryClient } from "@core/query-client";
+import { issueKeys } from "@core/issues/queries";
+import {
+  onIssueCreated,
+  onIssueUpdated,
+  onIssueDeleted,
+} from "@core/issues/ws-updaters";
 import type {
   MemberAddedPayload,
   WorkspaceDeletedPayload,
@@ -96,16 +103,27 @@ export function useRealtimeSync(ws: WSClient | null) {
       if (issue.status) {
         useInboxStore.getState().updateIssueStatus(issue.id, issue.status);
       }
+      // Dual-write: TanStack Query cache
+      const wsId = useWorkspaceStore.getState().workspace?.id;
+      if (wsId) onIssueUpdated(getQueryClient(), wsId, issue);
     });
 
     const unsubIssueCreated = ws.on("issue:created", (p) => {
       const { issue } = p as IssueCreatedPayload;
-      if (issue) useIssueStore.getState().addIssue(issue);
+      if (!issue) return;
+      useIssueStore.getState().addIssue(issue);
+      // Dual-write: TanStack Query cache
+      const wsId = useWorkspaceStore.getState().workspace?.id;
+      if (wsId) onIssueCreated(getQueryClient(), wsId, issue);
     });
 
     const unsubIssueDeleted = ws.on("issue:deleted", (p) => {
       const { issue_id } = p as IssueDeletedPayload;
-      if (issue_id) useIssueStore.getState().removeIssue(issue_id);
+      if (!issue_id) return;
+      useIssueStore.getState().removeIssue(issue_id);
+      // Dual-write: TanStack Query cache
+      const wsId = useWorkspaceStore.getState().workspace?.id;
+      if (wsId) onIssueDeleted(getQueryClient(), wsId, issue_id);
     });
 
     const unsubInboxNew = ws.on("inbox:new", (p) => {
@@ -167,6 +185,11 @@ export function useRealtimeSync(ws: WSClient | null) {
     const unsub = ws.onReconnect(async () => {
       logger.info("reconnected, refetching all data");
       try {
+        // Dual-write: invalidate TanStack Query caches
+        const wsId = useWorkspaceStore.getState().workspace?.id;
+        if (wsId) {
+          getQueryClient().invalidateQueries({ queryKey: issueKeys.all(wsId) });
+        }
         await Promise.all([
           useIssueStore.getState().fetch(),
           useInboxStore.getState().fetch(),
