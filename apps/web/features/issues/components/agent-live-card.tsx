@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Bot, ChevronRight, ChevronUp, Loader2, ArrowDown, Brain, AlertCircle, Clock, CheckCircle2, XCircle, Square } from "lucide-react";
+import { Bot, ChevronRight, ChevronDown, Loader2, ArrowDown, Brain, AlertCircle, Clock, CheckCircle2, XCircle, Square } from "lucide-react";
 import { api } from "@/shared/api";
 import { useWSEvent } from "@/features/realtime";
 import type { TaskMessagePayload, TaskCompletedPayload, TaskFailedPayload, TaskCancelledPayload } from "@/shared/types/events";
@@ -100,7 +100,7 @@ function buildTimeline(msgs: TaskMessagePayload[]): TimelineItem[] {
 interface AgentLiveCardProps {
   issueId: string;
   agentName?: string;
-  /** Scroll container ref — needed for sticky sentinel detection. */
+  /** Scroll container ref — used to auto-collapse timeline on outer scroll. */
   scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -109,11 +109,11 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
   const [activeTask, setActiveTask] = useState<AgentTask | null>(null);
   const [items, setItems] = useState<TimelineItem[]>([]);
   const [elapsed, setElapsed] = useState("");
+  const [open, setOpen] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
   const [cancelling, setCancelling] = useState(false);
-  const [isStuck, setIsStuck] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const sentinelRef = useRef<HTMLDivElement>(null);
+  const ignoreScrollRef = useRef(false);
   const seenSeqs = useRef(new Set<string>());
 
   // Check for active task on mount
@@ -163,46 +163,22 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
     }, [issueId]),
   );
 
-  // Handle task completion/failure
-  useWSEvent(
-    "task:completed",
-    useCallback((payload: unknown) => {
-      const p = payload as TaskCompletedPayload;
-      if (p.issue_id !== issueId) return;
-      setActiveTask(null);
-      setItems([]);
-      seenSeqs.current.clear();
-      setCancelling(false);
-    }, [issueId]),
-  );
+  // Handle task completion/failure/cancellation
+  const handleTaskEnd = useCallback((payload: unknown) => {
+    const p = payload as { issue_id: string };
+    if (p.issue_id !== issueId) return;
+    setActiveTask(null);
+    setItems([]);
+    seenSeqs.current.clear();
+    setCancelling(false);
+    setOpen(false);
+  }, [issueId]);
 
-  useWSEvent(
-    "task:failed",
-    useCallback((payload: unknown) => {
-      const p = payload as TaskFailedPayload;
-      if (p.issue_id !== issueId) return;
-      setActiveTask(null);
-      setItems([]);
-      seenSeqs.current.clear();
-      setCancelling(false);
-    }, [issueId]),
-  );
+  useWSEvent("task:completed", handleTaskEnd);
+  useWSEvent("task:failed", handleTaskEnd);
+  useWSEvent("task:cancelled", handleTaskEnd);
 
-  useWSEvent(
-    "task:cancelled",
-    useCallback((payload: unknown) => {
-      const p = payload as TaskCancelledPayload;
-      if (p.issue_id !== issueId) return;
-      setActiveTask(null);
-      setItems([]);
-      seenSeqs.current.clear();
-      setCancelling(false);
-    }, [issueId]),
-  );
-
-  // Pick up new tasks — skip if we're already showing an active task to avoid
-  // replacing its timeline mid-execution (per-issue serialization in the
-  // backend prevents this race, but this is a defensive safeguard).
+  // Pick up new tasks
   useWSEvent(
     "task:dispatch",
     useCallback(() => {
@@ -212,6 +188,7 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
           setActiveTask(task);
           setItems([]);
           seenSeqs.current.clear();
+          setOpen(false);
         }
       }).catch(console.error);
     }, [issueId, activeTask]),
@@ -226,31 +203,22 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
     return () => clearInterval(interval);
   }, [activeTask?.started_at, activeTask?.dispatched_at]);
 
-  // Sentinel pattern: detect when the card is scrolled past and becomes "stuck"
+  // Auto-collapse timeline when outer scroll container scrolls
+  // (ignoreScrollRef prevents layout-induced scroll from collapsing right after expand)
   useEffect(() => {
-    const sentinel = sentinelRef.current;
-    const root = scrollContainerRef?.current;
-    if (!sentinel || !root || !activeTask) {
-      setIsStuck(false);
-      return;
-    }
+    const container = scrollContainerRef?.current;
+    if (!container) return;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]) setIsStuck(!entries[0].isIntersecting);
-      },
-      { root, threshold: 0, rootMargin: "-40px 0px 0px 0px" },
-    );
+    const handleOuterScroll = () => {
+      if (ignoreScrollRef.current) return;
+      setOpen(false);
+    };
 
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [scrollContainerRef, activeTask]);
+    container.addEventListener("scroll", handleOuterScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleOuterScroll);
+  }, [scrollContainerRef]);
 
-  const scrollToCard = useCallback(() => {
-    sentinelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, []);
-
-  // Auto-scroll
+  // Auto-scroll timeline to bottom
   useEffect(() => {
     if (autoScroll && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -262,6 +230,14 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
     const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
     setAutoScroll(scrollHeight - scrollTop - clientHeight < 40);
   }, []);
+
+  const toggleOpen = useCallback(() => {
+    if (!open) {
+      ignoreScrollRef.current = true;
+      setTimeout(() => { ignoreScrollRef.current = false; }, 300);
+    }
+    setOpen(!open);
+  }, [open]);
 
   const handleCancel = useCallback(async () => {
     if (!activeTask || cancelling) return;
@@ -280,77 +256,63 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
   const name = (activeTask.agent_id ? getActorName("agent", activeTask.agent_id) : agentName) ?? "Agent";
 
   return (
-    <>
-      {/* Sentinel — zero-height element that IntersectionObserver watches */}
-      <div ref={sentinelRef} className="mt-4 h-0 pointer-events-none" aria-hidden />
-
+    <div className="mt-4 sticky top-4 z-10 rounded-lg border border-info/20 bg-info/5 backdrop-blur-sm">
+      {/* Header — click to toggle timeline */}
       <div
-        className={cn(
-          "rounded-lg border transition-all duration-200",
-          isStuck
-            ? "sticky top-4 z-10 shadow-md border-brand/30 bg-brand/10 backdrop-blur-md"
-            : "border-info/20 bg-info/5",
-        )}
+        className="group flex items-center gap-2 px-3 py-2 cursor-pointer select-none text-muted-foreground hover:text-foreground transition-colors"
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        onClick={toggleOpen}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            toggleOpen();
+          }
+        }}
       >
-        {/* Header */}
-        <div className="flex items-center gap-2 px-3 py-2">
-          {activeTask.agent_id ? (
-            <ActorAvatar actorType="agent" actorId={activeTask.agent_id} size={20} />
-          ) : (
-            <div className={cn(
-              "flex items-center justify-center h-5 w-5 rounded-full shrink-0",
-              isStuck ? "bg-brand/15 text-brand" : "bg-info/10 text-info",
-            )}>
-              <Bot className="h-3 w-3" />
-            </div>
-          )}
-          <div className="flex items-center gap-1.5 text-xs font-medium min-w-0">
-            <Loader2 className={cn("h-3 w-3 animate-spin shrink-0", isStuck ? "text-brand" : "text-info")} />
-            <span className="truncate">{name} is working</span>
+        {activeTask.agent_id ? (
+          <ActorAvatar actorType="agent" actorId={activeTask.agent_id} size={20} />
+        ) : (
+          <div className="flex items-center justify-center h-5 w-5 rounded-full shrink-0 bg-info/10 text-info">
+            <Bot className="h-3 w-3" />
           </div>
-          <span className="ml-auto text-xs text-muted-foreground tabular-nums shrink-0">{elapsed}</span>
-          {!isStuck && toolCount > 0 && (
-            <span className="text-xs text-muted-foreground shrink-0">
-              {toolCount} tool {toolCount === 1 ? "call" : "calls"}
-            </span>
-          )}
-          {isStuck ? (
-            <button
-              onClick={scrollToCard}
-              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
-              title="Scroll to live card"
-            >
-              <ChevronUp className="h-3.5 w-3.5" />
-            </button>
-          ) : (
-            <button
-              onClick={handleCancel}
-              disabled={cancelling}
-              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50 shrink-0"
-              title="Stop agent"
-            >
-              {cancelling ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <Square className="h-3 w-3" />
-              )}
-              <span>Stop</span>
-            </button>
+        )}
+        <div className="flex items-center gap-1.5 text-xs min-w-0">
+          <Loader2 className="h-3 w-3 animate-spin text-info shrink-0" />
+          <span className="font-medium text-foreground truncate">{name} is working</span>
+          <span className="text-muted-foreground tabular-nums shrink-0">{elapsed}</span>
+          {toolCount > 0 && (
+            <span className="text-muted-foreground shrink-0">{toolCount} tools</span>
           )}
         </div>
+        <div className="ml-auto flex items-center gap-1 shrink-0">
+          <button
+            onClick={(e) => { e.stopPropagation(); handleCancel(); }}
+            disabled={cancelling}
+            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+            title="Stop agent"
+          >
+            {cancelling ? <Loader2 className="h-3 w-3 animate-spin" /> : <Square className="h-3 w-3" />}
+            <span>Stop</span>
+          </button>
+          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
+        </div>
+      </div>
 
-        {/* Timeline content — collapses when stuck */}
-        <div
-          className={cn(
-            "overflow-hidden transition-all duration-200",
-            isStuck ? "max-h-0 opacity-0" : "max-h-[20rem] opacity-100",
-          )}
-        >
+      {/* Timeline — grid-rows animation for smooth collapse/expand */}
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-200 ease-out",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+        )}
+      >
+        <div className="overflow-hidden">
           {items.length > 0 && (
             <div
               ref={scrollRef}
               onScroll={handleScroll}
-              className="relative max-h-80 overflow-y-auto border-t border-info/10 px-3 py-2 space-y-0.5"
+              className="relative max-h-80 overflow-y-auto overscroll-y-contain border-t border-info/10 px-3 py-2 space-y-0.5"
             >
               {items.map((item, idx) => (
                 <TimelineRow key={`${item.seq}-${idx}`} item={item} />
@@ -358,7 +320,8 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
 
               {!autoScroll && (
                 <button
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     if (scrollRef.current) {
                       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
                       setAutoScroll(true);
@@ -374,7 +337,7 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
           )}
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
