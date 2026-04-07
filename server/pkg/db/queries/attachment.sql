@@ -1,6 +1,6 @@
 -- name: CreateAttachment :one
-INSERT INTO attachment (workspace_id, issue_id, comment_id, uploader_type, uploader_id, filename, url, content_type, size_bytes)
-VALUES ($1, sqlc.narg(issue_id), sqlc.narg(comment_id), $2, $3, $4, $5, $6, $7)
+INSERT INTO attachment (id, workspace_id, issue_id, comment_id, uploader_type, uploader_id, filename, url, content_type, size_bytes)
+VALUES ($1, $2, sqlc.narg(issue_id), sqlc.narg(comment_id), $3, $4, $5, $6, $7, $8)
 RETURNING *;
 
 -- name: ListAttachmentsByIssue :many
@@ -36,6 +36,13 @@ UPDATE attachment
 SET comment_id = $1
 WHERE issue_id = $2
   AND comment_id IS NULL
+  AND id = ANY($3::uuid[]);
+
+-- name: LinkAttachmentsToIssue :exec
+UPDATE attachment
+SET issue_id = $1
+WHERE workspace_id = $2
+  AND issue_id IS NULL
   AND id = ANY($3::uuid[]);
 
 -- name: DeleteAttachment :exec

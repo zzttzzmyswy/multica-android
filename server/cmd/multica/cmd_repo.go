@@ -14,14 +14,14 @@ import (
 
 var repoCmd = &cobra.Command{
 	Use:   "repo",
-	Short: "Manage repositories",
+	Short: "Work with repositories",
 }
 
 var repoCheckoutCmd = &cobra.Command{
 	Use:   "checkout <url>",
 	Short: "Check out a repository into the working directory",
 	Long:  "Creates a git worktree from the daemon's bare clone cache. Used by agents to check out repos on demand.",
-	Args:  cobra.ExactArgs(1),
+	Args:  exactArgs(1),
 	RunE:  runRepoCheckout,
 }
 

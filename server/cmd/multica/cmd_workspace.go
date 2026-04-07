@@ -15,7 +15,7 @@ import (
 
 var workspaceCmd = &cobra.Command{
 	Use:   "workspace",
-	Short: "Manage workspaces",
+	Short: "Work with workspaces",
 }
 
 var workspaceListCmd = &cobra.Command{
@@ -41,14 +41,14 @@ var workspaceMembersCmd = &cobra.Command{
 var workspaceWatchCmd = &cobra.Command{
 	Use:   "watch <workspace-id>",
 	Short: "Add a workspace to the daemon watch list",
-	Args:  cobra.ExactArgs(1),
+	Args:  exactArgs(1),
 	RunE:  runWatch,
 }
 
 var workspaceUnwatchCmd = &cobra.Command{
 	Use:   "unwatch <workspace-id>",
 	Short: "Remove a workspace from the daemon watch list",
-	Args:  cobra.ExactArgs(1),
+	Args:  exactArgs(1),
 	RunE:  runUnwatch,
 }
 

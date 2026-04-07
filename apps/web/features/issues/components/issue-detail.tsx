@@ -204,12 +204,22 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   const issue = useIssueStore((s) => s.issues.find((i) => i.id === id)) ?? null;
   const [issueLoading, setIssueLoading] = useState(!issue);
 
-  // If issue isn't in the store yet, fetch and upsert it
+  // If issue isn't in the store yet, fetch and upsert it.
+  // loadedIdRef tracks which issue was already loaded — if it disappears
+  // from the store (workspace switch clears all issues), skip refetch.
+  const loadedIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (issue) {
+      loadedIdRef.current = id;
       setIssueLoading(false);
       return;
     }
+    // Issue was loaded for this id but vanished → store cleared (workspace switch)
+    if (loadedIdRef.current === id) {
+      loadedIdRef.current = null;
+      return;
+    }
+    // Issue not in store → fetch it
     setIssueLoading(true);
     api
       .getIssue(id)

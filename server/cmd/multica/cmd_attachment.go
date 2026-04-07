@@ -14,14 +14,19 @@ import (
 
 var attachmentCmd = &cobra.Command{
 	Use:   "attachment",
-	Short: "Manage attachments",
+	Short: "Work with attachments",
 }
 
 var attachmentDownloadCmd = &cobra.Command{
 	Use:   "download <attachment-id>",
 	Short: "Download an attachment to a local file",
-	Long:  "Fetches the attachment metadata from the API, then downloads the file using its signed URL. Prints the local file path on success.",
-	Args:  cobra.ExactArgs(1),
+	Long:  "Download an attachment by its ID to a local file.",
+	Example: `  # Download an image attachment to the current directory
+  $ multica attachment download abc123
+
+  # Download to a specific directory
+  $ multica attachment download abc123 -o /tmp/images`,
+	Args:  exactArgs(1),
 	RunE:  runAttachmentDownload,
 }
 

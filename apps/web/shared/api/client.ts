@@ -114,7 +114,8 @@ export class ApiClient {
     if (!res.ok) {
       if (res.status === 401) this.handleUnauthorized();
       const message = await this.parseErrorMessage(res, `API error: ${res.status} ${res.statusText}`);
-      this.logger.error(`← ${res.status} ${path}`, { rid, duration: `${Date.now() - start}ms`, error: message });
+      const logLevel = res.status === 404 ? "warn" : "error";
+      this.logger[logLevel](`← ${res.status} ${path}`, { rid, duration: `${Date.now() - start}ms`, error: message });
       throw new Error(message);
     }
 
@@ -140,6 +141,13 @@ export class ApiClient {
     return this.fetch("/auth/verify-code", {
       method: "POST",
       body: JSON.stringify({ email, code }),
+    });
+  }
+
+  async googleLogin(code: string, redirectUri: string): Promise<LoginResponse> {
+    return this.fetch("/auth/google", {
+      method: "POST",
+      body: JSON.stringify({ code, redirect_uri: redirectUri }),
     });
   }
 

@@ -15,7 +15,7 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "multica",
 	Short: "Multica CLI — local agent runtime and management tool",
-	Long:  "multica manages local agent runtimes and provides control commands for the Multica platform.",
+	Long:  "Work seamlessly with Multica from the command line.",
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
@@ -25,24 +25,47 @@ func init() {
 	rootCmd.PersistentFlags().String("workspace-id", "", "Workspace ID (env: MULTICA_WORKSPACE_ID)")
 	rootCmd.PersistentFlags().String("profile", "", "Configuration profile name (e.g. dev) — isolates config, daemon state, and workspaces")
 
-	rootCmd.AddCommand(loginCmd)
-	rootCmd.AddCommand(authCmd)
-	rootCmd.AddCommand(daemonCmd)
+	// Core commands
+	issueCmd.GroupID = groupCore
+	agentCmd.GroupID = groupCore
+	workspaceCmd.GroupID = groupCore
+	repoCmd.GroupID = groupCore
+	skillCmd.GroupID = groupCore
+
+	// Runtime commands
+	daemonCmd.GroupID = groupRuntime
+	runtimeCmd.GroupID = groupRuntime
+
+	// Additional commands
+	authCmd.GroupID = groupAdditional
+	loginCmd.GroupID = groupAdditional
+	attachmentCmd.GroupID = groupAdditional
+	configCmd.GroupID = groupAdditional
+	updateCmd.GroupID = groupAdditional
+	versionCmd.GroupID = groupAdditional
+
+	rootCmd.AddCommand(issueCmd)
 	rootCmd.AddCommand(agentCmd)
 	rootCmd.AddCommand(workspaceCmd)
-	rootCmd.AddCommand(configCmd)
-	rootCmd.AddCommand(issueCmd)
-	rootCmd.AddCommand(attachmentCmd)
 	rootCmd.AddCommand(repoCmd)
-	rootCmd.AddCommand(versionCmd)
-	rootCmd.AddCommand(updateCmd)
 	rootCmd.AddCommand(skillCmd)
+	rootCmd.AddCommand(daemonCmd)
 	rootCmd.AddCommand(runtimeCmd)
+	rootCmd.AddCommand(authCmd)
+	rootCmd.AddCommand(loginCmd)
+	rootCmd.AddCommand(attachmentCmd)
+	rootCmd.AddCommand(configCmd)
+	rootCmd.AddCommand(updateCmd)
+	rootCmd.AddCommand(versionCmd)
+
+	initHelp(rootCmd)
 }
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "Error:", err)
+		if err != errSilent {
+			fmt.Fprintln(os.Stderr, "Error:", err)
+		}
 		os.Exit(1)
 	}
 }

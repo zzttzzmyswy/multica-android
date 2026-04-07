@@ -69,7 +69,12 @@ stop:
 	@echo "Stopping services..."
 	@-lsof -ti:$(PORT) | xargs kill -9 2>/dev/null
 	@-lsof -ti:$(FRONTEND_PORT) | xargs kill -9 2>/dev/null
-	@echo "✓ App processes stopped. Shared PostgreSQL is still running on localhost:5432."
+	@case "$(DATABASE_URL)" in \
+		""|*@localhost:*|*@localhost/*|*@127.0.0.1:*|*@127.0.0.1/*|*@\[::1\]:*|*@\[::1\]/*) \
+			echo "✓ App processes stopped. Shared PostgreSQL is still running on localhost:$(POSTGRES_PORT)." ;; \
+		*) \
+			echo "✓ App processes stopped. Remote PostgreSQL was not affected." ;; \
+	esac
 
 # Full verification: typecheck + unit tests + Go tests + E2E
 check:
@@ -98,8 +103,12 @@ check-main:
 	@ENV_FILE=$(MAIN_ENV_FILE) bash scripts/check.sh
 
 setup-worktree:
-	@echo "==> Generating $(WORKTREE_ENV_FILE) with unique ports..."
-	@FORCE=1 bash scripts/init-worktree-env.sh $(WORKTREE_ENV_FILE)
+	@if [ ! -f "$(WORKTREE_ENV_FILE)" ]; then \
+		echo "==> Generating $(WORKTREE_ENV_FILE) with unique ports..."; \
+		bash scripts/init-worktree-env.sh $(WORKTREE_ENV_FILE); \
+	else \
+		echo "==> Using existing $(WORKTREE_ENV_FILE)"; \
+	fi
 	@$(MAKE) setup ENV_FILE=$(WORKTREE_ENV_FILE)
 
 start-worktree:
@@ -134,10 +143,12 @@ COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 build:
 	cd server && go build -o bin/server ./cmd/server
 	cd server && go build -ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT)" -o bin/multica ./cmd/multica
+	cd server && go build -o bin/migrate ./cmd/migrate
 
 test:
 	$(REQUIRE_ENV)
 	@bash scripts/ensure-postgres.sh "$(ENV_FILE)"
+	cd server && go run ./cmd/migrate up
 	cd server && go test ./...
 
 # Database

@@ -36,7 +36,7 @@ export interface AgentTrigger {
   id: string;
   type: AgentTriggerType;
   enabled: boolean;
-  config: Record<string, unknown>;
+  config: Record<string, unknown> | null;
 }
 
 export interface AgentTask {

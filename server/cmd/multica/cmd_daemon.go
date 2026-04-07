@@ -23,7 +23,7 @@ import (
 
 var daemonCmd = &cobra.Command{
 	Use:   "daemon",
-	Short: "Manage the local agent runtime daemon",
+	Short: "Control the local agent runtime daemon",
 }
 
 var daemonStartCmd = &cobra.Command{
@@ -163,13 +163,14 @@ func runDaemonBackground(cmd *cobra.Command) error {
 		return fmt.Errorf("start daemon: %w", err)
 	}
 	logFile.Close()
+	pid := child.Process.Pid
 
 	// Detach: we don't Wait() on the child — it runs independently.
 	child.Process.Release()
 
 	// Write PID file.
 	pidPath := daemonPIDPathForProfile(profile)
-	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(child.Process.Pid)), 0o644); err != nil {
+	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(pid)), 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: could not write PID file: %v\n", err)
 	}
 
@@ -184,9 +185,9 @@ func runDaemonBackground(cmd *cobra.Command) error {
 	}
 
 	if profile != "" {
-		fmt.Fprintf(os.Stderr, "Daemon [%s] started (pid %d, version %s)\n", profile, child.Process.Pid, version)
+		fmt.Fprintf(os.Stderr, "Daemon [%s] started (pid %d, version %s)\n", profile, pid, version)
 	} else {
-		fmt.Fprintf(os.Stderr, "Daemon started (pid %d, version %s)\n", child.Process.Pid, version)
+		fmt.Fprintf(os.Stderr, "Daemon started (pid %d, version %s)\n", pid, version)
 	}
 	fmt.Fprintf(os.Stderr, "Logs: %s\n", logPath)
 	return nil

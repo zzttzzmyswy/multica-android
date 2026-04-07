@@ -11,6 +11,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countComments = `-- name: CountComments :one
+SELECT count(*) FROM comment
+WHERE issue_id = $1 AND workspace_id = $2
+`
+
+type CountCommentsParams struct {
+	IssueID     pgtype.UUID `json:"issue_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+func (q *Queries) CountComments(ctx context.Context, arg CountCommentsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countComments, arg.IssueID, arg.WorkspaceID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createComment = `-- name: CreateComment :one
 INSERT INTO comment (issue_id, workspace_id, author_type, author_id, content, type, parent_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -126,6 +143,151 @@ type ListCommentsParams struct {
 
 func (q *Queries) ListComments(ctx context.Context, arg ListCommentsParams) ([]Comment, error) {
 	rows, err := q.db.Query(ctx, listComments, arg.IssueID, arg.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Comment{}
+	for rows.Next() {
+		var i Comment
+		if err := rows.Scan(
+			&i.ID,
+			&i.IssueID,
+			&i.AuthorType,
+			&i.AuthorID,
+			&i.Content,
+			&i.Type,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ParentID,
+			&i.WorkspaceID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCommentsPaginated = `-- name: ListCommentsPaginated :many
+SELECT id, issue_id, author_type, author_id, content, type, created_at, updated_at, parent_id, workspace_id FROM comment
+WHERE issue_id = $1 AND workspace_id = $2
+ORDER BY created_at ASC
+LIMIT $3 OFFSET $4
+`
+
+type ListCommentsPaginatedParams struct {
+	IssueID     pgtype.UUID `json:"issue_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Limit       int32       `json:"limit"`
+	Offset      int32       `json:"offset"`
+}
+
+func (q *Queries) ListCommentsPaginated(ctx context.Context, arg ListCommentsPaginatedParams) ([]Comment, error) {
+	rows, err := q.db.Query(ctx, listCommentsPaginated,
+		arg.IssueID,
+		arg.WorkspaceID,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Comment{}
+	for rows.Next() {
+		var i Comment
+		if err := rows.Scan(
+			&i.ID,
+			&i.IssueID,
+			&i.AuthorType,
+			&i.AuthorID,
+			&i.Content,
+			&i.Type,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ParentID,
+			&i.WorkspaceID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCommentsSince = `-- name: ListCommentsSince :many
+SELECT id, issue_id, author_type, author_id, content, type, created_at, updated_at, parent_id, workspace_id FROM comment
+WHERE issue_id = $1 AND workspace_id = $2 AND created_at > $3
+ORDER BY created_at ASC
+`
+
+type ListCommentsSinceParams struct {
+	IssueID     pgtype.UUID        `json:"issue_id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListCommentsSince(ctx context.Context, arg ListCommentsSinceParams) ([]Comment, error) {
+	rows, err := q.db.Query(ctx, listCommentsSince, arg.IssueID, arg.WorkspaceID, arg.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Comment{}
+	for rows.Next() {
+		var i Comment
+		if err := rows.Scan(
+			&i.ID,
+			&i.IssueID,
+			&i.AuthorType,
+			&i.AuthorID,
+			&i.Content,
+			&i.Type,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ParentID,
+			&i.WorkspaceID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCommentsSincePaginated = `-- name: ListCommentsSincePaginated :many
+SELECT id, issue_id, author_type, author_id, content, type, created_at, updated_at, parent_id, workspace_id FROM comment
+WHERE issue_id = $1 AND workspace_id = $2 AND created_at > $3
+ORDER BY created_at ASC
+LIMIT $4 OFFSET $5
+`
+
+type ListCommentsSincePaginatedParams struct {
+	IssueID     pgtype.UUID        `json:"issue_id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	Limit       int32              `json:"limit"`
+	Offset      int32              `json:"offset"`
+}
+
+func (q *Queries) ListCommentsSincePaginated(ctx context.Context, arg ListCommentsSincePaginatedParams) ([]Comment, error) {
+	rows, err := q.db.Query(ctx, listCommentsSincePaginated,
+		arg.IssueID,
+		arg.WorkspaceID,
+		arg.CreatedAt,
+		arg.Limit,
+		arg.Offset,
+	)
 	if err != nil {
 		return nil, err
 	}
