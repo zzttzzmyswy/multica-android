@@ -273,6 +273,20 @@ export const zh: LandingDict = {
     subtitle: "Multica \u7684\u6700\u65b0\u66f4\u65b0\u548c\u6539\u8fdb\u3002",
     entries: [
       {
+        version: "0.1.7",
+        date: "2026-04-05",
+        title: "评论分页与 CLI 优化",
+        changes: [
+          "评论列表支持分页，API 和 CLI 均已适配",
+          "收件箱归档操作现在一次性归档同一 Issue 的所有通知",
+          "CLI 帮助输出重新设计，匹配 gh CLI 风格并增加示例",
+          "附件使用 UUIDv7 作为 S3 key，创建 Issue/评论时自动关联附件",
+          "支持在已完成或已取消的 Issue 上 @提及已分配的 Agent",
+          "回复仅 @提及成员时跳过父级提及继承逻辑",
+          "Worktree 环境配置保留已有的 .env.worktree 变量",
+        ],
+      },
+      {
         version: "0.1.6",
         date: "2026-04-03",
         title: "编辑器重构与 Agent 生命周期",
