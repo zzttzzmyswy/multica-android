@@ -152,12 +152,20 @@ func (b *openclawBackend) processEvents(r io.Reader, ch chan<- Message) openclaw
 		case "tool_call":
 			b.handleOCToolCallEvent(event, ch)
 		case "error":
+			// NOTE: error events unconditionally set finalStatus to "failed" and
+			// it stays sticky — subsequent text or result events won't revert it.
+			// This is intentional: once an error fires, the session is considered
+			// failed regardless of later events.
 			b.handleOCErrorEvent(event, ch, &finalStatus, &finalError)
 		case "step_start":
 			trySend(ch, Message{Type: MessageStatus, Status: "running"})
 		case "step_end":
 			// Captures final session ID from step_end if present.
 		case "result":
+			// The result event only updates status on explicit failure. A
+			// "completed" result is a no-op because finalStatus defaults to
+			// "completed". Any unrecognized status (e.g. "partial") is also
+			// treated as success — update this if OpenClaw adds new statuses.
 			if event.Data != nil {
 				if s, ok := event.Data["status"].(string); ok && s != "" {
 					if s == "error" || s == "failed" {
@@ -189,7 +197,7 @@ func (b *openclawBackend) processEvents(r io.Reader, ch chan<- Message) openclaw
 }
 
 func (b *openclawBackend) handleOCTextEvent(event openclawEvent, ch chan<- Message, output *strings.Builder) {
-	text := extractEventText(event.Data)
+	text := openclawExtractText(event.Data)
 	if text != "" {
 		output.WriteString(text)
 		trySend(ch, Message{Type: MessageText, Content: text})
@@ -197,7 +205,7 @@ func (b *openclawBackend) handleOCTextEvent(event openclawEvent, ch chan<- Messa
 }
 
 func (b *openclawBackend) handleOCThinkingEvent(event openclawEvent, ch chan<- Message) {
-	text := extractEventText(event.Data)
+	text := openclawExtractText(event.Data)
 	if text != "" {
 		trySend(ch, Message{Type: MessageThinking, Content: text})
 	}
@@ -233,7 +241,7 @@ func (b *openclawBackend) handleOCToolCallEvent(event openclawEvent, ch chan<- M
 	// If the tool has completed, also emit a tool-result message.
 	status, _ := event.Data["status"].(string)
 	if status == "completed" {
-		outputStr := extractOCToolOutput(event.Data["output"])
+		outputStr := extractToolOutput(event.Data["output"])
 		trySend(ch, Message{
 			Type:   MessageToolResult,
 			Tool:   name,
@@ -266,8 +274,9 @@ func (b *openclawBackend) handleOCErrorEvent(event openclawEvent, ch chan<- Mess
 	*finalError = errMsg
 }
 
-// extractEventText extracts text content from an event data map.
-func extractEventText(data map[string]any) string {
+// openclawExtractText extracts text content from an openclaw event data map.
+// Supports both flat {"text": "..."} and nested {"content": {"text": "..."}} layouts.
+func openclawExtractText(data map[string]any) string {
 	if data == nil {
 		return ""
 	}
@@ -282,18 +291,6 @@ func extractEventText(data map[string]any) string {
 		}
 	}
 	return ""
-}
-
-// extractOCToolOutput converts tool output (string or structured) into a string.
-func extractOCToolOutput(output any) string {
-	if output == nil {
-		return ""
-	}
-	if s, ok := output.(string); ok {
-		return s
-	}
-	data, _ := json.Marshal(output)
-	return string(data)
 }
 
 // ── JSON types for `openclaw agent --output-format stream-json` stdout events ──

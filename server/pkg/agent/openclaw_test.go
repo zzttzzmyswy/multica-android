@@ -517,12 +517,12 @@ func TestOpenclawProcessEventsResultErrorStatus(t *testing.T) {
 	close(ch)
 }
 
-// ── extractEventText tests ──
+// ── openclawExtractText tests ──
 
 func TestExtractEventTextDirect(t *testing.T) {
 	t.Parallel()
 	data := map[string]any{"text": "hello"}
-	if got := extractEventText(data); got != "hello" {
+	if got := openclawExtractText(data); got != "hello" {
 		t.Errorf("got %q, want %q", got, "hello")
 	}
 }
@@ -532,40 +532,15 @@ func TestExtractEventTextNested(t *testing.T) {
 	data := map[string]any{
 		"content": map[string]any{"text": "nested hello"},
 	}
-	if got := extractEventText(data); got != "nested hello" {
+	if got := openclawExtractText(data); got != "nested hello" {
 		t.Errorf("got %q, want %q", got, "nested hello")
 	}
 }
 
 func TestExtractEventTextNil(t *testing.T) {
 	t.Parallel()
-	if got := extractEventText(nil); got != "" {
+	if got := openclawExtractText(nil); got != "" {
 		t.Errorf("got %q, want empty", got)
-	}
-}
-
-// ── extractOCToolOutput tests ──
-
-func TestExtractOCToolOutputString(t *testing.T) {
-	t.Parallel()
-	if got := extractOCToolOutput("hello\n"); got != "hello\n" {
-		t.Errorf("got %q, want %q", got, "hello\n")
-	}
-}
-
-func TestExtractOCToolOutputNil(t *testing.T) {
-	t.Parallel()
-	if got := extractOCToolOutput(nil); got != "" {
-		t.Errorf("got %q, want empty", got)
-	}
-}
-
-func TestExtractOCToolOutputStructured(t *testing.T) {
-	t.Parallel()
-	obj := map[string]any{"key": "value"}
-	got := extractOCToolOutput(obj)
-	if !strings.Contains(got, `"key"`) || !strings.Contains(got, `"value"`) {
-		t.Errorf("got %q, expected JSON containing key/value", got)
 	}
 }
 
