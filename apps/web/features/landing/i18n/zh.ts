@@ -273,6 +273,21 @@ export const zh: LandingDict = {
     subtitle: "Multica \u7684\u6700\u65b0\u66f4\u65b0\u548c\u6539\u8fdb\u3002",
     entries: [
       {
+        version: "0.1.8",
+        date: "2026-04-07",
+        title: "OAuth、OpenClaw 与 Issue 加载优化",
+        changes: [
+          "支持 Google OAuth 登录",
+          "新增 OpenClaw 运行时，支持在 OpenClaw 基础设施上运行 Agent",
+          "Agent 实时卡片重新设计——始终吸顶，支持手动展开/收起",
+          "打开的 Issue 不再分页限制全量加载，已关闭的 Issue 滚动分页",
+          "JWT 和 CloudFront Cookie 有效期从 72 小时延长至 30 天",
+          "重新登录后记住上次选择的工作区",
+          "守护进程确保 Agent 任务环境中 multica CLI 在 PATH 上",
+          "新增 PR 模板和面向 Agent 的 CLI 安装指南",
+        ],
+      },
+      {
         version: "0.1.7",
         date: "2026-04-05",
         title: "评论分页与 CLI 优化",
