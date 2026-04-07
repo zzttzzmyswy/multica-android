@@ -12,6 +12,11 @@ export const issueKeys = {
     ["issues", "subscribers", issueId] as const,
 };
 
+/**
+ * CACHE SHAPE NOTE: The raw cache stores ListIssuesResponse ({ issues, total }),
+ * but `select` transforms it to Issue[] for consumers. Mutations and ws-updaters
+ * must use setQueryData<ListIssuesResponse>(...) — NOT setQueryData<Issue[]>.
+ */
 export function issueListOptions(wsId: string) {
   return queryOptions({
     queryKey: issueKeys.list(wsId),

@@ -10,8 +10,8 @@ import {
 } from "react";
 import { ReactRenderer } from "@tiptap/react";
 import { computePosition, offset, flip, shift } from "@floating-ui/dom";
+import type { QueryClient } from "@tanstack/react-query";
 import { useWorkspaceStore } from "@/features/workspace";
-import { getQueryClient } from "@core/query-client";
 import { issueKeys } from "@core/issues/queries";
 import { workspaceKeys } from "@core/workspace/queries";
 import type { Issue, ListIssuesResponse, MemberWithUser, Agent } from "@/shared/types";
@@ -213,18 +213,19 @@ function MentionRow({
 // Suggestion config factory
 // ---------------------------------------------------------------------------
 
-export function createMentionSuggestion(): Omit<
+export function createMentionSuggestion(qc: QueryClient): Omit<
   SuggestionOptions<MentionItem>,
   "editor"
 > {
   return {
     items: ({ query }) => {
       const wsId = useWorkspaceStore.getState().workspace?.id;
-      const members: MemberWithUser[] = wsId ? getQueryClient().getQueryData(workspaceKeys.members(wsId)) ?? [] : [];
-      const agents: Agent[] = wsId ? getQueryClient().getQueryData(workspaceKeys.agents(wsId)) ?? [] : [];
+      const members: MemberWithUser[] = wsId ? qc.getQueryData(workspaceKeys.members(wsId)) ?? [] : [];
+      const agents: Agent[] = wsId ? qc.getQueryData(workspaceKeys.agents(wsId)) ?? [] : [];
       const issues: Issue[] = wsId
-        ? getQueryClient().getQueryData<ListIssuesResponse>(issueKeys.list(wsId))?.issues ?? []
+        ? qc.getQueryData<ListIssuesResponse>(issueKeys.list(wsId))?.issues ?? []
         : [];
+
       const q = query.toLowerCase();
 
       // Show "All members" option when query is empty or matches "all"

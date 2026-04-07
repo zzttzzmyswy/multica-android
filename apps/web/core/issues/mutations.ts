@@ -60,6 +60,9 @@ export function useUpdateIssue() {
       if (ctx?.prevDetail)
         qc.setQueryData(issueKeys.detail(wsId, ctx.id), ctx.prevDetail);
     },
+    onSettled: (_data, _err, vars) => {
+      qc.invalidateQueries({ queryKey: issueKeys.detail(wsId, vars.id) });
+    },
   });
 }
 

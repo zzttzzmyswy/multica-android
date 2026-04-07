@@ -1,3 +1,3 @@
-export { createQueryClient, getQueryClient, setQueryClient } from "./query-client";
+export { createQueryClient } from "./query-client";
 export { QueryProvider } from "./provider";
 export { useWorkspaceId } from "./hooks";

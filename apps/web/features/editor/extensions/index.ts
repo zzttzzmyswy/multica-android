@@ -76,6 +76,7 @@ const ImageExtension = Image.extend({
 export interface EditorExtensionsOptions {
   editable: boolean;
   placeholder?: string;
+  queryClient?: import("@tanstack/react-query").QueryClient;
   onSubmitRef?: RefObject<(() => void) | undefined>;
   onUploadFileRef?: RefObject<
     ((file: File) => Promise<UploadResult | null>) | undefined
@@ -107,7 +108,7 @@ export function createEditorExtensions(
     Markdown,
     BaseMentionExtension.configure({
       HTMLAttributes: { class: "mention" },
-      ...(editable ? { suggestion: createMentionSuggestion() } : {}),
+      ...(editable && options.queryClient ? { suggestion: createMentionSuggestion(options.queryClient) } : {}),
     }),
   ];
 

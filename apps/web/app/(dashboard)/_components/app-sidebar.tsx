@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -77,7 +78,10 @@ export function AppSidebar() {
 
   const wsId = useWorkspaceId();
   const { data: inboxItems = [] } = useQuery(inboxListOptions(wsId));
-  const unreadCount = deduplicateInboxItems(inboxItems).filter((i) => !i.read).length;
+  const unreadCount = React.useMemo(
+    () => deduplicateInboxItems(inboxItems).filter((i) => !i.read).length,
+    [inboxItems],
+  );
 
   const logout = () => {
     router.push("/");

@@ -34,6 +34,7 @@ import {
 import { useEditor, EditorContent } from "@tiptap/react";
 import { cn } from "@/lib/utils";
 import type { UploadResult } from "@/shared/hooks/use-file-upload";
+import { useQueryClient } from "@tanstack/react-query";
 import { createEditorExtensions } from "./extensions";
 import { uploadAndInsertFile } from "./extensions/file-upload";
 import { preprocessMarkdown } from "./utils/preprocess";
@@ -94,6 +95,8 @@ const ContentEditor = forwardRef<ContentEditorRef, ContentEditorProps>(
     onBlurRef.current = onBlur;
     onUploadFileRef.current = onUploadFile;
 
+    const queryClient = useQueryClient();
+
     const editor = useEditor({
       immediatelyRender: false,
       editable,
@@ -102,6 +105,7 @@ const ContentEditor = forwardRef<ContentEditorRef, ContentEditorProps>(
       extensions: createEditorExtensions({
         editable,
         placeholder: placeholderText,
+        queryClient,
         onSubmitRef,
         onUploadFileRef,
       }),
