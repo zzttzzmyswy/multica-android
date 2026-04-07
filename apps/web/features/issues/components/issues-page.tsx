@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { ChevronRight, ListTodo } from "lucide-react";
 import type { IssueStatus } from "@/shared/types";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useIssueStore } from "@/features/issues/store";
+import { useQuery } from "@tanstack/react-query";
 import { useIssueViewStore, initFilterWorkspaceSync } from "@/features/issues/stores/view-store";
 import { useIssuesScopeStore } from "@/features/issues/stores/issues-scope-store";
 import { ViewStoreProvider } from "@/features/issues/stores/view-store-context";
@@ -13,7 +13,9 @@ import { filterIssues } from "@/features/issues/utils/filter";
 import { BOARD_STATUSES } from "@/features/issues/config";
 import { useWorkspaceStore } from "@/features/workspace";
 import { WorkspaceAvatar } from "@/features/workspace";
-import { api } from "@/shared/api";
+import { useWorkspaceId } from "@core/hooks";
+import { issueListOptions } from "@core/issues/queries";
+import { useUpdateIssue } from "@core/issues/mutations";
 import { useIssueSelectionStore } from "@/features/issues/stores/selection-store";
 import { IssuesHeader } from "./issues-header";
 import { BoardView } from "./board-view";
@@ -21,8 +23,8 @@ import { ListView } from "./list-view";
 import { BatchActionToolbar } from "./batch-action-toolbar";
 
 export function IssuesPage() {
-  const allIssues = useIssueStore((s) => s.issues);
-  const loading = useIssueStore((s) => s.loading);
+  const wsId = useWorkspaceId();
+  const { data: allIssues = [], isLoading: loading } = useQuery(issueListOptions(wsId));
   const workspace = useWorkspaceStore((s) => s.workspace);
   const scope = useIssuesScopeStore((s) => s.scope);
   const viewMode = useIssueViewStore((s) => s.viewMode);
@@ -64,6 +66,7 @@ export function IssuesPage() {
     return BOARD_STATUSES.filter((s) => !visibleStatuses.includes(s));
   }, [visibleStatuses]);
 
+  const updateIssueMutation = useUpdateIssue();
   const handleMoveIssue = useCallback(
     (issueId: string, newStatus: IssueStatus, newPosition?: number) => {
       // Auto-switch to manual sort so drag ordering is preserved
@@ -78,16 +81,12 @@ export function IssuesPage() {
       };
       if (newPosition !== undefined) updates.position = newPosition;
 
-      useIssueStore.getState().updateIssue(issueId, updates);
-
-      api.updateIssue(issueId, updates).catch(() => {
-        toast.error("Failed to move issue");
-        api.listIssues({ limit: 200 }).then((res) => {
-          useIssueStore.getState().setIssues(res.issues);
-        }).catch(console.error);
-      });
+      updateIssueMutation.mutate(
+        { id: issueId, ...updates },
+        { onError: () => toast.error("Failed to move issue") },
+      );
     },
-    []
+    [updateIssueMutation],
   );
 
   if (loading) {

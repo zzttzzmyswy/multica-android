@@ -8,8 +8,7 @@ import { toast } from "sonner";
 import type { Issue, UpdateIssueRequest } from "@/shared/types";
 import { CalendarDays } from "lucide-react";
 import { ActorAvatar } from "@/components/common/actor-avatar";
-import { api } from "@/shared/api";
-import { useIssueStore } from "@/features/issues/store";
+import { useUpdateIssue } from "@core/issues/mutations";
 import { PriorityIcon } from "./priority-icon";
 import { PriorityPicker, AssigneePicker, DueDatePicker } from "./pickers";
 import { PRIORITY_CONFIG } from "@/features/issues/config";
@@ -46,16 +45,15 @@ export const BoardCardContent = memo(function BoardCardContent({
   const storeProperties = useViewStore((s) => s.cardProperties);
   const priorityCfg = PRIORITY_CONFIG[issue.priority];
 
+  const updateIssueMutation = useUpdateIssue();
   const handleUpdate = useCallback(
     (updates: Partial<UpdateIssueRequest>) => {
-      const prev = { ...issue };
-      useIssueStore.getState().updateIssue(issue.id, updates);
-      api.updateIssue(issue.id, updates).catch(() => {
-        useIssueStore.getState().updateIssue(issue.id, prev);
-        toast.error("Failed to update issue");
-      });
+      updateIssueMutation.mutate(
+        { id: issue.id, ...updates },
+        { onError: () => toast.error("Failed to update issue") },
+      );
     },
-    [issue],
+    [issue.id, updateIssueMutation],
   );
 
   const showPriority = storeProperties.priority;

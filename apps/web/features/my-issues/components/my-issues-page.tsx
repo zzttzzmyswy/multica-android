@@ -8,7 +8,7 @@ import type { IssueStatus } from "@/shared/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore, WorkspaceAvatar } from "@/features/workspace";
-import { useIssueStore } from "@/features/issues/store";
+import { useQuery } from "@tanstack/react-query";
 import { filterIssues } from "@/features/issues/utils/filter";
 import { BOARD_STATUSES } from "@/features/issues/config";
 import { ViewStoreProvider } from "@/features/issues/stores/view-store-context";
@@ -17,7 +17,9 @@ import { BoardView } from "@/features/issues/components/board-view";
 import { ListView } from "@/features/issues/components/list-view";
 import { BatchActionToolbar } from "@/features/issues/components/batch-action-toolbar";
 import { registerViewStoreForWorkspaceSync } from "@/features/issues/stores/view-store";
-import { api } from "@/shared/api";
+import { useWorkspaceId } from "@core/hooks";
+import { issueListOptions } from "@core/issues/queries";
+import { useUpdateIssue } from "@core/issues/mutations";
 import { myIssuesViewStore } from "../stores/my-issues-view-store";
 import { MyIssuesHeader } from "./my-issues-header";
 
@@ -25,8 +27,8 @@ export function MyIssuesPage() {
   const user = useAuthStore((s) => s.user);
   const workspace = useWorkspaceStore((s) => s.workspace);
   const agents = useWorkspaceStore((s) => s.agents);
-  const allIssues = useIssueStore((s) => s.issues);
-  const loading = useIssueStore((s) => s.loading);
+  const wsId = useWorkspaceId();
+  const { data: allIssues = [], isLoading: loading } = useQuery(issueListOptions(wsId));
 
   const viewMode = useStore(myIssuesViewStore, (s) => s.viewMode);
   const statusFilters = useStore(myIssuesViewStore, (s) => s.statusFilters);
@@ -105,6 +107,7 @@ export function MyIssuesPage() {
     return BOARD_STATUSES.filter((s) => !visibleStatuses.includes(s));
   }, [visibleStatuses]);
 
+  const updateIssueMutation = useUpdateIssue();
   const handleMoveIssue = useCallback(
     (issueId: string, newStatus: IssueStatus, newPosition?: number) => {
       const viewState = myIssuesViewStore.getState();
@@ -118,16 +121,12 @@ export function MyIssuesPage() {
       };
       if (newPosition !== undefined) updates.position = newPosition;
 
-      useIssueStore.getState().updateIssue(issueId, updates);
-
-      api.updateIssue(issueId, updates).catch(() => {
-        toast.error("Failed to move issue");
-        api.listIssues({ limit: 200 }).then((res) => {
-          useIssueStore.getState().setIssues(res.issues);
-        }).catch(console.error);
-      });
+      updateIssueMutation.mutate(
+        { id: issueId, ...updates },
+        { onError: () => toast.error("Failed to move issue") },
+      );
     },
-    [],
+    [updateIssueMutation],
   );
 
   if (loading) {

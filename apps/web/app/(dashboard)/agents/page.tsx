@@ -76,7 +76,9 @@ import { api } from "@/shared/api";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
 import { useRuntimeStore } from "@/features/runtimes";
-import { useIssueStore } from "@/features/issues";
+import { useQuery } from "@tanstack/react-query";
+import { useWorkspaceId } from "@core/hooks";
+import { issueListOptions } from "@core/issues/queries";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { useFileUpload } from "@/shared/hooks/use-file-upload";
 
@@ -1056,7 +1058,8 @@ function TriggersTab({
 function TasksTab({ agent }: { agent: Agent }) {
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [loading, setLoading] = useState(true);
-  const issues = useIssueStore((s) => s.issues);
+  const wsId = useWorkspaceId();
+  const { data: issues = [] } = useQuery(issueListOptions(wsId));
 
   useEffect(() => {
     setLoading(true);

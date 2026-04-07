@@ -2,7 +2,6 @@
 
 import { create } from "zustand";
 import type { Workspace, MemberWithUser, Agent, Skill } from "@/shared/types";
-import { useIssueStore } from "@/features/issues";
 import { useInboxStore } from "@/features/inbox";
 import { useRuntimeStore } from "@/features/runtimes";
 import { toast } from "sonner";
@@ -88,7 +87,6 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         return [] as Agent[];
       }),
       api.listSkills().catch(() => [] as Skill[]),
-      useIssueStore.getState().fetch().catch(() => {}),
       useInboxStore.getState().fetch().catch(() => {}),
     ]);
     logger.info("hydrate complete", "members:", nextMembers.length, "agents:", nextAgents.length);
@@ -110,8 +108,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     api.setWorkspaceId(ws.id);
     localStorage.setItem("multica_workspace_id", ws.id);
 
-    // Clear ALL stale data across every store before hydrating.
-    useIssueStore.getState().setIssues([]);
+    // Clear stale data across stores before hydrating.
+    // Issue cache is managed by TanStack Query (keyed by wsId, auto-refetches).
     useInboxStore.getState().setItems([]);
     useRuntimeStore.getState().setRuntimes([]);
     set({ workspace: ws, members: [], agents: [], skills: [] });

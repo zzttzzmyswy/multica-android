@@ -21,9 +21,8 @@ import {
 } from "@/components/ui/popover";
 import type { UpdateIssueRequest } from "@/shared/types";
 import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
-import { useIssueStore } from "@/features/issues/store";
 import { useIssueSelectionStore } from "@/features/issues/stores/selection-store";
-import { api } from "@/shared/api";
+import { useBatchUpdateIssues, useBatchDeleteIssues } from "@core/issues/mutations";
 import { StatusIcon } from "./status-icon";
 import { PriorityIcon } from "./priority-icon";
 import { AssigneePicker } from "./pickers";
@@ -37,46 +36,31 @@ export function BatchActionToolbar() {
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const batchUpdate = useBatchUpdateIssues();
+  const batchDelete = useBatchDeleteIssues();
+  const loading = batchUpdate.isPending || batchDelete.isPending;
 
   if (count === 0) return null;
 
   const ids = Array.from(selectedIds);
 
   const handleBatchUpdate = async (updates: Partial<UpdateIssueRequest>) => {
-    setLoading(true);
     try {
-      await api.batchUpdateIssues(ids, updates);
-      for (const id of ids) {
-        useIssueStore.getState().updateIssue(id, updates);
-      }
+      await batchUpdate.mutateAsync({ ids, updates });
       toast.success(`Updated ${count} issue${count > 1 ? "s" : ""}`);
     } catch {
       toast.error("Failed to update issues");
-      api.listIssues({ limit: 200 }).then((res) => {
-        useIssueStore.getState().setIssues(res.issues);
-      }).catch(console.error);
-    } finally {
-      setLoading(false);
     }
   };
 
   const handleBatchDelete = async () => {
-    setLoading(true);
     try {
-      await api.batchDeleteIssues(ids);
-      for (const id of ids) {
-        useIssueStore.getState().removeIssue(id);
-      }
+      await batchDelete.mutateAsync(ids);
       clear();
       toast.success(`Deleted ${count} issue${count > 1 ? "s" : ""}`);
     } catch {
       toast.error("Failed to delete issues");
-      api.listIssues({ limit: 200 }).then((res) => {
-        useIssueStore.getState().setIssues(res.issues);
-      }).catch(console.error);
     } finally {
-      setLoading(false);
       setDeleteOpen(false);
     }
   };

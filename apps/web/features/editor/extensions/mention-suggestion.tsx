@@ -11,7 +11,9 @@ import {
 import { ReactRenderer } from "@tiptap/react";
 import { computePosition, offset, flip, shift } from "@floating-ui/dom";
 import { useWorkspaceStore } from "@/features/workspace";
-import { useIssueStore } from "@/features/issues";
+import { getQueryClient } from "@core/query-client";
+import { issueKeys } from "@core/issues/queries";
+import type { Issue, ListIssuesResponse } from "@/shared/types";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { StatusIcon } from "@/features/issues/components/status-icon";
 import { Badge } from "@/components/ui/badge";
@@ -217,7 +219,10 @@ export function createMentionSuggestion(): Omit<
   return {
     items: ({ query }) => {
       const { members, agents } = useWorkspaceStore.getState();
-      const { issues } = useIssueStore.getState();
+      const wsId = useWorkspaceStore.getState().workspace?.id;
+      const issues: Issue[] = wsId
+        ? getQueryClient().getQueryData<ListIssuesResponse>(issueKeys.list(wsId))?.issues ?? []
+        : [];
       const q = query.toLowerCase();
 
       // Show "All members" option when query is empty or matches "all"

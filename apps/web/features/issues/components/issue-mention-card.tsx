@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useIssueStore } from "@/features/issues/store";
+import { useQuery } from "@tanstack/react-query";
+import { issueListOptions } from "@core/issues/queries";
+import { useWorkspaceId } from "@core/hooks";
 import { StatusIcon } from "./status-icon";
 
 interface IssueMentionCardProps {
@@ -11,7 +13,9 @@ interface IssueMentionCardProps {
 }
 
 export function IssueMentionCard({ issueId, fallbackLabel }: IssueMentionCardProps) {
-  const issue = useIssueStore((s) => s.issues.find((i) => i.id === issueId));
+  const wsId = useWorkspaceId();
+  const { data: issues = [] } = useQuery(issueListOptions(wsId));
+  const issue = issues.find((i) => i.id === issueId);
 
   if (!issue) {
     return (

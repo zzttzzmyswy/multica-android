@@ -30,9 +30,8 @@ import { TitleEditor } from "@/features/editor";
 import { StatusIcon, PriorityIcon } from "@/features/issues/components";
 import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
 import { useWorkspaceStore, useActorName } from "@/features/workspace";
-import { useIssueStore } from "@/features/issues";
 import { useIssueDraftStore } from "@/features/issues/stores/draft-store";
-import { api } from "@/shared/api";
+import { useCreateIssue } from "@core/issues/mutations";
 import { useFileUpload } from "@/shared/hooks/use-file-upload";
 import { FileUploadButton } from "@/components/common/file-upload-button";
 import { ActorAvatar } from "@/components/common/actor-avatar";
@@ -125,11 +124,12 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
   };
   const updateDueDate = (v: string | null) => { setDueDate(v); setDraft({ dueDate: v }); };
 
+  const createIssueMutation = useCreateIssue();
   const handleSubmit = async () => {
     if (!title.trim() || submitting) return;
     setSubmitting(true);
     try {
-      const issue = await api.createIssue({
+      const issue = await createIssueMutation.mutateAsync({
         title: title.trim(),
         description: descEditorRef.current?.getMarkdown()?.trim() || undefined,
         status,
@@ -139,7 +139,6 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
         due_date: dueDate || undefined,
         attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
       });
-      useIssueStore.getState().addIssue(issue);
       clearDraft();
       onClose();
       toast.custom((t) => (

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Issue } from "@/shared/types";
 
 // Mock next/navigation
@@ -61,10 +62,11 @@ vi.mock("sonner", () => ({
 
 // Mock api
 const mockUpdateIssue = vi.fn();
+const mockListIssues = vi.hoisted(() => vi.fn().mockResolvedValue({ issues: [], total: 0 }));
 
 vi.mock("@/shared/api", () => ({
   api: {
-    listIssues: vi.fn().mockResolvedValue({ issues: [], total: 0 }),
+    listIssues: (...args: any[]) => mockListIssues(...args),
     updateIssue: (...args: any[]) => mockUpdateIssue(...args),
   },
 }));
@@ -282,6 +284,11 @@ const mockIssues: Issue[] = [
 
 import IssuesPage from "./page";
 
+function renderWithQuery(ui: React.ReactElement) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } });
+  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
+}
+
 describe("IssuesPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -302,17 +309,18 @@ describe("IssuesPage", () => {
   it("shows loading state initially", () => {
     mockStoreState.loading = true;
     mockStoreState.issues = [];
-    render(<IssuesPage />);
+    renderWithQuery(<IssuesPage />);
     expect(screen.getAllByRole("generic").some(el => el.getAttribute("data-slot") === "skeleton")).toBe(true);
   });
 
   it("renders issues in board view after loading", async () => {
     mockStoreState.loading = false;
     mockStoreState.issues = mockIssues;
+    mockListIssues.mockResolvedValue({ issues: mockIssues, total: mockIssues.length });
 
-    render(<IssuesPage />);
+    renderWithQuery(<IssuesPage />);
 
-    expect(screen.getByText("Implement auth")).toBeInTheDocument();
+    await screen.findByText("Implement auth");
     expect(screen.getByText("Design landing page")).toBeInTheDocument();
     expect(screen.getByText("Write tests")).toBeInTheDocument();
   });
@@ -320,43 +328,46 @@ describe("IssuesPage", () => {
   it("renders board columns", async () => {
     mockStoreState.loading = false;
     mockStoreState.issues = mockIssues;
+    mockListIssues.mockResolvedValue({ issues: mockIssues, total: mockIssues.length });
 
-    render(<IssuesPage />);
+    renderWithQuery(<IssuesPage />);
 
-    expect(screen.getAllByText("Backlog").length).toBeGreaterThanOrEqual(1);
+    await screen.findByText("Backlog");
     expect(screen.getAllByText("Todo").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("In Progress").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("In Review").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Done").length).toBeGreaterThanOrEqual(1);
   });
 
-  it("shows workspace breadcrumb", () => {
+  it("shows workspace breadcrumb", async () => {
     mockStoreState.loading = false;
     mockStoreState.issues = [];
 
-    render(<IssuesPage />);
+    renderWithQuery(<IssuesPage />);
 
-    expect(screen.getByText("Issues")).toBeInTheDocument();
+    await screen.findByText("Issues");
   });
 
-  it("shows scope buttons", () => {
+  it("shows scope buttons", async () => {
     mockStoreState.loading = false;
     mockStoreState.issues = [];
 
-    render(<IssuesPage />);
+    renderWithQuery(<IssuesPage />);
 
-    expect(screen.getByText("All")).toBeInTheDocument();
+    await screen.findByText("All");
     expect(screen.getByText("Members")).toBeInTheDocument();
     expect(screen.getByText("Agents")).toBeInTheDocument();
   });
 
-  it("shows filter and display icon buttons", () => {
+  it("shows filter and display icon buttons", async () => {
     mockStoreState.loading = false;
     mockStoreState.issues = mockIssues;
+    mockListIssues.mockResolvedValue({ issues: mockIssues, total: mockIssues.length });
 
-    render(<IssuesPage />);
+    renderWithQuery(<IssuesPage />);
 
-    // Filter and Display are now icon-only buttons, verify they render as buttons
+    // Wait for query to resolve and component to render past loading state
+    await screen.findByText("Implement auth");
     const buttons = screen.getAllByRole("button");
     expect(buttons.length).toBeGreaterThan(0);
   });
@@ -365,7 +376,7 @@ describe("IssuesPage", () => {
     mockStoreState.loading = false;
     mockStoreState.issues = [];
 
-    render(<IssuesPage />);
+    renderWithQuery(<IssuesPage />);
 
     // Should still render the board/list view, not a "no issues" message
     expect(screen.queryByText("No matching issues")).not.toBeInTheDocument();
