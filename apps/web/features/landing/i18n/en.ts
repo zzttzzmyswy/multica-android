@@ -273,6 +273,20 @@ export const en: LandingDict = {
     subtitle: "New updates and improvements to Multica.",
     entries: [
       {
+        version: "0.1.7",
+        date: "2026-04-05",
+        title: "Comment Pagination & CLI Polish",
+        changes: [
+          "Comment list pagination in both the API and CLI",
+          "Inbox archive now dismisses all items for the same issue at once",
+          "CLI help output overhauled to match gh CLI style with examples",
+          "Attachments use UUIDv7 as S3 key and auto-link on issue/comment creation",
+          "@mention assigned agents on done or cancelled issues",
+          "Reply @mention inheritance skips when the reply only mentions members",
+          "Worktree setup preserves existing .env.worktree variables",
+        ],
+      },
+      {
         version: "0.1.6",
         date: "2026-04-03",
         title: "Editor Overhaul & Agent Lifecycle",
