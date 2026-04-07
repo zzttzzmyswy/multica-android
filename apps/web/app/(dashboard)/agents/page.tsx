@@ -995,7 +995,7 @@ function TriggersTab({
                     value={scheduledConfig.cron ?? ""}
                     onChange={(e) =>
                       updateTriggerConfig(trigger.id, {
-                        ...scheduledConfig,
+                        ...(trigger.config ?? {}),
                         cron: e.target.value,
                       })
                     }
@@ -1012,7 +1012,7 @@ function TriggersTab({
                     value={scheduledConfig.timezone ?? ""}
                     onChange={(e) =>
                       updateTriggerConfig(trigger.id, {
-                        ...scheduledConfig,
+                        ...(trigger.config ?? {}),
                         timezone: e.target.value,
                       })
                     }
