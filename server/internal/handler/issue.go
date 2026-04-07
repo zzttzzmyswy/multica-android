@@ -527,9 +527,12 @@ func (h *Handler) shouldEnqueueOnComment(ctx context.Context, issue db.Issue) bo
 		return false
 	}
 	// Coalescing queue: allow enqueue when a task is running (so the agent
-	// picks up new comments on the next cycle) but skip if a pending task
-	// already exists (natural dedup for rapid-fire comments).
-	hasPending, err := h.Queries.HasPendingTaskForIssue(ctx, issue.ID)
+	// picks up new comments on the next cycle) but skip if this agent already
+	// has a pending task (natural dedup for rapid-fire comments).
+	hasPending, err := h.Queries.HasPendingTaskForIssueAndAgent(ctx, db.HasPendingTaskForIssueAndAgentParams{
+		IssueID: issue.ID,
+		AgentID: issue.AssigneeID,
+	})
 	if err != nil || hasPending {
 		return false
 	}

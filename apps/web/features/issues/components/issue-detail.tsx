@@ -783,7 +783,6 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
             {/* Agent live output */}
             <AgentLiveCard
               issueId={id}
-              agentName={issue.assignee_type === "agent" && issue.assignee_id ? getActorName("agent", issue.assignee_id) : undefined}
               scrollContainerRef={scrollContainerRef}
             />
 

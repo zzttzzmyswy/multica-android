@@ -95,49 +95,51 @@ function buildTimeline(msgs: TaskMessagePayload[]): TimelineItem[] {
   return items.sort((a, b) => a.seq - b.seq);
 }
 
-// ─── AgentLiveCard (real-time view) ────────────────────────────────────────
+// ─── Per-task state ─────────────────────────────────────────────────────────
+
+interface TaskState {
+  task: AgentTask;
+  items: TimelineItem[];
+}
+
+// ─── AgentLiveCard (real-time view for multiple agents) ───────────────────
 
 interface AgentLiveCardProps {
   issueId: string;
-  agentName?: string;
   /** Scroll container ref — used to auto-collapse timeline on outer scroll. */
   scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentLiveCardProps) {
+export function AgentLiveCard({ issueId, scrollContainerRef }: AgentLiveCardProps) {
   const { getActorName } = useActorName();
-  const [activeTask, setActiveTask] = useState<AgentTask | null>(null);
-  const [items, setItems] = useState<TimelineItem[]>([]);
-  const [elapsed, setElapsed] = useState("");
-  const [open, setOpen] = useState(false);
-  const [autoScroll, setAutoScroll] = useState(true);
-  const [cancelling, setCancelling] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const ignoreScrollRef = useRef(false);
+  const [taskStates, setTaskStates] = useState<Map<string, TaskState>>(new Map());
   const seenSeqs = useRef(new Set<string>());
 
-  // Check for active task on mount
+  // Fetch active tasks on mount
   useEffect(() => {
     let cancelled = false;
-    api.getActiveTaskForIssue(issueId).then(({ task }) => {
-      if (!cancelled) {
-        setActiveTask(task);
-        if (task) {
-          api.listTaskMessages(task.id).then((msgs) => {
-            if (!cancelled) {
-              const timeline = buildTimeline(msgs);
-              setItems(timeline);
-              for (const m of msgs) seenSeqs.current.add(`${m.task_id}:${m.seq}`);
-            }
-          }).catch(console.error);
+    api.getActiveTasksForIssue(issueId).then(({ tasks }) => {
+      if (cancelled || tasks.length === 0) return;
+      const newStates = new Map<string, TaskState>();
+      const loadPromises = tasks.map(async (task) => {
+        try {
+          const msgs = await api.listTaskMessages(task.id);
+          const timeline = buildTimeline(msgs);
+          for (const m of msgs) seenSeqs.current.add(`${m.task_id}:${m.seq}`);
+          newStates.set(task.id, { task, items: timeline });
+        } catch {
+          newStates.set(task.id, { task, items: [] });
         }
-      }
+      });
+      Promise.all(loadPromises).then(() => {
+        if (!cancelled) setTaskStates(newStates);
+      });
     }).catch(console.error);
 
     return () => { cancelled = true; };
   }, [issueId]);
 
-  // Handle real-time task messages
+  // Handle real-time task messages — route by task_id
   useWSEvent(
     "task:message",
     useCallback((payload: unknown) => {
@@ -147,64 +149,109 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
       if (seenSeqs.current.has(key)) return;
       seenSeqs.current.add(key);
 
-      setItems((prev) => {
-        const item: TimelineItem = {
-          seq: msg.seq,
-          type: msg.type,
-          tool: msg.tool,
-          content: msg.content,
-          input: msg.input,
-          output: msg.output,
-        };
-        const next = [...prev, item];
-        next.sort((a, b) => a.seq - b.seq);
+      const item: TimelineItem = {
+        seq: msg.seq,
+        type: msg.type,
+        tool: msg.tool,
+        content: msg.content,
+        input: msg.input,
+        output: msg.output,
+      };
+
+      setTaskStates((prev) => {
+        const next = new Map(prev);
+        const existing = next.get(msg.task_id);
+        if (existing) {
+          const items = [...existing.items, item].sort((a, b) => a.seq - b.seq);
+          next.set(msg.task_id, { ...existing, items });
+        }
+        // If we don't have this task yet, the dispatch handler will pick it up
         return next;
       });
     }, [issueId]),
   );
 
-  // Handle task completion/failure/cancellation
+  // Handle task end events — remove only the specific task
   const handleTaskEnd = useCallback((payload: unknown) => {
-    const p = payload as { issue_id: string };
+    const p = payload as { task_id: string; issue_id: string };
     if (p.issue_id !== issueId) return;
-    setActiveTask(null);
-    setItems([]);
-    seenSeqs.current.clear();
-    setCancelling(false);
-    setOpen(false);
+    setTaskStates((prev) => {
+      const next = new Map(prev);
+      next.delete(p.task_id);
+      return next;
+    });
   }, [issueId]);
 
   useWSEvent("task:completed", handleTaskEnd);
   useWSEvent("task:failed", handleTaskEnd);
   useWSEvent("task:cancelled", handleTaskEnd);
 
-  // Pick up new tasks
+  // Pick up newly dispatched tasks
   useWSEvent(
     "task:dispatch",
     useCallback(() => {
-      if (activeTask) return;
-      api.getActiveTaskForIssue(issueId).then(({ task }) => {
-        if (task) {
-          setActiveTask(task);
-          setItems([]);
-          seenSeqs.current.clear();
-          setOpen(false);
-        }
+      api.getActiveTasksForIssue(issueId).then(({ tasks }) => {
+        setTaskStates((prev) => {
+          const next = new Map(prev);
+          for (const task of tasks) {
+            if (!next.has(task.id)) {
+              next.set(task.id, { task, items: [] });
+            }
+          }
+          return next;
+        });
       }).catch(console.error);
-    }, [issueId, activeTask]),
+    }, [issueId]),
   );
+
+  if (taskStates.size === 0) return null;
+
+  const entries = Array.from(taskStates.values());
+
+  return (
+    <div className="mt-4 space-y-2">
+      {entries.map(({ task, items }) => (
+        <SingleAgentLiveCard
+          key={task.id}
+          task={task}
+          items={items}
+          issueId={issueId}
+          agentName={task.agent_id ? getActorName("agent", task.agent_id) : "Agent"}
+          scrollContainerRef={scrollContainerRef}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ─── SingleAgentLiveCard (one card per running task) ──────────────────────
+
+interface SingleAgentLiveCardProps {
+  task: AgentTask;
+  items: TimelineItem[];
+  issueId: string;
+  agentName: string;
+  scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
+}
+
+function SingleAgentLiveCard({ task, items, issueId, agentName, scrollContainerRef }: SingleAgentLiveCardProps) {
+  const [elapsed, setElapsed] = useState("");
+  const [open, setOpen] = useState(false);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [cancelling, setCancelling] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const ignoreScrollRef = useRef(false);
 
   // Elapsed time
   useEffect(() => {
-    if (!activeTask?.started_at && !activeTask?.dispatched_at) return;
-    const startRef = activeTask.started_at ?? activeTask.dispatched_at!;
+    if (!task.started_at && !task.dispatched_at) return;
+    const startRef = task.started_at ?? task.dispatched_at!;
     setElapsed(formatElapsed(startRef));
     const interval = setInterval(() => setElapsed(formatElapsed(startRef)), 1000);
     return () => clearInterval(interval);
-  }, [activeTask?.started_at, activeTask?.dispatched_at]);
+  }, [task.started_at, task.dispatched_at]);
 
   // Auto-collapse timeline when outer scroll container scrolls
-  // (ignoreScrollRef prevents layout-induced scroll from collapsing right after expand)
   useEffect(() => {
     const container = scrollContainerRef?.current;
     if (!container) return;
@@ -240,23 +287,20 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
   }, [open]);
 
   const handleCancel = useCallback(async () => {
-    if (!activeTask || cancelling) return;
+    if (cancelling) return;
     setCancelling(true);
     try {
-      await api.cancelTask(issueId, activeTask.id);
+      await api.cancelTask(issueId, task.id);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to cancel task");
       setCancelling(false);
     }
-  }, [activeTask, issueId, cancelling]);
-
-  if (!activeTask) return null;
+  }, [task.id, issueId, cancelling]);
 
   const toolCount = items.filter((i) => i.type === "tool_use").length;
-  const name = (activeTask.agent_id ? getActorName("agent", activeTask.agent_id) : agentName) ?? "Agent";
 
   return (
-    <div className="mt-4 sticky top-4 z-10 rounded-lg border border-info/20 bg-info/5 backdrop-blur-sm">
+    <div className="sticky top-4 z-10 rounded-lg border border-info/20 bg-info/5 backdrop-blur-sm">
       {/* Header — click to toggle timeline */}
       <div
         className="group flex items-center gap-2 px-3 py-2 cursor-pointer select-none text-muted-foreground hover:text-foreground transition-colors"
@@ -271,8 +315,8 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
           }
         }}
       >
-        {activeTask.agent_id ? (
-          <ActorAvatar actorType="agent" actorId={activeTask.agent_id} size={20} />
+        {task.agent_id ? (
+          <ActorAvatar actorType="agent" actorId={task.agent_id} size={20} />
         ) : (
           <div className="flex items-center justify-center h-5 w-5 rounded-full shrink-0 bg-info/10 text-info">
             <Bot className="h-3 w-3" />
@@ -280,7 +324,7 @@ export function AgentLiveCard({ issueId, agentName, scrollContainerRef }: AgentL
         )}
         <div className="flex items-center gap-1.5 text-xs min-w-0">
           <Loader2 className="h-3 w-3 animate-spin text-info shrink-0" />
-          <span className="font-medium text-foreground truncate">{name} is working</span>
+          <span className="font-medium text-foreground truncate">{agentName} is working</span>
           <span className="text-muted-foreground tabular-nums shrink-0">{elapsed}</span>
           {toolCount > 0 && (
             <span className="text-muted-foreground shrink-0">{toolCount} tools</span>

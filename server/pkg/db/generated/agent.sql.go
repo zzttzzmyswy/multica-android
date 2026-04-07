@@ -111,6 +111,7 @@ WHERE id = (
       AND NOT EXISTS (
           SELECT 1 FROM agent_task_queue active
           WHERE active.issue_id = atq.issue_id
+            AND active.agent_id = atq.agent_id
             AND active.status IN ('dispatched', 'running')
       )
     ORDER BY atq.priority DESC, atq.created_at ASC
@@ -120,10 +121,10 @@ WHERE id = (
 RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id
 `
 
-// Claims the next queued task for an agent, enforcing per-issue serialization:
-// a task is only claimable when no other task for the same issue is already
-// dispatched or running. This guarantees serial execution within an issue
-// while allowing parallel execution across different issues.
+// Claims the next queued task for an agent, enforcing per-(issue, agent) serialization:
+// a task is only claimable when no other task for the same issue AND same agent is
+// already dispatched or running. This allows different agents to work on the same
+// issue in parallel while preventing a single agent from running duplicate tasks.
 func (q *Queries) ClaimAgentTask(ctx context.Context, agentID pgtype.UUID) (AgentTaskQueue, error) {
 	row := q.db.QueryRow(ctx, claimAgentTask, agentID)
 	var i AgentTaskQueue

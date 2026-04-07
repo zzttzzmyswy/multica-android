@@ -536,17 +536,22 @@ func (h *Handler) ListTaskMessages(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// GetActiveTaskForIssue returns the currently running task for an issue, if any.
+// GetActiveTaskForIssue returns all currently active tasks for an issue.
+// Returns { tasks: [...] } array (may be empty).
 func (h *Handler) GetActiveTaskForIssue(w http.ResponseWriter, r *http.Request) {
 	issueID := chi.URLParam(r, "id")
 
 	tasks, err := h.Queries.ListActiveTasksByIssue(r.Context(), parseUUID(issueID))
-	if err != nil || len(tasks) == 0 {
-		writeJSON(w, http.StatusOK, map[string]any{"task": nil})
-		return
+	if err != nil {
+		tasks = nil
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"task": taskToResponse(tasks[0])})
+	resp := make([]AgentTaskResponse, len(tasks))
+	for i, t := range tasks {
+		resp[i] = taskToResponse(t)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"tasks": resp})
 }
 
 // CancelTask cancels a running or queued task by ID.
