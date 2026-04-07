@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
+import { QueryProvider } from "@core/provider";
 import { AuthInitializer } from "@/features/auth";
 import { WSProvider } from "@/features/realtime";
 import { ModalRegistry } from "@/features/modals";
@@ -67,11 +68,13 @@ export default async function RootLayout({
     >
       <body className="h-full overflow-hidden">
         <ThemeProvider>
-          <AuthInitializer>
-            <WSProvider>{children}</WSProvider>
-          </AuthInitializer>
-          <ModalRegistry />
-          <Toaster />
+          <QueryProvider>
+            <AuthInitializer>
+              <WSProvider>{children}</WSProvider>
+            </AuthInitializer>
+            <ModalRegistry />
+            <Toaster />
+          </QueryProvider>
         </ThemeProvider>
       </body>
     </html>
