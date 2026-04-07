@@ -42,7 +42,9 @@ import {
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
-import { useInboxStore } from "@/features/inbox";
+import { useQuery } from "@tanstack/react-query";
+import { useWorkspaceId } from "@core/hooks";
+import { inboxListOptions, deduplicateInboxItems } from "@core/inbox/queries";
 import { useModalStore } from "@/features/modals";
 
 const primaryNav = [
@@ -73,7 +75,9 @@ export function AppSidebar() {
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const switchWorkspace = useWorkspaceStore((s) => s.switchWorkspace);
 
-  const unreadCount = useInboxStore((s) => s.unreadCount());
+  const wsId = useWorkspaceId();
+  const { data: inboxItems = [] } = useQuery(inboxListOptions(wsId));
+  const unreadCount = deduplicateInboxItems(inboxItems).filter((i) => !i.read).length;
 
   const logout = () => {
     router.push("/");

@@ -1,9 +1,22 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { useDefaultLayout } from "react-resizable-panels";
-import { useInboxStore } from "@/features/inbox";
+import { useQuery } from "@tanstack/react-query";
+import { useWorkspaceId } from "@core/hooks";
+import {
+  inboxListOptions,
+  deduplicateInboxItems,
+} from "@core/inbox/queries";
+import {
+  useMarkInboxRead,
+  useArchiveInbox,
+  useMarkAllInboxRead,
+  useArchiveAllInbox,
+  useArchiveAllReadInbox,
+  useArchiveCompletedInbox,
+} from "@core/inbox/mutations";
 import { IssueDetail, StatusIcon, PriorityIcon } from "@/features/issues/components";
 import { STATUS_CONFIG, PRIORITY_CONFIG } from "@/features/issues/config";
 import { useActorName } from "@/features/workspace";
@@ -33,7 +46,6 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { api } from "@/shared/api";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -235,8 +247,9 @@ export default function InboxPage() {
     window.history.replaceState(null, "", url);
   }, []);
 
-  const items = useInboxStore((s) => s.dedupedItems());
-  const loading = useInboxStore((s) => s.loading);
+  const wsId = useWorkspaceId();
+  const { data: rawItems = [], isLoading: loading } = useQuery(inboxListOptions(wsId));
+  const items = useMemo(() => deduplicateInboxItems(rawItems), [rawItems]);
 
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: "multica_inbox_layout",
@@ -245,74 +258,58 @@ export default function InboxPage() {
   const selected = items.find((i) => (i.issue_id ?? i.id) === selectedKey) ?? null;
   const unreadCount = items.filter((i) => !i.read).length;
 
+  const markReadMutation = useMarkInboxRead();
+  const archiveMutation = useArchiveInbox();
+  const markAllReadMutation = useMarkAllInboxRead();
+  const archiveAllMutation = useArchiveAllInbox();
+  const archiveAllReadMutation = useArchiveAllReadInbox();
+  const archiveCompletedMutation = useArchiveCompletedInbox();
+
   // Click-to-read: select + auto-mark-read
-  const handleSelect = async (item: InboxItem) => {
+  const handleSelect = (item: InboxItem) => {
     setSelectedKey(item.issue_id ?? item.id);
     if (!item.read) {
-      useInboxStore.getState().markRead(item.id);
-      try {
-        await api.markInboxRead(item.id);
-      } catch {
-        // Rollback: refetch to get server truth
-        useInboxStore.getState().fetch();
-        toast.error("Failed to mark as read");
-      }
+      markReadMutation.mutate(item.id, {
+        onError: () => toast.error("Failed to mark as read"),
+      });
     }
   };
 
-  const handleArchive = async (id: string) => {
-    try {
-      await api.archiveInbox(id);
-      useInboxStore.getState().archive(id);
-      const archived = items.find((i) => i.id === id);
-      if (archived && (archived.issue_id ?? archived.id) === selectedKey) setSelectedKey("");
-    } catch {
-      toast.error("Failed to archive");
-    }
+  const handleArchive = (id: string) => {
+    const archived = items.find((i) => i.id === id);
+    if (archived && (archived.issue_id ?? archived.id) === selectedKey) setSelectedKey("");
+    archiveMutation.mutate(id, {
+      onError: () => toast.error("Failed to archive"),
+    });
   };
 
   // Batch operations
-  const handleMarkAllRead = async () => {
-    try {
-      useInboxStore.getState().markAllRead();
-      await api.markAllInboxRead();
-    } catch {
-      toast.error("Failed to mark all as read");
-      useInboxStore.getState().fetch();
-    }
+  const handleMarkAllRead = () => {
+    markAllReadMutation.mutate(undefined, {
+      onError: () => toast.error("Failed to mark all as read"),
+    });
   };
 
-  const handleArchiveAll = async () => {
-    try {
-      useInboxStore.getState().archiveAll();
-      setSelectedKey("");
-      await api.archiveAllInbox();
-    } catch {
-      toast.error("Failed to archive all");
-      useInboxStore.getState().fetch();
-    }
+  const handleArchiveAll = () => {
+    setSelectedKey("");
+    archiveAllMutation.mutate(undefined, {
+      onError: () => toast.error("Failed to archive all"),
+    });
   };
 
-  const handleArchiveAllRead = async () => {
-    try {
-      const readKeys = items.filter((i) => i.read).map((i) => i.issue_id ?? i.id);
-      useInboxStore.getState().archiveAllRead();
-      if (readKeys.includes(selectedKey)) setSelectedKey("");
-      await api.archiveAllReadInbox();
-    } catch {
-      toast.error("Failed to archive read items");
-      useInboxStore.getState().fetch();
-    }
+  const handleArchiveAllRead = () => {
+    const readKeys = items.filter((i) => i.read).map((i) => i.issue_id ?? i.id);
+    if (readKeys.includes(selectedKey)) setSelectedKey("");
+    archiveAllReadMutation.mutate(undefined, {
+      onError: () => toast.error("Failed to archive read items"),
+    });
   };
 
-  const handleArchiveCompleted = async () => {
-    try {
-      await api.archiveCompletedInbox();
-      setSelectedKey("");
-      await useInboxStore.getState().fetch();
-    } catch {
-      toast.error("Failed to archive completed");
-    }
+  const handleArchiveCompleted = () => {
+    setSelectedKey("");
+    archiveCompletedMutation.mutate(undefined, {
+      onError: () => toast.error("Failed to archive completed"),
+    });
   };
 
   if (loading) {

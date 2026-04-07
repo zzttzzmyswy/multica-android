@@ -1,20 +1,21 @@
 "use client";
 
 import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { WSClient } from "@/shared/api";
 import { toast } from "sonner";
-import { useInboxStore } from "@/features/inbox";
 import { useWorkspaceStore } from "@/features/workspace";
 import { useAuthStore } from "@/features/auth";
 import { createLogger } from "@/shared/logger";
 import { api } from "@/shared/api";
-import { getQueryClient } from "@core/query-client";
 import { issueKeys } from "@core/issues/queries";
 import {
   onIssueCreated,
   onIssueUpdated,
   onIssueDeleted,
 } from "@core/issues/ws-updaters";
+import { onInboxNew, onInboxInvalidate, onInboxIssueStatusChanged } from "@core/inbox/ws-updaters";
+import { inboxKeys } from "@core/inbox/queries";
 import type {
   MemberAddedPayload,
   WorkspaceDeletedPayload,
@@ -39,6 +40,7 @@ const logger = createLogger("realtime-sync");
  * by individual components via useWSEvent — not here.
  */
 export function useRealtimeSync(ws: WSClient | null) {
+  const qc = useQueryClient();
   // Main sync: onAny → refreshMap with debounce
   useEffect(() => {
     if (!ws) return;
@@ -49,7 +51,10 @@ export function useRealtimeSync(ws: WSClient | null) {
     ]);
 
     const refreshMap: Record<string, () => void> = {
-      inbox: () => void useInboxStore.getState().fetch(),
+      inbox: () => {
+        const wsId = useWorkspaceStore.getState().workspace?.id;
+        if (wsId) onInboxInvalidate(qc, wsId);
+      },
       agent: () => void useWorkspaceStore.getState().refreshAgents(),
       member: () => void useWorkspaceStore.getState().refreshMembers(),
       workspace: () => {
@@ -98,30 +103,34 @@ export function useRealtimeSync(ws: WSClient | null) {
     const unsubIssueUpdated = ws.on("issue:updated", (p) => {
       const { issue } = p as IssueUpdatedPayload;
       if (!issue?.id) return;
-      if (issue.status) {
-        useInboxStore.getState().updateIssueStatus(issue.id, issue.status);
-      }
       const wsId = useWorkspaceStore.getState().workspace?.id;
-      if (wsId) onIssueUpdated(getQueryClient(), wsId, issue);
+      if (wsId) {
+        onIssueUpdated(qc, wsId, issue);
+        if (issue.status) {
+          onInboxIssueStatusChanged(qc, wsId, issue.id, issue.status);
+        }
+      }
     });
 
     const unsubIssueCreated = ws.on("issue:created", (p) => {
       const { issue } = p as IssueCreatedPayload;
       if (!issue) return;
       const wsId = useWorkspaceStore.getState().workspace?.id;
-      if (wsId) onIssueCreated(getQueryClient(), wsId, issue);
+      if (wsId) onIssueCreated(qc, wsId, issue);
     });
 
     const unsubIssueDeleted = ws.on("issue:deleted", (p) => {
       const { issue_id } = p as IssueDeletedPayload;
       if (!issue_id) return;
       const wsId = useWorkspaceStore.getState().workspace?.id;
-      if (wsId) onIssueDeleted(getQueryClient(), wsId, issue_id);
+      if (wsId) onIssueDeleted(qc, wsId, issue_id);
     });
 
     const unsubInboxNew = ws.on("inbox:new", (p) => {
       const { item } = p as InboxNewPayload;
-      if (item) useInboxStore.getState().addItem(item);
+      if (!item) return;
+      const wsId = useWorkspaceStore.getState().workspace?.id;
+      if (wsId) onInboxNew(qc, wsId, item);
     });
 
     // --- Side-effect handlers (toast, navigation) ---
@@ -169,7 +178,7 @@ export function useRealtimeSync(ws: WSClient | null) {
       timers.forEach(clearTimeout);
       timers.clear();
     };
-  }, [ws]);
+  }, [ws, qc]);
 
   // Reconnect → refetch all data to recover missed events
   useEffect(() => {
@@ -180,10 +189,10 @@ export function useRealtimeSync(ws: WSClient | null) {
       try {
         const wsId = useWorkspaceStore.getState().workspace?.id;
         if (wsId) {
-          getQueryClient().invalidateQueries({ queryKey: issueKeys.all(wsId) });
+          qc.invalidateQueries({ queryKey: issueKeys.all(wsId) });
+          qc.invalidateQueries({ queryKey: inboxKeys.all(wsId) });
         }
         await Promise.all([
-          useInboxStore.getState().fetch(),
           useWorkspaceStore.getState().refreshAgents(),
           useWorkspaceStore.getState().refreshMembers(),
           useWorkspaceStore.getState().refreshSkills(),
@@ -194,5 +203,5 @@ export function useRealtimeSync(ws: WSClient | null) {
     });
 
     return unsub;
-  }, [ws]);
+  }, [ws, qc]);
 }
