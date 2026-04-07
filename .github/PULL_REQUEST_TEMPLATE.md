@@ -29,4 +29,6 @@ Closes #<!-- issue number -->
 
 ## AI Disclosure (optional)
 
-<!-- If AI tools were used, briefly note which ones (e.g., Claude Code, Copilot). -->
+<!-- If AI tools were used: -->
+<!-- - Which tool? (e.g., Claude Code, Copilot, Cursor) -->
+<!-- - What prompt did you use? Sharing your prompt helps others learn and lets reviewers understand intent. -->
