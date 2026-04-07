@@ -273,6 +273,21 @@ export const en: LandingDict = {
     subtitle: "New updates and improvements to Multica.",
     entries: [
       {
+        version: "0.1.8",
+        date: "2026-04-07",
+        title: "OAuth, OpenClaw & Issue Loading",
+        changes: [
+          "Google OAuth login",
+          "OpenClaw runtime support for running agents on OpenClaw infrastructure",
+          "Redesigned agent live card — always sticky with manual expand/collapse toggle",
+          "Load all open issues without pagination limit; closed issues paginate on scroll",
+          "JWT and CloudFront cookie expiration extended from 72 hours to 30 days",
+          "Remember last selected workspace after re-login",
+          "Daemon ensures multica CLI is on PATH in agent task environment",
+          "PR template and CLI install guide for agent-driven setup",
+        ],
+      },
+      {
         version: "0.1.7",
         date: "2026-04-05",
         title: "Comment Pagination & CLI Polish",
