@@ -39,23 +39,6 @@ type IssueResponse struct {
 	Attachments        []AttachmentResponse    `json:"attachments,omitempty"`
 }
 
-type agentTriggerSnapshot struct {
-	Type    string         `json:"type"`
-	Enabled bool           `json:"enabled"`
-	Config  map[string]any `json:"config"`
-}
-
-// defaultAgentTriggers returns the default trigger config for new agents:
-// all three triggers explicitly enabled.
-func defaultAgentTriggers() []byte {
-	b, _ := json.Marshal([]agentTriggerSnapshot{
-		{Type: "on_assign", Enabled: true},
-		{Type: "on_comment", Enabled: true},
-		{Type: "on_mention", Enabled: true},
-	})
-	return b
-}
-
 func issueToResponse(i db.Issue, issuePrefix string) IssueResponse {
 	identifier := issuePrefix + "-" + strconv.Itoa(int(i.Number))
 	return IssueResponse{
@@ -549,8 +532,9 @@ func (h *Handler) canAssignAgent(ctx context.Context, r *http.Request, agentID, 
 // the assigned agent. No status gate — assignment is an explicit human action,
 // so it should trigger regardless of issue status (e.g. assigning an agent to
 // a done issue to fix a discovered problem).
+// All trigger types (on_assign, on_comment, on_mention) are always enabled.
 func (h *Handler) shouldEnqueueAgentTask(ctx context.Context, issue db.Issue) bool {
-	return h.isAgentTriggerEnabled(ctx, issue, "on_assign")
+	return h.isAgentAssigneeReady(ctx, issue)
 }
 
 // shouldEnqueueOnComment returns true if a member comment on this issue should
@@ -561,7 +545,7 @@ func (h *Handler) shouldEnqueueOnComment(ctx context.Context, issue db.Issue) bo
 	if issue.Status == "done" || issue.Status == "cancelled" {
 		return false
 	}
-	if !h.isAgentTriggerEnabled(ctx, issue, "on_comment") {
+	if !h.isAgentAssigneeReady(ctx, issue) {
 		return false
 	}
 	// Coalescing queue: allow enqueue when a task is running (so the agent
@@ -574,10 +558,9 @@ func (h *Handler) shouldEnqueueOnComment(ctx context.Context, issue db.Issue) bo
 	return true
 }
 
-// isAgentTriggerEnabled checks if an issue is assigned to an agent with a
-// specific trigger type enabled. Returns true if the agent has no triggers
-// configured (default-enabled behavior for backwards compatibility).
-func (h *Handler) isAgentTriggerEnabled(ctx context.Context, issue db.Issue, triggerType string) bool {
+// isAgentAssigneeReady checks if an issue is assigned to an active agent
+// with a valid runtime.
+func (h *Handler) isAgentAssigneeReady(ctx context.Context, issue db.Issue) bool {
 	if !issue.AssigneeType.Valid || issue.AssigneeType.String != "agent" || !issue.AssigneeID.Valid {
 		return false
 	}
@@ -587,43 +570,7 @@ func (h *Handler) isAgentTriggerEnabled(ctx context.Context, issue db.Issue, tri
 		return false
 	}
 
-	return agentHasTriggerEnabled(agent.Triggers, triggerType)
-}
-
-// isAgentMentionTriggerEnabled checks if a specific agent has the on_mention
-// trigger enabled. Unlike isAgentTriggerEnabled, this takes an explicit agent
-// ID rather than deriving it from the issue assignee.
-func (h *Handler) isAgentMentionTriggerEnabled(ctx context.Context, agentID pgtype.UUID) bool {
-	agent, err := h.Queries.GetAgent(ctx, agentID)
-	if err != nil || !agent.RuntimeID.Valid {
-		return false
-	}
-
-	return agentHasTriggerEnabled(agent.Triggers, "on_mention")
-}
-
-// agentHasTriggerEnabled checks if a trigger type is enabled in the agent's
-// trigger config. Returns true (default-enabled) when the triggers list is
-// empty or does not contain the requested type — for backwards compatibility
-// with agents created before explicit trigger config was introduced.
-func agentHasTriggerEnabled(raw []byte, triggerType string) bool {
-	if raw == nil || len(raw) == 0 {
-		return true
-	}
-
-	var triggers []agentTriggerSnapshot
-	if err := json.Unmarshal(raw, &triggers); err != nil {
-		return false
-	}
-	if len(triggers) == 0 {
-		return true // Empty array = default-enabled (backwards compat)
-	}
-	for _, trigger := range triggers {
-		if trigger.Type == triggerType {
-			return trigger.Enabled
-		}
-	}
-	return true // Trigger type not configured = enabled by default
+	return true
 }
 
 func (h *Handler) DeleteIssue(w http.ResponseWriter, r *http.Request) {

@@ -131,7 +131,7 @@ export const en: LandingDict = {
       {
         title: "Create your first agent",
         description:
-          "Give it a name, write instructions, attach skills, and set triggers. Choose when it activates: on assignment, on comment, or on mention.",
+          "Give it a name, write instructions, and attach skills. Agents automatically activate on assignment, on comment, or on mention.",
       },
       {
         title: "Assign an issue and watch it work",
@@ -385,7 +385,7 @@ export const en: LandingDict = {
         title: "Core Platform",
         changes: [
           "Multi-workspace switching and creation",
-          "Agent management UI with skills, tools, and triggers",
+          "Agent management UI with skills",
           "Unified agent SDK supporting Claude Code and Codex backends",
           "Comment CRUD with real-time WebSocket updates",
           "Task service layer and daemon REST protocol",
