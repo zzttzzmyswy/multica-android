@@ -13,7 +13,8 @@ import { computePosition, offset, flip, shift } from "@floating-ui/dom";
 import { useWorkspaceStore } from "@/features/workspace";
 import { getQueryClient } from "@core/query-client";
 import { issueKeys } from "@core/issues/queries";
-import type { Issue, ListIssuesResponse } from "@/shared/types";
+import { workspaceKeys } from "@core/workspace/queries";
+import type { Issue, ListIssuesResponse, MemberWithUser, Agent } from "@/shared/types";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { StatusIcon } from "@/features/issues/components/status-icon";
 import { Badge } from "@/components/ui/badge";
@@ -218,8 +219,9 @@ export function createMentionSuggestion(): Omit<
 > {
   return {
     items: ({ query }) => {
-      const { members, agents } = useWorkspaceStore.getState();
       const wsId = useWorkspaceStore.getState().workspace?.id;
+      const members: MemberWithUser[] = wsId ? getQueryClient().getQueryData(workspaceKeys.members(wsId)) ?? [] : [];
+      const agents: Agent[] = wsId ? getQueryClient().getQueryData(workspaceKeys.agents(wsId)) ?? [] : [];
       const issues: Issue[] = wsId
         ? getQueryClient().getQueryData<ListIssuesResponse>(issueKeys.list(wsId))?.issues ?? []
         : [];

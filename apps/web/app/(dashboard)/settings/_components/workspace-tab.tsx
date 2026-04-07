@@ -18,14 +18,18 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
+import { useWorkspaceId } from "@core/hooks";
+import { memberListOptions } from "@core/workspace/queries";
 import { api } from "@/shared/api";
 
 export function WorkspaceTab() {
   const user = useAuthStore((s) => s.user);
   const workspace = useWorkspaceStore((s) => s.workspace);
-  const members = useWorkspaceStore((s) => s.members);
+  const wsId = useWorkspaceId();
+  const { data: members = [] } = useQuery(memberListOptions(wsId));
   const updateWorkspace = useWorkspaceStore((s) => s.updateWorkspace);
   const leaveWorkspace = useWorkspaceStore((s) => s.leaveWorkspace);
   const deleteWorkspace = useWorkspaceStore((s) => s.deleteWorkspace);

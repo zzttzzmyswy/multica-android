@@ -36,8 +36,11 @@ import {
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
+import { useWorkspaceId } from "@core/hooks";
+import { memberListOptions, workspaceKeys } from "@core/workspace/queries";
 import { api } from "@/shared/api";
 
 const roleConfig: Record<MemberRole, { label: string; icon: typeof Crown; description: string }> = {
@@ -140,8 +143,9 @@ function MemberRow({
 export function MembersTab() {
   const user = useAuthStore((s) => s.user);
   const workspace = useWorkspaceStore((s) => s.workspace);
-  const members = useWorkspaceStore((s) => s.members);
-  const refreshMembers = useWorkspaceStore((s) => s.refreshMembers);
+  const qc = useQueryClient();
+  const wsId = useWorkspaceId();
+  const { data: members = [] } = useQuery(memberListOptions(wsId));
 
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<MemberRole>("member");
@@ -168,7 +172,7 @@ export function MembersTab() {
       });
       setInviteEmail("");
       setInviteRole("member");
-      await refreshMembers();
+      qc.invalidateQueries({ queryKey: workspaceKeys.members(wsId) });
       toast.success("Member added");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to add member");
@@ -182,7 +186,7 @@ export function MembersTab() {
     setMemberActionId(memberId);
     try {
       await api.updateMember(workspace.id, memberId, { role });
-      await refreshMembers();
+      qc.invalidateQueries({ queryKey: workspaceKeys.members(wsId) });
       toast.success("Role updated");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to update member");
@@ -201,7 +205,7 @@ export function MembersTab() {
         setMemberActionId(member.id);
         try {
           await api.deleteMember(workspace.id, member.id);
-          await refreshMembers();
+          qc.invalidateQueries({ queryKey: workspaceKeys.members(wsId) });
           toast.success("Member removed");
         } catch (e) {
           toast.error(e instanceof Error ? e.message : "Failed to remove member");

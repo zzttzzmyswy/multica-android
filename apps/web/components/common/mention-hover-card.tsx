@@ -2,9 +2,11 @@
 
 import type { ReactNode } from "react";
 import { Users } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { ActorAvatar } from "@/components/common/actor-avatar";
-import { useWorkspaceStore } from "@/features/workspace";
+import { useWorkspaceId } from "@core/hooks";
+import { memberListOptions, agentListOptions } from "@core/workspace/queries";
 
 interface MentionHoverCardProps {
   type: string;
@@ -13,8 +15,9 @@ interface MentionHoverCardProps {
 }
 
 function MentionHoverCard({ type, id, children }: MentionHoverCardProps) {
-  const members = useWorkspaceStore((s) => s.members);
-  const agents = useWorkspaceStore((s) => s.agents);
+  const wsId = useWorkspaceId();
+  const { data: members = [] } = useQuery(memberListOptions(wsId));
+  const { data: agents = [] } = useQuery(agentListOptions(wsId));
 
   if (type === "all") {
     return (

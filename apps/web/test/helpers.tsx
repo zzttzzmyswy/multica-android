@@ -85,8 +85,6 @@ export const mockAuthValue: Record<string, any> = {
   leaveWorkspace: vi.fn(),
   deleteWorkspace: vi.fn(),
   refreshWorkspaces: vi.fn(),
-  refreshMembers: vi.fn(),
-  refreshAgents: vi.fn(),
   getMemberName: (userId: string) => {
     const m = mockMembers.find((m) => m.user_id === userId);
     return m?.name ?? "Unknown";

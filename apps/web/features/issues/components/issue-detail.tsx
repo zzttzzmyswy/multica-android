@@ -68,6 +68,7 @@ import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore, useActorName } from "@/features/workspace";
 import { useWorkspaceId } from "@core/hooks";
 import { issueListOptions, issueDetailOptions } from "@core/issues/queries";
+import { memberListOptions, agentListOptions } from "@core/workspace/queries";
 import { useUpdateIssue, useDeleteIssue } from "@core/issues/mutations";
 import { useIssueTimeline } from "@/features/issues/hooks/use-issue-timeline";
 import { useIssueReactions } from "@/features/issues/hooks/use-issue-reactions";
@@ -177,12 +178,12 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const workspace = useWorkspaceStore((s) => s.workspace);
-  const members = useWorkspaceStore((s) => s.members);
-  const agents = useWorkspaceStore((s) => s.agents);
-  const currentMemberRole = members.find((m) => m.user_id === user?.id)?.role;
 
   // Issue navigation — read from TQ list cache
   const wsId = useWorkspaceId();
+  const { data: members = [] } = useQuery(memberListOptions(wsId));
+  const { data: agents = [] } = useQuery(agentListOptions(wsId));
+  const currentMemberRole = members.find((m) => m.user_id === user?.id)?.role;
   const { data: allIssues = [] } = useQuery(issueListOptions(wsId));
   const currentIndex = allIssues.findIndex((i) => i.id === id);
   const prevIssue = currentIndex > 0 ? allIssues[currentIndex - 1] : null;

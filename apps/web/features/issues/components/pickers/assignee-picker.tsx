@@ -3,8 +3,11 @@
 import { useState } from "react";
 import { Lock, UserMinus } from "lucide-react";
 import type { Agent, IssueAssigneeType, UpdateIssueRequest } from "@/shared/types";
+import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/features/auth";
-import { useWorkspaceStore, useActorName } from "@/features/workspace";
+import { useActorName } from "@/features/workspace";
+import { useWorkspaceId } from "@core/hooks";
+import { memberListOptions, agentListOptions } from "@core/workspace/queries";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import {
   PropertyPicker,
@@ -44,8 +47,9 @@ export function AssigneePicker({
   const setOpen = controlledOnOpenChange ?? setInternalOpen;
   const [filter, setFilter] = useState("");
   const user = useAuthStore((s) => s.user);
-  const members = useWorkspaceStore((s) => s.members);
-  const agents = useWorkspaceStore((s) => s.agents);
+  const wsId = useWorkspaceId();
+  const { data: members = [] } = useQuery(memberListOptions(wsId));
+  const { data: agents = [] } = useQuery(agentListOptions(wsId));
   const { getActorName } = useActorName();
 
   const currentMember = members.find((m) => m.user_id === user?.id);

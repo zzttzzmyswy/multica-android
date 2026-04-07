@@ -1,10 +1,13 @@
 "use client";
 
-import { useWorkspaceStore } from "./store";
+import { useQuery } from "@tanstack/react-query";
+import { useWorkspaceId } from "@core/hooks";
+import { memberListOptions, agentListOptions } from "@core/workspace/queries";
 
 export function useActorName() {
-  const members = useWorkspaceStore((s) => s.members);
-  const agents = useWorkspaceStore((s) => s.agents);
+  const wsId = useWorkspaceId();
+  const { data: members = [] } = useQuery(memberListOptions(wsId));
+  const { data: agents = [] } = useQuery(agentListOptions(wsId));
 
   const getMemberName = (userId: string) => {
     const m = members.find((m) => m.user_id === userId);

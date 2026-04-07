@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore, WorkspaceAvatar } from "@/features/workspace";
 import { useQuery } from "@tanstack/react-query";
+import { agentListOptions } from "@core/workspace/queries";
 import { filterIssues } from "@/features/issues/utils/filter";
 import { BOARD_STATUSES } from "@/features/issues/config";
 import { ViewStoreProvider } from "@/features/issues/stores/view-store-context";
@@ -26,8 +27,8 @@ import { MyIssuesHeader } from "./my-issues-header";
 export function MyIssuesPage() {
   const user = useAuthStore((s) => s.user);
   const workspace = useWorkspaceStore((s) => s.workspace);
-  const agents = useWorkspaceStore((s) => s.agents);
   const wsId = useWorkspaceId();
+  const { data: agents = [] } = useQuery(agentListOptions(wsId));
   const { data: allIssues = [], isLoading: loading } = useQuery(issueListOptions(wsId));
 
   const viewMode = useStore(myIssuesViewStore, (s) => s.viewMode);

@@ -6,15 +6,19 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
+import { useWorkspaceId } from "@core/hooks";
+import { memberListOptions } from "@core/workspace/queries";
 import { api } from "@/shared/api";
 import type { WorkspaceRepo } from "@/shared/types";
 
 export function RepositoriesTab() {
   const user = useAuthStore((s) => s.user);
   const workspace = useWorkspaceStore((s) => s.workspace);
-  const members = useWorkspaceStore((s) => s.members);
+  const wsId = useWorkspaceId();
+  const { data: members = [] } = useQuery(memberListOptions(wsId));
   const updateWorkspace = useWorkspaceStore((s) => s.updateWorkspace);
 
   const [repos, setRepos] = useState<WorkspaceRepo[]>(workspace?.repos ?? []);

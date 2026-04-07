@@ -75,10 +75,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/shared/api";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
-import { useRuntimeStore } from "@/features/runtimes";
-import { useQuery } from "@tanstack/react-query";
+import { runtimeListOptions } from "@core/runtimes/queries";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWorkspaceId } from "@core/hooks";
 import { issueListOptions } from "@core/issues/queries";
+import { skillListOptions, agentListOptions, workspaceKeys } from "@core/workspace/queries";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { useFileUpload } from "@/shared/hooks/use-file-upload";
 
@@ -445,8 +446,9 @@ function SkillsTab({
 }: {
   agent: Agent;
 }) {
-  const workspaceSkills = useWorkspaceStore((s) => s.skills);
-  const refreshAgents = useWorkspaceStore((s) => s.refreshAgents);
+  const qc = useQueryClient();
+  const wsId = useWorkspaceId();
+  const { data: workspaceSkills = [] } = useQuery(skillListOptions(wsId));
   const [saving, setSaving] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
 
@@ -458,7 +460,7 @@ function SkillsTab({
     try {
       const newIds = [...agent.skills.map((s) => s.id), skillId];
       await api.setAgentSkills(agent.id, { skill_ids: newIds });
-      await refreshAgents();
+      qc.invalidateQueries({ queryKey: workspaceKeys.agents(wsId) });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to add skill");
     } finally {
@@ -472,7 +474,7 @@ function SkillsTab({
     try {
       const newIds = agent.skills.filter((s) => s.id !== skillId).map((s) => s.id);
       await api.setAgentSkills(agent.id, { skill_ids: newIds });
-      await refreshAgents();
+      qc.invalidateQueries({ queryKey: workspaceKeys.agents(wsId) });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to remove skill");
     } finally {
@@ -1547,20 +1549,16 @@ function AgentDetail({
 export default function AgentsPage() {
   const isLoading = useAuthStore((s) => s.isLoading);
   const workspace = useWorkspaceStore((s) => s.workspace);
-  const agents = useWorkspaceStore((s) => s.agents);
-  const refreshAgents = useWorkspaceStore((s) => s.refreshAgents);
+  const qc = useQueryClient();
+  const wsId = useWorkspaceId();
+  const { data: agents = [] } = useQuery(agentListOptions(wsId));
   const [selectedId, setSelectedId] = useState<string>("");
   const [showArchived, setShowArchived] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
-  const runtimes = useRuntimeStore((s) => s.runtimes);
-  const fetchRuntimes = useRuntimeStore((s) => s.fetchRuntimes);
+  const { data: runtimes = [] } = useQuery(runtimeListOptions(wsId));
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: "multica_agents_layout",
   });
-
-  useEffect(() => {
-    if (workspace) fetchRuntimes();
-  }, [workspace, fetchRuntimes]);
 
   const filteredAgents = useMemo(
     () => showArchived ? agents.filter((a) => !!a.archived_at) : agents.filter((a) => !a.archived_at),
@@ -1578,14 +1576,14 @@ export default function AgentsPage() {
 
   const handleCreate = async (data: CreateAgentRequest) => {
     const agent = await api.createAgent(data);
-    await refreshAgents();
+    qc.invalidateQueries({ queryKey: workspaceKeys.agents(wsId) });
     setSelectedId(agent.id);
   };
 
   const handleUpdate = async (id: string, data: Record<string, unknown>) => {
     try {
       await api.updateAgent(id, data as UpdateAgentRequest);
-      await refreshAgents();
+      qc.invalidateQueries({ queryKey: workspaceKeys.agents(wsId) });
       toast.success("Agent updated");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to update agent");
@@ -1596,7 +1594,7 @@ export default function AgentsPage() {
   const handleArchive = async (id: string) => {
     try {
       await api.archiveAgent(id);
-      await refreshAgents();
+      qc.invalidateQueries({ queryKey: workspaceKeys.agents(wsId) });
       toast.success("Agent archived");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to archive agent");
@@ -1606,7 +1604,7 @@ export default function AgentsPage() {
   const handleRestore = async (id: string) => {
     try {
       await api.restoreAgent(id);
-      await refreshAgents();
+      qc.invalidateQueries({ queryKey: workspaceKeys.agents(wsId) });
       toast.success("Agent restored");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to restore agent");
