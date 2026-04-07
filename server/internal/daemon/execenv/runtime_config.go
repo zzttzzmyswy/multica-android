@@ -13,13 +13,14 @@ import (
 // For Claude:   writes {workDir}/CLAUDE.md  (skills discovered natively from .claude/skills/)
 // For Codex:    writes {workDir}/AGENTS.md  (skills discovered natively via CODEX_HOME)
 // For OpenCode: writes {workDir}/AGENTS.md  (skills discovered natively from .config/opencode/skills/)
+// For OpenClaw: writes {workDir}/AGENTS.md  (skills discovered natively from .openclaw/skills/)
 func InjectRuntimeConfig(workDir, provider string, ctx TaskContextForEnv) error {
 	content := buildMetaSkillContent(provider, ctx)
 
 	switch provider {
 	case "claude":
 		return os.WriteFile(filepath.Join(workDir, "CLAUDE.md"), []byte(content), 0o644)
-	case "codex", "opencode":
+	case "codex", "opencode", "openclaw":
 		return os.WriteFile(filepath.Join(workDir, "AGENTS.md"), []byte(content), 0o644)
 	default:
 		// Unknown provider — skip config injection, prompt-only mode.
@@ -49,13 +50,18 @@ func buildMetaSkillContent(provider string, ctx TaskContextForEnv) string {
 	b.WriteString("- `multica issue list [--status X] [--priority X] [--assignee X] --output json` — List issues in workspace\n")
 	b.WriteString("- `multica issue comment list <issue-id> [--limit N] [--offset N] [--since <RFC3339>] --output json` — List comments on an issue (supports pagination; includes id, parent_id for threading)\n")
 	b.WriteString("- `multica workspace get --output json` — Get workspace details and context\n")
+	b.WriteString("- `multica workspace members [workspace-id] --output json` — List workspace members (user IDs, names, roles)\n")
 	b.WriteString("- `multica agent list --output json` — List agents in workspace\n")
+	b.WriteString("- `multica repo checkout <url>` — Check out a repository into the working directory (creates a git worktree with a dedicated branch)\n")
 	b.WriteString("- `multica issue runs <issue-id> --output json` — List all execution runs for an issue (status, timestamps, errors)\n")
 	b.WriteString("- `multica issue run-messages <task-id> [--since <seq>] --output json` — List messages for a specific execution run (supports incremental fetch)\n")
 	b.WriteString("- `multica attachment download <id> [-o <dir>]` — Download an attachment file locally by ID\n\n")
 
 	b.WriteString("### Write\n")
+	b.WriteString("- `multica issue create --title \"...\" [--description \"...\"] [--priority X] [--assignee X] [--parent <issue-id>] [--status X]` — Create a new issue\n")
+	b.WriteString("- `multica issue assign <id> --to <name>` — Assign an issue to a member or agent by name (use --unassign to remove assignee)\n")
 	b.WriteString("- `multica issue comment add <issue-id> --content \"...\" [--parent <comment-id>]` — Post a comment (use --parent to reply to a specific comment)\n")
+	b.WriteString("- `multica issue comment delete <comment-id>` — Delete a comment\n")
 	b.WriteString("- `multica issue status <id> <status>` — Update issue status (todo, in_progress, in_review, done, blocked)\n")
 	b.WriteString("- `multica issue update <id> [--title X] [--description X] [--priority X]` — Update issue fields\n\n")
 
@@ -99,13 +105,16 @@ func buildMetaSkillContent(provider string, ctx TaskContextForEnv) string {
 			b.WriteString("   a. Run `multica repo checkout <url>` to check out the appropriate repository\n")
 			b.WriteString("   b. `cd` into the checked-out directory\n")
 			b.WriteString("   c. Implement the changes and commit\n")
+			b.WriteString("   d. Push the branch to the remote\n")
+			b.WriteString("   e. Create a pull request (decide the target branch based on the repo's conventions)\n")
+			fmt.Fprintf(&b, "   f. Post the PR link as a comment: `multica issue comment add %s --content \"PR: <url>\"`\n", ctx.IssueID)
 		} else {
 			b.WriteString("   a. Create a new branch\n")
 			b.WriteString("   b. Implement the changes and commit\n")
+			b.WriteString("   c. Push the branch to the remote\n")
+			b.WriteString("   d. Create a pull request (decide the target branch based on the repo's conventions)\n")
+			fmt.Fprintf(&b, "   e. Post the PR link as a comment: `multica issue comment add %s --content \"PR: <url>\"`\n", ctx.IssueID)
 		}
-		b.WriteString("   c. Push the branch to the remote\n")
-		b.WriteString("   d. Create a pull request (decide the target branch based on the repo's conventions)\n")
-		fmt.Fprintf(&b, "   e. Post the PR link as a comment: `multica issue comment add %s --content \"PR: <url>\"`\n", ctx.IssueID)
 		b.WriteString("5. If the task does not require code (e.g. research, documentation), post your findings as a comment\n")
 		fmt.Fprintf(&b, "6. Run `multica issue status %s in_review`\n", ctx.IssueID)
 		fmt.Fprintf(&b, "7. If blocked, run `multica issue status %s blocked` and post a comment explaining why\n\n", ctx.IssueID)
@@ -117,8 +126,8 @@ func buildMetaSkillContent(provider string, ctx TaskContextForEnv) string {
 		case "claude":
 			// Claude discovers skills natively from .claude/skills/ — just list names.
 			b.WriteString("You have the following skills installed (discovered automatically):\n\n")
-		case "codex", "opencode":
-			// Codex and OpenCode discover skills natively from their respective paths — just list names.
+		case "codex", "opencode", "openclaw":
+			// Codex, OpenCode, and OpenClaw discover skills natively from their respective paths — just list names.
 			b.WriteString("You have the following skills installed (discovered automatically):\n\n")
 		default:
 			b.WriteString("Detailed skill instructions are in `.agent_context/skills/`. Each subdirectory contains a `SKILL.md`.\n\n")

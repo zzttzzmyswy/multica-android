@@ -12,15 +12,28 @@ export const issueKeys = {
     ["issues", "subscribers", issueId] as const,
 };
 
+const CLOSED_PAGE_SIZE = 50;
+
 /**
  * CACHE SHAPE NOTE: The raw cache stores ListIssuesResponse ({ issues, total }),
  * but `select` transforms it to Issue[] for consumers. Mutations and ws-updaters
  * must use setQueryData<ListIssuesResponse>(...) — NOT setQueryData<Issue[]>.
+ *
+ * Fetches all open issues + first page of closed issues (matching main's pagination strategy).
  */
 export function issueListOptions(wsId: string) {
   return queryOptions({
     queryKey: issueKeys.list(wsId),
-    queryFn: () => api.listIssues({ limit: 200 }),
+    queryFn: async () => {
+      const [openRes, closedRes] = await Promise.all([
+        api.listIssues({ open_only: true }),
+        api.listIssues({ status: "done", limit: CLOSED_PAGE_SIZE, offset: 0 }),
+      ]);
+      return {
+        issues: [...openRes.issues, ...closedRes.issues],
+        total: openRes.total + closedRes.total,
+      };
+    },
     select: (data) => data.issues,
   });
 }
