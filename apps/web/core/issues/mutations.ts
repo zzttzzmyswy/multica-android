@@ -35,8 +35,14 @@ export function useUpdateIssue() {
   return useMutation({
     mutationFn: ({ id, ...data }: { id: string } & UpdateIssueRequest) =>
       api.updateIssue(id, data),
-    onMutate: async ({ id, ...data }) => {
-      await qc.cancelQueries({ queryKey: issueKeys.list(wsId) });
+    onMutate: ({ id, ...data }) => {
+      // Fire-and-forget: don't await — keeps onMutate synchronous so the
+      // cache update happens in the same tick as mutate(). Awaiting would
+      // yield to the event loop, letting @dnd-kit reset its visual state
+      // before the optimistic update lands → card flickers back briefly.
+      // Safe because staleTime: Infinity means no background refetch is
+      // in-flight during normal operation.
+      qc.cancelQueries({ queryKey: issueKeys.list(wsId) });
       const prevList = qc.getQueryData<ListIssuesResponse>(issueKeys.list(wsId));
       const prevDetail = qc.getQueryData<Issue>(issueKeys.detail(wsId, id));
 
@@ -88,6 +94,9 @@ export function useDeleteIssue() {
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.prevList) qc.setQueryData(issueKeys.list(wsId), ctx.prevList);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
     },
   });
 }
@@ -148,6 +157,9 @@ export function useBatchDeleteIssues() {
     },
     onError: (_err, _ids, ctx) => {
       if (ctx?.prevList) qc.setQueryData(issueKeys.list(wsId), ctx.prevList);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
     },
   });
 }
@@ -215,6 +227,9 @@ export function useUpdateComment(issueId: string) {
       if (ctx?.prev)
         qc.setQueryData(issueKeys.timeline(issueId), ctx.prev);
     },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: issueKeys.timeline(issueId) });
+    },
   });
 }
 
@@ -250,6 +265,9 @@ export function useDeleteComment(issueId: string) {
     onError: (_err, _id, ctx) => {
       if (ctx?.prev)
         qc.setQueryData(issueKeys.timeline(issueId), ctx.prev);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: issueKeys.timeline(issueId) });
     },
   });
 }
@@ -339,6 +357,9 @@ export function useToggleCommentReaction(issueId: string) {
       if (ctx?.prev)
         qc.setQueryData(issueKeys.timeline(issueId), ctx.prev);
     },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: issueKeys.timeline(issueId) });
+    },
   });
 }
 
@@ -403,6 +424,9 @@ export function useToggleIssueReaction(issueId: string) {
     onError: (_err, _vars, ctx) => {
       if (ctx?.prev)
         qc.setQueryData(issueKeys.reactions(issueId), ctx.prev);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: issueKeys.reactions(issueId) });
     },
   });
 }
@@ -469,6 +493,9 @@ export function useToggleIssueSubscriber(issueId: string) {
     onError: (_err, _vars, ctx) => {
       if (ctx?.prev)
         qc.setQueryData(issueKeys.subscribers(issueId), ctx.prev);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: issueKeys.subscribers(issueId) });
     },
   });
 }

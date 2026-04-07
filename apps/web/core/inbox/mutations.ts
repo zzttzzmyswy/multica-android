@@ -20,6 +20,9 @@ export function useMarkInboxRead() {
     onError: (_err, _id, ctx) => {
       if (ctx?.prev) qc.setQueryData(inboxKeys.list(wsId), ctx.prev);
     },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: inboxKeys.list(wsId) });
+    },
   });
 }
 
@@ -46,6 +49,9 @@ export function useArchiveInbox() {
     onError: (_err, _id, ctx) => {
       if (ctx?.prev) qc.setQueryData(inboxKeys.list(wsId), ctx.prev);
     },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: inboxKeys.list(wsId) });
+    },
   });
 }
 
@@ -66,6 +72,9 @@ export function useMarkAllInboxRead() {
     },
     onError: (_err, _vars, ctx) => {
       if (ctx?.prev) qc.setQueryData(inboxKeys.list(wsId), ctx.prev);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: inboxKeys.list(wsId) });
     },
   });
 }

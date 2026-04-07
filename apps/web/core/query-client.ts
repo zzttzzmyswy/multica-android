@@ -7,7 +7,7 @@ export function createQueryClient(): QueryClient {
         staleTime: Infinity,
         gcTime: 10 * 60 * 1000, // 10 minutes
         refetchOnWindowFocus: false,
-        refetchOnReconnect: false,
+        refetchOnReconnect: true,
         retry: 1,
       },
       mutations: {
