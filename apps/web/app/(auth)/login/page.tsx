@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useAuthStore } from "@/features/auth";
+import { useAuthStore, setLoggedInCookie } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
 import { api } from "@/shared/api";
 import {
@@ -146,6 +146,10 @@ function LoginPageContent() {
             return;
           }
           const { token } = await api.verifyCode(email, value);
+          // Persist session in the browser so the web app stays logged in
+          localStorage.setItem("multica_token", token);
+          api.setToken(token);
+          setLoggedInCookie();
           const cliState = searchParams.get("cli_state") || "";
           redirectToCliCallback(cliCallback, token, cliState);
           return;
