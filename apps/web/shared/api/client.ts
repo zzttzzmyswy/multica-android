@@ -380,7 +380,7 @@ export class ApiClient {
     return this.fetch(`/api/agents/${agentId}/tasks`);
   }
 
-  async getActiveTaskForIssue(issueId: string): Promise<{ task: AgentTask | null }> {
+  async getActiveTasksForIssue(issueId: string): Promise<{ tasks: AgentTask[] }> {
     return this.fetch(`/api/issues/${issueId}/active-task`);
   }
 
