@@ -21,9 +21,11 @@ export function IssueMentionCard({ issueId, fallbackLabel }: IssueMentionCardPro
     return (
       <Link
         href={`/issues/${issueId}`}
-        className="text-primary font-medium cursor-pointer hover:underline"
+        className="issue-mention inline-flex items-center gap-1.5 rounded-md border mx-0.5 px-2 py-0.5 text-xs hover:bg-accent transition-colors cursor-pointer max-w-72"
       >
-        {fallbackLabel ?? issueId.slice(0, 8)}
+        <span className="font-medium text-muted-foreground">
+          {fallbackLabel ?? issueId.slice(0, 8)}
+        </span>
       </Link>
     );
   }
@@ -31,11 +33,11 @@ export function IssueMentionCard({ issueId, fallbackLabel }: IssueMentionCardPro
   return (
     <Link
       href={`/issues/${issueId}`}
-      className="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer no-underline"
+      className="issue-mention inline-flex items-center gap-1.5 rounded-md border mx-0.5 px-2 py-0.5 text-xs hover:bg-accent transition-colors cursor-pointer max-w-72"
     >
-      <StatusIcon status={issue.status} className="h-3.5 w-3.5" />
-      <span className="font-medium text-muted-foreground">{issue.identifier}</span>
-      <span className="text-foreground">{issue.title}</span>
+      <StatusIcon status={issue.status} className="h-3.5 w-3.5 shrink-0" />
+      <span className="font-medium text-muted-foreground shrink-0">{issue.identifier}</span>
+      <span className="text-foreground truncate">{issue.title}</span>
     </Link>
   );
 }
