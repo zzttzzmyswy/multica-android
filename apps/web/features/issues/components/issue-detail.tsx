@@ -63,7 +63,7 @@ import { StatusIcon, PriorityIcon, DueDatePicker, AssigneePicker, canAssignAgent
 import { CommentCard } from "./comment-card";
 import { CommentInput } from "./comment-input";
 import { AgentLiveCard, TaskRunHistory } from "./agent-live-card";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore, useActorName } from "@/features/workspace";
 import { useWorkspaceId } from "@core/hooks";
@@ -75,6 +75,8 @@ import { useIssueReactions } from "@/features/issues/hooks/use-issue-reactions";
 import { useIssueSubscribers } from "@/features/issues/hooks/use-issue-subscribers";
 import { ReactionBar } from "@/components/common/reaction-bar";
 import { useFileUpload } from "@/shared/hooks/use-file-upload";
+import { api } from "@/shared/api";
+import { AttachmentSection } from "./attachment-section";
 import { timeAgo } from "@/shared/utils";
 
 function shortDate(date: string | null): string {
@@ -190,6 +192,20 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   const nextIssue = currentIndex < allIssues.length - 1 ? allIssues[currentIndex + 1] : null;
   const { getActorName } = useActorName();
   const { uploadWithToast } = useFileUpload();
+  const queryClient = useQueryClient();
+
+  // Attachments
+  const { data: attachments } = useQuery({
+    queryKey: ["attachments", id],
+    queryFn: () => api.listAttachments(id),
+    staleTime: Infinity,
+  });
+  const deleteAttachment = useMutation({
+    mutationFn: (attachmentId: string) => api.deleteAttachment(attachmentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["attachments", id] });
+    },
+  });
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: layoutId,
   });
@@ -656,6 +672,16 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
               onSelect={(file) => descEditorRef.current?.uploadFile(file)}
             />
           </div>
+
+          {attachments && attachments.length > 0 && (
+            <div className="mt-4">
+              <AttachmentSection
+                attachments={attachments}
+                onDelete={(attId) => deleteAttachment.mutate(attId)}
+                deleting={deleteAttachment.isPending}
+              />
+            </div>
+          )}
 
           <div className="my-8 border-t" />
 
