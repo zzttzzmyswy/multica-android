@@ -4,8 +4,7 @@ import { useState, useCallback } from "react";
 import { toast } from "sonner";
 import { api } from "@/shared/api";
 import type { Attachment } from "@/shared/types";
-
-const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
+import { MAX_FILE_SIZE, isAllowedFileType } from "@/shared/constants/upload";
 
 export interface UploadResult {
   id: string;
@@ -23,6 +22,12 @@ export function useFileUpload() {
 
   const upload = useCallback(
     async (file: File, ctx?: UploadContext): Promise<UploadResult | null> => {
+      if (!isAllowedFileType(file.type)) {
+        throw new Error(
+          `Unsupported file type: ${file.type || file.name.split(".").pop()}`,
+        );
+      }
+
       if (file.size > MAX_FILE_SIZE) {
         throw new Error("File exceeds 100 MB limit");
       }
