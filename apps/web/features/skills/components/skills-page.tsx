@@ -33,8 +33,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/shared/api";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/features/auth";
-import { useWorkspaceStore } from "@/features/workspace";
+import { useWorkspaceId } from "@core/hooks";
+import { skillListOptions, workspaceKeys } from "@core/workspace/queries";
 
 import { FileTree } from "./file-tree";
 import { FileViewer } from "./file-viewer";
@@ -346,6 +348,8 @@ function SkillDetail({
   onUpdate: (id: string, data: UpdateSkillRequest) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }) {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceId();
   const [name, setName] = useState(skill.name);
   const [description, setDescription] = useState(skill.description);
   const [content, setContent] = useState(skill.content);
@@ -370,12 +374,12 @@ function SkillDetail({
     setSelectedPath(SKILL_MD);
     setLoadingFiles(true);
     api.getSkill(skill.id).then((full) => {
-      useWorkspaceStore.getState().upsertSkill(full);
+      qc.invalidateQueries({ queryKey: workspaceKeys.skills(wsId) });
       setFiles((full.files ?? []).map((f) => ({ path: f.path, content: f.content })));
     }).catch((e) => {
       toast.error(e instanceof Error ? e.message : "Failed to load skill files");
     }).finally(() => setLoadingFiles(false));
-  }, [skill.id]);
+  }, [skill.id, qc, wsId]);
 
   // Build the virtual file map
   const fileMap = useMemo(() => buildFileMap(content, files), [content, files]);
@@ -610,10 +614,9 @@ function SkillDetail({
 
 export default function SkillsPage() {
   const isLoading = useAuthStore((s) => s.isLoading);
-  const skills = useWorkspaceStore((s) => s.skills);
-  const refreshSkills = useWorkspaceStore((s) => s.refreshSkills);
-  const upsertSkill = useWorkspaceStore((s) => s.upsertSkill);
-  const removeSkill = useWorkspaceStore((s) => s.removeSkill);
+  const qc = useQueryClient();
+  const wsId = useWorkspaceId();
+  const { data: skills = [] } = useQuery(skillListOptions(wsId));
   const [selectedId, setSelectedId] = useState<string>("");
   const [showCreate, setShowCreate] = useState(false);
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
@@ -628,22 +631,22 @@ export default function SkillsPage() {
 
   const handleCreate = async (data: CreateSkillRequest) => {
     const skill = await api.createSkill(data);
-    upsertSkill(skill);
+    qc.invalidateQueries({ queryKey: workspaceKeys.skills(wsId) });
     setSelectedId(skill.id);
     toast.success("Skill created");
   };
 
   const handleImport = async (url: string) => {
     const skill = await api.importSkill({ url });
-    upsertSkill(skill);
+    qc.invalidateQueries({ queryKey: workspaceKeys.skills(wsId) });
     setSelectedId(skill.id);
     toast.success("Skill imported");
   };
 
   const handleUpdate = async (id: string, data: UpdateSkillRequest) => {
     try {
-      const updated = await api.updateSkill(id, data);
-      upsertSkill(updated);
+      await api.updateSkill(id, data);
+      qc.invalidateQueries({ queryKey: workspaceKeys.skills(wsId) });
       toast.success("Skill saved");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to save skill");
@@ -658,7 +661,7 @@ export default function SkillsPage() {
         const remaining = skills.filter((s) => s.id !== id);
         setSelectedId(remaining[0]?.id ?? "");
       }
-      removeSkill(id);
+      qc.invalidateQueries({ queryKey: workspaceKeys.skills(wsId) });
       toast.success("Skill deleted");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to delete skill");

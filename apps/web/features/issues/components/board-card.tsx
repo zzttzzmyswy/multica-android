@@ -2,14 +2,14 @@
 
 import { useCallback, memo } from "react";
 import Link from "next/link";
-import { useSortable } from "@dnd-kit/sortable";
+import { useSortable, defaultAnimateLayoutChanges } from "@dnd-kit/sortable";
+import type { AnimateLayoutChanges } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { toast } from "sonner";
 import type { Issue, UpdateIssueRequest } from "@/shared/types";
 import { CalendarDays } from "lucide-react";
 import { ActorAvatar } from "@/components/common/actor-avatar";
-import { api } from "@/shared/api";
-import { useIssueStore } from "@/features/issues/store";
+import { useUpdateIssue } from "@core/issues/mutations";
 import { PriorityIcon } from "./priority-icon";
 import { PriorityPicker, AssigneePicker, DueDatePicker } from "./pickers";
 import { PRIORITY_CONFIG } from "@/features/issues/config";
@@ -46,16 +46,15 @@ export const BoardCardContent = memo(function BoardCardContent({
   const storeProperties = useViewStore((s) => s.cardProperties);
   const priorityCfg = PRIORITY_CONFIG[issue.priority];
 
+  const updateIssueMutation = useUpdateIssue();
   const handleUpdate = useCallback(
     (updates: Partial<UpdateIssueRequest>) => {
-      const prev = { ...issue };
-      useIssueStore.getState().updateIssue(issue.id, updates);
-      api.updateIssue(issue.id, updates).catch(() => {
-        useIssueStore.getState().updateIssue(issue.id, prev);
-        toast.error("Failed to update issue");
-      });
+      updateIssueMutation.mutate(
+        { id: issue.id, ...updates },
+        { onError: () => toast.error("Failed to update issue") },
+      );
     },
-    [issue],
+    [issue.id, updateIssueMutation],
   );
 
   const showPriority = storeProperties.priority;
@@ -168,6 +167,12 @@ export const BoardCardContent = memo(function BoardCardContent({
   );
 });
 
+const animateLayoutChanges: AnimateLayoutChanges = (args) => {
+  const { isSorting, wasDragging } = args;
+  if (isSorting || wasDragging) return false;
+  return defaultAnimateLayoutChanges(args);
+};
+
 export const DraggableBoardCard = memo(function DraggableBoardCard({ issue }: { issue: Issue }) {
   const {
     attributes,
@@ -179,6 +184,7 @@ export const DraggableBoardCard = memo(function DraggableBoardCard({ issue }: { 
   } = useSortable({
     id: issue.id,
     data: { status: issue.status },
+    animateLayoutChanges,
   });
 
   const style = {

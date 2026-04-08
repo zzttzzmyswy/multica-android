@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { Server } from "lucide-react";
 import { useDefaultLayout } from "react-resizable-panels";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -10,38 +11,35 @@ import {
 } from "@/components/ui/resizable";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/features/auth";
-import { useWorkspaceStore } from "@/features/workspace";
+import { useWorkspaceId } from "@core/hooks";
+import { runtimeListOptions, runtimeKeys } from "@core/runtimes/queries";
 import { useWSEvent } from "@/features/realtime";
-import { useRuntimeStore } from "../store";
 import { RuntimeList } from "./runtime-list";
 import { RuntimeDetail } from "./runtime-detail";
 
 export default function RuntimesPage() {
   const isLoading = useAuthStore((s) => s.isLoading);
-  const workspace = useWorkspaceStore((s) => s.workspace);
-  const runtimes = useRuntimeStore((s) => s.runtimes);
-  const selectedId = useRuntimeStore((s) => s.selectedId);
-  const fetching = useRuntimeStore((s) => s.fetching);
-  const fetchRuntimes = useRuntimeStore((s) => s.fetchRuntimes);
-  const setSelectedId = useRuntimeStore((s) => s.setSelectedId);
+  const wsId = useWorkspaceId();
+  const qc = useQueryClient();
+  const { data: runtimes = [], isLoading: fetching } = useQuery(runtimeListOptions(wsId));
+  const [selectedId, setSelectedId] = useState("");
 
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: "multica_runtimes_layout",
   });
 
-  useEffect(() => {
-    if (workspace) fetchRuntimes();
-  }, [workspace, fetchRuntimes]);
-
   // Re-fetch on daemon register/deregister events.
-  // Heartbeat events are not broadcast over WS, so no handler needed.
   const handleDaemonEvent = useCallback(() => {
-    fetchRuntimes();
-  }, [fetchRuntimes]);
+    qc.invalidateQueries({ queryKey: runtimeKeys.list(wsId) });
+  }, [qc, wsId]);
 
   useWSEvent("daemon:register", handleDaemonEvent);
 
-  const selected = runtimes.find((r) => r.id === selectedId) ?? null;
+  // Auto-select first runtime if nothing selected
+  const effectiveSelectedId = selectedId && runtimes.some((r) => r.id === selectedId)
+    ? selectedId
+    : runtimes[0]?.id ?? "";
+  const selected = runtimes.find((r) => r.id === effectiveSelectedId) ?? null;
 
   if (isLoading || fetching) {
     return (
@@ -95,7 +93,7 @@ export default function RuntimesPage() {
       >
         <RuntimeList
           runtimes={runtimes}
-          selectedId={selectedId}
+          selectedId={effectiveSelectedId}
           onSelect={setSelectedId}
         />
       </ResizablePanel>

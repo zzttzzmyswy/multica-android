@@ -63,10 +63,13 @@ import { StatusIcon, PriorityIcon, DueDatePicker, AssigneePicker, canAssignAgent
 import { CommentCard } from "./comment-card";
 import { CommentInput } from "./comment-input";
 import { AgentLiveCard, TaskRunHistory } from "./agent-live-card";
-import { api } from "@/shared/api";
+import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore, useActorName } from "@/features/workspace";
-import { useIssueStore } from "@/features/issues";
+import { useWorkspaceId } from "@core/hooks";
+import { issueListOptions, issueDetailOptions } from "@core/issues/queries";
+import { memberListOptions, agentListOptions } from "@core/workspace/queries";
+import { useUpdateIssue, useDeleteIssue } from "@core/issues/mutations";
 import { useIssueTimeline } from "@/features/issues/hooks/use-issue-timeline";
 import { useIssueReactions } from "@/features/issues/hooks/use-issue-reactions";
 import { useIssueSubscribers } from "@/features/issues/hooks/use-issue-subscribers";
@@ -175,12 +178,13 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const workspace = useWorkspaceStore((s) => s.workspace);
-  const members = useWorkspaceStore((s) => s.members);
-  const agents = useWorkspaceStore((s) => s.agents);
-  const currentMemberRole = members.find((m) => m.user_id === user?.id)?.role;
 
-  // Issue navigation
-  const allIssues = useIssueStore((s) => s.issues);
+  // Issue navigation — read from TQ list cache
+  const wsId = useWorkspaceId();
+  const { data: members = [] } = useQuery(memberListOptions(wsId));
+  const { data: agents = [] } = useQuery(agentListOptions(wsId));
+  const currentMemberRole = members.find((m) => m.user_id === user?.id)?.role;
+  const { data: allIssues = [] } = useQuery(issueListOptions(wsId));
   const currentIndex = allIssues.findIndex((i) => i.id === id);
   const prevIssue = currentIndex > 0 ? allIssues[currentIndex - 1] : null;
   const nextIssue = currentIndex < allIssues.length - 1 ? allIssues[currentIndex + 1] : null;
@@ -200,38 +204,11 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const didHighlightRef = useRef<string | null>(null);
 
-  // Single source of truth: read issue directly from global store
-  const issue = useIssueStore((s) => s.issues.find((i) => i.id === id)) ?? null;
-  const [issueLoading, setIssueLoading] = useState(!issue);
-
-  // If issue isn't in the store yet, fetch and upsert it.
-  // loadedIdRef tracks which issue was already loaded — if it disappears
-  // from the store (workspace switch clears all issues), skip refetch.
-  const loadedIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (issue) {
-      loadedIdRef.current = id;
-      setIssueLoading(false);
-      return;
-    }
-    // Issue was loaded for this id but vanished → store cleared (workspace switch)
-    if (loadedIdRef.current === id) {
-      loadedIdRef.current = null;
-      return;
-    }
-    // Issue not in store → fetch it
-    setIssueLoading(true);
-    api
-      .getIssue(id)
-      .then((iss) => {
-        useIssueStore.getState().addIssue(iss);
-      })
-      .catch((e) => {
-        console.error(e);
-        toast.error("Failed to load issue");
-      })
-      .finally(() => setIssueLoading(false));
-  }, [id, !!issue]);
+  // Issue data from TQ — uses detail query, seeded from list cache if available
+  const { data: issue = null, isLoading: issueLoading } = useQuery({
+    ...issueDetailOptions(wsId, id),
+    initialData: () => allIssues.find((i) => i.id === id),
+  });
 
   // Custom hooks — encapsulate timeline, reactions, subscribers
   const {
@@ -283,18 +260,17 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
     scrollContainerRef.current?.scrollTo({ top: scrollContainerRef.current.scrollHeight, behavior: "smooth" });
   }, []);
 
-  // Issue field updates — write directly to the global store (single source of truth)
+  // Issue field updates via TQ mutation (optimistic update + rollback in mutation hook)
+  const updateIssueMutation = useUpdateIssue();
   const handleUpdateField = useCallback(
     (updates: Partial<UpdateIssueRequest>) => {
       if (!issue) return;
-      const prev = { ...issue };
-      useIssueStore.getState().updateIssue(id, updates);
-      api.updateIssue(id, updates).catch(() => {
-        useIssueStore.getState().updateIssue(id, prev);
-        toast.error("Failed to update issue");
-      });
+      updateIssueMutation.mutate(
+        { id, ...updates },
+        { onError: () => toast.error("Failed to update issue") },
+      );
     },
-    [issue, id],
+    [issue, id, updateIssueMutation],
   );
 
   const descEditorRef = useRef<ContentEditorRef>(null);
@@ -303,11 +279,11 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
     [uploadWithToast, id],
   );
 
+  const deleteIssueMutation = useDeleteIssue();
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      await api.deleteIssue(issue!.id);
-      useIssueStore.getState().removeIssue(issue!.id);
+      await deleteIssueMutation.mutateAsync(issue!.id);
       toast.success("Issue deleted");
       if (onDelete) onDelete();
       else router.push("/issues");

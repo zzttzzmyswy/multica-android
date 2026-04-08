@@ -24,64 +24,93 @@ The frontend uses a **feature-based architecture** with four layers:
 ```
 apps/web/
 ├── app/          # Routing layer (thin shells — import from features/)
-├── features/     # Business logic, organized by domain
+├── core/         # Headless business logic (TanStack Query, zero JSX, zero react-dom)
+├── features/     # UI business components, organized by domain
 ├── shared/       # Cross-feature utilities (api client, types, logger)
 ```
 
 **`app/`** — Next.js App Router pages. Route files should be thin: import and re-export from `features/`. Layout components and route-specific glue (redirects, auth guards) live here. Shared layout components (e.g. `app-sidebar`) stay in `app/(dashboard)/_components/`.
 
-**`features/`** — Domain modules, each with its own components, hooks, stores, and config:
+**`core/`** — Headless business logic. Query key factories, `queryOptions`, mutation hooks, WS cache updaters. **No JSX, no react-dom.** Designed for future extraction to `packages/core/` in a monorepo.
+
+| Module | Purpose | Key exports |
+|---|---|---|
+| `core/issues/` | Issue queries, mutations, WS updaters | `issueListOptions`, `useUpdateIssue`, `onIssueUpdated` |
+| `core/inbox/` | Inbox queries, mutations, WS updaters | `inboxListOptions`, `useMarkInboxRead` |
+| `core/workspace/` | Member/agent/skill queries, workspace mutations | `memberListOptions`, `agentListOptions` |
+| `core/runtimes/` | Runtime queries | `runtimeListOptions` |
+| `core/query-client.ts` | QueryClient factory | `createQueryClient` |
+| `core/provider.tsx` | QueryClientProvider wrapper | `QueryProvider` |
+| `core/hooks.ts` | Shared hooks | `useWorkspaceId` |
+
+**`features/`** — Domain modules with UI components, client-only stores, and config:
 
 | Feature | Purpose | Exports |
 |---|---|---|
 | `features/auth/` | Authentication state | `useAuthStore`, `AuthInitializer` |
-| `features/workspace/` | Workspace, members, agents | `useWorkspaceStore`, `useActorName` |
-| `features/issues/` | Issue state, components, config | `useIssueStore`, icons, pickers, status/priority config |
-| `features/inbox/` | Inbox notification state | `useInboxStore` |
+| `features/workspace/` | Workspace identity + UI | `useWorkspaceStore` (client-only: workspace/workspaces), `useActorName` |
+| `features/issues/` | Issue UI components + client state | `useIssueStore` (client-only: activeIssueId), icons, pickers, config |
 | `features/realtime/` | WebSocket connection + sync | `WSProvider`, `useWSEvent`, `useRealtimeSync` |
 | `features/modals/` | Modal registry and state | Modal store and components |
 | `features/skills/` | Skill management | Skill components |
 
-**`shared/`** — Code used across multiple features:
+**`shared/`** — Code used across multiple features (will migrate to `core/` in Phase 5):
 - `shared/api/` — `ApiClient` (REST) and `WSClient` (WebSocket) for backend communication, plus the `api` singleton.
 - `shared/types/` — Domain types (Issue, Agent, Workspace, etc.) and WebSocket event types.
 - `shared/logger.ts` — Logger utility.
 
 ### State Management
 
-- **Zustand** for global client state — one store per feature domain (`features/auth/store.ts`, `features/workspace/store.ts`, `features/issues/store.ts`, `features/inbox/store.ts`).
+- **TanStack Query** for all server state — issues, inbox, members, agents, skills, runtimes. Query definitions live in `core/<domain>/queries.ts`, mutations in `core/<domain>/mutations.ts`.
+- **Zustand** for client-only state — UI selections (`activeIssueId`), view filters, modal state, workspace identity, navigation. No API calls in Zustand stores.
 - **React Context** only for connection lifecycle (`WSProvider` in `features/realtime/`).
 - **Local `useState`** for component-scoped UI state (forms, modals, filters).
-- Do not use React Context for data that can be a zustand store.
 
-**Store conventions:**
-- One store per feature domain. Import via `useAuthStore(selector)` or `useWorkspaceStore(selector)`.
+**TanStack Query conventions:**
+- `staleTime: Infinity` — WS events handle cache freshness, no polling or refetch-on-focus.
+- WS events trigger `queryClient.invalidateQueries()` (preferred) or `queryClient.setQueryData()` for granular updates.
+- All workspace-scoped query keys include `wsId` — workspace switch automatically uses new cache.
+- Mutations use `onMutate` for optimistic updates + `onError` for rollback + `onSettled` for invalidation.
+- Components access QueryClient via `useQueryClient()` hook. Non-React contexts (e.g. Tiptap plugin callbacks) receive QueryClient via closure from the parent React component — never use module-level singletons.
+
+**Zustand store conventions:**
+- Stores hold only client state (UI selections, persisted preferences). Zero `api.*` calls in stores.
+- Import via `useAuthStore(selector)` or `useWorkspaceStore(selector)`.
 - Stores must not call `useRouter` or any React hooks — keep navigation in components.
-- Cross-store reads use `useOtherStore.getState()` inside actions (not hooks).
-- Dependency direction: `workspace` → `auth`, `realtime` → `auth`, `issues` → `workspace`. Never reverse.
+- `useWorkspaceStore` manages workspace identity (`workspace`, `workspaces`, `api.setWorkspaceId`, localStorage). Server data (members, agents, skills) is in TanStack Query, not the store.
 
 ### Import Aliases
 
-Use `@/` alias (maps to `apps/web/`):
+Use `@/` alias (maps to `apps/web/`) and `@core/` alias (maps to `apps/web/core/`):
 ```typescript
+// Core (headless business logic)
+import { issueListOptions, issueKeys } from "@core/issues/queries";
+import { useUpdateIssue, useCreateIssue } from "@core/issues/mutations";
+import { memberListOptions, agentListOptions } from "@core/workspace/queries";
+import { useWorkspaceId } from "@core/hooks";
+
+// Shared (api client, types)
 import { api } from "@/shared/api";
 import type { Issue } from "@/shared/types";
+
+// Features (UI components, client stores)
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
-import { useIssueStore } from "@/features/issues";
-import { useInboxStore } from "@/features/inbox";
 import { useWSEvent } from "@/features/realtime";
 import { StatusIcon } from "@/features/issues/components";
 ```
 
-Within a feature, use relative imports. Between features or to shared, use `@/`.
+Within a feature, use relative imports. Between features or to shared, use `@/`. For core modules, use `@core/`.
 
 ### Data Flow
 
 ```
-Browser → ApiClient (shared/api) → REST API (Chi handlers) → sqlc queries → PostgreSQL
-Browser ← WSClient (shared/api) ← WebSocket ← Hub.Broadcast() ← Handlers/TaskService
+Browser → useQuery (core/) → ApiClient (shared/api) → REST API (Chi handlers) → sqlc queries → PostgreSQL
+Browser ← useQuery cache ← invalidateQueries ← WS event handlers ← WSClient ← Hub.Broadcast()
 ```
+
+Mutations: `useMutation (core/)` → optimistic cache update → API call → onSettled invalidation.
+WS events: `use-realtime-sync.ts` → `queryClient.invalidateQueries()` for most events, `setQueryData()` for granular issue/inbox updates.
 
 ### Backend Structure (`server/`)
 
@@ -177,7 +206,7 @@ make start-worktree     # Start using .env.worktree
 - Prefer shadcn components over custom implementations. Install missing components via `npx shadcn add`.
 - **Feature-specific components** → `features/<domain>/components/` — issue icons, pickers, and other domain-bound UI live inside their feature module.
 - Use shadcn design tokens for styling (e.g. `bg-primary`, `text-muted-foreground`, `text-destructive`). Avoid hardcoded color values (e.g. `text-red-500`, `bg-gray-100`).
-- Do not introduce extra state (useState, context, reducers) unless explicitly required by the design. Prefer zustand stores for shared state over React Context.
+- Do not introduce extra state (useState, context, reducers) unless explicitly required by the design. Server data goes through TanStack Query (`core/`), client-only shared state through Zustand, React Context only for connection lifecycle.
 - Pay close attention to **overflow** (truncate long text, scrollable containers), **alignment**, and **spacing** consistency.
 - When unsure about interaction or state design, ask — the user will provide direction.
 

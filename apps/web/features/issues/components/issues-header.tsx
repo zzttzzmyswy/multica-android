@@ -43,7 +43,9 @@ import {
   PRIORITY_CONFIG,
 } from "@/features/issues/config";
 import { StatusIcon, PriorityIcon } from "@/features/issues/components";
-import { useWorkspaceStore } from "@/features/workspace";
+import { useQuery } from "@tanstack/react-query";
+import { useWorkspaceId } from "@core/hooks";
+import { memberListOptions, agentListOptions } from "@core/workspace/queries";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import {
   useIssueViewStore,
@@ -155,8 +157,9 @@ function ActorSubContent({
   noAssigneeCount?: number;
 }) {
   const [search, setSearch] = useState("");
-  const members = useWorkspaceStore((s) => s.members);
-  const agents = useWorkspaceStore((s) => s.agents);
+  const wsId = useWorkspaceId();
+  const { data: members = [] } = useQuery(memberListOptions(wsId));
+  const { data: agents = [] } = useQuery(agentListOptions(wsId));
   const query = search.toLowerCase();
   const filteredMembers = members.filter((m) =>
     m.name.toLowerCase().includes(query),

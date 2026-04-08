@@ -20,7 +20,9 @@
 
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
-import { useIssueStore } from "@/features/issues/store";
+import { useQuery } from "@tanstack/react-query";
+import { issueListOptions } from "@core/issues/queries";
+import { useWorkspaceId } from "@core/hooks";
 import { StatusIcon } from "@/features/issues/components/status-icon";
 
 export function MentionView({ node }: NodeViewProps) {
@@ -48,7 +50,9 @@ function IssueMention({
   issueId: string;
   fallbackLabel?: string;
 }) {
-  const issue = useIssueStore((s) => s.issues.find((i) => i.id === issueId));
+  const wsId = useWorkspaceId();
+  const { data: issues = [] } = useQuery(issueListOptions(wsId));
+  const issue = issues.find((i) => i.id === issueId);
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();

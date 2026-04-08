@@ -1,14 +1,21 @@
 "use client";
 
 import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { WSClient } from "@/shared/api";
 import { toast } from "sonner";
-import { useIssueStore } from "@/features/issues";
-import { useInboxStore } from "@/features/inbox";
 import { useWorkspaceStore } from "@/features/workspace";
 import { useAuthStore } from "@/features/auth";
 import { createLogger } from "@/shared/logger";
-import { api } from "@/shared/api";
+import { issueKeys } from "@core/issues/queries";
+import {
+  onIssueCreated,
+  onIssueUpdated,
+  onIssueDeleted,
+} from "@core/issues/ws-updaters";
+import { onInboxNew, onInboxInvalidate, onInboxIssueStatusChanged } from "@core/inbox/ws-updaters";
+import { inboxKeys } from "@core/inbox/queries";
+import { workspaceKeys } from "@core/workspace/queries";
 import type {
   MemberAddedPayload,
   WorkspaceDeletedPayload,
@@ -33,33 +40,31 @@ const logger = createLogger("realtime-sync");
  * by individual components via useWSEvent — not here.
  */
 export function useRealtimeSync(ws: WSClient | null) {
+  const qc = useQueryClient();
   // Main sync: onAny → refreshMap with debounce
   useEffect(() => {
     if (!ws) return;
 
-    // Event types handled by specific handlers below — skip generic refresh
-    const specificEvents = new Set([
-      "issue:updated", "issue:created", "issue:deleted", "inbox:new",
-    ]);
-
     const refreshMap: Record<string, () => void> = {
-      inbox: () => void useInboxStore.getState().fetch(),
-      agent: () => void useWorkspaceStore.getState().refreshAgents(),
-      member: () => void useWorkspaceStore.getState().refreshMembers(),
-      workspace: () => {
-        // Lightweight: only re-fetch workspace list, don't hydrate everything.
-        // workspace:deleted is handled by a precise side-effect handler below.
-        api.listWorkspaces().then((wsList) => {
-          const current = useWorkspaceStore.getState().workspace;
-          const updated = current
-            ? wsList.find((w) => w.id === current.id)
-            : null;
-          if (updated) useWorkspaceStore.getState().updateWorkspace(updated);
-        }).catch((err) => {
-          logger.error("workspace refresh failed", err);
-        });
+      inbox: () => {
+        const wsId = useWorkspaceStore.getState().workspace?.id;
+        if (wsId) onInboxInvalidate(qc, wsId);
       },
-      skill: () => void useWorkspaceStore.getState().refreshSkills(),
+      agent: () => {
+        const wsId = useWorkspaceStore.getState().workspace?.id;
+        if (wsId) qc.invalidateQueries({ queryKey: workspaceKeys.agents(wsId) });
+      },
+      member: () => {
+        const wsId = useWorkspaceStore.getState().workspace?.id;
+        if (wsId) qc.invalidateQueries({ queryKey: workspaceKeys.members(wsId) });
+      },
+      workspace: () => {
+        qc.invalidateQueries({ queryKey: workspaceKeys.list() });
+      },
+      skill: () => {
+        const wsId = useWorkspaceStore.getState().workspace?.id;
+        if (wsId) qc.invalidateQueries({ queryKey: workspaceKeys.skills(wsId) });
+      },
     };
 
     const timers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -75,6 +80,11 @@ export function useRealtimeSync(ws: WSClient | null) {
       );
     };
 
+    // Event types handled by specific handlers below — skip generic refresh
+    const specificEvents = new Set([
+      "issue:updated", "issue:created", "issue:deleted", "inbox:new",
+    ]);
+
     const unsubAny = ws.onAny((msg) => {
       const myUserId = useAuthStore.getState().user?.id;
       if (msg.actor_id && msg.actor_id === myUserId) {
@@ -88,29 +98,40 @@ export function useRealtimeSync(ws: WSClient | null) {
     });
 
     // --- Specific event handlers (granular updates, no full refetch) ---
+    // NOTE: ws.on() passes msg.payload (no actor_id). Self-event suppression
+    // requires WSClient changes to expose actor_id — tracked as separate task.
 
     const unsubIssueUpdated = ws.on("issue:updated", (p) => {
       const { issue } = p as IssueUpdatedPayload;
       if (!issue?.id) return;
-      useIssueStore.getState().updateIssue(issue.id, issue);
-      if (issue.status) {
-        useInboxStore.getState().updateIssueStatus(issue.id, issue.status);
+      const wsId = useWorkspaceStore.getState().workspace?.id;
+      if (wsId) {
+        onIssueUpdated(qc, wsId, issue);
+        if (issue.status) {
+          onInboxIssueStatusChanged(qc, wsId, issue.id, issue.status);
+        }
       }
     });
 
     const unsubIssueCreated = ws.on("issue:created", (p) => {
       const { issue } = p as IssueCreatedPayload;
-      if (issue) useIssueStore.getState().addIssue(issue);
+      if (!issue) return;
+      const wsId = useWorkspaceStore.getState().workspace?.id;
+      if (wsId) onIssueCreated(qc, wsId, issue);
     });
 
     const unsubIssueDeleted = ws.on("issue:deleted", (p) => {
       const { issue_id } = p as IssueDeletedPayload;
-      if (issue_id) useIssueStore.getState().removeIssue(issue_id);
+      if (!issue_id) return;
+      const wsId = useWorkspaceStore.getState().workspace?.id;
+      if (wsId) onIssueDeleted(qc, wsId, issue_id);
     });
 
     const unsubInboxNew = ws.on("inbox:new", (p) => {
       const { item } = p as InboxNewPayload;
-      if (item) useInboxStore.getState().addItem(item);
+      if (!item) return;
+      const wsId = useWorkspaceStore.getState().workspace?.id;
+      if (wsId) onInboxNew(qc, wsId, item);
     });
 
     // --- Side-effect handlers (toast, navigation) ---
@@ -158,7 +179,7 @@ export function useRealtimeSync(ws: WSClient | null) {
       timers.forEach(clearTimeout);
       timers.clear();
     };
-  }, [ws]);
+  }, [ws, qc]);
 
   // Reconnect → refetch all data to recover missed events
   useEffect(() => {
@@ -167,18 +188,20 @@ export function useRealtimeSync(ws: WSClient | null) {
     const unsub = ws.onReconnect(async () => {
       logger.info("reconnected, refetching all data");
       try {
-        await Promise.all([
-          useIssueStore.getState().fetch(),
-          useInboxStore.getState().fetch(),
-          useWorkspaceStore.getState().refreshAgents(),
-          useWorkspaceStore.getState().refreshMembers(),
-          useWorkspaceStore.getState().refreshSkills(),
-        ]);
+        const wsId = useWorkspaceStore.getState().workspace?.id;
+        if (wsId) {
+          qc.invalidateQueries({ queryKey: issueKeys.all(wsId) });
+          qc.invalidateQueries({ queryKey: inboxKeys.all(wsId) });
+          qc.invalidateQueries({ queryKey: workspaceKeys.agents(wsId) });
+          qc.invalidateQueries({ queryKey: workspaceKeys.members(wsId) });
+          qc.invalidateQueries({ queryKey: workspaceKeys.skills(wsId) });
+        }
+        qc.invalidateQueries({ queryKey: workspaceKeys.list() });
       } catch (e) {
         logger.error("reconnect refetch failed", e);
       }
     });
 
     return unsub;
-  }, [ws]);
+  }, [ws, qc]);
 }

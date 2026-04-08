@@ -30,9 +30,11 @@ import { TitleEditor } from "@/features/editor";
 import { StatusIcon, PriorityIcon } from "@/features/issues/components";
 import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
 import { useWorkspaceStore, useActorName } from "@/features/workspace";
-import { useIssueStore } from "@/features/issues";
+import { useQuery } from "@tanstack/react-query";
+import { useWorkspaceId } from "@core/hooks";
+import { memberListOptions, agentListOptions } from "@core/workspace/queries";
 import { useIssueDraftStore } from "@/features/issues/stores/draft-store";
-import { api } from "@/shared/api";
+import { useCreateIssue } from "@core/issues/mutations";
 import { useFileUpload } from "@/shared/hooks/use-file-upload";
 import { FileUploadButton } from "@/components/common/file-upload-button";
 import { ActorAvatar } from "@/components/common/actor-avatar";
@@ -68,8 +70,9 @@ function PillButton({
 export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?: Record<string, unknown> | null }) {
   const router = useRouter();
   const workspaceName = useWorkspaceStore((s) => s.workspace?.name);
-  const members = useWorkspaceStore((s) => s.members);
-  const agents = useWorkspaceStore((s) => s.agents);
+  const wsId = useWorkspaceId();
+  const { data: members = [] } = useQuery(memberListOptions(wsId));
+  const { data: agents = [] } = useQuery(agentListOptions(wsId));
   const { getActorName } = useActorName();
 
   const draft = useIssueDraftStore((s) => s.draft);
@@ -125,11 +128,12 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
   };
   const updateDueDate = (v: string | null) => { setDueDate(v); setDraft({ dueDate: v }); };
 
+  const createIssueMutation = useCreateIssue();
   const handleSubmit = async () => {
     if (!title.trim() || submitting) return;
     setSubmitting(true);
     try {
-      const issue = await api.createIssue({
+      const issue = await createIssueMutation.mutateAsync({
         title: title.trim(),
         description: descEditorRef.current?.getMarkdown()?.trim() || undefined,
         status,
@@ -139,7 +143,6 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
         due_date: dueDate || undefined,
         attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
       });
-      useIssueStore.getState().addIssue(issue);
       clearDraft();
       onClose();
       toast.custom((t) => (

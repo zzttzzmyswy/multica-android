@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Issue } from "@/shared/types";
 
 // Mock next/navigation
@@ -61,36 +62,28 @@ vi.mock("sonner", () => ({
 
 // Mock api
 const mockUpdateIssue = vi.fn();
+const mockListIssues = vi.hoisted(() => vi.fn().mockResolvedValue({ issues: [], total: 0 }));
 
 vi.mock("@/shared/api", () => ({
   api: {
-    listIssues: vi.fn().mockResolvedValue({ issues: [], total: 0 }),
+    listIssues: (...args: any[]) => mockListIssues(...args),
     updateIssue: (...args: any[]) => mockUpdateIssue(...args),
   },
 }));
 
-// Mock the issue store
-let mockStoreState: {
-  issues: Issue[];
-  loading: boolean;
-  fetch: () => Promise<void>;
-  setIssues: (issues: Issue[]) => void;
-  addIssue: (issue: Issue) => void;
-  updateIssue: (id: string, updates: Partial<Issue>) => void;
-  removeIssue: (id: string) => void;
-};
-
+// Mock issue store — only client state remains
+const mockIssueClientState = { activeIssueId: null, setActiveIssue: vi.fn() };
 vi.mock("@/features/issues/store", () => ({
   useIssueStore: Object.assign(
-    (selector?: any) => (selector ? selector(mockStoreState) : mockStoreState),
-    { getState: () => mockStoreState },
+    (selector?: any) => (selector ? selector(mockIssueClientState) : mockIssueClientState),
+    { getState: () => mockIssueClientState },
   ),
 }));
 
 vi.mock("@/features/issues", () => ({
   useIssueStore: Object.assign(
-    (selector?: any) => (selector ? selector(mockStoreState) : mockStoreState),
-    { getState: () => mockStoreState },
+    (selector?: any) => (selector ? selector(mockIssueClientState) : mockIssueClientState),
+    { getState: () => mockIssueClientState },
   ),
   StatusIcon: () => null,
   PriorityIcon: () => null,
@@ -282,90 +275,80 @@ const mockIssues: Issue[] = [
 
 import IssuesPage from "./page";
 
+function renderWithQuery(ui: React.ReactElement) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } });
+  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
+}
+
 describe("IssuesPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockStoreState = {
-      issues: [],
-      loading: true,
-      fetch: vi.fn(),
-      setIssues: vi.fn(),
-      addIssue: vi.fn(),
-      updateIssue: vi.fn(),
-      removeIssue: vi.fn(),
-    };
+    mockListIssues.mockResolvedValue({ issues: [], total: 0 });
     mockViewState.viewMode = "board";
     mockViewState.statusFilters = [];
     mockViewState.priorityFilters = [];
   });
 
   it("shows loading state initially", () => {
-    mockStoreState.loading = true;
-    mockStoreState.issues = [];
-    render(<IssuesPage />);
+    renderWithQuery(<IssuesPage />);
     expect(screen.getAllByRole("generic").some(el => el.getAttribute("data-slot") === "skeleton")).toBe(true);
   });
 
   it("renders issues in board view after loading", async () => {
-    mockStoreState.loading = false;
-    mockStoreState.issues = mockIssues;
+    // issueListOptions makes 2 calls: open_only + closed page. Return issues for open, empty for closed.
+    mockListIssues.mockImplementation((params: any) =>
+      Promise.resolve(params?.open_only ? { issues: mockIssues, total: mockIssues.length } : { issues: [], total: 0 }),
+    );
 
-    render(<IssuesPage />);
+    renderWithQuery(<IssuesPage />);
 
-    expect(screen.getByText("Implement auth")).toBeInTheDocument();
+    await screen.findByText("Implement auth");
     expect(screen.getByText("Design landing page")).toBeInTheDocument();
     expect(screen.getByText("Write tests")).toBeInTheDocument();
   });
 
   it("renders board columns", async () => {
-    mockStoreState.loading = false;
-    mockStoreState.issues = mockIssues;
+    mockListIssues.mockImplementation((params: any) =>
+      Promise.resolve(params?.open_only ? { issues: mockIssues, total: mockIssues.length } : { issues: [], total: 0 }),
+    );
 
-    render(<IssuesPage />);
+    renderWithQuery(<IssuesPage />);
 
-    expect(screen.getAllByText("Backlog").length).toBeGreaterThanOrEqual(1);
+    await screen.findByText("Backlog");
     expect(screen.getAllByText("Todo").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("In Progress").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("In Review").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Done").length).toBeGreaterThanOrEqual(1);
   });
 
-  it("shows workspace breadcrumb", () => {
-    mockStoreState.loading = false;
-    mockStoreState.issues = [];
+  it("shows workspace breadcrumb", async () => {
+    renderWithQuery(<IssuesPage />);
 
-    render(<IssuesPage />);
-
-    expect(screen.getByText("Issues")).toBeInTheDocument();
+    await screen.findByText("Issues");
   });
 
-  it("shows scope buttons", () => {
-    mockStoreState.loading = false;
-    mockStoreState.issues = [];
+  it("shows scope buttons", async () => {
+    renderWithQuery(<IssuesPage />);
 
-    render(<IssuesPage />);
-
-    expect(screen.getByText("All")).toBeInTheDocument();
+    await screen.findByText("All");
     expect(screen.getByText("Members")).toBeInTheDocument();
     expect(screen.getByText("Agents")).toBeInTheDocument();
   });
 
-  it("shows filter and display icon buttons", () => {
-    mockStoreState.loading = false;
-    mockStoreState.issues = mockIssues;
+  it("shows filter and display icon buttons", async () => {
+    mockListIssues.mockImplementation((params: any) =>
+      Promise.resolve(params?.open_only ? { issues: mockIssues, total: mockIssues.length } : { issues: [], total: 0 }),
+    );
 
-    render(<IssuesPage />);
+    renderWithQuery(<IssuesPage />);
 
-    // Filter and Display are now icon-only buttons, verify they render as buttons
+    await screen.findByText("Implement auth");
     const buttons = screen.getAllByRole("button");
     expect(buttons.length).toBeGreaterThan(0);
   });
 
   it("shows empty board view when no issues exist", () => {
-    mockStoreState.loading = false;
-    mockStoreState.issues = [];
-
-    render(<IssuesPage />);
+    renderWithQuery(<IssuesPage />);
 
     // Should still render the board/list view, not a "no issues" message
     expect(screen.queryByText("No matching issues")).not.toBeInTheDocument();

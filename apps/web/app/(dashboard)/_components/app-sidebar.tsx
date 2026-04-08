@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -42,7 +43,9 @@ import {
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
-import { useInboxStore } from "@/features/inbox";
+import { useQuery } from "@tanstack/react-query";
+import { inboxKeys, deduplicateInboxItems } from "@core/inbox/queries";
+import { api } from "@/shared/api";
 import { useModalStore } from "@/features/modals";
 
 const primaryNav = [
@@ -73,7 +76,16 @@ export function AppSidebar() {
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const switchWorkspace = useWorkspaceStore((s) => s.switchWorkspace);
 
-  const unreadCount = useInboxStore((s) => s.unreadCount());
+  const wsId = workspace?.id;
+  const { data: inboxItems = [] } = useQuery({
+    queryKey: wsId ? inboxKeys.list(wsId) : ["inbox", "disabled"],
+    queryFn: () => api.listInbox(),
+    enabled: !!wsId,
+  });
+  const unreadCount = React.useMemo(
+    () => deduplicateInboxItems(inboxItems).filter((i) => !i.read).length,
+    [inboxItems],
+  );
 
   const logout = () => {
     router.push("/");
