@@ -17,6 +17,7 @@ import {
   useUpdateComment,
   useDeleteComment,
   useToggleCommentReaction,
+  type ToggleCommentReactionVars,
 } from "@core/issues/mutations";
 import { useWSEvent, useWSReconnect } from "@/features/realtime";
 import { toast } from "sonner";
@@ -269,9 +270,7 @@ export function useIssueTimeline(issueId: string, userId?: string) {
       status: "pending",
     },
     select: (m) =>
-      m.state.variables as
-        | { commentId: string; emoji: string; existing: Reaction | undefined }
-        | undefined,
+      m.state.variables as ToggleCommentReactionVars | undefined,
   });
 
   const optimisticTimeline = useMemo(() => {
@@ -306,7 +305,7 @@ export function useIssueTimeline(issueId: string, userId?: string) {
                 actor_type: "member",
                 actor_id: userId ?? "",
                 emoji: vars.emoji,
-                created_at: new Date().toISOString(),
+                created_at: "",
               },
             ];
           }

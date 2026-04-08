@@ -8,7 +8,7 @@ import type {
   IssueReactionRemovedPayload,
 } from "@/shared/types";
 import { issueReactionsOptions, issueKeys } from "@core/issues/queries";
-import { useToggleIssueReaction } from "@core/issues/mutations";
+import { useToggleIssueReaction, type ToggleIssueReactionVars } from "@core/issues/mutations";
 import { useWSEvent, useWSReconnect } from "@/features/realtime";
 
 export function useIssueReactions(issueId: string, userId?: string) {
@@ -80,9 +80,7 @@ export function useIssueReactions(issueId: string, userId?: string) {
       status: "pending",
     },
     select: (m) =>
-      m.state.variables as
-        | { emoji: string; existing: IssueReaction | undefined }
-        | undefined,
+      m.state.variables as ToggleIssueReactionVars | undefined,
   });
 
   const reactions = useMemo(() => {
@@ -111,7 +109,7 @@ export function useIssueReactions(issueId: string, userId?: string) {
               actor_type: "member",
               actor_id: userId ?? "",
               emoji: vars.emoji,
-              created_at: new Date().toISOString(),
+              created_at: "",
             },
           ];
         }

@@ -12,6 +12,22 @@ import type {
 import type { TimelineEntry, IssueSubscriber, Reaction } from "@/shared/types";
 
 // ---------------------------------------------------------------------------
+// Shared mutation variable types — used by both mutation hooks and
+// useMutationState consumers to keep the type assertion in sync.
+// ---------------------------------------------------------------------------
+
+export type ToggleCommentReactionVars = {
+  commentId: string;
+  emoji: string;
+  existing: Reaction | undefined;
+};
+
+export type ToggleIssueReactionVars = {
+  emoji: string;
+  existing: IssueReaction | undefined;
+};
+
+// ---------------------------------------------------------------------------
 // Done issue pagination
 // ---------------------------------------------------------------------------
 
@@ -339,11 +355,7 @@ export function useToggleCommentReaction(issueId: string) {
       commentId,
       emoji,
       existing,
-    }: {
-      commentId: string;
-      emoji: string;
-      existing: Reaction | undefined;
-    }) => {
+    }: ToggleCommentReactionVars) => {
       if (existing) {
         await api.removeReaction(commentId, emoji);
         return null;
@@ -367,10 +379,7 @@ export function useToggleIssueReaction(issueId: string) {
     mutationFn: async ({
       emoji,
       existing,
-    }: {
-      emoji: string;
-      existing: IssueReaction | undefined;
-    }) => {
+    }: ToggleIssueReactionVars) => {
       if (existing) {
         await api.removeIssueReaction(issueId, emoji);
         return null;
