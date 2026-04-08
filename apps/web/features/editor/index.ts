@@ -9,3 +9,4 @@ export {
   type TitleEditorRef,
 } from "./title-editor";
 export { copyMarkdown } from "./utils/clipboard";
+export { ReadonlyContent } from "./readonly-content";

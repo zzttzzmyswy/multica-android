@@ -353,7 +353,8 @@
   font-style: italic;
 }
 
-.rich-text-editor s {
+.rich-text-editor s,
+.rich-text-editor del {
   text-decoration: line-through;
   color: var(--muted-foreground);
 }
