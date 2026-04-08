@@ -23,11 +23,13 @@ export function BoardColumn({
   status,
   issueIds,
   issueMap,
+  totalCount,
   footer,
 }: {
   status: IssueStatus;
   issueIds: string[];
   issueMap: Map<string, Issue>;
+  totalCount?: number;
   footer?: ReactNode;
 }) {
   const cfg = STATUS_CONFIG[status];
@@ -54,7 +56,7 @@ export function BoardColumn({
             {cfg.label}
           </span>
           <span className="text-xs text-muted-foreground">
-            {issueIds.length}
+            {totalCount ?? issueIds.length}
           </span>
         </div>
 
