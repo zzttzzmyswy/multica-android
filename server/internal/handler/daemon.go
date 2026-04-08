@@ -341,10 +341,21 @@ func (h *Handler) ReportTaskProgress(w http.ResponseWriter, r *http.Request) {
 
 // CompleteTask marks a running task as completed.
 type TaskCompleteRequest struct {
-	PRURL     string `json:"pr_url"`
-	Output    string `json:"output"`
-	SessionID string `json:"session_id"` // Claude session ID for future resumption
-	WorkDir   string `json:"work_dir"`   // working directory used during execution
+	PRURL     string             `json:"pr_url"`
+	Output    string             `json:"output"`
+	SessionID string             `json:"session_id"` // Claude session ID for future resumption
+	WorkDir   string             `json:"work_dir"`   // working directory used during execution
+	Usage     []TaskUsagePayload `json:"usage,omitempty"`
+}
+
+// TaskUsagePayload is the per-model token usage reported by the daemon.
+type TaskUsagePayload struct {
+	Provider         string `json:"provider"`
+	Model            string `json:"model"`
+	InputTokens      int64  `json:"input_tokens"`
+	OutputTokens     int64  `json:"output_tokens"`
+	CacheReadTokens  int64  `json:"cache_read_tokens"`
+	CacheWriteTokens int64  `json:"cache_write_tokens"`
 }
 
 func (h *Handler) CompleteTask(w http.ResponseWriter, r *http.Request) {
@@ -362,6 +373,21 @@ func (h *Handler) CompleteTask(w http.ResponseWriter, r *http.Request) {
 		slog.Warn("complete task failed", "task_id", taskID, "error", err)
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+
+	// Store per-task token usage (best-effort, don't fail the request).
+	for _, u := range req.Usage {
+		if err := h.Queries.UpsertTaskUsage(r.Context(), db.UpsertTaskUsageParams{
+			TaskID:           parseUUID(taskID),
+			Provider:         u.Provider,
+			Model:            u.Model,
+			InputTokens:      u.InputTokens,
+			OutputTokens:     u.OutputTokens,
+			CacheReadTokens:  u.CacheReadTokens,
+			CacheWriteTokens: u.CacheWriteTokens,
+		}); err != nil {
+			slog.Warn("upsert task usage failed", "task_id", taskID, "model", u.Model, "error", err)
+		}
 	}
 
 	slog.Info("task completed", "task_id", taskID, "agent_id", uuidToString(task.AgentID))

@@ -221,6 +221,12 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 				})
 			})
 
+			// Usage
+			r.Route("/api/usage", func(r chi.Router) {
+				r.Get("/daily", h.GetWorkspaceUsageByDay)
+				r.Get("/summary", h.GetWorkspaceUsageSummary)
+			})
+
 			// Runtimes
 			r.Route("/api/runtimes", func(r chi.Router) {
 				r.Get("/", h.ListAgentRuntimes)

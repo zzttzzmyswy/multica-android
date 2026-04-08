@@ -91,6 +91,7 @@ func (b *claudeBackend) Execute(ctx context.Context, prompt string, opts ExecOpt
 		var sessionID string
 		finalStatus := "completed"
 		var finalError string
+		usage := make(map[string]TokenUsage)
 
 		scanner := bufio.NewScanner(stdout)
 		scanner.Buffer(make([]byte, 0, 1024*1024), 10*1024*1024)
@@ -108,7 +109,7 @@ func (b *claudeBackend) Execute(ctx context.Context, prompt string, opts ExecOpt
 
 			switch msg.Type {
 			case "assistant":
-				b.handleAssistant(msg, msgCh, &output)
+				b.handleAssistant(msg, msgCh, &output, usage)
 			case "user":
 				b.handleUser(msg, msgCh)
 			case "system":
@@ -162,16 +163,27 @@ func (b *claudeBackend) Execute(ctx context.Context, prompt string, opts ExecOpt
 			Error:      finalError,
 			DurationMs: duration.Milliseconds(),
 			SessionID:  sessionID,
+			Usage:      usage,
 		}
 	}()
 
 	return &Session{Messages: msgCh, Result: resCh}, nil
 }
 
-func (b *claudeBackend) handleAssistant(msg claudeSDKMessage, ch chan<- Message, output *strings.Builder) {
+func (b *claudeBackend) handleAssistant(msg claudeSDKMessage, ch chan<- Message, output *strings.Builder, usage map[string]TokenUsage) {
 	var content claudeMessageContent
 	if err := json.Unmarshal(msg.Message, &content); err != nil {
 		return
+	}
+
+	// Accumulate token usage per model.
+	if content.Usage != nil && content.Model != "" {
+		u := usage[content.Model]
+		u.InputTokens += content.Usage.InputTokens
+		u.OutputTokens += content.Usage.OutputTokens
+		u.CacheReadTokens += content.Usage.CacheReadInputTokens
+		u.CacheWriteTokens += content.Usage.CacheCreationInputTokens
+		usage[content.Model] = u
 	}
 
 	for _, block := range content.Content {
@@ -287,8 +299,17 @@ type claudeLogEntry struct {
 }
 
 type claudeMessageContent struct {
-	Role    string             `json:"role"`
+	Role    string               `json:"role"`
+	Model   string               `json:"model"`
 	Content []claudeContentBlock `json:"content"`
+	Usage   *claudeUsage         `json:"usage,omitempty"`
+}
+
+type claudeUsage struct {
+	InputTokens              int64 `json:"input_tokens"`
+	OutputTokens             int64 `json:"output_tokens"`
+	CacheReadInputTokens     int64 `json:"cache_read_input_tokens"`
+	CacheCreationInputTokens int64 `json:"cache_creation_input_tokens"`
 }
 
 type claudeContentBlock struct {

@@ -281,6 +281,18 @@ type TaskMessage struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+type TaskUsage struct {
+	ID               pgtype.UUID        `json:"id"`
+	TaskID           pgtype.UUID        `json:"task_id"`
+	Provider         string             `json:"provider"`
+	Model            string             `json:"model"`
+	InputTokens      int64              `json:"input_tokens"`
+	OutputTokens     int64              `json:"output_tokens"`
+	CacheReadTokens  int64              `json:"cache_read_tokens"`
+	CacheWriteTokens int64              `json:"cache_write_tokens"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
 type User struct {
 	ID        pgtype.UUID        `json:"id"`
 	Name      string             `json:"name"`

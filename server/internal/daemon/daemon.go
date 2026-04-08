@@ -844,7 +844,7 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 		}
 	default:
 		taskLog.Info("task completed", "status", result.Status)
-		if err := d.client.CompleteTask(ctx, task.ID, result.Comment, result.BranchName, result.SessionID, result.WorkDir); err != nil {
+		if err := d.client.CompleteTask(ctx, task.ID, result.Comment, result.BranchName, result.SessionID, result.WorkDir, result.Usage); err != nil {
 			taskLog.Error("complete task failed, falling back to fail", "error", err)
 			if failErr := d.client.FailTask(ctx, task.ID, fmt.Sprintf("complete task failed: %s", err.Error())); failErr != nil {
 				taskLog.Error("fail task fallback also failed", "error", failErr)
@@ -1105,6 +1105,22 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 		"tools", toolCount.Load(),
 	)
 
+	// Convert agent usage map to task usage entries.
+	var usageEntries []TaskUsageEntry
+	for model, u := range result.Usage {
+		if u.InputTokens == 0 && u.OutputTokens == 0 && u.CacheReadTokens == 0 && u.CacheWriteTokens == 0 {
+			continue
+		}
+		usageEntries = append(usageEntries, TaskUsageEntry{
+			Provider:         provider,
+			Model:            model,
+			InputTokens:      u.InputTokens,
+			OutputTokens:     u.OutputTokens,
+			CacheReadTokens:  u.CacheReadTokens,
+			CacheWriteTokens: u.CacheWriteTokens,
+		})
+	}
+
 	switch result.Status {
 	case "completed":
 		if result.Output == "" {
@@ -1115,6 +1131,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 			Comment:   result.Output,
 			SessionID: result.SessionID,
 			WorkDir:   env.WorkDir,
+			Usage:     usageEntries,
 		}, nil
 	case "timeout":
 		return TaskResult{}, fmt.Errorf("%s timed out after %s", provider, d.cfg.AgentTimeout)
@@ -1123,7 +1140,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 		if errMsg == "" {
 			errMsg = fmt.Sprintf("%s execution %s", provider, result.Status)
 		}
-		return TaskResult{Status: "blocked", Comment: errMsg}, nil
+		return TaskResult{Status: "blocked", Comment: errMsg, Usage: usageEntries}, nil
 	}
 }
 
