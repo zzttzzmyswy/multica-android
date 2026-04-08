@@ -56,12 +56,23 @@ type SkillFileData struct {
 	Content string `json:"content"`
 }
 
+// TaskUsageEntry represents token usage for a single model during a task execution.
+type TaskUsageEntry struct {
+	Provider         string `json:"provider"`
+	Model            string `json:"model"`
+	InputTokens      int64  `json:"input_tokens"`
+	OutputTokens     int64  `json:"output_tokens"`
+	CacheReadTokens  int64  `json:"cache_read_tokens"`
+	CacheWriteTokens int64  `json:"cache_write_tokens"`
+}
+
 // TaskResult is the outcome of executing a task.
 type TaskResult struct {
-	Status     string `json:"status"`
-	Comment    string `json:"comment"`
-	BranchName string `json:"branch_name,omitempty"`
-	EnvType    string `json:"env_type,omitempty"`
-	SessionID  string `json:"session_id,omitempty"` // Claude session ID for future resumption
-	WorkDir    string `json:"work_dir,omitempty"`   // working directory used during execution
+	Status     string           `json:"status"`
+	Comment    string           `json:"comment"`
+	BranchName string           `json:"branch_name,omitempty"`
+	EnvType    string           `json:"env_type,omitempty"`
+	SessionID  string           `json:"session_id,omitempty"` // Claude session ID for future resumption
+	WorkDir    string           `json:"work_dir,omitempty"`   // working directory used during execution
+	Usage      []TaskUsageEntry `json:"usage,omitempty"`      // per-model token usage
 }

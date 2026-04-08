@@ -62,6 +62,14 @@ type Message struct {
 	Level   string         // log level (Log)
 }
 
+// TokenUsage tracks token consumption for a single model.
+type TokenUsage struct {
+	InputTokens      int64
+	OutputTokens     int64
+	CacheReadTokens  int64
+	CacheWriteTokens int64
+}
+
 // Result is the final outcome after an agent session completes.
 type Result struct {
 	Status     string // "completed", "failed", "aborted", "timeout"
@@ -69,6 +77,7 @@ type Result struct {
 	Error      string // error message if failed
 	DurationMs int64
 	SessionID  string
+	Usage      map[string]TokenUsage // keyed by model name
 }
 
 // Config configures a Backend instance.

@@ -192,6 +192,96 @@ func (h *Handler) GetRuntimeTaskActivity(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// GetWorkspaceUsageByDay returns daily token usage aggregated by model for the workspace.
+func (h *Handler) GetWorkspaceUsageByDay(w http.ResponseWriter, r *http.Request) {
+	workspaceID := resolveWorkspaceID(r)
+	since := parseSinceParam(r, 30)
+
+	rows, err := h.Queries.GetWorkspaceUsageByDay(r.Context(), db.GetWorkspaceUsageByDayParams{
+		WorkspaceID: parseUUID(workspaceID),
+		Since:       since,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get usage")
+		return
+	}
+
+	type DailyUsageRow struct {
+		Date                  string `json:"date"`
+		Model                 string `json:"model"`
+		TotalInputTokens      int64  `json:"total_input_tokens"`
+		TotalOutputTokens     int64  `json:"total_output_tokens"`
+		TotalCacheReadTokens  int64  `json:"total_cache_read_tokens"`
+		TotalCacheWriteTokens int64  `json:"total_cache_write_tokens"`
+		TaskCount             int32  `json:"task_count"`
+	}
+
+	resp := make([]DailyUsageRow, len(rows))
+	for i, row := range rows {
+		resp[i] = DailyUsageRow{
+			Date:                  row.Date.Time.Format("2006-01-02"),
+			Model:                 row.Model,
+			TotalInputTokens:      row.TotalInputTokens,
+			TotalOutputTokens:     row.TotalOutputTokens,
+			TotalCacheReadTokens:  row.TotalCacheReadTokens,
+			TotalCacheWriteTokens: row.TotalCacheWriteTokens,
+			TaskCount:             row.TaskCount,
+		}
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// GetWorkspaceUsageSummary returns total token usage aggregated by model for the workspace.
+func (h *Handler) GetWorkspaceUsageSummary(w http.ResponseWriter, r *http.Request) {
+	workspaceID := resolveWorkspaceID(r)
+	since := parseSinceParam(r, 30)
+
+	rows, err := h.Queries.GetWorkspaceUsageSummary(r.Context(), db.GetWorkspaceUsageSummaryParams{
+		WorkspaceID: parseUUID(workspaceID),
+		Since:       since,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get usage summary")
+		return
+	}
+
+	type UsageSummaryRow struct {
+		Model                 string `json:"model"`
+		TotalInputTokens      int64  `json:"total_input_tokens"`
+		TotalOutputTokens     int64  `json:"total_output_tokens"`
+		TotalCacheReadTokens  int64  `json:"total_cache_read_tokens"`
+		TotalCacheWriteTokens int64  `json:"total_cache_write_tokens"`
+		TaskCount             int32  `json:"task_count"`
+	}
+
+	resp := make([]UsageSummaryRow, len(rows))
+	for i, row := range rows {
+		resp[i] = UsageSummaryRow{
+			Model:                 row.Model,
+			TotalInputTokens:      row.TotalInputTokens,
+			TotalOutputTokens:     row.TotalOutputTokens,
+			TotalCacheReadTokens:  row.TotalCacheReadTokens,
+			TotalCacheWriteTokens: row.TotalCacheWriteTokens,
+			TaskCount:             row.TaskCount,
+		}
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// parseSinceParam parses the "days" query parameter and returns a timestamptz.
+func parseSinceParam(r *http.Request, defaultDays int) pgtype.Timestamptz {
+	days := defaultDays
+	if d := r.URL.Query().Get("days"); d != "" {
+		if parsed, err := strconv.Atoi(d); err == nil && parsed > 0 && parsed <= 365 {
+			days = parsed
+		}
+	}
+	t := time.Now().AddDate(0, 0, -days)
+	return pgtype.Timestamptz{Time: t, Valid: true}
+}
+
 func (h *Handler) ListAgentRuntimes(w http.ResponseWriter, r *http.Request) {
 	workspaceID := resolveWorkspaceID(r)
 

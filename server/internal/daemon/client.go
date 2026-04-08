@@ -113,6 +113,15 @@ func (c *Client) CompleteTask(ctx context.Context, taskID, output, branchName, s
 	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/tasks/%s/complete", taskID), body, nil)
 }
 
+func (c *Client) ReportTaskUsage(ctx context.Context, taskID string, usage []TaskUsageEntry) error {
+	if len(usage) == 0 {
+		return nil
+	}
+	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/tasks/%s/usage", taskID), map[string]any{
+		"usage": usage,
+	}, nil)
+}
+
 func (c *Client) FailTask(ctx context.Context, taskID, errMsg string) error {
 	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/tasks/%s/fail", taskID), map[string]any{
 		"error": errMsg,
