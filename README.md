@@ -158,7 +158,3 @@ make start
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development workflow, worktree support, testing, and troubleshooting.
-
-## License
-
-[Apache 2.0](LICENSE)
