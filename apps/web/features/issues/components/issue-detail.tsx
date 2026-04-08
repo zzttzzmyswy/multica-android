@@ -13,6 +13,7 @@ import {
   Link2,
   MoreHorizontal,
   PanelRight,
+  Plus,
   Trash2,
   UserMinus,
   Users,
@@ -57,7 +58,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { AvatarGroup, AvatarGroupCount } from "@/components/ui/avatar";
 import { ActorAvatar } from "@/components/common/actor-avatar";
-import type { UpdateIssueRequest, IssueStatus, IssuePriority, TimelineEntry } from "@/shared/types";
+import type { Issue, UpdateIssueRequest, IssueStatus, IssuePriority, TimelineEntry } from "@/shared/types";
 import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
 import { StatusIcon, PriorityIcon, DueDatePicker, AssigneePicker, canAssignAgent } from "@/features/issues/components";
 import { CommentCard } from "./comment-card";
@@ -75,6 +76,7 @@ import { useIssueReactions } from "@/features/issues/hooks/use-issue-reactions";
 import { useIssueSubscribers } from "@/features/issues/hooks/use-issue-subscribers";
 import { ReactionBar } from "@/components/common/reaction-bar";
 import { useFileUpload } from "@/shared/hooks/use-file-upload";
+import { useModalStore } from "@/features/modals";
 import { timeAgo } from "@/shared/utils";
 
 function shortDate(date: string | null): string {
@@ -225,6 +227,38 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
     subscribers, loading: subscribersLoading, isSubscribed, toggleSubscribe: handleToggleSubscribe, toggleSubscriber,
   } = useIssueSubscribers(id, user?.id);
 
+  // Sub-issue state — derive from store when possible, fetch otherwise
+  const [parentIssue, setParentIssue] = useState<Issue | null>(null);
+  const [childIssues, setChildIssues] = useState<Issue[]>([]);
+
+  // Fetch parent issue when parent_issue_id changes
+  useEffect(() => {
+    if (!issue?.parent_issue_id) {
+      setParentIssue(null);
+      return;
+    }
+    // Try store first, then fetch
+    const storeParent = allIssues.find((i) => i.id === issue.parent_issue_id);
+    if (storeParent) {
+      setParentIssue(storeParent);
+    } else {
+      api.getIssue(issue.parent_issue_id).then(setParentIssue).catch(() => setParentIssue(null));
+    }
+  }, [issue?.parent_issue_id, allIssues]);
+
+  // Fetch child issues once, then keep in sync via store
+  const childIssuesFromStore = allIssues.filter((i) => i.parent_issue_id === id);
+  useEffect(() => {
+    if (!issue) return;
+    // If store has children, use them directly
+    if (childIssuesFromStore.length > 0) {
+      setChildIssues(childIssuesFromStore);
+      return;
+    }
+    // Fetch from API (children may not be in the store yet, e.g. deep-linked)
+    api.listChildIssues(issue.id).then((r) => setChildIssues(r.issues)).catch(() => setChildIssues([]));
+  }, [issue?.id, childIssuesFromStore.length]);
+
   const loading = issueLoading;
 
   // Scroll to highlighted comment once timeline loads (fire only once per highlightCommentId)
@@ -373,6 +407,17 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                   className="text-muted-foreground hover:text-foreground transition-colors truncate shrink-0"
                 >
                   {workspace.name}
+                </Link>
+                <ChevronRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+              </>
+            )}
+            {parentIssue && (
+              <>
+                <Link
+                  href={`/issues/${parentIssue.id}`}
+                  className="text-muted-foreground hover:text-foreground transition-colors truncate shrink-0"
+                >
+                  {parentIssue.identifier}
                 </Link>
                 <ChevronRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
               </>
@@ -546,6 +591,17 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                 </DropdownMenuSub>
 
                 <DropdownMenuSeparator />
+
+                {/* Create sub-issue */}
+                <DropdownMenuItem onClick={() => {
+                  useModalStore.getState().open("create-issue", {
+                    parent_issue_id: issue.id,
+                    parent_issue_identifier: issue.identifier,
+                  });
+                }}>
+                  <Plus className="h-3.5 w-3.5" />
+                  Create sub-issue
+                </DropdownMenuItem>
 
                 {/* Copy link */}
                 <DropdownMenuItem onClick={() => {
@@ -1003,6 +1059,63 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                 />
               </PropRow>
             </div>}
+          </div>
+
+          {/* Parent issue */}
+          {parentIssue && (
+            <div>
+              <div className="text-xs font-medium mb-2 flex items-center gap-1">
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rotate-90" />
+                Parent issue
+              </div>
+              <div className="pl-2">
+                <Link
+                  href={`/issues/${parentIssue.id}`}
+                  className="flex items-center gap-1.5 rounded-md px-2 py-1.5 -mx-2 text-xs hover:bg-accent/50 transition-colors group"
+                >
+                  <StatusIcon status={parentIssue.status} className="h-3.5 w-3.5 shrink-0" />
+                  <span className="text-muted-foreground shrink-0">{parentIssue.identifier}</span>
+                  <span className="truncate group-hover:text-foreground">{parentIssue.title}</span>
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {/* Sub-issues */}
+          <div>
+            <div className="text-xs font-medium mb-2 flex items-center gap-1">
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rotate-90" />
+              Sub-issues
+              {childIssues.length > 0 && (
+                <span className="text-muted-foreground">{childIssues.length}</span>
+              )}
+              <button
+                type="button"
+                className="ml-auto p-0.5 rounded hover:bg-accent/60 transition-colors text-muted-foreground hover:text-foreground"
+                onClick={() => useModalStore.getState().open("create-issue", {
+                  parent_issue_id: issue.id,
+                  parent_issue_identifier: issue.identifier,
+                })}
+              >
+                <Plus className="h-3 w-3" />
+              </button>
+            </div>
+            <div className="pl-2 space-y-0.5">
+              {childIssues.map((child) => (
+                <Link
+                  key={child.id}
+                  href={`/issues/${child.id}`}
+                  className="flex items-center gap-1.5 rounded-md px-2 py-1.5 -mx-2 text-xs hover:bg-accent/50 transition-colors group"
+                >
+                  <StatusIcon status={child.status} className="h-3.5 w-3.5 shrink-0" />
+                  <span className="text-muted-foreground shrink-0">{child.identifier}</span>
+                  <span className="truncate group-hover:text-foreground">{child.title}</span>
+                </Link>
+              ))}
+              {childIssues.length === 0 && (
+                <span className="text-xs text-muted-foreground px-2">No sub-issues</span>
+              )}
+            </div>
           </div>
 
           {/* Details section */}
