@@ -273,6 +273,24 @@ export const zh: LandingDict = {
     subtitle: "Multica \u7684\u6700\u65b0\u66f4\u65b0\u548c\u6539\u8fdb\u3002",
     entries: [
       {
+        version: "0.1.9",
+        date: "2026-04-08",
+        title: "子 Issue、TanStack Query 与用量追踪",
+        changes: [
+          "子 Issue 支持——在任意 Issue 内创建、查看和管理子任务",
+          "全面迁移至 TanStack Query 管理服务端状态（Issue、收件箱、工作区、运行时）",
+          "按任务维度追踪所有 Agent 提供商的 token 用量",
+          "同一 Issue 支持多个 Agent 并发执行",
+          "看板视图：Done 列显示总数并支持无限滚动",
+          "新增 ReadonlyContent 组件，轻量渲染评论中的 Markdown",
+          "表情反应和变更操作支持乐观更新与回滚",
+          "WebSocket 驱动缓存失效，替代轮询和焦点刷新",
+          "CLI 登录流程中浏览器会话保持不丢失",
+          "守护进程复用已有 worktree 时自动拉取最新远程代码",
+          "修复动态根布局导致的标签页切换卡顿问题",
+        ],
+      },
+      {
         version: "0.1.8",
         date: "2026-04-07",
         title: "OAuth、OpenClaw 与 Issue 加载优化",

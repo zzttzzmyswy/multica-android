@@ -273,6 +273,24 @@ export const en: LandingDict = {
     subtitle: "New updates and improvements to Multica.",
     entries: [
       {
+        version: "0.1.9",
+        date: "2026-04-08",
+        title: "Sub-Issues, TanStack Query & Usage Tracking",
+        changes: [
+          "Sub-issue support — create, view, and manage child issues within any issue",
+          "Full migration to TanStack Query for server state (issues, inbox, workspace, runtimes)",
+          "Per-task token usage tracking across all agent providers",
+          "Multiple agents can now run concurrently on the same issue",
+          "Board view: Done column shows total count with infinite scroll",
+          "ReadonlyContent component for lightweight Markdown display in comments",
+          "Optimistic UI updates for reactions and mutations with rollback",
+          "WebSocket-driven cache invalidation replaces polling and refetch-on-focus",
+          "Browser session persists during CLI login flow",
+          "Daemon reuses existing worktrees by updating to latest remote",
+          "Fixed slow tab switching caused by dynamic root layout",
+        ],
+      },
+      {
         version: "0.1.8",
         date: "2026-04-07",
         title: "OAuth, OpenClaw & Issue Loading",
