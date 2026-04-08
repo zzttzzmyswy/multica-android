@@ -418,10 +418,6 @@ func (h *Handler) enqueueMentionedAgentTasks(ctx context.Context, issue db.Issue
 				}
 			}
 		}
-		// Check if the agent has on_mention trigger enabled.
-		if !agentHasTriggerEnabled(agent.Triggers, "on_mention") {
-			continue
-		}
 		// Dedup: skip if this agent already has a pending task for this issue.
 		hasPending, err := h.Queries.HasPendingTaskForIssueAndAgent(ctx, db.HasPendingTaskForIssueAndAgentParams{
 			IssueID: issue.ID,

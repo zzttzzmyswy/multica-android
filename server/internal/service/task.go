@@ -531,14 +531,6 @@ func agentToMap(a db.Agent) map[string]any {
 	if a.RuntimeConfig != nil {
 		json.Unmarshal(a.RuntimeConfig, &rc)
 	}
-	var tools any
-	if a.Tools != nil {
-		json.Unmarshal(a.Tools, &tools)
-	}
-	var triggers any
-	if a.Triggers != nil {
-		json.Unmarshal(a.Triggers, &triggers)
-	}
 	return map[string]any{
 		"id":                   util.UUIDToString(a.ID),
 		"workspace_id":         util.UUIDToString(a.WorkspaceID),
@@ -553,8 +545,6 @@ func agentToMap(a db.Agent) map[string]any {
 		"max_concurrent_tasks": a.MaxConcurrentTasks,
 		"owner_id":             util.UUIDToPtr(a.OwnerID),
 		"skills":               []any{},
-		"tools":                tools,
-		"triggers":             triggers,
 		"created_at":           util.TimestampToString(a.CreatedAt),
 		"updated_at":           util.TimestampToString(a.UpdatedAt),
 		"archived_at":          util.TimestampToPtr(a.ArchivedAt),
