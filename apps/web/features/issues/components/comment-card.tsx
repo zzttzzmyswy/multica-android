@@ -30,7 +30,7 @@ import { QuickEmojiPicker } from "@/components/common/quick-emoji-picker";
 import { cn } from "@/lib/utils";
 import { useActorName } from "@/features/workspace";
 import { timeAgo } from "@/shared/utils";
-import { ContentEditor, type ContentEditorRef, copyMarkdown } from "@/features/editor";
+import { ContentEditor, type ContentEditorRef, copyMarkdown, ReadonlyContent } from "@/features/editor";
 import { FileUploadButton } from "@/components/common/file-upload-button";
 import { useFileUpload } from "@/shared/hooks/use-file-upload";
 import { ReplyInput } from "./reply-input";
@@ -247,7 +247,7 @@ function CommentRow({
       ) : (
         <>
           <div className="mt-1.5 pl-8 text-sm leading-relaxed text-foreground/85">
-            <ContentEditor defaultValue={entry.content ?? ""} editable={false} />
+            <ReadonlyContent content={entry.content ?? ""} />
           </div>
           {!isTemp && (
             <ReactionBar
@@ -455,7 +455,7 @@ function CommentCard({
             ) : (
               <>
                 <div className="pl-10 text-sm leading-relaxed text-foreground/85">
-                  <ContentEditor defaultValue={entry.content ?? ""} editable={false} />
+                  <ReadonlyContent content={entry.content ?? ""} />
                 </div>
                 {!isTemp && (
                   <ReactionBar
