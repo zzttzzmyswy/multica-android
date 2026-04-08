@@ -63,7 +63,19 @@ const components: Partial<Components> = {
             : Array.isArray(children)
               ? children.join("")
               : undefined;
-        return <IssueMentionCard issueId={match[2]} fallbackLabel={label} />;
+        // Wrap in inline span for vertical alignment (mimics Tiptap's NodeViewWrapper)
+        return (
+          <span
+            className="inline align-middle"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              window.open(`/issues/${match[2]}`, "_blank", "noopener,noreferrer");
+            }}
+          >
+            <IssueMentionCard issueId={match[2]} fallbackLabel={label} />
+          </span>
+        );
       }
       // Member / agent / all mentions
       return <span className="mention">{children}</span>;
@@ -82,6 +94,16 @@ const components: Partial<Components> = {
       </a>
     );
   },
+
+  // Images — constrain width (matches Tiptap Image extension inline style)
+  img: ({ src, alt, ...props }) => (
+    <img
+      src={src}
+      alt={alt ?? ""}
+      style={{ maxWidth: "100%", height: "auto" }}
+      {...props}
+    />
+  ),
 
   // Tables — wrap in tableWrapper div for border/radius/scroll (matches Tiptap)
   table: ({ children }) => (
