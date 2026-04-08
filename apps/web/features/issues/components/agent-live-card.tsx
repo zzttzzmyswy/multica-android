@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Bot, ChevronRight, ChevronDown, Loader2, ArrowDown, Brain, AlertCircle, Clock, CheckCircle2, XCircle, Square } from "lucide-react";
+import { Bot, ChevronRight, ChevronDown, Loader2, ArrowDown, Brain, AlertCircle, Clock, CheckCircle2, XCircle, Square, Maximize2 } from "lucide-react";
 import { api } from "@/shared/api";
 import { useWSEvent } from "@/features/realtime";
 import type { TaskMessagePayload, TaskCompletedPayload, TaskFailedPayload, TaskCancelledPayload } from "@/shared/types/events";
@@ -12,6 +12,7 @@ import { ActorAvatar } from "@/components/common/actor-avatar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useActorName } from "@/features/workspace";
 import { redactSecrets } from "../utils/redact";
+import { AgentTranscriptDialog } from "./agent-transcript-dialog";
 
 // ─── Shared types & helpers ─────────────────────────────────────────────────
 
@@ -239,6 +240,7 @@ function SingleAgentLiveCard({ task, items, issueId, agentName, scrollContainerR
   const [open, setOpen] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
   const [cancelling, setCancelling] = useState(false);
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const ignoreScrollRef = useRef(false);
 
@@ -332,6 +334,13 @@ function SingleAgentLiveCard({ task, items, issueId, agentName, scrollContainerR
         </div>
         <div className="ml-auto flex items-center gap-1 shrink-0">
           <button
+            onClick={(e) => { e.stopPropagation(); setTranscriptOpen(true); }}
+            className="flex items-center justify-center rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+            title="Expand transcript"
+          >
+            <Maximize2 className="h-3 w-3" />
+          </button>
+          <button
             onClick={(e) => { e.stopPropagation(); handleCancel(); }}
             disabled={cancelling}
             className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
@@ -381,6 +390,16 @@ function SingleAgentLiveCard({ task, items, issueId, agentName, scrollContainerR
           )}
         </div>
       </div>
+
+      {/* Fullscreen transcript dialog */}
+      <AgentTranscriptDialog
+        open={transcriptOpen}
+        onOpenChange={setTranscriptOpen}
+        task={task}
+        items={items}
+        agentName={agentName}
+        isLive
+      />
     </div>
   );
 }
@@ -450,8 +469,10 @@ export function TaskRunHistory({ issueId }: TaskRunHistoryProps) {
 }
 
 function TaskRunEntry({ task }: { task: AgentTask }) {
+  const { getActorName } = useActorName();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<TimelineItem[] | null>(null);
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
 
   const loadMessages = useCallback(() => {
     if (items !== null) return; // already loaded
@@ -487,6 +508,24 @@ function TaskRunEntry({ task }: { task: AgentTask }) {
         <span className={cn("ml-auto capitalize", task.status === "completed" ? "text-success" : "text-destructive")}>
           {task.status}
         </span>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            // Load messages before opening the transcript dialog
+            if (items === null) {
+              api.listTaskMessages(task.id).then((msgs) => {
+                setItems(buildTimeline(msgs));
+                setTranscriptOpen(true);
+              }).catch(console.error);
+            } else {
+              setTranscriptOpen(true);
+            }
+          }}
+          className="flex items-center justify-center rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+          title="Expand transcript"
+        >
+          <Maximize2 className="h-3 w-3" />
+        </button>
       </CollapsibleTrigger>
       <CollapsibleContent>
         <div className="ml-5 mt-1 max-h-64 overflow-y-auto rounded border bg-muted/30 px-3 py-2 space-y-0.5">
@@ -504,6 +543,17 @@ function TaskRunEntry({ task }: { task: AgentTask }) {
           )}
         </div>
       </CollapsibleContent>
+
+      {/* Fullscreen transcript dialog */}
+      {items !== null && (
+        <AgentTranscriptDialog
+          open={transcriptOpen}
+          onOpenChange={setTranscriptOpen}
+          task={task}
+          items={items}
+          agentName={task.agent_id ? getActorName("agent", task.agent_id) : "Agent"}
+        />
+      )}
     </Collapsible>
   );
 }
