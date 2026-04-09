@@ -47,6 +47,7 @@ import { useQuery } from "@tanstack/react-query";
 import { inboxKeys, deduplicateInboxItems } from "@multica/core/inbox/queries";
 import { api } from "@/platform/api";
 import { useModalStore } from "@multica/core/modals";
+import { useMyRuntimesNeedUpdate } from "@multica/core/runtimes/hooks";
 
 const primaryNav = [
   { href: "/inbox", label: "Inbox", icon: Inbox },
@@ -86,6 +87,7 @@ export function AppSidebar() {
     () => deduplicateInboxItems(inboxItems).filter((i) => !i.read).length,
     [inboxItems],
   );
+  const hasRuntimeUpdates = useMyRuntimesNeedUpdate();
 
   const logout = () => {
     router.push("/");
@@ -224,6 +226,9 @@ export function AppSidebar() {
                       >
                         <item.icon />
                         <span>{item.label}</span>
+                        {item.label === "Runtimes" && hasRuntimeUpdates && (
+                          <span className="ml-auto size-1.5 rounded-full bg-destructive" />
+                        )}
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   );

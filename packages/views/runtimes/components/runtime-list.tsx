@@ -1,4 +1,4 @@
-import { Server } from "lucide-react";
+import { Server, ArrowUpCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { AgentRuntime, MemberWithUser } from "@multica/core/types";
 import { useWorkspaceId } from "@multica/core/hooks";
@@ -12,11 +12,13 @@ function RuntimeListItem({
   runtime,
   isSelected,
   ownerMember,
+  hasUpdate,
   onClick,
 }: {
   runtime: AgentRuntime;
   isSelected: boolean;
   ownerMember: MemberWithUser | null;
+  hasUpdate: boolean;
   onClick: () => void;
 }) {
   return (
@@ -50,11 +52,18 @@ function RuntimeListItem({
           <span className="truncate">{runtime.provider}</span>
         </div>
       </div>
-      <div
-        className={`h-2 w-2 shrink-0 rounded-full ${
-          runtime.status === "online" ? "bg-success" : "bg-muted-foreground/40"
-        }`}
-      />
+      <div className="flex items-center gap-1.5 shrink-0">
+        {hasUpdate && (
+          <span title="Update available">
+            <ArrowUpCircle className="h-3.5 w-3.5 text-info" />
+          </span>
+        )}
+        <div
+          className={`h-2 w-2 rounded-full ${
+            runtime.status === "online" ? "bg-success" : "bg-muted-foreground/40"
+          }`}
+        />
+      </div>
     </button>
   );
 }
@@ -67,6 +76,7 @@ export function RuntimeList({
   onFilterChange,
   ownerFilter,
   onOwnerFilterChange,
+  updatableIds,
 }: {
   runtimes: AgentRuntime[];
   selectedId: string;
@@ -75,6 +85,7 @@ export function RuntimeList({
   onFilterChange: (filter: RuntimeFilter) => void;
   ownerFilter: string | null;
   onOwnerFilterChange: (ownerId: string | null) => void;
+  updatableIds?: Set<string>;
 }) {
   const wsId = useWorkspaceId();
   const { data: members = [] } = useQuery(memberListOptions(wsId));
@@ -178,6 +189,7 @@ export function RuntimeList({
               runtime={runtime}
               isSelected={runtime.id === selectedId}
               ownerMember={getOwnerMember(runtime.owner_id)}
+              hasUpdate={updatableIds?.has(runtime.id) ?? false}
               onClick={() => onSelect(runtime.id)}
             />
           ))}

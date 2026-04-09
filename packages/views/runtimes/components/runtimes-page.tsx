@@ -13,6 +13,7 @@ import { Skeleton } from "@multica/ui/components/ui/skeleton";
 import { useAuthStore } from "@multica/core/auth";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { runtimeListOptions, runtimeKeys } from "@multica/core/runtimes/queries";
+import { useUpdatableRuntimeIds } from "@multica/core/runtimes/hooks";
 import { useWSEvent } from "@multica/core/realtime";
 import { RuntimeList } from "./runtime-list";
 import { RuntimeDetail } from "./runtime-detail";
@@ -40,6 +41,7 @@ export default function RuntimesPage() {
   }, [qc, wsId]);
 
   useWSEvent("daemon:register", handleDaemonEvent);
+  const updatableIds = useUpdatableRuntimeIds();
 
   // Auto-select first runtime if nothing selected
   const effectiveSelectedId = selectedId && runtimes.some((r) => r.id === selectedId)
@@ -105,6 +107,7 @@ export default function RuntimesPage() {
           onFilterChange={setFilter}
           ownerFilter={ownerFilter}
           onOwnerFilterChange={setOwnerFilter}
+          updatableIds={updatableIds}
         />
       </ResizablePanel>
 
