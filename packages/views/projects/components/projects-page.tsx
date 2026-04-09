@@ -264,7 +264,7 @@ function CreateProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             <DropdownMenuTrigger
               render={
                 <PillButton>
-                  <span className={cn("size-2 rounded-full", PROJECT_STATUS_CONFIG[status].color.replace("text-", "bg-"))} />
+                  <span className={cn("size-2 rounded-full", PROJECT_STATUS_CONFIG[status].dotColor)} />
                   <span>{PROJECT_STATUS_CONFIG[status].label}</span>
                 </PillButton>
               }
@@ -272,7 +272,7 @@ function CreateProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             <DropdownMenuContent align="start" className="w-44">
               {PROJECT_STATUS_ORDER.map((s) => (
                 <DropdownMenuItem key={s} onClick={() => setStatus(s)}>
-                  <span className={cn("size-2 rounded-full", PROJECT_STATUS_CONFIG[s].color.replace("text-", "bg-"))} />
+                  <span className={cn("size-2 rounded-full", PROJECT_STATUS_CONFIG[s].dotColor)} />
                   <span>{PROJECT_STATUS_CONFIG[s].label}</span>
                 </DropdownMenuItem>
               ))}

@@ -347,7 +347,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                   <DropdownMenuTrigger
                     render={
                       <PropertyPill>
-                        <span className={cn("size-2 rounded-full", statusCfg.color.replace("text-", "bg-"))} />
+                        <span className={cn("size-2 rounded-full", statusCfg.dotColor)} />
                         <span>{statusCfg.label}</span>
                       </PropertyPill>
                     }
@@ -355,7 +355,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                   <DropdownMenuContent align="start" className="w-44">
                     {PROJECT_STATUS_ORDER.map((s) => (
                       <DropdownMenuItem key={s} onClick={() => handleUpdateField({ status: s as ProjectStatus })}>
-                        <span className={cn("size-2 rounded-full", PROJECT_STATUS_CONFIG[s].color.replace("text-", "bg-"))} />
+                        <span className={cn("size-2 rounded-full", PROJECT_STATUS_CONFIG[s].dotColor)} />
                         <span>{PROJECT_STATUS_CONFIG[s].label}</span>
                         {s === project.status && <Check className="ml-auto h-3.5 w-3.5" />}
                       </DropdownMenuItem>
