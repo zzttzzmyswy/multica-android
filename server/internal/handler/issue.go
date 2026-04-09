@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -59,6 +60,145 @@ func issueToResponse(i db.Issue, issuePrefix string) IssueResponse {
 		DueDate:       timestampToPtr(i.DueDate),
 		CreatedAt:     timestampToString(i.CreatedAt),
 		UpdatedAt:     timestampToString(i.UpdatedAt),
+	}
+}
+
+// SearchIssueResponse extends IssueResponse with search metadata.
+type SearchIssueResponse struct {
+	IssueResponse
+	MatchSource    string  `json:"match_source"`
+	MatchedSnippet *string `json:"matched_snippet,omitempty"`
+}
+
+// extractSnippet extracts a snippet of text around the first occurrence of query.
+// Returns up to ~120 chars centered on the match.
+func extractSnippet(content, query string) string {
+	lower := strings.ToLower(content)
+	idx := strings.Index(lower, strings.ToLower(query))
+	if idx < 0 {
+		if len(content) > 120 {
+			return content[:120] + "..."
+		}
+		return content
+	}
+	start := idx - 40
+	if start < 0 {
+		start = 0
+	}
+	end := idx + len(query) + 80
+	if end > len(content) {
+		end = len(content)
+	}
+	snippet := content[start:end]
+	if start > 0 {
+		snippet = "..." + snippet
+	}
+	if end < len(content) {
+		snippet = snippet + "..."
+	}
+	return snippet
+}
+
+// escapeLike escapes LIKE special characters (%, _, \) in user input.
+func escapeLike(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return s
+}
+
+func (h *Handler) SearchIssues(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	workspaceID := resolveWorkspaceID(r)
+
+	q := r.URL.Query().Get("q")
+	if q == "" {
+		writeError(w, http.StatusBadRequest, "q parameter is required")
+		return
+	}
+
+	limit := 20
+	offset := 0
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if v, err := strconv.Atoi(l); err == nil && v > 0 {
+			limit = v
+		}
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if v, err := strconv.Atoi(o); err == nil && v >= 0 {
+			offset = v
+		}
+	}
+
+	includeClosed := r.URL.Query().Get("include_closed") == "true"
+
+	wsUUID := parseUUID(workspaceID)
+	queryText := strToText(escapeLike(q))
+
+	rows, err := h.Queries.SearchIssues(ctx, db.SearchIssuesParams{
+		WorkspaceID:   wsUUID,
+		Query:         queryText,
+		SearchLimit:   int32(limit),
+		SearchOffset:  int32(offset),
+		IncludeClosed: includeClosed,
+	})
+	if err != nil {
+		slog.Warn("search issues failed", "error", err, "workspace_id", workspaceID, "query", q)
+		writeError(w, http.StatusInternalServerError, "failed to search issues")
+		return
+	}
+
+	var total int64
+	if len(rows) > 0 {
+		total = rows[0].TotalCount
+	}
+
+	prefix := h.getIssuePrefix(ctx, wsUUID)
+	resp := make([]SearchIssueResponse, len(rows))
+	for i, row := range rows {
+		sir := SearchIssueResponse{
+			IssueResponse: issueToResponse(searchRowToIssue(row), prefix),
+			MatchSource:   row.MatchSource,
+		}
+		if row.MatchSource == "comment" {
+			if content, ok := row.MatchedCommentContent.(string); ok && content != "" {
+				snippet := extractSnippet(content, q)
+				sir.MatchedSnippet = &snippet
+			}
+		}
+		resp[i] = sir
+	}
+
+	w.Header().Set("X-Total-Count", strconv.FormatInt(total, 10))
+	writeJSON(w, http.StatusOK, map[string]any{
+		"issues": resp,
+		"total":  total,
+	})
+}
+
+func searchRowToIssue(row db.SearchIssuesRow) db.Issue {
+	return db.Issue{
+		ID:                 row.ID,
+		WorkspaceID:        row.WorkspaceID,
+		Title:              row.Title,
+		Description:        row.Description,
+		Status:             row.Status,
+		Priority:           row.Priority,
+		AssigneeType:       row.AssigneeType,
+		AssigneeID:         row.AssigneeID,
+		CreatorType:        row.CreatorType,
+		CreatorID:          row.CreatorID,
+		ParentIssueID:      row.ParentIssueID,
+		AcceptanceCriteria: row.AcceptanceCriteria,
+		ContextRefs:        row.ContextRefs,
+		Position:           row.Position,
+		DueDate:            row.DueDate,
+		CreatedAt:          row.CreatedAt,
+		UpdatedAt:          row.UpdatedAt,
+		Number:             row.Number,
 	}
 }
 

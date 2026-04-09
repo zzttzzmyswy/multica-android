@@ -157,6 +157,7 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 
 			// Issues
 			r.Route("/api/issues", func(r chi.Router) {
+				r.Get("/search", h.SearchIssues)
 				r.Get("/", h.ListIssues)
 				r.Post("/", h.CreateIssue)
 				r.Post("/batch-update", h.BatchUpdateIssues)
