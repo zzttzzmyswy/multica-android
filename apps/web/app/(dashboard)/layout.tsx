@@ -9,6 +9,7 @@ import { useAuthStore } from "@/platform/auth";
 import { useWorkspaceStore } from "@/platform/workspace";
 import { WorkspaceIdProvider } from "@multica/core/hooks";
 import { ModalRegistry } from "@multica/views/modals/registry";
+import { SearchCommand } from "@/features/search";
 import { AppSidebar } from "./_components/app-sidebar";
 
 export default function DashboardLayout({
@@ -57,6 +58,7 @@ export default function DashboardLayout({
           </div>
         )}
       </SidebarInset>
+      <SearchCommand />
     </SidebarProvider>
   );
 }

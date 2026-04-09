@@ -474,7 +474,7 @@ importers:
         specifier: ^3.22.1
         version: 3.22.1(@tiptap/core@3.22.1(@tiptap/pm@3.22.1))(@tiptap/pm@3.22.1)
       hast-util-to-html:
-        specifier: ^4.0.0
+        specifier: ^4.0.1
         version: 4.0.1
       lowlight:
         specifier: ^3.3.0
