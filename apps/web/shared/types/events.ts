@@ -44,7 +44,9 @@ export type WSEventType =
   | "reaction:added"
   | "reaction:removed"
   | "issue_reaction:added"
-  | "issue_reaction:removed";
+  | "issue_reaction:removed"
+  | "chat:message"
+  | "chat:done";
 
 export interface WSMessage<T = unknown> {
   type: WSEventType;
@@ -214,4 +216,19 @@ export interface IssueReactionRemovedPayload {
   emoji: string;
   actor_type: string;
   actor_id: string;
+}
+
+export interface ChatMessageEventPayload {
+  chat_session_id: string;
+  message_id: string;
+  role: "user" | "assistant";
+  content: string;
+  task_id?: string;
+  created_at: string;
+}
+
+export interface ChatDonePayload {
+  chat_session_id: string;
+  task_id: string;
+  content?: string;
 }

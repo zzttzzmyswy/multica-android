@@ -8,6 +8,7 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore } from "@/features/workspace";
 import { AppSidebar } from "./_components/app-sidebar";
+import { ChatFab, ChatWindow } from "@/features/chat";
 
 export default function DashboardLayout({
   children,
@@ -52,6 +53,12 @@ export default function DashboardLayout({
           </div>
         )}
       </SidebarInset>
+      {workspace && (
+        <>
+          <ChatWindow />
+          <ChatFab />
+        </>
+      )}
     </SidebarProvider>
   );
 }

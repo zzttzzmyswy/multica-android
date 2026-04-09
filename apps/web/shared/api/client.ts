@@ -35,6 +35,9 @@ import type {
   TimelineEntry,
   TaskMessagePayload,
   Attachment,
+  ChatSession,
+  ChatMessage,
+  SendChatMessageResponse,
 } from "@/shared/types";
 import { type Logger, noopLogger } from "@/shared/logger";
 
@@ -583,6 +586,37 @@ export class ApiClient {
 
     this.logger.info(`← ${res.status} /api/upload-file`, { rid, duration: `${Date.now() - start}ms` });
     return res.json() as Promise<Attachment>;
+  }
+
+  // Chat Sessions
+  async listChatSessions(): Promise<ChatSession[]> {
+    return this.fetch("/api/chat/sessions");
+  }
+
+  async getChatSession(id: string): Promise<ChatSession> {
+    return this.fetch(`/api/chat/sessions/${id}`);
+  }
+
+  async createChatSession(data: { agent_id: string; title?: string }): Promise<ChatSession> {
+    return this.fetch("/api/chat/sessions", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async archiveChatSession(id: string): Promise<void> {
+    await this.fetch(`/api/chat/sessions/${id}`, { method: "DELETE" });
+  }
+
+  async listChatMessages(sessionId: string): Promise<ChatMessage[]> {
+    return this.fetch(`/api/chat/sessions/${sessionId}/messages`);
+  }
+
+  async sendChatMessage(sessionId: string, content: string): Promise<SendChatMessageResponse> {
+    return this.fetch(`/api/chat/sessions/${sessionId}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    });
   }
 
   async listAttachments(issueId: string): Promise<Attachment[]> {

@@ -728,7 +728,11 @@ func (d *Daemon) pollLoop(ctx context.Context) error {
 				continue
 			}
 			if task != nil {
-				d.logger.Info("task received", "task", shortID(task.ID), "issue", task.IssueID)
+				taskTarget := task.IssueID
+				if taskTarget == "" && task.ChatSessionID != "" {
+					taskTarget = "chat:" + shortID(task.ChatSessionID)
+				}
+				d.logger.Info("task received", "task", shortID(task.ID), "target", taskTarget)
 				wg.Add(1)
 				go func(t Task) {
 					defer wg.Done()
@@ -772,7 +776,11 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 	if task.Agent != nil {
 		agentName = task.Agent.Name
 	}
-	taskLog.Info("picked task", "issue", task.IssueID, "agent", agentName, "provider", provider)
+	if task.ChatSessionID != "" {
+		taskLog.Info("picked chat task", "chat_session", shortID(task.ChatSessionID), "agent", agentName, "provider", provider)
+	} else {
+		taskLog.Info("picked task", "issue", task.IssueID, "agent", agentName, "provider", provider)
+	}
 
 	if err := d.client.StartTask(ctx, task.ID); err != nil {
 		taskLog.Error("start task failed", "error", err)
@@ -885,6 +893,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 		AgentInstructions: instructions,
 		AgentSkills:       convertSkillsForEnv(skills),
 		Repos:             convertReposForEnv(task.Repos),
+		ChatSessionID:     task.ChatSessionID,
 	}
 
 	// Try to reuse the workdir from a previous task on the same (agent, issue) pair.
