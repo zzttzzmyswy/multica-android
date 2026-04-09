@@ -264,10 +264,15 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const didHighlightRef = useRef<string | null>(null);
 
-  // Issue data from TQ — uses detail query, seeded from list cache if available
+  // Issue data from TQ — uses detail query, seeded from list cache if available.
+  // Only seed when description is present; list API omits it, and ContentEditor
+  // reads defaultValue on mount only — seeding null description shows an empty editor.
   const { data: issue = null, isLoading: issueLoading } = useQuery({
     ...issueDetailOptions(wsId, id),
-    initialData: () => allIssues.find((i) => i.id === id),
+    initialData: () => {
+      const cached = allIssues.find((i) => i.id === id);
+      return cached?.description != null ? cached : undefined;
+    },
   });
 
   // Custom hooks — encapsulate timeline, reactions, subscribers
@@ -336,9 +341,11 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   );
 
   const descEditorRef = useRef<ContentEditorRef>(null);
+  // Description uploads don't pass issueId — the URL lives in the markdown.
+  // This avoids stale attachment records when users delete images from the editor.
   const handleDescriptionUpload = useCallback(
-    (file: File) => uploadWithToast(file, { issueId: id }),
-    [uploadWithToast, id],
+    (file: File) => uploadWithToast(file),
+    [uploadWithToast],
   );
 
   const deleteIssueMutation = useDeleteIssue();
