@@ -17,12 +17,17 @@ import { useWSEvent } from "@/features/realtime";
 import { RuntimeList } from "./runtime-list";
 import { RuntimeDetail } from "./runtime-detail";
 
+type RuntimeFilter = "mine" | "all";
+
 export default function RuntimesPage() {
   const isLoading = useAuthStore((s) => s.isLoading);
   const wsId = useWorkspaceId();
   const qc = useQueryClient();
-  const { data: runtimes = [], isLoading: fetching } = useQuery(runtimeListOptions(wsId));
+  const [filter, setFilter] = useState<RuntimeFilter>("mine");
   const [selectedId, setSelectedId] = useState("");
+
+  const ownerParam = filter === "mine" ? "me" as const : undefined;
+  const { data: runtimes = [], isLoading: fetching } = useQuery(runtimeListOptions(wsId, ownerParam));
 
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: "multica_runtimes_layout",
@@ -30,7 +35,7 @@ export default function RuntimesPage() {
 
   // Re-fetch on daemon register/deregister events.
   const handleDaemonEvent = useCallback(() => {
-    qc.invalidateQueries({ queryKey: runtimeKeys.list(wsId) });
+    qc.invalidateQueries({ queryKey: runtimeKeys.all(wsId) });
   }, [qc, wsId]);
 
   useWSEvent("daemon:register", handleDaemonEvent);
@@ -95,6 +100,8 @@ export default function RuntimesPage() {
           runtimes={runtimes}
           selectedId={effectiveSelectedId}
           onSelect={setSelectedId}
+          filter={filter}
+          onFilterChange={setFilter}
         />
       </ResizablePanel>
 

@@ -1,4 +1,25 @@
+"use client";
+
+import { useState } from "react";
+import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
 import type { AgentRuntime } from "@/shared/types";
+import { useAuthStore } from "@/features/auth";
+import { useWorkspaceId } from "@core/hooks";
+import { memberListOptions } from "@core/workspace/queries";
+import { useDeleteRuntime } from "@core/runtimes/mutations";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { formatLastSeen } from "../utils";
 import { RuntimeModeIcon, StatusBadge, InfoField } from "./shared";
 import { PingSection } from "./ping-section";
@@ -20,6 +41,41 @@ export function RuntimeDetail({ runtime }: { runtime: AgentRuntime }) {
   const cliVersion =
     runtime.runtime_mode === "local" ? getCliVersion(runtime.metadata) : null;
 
+  const user = useAuthStore((s) => s.user);
+  const wsId = useWorkspaceId();
+  const { data: members = [] } = useQuery(memberListOptions(wsId));
+  const deleteMutation = useDeleteRuntime(wsId);
+
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  // Resolve owner info
+  const ownerMember = runtime.owner_id
+    ? members.find((m) => m.user_id === runtime.owner_id)
+    : null;
+  const ownerName = ownerMember?.name ?? null;
+
+  // Permission check for delete
+  const currentMember = user
+    ? members.find((m) => m.user_id === user.id)
+    : null;
+  const isAdmin = currentMember
+    ? currentMember.role === "owner" || currentMember.role === "admin"
+    : false;
+  const isRuntimeOwner = user && runtime.owner_id === user.id;
+  const canDelete = isAdmin || isRuntimeOwner;
+
+  const handleDelete = () => {
+    deleteMutation.mutate(runtime.id, {
+      onSuccess: () => {
+        toast.success("Runtime deleted");
+        setDeleteOpen(false);
+      },
+      onError: (e) => {
+        toast.error(e instanceof Error ? e.message : "Failed to delete runtime");
+      },
+    });
+  };
+
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
@@ -36,7 +92,19 @@ export function RuntimeDetail({ runtime }: { runtime: AgentRuntime }) {
             <h2 className="text-sm font-semibold truncate">{runtime.name}</h2>
           </div>
         </div>
-        <StatusBadge status={runtime.status} />
+        <div className="flex items-center gap-2">
+          <StatusBadge status={runtime.status} />
+          {canDelete && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+              onClick={() => setDeleteOpen(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Content */}
@@ -50,6 +118,7 @@ export function RuntimeDetail({ runtime }: { runtime: AgentRuntime }) {
             label="Last Seen"
             value={formatLastSeen(runtime.last_seen_at)}
           />
+          {ownerName && <InfoField label="Owner" value={ownerName} />}
           {runtime.device_info && (
             <InfoField label="Device" value={runtime.device_info} />
           )}
@@ -114,6 +183,28 @@ export function RuntimeDetail({ runtime }: { runtime: AgentRuntime }) {
           />
         </div>
       </div>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={deleteOpen} onOpenChange={(v) => { if (!v) setDeleteOpen(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Runtime</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &ldquo;{runtime.name}&rdquo;? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

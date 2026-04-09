@@ -347,11 +347,16 @@ export class ApiClient {
     return this.fetch(`/api/agents/${id}/restore`, { method: "POST" });
   }
 
-  async listRuntimes(params?: { workspace_id?: string }): Promise<AgentRuntime[]> {
+  async listRuntimes(params?: { workspace_id?: string; owner?: "me" }): Promise<AgentRuntime[]> {
     const search = new URLSearchParams();
     const wsId = params?.workspace_id ?? this.workspaceId;
     if (wsId) search.set("workspace_id", wsId);
+    if (params?.owner) search.set("owner", params.owner);
     return this.fetch(`/api/runtimes?${search}`);
+  }
+
+  async deleteRuntime(runtimeId: string): Promise<void> {
+    await this.fetch(`/api/runtimes/${runtimeId}`, { method: "DELETE" });
   }
 
   async getRuntimeUsage(runtimeId: string, params?: { days?: number }): Promise<RuntimeUsage[]> {

@@ -233,12 +233,15 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 			// Runtimes
 			r.Route("/api/runtimes", func(r chi.Router) {
 				r.Get("/", h.ListAgentRuntimes)
-				r.Get("/{runtimeId}/usage", h.GetRuntimeUsage)
-				r.Get("/{runtimeId}/activity", h.GetRuntimeTaskActivity)
-				r.Post("/{runtimeId}/ping", h.InitiatePing)
-				r.Get("/{runtimeId}/ping/{pingId}", h.GetPing)
-				r.Post("/{runtimeId}/update", h.InitiateUpdate)
-				r.Get("/{runtimeId}/update/{updateId}", h.GetUpdate)
+				r.Route("/{runtimeId}", func(r chi.Router) {
+					r.Get("/usage", h.GetRuntimeUsage)
+					r.Get("/activity", h.GetRuntimeTaskActivity)
+					r.Post("/ping", h.InitiatePing)
+					r.Get("/ping/{pingId}", h.GetPing)
+					r.Post("/update", h.InitiateUpdate)
+					r.Get("/update/{updateId}", h.GetUpdate)
+					r.Delete("/", h.DeleteAgentRuntime)
+				})
 			})
 
 			// Inbox

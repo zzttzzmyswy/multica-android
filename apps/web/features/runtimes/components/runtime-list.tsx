@@ -1,14 +1,21 @@
 import { Server } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import type { AgentRuntime } from "@/shared/types";
+import { useWorkspaceId } from "@core/hooks";
+import { memberListOptions } from "@core/workspace/queries";
 import { RuntimeModeIcon } from "./shared";
+
+type RuntimeFilter = "mine" | "all";
 
 function RuntimeListItem({
   runtime,
   isSelected,
+  ownerName,
   onClick,
 }: {
   runtime: AgentRuntime;
   isSelected: boolean;
+  ownerName: string | null;
   onClick: () => void;
 }) {
   return (
@@ -29,6 +36,7 @@ function RuntimeListItem({
         <div className="truncate text-sm font-medium">{runtime.name}</div>
         <div className="mt-0.5 truncate text-xs text-muted-foreground">
           {runtime.provider} &middot; {runtime.runtime_mode}
+          {ownerName && <> &middot; {ownerName}</>}
         </div>
       </div>
       <div
@@ -44,11 +52,23 @@ export function RuntimeList({
   runtimes,
   selectedId,
   onSelect,
+  filter,
+  onFilterChange,
 }: {
   runtimes: AgentRuntime[];
   selectedId: string;
   onSelect: (id: string) => void;
+  filter: RuntimeFilter;
+  onFilterChange: (filter: RuntimeFilter) => void;
 }) {
+  const wsId = useWorkspaceId();
+  const { data: members = [] } = useQuery(memberListOptions(wsId));
+
+  const getOwnerName = (ownerId: string | null) => {
+    if (!ownerId) return null;
+    return members.find((m) => m.user_id === ownerId)?.name ?? null;
+  };
+
   return (
     <div className="overflow-y-auto h-full border-r">
       <div className="flex h-12 items-center justify-between border-b px-4">
@@ -58,11 +78,36 @@ export function RuntimeList({
           {runtimes.length} online
         </span>
       </div>
+
+      {/* Filter toggle */}
+      <div className="flex border-b px-4 py-2 gap-1">
+        <button
+          onClick={() => onFilterChange("mine")}
+          className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+            filter === "mine"
+              ? "bg-accent text-accent-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Mine
+        </button>
+        <button
+          onClick={() => onFilterChange("all")}
+          className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+            filter === "all"
+              ? "bg-accent text-accent-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          All
+        </button>
+      </div>
+
       {runtimes.length === 0 ? (
         <div className="flex flex-col items-center justify-center px-4 py-12">
           <Server className="h-8 w-8 text-muted-foreground/40" />
           <p className="mt-3 text-sm text-muted-foreground">
-            No runtimes registered
+            {filter === "mine" ? "No runtimes owned by you" : "No runtimes registered"}
           </p>
           <p className="mt-1 text-xs text-muted-foreground text-center">
             Run{" "}
@@ -79,6 +124,7 @@ export function RuntimeList({
               key={runtime.id}
               runtime={runtime}
               isSelected={runtime.id === selectedId}
+              ownerName={filter === "all" ? getOwnerName(runtime.owner_id) : null}
               onClick={() => onSelect(runtime.id)}
             />
           ))}
