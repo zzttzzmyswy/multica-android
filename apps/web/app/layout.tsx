@@ -65,7 +65,7 @@ export default function RootLayout({
       <body className="h-full overflow-hidden">
         <LocaleSync />
         <ThemeProvider>
-          <QueryProvider>
+          <QueryProvider showDevtools={process.env.NEXT_PUBLIC_DEVTOOLS !== "false"}>
             <WebNavigationProvider>
               <AuthInitializer>
                 <WebWSProvider>{children}</WebWSProvider>

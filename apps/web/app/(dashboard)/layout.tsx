@@ -11,6 +11,7 @@ import { WorkspaceIdProvider } from "@multica/core/hooks";
 import { ModalRegistry } from "@multica/views/modals/registry";
 import { SearchCommand } from "@/features/search";
 import { AppSidebar } from "./_components/app-sidebar";
+import { ChatFab, ChatWindow } from "@/features/chat";
 
 export default function DashboardLayout({
   children,
@@ -43,10 +44,6 @@ export default function DashboardLayout({
 
   if (!user) return null;
 
-  // AppSidebar (and other dashboard children) call hooks that depend on the
-  // workspace id via useWorkspaceId(), so the entire dashboard tree must
-  // mount inside WorkspaceIdProvider. Show a fullscreen loader while the
-  // workspace is still being resolved.
   if (!workspace) {
     return (
       <div className="flex h-svh items-center justify-center">
@@ -63,6 +60,8 @@ export default function DashboardLayout({
           {children}
           <ModalRegistry />
         </SidebarInset>
+        <ChatWindow />
+        <ChatFab />
         <SearchCommand />
       </SidebarProvider>
     </WorkspaceIdProvider>

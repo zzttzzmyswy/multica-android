@@ -255,6 +255,20 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 				})
 			})
 
+			// Tasks (user-facing, with ownership check)
+			r.Post("/api/tasks/{taskId}/cancel", h.CancelTaskByUser)
+
+			r.Route("/api/chat/sessions", func(r chi.Router) {
+				r.Post("/", h.CreateChatSession)
+				r.Get("/", h.ListChatSessions)
+				r.Route("/{sessionId}", func(r chi.Router) {
+					r.Get("/", h.GetChatSession)
+					r.Delete("/", h.ArchiveChatSession)
+					r.Post("/messages", h.SendChatMessage)
+					r.Get("/messages", h.ListChatMessages)
+				})
+			})
+
 			// Inbox
 			r.Route("/api/inbox", func(r chi.Router) {
 				r.Get("/", h.ListInbox)
