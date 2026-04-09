@@ -15,10 +15,12 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@multica/ui/components/ui/dialog";
+import { useSearchStore } from "../stores/search-store";
 
 export function SearchCommand() {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const open = useSearchStore((s) => s.open);
+  const setOpen = useSearchStore((s) => s.setOpen);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchIssueResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -30,7 +32,7 @@ export function SearchCommand() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        setOpen((prev) => !prev);
+        useSearchStore.getState().toggle();
       }
     };
     document.addEventListener("keydown", handleKeyDown);
@@ -186,8 +188,9 @@ export function SearchCommand() {
             )}
 
             {!isLoading && !query.trim() && (
-              <div className="py-10 text-center text-sm text-muted-foreground">
-                Type to search issues...
+              <div className="flex flex-col items-center gap-2 py-10 text-sm text-muted-foreground">
+                <span>Type to search issues...</span>
+                <span className="text-xs">Press <kbd className="rounded bg-muted px-1.5 py-0.5 font-medium">⌘K</kbd> to open this anytime</span>
               </div>
             )}
           </CommandPrimitive.List>
