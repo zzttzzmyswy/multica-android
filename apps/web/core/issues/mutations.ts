@@ -1,6 +1,7 @@
+import { useState, useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/shared/api";
-import { issueKeys } from "./queries";
+import { issueKeys, CLOSED_PAGE_SIZE } from "./queries";
 import { useWorkspaceId } from "@core/hooks";
 import type { Issue, IssueReaction } from "@/shared/types";
 import type {
@@ -9,6 +10,65 @@ import type {
   ListIssuesResponse,
 } from "@/shared/types";
 import type { TimelineEntry, IssueSubscriber, Reaction } from "@/shared/types";
+
+// ---------------------------------------------------------------------------
+// Shared mutation variable types — used by both mutation hooks and
+// useMutationState consumers to keep the type assertion in sync.
+// ---------------------------------------------------------------------------
+
+export type ToggleCommentReactionVars = {
+  commentId: string;
+  emoji: string;
+  existing: Reaction | undefined;
+};
+
+export type ToggleIssueReactionVars = {
+  emoji: string;
+  existing: IssueReaction | undefined;
+};
+
+// ---------------------------------------------------------------------------
+// Done issue pagination
+// ---------------------------------------------------------------------------
+
+export function useLoadMoreDoneIssues() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceId();
+  const [isLoading, setIsLoading] = useState(false);
+
+  const cache = qc.getQueryData<ListIssuesResponse>(issueKeys.list(wsId));
+  const doneLoaded = cache
+    ? cache.issues.filter((i) => i.status === "done").length
+    : 0;
+  const doneTotal = cache?.doneTotal ?? 0;
+  const hasMore = doneLoaded < doneTotal;
+
+  const loadMore = useCallback(async () => {
+    if (isLoading || !hasMore) return;
+    setIsLoading(true);
+    try {
+      const res = await api.listIssues({
+        status: "done",
+        limit: CLOSED_PAGE_SIZE,
+        offset: doneLoaded,
+      });
+      qc.setQueryData<ListIssuesResponse>(issueKeys.list(wsId), (old) => {
+        if (!old) return old;
+        const existingIds = new Set(old.issues.map((i) => i.id));
+        const newIssues = res.issues.filter((i) => !existingIds.has(i.id));
+        return {
+          ...old,
+          issues: [...old.issues, ...newIssues],
+          doneTotal: res.total,
+        };
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [qc, wsId, doneLoaded, hasMore, isLoading]);
+
+  return { loadMore, hasMore, isLoading, doneTotal };
+}
 
 // ---------------------------------------------------------------------------
 // Issue CRUD
@@ -22,9 +82,18 @@ export function useCreateIssue() {
     onSuccess: (newIssue) => {
       qc.setQueryData<ListIssuesResponse>(issueKeys.list(wsId), (old) =>
         old && !old.issues.some((i) => i.id === newIssue.id)
-          ? { ...old, issues: [...old.issues, newIssue], total: old.total + 1 }
+          ? {
+              ...old,
+              issues: [...old.issues, newIssue],
+              total: old.total + 1,
+              doneTotal: (old.doneTotal ?? 0) + (newIssue.status === "done" ? 1 : 0),
+            }
           : old,
       );
+      // Invalidate parent's children query so sub-issues list updates immediately
+      if (newIssue.parent_issue_id) {
+        qc.invalidateQueries({ queryKey: issueKeys.children(wsId, newIssue.parent_issue_id) });
+      }
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
@@ -47,6 +116,17 @@ export function useUpdateIssue() {
       const prevList = qc.getQueryData<ListIssuesResponse>(issueKeys.list(wsId));
       const prevDetail = qc.getQueryData<Issue>(issueKeys.detail(wsId, id));
 
+      // Resolve parent_issue_id from the freshest source so we can keep the
+      // parent's children cache in sync (used by the parent issue's
+      // sub-issues list).
+      const parentId =
+        prevDetail?.parent_issue_id ??
+        prevList?.issues.find((i) => i.id === id)?.parent_issue_id ??
+        null;
+      const prevChildren = parentId
+        ? qc.getQueryData<Issue[]>(issueKeys.children(wsId, parentId))
+        : undefined;
+
       qc.setQueryData<ListIssuesResponse>(issueKeys.list(wsId), (old) =>
         old
           ? {
@@ -60,16 +140,34 @@ export function useUpdateIssue() {
       qc.setQueryData<Issue>(issueKeys.detail(wsId, id), (old) =>
         old ? { ...old, ...data } : old,
       );
-      return { prevList, prevDetail, id };
+      if (parentId) {
+        qc.setQueryData<Issue[]>(
+          issueKeys.children(wsId, parentId),
+          (old) =>
+            old?.map((c) => (c.id === id ? { ...c, ...data } : c)),
+        );
+      }
+      return { prevList, prevDetail, prevChildren, parentId, id };
     },
     onError: (_err, _vars, ctx) => {
       if (ctx?.prevList) qc.setQueryData(issueKeys.list(wsId), ctx.prevList);
       if (ctx?.prevDetail)
         qc.setQueryData(issueKeys.detail(wsId, ctx.id), ctx.prevDetail);
+      if (ctx?.parentId && ctx.prevChildren !== undefined) {
+        qc.setQueryData(
+          issueKeys.children(wsId, ctx.parentId),
+          ctx.prevChildren,
+        );
+      }
     },
-    onSettled: (_data, _err, vars) => {
+    onSettled: (_data, _err, vars, ctx) => {
       qc.invalidateQueries({ queryKey: issueKeys.detail(wsId, vars.id) });
       qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
+      if (ctx?.parentId) {
+        qc.invalidateQueries({
+          queryKey: issueKeys.children(wsId, ctx.parentId),
+        });
+      }
     },
   });
 }
@@ -82,15 +180,16 @@ export function useDeleteIssue() {
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: issueKeys.list(wsId) });
       const prevList = qc.getQueryData<ListIssuesResponse>(issueKeys.list(wsId));
-      qc.setQueryData<ListIssuesResponse>(issueKeys.list(wsId), (old) =>
-        old
-          ? {
-              ...old,
-              issues: old.issues.filter((i) => i.id !== id),
-              total: old.total - 1,
-            }
-          : old,
-      );
+      qc.setQueryData<ListIssuesResponse>(issueKeys.list(wsId), (old) => {
+        if (!old) return old;
+        const deleted = old.issues.find((i) => i.id === id);
+        return {
+          ...old,
+          issues: old.issues.filter((i) => i.id !== id),
+          total: old.total - 1,
+          doneTotal: (old.doneTotal ?? 0) - (deleted?.status === "done" ? 1 : 0),
+        };
+      });
       qc.removeQueries({ queryKey: issueKeys.detail(wsId, id) });
       return { prevList };
     },
@@ -146,15 +245,19 @@ export function useBatchDeleteIssues() {
     onMutate: async (ids) => {
       await qc.cancelQueries({ queryKey: issueKeys.list(wsId) });
       const prevList = qc.getQueryData<ListIssuesResponse>(issueKeys.list(wsId));
-      qc.setQueryData<ListIssuesResponse>(issueKeys.list(wsId), (old) =>
-        old
-          ? {
-              ...old,
-              issues: old.issues.filter((i) => !ids.includes(i.id)),
-              total: old.total - ids.length,
-            }
-          : old,
-      );
+      qc.setQueryData<ListIssuesResponse>(issueKeys.list(wsId), (old) => {
+        if (!old) return old;
+        const idSet = new Set(ids);
+        const doneDeleted = old.issues.filter(
+          (i) => idSet.has(i.id) && i.status === "done",
+        ).length;
+        return {
+          ...old,
+          issues: old.issues.filter((i) => !idSet.has(i.id)),
+          total: old.total - ids.length,
+          doneTotal: (old.doneTotal ?? 0) - doneDeleted,
+        };
+      });
       return { prevList };
     },
     onError: (_err, _ids, ctx) => {
@@ -280,87 +383,17 @@ export function useDeleteComment(issueId: string) {
 export function useToggleCommentReaction(issueId: string) {
   const qc = useQueryClient();
   return useMutation({
+    mutationKey: ["toggleCommentReaction", issueId] as const,
     mutationFn: async ({
       commentId,
       emoji,
       existing,
-    }: {
-      commentId: string;
-      emoji: string;
-      existing: Reaction | undefined;
-    }) => {
+    }: ToggleCommentReactionVars) => {
       if (existing) {
         await api.removeReaction(commentId, emoji);
         return null;
       }
       return api.addReaction(commentId, emoji);
-    },
-    onMutate: async ({ commentId, emoji, existing }) => {
-      await qc.cancelQueries({ queryKey: issueKeys.timeline(issueId) });
-      const prev = qc.getQueryData<TimelineEntry[]>(issueKeys.timeline(issueId));
-
-      if (existing) {
-        // Remove
-        qc.setQueryData<TimelineEntry[]>(
-          issueKeys.timeline(issueId),
-          (old) =>
-            old?.map((e) =>
-              e.id === commentId
-                ? {
-                    ...e,
-                    reactions: (e.reactions ?? []).filter(
-                      (r) => r.id !== existing.id,
-                    ),
-                  }
-                : e,
-            ),
-        );
-      } else {
-        // Add temp
-        const tempReaction: Reaction = {
-          id: `temp-${Date.now()}`,
-          comment_id: commentId,
-          actor_type: "",
-          actor_id: "",
-          emoji,
-          created_at: new Date().toISOString(),
-        };
-        qc.setQueryData<TimelineEntry[]>(
-          issueKeys.timeline(issueId),
-          (old) =>
-            old?.map((e) =>
-              e.id === commentId
-                ? { ...e, reactions: [...(e.reactions ?? []), tempReaction] }
-                : e,
-            ),
-        );
-      }
-      return { prev };
-    },
-    onSuccess: (reaction, { commentId }) => {
-      if (reaction) {
-        // Replace temp with real
-        qc.setQueryData<TimelineEntry[]>(
-          issueKeys.timeline(issueId),
-          (old) =>
-            old?.map((e) =>
-              e.id === commentId
-                ? {
-                    ...e,
-                    reactions: (e.reactions ?? []).map((r) =>
-                      r.id.startsWith("temp-") && r.emoji === reaction.emoji
-                        ? reaction
-                        : r,
-                    ),
-                  }
-                : e,
-            ),
-        );
-      }
-    },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.prev)
-        qc.setQueryData(issueKeys.timeline(issueId), ctx.prev);
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: issueKeys.timeline(issueId) });
@@ -375,60 +408,16 @@ export function useToggleCommentReaction(issueId: string) {
 export function useToggleIssueReaction(issueId: string) {
   const qc = useQueryClient();
   return useMutation({
+    mutationKey: ["toggleIssueReaction", issueId] as const,
     mutationFn: async ({
       emoji,
       existing,
-    }: {
-      emoji: string;
-      existing: IssueReaction | undefined;
-    }) => {
+    }: ToggleIssueReactionVars) => {
       if (existing) {
         await api.removeIssueReaction(issueId, emoji);
         return null;
       }
       return api.addIssueReaction(issueId, emoji);
-    },
-    onMutate: async ({ emoji, existing }) => {
-      await qc.cancelQueries({ queryKey: issueKeys.reactions(issueId) });
-      const prev = qc.getQueryData<IssueReaction[]>(issueKeys.reactions(issueId));
-
-      if (existing) {
-        qc.setQueryData<IssueReaction[]>(
-          issueKeys.reactions(issueId),
-          (old) => old?.filter((r) => r.id !== existing.id),
-        );
-      } else {
-        const temp: IssueReaction = {
-          id: `temp-${Date.now()}`,
-          issue_id: issueId,
-          actor_type: "",
-          actor_id: "",
-          emoji,
-          created_at: new Date().toISOString(),
-        };
-        qc.setQueryData<IssueReaction[]>(
-          issueKeys.reactions(issueId),
-          (old) => [...(old ?? []), temp],
-        );
-      }
-      return { prev };
-    },
-    onSuccess: (reaction) => {
-      if (reaction) {
-        qc.setQueryData<IssueReaction[]>(
-          issueKeys.reactions(issueId),
-          (old) =>
-            old?.map((r) =>
-              r.id.startsWith("temp-") && r.emoji === reaction.emoji
-                ? reaction
-                : r,
-            ),
-        );
-      }
-    },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.prev)
-        qc.setQueryData(issueKeys.reactions(issueId), ctx.prev);
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: issueKeys.reactions(issueId) });

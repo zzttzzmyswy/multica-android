@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import { cookies } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
@@ -8,6 +7,7 @@ import { QueryProvider } from "@core/provider";
 import { AuthInitializer } from "@/features/auth";
 import { WSProvider } from "@/features/realtime";
 import { ModalRegistry } from "@/features/modals";
+import { LocaleSync } from "@/components/locale-sync";
 import "./globals.css";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
@@ -51,22 +51,19 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const cookieStore = await cookies();
-  const locale = cookieStore.get("multica-locale")?.value;
-  const lang = locale === "zh" ? "zh" : "en";
-
   return (
     <html
-      lang={lang}
+      lang="en"
       suppressHydrationWarning
       className={cn("antialiased font-sans h-full", geist.variable, geistMono.variable)}
     >
       <body className="h-full overflow-hidden">
+        <LocaleSync />
         <ThemeProvider>
           <QueryProvider>
             <AuthInitializer>

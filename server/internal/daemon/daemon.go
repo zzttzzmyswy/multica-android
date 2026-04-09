@@ -837,6 +837,13 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 		return
 	}
 
+	// Report usage independently so it's captured even for failed/blocked tasks.
+	if len(result.Usage) > 0 {
+		if err := d.client.ReportTaskUsage(ctx, task.ID, result.Usage); err != nil {
+			taskLog.Warn("report task usage failed", "error", err)
+		}
+	}
+
 	switch result.Status {
 	case "blocked":
 		if err := d.client.FailTask(ctx, task.ID, result.Comment); err != nil {
@@ -1105,6 +1112,22 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 		"tools", toolCount.Load(),
 	)
 
+	// Convert agent usage map to task usage entries.
+	var usageEntries []TaskUsageEntry
+	for model, u := range result.Usage {
+		if u.InputTokens == 0 && u.OutputTokens == 0 && u.CacheReadTokens == 0 && u.CacheWriteTokens == 0 {
+			continue
+		}
+		usageEntries = append(usageEntries, TaskUsageEntry{
+			Provider:         provider,
+			Model:            model,
+			InputTokens:      u.InputTokens,
+			OutputTokens:     u.OutputTokens,
+			CacheReadTokens:  u.CacheReadTokens,
+			CacheWriteTokens: u.CacheWriteTokens,
+		})
+	}
+
 	switch result.Status {
 	case "completed":
 		if result.Output == "" {
@@ -1115,6 +1138,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 			Comment:   result.Output,
 			SessionID: result.SessionID,
 			WorkDir:   env.WorkDir,
+			Usage:     usageEntries,
 		}, nil
 	case "timeout":
 		return TaskResult{}, fmt.Errorf("%s timed out after %s", provider, d.cfg.AgentTimeout)
@@ -1123,7 +1147,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 		if errMsg == "" {
 			errMsg = fmt.Sprintf("%s execution %s", provider, result.Status)
 		}
-		return TaskResult{Status: "blocked", Comment: errMsg}, nil
+		return TaskResult{Status: "blocked", Comment: errMsg, Usage: usageEntries}, nil
 	}
 }
 

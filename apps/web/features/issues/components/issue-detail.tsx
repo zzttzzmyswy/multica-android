@@ -13,6 +13,7 @@ import {
   Link2,
   MoreHorizontal,
   PanelRight,
+  Plus,
   Trash2,
   UserMinus,
   Users,
@@ -57,7 +58,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { AvatarGroup, AvatarGroupCount } from "@/components/ui/avatar";
 import { ActorAvatar } from "@/components/common/actor-avatar";
-import type { UpdateIssueRequest, IssueStatus, IssuePriority, TimelineEntry } from "@/shared/types";
+import type { Issue, UpdateIssueRequest, IssueStatus, IssuePriority, TimelineEntry } from "@/shared/types";
 import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
 import { StatusIcon, PriorityIcon, DueDatePicker, AssigneePicker, canAssignAgent } from "@/features/issues/components";
 import { CommentCard } from "./comment-card";
@@ -67,7 +68,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore, useActorName } from "@/features/workspace";
 import { useWorkspaceId } from "@core/hooks";
-import { issueListOptions, issueDetailOptions } from "@core/issues/queries";
+import { issueListOptions, issueDetailOptions, childIssuesOptions } from "@core/issues/queries";
 import { memberListOptions, agentListOptions } from "@core/workspace/queries";
 import { useUpdateIssue, useDeleteIssue } from "@core/issues/mutations";
 import { useIssueTimeline } from "@/features/issues/hooks/use-issue-timeline";
@@ -76,7 +77,62 @@ import { useIssueSubscribers } from "@/features/issues/hooks/use-issue-subscribe
 import { ReactionBar } from "@/components/common/reaction-bar";
 import { useFileUpload } from "@/shared/hooks/use-file-upload";
 import { api } from "@/shared/api";
+import { useModalStore } from "@/features/modals";
 import { timeAgo } from "@/shared/utils";
+import { cn } from "@/lib/utils";
+
+/**
+ * Tiny circular progress ring used in the "Sub-issue of …" line and the
+ * Sub-issues section header. Renders an open ring when in-progress and
+ * fills to a solid arc when complete.
+ */
+function ProgressRing({
+  done,
+  total,
+  size = 12,
+}: {
+  done: number;
+  total: number;
+  size?: number;
+}) {
+  const stroke = 1.5;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const ratio = total > 0 ? Math.min(done / total, 1) : 0;
+  const offset = circumference * (1 - ratio);
+  const isComplete = total > 0 && done >= total;
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      className={isComplete ? "text-info" : "text-primary"}
+      aria-hidden="true"
+    >
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke="currentColor"
+        strokeOpacity="0.25"
+        strokeWidth={stroke}
+      />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={stroke}
+        strokeDasharray={circumference}
+        strokeDashoffset={offset}
+        strokeLinecap="round"
+        transform={`rotate(-90 ${size / 2} ${size / 2})`}
+      />
+    </svg>
+  );
+}
 
 function shortDate(date: string | null): string {
   if (!date) return "—";
@@ -203,7 +259,6 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(true);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [showScrollBottom, setShowScrollBottom] = useState(false);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const didHighlightRef = useRef<string | null>(null);
 
@@ -228,6 +283,25 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
     subscribers, loading: subscribersLoading, isSubscribed, toggleSubscribe: handleToggleSubscribe, toggleSubscriber,
   } = useIssueSubscribers(id, user?.id);
 
+  // Sub-issue queries
+  const parentIssueId = issue?.parent_issue_id;
+  const { data: parentIssue = null } = useQuery({
+    ...issueDetailOptions(wsId, parentIssueId ?? ""),
+    enabled: !!parentIssueId,
+    initialData: () => allIssues.find((i) => i.id === parentIssueId),
+  });
+  const { data: childIssues = [] } = useQuery({
+    ...childIssuesOptions(wsId, id),
+    enabled: !!issue,
+  });
+  // Parent's children — used to render the "x/y" progress next to the
+  // "Sub-issue of …" breadcrumb under the title.
+  const { data: parentChildIssues = [] } = useQuery({
+    ...childIssuesOptions(wsId, parentIssueId ?? ""),
+    enabled: !!parentIssueId,
+  });
+  const [subIssuesCollapsed, setSubIssuesCollapsed] = useState(false);
+
   const loading = issueLoading;
 
   // Scroll to highlighted comment once timeline loads (fire only once per highlightCommentId)
@@ -245,23 +319,6 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
       });
     }
   }, [highlightCommentId, timeline.length]);
-
-  // Track scroll position for jump-to-bottom button
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    const onScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = container;
-      setShowScrollBottom(scrollHeight - scrollTop - clientHeight > 200);
-    };
-    container.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-    return () => container.removeEventListener("scroll", onScroll);
-  }, []);
-
-  const scrollToBottom = useCallback(() => {
-    scrollContainerRef.current?.scrollTo({ top: scrollContainerRef.current.scrollHeight, behavior: "smooth" });
-  }, []);
 
   // Issue field updates via TQ mutation (optimistic update + rollback in mutation hook)
   const updateIssueMutation = useUpdateIssue();
@@ -376,6 +433,17 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                   className="text-muted-foreground hover:text-foreground transition-colors truncate shrink-0"
                 >
                   {workspace.name}
+                </Link>
+                <ChevronRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+              </>
+            )}
+            {parentIssue && (
+              <>
+                <Link
+                  href={`/issues/${parentIssue.id}`}
+                  className="text-muted-foreground hover:text-foreground transition-colors truncate shrink-0"
+                >
+                  {parentIssue.identifier}
                 </Link>
                 <ChevronRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
               </>
@@ -550,6 +618,17 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
 
                 <DropdownMenuSeparator />
 
+                {/* Create sub-issue */}
+                <DropdownMenuItem onClick={() => {
+                  useModalStore.getState().open("create-issue", {
+                    parent_issue_id: issue.id,
+                    parent_issue_identifier: issue.identifier,
+                  });
+                }}>
+                  <Plus className="h-3.5 w-3.5" />
+                  Create sub-issue
+                </DropdownMenuItem>
+
                 {/* Copy link */}
                 <DropdownMenuItem onClick={() => {
                   navigator.clipboard.writeText(window.location.href);
@@ -630,6 +709,31 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
             }}
           />
 
+          {parentIssue && (
+            <Link
+              href={`/issues/${parentIssue.id}`}
+              className="mt-2 inline-flex max-w-full items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors group/parent"
+            >
+              <span className="font-medium shrink-0">Sub-issue of</span>
+              <StatusIcon status={parentIssue.status} className="h-3.5 w-3.5 shrink-0" />
+              <span className="tabular-nums shrink-0">{parentIssue.identifier}</span>
+              <span className="truncate group-hover/parent:text-foreground">
+                {parentIssue.title}
+              </span>
+              {parentChildIssues.length > 0 && (() => {
+                const done = parentChildIssues.filter((c) => c.status === "done").length;
+                return (
+                  <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5 shrink-0">
+                    <ProgressRing done={done} total={parentChildIssues.length} size={11} />
+                    <span className="tabular-nums text-[10.5px] font-medium">
+                      {done}/{parentChildIssues.length}
+                    </span>
+                  </span>
+                );
+              })()}
+            </Link>
+          )}
+
           <ContentEditor
             ref={descEditorRef}
             key={id}
@@ -659,6 +763,122 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
               onSelect={(file) => descEditorRef.current?.uploadFile(file)}
             />
           </div>
+
+          {/* Sub-issues — Linear-style */}
+          {childIssues.length === 0 && (
+            <div className="mt-6">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() =>
+                  useModalStore.getState().open("create-issue", {
+                    parent_issue_id: issue.id,
+                    parent_issue_identifier: issue.identifier,
+                  })
+                }
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Add sub-issues</span>
+              </button>
+            </div>
+          )}
+          {childIssues.length > 0 && (() => {
+            const doneCount = childIssues.filter((c) => c.status === "done").length;
+            return (
+              <div className="mt-10">
+                {/* Header */}
+                <div className="flex items-center gap-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setSubIssuesCollapsed((v) => !v)}
+                    className="flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-foreground/80 transition-colors"
+                  >
+                    <ChevronDown
+                      className={cn(
+                        "h-3.5 w-3.5 text-muted-foreground transition-transform",
+                        subIssuesCollapsed && "-rotate-90",
+                      )}
+                    />
+                    <span>Sub-issues</span>
+                  </button>
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-muted/60 px-2 py-0.5">
+                    <ProgressRing done={doneCount} total={childIssues.length} size={11} />
+                    <span className="text-[11px] text-muted-foreground tabular-nums font-medium">
+                      {doneCount}/{childIssues.length}
+                    </span>
+                  </div>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          className="ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                          onClick={() =>
+                            useModalStore.getState().open("create-issue", {
+                              parent_issue_id: issue.id,
+                              parent_issue_identifier: issue.identifier,
+                            })
+                          }
+                          aria-label="Add sub-issue"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      }
+                    />
+                    <TooltipContent side="bottom">Add sub-issue</TooltipContent>
+                  </Tooltip>
+                </div>
+
+                {/* List */}
+                {!subIssuesCollapsed && (
+                  <div className="overflow-hidden rounded-lg border bg-card/30 divide-y divide-border/60">
+                    {childIssues.map((child) => {
+                      const isDone =
+                        child.status === "done" || child.status === "cancelled";
+                      return (
+                        <Link
+                          key={child.id}
+                          href={`/issues/${child.id}`}
+                          className="flex items-center gap-2.5 px-3 py-2 hover:bg-accent/50 transition-colors group/row"
+                        >
+                          <StatusIcon
+                            status={child.status}
+                            className="h-[15px] w-[15px] shrink-0"
+                          />
+                          <span className="text-[11px] text-muted-foreground tabular-nums font-medium shrink-0">
+                            {child.identifier}
+                          </span>
+                          <span
+                            className={cn(
+                              "text-sm truncate flex-1",
+                              isDone
+                                ? "text-muted-foreground"
+                                : "group-hover/row:text-foreground",
+                            )}
+                          >
+                            {child.title}
+                          </span>
+                          {child.assignee_type && child.assignee_id ? (
+                            <ActorAvatar
+                              actorType={child.assignee_type}
+                              actorId={child.assignee_id}
+                              size={20}
+                              className="shrink-0"
+                            />
+                          ) : (
+                            <span
+                              aria-hidden
+                              className="h-5 w-5 rounded-full border border-dashed border-muted-foreground/30 shrink-0"
+                            />
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="my-8 border-t" />
 
@@ -906,20 +1126,6 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
             </div>
           </div>
         </div>
-        {/* Jump to bottom button */}
-        {showScrollBottom && (
-          <div className="sticky bottom-4 flex justify-center pointer-events-none">
-            <Button
-              variant="secondary"
-              size="sm"
-              className="pointer-events-auto shadow-md"
-              onClick={scrollToBottom}
-            >
-              <ChevronDown className="mr-1 h-3.5 w-3.5" />
-              Jump to bottom
-            </Button>
-          </div>
-        )}
         </div>
       </div>
       </ResizablePanel>
@@ -1007,6 +1213,26 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
               </PropRow>
             </div>}
           </div>
+
+          {/* Parent issue */}
+          {parentIssue && (
+            <div>
+              <div className="text-xs font-medium mb-2 flex items-center gap-1">
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rotate-90" />
+                Parent issue
+              </div>
+              <div className="pl-2">
+                <Link
+                  href={`/issues/${parentIssue.id}`}
+                  className="flex items-center gap-1.5 rounded-md px-2 py-1.5 -mx-2 text-xs hover:bg-accent/50 transition-colors group"
+                >
+                  <StatusIcon status={parentIssue.status} className="h-3.5 w-3.5 shrink-0" />
+                  <span className="text-muted-foreground shrink-0">{parentIssue.identifier}</span>
+                  <span className="truncate group-hover:text-foreground">{parentIssue.title}</span>
+                </Link>
+              </div>
+            </div>
+          )}
 
           {/* Details section */}
           <div>

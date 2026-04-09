@@ -23,6 +23,7 @@ export interface UpdateIssueRequest {
   assignee_id?: string | null;
   position?: number;
   due_date?: string | null;
+  parent_issue_id?: string | null;
 }
 
 export interface ListIssuesParams {
@@ -38,6 +39,8 @@ export interface ListIssuesParams {
 export interface ListIssuesResponse {
   issues: Issue[];
   total: number;
+  /** True total of done issues in the workspace (for load-more pagination). Not returned by backend API — set by the frontend query function. */
+  doneTotal?: number;
 }
 
 export interface UpdateMeRequest {

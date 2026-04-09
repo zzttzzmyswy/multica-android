@@ -368,6 +368,45 @@ func (h *Handler) CompleteTask(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, taskToResponse(*task))
 }
 
+// ReportTaskUsage stores per-task token usage. Called independently of
+// complete/fail so usage is captured even when tasks fail or are blocked.
+type TaskUsagePayload struct {
+	Provider         string `json:"provider"`
+	Model            string `json:"model"`
+	InputTokens      int64  `json:"input_tokens"`
+	OutputTokens     int64  `json:"output_tokens"`
+	CacheReadTokens  int64  `json:"cache_read_tokens"`
+	CacheWriteTokens int64  `json:"cache_write_tokens"`
+}
+
+func (h *Handler) ReportTaskUsage(w http.ResponseWriter, r *http.Request) {
+	taskID := chi.URLParam(r, "taskId")
+
+	var req struct {
+		Usage []TaskUsagePayload `json:"usage"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	for _, u := range req.Usage {
+		if err := h.Queries.UpsertTaskUsage(r.Context(), db.UpsertTaskUsageParams{
+			TaskID:           parseUUID(taskID),
+			Provider:         u.Provider,
+			Model:            u.Model,
+			InputTokens:      u.InputTokens,
+			OutputTokens:     u.OutputTokens,
+			CacheReadTokens:  u.CacheReadTokens,
+			CacheWriteTokens: u.CacheWriteTokens,
+		}); err != nil {
+			slog.Warn("upsert task usage failed", "task_id", taskID, "model", u.Model, "error", err)
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 // GetTaskStatus returns the current status of a task.
 // Used by the daemon to check whether a task was cancelled mid-execution.
 func (h *Handler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
