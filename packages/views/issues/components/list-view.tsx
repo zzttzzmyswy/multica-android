@@ -6,6 +6,7 @@ import { Accordion } from "@base-ui/react/accordion";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@multica/ui/components/ui/tooltip";
 import { Button } from "@multica/ui/components/ui/button";
 import type { Issue, IssueStatus } from "@multica/core/types";
+import { useLoadMoreDoneIssues } from "@multica/core/issues/mutations";
 import { STATUS_CONFIG } from "@multica/core/issues/config";
 import { useModalStore } from "@multica/core/modals";
 import { useViewStore } from "@multica/core/issues/stores/view-store-context";
@@ -13,6 +14,7 @@ import { useIssueSelectionStore } from "@multica/core/issues/stores/selection-st
 import { sortIssues } from "../utils/sort";
 import { StatusIcon } from "./status-icon";
 import { ListRow } from "./list-row";
+import { InfiniteScrollSentinel } from "./infinite-scroll-sentinel";
 
 export function ListView({
   issues,
@@ -32,6 +34,7 @@ export function ListView({
   const selectedIds = useIssueSelectionStore((s) => s.selectedIds);
   const select = useIssueSelectionStore((s) => s.select);
   const deselect = useIssueSelectionStore((s) => s.deselect);
+  const { loadMore, hasMore, isLoading: loadingMore, doneTotal } = useLoadMoreDoneIssues();
 
   const issuesByStatus = useMemo(() => {
     const map = new Map<IssueStatus, Issue[]>();
@@ -101,7 +104,7 @@ export function ListView({
                     {cfg.label}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {statusIssues.length}
+                    {status === "done" ? doneTotal : statusIssues.length}
                   </span>
                 </Accordion.Trigger>
                 <div className="pr-2">
@@ -128,9 +131,14 @@ export function ListView({
               </Accordion.Header>
               <Accordion.Panel className="pt-1">
                 {statusIssues.length > 0 ? (
-                  statusIssues.map((issue) => (
-                    <ListRow key={issue.id} issue={issue} />
-                  ))
+                  <>
+                    {statusIssues.map((issue) => (
+                      <ListRow key={issue.id} issue={issue} />
+                    ))}
+                    {status === "done" && hasMore && (
+                      <InfiniteScrollSentinel onVisible={loadMore} loading={loadingMore} />
+                    )}
+                  </>
                 ) : (
                   <p className="py-6 text-center text-xs text-muted-foreground">
                     No issues
