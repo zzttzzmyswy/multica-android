@@ -336,9 +336,11 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   );
 
   const descEditorRef = useRef<ContentEditorRef>(null);
+  // Description uploads don't pass issueId — the URL lives in the markdown.
+  // This avoids stale attachment records when users delete images from the editor.
   const handleDescriptionUpload = useCallback(
-    (file: File) => uploadWithToast(file, { issueId: id }),
-    [uploadWithToast, id],
+    (file: File) => uploadWithToast(file),
+    [uploadWithToast],
   );
 
   const deleteIssueMutation = useDeleteIssue();
