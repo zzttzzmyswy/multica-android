@@ -12,14 +12,21 @@ Multica is an AI-native task management platform — like Linear, but with AI ag
 
 ## Architecture
 
-**Go backend + monorepo frontend with shared packages.**
+**Go backend + monorepo frontend (pnpm workspaces + Turborepo) with shared packages.**
 
 - `server/` — Go backend (Chi router, sqlc for DB, gorilla/websocket for real-time)
 - `apps/web/` — Next.js 16 frontend (App Router)
+- `apps/desktop/` — Electron 39 desktop app (electron-vite + react-router-dom)
 - `packages/core/` — Headless business logic (zero react-dom, all-platform reuse)
 - `packages/ui/` — Atomic UI components (zero business logic)
-- `packages/views/` — Shared business pages/components (zero next/* imports)
+- `packages/views/` — Shared business pages/components (zero next/* imports, zero react-router imports)
 - `packages/tsconfig/` — Shared TypeScript configuration
+
+### Monorepo Tooling
+
+- **pnpm workspaces** for dependency management. `pnpm-workspace.yaml` defines a `catalog:` for version pinning — all shared deps (React, Zustand, TanStack Query, Tailwind, TypeScript) use `catalog:` references to guarantee a single version across all packages.
+- **Turborepo** for task orchestration — build, typecheck, test, lint all respect the package dependency graph.
+- **Internal Packages pattern** — all shared packages export raw `.ts`/`.tsx` files (no pre-compilation). The consuming app's bundler (Vite for desktop, Next.js for web) compiles them directly. This gives zero-config HMR and instant go-to-definition. If a package is ever published to npm, add a build step then.
 
 ### Package Architecture
 
@@ -27,15 +34,20 @@ Three shared packages with single-direction dependencies:
 
 ```
 packages/
-├── core/     # @multica/core  — types, API client, stores, queries, mutations, realtime
-├── ui/       # @multica/ui    — 55 shadcn components, common components, markdown, hooks
-├── views/    # @multica/views — issue pages, editor, modals, skills, runtimes, navigation
+├── core/     # @multica/core  — types, API client, stores, queries, mutations, realtime, platform
+├── ui/       # @multica/ui    — 55 shadcn components, common components, markdown, hooks, styles
+├── views/    # @multica/views — issue pages, editor, modals, skills, runtimes, navigation, layout, auth, settings
 └── tsconfig/ # @multica/tsconfig — shared TS base configs
 ```
 
-**Dependency direction:** `views/ → core/ + ui/`. Core and UI are independent of each other. No package imports from `next/*` or `apps/web/`.
+**Dependency direction:** `views/ → core/ + ui/`. Core and UI are independent of each other. No package imports from `next/*`, `react-router-dom`, or app-specific code.
 
-**Platform bridge:** `packages/core/platform/` provides `CoreProvider` — a single component that initializes API client, auth store, workspace store, WS connection, and QueryClient. Apps wrap their root with `<CoreProvider apiBaseUrl wsUrl>` and only need to provide a `NavigationAdapter` for routing. `apps/web/platform/` adds web-specific concerns (cookies, Next.js navigation). Desktop uses `CoreProvider` directly with `react-router-dom` navigation.
+**Platform bridge:** `packages/core/platform/` provides `CoreProvider` — a single component that initializes API client, auth/workspace stores, WS connection, and QueryClient. Each app wraps its root with `<CoreProvider apiBaseUrl wsUrl>` and provides its own `NavigationAdapter` for routing.
+
+```
+apps/web:     ThemeProvider > CoreProvider(onLogin=cookie, onLogout=cookie) > WebNavigationProvider > pages
+apps/desktop: ThemeProvider > CoreProvider(apiBaseUrl, wsUrl)               > RouterProvider > DesktopNavigationProvider > pages
+```
 
 ### packages/core/ (`@multica/core`)
 
@@ -70,22 +82,41 @@ Each app creates its own instances in its platform layer and registers them via 
 Atomic UI layer. **Zero business logic, zero `@multica/core` imports.**
 
 - `components/ui/` — 55 shadcn components (button, dialog, card, tooltip, sidebar, etc.)
-- `components/common/` — Pure-props components (actor-avatar, emoji-picker, reaction-bar, file-upload-button)
+- `components/common/` — Pure-props components (actor-avatar, emoji-picker, reaction-bar, multica-icon, theme-provider)
 - `markdown/` — Markdown renderer with `renderMention` slot for platform-specific mention cards
 - `hooks/` — DOM hooks (use-auto-scroll, use-mobile, use-scroll-fade)
 - `lib/utils.ts` — `cn()` function (clsx + tailwind-merge)
-- `styles/tokens.css` — Tailwind CSS v4 design tokens (@theme, :root, .dark variables)
+- `styles/tokens.css` — Tailwind CSS v4 design tokens (@theme inline, :root, .dark variables)
+- `styles/base.css` — Shared base layer (scrollbar, shiki themes, entrance-spin animation, sidebar active state, sonner alignment, body/html defaults)
 
 ### packages/views/ (`@multica/views`)
 
-Shared business UI pages. **Zero `next/*` imports.** Uses `NavigationAdapter` for routing.
+Shared business UI pages. **Zero `next/*` imports. Zero `react-router-dom` imports.** Uses `NavigationAdapter` for routing.
 
 - `navigation/` — `NavigationAdapter` interface, `useNavigation()` hook, `AppLink` component
+- `layout/` — `DashboardLayout`, `AppSidebar`, `useDashboardGuard`
+- `auth/` — `LoginPage` (shared login with optional Google OAuth via props)
 - `issues/components/` — IssuesPage, IssueDetail, BoardView, ListView, pickers, icons
 - `editor/` — ContentEditor, TitleEditor, Tiptap extensions
 - `modals/` — CreateIssueModal, CreateWorkspaceModal, ModalRegistry
-- `my-issues/`, `skills/`, `runtimes/` — domain pages
+- `my-issues/`, `skills/`, `runtimes/`, `agents/`, `inbox/`, `settings/` — domain pages
 - `common/` — Data-aware wrappers (ActorAvatar with useActorName, Markdown with IssueMentionCard)
+
+**NavigationAdapter:** Platform-agnostic routing interface. All shared components use `useNavigation()` — never import from `next/navigation` or `react-router-dom` directly.
+
+```typescript
+interface NavigationAdapter {
+  push(path: string): void;
+  replace(path: string): void;
+  back(): void;
+  pathname: string;
+  searchParams: URLSearchParams;
+  openInNewTab?: (path: string, title?: string) => void;  // Desktop: opens a tab
+  getShareableUrl?: (path: string) => string;              // Desktop: returns web URL
+}
+```
+
+Web provides `push`/`replace`/`back`/`pathname` via Next.js router. Desktop adds `openInNewTab` (creates a tab in the tab store) and `getShareableUrl` (returns `https://www.multica.ai{path}`). Shared components check `openInNewTab?.()` — if present use it, otherwise fall through to browser default behavior.
 
 ### apps/web/ (Next.js App)
 
@@ -94,17 +125,54 @@ Thin routing shells + platform-specific code.
 ```
 apps/web/
 ├── app/              # Next.js route shells (< 15 lines each, import from @multica/views)
-├── platform/         # Web platform bridge (api singleton, store instances, navigation, storage)
+├── platform/         # Web platform bridge — only navigation.tsx remains
 ├── features/
-│   ├── auth/         # Web-only: auth-cookie.ts, initializer.tsx
+│   ├── auth/         # Web-only: auth-cookie.ts (cookie for Next.js middleware)
 │   ├── landing/      # Web-only: landing pages (uses next/image, next/link)
 │   └── search/       # Web-only: search dialog
-└── components/       # App-level: theme-provider (re-export + React 19 fix), locale-sync, loading-indicator
+└── components/       # App-level: web-providers.tsx, locale-sync, loading-indicator
 ```
 
-**`platform/`** — Web-specific code that extends `CoreProvider` from `@multica/core/platform`:
-- `navigation.tsx` — `WebNavigationProvider` wrapping Next.js `useRouter`/`usePathname`
-- Core initialization (API, auth, workspace, WS) is handled by `CoreProvider` in `packages/core/platform/`
+**`platform/navigation.tsx`** — `WebNavigationProvider` wrapping Next.js `useRouter`/`usePathname`. This is the only web-platform-specific file. Core initialization (API, auth, WS) is handled by `CoreProvider` in `packages/core/platform/`.
+
+**`components/web-providers.tsx`** — Composes `CoreProvider` + `WebNavigationProvider`, passes `onLogin`/`onLogout` callbacks for cookie management.
+
+### apps/desktop/ (Electron App)
+
+Electron 39 + electron-vite + react-router-dom. Hash router (`#/issues/...`) since there's no server for pushState.
+
+```
+apps/desktop/
+├── src/main/index.ts           # Electron main process (BrowserWindow, hiddenInset titlebar)
+├── src/preload/                # contextBridge for electron API
+├── src/renderer/src/
+│   ├── App.tsx                 # Root: ThemeProvider > CoreProvider > RouterProvider
+│   ├── router.tsx              # createHashRouter + TitleSync + route definitions with handle.title
+│   ├── globals.css             # Same shared imports as web + desktop sidebar override
+│   ├── components/
+│   │   ├── desktop-layout.tsx  # Custom layout: sidebar + tab bar + content area
+│   │   └── tab-bar.tsx         # Tab rendering (fixed-width, fade mask, hover-close)
+│   ├── hooks/
+│   │   ├── use-tab-sync.ts     # URL + document.title → tab store sync
+│   │   ├── use-document-title.ts  # Sets document.title (tab system observes via MutationObserver)
+│   │   └── use-history-stack.ts   # Back/forward navigation state
+│   ├── pages/
+│   │   ├── login.tsx           # Thin wrapper: traffic light spacer + shared LoginPage
+│   │   └── issue-detail-page.tsx  # useDocumentTitle for dynamic tab title
+│   ├── platform/
+│   │   └── navigation.tsx      # DesktopNavigationProvider (adapts react-router to NavigationAdapter)
+│   └── stores/
+│       └── tab-store.ts        # Zustand: tab open/close/switch/update
+├── electron.vite.config.ts     # Build config: externalize main/preload, react+tailwind for renderer
+├── electron-builder.yml        # Packaging config: dmg/zip (mac), nsis (win), AppImage/deb (linux)
+└── .env.production             # Production API/WS URLs (VITE_API_URL, VITE_WS_URL)
+```
+
+**Desktop shares all pages from `@multica/views`** — IssuesPage, InboxPage, AgentsPage, SettingsPage, etc. are imported directly in the router. Desktop-specific code is only: tab system, layout shell, navigation adapter, and page wrappers for dynamic titles.
+
+**Tab system design:** `document.title` is the single source of truth for tab titles (same as browsers). Route definitions provide default titles via `handle: { title }`. Pages with dynamic data (e.g. issue detail) override via `useDocumentTitle()`. A MutationObserver on `<title>` syncs changes to the tab store automatically. No manual `resolveTabMeta()` mapping needed.
+
+**Environment variables:** `VITE_API_URL` and `VITE_WS_URL` are compiled into the bundle at build time (like `NEXT_PUBLIC_*` in Next.js). `.env.production` is loaded automatically by Vite during `pnpm build`. Dev mode falls back to `http://localhost:8080`.
 
 ### State Management
 
@@ -143,17 +211,19 @@ import { IssuesPage } from "@multica/views/issues/components";
 import { useNavigation, AppLink } from "@multica/views/navigation";
 import { ModalRegistry } from "@multica/views/modals/registry";
 
-// Platform (web-only singletons) — from @/platform
-import { api } from "@/platform/api";
-import { useAuthStore } from "@/platform/auth";
-import { useWorkspaceStore } from "@/platform/workspace";
+// Platform (web-only) — from @/platform
+import { WebNavigationProvider } from "@/platform/navigation";
+
+// Platform (desktop-only) — from @/ (maps to apps/desktop/src/renderer/src/)
+import { useTabStore } from "@/stores/tab-store";
+import { useDocumentTitle } from "@/hooks/use-document-title";
+import { DesktopNavigationProvider } from "@/platform/navigation";
 
 // Web-only features — from @/features
-import { AuthInitializer } from "@/features/auth";
 import { SearchCommand } from "@/features/search";
 ```
 
-`@/` maps to `apps/web/`. Within a package, use relative imports. Between packages, use `@multica/*`.
+`@/` maps to `apps/web/` in the web app and `apps/desktop/src/renderer/src/` in the desktop app. Within a package, use relative imports. Between packages, use `@multica/*`.
 
 ### Data Flow
 
@@ -200,8 +270,9 @@ make db-down          # Stop the shared PostgreSQL container
 # Frontend (all commands go through Turborepo)
 pnpm install
 pnpm dev:web          # Next.js dev server (port 3000)
-pnpm build            # Build frontend
-pnpm typecheck        # TypeScript check (all packages via turbo)
+pnpm dev:desktop      # Electron dev (electron-vite, HMR)
+pnpm build            # Build all frontend apps
+pnpm typecheck        # TypeScript check (all packages + apps via turbo)
 pnpm lint             # ESLint via Next.js
 pnpm test             # TS tests (Vitest, via turbo)
 
@@ -223,6 +294,10 @@ pnpm --filter @multica/web exec vitest run src/path/to/file.test.ts
 
 # Run a single E2E test (requires backend + frontend running)
 pnpm exec playwright test e2e/tests/specific-test.spec.ts
+
+# Desktop build & package
+pnpm --filter @multica/desktop build      # Compile TS → JS (reads .env.production)
+pnpm --filter @multica/desktop package    # Package into .app/.dmg/.exe (current platform only)
 
 # shadcn (monorepo mode — must specify app)
 npx shadcn add badge -c apps/web
@@ -259,21 +334,51 @@ make start-worktree     # Start using .env.worktree
 
 ### Package Boundary Rules
 
-- `packages/core/` — zero react-dom, zero localStorage (use StorageAdapter), zero process.env, zero UI libraries
+- `packages/core/` — zero react-dom, zero localStorage (use StorageAdapter), zero process.env, zero UI libraries. Exception: `core/platform/storage.ts` has an SSR-safe `defaultStorage` using `localStorage` behind `typeof window` guards.
 - `packages/ui/` — zero `@multica/core` imports (pure UI, no business logic)
-- `packages/views/` — zero `next/*` imports (use NavigationAdapter for routing)
-- `apps/web/platform/` — the only place for Next.js APIs, env vars, and browser globals
+- `packages/views/` — zero `next/*` imports, zero `react-router-dom` imports. Use `NavigationAdapter` for all routing. Use `window.open()` only for external URLs, never for internal navigation.
+- `apps/web/platform/` — the only place for Next.js APIs (`next/navigation`)
+- `apps/desktop/src/renderer/src/platform/` — the only place for react-router-dom navigation wiring
+
+### Cross-Platform Development Rules
+
+When adding a new page or feature to the shared packages:
+
+1. **New page component** → add to `packages/views/<domain>/`. Import shared components from `@multica/views` and `@multica/ui`. Never import from `next/*` or `react-router-dom`.
+2. **Wire it in both apps** → add a route in `apps/web/app/` (Next.js page file) AND in `apps/desktop/src/renderer/src/router.tsx` (react-router route with `handle: { title }`).
+3. **Navigation** → use `useNavigation().push()` or `<AppLink>`. Never use `next/link` or react-router's `<Link>` in shared code.
+4. **Dynamic page titles** → desktop pages that need dynamic titles (from async data) should use `useDocumentTitle(title)`. Static titles are set automatically via route `handle.title`.
+5. **Platform-specific UI** → if a feature is web-only (e.g. SearchCommand) or desktop-only (e.g. TabBar), keep it in the respective app. Use props slots (`extra`, `topSlot`) on shared layout components to inject platform-specific UI.
+
+### CSS Architecture
+
+Both apps share the same CSS foundation. Each app's `globals.css` follows the same import pattern:
+
+```css
+@import "tailwindcss";                   /* Core framework */
+@import "tw-animate-css";                /* Animation utilities for shadcn */
+@import "shadcn/tailwind.css";           /* data-* custom variants + no-scrollbar */
+@import "@multica/ui/styles/tokens.css"; /* Design tokens (colors, radius, fonts) */
+@import "@multica/ui/styles/base.css";   /* Shared base styles (scrollbar, shiki, body) */
+```
+
+- **Shared styles** → `packages/ui/styles/`. Never duplicate scrollbar styling, keyframes, or base layer rules in app CSS.
+- **App-specific styles** → keep in the app's own CSS. Web: `apps/web/app/custom.css`. Desktop: inline in `globals.css`.
+- **Design tokens** → use semantic tokens (`bg-background`, `text-muted-foreground`, `border-border`). Never use hardcoded Tailwind colors (`text-red-500`, `bg-gray-100`).
+- **`@source` directives** → both apps scan `packages/ui/**/*.tsx`, `packages/core/**/*.{ts,tsx}`, `packages/views/**/*.{ts,tsx}` so Tailwind sees all class names used in shared packages.
 
 ## UI/UX Rules
 
 - Prefer shadcn components over custom implementations. Install via `npx shadcn add <component> -c apps/web` (monorepo flag required).
-- **Shared UI components** → `packages/ui/components/` — shadcn primitives and pure-props common components.
+- **Shared UI components** → `packages/ui/components/` — shadcn primitives and pure-props common components (multica-icon, theme-provider, actor-avatar, etc.).
 - **Shared business components** → `packages/views/<domain>/components/` — pages and domain-bound UI.
 - **Web-only components** → `apps/web/features/` or `apps/web/components/`.
+- **Desktop-only components** → `apps/desktop/src/renderer/src/components/` (tab-bar, desktop-layout).
 - Use shadcn design tokens for styling (e.g. `bg-primary`, `text-muted-foreground`, `text-destructive`). Avoid hardcoded color values (e.g. `text-red-500`, `bg-gray-100`).
 - Do not introduce extra state (useState, context, reducers) unless explicitly required by the design.
 - Pay close attention to **overflow** (truncate long text, scrollable containers), **alignment**, and **spacing** consistency.
 - When unsure about interaction or state design, ask — the user will provide direction.
+- **If a component is identical between web and desktop, it belongs in a shared package.** Do not copy-paste between apps.
 
 ## Testing Rules
 
