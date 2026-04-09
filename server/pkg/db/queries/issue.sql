@@ -1,5 +1,8 @@
 -- name: ListIssues :many
-SELECT * FROM issue
+SELECT id, workspace_id, title, status, priority,
+       assignee_type, assignee_id, creator_type, creator_id,
+       parent_issue_id, position, due_date, created_at, updated_at, number, project_id
+FROM issue
 WHERE workspace_id = $1
   AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status'))
   AND (sqlc.narg('priority')::text IS NULL OR priority = sqlc.narg('priority'))
@@ -55,7 +58,10 @@ RETURNING *;
 DELETE FROM issue WHERE id = $1;
 
 -- name: ListOpenIssues :many
-SELECT * FROM issue
+SELECT id, workspace_id, title, status, priority,
+       assignee_type, assignee_id, creator_type, creator_id,
+       parent_issue_id, position, due_date, created_at, updated_at, number, project_id
+FROM issue
 WHERE workspace_id = $1
   AND status NOT IN ('done', 'cancelled')
   AND (sqlc.narg('priority')::text IS NULL OR priority = sqlc.narg('priority'))
