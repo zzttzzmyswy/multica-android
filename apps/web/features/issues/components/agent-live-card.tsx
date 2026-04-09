@@ -107,11 +107,9 @@ interface TaskState {
 
 interface AgentLiveCardProps {
   issueId: string;
-  /** Scroll container ref — used to auto-collapse timeline on outer scroll. */
-  scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-export function AgentLiveCard({ issueId, scrollContainerRef }: AgentLiveCardProps) {
+export function AgentLiveCard({ issueId }: AgentLiveCardProps) {
   const { getActorName } = useActorName();
   const [taskStates, setTaskStates] = useState<Map<string, TaskState>>(new Map());
   const seenSeqs = useRef(new Set<string>());
@@ -208,20 +206,35 @@ export function AgentLiveCard({ issueId, scrollContainerRef }: AgentLiveCardProp
   if (taskStates.size === 0) return null;
 
   const entries = Array.from(taskStates.values());
+  const [firstEntry, ...restEntries] = entries;
+  if (!firstEntry) return null;
 
   return (
-    <div className="mt-4 space-y-2">
-      {entries.map(({ task, items }) => (
+    <>
+      {/* Primary agent — sticky at top of the Activity section */}
+      <div className="mt-4 sticky top-4 z-10">
         <SingleAgentLiveCard
-          key={task.id}
-          task={task}
-          items={items}
+          task={firstEntry.task}
+          items={firstEntry.items}
           issueId={issueId}
-          agentName={task.agent_id ? getActorName("agent", task.agent_id) : "Agent"}
-          scrollContainerRef={scrollContainerRef}
+          agentName={firstEntry.task.agent_id ? getActorName("agent", firstEntry.task.agent_id) : "Agent"}
         />
-      ))}
-    </div>
+      </div>
+      {/* Additional agents — scroll with the page */}
+      {restEntries.length > 0 && (
+        <div className="mt-1.5 space-y-1.5">
+          {restEntries.map(({ task, items }) => (
+            <SingleAgentLiveCard
+              key={task.id}
+              task={task}
+              items={items}
+              issueId={issueId}
+              agentName={task.agent_id ? getActorName("agent", task.agent_id) : "Agent"}
+            />
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -232,17 +245,15 @@ interface SingleAgentLiveCardProps {
   items: TimelineItem[];
   issueId: string;
   agentName: string;
-  scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-function SingleAgentLiveCard({ task, items, issueId, agentName, scrollContainerRef }: SingleAgentLiveCardProps) {
+function SingleAgentLiveCard({ task, items, issueId, agentName }: SingleAgentLiveCardProps) {
   const [elapsed, setElapsed] = useState("");
   const [open, setOpen] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
   const [cancelling, setCancelling] = useState(false);
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const ignoreScrollRef = useRef(false);
 
   // Elapsed time
   useEffect(() => {
@@ -252,20 +263,6 @@ function SingleAgentLiveCard({ task, items, issueId, agentName, scrollContainerR
     const interval = setInterval(() => setElapsed(formatElapsed(startRef)), 1000);
     return () => clearInterval(interval);
   }, [task.started_at, task.dispatched_at]);
-
-  // Auto-collapse timeline when outer scroll container scrolls
-  useEffect(() => {
-    const container = scrollContainerRef?.current;
-    if (!container) return;
-
-    const handleOuterScroll = () => {
-      if (ignoreScrollRef.current) return;
-      setOpen(false);
-    };
-
-    container.addEventListener("scroll", handleOuterScroll, { passive: true });
-    return () => container.removeEventListener("scroll", handleOuterScroll);
-  }, [scrollContainerRef]);
 
   // Auto-scroll timeline to bottom
   useEffect(() => {
@@ -281,10 +278,6 @@ function SingleAgentLiveCard({ task, items, issueId, agentName, scrollContainerR
   }, []);
 
   const toggleOpen = useCallback(() => {
-    if (!open) {
-      ignoreScrollRef.current = true;
-      setTimeout(() => { ignoreScrollRef.current = false; }, 300);
-    }
     setOpen(!open);
   }, [open]);
 
@@ -302,7 +295,7 @@ function SingleAgentLiveCard({ task, items, issueId, agentName, scrollContainerR
   const toolCount = items.filter((i) => i.type === "tool_use").length;
 
   return (
-    <div className="sticky top-4 z-10 rounded-lg border border-info/20 bg-info/5 backdrop-blur-sm">
+    <div className="rounded-lg border border-info/20 bg-info/5 backdrop-blur-sm">
       {/* Header — click to toggle timeline */}
       <div
         className="group flex items-center gap-2 px-3 py-2 cursor-pointer select-none text-muted-foreground hover:text-foreground transition-colors"
