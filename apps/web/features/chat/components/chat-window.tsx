@@ -14,16 +14,14 @@ import { useWorkspaceId } from "@multica/core/hooks";
 import { useAuthStore } from "@multica/core/auth";
 import { agentListOptions, memberListOptions } from "@multica/core/workspace/queries";
 import { canAssignAgent } from "@multica/views/issues/components";
+import { api } from "@/platform/api";
 import { chatSessionsOptions, chatMessagesOptions, chatKeys } from "@/core/chat/queries";
-import {
-  useCreateChatSession,
-  useSendChatMessage,
-} from "@/core/chat/mutations";
+import { useCreateChatSession } from "@/core/chat/mutations";
 import { useChatStore } from "../store";
 import { ChatMessageList } from "./chat-message-list";
 import { ChatInput } from "./chat-input";
 import { useWS } from "@multica/core/realtime";
-import type { TaskMessagePayload, ChatDonePayload, Agent } from "@multica/core/types";
+import type { TaskMessagePayload, ChatDonePayload, Agent, ChatMessage } from "@multica/core/types";
 
 export function ChatWindow() {
   const wsId = useWorkspaceId();
@@ -53,7 +51,6 @@ export function ChatWindow() {
 
   const qc = useQueryClient();
   const createSession = useCreateChatSession();
-  const sendMessage = useSendChatMessage(activeSessionId ?? "");
 
   const currentMember = members.find((m) => m.user_id === user?.id);
   const memberRole = currentMember?.role;
@@ -158,12 +155,23 @@ export function ChatWindow() {
         setActiveSession(sessionId);
       }
 
-      const { task_id } = await (await import("@/platform/api")).api.sendChatMessage(
-        sessionId,
+      // Optimistic: show user message immediately.
+      const optimistic: ChatMessage = {
+        id: `optimistic-${Date.now()}`,
+        chat_session_id: sessionId,
+        role: "user",
         content,
+        task_id: null,
+        created_at: new Date().toISOString(),
+      };
+      qc.setQueryData<ChatMessage[]>(
+        chatKeys.messages(sessionId),
+        (old) => (old ? [...old, optimistic] : [optimistic]),
       );
+
+      const result = await api.sendChatMessage(sessionId, content);
       qc.invalidateQueries({ queryKey: chatKeys.messages(sessionId) });
-      setPendingTask(task_id);
+      setPendingTask(result.task_id);
     },
     [
       activeSessionId,
@@ -178,7 +186,7 @@ export function ChatWindow() {
   const handleStop = useCallback(async () => {
     if (!pendingTaskId) return;
     try {
-      await (await import("@/platform/api")).api.cancelTaskById(pendingTaskId);
+      await api.cancelTaskById(pendingTaskId);
     } catch {
       // Task may already be completed
     }

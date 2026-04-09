@@ -22,7 +22,6 @@ interface ChatState {
   isFullscreen: boolean;
   activeSessionId: string | null;
   pendingTaskId: string | null;
-  streamingContent: string;
   selectedAgentId: string | null;
   timelineItems: ChatTimelineItem[];
   setOpen: (open: boolean) => void;
@@ -30,8 +29,6 @@ interface ChatState {
   toggleFullscreen: () => void;
   setActiveSession: (id: string | null) => void;
   setPendingTask: (taskId: string | null) => void;
-  appendStreamingContent: (text: string) => void;
-  clearStreamingContent: () => void;
   setSelectedAgentId: (id: string) => void;
   addTimelineItem: (item: ChatTimelineItem) => void;
   clearTimeline: () => void;
@@ -42,7 +39,6 @@ export const useChatStore = create<ChatState>((set) => ({
   isFullscreen: false,
   activeSessionId: readStored(SESSION_STORAGE_KEY),
   pendingTaskId: null,
-  streamingContent: "",
   selectedAgentId: readStored(AGENT_STORAGE_KEY),
   timelineItems: [],
   setOpen: (open) => set({ isOpen: open, ...(open ? {} : { isFullscreen: false }) }),
@@ -57,9 +53,6 @@ export const useChatStore = create<ChatState>((set) => ({
     set({ activeSessionId: id });
   },
   setPendingTask: (taskId) => set({ pendingTaskId: taskId, timelineItems: [] }),
-  appendStreamingContent: (text) =>
-    set((s) => ({ streamingContent: s.streamingContent + text })),
-  clearStreamingContent: () => set({ streamingContent: "" }),
   setSelectedAgentId: (id) => {
     localStorage.setItem(AGENT_STORAGE_KEY, id);
     set({ selectedAgentId: id });

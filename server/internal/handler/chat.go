@@ -87,6 +87,10 @@ func (h *Handler) ListChatSessions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetChatSession(w http.ResponseWriter, r *http.Request) {
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return
+	}
 	workspaceID := ctxWorkspaceID(r.Context())
 	sessionID := chi.URLParam(r, "sessionId")
 
@@ -98,20 +102,32 @@ func (h *Handler) GetChatSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "chat session not found")
 		return
 	}
+	if uuidToString(session.CreatorID) != userID {
+		writeError(w, http.StatusForbidden, "not your chat session")
+		return
+	}
 
 	writeJSON(w, http.StatusOK, chatSessionToResponse(session))
 }
 
 func (h *Handler) ArchiveChatSession(w http.ResponseWriter, r *http.Request) {
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return
+	}
 	workspaceID := ctxWorkspaceID(r.Context())
 	sessionID := chi.URLParam(r, "sessionId")
 
-	// Verify session exists in workspace.
-	if _, err := h.Queries.GetChatSessionInWorkspace(r.Context(), db.GetChatSessionInWorkspaceParams{
+	session, err := h.Queries.GetChatSessionInWorkspace(r.Context(), db.GetChatSessionInWorkspaceParams{
 		ID:          parseUUID(sessionID),
 		WorkspaceID: parseUUID(workspaceID),
-	}); err != nil {
+	})
+	if err != nil {
 		writeError(w, http.StatusNotFound, "chat session not found")
+		return
+	}
+	if uuidToString(session.CreatorID) != userID {
+		writeError(w, http.StatusForbidden, "not your chat session")
 		return
 	}
 
@@ -167,23 +183,26 @@ func (h *Handler) SendChatMessage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "chat session is archived")
 		return
 	}
-
-	// Enqueue a chat task.
-	task, err := h.TaskService.EnqueueChatTask(r.Context(), session)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to enqueue chat task: "+err.Error())
+	if uuidToString(session.CreatorID) != userID {
+		writeError(w, http.StatusForbidden, "not your chat session")
 		return
 	}
 
-	// Create the user message.
+	// Create the user message first so the daemon can always find it.
 	msg, err := h.Queries.CreateChatMessage(r.Context(), db.CreateChatMessageParams{
 		ChatSessionID: session.ID,
 		Role:          "user",
 		Content:       req.Content,
-		TaskID:        task.ID,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create chat message")
+		return
+	}
+
+	// Enqueue a chat task after the message exists.
+	task, err := h.TaskService.EnqueueChatTask(r.Context(), session)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to enqueue chat task: "+err.Error())
 		return
 	}
 
@@ -207,15 +226,23 @@ func (h *Handler) SendChatMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListChatMessages(w http.ResponseWriter, r *http.Request) {
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return
+	}
 	workspaceID := ctxWorkspaceID(r.Context())
 	sessionID := chi.URLParam(r, "sessionId")
 
-	// Verify session exists in workspace.
-	if _, err := h.Queries.GetChatSessionInWorkspace(r.Context(), db.GetChatSessionInWorkspaceParams{
+	session, err := h.Queries.GetChatSessionInWorkspace(r.Context(), db.GetChatSessionInWorkspaceParams{
 		ID:          parseUUID(sessionID),
 		WorkspaceID: parseUUID(workspaceID),
-	}); err != nil {
+	})
+	if err != nil {
 		writeError(w, http.StatusNotFound, "chat session not found")
+		return
+	}
+	if uuidToString(session.CreatorID) != userID {
+		writeError(w, http.StatusForbidden, "not your chat session")
 		return
 	}
 
@@ -230,6 +257,47 @@ func (h *Handler) ListChatMessages(w http.ResponseWriter, r *http.Request) {
 		resp[i] = chatMessageToResponse(m)
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// ---------------------------------------------------------------------------
+// Task cancellation (user-facing, with ownership check)
+// ---------------------------------------------------------------------------
+
+// CancelTaskByUser cancels a task after verifying the requesting user owns
+// the associated chat session or issue.
+func (h *Handler) CancelTaskByUser(w http.ResponseWriter, r *http.Request) {
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return
+	}
+	taskID := chi.URLParam(r, "taskId")
+
+	task, err := h.Queries.GetAgentTask(r.Context(), parseUUID(taskID))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
+	}
+
+	// Verify ownership: for chat tasks, check creator; for issue tasks, workspace membership is sufficient.
+	if task.ChatSessionID.Valid {
+		cs, err := h.Queries.GetChatSession(r.Context(), task.ChatSessionID)
+		if err != nil {
+			writeError(w, http.StatusNotFound, "chat session not found")
+			return
+		}
+		if uuidToString(cs.CreatorID) != userID {
+			writeError(w, http.StatusForbidden, "not your task")
+			return
+		}
+	}
+
+	cancelled, err := h.TaskService.CancelTask(r.Context(), parseUUID(taskID))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, taskToResponse(*cancelled))
 }
 
 // ---------------------------------------------------------------------------

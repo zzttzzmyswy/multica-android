@@ -6,9 +6,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { createQueryClient } from "./query-client";
 import type { ReactNode } from "react";
 
-const showDevtools = process.env.NEXT_PUBLIC_DEVTOOLS !== "false";
-
-export function QueryProvider({ children }: { children: ReactNode }) {
+export function QueryProvider({ children, showDevtools = true }: { children: ReactNode; showDevtools?: boolean }) {
   const [queryClient] = useState(createQueryClient);
   return (
     <QueryClientProvider client={queryClient}>

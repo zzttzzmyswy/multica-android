@@ -5,7 +5,7 @@ CREATE TABLE chat_session (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
     agent_id UUID NOT NULL REFERENCES agent(id) ON DELETE CASCADE,
-    creator_id UUID NOT NULL,
+    creator_id UUID NOT NULL REFERENCES "user"(id),
     title TEXT NOT NULL DEFAULT '',
     session_id TEXT,
     work_dir TEXT,
