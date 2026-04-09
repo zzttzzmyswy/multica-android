@@ -17,6 +17,7 @@ import {
   SquarePen,
   CircleUser,
   FolderKanban,
+  Search,
 } from "lucide-react";
 import { WorkspaceAvatar } from "@multica/views/workspace/workspace-avatar";
 import { useIssueDraftStore } from "@multica/core/issues/stores/draft-store";
@@ -49,6 +50,7 @@ import { inboxKeys, deduplicateInboxItems } from "@multica/core/inbox/queries";
 import { api } from "@/platform/api";
 import { useModalStore } from "@multica/core/modals";
 import { useMyRuntimesNeedUpdate } from "@multica/core/runtimes/hooks";
+import { useSearchStore } from "@/features/search";
 
 const primaryNav = [
   { href: "/inbox", label: "Inbox", icon: Inbox },
@@ -172,16 +174,27 @@ export function AppSidebar() {
                 </DropdownMenu>
               </SidebarMenuItem>
             </SidebarMenu>
-            <Tooltip>
-              <TooltipTrigger
-                className="relative flex h-7 w-7 items-center justify-center rounded-lg bg-background text-foreground shadow-sm hover:bg-accent"
-                onClick={() => useModalStore.getState().open("create-issue")}
-              >
-                <SquarePen className="size-3.5" />
-                <DraftDot />
-              </TooltipTrigger>
-              <TooltipContent side="bottom">New issue</TooltipContent>
-            </Tooltip>
+            <div className="flex items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger
+                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-secondary-foreground"
+                  onClick={() => useSearchStore.getState().setOpen(true)}
+                >
+                  <Search className="size-3.5" />
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Search workspace (⌘K)</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger
+                  className="relative flex h-7 w-7 items-center justify-center rounded-lg bg-background text-foreground shadow-sm hover:bg-accent"
+                  onClick={() => useModalStore.getState().open("create-issue")}
+                >
+                  <SquarePen className="size-3.5" />
+                  <DraftDot />
+                </TooltipTrigger>
+                <TooltipContent side="bottom">New issue</TooltipContent>
+              </Tooltip>
+            </div>
           </div>
         </SidebarHeader>
 
