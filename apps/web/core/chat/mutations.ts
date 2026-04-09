@@ -12,6 +12,7 @@ export function useCreateChatSession() {
       api.createChatSession(data),
     onSettled: () => {
       qc.invalidateQueries({ queryKey: chatKeys.sessions(wsId) });
+      qc.invalidateQueries({ queryKey: chatKeys.allSessions(wsId) });
     },
   });
 }
@@ -24,6 +25,7 @@ export function useArchiveChatSession() {
     mutationFn: (sessionId: string) => api.archiveChatSession(sessionId),
     onSettled: () => {
       qc.invalidateQueries({ queryKey: chatKeys.sessions(wsId) });
+      qc.invalidateQueries({ queryKey: chatKeys.allSessions(wsId) });
     },
   });
 }

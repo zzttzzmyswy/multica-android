@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Minus, Maximize2, Minimize2, Send, ChevronDown, Bot, Plus } from "lucide-react";
+import { Minus, Maximize2, Minimize2, Send, ChevronDown, Bot, Plus, History } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@multica/ui/components/ui/avatar";
 import {
   DropdownMenu,
@@ -15,11 +15,12 @@ import { useAuthStore } from "@multica/core/auth";
 import { agentListOptions, memberListOptions } from "@multica/core/workspace/queries";
 import { canAssignAgent } from "@multica/views/issues/components";
 import { api } from "@/platform/api";
-import { chatSessionsOptions, chatMessagesOptions, chatKeys } from "@/core/chat/queries";
+import { chatSessionsOptions, allChatSessionsOptions, chatMessagesOptions, chatKeys } from "@/core/chat/queries";
 import { useCreateChatSession } from "@/core/chat/mutations";
 import { useChatStore } from "../store";
 import { ChatMessageList } from "./chat-message-list";
 import { ChatInput } from "./chat-input";
+import { ChatSessionHistory } from "./chat-session-history";
 import { useWS } from "@multica/core/realtime";
 import type { TaskMessagePayload, ChatDonePayload, Agent, ChatMessage } from "@multica/core/types";
 
@@ -33,21 +34,30 @@ export function ChatWindow() {
   const selectedAgentId = useChatStore((s) => s.selectedAgentId);
   const setOpen = useChatStore((s) => s.setOpen);
   const toggleFullscreen = useChatStore((s) => s.toggleFullscreen);
+  const showHistory = useChatStore((s) => s.showHistory);
   const setActiveSession = useChatStore((s) => s.setActiveSession);
   const setPendingTask = useChatStore((s) => s.setPendingTask);
   const addTimelineItem = useChatStore((s) => s.addTimelineItem);
   const clearTimeline = useChatStore((s) => s.clearTimeline);
   const setSelectedAgentId = useChatStore((s) => s.setSelectedAgentId);
+  const setShowHistory = useChatStore((s) => s.setShowHistory);
 
   const user = useAuthStore((s) => s.user);
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
   const { data: members = [] } = useQuery(memberListOptions(wsId));
   const { data: sessions = [] } = useQuery(chatSessionsOptions(wsId));
+  const { data: allSessions = [] } = useQuery(allChatSessionsOptions(wsId));
   const { data: rawMessages } = useQuery(
     chatMessagesOptions(activeSessionId ?? ""),
   );
   // When no active session, always show empty — don't use stale cache
   const messages = activeSessionId ? rawMessages ?? [] : [];
+
+  // Check if current session is archived
+  const currentSession = activeSessionId
+    ? allSessions.find((s) => s.id === activeSessionId)
+    : null;
+  const isSessionArchived = currentSession?.status === "archived";
 
   const qc = useQueryClient();
   const createSession = useCreateChatSession();
@@ -217,55 +227,75 @@ export function ChatWindow() {
   return (
     <div className={containerClass}>
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-2.5">
-        <AgentSelector
-          agents={availableAgents}
-          activeAgent={activeAgent}
-          onSelect={handleSelectAgent}
-        />
-        <div className="flex items-center gap-0.5">
-          <button
-            onClick={() => {
-              setActiveSession(null);
-              clearTimeline();
-              setPendingTask(null);
-            }}
-            title="New chat"
-            className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-          >
-            <Plus className="size-3.5" />
-          </button>
-          <button
-            onClick={toggleFullscreen}
-            title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-            className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-          >
-            {isFullscreen ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
-          </button>
-          <button
-            onClick={() => setOpen(false)}
-            title="Minimize"
-            className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-          >
-            <Minus className="size-3.5" />
-          </button>
+      {!showHistory && (
+        <div className="flex items-center justify-between border-b px-4 py-2.5">
+          <AgentSelector
+            agents={availableAgents}
+            activeAgent={activeAgent}
+            onSelect={handleSelectAgent}
+          />
+          <div className="flex items-center gap-0.5">
+            <button
+              onClick={() => setShowHistory(true)}
+              title="Chat history"
+              className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              <History className="size-3.5" />
+            </button>
+            <button
+              onClick={() => {
+                setActiveSession(null);
+                clearTimeline();
+                setPendingTask(null);
+              }}
+              title="New chat"
+              className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              <Plus className="size-3.5" />
+            </button>
+            <button
+              onClick={toggleFullscreen}
+              title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              {isFullscreen ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+            </button>
+            <button
+              onClick={() => setOpen(false)}
+              title="Minimize"
+              className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              <Minus className="size-3.5" />
+            </button>
+          </div>
         </div>
-      </div>
-
-      {/* Messages or Empty State */}
-      {hasMessages ? (
-        <ChatMessageList
-          messages={messages}
-          agent={activeAgent}
-          timelineItems={timelineItems}
-          isWaiting={!!pendingTaskId}
-        />
-      ) : (
-        <EmptyState agentName={activeAgent?.name} />
       )}
 
-      {/* Input */}
-      <ChatInput onSend={handleSend} onStop={handleStop} isRunning={!!pendingTaskId} />
+      {showHistory ? (
+        <ChatSessionHistory />
+      ) : (
+        <>
+          {/* Messages or Empty State */}
+          {hasMessages ? (
+            <ChatMessageList
+              messages={messages}
+              agent={activeAgent}
+              timelineItems={timelineItems}
+              isWaiting={!!pendingTaskId}
+            />
+          ) : (
+            <EmptyState agentName={activeAgent?.name} />
+          )}
+
+          {/* Input — disabled for archived sessions */}
+          <ChatInput
+            onSend={handleSend}
+            onStop={handleStop}
+            isRunning={!!pendingTaskId}
+            disabled={isSessionArchived}
+          />
+        </>
+      )}
     </div>
   );
 }

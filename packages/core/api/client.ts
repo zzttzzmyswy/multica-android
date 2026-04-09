@@ -608,8 +608,9 @@ export class ApiClient {
   }
 
   // Chat Sessions
-  async listChatSessions(): Promise<ChatSession[]> {
-    return this.fetch("/api/chat/sessions");
+  async listChatSessions(params?: { status?: string }): Promise<ChatSession[]> {
+    const query = params?.status ? `?status=${params.status}` : "";
+    return this.fetch(`/api/chat/sessions${query}`);
   }
 
   async getChatSession(id: string): Promise<ChatSession> {

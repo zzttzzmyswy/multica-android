@@ -16,6 +16,11 @@ SELECT * FROM chat_session
 WHERE workspace_id = $1 AND creator_id = $2 AND status = 'active'
 ORDER BY updated_at DESC;
 
+-- name: ListAllChatSessionsByCreator :many
+SELECT * FROM chat_session
+WHERE workspace_id = $1 AND creator_id = $2
+ORDER BY updated_at DESC;
+
 -- name: UpdateChatSessionTitle :one
 UPDATE chat_session SET title = $2, updated_at = now()
 WHERE id = $1

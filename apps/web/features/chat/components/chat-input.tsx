@@ -7,22 +7,23 @@ interface ChatInputProps {
   onSend: (content: string) => void;
   onStop?: () => void;
   isRunning?: boolean;
+  disabled?: boolean;
 }
 
-export function ChatInput({ onSend, onStop, isRunning }: ChatInputProps) {
+export function ChatInput({ onSend, onStop, isRunning, disabled }: ChatInputProps) {
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSend = useCallback(() => {
     const trimmed = value.trim();
-    if (!trimmed || isRunning) return;
+    if (!trimmed || isRunning || disabled) return;
     onSend(trimmed);
     setValue("");
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
     textareaRef.current?.focus();
-  }, [value, isRunning, onSend]);
+  }, [value, isRunning, disabled, onSend]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -52,8 +53,8 @@ export function ChatInput({ onSend, onStop, isRunning }: ChatInputProps) {
             handleInput();
           }}
           onKeyDown={handleKeyDown}
-          placeholder="Ask Multica..."
-          disabled={isRunning}
+          placeholder={disabled ? "This session is archived" : "Ask Multica..."}
+          disabled={isRunning || disabled}
           className="block w-full resize-none bg-transparent px-3 pt-3 pb-2 text-sm placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
           rows={1}
         />
@@ -68,7 +69,7 @@ export function ChatInput({ onSend, onStop, isRunning }: ChatInputProps) {
           ) : (
             <button
               onClick={handleSend}
-              disabled={!value.trim()}
+              disabled={!value.trim() || disabled}
               className="flex size-7 items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-80 disabled:opacity-30"
             >
               <ArrowUp className="size-4" />
