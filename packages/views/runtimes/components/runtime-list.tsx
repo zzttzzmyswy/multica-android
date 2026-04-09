@@ -45,7 +45,7 @@ function RuntimeListItem({
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium">{runtime.name}</div>
         <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-          {ownerMember && (
+          {ownerMember ? (
             <>
               <ActorAvatar
                 actorType="member"
@@ -53,10 +53,10 @@ function RuntimeListItem({
                 size={14}
               />
               <span className="truncate">{ownerMember.name}</span>
-              <span>&middot;</span>
             </>
+          ) : (
+            <span className="truncate">{runtime.runtime_mode}</span>
           )}
-          <span className="truncate">{runtime.provider}</span>
         </div>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">

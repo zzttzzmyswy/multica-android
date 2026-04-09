@@ -31,3 +31,4 @@ export type * from "./api";
 export type { Attachment } from "./attachment";
 export type { ChatSession, ChatMessage, SendChatMessageResponse } from "./chat";
 export type { StorageAdapter } from "./storage";
+export type { Project, ProjectStatus, ProjectPriority, CreateProjectRequest, UpdateProjectRequest, ListProjectsResponse } from "./project";

@@ -61,6 +61,7 @@ import { ActorAvatar } from "../../common/actor-avatar";
 import type { Issue, UpdateIssueRequest, IssueStatus, IssuePriority, TimelineEntry } from "@multica/core/types";
 import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@multica/core/issues/config";
 import { StatusIcon, PriorityIcon, DueDatePicker, AssigneePicker, canAssignAgent } from ".";
+import { ProjectPicker } from "../../projects/components/project-picker";
 import { CommentCard } from "./comment-card";
 import { CommentInput } from "./comment-input";
 import { AgentLiveCard, TaskRunHistory } from "./agent-live-card";
@@ -263,10 +264,15 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const didHighlightRef = useRef<string | null>(null);
 
-  // Issue data from TQ — uses detail query, seeded from list cache if available
+  // Issue data from TQ — uses detail query, seeded from list cache if available.
+  // Only seed when description is present; list API omits it, and ContentEditor
+  // reads defaultValue on mount only — seeding null description shows an empty editor.
   const { data: issue = null, isLoading: issueLoading } = useQuery({
     ...issueDetailOptions(wsId, id),
-    initialData: () => allIssues.find((i) => i.id === id),
+    initialData: () => {
+      const cached = allIssues.find((i) => i.id === id);
+      return cached?.description != null ? cached : undefined;
+    },
   });
 
   // Custom hooks — encapsulate timeline, reactions, subscribers
@@ -335,9 +341,11 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   );
 
   const descEditorRef = useRef<ContentEditorRef>(null);
+  // Description uploads don't pass issueId — the URL lives in the markdown.
+  // This avoids stale attachment records when users delete images from the editor.
   const handleDescriptionUpload = useCallback(
-    (file: File) => uploadWithToast(file, { issueId: id }),
-    [uploadWithToast, id],
+    (file: File) => uploadWithToast(file),
+    [uploadWithToast],
   );
 
   const deleteIssueMutation = useDeleteIssue();
@@ -1208,6 +1216,14 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
               <PropRow label="Due date">
                 <DueDatePicker
                   dueDate={issue.due_date}
+                  onUpdate={handleUpdateField}
+                />
+              </PropRow>
+
+              {/* Project */}
+              <PropRow label="Project">
+                <ProjectPicker
+                  projectId={issue.project_id}
                   onUpdate={handleUpdateField}
                 />
               </PropRow>
