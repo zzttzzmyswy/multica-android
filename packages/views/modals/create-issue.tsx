@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import { useNavigation } from "../navigation";
-import { CalendarDays, Check, ChevronRight, Maximize2, Minimize2, UserMinus, X as XIcon } from "lucide-react";
+import { CalendarDays, Check, ChevronRight, FolderKanban, Maximize2, Minimize2, UserMinus, X as XIcon } from "lucide-react";
 import { cn } from "@multica/ui/lib/utils";
 import { toast } from "sonner";
 import type { IssueStatus, IssuePriority, IssueAssigneeType } from "@multica/core/types";
@@ -15,6 +15,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@multica/ui/components/ui/dropdown-menu";
 import {
@@ -34,6 +35,7 @@ import { useActorName } from "@multica/core/workspace/hooks";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { memberListOptions, agentListOptions } from "@multica/core/workspace/queries";
+import { projectListOptions } from "@multica/core/projects/queries";
 import { useIssueDraftStore } from "@multica/core/issues/stores/draft-store";
 import { useCreateIssue } from "@multica/core/issues/mutations";
 import { useFileUpload } from "@multica/core/hooks/use-file-upload";
@@ -75,6 +77,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
   const wsId = useWorkspaceId();
   const { data: members = [] } = useQuery(memberListOptions(wsId));
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
+  const { data: projects = [] } = useQuery(projectListOptions(wsId));
   const { getActorName } = useActorName();
 
   const draft = useIssueDraftStore((s) => s.draft);
@@ -89,6 +92,9 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
   const [assigneeType, setAssigneeType] = useState<IssueAssigneeType | undefined>(draft.assigneeType);
   const [assigneeId, setAssigneeId] = useState<string | undefined>(draft.assigneeId);
   const [dueDate, setDueDate] = useState<string | null>(draft.dueDate);
+  const [projectId, setProjectId] = useState<string | undefined>(
+    (data?.project_id as string) || undefined,
+  );
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Assignee popover
@@ -145,6 +151,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
         due_date: dueDate || undefined,
         attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
         parent_issue_id: (data?.parent_issue_id as string) || undefined,
+        project_id: projectId,
       });
       clearDraft();
       onClose();
@@ -434,6 +441,46 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
               )}
             </PopoverContent>
           </Popover>
+
+          {/* Project */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <PillButton>
+                  <FolderKanban className="size-3.5 text-muted-foreground" />
+                  {projectId ? (
+                    <span>{projects.find((p) => p.id === projectId)?.title ?? "Project"}</span>
+                  ) : (
+                    <span className="text-muted-foreground">Project</span>
+                  )}
+                </PillButton>
+              }
+            />
+            <DropdownMenuContent align="start" className="w-52">
+              {projects.length === 0 ? (
+                <div className="px-2 py-1.5 text-xs text-muted-foreground">No projects yet</div>
+              ) : (
+                <>
+                  {projects.map((p) => (
+                    <DropdownMenuItem key={p.id} onClick={() => setProjectId(p.id)}>
+                      <span className="mr-1">{p.icon || "📁"}</span>
+                      <span className="truncate">{p.title}</span>
+                      {p.id === projectId && <Check className="ml-auto h-3.5 w-3.5 shrink-0" />}
+                    </DropdownMenuItem>
+                  ))}
+                  {projectId && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => setProjectId(undefined)}>
+                        <XIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                        No project
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Footer */}

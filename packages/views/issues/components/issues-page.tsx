@@ -126,11 +126,11 @@ export function IssuesPage() {
         <span className="text-sm font-medium">Issues</span>
       </div>
 
-      {/* Header 2: Scope tabs + filters */}
-      <IssuesHeader scopedIssues={scopedIssues} />
-
-      {/* Content: scrollable */}
       <ViewStoreProvider store={useIssueViewStore}>
+        {/* Header 2: Scope tabs + filters */}
+        <IssuesHeader scopedIssues={scopedIssues} />
+
+        {/* Content: scrollable */}
         {scopedIssues.length === 0 ? (
           <div className="flex flex-1 min-h-0 flex-col items-center justify-center gap-2 text-muted-foreground">
             <ListTodo className="h-10 w-10 text-muted-foreground/40" />

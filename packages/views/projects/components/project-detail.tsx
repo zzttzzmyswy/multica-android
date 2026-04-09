@@ -272,7 +272,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       </div>
 
       {/* Tab bar */}
-      <div className="flex h-10 shrink-0 items-center gap-1 border-b px-4">
+      <div className="flex h-10 shrink-0 items-center gap-1 border-b px-1">
         <button
           type="button"
           onClick={() => setActiveTab("overview")}
@@ -296,9 +296,6 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
           )}
         >
           Issues
-          {projectIssues.length > 0 && (
-            <span className="ml-1.5 tabular-nums text-muted-foreground">{projectIssues.length}</span>
-          )}
         </button>
       </div>
 
