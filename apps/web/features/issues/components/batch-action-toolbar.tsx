@@ -19,10 +19,10 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
-import type { UpdateIssueRequest } from "@/shared/types";
-import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
-import { useIssueSelectionStore } from "@/features/issues/stores/selection-store";
-import { useBatchUpdateIssues, useBatchDeleteIssues } from "@core/issues/mutations";
+import type { UpdateIssueRequest } from "@multica/core/types";
+import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@multica/core/issues/config";
+import { useIssueSelectionStore } from "@multica/core/issues/stores/selection-store";
+import { useBatchUpdateIssues, useBatchDeleteIssues } from "@multica/core/issues/mutations";
 import { StatusIcon } from "./status-icon";
 import { PriorityIcon } from "./priority-icon";
 import { AssigneePicker } from "./pickers";

@@ -21,8 +21,8 @@ import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ActorAvatar } from "@/components/common/actor-avatar";
-import { api } from "@/shared/api";
-import type { AgentTask, Agent, AgentRuntime } from "@/shared/types/agent";
+import { api } from "@/platform/api";
+import type { AgentTask, Agent, AgentRuntime } from "@multica/core/types/agent";
 import { redactSecrets } from "../utils/redact";
 
 // ─── Types ──────────────────────────────────────────────────────────────────

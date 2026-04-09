@@ -16,18 +16,18 @@ import {
 } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import { Eye, Loader2, MoreHorizontal } from "lucide-react";
-import type { Issue, IssueStatus } from "@/shared/types";
+import type { Issue, IssueStatus } from "@multica/core/types";
 import { Button } from "@/components/ui/button";
-import { useLoadMoreDoneIssues } from "@core/issues/mutations";
+import { useLoadMoreDoneIssues } from "@multica/core/issues/mutations";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { ALL_STATUSES, STATUS_CONFIG } from "@/features/issues/config";
-import { useViewStoreApi, useViewStore } from "@/features/issues/stores/view-store-context";
-import type { SortField, SortDirection } from "@/features/issues/stores/view-store";
+import { ALL_STATUSES, STATUS_CONFIG } from "@multica/core/issues/config";
+import { useViewStoreApi, useViewStore } from "@multica/core/issues/stores/view-store-context";
+import type { SortField, SortDirection } from "@multica/core/issues/stores/view-store";
 import { sortIssues } from "@/features/issues/utils/sort";
 import { StatusIcon } from "./status-icon";
 import { BoardColumn } from "./board-column";

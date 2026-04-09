@@ -7,8 +7,8 @@ import {
   Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { api } from "@/shared/api";
-import type { RuntimeUpdateStatus } from "@/shared/types";
+import { api } from "@/platform/api";
+import type { RuntimeUpdateStatus } from "@multica/core/types";
 
 const GITHUB_RELEASES_URL =
   "https://api.github.com/repos/multica-ai/multica/releases/latest";

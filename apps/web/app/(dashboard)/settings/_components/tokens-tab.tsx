@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Key, Trash2, Copy, Check } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import type { PersonalAccessToken } from "@/shared/types";
+import type { PersonalAccessToken } from "@multica/core/types";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { api } from "@/shared/api";
+import { api } from "@/platform/api";
 
 export function TokensTab() {
   const [tokens, setTokens] = useState<PersonalAccessToken[]>([]);

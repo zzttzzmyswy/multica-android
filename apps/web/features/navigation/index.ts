@@ -1,1 +1,1 @@
-export { useNavigationStore } from "./store";
+export { useNavigationStore } from "@multica/core/navigation";

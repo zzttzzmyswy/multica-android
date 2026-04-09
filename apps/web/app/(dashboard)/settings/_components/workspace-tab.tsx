@@ -19,11 +19,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
-import { useAuthStore } from "@/features/auth";
-import { useWorkspaceStore } from "@/features/workspace";
-import { useWorkspaceId } from "@core/hooks";
-import { memberListOptions } from "@core/workspace/queries";
-import { api } from "@/shared/api";
+import { useAuthStore } from "@/platform/auth";
+import { useWorkspaceStore } from "@/platform/workspace";
+import { useWorkspaceId } from "@multica/core/hooks";
+import { memberListOptions } from "@multica/core/workspace/queries";
+import { api } from "@/platform/api";
 
 export function WorkspaceTab() {
   const user = useAuthStore((s) => s.user);

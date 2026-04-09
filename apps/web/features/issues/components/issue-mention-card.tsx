@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { issueListOptions } from "@core/issues/queries";
-import { useWorkspaceId } from "@core/hooks";
+import { issueListOptions } from "@multica/core/issues/queries";
+import { useWorkspaceId } from "@multica/core/hooks";
 import { StatusIcon } from "./status-icon";
 
 interface IssueMentionCardProps {

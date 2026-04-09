@@ -10,7 +10,7 @@ import {
   AlertCircle,
   Download,
 } from "lucide-react";
-import type { Skill, CreateSkillRequest, UpdateSkillRequest } from "@/shared/types";
+import type { Skill, CreateSkillRequest, UpdateSkillRequest } from "@multica/core/types";
 import {
   Dialog,
   DialogContent,
@@ -32,11 +32,11 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
-import { api } from "@/shared/api";
+import { api } from "@/platform/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuthStore } from "@/features/auth";
-import { useWorkspaceId } from "@core/hooks";
-import { skillListOptions, workspaceKeys } from "@core/workspace/queries";
+import { useAuthStore } from "@/platform/auth";
+import { useWorkspaceId } from "@multica/core/hooks";
+import { skillListOptions, workspaceKeys } from "@multica/core/workspace/queries";
 
 import { FileTree } from "./file-tree";
 import { FileViewer } from "./file-viewer";

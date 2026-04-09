@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Crown, Shield, User, Plus, MoreHorizontal, UserMinus, Users } from "lucide-react";
 import { ActorAvatar } from "@/components/common/actor-avatar";
-import type { MemberWithUser, MemberRole } from "@/shared/types";
+import type { MemberWithUser, MemberRole } from "@multica/core/types";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -37,11 +37,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuthStore } from "@/features/auth";
-import { useWorkspaceStore } from "@/features/workspace";
-import { useWorkspaceId } from "@core/hooks";
-import { memberListOptions, workspaceKeys } from "@core/workspace/queries";
-import { api } from "@/shared/api";
+import { useAuthStore } from "@/platform/auth";
+import { useWorkspaceStore } from "@/platform/workspace";
+import { useWorkspaceId } from "@multica/core/hooks";
+import { memberListOptions, workspaceKeys } from "@multica/core/workspace/queries";
+import { api } from "@/platform/api";
 
 const roleConfig: Record<MemberRole, { label: string; icon: typeof Crown; description: string }> = {
   owner: { label: "Owner", icon: Crown, description: "Full access, manage all settings" },

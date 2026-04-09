@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { Issue } from "@/shared/types";
+import type { Issue } from "@multica/core/types";
+import { WorkspaceIdProvider } from "@multica/core/hooks";
 
 // Mock next/navigation
 vi.mock("next/navigation", () => ({
@@ -47,6 +48,16 @@ vi.mock("@/features/workspace", () => ({
   WorkspaceAvatar: ({ name }: { name: string }) => <span>{name.charAt(0)}</span>,
 }));
 
+vi.mock("@/platform/workspace", () => ({
+  useWorkspaceStore: Object.assign(
+    (selector?: any) => {
+      const state = { workspace: { id: "ws-1", name: "Test", slug: "test" }, agents: [], members: [] };
+      return selector ? selector(state) : state;
+    },
+    { getState: () => ({ workspace: { id: "ws-1", name: "Test", slug: "test" }, agents: [], members: [] }) },
+  ),
+}));
+
 // Mock WebSocket context
 vi.mock("@/features/realtime", () => ({
   useWSEvent: vi.fn(),
@@ -60,20 +71,25 @@ vi.mock("sonner", () => ({
   toast: { error: vi.fn(), success: vi.fn() },
 }));
 
-// Mock api
+// Mock api (core queries/mutations use @multica/core/api)
 const mockUpdateIssue = vi.fn();
 const mockListIssues = vi.hoisted(() => vi.fn().mockResolvedValue({ issues: [], total: 0 }));
 
-vi.mock("@/shared/api", () => ({
+vi.mock("@multica/core/api", () => ({
   api: {
     listIssues: (...args: any[]) => mockListIssues(...args),
     updateIssue: (...args: any[]) => mockUpdateIssue(...args),
   },
+  getApi: () => ({
+    listIssues: (...args: any[]) => mockListIssues(...args),
+    updateIssue: (...args: any[]) => mockUpdateIssue(...args),
+  }),
+  setApiInstance: vi.fn(),
 }));
 
 // Mock issue store — only client state remains
 const mockIssueClientState = { activeIssueId: null, setActiveIssue: vi.fn() };
-vi.mock("@/features/issues/store", () => ({
+vi.mock("@multica/core/issues", () => ({
   useIssueStore: Object.assign(
     (selector?: any) => (selector ? selector(mockIssueClientState) : mockIssueClientState),
     { getState: () => mockIssueClientState },
@@ -122,12 +138,17 @@ const mockViewState = {
   toggleListCollapsed: vi.fn(),
 };
 
-vi.mock("@/features/issues/stores/view-store", () => ({
+vi.mock("@multica/core/issues/stores/view-store", () => ({
   initFilterWorkspaceSync: vi.fn(),
   useIssueViewStore: Object.assign(
     (selector?: any) => (selector ? selector(mockViewState) : mockViewState),
     { getState: () => mockViewState, setState: vi.fn() },
   ),
+  createIssueViewStore: () => ({
+    getState: () => mockViewState,
+    setState: vi.fn(),
+    subscribe: vi.fn(),
+  }),
   SORT_OPTIONS: [
     { value: "position", label: "Manual" },
     { value: "priority", label: "Priority" },
@@ -144,14 +165,36 @@ vi.mock("@/features/issues/stores/view-store", () => ({
 }));
 
 // Mock view store context (shared components read from context)
-vi.mock("@/features/issues/stores/view-store-context", () => ({
+vi.mock("@multica/core/issues/stores/view-store-context", () => ({
   ViewStoreProvider: ({ children }: { children: React.ReactNode }) => children,
   useViewStore: (selector?: any) => (selector ? selector(mockViewState) : mockViewState),
   useViewStoreApi: () => ({ getState: () => mockViewState, setState: vi.fn(), subscribe: vi.fn() }),
 }));
 
+// Mock issues scope store
+vi.mock("@multica/core/issues/stores/issues-scope-store", () => ({
+  useIssuesScopeStore: Object.assign(
+    (selector?: any) => {
+      const state = { scope: "all", setScope: vi.fn() };
+      return selector ? selector(state) : state;
+    },
+    { getState: () => ({ scope: "all", setScope: vi.fn() }) },
+  ),
+}));
+
+// Mock selection store
+vi.mock("@multica/core/issues/stores/selection-store", () => ({
+  useIssueSelectionStore: Object.assign(
+    (selector?: any) => {
+      const state = { selectedIds: new Set(), toggle: vi.fn(), clear: vi.fn(), setAll: vi.fn() };
+      return selector ? selector(state) : state;
+    },
+    { getState: () => ({ selectedIds: new Set(), toggle: vi.fn(), clear: vi.fn(), setAll: vi.fn() }) },
+  ),
+}));
+
 // Mock issue config
-vi.mock("@/features/issues/config", () => ({
+vi.mock("@multica/core/issues/config", () => ({
   ALL_STATUSES: ["backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled"],
   BOARD_STATUSES: ["backlog", "todo", "in_progress", "in_review", "done", "blocked"],
   STATUS_ORDER: ["backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled"],
@@ -175,6 +218,13 @@ vi.mock("@/features/issues/config", () => ({
 }));
 
 // Mock modals
+vi.mock("@multica/core/modals", () => ({
+  useModalStore: Object.assign(
+    () => ({ open: vi.fn() }),
+    { getState: () => ({ open: vi.fn() }) },
+  ),
+}));
+
 vi.mock("@/features/modals", () => ({
   useModalStore: Object.assign(
     () => ({ open: vi.fn() }),
@@ -277,7 +327,13 @@ import IssuesPage from "./page";
 
 function renderWithQuery(ui: React.ReactElement) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } });
-  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
+  return render(
+    <QueryClientProvider client={qc}>
+      <WorkspaceIdProvider wsId="ws-1">
+        {ui}
+      </WorkspaceIdProvider>
+    </QueryClientProvider>,
+  );
 }
 
 describe("IssuesPage", () => {

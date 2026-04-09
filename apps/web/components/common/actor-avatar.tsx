@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useActorName } from "@/features/workspace";
+import { useActorName } from "@multica/core/workspace/hooks";
 
 interface ActorAvatarProps {
   actorType: string;

@@ -1,4 +1,4 @@
-import type { AgentRuntime } from "@/shared/types";
+import type { AgentRuntime } from "@multica/core/types";
 import { formatLastSeen } from "../utils";
 import { RuntimeModeIcon, StatusBadge, InfoField } from "./shared";
 import { PingSection } from "./ping-section";

@@ -5,7 +5,8 @@ import { ArrowUp, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ContentEditor, type ContentEditorRef } from "@/features/editor";
 import { FileUploadButton } from "@/components/common/file-upload-button";
-import { useFileUpload } from "@/shared/hooks/use-file-upload";
+import { useFileUpload } from "@multica/core/hooks/use-file-upload";
+import { api } from "@/platform/api";
 
 interface CommentInputProps {
   issueId: string;
@@ -17,7 +18,7 @@ function CommentInput({ issueId, onSubmit }: CommentInputProps) {
   const [isEmpty, setIsEmpty] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [attachmentIds, setAttachmentIds] = useState<string[]>([]);
-  const { uploadWithToast } = useFileUpload();
+  const { uploadWithToast } = useFileUpload(api);
 
   const handleUpload = async (file: File) => {
     const result = await uploadWithToast(file, { issueId });

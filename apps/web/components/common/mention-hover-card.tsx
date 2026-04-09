@@ -5,8 +5,8 @@ import { Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { ActorAvatar } from "@/components/common/actor-avatar";
-import { useWorkspaceId } from "@core/hooks";
-import { memberListOptions, agentListOptions } from "@core/workspace/queries";
+import { useWorkspaceId } from "@multica/core/hooks";
+import { memberListOptions, agentListOptions } from "@multica/core/workspace/queries";
 
 interface MentionHoverCardProps {
   type: string;

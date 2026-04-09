@@ -1,6 +1,6 @@
-import type { Issue } from "@/shared/types";
-import { PRIORITY_ORDER } from "@/features/issues/config";
-import type { SortField, SortDirection } from "@/features/issues/stores/view-store";
+import type { Issue } from "@multica/core/types";
+import { PRIORITY_ORDER } from "@multica/core/issues/config";
+import type { SortField, SortDirection } from "@multica/core/issues/stores/view-store";
 
 const PRIORITY_RANK: Record<string, number> = Object.fromEntries(
   PRIORITY_ORDER.map((p, i) => [p, i])

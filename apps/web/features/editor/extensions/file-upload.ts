@@ -1,6 +1,6 @@
 import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
-import type { UploadResult } from "@/shared/hooks/use-file-upload";
+import type { UploadResult } from "@multica/core/hooks/use-file-upload";
 
 /** Find and remove a fileCard node by uploadId. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -2,9 +2,9 @@
 
 import { memo } from "react";
 import Link from "next/link";
-import type { Issue } from "@/shared/types";
+import type { Issue } from "@multica/core/types";
 import { ActorAvatar } from "@/components/common/actor-avatar";
-import { useIssueSelectionStore } from "@/features/issues/stores/selection-store";
+import { useIssueSelectionStore } from "@multica/core/issues/stores/selection-store";
 import { PriorityIcon } from "./priority-icon";
 
 function formatDate(date: string): string {

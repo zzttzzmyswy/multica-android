@@ -2,9 +2,10 @@
 
 import { Suspense, useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useAuthStore, setLoggedInCookie } from "@/features/auth";
-import { useWorkspaceStore } from "@/features/workspace";
-import { api } from "@/shared/api";
+import { useAuthStore } from "@/platform/auth";
+import { setLoggedInCookie } from "@/features/auth/auth-cookie";
+import { useWorkspaceStore } from "@/platform/workspace";
+import { api } from "@/platform/api";
 import {
   Card,
   CardHeader,
@@ -21,7 +22,7 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
-import type { User } from "@/shared/types";
+import type { User } from "@multica/core/types";
 
 function validateCliCallback(cliCallback: string): boolean {
   try {

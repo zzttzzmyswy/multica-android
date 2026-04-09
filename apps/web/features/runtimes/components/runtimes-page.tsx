@@ -10,10 +10,10 @@ import {
   ResizableHandle,
 } from "@/components/ui/resizable";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAuthStore } from "@/features/auth";
-import { useWorkspaceId } from "@core/hooks";
-import { runtimeListOptions, runtimeKeys } from "@core/runtimes/queries";
-import { useWSEvent } from "@/features/realtime";
+import { useAuthStore } from "@/platform/auth";
+import { useWorkspaceId } from "@multica/core/hooks";
+import { runtimeListOptions, runtimeKeys } from "@multica/core/runtimes/queries";
+import { useWSEvent } from "@multica/core/realtime";
 import { RuntimeList } from "./runtime-list";
 import { RuntimeDetail } from "./runtime-detail";
 

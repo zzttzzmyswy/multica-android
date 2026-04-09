@@ -1,4 +1,4 @@
-import type { RuntimeUsage } from "@/shared/types";
+import type { RuntimeUsage } from "@multica/core/types";
 
 // ---------------------------------------------------------------------------
 // Formatting helpers

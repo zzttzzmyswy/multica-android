@@ -6,15 +6,15 @@ import { useSortable, defaultAnimateLayoutChanges } from "@dnd-kit/sortable";
 import type { AnimateLayoutChanges } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { toast } from "sonner";
-import type { Issue, UpdateIssueRequest } from "@/shared/types";
+import type { Issue, UpdateIssueRequest } from "@multica/core/types";
 import { CalendarDays } from "lucide-react";
 import { ActorAvatar } from "@/components/common/actor-avatar";
-import { useUpdateIssue } from "@core/issues/mutations";
+import { useUpdateIssue } from "@multica/core/issues/mutations";
 import { PriorityIcon } from "./priority-icon";
 import { PriorityPicker, AssigneePicker, DueDatePicker } from "./pickers";
-import { PRIORITY_CONFIG } from "@/features/issues/config";
-import type { CardProperties } from "@/features/issues/stores/view-store";
-import { useViewStore } from "@/features/issues/stores/view-store-context";
+import { PRIORITY_CONFIG } from "@multica/core/issues/config";
+import type { CardProperties } from "@multica/core/issues/stores/view-store";
+import { useViewStore } from "@multica/core/issues/stores/view-store-context";
 
 function formatDate(date: string): string {
   return new Date(date).toLocaleDateString("en-US", {

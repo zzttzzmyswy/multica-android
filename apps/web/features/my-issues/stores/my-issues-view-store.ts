@@ -6,7 +6,7 @@ import {
   type IssueViewState,
   viewStoreSlice,
   viewStorePersistOptions,
-} from "@/features/issues/stores/view-store";
+} from "@multica/core/issues/stores/view-store";
 
 export type MyIssuesScope = "assigned" | "created" | "agents";
 

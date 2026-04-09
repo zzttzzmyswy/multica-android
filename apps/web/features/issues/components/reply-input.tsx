@@ -5,7 +5,8 @@ import { ArrowUp, Loader2 } from "lucide-react";
 import { ContentEditor, type ContentEditorRef } from "@/features/editor";
 import { FileUploadButton } from "@/components/common/file-upload-button";
 import { ActorAvatar } from "@/components/common/actor-avatar";
-import { useFileUpload } from "@/shared/hooks/use-file-upload";
+import { useFileUpload } from "@multica/core/hooks/use-file-upload";
+import { api } from "@/platform/api";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -39,7 +40,7 @@ function ReplyInput({
   const [isExpanded, setIsExpanded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [attachmentIds, setAttachmentIds] = useState<string[]>([]);
-  const { uploadWithToast } = useFileUpload();
+  const { uploadWithToast } = useFileUpload(api);
 
   useEffect(() => {
     const el = measureRef.current;

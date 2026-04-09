@@ -1,5 +1,5 @@
-export { useIssueStore } from "./store";
-export { useIssueViewStore, createIssueViewStore } from "./stores/view-store";
-export { ViewStoreProvider, useViewStore } from "./stores/view-store-context";
+export { useIssueStore } from "@multica/core/issues";
+export { useIssueViewStore, createIssueViewStore } from "@multica/core/issues/stores/view-store";
+export { ViewStoreProvider, useViewStore } from "@multica/core/issues/stores/view-store-context";
 export { StatusIcon, PriorityIcon, StatusPicker, PriorityPicker, AssigneePicker } from "./components";
-export * from "./config";
+export * from "@multica/core/issues/config";

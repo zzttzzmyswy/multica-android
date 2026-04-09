@@ -1,5 +1,5 @@
 import { Server } from "lucide-react";
-import type { AgentRuntime } from "@/shared/types";
+import type { AgentRuntime } from "@multica/core/types";
 import { RuntimeModeIcon } from "./shared";
 
 function RuntimeListItem({

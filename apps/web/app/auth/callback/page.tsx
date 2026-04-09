@@ -2,9 +2,9 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useAuthStore } from "@/features/auth";
-import { useWorkspaceStore } from "@/features/workspace";
-import { api } from "@/shared/api";
+import { useAuthStore } from "@/platform/auth";
+import { useWorkspaceStore } from "@/platform/workspace";
+import { api } from "@/platform/api";
 import {
   Card,
   CardHeader,

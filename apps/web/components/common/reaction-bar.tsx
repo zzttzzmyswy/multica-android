@@ -2,7 +2,7 @@
 
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { QuickEmojiPicker } from "@/components/common/quick-emoji-picker";
-import { useActorName } from "@/features/workspace";
+import { useActorName } from "@multica/core/workspace/hooks";
 
 interface ReactionItem {
   id: string;

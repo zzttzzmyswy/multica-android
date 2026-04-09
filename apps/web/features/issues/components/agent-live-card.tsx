@@ -2,15 +2,15 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Bot, ChevronRight, ChevronDown, Loader2, ArrowDown, Brain, AlertCircle, Clock, CheckCircle2, XCircle, Square, Maximize2 } from "lucide-react";
-import { api } from "@/shared/api";
-import { useWSEvent } from "@/features/realtime";
-import type { TaskMessagePayload, TaskCompletedPayload, TaskFailedPayload, TaskCancelledPayload } from "@/shared/types/events";
-import type { AgentTask } from "@/shared/types/agent";
+import { api } from "@/platform/api";
+import { useWSEvent } from "@multica/core/realtime";
+import type { TaskMessagePayload, TaskCompletedPayload, TaskFailedPayload, TaskCancelledPayload } from "@multica/core/types/events";
+import type { AgentTask } from "@multica/core/types/agent";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useActorName } from "@/features/workspace";
+import { useActorName } from "@multica/core/workspace/hooks";
 import { redactSecrets } from "../utils/redact";
 import { AgentTranscriptDialog } from "./agent-transcript-dialog";
 

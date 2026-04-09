@@ -1,6 +1,6 @@
 "use client";
 
-import { useModalStore } from "./store";
+import { useModalStore } from "@multica/core/modals";
 import { CreateWorkspaceModal } from "./create-workspace";
 import { CreateIssueModal } from "./create-issue";
 

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CalendarDays } from "lucide-react";
-import type { UpdateIssueRequest } from "@/shared/types";
+import type { UpdateIssueRequest } from "@multica/core/types";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,

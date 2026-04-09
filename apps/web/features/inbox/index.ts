@@ -10,4 +10,4 @@ export {
   useArchiveAllInbox,
   useArchiveAllReadInbox,
   useArchiveCompletedInbox,
-} from "@core/inbox";
+} from "@multica/core/inbox";

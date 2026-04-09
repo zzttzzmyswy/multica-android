@@ -21,8 +21,8 @@
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 import { useQuery } from "@tanstack/react-query";
-import { issueListOptions } from "@core/issues/queries";
-import { useWorkspaceId } from "@core/hooks";
+import { issueListOptions } from "@multica/core/issues/queries";
+import { useWorkspaceId } from "@multica/core/hooks";
 import { StatusIcon } from "@/features/issues/components/status-icon";
 
 export function MentionView({ node }: NodeViewProps) {

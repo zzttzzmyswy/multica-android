@@ -41,25 +41,25 @@ import {
   STATUS_CONFIG,
   PRIORITY_ORDER,
   PRIORITY_CONFIG,
-} from "@/features/issues/config";
+} from "@multica/core/issues/config";
 import { StatusIcon, PriorityIcon } from "@/features/issues/components";
 import { useQuery } from "@tanstack/react-query";
-import { useWorkspaceId } from "@core/hooks";
-import { memberListOptions, agentListOptions } from "@core/workspace/queries";
+import { useWorkspaceId } from "@multica/core/hooks";
+import { memberListOptions, agentListOptions } from "@multica/core/workspace/queries";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import {
   useIssueViewStore,
   SORT_OPTIONS,
   CARD_PROPERTY_OPTIONS,
   type ActorFilterValue,
-} from "@/features/issues/stores/view-store";
+} from "@multica/core/issues/stores/view-store";
 import {
   useIssuesScopeStore,
   type IssuesScope,
-} from "@/features/issues/stores/issues-scope-store";
+} from "@multica/core/issues/stores/issues-scope-store";
 import { filterIssues } from "@/features/issues/utils/filter";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import type { Issue } from "@/shared/types";
+import type { Issue } from "@multica/core/types";
 
 // ---------------------------------------------------------------------------
 // HoverCheck — shadcn official pattern (PR #6862)

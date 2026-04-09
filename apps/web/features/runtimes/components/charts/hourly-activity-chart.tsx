@@ -13,8 +13,8 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { api } from "@/shared/api";
-import type { RuntimeHourlyActivity } from "@/shared/types";
+import { api } from "@/platform/api";
+import type { RuntimeHourlyActivity } from "@multica/core/types";
 
 const hourlyChartConfig = {
   count: { label: "Tasks", color: "hsl(var(--chart-2))" },

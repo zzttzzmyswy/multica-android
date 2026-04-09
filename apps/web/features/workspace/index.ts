@@ -1,3 +1,3 @@
-export { useWorkspaceStore } from "./store";
-export { useActorName } from "./hooks";
+export { useWorkspaceStore } from "@/platform/workspace";
+export { useActorName } from "@multica/core/workspace/hooks";
 export { WorkspaceAvatar } from "./components/workspace-avatar";

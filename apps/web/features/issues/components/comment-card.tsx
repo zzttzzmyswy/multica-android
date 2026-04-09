@@ -28,13 +28,14 @@ import { ActorAvatar } from "@/components/common/actor-avatar";
 import { ReactionBar } from "@/components/common/reaction-bar";
 import { QuickEmojiPicker } from "@/components/common/quick-emoji-picker";
 import { cn } from "@/lib/utils";
-import { useActorName } from "@/features/workspace";
-import { timeAgo } from "@/shared/utils";
+import { useActorName } from "@multica/core/workspace/hooks";
+import { timeAgo } from "@multica/core/utils";
 import { ContentEditor, type ContentEditorRef, copyMarkdown, ReadonlyContent } from "@/features/editor";
 import { FileUploadButton } from "@/components/common/file-upload-button";
-import { useFileUpload } from "@/shared/hooks/use-file-upload";
+import { useFileUpload } from "@multica/core/hooks/use-file-upload";
+import { api } from "@/platform/api";
 import { ReplyInput } from "./reply-input";
-import type { TimelineEntry } from "@/shared/types";
+import type { TimelineEntry } from "@multica/core/types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -113,7 +114,7 @@ function CommentRow({
   const [editing, setEditing] = useState(false);
   const editEditorRef = useRef<ContentEditorRef>(null);
   const cancelledRef = useRef(false);
-  const { uploadWithToast } = useFileUpload();
+  const { uploadWithToast } = useFileUpload(api);
 
   const isOwn = entry.actor_type === "member" && entry.actor_id === currentUserId;
   const isTemp = entry.id.startsWith("temp-");
@@ -280,7 +281,7 @@ function CommentCard({
   highlightedCommentId,
 }: CommentCardProps) {
   const { getActorName } = useActorName();
-  const { uploadWithToast } = useFileUpload();
+  const { uploadWithToast } = useFileUpload(api);
   const [open, setOpen] = useState(true);
   const [editing, setEditing] = useState(false);
   const editEditorRef = useRef<ContentEditorRef>(null);

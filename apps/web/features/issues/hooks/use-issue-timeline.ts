@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo } from "react";
 import { useQuery, useQueryClient, useMutationState } from "@tanstack/react-query";
-import type { Comment, TimelineEntry, Reaction } from "@/shared/types";
+import type { Comment, TimelineEntry, Reaction } from "@multica/core/types";
 import type {
   CommentCreatedPayload,
   CommentUpdatedPayload,
@@ -10,16 +10,16 @@ import type {
   ActivityCreatedPayload,
   ReactionAddedPayload,
   ReactionRemovedPayload,
-} from "@/shared/types";
-import { issueTimelineOptions, issueKeys } from "@core/issues/queries";
+} from "@multica/core/types";
+import { issueTimelineOptions, issueKeys } from "@multica/core/issues/queries";
 import {
   useCreateComment,
   useUpdateComment,
   useDeleteComment,
   useToggleCommentReaction,
   type ToggleCommentReactionVars,
-} from "@core/issues/mutations";
-import { useWSEvent, useWSReconnect } from "@/features/realtime";
+} from "@multica/core/issues/mutations";
+import { useWSEvent, useWSReconnect } from "@multica/core/realtime";
 import { toast } from "sonner";
 
 function commentToTimelineEntry(c: Comment): TimelineEntry {

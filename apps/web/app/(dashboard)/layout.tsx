@@ -3,10 +3,10 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { MulticaIcon } from "@/components/multica-icon";
-import { useNavigationStore } from "@/features/navigation";
+import { useNavigationStore } from "@multica/core/navigation";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
-import { useAuthStore } from "@/features/auth";
-import { useWorkspaceStore } from "@/features/workspace";
+import { useAuthStore } from "@/platform/auth";
+import { useWorkspaceStore } from "@/platform/workspace";
 import { AppSidebar } from "./_components/app-sidebar";
 
 export default function DashboardLayout({

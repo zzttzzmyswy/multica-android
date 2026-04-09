@@ -58,27 +58,28 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { AvatarGroup, AvatarGroupCount } from "@/components/ui/avatar";
 import { ActorAvatar } from "@/components/common/actor-avatar";
-import type { Issue, UpdateIssueRequest, IssueStatus, IssuePriority, TimelineEntry } from "@/shared/types";
-import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
+import type { Issue, UpdateIssueRequest, IssueStatus, IssuePriority, TimelineEntry } from "@multica/core/types";
+import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@multica/core/issues/config";
 import { StatusIcon, PriorityIcon, DueDatePicker, AssigneePicker, canAssignAgent } from "@/features/issues/components";
 import { CommentCard } from "./comment-card";
 import { CommentInput } from "./comment-input";
 import { AgentLiveCard, TaskRunHistory } from "./agent-live-card";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuthStore } from "@/features/auth";
-import { useWorkspaceStore, useActorName } from "@/features/workspace";
-import { useWorkspaceId } from "@core/hooks";
-import { issueListOptions, issueDetailOptions, childIssuesOptions } from "@core/issues/queries";
-import { memberListOptions, agentListOptions } from "@core/workspace/queries";
-import { useUpdateIssue, useDeleteIssue } from "@core/issues/mutations";
+import { useAuthStore } from "@/platform/auth";
+import { useWorkspaceStore } from "@/platform/workspace";
+import { useActorName } from "@multica/core/workspace/hooks";
+import { useWorkspaceId } from "@multica/core/hooks";
+import { issueListOptions, issueDetailOptions, childIssuesOptions } from "@multica/core/issues/queries";
+import { memberListOptions, agentListOptions } from "@multica/core/workspace/queries";
+import { useUpdateIssue, useDeleteIssue } from "@multica/core/issues/mutations";
 import { useIssueTimeline } from "@/features/issues/hooks/use-issue-timeline";
 import { useIssueReactions } from "@/features/issues/hooks/use-issue-reactions";
 import { useIssueSubscribers } from "@/features/issues/hooks/use-issue-subscribers";
 import { ReactionBar } from "@/components/common/reaction-bar";
-import { useFileUpload } from "@/shared/hooks/use-file-upload";
-import { api } from "@/shared/api";
-import { useModalStore } from "@/features/modals";
-import { timeAgo } from "@/shared/utils";
+import { useFileUpload } from "@multica/core/hooks/use-file-upload";
+import { api } from "@/platform/api";
+import { useModalStore } from "@multica/core/modals";
+import { timeAgo } from "@multica/core/utils";
 import { cn } from "@/lib/utils";
 
 /**
@@ -246,7 +247,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   const prevIssue = currentIndex > 0 ? allIssues[currentIndex - 1] : null;
   const nextIssue = currentIndex < allIssues.length - 1 ? allIssues[currentIndex + 1] : null;
   const { getActorName } = useActorName();
-  const { uploadWithToast } = useFileUpload();
+  const { uploadWithToast } = useFileUpload(api);
   const queryClient = useQueryClient();
 
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({

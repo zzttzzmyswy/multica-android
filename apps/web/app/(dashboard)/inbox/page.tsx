@@ -4,11 +4,11 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { useDefaultLayout } from "react-resizable-panels";
 import { useQuery } from "@tanstack/react-query";
-import { useWorkspaceId } from "@core/hooks";
+import { useWorkspaceId } from "@multica/core/hooks";
 import {
   inboxListOptions,
   deduplicateInboxItems,
-} from "@core/inbox/queries";
+} from "@multica/core/inbox/queries";
 import {
   useMarkInboxRead,
   useArchiveInbox,
@@ -16,10 +16,10 @@ import {
   useArchiveAllInbox,
   useArchiveAllReadInbox,
   useArchiveCompletedInbox,
-} from "@core/inbox/mutations";
+} from "@multica/core/inbox/mutations";
 import { IssueDetail, StatusIcon, PriorityIcon } from "@/features/issues/components";
-import { STATUS_CONFIG, PRIORITY_CONFIG } from "@/features/issues/config";
-import { useActorName } from "@/features/workspace";
+import { STATUS_CONFIG, PRIORITY_CONFIG } from "@multica/core/issues/config";
+import { useActorName } from "@multica/core/workspace/hooks";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { toast } from "sonner";
 import {
@@ -31,7 +31,7 @@ import {
   BookCheck,
   ListChecks,
 } from "lucide-react";
-import type { InboxItem, InboxItemType, IssueStatus, IssuePriority } from "@/shared/types";
+import type { InboxItem, InboxItemType, IssueStatus, IssuePriority } from "@multica/core/types";
 import { Button } from "@/components/ui/button";
 import {
   ResizablePanelGroup,

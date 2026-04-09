@@ -3,9 +3,9 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
-import { QueryProvider } from "@core/provider";
+import { QueryProvider } from "@multica/core/provider";
 import { AuthInitializer } from "@/features/auth";
-import { WSProvider } from "@/features/realtime";
+import { WebWSProvider } from "@/platform/ws-provider";
 import { ModalRegistry } from "@/features/modals";
 import { LocaleSync } from "@/components/locale-sync";
 import "./globals.css";
@@ -67,7 +67,7 @@ export default function RootLayout({
         <ThemeProvider>
           <QueryProvider>
             <AuthInitializer>
-              <WSProvider>{children}</WSProvider>
+              <WebWSProvider>{children}</WebWSProvider>
             </AuthInitializer>
             <ModalRegistry />
             <Toaster />

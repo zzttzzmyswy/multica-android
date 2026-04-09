@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { CalendarDays, Check, ChevronRight, Maximize2, Minimize2, UserMinus, X as XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import type { IssueStatus, IssuePriority, IssueAssigneeType } from "@/shared/types";
+import type { IssueStatus, IssuePriority, IssueAssigneeType } from "@multica/core/types";
 import {
   Dialog,
   DialogContent,
@@ -28,14 +28,16 @@ import { Button } from "@/components/ui/button";
 import { ContentEditor, type ContentEditorRef } from "@/features/editor";
 import { TitleEditor } from "@/features/editor";
 import { StatusIcon, PriorityIcon } from "@/features/issues/components";
-import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@/features/issues/config";
-import { useWorkspaceStore, useActorName } from "@/features/workspace";
+import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@multica/core/issues/config";
+import { useWorkspaceStore } from "@/platform/workspace";
+import { useActorName } from "@multica/core/workspace/hooks";
 import { useQuery } from "@tanstack/react-query";
-import { useWorkspaceId } from "@core/hooks";
-import { memberListOptions, agentListOptions } from "@core/workspace/queries";
-import { useIssueDraftStore } from "@/features/issues/stores/draft-store";
-import { useCreateIssue } from "@core/issues/mutations";
-import { useFileUpload } from "@/shared/hooks/use-file-upload";
+import { useWorkspaceId } from "@multica/core/hooks";
+import { memberListOptions, agentListOptions } from "@multica/core/workspace/queries";
+import { useIssueDraftStore } from "@multica/core/issues/stores/draft-store";
+import { useCreateIssue } from "@multica/core/issues/mutations";
+import { useFileUpload } from "@multica/core/hooks/use-file-upload";
+import { api } from "@/platform/api";
 import { FileUploadButton } from "@/components/common/file-upload-button";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 
@@ -98,7 +100,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
 
   // File upload — collect attachment IDs so we can link them after issue creation.
   const [attachmentIds, setAttachmentIds] = useState<string[]>([]);
-  const { uploadWithToast } = useFileUpload();
+  const { uploadWithToast } = useFileUpload(api);
   const handleUpload = async (file: File) => {
     const result = await uploadWithToast(file);
     if (result) {

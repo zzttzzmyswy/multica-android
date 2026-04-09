@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import { BarChart3 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { RuntimeUsage } from "@/shared/types";
-import { api } from "@/shared/api";
+import type { RuntimeUsage } from "@multica/core/types";
+import { api } from "@/platform/api";
 import { formatTokens, estimateCost, aggregateByDate } from "../utils";
 import { TokenCard } from "./shared";
 import {

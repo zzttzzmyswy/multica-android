@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, CheckCircle2, XCircle, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { api } from "@/shared/api";
-import type { RuntimePingStatus } from "@/shared/types";
+import { api } from "@/platform/api";
+import type { RuntimePingStatus } from "@multica/core/types";
 
 const pingStatusConfig: Record<
   RuntimePingStatus,
