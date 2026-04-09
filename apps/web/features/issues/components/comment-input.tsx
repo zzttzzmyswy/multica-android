@@ -2,9 +2,9 @@
 
 import { useRef, useState } from "react";
 import { ArrowUp, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@multica/ui/components/ui/button";
 import { ContentEditor, type ContentEditorRef } from "@/features/editor";
-import { FileUploadButton } from "@/components/common/file-upload-button";
+import { FileUploadButton } from "@multica/ui/components/common/file-upload-button";
 import { useFileUpload } from "@multica/core/hooks/use-file-upload";
 import { api } from "@/platform/api";
 

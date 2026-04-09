@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, CheckCircle2, XCircle, Zap } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@multica/ui/components/ui/button";
 import { api } from "@/platform/api";
 import type { RuntimePingStatus } from "@multica/core/types";
 

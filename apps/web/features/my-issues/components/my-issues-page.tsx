@@ -5,7 +5,7 @@ import { useStore } from "zustand";
 import { toast } from "sonner";
 import { ChevronRight, ListTodo } from "lucide-react";
 import type { IssueStatus } from "@multica/core/types";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@multica/ui/components/ui/skeleton";
 import { useAuthStore } from "@/platform/auth";
 import { useWorkspaceStore } from "@/platform/workspace";
 import { WorkspaceAvatar } from "@/features/workspace";

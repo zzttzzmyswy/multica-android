@@ -3,16 +3,16 @@
 import { useRef, useState } from "react";
 import { ChevronRight, Copy, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card } from "@multica/ui/components/ui/card";
+import { Button } from "@multica/ui/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+} from "@multica/ui/components/ui/dropdown-menu";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@multica/ui/components/ui/tooltip";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,16 +22,16 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
+} from "@multica/ui/components/ui/alert-dialog";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@multica/ui/components/ui/collapsible";
 import { ActorAvatar } from "@/components/common/actor-avatar";
-import { ReactionBar } from "@/components/common/reaction-bar";
-import { QuickEmojiPicker } from "@/components/common/quick-emoji-picker";
-import { cn } from "@/lib/utils";
+import { ReactionBar } from "@multica/ui/components/common/reaction-bar";
+import { QuickEmojiPicker } from "@multica/ui/components/common/quick-emoji-picker";
+import { cn } from "@multica/ui/lib/utils";
 import { useActorName } from "@multica/core/workspace/hooks";
 import { timeAgo } from "@multica/core/utils";
 import { ContentEditor, type ContentEditorRef, copyMarkdown, ReadonlyContent } from "@/features/editor";
-import { FileUploadButton } from "@/components/common/file-upload-button";
+import { FileUploadButton } from "@multica/ui/components/common/file-upload-button";
 import { useFileUpload } from "@multica/core/hooks/use-file-upload";
 import { api } from "@/platform/api";
 import { ReplyInput } from "./reply-input";
@@ -255,6 +255,7 @@ function CommentRow({
               reactions={reactions}
               currentUserId={currentUserId}
               onToggle={(emoji) => onToggleReaction(entry.id, emoji)}
+              getActorName={getActorName}
               hideAddButton={!isLongContent}
               className="mt-1.5 pl-8"
             />
@@ -464,6 +465,7 @@ function CommentCard({
                     reactions={reactions}
                     currentUserId={currentUserId}
                     onToggle={(emoji) => onToggleReaction(entry.id, emoji)}
+                    getActorName={getActorName}
                     hideAddButton={!isLongContent}
                     className="mt-1.5 pl-10"
                   />

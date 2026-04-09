@@ -2,9 +2,9 @@
 
 import { useState, useMemo } from "react";
 import { Pencil, Eye } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { Button } from "@multica/ui/components/ui/button";
+import { Textarea } from "@multica/ui/components/ui/textarea";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@multica/ui/components/ui/tooltip";
 import { Markdown } from "@/components/markdown/Markdown";
 
 function isMarkdown(path: string) {

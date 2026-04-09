@@ -8,8 +8,8 @@ import {
   ResizablePanelGroup,
   ResizablePanel,
   ResizableHandle,
-} from "@/components/ui/resizable";
-import { Skeleton } from "@/components/ui/skeleton";
+} from "@multica/ui/components/ui/resizable";
+import { Skeleton } from "@multica/ui/components/ui/skeleton";
 import { useAuthStore } from "@/platform/auth";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { runtimeListOptions, runtimeKeys } from "@multica/core/runtimes/queries";

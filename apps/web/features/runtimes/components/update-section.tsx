@@ -6,7 +6,7 @@ import {
   ArrowUpCircle,
   Check,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@multica/ui/components/ui/button";
 import { api } from "@/platform/api";
 import type { RuntimeUpdateStatus } from "@multica/core/types";
 

@@ -12,7 +12,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
-} from "@/components/ui/chart";
+} from "@multica/ui/components/ui/chart";
 import { api } from "@/platform/api";
 import type { RuntimeHourlyActivity } from "@multica/core/types";
 

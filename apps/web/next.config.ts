@@ -22,7 +22,7 @@ const allowedDevOrigins = process.env.CORS_ALLOWED_ORIGINS
   : undefined;
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@multica/core"],
+  transpilePackages: ["@multica/core", "@multica/ui"],
   ...(allowedDevOrigins && allowedDevOrigins.length > 0
     ? { allowedDevOrigins }
     : {}),

@@ -20,7 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@multica/ui/components/ui/skeleton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,8 +30,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+} from "@multica/ui/components/ui/alert-dialog";
+import { Button } from "@multica/ui/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -43,20 +43,20 @@ import {
   DropdownMenuSub,
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
-} from "@/components/ui/dropdown-menu";
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
+} from "@multica/ui/components/ui/dropdown-menu";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@multica/ui/components/ui/resizable";
 import { ContentEditor, type ContentEditorRef } from "@/features/editor";
-import { FileUploadButton } from "@/components/common/file-upload-button";
+import { FileUploadButton } from "@multica/ui/components/common/file-upload-button";
 import { TitleEditor } from "@/features/editor";
 import {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
-} from "@/components/ui/tooltip";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
-import { AvatarGroup, AvatarGroupCount } from "@/components/ui/avatar";
+} from "@multica/ui/components/ui/tooltip";
+import { Popover, PopoverTrigger, PopoverContent } from "@multica/ui/components/ui/popover";
+import { Checkbox } from "@multica/ui/components/ui/checkbox";
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@multica/ui/components/ui/command";
+import { AvatarGroup, AvatarGroupCount } from "@multica/ui/components/ui/avatar";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import type { Issue, UpdateIssueRequest, IssueStatus, IssuePriority, TimelineEntry } from "@multica/core/types";
 import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@multica/core/issues/config";
@@ -75,12 +75,12 @@ import { useUpdateIssue, useDeleteIssue } from "@multica/core/issues/mutations";
 import { useIssueTimeline } from "@/features/issues/hooks/use-issue-timeline";
 import { useIssueReactions } from "@/features/issues/hooks/use-issue-reactions";
 import { useIssueSubscribers } from "@/features/issues/hooks/use-issue-subscribers";
-import { ReactionBar } from "@/components/common/reaction-bar";
+import { ReactionBar } from "@multica/ui/components/common/reaction-bar";
 import { useFileUpload } from "@multica/core/hooks/use-file-upload";
 import { api } from "@/platform/api";
 import { useModalStore } from "@multica/core/modals";
 import { timeAgo } from "@multica/core/utils";
-import { cn } from "@/lib/utils";
+import { cn } from "@multica/ui/lib/utils";
 
 /**
  * Tiny circular progress ring used in the "Sub-issue of …" line and the
@@ -757,6 +757,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                 reactions={issueReactions}
                 currentUserId={user?.id}
                 onToggle={handleToggleIssueReaction}
+                getActorName={getActorName}
               />
             )}
             <FileUploadButton

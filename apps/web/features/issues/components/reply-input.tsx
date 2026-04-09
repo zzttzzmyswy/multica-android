@@ -3,11 +3,11 @@
 import { useRef, useState, useEffect } from "react";
 import { ArrowUp, Loader2 } from "lucide-react";
 import { ContentEditor, type ContentEditorRef } from "@/features/editor";
-import { FileUploadButton } from "@/components/common/file-upload-button";
+import { FileUploadButton } from "@multica/ui/components/common/file-upload-button";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { useFileUpload } from "@multica/core/hooks/use-file-upload";
 import { api } from "@/platform/api";
-import { cn } from "@/lib/utils";
+import { cn } from "@multica/ui/lib/utils";
 
 // ---------------------------------------------------------------------------
 // Types

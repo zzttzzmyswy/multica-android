@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { Save, LogOut } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@multica/ui/components/ui/input";
+import { Textarea } from "@multica/ui/components/ui/textarea";
+import { Label } from "@multica/ui/components/ui/label";
+import { Button } from "@multica/ui/components/ui/button";
+import { Card, CardContent } from "@multica/ui/components/ui/card";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -16,7 +16,7 @@ import {
   AlertDialogFooter,
   AlertDialogCancel,
   AlertDialogAction,
-} from "@/components/ui/alert-dialog";
+} from "@multica/ui/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/platform/auth";

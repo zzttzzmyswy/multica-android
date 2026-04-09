@@ -32,20 +32,20 @@ import {
   ListChecks,
 } from "lucide-react";
 import type { InboxItem, InboxItemType, IssueStatus, IssuePriority } from "@multica/core/types";
-import { Button } from "@/components/ui/button";
+import { Button } from "@multica/ui/components/ui/button";
 import {
   ResizablePanelGroup,
   ResizablePanel,
   ResizableHandle,
-} from "@/components/ui/resizable";
-import { Skeleton } from "@/components/ui/skeleton";
+} from "@multica/ui/components/ui/resizable";
+import { Skeleton } from "@multica/ui/components/ui/skeleton";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
+} from "@multica/ui/components/ui/dropdown-menu";
 
 // ---------------------------------------------------------------------------
 // Helpers

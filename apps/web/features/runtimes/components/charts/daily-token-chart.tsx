@@ -12,7 +12,7 @@ import {
   ChartLegend,
   ChartLegendContent,
   type ChartConfig,
-} from "@/components/ui/chart";
+} from "@multica/ui/components/ui/chart";
 import type { DailyTokenData } from "../../utils";
 import { formatTokens } from "../../utils";
 

@@ -18,7 +18,7 @@ import {
   Sparkles,
   UserMinus,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@multica/ui/lib/utils";
 import { ImageIcon } from "./shared";
 import { useLocale } from "../i18n";
 import type { LandingDict } from "../i18n";

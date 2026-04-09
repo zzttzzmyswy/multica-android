@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { BarChart3 } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@multica/ui/components/ui/skeleton";
 import type { RuntimeUsage } from "@multica/core/types";
 import { api } from "@/platform/api";
 import { formatTokens, estimateCost, aggregateByDate } from "../utils";

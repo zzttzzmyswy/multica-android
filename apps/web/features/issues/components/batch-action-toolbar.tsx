@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { X, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+import { Button } from "@multica/ui/components/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,12 +13,12 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "@multica/ui/components/ui/alert-dialog";
 import {
   Popover,
   PopoverTrigger,
   PopoverContent,
-} from "@/components/ui/popover";
+} from "@multica/ui/components/ui/popover";
 import type { UpdateIssueRequest } from "@multica/core/types";
 import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@multica/core/issues/config";
 import { useIssueSelectionStore } from "@multica/core/issues/stores/selection-store";

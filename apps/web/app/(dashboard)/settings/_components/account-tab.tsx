@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Camera, Loader2, Save } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@multica/ui/components/ui/input";
+import { Label } from "@multica/ui/components/ui/label";
+import { Button } from "@multica/ui/components/ui/button";
+import { Card, CardContent } from "@multica/ui/components/ui/card";
 import { toast } from "sonner";
 import { useAuthStore } from "@/platform/auth";
 import { api } from "@/platform/api";

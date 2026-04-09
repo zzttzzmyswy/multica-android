@@ -10,7 +10,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
-} from "@/components/ui/chart";
+} from "@multica/ui/components/ui/chart";
 import type { DailyCostData } from "../../utils";
 
 const costChartConfig = {

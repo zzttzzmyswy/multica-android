@@ -16,7 +16,7 @@ import {
   UserMinus,
   UserPen,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@multica/ui/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -29,13 +29,13 @@ import {
   DropdownMenuSub,
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
-} from "@/components/ui/dropdown-menu";
+} from "@multica/ui/components/ui/dropdown-menu";
 import {
   Popover,
   PopoverTrigger,
   PopoverContent,
-} from "@/components/ui/popover";
-import { Switch } from "@/components/ui/switch";
+} from "@multica/ui/components/ui/popover";
+import { Switch } from "@multica/ui/components/ui/switch";
 import {
   ALL_STATUSES,
   STATUS_CONFIG,
@@ -58,7 +58,7 @@ import {
   type IssuesScope,
 } from "@multica/core/issues/stores/issues-scope-store";
 import { filterIssues } from "@/features/issues/utils/filter";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@multica/ui/components/ui/tooltip";
 import type { Issue } from "@multica/core/types";
 
 // ---------------------------------------------------------------------------

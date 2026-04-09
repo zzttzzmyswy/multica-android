@@ -17,7 +17,7 @@ import { workspaceKeys } from "@multica/core/workspace/queries";
 import type { Issue, ListIssuesResponse, MemberWithUser, Agent } from "@multica/core/types";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { StatusIcon } from "@/features/issues/components/status-icon";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@multica/ui/components/ui/badge";
 import type { IssueStatus } from "@multica/core/types";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 

@@ -33,7 +33,7 @@ import {
   useState,
 } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
-import { cn } from "@/lib/utils";
+import { cn } from "@multica/ui/lib/utils";
 import type { UploadResult } from "@multica/core/hooks/use-file-upload";
 import { useQueryClient } from "@tanstack/react-query";
 import { createEditorExtensions } from "./extensions";

@@ -11,7 +11,7 @@ import {
   CardTitle,
   CardDescription,
   CardContent,
-} from "@/components/ui/card";
+} from "@multica/ui/components/ui/card";
 import { Loader2 } from "lucide-react";
 
 function CallbackContent() {

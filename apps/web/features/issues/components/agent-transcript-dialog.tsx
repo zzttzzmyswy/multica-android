@@ -17,9 +17,9 @@ import {
   Cloud,
   Cpu,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { cn } from "@multica/ui/lib/utils";
+import { Dialog, DialogContent, DialogTitle } from "@multica/ui/components/ui/dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@multica/ui/components/ui/collapsible";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 import { api } from "@/platform/api";
 import type { AgentTask, Agent, AgentRuntime } from "@multica/core/types/agent";

@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { MulticaIcon } from "@/components/multica-icon";
 import { useNavigationStore } from "@multica/core/navigation";
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarInset } from "@multica/ui/components/ui/sidebar";
 import { useAuthStore } from "@/platform/auth";
 import { useWorkspaceStore } from "@/platform/workspace";
 import { AppSidebar } from "./_components/app-sidebar";

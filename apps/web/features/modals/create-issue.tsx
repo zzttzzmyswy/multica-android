@@ -3,28 +3,28 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays, Check, ChevronRight, Maximize2, Minimize2, UserMinus, X as XIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@multica/ui/lib/utils";
 import { toast } from "sonner";
 import type { IssueStatus, IssuePriority, IssueAssigneeType } from "@multica/core/types";
 import {
   Dialog,
   DialogContent,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@multica/ui/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@multica/ui/components/ui/dropdown-menu";
 import {
   Popover,
   PopoverTrigger,
   PopoverContent,
-} from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { Button } from "@/components/ui/button";
+} from "@multica/ui/components/ui/popover";
+import { Calendar } from "@multica/ui/components/ui/calendar";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@multica/ui/components/ui/tooltip";
+import { Button } from "@multica/ui/components/ui/button";
 import { ContentEditor, type ContentEditorRef } from "@/features/editor";
 import { TitleEditor } from "@/features/editor";
 import { StatusIcon, PriorityIcon } from "@/features/issues/components";
@@ -38,7 +38,7 @@ import { useIssueDraftStore } from "@multica/core/issues/stores/draft-store";
 import { useCreateIssue } from "@multica/core/issues/mutations";
 import { useFileUpload } from "@multica/core/hooks/use-file-upload";
 import { api } from "@/platform/api";
-import { FileUploadButton } from "@/components/common/file-upload-button";
+import { FileUploadButton } from "@multica/ui/components/common/file-upload-button";
 import { ActorAvatar } from "@/components/common/actor-avatar";
 
 // ---------------------------------------------------------------------------
