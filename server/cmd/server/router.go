@@ -22,13 +22,19 @@ import (
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
+var defaultOrigins = []string{
+	"http://localhost:3000", // Next.js dev
+	"http://localhost:5173", // electron-vite dev
+	"http://localhost:5174", // electron-vite dev (fallback port)
+}
+
 func allowedOrigins() []string {
 	raw := strings.TrimSpace(os.Getenv("CORS_ALLOWED_ORIGINS"))
 	if raw == "" {
 		raw = strings.TrimSpace(os.Getenv("FRONTEND_ORIGIN"))
 	}
 	if raw == "" {
-		return []string{"http://localhost:3000"}
+		return defaultOrigins
 	}
 
 	parts := strings.Split(raw, ",")
@@ -40,7 +46,7 @@ func allowedOrigins() []string {
 		}
 	}
 	if len(origins) == 0 {
-		return []string{"http://localhost:3000"}
+		return defaultOrigins
 	}
 	return origins
 }
