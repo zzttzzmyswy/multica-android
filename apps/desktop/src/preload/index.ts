@@ -1,22 +1,23 @@
-import { contextBridge } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
+import { contextBridge } from "electron";
+import { electronAPI } from "@electron-toolkit/preload";
+import Store from "electron-store";
 
-// Custom APIs for renderer
-const api = {}
+const store = new Store<Record<string, string>>({
+  name: "multica-desktop",
+});
 
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
+const electronStore = {
+  get: (key: string): string | null => store.get(key) ?? null,
+  set: (key: string, value: string): void => store.set(key, value),
+  delete: (key: string): void => store.delete(key),
+};
+
 if (process.contextIsolated) {
-  try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
-    contextBridge.exposeInMainWorld('api', api)
-  } catch (error) {
-    console.error(error)
-  }
+  contextBridge.exposeInMainWorld("electron", electronAPI);
+  contextBridge.exposeInMainWorld("electronStore", electronStore);
 } else {
-  // @ts-ignore (define in dts)
-  window.electron = electronAPI
-  // @ts-ignore (define in dts)
-  window.api = api
+  // @ts-expect-error - fallback for non-isolated context
+  window.electron = electronAPI;
+  // @ts-expect-error - fallback for non-isolated context
+  window.electronStore = electronStore;
 }
