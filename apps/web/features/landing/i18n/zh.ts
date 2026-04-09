@@ -273,7 +273,7 @@ export const zh: LandingDict = {
     subtitle: "Multica \u7684\u6700\u65b0\u66f4\u65b0\u548c\u6539\u8fdb\u3002",
     entries: [
       {
-        version: "0.1.10",
+        version: "0.1.21",
         date: "2026-04-09",
         title: "项目、搜索与 Monorepo",
         changes: [
@@ -292,7 +292,7 @@ export const zh: LandingDict = {
         ],
       },
       {
-        version: "0.1.9",
+        version: "0.1.20",
         date: "2026-04-08",
         title: "子 Issue、TanStack Query 与用量追踪",
         changes: [
@@ -310,7 +310,7 @@ export const zh: LandingDict = {
         ],
       },
       {
-        version: "0.1.8",
+        version: "0.1.18",
         date: "2026-04-07",
         title: "OAuth、OpenClaw 与 Issue 加载优化",
         changes: [
@@ -325,7 +325,7 @@ export const zh: LandingDict = {
         ],
       },
       {
-        version: "0.1.7",
+        version: "0.1.17",
         date: "2026-04-05",
         title: "评论分页与 CLI 优化",
         changes: [
@@ -339,7 +339,7 @@ export const zh: LandingDict = {
         ],
       },
       {
-        version: "0.1.6",
+        version: "0.1.15",
         date: "2026-04-03",
         title: "编辑器重构与 Agent 生命周期",
         changes: [
@@ -355,7 +355,7 @@ export const zh: LandingDict = {
         ],
       },
       {
-        version: "0.1.5",
+        version: "0.1.14",
         date: "2026-04-02",
         title: "提及与权限",
         changes: [
@@ -372,7 +372,7 @@ export const zh: LandingDict = {
         ],
       },
       {
-        version: "0.1.4",
+        version: "0.1.13",
         date: "2026-04-01",
         title: "\u6211\u7684 Issue \u4e0e\u56fd\u9645\u5316",
         changes: [
