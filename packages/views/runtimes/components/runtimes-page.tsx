@@ -24,6 +24,7 @@ export default function RuntimesPage() {
   const wsId = useWorkspaceId();
   const qc = useQueryClient();
   const [filter, setFilter] = useState<RuntimeFilter>("mine");
+  const [ownerFilter, setOwnerFilter] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState("");
 
   const ownerParam = filter === "mine" ? "me" as const : undefined;
@@ -102,6 +103,8 @@ export default function RuntimesPage() {
           onSelect={setSelectedId}
           filter={filter}
           onFilterChange={setFilter}
+          ownerFilter={ownerFilter}
+          onOwnerFilterChange={setOwnerFilter}
         />
       </ResizablePanel>
 

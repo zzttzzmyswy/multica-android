@@ -20,6 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@multica/ui/components/ui/alert-dialog";
+import { ActorAvatar } from "../../common/actor-avatar";
 import { formatLastSeen } from "../utils";
 import { RuntimeModeIcon, StatusBadge, InfoField } from "./shared";
 import { PingSection } from "./ping-section";
@@ -50,9 +51,8 @@ export function RuntimeDetail({ runtime }: { runtime: AgentRuntime }) {
 
   // Resolve owner info
   const ownerMember = runtime.owner_id
-    ? members.find((m) => m.user_id === runtime.owner_id)
+    ? members.find((m) => m.user_id === runtime.owner_id) ?? null
     : null;
-  const ownerName = ownerMember?.name ?? null;
 
   // Permission check for delete
   const currentMember = user
@@ -118,7 +118,19 @@ export function RuntimeDetail({ runtime }: { runtime: AgentRuntime }) {
             label="Last Seen"
             value={formatLastSeen(runtime.last_seen_at)}
           />
-          {ownerName && <InfoField label="Owner" value={ownerName} />}
+          {ownerMember && (
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Owner</div>
+              <div className="flex items-center gap-2">
+                <ActorAvatar
+                  actorType="member"
+                  actorId={ownerMember.user_id}
+                  size={20}
+                />
+                <span className="text-sm">{ownerMember.name}</span>
+              </div>
+            </div>
+          )}
           {runtime.device_info && (
             <InfoField label="Device" value={runtime.device_info} />
           )}
