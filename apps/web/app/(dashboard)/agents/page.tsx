@@ -72,7 +72,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { issueListOptions } from "@multica/core/issues/queries";
 import { skillListOptions, agentListOptions, workspaceKeys } from "@multica/core/workspace/queries";
-import { ActorAvatar } from "@/components/common/actor-avatar";
+import { ActorAvatar } from "@multica/views/common/actor-avatar";
 import { useFileUpload } from "@multica/core/hooks/use-file-upload";
 
 

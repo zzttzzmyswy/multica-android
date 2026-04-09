@@ -1,5 +1,6 @@
 import { createAuthStore, registerAuthStore } from "@multica/core/auth";
 import { api } from "./api";
+import { webStorage } from "./storage";
 import {
   setLoggedInCookie,
   clearLoggedInCookie,
@@ -7,7 +8,7 @@ import {
 
 export const useAuthStore = createAuthStore({
   api,
-  storage: localStorage,
+  storage: webStorage,
   onLogin: setLoggedInCookie,
   onLogout: clearLoggedInCookie,
 });

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Crown, Shield, User, Plus, MoreHorizontal, UserMinus, Users } from "lucide-react";
-import { ActorAvatar } from "@/components/common/actor-avatar";
+import { ActorAvatar } from "@multica/views/common/actor-avatar";
 import type { MemberWithUser, MemberRole } from "@multica/core/types";
 import { Input } from "@multica/ui/components/ui/input";
 import { Button } from "@multica/ui/components/ui/button";

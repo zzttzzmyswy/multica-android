@@ -20,7 +20,7 @@ import {
 import { IssueDetail, StatusIcon, PriorityIcon } from "@multica/views/issues/components";
 import { STATUS_CONFIG, PRIORITY_CONFIG } from "@multica/core/issues/config";
 import { useActorName } from "@multica/core/workspace/hooks";
-import { ActorAvatar } from "@/components/common/actor-avatar";
+import { ActorAvatar } from "@multica/views/common/actor-avatar";
 import { toast } from "sonner";
 import {
   ArrowRight,
