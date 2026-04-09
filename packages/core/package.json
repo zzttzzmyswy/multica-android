@@ -45,8 +45,7 @@
   "dependencies": {
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-query-devtools": "^5.96.2",
-    "zustand": "catalog:",
-    "sonner": "^2.0.0"
+    "zustand": "catalog:"
   },
   "peerDependencies": {
     "react": "catalog:"

@@ -1,10 +1,14 @@
 import { create } from "zustand";
-import { toast } from "sonner";
-import type { Workspace } from "../types";
+import type { Workspace, StorageAdapter } from "../types";
 import type { ApiClient } from "../api/client";
 import { createLogger } from "../logger";
 
 const logger = createLogger("workspace-store");
+
+interface WorkspaceStoreOptions {
+  storage?: StorageAdapter;
+  onError?: (message: string) => void;
+}
 
 interface WorkspaceState {
   workspace: Workspace | null;
@@ -31,7 +35,10 @@ interface WorkspaceActions {
 
 export type WorkspaceStore = WorkspaceState & WorkspaceActions;
 
-export function createWorkspaceStore(api: ApiClient) {
+export function createWorkspaceStore(api: ApiClient, options?: WorkspaceStoreOptions) {
+  const storage = options?.storage;
+  const onError = options?.onError;
+
   return create<WorkspaceStore>((set, get) => ({
     // State
     workspace: null,
@@ -50,13 +57,13 @@ export function createWorkspaceStore(api: ApiClient) {
 
       if (!nextWorkspace) {
         api.setWorkspaceId(null);
-        localStorage.removeItem("multica_workspace_id");
+        storage?.removeItem("multica_workspace_id");
         set({ workspace: null });
         return null;
       }
 
       api.setWorkspaceId(nextWorkspace.id);
-      localStorage.setItem("multica_workspace_id", nextWorkspace.id);
+      storage?.setItem("multica_workspace_id", nextWorkspace.id);
       set({ workspace: nextWorkspace });
       logger.debug("hydrate workspace", nextWorkspace.name, nextWorkspace.id);
 
@@ -73,7 +80,7 @@ export function createWorkspaceStore(api: ApiClient) {
       if (!ws) return;
 
       api.setWorkspaceId(ws.id);
-      localStorage.setItem("multica_workspace_id", ws.id);
+      storage?.setItem("multica_workspace_id", ws.id);
 
       // All data caches (issues, inbox, members, agents, skills, runtimes)
       // are managed by TanStack Query, keyed by wsId — auto-refetch on switch.
@@ -84,14 +91,14 @@ export function createWorkspaceStore(api: ApiClient) {
 
     refreshWorkspaces: async () => {
       const { workspace, hydrateWorkspace } = get();
-      const storedWorkspaceId = localStorage.getItem("multica_workspace_id");
+      const storedWorkspaceId = storage?.getItem("multica_workspace_id") ?? null;
       try {
         const wsList = await api.listWorkspaces();
         hydrateWorkspace(wsList, workspace?.id ?? storedWorkspaceId);
         return wsList;
       } catch (e) {
         logger.error("failed to refresh workspaces", e);
-        toast.error("Failed to refresh workspaces");
+        onError?.("Failed to refresh workspaces");
         return get().workspaces;
       }
     },

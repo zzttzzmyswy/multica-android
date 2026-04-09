@@ -7,6 +7,7 @@ import {
 
 export const useAuthStore = createAuthStore({
   api,
+  storage: localStorage,
   onLogin: setLoggedInCookie,
   onLogout: clearLoggedInCookie,
 });

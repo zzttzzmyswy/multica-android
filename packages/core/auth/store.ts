@@ -1,9 +1,10 @@
 import { create } from "zustand";
-import type { User } from "../types";
+import type { User, StorageAdapter } from "../types";
 import type { ApiClient } from "../api/client";
 
 export interface AuthStoreOptions {
   api: ApiClient;
+  storage: StorageAdapter;
   onLogin?: () => void;
   onLogout?: () => void;
 }
@@ -21,14 +22,14 @@ export interface AuthState {
 }
 
 export function createAuthStore(options: AuthStoreOptions) {
-  const { api, onLogin, onLogout } = options;
+  const { api, storage, onLogin, onLogout } = options;
 
   return create<AuthState>((set) => ({
     user: null,
     isLoading: true,
 
     initialize: async () => {
-      const token = localStorage.getItem("multica_token");
+      const token = storage.getItem("multica_token");
       if (!token) {
         set({ isLoading: false });
         return;
@@ -42,7 +43,7 @@ export function createAuthStore(options: AuthStoreOptions) {
       } catch {
         api.setToken(null);
         api.setWorkspaceId(null);
-        localStorage.removeItem("multica_token");
+        storage.removeItem("multica_token");
         set({ user: null, isLoading: false });
       }
     },
@@ -53,7 +54,7 @@ export function createAuthStore(options: AuthStoreOptions) {
 
     verifyCode: async (email: string, code: string) => {
       const { token, user } = await api.verifyCode(email, code);
-      localStorage.setItem("multica_token", token);
+      storage.setItem("multica_token", token);
       api.setToken(token);
       onLogin?.();
       set({ user });
@@ -62,7 +63,7 @@ export function createAuthStore(options: AuthStoreOptions) {
 
     loginWithGoogle: async (code: string, redirectUri: string) => {
       const { token, user } = await api.googleLogin(code, redirectUri);
-      localStorage.setItem("multica_token", token);
+      storage.setItem("multica_token", token);
       api.setToken(token);
       onLogin?.();
       set({ user });
@@ -70,7 +71,7 @@ export function createAuthStore(options: AuthStoreOptions) {
     },
 
     logout: () => {
-      localStorage.removeItem("multica_token");
+      storage.removeItem("multica_token");
       api.setToken(null);
       api.setWorkspaceId(null);
       onLogout?.();

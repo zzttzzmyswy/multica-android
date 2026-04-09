@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { WSClient } from "../api/ws-client";
-import type { WSEventType } from "../types";
+import type { WSEventType, StorageAdapter } from "../types";
 import type { StoreApi, UseBoundStore } from "zustand";
 import type { AuthState } from "../auth/store";
 import type { WorkspaceStore } from "../workspace/store";
@@ -34,6 +34,8 @@ export interface WSProviderProps {
   authStore: UseBoundStore<StoreApi<AuthState>>;
   /** Platform-created workspace store instance */
   workspaceStore: UseBoundStore<StoreApi<WorkspaceStore>>;
+  /** Platform-specific storage adapter for reading auth tokens */
+  storage: StorageAdapter;
   /** Optional callback for showing toast messages (platform-specific, e.g. sonner) */
   onToast?: (message: string, type?: "info" | "error") => void;
 }
@@ -43,6 +45,7 @@ export function WSProvider({
   wsUrl,
   authStore,
   workspaceStore,
+  storage,
   onToast,
 }: WSProviderProps) {
   const user = authStore((s) => s.user);
@@ -53,7 +56,7 @@ export function WSProvider({
   useEffect(() => {
     if (!user || !workspace) return;
 
-    const token = localStorage.getItem("multica_token");
+    const token = storage.getItem("multica_token");
     if (!token) return;
 
     const ws = new WSClient(wsUrl, { logger: createLogger("ws") });
@@ -67,7 +70,7 @@ export function WSProvider({
       wsRef.current = null;
       setWsClient(null);
     };
-  }, [user, workspace, wsUrl]);
+  }, [user, workspace, wsUrl, storage]);
 
   const stores: RealtimeSyncStores = { authStore, workspaceStore };
 

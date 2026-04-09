@@ -13,6 +13,7 @@ export function WebWSProvider({ children }: { children: React.ReactNode }) {
       wsUrl={WS_URL}
       authStore={useAuthStore}
       workspaceStore={useWorkspaceStore}
+      storage={localStorage}
       onToast={(message, type) => {
         if (type === "error") toast.error(message);
         else toast.info(message);
