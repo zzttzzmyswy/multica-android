@@ -2,6 +2,42 @@ import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import type { UploadResult } from "@/shared/hooks/use-file-upload";
 
+/** Find and remove a fileCard node by uploadId. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function removeUploadingFileCard(editor: any, uploadId: string) {
+  const { tr } = editor.state;
+  let deleted = false;
+  editor.state.doc.descendants((node: any, pos: number) => {
+    if (deleted) return false;
+    if (node.type.name === "fileCard" && node.attrs.uploadId === uploadId) {
+      tr.delete(pos, pos + node.nodeSize);
+      deleted = true;
+      return false;
+    }
+  });
+  if (deleted) editor.view.dispatch(tr);
+}
+
+/** Update a fileCard node from uploading state to final state with real URL. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function finalizeFileCard(editor: any, uploadId: string, href: string) {
+  const { tr } = editor.state;
+  let updated = false;
+  editor.state.doc.descendants((node: any, nodePos: number) => {
+    if (updated) return false;
+    if (node.type.name === "fileCard" && node.attrs.uploadId === uploadId) {
+      tr.setNodeMarkup(nodePos, undefined, {
+        ...node.attrs,
+        href,
+        uploading: false,
+      });
+      updated = true;
+      return false;
+    }
+  });
+  if (updated) editor.view.dispatch(tr);
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function removeImageBySrc(editor: any, src: string) {
   if (!editor) return;
@@ -44,7 +80,9 @@ export async function uploadAndInsertFile(
       const result = await handler(file);
       if (result) {
         const { tr } = editor.state;
+        let found = false;
         editor.state.doc.descendants((node: { type: { name: string }; attrs: { src: string } }, nodePos: number) => {
+          if (found) return false;
           if (node.type.name === "image" && node.attrs.src === blobUrl) {
             tr.setNodeMarkup(nodePos, undefined, {
               ...node.attrs,
@@ -52,9 +90,11 @@ export async function uploadAndInsertFile(
               alt: result.filename,
               uploading: false,
             });
+            found = true;
+            return false;
           }
         });
-        editor.view.dispatch(tr);
+        if (found) editor.view.dispatch(tr);
       } else {
         removeImageBySrc(editor, blobUrl);
       }
@@ -64,14 +104,25 @@ export async function uploadAndInsertFile(
       URL.revokeObjectURL(blobUrl);
     }
   } else {
-    // Non-image: upload first, then insert link
-    const result = await handler(file);
-    if (!result) return;
-    const linkText = `[${result.filename}](${result.link})`;
+    // Non-image: insert skeleton fileCard → upload → finalize with real URL
+    const uploadId = crypto.randomUUID();
+    const cardAttrs = { filename: file.name, href: "", fileSize: file.size, uploading: true, uploadId };
+    const insertContent = { type: "fileCard", attrs: cardAttrs };
     if (pos !== undefined) {
-      editor.chain().focus().insertContentAt(pos, linkText).run();
+      editor.chain().focus().insertContentAt(pos, insertContent).run();
     } else {
-      editor.chain().focus().insertContent(linkText).run();
+      editor.chain().focus().insertContent(insertContent).run();
+    }
+
+    try {
+      const result = await handler(file);
+      if (result) {
+        finalizeFileCard(editor, uploadId, result.link);
+      } else {
+        removeUploadingFileCard(editor, uploadId);
+      }
+    } catch {
+      removeUploadingFileCard(editor, uploadId);
     }
   }
 }
@@ -104,11 +155,21 @@ export function createFileUploadExtension(
               handleFiles(files);
               return true;
             },
-            handleDrop(_view, event) {
-              const files = (event as DragEvent).dataTransfer?.files;
+            handleDrop(view, event) {
+              const dragEvent = event as DragEvent;
+              const files = dragEvent.dataTransfer?.files;
               if (!files?.length) return false;
-              if (!onUploadFileRef.current) return false;
-              handleFiles(files);
+              const handler = onUploadFileRef.current;
+              if (!handler) return false;
+              // Resolve drop position from mouse coordinates.
+              // Only the first file uses the drop position; subsequent files
+              // append to the end to avoid stale position issues.
+              const dropPos = view.posAtCoords({ left: dragEvent.clientX, top: dragEvent.clientY });
+              const fileArray = Array.from(files);
+              for (let i = 0; i < fileArray.length; i++) {
+                const insertPos = i === 0 ? dropPos?.pos : undefined;
+                uploadAndInsertFile(editor, fileArray[i]!, handler, insertPos);
+              }
               return true;
             },
           },

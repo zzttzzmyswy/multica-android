@@ -64,7 +64,7 @@ import { StatusIcon, PriorityIcon, DueDatePicker, AssigneePicker, canAssignAgent
 import { CommentCard } from "./comment-card";
 import { CommentInput } from "./comment-input";
 import { AgentLiveCard, TaskRunHistory } from "./agent-live-card";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/features/auth";
 import { useWorkspaceStore, useActorName } from "@/features/workspace";
 import { useWorkspaceId } from "@core/hooks";
@@ -76,6 +76,7 @@ import { useIssueReactions } from "@/features/issues/hooks/use-issue-reactions";
 import { useIssueSubscribers } from "@/features/issues/hooks/use-issue-subscribers";
 import { ReactionBar } from "@/components/common/reaction-bar";
 import { useFileUpload } from "@/shared/hooks/use-file-upload";
+import { api } from "@/shared/api";
 import { useModalStore } from "@/features/modals";
 import { timeAgo } from "@/shared/utils";
 import { cn } from "@/lib/utils";
@@ -246,6 +247,8 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   const nextIssue = currentIndex < allIssues.length - 1 ? allIssues[currentIndex + 1] : null;
   const { getActorName } = useActorName();
   const { uploadWithToast } = useFileUpload();
+  const queryClient = useQueryClient();
+
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: layoutId,
   });

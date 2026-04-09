@@ -438,6 +438,7 @@ function CommentCard({
                     defaultValue={entry.content ?? ""}
                     placeholder="Edit comment..."
                     onSubmit={saveEdit}
+                    onUploadFile={(file) => uploadWithToast(file, { issueId })}
                     debounceMs={100}
                   />
                 </div>

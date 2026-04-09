@@ -371,20 +371,110 @@
   vertical-align: middle;
 }
 
-/* Images — shared styling for both editing and readonly */
+/* Block-level NodeViews (fileCard) need to override the inline default above */
+.rich-text-editor .file-card-node {
+  display: block !important;
+}
+
+/* Images — generic fallback (non-NodeView contexts) */
 .rich-text-editor img {
+  max-width: 100%;
+  height: auto;
   border-radius: var(--radius);
   margin: 0.5rem 0;
 }
 
-/* Uploading image placeholder — data-uploading attribute managed by ProseMirror schema */
-.rich-text-editor img[data-uploading] {
-  opacity: 0.5;
+/* Image NodeView — centered block with max-width cap */
+.rich-text-editor .image-node {
+  display: block !important;
+  text-align: center;
+}
+
+.rich-text-editor .image-figure {
+  position: relative;
+  display: inline-block;
+  max-width: min(100%, 640px);
+  margin: 0.75rem 0;
+}
+
+.rich-text-editor .image-figure.image-selected .image-content {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.rich-text-editor .image-content {
+  display: block;
+  width: 100%;
+  height: auto;
   border-radius: var(--radius);
+}
+
+.rich-text-editor .image-uploading {
+  opacity: 0.5;
   animation: rte-upload-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 @keyframes rte-upload-pulse {
   0%, 100% { opacity: 0.5; }
   50% { opacity: 0.3; }
+}
+
+/* Readonly — zoom cursor on clickable images */
+.rich-text-editor.readonly .image-figure {
+  cursor: zoom-in;
+}
+
+/* Image toolbar — dark pill, top-right corner, appears on hover */
+.rich-text-editor .image-toolbar {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  gap: 1px;
+  padding: 0.25rem;
+  background: color-mix(in srgb, black 75%, transparent);
+  backdrop-filter: blur(8px);
+  border-radius: var(--radius);
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 1;
+}
+
+.image-figure:hover .image-toolbar {
+  opacity: 1;
+}
+
+.rich-text-editor .image-toolbar button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: calc(var(--radius) - 2px);
+  color: white;
+  transition: background 0.15s;
+}
+
+.rich-text-editor .image-toolbar button:hover {
+  background: color-mix(in srgb, white 15%, transparent);
+}
+
+/* Drag-and-drop overlay */
+.editor-drop-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed color-mix(in srgb, var(--brand) 40%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--brand) 3%, transparent);
+  z-index: 10;
+  pointer-events: none;
+}
+
+.editor-drop-overlay p {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--brand) 60%, transparent);
 }
