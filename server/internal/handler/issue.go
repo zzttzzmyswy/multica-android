@@ -71,13 +71,31 @@ type SearchIssueResponse struct {
 }
 
 // extractSnippet extracts a snippet of text around the first occurrence of query.
-// Returns up to ~120 chars centered on the match.
+// Returns up to ~120 runes centered on the match. Uses rune-based slicing to
+// avoid splitting multi-byte UTF-8 characters (important for CJK content).
 func extractSnippet(content, query string) string {
-	lower := strings.ToLower(content)
-	idx := strings.Index(lower, strings.ToLower(query))
+	runes := []rune(content)
+	lowerRunes := []rune(strings.ToLower(content))
+	queryRunes := []rune(strings.ToLower(query))
+
+	idx := -1
+	for i := 0; i <= len(lowerRunes)-len(queryRunes); i++ {
+		match := true
+		for j := range queryRunes {
+			if lowerRunes[i+j] != queryRunes[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			idx = i
+			break
+		}
+	}
+
 	if idx < 0 {
-		if len(content) > 120 {
-			return content[:120] + "..."
+		if len(runes) > 120 {
+			return string(runes[:120]) + "..."
 		}
 		return content
 	}
@@ -85,15 +103,15 @@ func extractSnippet(content, query string) string {
 	if start < 0 {
 		start = 0
 	}
-	end := idx + len(query) + 80
-	if end > len(content) {
-		end = len(content)
+	end := idx + len(queryRunes) + 80
+	if end > len(runes) {
+		end = len(runes)
 	}
-	snippet := content[start:end]
+	snippet := string(runes[start:end])
 	if start > 0 {
 		snippet = "..." + snippet
 	}
-	if end < len(content) {
+	if end < len(runes) {
 		snippet = snippet + "..."
 	}
 	return snippet

@@ -37,6 +37,14 @@ export function SearchCommand() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Cleanup debounce/abort on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (abortRef.current) abortRef.current.abort();
+    };
+  }, []);
+
   // Reset state when dialog closes
   useEffect(() => {
     if (!open) {
@@ -97,16 +105,16 @@ export function SearchCommand() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogHeader className="sr-only">
-        <DialogTitle>Search Issues</DialogTitle>
-        <DialogDescription>
-          Search issues by title, description, or comments
-        </DialogDescription>
-      </DialogHeader>
       <DialogContent
         className="top-[20%] translate-y-0 overflow-hidden rounded-xl! p-0 sm:max-w-xl!"
         showCloseButton={false}
       >
+        <DialogHeader className="sr-only">
+          <DialogTitle>Search Issues</DialogTitle>
+          <DialogDescription>
+            Search issues by title, description, or comments
+          </DialogDescription>
+        </DialogHeader>
         <CommandPrimitive
           shouldFilter={false}
           className="flex size-full flex-col overflow-hidden rounded-xl bg-popover text-popover-foreground"
