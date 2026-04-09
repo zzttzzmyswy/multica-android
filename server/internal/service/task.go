@@ -281,9 +281,17 @@ func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, resu
 		}
 	}
 
-	// For chat tasks, update the chat session with the latest session_id/work_dir
-	// and broadcast a chat:done event.
+	// For chat tasks, save assistant reply, update session, and broadcast chat:done.
 	if task.ChatSessionID.Valid {
+		var payload protocol.TaskCompletedPayload
+		if err := json.Unmarshal(result, &payload); err == nil && payload.Output != "" {
+			s.Queries.CreateChatMessage(ctx, db.CreateChatMessageParams{
+				ChatSessionID: task.ChatSessionID,
+				Role:          "assistant",
+				Content:       redact.Text(payload.Output),
+				TaskID:        task.ID,
+			})
+		}
 		s.Queries.UpdateChatSessionSession(ctx, db.UpdateChatSessionSessionParams{
 			ID:        task.ChatSessionID,
 			SessionID: pgtype.Text{String: sessionID, Valid: sessionID != ""},

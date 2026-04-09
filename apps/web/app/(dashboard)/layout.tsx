@@ -44,28 +44,26 @@ export default function DashboardLayout({
 
   if (!user) return null;
 
+  if (!workspace) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <MulticaIcon className="size-6 animate-pulse" />
+      </div>
+    );
+  }
+
   return (
-    <SidebarProvider className="h-svh">
-      <AppSidebar />
-      <SidebarInset className="overflow-hidden">
-        {workspace ? (
-          <WorkspaceIdProvider wsId={workspace.id}>
-            {children}
-            <ModalRegistry />
-          </WorkspaceIdProvider>
-        ) : (
-          <div className="flex flex-1 items-center justify-center">
-            <MulticaIcon className="size-6 animate-pulse" />
-          </div>
-        )}
-      </SidebarInset>
-      {workspace && (
-        <>
-          <ChatWindow />
-          <ChatFab />
-        </>
-      )}
-      <SearchCommand />
-    </SidebarProvider>
+    <WorkspaceIdProvider wsId={workspace.id}>
+      <SidebarProvider className="h-svh">
+        <AppSidebar />
+        <SidebarInset className="overflow-hidden">
+          {children}
+          <ModalRegistry />
+        </SidebarInset>
+        <ChatWindow />
+        <ChatFab />
+        <SearchCommand />
+      </SidebarProvider>
+    </WorkspaceIdProvider>
   );
 }

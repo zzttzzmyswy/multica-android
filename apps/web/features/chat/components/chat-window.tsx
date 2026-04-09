@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { X, Minus, Maximize2, Send, ChevronDown, Bot } from "lucide-react";
+import { Minus, Maximize2, Minimize2, Send, ChevronDown, Bot, Plus } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@multica/ui/components/ui/avatar";
 import {
   DropdownMenu,
@@ -11,8 +11,10 @@ import {
   DropdownMenuTrigger,
 } from "@multica/ui/components/ui/dropdown-menu";
 import { useWorkspaceId } from "@multica/core/hooks";
-import { agentListOptions } from "@multica/core/workspace/queries";
-import { chatMessagesOptions, chatKeys } from "@/core/chat/queries";
+import { useAuthStore } from "@multica/core/auth";
+import { agentListOptions, memberListOptions } from "@multica/core/workspace/queries";
+import { canAssignAgent } from "@multica/views/issues/components";
+import { chatSessionsOptions, chatMessagesOptions, chatKeys } from "@/core/chat/queries";
 import {
   useCreateChatSession,
   useSendChatMessage,
@@ -26,27 +28,38 @@ import type { TaskMessagePayload, ChatDonePayload, Agent } from "@multica/core/t
 export function ChatWindow() {
   const wsId = useWorkspaceId();
   const isOpen = useChatStore((s) => s.isOpen);
+  const isFullscreen = useChatStore((s) => s.isFullscreen);
   const activeSessionId = useChatStore((s) => s.activeSessionId);
   const pendingTaskId = useChatStore((s) => s.pendingTaskId);
-  const streamingContent = useChatStore((s) => s.streamingContent);
+  const timelineItems = useChatStore((s) => s.timelineItems);
   const selectedAgentId = useChatStore((s) => s.selectedAgentId);
   const setOpen = useChatStore((s) => s.setOpen);
+  const toggleFullscreen = useChatStore((s) => s.toggleFullscreen);
   const setActiveSession = useChatStore((s) => s.setActiveSession);
   const setPendingTask = useChatStore((s) => s.setPendingTask);
-  const appendStreaming = useChatStore((s) => s.appendStreamingContent);
-  const clearStreaming = useChatStore((s) => s.clearStreamingContent);
+  const addTimelineItem = useChatStore((s) => s.addTimelineItem);
+  const clearTimeline = useChatStore((s) => s.clearTimeline);
   const setSelectedAgentId = useChatStore((s) => s.setSelectedAgentId);
 
+  const user = useAuthStore((s) => s.user);
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
-  const { data: messages = [] } = useQuery(
+  const { data: members = [] } = useQuery(memberListOptions(wsId));
+  const { data: sessions = [] } = useQuery(chatSessionsOptions(wsId));
+  const { data: rawMessages } = useQuery(
     chatMessagesOptions(activeSessionId ?? ""),
   );
+  // When no active session, always show empty — don't use stale cache
+  const messages = activeSessionId ? rawMessages ?? [] : [];
 
   const qc = useQueryClient();
   const createSession = useCreateChatSession();
   const sendMessage = useSendChatMessage(activeSessionId ?? "");
 
-  const availableAgents = agents.filter((a) => !a.archived_at);
+  const currentMember = members.find((m) => m.user_id === user?.id);
+  const memberRole = currentMember?.role;
+  const availableAgents = agents.filter(
+    (a) => !a.archived_at && canAssignAgent(a, user?.id, memberRole),
+  );
 
   // Resolve selected agent: stored preference → first available
   const activeAgent =
@@ -54,49 +67,70 @@ export function ChatWindow() {
     availableAgents[0] ??
     null;
 
-  // Subscribe to task:message for streaming.
+  // Auto-restore most recent active session from server (only once on mount)
+  const didRestoreRef = useRef(false);
+  useEffect(() => {
+    if (didRestoreRef.current) return;
+    didRestoreRef.current = true;
+    if (activeSessionId || sessions.length === 0) return;
+    const latest = sessions.find((s) => s.status === "active");
+    if (latest) {
+      setActiveSession(latest.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once when sessions load
+  }, [sessions]);
+
+  // Use ref for pendingTaskId so WS handlers always see the latest value
+  // without needing to re-subscribe on every change.
+  const pendingTaskRef = useRef<string | null>(pendingTaskId);
+  pendingTaskRef.current = pendingTaskId;
+
   const { subscribe } = useWS();
 
   useEffect(() => {
-    if (!pendingTaskId) return;
-
     const unsubMessage = subscribe("task:message", (payload) => {
       const p = payload as TaskMessagePayload;
-      if (p.task_id !== pendingTaskId) return;
-      if (p.type === "text" && p.content) {
-        appendStreaming(p.content);
-      }
+      if (!pendingTaskRef.current || p.task_id !== pendingTaskRef.current) return;
+      addTimelineItem({
+        seq: p.seq,
+        type: p.type,
+        tool: p.tool,
+        content: p.content,
+        input: p.input,
+        output: p.output,
+      });
     });
 
     const unsubDone = subscribe("chat:done", (payload) => {
       const p = payload as ChatDonePayload;
-      if (p.task_id !== pendingTaskId) return;
-      const content = useChatStore.getState().streamingContent;
-      if (content && activeSessionId) {
-        qc.invalidateQueries({
-          queryKey: chatKeys.messages(activeSessionId),
-        });
-      }
-      clearStreaming();
-      setPendingTask(null);
-    });
-
-    const unsubCompleted = subscribe("task:completed", (payload) => {
-      const p = payload as { task_id: string };
-      if (p.task_id !== pendingTaskId) return;
+      if (!pendingTaskRef.current || p.task_id !== pendingTaskRef.current) return;
+      const activeSessionId = useChatStore.getState().activeSessionId;
       if (activeSessionId) {
         qc.invalidateQueries({
           queryKey: chatKeys.messages(activeSessionId),
         });
       }
-      clearStreaming();
+      clearTimeline();
+      setPendingTask(null);
+    });
+
+    const unsubCompleted = subscribe("task:completed", (payload) => {
+      const p = payload as { task_id: string };
+      if (!pendingTaskRef.current || p.task_id !== pendingTaskRef.current) return;
+      const activeSessionId = useChatStore.getState().activeSessionId;
+      if (activeSessionId) {
+        qc.invalidateQueries({
+          queryKey: chatKeys.messages(activeSessionId),
+        });
+      }
+      clearTimeline();
       setPendingTask(null);
     });
 
     const unsubFailed = subscribe("task:failed", (payload) => {
       const p = payload as { task_id: string };
-      if (p.task_id !== pendingTaskId) return;
-      clearStreaming();
+      if (!pendingTaskRef.current || p.task_id !== pendingTaskRef.current) return;
+      clearTimeline();
       setPendingTask(null);
     });
 
@@ -106,15 +140,8 @@ export function ChatWindow() {
       unsubCompleted();
       unsubFailed();
     };
-  }, [
-    pendingTaskId,
-    activeSessionId,
-    subscribe,
-    appendStreaming,
-    clearStreaming,
-    setPendingTask,
-    qc,
-  ]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- refs + stable store actions, subscribe once
+  }, [subscribe, addTimelineItem, clearTimeline, setPendingTask, qc]);
 
   const handleSend = useCallback(
     async (content: string) => {
@@ -137,7 +164,6 @@ export function ChatWindow() {
       );
       qc.invalidateQueries({ queryKey: chatKeys.messages(sessionId) });
       setPendingTask(task_id);
-      clearStreaming();
     },
     [
       activeSessionId,
@@ -145,10 +171,23 @@ export function ChatWindow() {
       createSession,
       setActiveSession,
       setPendingTask,
-      clearStreaming,
       qc,
     ],
   );
+
+  const handleStop = useCallback(async () => {
+    if (!pendingTaskId) return;
+    try {
+      await (await import("@/platform/api")).api.cancelTaskById(pendingTaskId);
+    } catch {
+      // Task may already be completed
+    }
+    if (activeSessionId) {
+      qc.invalidateQueries({ queryKey: chatKeys.messages(activeSessionId) });
+    }
+    clearTimeline();
+    setPendingTask(null);
+  }, [pendingTaskId, activeSessionId, clearTimeline, setPendingTask, qc]);
 
   const handleSelectAgent = useCallback(
     (agent: Agent) => {
@@ -161,10 +200,14 @@ export function ChatWindow() {
 
   if (!isOpen) return null;
 
-  const hasMessages = messages.length > 0 || !!streamingContent;
+  const hasMessages = messages.length > 0 || timelineItems.length > 0;
+
+  const containerClass = isFullscreen
+    ? "fixed inset-y-0 right-0 z-50 flex flex-col w-[50%] border-l bg-background shadow-2xl"
+    : "fixed bottom-4 right-4 z-50 flex flex-col w-[420px] h-[600px] rounded-xl border bg-background shadow-2xl overflow-hidden";
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col w-[420px] h-[600px] rounded-xl border bg-background shadow-2xl overflow-hidden">
+    <div className={containerClass}>
       {/* Header */}
       <div className="flex items-center justify-between border-b px-4 py-2.5">
         <AgentSelector
@@ -174,24 +217,29 @@ export function ChatWindow() {
         />
         <div className="flex items-center gap-0.5">
           <button
+            onClick={() => {
+              setActiveSession(null);
+              clearTimeline();
+              setPendingTask(null);
+            }}
+            title="New chat"
+            className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          >
+            <Plus className="size-3.5" />
+          </button>
+          <button
+            onClick={toggleFullscreen}
+            title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+            className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          >
+            {isFullscreen ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+          </button>
+          <button
             onClick={() => setOpen(false)}
+            title="Minimize"
             className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
           >
             <Minus className="size-3.5" />
-          </button>
-          <button
-            className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-          >
-            <Maximize2 className="size-3.5" />
-          </button>
-          <button
-            onClick={() => {
-              setOpen(false);
-              setActiveSession(null);
-            }}
-            className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-          >
-            <X className="size-3.5" />
           </button>
         </div>
       </div>
@@ -201,7 +249,7 @@ export function ChatWindow() {
         <ChatMessageList
           messages={messages}
           agent={activeAgent}
-          streamingContent={streamingContent}
+          timelineItems={timelineItems}
           isWaiting={!!pendingTaskId}
         />
       ) : (
@@ -209,7 +257,7 @@ export function ChatWindow() {
       )}
 
       {/* Input */}
-      <ChatInput onSend={handleSend} disabled={!!pendingTaskId} />
+      <ChatInput onSend={handleSend} onStop={handleStop} isRunning={!!pendingTaskId} />
     </div>
   );
 }

@@ -245,6 +245,9 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 			})
 
 			// Chat
+			// Tasks (generic)
+			r.Post("/api/tasks/{taskId}/cancel", h.CancelTask)
+
 			r.Route("/api/chat/sessions", func(r chi.Router) {
 				r.Post("/", h.CreateChatSession)
 				r.Get("/", h.ListChatSessions)

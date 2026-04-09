@@ -634,6 +634,10 @@ export class ApiClient {
     });
   }
 
+  async cancelTaskById(taskId: string): Promise<void> {
+    await this.fetch(`/api/tasks/${taskId}/cancel`, { method: "POST" });
+  }
+
   async listAttachments(issueId: string): Promise<Attachment[]> {
     return this.fetch(`/api/issues/${issueId}/attachments`);
   }

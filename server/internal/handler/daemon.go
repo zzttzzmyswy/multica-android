@@ -517,8 +517,15 @@ func (h *Handler) ReportTaskMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	workspaceID := ""
-	if issue, err := h.Queries.GetIssue(r.Context(), task.IssueID); err == nil {
-		workspaceID = uuidToString(issue.WorkspaceID)
+	if task.IssueID.Valid {
+		if issue, err := h.Queries.GetIssue(r.Context(), task.IssueID); err == nil {
+			workspaceID = uuidToString(issue.WorkspaceID)
+		}
+	}
+	if workspaceID == "" && task.ChatSessionID.Valid {
+		if cs, err := h.Queries.GetChatSession(r.Context(), task.ChatSessionID); err == nil {
+			workspaceID = uuidToString(cs.WorkspaceID)
+		}
 	}
 
 	for _, msg := range req.Messages {
