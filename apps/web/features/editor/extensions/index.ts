@@ -41,6 +41,8 @@ import { CodeBlockView } from "./code-block-view";
 import { createMarkdownPasteExtension } from "./markdown-paste";
 import { createSubmitExtension } from "./submit-shortcut";
 import { createFileUploadExtension } from "./file-upload";
+import { FileCardExtension } from "./file-card";
+import { ImageView } from "./image-view";
 
 const lowlight = createLowlight(common);
 
@@ -67,10 +69,12 @@ const ImageExtension = Image.extend({
       },
     };
   },
+  addNodeView() {
+    return ReactNodeViewRenderer(ImageView);
+  },
 }).configure({
   inline: false,
   allowBase64: false,
-  HTMLAttributes: { style: "max-width: 100%; height: auto;" },
 });
 
 export interface EditorExtensionsOptions {
@@ -106,6 +110,7 @@ export function createEditorExtensions(
     TableHeader,
     TableCell,
     Markdown,
+    FileCardExtension,
     BaseMentionExtension.configure({
       HTMLAttributes: { class: "mention" },
       ...(editable && options.queryClient ? { suggestion: createMentionSuggestion(options.queryClient) } : {}),

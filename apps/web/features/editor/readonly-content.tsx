@@ -16,7 +16,7 @@
  * - Rendering mentions with the same IssueMentionCard component and .mention class
  */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import ReactMarkdown, {
   defaultUrlTransform,
   type Components,
@@ -25,8 +25,11 @@ import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import { createLowlight, common } from "lowlight";
 import { toHtml } from "hast-util-to-html";
+import { Maximize2, Download, Link as LinkIcon, FileText } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { IssueMentionCard } from "@/features/issues/components/issue-mention-card";
+import { ImageLightbox } from "./extensions/image-view";
 import { preprocessMarkdown } from "./utils/preprocess";
 import "./content-editor.css";
 
@@ -95,15 +98,80 @@ const components: Partial<Components> = {
     );
   },
 
-  // Images — constrain width (matches Tiptap Image extension inline style)
-  img: ({ src, alt, ...props }) => (
-    <img
-      src={src}
-      alt={alt ?? ""}
-      style={{ maxWidth: "100%", height: "auto" }}
-      {...props}
-    />
-  ),
+  // Images — centered with toolbar + lightbox (matches Tiptap ImageView NodeView)
+  img: function ReadonlyImage({ src, alt }) {
+    const [lightbox, setLightbox] = useState(false);
+    const imgSrc = typeof src === "string" ? src : "";
+    const imgAlt = alt ?? "";
+
+    const handleView = () => setLightbox(true);
+    const handleDownload = () => {
+      window.open(imgSrc, "_blank", "noopener,noreferrer");
+    };
+    const handleCopyLink = async () => {
+      try {
+        await navigator.clipboard.writeText(imgSrc);
+        toast.success("Link copied");
+      } catch {
+        toast.error("Failed to copy link");
+      }
+    };
+
+    return (
+      <span className="image-node">
+        {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+        <span className="image-figure" onClick={handleView}>
+          <img src={imgSrc} alt={imgAlt} className="image-content" draggable={false} />
+          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+          <span
+            className="image-toolbar"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button type="button" onClick={handleView} title="View image">
+              <Maximize2 className="size-3.5" />
+            </button>
+            <button type="button" onClick={handleDownload} title="Download">
+              <Download className="size-3.5" />
+            </button>
+            <button type="button" onClick={handleCopyLink} title="Copy link">
+              <LinkIcon className="size-3.5" />
+            </button>
+          </span>
+        </span>
+        {lightbox && (
+          <ImageLightbox src={imgSrc} alt={imgAlt} onClose={() => setLightbox(false)} />
+        )}
+      </span>
+    );
+  },
+
+  // FileCard — intercept <div data-type="fileCard"> from preprocessMarkdown
+  div: ({ node, children, ...props }) => {
+    const dataType = node?.properties?.dataType as string | undefined;
+    if (dataType === "fileCard") {
+      const href = (node?.properties?.dataHref as string) || "";
+      const filename = (node?.properties?.dataFilename as string) || "";
+      return (
+        <div className="my-1 flex items-center gap-2 rounded-md border border-border bg-muted/50 px-2.5 py-1 transition-colors hover:bg-muted">
+          <FileText className="size-4 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm">{filename}</p>
+          </div>
+          {href && (
+            <button
+              type="button"
+              className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              onClick={() => window.open(href, "_blank", "noopener,noreferrer")}
+            >
+              <Download className="size-3.5" />
+            </button>
+          )}
+        </div>
+      );
+    }
+    return <div {...props}>{children}</div>;
+  },
 
   // Tables — wrap in tableWrapper div for border/radius/scroll (matches Tiptap)
   table: ({ children }) => (

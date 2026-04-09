@@ -166,6 +166,17 @@ const ContentEditor = forwardRef<ContentEditorRef, ContentEditorProps>(
       };
     }, []);
 
+    // Always clear drag overlay on any drop/dragend anywhere in the document
+    useEffect(() => {
+      const clear = () => setDragOver(false);
+      document.addEventListener("drop", clear);
+      document.addEventListener("dragend", clear);
+      return () => {
+        document.removeEventListener("drop", clear);
+        document.removeEventListener("dragend", clear);
+      };
+    }, []);
+
     // Readonly content update: when defaultValue changes and editor is readonly,
     // re-set the content (e.g. after editing a comment, the readonly view updates)
     useEffect(() => {
@@ -199,7 +210,7 @@ const ContentEditor = forwardRef<ContentEditorRef, ContentEditorProps>(
 
     return (
       <div
-        className={cn("relative", dragOver && "editor-drag-over")}
+        className={cn("relative min-h-full", dragOver && "editor-drag-over")}
         onDragEnter={(e) => {
           e.preventDefault();
           if (editable && e.dataTransfer.types.includes("Files"))
@@ -212,7 +223,23 @@ const ContentEditor = forwardRef<ContentEditorRef, ContentEditorProps>(
           if (!e.currentTarget.contains(e.relatedTarget as Node))
             setDragOver(false);
         }}
-        onDrop={() => setDragOver(false)}
+        onDrop={(e) => {
+          const alreadyHandled = e.nativeEvent.defaultPrevented;
+          e.preventDefault();
+          setDragOver(false);
+          // Only upload if ProseMirror didn't already handle the drop.
+          // When drop lands on the editor area, ProseMirror's handleDrop
+          // processes it and calls preventDefault on the native event.
+          // This fallback only fires when the overlay intercepted the drop.
+          if (alreadyHandled) return;
+          const files = e.dataTransfer?.files;
+          if (files?.length && editor && onUploadFileRef.current) {
+            const endPos = editor.state.doc.content.size;
+            for (const file of Array.from(files)) {
+              uploadAndInsertFile(editor, file, onUploadFileRef.current, endPos);
+            }
+          }
+        }}
       >
         <EditorContent editor={editor} />
         {dragOver && (

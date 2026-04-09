@@ -3,7 +3,6 @@
 import { useRef } from "react";
 import { Paperclip } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { FILE_INPUT_ACCEPT } from "@/shared/constants/upload";
 
 interface FileUploadButtonProps {
   /** Called with the selected File — caller handles upload. */
@@ -49,7 +48,6 @@ function FileUploadButton({
         ref={inputRef}
         type="file"
         className="hidden"
-        accept={FILE_INPUT_ACCEPT}
         onChange={handleChange}
       />
     </>
