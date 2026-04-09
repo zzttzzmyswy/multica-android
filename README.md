@@ -21,7 +21,7 @@ Turn coding agents into real teammates — assign tasks, track progress, compoun
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![GitHub stars](https://img.shields.io/github/stars/multica-ai/multica?style=flat)](https://github.com/multica-ai/multica/stargazers)
 
-[Website](https://multica.ai) · [Cloud](https://multica.ai/app) · [Self-Hosting](SELF_HOSTING.md) · [Contributing](CONTRIBUTING.md)
+[Website](https://multica.ai) · [Cloud](https://multica.ai/app) · [X](https://x.com/multica_hq) · [Self-Hosting](SELF_HOSTING.md) · [Contributing](CONTRIBUTING.md)
 
 **English | [简体中文](README.zh-CN.md)**
 

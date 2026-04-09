@@ -41,6 +41,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
+    site: "@multica_hq",
+    creator: "@multica_hq",
   },
   alternates: {
     canonical: "/",

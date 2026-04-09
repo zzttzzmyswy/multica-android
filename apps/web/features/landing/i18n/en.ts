@@ -230,7 +230,7 @@ export const en: LandingDict = {
         links: [
           { label: "Documentation", href: githubUrl },
           { label: "API", href: githubUrl },
-          { label: "Community", href: githubUrl },
+          { label: "X (Twitter)", href: "https://x.com/multica_hq" },
         ],
       },
       company: {

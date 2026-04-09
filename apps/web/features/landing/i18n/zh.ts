@@ -230,7 +230,7 @@ export const zh: LandingDict = {
         links: [
           { label: "\u6587\u6863", href: githubUrl },
           { label: "API", href: githubUrl },
-          { label: "\u793e\u533a", href: githubUrl },
+          { label: "X (Twitter)", href: "https://x.com/multica_hq" },
         ],
       },
       company: {
