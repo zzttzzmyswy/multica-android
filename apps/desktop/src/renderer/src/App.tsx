@@ -1,17 +1,16 @@
-function App(): React.JSX.Element {
+import { RouterProvider } from "react-router-dom";
+import { ThemeProvider } from "./components/theme-provider";
+import { Toaster } from "@multica/ui/components/ui/sonner";
+import { QueryProvider } from "@multica/core/provider";
+import { router } from "./router";
+
+export default function App() {
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        height: "100vh",
-        fontFamily: "system-ui, sans-serif",
-      }}
-    >
-      <h1>Multica Desktop</h1>
-    </div>
+    <ThemeProvider>
+      <QueryProvider>
+        <RouterProvider router={router} />
+        <Toaster />
+      </QueryProvider>
+    </ThemeProvider>
   );
 }
-
-export default App;
