@@ -89,7 +89,7 @@ export function LoginPage() {
                     />
                   </div>
                   {error && <p className="text-sm text-destructive">{error}</p>}
-                  <Button className="w-full" disabled={!email || loading}>
+                  <Button type="submit" className="w-full" disabled={!email || loading}>
                     {loading ? "Sending..." : "Send Code"}
                   </Button>
                 </div>
@@ -113,7 +113,7 @@ export function LoginPage() {
                     />
                   </div>
                   {error && <p className="text-sm text-destructive">{error}</p>}
-                  <Button className="w-full" disabled={!code || loading}>
+                  <Button type="submit" className="w-full" disabled={!code || loading}>
                     {loading ? "Verifying..." : "Verify"}
                   </Button>
                   <Button
