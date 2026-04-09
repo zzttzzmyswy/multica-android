@@ -7,8 +7,8 @@
 @custom-variant dark (&:is(.dark *));
 
 @source "../../../packages/ui/**/*.tsx";
-@source "../../../packages/core/**/*.tsx";
-@source "../../../packages/views/**/*.tsx";
+@source "../../../packages/core/**/*.{ts,tsx}";
+@source "../../../packages/views/**/*.{ts,tsx}";
 
 @layer base {
   * {

@@ -41,7 +41,8 @@
     "./provider": "./provider.tsx",
     "./logger": "./logger.ts",
     "./utils": "./utils.ts",
-    "./constants/*": "./constants/*.ts"
+    "./constants/*": "./constants/*.ts",
+    "./platform": "./platform/index.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "catalog:",

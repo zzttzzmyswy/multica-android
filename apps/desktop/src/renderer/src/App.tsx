@@ -1,19 +1,19 @@
 import { RouterProvider } from "react-router-dom";
+import { CoreProvider } from "@multica/core/platform";
 import { ThemeProvider } from "./components/theme-provider";
-import { Toaster } from "@multica/ui/components/ui/sonner";
-import { QueryProvider } from "@multica/core/provider";
-import { AuthInitializer } from "./platform/auth-initializer";
+import { Toaster } from "sonner";
 import { router } from "./router";
 
 export default function App() {
   return (
     <ThemeProvider>
-      <QueryProvider>
-        <AuthInitializer>
-          <RouterProvider router={router} />
-        </AuthInitializer>
-        <Toaster />
-      </QueryProvider>
+      <CoreProvider
+        apiBaseUrl={import.meta.env.VITE_API_URL}
+        wsUrl={import.meta.env.VITE_WS_URL}
+      >
+        <RouterProvider router={router} />
+      </CoreProvider>
+      <Toaster />
     </ThemeProvider>
   );
 }
