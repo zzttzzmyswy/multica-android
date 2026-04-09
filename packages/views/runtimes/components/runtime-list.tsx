@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
 } from "@multica/ui/components/ui/dropdown-menu";
 import { ActorAvatar } from "../../common/actor-avatar";
-import { RuntimeModeIcon } from "./shared";
+import { ProviderLogo } from "./provider-logo";
 
 type RuntimeFilter = "mine" | "all";
 
@@ -40,7 +40,7 @@ function RuntimeListItem({
           runtime.status === "online" ? "bg-success/10" : "bg-muted"
         }`}
       >
-        <RuntimeModeIcon mode={runtime.runtime_mode} />
+        <ProviderLogo provider={runtime.provider} className="h-4 w-4" />
       </div>
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium">{runtime.name}</div>

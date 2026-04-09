@@ -22,7 +22,8 @@ import {
 } from "@multica/ui/components/ui/alert-dialog";
 import { ActorAvatar } from "../../common/actor-avatar";
 import { formatLastSeen } from "../utils";
-import { RuntimeModeIcon, StatusBadge, InfoField } from "./shared";
+import { StatusBadge, InfoField } from "./shared";
+import { ProviderLogo } from "./provider-logo";
 import { PingSection } from "./ping-section";
 import { UpdateSection } from "./update-section";
 import { UsageSection } from "./usage-section";
@@ -86,7 +87,7 @@ export function RuntimeDetail({ runtime }: { runtime: AgentRuntime }) {
               runtime.status === "online" ? "bg-success/10" : "bg-muted"
             }`}
           >
-            <RuntimeModeIcon mode={runtime.runtime_mode} />
+            <ProviderLogo provider={runtime.provider} className="h-4 w-4" />
           </div>
           <div className="min-w-0">
             <h2 className="text-sm font-semibold truncate">{runtime.name}</h2>
