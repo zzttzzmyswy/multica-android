@@ -1,2 +1,2 @@
 export { useModalStore } from "@multica/core/modals";
-export { ModalRegistry } from "./registry";
+export { ModalRegistry } from "@multica/views/modals/registry";

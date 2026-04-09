@@ -23,8 +23,9 @@ export function getApi(): ApiClientType {
  */
 export const api = new Proxy({} as ApiClientType, {
   get(_target, prop, receiver) {
-    const instance = getApi();
-    const value = Reflect.get(instance, prop, receiver);
-    return typeof value === "function" ? value.bind(instance) : value;
+    // Allow property inspection (HMR/React Refresh) before initialisation
+    if (!_api) return undefined;
+    const value = Reflect.get(_api, prop, receiver);
+    return typeof value === "function" ? value.bind(_api) : value;
   },
 });

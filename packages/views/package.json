@@ -1,0 +1,41 @@
+{
+  "name": "@multica/views",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./navigation": "./navigation/index.ts",
+    "./common/actor-avatar": "./common/actor-avatar.tsx",
+    "./common/markdown": "./common/markdown.tsx",
+    "./editor": "./editor/index.ts",
+    "./issues/components": "./issues/components/index.ts",
+    "./issues/hooks": "./issues/hooks/index.ts",
+    "./issues/utils/filter": "./issues/utils/filter.ts",
+    "./issues/utils/sort": "./issues/utils/sort.ts",
+    "./issues/utils/redact": "./issues/utils/redact.ts",
+    "./modals/registry": "./modals/registry.tsx",
+    "./modals/create-issue": "./modals/create-issue.tsx",
+    "./modals/create-workspace": "./modals/create-workspace.tsx",
+    "./my-issues": "./my-issues/index.ts",
+    "./skills": "./skills/index.ts",
+    "./runtimes": "./runtimes/index.ts",
+    "./workspace/workspace-avatar": "./workspace/workspace-avatar.tsx"
+  },
+  "dependencies": {
+    "@multica/core": "workspace:*",
+    "@multica/ui": "workspace:*"
+  },
+  "peerDependencies": {
+    "@tanstack/react-query": "catalog:",
+    "lucide-react": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "zustand": "catalog:"
+  },
+  "devDependencies": {
+    "@multica/tsconfig": "workspace:*",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "typescript": "catalog:"
+  }
+}

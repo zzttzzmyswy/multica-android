@@ -17,7 +17,7 @@ import {
   useArchiveAllReadInbox,
   useArchiveCompletedInbox,
 } from "@multica/core/inbox/mutations";
-import { IssueDetail, StatusIcon, PriorityIcon } from "@/features/issues/components";
+import { IssueDetail, StatusIcon, PriorityIcon } from "@multica/views/issues/components";
 import { STATUS_CONFIG, PRIORITY_CONFIG } from "@multica/core/issues/config";
 import { useActorName } from "@multica/core/workspace/hooks";
 import { ActorAvatar } from "@/components/common/actor-avatar";

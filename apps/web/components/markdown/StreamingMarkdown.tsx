@@ -3,7 +3,7 @@ import {
   StreamingMarkdown as StreamingMarkdownBase,
   type StreamingMarkdownProps as StreamingMarkdownBaseProps
 } from '@multica/ui/markdown'
-import { IssueMentionCard } from '@/features/issues/components/issue-mention-card'
+import { IssueMentionCard } from '@multica/views/issues/components'
 
 export type StreamingMarkdownProps = StreamingMarkdownBaseProps
 

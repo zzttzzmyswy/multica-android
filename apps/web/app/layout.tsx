@@ -6,7 +6,7 @@ import { cn } from "@multica/ui/lib/utils";
 import { QueryProvider } from "@multica/core/provider";
 import { AuthInitializer } from "@/features/auth";
 import { WebWSProvider } from "@/platform/ws-provider";
-import { ModalRegistry } from "@/features/modals";
+import { WebNavigationProvider } from "@/platform/navigation";
 import { LocaleSync } from "@/components/locale-sync";
 import "./globals.css";
 
@@ -66,10 +66,11 @@ export default function RootLayout({
         <LocaleSync />
         <ThemeProvider>
           <QueryProvider>
-            <AuthInitializer>
-              <WebWSProvider>{children}</WebWSProvider>
-            </AuthInitializer>
-            <ModalRegistry />
+            <WebNavigationProvider>
+              <AuthInitializer>
+                <WebWSProvider>{children}</WebWSProvider>
+              </AuthInitializer>
+            </WebNavigationProvider>
             <Toaster />
           </QueryProvider>
         </ThemeProvider>

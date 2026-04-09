@@ -17,7 +17,7 @@ import {
   SquarePen,
   CircleUser,
 } from "lucide-react";
-import { WorkspaceAvatar } from "@/features/workspace";
+import { WorkspaceAvatar } from "@multica/views/workspace/workspace-avatar";
 import { useIssueDraftStore } from "@multica/core/issues/stores/draft-store";
 import {
   Sidebar,

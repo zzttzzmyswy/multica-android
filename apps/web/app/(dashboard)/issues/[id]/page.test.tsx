@@ -38,6 +38,121 @@ vi.mock("@/platform/auth", () => ({
     }),
 }));
 
+// Mock @multica/core/workspace (used by @multica/views components)
+vi.mock("@multica/core/workspace", () => ({
+  useWorkspaceStore: Object.assign(
+    (selector: (s: any) => any) =>
+      selector({
+        workspace: { id: "ws-1", name: "Test WS" },
+        workspaces: [{ id: "ws-1", name: "Test WS" }],
+        members: [{ user_id: "user-1", name: "Test User", email: "test@multica.ai" }],
+        agents: [{ id: "agent-1", name: "Claude Agent" }],
+      }),
+    { getState: () => ({
+        workspace: { id: "ws-1", name: "Test WS" },
+        workspaces: [{ id: "ws-1", name: "Test WS" }],
+        members: [{ user_id: "user-1", name: "Test User", email: "test@multica.ai" }],
+        agents: [{ id: "agent-1", name: "Claude Agent" }],
+      }),
+    },
+  ),
+  registerWorkspaceStore: vi.fn(),
+}));
+
+// Mock @multica/core/auth (used by @multica/views components)
+vi.mock("@multica/core/auth", () => ({
+  useAuthStore: Object.assign(
+    (selector: (s: any) => any) =>
+      selector({
+        user: { id: "user-1", name: "Test User", email: "test@multica.ai" },
+        isLoading: false,
+      }),
+    { getState: () => ({
+        user: { id: "user-1", name: "Test User", email: "test@multica.ai" },
+        isLoading: false,
+      }),
+    },
+  ),
+  registerAuthStore: vi.fn(),
+  createAuthStore: vi.fn(),
+}));
+
+// Mock @multica/views/navigation (AppLink used by views components)
+vi.mock("@multica/views/navigation", () => ({
+  AppLink: ({ children, href, ...props }: any) => <a href={href} {...props}>{children}</a>,
+  useNavigation: () => ({ push: vi.fn(), pathname: "/issues/issue-1" }),
+  NavigationProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
+// Mock @multica/views/editor (ContentEditor, TitleEditor used by IssueDetail)
+vi.mock("@multica/views/editor", () => ({
+  ReadonlyContent: ({ content }: { content: string }) => (
+    <div data-testid="readonly-content">{content}</div>
+  ),
+  ContentEditor: forwardRef(({ defaultValue, onUpdate, placeholder, onSubmit }: any, ref: any) => {
+    const valueRef = useRef(defaultValue || "");
+    const [value, setValue] = useState(defaultValue || "");
+    useImperativeHandle(ref, () => ({
+      getMarkdown: () => valueRef.current,
+      clearContent: () => { valueRef.current = ""; setValue(""); },
+      focus: () => {},
+    }));
+    return (
+      <textarea
+        value={value}
+        onChange={(e) => {
+          valueRef.current = e.target.value;
+          setValue(e.target.value);
+          onUpdate?.(e.target.value);
+        }}
+        onKeyDown={(e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+            onSubmit?.();
+          }
+        }}
+        placeholder={placeholder}
+        data-testid="rich-text-editor"
+      />
+    );
+  }),
+  TitleEditor: forwardRef(({ defaultValue, placeholder, onBlur, onChange }: any, ref: any) => {
+    const valueRef = useRef(defaultValue || "");
+    const [value, setValue] = useState(defaultValue || "");
+    useImperativeHandle(ref, () => ({
+      getText: () => valueRef.current,
+      focus: () => {},
+    }));
+    return (
+      <input
+        value={value}
+        onChange={(e) => {
+          valueRef.current = e.target.value;
+          setValue(e.target.value);
+          onChange?.(e.target.value);
+        }}
+        onBlur={() => onBlur?.(valueRef.current)}
+        placeholder={placeholder}
+        data-testid="title-editor"
+      />
+    );
+  }),
+}));
+
+// Mock @multica/views/workspace/workspace-avatar
+vi.mock("@multica/views/workspace/workspace-avatar", () => ({
+  WorkspaceAvatar: ({ name }: { name: string }) => <span>{name.charAt(0)}</span>,
+}));
+
+// Mock @multica/views/common/actor-avatar
+vi.mock("@multica/views/common/actor-avatar", () => ({
+  ActorAvatar: ({ actorType, actorId }: any) => <span data-testid="actor-avatar">{actorType}:{actorId}</span>,
+}));
+
+// Mock @multica/views/common/markdown
+vi.mock("@multica/views/common/markdown", () => ({
+  Markdown: ({ children }: { children: string }) => <div>{children}</div>,
+}));
+
 // Mock workspace feature
 vi.mock("@/features/workspace", () => ({
   useWorkspaceStore: (selector: (s: any) => any) =>

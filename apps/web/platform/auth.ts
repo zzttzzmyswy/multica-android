@@ -1,4 +1,4 @@
-import { createAuthStore } from "@multica/core/auth";
+import { createAuthStore, registerAuthStore } from "@multica/core/auth";
 import { api } from "./api";
 import {
   setLoggedInCookie,
@@ -10,3 +10,5 @@ export const useAuthStore = createAuthStore({
   onLogin: setLoggedInCookie,
   onLogout: clearLoggedInCookie,
 });
+
+registerAuthStore(useAuthStore);

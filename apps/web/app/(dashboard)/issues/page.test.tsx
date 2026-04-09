@@ -48,6 +48,32 @@ vi.mock("@/features/workspace", () => ({
   WorkspaceAvatar: ({ name }: { name: string }) => <span>{name.charAt(0)}</span>,
 }));
 
+// Mock @multica/core/auth (used by @multica/views pickers like AssigneePicker)
+const mockAuthUser = { id: "user-1", email: "test@test.com", name: "Test User" };
+vi.mock("@multica/core/auth", () => ({
+  useAuthStore: Object.assign(
+    (selector?: any) => {
+      const state = { user: mockAuthUser, isAuthenticated: true };
+      return selector ? selector(state) : state;
+    },
+    { getState: () => ({ user: mockAuthUser, isAuthenticated: true }) },
+  ),
+  registerAuthStore: vi.fn(),
+  createAuthStore: vi.fn(),
+}));
+
+// Mock @multica/core/workspace (used by @multica/views components)
+vi.mock("@multica/core/workspace", () => ({
+  useWorkspaceStore: Object.assign(
+    (selector?: any) => {
+      const state = { workspace: { id: "ws-1", name: "Test", slug: "test" }, agents: [], members: [] };
+      return selector ? selector(state) : state;
+    },
+    { getState: () => ({ workspace: { id: "ws-1", name: "Test", slug: "test" }, agents: [], members: [] }) },
+  ),
+  registerWorkspaceStore: vi.fn(),
+}));
+
 vi.mock("@/platform/workspace", () => ({
   useWorkspaceStore: Object.assign(
     (selector?: any) => {
@@ -56,6 +82,18 @@ vi.mock("@/platform/workspace", () => ({
     },
     { getState: () => ({ workspace: { id: "ws-1", name: "Test", slug: "test" }, agents: [], members: [] }) },
   ),
+}));
+
+// Mock @multica/views/navigation (AppLink used by views components)
+vi.mock("@multica/views/navigation", () => ({
+  AppLink: ({ children, href, ...props }: any) => <a href={href} {...props}>{children}</a>,
+  useNavigation: () => ({ push: vi.fn(), pathname: "/issues" }),
+  NavigationProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
+// Mock @multica/views/workspace/workspace-avatar
+vi.mock("@multica/views/workspace/workspace-avatar", () => ({
+  WorkspaceAvatar: ({ name }: { name: string }) => <span>{name.charAt(0)}</span>,
 }));
 
 // Mock WebSocket context
@@ -79,10 +117,14 @@ vi.mock("@multica/core/api", () => ({
   api: {
     listIssues: (...args: any[]) => mockListIssues(...args),
     updateIssue: (...args: any[]) => mockUpdateIssue(...args),
+    listMembers: () => Promise.resolve([]),
+    listAgents: () => Promise.resolve([]),
   },
   getApi: () => ({
     listIssues: (...args: any[]) => mockListIssues(...args),
     updateIssue: (...args: any[]) => mockUpdateIssue(...args),
+    listMembers: () => Promise.resolve([]),
+    listAgents: () => Promise.resolve([]),
   }),
   setApiInstance: vi.fn(),
 }));
