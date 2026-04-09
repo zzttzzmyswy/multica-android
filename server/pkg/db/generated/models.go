@@ -245,6 +245,7 @@ type Project struct {
 	LeadID      pgtype.UUID        `json:"lead_id"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	Priority    string             `json:"priority"`
 }
 
 type RuntimeUsage struct {

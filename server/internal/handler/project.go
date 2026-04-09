@@ -18,6 +18,7 @@ type ProjectResponse struct {
 	Description *string `json:"description"`
 	Icon        *string `json:"icon"`
 	Status      string  `json:"status"`
+	Priority    string  `json:"priority"`
 	LeadType    *string `json:"lead_type"`
 	LeadID      *string `json:"lead_id"`
 	CreatedAt   string  `json:"created_at"`
@@ -32,6 +33,7 @@ func projectToResponse(p db.Project) ProjectResponse {
 		Description: textToPtr(p.Description),
 		Icon:        textToPtr(p.Icon),
 		Status:      p.Status,
+		Priority:    p.Priority,
 		LeadType:    textToPtr(p.LeadType),
 		LeadID:      uuidToPtr(p.LeadID),
 		CreatedAt:   timestampToString(p.CreatedAt),
@@ -44,6 +46,7 @@ type CreateProjectRequest struct {
 	Description *string `json:"description"`
 	Icon        *string `json:"icon"`
 	Status      string  `json:"status"`
+	Priority    string  `json:"priority"`
 	LeadType    *string `json:"lead_type"`
 	LeadID      *string `json:"lead_id"`
 }
@@ -53,6 +56,7 @@ type UpdateProjectRequest struct {
 	Description *string `json:"description"`
 	Icon        *string `json:"icon"`
 	Status      *string `json:"status"`
+	Priority    *string `json:"priority"`
 	LeadType    *string `json:"lead_type"`
 	LeadID      *string `json:"lead_id"`
 }
@@ -63,9 +67,14 @@ func (h *Handler) ListProjects(w http.ResponseWriter, r *http.Request) {
 	if s := r.URL.Query().Get("status"); s != "" {
 		statusFilter = pgtype.Text{String: s, Valid: true}
 	}
+	var priorityFilter pgtype.Text
+	if p := r.URL.Query().Get("priority"); p != "" {
+		priorityFilter = pgtype.Text{String: p, Valid: true}
+	}
 	projects, err := h.Queries.ListProjects(r.Context(), db.ListProjectsParams{
 		WorkspaceID: parseUUID(workspaceID),
 		Status:      statusFilter,
+		Priority:    priorityFilter,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list projects")
@@ -110,6 +119,10 @@ func (h *Handler) CreateProject(w http.ResponseWriter, r *http.Request) {
 	if status == "" {
 		status = "planned"
 	}
+	priority := req.Priority
+	if priority == "" {
+		priority = "none"
+	}
 	var leadType pgtype.Text
 	var leadID pgtype.UUID
 	if req.LeadType != nil {
@@ -126,6 +139,7 @@ func (h *Handler) CreateProject(w http.ResponseWriter, r *http.Request) {
 		Status:      status,
 		LeadType:    leadType,
 		LeadID:      leadID,
+		Priority:    priority,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create project")
@@ -175,6 +189,9 @@ func (h *Handler) UpdateProject(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Status != nil {
 		params.Status = pgtype.Text{String: *req.Status, Valid: true}
+	}
+	if req.Priority != nil {
+		params.Priority = pgtype.Text{String: *req.Priority, Valid: true}
 	}
 	if _, ok := rawFields["description"]; ok {
 		if req.Description != nil {

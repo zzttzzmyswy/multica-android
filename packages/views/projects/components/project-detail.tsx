@@ -5,7 +5,7 @@ import { Check, ChevronRight, Link2, ListTodo, MoreHorizontal, Trash2, UserMinus
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@multica/ui/lib/utils";
 import { toast } from "sonner";
-import type { Issue, IssueStatus, ProjectStatus } from "@multica/core/types";
+import type { Issue, IssueStatus, ProjectStatus, ProjectPriority } from "@multica/core/types";
 import { projectDetailOptions } from "@multica/core/projects/queries";
 import { useUpdateProject, useDeleteProject } from "@multica/core/projects/mutations";
 import { issueListOptions } from "@multica/core/issues/queries";
@@ -14,7 +14,7 @@ import { memberListOptions, agentListOptions } from "@multica/core/workspace/que
 import { useWorkspaceId } from "@multica/core/hooks";
 import { useWorkspaceStore } from "@multica/core/workspace";
 import { useActorName } from "@multica/core/workspace/hooks";
-import { PROJECT_STATUS_ORDER, PROJECT_STATUS_CONFIG } from "@multica/core/projects/config";
+import { PROJECT_STATUS_ORDER, PROJECT_STATUS_CONFIG, PROJECT_PRIORITY_ORDER, PROJECT_PRIORITY_CONFIG } from "@multica/core/projects/config";
 import { BOARD_STATUSES } from "@multica/core/issues/config";
 import { createIssueViewStore, useIssueViewStore as useGlobalIssueViewStore } from "@multica/core/issues/stores/view-store";
 import { ViewStoreProvider, useViewStore } from "@multica/core/issues/stores/view-store-context";
@@ -23,6 +23,7 @@ import { filterIssues } from "../../issues/utils/filter";
 import { ActorAvatar } from "../../common/actor-avatar";
 import { AppLink, useNavigation } from "../../navigation";
 import { TitleEditor, ContentEditor, type ContentEditorRef } from "../../editor";
+import { PriorityIcon } from "../../issues/components/priority-icon";
 import { IssuesHeader } from "../../issues/components/issues-header";
 import { BoardView } from "../../issues/components/board-view";
 import { ListView } from "../../issues/components/list-view";
@@ -218,6 +219,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   }
 
   const statusCfg = PROJECT_STATUS_CONFIG[project.status];
+  const priorityCfg = PROJECT_PRIORITY_CONFIG[project.priority];
 
   return (
     <div className="flex h-full flex-col">
@@ -358,6 +360,27 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                         <span className={cn("size-2 rounded-full", PROJECT_STATUS_CONFIG[s].dotColor)} />
                         <span>{PROJECT_STATUS_CONFIG[s].label}</span>
                         {s === project.status && <Check className="ml-auto h-3.5 w-3.5" />}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {/* Priority */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <PropertyPill>
+                        <PriorityIcon priority={project.priority} />
+                        <span>{priorityCfg.label}</span>
+                      </PropertyPill>
+                    }
+                  />
+                  <DropdownMenuContent align="start" className="w-44">
+                    {PROJECT_PRIORITY_ORDER.map((p) => (
+                      <DropdownMenuItem key={p} onClick={() => handleUpdateField({ priority: p as ProjectPriority })}>
+                        <PriorityIcon priority={p} />
+                        <span>{PROJECT_PRIORITY_CONFIG[p].label}</span>
+                        {p === project.priority && <Check className="ml-auto h-3.5 w-3.5" />}
                       </DropdownMenuItem>
                     ))}
                   </DropdownMenuContent>

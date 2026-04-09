@@ -5,7 +5,7 @@ import { Plus, FolderKanban, ChevronRight, Maximize2, Minimize2, X as XIcon, Use
 import { useQuery } from "@tanstack/react-query";
 import { projectListOptions } from "@multica/core/projects/queries";
 import { useCreateProject } from "@multica/core/projects/mutations";
-import { PROJECT_STATUS_CONFIG, PROJECT_STATUS_ORDER } from "@multica/core/projects/config";
+import { PROJECT_STATUS_CONFIG, PROJECT_STATUS_ORDER, PROJECT_PRIORITY_CONFIG, PROJECT_PRIORITY_ORDER } from "@multica/core/projects/config";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { useWorkspaceStore } from "@multica/core/workspace";
 import { memberListOptions, agentListOptions } from "@multica/core/workspace/queries";
@@ -36,7 +36,8 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@multica/ui/components/
 import { ContentEditor, type ContentEditorRef } from "../../editor";
 import { TitleEditor } from "../../editor";
 import { EmojiPicker } from "@multica/ui/components/common/emoji-picker";
-import type { Project, ProjectStatus } from "@multica/core/types";
+import type { Project, ProjectStatus, ProjectPriority } from "@multica/core/types";
+import { PriorityIcon } from "../../issues/components/priority-icon";
 
 function formatRelativeDate(date: string): string {
   const diff = Date.now() - new Date(date).getTime();
@@ -50,6 +51,7 @@ function formatRelativeDate(date: string): string {
 
 function ProjectRow({ project }: { project: Project }) {
   const statusCfg = PROJECT_STATUS_CONFIG[project.status];
+  const priorityCfg = PROJECT_PRIORITY_CONFIG[project.priority];
   return (
     <AppLink
       href={`/projects/${project.id}`}
@@ -58,6 +60,12 @@ function ProjectRow({ project }: { project: Project }) {
       {/* Icon + Name */}
       <span className="shrink-0 w-[24px] text-center text-base">{project.icon || "📁"}</span>
       <span className="min-w-0 flex-1 truncate font-medium">{project.title}</span>
+
+      {/* Priority */}
+      <span className="flex w-24 items-center justify-center gap-1 shrink-0">
+        <PriorityIcon priority={project.priority} />
+        <span className={cn("text-xs", priorityCfg.color)}>{priorityCfg.label}</span>
+      </span>
 
       {/* Status */}
       <span className={cn(
@@ -115,6 +123,7 @@ function CreateProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const [title, setTitle] = useState("");
   const descEditorRef = useRef<ContentEditorRef>(null);
   const [status, setStatus] = useState<ProjectStatus>("planned");
+  const [priority, setPriority] = useState<ProjectPriority>("none");
   const [leadType, setLeadType] = useState<"member" | "agent" | undefined>();
   const [leadId, setLeadId] = useState<string | undefined>();
   const [icon, setIcon] = useState<string | undefined>();
@@ -144,6 +153,7 @@ function CreateProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         description: descEditorRef.current?.getMarkdown()?.trim() || undefined,
         icon,
         status,
+        priority,
         lead_type: leadType,
         lead_id: leadId,
       });
@@ -151,6 +161,7 @@ function CreateProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       setTitle("");
       setIcon(undefined);
       setStatus("planned");
+      setPriority("none");
       setLeadType(undefined);
       setLeadId(undefined);
       toast.success("Project created");
@@ -274,6 +285,26 @@ function CreateProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                 <DropdownMenuItem key={s} onClick={() => setStatus(s)}>
                   <span className={cn("size-2 rounded-full", PROJECT_STATUS_CONFIG[s].dotColor)} />
                   <span>{PROJECT_STATUS_CONFIG[s].label}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Priority */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <PillButton>
+                  <PriorityIcon priority={priority} />
+                  <span>{PROJECT_PRIORITY_CONFIG[priority].label}</span>
+                </PillButton>
+              }
+            />
+            <DropdownMenuContent align="start" className="w-44">
+              {PROJECT_PRIORITY_ORDER.map((p) => (
+                <DropdownMenuItem key={p} onClick={() => setPriority(p)}>
+                  <PriorityIcon priority={p} />
+                  <span>{PROJECT_PRIORITY_CONFIG[p].label}</span>
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -410,6 +441,7 @@ export function ProjectsPage() {
               {/* Icon spacer + Name */}
               <span className="shrink-0 w-[24px]" />
               <span className="min-w-0 flex-1">Name</span>
+              <span className="w-24 text-center shrink-0">Priority</span>
               <span className="w-28 text-center shrink-0">Status</span>
               <span className="w-10 text-center shrink-0">Lead</span>
               <span className="w-20 text-right shrink-0">Created</span>
