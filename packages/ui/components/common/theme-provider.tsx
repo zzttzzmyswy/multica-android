@@ -1,5 +1,7 @@
-import { ThemeProvider as NextThemesProvider } from "next-themes";
-import { TooltipProvider } from "@multica/ui/components/ui/tooltip";
+import { ThemeProvider as NextThemesProvider, useTheme } from "next-themes";
+
+export { useTheme };
+import { TooltipProvider } from "../ui/tooltip";
 
 export function ThemeProvider({
   children,

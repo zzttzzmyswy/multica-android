@@ -1,7 +1,7 @@
 "use client"
 
-import { ThemeProvider as NextThemesProvider } from "next-themes"
-import { TooltipProvider } from "@multica/ui/components/ui/tooltip"
+// Re-export the shared ThemeProvider from @multica/ui
+export { ThemeProvider } from "@multica/ui/components/common/theme-provider"
 
 // Suppress React 19 false-positive about next-themes' inline <script>.
 // The script works correctly; React 19 just warns about any <script> in components.
@@ -14,24 +14,3 @@ if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
     orig.apply(console, args);
   };
 }
-
-function ThemeProvider({
-  children,
-  ...props
-}: React.ComponentProps<typeof NextThemesProvider>) {
-  return (
-    <NextThemesProvider
-      attribute="class"
-      defaultTheme="system"
-      enableSystem
-      disableTransitionOnChange
-      {...props}
-    >
-      <TooltipProvider delay={500}>
-        {children}
-      </TooltipProvider>
-    </NextThemesProvider>
-  )
-}
-
-export { ThemeProvider }

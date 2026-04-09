@@ -632,7 +632,10 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
 
                 {/* Copy link */}
                 <DropdownMenuItem onClick={() => {
-                  navigator.clipboard.writeText(window.location.href);
+                  const url = router.getShareableUrl
+                    ? router.getShareableUrl(router.pathname)
+                    : window.location.href;
+                  navigator.clipboard.writeText(url);
                   toast.success("Link copied");
                 }}>
                   <Link2 className="h-3.5 w-3.5" />

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { cn } from "@multica/ui/lib/utils";
+import { cn } from "../../lib/utils";
 
 interface MulticaIconProps extends React.ComponentProps<"span"> {
   /**

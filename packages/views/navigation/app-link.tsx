@@ -9,11 +9,16 @@ interface AppLinkProps extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
 
 export const AppLink = forwardRef<HTMLAnchorElement, AppLinkProps>(
   function AppLink({ href, children, onClick, ...props }, ref) {
-    const { push } = useNavigation();
+    const { push, openInNewTab } = useNavigation();
 
     const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-      // Allow ctrl/cmd+click to open in new tab
-      if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey) {
+        if (openInNewTab) {
+          e.preventDefault();
+          openInNewTab(href);
+        }
+        return;
+      }
       e.preventDefault();
       onClick?.(e);
       push(href);

@@ -6,6 +6,7 @@ import { useAuthStore } from "../auth";
 import { useWorkspaceStore } from "../workspace";
 import { createLogger } from "../logger";
 import { defaultStorage } from "./storage";
+import type { StorageAdapter } from "../types/storage";
 
 const logger = createLogger("auth");
 
@@ -13,13 +14,15 @@ export function AuthInitializer({
   children,
   onLogin,
   onLogout,
+  storage = defaultStorage,
 }: {
   children: ReactNode;
   onLogin?: () => void;
   onLogout?: () => void;
+  storage?: StorageAdapter;
 }) {
   useEffect(() => {
-    const token = defaultStorage.getItem("multica_token");
+    const token = storage.getItem("multica_token");
     if (!token) {
       onLogout?.();
       useAuthStore.setState({ isLoading: false });
@@ -28,7 +31,7 @@ export function AuthInitializer({
 
     const api = getApi();
     api.setToken(token);
-    const wsId = defaultStorage.getItem("multica_workspace_id");
+    const wsId = storage.getItem("multica_workspace_id");
 
     Promise.all([api.getMe(), api.listWorkspaces()])
       .then(([user, wsList]) => {
@@ -40,8 +43,8 @@ export function AuthInitializer({
         logger.error("auth init failed", err);
         api.setToken(null);
         api.setWorkspaceId(null);
-        defaultStorage.removeItem("multica_token");
-        defaultStorage.removeItem("multica_workspace_id");
+        storage.removeItem("multica_token");
+        storage.removeItem("multica_workspace_id");
         onLogout?.();
         useAuthStore.setState({ user: null, isLoading: false });
       });

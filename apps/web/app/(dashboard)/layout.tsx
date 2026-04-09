@@ -1,7 +1,7 @@
 "use client";
 
 import { DashboardLayout } from "@multica/views/layout";
-import { MulticaIcon } from "@/components/multica-icon";
+import { MulticaIcon } from "@multica/ui/components/common/multica-icon";
 import { SearchCommand } from "@/features/search";
 
 export default function Layout({ children }: { children: React.ReactNode }) {

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { cn } from "@multica/ui/lib/utils";
 import { AppLink, useNavigation } from "../navigation";
 import {
   Inbox,
@@ -66,7 +67,16 @@ function DraftDot() {
   return <span className="absolute top-0 right-0 size-1.5 rounded-full bg-brand" />;
 }
 
-export function AppSidebar() {
+interface AppSidebarProps {
+  /** Rendered above SidebarHeader (e.g. desktop traffic light spacer) */
+  topSlot?: React.ReactNode;
+  /** Extra className for SidebarHeader */
+  headerClassName?: string;
+  /** Extra style for SidebarHeader */
+  headerStyle?: React.CSSProperties;
+}
+
+export function AppSidebar({ topSlot, headerClassName, headerStyle }: AppSidebarProps = {}) {
   const { pathname, push } = useNavigation();
   const user = useAuthStore((s) => s.user);
   const authLogout = useAuthStore((s) => s.logout);
@@ -93,8 +103,9 @@ export function AppSidebar() {
 
   return (
       <Sidebar variant="inset">
+        {topSlot}
         {/* Workspace Switcher */}
-        <SidebarHeader className="py-3">
+        <SidebarHeader className={cn("py-3", headerClassName)} style={headerStyle}>
           <div className="flex items-center gap-4">
             <SidebarMenu className="min-w-0 flex-1">
               <SidebarMenuItem>
@@ -111,7 +122,7 @@ export function AppSidebar() {
                     }
                   />
                 <DropdownMenuContent
-                  className="w-52"
+                  className="w-auto"
                   align="start"
                   side="bottom"
                   sideOffset={4}

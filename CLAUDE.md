@@ -35,7 +35,7 @@ packages/
 
 **Dependency direction:** `views/ → core/ + ui/`. Core and UI are independent of each other. No package imports from `next/*` or `apps/web/`.
 
-**Platform bridge:** `apps/web/platform/` is the only place that touches `process.env`, `next/navigation`, and creates store/api singletons. Each future app (desktop, mobile) provides its own platform layer.
+**Platform bridge:** `packages/core/platform/` provides `CoreProvider` — a single component that initializes API client, auth store, workspace store, WS connection, and QueryClient. Apps wrap their root with `<CoreProvider apiBaseUrl wsUrl>` and only need to provide a `NavigationAdapter` for routing. `apps/web/platform/` adds web-specific concerns (cookies, Next.js navigation). Desktop uses `CoreProvider` directly with `react-router-dom` navigation.
 
 ### packages/core/ (`@multica/core`)
 
@@ -54,6 +54,7 @@ Headless business logic. **Zero react-dom, zero localStorage, zero process.env.*
 | `core/hooks.tsx` | Workspace ID context | `useWorkspaceId`, `WorkspaceIdProvider` |
 | `core/modals/` | Modal state store | `useModalStore` |
 | `core/navigation/` | Navigation state store | `useNavigationStore` |
+| `core/platform/` | CoreProvider + auth init + default storage | `CoreProvider`, `AuthInitializer`, `defaultStorage` |
 
 **Store factory pattern:** Auth and workspace stores are created via factory functions that receive platform-specific dependencies:
 ```typescript
@@ -98,16 +99,12 @@ apps/web/
 │   ├── auth/         # Web-only: auth-cookie.ts, initializer.tsx
 │   ├── landing/      # Web-only: landing pages (uses next/image, next/link)
 │   └── search/       # Web-only: search dialog
-└── components/       # App-level: theme-provider, multica-icon, locale-sync, loading-indicator
+└── components/       # App-level: theme-provider (re-export + React 19 fix), locale-sync, loading-indicator
 ```
 
-**`platform/`** — The only code that touches Next.js APIs and browser globals:
-- `api.ts` — Creates `ApiClient` singleton with `onUnauthorized` redirect
-- `auth.ts` — `createAuthStore({ api, storage: webStorage, onLogin: setLoggedInCookie })`
-- `workspace.ts` — `createWorkspaceStore(api, { storage: webStorage, onError: toast.error })`
-- `ws-provider.tsx` — Wraps `WSProvider` with web-specific WS URL and store instances
+**`platform/`** — Web-specific code that extends `CoreProvider` from `@multica/core/platform`:
 - `navigation.tsx` — `WebNavigationProvider` wrapping Next.js `useRouter`/`usePathname`
-- `storage.ts` — SSR-safe `webStorage` adapter (guards `localStorage` with `typeof window` checks)
+- Core initialization (API, auth, workspace, WS) is handled by `CoreProvider` in `packages/core/platform/`
 
 ### State Management
 
