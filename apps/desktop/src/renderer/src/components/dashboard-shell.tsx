@@ -7,7 +7,6 @@ import { ModalRegistry } from "@multica/views/modals/registry";
 import { useAuthStore } from "@/platform/auth";
 import { useWorkspaceStore } from "@/platform/workspace";
 import { DesktopNavigationProvider } from "@/platform/navigation";
-import { AuthInitializer } from "@/platform/auth-initializer";
 import { DesktopWSProvider } from "@/platform/ws-provider";
 import { TitleBar } from "./title-bar";
 import { AppSidebar } from "./app-sidebar";
@@ -45,30 +44,28 @@ export function DashboardShell() {
 
   return (
     <DesktopNavigationProvider>
-      <AuthInitializer>
-        <DesktopWSProvider>
-          <div className="flex h-screen flex-col">
-            <TitleBar />
-            <div className="flex flex-1 min-h-0">
-              <SidebarProvider className="flex-1">
-                <AppSidebar />
-                <SidebarInset className="overflow-hidden">
-                  {workspace ? (
-                    <WorkspaceIdProvider wsId={workspace.id}>
-                      <Outlet />
-                      <ModalRegistry />
-                    </WorkspaceIdProvider>
-                  ) : (
-                    <div className="flex flex-1 items-center justify-center">
-                      <MulticaIcon className="size-6 animate-pulse" />
-                    </div>
-                  )}
-                </SidebarInset>
-              </SidebarProvider>
-            </div>
+      <DesktopWSProvider>
+        <div className="flex h-screen flex-col">
+          <TitleBar />
+          <div className="flex flex-1 min-h-0">
+            <SidebarProvider className="flex-1">
+              <AppSidebar />
+              <SidebarInset className="overflow-hidden">
+                {workspace ? (
+                  <WorkspaceIdProvider wsId={workspace.id}>
+                    <Outlet />
+                    <ModalRegistry />
+                  </WorkspaceIdProvider>
+                ) : (
+                  <div className="flex flex-1 items-center justify-center">
+                    <MulticaIcon className="size-6 animate-pulse" />
+                  </div>
+                )}
+              </SidebarInset>
+            </SidebarProvider>
           </div>
-        </DesktopWSProvider>
-      </AuthInitializer>
+        </div>
+      </DesktopWSProvider>
     </DesktopNavigationProvider>
   );
 }
