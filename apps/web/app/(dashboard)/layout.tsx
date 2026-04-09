@@ -3,10 +3,12 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { MulticaIcon } from "@/components/multica-icon";
-import { useNavigationStore } from "@/features/navigation";
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
-import { useAuthStore } from "@/features/auth";
-import { useWorkspaceStore } from "@/features/workspace";
+import { useNavigationStore } from "@multica/core/navigation";
+import { SidebarProvider, SidebarInset } from "@multica/ui/components/ui/sidebar";
+import { useAuthStore } from "@/platform/auth";
+import { useWorkspaceStore } from "@/platform/workspace";
+import { WorkspaceIdProvider } from "@multica/core/hooks";
+import { ModalRegistry } from "@multica/views/modals/registry";
 import { SearchCommand } from "@/features/search";
 import { AppSidebar } from "./_components/app-sidebar";
 
@@ -46,7 +48,10 @@ export default function DashboardLayout({
       <AppSidebar />
       <SidebarInset className="overflow-hidden">
         {workspace ? (
-          children
+          <WorkspaceIdProvider wsId={workspace.id}>
+            {children}
+            <ModalRegistry />
+          </WorkspaceIdProvider>
         ) : (
           <div className="flex flex-1 items-center justify-center">
             <MulticaIcon className="size-6 animate-pulse" />

@@ -17,8 +17,8 @@ import {
   SquarePen,
   CircleUser,
 } from "lucide-react";
-import { WorkspaceAvatar } from "@/features/workspace";
-import { useIssueDraftStore } from "@/features/issues/stores/draft-store";
+import { WorkspaceAvatar } from "@multica/views/workspace/workspace-avatar";
+import { useIssueDraftStore } from "@multica/core/issues/stores/draft-store";
 import {
   Sidebar,
   SidebarContent,
@@ -30,7 +30,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-} from "@/components/ui/sidebar";
+} from "@multica/ui/components/ui/sidebar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,14 +39,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { useAuthStore } from "@/features/auth";
-import { useWorkspaceStore } from "@/features/workspace";
+} from "@multica/ui/components/ui/dropdown-menu";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@multica/ui/components/ui/tooltip";
+import { useAuthStore } from "@/platform/auth";
+import { useWorkspaceStore } from "@/platform/workspace";
 import { useQuery } from "@tanstack/react-query";
-import { inboxKeys, deduplicateInboxItems } from "@core/inbox/queries";
-import { api } from "@/shared/api";
-import { useModalStore } from "@/features/modals";
+import { inboxKeys, deduplicateInboxItems } from "@multica/core/inbox/queries";
+import { api } from "@/platform/api";
+import { useModalStore } from "@multica/core/modals";
 
 const primaryNav = [
   { href: "/inbox", label: "Inbox", icon: Inbox },

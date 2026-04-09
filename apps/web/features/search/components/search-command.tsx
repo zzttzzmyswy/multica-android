@@ -4,17 +4,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, MessageSquare, SearchIcon } from "lucide-react";
 import { Command as CommandPrimitive } from "cmdk";
-import type { SearchIssueResult } from "@/shared/types";
-import { api } from "@/shared/api";
-import { StatusIcon } from "@/features/issues";
-import { STATUS_CONFIG } from "@/features/issues/config";
+import type { SearchIssueResult } from "@multica/core/types";
+import { api } from "@/platform/api";
+import { StatusIcon } from "@multica/views/issues/components";
+import { STATUS_CONFIG } from "@multica/core/issues/config";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from "@/components/ui/dialog";
+} from "@multica/ui/components/ui/dialog";
 
 export function SearchCommand() {
   const router = useRouter();
