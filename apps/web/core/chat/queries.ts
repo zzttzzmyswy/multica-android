@@ -12,6 +12,7 @@ export function chatSessionsOptions(wsId: string) {
   return queryOptions({
     queryKey: chatKeys.sessions(wsId),
     queryFn: () => api.listChatSessions(),
+    staleTime: Infinity,
   });
 }
 
@@ -20,6 +21,7 @@ export function chatSessionOptions(wsId: string, id: string) {
     queryKey: chatKeys.session(wsId, id),
     queryFn: () => api.getChatSession(id),
     enabled: !!id,
+    staleTime: Infinity,
   });
 }
 
@@ -28,5 +30,6 @@ export function chatMessagesOptions(sessionId: string) {
     queryKey: chatKeys.messages(sessionId),
     queryFn: () => api.listChatMessages(sessionId),
     enabled: !!sessionId,
+    staleTime: Infinity,
   });
 }

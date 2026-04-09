@@ -285,12 +285,14 @@ func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, resu
 	if task.ChatSessionID.Valid {
 		var payload protocol.TaskCompletedPayload
 		if err := json.Unmarshal(result, &payload); err == nil && payload.Output != "" {
-			s.Queries.CreateChatMessage(ctx, db.CreateChatMessageParams{
+			if _, err := s.Queries.CreateChatMessage(ctx, db.CreateChatMessageParams{
 				ChatSessionID: task.ChatSessionID,
 				Role:          "assistant",
 				Content:       redact.Text(payload.Output),
 				TaskID:        task.ID,
-			})
+			}); err != nil {
+				slog.Error("failed to save assistant chat message", "task_id", util.UUIDToString(task.ID), "error", err)
+			}
 		}
 		s.Queries.UpdateChatSessionSession(ctx, db.UpdateChatSessionSessionParams{
 			ID:        task.ChatSessionID,

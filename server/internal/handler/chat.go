@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -207,7 +208,9 @@ func (h *Handler) SendChatMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Touch session updated_at.
-	h.Queries.TouchChatSession(r.Context(), session.ID)
+	if err := h.Queries.TouchChatSession(r.Context(), session.ID); err != nil {
+		slog.Warn("failed to touch chat session", "session_id", sessionID, "error", err)
+	}
 
 	// Broadcast the user message.
 	h.publish(protocol.EventChatMessage, workspaceID, "member", userID, protocol.ChatMessagePayload{
@@ -264,12 +267,13 @@ func (h *Handler) ListChatMessages(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------------------
 
 // CancelTaskByUser cancels a task after verifying the requesting user owns
-// the associated chat session or issue.
+// the associated chat session or issue within the current workspace.
 func (h *Handler) CancelTaskByUser(w http.ResponseWriter, r *http.Request) {
 	userID, ok := requireUserID(w, r)
 	if !ok {
 		return
 	}
+	workspaceID := ctxWorkspaceID(r.Context())
 	taskID := chi.URLParam(r, "taskId")
 
 	task, err := h.Queries.GetAgentTask(r.Context(), parseUUID(taskID))
@@ -278,17 +282,30 @@ func (h *Handler) CancelTaskByUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify ownership: for chat tasks, check creator; for issue tasks, workspace membership is sufficient.
+	// Verify ownership: for chat tasks, check workspace + creator;
+	// for issue tasks, verify the issue belongs to the current workspace.
 	if task.ChatSessionID.Valid {
-		cs, err := h.Queries.GetChatSession(r.Context(), task.ChatSessionID)
+		cs, err := h.Queries.GetChatSessionInWorkspace(r.Context(), db.GetChatSessionInWorkspaceParams{
+			ID:          task.ChatSessionID,
+			WorkspaceID: parseUUID(workspaceID),
+		})
 		if err != nil {
-			writeError(w, http.StatusNotFound, "chat session not found")
+			writeError(w, http.StatusNotFound, "task not found")
 			return
 		}
 		if uuidToString(cs.CreatorID) != userID {
 			writeError(w, http.StatusForbidden, "not your task")
 			return
 		}
+	} else if task.IssueID.Valid {
+		issue, err := h.Queries.GetIssue(r.Context(), task.IssueID)
+		if err != nil || uuidToString(issue.WorkspaceID) != workspaceID {
+			writeError(w, http.StatusNotFound, "task not found")
+			return
+		}
+	} else {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
 	}
 
 	cancelled, err := h.TaskService.CancelTask(r.Context(), parseUUID(taskID))
