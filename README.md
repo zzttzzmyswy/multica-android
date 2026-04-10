@@ -55,15 +55,19 @@ The fastest way to get started — no setup required: **[multica.ai](https://mul
 
 ### Self-Host with Docker
 
+**Prerequisites:** Docker and Docker Compose.
+
 ```bash
 git clone https://github.com/multica-ai/multica.git
 cd multica
-make dev    # auto-creates .env, installs deps, starts DB + migrations, launches app
+cp .env.example .env
+# Edit .env — change JWT_SECRET at minimum
+docker compose -f docker-compose.selfhost.yml up -d
 ```
 
-That's it — `make dev` handles environment setup, dependency installation, database creation, migrations, and starts both the backend and frontend. Edit `.env` afterward to customize settings (e.g. `JWT_SECRET`).
+This builds and starts PostgreSQL, the backend (with auto-migration), and the frontend. Open http://localhost:3000 when ready.
 
-For explicit control over each step, see the [Self-Hosting Guide](SELF_HOSTING.md).
+See the [Self-Hosting Guide](SELF_HOSTING.md) for full configuration, reverse proxy setup, and CLI/daemon instructions.
 
 ## CLI
 
