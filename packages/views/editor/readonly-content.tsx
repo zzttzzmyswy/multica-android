@@ -130,10 +130,8 @@ const components: Partial<Components> = {
 
     return (
       <span className="image-node">
-        {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
         <span className="image-figure" onClick={handleView}>
           <img src={imgSrc} alt={imgAlt} className="image-content" draggable={false} />
-          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
           <span
             className="image-toolbar"
             onMouseDown={(e) => e.stopPropagation()}

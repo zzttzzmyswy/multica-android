@@ -147,7 +147,7 @@ export function ChatWindow() {
       unsubCompleted();
       unsubFailed();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- refs + stable store actions, subscribe once
+   
   }, [subscribe, addTimelineItem, clearTimeline, setPendingTask, qc]);
 
   const handleSend = useCallback(

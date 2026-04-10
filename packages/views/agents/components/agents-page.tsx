@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import { Bot, Plus, Archive } from "lucide-react";
-import type { Agent, CreateAgentRequest, UpdateAgentRequest } from "@multica/core/types";
+import type { CreateAgentRequest, UpdateAgentRequest } from "@multica/core/types";
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -14,7 +14,6 @@ import { toast } from "sonner";
 import { Skeleton } from "@multica/ui/components/ui/skeleton";
 import { api } from "@multica/core/api";
 import { useAuthStore } from "@multica/core/auth";
-import { useWorkspaceStore } from "@multica/core/workspace";
 import { runtimeListOptions } from "@multica/core/runtimes/queries";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWorkspaceId } from "@multica/core/hooks";
@@ -25,7 +24,6 @@ import { AgentDetail } from "./agent-detail";
 
 export function AgentsPage() {
   const isLoading = useAuthStore((s) => s.isLoading);
-  const workspace = useWorkspaceStore((s) => s.workspace);
   const qc = useQueryClient();
   const wsId = useWorkspaceId();
   const { data: agents = [] } = useQuery(agentListOptions(wsId));

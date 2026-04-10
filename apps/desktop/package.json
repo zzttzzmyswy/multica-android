@@ -11,6 +11,7 @@
     "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web",
     "preview": "electron-vite preview",
     "package": "electron-builder",
+    "lint": "eslint .",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {

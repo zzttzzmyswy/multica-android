@@ -53,7 +53,7 @@ function IssueMention({
 }) {
   const wsId = useWorkspaceId();
   const { data: issues = [] } = useQuery(issueListOptions(wsId));
-  const { push, openInNewTab } = useNavigation();
+  const { openInNewTab } = useNavigation();
   const issue = issues.find((i) => i.id === issueId);
 
   const issuePath = `/issues/${issueId}`;
