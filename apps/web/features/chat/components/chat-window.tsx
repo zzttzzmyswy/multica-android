@@ -14,7 +14,7 @@ import { useWorkspaceId } from "@multica/core/hooks";
 import { useAuthStore } from "@multica/core/auth";
 import { agentListOptions, memberListOptions } from "@multica/core/workspace/queries";
 import { canAssignAgent } from "@multica/views/issues/components";
-import { api } from "@/platform/api";
+import { api } from "@multica/core/api";
 import { chatSessionsOptions, allChatSessionsOptions, chatMessagesOptions, chatKeys } from "@/core/chat/queries";
 import { useCreateChatSession } from "@/core/chat/mutations";
 import { useChatStore } from "../store";
@@ -147,7 +147,7 @@ export function ChatWindow() {
       unsubCompleted();
       unsubFailed();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- refs + stable store actions, subscribe once
+   
   }, [subscribe, addTimelineItem, clearTimeline, setPendingTask, qc]);
 
   const handleSend = useCallback(

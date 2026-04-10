@@ -2,10 +2,10 @@
 
 import { Suspense, useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useAuthStore } from "@/platform/auth";
+import { useAuthStore } from "@multica/core/auth";
 import { setLoggedInCookie } from "@/features/auth/auth-cookie";
-import { useWorkspaceStore } from "@/platform/workspace";
-import { api } from "@/platform/api";
+import { useWorkspaceStore } from "@multica/core/workspace";
+import { api } from "@multica/core/api";
 import {
   Card,
   CardHeader,

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, MessageSquare, SearchIcon } from "lucide-react";
 import { Command as CommandPrimitive } from "cmdk";
 import type { SearchIssueResult } from "@multica/core/types";
-import { api } from "@/platform/api";
+import { api } from "@multica/core/api";
 import { StatusIcon } from "@multica/views/issues/components";
 import { STATUS_CONFIG } from "@multica/core/issues/config";
 import {

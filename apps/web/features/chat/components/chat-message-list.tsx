@@ -10,7 +10,7 @@ import {
   CollapsibleTrigger,
 } from "@multica/ui/components/ui/collapsible";
 import { Bot, Loader2, ChevronRight, ChevronDown, Brain, AlertCircle } from "lucide-react";
-import { api } from "@/platform/api";
+import { api } from "@multica/core/api";
 import { Markdown } from "@multica/views/common/markdown";
 import type { ChatMessage, Agent, TaskMessagePayload } from "@multica/core/types";
 import type { ChatTimelineItem } from "../store";

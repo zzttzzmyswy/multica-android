@@ -12,7 +12,7 @@ vi.mock("next/navigation", () => ({
 // Mock auth store
 const mockSendCode = vi.fn();
 const mockVerifyCode = vi.fn();
-vi.mock("@/platform/auth", () => ({
+vi.mock("@multica/core/auth", () => ({
   useAuthStore: (selector: (s: any) => any) =>
     selector({
       sendCode: mockSendCode,
@@ -27,7 +27,7 @@ vi.mock("@/features/auth/auth-cookie", () => ({
 
 // Mock workspace store
 const mockHydrateWorkspace = vi.fn();
-vi.mock("@/platform/workspace", () => ({
+vi.mock("@multica/core/workspace", () => ({
   useWorkspaceStore: (selector: (s: any) => any) =>
     selector({
       hydrateWorkspace: mockHydrateWorkspace,
@@ -35,7 +35,7 @@ vi.mock("@/platform/workspace", () => ({
 }));
 
 // Mock api
-vi.mock("@/platform/api", () => ({
+vi.mock("@multica/core/api", () => ({
   api: {
     listWorkspaces: vi.fn().mockResolvedValue([]),
     verifyCode: vi.fn(),

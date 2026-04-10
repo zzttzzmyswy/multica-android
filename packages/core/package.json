@@ -3,6 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
   "exports": {
     ".": "./index.ts",
     "./types": "./types/index.ts",
@@ -46,7 +50,8 @@
     "./provider": "./provider.tsx",
     "./logger": "./logger.ts",
     "./utils": "./utils.ts",
-    "./constants/*": "./constants/*.ts"
+    "./constants/*": "./constants/*.ts",
+    "./platform": "./platform/index.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "catalog:",

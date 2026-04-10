@@ -13,7 +13,6 @@ import { useUpdateIssue } from "@multica/core/issues/mutations";
 import { PriorityIcon } from "./priority-icon";
 import { PriorityPicker, AssigneePicker, DueDatePicker } from "./pickers";
 import { PRIORITY_CONFIG } from "@multica/core/issues/config";
-import type { CardProperties } from "@multica/core/issues/stores/view-store";
 import { useViewStore } from "@multica/core/issues/stores/view-store-context";
 import { ProgressRing } from "./progress-ring";
 import type { ChildProgress } from "./list-row";
@@ -65,7 +64,6 @@ export const BoardCardContent = memo(function BoardCardContent({
   const showDescription = storeProperties.description && issue.description;
   const showAssignee = storeProperties.assignee && issue.assignee_type && issue.assignee_id;
   const showDueDate = storeProperties.dueDate && issue.due_date;
-  const showBottom = showAssignee || showDueDate;
 
   return (
     <div className="rounded-lg border bg-card p-3.5 shadow-[0_1px_2px_0_rgba(0,0,0,0.03)] transition-shadow group-hover:shadow-sm">

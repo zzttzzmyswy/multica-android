@@ -132,17 +132,29 @@ const ContentEditor = forwardRef<ContentEditorRef, ContentEditorProps>(
             const href = link?.getAttribute("href");
             if (!href || href.startsWith("mention://")) return false;
 
+            const openLink = () => {
+              if (href.startsWith("/")) {
+                // Internal path — dispatch custom event so the app can handle it
+                // (direct window.open breaks in Electron hash router)
+                window.dispatchEvent(
+                  new CustomEvent("multica:navigate", { detail: { path: href } }),
+                );
+              } else {
+                window.open(href, "_blank", "noopener,noreferrer");
+              }
+            };
+
             if (!editable) {
               // Readonly: any click on link opens new tab
               event.preventDefault();
-              window.open(href, "_blank", "noopener,noreferrer");
+              openLink();
               return true;
             }
 
             if (event.metaKey || event.ctrlKey) {
               // Edit mode: Cmd/Ctrl+click opens link
-              window.open(href, "_blank", "noopener,noreferrer");
               event.preventDefault();
+              openLink();
               return true;
             }
 
