@@ -235,6 +235,10 @@ func (d *Daemon) registerRuntimesForWorkspace(ctx context.Context, workspaceID s
 			d.logger.Warn("skip registering runtime", "name", name, "error", err)
 			continue
 		}
+		if err := agent.CheckMinVersion(name, version); err != nil {
+			d.logger.Warn("skip registering runtime: version too old", "name", name, "version", version, "error", err)
+			continue
+		}
 		displayName := strings.ToUpper(name[:1]) + name[1:]
 		if d.cfg.DeviceName != "" {
 			displayName = fmt.Sprintf("%s (%s)", displayName, d.cfg.DeviceName)
