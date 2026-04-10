@@ -23,7 +23,7 @@ const TAB_ICONS: Record<string, LucideIcon> = {
   Settings,
 };
 
-function TabItem({ tab, isActive }: { tab: Tab; isActive: boolean }) {
+function TabItem({ tab, isActive, isOnly }: { tab: Tab; isActive: boolean; isOnly: boolean }) {
   const setActiveTab = useTabStore((s) => s.setActiveTab);
   const closeTab = useTabStore((s) => s.closeTab);
 
@@ -62,12 +62,14 @@ function TabItem({ tab, isActive }: { tab: Tab; isActive: boolean }) {
       >
         {tab.title}
       </span>
-      <span
-        onClick={handleClose}
-        className="hidden size-3.5 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors group-hover:flex hover:bg-muted-foreground/20 hover:text-foreground"
-      >
-        <X className="size-2.5" />
-      </span>
+      {!isOnly && (
+        <span
+          onClick={handleClose}
+          className="hidden size-3.5 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors group-hover:flex hover:bg-muted-foreground/20 hover:text-foreground"
+        >
+          <X className="size-2.5" />
+        </span>
+      )}
     </button>
   );
 }
@@ -103,7 +105,7 @@ export function TabBar() {
       style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
     >
       {tabs.map((tab) => (
-        <TabItem key={tab.id} tab={tab} isActive={tab.id === activeTabId} />
+        <TabItem key={tab.id} tab={tab} isActive={tab.id === activeTabId} isOnly={tabs.length === 1} />
       ))}
       <NewTabButton />
     </div>

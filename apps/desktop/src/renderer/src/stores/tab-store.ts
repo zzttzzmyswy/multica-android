@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type { DataRouter } from "react-router-dom";
 import { createTabRouter } from "../routes";
 
@@ -81,7 +82,9 @@ function makeTab(path: string, title: string, icon: string): Tab {
 
 const initialTab = makeTab(DEFAULT_PATH, "Issues", resolveRouteIcon(DEFAULT_PATH));
 
-export const useTabStore = create<TabStore>((set, get) => ({
+export const useTabStore = create<TabStore>()(
+  persist(
+    (set, get) => ({
   tabs: [initialTab],
   activeTabId: initialTab.id,
 
@@ -147,4 +150,36 @@ export const useTabStore = create<TabStore>((set, get) => ({
       ),
     }));
   },
-}));
+    }),
+    {
+      name: "multica_tabs",
+      version: 1,
+      partialize: (state) => ({
+        tabs: state.tabs.map(
+          ({ router, historyIndex, historyLength, ...rest }) => rest,
+        ),
+        activeTabId: state.activeTabId,
+      }),
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as
+          | Pick<TabStore, "tabs" | "activeTabId">
+          | undefined;
+        if (!persisted?.tabs?.length) return currentState;
+
+        const tabs: Tab[] = persisted.tabs.map((tab) => ({
+          ...tab,
+          router: createTabRouter(tab.path),
+          historyIndex: 0,
+          historyLength: 1,
+        }));
+
+        // Validate activeTabId — fall back to first tab if stale
+        const activeTabId = tabs.some((t) => t.id === persisted.activeTabId)
+          ? persisted.activeTabId
+          : tabs[0].id;
+
+        return { ...currentState, tabs, activeTabId };
+      },
+    },
+  ),
+);
