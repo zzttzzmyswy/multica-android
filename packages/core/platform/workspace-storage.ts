@@ -2,9 +2,22 @@ import type { StateStorage } from "zustand/middleware";
 import type { StorageAdapter } from "../types/storage";
 
 let _currentWsId: string | null = null;
+const _rehydrateFns: Array<() => void> = [];
 
 export function setCurrentWorkspaceId(wsId: string | null) {
   _currentWsId = wsId;
+}
+
+/** Register a persist store's rehydrate function to be called on workspace switch. */
+export function registerForWorkspaceRehydration(fn: () => void) {
+  _rehydrateFns.push(fn);
+}
+
+/** Rehydrate all registered workspace-scoped persist stores from the new namespace. */
+export function rehydrateAllWorkspaceStores() {
+  for (const fn of _rehydrateFns) {
+    fn();
+  }
 }
 
 export function getCurrentWorkspaceId(): string | null {

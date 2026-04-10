@@ -12,7 +12,7 @@ function mockAdapter(): StorageAdapter {
 }
 
 describe("createPersistStorage", () => {
-  it("delegates to StorageAdapter without namespace", () => {
+  it("delegates to StorageAdapter", () => {
     const adapter = mockAdapter();
     const storage = createPersistStorage(adapter);
 
@@ -27,33 +27,19 @@ describe("createPersistStorage", () => {
     expect(result).toEqual(JSON.stringify("value"));
   });
 
-  it("namespaces keys when wsId is provided", () => {
-    const adapter = mockAdapter();
-    const storage = createPersistStorage(adapter, "ws_123");
-
-    storage.setItem("draft", JSON.stringify({ title: "test" }));
-    expect(adapter.setItem).toHaveBeenCalledWith(
-      "draft:ws_123",
-      JSON.stringify({ title: "test" }),
-    );
-
-    storage.getItem("draft");
-    expect(adapter.getItem).toHaveBeenCalledWith("draft:ws_123");
-  });
-
-  it("removeItem namespaces correctly", () => {
-    const adapter = mockAdapter();
-    const storage = createPersistStorage(adapter, "ws_abc");
-
-    storage.removeItem("draft");
-    expect(adapter.removeItem).toHaveBeenCalledWith("draft:ws_abc");
-  });
-
   it("returns null for missing keys", () => {
     const adapter = mockAdapter();
     const storage = createPersistStorage(adapter);
 
     const result = storage.getItem("nonexistent");
     expect(result).toBeNull();
+  });
+
+  it("removeItem delegates correctly", () => {
+    const adapter = mockAdapter();
+    const storage = createPersistStorage(adapter);
+
+    storage.removeItem("key");
+    expect(adapter.removeItem).toHaveBeenCalledWith("key");
   });
 });

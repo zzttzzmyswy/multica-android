@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import { createWorkspaceAwareStorage } from "../../platform/workspace-storage";
+import { createWorkspaceAwareStorage, registerForWorkspaceRehydration } from "../../platform/workspace-storage";
 import { defaultStorage } from "../../platform/storage";
 
 export type IssuesScope = "all" | "members" | "agents";
@@ -24,3 +24,5 @@ export const useIssuesScopeStore = create<IssuesScopeState>()(
     },
   ),
 );
+
+registerForWorkspaceRehydration(() => useIssuesScopeStore.persist.rehydrate());
