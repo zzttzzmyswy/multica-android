@@ -1,8 +1,7 @@
 import { useEffect } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useNavigationHistory } from "@/hooks/use-history-stack";
-import { useTabSync } from "@/hooks/use-tab-sync";
+import { useTabHistory } from "@/hooks/use-tab-history";
+import { useActiveTitleSync } from "@/hooks/use-tab-sync";
 import { useTabStore, resolveRouteIcon } from "@/stores/tab-store";
 import { SidebarProvider } from "@multica/ui/components/ui/sidebar";
 import { ModalRegistry } from "@multica/views/modals/registry";
@@ -11,9 +10,10 @@ import { SearchCommand, SearchTrigger } from "@multica/views/search";
 import { DesktopNavigationProvider } from "@/platform/navigation";
 import { MulticaIcon } from "@multica/ui/components/common/multica-icon";
 import { TabBar } from "./tab-bar";
+import { TabContent } from "./tab-content";
 
 function SidebarTopBar() {
-  const { canGoBack, canGoForward, goBack, goForward } = useNavigationHistory();
+  const { canGoBack, canGoForward, goBack, goForward } = useTabHistory();
 
   return (
     <div
@@ -43,17 +43,7 @@ function SidebarTopBar() {
   );
 }
 
-export function DesktopLayout() {
-  return (
-    <DesktopNavigationProvider>
-      <DesktopLayoutInner />
-    </DesktopNavigationProvider>
-  );
-}
-
 function useInternalLinkHandler() {
-  const navigate = useNavigate();
-
   useEffect(() => {
     const handler = (e: Event) => {
       const path = (e as CustomEvent).detail?.path;
@@ -62,47 +52,48 @@ function useInternalLinkHandler() {
       const store = useTabStore.getState();
       const tabId = store.openTab(path, path, icon);
       store.setActiveTab(tabId);
-      navigate(path);
     };
     window.addEventListener("multica:navigate", handler);
     return () => window.removeEventListener("multica:navigate", handler);
-  }, [navigate]);
+  }, []);
 }
 
-function DesktopLayoutInner() {
-  useTabSync();
+export function DesktopShell() {
   useInternalLinkHandler();
+  useActiveTitleSync();
 
   return (
-    <DashboardGuard
-      loginPath="/login"
-      loadingFallback={
-        <div className="flex h-screen items-center justify-center">
-          <MulticaIcon className="size-6 animate-pulse" />
-        </div>
-      }
-    >
-      <div className="flex h-screen">
-        <SidebarProvider className="flex-1">
-          <AppSidebar topSlot={<SidebarTopBar />} searchSlot={<SearchTrigger />} />
-          {/* Right side: header + content container */}
-          <div className="flex flex-1 min-w-0 flex-col">
-            {/* Tab bar + drag region */}
-            <header
-              className="h-12 shrink-0"
-              style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
-            >
-              <TabBar />
-            </header>
-            {/* Content area with inset styling */}
-            <div className="flex flex-1 min-h-0 flex-col overflow-hidden mr-2 mb-2 ml-0.5 rounded-xl shadow-sm bg-background">
-              <Outlet />
-              <ModalRegistry />
-              <SearchCommand />
-            </div>
+    <DesktopNavigationProvider>
+      <DashboardGuard
+        loginPath="/login"
+        loadingFallback={
+          <div className="flex h-screen items-center justify-center">
+            <MulticaIcon className="size-6 animate-pulse" />
           </div>
-        </SidebarProvider>
-      </div>
-    </DashboardGuard>
+        }
+      >
+        <div className="flex h-screen">
+          <SidebarProvider className="flex-1">
+            <AppSidebar topSlot={<SidebarTopBar />} searchSlot={<SearchTrigger />} />
+            {/* Right side: header + content container */}
+            <div className="flex flex-1 min-w-0 flex-col">
+              {/* Tab bar + drag region */}
+              <header
+                className="h-12 shrink-0"
+                style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+              >
+                <TabBar />
+              </header>
+              {/* Content area with inset styling */}
+              <div className="flex flex-1 min-h-0 flex-col overflow-hidden mr-2 mb-2 ml-0.5 rounded-xl shadow-sm bg-background">
+                <TabContent />
+              </div>
+            </div>
+          </SidebarProvider>
+        </div>
+        <ModalRegistry />
+        <SearchCommand />
+      </DashboardGuard>
+    </DesktopNavigationProvider>
   );
 }

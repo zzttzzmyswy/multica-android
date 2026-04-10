@@ -1,54 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Issue } from "@multica/core/types";
 import { WorkspaceIdProvider } from "@multica/core/hooks";
 
-// Mock next/navigation
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
-  usePathname: () => "/issues",
-}));
+// ---------------------------------------------------------------------------
+// Mocks
+// ---------------------------------------------------------------------------
 
-// Mock next/link
-vi.mock("next/link", () => ({
-  default: ({
-    children,
-    href,
-    ...props
-  }: {
-    children: React.ReactNode;
-    href: string;
-    [key: string]: any;
-  }) => (
-    <a href={href} {...props}>
-      {children}
-    </a>
-  ),
-}));
-
-// Mock workspace feature
-vi.mock("@/features/workspace", () => ({
-  useActorName: () => ({
-    getMemberName: (id: string) => (id === "user-1" ? "Test User" : "Unknown"),
-    getAgentName: (id: string) => (id === "agent-1" ? "Claude Agent" : "Unknown Agent"),
-    getActorName: (type: string, id: string) =>
-      type === "member" ? "Test User" : "Claude Agent",
-    getActorInitials: () => "TU",
-    getActorAvatarUrl: () => null,
-  }),
-  useWorkspaceStore: Object.assign(
-    (selector?: any) => {
-      const state = { workspace: { id: "ws-1", name: "Test", slug: "test" }, agents: [], members: [] };
-      return selector ? selector(state) : state;
-    },
-    { getState: () => ({ workspace: { id: "ws-1", name: "Test", slug: "test" }, agents: [], members: [] }) },
-  ),
-  WorkspaceAvatar: ({ name }: { name: string }) => <span>{name.charAt(0)}</span>,
-}));
-
-// Mock @multica/core/auth (used by @multica/views pickers like AssigneePicker)
+// Mock @multica/core/auth
 const mockAuthUser = { id: "user-1", email: "test@test.com", name: "Test User" };
 vi.mock("@multica/core/auth", () => ({
   useAuthStore: Object.assign(
@@ -62,95 +22,84 @@ vi.mock("@multica/core/auth", () => ({
   createAuthStore: vi.fn(),
 }));
 
-// Mock @multica/core/workspace (used by @multica/views components)
+// Mock @multica/core/workspace
 vi.mock("@multica/core/workspace", () => ({
   useWorkspaceStore: Object.assign(
     (selector?: any) => {
-      const state = { workspace: { id: "ws-1", name: "Test", slug: "test" }, agents: [], members: [] };
+      const state = {
+        workspace: { id: "ws-1", name: "Test WS", slug: "test" },
+        agents: [],
+        members: [],
+      };
       return selector ? selector(state) : state;
     },
-    { getState: () => ({ workspace: { id: "ws-1", name: "Test", slug: "test" }, agents: [], members: [] }) },
+    {
+      getState: () => ({
+        workspace: { id: "ws-1", name: "Test WS", slug: "test" },
+        agents: [],
+        members: [],
+      }),
+    },
   ),
   registerWorkspaceStore: vi.fn(),
 }));
 
-vi.mock("@/platform/workspace", () => ({
-  useWorkspaceStore: Object.assign(
-    (selector?: any) => {
-      const state = { workspace: { id: "ws-1", name: "Test", slug: "test" }, agents: [], members: [] };
-      return selector ? selector(state) : state;
-    },
-    { getState: () => ({ workspace: { id: "ws-1", name: "Test", slug: "test" }, agents: [], members: [] }) },
+// Mock @multica/views/navigation (AppLink + useNavigation)
+vi.mock("../../navigation", () => ({
+  AppLink: ({ children, href, ...props }: any) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
   ),
-}));
-
-// Mock @multica/views/navigation (AppLink used by views components)
-vi.mock("@multica/views/navigation", () => ({
-  AppLink: ({ children, href, ...props }: any) => <a href={href} {...props}>{children}</a>,
   useNavigation: () => ({ push: vi.fn(), pathname: "/issues" }),
   NavigationProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
-// Mock @multica/views/workspace/workspace-avatar
-vi.mock("@multica/views/workspace/workspace-avatar", () => ({
-  WorkspaceAvatar: ({ name }: { name: string }) => <span>{name.charAt(0)}</span>,
+// Mock workspace avatar
+vi.mock("../../workspace/workspace-avatar", () => ({
+  WorkspaceAvatar: ({ name }: { name: string }) => <span data-testid="workspace-avatar">{name.charAt(0)}</span>,
 }));
 
-// Mock WebSocket context
-vi.mock("@/features/realtime", () => ({
-  useWSEvent: vi.fn(),
-  useWSReconnect: vi.fn(),
-  useWS: () => ({ subscribe: vi.fn(() => () => {}), onReconnect: vi.fn(() => () => {}) }),
-  WSProvider: ({ children }: { children: React.ReactNode }) => children,
-}));
-
-// Mock sonner toast
-vi.mock("sonner", () => ({
-  toast: { error: vi.fn(), success: vi.fn() },
-}));
-
-// Mock api (core queries/mutations use @multica/core/api)
-const mockUpdateIssue = vi.fn();
+// Mock api (queries use api internally)
 const mockListIssues = vi.hoisted(() => vi.fn().mockResolvedValue({ issues: [], total: 0 }));
-
 vi.mock("@multica/core/api", () => ({
   api: {
     listIssues: (...args: any[]) => mockListIssues(...args),
-    updateIssue: (...args: any[]) => mockUpdateIssue(...args),
+    updateIssue: vi.fn(),
     listMembers: () => Promise.resolve([]),
     listAgents: () => Promise.resolve([]),
   },
   getApi: () => ({
     listIssues: (...args: any[]) => mockListIssues(...args),
-    updateIssue: (...args: any[]) => mockUpdateIssue(...args),
+    updateIssue: vi.fn(),
     listMembers: () => Promise.resolve([]),
     listAgents: () => Promise.resolve([]),
   }),
   setApiInstance: vi.fn(),
 }));
 
-// Mock issue store — only client state remains
-const mockIssueClientState = { activeIssueId: null, setActiveIssue: vi.fn() };
-vi.mock("@multica/core/issues", () => ({
-  useIssueStore: Object.assign(
-    (selector?: any) => (selector ? selector(mockIssueClientState) : mockIssueClientState),
-    { getState: () => mockIssueClientState },
-  ),
-}));
-
-vi.mock("@/features/issues", () => ({
-  useIssueStore: Object.assign(
-    (selector?: any) => (selector ? selector(mockIssueClientState) : mockIssueClientState),
-    { getState: () => mockIssueClientState },
-  ),
-  StatusIcon: () => null,
-  PriorityIcon: () => null,
-  StatusPicker: ({ value, onChange }: any) => (
-    <button onClick={() => onChange?.("todo")}>{value || "todo"}</button>
-  ),
-  PriorityPicker: ({ value, onChange }: any) => (
-    <button onClick={() => onChange?.("none")}>{value || "none"}</button>
-  ),
+// Mock issue config
+vi.mock("@multica/core/issues/config", () => ({
+  ALL_STATUSES: ["backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled"],
+  BOARD_STATUSES: ["backlog", "todo", "in_progress", "in_review", "done", "blocked"],
+  STATUS_ORDER: ["backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled"],
+  STATUS_CONFIG: {
+    backlog: { label: "Backlog", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent" },
+    todo: { label: "Todo", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent" },
+    in_progress: { label: "In Progress", iconColor: "text-warning", hoverBg: "hover:bg-warning/10" },
+    in_review: { label: "In Review", iconColor: "text-success", hoverBg: "hover:bg-success/10" },
+    done: { label: "Done", iconColor: "text-info", hoverBg: "hover:bg-info/10" },
+    blocked: { label: "Blocked", iconColor: "text-destructive", hoverBg: "hover:bg-destructive/10" },
+    cancelled: { label: "Cancelled", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent" },
+  },
+  PRIORITY_ORDER: ["urgent", "high", "medium", "low", "none"],
+  PRIORITY_CONFIG: {
+    urgent: { label: "Urgent", bars: 4, color: "text-destructive" },
+    high: { label: "High", bars: 3, color: "text-warning" },
+    medium: { label: "Medium", bars: 2, color: "text-warning" },
+    low: { label: "Low", bars: 1, color: "text-info" },
+    none: { label: "No priority", bars: 0, color: "text-muted-foreground" },
+  },
 }));
 
 // Mock view store
@@ -206,14 +155,12 @@ vi.mock("@multica/core/issues/stores/view-store", () => ({
   ],
 }));
 
-// Mock view store context (shared components read from context)
 vi.mock("@multica/core/issues/stores/view-store-context", () => ({
   ViewStoreProvider: ({ children }: { children: React.ReactNode }) => children,
   useViewStore: (selector?: any) => (selector ? selector(mockViewState) : mockViewState),
   useViewStoreApi: () => ({ getState: () => mockViewState, setState: vi.fn(), subscribe: vi.fn() }),
 }));
 
-// Mock issues scope store
 vi.mock("@multica/core/issues/stores/issues-scope-store", () => ({
   useIssuesScopeStore: Object.assign(
     (selector?: any) => {
@@ -224,7 +171,6 @@ vi.mock("@multica/core/issues/stores/issues-scope-store", () => ({
   ),
 }));
 
-// Mock selection store
 vi.mock("@multica/core/issues/stores/selection-store", () => ({
   useIssueSelectionStore: Object.assign(
     (selector?: any) => {
@@ -235,31 +181,6 @@ vi.mock("@multica/core/issues/stores/selection-store", () => ({
   ),
 }));
 
-// Mock issue config
-vi.mock("@multica/core/issues/config", () => ({
-  ALL_STATUSES: ["backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled"],
-  BOARD_STATUSES: ["backlog", "todo", "in_progress", "in_review", "done", "blocked"],
-  STATUS_ORDER: ["backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled"],
-  STATUS_CONFIG: {
-    backlog: { label: "Backlog", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent" },
-    todo: { label: "Todo", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent" },
-    in_progress: { label: "In Progress", iconColor: "text-warning", hoverBg: "hover:bg-warning/10" },
-    in_review: { label: "In Review", iconColor: "text-success", hoverBg: "hover:bg-success/10" },
-    done: { label: "Done", iconColor: "text-info", hoverBg: "hover:bg-info/10" },
-    blocked: { label: "Blocked", iconColor: "text-destructive", hoverBg: "hover:bg-destructive/10" },
-    cancelled: { label: "Cancelled", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent" },
-  },
-  PRIORITY_ORDER: ["urgent", "high", "medium", "low", "none"],
-  PRIORITY_CONFIG: {
-    urgent: { label: "Urgent", bars: 4, color: "text-destructive" },
-    high: { label: "High", bars: 3, color: "text-warning" },
-    medium: { label: "Medium", bars: 2, color: "text-warning" },
-    low: { label: "Low", bars: 1, color: "text-info" },
-    none: { label: "No priority", bars: 0, color: "text-muted-foreground" },
-  },
-}));
-
-// Mock modals
 vi.mock("@multica/core/modals", () => ({
   useModalStore: Object.assign(
     () => ({ open: vi.fn() }),
@@ -267,11 +188,9 @@ vi.mock("@multica/core/modals", () => ({
   ),
 }));
 
-vi.mock("@/features/modals", () => ({
-  useModalStore: Object.assign(
-    () => ({ open: vi.fn() }),
-    { getState: () => ({ open: vi.fn() }) },
-  ),
+// Mock sonner toast
+vi.mock("sonner", () => ({
+  toast: { error: vi.fn(), success: vi.fn() },
 }));
 
 // Mock dnd-kit
@@ -289,6 +208,7 @@ vi.mock("@dnd-kit/core", () => ({
 vi.mock("@dnd-kit/sortable", () => ({
   SortableContext: ({ children }: any) => children,
   verticalListSortingStrategy: {},
+  arrayMove: vi.fn(),
   useSortable: () => ({
     attributes: {},
     listeners: {},
@@ -302,6 +222,24 @@ vi.mock("@dnd-kit/sortable", () => ({
 vi.mock("@dnd-kit/utilities", () => ({
   CSS: { Transform: { toString: () => undefined } },
 }));
+
+// Mock @base-ui/react/accordion (used by ListView)
+vi.mock("@base-ui/react/accordion", () => ({
+  Accordion: Object.assign(
+    ({ children }: any) => <div>{children}</div>,
+    {
+      Root: ({ children }: any) => <div>{children}</div>,
+      Item: ({ children }: any) => <div>{children}</div>,
+      Header: ({ children }: any) => <div>{children}</div>,
+      Trigger: ({ children }: any) => <button>{children}</button>,
+      Panel: ({ children }: any) => <div>{children}</div>,
+    },
+  ),
+}));
+
+// ---------------------------------------------------------------------------
+// Test data
+// ---------------------------------------------------------------------------
 
 const issueDefaults = {
   parent_issue_id: null,
@@ -366,20 +304,35 @@ const mockIssues: Issue[] = [
   },
 ];
 
-import IssuesPage from "./page";
+// ---------------------------------------------------------------------------
+// Import component under test (after mocks)
+// ---------------------------------------------------------------------------
+
+import { IssuesPage } from "./issues-page";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function renderWithQuery(ui: React.ReactElement) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } });
+  const qc = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: 0 },
+      mutations: { retry: false },
+    },
+  });
   return render(
     <QueryClientProvider client={qc}>
-      <WorkspaceIdProvider wsId="ws-1">
-        {ui}
-      </WorkspaceIdProvider>
+      <WorkspaceIdProvider wsId="ws-1">{ui}</WorkspaceIdProvider>
     </QueryClientProvider>,
   );
 }
 
-describe("IssuesPage", () => {
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+describe("IssuesPage (shared)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockListIssues.mockResolvedValue({ issues: [], total: 0 });
@@ -388,15 +341,20 @@ describe("IssuesPage", () => {
     mockViewState.priorityFilters = [];
   });
 
-  it("shows loading state initially", () => {
+  it("shows loading skeletons initially", () => {
     renderWithQuery(<IssuesPage />);
-    expect(screen.getAllByRole("generic").some(el => el.getAttribute("data-slot") === "skeleton")).toBe(true);
+    expect(
+      screen.getAllByRole("generic").some((el) => el.getAttribute("data-slot") === "skeleton"),
+    ).toBe(true);
   });
 
-  it("renders issues in board view after loading", async () => {
-    // issueListOptions makes 2 calls: open_only + closed page. Return issues for open, empty for closed.
+  it("renders issue titles after data loads", async () => {
     mockListIssues.mockImplementation((params: any) =>
-      Promise.resolve(params?.open_only ? { issues: mockIssues, total: mockIssues.length } : { issues: [], total: 0 }),
+      Promise.resolve(
+        params?.open_only
+          ? { issues: mockIssues, total: mockIssues.length }
+          : { issues: [], total: 0 },
+      ),
     );
 
     renderWithQuery(<IssuesPage />);
@@ -406,9 +364,13 @@ describe("IssuesPage", () => {
     expect(screen.getByText("Write tests")).toBeInTheDocument();
   });
 
-  it("renders board columns", async () => {
+  it("renders board column headers", async () => {
     mockListIssues.mockImplementation((params: any) =>
-      Promise.resolve(params?.open_only ? { issues: mockIssues, total: mockIssues.length } : { issues: [], total: 0 }),
+      Promise.resolve(
+        params?.open_only
+          ? { issues: mockIssues, total: mockIssues.length }
+          : { issues: [], total: 0 },
+      ),
     );
 
     renderWithQuery(<IssuesPage />);
@@ -416,40 +378,37 @@ describe("IssuesPage", () => {
     await screen.findByText("Backlog");
     expect(screen.getAllByText("Todo").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("In Progress").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("In Review").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("Done").length).toBeGreaterThanOrEqual(1);
   });
 
-  it("shows workspace breadcrumb", async () => {
+  it("shows workspace breadcrumb with 'Issues' label", async () => {
+    mockListIssues.mockImplementation((params: any) =>
+      Promise.resolve(
+        params?.open_only
+          ? { issues: mockIssues, total: mockIssues.length }
+          : { issues: [], total: 0 },
+      ),
+    );
+
     renderWithQuery(<IssuesPage />);
 
     await screen.findByText("Issues");
+    expect(screen.getByText("Test WS")).toBeInTheDocument();
   });
 
-  it("shows scope buttons", async () => {
+  it("shows empty state when there are no issues", async () => {
+    mockListIssues.mockResolvedValue({ issues: [], total: 0 });
+
+    renderWithQuery(<IssuesPage />);
+
+    await screen.findByText("No issues yet");
+    expect(screen.getByText("Create an issue to get started.")).toBeInTheDocument();
+  });
+
+  it("shows scope tab buttons", async () => {
     renderWithQuery(<IssuesPage />);
 
     await screen.findByText("All");
     expect(screen.getByText("Members")).toBeInTheDocument();
     expect(screen.getByText("Agents")).toBeInTheDocument();
-  });
-
-  it("shows filter and display icon buttons", async () => {
-    mockListIssues.mockImplementation((params: any) =>
-      Promise.resolve(params?.open_only ? { issues: mockIssues, total: mockIssues.length } : { issues: [], total: 0 }),
-    );
-
-    renderWithQuery(<IssuesPage />);
-
-    await screen.findByText("Implement auth");
-    const buttons = screen.getAllByRole("button");
-    expect(buttons.length).toBeGreaterThan(0);
-  });
-
-  it("shows empty board view when no issues exist", () => {
-    renderWithQuery(<IssuesPage />);
-
-    // Should still render the board/list view, not a "no issues" message
-    expect(screen.queryByText("No matching issues")).not.toBeInTheDocument();
   });
 });

@@ -1,10 +1,7 @@
-import { useNavigate } from "react-router-dom";
 import { LoginPage } from "@multica/views/auth";
 import { MulticaIcon } from "@multica/ui/components/common/multica-icon";
 
 export function DesktopLoginPage() {
-  const navigate = useNavigate();
-
   return (
     <div className="flex h-screen flex-col">
       {/* Traffic light inset */}
@@ -14,7 +11,9 @@ export function DesktopLoginPage() {
       />
       <LoginPage
         logo={<MulticaIcon bordered size="lg" />}
-        onSuccess={() => navigate("/issues", { replace: true })}
+        onSuccess={() => {
+          // Auth store update triggers AppContent re-render → shows DesktopShell
+        }}
       />
     </div>
   );

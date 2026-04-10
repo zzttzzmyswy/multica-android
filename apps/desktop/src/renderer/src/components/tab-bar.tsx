@@ -1,4 +1,3 @@
-import { useNavigate } from "react-router-dom";
 import {
   Inbox,
   CircleUser,
@@ -25,7 +24,6 @@ const TAB_ICONS: Record<string, LucideIcon> = {
 };
 
 function TabItem({ tab, isActive }: { tab: Tab; isActive: boolean }) {
-  const navigate = useNavigate();
   const setActiveTab = useTabStore((s) => s.setActiveTab);
   const closeTab = useTabStore((s) => s.closeTab);
 
@@ -34,13 +32,13 @@ function TabItem({ tab, isActive }: { tab: Tab; isActive: boolean }) {
   const handleClick = () => {
     if (isActive) return;
     setActiveTab(tab.id);
-    navigate(tab.path);
+    // No navigate() — Activity handles visibility
   };
 
   const handleClose = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const newPath = closeTab(tab.id);
-    if (newPath) navigate(newPath);
+    closeTab(tab.id);
+    // No navigate() — store handles activeTabId switch
   };
 
   return (
@@ -50,8 +48,8 @@ function TabItem({ tab, isActive }: { tab: Tab; isActive: boolean }) {
         "group flex h-7 w-40 items-center gap-1.5 rounded-md px-2 text-xs transition-colors",
         "select-none cursor-default",
         isActive
-          ? "bg-sidebar-accent text-sidebar-accent-foreground"
-          : "bg-sidebar-accent/60 text-muted-foreground hover:bg-sidebar-accent/80",
+          ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+          : "bg-sidebar-accent/50 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
       )}
     >
       {Icon && <Icon className="size-3.5 shrink-0" />}
@@ -75,7 +73,6 @@ function TabItem({ tab, isActive }: { tab: Tab; isActive: boolean }) {
 }
 
 function NewTabButton() {
-  const navigate = useNavigate();
   const addTab = useTabStore((s) => s.addTab);
   const setActiveTab = useTabStore((s) => s.setActiveTab);
 
@@ -83,7 +80,7 @@ function NewTabButton() {
     const path = "/issues";
     const tabId = addTab(path, "Issues", resolveRouteIcon(path));
     setActiveTab(tabId);
-    navigate(path);
+    // No navigate() — new tab's router starts at /issues automatically
   };
 
   return (
