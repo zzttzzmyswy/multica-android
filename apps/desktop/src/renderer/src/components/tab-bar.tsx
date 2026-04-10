@@ -44,6 +44,7 @@ function TabItem({ tab, isActive, isOnly }: { tab: Tab; isActive: boolean; isOnl
   return (
     <button
       onClick={handleClick}
+      style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
       className={cn(
         "group flex h-7 w-40 items-center gap-1.5 rounded-md px-2 text-xs transition-colors",
         "select-none cursor-default",
@@ -88,6 +89,7 @@ function NewTabButton() {
   return (
     <button
       onClick={handleClick}
+      style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
       className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-muted/50 hover:text-muted-foreground"
     >
       <Plus className="size-3.5" />
@@ -100,10 +102,7 @@ export function TabBar() {
   const activeTabId = useTabStore((s) => s.activeTabId);
 
   return (
-    <div
-      className="flex h-full items-center gap-0.5 px-2 justify-start"
-      style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
-    >
+    <div className="flex h-full items-center gap-0.5 px-2 justify-start">
       {tabs.map((tab) => (
         <TabItem key={tab.id} tab={tab} isActive={tab.id === activeTabId} isOnly={tabs.length === 1} />
       ))}

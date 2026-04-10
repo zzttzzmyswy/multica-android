@@ -5,6 +5,7 @@ import { ApiClient } from "../api/client";
 import { setApiInstance } from "../api";
 import { createAuthStore, registerAuthStore } from "../auth";
 import { createWorkspaceStore, registerWorkspaceStore } from "../workspace";
+import { createChatStore, registerChatStore } from "../chat";
 import { WSProvider } from "../realtime";
 import { QueryProvider } from "../provider";
 import { createLogger } from "../logger";
@@ -18,6 +19,7 @@ import type { StorageAdapter } from "../types/storage";
 let initialized = false;
 let authStore: ReturnType<typeof createAuthStore>;
 let workspaceStore: ReturnType<typeof createWorkspaceStore>;
+let chatStore: ReturnType<typeof createChatStore>;
 function initCore(
   apiBaseUrl: string,
   storage: StorageAdapter,
@@ -46,6 +48,9 @@ function initCore(
 
   workspaceStore = createWorkspaceStore(api, { storage });
   registerWorkspaceStore(workspaceStore);
+
+  chatStore = createChatStore({ storage });
+  registerChatStore(chatStore);
 
   initialized = true;
 }

@@ -13,7 +13,7 @@ import { Bot, Loader2, ChevronRight, ChevronDown, Brain, AlertCircle } from "luc
 import { api } from "@multica/core/api";
 import { Markdown } from "@multica/views/common/markdown";
 import type { ChatMessage, Agent, TaskMessagePayload } from "@multica/core/types";
-import type { ChatTimelineItem } from "../store";
+import type { ChatTimelineItem } from "@multica/core/chat";
 
 // ─── Public component ────────────────────────────────────────────────────
 

@@ -6,9 +6,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@multica/ui/components/ui/a
 import { Bot } from "lucide-react";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { agentListOptions } from "@multica/core/workspace/queries";
-import { allChatSessionsOptions } from "@/core/chat/queries";
-import { useArchiveChatSession } from "@/core/chat/mutations";
-import { useChatStore } from "../store";
+import { allChatSessionsOptions } from "@multica/core/chat/queries";
+import { useArchiveChatSession } from "@multica/core/chat/mutations";
+import { useChatStore } from "@multica/core/chat";
 import type { ChatSession, Agent } from "@multica/core/types";
 
 export function ChatSessionHistory() {

@@ -15,9 +15,14 @@ import { useAuthStore } from "@multica/core/auth";
 import { agentListOptions, memberListOptions } from "@multica/core/workspace/queries";
 import { canAssignAgent } from "@multica/views/issues/components";
 import { api } from "@multica/core/api";
-import { chatSessionsOptions, allChatSessionsOptions, chatMessagesOptions, chatKeys } from "@/core/chat/queries";
-import { useCreateChatSession } from "@/core/chat/mutations";
-import { useChatStore } from "../store";
+import {
+  chatSessionsOptions,
+  allChatSessionsOptions,
+  chatMessagesOptions,
+  chatKeys,
+} from "@multica/core/chat/queries";
+import { useCreateChatSession } from "@multica/core/chat/mutations";
+import { useChatStore } from "@multica/core/chat";
 import { ChatMessageList } from "./chat-message-list";
 import { ChatInput } from "./chat-input";
 import { ChatSessionHistory } from "./chat-session-history";
@@ -95,9 +100,25 @@ export function ChatWindow() {
   const { subscribe } = useWS();
 
   useEffect(() => {
+    // Returns true if the event was for our pending task and was handled.
+    // Caller still decides whether to invalidate cache (chat:done / completed do; failed doesn't).
+    const matchesPending = (taskId: string) =>
+      !!pendingTaskRef.current && taskId === pendingTaskRef.current;
+
+    const finalizePending = (invalidateCache: boolean) => {
+      if (invalidateCache) {
+        const sid = useChatStore.getState().activeSessionId;
+        if (sid) {
+          qc.invalidateQueries({ queryKey: chatKeys.messages(sid) });
+        }
+      }
+      clearTimeline();
+      setPendingTask(null);
+    };
+
     const unsubMessage = subscribe("task:message", (payload) => {
       const p = payload as TaskMessagePayload;
-      if (!pendingTaskRef.current || p.task_id !== pendingTaskRef.current) return;
+      if (!matchesPending(p.task_id)) return;
       addTimelineItem({
         seq: p.seq,
         type: p.type,
@@ -110,35 +131,20 @@ export function ChatWindow() {
 
     const unsubDone = subscribe("chat:done", (payload) => {
       const p = payload as ChatDonePayload;
-      if (!pendingTaskRef.current || p.task_id !== pendingTaskRef.current) return;
-      const activeSessionId = useChatStore.getState().activeSessionId;
-      if (activeSessionId) {
-        qc.invalidateQueries({
-          queryKey: chatKeys.messages(activeSessionId),
-        });
-      }
-      clearTimeline();
-      setPendingTask(null);
+      if (!matchesPending(p.task_id)) return;
+      finalizePending(true);
     });
 
     const unsubCompleted = subscribe("task:completed", (payload) => {
       const p = payload as { task_id: string };
-      if (!pendingTaskRef.current || p.task_id !== pendingTaskRef.current) return;
-      const activeSessionId = useChatStore.getState().activeSessionId;
-      if (activeSessionId) {
-        qc.invalidateQueries({
-          queryKey: chatKeys.messages(activeSessionId),
-        });
-      }
-      clearTimeline();
-      setPendingTask(null);
+      if (!matchesPending(p.task_id)) return;
+      finalizePending(true);
     });
 
     const unsubFailed = subscribe("task:failed", (payload) => {
       const p = payload as { task_id: string };
-      if (!pendingTaskRef.current || p.task_id !== pendingTaskRef.current) return;
-      clearTimeline();
-      setPendingTask(null);
+      if (!matchesPending(p.task_id)) return;
+      finalizePending(false);
     });
 
     return () => {
@@ -147,7 +153,6 @@ export function ChatWindow() {
       unsubCompleted();
       unsubFailed();
     };
-   
   }, [subscribe, addTimelineItem, clearTimeline, setPendingTask, qc]);
 
   const handleSend = useCallback(

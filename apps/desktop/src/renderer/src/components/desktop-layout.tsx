@@ -7,6 +7,7 @@ import { SidebarProvider } from "@multica/ui/components/ui/sidebar";
 import { ModalRegistry } from "@multica/views/modals/registry";
 import { AppSidebar, DashboardGuard } from "@multica/views/layout";
 import { SearchCommand, SearchTrigger } from "@multica/views/search";
+import { ChatFab, ChatWindow } from "@multica/views/chat";
 import { DesktopNavigationProvider } from "@/platform/navigation";
 import { MulticaIcon } from "@multica/ui/components/common/multica-icon";
 import { TabBar } from "./tab-bar";
@@ -93,6 +94,8 @@ export function DesktopShell() {
         </div>
         <ModalRegistry />
         <SearchCommand />
+        <ChatWindow />
+        <ChatFab />
       </DashboardGuard>
     </DesktopNavigationProvider>
   );

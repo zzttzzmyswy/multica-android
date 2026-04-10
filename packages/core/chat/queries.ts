@@ -1,5 +1,12 @@
 import { queryOptions } from "@tanstack/react-query";
-import { api } from "@multica/core/api";
+import { api } from "../api";
+
+// NOTE on workspace scoping:
+// `wsId` is used only as part of queryKey for cache isolation per workspace.
+// The actual workspace context comes from ApiClient's X-Workspace-ID header,
+// which is set by useWorkspaceStore.switchWorkspace(). Callers must ensure the
+// header is in sync with the wsId they pass here — otherwise cache writes will
+// be misattributed during a workspace switch race window.
 
 export const chatKeys = {
   all: (wsId: string) => ["chat", wsId] as const,
