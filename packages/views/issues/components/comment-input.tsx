@@ -3,10 +3,7 @@
 import { useRef, useState } from "react";
 import { ArrowUp, Loader2 } from "lucide-react";
 import { Button } from "@multica/ui/components/ui/button";
-import { cn } from "@multica/ui/lib/utils";
-import { ContentEditor, type ContentEditorRef } from "../../editor";
-import { useFileDropZone } from "../../editor/use-file-drop-zone";
-import { FileDropOverlay } from "../../editor/file-drop-overlay";
+import { ContentEditor, type ContentEditorRef, useFileDropZone, FileDropOverlay } from "../../editor";
 import { FileUploadButton } from "@multica/ui/components/common/file-upload-button";
 import { useFileUpload } from "@multica/core/hooks/use-file-upload";
 import { api } from "@multica/core/api";
@@ -51,10 +48,7 @@ function CommentInput({ issueId, onSubmit }: CommentInputProps) {
   return (
     <div
       {...dropZoneProps}
-      className={cn(
-        "relative flex max-h-56 flex-col rounded-lg bg-card pb-8 ring-1 ring-border",
-        isDragOver && "ring-brand/30",
-      )}
+      className="relative flex max-h-56 flex-col rounded-lg bg-card pb-8 ring-1 ring-border"
     >
       <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2">
         <ContentEditor
@@ -63,7 +57,6 @@ function CommentInput({ issueId, onSubmit }: CommentInputProps) {
           onUpdate={(md) => setIsEmpty(!md.trim())}
           onSubmit={handleSubmit}
           onUploadFile={handleUpload}
-          showDropOverlay={false}
           debounceMs={100}
         />
       </div>

@@ -13,10 +13,7 @@ import {
 } from "@multica/ui/components/ui/dialog";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@multica/ui/components/ui/tooltip";
 import { Button } from "@multica/ui/components/ui/button";
-import { ContentEditor, type ContentEditorRef } from "../editor";
-import { useFileDropZone } from "../editor/use-file-drop-zone";
-import { FileDropOverlay } from "../editor/file-drop-overlay";
-import { TitleEditor } from "../editor";
+import { ContentEditor, type ContentEditorRef, TitleEditor, useFileDropZone, FileDropOverlay } from "../editor";
 import { StatusIcon, StatusPicker, PriorityPicker, AssigneePicker, DueDatePicker } from "../issues/components";
 import { ProjectPicker } from "../projects/components/project-picker";
 import { useWorkspaceStore } from "@multica/core/workspace";
@@ -227,7 +224,6 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
             placeholder="Add description..."
             onUpdate={(md) => setDraft({ description: md })}
             onUploadFile={handleUpload}
-            showDropOverlay={false}
             debounceMs={500}
           />
           {descDragOver && <FileDropOverlay />}

@@ -30,9 +30,7 @@ import { QuickEmojiPicker } from "@multica/ui/components/common/quick-emoji-pick
 import { cn } from "@multica/ui/lib/utils";
 import { useActorName } from "@multica/core/workspace/hooks";
 import { timeAgo } from "@multica/core/utils";
-import { ContentEditor, type ContentEditorRef, copyMarkdown, ReadonlyContent } from "../../editor";
-import { useFileDropZone } from "../../editor/use-file-drop-zone";
-import { FileDropOverlay } from "../../editor/file-drop-overlay";
+import { ContentEditor, type ContentEditorRef, copyMarkdown, ReadonlyContent, useFileDropZone, FileDropOverlay } from "../../editor";
 import { FileUploadButton } from "@multica/ui/components/common/file-upload-button";
 import { useFileUpload } from "@multica/core/hooks/use-file-upload";
 import { api } from "@multica/core/api";
@@ -238,7 +236,6 @@ function CommentRow({
               placeholder="Edit comment..."
               onSubmit={saveEdit}
               onUploadFile={(file) => uploadWithToast(file, { issueId })}
-              showDropOverlay={false}
               debounceMs={100}
             />
           </div>
@@ -455,7 +452,6 @@ function CommentCard({
                     placeholder="Edit comment..."
                     onSubmit={saveEdit}
                     onUploadFile={(file) => uploadWithToast(file, { issueId })}
-                    showDropOverlay={false}
                     debounceMs={100}
                   />
                 </div>

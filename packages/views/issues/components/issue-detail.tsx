@@ -41,11 +41,8 @@ import {
   DropdownMenuSubContent,
 } from "@multica/ui/components/ui/dropdown-menu";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@multica/ui/components/ui/resizable";
-import { ContentEditor, type ContentEditorRef } from "../../editor";
-import { useFileDropZone } from "../../editor/use-file-drop-zone";
-import { FileDropOverlay } from "../../editor/file-drop-overlay";
+import { ContentEditor, type ContentEditorRef, TitleEditor, useFileDropZone, FileDropOverlay } from "../../editor";
 import { FileUploadButton } from "@multica/ui/components/common/file-upload-button";
-import { TitleEditor } from "../../editor";
 import {
   Tooltip,
   TooltipTrigger,
@@ -715,7 +712,6 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
               placeholder="Add description..."
               onUpdate={(md) => handleUpdateField({ description: md || undefined })}
               onUploadFile={handleDescriptionUpload}
-              showDropOverlay={false}
               debounceMs={1500}
             />
 

@@ -30,7 +30,6 @@ import {
   useEffect,
   useImperativeHandle,
   useRef,
-  useState,
 } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import { cn } from "@multica/ui/lib/utils";
@@ -55,8 +54,6 @@ interface ContentEditorProps {
   onSubmit?: () => void;
   onBlur?: () => void;
   onUploadFile?: (file: File) => Promise<UploadResult | null>;
-  /** When false, suppresses the internal drag-over overlay so the parent can render its own. Default true. */
-  showDropOverlay?: boolean;
 }
 
 interface ContentEditorRef {
@@ -82,11 +79,9 @@ const ContentEditor = forwardRef<ContentEditorRef, ContentEditorProps>(
       onSubmit,
       onBlur,
       onUploadFile,
-      showDropOverlay = true,
     },
     ref,
   ) {
-    const [dragOver, setDragOver] = useState(false);
     const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
     const onUpdateRef = useRef(onUpdate);
     const onSubmitRef = useRef(onSubmit);
@@ -181,18 +176,6 @@ const ContentEditor = forwardRef<ContentEditorRef, ContentEditorProps>(
       };
     }, []);
 
-    // Always clear drag overlay on any drop/dragend anywhere in the document
-    useEffect(() => {
-      if (!showDropOverlay) return;
-      const clear = () => setDragOver(false);
-      document.addEventListener("drop", clear);
-      document.addEventListener("dragend", clear);
-      return () => {
-        document.removeEventListener("drop", clear);
-        document.removeEventListener("dragend", clear);
-      };
-    }, [showDropOverlay]);
-
     // Readonly content update: when defaultValue changes and editor is readonly,
     // re-set the content (e.g. after editing a comment, the readonly view updates)
     useEffect(() => {
@@ -225,52 +208,8 @@ const ContentEditor = forwardRef<ContentEditorRef, ContentEditorProps>(
     if (!editor) return null;
 
     return (
-      <div
-        className={cn(
-          "relative min-h-full",
-          showDropOverlay && dragOver && "editor-drag-over",
-        )}
-        {...(showDropOverlay
-          ? {
-              onDragEnter: (e: React.DragEvent) => {
-                e.preventDefault();
-                if (editable && e.dataTransfer.types.includes("Files"))
-                  setDragOver(true);
-              },
-              onDragOver: (e: React.DragEvent) => {
-                e.preventDefault();
-              },
-              onDragLeave: (e: React.DragEvent) => {
-                if (!e.currentTarget.contains(e.relatedTarget as Node))
-                  setDragOver(false);
-              },
-              onDrop: (e: React.DragEvent) => {
-                const alreadyHandled = e.nativeEvent.defaultPrevented;
-                e.preventDefault();
-                setDragOver(false);
-                if (alreadyHandled) return;
-                const files = e.dataTransfer?.files;
-                if (files?.length && editor && onUploadFileRef.current) {
-                  const endPos = editor.state.doc.content.size;
-                  for (const file of Array.from(files)) {
-                    uploadAndInsertFile(
-                      editor,
-                      file,
-                      onUploadFileRef.current,
-                      endPos,
-                    );
-                  }
-                }
-              },
-            }
-          : {})}
-      >
+      <div className="relative min-h-full">
         <EditorContent editor={editor} />
-        {showDropOverlay && dragOver && (
-          <div className="editor-drop-overlay">
-            <p>Drop files to upload</p>
-          </div>
-        )}
       </div>
     );
   },

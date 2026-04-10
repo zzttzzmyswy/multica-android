@@ -2,9 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import { ArrowUp, Loader2 } from "lucide-react";
-import { ContentEditor, type ContentEditorRef } from "../../editor";
-import { useFileDropZone } from "../../editor/use-file-drop-zone";
-import { FileDropOverlay } from "../../editor/file-drop-overlay";
+import { ContentEditor, type ContentEditorRef, useFileDropZone, FileDropOverlay } from "../../editor";
 import { FileUploadButton } from "@multica/ui/components/common/file-upload-button";
 import { ActorAvatar } from "../../common/actor-avatar";
 import { useFileUpload } from "@multica/core/hooks/use-file-upload";
@@ -106,7 +104,6 @@ function ReplyInput({
               onUpdate={(md) => setIsEmpty(!md.trim())}
               onSubmit={handleSubmit}
               onUploadFile={handleUpload}
-              showDropOverlay={false}
               debounceMs={100}
             />
           </div>
