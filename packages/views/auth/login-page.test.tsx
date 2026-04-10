@@ -1,11 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-
-// jsdom doesn't provide elementFromPoint; input-otp calls it on a timer.
-if (typeof document.elementFromPoint !== "function") {
-  document.elementFromPoint = () => null;
-}
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks
@@ -83,6 +78,7 @@ describe("LoginPage", () => {
   const onSuccess = vi.fn();
 
   beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.clearAllMocks();
     // Default: no existing session
     localStorage.clear();
@@ -91,6 +87,10 @@ describe("LoginPage", () => {
       writable: true,
       value: { href: "http://localhost:3000" },
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   // -------------------------------------------------------------------------
@@ -315,8 +315,6 @@ describe("LoginPage", () => {
   });
 
   it("calls sendCode again when resend is clicked after cooldown", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-
     mockSendCode.mockResolvedValue(undefined);
     render(<LoginPage onSuccess={onSuccess} />);
 
@@ -348,8 +346,6 @@ describe("LoginPage", () => {
 
     await user.click(resendBtn);
     expect(mockSendCode).toHaveBeenCalledTimes(2);
-
-    vi.useRealTimers();
   });
 
   // -------------------------------------------------------------------------
