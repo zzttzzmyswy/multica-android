@@ -3,3 +3,4 @@ export type { CoreProviderProps } from "./types";
 export { AuthInitializer } from "./auth-initializer";
 export { defaultStorage } from "./storage";
 export { createPersistStorage } from "./persist-storage";
+export { createWorkspaceAwareStorage, setCurrentWorkspaceId, getCurrentWorkspaceId } from "./workspace-storage";

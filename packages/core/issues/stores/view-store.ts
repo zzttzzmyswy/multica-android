@@ -2,9 +2,11 @@
 
 import { create } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
 import type { IssueStatus, IssuePriority } from "../../types";
 import { ALL_STATUSES } from "../config";
+import { createWorkspaceAwareStorage } from "../../platform/workspace-storage";
+import { defaultStorage } from "../../platform/storage";
 
 export type ViewMode = "board" | "list";
 export type SortField = "position" | "priority" | "due_date" | "created_at" | "title";
@@ -164,6 +166,7 @@ export const viewStoreSlice = (set: StoreApi<IssueViewState>["setState"]): Issue
 
 export const viewStorePersistOptions = (name: string) => ({
   name,
+  storage: createJSONStorage(() => createWorkspaceAwareStorage(defaultStorage)),
   partialize: (state: IssueViewState) => ({
     viewMode: state.viewMode,
     statusFilters: state.statusFilters,

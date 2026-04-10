@@ -26,6 +26,7 @@ export const myIssuesViewStore: StoreApi<MyIssuesViewState> = createStore<MyIssu
     }),
     {
       name: basePersist.name,
+      storage: basePersist.storage,
       partialize: (state: MyIssuesViewState) => ({
         ...basePersist.partialize(state),
         scope: state.scope,

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { Workspace, StorageAdapter } from "../types";
 import type { ApiClient } from "../api/client";
 import { createLogger } from "../logger";
+import { setCurrentWorkspaceId } from "../platform/workspace-storage";
 
 const logger = createLogger("workspace-store");
 
@@ -57,12 +58,14 @@ export function createWorkspaceStore(api: ApiClient, options?: WorkspaceStoreOpt
 
       if (!nextWorkspace) {
         api.setWorkspaceId(null);
+        setCurrentWorkspaceId(null);
         storage?.removeItem("multica_workspace_id");
         set({ workspace: null });
         return null;
       }
 
       api.setWorkspaceId(nextWorkspace.id);
+      setCurrentWorkspaceId(nextWorkspace.id);
       storage?.setItem("multica_workspace_id", nextWorkspace.id);
       set({ workspace: nextWorkspace });
       logger.debug("hydrate workspace", nextWorkspace.name, nextWorkspace.id);
@@ -138,6 +141,7 @@ export function createWorkspaceStore(api: ApiClient, options?: WorkspaceStoreOpt
 
     clearWorkspace: () => {
       api.setWorkspaceId(null);
+      setCurrentWorkspaceId(null);
       set({ workspace: null, workspaces: [] });
     },
   }));
