@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import type { DataRouter } from "react-router-dom";
+import { createTabRouter } from "../routes";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -9,6 +11,9 @@ export interface Tab {
   path: string;
   title: string;
   icon: string;
+  router: DataRouter;
+  historyIndex: number;
+  historyLength: number;
 }
 
 interface TabStore {
@@ -19,12 +24,14 @@ interface TabStore {
   openTab: (path: string, title: string, icon: string) => string;
   /** Always create a new tab (no dedup). Returns the tab id. */
   addTab: (path: string, title: string, icon: string) => string;
-  /** Close a tab. Returns the path to navigate to if active tab changed, or null. */
-  closeTab: (tabId: string) => string | null;
+  /** Close a tab. Disposes router. */
+  closeTab: (tabId: string) => void;
   /** Switch to a tab by id. */
   setActiveTab: (tabId: string) => void;
-  /** Update the active tab's metadata. */
-  updateActiveTab: (path: string, title: string, icon: string) => void;
+  /** Update a tab's metadata (path, title, icon — partial). */
+  updateTab: (tabId: string, patch: Partial<Pick<Tab, "path" | "title" | "icon">>) => void;
+  /** Update a tab's history tracking. */
+  updateTabHistory: (tabId: string, historyIndex: number, historyLength: number) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -35,6 +42,7 @@ const ROUTE_ICONS: Record<string, string> = {
   "/inbox": "Inbox",
   "/my-issues": "CircleUser",
   "/issues": "ListTodo",
+  "/projects": "FolderKanban",
   "/agents": "Bot",
   "/runtimes": "Monitor",
   "/skills": "BookOpenText",
@@ -43,7 +51,10 @@ const ROUTE_ICONS: Record<string, string> = {
 
 /** Resolve a route icon. Title is NOT determined here — it comes from document.title. */
 export function resolveRouteIcon(pathname: string): string {
-  return ROUTE_ICONS[pathname] ?? (pathname.startsWith("/issues/") ? "ListTodo" : "ListTodo");
+  return ROUTE_ICONS[pathname]
+    ?? (pathname.startsWith("/issues/") ? "ListTodo" : undefined)
+    ?? (pathname.startsWith("/projects/") ? "FolderKanban" : undefined)
+    ?? "ListTodo";
 }
 
 // ---------------------------------------------------------------------------
@@ -56,12 +67,19 @@ function createId(): string {
   return crypto.randomUUID();
 }
 
-const initialTab: Tab = {
-  id: createId(),
-  path: DEFAULT_PATH,
-  title: "Issues",
-  icon: resolveRouteIcon(DEFAULT_PATH),
-};
+function makeTab(path: string, title: string, icon: string): Tab {
+  return {
+    id: createId(),
+    path,
+    title,
+    icon,
+    router: createTabRouter(path),
+    historyIndex: 0,
+    historyLength: 1,
+  };
+}
+
+const initialTab = makeTab(DEFAULT_PATH, "Issues", resolveRouteIcon(DEFAULT_PATH));
 
 export const useTabStore = create<TabStore>((set, get) => ({
   tabs: [initialTab],
@@ -72,13 +90,13 @@ export const useTabStore = create<TabStore>((set, get) => ({
     const existing = tabs.find((t) => t.path === path);
     if (existing) return existing.id;
 
-    const tab: Tab = { id: createId(), path, title, icon };
+    const tab = makeTab(path, title, icon);
     set({ tabs: [...tabs, tab] });
     return tab.id;
   },
 
   addTab(path, title, icon) {
-    const tab: Tab = { id: createId(), path, title, icon };
+    const tab = makeTab(path, title, icon);
     set((s) => ({ tabs: [...s.tabs, tab] }));
     return tab.id;
   },
@@ -86,38 +104,47 @@ export const useTabStore = create<TabStore>((set, get) => ({
   closeTab(tabId) {
     const { tabs, activeTabId } = get();
 
+    const closingTab = tabs.find((t) => t.id === tabId);
+
     // Never close the last tab — replace with default
     if (tabs.length === 1) {
-      const fresh: Tab = { id: createId(), path: DEFAULT_PATH, title: "Issues", icon: resolveRouteIcon(DEFAULT_PATH) };
+      closingTab?.router.dispose();
+      const fresh = makeTab(DEFAULT_PATH, "Issues", resolveRouteIcon(DEFAULT_PATH));
       set({ tabs: [fresh], activeTabId: fresh.id });
-      return fresh.path;
+      return;
     }
 
     const idx = tabs.findIndex((t) => t.id === tabId);
-    if (idx === -1) return null;
+    if (idx === -1) return;
 
+    closingTab?.router.dispose();
     const next = tabs.filter((t) => t.id !== tabId);
 
     if (tabId === activeTabId) {
       const newActive = next[Math.min(idx, next.length - 1)];
       set({ tabs: next, activeTabId: newActive.id });
-      return newActive.path;
+    } else {
+      set({ tabs: next });
     }
-
-    set({ tabs: next });
-    return null;
   },
 
   setActiveTab(tabId) {
     set({ activeTabId: tabId });
   },
 
-  updateActiveTab(path, title, icon) {
-    const { tabs, activeTabId } = get();
-    set({
-      tabs: tabs.map((t) =>
-        t.id === activeTabId ? { ...t, path, title, icon } : t,
+  updateTab(tabId, patch) {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === tabId ? { ...t, ...patch } : t,
       ),
-    });
+    }));
+  },
+
+  updateTabHistory(tabId, historyIndex, historyLength) {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === tabId ? { ...t, historyIndex, historyLength } : t,
+      ),
+    }));
   },
 }));
