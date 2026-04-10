@@ -22,7 +22,7 @@ import { registerViewStoreForWorkspaceSync } from "@multica/core/issues/stores/v
 import { useWorkspaceId } from "@multica/core/hooks";
 import { issueListOptions } from "@multica/core/issues/queries";
 import { useUpdateIssue } from "@multica/core/issues/mutations";
-import { myIssuesViewStore } from "../stores/my-issues-view-store";
+import { myIssuesViewStore } from "@multica/core/issues/stores/my-issues-view-store";
 import { MyIssuesHeader } from "./my-issues-header";
 
 export function MyIssuesPage() {
