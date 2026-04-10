@@ -567,6 +567,9 @@ importers:
       '@tiptap/suggestion':
         specifier: ^3.22.1
         version: 3.22.1(@tiptap/core@3.22.1(@tiptap/pm@3.22.1))(@tiptap/pm@3.22.1)
+      cmdk:
+        specifier: ^1.1.1
+        version: 1.1.1(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       hast-util-to-html:
         specifier: ^4.0.1
         version: 4.0.1
