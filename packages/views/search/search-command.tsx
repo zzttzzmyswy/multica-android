@@ -1,7 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Clock, FolderKanban, Loader2, MessageSquare, SearchIcon } from "lucide-react";
+import {
+  Clock,
+  Loader2,
+  MessageSquare,
+  SearchIcon,
+  Inbox,
+  CircleUser,
+  ListTodo,
+  FolderKanban,
+  Bot,
+  Monitor,
+  BookOpenText,
+  Settings,
+  type LucideIcon,
+} from "lucide-react";
 import { Command as CommandPrimitive } from "cmdk";
 import type { SearchIssueResult, SearchProjectResult } from "@multica/core/types";
 import { api } from "@multica/core/api";
@@ -56,6 +70,24 @@ function HighlightText({ text, query }: { text: string; query: string }) {
   );
 }
 
+interface NavPage {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  keywords: string[];
+}
+
+const navPages: NavPage[] = [
+  { href: "/inbox", label: "Inbox", icon: Inbox, keywords: ["inbox", "notifications"] },
+  { href: "/my-issues", label: "My Issues", icon: CircleUser, keywords: ["my", "issues", "assigned"] },
+  { href: "/issues", label: "Issues", icon: ListTodo, keywords: ["issues", "tasks", "bugs"] },
+  { href: "/projects", label: "Projects", icon: FolderKanban, keywords: ["projects", "kanban"] },
+  { href: "/agents", label: "Agents", icon: Bot, keywords: ["agents", "bots", "ai"] },
+  { href: "/runtimes", label: "Runtimes", icon: Monitor, keywords: ["runtimes", "environments"] },
+  { href: "/skills", label: "Skills", icon: BookOpenText, keywords: ["skills", "library"] },
+  { href: "/settings", label: "Settings", icon: Settings, keywords: ["settings", "config", "preferences"] },
+];
+
 interface SearchResults {
   issues: SearchIssueResult[];
   projects: SearchProjectResult[];
@@ -71,6 +103,16 @@ export function SearchCommand() {
   const [isLoading, setIsLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  const filteredPages = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return navPages.filter(
+      (page) =>
+        page.label.toLowerCase().includes(q) ||
+        page.keywords.some((kw) => kw.includes(q)),
+    );
+  }, [query]);
 
   const hasResults = results.issues.length > 0 || results.projects.length > 0;
 
@@ -181,6 +223,14 @@ export function SearchCommand() {
     [push, setOpen],
   );
 
+  const handlePageSelect = useCallback(
+    (href: string) => {
+      setOpen(false);
+      push(href);
+    },
+    [push],
+  );
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent
@@ -190,7 +240,7 @@ export function SearchCommand() {
         <DialogHeader className="sr-only">
           <DialogTitle>Search</DialogTitle>
           <DialogDescription>
-            Search issues and projects by title or description
+            Search pages, issues, and projects
           </DialogDescription>
         </DialogHeader>
         <CommandPrimitive
@@ -213,13 +263,35 @@ export function SearchCommand() {
 
           {/* Results list */}
           <CommandPrimitive.List className="max-h-[min(400px,50vh)] overflow-y-auto overflow-x-hidden">
+            {/* Pages section — only shown when query matches */}
+            {filteredPages.length > 0 && (
+              <CommandPrimitive.Group className="p-2">
+                <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                  Pages
+                </div>
+                {filteredPages.map((page) => (
+                  <CommandPrimitive.Item
+                    key={page.href}
+                    value={`page:${page.href}`}
+                    onSelect={() => handlePageSelect(page.href)}
+                    className="flex cursor-default select-none items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm outline-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-selected:bg-accent"
+                  >
+                    <page.icon className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate">
+                      <HighlightText text={page.label} query={query} />
+                    </span>
+                  </CommandPrimitive.Item>
+                ))}
+              </CommandPrimitive.Group>
+            )}
+
             {isLoading && (
               <div className="flex items-center justify-center py-10">
                 <Loader2 className="size-5 animate-spin text-muted-foreground" />
               </div>
             )}
 
-            {!isLoading && query.trim() && !hasResults && (
+            {!isLoading && query.trim() && !hasResults && filteredPages.length === 0 && (
               <CommandPrimitive.Empty className="py-10 text-center text-sm text-muted-foreground">
                 No results found.
               </CommandPrimitive.Empty>
