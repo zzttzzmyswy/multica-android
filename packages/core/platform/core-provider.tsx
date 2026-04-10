@@ -19,6 +19,7 @@ import type { StorageAdapter } from "../types/storage";
 let initialized = false;
 let authStore: ReturnType<typeof createAuthStore>;
 let workspaceStore: ReturnType<typeof createWorkspaceStore>;
+let chatStore: ReturnType<typeof createChatStore>;
 function initCore(
   apiBaseUrl: string,
   storage: StorageAdapter,
@@ -48,7 +49,8 @@ function initCore(
   workspaceStore = createWorkspaceStore(api, { storage });
   registerWorkspaceStore(workspaceStore);
 
-  registerChatStore(createChatStore({ storage }));
+  chatStore = createChatStore({ storage });
+  registerChatStore(chatStore);
 
   initialized = true;
 }
