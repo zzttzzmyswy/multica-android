@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, MessageSquare, SearchIcon } from "lucide-react";
 import { Command as CommandPrimitive } from "cmdk";
@@ -15,10 +15,48 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@multica/ui/components/ui/dialog";
+import { useSearchStore } from "../stores/search-store";
+
+function HighlightText({ text, query }: { text: string; query: string }) {
+  const parts = useMemo(() => {
+    if (!query.trim()) return [{ text, highlight: false }];
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`(${escaped})`, "gi");
+    const result: { text: string; highlight: boolean }[] = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        result.push({ text: text.slice(lastIndex, match.index), highlight: false });
+      }
+      result.push({ text: match[0], highlight: true });
+      lastIndex = regex.lastIndex;
+    }
+    if (lastIndex < text.length) {
+      result.push({ text: text.slice(lastIndex), highlight: false });
+    }
+    return result.length > 0 ? result : [{ text, highlight: false }];
+  }, [text, query]);
+
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.highlight ? (
+          <mark key={i} className="bg-yellow-200 dark:bg-yellow-900/60 text-inherit rounded-sm">
+            {part.text}
+          </mark>
+        ) : (
+          part.text
+        ),
+      )}
+    </>
+  );
+}
 
 export function SearchCommand() {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const open = useSearchStore((s) => s.open);
+  const setOpen = useSearchStore((s) => s.setOpen);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchIssueResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -30,7 +68,7 @@ export function SearchCommand() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        setOpen((prev) => !prev);
+        useSearchStore.getState().toggle();
       }
     };
     document.addEventListener("keydown", handleKeyDown);
@@ -164,7 +202,9 @@ export function SearchCommand() {
                       <span className="text-xs text-muted-foreground shrink-0">
                         {issue.identifier}
                       </span>
-                      <span className="truncate">{issue.title}</span>
+                      <span className="truncate">
+                        <HighlightText text={issue.title} query={query} />
+                      </span>
                       <span
                         className={`ml-auto text-xs shrink-0 ${STATUS_CONFIG[issue.status].iconColor}`}
                       >
@@ -176,7 +216,10 @@ export function SearchCommand() {
                         <div className="flex items-start gap-2 pl-[26px]">
                           <MessageSquare className="size-3 shrink-0 text-muted-foreground mt-0.5" />
                           <span className="text-xs text-muted-foreground truncate">
-                            {issue.matched_snippet}
+                            <HighlightText
+                              text={issue.matched_snippet}
+                              query={query}
+                            />
                           </span>
                         </div>
                       )}
@@ -186,8 +229,9 @@ export function SearchCommand() {
             )}
 
             {!isLoading && !query.trim() && (
-              <div className="py-10 text-center text-sm text-muted-foreground">
-                Type to search issues...
+              <div className="flex flex-col items-center gap-2 py-10 text-sm text-muted-foreground">
+                <span>Type to search issues...</span>
+                <span className="text-xs">Press <kbd className="rounded bg-muted px-1.5 py-0.5 font-medium">⌘K</kbd> to open this anytime</span>
               </div>
             )}
           </CommandPrimitive.List>

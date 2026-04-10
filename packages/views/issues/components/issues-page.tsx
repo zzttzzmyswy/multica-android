@@ -57,6 +57,23 @@ export function IssuesPage() {
     [scopedIssues, statusFilters, priorityFilters, assigneeFilters, includeNoAssignee, creatorFilters],
   );
 
+  // Compute sub-issue progress for each parent from the full (unfiltered) issue list
+  const childProgressMap = useMemo(() => {
+    const map = new Map<string, { done: number; total: number }>();
+    for (const issue of allIssues) {
+      if (!issue.parent_issue_id) continue;
+      const entry = map.get(issue.parent_issue_id);
+      const isDone = issue.status === "done" || issue.status === "cancelled";
+      if (entry) {
+        entry.total++;
+        if (isDone) entry.done++;
+      } else {
+        map.set(issue.parent_issue_id, { done: isDone ? 1 : 0, total: 1 });
+      }
+    }
+    return map;
+  }, [allIssues]);
+
   const visibleStatuses = useMemo(() => {
     if (statusFilters.length > 0)
       return BOARD_STATUSES.filter((s) => statusFilters.includes(s));
@@ -126,11 +143,11 @@ export function IssuesPage() {
         <span className="text-sm font-medium">Issues</span>
       </div>
 
-      {/* Header 2: Scope tabs + filters */}
-      <IssuesHeader scopedIssues={scopedIssues} />
-
-      {/* Content: scrollable */}
       <ViewStoreProvider store={useIssueViewStore}>
+        {/* Header 2: Scope tabs + filters */}
+        <IssuesHeader scopedIssues={scopedIssues} />
+
+        {/* Content: scrollable */}
         {scopedIssues.length === 0 ? (
           <div className="flex flex-1 min-h-0 flex-col items-center justify-center gap-2 text-muted-foreground">
             <ListTodo className="h-10 w-10 text-muted-foreground/40" />
@@ -146,9 +163,10 @@ export function IssuesPage() {
                 visibleStatuses={visibleStatuses}
                 hiddenStatuses={hiddenStatuses}
                 onMoveIssue={handleMoveIssue}
+                childProgressMap={childProgressMap}
               />
             ) : (
-              <ListView issues={issues} visibleStatuses={visibleStatuses} />
+              <ListView issues={issues} visibleStatuses={visibleStatuses} childProgressMap={childProgressMap} />
             )}
           </div>
         )}

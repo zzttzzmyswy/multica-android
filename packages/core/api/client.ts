@@ -36,6 +36,13 @@ import type {
   TimelineEntry,
   TaskMessagePayload,
   Attachment,
+  ChatSession,
+  ChatMessage,
+  SendChatMessageResponse,
+  Project,
+  CreateProjectRequest,
+  UpdateProjectRequest,
+  ListProjectsResponse,
 } from "../types";
 import { type Logger, noopLogger } from "../logger";
 
@@ -600,11 +607,78 @@ export class ApiClient {
     return res.json() as Promise<Attachment>;
   }
 
+  // Chat Sessions
+  async listChatSessions(params?: { status?: string }): Promise<ChatSession[]> {
+    const query = params?.status ? `?status=${params.status}` : "";
+    return this.fetch(`/api/chat/sessions${query}`);
+  }
+
+  async getChatSession(id: string): Promise<ChatSession> {
+    return this.fetch(`/api/chat/sessions/${id}`);
+  }
+
+  async createChatSession(data: { agent_id: string; title?: string }): Promise<ChatSession> {
+    return this.fetch("/api/chat/sessions", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async archiveChatSession(id: string): Promise<void> {
+    await this.fetch(`/api/chat/sessions/${id}`, { method: "DELETE" });
+  }
+
+  async listChatMessages(sessionId: string): Promise<ChatMessage[]> {
+    return this.fetch(`/api/chat/sessions/${sessionId}/messages`);
+  }
+
+  async sendChatMessage(sessionId: string, content: string): Promise<SendChatMessageResponse> {
+    return this.fetch(`/api/chat/sessions/${sessionId}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    });
+  }
+
+  async cancelTaskById(taskId: string): Promise<void> {
+    await this.fetch(`/api/tasks/${taskId}/cancel`, { method: "POST" });
+  }
+
   async listAttachments(issueId: string): Promise<Attachment[]> {
     return this.fetch(`/api/issues/${issueId}/attachments`);
   }
 
   async deleteAttachment(id: string): Promise<void> {
     await this.fetch(`/api/attachments/${id}`, { method: "DELETE" });
+  }
+
+  // Projects
+  async listProjects(params?: { status?: string }): Promise<ListProjectsResponse> {
+    const search = new URLSearchParams();
+    if (params?.status) search.set("status", params.status);
+    return this.fetch(`/api/projects?${search}`);
+  }
+
+  async getProject(id: string): Promise<Project> {
+    return this.fetch(`/api/projects/${id}`);
+  }
+
+  async createProject(data: CreateProjectRequest): Promise<Project> {
+    const search = new URLSearchParams();
+    if (this.workspaceId) search.set("workspace_id", this.workspaceId);
+    return this.fetch(`/api/projects?${search}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateProject(id: string, data: UpdateProjectRequest): Promise<Project> {
+    return this.fetch(`/api/projects/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteProject(id: string): Promise<void> {
+    await this.fetch(`/api/projects/${id}`, { method: "DELETE" });
   }
 }

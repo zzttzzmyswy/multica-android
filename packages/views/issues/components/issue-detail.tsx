@@ -60,7 +60,8 @@ import { AvatarGroup, AvatarGroupCount } from "@multica/ui/components/ui/avatar"
 import { ActorAvatar } from "../../common/actor-avatar";
 import type { Issue, UpdateIssueRequest, IssueStatus, IssuePriority, TimelineEntry } from "@multica/core/types";
 import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@multica/core/issues/config";
-import { StatusIcon, PriorityIcon, DueDatePicker, AssigneePicker, canAssignAgent } from ".";
+import { StatusIcon, PriorityIcon, StatusPicker, PriorityPicker, DueDatePicker, AssigneePicker, canAssignAgent } from ".";
+import { ProjectPicker } from "../../projects/components/project-picker";
 import { CommentCard } from "./comment-card";
 import { CommentInput } from "./comment-input";
 import { AgentLiveCard, TaskRunHistory } from "./agent-live-card";
@@ -82,58 +83,7 @@ import { useModalStore } from "@multica/core/modals";
 import { timeAgo } from "@multica/core/utils";
 import { cn } from "@multica/ui/lib/utils";
 
-/**
- * Tiny circular progress ring used in the "Sub-issue of …" line and the
- * Sub-issues section header. Renders an open ring when in-progress and
- * fills to a solid arc when complete.
- */
-function ProgressRing({
-  done,
-  total,
-  size = 12,
-}: {
-  done: number;
-  total: number;
-  size?: number;
-}) {
-  const stroke = 1.5;
-  const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const ratio = total > 0 ? Math.min(done / total, 1) : 0;
-  const offset = circumference * (1 - ratio);
-  const isComplete = total > 0 && done >= total;
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox={`0 0 ${size} ${size}`}
-      className={isComplete ? "text-info" : "text-primary"}
-      aria-hidden="true"
-    >
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        fill="none"
-        stroke="currentColor"
-        strokeOpacity="0.25"
-        strokeWidth={stroke}
-      />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={stroke}
-        strokeDasharray={circumference}
-        strokeDashoffset={offset}
-        strokeLinecap="round"
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-      />
-    </svg>
-  );
-}
+import { ProgressRing } from "./progress-ring";
 
 function shortDate(date: string | null): string {
   if (!date) return "—";
@@ -263,10 +213,15 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const didHighlightRef = useRef<string | null>(null);
 
-  // Issue data from TQ — uses detail query, seeded from list cache if available
+  // Issue data from TQ — uses detail query, seeded from list cache if available.
+  // Only seed when description is present; list API omits it, and ContentEditor
+  // reads defaultValue on mount only — seeding null description shows an empty editor.
   const { data: issue = null, isLoading: issueLoading } = useQuery({
     ...issueDetailOptions(wsId, id),
-    initialData: () => allIssues.find((i) => i.id === id),
+    initialData: () => {
+      const cached = allIssues.find((i) => i.id === id);
+      return cached?.description != null ? cached : undefined;
+    },
   });
 
   // Custom hooks — encapsulate timeline, reactions, subscribers
@@ -335,9 +290,11 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   );
 
   const descEditorRef = useRef<ContentEditorRef>(null);
+  // Description uploads don't pass issueId — the URL lives in the markdown.
+  // This avoids stale attachment records when users delete images from the editor.
   const handleDescriptionUpload = useCallback(
-    (file: File) => uploadWithToast(file, { issueId: id }),
-    [uploadWithToast, id],
+    (file: File) => uploadWithToast(file),
+    [uploadWithToast],
   );
 
   const deleteIssueMutation = useDeleteIssue();
@@ -1159,42 +1116,20 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
             {propertiesOpen && <div className="space-y-0.5 pl-2">
               {/* Status */}
               <PropRow label="Status">
-                <DropdownMenu>
-                  <DropdownMenuTrigger className="flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 hover:bg-accent/30 transition-colors overflow-hidden">
-                    <StatusIcon status={issue.status} className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">{STATUS_CONFIG[issue.status].label}</span>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-44">
-                    {ALL_STATUSES.map((s) => (
-                      <DropdownMenuItem key={s} onClick={() => handleUpdateField({ status: s })}>
-                        <StatusIcon status={s} className="h-3.5 w-3.5" />
-                        {STATUS_CONFIG[s].label}
-                        {s === issue.status && <Check className="ml-auto h-3.5 w-3.5" />}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <StatusPicker
+                  status={issue.status}
+                  onUpdate={handleUpdateField}
+                  align="start"
+                />
               </PropRow>
 
               {/* Priority */}
               <PropRow label="Priority">
-                <DropdownMenu>
-                  <DropdownMenuTrigger className="flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 hover:bg-accent/30 transition-colors overflow-hidden">
-                    <PriorityIcon priority={issue.priority} className="shrink-0" />
-                    <span className="truncate">{PRIORITY_CONFIG[issue.priority].label}</span>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-44">
-                    {PRIORITY_ORDER.map((p) => (
-                      <DropdownMenuItem key={p} onClick={() => handleUpdateField({ priority: p })}>
-                        <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${PRIORITY_CONFIG[p].badgeBg} ${PRIORITY_CONFIG[p].badgeText}`}>
-                          <PriorityIcon priority={p} className="h-3 w-3" inheritColor />
-                          {PRIORITY_CONFIG[p].label}
-                        </span>
-                        {p === issue.priority && <Check className="ml-auto h-3.5 w-3.5" />}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <PriorityPicker
+                  priority={issue.priority}
+                  onUpdate={handleUpdateField}
+                  align="start"
+                />
               </PropRow>
 
               {/* Assignee */}
@@ -1211,6 +1146,14 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
               <PropRow label="Due date">
                 <DueDatePicker
                   dueDate={issue.due_date}
+                  onUpdate={handleUpdateField}
+                />
+              </PropRow>
+
+              {/* Project */}
+              <PropRow label="Project">
+                <ProjectPicker
+                  projectId={issue.project_id}
                   onUpdate={handleUpdateField}
                 />
               </PropRow>
