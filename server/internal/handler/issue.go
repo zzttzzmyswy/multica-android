@@ -568,6 +568,18 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 	if a := r.URL.Query().Get("assignee_id"); a != "" {
 		assigneeFilter = parseUUID(a)
 	}
+	var assigneeIdsFilter []pgtype.UUID
+	if ids := r.URL.Query().Get("assignee_ids"); ids != "" {
+		for _, raw := range strings.Split(ids, ",") {
+			if s := strings.TrimSpace(raw); s != "" {
+				assigneeIdsFilter = append(assigneeIdsFilter, parseUUID(s))
+			}
+		}
+	}
+	var creatorFilter pgtype.UUID
+	if c := r.URL.Query().Get("creator_id"); c != "" {
+		creatorFilter = parseUUID(c)
+	}
 
 	// open_only=true returns all non-done/cancelled issues (no limit).
 	if r.URL.Query().Get("open_only") == "true" {
@@ -575,6 +587,8 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 			WorkspaceID: wsUUID,
 			Priority:    priorityFilter,
 			AssigneeID:  assigneeFilter,
+			AssigneeIds: assigneeIdsFilter,
+			CreatorID:   creatorFilter,
 		})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to list issues")
@@ -619,6 +633,8 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 		Status:      statusFilter,
 		Priority:    priorityFilter,
 		AssigneeID:  assigneeFilter,
+		AssigneeIds: assigneeIdsFilter,
+		CreatorID:   creatorFilter,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list issues")
@@ -631,6 +647,8 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 		Status:      statusFilter,
 		Priority:    priorityFilter,
 		AssigneeID:  assigneeFilter,
+		AssigneeIds: assigneeIdsFilter,
+		CreatorID:   creatorFilter,
 	})
 	if err != nil {
 		total = int64(len(issues))

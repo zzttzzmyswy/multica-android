@@ -7,6 +7,8 @@ WHERE workspace_id = $1
   AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status'))
   AND (sqlc.narg('priority')::text IS NULL OR priority = sqlc.narg('priority'))
   AND (sqlc.narg('assignee_id')::uuid IS NULL OR assignee_id = sqlc.narg('assignee_id'))
+  AND (sqlc.narg('assignee_ids')::uuid[] IS NULL OR assignee_id = ANY(sqlc.narg('assignee_ids')::uuid[]))
+  AND (sqlc.narg('creator_id')::uuid IS NULL OR creator_id = sqlc.narg('creator_id'))
 ORDER BY position ASC, created_at DESC
 LIMIT $2 OFFSET $3;
 
@@ -66,6 +68,8 @@ WHERE workspace_id = $1
   AND status NOT IN ('done', 'cancelled')
   AND (sqlc.narg('priority')::text IS NULL OR priority = sqlc.narg('priority'))
   AND (sqlc.narg('assignee_id')::uuid IS NULL OR assignee_id = sqlc.narg('assignee_id'))
+  AND (sqlc.narg('assignee_ids')::uuid[] IS NULL OR assignee_id = ANY(sqlc.narg('assignee_ids')::uuid[]))
+  AND (sqlc.narg('creator_id')::uuid IS NULL OR creator_id = sqlc.narg('creator_id'))
 ORDER BY position ASC, created_at DESC;
 
 -- name: CountIssues :one
@@ -73,7 +77,9 @@ SELECT count(*) FROM issue
 WHERE workspace_id = $1
   AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status'))
   AND (sqlc.narg('priority')::text IS NULL OR priority = sqlc.narg('priority'))
-  AND (sqlc.narg('assignee_id')::uuid IS NULL OR assignee_id = sqlc.narg('assignee_id'));
+  AND (sqlc.narg('assignee_id')::uuid IS NULL OR assignee_id = sqlc.narg('assignee_id'))
+  AND (sqlc.narg('assignee_ids')::uuid[] IS NULL OR assignee_id = ANY(sqlc.narg('assignee_ids')::uuid[]))
+  AND (sqlc.narg('creator_id')::uuid IS NULL OR creator_id = sqlc.narg('creator_id'));
 
 -- name: ListChildIssues :many
 SELECT * FROM issue

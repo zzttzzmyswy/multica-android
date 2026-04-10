@@ -17,13 +17,17 @@ WHERE workspace_id = $1
   AND ($2::text IS NULL OR status = $2)
   AND ($3::text IS NULL OR priority = $3)
   AND ($4::uuid IS NULL OR assignee_id = $4)
+  AND ($5::uuid[] IS NULL OR assignee_id = ANY($5::uuid[]))
+  AND ($6::uuid IS NULL OR creator_id = $6)
 `
 
 type CountIssuesParams struct {
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	Status      pgtype.Text `json:"status"`
-	Priority    pgtype.Text `json:"priority"`
-	AssigneeID  pgtype.UUID `json:"assignee_id"`
+	WorkspaceID pgtype.UUID   `json:"workspace_id"`
+	Status      pgtype.Text   `json:"status"`
+	Priority    pgtype.Text   `json:"priority"`
+	AssigneeID  pgtype.UUID   `json:"assignee_id"`
+	AssigneeIds []pgtype.UUID `json:"assignee_ids"`
+	CreatorID   pgtype.UUID   `json:"creator_id"`
 }
 
 func (q *Queries) CountIssues(ctx context.Context, arg CountIssuesParams) (int64, error) {
@@ -32,6 +36,8 @@ func (q *Queries) CountIssues(ctx context.Context, arg CountIssuesParams) (int64
 		arg.Status,
 		arg.Priority,
 		arg.AssigneeID,
+		arg.AssigneeIds,
+		arg.CreatorID,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -277,17 +283,21 @@ WHERE workspace_id = $1
   AND ($4::text IS NULL OR status = $4)
   AND ($5::text IS NULL OR priority = $5)
   AND ($6::uuid IS NULL OR assignee_id = $6)
+  AND ($7::uuid[] IS NULL OR assignee_id = ANY($7::uuid[]))
+  AND ($8::uuid IS NULL OR creator_id = $8)
 ORDER BY position ASC, created_at DESC
 LIMIT $2 OFFSET $3
 `
 
 type ListIssuesParams struct {
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	Limit       int32       `json:"limit"`
-	Offset      int32       `json:"offset"`
-	Status      pgtype.Text `json:"status"`
-	Priority    pgtype.Text `json:"priority"`
-	AssigneeID  pgtype.UUID `json:"assignee_id"`
+	WorkspaceID pgtype.UUID   `json:"workspace_id"`
+	Limit       int32         `json:"limit"`
+	Offset      int32         `json:"offset"`
+	Status      pgtype.Text   `json:"status"`
+	Priority    pgtype.Text   `json:"priority"`
+	AssigneeID  pgtype.UUID   `json:"assignee_id"`
+	AssigneeIds []pgtype.UUID `json:"assignee_ids"`
+	CreatorID   pgtype.UUID   `json:"creator_id"`
 }
 
 type ListIssuesRow struct {
@@ -317,6 +327,8 @@ func (q *Queries) ListIssues(ctx context.Context, arg ListIssuesParams) ([]ListI
 		arg.Status,
 		arg.Priority,
 		arg.AssigneeID,
+		arg.AssigneeIds,
+		arg.CreatorID,
 	)
 	if err != nil {
 		return nil, err
@@ -362,13 +374,17 @@ WHERE workspace_id = $1
   AND status NOT IN ('done', 'cancelled')
   AND ($2::text IS NULL OR priority = $2)
   AND ($3::uuid IS NULL OR assignee_id = $3)
+  AND ($4::uuid[] IS NULL OR assignee_id = ANY($4::uuid[]))
+  AND ($5::uuid IS NULL OR creator_id = $5)
 ORDER BY position ASC, created_at DESC
 `
 
 type ListOpenIssuesParams struct {
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	Priority    pgtype.Text `json:"priority"`
-	AssigneeID  pgtype.UUID `json:"assignee_id"`
+	WorkspaceID pgtype.UUID   `json:"workspace_id"`
+	Priority    pgtype.Text   `json:"priority"`
+	AssigneeID  pgtype.UUID   `json:"assignee_id"`
+	AssigneeIds []pgtype.UUID `json:"assignee_ids"`
+	CreatorID   pgtype.UUID   `json:"creator_id"`
 }
 
 type ListOpenIssuesRow struct {
@@ -391,7 +407,13 @@ type ListOpenIssuesRow struct {
 }
 
 func (q *Queries) ListOpenIssues(ctx context.Context, arg ListOpenIssuesParams) ([]ListOpenIssuesRow, error) {
-	rows, err := q.db.Query(ctx, listOpenIssues, arg.WorkspaceID, arg.Priority, arg.AssigneeID)
+	rows, err := q.db.Query(ctx, listOpenIssues,
+		arg.WorkspaceID,
+		arg.Priority,
+		arg.AssigneeID,
+		arg.AssigneeIds,
+		arg.CreatorID,
+	)
 	if err != nil {
 		return nil, err
 	}

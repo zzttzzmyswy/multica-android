@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
-import { issueKeys, CLOSED_PAGE_SIZE } from "./queries";
+import { issueKeys, CLOSED_PAGE_SIZE, type MyIssuesFilter } from "./queries";
 import { useWorkspaceId } from "../hooks";
 import type { Issue, IssueReaction } from "../types";
 import type {
@@ -31,12 +31,15 @@ export type ToggleIssueReactionVars = {
 // Done issue pagination
 // ---------------------------------------------------------------------------
 
-export function useLoadMoreDoneIssues() {
+export function useLoadMoreDoneIssues(myIssues?: { scope: string; filter: MyIssuesFilter }) {
   const qc = useQueryClient();
   const wsId = useWorkspaceId();
   const [isLoading, setIsLoading] = useState(false);
 
-  const cache = qc.getQueryData<ListIssuesResponse>(issueKeys.list(wsId));
+  const queryKey = myIssues
+    ? issueKeys.myList(wsId, myIssues.scope, myIssues.filter)
+    : issueKeys.list(wsId);
+  const cache = qc.getQueryData<ListIssuesResponse>(queryKey);
   const doneLoaded = cache
     ? cache.issues.filter((i) => i.status === "done").length
     : 0;
@@ -51,8 +54,9 @@ export function useLoadMoreDoneIssues() {
         status: "done",
         limit: CLOSED_PAGE_SIZE,
         offset: doneLoaded,
+        ...myIssues?.filter,
       });
-      qc.setQueryData<ListIssuesResponse>(issueKeys.list(wsId), (old) => {
+      qc.setQueryData<ListIssuesResponse>(queryKey, (old) => {
         if (!old) return old;
         const existingIds = new Set(old.issues.map((i) => i.id));
         const newIssues = res.issues.filter((i) => !existingIds.has(i.id));
@@ -65,7 +69,7 @@ export function useLoadMoreDoneIssues() {
     } finally {
       setIsLoading(false);
     }
-  }, [qc, wsId, doneLoaded, hasMore, isLoading]);
+  }, [qc, queryKey, doneLoaded, hasMore, isLoading, myIssues?.filter]);
 
   return { loadMore, hasMore, isLoading, doneTotal };
 }
