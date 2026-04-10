@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -45,6 +46,14 @@ func projectToResponse(p db.Project) ProjectResponse {
 		CreatedAt:   timestampToString(p.CreatedAt),
 		UpdatedAt:   timestampToString(p.UpdatedAt),
 	}
+}
+
+func (h *Handler) loadProjectIssueStats(ctx context.Context, projectID pgtype.UUID) (int64, int64) {
+	stats, err := h.Queries.GetProjectIssueStats(ctx, []pgtype.UUID{projectID})
+	if err != nil || len(stats) == 0 {
+		return 0, 0
+	}
+	return stats[0].TotalCount, stats[0].DoneCount
 }
 
 type CreateProjectRequest struct {
@@ -123,7 +132,9 @@ func (h *Handler) GetProject(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "project not found")
 		return
 	}
-	writeJSON(w, http.StatusOK, projectToResponse(project))
+	resp := projectToResponse(project)
+	resp.IssueCount, resp.DoneCount = h.loadProjectIssueStats(r.Context(), project.ID)
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *Handler) CreateProject(w http.ResponseWriter, r *http.Request) {
@@ -459,8 +470,8 @@ func (h *Handler) SearchProjects(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type projectSearchRow struct {
-		project    db.Project
-		totalCount int64
+		project     db.Project
+		totalCount  int64
 		matchSource string
 	}
 

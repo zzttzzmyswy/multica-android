@@ -22,6 +22,7 @@ import { BOARD_STATUSES } from "@multica/core/issues/config";
 import { createIssueViewStore } from "@multica/core/issues/stores/view-store";
 import { ViewStoreProvider, useViewStore } from "@multica/core/issues/stores/view-store-context";
 import { filterIssues } from "../../issues/utils/filter";
+import { getProjectIssueMetrics } from "./project-issue-metrics";
 import { ActorAvatar } from "../../common/actor-avatar";
 import { AppLink, useNavigation } from "../../navigation";
 import { TitleEditor, ContentEditor, type ContentEditorRef } from "../../editor";
@@ -101,6 +102,10 @@ function ProjectIssuesContent({ projectIssues }: { projectIssues: Issue[] }) {
     () => filterIssues(projectIssues, { statusFilters, priorityFilters, assigneeFilters, includeNoAssignee, creatorFilters }),
     [projectIssues, statusFilters, priorityFilters, assigneeFilters, includeNoAssignee, creatorFilters],
   );
+  const doneColumnCount = useMemo(
+    () => projectIssues.filter((issue) => issue.status === "done").length,
+    [projectIssues],
+  );
 
   const childProgressMap = useMemo(() => {
     const map = new Map<string, { done: number; total: number }>();
@@ -167,9 +172,15 @@ function ProjectIssuesContent({ projectIssues }: { projectIssues: Issue[] }) {
           hiddenStatuses={hiddenStatuses}
           onMoveIssue={handleMoveIssue}
           childProgressMap={childProgressMap}
+          doneTotal={doneColumnCount}
         />
       ) : (
-        <ListView issues={issues} visibleStatuses={visibleStatuses} childProgressMap={childProgressMap} />
+        <ListView
+          issues={issues}
+          visibleStatuses={visibleStatuses}
+          childProgressMap={childProgressMap}
+          doneTotal={doneColumnCount}
+        />
       )}
     </div>
   );
@@ -251,6 +262,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
     return <div className="flex items-center justify-center h-full text-muted-foreground">Project not found</div>;
   }
 
+  const issueMetrics = getProjectIssueMetrics(project, projectIssues);
   const statusCfg = PROJECT_STATUS_CONFIG[project.status];
   const priorityCfg = PROJECT_PRIORITY_CONFIG[project.priority];
 
@@ -548,10 +560,8 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
               </div>
 
               {/* Progress */}
-              {projectIssues.length > 0 && (() => {
-                const doneCount = projectIssues.filter((i) => i.status === "done" || i.status === "cancelled").length;
-                const totalCount = projectIssues.length;
-                const pct = Math.round((doneCount / totalCount) * 100);
+              {issueMetrics.totalCount > 0 && (() => {
+                const pct = Math.round((issueMetrics.completedCount / issueMetrics.totalCount) * 100);
                 return (
                   <div>
                     <div className="text-xs font-medium mb-2 flex items-center gap-1">
@@ -565,7 +575,9 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                           style={{ width: `${pct}%` }}
                         />
                       </div>
-                      <span className="text-xs text-muted-foreground tabular-nums shrink-0">{doneCount}/{totalCount}</span>
+                      <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+                        {issueMetrics.completedCount}/{issueMetrics.totalCount}
+                      </span>
                     </div>
                   </div>
                 );
