@@ -127,12 +127,15 @@ export function AppSidebar({ topSlot, searchSlot, headerClassName, headerStyle }
         if (isEditable) return;
         if (useModalStore.getState().modal) return;
         e.preventDefault();
-        useModalStore.getState().open("create-issue");
+        // Auto-fill project when on a project detail page
+        const projectMatch = pathname.match(/^\/projects\/([^/]+)$/);
+        const data = projectMatch ? { project_id: projectMatch[1] } : undefined;
+        useModalStore.getState().open("create-issue", data);
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [pathname]);
 
   return (
       <Sidebar variant="inset">
