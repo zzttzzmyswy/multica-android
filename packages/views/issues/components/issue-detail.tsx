@@ -42,6 +42,8 @@ import {
 } from "@multica/ui/components/ui/dropdown-menu";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@multica/ui/components/ui/resizable";
 import { ContentEditor, type ContentEditorRef } from "../../editor";
+import { useFileDropZone } from "../../editor/use-file-drop-zone";
+import { FileDropOverlay } from "../../editor/file-drop-overlay";
 import { FileUploadButton } from "@multica/ui/components/common/file-upload-button";
 import { TitleEditor } from "../../editor";
 import {
@@ -297,6 +299,9 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   );
 
   const descEditorRef = useRef<ContentEditorRef>(null);
+  const { isDragOver: descDragOver, dropZoneProps: descDropZoneProps } = useFileDropZone({
+    onDrop: (files) => files.forEach((f) => descEditorRef.current?.uploadFile(f)),
+  });
   // Description uploads don't pass issueId — the URL lives in the markdown.
   // This avoids stale attachment records when users delete images from the editor.
   const handleDescriptionUpload = useCallback(
@@ -702,35 +707,38 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
             </AppLink>
           )}
 
-          <ContentEditor
-            ref={descEditorRef}
-            key={id}
-            defaultValue={issue.description || ""}
-            placeholder="Add description..."
-            onUpdate={(md) => handleUpdateField({ description: md || undefined })}
-            onUploadFile={handleDescriptionUpload}
-            debounceMs={1500}
-            className="mt-5"
-          />
-
-          <div className="flex items-center gap-1 mt-3">
-            {reactionsLoading ? (
-              <div className="flex items-center gap-1">
-                <Skeleton className="h-7 w-14 rounded-full" />
-                <Skeleton className="h-7 w-14 rounded-full" />
-              </div>
-            ) : (
-              <ReactionBar
-                reactions={issueReactions}
-                currentUserId={user?.id}
-                onToggle={handleToggleIssueReaction}
-                getActorName={getActorName}
-              />
-            )}
-            <FileUploadButton
-              size="sm"
-              onSelect={(file) => descEditorRef.current?.uploadFile(file)}
+          <div {...descDropZoneProps} className="relative mt-5 rounded-lg">
+            <ContentEditor
+              ref={descEditorRef}
+              key={id}
+              defaultValue={issue.description || ""}
+              placeholder="Add description..."
+              onUpdate={(md) => handleUpdateField({ description: md || undefined })}
+              onUploadFile={handleDescriptionUpload}
+              showDropOverlay={false}
+              debounceMs={1500}
             />
+
+            <div className="flex items-center gap-1 mt-3">
+              {reactionsLoading ? (
+                <div className="flex items-center gap-1">
+                  <Skeleton className="h-7 w-14 rounded-full" />
+                  <Skeleton className="h-7 w-14 rounded-full" />
+                </div>
+              ) : (
+                <ReactionBar
+                  reactions={issueReactions}
+                  currentUserId={user?.id}
+                  onToggle={handleToggleIssueReaction}
+                  getActorName={getActorName}
+                />
+              )}
+              <FileUploadButton
+                size="sm"
+                onSelect={(file) => descEditorRef.current?.uploadFile(file)}
+              />
+            </div>
+            {descDragOver && <FileDropOverlay />}
           </div>
 
           {/* Sub-issues — Linear-style */}

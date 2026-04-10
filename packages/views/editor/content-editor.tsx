@@ -55,6 +55,8 @@ interface ContentEditorProps {
   onSubmit?: () => void;
   onBlur?: () => void;
   onUploadFile?: (file: File) => Promise<UploadResult | null>;
+  /** When false, suppresses the internal drag-over overlay so the parent can render its own. Default true. */
+  showDropOverlay?: boolean;
 }
 
 interface ContentEditorRef {
@@ -80,6 +82,7 @@ const ContentEditor = forwardRef<ContentEditorRef, ContentEditorProps>(
       onSubmit,
       onBlur,
       onUploadFile,
+      showDropOverlay = true,
     },
     ref,
   ) {
@@ -180,6 +183,7 @@ const ContentEditor = forwardRef<ContentEditorRef, ContentEditorProps>(
 
     // Always clear drag overlay on any drop/dragend anywhere in the document
     useEffect(() => {
+      if (!showDropOverlay) return;
       const clear = () => setDragOver(false);
       document.addEventListener("drop", clear);
       document.addEventListener("dragend", clear);
@@ -187,7 +191,7 @@ const ContentEditor = forwardRef<ContentEditorRef, ContentEditorProps>(
         document.removeEventListener("drop", clear);
         document.removeEventListener("dragend", clear);
       };
-    }, []);
+    }, [showDropOverlay]);
 
     // Readonly content update: when defaultValue changes and editor is readonly,
     // re-set the content (e.g. after editing a comment, the readonly view updates)
@@ -222,39 +226,47 @@ const ContentEditor = forwardRef<ContentEditorRef, ContentEditorProps>(
 
     return (
       <div
-        className={cn("relative min-h-full", dragOver && "editor-drag-over")}
-        onDragEnter={(e) => {
-          e.preventDefault();
-          if (editable && e.dataTransfer.types.includes("Files"))
-            setDragOver(true);
-        }}
-        onDragOver={(e) => {
-          e.preventDefault();
-        }}
-        onDragLeave={(e) => {
-          if (!e.currentTarget.contains(e.relatedTarget as Node))
-            setDragOver(false);
-        }}
-        onDrop={(e) => {
-          const alreadyHandled = e.nativeEvent.defaultPrevented;
-          e.preventDefault();
-          setDragOver(false);
-          // Only upload if ProseMirror didn't already handle the drop.
-          // When drop lands on the editor area, ProseMirror's handleDrop
-          // processes it and calls preventDefault on the native event.
-          // This fallback only fires when the overlay intercepted the drop.
-          if (alreadyHandled) return;
-          const files = e.dataTransfer?.files;
-          if (files?.length && editor && onUploadFileRef.current) {
-            const endPos = editor.state.doc.content.size;
-            for (const file of Array.from(files)) {
-              uploadAndInsertFile(editor, file, onUploadFileRef.current, endPos);
+        className={cn(
+          "relative min-h-full",
+          showDropOverlay && dragOver && "editor-drag-over",
+        )}
+        {...(showDropOverlay
+          ? {
+              onDragEnter: (e: React.DragEvent) => {
+                e.preventDefault();
+                if (editable && e.dataTransfer.types.includes("Files"))
+                  setDragOver(true);
+              },
+              onDragOver: (e: React.DragEvent) => {
+                e.preventDefault();
+              },
+              onDragLeave: (e: React.DragEvent) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node))
+                  setDragOver(false);
+              },
+              onDrop: (e: React.DragEvent) => {
+                const alreadyHandled = e.nativeEvent.defaultPrevented;
+                e.preventDefault();
+                setDragOver(false);
+                if (alreadyHandled) return;
+                const files = e.dataTransfer?.files;
+                if (files?.length && editor && onUploadFileRef.current) {
+                  const endPos = editor.state.doc.content.size;
+                  for (const file of Array.from(files)) {
+                    uploadAndInsertFile(
+                      editor,
+                      file,
+                      onUploadFileRef.current,
+                      endPos,
+                    );
+                  }
+                }
+              },
             }
-          }
-        }}
+          : {})}
       >
         <EditorContent editor={editor} />
-        {dragOver && (
+        {showDropOverlay && dragOver && (
           <div className="editor-drop-overlay">
             <p>Drop files to upload</p>
           </div>

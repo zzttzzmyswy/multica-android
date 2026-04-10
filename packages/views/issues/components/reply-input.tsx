@@ -3,6 +3,8 @@
 import { useRef, useState, useEffect } from "react";
 import { ArrowUp, Loader2 } from "lucide-react";
 import { ContentEditor, type ContentEditorRef } from "../../editor";
+import { useFileDropZone } from "../../editor/use-file-drop-zone";
+import { FileDropOverlay } from "../../editor/file-drop-overlay";
 import { FileUploadButton } from "@multica/ui/components/common/file-upload-button";
 import { ActorAvatar } from "../../common/actor-avatar";
 import { useFileUpload } from "@multica/core/hooks/use-file-upload";
@@ -41,6 +43,9 @@ function ReplyInput({
   const [submitting, setSubmitting] = useState(false);
   const [attachmentIds, setAttachmentIds] = useState<string[]>([]);
   const { uploadWithToast } = useFileUpload(api);
+  const { isDragOver, dropZoneProps } = useFileDropZone({
+    onDrop: (files) => files.forEach((f) => editorRef.current?.uploadFile(f)),
+  });
 
   useEffect(() => {
     const el = measureRef.current;
@@ -86,6 +91,7 @@ function ReplyInput({
         className="mt-0.5 shrink-0"
       />
       <div
+        {...dropZoneProps}
         className={cn(
           "relative min-w-0 flex-1 flex flex-col",
           size === "sm" ? "max-h-40" : "max-h-56",
@@ -100,6 +106,7 @@ function ReplyInput({
               onUpdate={(md) => setIsEmpty(!md.trim())}
               onSubmit={handleSubmit}
               onUploadFile={handleUpload}
+              showDropOverlay={false}
               debounceMs={100}
             />
           </div>
@@ -122,6 +129,7 @@ function ReplyInput({
             )}
           </button>
         </div>
+        {isDragOver && <FileDropOverlay />}
       </div>
     </div>
   );
