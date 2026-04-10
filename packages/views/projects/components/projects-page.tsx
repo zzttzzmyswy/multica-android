@@ -75,6 +75,25 @@ function ProjectRow({ project }: { project: Project }) {
         {statusCfg.label}
       </span>
 
+      {/* Progress */}
+      <span className="flex w-24 items-center justify-center gap-1.5 shrink-0">
+        {project.issue_count > 0 ? (
+          <>
+            <span className="relative h-1.5 w-12 rounded-full bg-muted overflow-hidden">
+              <span
+                className="absolute inset-y-0 left-0 rounded-full bg-emerald-500 transition-all"
+                style={{ width: `${Math.round((project.done_count / project.issue_count) * 100)}%` }}
+              />
+            </span>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {project.done_count}/{project.issue_count}
+            </span>
+          </>
+        ) : (
+          <span className="text-xs text-muted-foreground">--</span>
+        )}
+      </span>
+
       {/* Lead */}
       <span className="flex w-10 items-center justify-center shrink-0">
         {project.lead_type && project.lead_id ? (
@@ -443,6 +462,7 @@ export function ProjectsPage() {
               <span className="min-w-0 flex-1">Name</span>
               <span className="w-24 text-center shrink-0">Priority</span>
               <span className="w-28 text-center shrink-0">Status</span>
+              <span className="w-24 text-center shrink-0">Progress</span>
               <span className="w-10 text-center shrink-0">Lead</span>
               <span className="w-20 text-right shrink-0">Created</span>
             </div>

@@ -478,6 +478,27 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
               </div>
             </div>
 
+            {/* Progress */}
+            {projectIssues.length > 0 && (() => {
+              const doneCount = projectIssues.filter((i) => i.status === "done" || i.status === "cancelled").length;
+              const totalCount = projectIssues.length;
+              const pct = Math.round((doneCount / totalCount) * 100);
+              return (
+                <div className="mt-5 flex items-center gap-4">
+                  <span className="text-xs font-medium text-muted-foreground shrink-0 w-20">Progress</span>
+                  <div className="flex items-center gap-3">
+                    <div className="relative h-2 w-40 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className="absolute inset-y-0 left-0 rounded-full bg-emerald-500 transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-muted-foreground tabular-nums">{doneCount}/{totalCount} ({pct}%)</span>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Description */}
             <div className="mt-8">
               <h3 className="text-xs font-medium text-muted-foreground mb-2">Description</h3>

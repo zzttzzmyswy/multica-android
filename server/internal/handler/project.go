@@ -23,6 +23,8 @@ type ProjectResponse struct {
 	LeadID      *string `json:"lead_id"`
 	CreatedAt   string  `json:"created_at"`
 	UpdatedAt   string  `json:"updated_at"`
+	IssueCount  int64   `json:"issue_count"`
+	DoneCount   int64   `json:"done_count"`
 }
 
 func projectToResponse(p db.Project) ProjectResponse {
@@ -80,9 +82,29 @@ func (h *Handler) ListProjects(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to list projects")
 		return
 	}
+
+	// Batch-fetch issue stats for all projects
+	statsMap := make(map[string]db.GetProjectIssueStatsRow)
+	if len(projects) > 0 {
+		projectIDs := make([]pgtype.UUID, len(projects))
+		for i, p := range projects {
+			projectIDs[i] = p.ID
+		}
+		stats, err := h.Queries.GetProjectIssueStats(r.Context(), projectIDs)
+		if err == nil {
+			for _, s := range stats {
+				statsMap[uuidToString(s.ProjectID)] = s
+			}
+		}
+	}
+
 	resp := make([]ProjectResponse, len(projects))
 	for i, p := range projects {
 		resp[i] = projectToResponse(p)
+		if s, ok := statsMap[resp[i].ID]; ok {
+			resp[i].IssueCount = s.TotalCount
+			resp[i].DoneCount = s.DoneCount
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"projects": resp, "total": len(resp)})
 }
