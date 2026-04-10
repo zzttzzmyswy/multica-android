@@ -1,12 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Loader2, MessageSquare, SearchIcon } from "lucide-react";
 import { Command as CommandPrimitive } from "cmdk";
 import type { SearchIssueResult } from "@multica/core/types";
 import { api } from "@multica/core/api";
-import { StatusIcon } from "@multica/views/issues/components";
+import { StatusIcon } from "../issues/components";
 import { STATUS_CONFIG } from "@multica/core/issues/config";
 import {
   Dialog,
@@ -15,7 +14,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@multica/ui/components/ui/dialog";
-import { useSearchStore } from "../stores/search-store";
+import { useNavigation } from "../navigation";
+import { useSearchStore } from "./search-store";
 
 function HighlightText({ text, query }: { text: string; query: string }) {
   const parts = useMemo(() => {
@@ -54,7 +54,7 @@ function HighlightText({ text, query }: { text: string; query: string }) {
 }
 
 export function SearchCommand() {
-  const router = useRouter();
+  const { push } = useNavigation();
   const open = useSearchStore((s) => s.open);
   const setOpen = useSearchStore((s) => s.setOpen);
   const [query, setQuery] = useState("");
@@ -136,9 +136,9 @@ export function SearchCommand() {
   const handleSelect = useCallback(
     (issueId: string) => {
       setOpen(false);
-      router.push(`/issues/${issueId}`);
+      push(`/issues/${issueId}`);
     },
-    [router],
+    [push],
   );
 
   return (

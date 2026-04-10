@@ -8,6 +8,7 @@ import { SidebarProvider } from "@multica/ui/components/ui/sidebar";
 import { WorkspaceIdProvider } from "@multica/core/hooks";
 import { ModalRegistry } from "@multica/views/modals/registry";
 import { AppSidebar, useDashboardGuard } from "@multica/views/layout";
+import { SearchCommand, SearchTrigger } from "@multica/views/search";
 import { DesktopNavigationProvider } from "@/platform/navigation";
 import { MulticaIcon } from "@multica/ui/components/common/multica-icon";
 import { TabBar } from "./tab-bar";
@@ -87,7 +88,7 @@ function DesktopLayoutInner() {
   return (
     <div className="flex h-screen">
       <SidebarProvider className="flex-1">
-        <AppSidebar topSlot={<SidebarTopBar />} />
+        <AppSidebar topSlot={<SidebarTopBar />} searchSlot={<SearchTrigger />} />
         {/* Right side: header + content container */}
         <div className="flex flex-1 min-w-0 flex-col">
           {/* Tab bar + drag region */}
@@ -103,6 +104,7 @@ function DesktopLayoutInner() {
               <WorkspaceIdProvider wsId={workspace.id}>
                 <Outlet />
                 <ModalRegistry />
+                <SearchCommand />
               </WorkspaceIdProvider>
             ) : (
               <div className="flex h-full items-center justify-center">
