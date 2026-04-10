@@ -1,7 +1,7 @@
 "use client";
 
 import { Send } from "lucide-react";
-import { useChatStore } from "../store";
+import { useChatStore } from "@multica/core/chat";
 
 export function ChatFab() {
   const isOpen = useChatStore((s) => s.isOpen);

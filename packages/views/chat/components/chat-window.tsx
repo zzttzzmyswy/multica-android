@@ -15,9 +15,14 @@ import { useAuthStore } from "@multica/core/auth";
 import { agentListOptions, memberListOptions } from "@multica/core/workspace/queries";
 import { canAssignAgent } from "@multica/views/issues/components";
 import { api } from "@multica/core/api";
-import { chatSessionsOptions, allChatSessionsOptions, chatMessagesOptions, chatKeys } from "@/core/chat/queries";
-import { useCreateChatSession } from "@/core/chat/mutations";
-import { useChatStore } from "../store";
+import {
+  chatSessionsOptions,
+  allChatSessionsOptions,
+  chatMessagesOptions,
+  chatKeys,
+} from "@multica/core/chat/queries";
+import { useCreateChatSession } from "@multica/core/chat/mutations";
+import { useChatStore } from "@multica/core/chat";
 import { ChatMessageList } from "./chat-message-list";
 import { ChatInput } from "./chat-input";
 import { ChatSessionHistory } from "./chat-session-history";
@@ -147,7 +152,7 @@ export function ChatWindow() {
       unsubCompleted();
       unsubFailed();
     };
-   
+
   }, [subscribe, addTimelineItem, clearTimeline, setPendingTask, qc]);
 
   const handleSend = useCallback(

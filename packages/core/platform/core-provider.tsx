@@ -5,6 +5,7 @@ import { ApiClient } from "../api/client";
 import { setApiInstance } from "../api";
 import { createAuthStore, registerAuthStore } from "../auth";
 import { createWorkspaceStore, registerWorkspaceStore } from "../workspace";
+import { createChatStore, registerChatStore } from "../chat";
 import { WSProvider } from "../realtime";
 import { QueryProvider } from "../provider";
 import { createLogger } from "../logger";
@@ -46,6 +47,8 @@ function initCore(
 
   workspaceStore = createWorkspaceStore(api, { storage });
   registerWorkspaceStore(workspaceStore);
+
+  registerChatStore(createChatStore({ storage }));
 
   initialized = true;
 }

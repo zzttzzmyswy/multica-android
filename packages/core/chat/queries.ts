@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import { api } from "@multica/core/api";
+import { api } from "../api";
 
 export const chatKeys = {
   all: (wsId: string) => ["chat", wsId] as const,

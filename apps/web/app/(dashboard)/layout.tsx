@@ -3,7 +3,7 @@
 import { DashboardLayout } from "@multica/views/layout";
 import { MulticaIcon } from "@multica/ui/components/common/multica-icon";
 import { SearchCommand, SearchTrigger } from "@multica/views/search";
-import { ChatFab, ChatWindow } from "@/features/chat";
+import { ChatFab, ChatWindow } from "@multica/views/chat";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
