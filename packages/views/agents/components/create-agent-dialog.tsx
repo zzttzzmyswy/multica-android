@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Globe,
   Lock,
+  Loader2,
 } from "lucide-react";
 import type {
   AgentVisibility,
@@ -33,10 +34,12 @@ import { toast } from "sonner";
 
 export function CreateAgentDialog({
   runtimes,
+  runtimesLoading,
   onClose,
   onCreate,
 }: {
   runtimes: RuntimeDevice[];
+  runtimesLoading?: boolean;
   onClose: () => void;
   onCreate: (data: CreateAgentRequest) => Promise<void>;
 }) {
@@ -147,10 +150,12 @@ export function CreateAgentDialog({
             <Label className="text-xs text-muted-foreground">Runtime</Label>
             <Popover open={runtimeOpen} onOpenChange={setRuntimeOpen}>
               <PopoverTrigger
-                disabled={runtimes.length === 0}
+                disabled={runtimes.length === 0 && !runtimesLoading}
                 className="flex w-full items-center gap-3 rounded-lg border border-border bg-background px-3 py-2.5 mt-1.5 text-left text-sm transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
               >
-                {selectedRuntime?.runtime_mode === "cloud" ? (
+                {runtimesLoading ? (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
+                ) : selectedRuntime?.runtime_mode === "cloud" ? (
                   <Cloud className="h-4 w-4 shrink-0 text-muted-foreground" />
                 ) : (
                   <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -158,7 +163,7 @@ export function CreateAgentDialog({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate font-medium">
-                      {selectedRuntime?.name ?? "No runtime available"}
+                      {runtimesLoading ? "Loading runtimes..." : (selectedRuntime?.name ?? "No runtime available")}
                     </span>
                     {selectedRuntime?.runtime_mode === "cloud" && (
                       <span className="shrink-0 rounded bg-info/10 px-1.5 py-0.5 text-xs font-medium text-info">
