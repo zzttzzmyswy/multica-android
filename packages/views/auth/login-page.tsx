@@ -20,6 +20,7 @@ import {
 import { useAuthStore } from "@multica/core/auth";
 import { useWorkspaceStore } from "@multica/core/workspace";
 import { api } from "@multica/core/api";
+import type { User } from "@multica/core/types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -30,6 +31,13 @@ interface GoogleAuthConfig {
   redirectUri: string;
 }
 
+interface CliCallbackConfig {
+  /** Validated localhost callback URL */
+  url: string;
+  /** Opaque state to pass back to CLI */
+  state: string;
+}
+
 interface LoginPageProps {
   /** Logo element rendered above the title */
   logo?: ReactNode;
@@ -37,19 +45,74 @@ interface LoginPageProps {
   onSuccess: () => void;
   /** Google OAuth config. Omit to disable Google login. */
   google?: GoogleAuthConfig;
+  /** CLI callback config for authorizing CLI tools. */
+  cliCallback?: CliCallbackConfig;
+  /** Preferred workspace ID to restore after login. */
+  lastWorkspaceId?: string | null;
+  /** Called after a token is obtained (e.g. to set cookies). */
+  onTokenObtained?: () => void;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function redirectToCliCallback(url: string, token: string, state: string) {
+  const separator = url.includes("?") ? "&" : "?";
+  window.location.href = `${url}${separator}token=${encodeURIComponent(token)}&state=${encodeURIComponent(state)}`;
+}
+
+/** Validate that a CLI callback URL points to localhost over HTTP. */
+export function validateCliCallback(cliCallback: string): boolean {
+  try {
+    const cbUrl = new URL(cliCallback);
+    if (cbUrl.protocol !== "http:") return false;
+    if (cbUrl.hostname !== "localhost" && cbUrl.hostname !== "127.0.0.1")
+      return false;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function LoginPage({ logo, onSuccess, google }: LoginPageProps) {
-  const [step, setStep] = useState<"email" | "code">("email");
+export function LoginPage({
+  logo,
+  onSuccess,
+  google,
+  cliCallback,
+  lastWorkspaceId,
+  onTokenObtained,
+}: LoginPageProps) {
+  const [step, setStep] = useState<"email" | "code" | "cli_confirm">("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [existingUser, setExistingUser] = useState<User | null>(null);
+
+  // Check for existing session when CLI callback is present
+  useEffect(() => {
+    if (!cliCallback) return;
+    const token = localStorage.getItem("multica_token");
+    if (!token) return;
+
+    api.setToken(token);
+    api
+      .getMe()
+      .then((user) => {
+        setExistingUser(user);
+        setStep("cli_confirm");
+      })
+      .catch(() => {
+        api.setToken(null);
+        localStorage.removeItem("multica_token");
+      });
+  }, [cliCallback]);
 
   // Cooldown timer for resend
   useEffect(() => {
@@ -91,9 +154,21 @@ export function LoginPage({ logo, onSuccess, google }: LoginPageProps) {
       setLoading(true);
       setError("");
       try {
+        if (cliCallback) {
+          // CLI path: get token directly for the redirect URL
+          const { token } = await api.verifyCode(email, value);
+          localStorage.setItem("multica_token", token);
+          api.setToken(token);
+          onTokenObtained?.();
+          redirectToCliCallback(cliCallback.url, token, cliCallback.state);
+          return;
+        }
+
+        // Normal path
         await useAuthStore.getState().verifyCode(email, value);
         const wsList = await api.listWorkspaces();
-        useWorkspaceStore.getState().hydrateWorkspace(wsList);
+        useWorkspaceStore.getState().hydrateWorkspace(wsList, lastWorkspaceId);
+        onTokenObtained?.();
         onSuccess();
       } catch (err) {
         setError(
@@ -103,7 +178,7 @@ export function LoginPage({ logo, onSuccess, google }: LoginPageProps) {
         setLoading(false);
       }
     },
-    [email, onSuccess],
+    [email, onSuccess, cliCallback, lastWorkspaceId, onTokenObtained],
   );
 
   const handleResend = async () => {
@@ -117,6 +192,15 @@ export function LoginPage({ logo, onSuccess, google }: LoginPageProps) {
         err instanceof Error ? err.message : "Failed to resend code",
       );
     }
+  };
+
+  const handleCliAuthorize = () => {
+    if (!cliCallback) return;
+    const token = localStorage.getItem("multica_token");
+    if (!token) return;
+    setLoading(true);
+    onTokenObtained?.();
+    redirectToCliCallback(cliCallback.url, token, cliCallback.state);
   };
 
   const handleGoogleLogin = () => {
@@ -133,12 +217,56 @@ export function LoginPage({ logo, onSuccess, google }: LoginPageProps) {
   };
 
   // -------------------------------------------------------------------------
+  // CLI confirm step
+  // -------------------------------------------------------------------------
+
+  if (step === "cli_confirm" && existingUser) {
+    return (
+      <div className="flex min-h-svh items-center justify-center">
+        <Card className="w-full max-w-sm">
+          <CardHeader className="text-center">
+            {logo && <div className="mx-auto mb-4">{logo}</div>}
+            <CardTitle className="text-2xl">Authorize CLI</CardTitle>
+            <CardDescription>
+              Allow the CLI to access Multica as{" "}
+              <span className="font-medium text-foreground">
+                {existingUser.email}
+              </span>
+              ?
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <Button
+              onClick={handleCliAuthorize}
+              disabled={loading}
+              className="w-full"
+              size="lg"
+            >
+              {loading ? "Authorizing..." : "Authorize"}
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full"
+              onClick={() => {
+                setExistingUser(null);
+                setStep("email");
+              }}
+            >
+              Use a different account
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------------------
   // Code verification step
   // -------------------------------------------------------------------------
 
   if (step === "code") {
     return (
-      <div className="flex flex-1 items-center justify-center">
+      <div className="flex min-h-svh items-center justify-center">
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
             {logo && <div className="mx-auto mb-4">{logo}</div>}
@@ -205,7 +333,7 @@ export function LoginPage({ logo, onSuccess, google }: LoginPageProps) {
   // -------------------------------------------------------------------------
 
   return (
-    <div className="flex flex-1 items-center justify-center">
+    <div className="flex min-h-svh items-center justify-center">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           {logo && <div className="mx-auto mb-4">{logo}</div>}
