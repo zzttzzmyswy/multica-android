@@ -72,7 +72,6 @@ export function createAuthStore(options: AuthStoreOptions) {
 
     logout: () => {
       storage.removeItem("multica_token");
-      storage.removeItem("multica_workspace_id");
       api.setToken(null);
       api.setWorkspaceId(null);
       onLogout?.();
