@@ -369,6 +369,89 @@ func TestCreateSubIssueInheritsParentProject(t *testing.T) {
 	}
 }
 
+func TestCreateSubIssueUsesExplicitProjectOverParentProject(t *testing.T) {
+	var parentProjectID, childProjectID, parentID, childID string
+	defer func() {
+		for _, issueID := range []string{childID, parentID} {
+			if issueID == "" {
+				continue
+			}
+			req := newRequest("DELETE", "/api/issues/"+issueID, nil)
+			req = withURLParam(req, "id", issueID)
+			testHandler.DeleteIssue(httptest.NewRecorder(), req)
+		}
+		for _, projectID := range []string{childProjectID, parentProjectID} {
+			if projectID == "" {
+				continue
+			}
+			req := newRequest("DELETE", "/api/projects/"+projectID, nil)
+			req = withURLParam(req, "id", projectID)
+			testHandler.DeleteProject(httptest.NewRecorder(), req)
+		}
+	}()
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/projects?workspace_id="+testWorkspaceID, map[string]any{
+		"title": "Parent project",
+	})
+	testHandler.CreateProject(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateProject parent: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var parentProject ProjectResponse
+	json.NewDecoder(w.Body).Decode(&parentProject)
+	parentProjectID = parentProject.ID
+
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/projects?workspace_id="+testWorkspaceID, map[string]any{
+		"title": "Child explicit project",
+	})
+	testHandler.CreateProject(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateProject child: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var childProject ProjectResponse
+	json.NewDecoder(w.Body).Decode(&childProject)
+	childProjectID = childProject.ID
+
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
+		"title":      "Parent with project",
+		"project_id": parentProjectID,
+	})
+	testHandler.CreateIssue(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateIssue parent: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var parent IssueResponse
+	json.NewDecoder(w.Body).Decode(&parent)
+	parentID = parent.ID
+	if parent.ProjectID == nil || *parent.ProjectID != parentProjectID {
+		t.Fatalf("CreateIssue parent: expected project_id %q, got %v", parentProjectID, parent.ProjectID)
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
+		"title":           "Child with explicit project",
+		"parent_issue_id": parentID,
+		"project_id":      childProjectID,
+	})
+	testHandler.CreateIssue(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateIssue child: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var child IssueResponse
+	json.NewDecoder(w.Body).Decode(&child)
+	childID = child.ID
+
+	if child.ParentIssueID == nil || *child.ParentIssueID != parentID {
+		t.Fatalf("CreateIssue child: expected parent_issue_id %q, got %v", parentID, child.ParentIssueID)
+	}
+	if child.ProjectID == nil || *child.ProjectID != childProjectID {
+		t.Fatalf("CreateIssue child: expected explicit project_id %q, got %v", childProjectID, child.ProjectID)
+	}
+}
+
 func TestCommentCRUD(t *testing.T) {
 	// Create an issue first
 	w := httptest.NewRecorder()
