@@ -28,4 +28,8 @@ win:
   target:
     - nsis
   artifactName: ${name}-${version}-setup.${ext}
+publish:
+  provider: github
+  owner: multica-ai
+  repo: multica
 npmRebuild: false

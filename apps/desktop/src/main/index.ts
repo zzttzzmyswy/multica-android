@@ -1,6 +1,7 @@
 import { app, shell, BrowserWindow } from "electron";
 import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
+import { setupAutoUpdater } from "./updater";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -45,6 +46,8 @@ app.whenReady().then(() => {
   });
 
   createWindow();
+
+  setupAutoUpdater(() => mainWindow);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
