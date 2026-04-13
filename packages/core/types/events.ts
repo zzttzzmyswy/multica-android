@@ -34,6 +34,8 @@ export type WSEventType =
   | "member:added"
   | "member:updated"
   | "member:removed"
+  | "member:online"
+  | "member:offline"
   | "daemon:heartbeat"
   | "daemon:register"
   | "skill:created"
@@ -147,6 +149,14 @@ export interface MemberRemovedPayload {
   member_id: string;
   user_id: string;
   workspace_id: string;
+}
+
+export interface MemberOnlinePayload {
+  user_id: string;
+}
+
+export interface MemberOfflinePayload {
+  user_id: string;
 }
 
 export interface SubscriberAddedPayload {
