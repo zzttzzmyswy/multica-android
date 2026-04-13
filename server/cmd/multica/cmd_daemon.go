@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -82,11 +83,11 @@ func daemonDirForProfile(profile string) string {
 }
 
 func daemonPIDPathForProfile(profile string) string {
-	return daemonDirForProfile(profile) + "/daemon.pid"
+	return filepath.Join(daemonDirForProfile(profile), "daemon.pid")
 }
 
 func daemonLogPathForProfile(profile string) string {
-	return daemonDirForProfile(profile) + "/daemon.log"
+	return filepath.Join(daemonDirForProfile(profile), "daemon.log")
 }
 
 // healthPortForProfile returns the health check port for the given profile.

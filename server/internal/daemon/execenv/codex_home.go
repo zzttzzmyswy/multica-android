@@ -87,7 +87,7 @@ func resolveSharedCodexHome() string {
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join("/tmp", ".codex") // last resort fallback
+		return filepath.Join(os.TempDir(), ".codex") // last resort fallback
 	}
 	return filepath.Join(home, ".codex")
 }
