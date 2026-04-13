@@ -251,7 +251,7 @@ export function useRealtimeSync(
       if (currentWs?.id === workspace_id) {
         logger.warn("current workspace deleted, switching");
         onToast?.("This workspace was deleted", "info");
-        qc.fetchQuery(workspaceListOptions()).then((wsList) => {
+        qc.fetchQuery({ ...workspaceListOptions(), staleTime: 0 }).then((wsList) => {
           workspaceStore.getState().hydrateWorkspace(wsList);
         });
       }
@@ -265,7 +265,7 @@ export function useRealtimeSync(
         if (wsId) clearWorkspaceStorage(defaultStorage, wsId);
         logger.warn("removed from workspace, switching");
         onToast?.("You were removed from this workspace", "info");
-        qc.fetchQuery(workspaceListOptions()).then((wsList) => {
+        qc.fetchQuery({ ...workspaceListOptions(), staleTime: 0 }).then((wsList) => {
           workspaceStore.getState().hydrateWorkspace(wsList);
         });
       }
