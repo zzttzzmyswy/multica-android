@@ -162,7 +162,7 @@ export function LoginPage({
         await useAuthStore.getState().sendCode(email);
         setStep("code");
         setCode("");
-        setCooldown(10);
+        setCooldown(60);
       } catch (err) {
         setError(
           err instanceof Error
@@ -215,7 +215,7 @@ export function LoginPage({
     setError("");
     try {
       await useAuthStore.getState().sendCode(email);
-      setCooldown(10);
+      setCooldown(60);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to resend code",

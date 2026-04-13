@@ -304,7 +304,7 @@ describe("LoginPage", () => {
       ).toBeInTheDocument();
     });
 
-    // After transitioning to code step, cooldown is 10s
+    // After transitioning to code step, cooldown is 60s
     const resendBtn = screen.getByRole("button", { name: /resend in/i });
     expect(resendBtn).toBeDisabled();
   });
@@ -340,9 +340,9 @@ describe("LoginPage", () => {
     // sendCode was called once for the initial send
     expect(mockSendCode).toHaveBeenCalledTimes(1);
 
-    // Advance past the 10s cooldown one second at a time so React can
+    // Advance past the 60s cooldown one second at a time so React can
     // process each setCooldown state update between ticks.
-    for (let i = 0; i < 11; i++) {
+    for (let i = 0; i < 61; i++) {
       await act(async () => {
         vi.advanceTimersByTime(1_000);
       });

@@ -110,9 +110,9 @@ func (h *Handler) SendCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Rate limit: max 1 code per 10 seconds per email
+	// Rate limit: max 1 code per 60 seconds per email
 	latest, err := h.Queries.GetLatestCodeByEmail(r.Context(), email)
-	if err == nil && time.Since(latest.CreatedAt.Time) < 10*time.Second {
+	if err == nil && time.Since(latest.CreatedAt.Time) < 60*time.Second {
 		writeError(w, http.StatusTooManyRequests, "please wait before requesting another code")
 		return
 	}
