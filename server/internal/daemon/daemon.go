@@ -894,9 +894,11 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 	}
 
 	agentName := "agent"
+	var agentID string
 	var skills []SkillData
 	var instructions string
 	if task.Agent != nil {
+		agentID = task.Agent.ID
 		agentName = task.Agent.Name
 		skills = task.Agent.Skills
 		instructions = task.Agent.Instructions
@@ -908,6 +910,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 	taskCtx := execenv.TaskContextForEnv{
 		IssueID:           task.IssueID,
 		TriggerCommentID:  task.TriggerCommentID,
+		AgentID:           agentID,
 		AgentName:         agentName,
 		AgentInstructions: instructions,
 		AgentSkills:       convertSkillsForEnv(skills),
