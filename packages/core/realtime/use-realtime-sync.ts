@@ -20,7 +20,7 @@ import {
 } from "../issues/ws-updaters";
 import { onInboxNew, onInboxInvalidate, onInboxIssueStatusChanged } from "../inbox/ws-updaters";
 import { inboxKeys } from "../inbox/queries";
-import { workspaceKeys } from "../workspace/queries";
+import { workspaceKeys, workspaceListOptions } from "../workspace/queries";
 import type {
   MemberAddedPayload,
   WorkspaceDeletedPayload,
@@ -251,7 +251,9 @@ export function useRealtimeSync(
       if (currentWs?.id === workspace_id) {
         logger.warn("current workspace deleted, switching");
         onToast?.("This workspace was deleted", "info");
-        workspaceStore.getState().refreshWorkspaces();
+        qc.fetchQuery({ ...workspaceListOptions(), staleTime: 0 }).then((wsList) => {
+          workspaceStore.getState().hydrateWorkspace(wsList);
+        });
       }
     });
 
@@ -263,7 +265,9 @@ export function useRealtimeSync(
         if (wsId) clearWorkspaceStorage(defaultStorage, wsId);
         logger.warn("removed from workspace, switching");
         onToast?.("You were removed from this workspace", "info");
-        workspaceStore.getState().refreshWorkspaces();
+        qc.fetchQuery({ ...workspaceListOptions(), staleTime: 0 }).then((wsList) => {
+          workspaceStore.getState().hydrateWorkspace(wsList);
+        });
       }
     });
 
@@ -271,7 +275,7 @@ export function useRealtimeSync(
       const { member, workspace_name } = p as MemberAddedPayload;
       const myUserId = authStore.getState().user?.id;
       if (member.user_id === myUserId) {
-        workspaceStore.getState().refreshWorkspaces();
+        qc.invalidateQueries({ queryKey: workspaceKeys.list() });
         onToast?.(
           `You were invited to ${workspace_name ?? "a workspace"}`,
           "info",
