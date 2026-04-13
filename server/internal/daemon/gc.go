@@ -204,17 +204,21 @@ func (d *Daemon) pruneRepoWorktrees(workspacesRoot string) {
 			if !isBareRepo(barePath) {
 				continue
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), gitCmdTimeout)
-			cmd := exec.CommandContext(ctx, "git", "-C", barePath, "worktree", "prune")
-			if out, err := cmd.CombinedOutput(); err != nil {
-				d.logger.Warn("gc: worktree prune failed",
-					"repo", barePath,
-					"output", strings.TrimSpace(string(out)),
-					"error", err,
-				)
-			}
-			cancel()
+			d.pruneWorktree(barePath)
 		}
+	}
+}
+
+func (d *Daemon) pruneWorktree(barePath string) {
+	ctx, cancel := context.WithTimeout(context.Background(), gitCmdTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "-C", barePath, "worktree", "prune")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		d.logger.Warn("gc: worktree prune failed",
+			"repo", barePath,
+			"output", strings.TrimSpace(string(out)),
+			"error", err,
+		)
 	}
 }
 
