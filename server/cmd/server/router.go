@@ -78,6 +78,7 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 	r.Use(chimw.RequestID)
 	r.Use(middleware.RequestLogger)
 	r.Use(chimw.Recoverer)
+	r.Use(middleware.ContentSecurityPolicy)
 	origins := allowedOrigins()
 
 	// Share allowed origins with WebSocket origin checker.
