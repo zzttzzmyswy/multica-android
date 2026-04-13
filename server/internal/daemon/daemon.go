@@ -178,11 +178,14 @@ func (d *Daemon) loadWatchedWorkspaces(ctx context.Context) error {
 		}
 		d.mu.Unlock()
 
-		// Sync workspace repos to local cache.
+		// Sync workspace repos to local cache in the background so heartbeat
+		// and poll loops are not blocked by slow git clone/fetch operations.
 		if d.repoCache != nil && len(resp.Repos) > 0 {
-			if err := d.repoCache.Sync(ws.ID, repoDataToInfo(resp.Repos)); err != nil {
-				d.logger.Warn("repo cache sync failed", "workspace_id", ws.ID, "error", err)
-			}
+			go func(wsID string, repos []RepoData) {
+				if err := d.repoCache.Sync(wsID, repoDataToInfo(repos)); err != nil {
+					d.logger.Warn("repo cache sync failed", "workspace_id", wsID, "error", err)
+				}
+			}(ws.ID, resp.Repos)
 		}
 
 		d.logger.Info("watching workspace", "workspace_id", ws.ID, "name", ws.Name, "runtimes", len(resp.Runtimes), "repos", len(resp.Repos))
@@ -407,11 +410,13 @@ func (d *Daemon) reloadWorkspaces(ctx context.Context) {
 			}
 			d.mu.Unlock()
 
-			// Sync workspace repos to local cache.
+			// Sync workspace repos to local cache in the background.
 			if d.repoCache != nil && len(resp.Repos) > 0 {
-				if err := d.repoCache.Sync(id, repoDataToInfo(resp.Repos)); err != nil {
-					d.logger.Warn("repo cache sync failed", "workspace_id", id, "error", err)
-				}
+				go func(wsID string, repos []RepoData) {
+					if err := d.repoCache.Sync(wsID, repoDataToInfo(repos)); err != nil {
+						d.logger.Warn("repo cache sync failed", "workspace_id", wsID, "error", err)
+					}
+				}(id, resp.Repos)
 			}
 
 			d.logger.Info("now watching workspace", "workspace_id", id, "name", name)
