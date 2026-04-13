@@ -66,6 +66,53 @@ func TestBuildPromptNoIssueDetails(t *testing.T) {
 	}
 }
 
+func TestBuildPromptCommentTriggered(t *testing.T) {
+	t.Parallel()
+
+	issueID := "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+	commentID := "c1c2c3c4-d5d6-7890-abcd-ef1234567890"
+	commentContent := "请把报告翻译成英文"
+
+	prompt := BuildPrompt(Task{
+		IssueID:               issueID,
+		TriggerCommentID:      commentID,
+		TriggerCommentContent: commentContent,
+		Agent:                 &AgentData{Name: "Test"},
+	})
+
+	// Prompt should contain the comment content directly.
+	for _, want := range []string{
+		issueID,
+		commentContent,
+		"comment that triggered this task",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt missing %q", want)
+		}
+	}
+
+	// Should still contain CLI hint for fetching issue context.
+	if !strings.Contains(prompt, "multica issue get") {
+		t.Fatal("prompt missing CLI hint for issue context")
+	}
+}
+
+func TestBuildPromptCommentTriggeredNoContent(t *testing.T) {
+	t.Parallel()
+
+	// When TriggerCommentID is set but content is empty (e.g. fetch failed),
+	// it should still use the comment prompt path.
+	prompt := BuildPrompt(Task{
+		IssueID:          "test-id",
+		TriggerCommentID: "comment-id",
+		Agent:            &AgentData{Name: "Test"},
+	})
+
+	if !strings.Contains(prompt, "multica issue get") {
+		t.Fatal("prompt missing CLI hint")
+	}
+}
+
 func TestIsWorkspaceNotFoundError(t *testing.T) {
 	t.Parallel()
 
