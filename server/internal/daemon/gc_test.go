@@ -15,8 +15,8 @@ import (
 	"github.com/multica-ai/multica/server/internal/daemon/execenv"
 )
 
-// newTestDaemon creates a minimal Daemon for GC testing with a mock HTTP server.
-func newTestDaemon(t *testing.T, handler http.Handler) *Daemon {
+// newGCTestDaemon creates a minimal Daemon for GC testing with a mock HTTP server.
+func newGCTestDaemon(t *testing.T, handler http.Handler) *Daemon {
 	t.Helper()
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
@@ -64,7 +64,7 @@ func TestShouldCleanTaskDir_DoneIssueOverTTL(t *testing.T) {
 		})
 	})
 
-	d := newTestDaemon(t, mux)
+	d := newGCTestDaemon(t, mux)
 	taskDir := createTaskDir(t, d.cfg.WorkspacesRoot, "ws1", "task1", &execenv.GCMeta{
 		IssueID:     issueID,
 		WorkspaceID: "ws1",
@@ -90,7 +90,7 @@ func TestShouldCleanTaskDir_CanceledIssueOverTTL(t *testing.T) {
 		})
 	})
 
-	d := newTestDaemon(t, mux)
+	d := newGCTestDaemon(t, mux)
 	taskDir := createTaskDir(t, d.cfg.WorkspacesRoot, "ws1", "task2", &execenv.GCMeta{
 		IssueID:     issueID,
 		WorkspaceID: "ws1",
@@ -116,7 +116,7 @@ func TestShouldCleanTaskDir_OpenIssueSkipped(t *testing.T) {
 		})
 	})
 
-	d := newTestDaemon(t, mux)
+	d := newGCTestDaemon(t, mux)
 	taskDir := createTaskDir(t, d.cfg.WorkspacesRoot, "ws1", "task3", &execenv.GCMeta{
 		IssueID:     issueID,
 		WorkspaceID: "ws1",
@@ -142,7 +142,7 @@ func TestShouldCleanTaskDir_DoneButRecentSkipped(t *testing.T) {
 		})
 	})
 
-	d := newTestDaemon(t, mux)
+	d := newGCTestDaemon(t, mux)
 	taskDir := createTaskDir(t, d.cfg.WorkspacesRoot, "ws1", "task4", &execenv.GCMeta{
 		IssueID:     issueID,
 		WorkspaceID: "ws1",
@@ -158,7 +158,7 @@ func TestShouldCleanTaskDir_DoneButRecentSkipped(t *testing.T) {
 func TestShouldCleanTaskDir_NoMetaRecentSkipped(t *testing.T) {
 	t.Parallel()
 
-	d := newTestDaemon(t, http.NewServeMux())
+	d := newGCTestDaemon(t, http.NewServeMux())
 	// No meta, fresh directory — should skip.
 	taskDir := createTaskDir(t, d.cfg.WorkspacesRoot, "ws1", "task5", nil)
 
@@ -171,7 +171,7 @@ func TestShouldCleanTaskDir_NoMetaRecentSkipped(t *testing.T) {
 func TestShouldCleanTaskDir_NoMetaOldOrphan(t *testing.T) {
 	t.Parallel()
 
-	d := newTestDaemon(t, http.NewServeMux())
+	d := newGCTestDaemon(t, http.NewServeMux())
 	d.cfg.GCOrphanTTL = 0 // treat all orphans as expired
 	taskDir := createTaskDir(t, d.cfg.WorkspacesRoot, "ws1", "task6", nil)
 
@@ -190,7 +190,7 @@ func TestShouldCleanTaskDir_APIErrorSkipped(t *testing.T) {
 		w.WriteHeader(http.StatusInternalServerError)
 	})
 
-	d := newTestDaemon(t, mux)
+	d := newGCTestDaemon(t, mux)
 	taskDir := createTaskDir(t, d.cfg.WorkspacesRoot, "ws1", "task7", &execenv.GCMeta{
 		IssueID:     issueID,
 		WorkspaceID: "ws1",
@@ -213,7 +213,7 @@ func TestShouldCleanTaskDir_Issue404OldOrphan(t *testing.T) {
 		w.Write([]byte(`{"error":"issue not found"}`))
 	})
 
-	d := newTestDaemon(t, mux)
+	d := newGCTestDaemon(t, mux)
 	d.cfg.GCOrphanTTL = 0 // treat orphans as immediately eligible
 	taskDir := createTaskDir(t, d.cfg.WorkspacesRoot, "ws1", "task8", &execenv.GCMeta{
 		IssueID:     issueID,
@@ -229,7 +229,7 @@ func TestShouldCleanTaskDir_Issue404OldOrphan(t *testing.T) {
 
 func TestCleanTaskDir_RemovesDirectory(t *testing.T) {
 	t.Parallel()
-	d := newTestDaemon(t, http.NewServeMux())
+	d := newGCTestDaemon(t, http.NewServeMux())
 	taskDir := createTaskDir(t, d.cfg.WorkspacesRoot, "ws1", "doomed", nil)
 
 	if _, err := os.Stat(taskDir); err != nil {
@@ -256,7 +256,7 @@ func TestGcWorkspace_CleansEmptyWorkspaceDir(t *testing.T) {
 		})
 	})
 
-	d := newTestDaemon(t, mux)
+	d := newGCTestDaemon(t, mux)
 	wsDir := filepath.Join(d.cfg.WorkspacesRoot, "ws-empty")
 	createTaskDir(t, d.cfg.WorkspacesRoot, "ws-empty", "only-task", &execenv.GCMeta{
 		IssueID:     issueID,

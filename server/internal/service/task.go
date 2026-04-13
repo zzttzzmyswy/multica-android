@@ -461,6 +461,8 @@ func (s *TaskService) broadcastTaskDispatch(ctx context.Context, task db.AgentTa
 	}
 	payload["task_id"] = util.UUIDToString(task.ID)
 	payload["runtime_id"] = util.UUIDToString(task.RuntimeID)
+	payload["issue_id"] = util.UUIDToString(task.IssueID)
+	payload["agent_id"] = util.UUIDToString(task.AgentID)
 
 	workspaceID := s.resolveTaskWorkspaceID(ctx, task)
 	if workspaceID == "" {
