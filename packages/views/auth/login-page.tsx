@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, type ReactNode } from "react";
+import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Card,
@@ -102,23 +102,43 @@ export function LoginPage({
   const [loading, setLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [existingUser, setExistingUser] = useState<User | null>(null);
+  // Tracks how the existing session was detected so handleCliAuthorize
+  // uses the matching token source (cookie → issueCliToken, localStorage → direct).
+  const authSourceRef = useRef<"cookie" | "localStorage">("cookie");
 
-  // Check for existing session when CLI callback is present
+  // Check for existing session when CLI callback is present.
+  // Prioritises cookie auth (= current browser session) to avoid authorising
+  // the CLI with a stale or mismatched localStorage token.
   useEffect(() => {
     if (!cliCallback) return;
-    const token = localStorage.getItem("multica_token");
-    if (!token) return;
 
-    api.setToken(token);
+    // Ensure no stale bearer token interferes — we want to test the cookie first.
+    api.setToken(null);
+
     api
       .getMe()
       .then((user) => {
+        authSourceRef.current = "cookie";
         setExistingUser(user);
         setStep("cli_confirm");
       })
       .catch(() => {
-        api.setToken(null);
-        localStorage.removeItem("multica_token");
+        // Cookie auth failed — fall back to localStorage token
+        const token = localStorage.getItem("multica_token");
+        if (!token) return;
+
+        api.setToken(token);
+        api
+          .getMe()
+          .then((user) => {
+            authSourceRef.current = "localStorage";
+            setExistingUser(user);
+            setStep("cli_confirm");
+          })
+          .catch(() => {
+            api.setToken(null);
+            localStorage.removeItem("multica_token");
+          });
       });
   }, [cliCallback]);
 
@@ -203,13 +223,32 @@ export function LoginPage({
     }
   };
 
-  const handleCliAuthorize = () => {
+  const handleCliAuthorize = async () => {
     if (!cliCallback) return;
-    const token = localStorage.getItem("multica_token");
-    if (!token) return;
     setLoading(true);
-    onTokenObtained?.();
-    redirectToCliCallback(cliCallback.url, token, cliCallback.state);
+
+    try {
+      let token: string;
+
+      if (authSourceRef.current === "localStorage") {
+        // Session was detected via localStorage — reuse that token directly.
+        const stored = localStorage.getItem("multica_token");
+        if (!stored) throw new Error("token missing");
+        token = stored;
+      } else {
+        // Session was detected via cookie — obtain a bearer token from the server.
+        const res = await api.issueCliToken();
+        token = res.token;
+      }
+
+      onTokenObtained?.();
+      redirectToCliCallback(cliCallback.url, token, cliCallback.state);
+    } catch {
+      setError("Failed to authorize CLI. Please log in again.");
+      setExistingUser(null);
+      setStep("email");
+      setLoading(false);
+    }
   };
 
   const handleGoogleLogin = () => {
