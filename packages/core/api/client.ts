@@ -447,7 +447,7 @@ export class ApiClient {
   }
 
   async listTaskMessages(taskId: string): Promise<TaskMessagePayload[]> {
-    return this.fetch(`/api/daemon/tasks/${taskId}/messages`);
+    return this.fetch(`/api/tasks/${taskId}/messages`);
   }
 
   async listTasksByIssue(issueId: string): Promise<AgentTask[]> {
