@@ -86,18 +86,21 @@ func (b *geminiBackend) Execute(ctx context.Context, prompt string, opts ExecOpt
 			DurationMs: durationMs,
 		}
 
-		if readErr != nil {
+		// Check context errors first — timeout and cancellation kill the
+		// process, which can cause readErr/waitErr as side effects. The
+		// context error is the root cause and determines the correct status.
+		if runCtx.Err() == context.DeadlineExceeded {
+			result.Status = "timeout"
+			result.Error = fmt.Sprintf("gemini timed out after %s", timeout)
+		} else if runCtx.Err() == context.Canceled {
+			result.Status = "aborted"
+			result.Error = "execution cancelled"
+		} else if readErr != nil {
 			result.Status = "failed"
 			result.Error = fmt.Sprintf("read stdout: %s", readErr.Error())
 		} else if waitErr != nil {
-			// Distinguish context cancellation (timeout) from exit errors.
-			if runCtx.Err() == context.DeadlineExceeded {
-				result.Status = "timeout"
-				result.Error = fmt.Sprintf("gemini timed out after %s", timeout)
-			} else {
-				result.Status = "failed"
-				result.Error = waitErr.Error()
-			}
+			result.Status = "failed"
+			result.Error = waitErr.Error()
 		}
 
 		resCh <- result
