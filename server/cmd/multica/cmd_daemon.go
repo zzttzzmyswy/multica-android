@@ -8,10 +8,8 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"os/signal"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -156,7 +154,7 @@ func runDaemonBackground(cmd *cobra.Command) error {
 	child := exec.Command(exePath, args...)
 	child.Stdout = logFile
 	child.Stderr = logFile
-	child.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	child.SysProcAttr = daemonSysProcAttr()
 
 	if err := child.Start(); err != nil {
 		logFile.Close()
@@ -274,7 +272,7 @@ func runDaemonForeground(cmd *cobra.Command) error {
 	}
 	cfg.CLIVersion = version
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	ctx, stop := daemonNotifyContext(context.Background())
 	defer stop()
 
 	logger := logger_pkg.NewLogger("daemon")
@@ -306,7 +304,7 @@ func runDaemonForeground(cmd *cobra.Command) error {
 		}
 		child.Stdout = logFile
 		child.Stderr = logFile
-		child.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		child.SysProcAttr = daemonSysProcAttr()
 
 		if err := child.Start(); err != nil {
 			logFile.Close()
@@ -355,7 +353,7 @@ func runDaemonStop(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("find process %d: %w", int(pid), err)
 	}
 
-	if err := process.Signal(syscall.SIGTERM); err != nil {
+	if err := process.Signal(daemonStopSignal()); err != nil {
 		return fmt.Errorf("stop daemon (pid %d): %w", int(pid), err)
 	}
 
