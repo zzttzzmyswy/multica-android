@@ -1,8 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, MessageSquare, Archive, Bot, Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import { ArrowLeft, MessageSquare, Bot } from "lucide-react";
 import { cn } from "@multica/ui/lib/utils";
 import { Button } from "@multica/ui/components/ui/button";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@multica/ui/components/ui/tooltip";
@@ -10,7 +9,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@multica/ui/components/ui/a
 import { useWorkspaceId } from "@multica/core/hooks";
 import { agentListOptions } from "@multica/core/workspace/queries";
 import { allChatSessionsOptions } from "@multica/core/chat/queries";
-import { useArchiveChatSession } from "@multica/core/chat/mutations";
 import { useChatStore } from "@multica/core/chat";
 import type { ChatSession, Agent } from "@multica/core/types";
 
@@ -24,7 +22,6 @@ export function ChatSessionHistory() {
 
   const { data: sessions = [] } = useQuery(allChatSessionsOptions(wsId));
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
-  const archiveSession = useArchiveChatSession();
 
   const agentMap = new Map(agents.map((a) => [a.id, a]));
 
@@ -34,19 +31,6 @@ export function ChatSessionHistory() {
     setPendingTask(null);
     setShowHistory(false);
   };
-
-  const handleArchive = (e: React.MouseEvent, sessionId: string) => {
-    e.stopPropagation();
-    if (activeSessionId === sessionId) {
-      setActiveSession(null);
-    }
-    archiveSession.mutate(sessionId, {
-      onError: () => toast.error("Failed to archive session"),
-    });
-  };
-
-  const activeSessions = sessions.filter((s) => s.status === "active");
-  const archivedSessions = sessions.filter((s) => s.status === "archived");
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -78,70 +62,19 @@ export function ChatSessionHistory() {
             <span className="text-sm">No chat sessions yet</span>
           </div>
         ) : (
-          <>
-            {activeSessions.length > 0 && (
-              <SessionGroup
-                label="Active"
-                sessions={activeSessions}
-                agentMap={agentMap}
-                activeSessionId={activeSessionId}
-                archivingId={archiveSession.isPending ? (archiveSession.variables as string) : null}
-                onSelect={handleSelectSession}
-                onArchive={handleArchive}
+          <div>
+            {sessions.map((session) => (
+              <SessionItem
+                key={session.id}
+                session={session}
+                agent={agentMap.get(session.agent_id) ?? null}
+                isActive={session.id === activeSessionId}
+                onSelect={() => handleSelectSession(session)}
               />
-            )}
-            {archivedSessions.length > 0 && (
-              <SessionGroup
-                label="Archived"
-                sessions={archivedSessions}
-                agentMap={agentMap}
-                activeSessionId={activeSessionId}
-                archivingId={null}
-                onSelect={handleSelectSession}
-              />
-            )}
-          </>
+            ))}
+          </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function SessionGroup({
-  label,
-  sessions,
-  agentMap,
-  activeSessionId,
-  archivingId,
-  onSelect,
-  onArchive,
-}: {
-  label: string;
-  sessions: ChatSession[];
-  agentMap: Map<string, Agent>;
-  activeSessionId: string | null;
-  archivingId: string | null;
-  onSelect: (session: ChatSession) => void;
-  onArchive?: (e: React.MouseEvent, sessionId: string) => void;
-}) {
-  return (
-    <div>
-      <div className="px-4 pt-3 pb-1">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          {label}
-        </span>
-      </div>
-      {sessions.map((session) => (
-        <SessionItem
-          key={session.id}
-          session={session}
-          agent={agentMap.get(session.agent_id) ?? null}
-          isActive={session.id === activeSessionId}
-          isArchiving={session.id === archivingId}
-          onSelect={() => onSelect(session)}
-          onArchive={onArchive ? (e) => onArchive(e, session.id) : undefined}
-        />
-      ))}
     </div>
   );
 }
@@ -150,16 +83,12 @@ function SessionItem({
   session,
   agent,
   isActive,
-  isArchiving,
   onSelect,
-  onArchive,
 }: {
   session: ChatSession;
   agent: Agent | null;
   isActive: boolean;
-  isArchiving: boolean;
   onSelect: () => void;
-  onArchive?: (e: React.MouseEvent) => void;
 }) {
   const timeAgo = formatTimeAgo(session.updated_at);
 
@@ -167,7 +96,7 @@ function SessionItem({
     <button
       onClick={onSelect}
       className={cn(
-        "group flex w-full items-start gap-3 px-4 py-2.5 text-left transition-colors hover:bg-accent/50",
+        "flex w-full items-start gap-3 px-4 py-2.5 text-left transition-colors hover:bg-accent/50",
         isActive && "bg-accent/30",
       )}
     >
@@ -182,9 +111,6 @@ function SessionItem({
           <span className="truncate text-sm font-medium">
             {session.title || "Untitled"}
           </span>
-          {session.status === "archived" && (
-            <Archive className="size-3 shrink-0 text-muted-foreground" />
-          )}
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
           {agent && (
@@ -195,27 +121,6 @@ function SessionItem({
           <span className="text-xs text-muted-foreground/60">{timeAgo}</span>
         </div>
       </div>
-      {onArchive && (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className={cn(
-                  "shrink-0 mt-0.5 text-muted-foreground",
-                  !isArchiving && "invisible group-hover:visible",
-                )}
-                onClick={onArchive}
-                disabled={isArchiving}
-              />
-            }
-          >
-            {isArchiving ? <Loader2 className="animate-spin" /> : <Archive />}
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Archive</TooltipContent>
-        </Tooltip>
-      )}
     </button>
   );
 }
