@@ -102,6 +102,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 
 	go d.heartbeatLoop(ctx)
 	go d.usageScanLoop(ctx)
+	go d.gcLoop(ctx)
 	go d.serveHealth(ctx, healthLn, time.Now())
 	return d.pollLoop(ctx)
 }
@@ -927,6 +928,11 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 	// NOTE: No cleanup — workdir is preserved for reuse by future tasks on
 	// the same (agent, issue) pair. The work_dir path is stored in DB on
 	// task completion and passed back via PriorWorkDir on the next claim.
+
+	// Write GC metadata so the periodic GC loop can look up the issue later.
+	if err := env.WriteGCMeta(task.IssueID, task.WorkspaceID); err != nil {
+		taskLog.Warn("write gc meta failed (non-fatal)", "error", err)
+	}
 
 	prompt := BuildPrompt(task)
 
