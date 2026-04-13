@@ -56,113 +56,6 @@ type VerifyCodeRequest struct {
 	Code  string `json:"code"`
 }
 
-func defaultWorkspaceName(user db.User) string {
-	name := strings.TrimSpace(user.Name)
-	if name == "" {
-		email := strings.TrimSpace(user.Email)
-		if at := strings.Index(email, "@"); at > 0 {
-			name = email[:at]
-		}
-	}
-	if name == "" {
-		name = "Personal"
-	}
-	return name + "'s Workspace"
-}
-
-func slugifyWorkspacePart(value string) string {
-	value = strings.ToLower(strings.TrimSpace(value))
-	var b strings.Builder
-	lastWasDash := false
-
-	for _, r := range value {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
-			b.WriteRune(r)
-			lastWasDash = false
-		case b.Len() > 0 && !lastWasDash:
-			b.WriteByte('-')
-			lastWasDash = true
-		}
-	}
-
-	return strings.Trim(b.String(), "-")
-}
-
-func defaultWorkspaceSlug(user db.User) string {
-	candidates := []string{
-		slugifyWorkspacePart(user.Name),
-		slugifyWorkspacePart(strings.Split(strings.TrimSpace(user.Email), "@")[0]),
-		"workspace",
-	}
-
-	base := "workspace"
-	for _, candidate := range candidates {
-		if candidate != "" {
-			base = candidate
-			break
-		}
-	}
-
-	userID := uuidToString(user.ID)
-	if len(userID) >= 8 {
-		return base + "-" + userID[:8]
-	}
-	return base
-}
-
-func (h *Handler) ensureUserWorkspace(ctx context.Context, user db.User) error {
-	workspaces, err := h.Queries.ListWorkspaces(ctx, user.ID)
-	if err != nil {
-		return err
-	}
-	if len(workspaces) > 0 {
-		return nil
-	}
-
-	tx, err := h.TxStarter.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	qtx := h.Queries.WithTx(tx)
-	workspaces, err = qtx.ListWorkspaces(ctx, user.ID)
-	if err != nil {
-		return err
-	}
-	if len(workspaces) > 0 {
-		return nil
-	}
-
-	wsName := defaultWorkspaceName(user)
-	workspace, err := qtx.CreateWorkspace(ctx, db.CreateWorkspaceParams{
-		Name:        wsName,
-		Slug:        defaultWorkspaceSlug(user),
-		Description: pgtype.Text{},
-		IssuePrefix: generateIssuePrefix(wsName),
-	})
-	if err != nil {
-		if isUniqueViolation(err) {
-			workspaces, lookupErr := h.Queries.ListWorkspaces(ctx, user.ID)
-			if lookupErr == nil && len(workspaces) > 0 {
-				return nil
-			}
-		}
-		return err
-	}
-
-	if _, err := qtx.CreateMember(ctx, db.CreateMemberParams{
-		WorkspaceID: workspace.ID,
-		UserID:      user.ID,
-		Role:        "owner",
-	}); err != nil {
-		return err
-	}
-
-	return tx.Commit(ctx)
-}
-
 func generateCode() (string, error) {
 	var buf [4]byte
 	if _, err := rand.Read(buf[:]); err != nil {
@@ -288,11 +181,6 @@ func (h *Handler) VerifyCode(w http.ResponseWriter, r *http.Request) {
 	user, err := h.findOrCreateUser(r.Context(), email)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create user")
-		return
-	}
-
-	if err := h.ensureUserWorkspace(r.Context(), user); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to provision workspace")
 		return
 	}
 
@@ -478,11 +366,6 @@ func (h *Handler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := h.ensureUserWorkspace(r.Context(), user); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to provision workspace")
-		return
-	}
-
 	tokenString, err := h.issueJWT(user)
 	if err != nil {
 		slog.Warn("google login failed", append(logger.RequestAttrs(r), "error", err, "email", email)...)
@@ -505,6 +388,31 @@ func (h *Handler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 		Token: tokenString,
 		User:  userToResponse(user),
 	})
+}
+
+// IssueCliToken returns a fresh JWT for the authenticated user.
+// This allows cookie-authenticated browser sessions to obtain a bearer token
+// that can be handed off to the CLI via the cli_callback redirect.
+func (h *Handler) IssueCliToken(w http.ResponseWriter, r *http.Request) {
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return
+	}
+
+	user, err := h.Queries.GetUser(r.Context(), parseUUID(userID))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	tokenString, err := h.issueJWT(user)
+	if err != nil {
+		slog.Warn("cli-token: failed to issue JWT", append(logger.RequestAttrs(r), "error", err, "user_id", userID)...)
+		writeError(w, http.StatusInternalServerError, "failed to generate token")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"token": tokenString})
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {

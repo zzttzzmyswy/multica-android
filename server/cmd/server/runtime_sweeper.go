@@ -18,6 +18,9 @@ const (
 	// staleThresholdSeconds marks runtimes offline if no heartbeat for this long.
 	// The daemon heartbeat interval is 15s, so 45s = 3 missed heartbeats.
 	staleThresholdSeconds = 45.0
+	// offlineRuntimeTTLSeconds deletes offline runtimes with no active agents
+	// after this duration. 7 days gives users plenty of time to restart daemons.
+	offlineRuntimeTTLSeconds = 7 * 24 * 3600.0
 	// dispatchTimeoutSeconds fails tasks stuck in 'dispatched' beyond this.
 	// The dispatched→running transition should be near-instant, so 5 minutes
 	// means something went wrong (e.g. StartTask API call failed silently).
@@ -42,6 +45,7 @@ func runRuntimeSweeper(ctx context.Context, queries *db.Queries, bus *events.Bus
 		case <-ticker.C:
 			sweepStaleRuntimes(ctx, queries, bus)
 			sweepStaleTasks(ctx, queries, bus)
+			gcRuntimes(ctx, queries, bus)
 		}
 	}
 }
@@ -84,6 +88,38 @@ func sweepStaleRuntimes(ctx context.Context, queries *db.Queries, bus *events.Bu
 			ActorType:   "system",
 			Payload: map[string]any{
 				"action": "stale_sweep",
+			},
+		})
+	}
+}
+
+// gcRuntimes deletes offline runtimes that have exceeded the TTL and have
+// no active (non-archived) agents. Before deleting, it cleans up any
+// archived agents so the FK constraint (ON DELETE RESTRICT) doesn't block.
+func gcRuntimes(ctx context.Context, queries *db.Queries, bus *events.Bus) {
+	deleted, err := queries.DeleteStaleOfflineRuntimes(ctx, offlineRuntimeTTLSeconds)
+	if err != nil {
+		slog.Warn("runtime GC: failed to delete stale offline runtimes", "error", err)
+		return
+	}
+	if len(deleted) == 0 {
+		return
+	}
+
+	gcWorkspaces := make(map[string]bool)
+	for _, row := range deleted {
+		gcWorkspaces[util.UUIDToString(row.WorkspaceID)] = true
+	}
+
+	slog.Info("runtime GC: deleted stale offline runtimes", "count", len(deleted), "workspaces", len(gcWorkspaces))
+
+	for wsID := range gcWorkspaces {
+		bus.Publish(events.Event{
+			Type:        protocol.EventDaemonRegister,
+			WorkspaceID: wsID,
+			ActorType:   "system",
+			Payload: map[string]any{
+				"action": "runtime_gc",
 			},
 		})
 	}

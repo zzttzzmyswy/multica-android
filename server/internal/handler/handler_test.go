@@ -252,6 +252,56 @@ func TestIssueCRUD(t *testing.T) {
 	}
 }
 
+// TestCreateIssueDefaultStatusIsTodo verifies that issues created without an
+// explicit status default to "todo" so the daemon picks them up immediately.
+// Before this fix the default was "backlog", which daemons ignore.
+func TestCreateIssueDefaultStatusIsTodo(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
+		"title": "Issue with no explicit status",
+	})
+	testHandler.CreateIssue(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateIssue: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var created IssueResponse
+	json.NewDecoder(w.Body).Decode(&created)
+	if created.Status != "todo" {
+		t.Fatalf("CreateIssue: expected default status 'todo', got '%s'", created.Status)
+	}
+
+	// Cleanup
+	cleanupReq := newRequest("DELETE", "/api/issues/"+created.ID, nil)
+	cleanupReq = withURLParam(cleanupReq, "id", created.ID)
+	testHandler.DeleteIssue(httptest.NewRecorder(), cleanupReq)
+}
+
+// TestCreateIssueExplicitBacklogPreserved verifies that explicitly requesting
+// "backlog" status is still respected — only the implicit default changed.
+func TestCreateIssueExplicitBacklogPreserved(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
+		"title":  "Explicit backlog issue",
+		"status": "backlog",
+	})
+	testHandler.CreateIssue(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateIssue: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var created IssueResponse
+	json.NewDecoder(w.Body).Decode(&created)
+	if created.Status != "backlog" {
+		t.Fatalf("CreateIssue: expected explicit 'backlog' to be preserved, got '%s'", created.Status)
+	}
+
+	// Cleanup
+	cleanupReq := newRequest("DELETE", "/api/issues/"+created.ID, nil)
+	cleanupReq = withURLParam(cleanupReq, "id", created.ID)
+	testHandler.DeleteIssue(httptest.NewRecorder(), cleanupReq)
+}
+
 func TestCommentCRUD(t *testing.T) {
 	// Create an issue first
 	w := httptest.NewRecorder()
@@ -359,6 +409,72 @@ func TestWorkspaceCRUD(t *testing.T) {
 	testHandler.GetWorkspace(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("GetWorkspace: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestCreateWorkspaceUsesRequestedSlug(t *testing.T) {
+	const slug = "handler-create-workspace-requested"
+	ctx := context.Background()
+
+	t.Cleanup(func() {
+		testPool.Exec(ctx, `DELETE FROM workspace WHERE slug = $1`, slug)
+	})
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/workspaces", map[string]string{
+		"name": "Handler Create Workspace Requested",
+		"slug": slug,
+	})
+	testHandler.CreateWorkspace(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateWorkspace: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var created WorkspaceResponse
+	if err := json.NewDecoder(w.Body).Decode(&created); err != nil {
+		t.Fatalf("CreateWorkspace: decode response: %v", err)
+	}
+	if created.Slug != slug {
+		t.Fatalf("CreateWorkspace: expected slug %q, got %q", slug, created.Slug)
+	}
+}
+
+func TestCreateWorkspaceSlugConflictReturnsConflict(t *testing.T) {
+	ctx := context.Background()
+	retriedSlug := handlerTestWorkspaceSlug + "-2"
+
+	t.Cleanup(func() {
+		testPool.Exec(ctx, `DELETE FROM workspace WHERE slug = $1`, retriedSlug)
+	})
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/workspaces", map[string]string{
+		"name": "Duplicate Handler Workspace",
+		"slug": handlerTestWorkspaceSlug,
+	})
+	testHandler.CreateWorkspace(w, req)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("CreateWorkspace: expected 409, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var count int
+	if err := testPool.QueryRow(ctx, `SELECT count(*) FROM workspace WHERE slug = $1`, retriedSlug).Scan(&count); err != nil {
+		t.Fatalf("CreateWorkspace: check retried slug: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("CreateWorkspace: expected no fallback slug %q, got %d rows", retriedSlug, count)
+	}
+}
+
+func TestCreateWorkspaceInvalidSlugReturnsBadRequest(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/workspaces", map[string]string{
+		"name": "Invalid Slug Workspace",
+		"slug": "invalid slug",
+	})
+	testHandler.CreateWorkspace(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("CreateWorkspace: expected 400, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
@@ -549,21 +665,12 @@ func TestVerifyCodeBruteForceProtection(t *testing.T) {
 	}
 }
 
-func TestVerifyCodeCreatesWorkspace(t *testing.T) {
+func TestVerifyCodeNewUserHasNoWorkspace(t *testing.T) {
 	const email = "workspace-verify-test@multica.ai"
 	ctx := context.Background()
 
 	t.Cleanup(func() {
 		testPool.Exec(ctx, `DELETE FROM verification_code WHERE email = $1`, email)
-		user, err := testHandler.Queries.GetUserByEmail(ctx, email)
-		if err == nil {
-			workspaces, listErr := testHandler.Queries.ListWorkspaces(ctx, user.ID)
-			if listErr == nil {
-				for _, workspace := range workspaces {
-					_ = testHandler.Queries.DeleteWorkspace(ctx, workspace.ID)
-				}
-			}
-		}
 		testPool.Exec(ctx, `DELETE FROM "user" WHERE email = $1`, email)
 	})
 
@@ -597,15 +704,13 @@ func TestVerifyCodeCreatesWorkspace(t *testing.T) {
 		t.Fatalf("GetUserByEmail: %v", err)
 	}
 
+	// New users should have no workspaces (onboarding creates one)
 	workspaces, err := testHandler.Queries.ListWorkspaces(ctx, user.ID)
 	if err != nil {
 		t.Fatalf("ListWorkspaces: %v", err)
 	}
-	if len(workspaces) != 1 {
-		t.Fatalf("ListWorkspaces: expected 1 workspace, got %d", len(workspaces))
-	}
-	if !strings.Contains(workspaces[0].Name, "Workspace") {
-		t.Fatalf("expected auto-created workspace name, got %q", workspaces[0].Name)
+	if len(workspaces) != 0 {
+		t.Fatalf("ListWorkspaces: expected 0 workspaces for new user, got %d", len(workspaces))
 	}
 }
 
@@ -656,11 +761,11 @@ func TestResolveActor(t *testing.T) {
 	})
 
 	tests := []struct {
-		name            string
-		agentIDHeader   string
-		taskIDHeader    string
-		wantActorType   string
-		wantIsAgent     bool
+		name          string
+		agentIDHeader string
+		taskIDHeader  string
+		wantActorType string
+		wantIsAgent   bool
 	}{
 		{
 			name:          "no headers returns member",
