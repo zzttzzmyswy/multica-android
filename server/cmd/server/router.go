@@ -223,6 +223,9 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 				})
 			})
 
+			// Task messages (user-facing, not daemon auth)
+			r.Get("/api/tasks/{taskId}/messages", h.ListTaskMessagesByUser)
+
 			// Projects
 			r.Route("/api/projects", func(r chi.Router) {
 				r.Get("/search", h.SearchProjects)
