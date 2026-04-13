@@ -15,7 +15,7 @@ export function ChatFab() {
   if (isOpen) return null;
 
   return (
-    <Tooltip delay={300}>
+    <Tooltip>
       <TooltipTrigger
         onClick={toggle}
         className="fixed bottom-4 right-4 z-50 flex size-10 cursor-pointer items-center justify-center rounded-full border bg-background text-muted-foreground shadow-sm transition-transform hover:scale-110 hover:text-accent-foreground active:scale-95"
