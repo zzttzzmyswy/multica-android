@@ -302,6 +302,73 @@ func TestCreateIssueExplicitBacklogPreserved(t *testing.T) {
 	testHandler.DeleteIssue(httptest.NewRecorder(), cleanupReq)
 }
 
+func TestCreateSubIssueInheritsParentProject(t *testing.T) {
+	var projectID, parentID, childID string
+	defer func() {
+		for _, issueID := range []string{childID, parentID} {
+			if issueID == "" {
+				continue
+			}
+			req := newRequest("DELETE", "/api/issues/"+issueID, nil)
+			req = withURLParam(req, "id", issueID)
+			testHandler.DeleteIssue(httptest.NewRecorder(), req)
+		}
+		if projectID != "" {
+			req := newRequest("DELETE", "/api/projects/"+projectID, nil)
+			req = withURLParam(req, "id", projectID)
+			testHandler.DeleteProject(httptest.NewRecorder(), req)
+		}
+	}()
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/projects?workspace_id="+testWorkspaceID, map[string]any{
+		"title": "Sub-issue inheritance project",
+	})
+	testHandler.CreateProject(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateProject: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var project ProjectResponse
+	json.NewDecoder(w.Body).Decode(&project)
+	projectID = project.ID
+
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
+		"title":      "Parent with project",
+		"project_id": projectID,
+	})
+	testHandler.CreateIssue(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateIssue parent: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var parent IssueResponse
+	json.NewDecoder(w.Body).Decode(&parent)
+	parentID = parent.ID
+	if parent.ProjectID == nil || *parent.ProjectID != projectID {
+		t.Fatalf("CreateIssue parent: expected project_id %q, got %v", projectID, parent.ProjectID)
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
+		"title":           "Child without explicit project",
+		"parent_issue_id": parentID,
+	})
+	testHandler.CreateIssue(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateIssue child: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var child IssueResponse
+	json.NewDecoder(w.Body).Decode(&child)
+	childID = child.ID
+
+	if child.ParentIssueID == nil || *child.ParentIssueID != parentID {
+		t.Fatalf("CreateIssue child: expected parent_issue_id %q, got %v", parentID, child.ParentIssueID)
+	}
+	if child.ProjectID == nil || *child.ProjectID != projectID {
+		t.Fatalf("CreateIssue child: expected inherited project_id %q, got %v", projectID, child.ProjectID)
+	}
+}
+
 func TestCommentCRUD(t *testing.T) {
 	// Create an issue first
 	w := httptest.NewRecorder()

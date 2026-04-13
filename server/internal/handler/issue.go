@@ -815,6 +815,10 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var parentIssueID pgtype.UUID
+	var projectID pgtype.UUID
+	if req.ProjectID != nil {
+		projectID = parseUUID(*req.ProjectID)
+	}
 	if req.ParentIssueID != nil {
 		parentIssueID = parseUUID(*req.ParentIssueID)
 		// Validate parent exists in the same workspace.
@@ -825,6 +829,9 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 		if err != nil || !parent.ID.Valid {
 			writeError(w, http.StatusBadRequest, "parent issue not found in this workspace")
 			return
+		}
+		if req.ProjectID == nil {
+			projectID = parent.ProjectID
 		}
 	}
 
@@ -872,7 +879,7 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 		Position:           0,
 		DueDate:            dueDate,
 		Number:             issueNumber,
-		ProjectID:          func() pgtype.UUID { if req.ProjectID != nil { return parseUUID(*req.ProjectID) }; return pgtype.UUID{} }(),
+		ProjectID:          projectID,
 	})
 	if err != nil {
 		slog.Warn("create issue failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", workspaceID)...)
