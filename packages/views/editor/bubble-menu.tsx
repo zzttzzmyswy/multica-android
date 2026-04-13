@@ -299,7 +299,7 @@ function HeadingDropdown({
         side="bottom"
         sideOffset={8}
         align="start"
-        className="min-w-28"
+        className="w-auto"
       >
         {items.map((item) => (
           <DropdownMenuItem
@@ -354,7 +354,7 @@ function ListDropdown({
         side="bottom"
         sideOffset={8}
         align="start"
-        className="min-w-32"
+        className="w-auto"
       >
         <DropdownMenuItem
           onClick={() => editor.chain().focus().toggleBulletList().run()}
