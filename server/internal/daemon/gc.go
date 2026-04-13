@@ -101,6 +101,14 @@ func (d *Daemon) gcWorkspace(ctx context.Context, wsDir string) (cleaned, skippe
 			skipped++
 		}
 	}
+
+	// Remove the workspace directory itself if it's now empty.
+	if cleaned+orphaned > 0 {
+		remaining, _ := os.ReadDir(wsDir)
+		if len(remaining) == 0 {
+			os.Remove(wsDir)
+		}
+	}
 	return
 }
 
@@ -169,6 +177,8 @@ func (d *Daemon) cleanTaskDir(taskDir string) {
 	}
 }
 
+const gitCmdTimeout = 30 * time.Second
+
 // pruneRepoWorktrees runs `git worktree prune` on all bare repos in the cache.
 func (d *Daemon) pruneRepoWorktrees(workspacesRoot string) {
 	reposRoot := filepath.Join(workspacesRoot, ".repos")
@@ -194,7 +204,8 @@ func (d *Daemon) pruneRepoWorktrees(workspacesRoot string) {
 			if !isBareRepo(barePath) {
 				continue
 			}
-			cmd := exec.Command("git", "-C", barePath, "worktree", "prune")
+			ctx, cancel := context.WithTimeout(context.Background(), gitCmdTimeout)
+			cmd := exec.CommandContext(ctx, "git", "-C", barePath, "worktree", "prune")
 			if out, err := cmd.CombinedOutput(); err != nil {
 				d.logger.Warn("gc: worktree prune failed",
 					"repo", barePath,
@@ -202,12 +213,18 @@ func (d *Daemon) pruneRepoWorktrees(workspacesRoot string) {
 					"error", err,
 				)
 			}
+			cancel()
 		}
 	}
 }
 
 // isBareRepo checks if a path looks like a bare git repository.
 func isBareRepo(path string) bool {
-	_, err := os.Stat(filepath.Join(path, "HEAD"))
-	return err == nil
+	if _, err := os.Stat(filepath.Join(path, "HEAD")); err != nil {
+		return false
+	}
+	if _, err := os.Stat(filepath.Join(path, "objects")); err != nil {
+		return false
+	}
+	return true
 }

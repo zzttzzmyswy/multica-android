@@ -871,6 +871,15 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 			}
 		}
 	}
+
+	// Write GC metadata after the task finishes so the periodic GC loop
+	// can look up the issue later. Written last so that a mid-task crash
+	// leaves the directory as an orphan (cleaned up by GCOrphanTTL).
+	if result.EnvRoot != "" {
+		if err := execenv.WriteGCMeta(result.EnvRoot, task.IssueID, task.WorkspaceID); err != nil {
+			taskLog.Warn("write gc meta failed (non-fatal)", "error", err)
+		}
+	}
 }
 
 func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLog *slog.Logger) (TaskResult, error) {
@@ -928,11 +937,6 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 	// NOTE: No cleanup — workdir is preserved for reuse by future tasks on
 	// the same (agent, issue) pair. The work_dir path is stored in DB on
 	// task completion and passed back via PriorWorkDir on the next claim.
-
-	// Write GC metadata so the periodic GC loop can look up the issue later.
-	if err := env.WriteGCMeta(task.IssueID, task.WorkspaceID); err != nil {
-		taskLog.Warn("write gc meta failed (non-fatal)", "error", err)
-	}
 
 	prompt := BuildPrompt(task)
 
@@ -1157,6 +1161,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 			Comment:   result.Output,
 			SessionID: result.SessionID,
 			WorkDir:   env.WorkDir,
+			EnvRoot:   env.RootDir,
 			Usage:     usageEntries,
 		}, nil
 	case "timeout":
@@ -1166,7 +1171,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 		if errMsg == "" {
 			errMsg = fmt.Sprintf("%s execution %s", provider, result.Status)
 		}
-		return TaskResult{Status: "blocked", Comment: errMsg, Usage: usageEntries}, nil
+		return TaskResult{Status: "blocked", Comment: errMsg, EnvRoot: env.RootDir, Usage: usageEntries}, nil
 	}
 }
 

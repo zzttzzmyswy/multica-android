@@ -168,9 +168,9 @@ type GCMeta struct {
 
 const gcMetaFile = ".gc_meta.json"
 
-// WriteGCMeta writes GC metadata into the environment root directory.
-func (env *Environment) WriteGCMeta(issueID, workspaceID string) error {
-	if env == nil {
+// WriteGCMeta writes GC metadata into the given directory.
+func WriteGCMeta(envRoot, issueID, workspaceID string) error {
+	if envRoot == "" {
 		return nil
 	}
 	meta := GCMeta{
@@ -182,7 +182,7 @@ func (env *Environment) WriteGCMeta(issueID, workspaceID string) error {
 	if err != nil {
 		return fmt.Errorf("marshal gc meta: %w", err)
 	}
-	return os.WriteFile(filepath.Join(env.RootDir, gcMetaFile), data, 0o644)
+	return os.WriteFile(filepath.Join(envRoot, gcMetaFile), data, 0o644)
 }
 
 // ReadGCMeta reads GC metadata from a task directory root.
