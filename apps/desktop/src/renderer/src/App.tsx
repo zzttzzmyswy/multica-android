@@ -8,6 +8,7 @@ import { MulticaIcon } from "@multica/ui/components/common/multica-icon";
 import { Toaster } from "sonner";
 import { DesktopLoginPage } from "./pages/login";
 import { DesktopShell } from "./components/desktop-layout";
+import { UpdateNotification } from "./components/update-notification";
 
 function AppContent() {
   const user = useAuthStore((s) => s.user);
@@ -51,6 +52,7 @@ export default function App() {
         <AppContent />
       </CoreProvider>
       <Toaster />
+      <UpdateNotification />
     </ThemeProvider>
   );
 }

@@ -1,6 +1,7 @@
 import { app, shell, BrowserWindow, ipcMain } from "electron";
 import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
+import { setupAutoUpdater } from "./updater";
 
 const PROTOCOL = "multica";
 
@@ -113,6 +114,8 @@ if (!gotTheLock) {
     });
 
     createWindow();
+
+    setupAutoUpdater(() => mainWindow);
 
     // macOS: deep link arrives via open-url event
     app.on("open-url", (_event, url) => {

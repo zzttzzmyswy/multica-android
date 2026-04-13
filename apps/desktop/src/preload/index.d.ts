@@ -7,10 +7,19 @@ interface DesktopAPI {
   openExternal: (url: string) => Promise<void>;
 }
 
+interface UpdaterAPI {
+  onUpdateAvailable: (callback: (info: { version: string; releaseNotes?: string }) => void) => () => void;
+  onDownloadProgress: (callback: (progress: { percent: number }) => void) => () => void;
+  onUpdateDownloaded: (callback: () => void) => () => void;
+  downloadUpdate: () => Promise<void>;
+  installUpdate: () => Promise<void>;
+}
+
 declare global {
   interface Window {
     electron: ElectronAPI;
     desktopAPI: DesktopAPI;
+    updater: UpdaterAPI;
   }
 }
 
