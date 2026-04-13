@@ -246,7 +246,13 @@ function LinkEditBar({
 // Heading Dropdown
 // ---------------------------------------------------------------------------
 
-function HeadingDropdown({ editor }: { editor: Editor }) {
+function HeadingDropdown({
+  editor,
+  onOpenChange,
+}: {
+  editor: Editor;
+  onOpenChange: (open: boolean) => void;
+}) {
   const activeLevel = [1, 2, 3].find((l) =>
     editor.isActive("heading", { level: l }),
   );
@@ -281,7 +287,7 @@ function HeadingDropdown({ editor }: { editor: Editor }) {
   ];
 
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={onOpenChange}>
       <DropdownMenuTrigger
         className="inline-flex h-7 items-center gap-0.5 rounded-md px-1.5 text-xs font-medium hover:bg-muted"
         onMouseDown={(e) => e.preventDefault()}
@@ -315,12 +321,18 @@ function HeadingDropdown({ editor }: { editor: Editor }) {
 // List Dropdown
 // ---------------------------------------------------------------------------
 
-function ListDropdown({ editor }: { editor: Editor }) {
+function ListDropdown({
+  editor,
+  onOpenChange,
+}: {
+  editor: Editor;
+  onOpenChange: (open: boolean) => void;
+}) {
   const isBullet = editor.isActive("bulletList");
   const isOrdered = editor.isActive("orderedList");
 
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={onOpenChange}>
       <Tooltip>
         <TooltipTrigger
           render={
@@ -374,16 +386,20 @@ function EditorBubbleMenu({ editor }: { editor: Editor }) {
   const [focused, setFocused] = useState(editor.view.hasFocus());
   const modeRef = useRef(mode);
   modeRef.current = mode;
+  // Track whether a child dropdown is open — blur during dropdown interaction should not hide
+  const menuOpenRef = useRef(false);
+  const handleMenuOpenChange = useCallback((open: boolean) => {
+    menuOpenRef.current = open;
+  }, []);
 
   useEditorTransactionUpdate(editor);
 
-  // Hide bubble menu when editor loses focus
+  // Hide bubble menu when editor loses focus (but not when a child dropdown is open)
   useEffect(() => {
     const onFocus = () => setFocused(true);
     const onBlur = () => {
-      // Delay to allow focus to settle (e.g. clicking bubble menu buttons)
       setTimeout(() => {
-        if (!editor.isDestroyed && !editor.view.hasFocus()) {
+        if (!editor.isDestroyed && !editor.view.hasFocus() && !menuOpenRef.current) {
           setFocused(false);
         }
       }, 0);
@@ -502,8 +518,8 @@ function EditorBubbleMenu({ editor }: { editor: Editor }) {
             <Separator orientation="vertical" className="mx-0.5 h-5" />
 
             {/* Group 3: Block Transforms */}
-            <HeadingDropdown editor={editor} />
-            <ListDropdown editor={editor} />
+            <HeadingDropdown editor={editor} onOpenChange={handleMenuOpenChange} />
+            <ListDropdown editor={editor} onOpenChange={handleMenuOpenChange} />
             <Tooltip>
               <TooltipTrigger
                 render={
