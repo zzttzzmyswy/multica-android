@@ -304,7 +304,7 @@ function HeadingDropdown({
         {items.map((item) => (
           <DropdownMenuItem
             key={item.label}
-            onSelect={item.action}
+            onClick={item.action}
             className="gap-2 text-xs"
           >
             <item.icon className="size-3.5" />
@@ -357,7 +357,7 @@ function ListDropdown({
         className="min-w-32"
       >
         <DropdownMenuItem
-          onSelect={() => editor.chain().focus().toggleBulletList().run()}
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
           className="gap-2 text-xs"
         >
           <List className="size-3.5" />
@@ -365,7 +365,7 @@ function ListDropdown({
           {isBullet && <Check className="ml-auto size-3.5" />}
         </DropdownMenuItem>
         <DropdownMenuItem
-          onSelect={() => editor.chain().focus().toggleOrderedList().run()}
+          onClick={() => editor.chain().focus().toggleOrderedList().run()}
           className="gap-2 text-xs"
         >
           <ListOrdered className="size-3.5" />
