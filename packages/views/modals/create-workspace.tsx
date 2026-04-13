@@ -14,15 +14,15 @@ import {
   DialogDescription,
 } from "@multica/ui/components/ui/dialog";
 import { Card, CardContent } from "@multica/ui/components/ui/card";
-import { useWorkspaceStore } from "@multica/core/workspace";
+import { useCreateWorkspace } from "@multica/core/workspace/mutations";
 
 const SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export function CreateWorkspaceModal({ onClose }: { onClose: () => void }) {
   const router = useNavigation();
+  const createWorkspace = useCreateWorkspace();
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
-  const [creating, setCreating] = useState(false);
 
   const slugError =
     slug.length > 0 && !SLUG_REGEX.test(slug)
@@ -41,24 +41,20 @@ export function CreateWorkspaceModal({ onClose }: { onClose: () => void }) {
     );
   };
 
-  const handleCreate = async () => {
+  const handleCreate = () => {
     if (!canSubmit) return;
-    setCreating(true);
-    try {
-      const { createWorkspace, switchWorkspace } =
-        useWorkspaceStore.getState();
-      const ws = await createWorkspace({
-        name: name.trim(),
-        slug: slug.trim(),
-      });
-      onClose();
-      router.push("/issues");
-      await switchWorkspace(ws.id);
-    } catch {
-      toast.error("Failed to create workspace");
-    } finally {
-      setCreating(false);
-    }
+    createWorkspace.mutate(
+      { name: name.trim(), slug: slug.trim() },
+      {
+        onSuccess: () => {
+          onClose();
+          router.push("/issues");
+        },
+        onError: () => {
+          toast.error("Failed to create workspace");
+        },
+      },
+    );
   };
 
   return (
@@ -125,9 +121,9 @@ export function CreateWorkspaceModal({ onClose }: { onClose: () => void }) {
             className="w-full"
             size="lg"
             onClick={handleCreate}
-            disabled={creating || !canSubmit}
+            disabled={createWorkspace.isPending || !canSubmit}
           >
-            {creating ? "Creating..." : "Create workspace"}
+            {createWorkspace.isPending ? "Creating..." : "Create workspace"}
           </Button>
         </div>
       </DialogContent>

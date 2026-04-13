@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { getApi } from "../api";
 import { useAuthStore } from "../auth";
 import { useWorkspaceStore } from "../workspace";
+import { workspaceKeys } from "../workspace/queries";
 import { createLogger } from "../logger";
 import { defaultStorage } from "./storage";
 import type { StorageAdapter } from "../types/storage";
@@ -21,6 +23,8 @@ export function AuthInitializer({
   onLogout?: () => void;
   storage?: StorageAdapter;
 }) {
+  const qc = useQueryClient();
+
   useEffect(() => {
     const token = storage.getItem("multica_token");
     if (!token) {
@@ -37,6 +41,8 @@ export function AuthInitializer({
       .then(([user, wsList]) => {
         onLogin?.();
         useAuthStore.setState({ user, isLoading: false });
+        // Seed React Query cache so components don't need a second fetch
+        qc.setQueryData(workspaceKeys.list(), wsList);
         useWorkspaceStore.getState().hydrateWorkspace(wsList, wsId);
       })
       .catch((err) => {

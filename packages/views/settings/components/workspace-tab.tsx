@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@multica/core/auth";
 import { useWorkspaceStore } from "@multica/core/workspace";
+import { useLeaveWorkspace, useDeleteWorkspace } from "@multica/core/workspace/mutations";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { memberListOptions } from "@multica/core/workspace/queries";
 import { api } from "@multica/core/api";
@@ -31,8 +32,8 @@ export function WorkspaceTab() {
   const wsId = useWorkspaceId();
   const { data: members = [] } = useQuery(memberListOptions(wsId));
   const updateWorkspace = useWorkspaceStore((s) => s.updateWorkspace);
-  const leaveWorkspace = useWorkspaceStore((s) => s.leaveWorkspace);
-  const deleteWorkspace = useWorkspaceStore((s) => s.deleteWorkspace);
+  const leaveWorkspace = useLeaveWorkspace();
+  const deleteWorkspace = useDeleteWorkspace();
 
   const [name, setName] = useState(workspace?.name ?? "");
   const [description, setDescription] = useState(workspace?.description ?? "");
@@ -83,7 +84,7 @@ export function WorkspaceTab() {
       onConfirm: async () => {
         setActionId("leave");
         try {
-          await leaveWorkspace(workspace.id);
+          await leaveWorkspace.mutateAsync(workspace.id);
         } catch (e) {
           toast.error(e instanceof Error ? e.message : "Failed to leave workspace");
         } finally {
@@ -102,7 +103,7 @@ export function WorkspaceTab() {
       onConfirm: async () => {
         setActionId("delete-workspace");
         try {
-          await deleteWorkspace(workspace.id);
+          await deleteWorkspace.mutateAsync(workspace.id);
         } catch (e) {
           toast.error(e instanceof Error ? e.message : "Failed to delete workspace");
         } finally {
