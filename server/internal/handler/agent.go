@@ -46,7 +46,9 @@ func agentToResponse(a db.Agent) AgentResponse {
 
 	var customEnv map[string]string
 	if a.CustomEnv != nil {
-		json.Unmarshal(a.CustomEnv, &customEnv)
+		if err := json.Unmarshal(a.CustomEnv, &customEnv); err != nil {
+			slog.Warn("failed to unmarshal agent custom_env", "agent_id", uuidToString(a.ID), "error", err)
+		}
 	}
 	if customEnv == nil {
 		customEnv = map[string]string{}

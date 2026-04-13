@@ -29,7 +29,10 @@ import { api } from "@multica/core/api";
 import { useFileUpload } from "@multica/core/hooks/use-file-upload";
 import { ActorAvatar } from "../../../common/actor-avatar";
 
+let nextEnvId = 0;
+
 interface EnvEntry {
+  id: number;
   key: string;
   value: string;
   visible: boolean;
@@ -37,6 +40,7 @@ interface EnvEntry {
 
 function envMapToEntries(env: Record<string, string>): EnvEntry[] {
   return Object.entries(env).map(([key, value]) => ({
+    id: nextEnvId++,
     key,
     value,
     visible: false,
@@ -137,7 +141,7 @@ export function SettingsTab({
   };
 
   const addEnvEntry = () => {
-    setEnvEntries([...envEntries, { key: "", value: "", visible: true }]);
+    setEnvEntries([...envEntries, { id: nextEnvId++, key: "", value: "", visible: true }]);
   };
 
   const removeEnvEntry = (index: number) => {
@@ -355,7 +359,7 @@ export function SettingsTab({
         {envEntries.length > 0 && (
           <div className="mt-2 space-y-2">
             {envEntries.map((entry, index) => (
-              <div key={index} className="flex items-center gap-2">
+              <div key={entry.id} className="flex items-center gap-2">
                 <Input
                   value={entry.key}
                   onChange={(e) => updateEnvEntry(index, "key", e.target.value)}
