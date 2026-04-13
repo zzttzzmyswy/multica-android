@@ -8,8 +8,7 @@ description: Install the Multica CLI and start the agent daemon.
 ### Homebrew (macOS/Linux)
 
 ```bash
-brew tap multica-ai/tap
-brew install multica
+brew install multica-ai/tap/multica
 ```
 
 ### Build from Source
@@ -49,10 +48,16 @@ rm /tmp/multica.tar.gz
 ### Update
 
 ```bash
+brew upgrade multica-ai/tap/multica
+```
+
+For install script or manual installs, use:
+
+```bash
 multica update
 ```
 
-This auto-detects your installation method (Homebrew or manual) and upgrades accordingly.
+`multica update` auto-detects your installation method and upgrades accordingly.
 
 ## Quick Start
 

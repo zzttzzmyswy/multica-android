@@ -29,6 +29,12 @@ This clones the repository, starts all services via Docker Compose, installs the
 Open http://localhost:3000, log in with any email + verification code **`888888`**.
 
 > **Prerequisites:** Docker and Docker Compose must be installed. The script checks for this and provides install links if missing.
+>
+> **CLI only?** If the self-host server is already running and you only need the CLI on a macOS/Linux machine, install it with Homebrew:
+>
+> ```bash
+> brew install multica-ai/tap/multica
+> ```
 
 ---
 
@@ -70,8 +76,7 @@ Each team member who wants to run AI agents locally needs to:
 ### a) Install the CLI and an AI agent
 
 ```bash
-brew tap multica-ai/tap
-brew install multica
+brew install multica-ai/tap/multica
 ```
 
 You also need at least one AI agent CLI installed:

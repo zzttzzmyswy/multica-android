@@ -34,6 +34,10 @@ multica setup self-host
 This clones the repo, starts all services, installs the CLI, and configures it for localhost. Then open http://localhost:3000 — log in with any email + code **`888888`**.
 
 <Callout>
+If the self-host server is already running and you only need the CLI on a macOS/Linux machine, install it with Homebrew: `brew install multica-ai/tap/multica`.
+</Callout>
+
+<Callout>
 For a step-by-step setup, see below.
 </Callout>
 
@@ -73,8 +77,7 @@ The daemon runs on your local machine (not inside Docker). It detects installed 
 ### a) Install the CLI and an AI agent
 
 ```bash
-brew tap multica-ai/tap
-brew install multica
+brew install multica-ai/tap/multica
 ```
 
 You also need at least one AI agent CLI:

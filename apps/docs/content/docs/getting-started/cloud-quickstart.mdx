@@ -19,10 +19,28 @@ Fetch https://github.com/multica-ai/multica/blob/main/CLI_INSTALL.md and follow 
 
 Or install manually:
 
+### macOS / Linux (Homebrew - recommended)
+
+```bash
+brew install multica-ai/tap/multica
+```
+
+### macOS / Linux (install script)
+
 ```bash
 # Install the CLI
 curl -fsSL https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.sh | bash
+```
 
+### Windows (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.ps1 | iex
+```
+
+Then configure, authenticate, and start the daemon:
+
+```bash
 # Configure, authenticate, and start the daemon
 multica setup
 ```

@@ -50,13 +50,23 @@ Multica manages the full agent lifecycle: from task assignment to execution moni
 
 ## Quick Install
 
+### macOS / Linux (Homebrew - recommended)
+
+```bash
+brew install multica-ai/tap/multica
+```
+
+Use `brew upgrade multica-ai/tap/multica` to keep the CLI current.
+
+### macOS / Linux (install script)
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.sh | bash
 ```
 
-Installs the Multica CLI on macOS and Linux. Works with Homebrew or downloads the binary directly.
+Use this if Homebrew is not available. The script installs the Multica CLI on macOS and Linux by using Homebrew when it is on `PATH`, otherwise it downloads the binary directly.
 
-**Windows (PowerShell):**
+### Windows (PowerShell)
 
 ```powershell
 irm https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.ps1 | iex

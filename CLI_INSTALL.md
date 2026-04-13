@@ -40,7 +40,7 @@ which brew
 If `brew` is found, install via Homebrew:
 
 ```bash
-brew tap multica-ai/tap && brew install multica
+brew install multica-ai/tap/multica
 ```
 
 Then verify:
@@ -50,6 +50,12 @@ multica version
 ```
 
 If the version prints successfully, skip to **Step 3**.
+
+To upgrade later, run:
+
+```bash
+brew upgrade multica-ai/tap/multica
+```
 
 ### Option B: Download from GitHub Releases (macOS/Linux, no Homebrew)
 
