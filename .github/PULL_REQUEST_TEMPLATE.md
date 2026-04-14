@@ -35,22 +35,14 @@ Closes #
 
 ## Checklist
 
-- [ ] I searched for [existing PRs](https://github.com/multica-ai/multica/pulls) to make sure this isn't a duplicate
-- [ ] My commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (`fix(scope):`, `feat(scope):`, etc.)
-- [ ] `make check` passes (typecheck, unit tests, Go tests, E2E)
-- [ ] Changes follow existing code patterns and conventions
-- [ ] No unrelated changes included
-
-## Manual Testing / Acceptance
-
-<!-- Verify that the change works correctly in a real environment. Check all that apply. -->
-
-- [ ] Tested the happy path end-to-end in a running app (`make dev`)
-- [ ] Tested edge cases (empty states, long text, error responses, missing data)
-- [ ] Verified no visual regressions on affected pages (layout, alignment, overflow)
-- [ ] Tested across relevant platforms (web / desktop) if the change touches shared code
-- [ ] Confirmed API changes work with both frontend and CLI consumers
-- [ ] Checked browser console and server logs for unexpected errors or warnings
+- [ ] I have included a thinking path that traces from project context to this change
+- [ ] I have specified the model used (with version and capability details)
+- [ ] I have run tests locally and they pass (`make check`)
+- [ ] I have added or updated tests where applicable
+- [ ] If this change affects the UI, I have included before/after screenshots
+- [ ] I have updated relevant documentation to reflect my changes
+- [ ] I have considered and documented any risks above
+- [ ] I will address all reviewer comments before requesting merge
 
 ## AI Disclosure
 
