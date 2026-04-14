@@ -280,12 +280,11 @@ export const zh: LandingDict = {
       {
         version: "0.1.33",
         date: "2026-04-14",
-        title: "Gemini CLI、Agent 环境变量与桌面自动更新",
+        title: "Gemini CLI 与 Agent 环境变量",
         changes: [],
         features: [
           "Google Gemini CLI 作为新的 Agent 运行时，支持实时日志流",
           "Agent 自定义环境变量（router/proxy 模式），新增专用设置标签页",
-          "桌面应用通过 GitHub Releases 自动更新",
           "Issue 右键菜单新增「设置父 Issue」和「添加子 Issue」",
           "CLI `--parent` 更新父 Issue，`--content-stdin` 管道输入评论内容",
           "子 Issue 自动继承父级项目",

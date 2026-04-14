@@ -280,12 +280,11 @@ export const en: LandingDict = {
       {
         version: "0.1.33",
         date: "2026-04-14",
-        title: "Gemini CLI, Agent Env Vars & Desktop Auto-Update",
+        title: "Gemini CLI & Agent Env Vars",
         changes: [],
         features: [
           "Google Gemini CLI as a new agent runtime with live log streaming",
           "Custom environment variables for agents (router/proxy mode) with dedicated settings tab",
-          "Desktop app auto-update via GitHub Releases",
           "\"Set parent issue\" and \"Add sub-issue\" actions in issue context menu",
           "CLI `--parent` flag for issue update and `--content-stdin` for piping comment content",
           "Sub-issues inherit parent project automatically",
