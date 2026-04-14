@@ -21,6 +21,7 @@ import {
 import { onInboxNew, onInboxInvalidate, onInboxIssueStatusChanged } from "../inbox/ws-updaters";
 import { inboxKeys } from "../inbox/queries";
 import { workspaceKeys, workspaceListOptions } from "../workspace/queries";
+import { chatKeys } from "../chat/queries";
 import type {
   MemberAddedPayload,
   WorkspaceDeletedPayload,
@@ -39,7 +40,13 @@ import type {
   IssueReactionRemovedPayload,
   SubscriberAddedPayload,
   SubscriberRemovedPayload,
+  TaskMessagePayload,
+  TaskCompletedPayload,
+  TaskFailedPayload,
+  ChatDonePayload,
 } from "../types";
+
+const chatWsLogger = createLogger("chat.ws");
 
 const logger = createLogger("realtime-sync");
 
@@ -133,6 +140,9 @@ export function useRealtimeSync(
       "issue_reaction:added", "issue_reaction:removed",
       "subscriber:added", "subscriber:removed",
       "daemon:heartbeat",
+      // Chat / task events are handled explicitly below; do not double-invalidate.
+      "chat:message", "chat:done", "chat:session_read",
+      "task:message", "task:completed", "task:failed",
     ]);
 
     const unsubAny = ws.onAny((msg) => {
@@ -283,6 +293,103 @@ export function useRealtimeSync(
       }
     });
 
+    // --- Chat / task events (global, survives ChatWindow unmount) ---
+    //
+    // Single source of truth: the Query cache. No Zustand writes here — the
+    // earlier mirror caused a race where the cache and store disagreed
+    // during the invalidate → refetch window and the UI rendered duplicates.
+    //
+    // task:message is written directly into the task-messages cache so the
+    // live timeline updates in place. chat:message / chat:done /
+    // task:completed / task:failed invalidate messages + pending-task so the
+    // DB remains authoritative.
+
+    const unsubTaskMessage = ws.on("task:message", (p) => {
+      const payload = p as TaskMessagePayload;
+      qc.setQueryData<TaskMessagePayload[]>(
+        ["task-messages", payload.task_id],
+        (old = []) => {
+          if (old.some((m) => m.seq === payload.seq)) return old;
+          return [...old, payload].sort((a, b) => a.seq - b.seq);
+        },
+      );
+      chatWsLogger.debug("task:message (global)", {
+        task_id: payload.task_id,
+        seq: payload.seq,
+        type: payload.type,
+      });
+    });
+
+    // Helpers reused by chat lifecycle handlers.
+    const invalidatePendingAggregate = () => {
+      const id = workspaceStore.getState().workspace?.id;
+      if (id) qc.invalidateQueries({ queryKey: chatKeys.pendingTasks(id) });
+    };
+    const invalidateSessionLists = () => {
+      const id = workspaceStore.getState().workspace?.id;
+      if (id) {
+        qc.invalidateQueries({ queryKey: chatKeys.sessions(id) });
+        qc.invalidateQueries({ queryKey: chatKeys.allSessions(id) });
+      }
+    };
+
+    const unsubChatMessage = ws.on("chat:message", (p) => {
+      const payload = p as { chat_session_id: string };
+      chatWsLogger.info("chat:message (global)", { chat_session_id: payload.chat_session_id });
+      qc.invalidateQueries({ queryKey: chatKeys.messages(payload.chat_session_id) });
+      qc.invalidateQueries({ queryKey: chatKeys.pendingTask(payload.chat_session_id) });
+      invalidatePendingAggregate();
+    });
+
+    const unsubChatDone = ws.on("chat:done", (p) => {
+      const payload = p as ChatDonePayload;
+      chatWsLogger.info("chat:done (global)", {
+        task_id: payload.task_id,
+        chat_session_id: payload.chat_session_id,
+      });
+      // Assistant message was just written and task flipped out of 'running'.
+      // Clear pending-task cache immediately so the live-timeline-vs-assistant
+      // race window collapses to zero — the subsequent refetch will confirm.
+      qc.setQueryData(chatKeys.pendingTask(payload.chat_session_id), {});
+      qc.invalidateQueries({ queryKey: chatKeys.messages(payload.chat_session_id) });
+      qc.invalidateQueries({ queryKey: chatKeys.pendingTask(payload.chat_session_id) });
+      invalidatePendingAggregate();
+      // Assistant message just landed → has_unread may have flipped to true.
+      invalidateSessionLists();
+    });
+
+    const unsubTaskCompleted = ws.on("task:completed", (p) => {
+      const payload = p as TaskCompletedPayload;
+      if (!payload.chat_session_id) return; // issue tasks handled elsewhere
+      chatWsLogger.info("task:completed (global, chat)", {
+        task_id: payload.task_id,
+        chat_session_id: payload.chat_session_id,
+      });
+      qc.setQueryData(chatKeys.pendingTask(payload.chat_session_id), {});
+      qc.invalidateQueries({ queryKey: chatKeys.messages(payload.chat_session_id) });
+      qc.invalidateQueries({ queryKey: chatKeys.pendingTask(payload.chat_session_id) });
+      invalidatePendingAggregate();
+    });
+
+    const unsubTaskFailed = ws.on("task:failed", (p) => {
+      const payload = p as TaskFailedPayload;
+      if (!payload.chat_session_id) return;
+      chatWsLogger.warn("task:failed (global, chat)", {
+        task_id: payload.task_id,
+        chat_session_id: payload.chat_session_id,
+      });
+      // No new message; just flip the pending signal.
+      qc.setQueryData(chatKeys.pendingTask(payload.chat_session_id), {});
+      qc.invalidateQueries({ queryKey: chatKeys.pendingTask(payload.chat_session_id) });
+      invalidatePendingAggregate();
+    });
+
+    const unsubChatSessionRead = ws.on("chat:session_read", (p) => {
+      const payload = p as { chat_session_id: string };
+      chatWsLogger.info("chat:session_read (global)", payload);
+      invalidateSessionLists();
+    });
+
     return () => {
       unsubAny();
       unsubIssueUpdated();
@@ -302,6 +409,12 @@ export function useRealtimeSync(
       unsubWsDeleted();
       unsubMemberRemoved();
       unsubMemberAdded();
+      unsubTaskMessage();
+      unsubChatMessage();
+      unsubChatDone();
+      unsubTaskCompleted();
+      unsubTaskFailed();
+      unsubChatSessionRead();
       timers.forEach(clearTimeout);
       timers.clear();
     };

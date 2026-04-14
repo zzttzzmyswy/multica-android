@@ -69,6 +69,10 @@ interface ContentEditorProps {
   onSubmit?: () => void;
   onBlur?: () => void;
   onUploadFile?: (file: File) => Promise<UploadResult | null>;
+  /** Show the floating formatting toolbar on text selection. Defaults true. */
+  showBubbleMenu?: boolean;
+  /** When true, bare Enter submits (chat-style). Mod-Enter always submits. */
+  submitOnEnter?: boolean;
 }
 
 interface ContentEditorRef {
@@ -96,6 +100,8 @@ const ContentEditor = forwardRef<ContentEditorRef, ContentEditorProps>(
       onSubmit,
       onBlur,
       onUploadFile,
+      showBubbleMenu = true,
+      submitOnEnter = false,
     },
     ref,
   ) {
@@ -125,6 +131,7 @@ const ContentEditor = forwardRef<ContentEditorRef, ContentEditorProps>(
         queryClient,
         onSubmitRef,
         onUploadFileRef,
+        submitOnEnter,
       }),
       onUpdate: ({ editor: ed }) => {
         if (!onUpdateRef.current) return;
@@ -240,7 +247,7 @@ const ContentEditor = forwardRef<ContentEditorRef, ContentEditorProps>(
         onMouseDown={handleContainerMouseDown}
       >
         <EditorContent className="flex-1 min-h-full" editor={editor} />
-        {editable && <EditorBubbleMenu editor={editor} />}
+        {editable && showBubbleMenu && <EditorBubbleMenu editor={editor} />}
         <LinkHoverCard {...hover} />
       </div>
     );

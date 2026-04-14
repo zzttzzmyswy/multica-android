@@ -307,6 +307,14 @@ func (s *TaskService) CompleteTask(ctx context.Context, taskID pgtype.UUID, resu
 				TaskID:        task.ID,
 			}); err != nil {
 				slog.Error("failed to save assistant chat message", "task_id", util.UUIDToString(task.ID), "error", err)
+			} else {
+				// Event-driven unread: stamp unread_since on the first unread
+				// assistant message. No-op if the session already has unread.
+				// If the user is actively viewing the session, the frontend's
+				// auto-mark-read effect will clear this within a tick.
+				if err := s.Queries.SetUnreadSinceIfNull(ctx, task.ChatSessionID); err != nil {
+					slog.Warn("failed to set unread_since", "chat_session_id", util.UUIDToString(task.ChatSessionID), "error", err)
+				}
 			}
 		}
 		s.Queries.UpdateChatSessionSession(ctx, db.UpdateChatSessionSessionParams{

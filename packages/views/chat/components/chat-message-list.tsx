@@ -11,7 +11,7 @@ import {
 import { Loader2, ChevronRight, ChevronDown, Brain, AlertCircle } from "lucide-react";
 import { useScrollFade } from "@multica/ui/hooks/use-scroll-fade";
 import { useAutoScroll } from "@multica/ui/hooks/use-auto-scroll";
-import { api } from "@multica/core/api";
+import { taskMessagesOptions } from "@multica/core/chat/queries";
 import { Markdown } from "@multica/views/common/markdown";
 import type { ChatMessage, TaskMessagePayload } from "@multica/core/types";
 import type { ChatTimelineItem } from "@multica/core/chat";
@@ -20,20 +20,37 @@ import type { ChatTimelineItem } from "@multica/core/chat";
 
 interface ChatMessageListProps {
   messages: ChatMessage[];
-  timelineItems: ChatTimelineItem[];
+  /** When set, streams the live timeline for this task from task-messages cache. */
+  pendingTaskId: string | null;
   isWaiting: boolean;
 }
 
 export function ChatMessageList({
   messages,
-  timelineItems,
+  pendingTaskId,
   isWaiting,
 }: ChatMessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fadeStyle = useScrollFade(scrollRef);
   useAutoScroll(scrollRef);
 
-  const hasTimeline = timelineItems.length > 0;
+  // Once the assistant message for this pending task has landed in the
+  // messages list, AssistantMessage owns its rendering — suppress the live
+  // timeline to avoid rendering the same content in two places during the
+  // invalidate → refetch window.
+  const pendingAlreadyPersisted = !!pendingTaskId && messages.some(
+    (m) => m.role === "assistant" && m.task_id === pendingTaskId,
+  );
+
+  // Live timeline for the in-flight task. useRealtimeSync keeps this cache
+  // current via setQueryData on task:message events.
+  const showLiveTimeline = !!pendingTaskId && !pendingAlreadyPersisted;
+  const { data: liveTaskMessages } = useQuery({
+    ...taskMessagesOptions(pendingTaskId ?? ""),
+    enabled: showLiveTimeline,
+  });
+  const liveTimeline: ChatTimelineItem[] = (liveTaskMessages ?? []).map(toTimelineItem);
+  const hasLive = showLiveTimeline && liveTimeline.length > 0;
 
   return (
     <div
@@ -44,17 +61,27 @@ export function ChatMessageList({
       {messages.map((msg) => (
         <MessageBubble key={msg.id} message={msg} />
       ))}
-      {/* Live streaming timeline */}
-      {hasTimeline && (
+      {hasLive && (
         <div className="w-full space-y-1.5">
-          <TimelineView items={timelineItems} />
+          <TimelineView items={liveTimeline} />
         </div>
       )}
-      {isWaiting && !hasTimeline && (
+      {isWaiting && !hasLive && !pendingAlreadyPersisted && (
         <Loader2 className="size-4 animate-spin text-muted-foreground" />
       )}
     </div>
   );
+}
+
+function toTimelineItem(m: TaskMessagePayload): ChatTimelineItem {
+  return {
+    seq: m.seq,
+    type: m.type,
+    tool: m.tool,
+    content: m.content,
+    input: m.input,
+    output: m.output,
+  };
 }
 
 // ─── Message bubbles ─────────────────────────────────────────────────────
@@ -63,8 +90,14 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   if (message.role === "user") {
     return (
       <div className="flex justify-end">
-        <div className="rounded-2xl bg-muted px-3.5 py-2 text-sm max-w-[80%] whitespace-pre-wrap break-words">
-          {message.content}
+        <div className="rounded-2xl bg-muted px-3.5 py-2 text-sm max-w-[80%] break-words">
+          {/* User messages are authored as markdown in ContentEditor, so
+           * render them through the same pipeline as assistant replies.
+           * Neutralise prose's leading/trailing margin so single-line
+           * bubbles stay as compact as the plain-text version used to. */}
+          <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+            <Markdown>{message.content}</Markdown>
+          </div>
         </div>
       </div>
     );
@@ -80,24 +113,15 @@ function AssistantMessage({
 }) {
   const taskId = message.task_id;
 
-  // Always fetch task messages for assistant messages with a task_id
+  // Use the shared taskMessagesOptions so this cache entry is the same one
+  // seeded by useRealtimeSync during task execution — zero refetch when the
+  // task finishes, since WS already populated it.
   const { data: taskMessages } = useQuery({
-    queryKey: ["task-messages", taskId],
-    queryFn: () => api.listTaskMessages(taskId!),
+    ...taskMessagesOptions(taskId ?? ""),
     enabled: !!taskId,
-    staleTime: Infinity,
   });
 
-  const timeline: ChatTimelineItem[] = (taskMessages ?? []).map(
-    (m: TaskMessagePayload) => ({
-      seq: m.seq,
-      type: m.type,
-      tool: m.tool,
-      content: m.content,
-      input: m.input,
-      output: m.output,
-    }),
-  );
+  const timeline: ChatTimelineItem[] = (taskMessages ?? []).map(toTimelineItem);
 
   return (
     <div className="w-full space-y-1.5">

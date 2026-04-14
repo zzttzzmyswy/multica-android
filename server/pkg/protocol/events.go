@@ -59,8 +59,9 @@ const (
 	EventSkillDeleted = "skill:deleted"
 
 	// Chat events
-	EventChatMessage = "chat:message"
-	EventChatDone    = "chat:done"
+	EventChatMessage     = "chat:message"
+	EventChatDone        = "chat:done"
+	EventChatSessionRead = "chat:session_read"
 
 	// Project events
 	EventProjectCreated = "project:created"
