@@ -29,7 +29,7 @@ import {
 } from "@multica/core/chat/queries";
 import { useCreateChatSession, useMarkChatSessionRead } from "@multica/core/chat/mutations";
 import { useChatStore } from "@multica/core/chat";
-import { ChatMessageList } from "./chat-message-list";
+import { ChatMessageList, ChatMessageSkeleton } from "./chat-message-list";
 import { ChatInput } from "./chat-input";
 import { ChatResizeHandles } from "./chat-resize-handles";
 import { useChatResize } from "./use-chat-resize";
@@ -52,11 +52,15 @@ export function ChatWindow() {
   const { data: members = [] } = useQuery(memberListOptions(wsId));
   const { data: sessions = [] } = useQuery(chatSessionsOptions(wsId));
   const { data: allSessions = [] } = useQuery(allChatSessionsOptions(wsId));
-  const { data: rawMessages } = useQuery(
+  const { data: rawMessages, isLoading: messagesLoading } = useQuery(
     chatMessagesOptions(activeSessionId ?? ""),
   );
   // When no active session, always show empty — don't use stale cache
   const messages = activeSessionId ? rawMessages ?? [] : [];
+  // Skeleton only shows for an un-cached session fetch. Cached switches
+  // return data synchronously — no flash. `enabled: false` (new chat)
+  // keeps isLoading false so the starter prompts aren't hidden.
+  const showSkeleton = !!activeSessionId && messagesLoading;
 
   // Server-authoritative pending task. Survives refresh / reopen / session
   // switch because it's keyed on sessionId in the Query cache; WS events
@@ -374,8 +378,10 @@ export function ChatWindow() {
         </div>
       </div>
 
-      {/* Messages or Empty State */}
-      {hasMessages ? (
+      {/* Messages / skeleton / empty state */}
+      {showSkeleton ? (
+        <ChatMessageSkeleton />
+      ) : hasMessages ? (
         <ChatMessageList
           messages={messages}
           pendingTaskId={pendingTaskId}
