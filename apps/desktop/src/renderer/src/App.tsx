@@ -120,15 +120,9 @@ function AppContent() {
   return <DesktopShell />;
 }
 
-const remoteProxy = Boolean(import.meta.env.VITE_REMOTE_API);
-// Backend the daemon should connect to. In remote-proxy mode the renderer
-// talks through a local Vite proxy, but the daemon needs the real upstream
-// URL — which is what VITE_REMOTE_API holds. Fall back to VITE_API_URL
-// (direct mode) and finally localhost:8080 (local dev default).
+// Backend the daemon should connect to — same URL the renderer talks to.
 const DAEMON_TARGET_API_URL =
-  import.meta.env.VITE_REMOTE_API ||
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:8080";
+  import.meta.env.VITE_API_URL || "http://localhost:8080";
 
 // On logout, clear any cached PAT and stop the daemon so that a subsequent
 // login as a different user never inherits the previous user's credentials.
@@ -149,8 +143,8 @@ export default function App() {
   return (
     <ThemeProvider>
       <CoreProvider
-        apiBaseUrl={remoteProxy ? "" : (import.meta.env.VITE_API_URL || "http://localhost:8080")}
-        wsUrl={remoteProxy ? "ws://localhost:5173/ws" : (import.meta.env.VITE_WS_URL || "ws://localhost:8080/ws")}
+        apiBaseUrl={import.meta.env.VITE_API_URL || "http://localhost:8080"}
+        wsUrl={import.meta.env.VITE_WS_URL || "ws://localhost:8080/ws"}
         onLogout={handleDaemonLogout}
       >
         <AppContent />
