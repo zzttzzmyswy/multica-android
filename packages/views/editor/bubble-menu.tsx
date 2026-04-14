@@ -25,11 +25,10 @@ import {
   TooltipProvider,
 } from "@multica/ui/components/ui/tooltip";
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "@multica/ui/components/ui/dropdown-menu";
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@multica/ui/components/ui/popover";
 import { Input } from "@multica/ui/components/ui/input";
 import { Button } from "@multica/ui/components/ui/button";
 import {
@@ -241,6 +240,7 @@ function LinkEditBar({
 // ---------------------------------------------------------------------------
 
 function HeadingDropdown({ editor, onOpenChange }: { editor: Editor; onOpenChange: (open: boolean) => void }) {
+  const [open, setOpen] = useState(false);
   const activeLevel = [1, 2, 3].find((l) => editor.isActive("heading", { level: l }));
   const label = activeLevel ? `H${activeLevel}` : "Text";
   const items = [
@@ -250,25 +250,45 @@ function HeadingDropdown({ editor, onOpenChange }: { editor: Editor; onOpenChang
     { label: "Heading 3", icon: Heading3, active: activeLevel === 3, action: () => editor.chain().focus().toggleHeading({ level: 3 }).run() },
   ];
 
+  const handleOpenChange = useCallback((next: boolean) => {
+    setOpen(next);
+    onOpenChange(next);
+  }, [onOpenChange]);
+
   return (
-    <DropdownMenu onOpenChange={onOpenChange}>
-      <DropdownMenuTrigger
+    <Popover modal={false} open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger
         className="inline-flex h-7 items-center gap-0.5 rounded-md px-1.5 text-xs font-medium hover:bg-muted"
-        onClick={(e) => e.preventDefault()}
+        onMouseDown={(e) => e.preventDefault()}
       >
         {label}
         <ChevronDown className="size-3" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side="bottom" sideOffset={8} align="start" className="w-auto">
+      </PopoverTrigger>
+      <PopoverContent
+        side="bottom"
+        sideOffset={8}
+        align="start"
+        className="w-auto min-w-32 p-1"
+        initialFocus={false}
+        finalFocus={false}
+      >
         {items.map((item) => (
-          <DropdownMenuItem key={item.label} onClick={item.action} className="gap-2 text-xs">
+          <button
+            key={item.label}
+            className="flex w-full cursor-default items-center gap-2 rounded-md px-1.5 py-1 text-xs outline-hidden select-none hover:bg-accent hover:text-accent-foreground"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              item.action();
+              handleOpenChange(false);
+            }}
+          >
             <item.icon className="size-3.5" />
             {item.label}
             {item.active && <Check className="ml-auto size-3.5" />}
-          </DropdownMenuItem>
+          </button>
         ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -277,31 +297,58 @@ function HeadingDropdown({ editor, onOpenChange }: { editor: Editor; onOpenChang
 // ---------------------------------------------------------------------------
 
 function ListDropdown({ editor, onOpenChange }: { editor: Editor; onOpenChange: (open: boolean) => void }) {
+  const [open, setOpen] = useState(false);
   const isBullet = editor.isActive("bulletList");
   const isOrdered = editor.isActive("orderedList");
 
+  const handleOpenChange = useCallback((next: boolean) => {
+    setOpen(next);
+    onOpenChange(next);
+  }, [onOpenChange]);
+
   return (
-    <DropdownMenu onOpenChange={onOpenChange}>
+    <Popover modal={false} open={open} onOpenChange={handleOpenChange}>
       <Tooltip>
         <TooltipTrigger render={
-          <DropdownMenuTrigger className="inline-flex h-7 items-center gap-0.5 rounded-md px-1.5 text-xs font-medium hover:bg-muted aria-pressed:bg-muted" aria-pressed={isBullet || isOrdered} onClick={(e) => e.preventDefault()} />
+          <PopoverTrigger className="inline-flex h-7 items-center gap-0.5 rounded-md px-1.5 text-xs font-medium hover:bg-muted aria-pressed:bg-muted" aria-pressed={isBullet || isOrdered} onMouseDown={(e) => e.preventDefault()} />
         }>
           <List className="size-3.5" />
           <ChevronDown className="size-3" />
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={8}>List</TooltipContent>
       </Tooltip>
-      <DropdownMenuContent side="bottom" sideOffset={8} align="start" className="w-auto">
-        <DropdownMenuItem onClick={() => editor.chain().focus().toggleBulletList().run()} className="gap-2 text-xs">
+      <PopoverContent
+        side="bottom"
+        sideOffset={8}
+        align="start"
+        className="w-auto min-w-32 p-1"
+        initialFocus={false}
+        finalFocus={false}
+      >
+        <button
+          className="flex w-full cursor-default items-center gap-2 rounded-md px-1.5 py-1 text-xs outline-hidden select-none hover:bg-accent hover:text-accent-foreground"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            editor.chain().focus().toggleBulletList().run();
+            handleOpenChange(false);
+          }}
+        >
           <List className="size-3.5" /> Bullet List
           {isBullet && <Check className="ml-auto size-3.5" />}
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => editor.chain().focus().toggleOrderedList().run()} className="gap-2 text-xs">
+        </button>
+        <button
+          className="flex w-full cursor-default items-center gap-2 rounded-md px-1.5 py-1 text-xs outline-hidden select-none hover:bg-accent hover:text-accent-foreground"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            editor.chain().focus().toggleOrderedList().run();
+            handleOpenChange(false);
+          }}
+        >
           <ListOrdered className="size-3.5" /> Ordered List
           {isOrdered && <Check className="ml-auto size-3.5" />}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </button>
+      </PopoverContent>
+    </Popover>
   );
 }
 
