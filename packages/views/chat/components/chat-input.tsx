@@ -30,7 +30,15 @@ export function ChatInput({
 }: ChatInputProps) {
   const editorRef = useRef<ContentEditorRef>(null);
   const activeSessionId = useChatStore((s) => s.activeSessionId);
-  const draftKey = activeSessionId ?? DRAFT_NEW_SESSION;
+  const selectedAgentId = useChatStore((s) => s.selectedAgentId);
+  // Scope the new-chat draft by agent:
+  //   1. Switching agents while composing a brand-new chat gives each
+  //      agent its own draft (no cross-agent leakage).
+  //   2. Tiptap's Placeholder extension is only applied at mount; this
+  //      key changes on agent switch so the editor remounts and the
+  //      `Tell {agent} what to do…` placeholder refreshes.
+  const draftKey =
+    activeSessionId ?? `${DRAFT_NEW_SESSION}:${selectedAgentId ?? ""}`;
   // Select a primitive — empty-string fallback keeps referential stability.
   const inputDraft = useChatStore((s) => s.inputDrafts[draftKey] ?? "");
   const setInputDraft = useChatStore((s) => s.setInputDraft);
@@ -65,8 +73,8 @@ export function ChatInput({
       : "Tell me what to do…";
 
   return (
-    <div className="p-2 pt-0">
-      <div className="relative flex min-h-16 max-h-40 flex-col rounded-lg bg-card pb-9 border-1 border-border transition-colors focus-within:border-brand">
+    <div className="px-5 pb-3 pt-0">
+      <div className="relative mx-auto flex min-h-16 max-h-40 w-full max-w-4xl flex-col rounded-lg bg-card pb-9 border-1 border-border transition-colors focus-within:border-brand">
         <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2">
           <ContentEditor
             // Remount the editor when the active session changes so its

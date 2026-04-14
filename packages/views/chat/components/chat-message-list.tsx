@@ -53,22 +53,51 @@ export function ChatMessageList({
   const hasLive = showLiveTimeline && liveTimeline.length > 0;
 
   return (
-    <div
-      ref={scrollRef}
-      style={fadeStyle}
-      className="flex-1 overflow-y-auto px-4 py-3 space-y-4"
-    >
-      {messages.map((msg) => (
-        <MessageBubble key={msg.id} message={msg} />
-      ))}
-      {hasLive && (
-        <div className="w-full space-y-1.5">
-          <TimelineView items={liveTimeline} />
+    <div ref={scrollRef} style={fadeStyle} className="flex-1 overflow-y-auto">
+      {/* Inner container matches issue / project detail width convention
+       *  (max-w-4xl + mx-auto) so switching between chat and content
+       *  views doesn't jolt the reading width. px-5 is a touch tighter
+       *  than issue-detail's px-8 because the chat window can be narrow. */}
+      <div className="mx-auto w-full max-w-4xl px-5 py-4 space-y-4">
+        {messages.map((msg) => (
+          <MessageBubble key={msg.id} message={msg} />
+        ))}
+        {hasLive && (
+          <div className="w-full space-y-1.5">
+            <TimelineView items={liveTimeline} />
+          </div>
+        )}
+        {isWaiting && !hasLive && !pendingAlreadyPersisted && (
+          <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Placeholder shown while `chat_message` for a session is being fetched
+ * (initial refresh, or switching to an un-cached session). Shape roughly
+ * mirrors an assistant → user → assistant exchange so the window doesn't
+ * shift under the user when real messages arrive.
+ */
+export function ChatMessageSkeleton() {
+  return (
+    <div className="flex-1 overflow-hidden">
+      <div className="mx-auto w-full max-w-4xl px-5 py-4 space-y-5">
+        <div className="space-y-2">
+          <div className="h-3.5 w-3/4 rounded bg-muted animate-pulse" />
+          <div className="h-3.5 w-1/2 rounded bg-muted animate-pulse" />
         </div>
-      )}
-      {isWaiting && !hasLive && !pendingAlreadyPersisted && (
-        <Loader2 className="size-4 animate-spin text-muted-foreground" />
-      )}
+        <div className="flex justify-end">
+          <div className="h-8 w-48 rounded-2xl bg-muted animate-pulse" />
+        </div>
+        <div className="space-y-2">
+          <div className="h-3.5 w-2/3 rounded bg-muted animate-pulse" />
+          <div className="h-3.5 w-5/6 rounded bg-muted animate-pulse" />
+          <div className="h-3.5 w-1/3 rounded bg-muted animate-pulse" />
+        </div>
+      </div>
     </div>
   );
 }
