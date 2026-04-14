@@ -41,6 +41,8 @@ import type {
   Attachment,
   ChatSession,
   ChatMessage,
+  ChatPendingTask,
+  PendingChatTasksResponse,
   SendChatMessageResponse,
   Project,
   CreateProjectRequest,
@@ -701,6 +703,18 @@ export class ApiClient {
       method: "POST",
       body: JSON.stringify({ content }),
     });
+  }
+
+  async getPendingChatTask(sessionId: string): Promise<ChatPendingTask> {
+    return this.fetch(`/api/chat/sessions/${sessionId}/pending-task`);
+  }
+
+  async listPendingChatTasks(): Promise<PendingChatTasksResponse> {
+    return this.fetch(`/api/chat/pending-tasks`);
+  }
+
+  async markChatSessionRead(sessionId: string): Promise<void> {
+    await this.fetch(`/api/chat/sessions/${sessionId}/read`, { method: "POST" });
   }
 
   async cancelTaskById(taskId: string): Promise<void> {

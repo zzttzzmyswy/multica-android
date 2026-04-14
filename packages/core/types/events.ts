@@ -48,6 +48,7 @@ export type WSEventType =
   | "issue_reaction:removed"
   | "chat:message"
   | "chat:done"
+  | "chat:session_read"
   | "project:created"
   | "project:updated"
   | "project:deleted"
@@ -170,6 +171,7 @@ export interface ActivityCreatedPayload {
 export interface TaskMessagePayload {
   task_id: string;
   issue_id: string;
+  chat_session_id?: string;
   seq: number;
   type: "text" | "thinking" | "tool_use" | "tool_result" | "error";
   tool?: string;
@@ -182,6 +184,7 @@ export interface TaskCompletedPayload {
   task_id: string;
   agent_id: string;
   issue_id: string;
+  chat_session_id?: string;
   status: string;
 }
 
@@ -189,6 +192,7 @@ export interface TaskFailedPayload {
   task_id: string;
   agent_id: string;
   issue_id: string;
+  chat_session_id?: string;
   status: string;
 }
 
@@ -196,6 +200,7 @@ export interface TaskCancelledPayload {
   task_id: string;
   agent_id: string;
   issue_id: string;
+  chat_session_id?: string;
   status: string;
 }
 
@@ -237,6 +242,10 @@ export interface ChatDonePayload {
   chat_session_id: string;
   task_id: string;
   content?: string;
+}
+
+export interface ChatSessionReadPayload {
+  chat_session_id: string;
 }
 
 export interface ProjectCreatedPayload {

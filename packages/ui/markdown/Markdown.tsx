@@ -115,7 +115,11 @@ function createComponents(
           const id = mentionMatch[2]
 
           if (renderMention) {
-            return <>{renderMention({ type, id })}</>
+            // Let the custom renderer opt out for types it doesn't handle
+            // by returning null/undefined — we then fall through to the
+            // default styled span so nothing ever disappears silently.
+            const rendered = renderMention({ type, id })
+            if (rendered) return <>{rendered}</>
           }
 
           // Fallback: render as a simple styled span

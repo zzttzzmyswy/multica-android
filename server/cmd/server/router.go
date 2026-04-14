@@ -321,8 +321,11 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 					r.Delete("/", h.ArchiveChatSession)
 					r.Post("/messages", h.SendChatMessage)
 					r.Get("/messages", h.ListChatMessages)
+					r.Get("/pending-task", h.GetPendingChatTask)
+					r.Post("/read", h.MarkChatSessionRead)
 				})
 			})
+			r.Get("/api/chat/pending-tasks", h.ListPendingChatTasks)
 
 			// Inbox
 			r.Route("/api/inbox", func(r chi.Router) {
