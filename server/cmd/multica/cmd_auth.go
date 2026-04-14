@@ -98,15 +98,28 @@ func runAuthLoginBrowser(cmd *cobra.Command) error {
 	serverURL := resolveServerURL(cmd)
 	appURL := resolveAppURL(cmd)
 
+	// Determine the callback host from the configured app URL.
+	// For self-hosted setups where the browser is on a different machine,
+	// we need to use the server's reachable hostname instead of localhost.
+	callbackHost := "localhost"
+	bindAddr := "127.0.0.1"
+	if parsed, err := url.Parse(appURL); err == nil {
+		h := parsed.Hostname()
+		if h != "" && h != "localhost" && h != "127.0.0.1" {
+			callbackHost = h
+			bindAddr = "0.0.0.0"
+		}
+	}
+
 	// Start a local HTTP server on a random port to receive the callback.
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := net.Listen("tcp", bindAddr+":0")
 	if err != nil {
 		return fmt.Errorf("failed to start local server: %w", err)
 	}
 	defer listener.Close()
 
 	port := listener.Addr().(*net.TCPAddr).Port
-	callbackURL := fmt.Sprintf("http://localhost:%d/callback", port)
+	callbackURL := fmt.Sprintf("http://%s:%d/callback", callbackHost, port)
 
 	// Generate a random state parameter for CSRF protection.
 	stateBytes := make([]byte, 16)

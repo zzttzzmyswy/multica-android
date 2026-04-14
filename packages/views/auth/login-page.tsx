@@ -68,14 +68,22 @@ function redirectToCliCallback(url: string, token: string, state: string) {
   window.location.href = `${url}${separator}token=${encodeURIComponent(token)}&state=${encodeURIComponent(state)}`;
 }
 
-/** Validate that a CLI callback URL points to localhost over HTTP. */
+/**
+ * Validate that a CLI callback URL points to a safe host over HTTP.
+ * Allows localhost and private/LAN IPs (RFC 1918) to support self-hosted setups
+ * on local VMs while blocking arbitrary public hosts.
+ */
 export function validateCliCallback(cliCallback: string): boolean {
   try {
     const cbUrl = new URL(cliCallback);
     if (cbUrl.protocol !== "http:") return false;
-    if (cbUrl.hostname !== "localhost" && cbUrl.hostname !== "127.0.0.1")
-      return false;
-    return true;
+    const h = cbUrl.hostname;
+    if (h === "localhost" || h === "127.0.0.1") return true;
+    // Allow RFC 1918 private IPs: 10.x.x.x, 172.16-31.x.x, 192.168.x.x
+    if (/^10\./.test(h)) return true;
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true;
+    if (/^192\.168\./.test(h)) return true;
+    return false;
   } catch {
     return false;
   }
