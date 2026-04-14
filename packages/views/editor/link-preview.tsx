@@ -156,9 +156,10 @@ function EditorLinkPreview({ editor }: { editor: Editor }) {
 
   const close = useCallback(() => setVisible(false), []);
 
+  // Avoid accessing editor.view during initial render — it may not be mounted yet.
   const virtualRef = useRef({
     getBoundingClientRect: () => new DOMRect(),
-    contextElement: editor.view?.dom,
+    contextElement: undefined as Element | undefined,
   });
 
   const { refs, floatingStyles, isPositioned, update } = useFloating({
