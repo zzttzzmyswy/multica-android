@@ -252,7 +252,10 @@ function HeadingDropdown({ editor, onOpenChange }: { editor: Editor; onOpenChang
 
   return (
     <DropdownMenu onOpenChange={onOpenChange}>
-      <DropdownMenuTrigger className="inline-flex h-7 items-center gap-0.5 rounded-md px-1.5 text-xs font-medium hover:bg-muted" onMouseDown={(e) => e.preventDefault()}>
+      <DropdownMenuTrigger
+        className="inline-flex h-7 items-center gap-0.5 rounded-md px-1.5 text-xs font-medium hover:bg-muted"
+        onClick={(e) => e.preventDefault()}
+      >
         {label}
         <ChevronDown className="size-3" />
       </DropdownMenuTrigger>
@@ -281,7 +284,7 @@ function ListDropdown({ editor, onOpenChange }: { editor: Editor; onOpenChange: 
     <DropdownMenu onOpenChange={onOpenChange}>
       <Tooltip>
         <TooltipTrigger render={
-          <DropdownMenuTrigger className="inline-flex h-7 items-center gap-0.5 rounded-md px-1.5 text-xs font-medium hover:bg-muted aria-pressed:bg-muted" aria-pressed={isBullet || isOrdered} onMouseDown={(e) => e.preventDefault()} />
+          <DropdownMenuTrigger className="inline-flex h-7 items-center gap-0.5 rounded-md px-1.5 text-xs font-medium hover:bg-muted aria-pressed:bg-muted" aria-pressed={isBullet || isOrdered} onClick={(e) => e.preventDefault()} />
         }>
           <List className="size-3.5" />
           <ChevronDown className="size-3" />
