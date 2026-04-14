@@ -263,7 +263,7 @@ func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Route
 			// Agents
 			r.Route("/api/agents", func(r chi.Router) {
 				r.Get("/", h.ListAgents)
-				r.With(middleware.RequireWorkspaceRole(queries, "owner", "admin")).Post("/", h.CreateAgent)
+				r.Post("/", h.CreateAgent)
 				r.Route("/{id}", func(r chi.Router) {
 					r.Get("/", h.GetAgent)
 					r.Put("/", h.UpdateAgent)
