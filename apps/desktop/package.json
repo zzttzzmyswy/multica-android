@@ -6,7 +6,6 @@
   "scripts": {
     "bundle-cli": "node scripts/bundle-cli.mjs",
     "dev": "pnpm run bundle-cli && electron-vite dev",
-    "dev:remote": "pnpm run bundle-cli && electron-vite dev --mode remote",
     "build": "pnpm run bundle-cli && electron-vite build",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
