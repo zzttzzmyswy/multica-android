@@ -156,8 +156,13 @@ func (d *Daemon) loadWatchedWorkspaces(ctx context.Context) error {
 		return fmt.Errorf("load CLI config: %w", err)
 	}
 
+	// It's fine to start with an empty watched list — workspaceSyncLoop runs
+	// immediately on startup and will populate the list from the server. The
+	// daemon also accepts HTTP POST /watch for explicit adds from clients
+	// like the Desktop app.
 	if len(cfg.WatchedWorkspaces) == 0 {
-		return fmt.Errorf("no watched workspaces configured: run 'multica workspace watch <id>' to add one")
+		d.logger.Info("no watched workspaces in config; workspaceSyncLoop will populate from API")
+		return nil
 	}
 
 	var registered int
@@ -263,6 +268,7 @@ func (d *Daemon) registerRuntimesForWorkspace(ctx context.Context, workspaceID s
 		"daemon_id":    d.cfg.DaemonID,
 		"device_name":  d.cfg.DeviceName,
 		"cli_version":  d.cfg.CLIVersion,
+		"launched_by":  d.cfg.LaunchedBy,
 		"runtimes":     runtimes,
 	}
 
@@ -350,6 +356,9 @@ func (d *Daemon) syncWorkspacesFromAPI(ctx context.Context) {
 
 	var added int
 	for _, ws := range workspaces {
+		if cfg.IsUnwatched(ws.ID) {
+			continue // user explicitly opted out
+		}
 		if cfg.AddWatchedWorkspace(ws.ID, ws.Name) {
 			added++
 			d.logger.Info("workspace sync: discovered new workspace", "workspace_id", ws.ID, "name", ws.Name)
@@ -562,6 +571,19 @@ func (d *Daemon) handlePing(ctx context.Context, rt Runtime, pingID string) {
 
 // handleUpdate performs the CLI update when triggered by the server via heartbeat.
 func (d *Daemon) handleUpdate(ctx context.Context, runtimeID string, update *PendingUpdate) {
+	// Desktop-managed daemons share their CLI binary with the Electron app,
+	// which is responsible for shipping and replacing it. Letting the daemon
+	// self-update would just get overwritten on the next Desktop launch and
+	// could brick the embedded binary mid-update. Refuse cleanly.
+	if d.cfg.LaunchedBy == "desktop" {
+		d.logger.Info("refusing CLI self-update: daemon is managed by Desktop", "runtime_id", runtimeID, "update_id", update.ID)
+		d.client.ReportUpdateResult(ctx, runtimeID, update.ID, map[string]any{
+			"status": "failed",
+			"error":  "CLI is managed by Multica Desktop — update the Desktop app to upgrade the CLI",
+		})
+		return
+	}
+
 	// Prevent concurrent update attempts.
 	if !d.updating.CompareAndSwap(false, true) {
 		d.logger.Warn("update already in progress, ignoring", "runtime_id", runtimeID, "update_id", update.ID)

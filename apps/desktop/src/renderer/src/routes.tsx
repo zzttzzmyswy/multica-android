@@ -13,9 +13,14 @@ import { ProjectsPage } from "@multica/views/projects/components";
 import { MyIssuesPage } from "@multica/views/my-issues";
 import { RuntimesPage } from "@multica/views/runtimes";
 import { SkillsPage } from "@multica/views/skills";
+import { DaemonRuntimeCard } from "./components/daemon-runtime-card";
 import { AgentsPage } from "@multica/views/agents";
 import { InboxPage } from "@multica/views/inbox";
 import { SettingsPage } from "@multica/views/settings";
+import { OnboardingWizard } from "@multica/views/onboarding";
+import { useNavigation } from "@multica/views/navigation";
+import { Server } from "lucide-react";
+import { DaemonSettingsTab } from "./components/daemon-settings-tab";
 
 /**
  * Sets document.title from the deepest matched route's handle.title.
@@ -47,6 +52,11 @@ function PageShell() {
   );
 }
 
+function OnboardingRoute() {
+  const nav = useNavigation();
+  return <OnboardingWizard onComplete={() => nav.push("/issues")} />;
+}
+
 /** Route definitions shared by all tabs (no layout wrapper). */
 export const appRoutes: RouteObject[] = [
   {
@@ -76,15 +86,31 @@ export const appRoutes: RouteObject[] = [
       },
       {
         path: "runtimes",
-        element: <RuntimesPage />,
+        element: <RuntimesPage topSlot={<DaemonRuntimeCard />} />,
         handle: { title: "Runtimes" },
       },
       { path: "skills", element: <SkillsPage />, handle: { title: "Skills" } },
       { path: "agents", element: <AgentsPage />, handle: { title: "Agents" } },
       { path: "inbox", element: <InboxPage />, handle: { title: "Inbox" } },
       {
+        path: "onboarding",
+        element: <OnboardingRoute />,
+        handle: { title: "Get Started" },
+      },
+      {
         path: "settings",
-        element: <SettingsPage />,
+        element: (
+          <SettingsPage
+            extraAccountTabs={[
+              {
+                value: "daemon",
+                label: "Daemon",
+                icon: Server,
+                content: <DaemonSettingsTab />,
+              },
+            ]}
+          />
+        ),
         handle: { title: "Settings" },
       },
     ],
