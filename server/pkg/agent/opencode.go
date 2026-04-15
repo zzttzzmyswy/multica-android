@@ -11,6 +11,12 @@ import (
 	"time"
 )
 
+// opencodeBlockedArgs are flags hardcoded by the daemon that must not be
+// overridden by user-configured custom_args.
+var opencodeBlockedArgs = map[string]blockedArgMode{
+	"--format": blockedWithValue, // json output format for daemon communication
+}
+
 // opencodeBackend implements Backend by spawning `opencode run --format json`
 // and reading streaming JSON events from stdout — the same pattern as Claude.
 type opencodeBackend struct {
@@ -45,6 +51,7 @@ func (b *opencodeBackend) Execute(ctx context.Context, prompt string, opts ExecO
 	if opts.ResumeSessionID != "" {
 		args = append(args, "--session", opts.ResumeSessionID)
 	}
+	args = append(args, filterCustomArgs(opts.CustomArgs, opencodeBlockedArgs, b.cfg.Logger)...)
 	args = append(args, prompt)
 
 	cmd := exec.CommandContext(runCtx, execPath, args...)

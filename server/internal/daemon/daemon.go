@@ -916,11 +916,16 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 
 	taskStart := time.Now()
 
+	var customArgs []string
+	if task.Agent != nil {
+		customArgs = task.Agent.CustomArgs
+	}
 	execOpts := agent.ExecOptions{
 		Cwd:             env.WorkDir,
 		Model:           entry.Model,
 		Timeout:         d.cfg.AgentTimeout,
 		ResumeSessionID: task.PriorSessionID,
+		CustomArgs:      customArgs,
 	}
 
 	result, tools, err := d.executeAndDrain(ctx, backend, prompt, execOpts, taskLog, task.ID)
