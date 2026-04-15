@@ -359,6 +359,7 @@ function ListDropdown({ editor, onOpenChange, isBullet, isOrdered }: { editor: E
 function EditorBubbleMenu({ editor }: { editor: Editor }) {
   const [mode, setMode] = useState<"toolbar" | "link-edit">("toolbar");
   const [scrollTarget, setScrollTarget] = useState<HTMLElement | Window>(window);
+  const menuElRef = useRef<HTMLDivElement>(null);
 
   // Precise subscription to formatting state — only re-renders when these
   // values actually change, replacing direct editor.isActive() calls that
@@ -456,6 +457,7 @@ function EditorBubbleMenu({ editor }: { editor: Editor }) {
 
   return (
     <BubbleMenu
+      ref={menuElRef}
       editor={editor}
       shouldShow={shouldShowBubbleMenu}
       updateDelay={0}
@@ -471,6 +473,17 @@ function EditorBubbleMenu({ editor }: { editor: Editor }) {
         shift: { padding: 8 },
         hide: true,
         scrollTarget,
+        // Tiptap's React wrapper initialises the menu element with
+        // position:absolute, but computePosition (called right after
+        // show()) needs position:fixed so that getOffsetParent returns
+        // the viewport instead of a positioned ancestor. Without this,
+        // the first positioning computes coordinates relative to the
+        // wrong containing block and the menu flies off-screen.
+        onShow: () => {
+          if (menuElRef.current) {
+            menuElRef.current.style.position = "fixed";
+          }
+        },
       }}
     >
       {mode === "link-edit" ? (
