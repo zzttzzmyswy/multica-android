@@ -534,6 +534,11 @@ export class ApiClient {
     return this.fetch("/api/inbox/archive-completed", { method: "POST" });
   }
 
+  // App Config
+  async getConfig(): Promise<{ cdn_domain: string }> {
+    return this.fetch("/api/config");
+  }
+
   // Workspaces
   async listWorkspaces(): Promise<Workspace[]> {
     return this.fetch("/api/workspaces");
