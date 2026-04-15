@@ -168,6 +168,7 @@ export function AgentDetail({
         {activeTab === "env" && (
           <EnvTab
             agent={agent}
+            readOnly={agent.custom_env_redacted}
             onSave={(updates) => onUpdate(agent.id, updates)}
           />
         )}
