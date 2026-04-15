@@ -21,30 +21,6 @@ import { FileText, Loader2, Download } from "lucide-react";
 
 
 // ---------------------------------------------------------------------------
-// CDN URL detection
-// ---------------------------------------------------------------------------
-
-const IMAGE_EXTS = /\.(png|jpe?g|gif|webp|svg|ico|bmp|tiff?)$/i;
-
-/** Check if a URL points to our upload CDN (CloudFront or S3 bucket). */
-export function isCdnUrl(url: string): boolean {
-  try {
-    const u = new URL(url);
-    return (
-      u.hostname.endsWith(".copilothub.ai") ||
-      u.hostname.endsWith(".amazonaws.com")
-    );
-  } catch {
-    return false;
-  }
-}
-
-/** Check if a CDN URL is a non-image file that should render as a file card. */
-export function isFileCardUrl(url: string): boolean {
-  return isCdnUrl(url) && !IMAGE_EXTS.test(new URL(url).pathname);
-}
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
