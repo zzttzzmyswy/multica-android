@@ -487,79 +487,6 @@ async function clearToken(): Promise<void> {
   await removeProfileUserId(active.name);
 }
 
-interface WatchedWorkspace {
-  id: string;
-  name: string;
-  runtime_count?: number;
-}
-
-interface WatchListResponse {
-  watched: WatchedWorkspace[];
-  unwatched: string[];
-}
-
-async function daemonFetch(
-  path: string,
-  init?: RequestInit,
-): Promise<Response> {
-  const active = await ensureActiveProfile();
-  const url = `http://127.0.0.1:${active.port}${path}`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
-  try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function listWatchedWorkspaces(): Promise<WatchListResponse> {
-  const empty: WatchListResponse = { watched: [], unwatched: [] };
-  try {
-    const res = await daemonFetch("/watch");
-    if (!res.ok) {
-      // Older daemon versions don't have /watch. Treat as "nothing watched
-      // yet" so the UI renders cleanly; the user can take manual action.
-      if (res.status === 404) return empty;
-      throw new Error(`list /watch failed: ${res.status} ${res.statusText}`);
-    }
-    const data = (await res.json()) as WatchListResponse;
-    return {
-      watched: Array.isArray(data.watched) ? data.watched : [],
-      unwatched: Array.isArray(data.unwatched) ? data.unwatched : [],
-    };
-  } catch (err) {
-    // Network errors (ECONNREFUSED when daemon is still starting, etc.) are
-    // expected during startup races — return empty instead of throwing so
-    // we don't spam the main-process error log on every poll.
-    const msg = err instanceof Error ? err.message : String(err);
-    console.log(`[daemon] list /watch unreachable: ${msg}`);
-    return empty;
-  }
-}
-
-async function watchWorkspace(id: string, name: string): Promise<void> {
-  const res = await daemonFetch("/watch", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ workspace_id: id, name }),
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`watch failed: ${res.status} ${body}`);
-  }
-}
-
-async function unwatchWorkspace(id: string): Promise<void> {
-  const res = await daemonFetch(`/watch/${encodeURIComponent(id)}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`unwatch failed: ${res.status} ${body}`);
-  }
-}
-
 async function withGuard<T>(fn: () => Promise<T>): Promise<T | { success: false; error: string }> {
   if (operationInProgress) {
     return { success: false, error: "Another daemon operation is in progress" };
@@ -804,14 +731,6 @@ export function setupDaemonManager(
     (_event, token: string, userId: string) => syncToken(token, userId),
   );
   ipcMain.handle("daemon:clear-token", () => clearToken());
-  ipcMain.handle("daemon:list-watched", () => listWatchedWorkspaces());
-  ipcMain.handle(
-    "daemon:watch-workspace",
-    (_event, id: string, name: string) => watchWorkspace(id, name),
-  );
-  ipcMain.handle("daemon:unwatch-workspace", (_event, id: string) =>
-    unwatchWorkspace(id),
-  );
   ipcMain.handle("daemon:is-cli-installed", async () => {
     const bin = await resolveCliBinary();
     return bin !== null;

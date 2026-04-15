@@ -81,32 +81,16 @@ func (d *Daemon) Run(ctx context.Context) error {
 		return err
 	}
 
-	// Load and register watched workspaces.
-	if err := d.loadWatchedWorkspaces(ctx); err != nil {
+	// Fetch all user workspaces from the API and register runtimes.
+	if err := d.syncWorkspacesFromAPI(ctx); err != nil {
 		return err
 	}
-
-	// If no runtimes yet (empty watched list), run one sync cycle to discover
-	// workspaces from the API before giving up. workspaceSyncLoop normally
-	// handles this, but the runtime check below would fail before it runs.
 	if len(d.allRuntimeIDs()) == 0 {
-		d.syncWorkspacesFromAPI(ctx)
-		// syncWorkspacesFromAPI writes to config; reload and register.
-		if err := d.loadWatchedWorkspaces(ctx); err != nil {
-			return err
-		}
-	}
-
-	runtimeIDs := d.allRuntimeIDs()
-	if len(runtimeIDs) == 0 {
 		return fmt.Errorf("no runtimes registered")
 	}
 
 	// Deregister runtimes on shutdown (uses a fresh context since ctx will be cancelled).
 	defer d.deregisterRuntimes()
-
-	// Start config watcher for hot-reload.
-	go d.configWatchLoop(ctx)
 
 	// Start workspace sync loop to discover newly created workspaces.
 	go d.workspaceSyncLoop(ctx)
@@ -160,60 +144,6 @@ func (d *Daemon) resolveAuth() error {
 	return nil
 }
 
-// loadWatchedWorkspaces reads watched workspaces from CLI config and registers runtimes.
-func (d *Daemon) loadWatchedWorkspaces(ctx context.Context) error {
-	cfg, err := cli.LoadCLIConfigForProfile(d.cfg.Profile)
-	if err != nil {
-		return fmt.Errorf("load CLI config: %w", err)
-	}
-
-	// It's fine to start with an empty watched list — workspaceSyncLoop runs
-	// immediately on startup and will populate the list from the server. The
-	// daemon also accepts HTTP POST /watch for explicit adds from clients
-	// like the Desktop app.
-	if len(cfg.WatchedWorkspaces) == 0 {
-		d.logger.Info("no watched workspaces in config; workspaceSyncLoop will populate from API")
-		return nil
-	}
-
-	var registered int
-	for _, ws := range cfg.WatchedWorkspaces {
-		resp, err := d.registerRuntimesForWorkspace(ctx, ws.ID)
-		if err != nil {
-			d.logger.Error("failed to register runtimes", "workspace_id", ws.ID, "name", ws.Name, "error", err)
-			continue
-		}
-		runtimeIDs := make([]string, len(resp.Runtimes))
-		for i, rt := range resp.Runtimes {
-			runtimeIDs[i] = rt.ID
-			d.logger.Info("registered runtime", "workspace_id", ws.ID, "runtime_id", rt.ID, "provider", rt.Provider)
-		}
-		d.mu.Lock()
-		d.workspaces[ws.ID] = &workspaceState{workspaceID: ws.ID, runtimeIDs: runtimeIDs}
-		for _, rt := range resp.Runtimes {
-			d.runtimeIndex[rt.ID] = rt
-		}
-		d.mu.Unlock()
-
-		// Sync workspace repos to local cache in the background so heartbeat
-		// and poll loops are not blocked by slow git clone/fetch operations.
-		if d.repoCache != nil && len(resp.Repos) > 0 {
-			go func(wsID string, repos []RepoData) {
-				if err := d.repoCache.Sync(wsID, repoDataToInfo(repos)); err != nil {
-					d.logger.Warn("repo cache sync failed", "workspace_id", wsID, "error", err)
-				}
-			}(ws.ID, resp.Repos)
-		}
-
-		d.logger.Info("watching workspace", "workspace_id", ws.ID, "name", ws.Name, "runtimes", len(resp.Runtimes), "repos", len(resp.Repos))
-		registered++
-	}
-
-	if registered == 0 {
-		return fmt.Errorf("failed to register runtimes for any of the %d watched workspace(s)", len(cfg.WatchedWorkspaces))
-	}
-	return nil
-}
 
 // allRuntimeIDs returns all runtime IDs across all watched workspaces.
 func (d *Daemon) allRuntimeIDs() []string {
@@ -293,47 +223,9 @@ func (d *Daemon) registerRuntimesForWorkspace(ctx context.Context, workspaceID s
 	return resp, nil
 }
 
-// configWatchLoop periodically checks for config file changes and reloads workspaces.
-func (d *Daemon) configWatchLoop(ctx context.Context) {
-	configPath, err := cli.CLIConfigPathForProfile(d.cfg.Profile)
-	if err != nil {
-		d.logger.Warn("cannot watch config file", "error", err)
-		return
-	}
-
-	var lastModTime time.Time
-	if info, err := os.Stat(configPath); err == nil {
-		lastModTime = info.ModTime()
-	}
-
-	ticker := time.NewTicker(DefaultConfigReloadInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			info, err := os.Stat(configPath)
-			if err != nil {
-				continue
-			}
-			if !info.ModTime().After(lastModTime) {
-				continue
-			}
-			lastModTime = info.ModTime()
-			d.reloadWorkspaces(ctx)
-		}
-	}
-}
-
 // workspaceSyncLoop periodically fetches the user's workspaces from the API
-// and adds any new ones to the CLI config. The configWatchLoop will then
-// detect the config change and register runtimes for the new workspaces.
+// and registers runtimes for any new ones.
 func (d *Daemon) workspaceSyncLoop(ctx context.Context) {
-	// Run immediately on startup before entering the periodic loop.
-	d.syncWorkspacesFromAPI(ctx)
-
 	ticker := time.NewTicker(DefaultWorkspaceSyncInterval)
 	defer ticker.Stop()
 
@@ -342,113 +234,77 @@ func (d *Daemon) workspaceSyncLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			d.syncWorkspacesFromAPI(ctx)
+			if err := d.syncWorkspacesFromAPI(ctx); err != nil {
+				d.logger.Debug("workspace sync failed", "error", err)
+			}
 		}
 	}
 }
 
-// syncWorkspacesFromAPI fetches all workspaces the user belongs to and adds
-// any missing ones to the CLI config's watched list.
-func (d *Daemon) syncWorkspacesFromAPI(ctx context.Context) {
+// syncWorkspacesFromAPI fetches all workspaces the user belongs to and
+// registers runtimes for any that aren't already tracked. Workspaces the user
+// has left are cleaned up.
+func (d *Daemon) syncWorkspacesFromAPI(ctx context.Context) error {
+	d.reloading.Lock()
+	defer d.reloading.Unlock()
+
 	apiCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	workspaces, err := d.client.ListWorkspaces(apiCtx)
 	if err != nil {
-		d.logger.Debug("workspace sync: failed to list workspaces", "error", err)
-		return
+		return fmt.Errorf("list workspaces: %w", err)
 	}
 
-	cfg, err := cli.LoadCLIConfigForProfile(d.cfg.Profile)
-	if err != nil {
-		d.logger.Warn("workspace sync: failed to load config", "error", err)
-		return
-	}
-
-	var added int
+	apiIDs := make(map[string]string, len(workspaces)) // id -> name
 	for _, ws := range workspaces {
-		if cfg.IsUnwatched(ws.ID) {
-			continue // user explicitly opted out
-		}
-		if cfg.AddWatchedWorkspace(ws.ID, ws.Name) {
-			added++
-			d.logger.Info("workspace sync: discovered new workspace", "workspace_id", ws.ID, "name", ws.Name)
-		}
-	}
-
-	if added == 0 {
-		return
-	}
-
-	if err := cli.SaveCLIConfigForProfile(cfg, d.cfg.Profile); err != nil {
-		d.logger.Warn("workspace sync: failed to save config", "error", err)
-		return
-	}
-	d.logger.Info("workspace sync: added new workspace(s) to config", "count", added)
-}
-
-// reloadWorkspaces reconciles the active workspace set with the config file.
-// NOTE: Token changes (e.g. re-login as a different user) are not picked up;
-// the daemon must be restarted for a new auth token to take effect.
-func (d *Daemon) reloadWorkspaces(ctx context.Context) {
-	d.reloading.Lock()
-	defer d.reloading.Unlock()
-
-	cfg, err := cli.LoadCLIConfigForProfile(d.cfg.Profile)
-	if err != nil {
-		d.logger.Warn("reload config failed", "error", err)
-		return
-	}
-
-	newIDs := make(map[string]string) // id -> name
-	for _, ws := range cfg.WatchedWorkspaces {
-		newIDs[ws.ID] = ws.Name
+		apiIDs[ws.ID] = ws.Name
 	}
 
 	d.mu.Lock()
-	currentIDs := make(map[string]bool)
+	currentIDs := make(map[string]bool, len(d.workspaces))
 	for id := range d.workspaces {
 		currentIDs[id] = true
 	}
 	d.mu.Unlock()
 
-	// Register runtimes for newly added workspaces.
-	for id, name := range newIDs {
-		if !currentIDs[id] {
-			resp, err := d.registerRuntimesForWorkspace(ctx, id)
-			if err != nil {
-				d.logger.Error("register runtimes for new workspace failed", "workspace_id", id, "error", err)
-				continue
-			}
-			runtimeIDs := make([]string, len(resp.Runtimes))
-			for i, rt := range resp.Runtimes {
-				runtimeIDs[i] = rt.ID
-			}
-			d.mu.Lock()
-			d.workspaces[id] = &workspaceState{workspaceID: id, runtimeIDs: runtimeIDs}
-			for _, rt := range resp.Runtimes {
-				d.runtimeIndex[rt.ID] = rt
-			}
-			d.mu.Unlock()
-
-			// Sync workspace repos to local cache in the background.
-			if d.repoCache != nil && len(resp.Repos) > 0 {
-				go func(wsID string, repos []RepoData) {
-					if err := d.repoCache.Sync(wsID, repoDataToInfo(repos)); err != nil {
-						d.logger.Warn("repo cache sync failed", "workspace_id", wsID, "error", err)
-					}
-				}(id, resp.Repos)
-			}
-
-			d.logger.Info("now watching workspace", "workspace_id", id, "name", name)
+	var registered int
+	for id, name := range apiIDs {
+		if currentIDs[id] {
+			continue
 		}
+		resp, err := d.registerRuntimesForWorkspace(ctx, id)
+		if err != nil {
+			d.logger.Error("failed to register runtimes", "workspace_id", id, "name", name, "error", err)
+			continue
+		}
+		runtimeIDs := make([]string, len(resp.Runtimes))
+		for i, rt := range resp.Runtimes {
+			runtimeIDs[i] = rt.ID
+			d.logger.Info("registered runtime", "workspace_id", id, "runtime_id", rt.ID, "provider", rt.Provider)
+		}
+		d.mu.Lock()
+		d.workspaces[id] = &workspaceState{workspaceID: id, runtimeIDs: runtimeIDs}
+		for _, rt := range resp.Runtimes {
+			d.runtimeIndex[rt.ID] = rt
+		}
+		d.mu.Unlock()
+
+		if d.repoCache != nil && len(resp.Repos) > 0 {
+			go func(wsID string, repos []RepoData) {
+				if err := d.repoCache.Sync(wsID, repoDataToInfo(repos)); err != nil {
+					d.logger.Warn("repo cache sync failed", "workspace_id", wsID, "error", err)
+				}
+			}(id, resp.Repos)
+		}
+
+		d.logger.Info("watching workspace", "workspace_id", id, "name", name, "runtimes", len(resp.Runtimes))
+		registered++
 	}
 
-	// Remove workspaces no longer in config.
-	// NOTE: runtimes are not deregistered server-side; they will go offline
-	// after heartbeats stop arriving (within HeartbeatInterval).
+	// Remove workspaces the user no longer belongs to.
 	for id := range currentIDs {
-		if _, ok := newIDs[id]; !ok {
+		if _, ok := apiIDs[id]; !ok {
 			d.mu.Lock()
 			if ws, exists := d.workspaces[id]; exists {
 				for _, rid := range ws.runtimeIDs {
@@ -460,6 +316,11 @@ func (d *Daemon) reloadWorkspaces(ctx context.Context) {
 			d.logger.Info("stopped watching workspace", "workspace_id", id)
 		}
 	}
+
+	if len(d.allRuntimeIDs()) == 0 && registered == 0 && len(workspaces) > 0 {
+		return fmt.Errorf("failed to register runtimes for any of the %d workspace(s)", len(workspaces))
+	}
+	return nil
 }
 
 func (d *Daemon) heartbeatLoop(ctx context.Context) {
