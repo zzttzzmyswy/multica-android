@@ -1,11 +1,11 @@
-import { app, shell, BrowserWindow, ipcMain, nativeImage } from "electron";
+import { app, BrowserWindow, ipcMain, nativeImage } from "electron";
 import { homedir } from "os";
 import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import fixPath from "fix-path";
 import { setupAutoUpdater } from "./updater";
 import { setupDaemonManager } from "./daemon-manager";
-import { isSafeExternalHttpUrl } from "./external-url";
+import { openExternalSafely } from "./external-url";
 
 // Bundled icon used for dev-mode dock/taskbar branding. In production the
 // app bundle icon (from electron-builder) wins; this path is only consumed
@@ -105,11 +105,7 @@ function createWindow(): void {
   });
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    if (!isSafeExternalHttpUrl(details.url)) {
-      console.warn("[security] blocked window.open external URL");
-      return { action: "deny" };
-    }
-    shell.openExternal(details.url);
+    openExternalSafely(details.url);
     return { action: "deny" };
   });
 
@@ -189,16 +185,12 @@ if (!gotTheLock) {
     });
 
     // IPC: open URL in default browser (used by renderer for Google login).
-    // Restrict to http/https so the renderer can't dispatch arbitrary OS
-    // protocol handlers (file://, smb://, ms-msdt:, vscode://, ...) which
-    // become a concern under this app's intentional webSecurity: false +
-    // sandbox: false configuration.
+    // All scheme-allowlist enforcement lives in openExternalSafely — this
+    // is the single audit point for renderer-controlled URLs reaching the
+    // OS shell under the app's intentional webSecurity: false + sandbox:
+    // false configuration.
     ipcMain.handle("shell:openExternal", (_event, url: string) => {
-      if (!isSafeExternalHttpUrl(url)) {
-        console.warn("[security] blocked openExternal: invalid external URL");
-        return;
-      }
-      return shell.openExternal(url);
+      return openExternalSafely(url);
     });
 
     // IPC: toggle immersive mode — hides the macOS traffic lights so full-screen
