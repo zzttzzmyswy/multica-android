@@ -449,6 +449,62 @@ multica config set app_url https://app.example.com
 multica config set workspace_id <workspace-id>
 ```
 
+## Autopilot Commands
+
+Autopilots are scheduled/triggered automations that dispatch agent tasks (either by creating an issue or by running an agent directly).
+
+### List Autopilots
+
+```bash
+multica autopilot list
+multica autopilot list --status active --output json
+```
+
+### Get Autopilot Details
+
+```bash
+multica autopilot get <id>
+multica autopilot get <id> --output json   # includes triggers
+```
+
+### Create / Update / Delete
+
+```bash
+multica autopilot create \
+  --title "Nightly bug triage" \
+  --description "Scan todo issues and prioritize." \
+  --agent "Lambda" \
+  --mode create_issue
+
+multica autopilot update <id> --status paused
+multica autopilot update <id> --description "New prompt"
+multica autopilot delete <id>
+```
+
+`--mode` currently only accepts `create_issue` (creates a new issue on each run and assigns it to the agent). The server data model also defines `run_only`, but the daemon task path doesn't yet resolve a workspace for runs without an issue, so it's not exposed by the CLI. `--agent` accepts either a name or UUID.
+
+### Manual Trigger
+
+```bash
+multica autopilot trigger <id>            # Fires the autopilot once, returns the run
+```
+
+### Run History
+
+```bash
+multica autopilot runs <id>
+multica autopilot runs <id> --limit 50 --output json
+```
+
+### Triggers (Schedule / Webhook / API)
+
+```bash
+multica autopilot trigger-add <autopilot-id> --kind schedule --cron "0 9 * * 1-5" --timezone "America/New_York"
+multica autopilot trigger-add <autopilot-id> --kind webhook
+multica autopilot trigger-update <autopilot-id> <trigger-id> --enabled=false
+multica autopilot trigger-delete <autopilot-id> <trigger-id>
+```
+
 ## Other Commands
 
 ```bash
