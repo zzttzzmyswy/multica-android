@@ -496,14 +496,15 @@ multica autopilot runs <id>
 multica autopilot runs <id> --limit 50 --output json
 ```
 
-### Triggers (Schedule / Webhook / API)
+### Schedule Triggers
 
 ```bash
-multica autopilot trigger-add <autopilot-id> --kind schedule --cron "0 9 * * 1-5" --timezone "America/New_York"
-multica autopilot trigger-add <autopilot-id> --kind webhook
+multica autopilot trigger-add <autopilot-id> --cron "0 9 * * 1-5" --timezone "America/New_York"
 multica autopilot trigger-update <autopilot-id> <trigger-id> --enabled=false
 multica autopilot trigger-delete <autopilot-id> <trigger-id>
 ```
+
+Only cron-based `schedule` triggers are currently exposed via the CLI. The data model also defines `webhook` and `api` kinds, but there is no server endpoint that fires them yet, so they're not surfaced here.
 
 ## Other Commands
 
