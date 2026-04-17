@@ -96,7 +96,8 @@ func (h *Handler) verifyDaemonWorkspaceAccess(r *http.Request, workspaceID strin
 	return err == nil
 }
 
-// resolveTaskWorkspaceID derives the workspace ID from a task's issue or chat session.
+// resolveTaskWorkspaceID derives the workspace ID from a task's linked entity
+// (issue, chat session, or autopilot run).
 func (h *Handler) resolveTaskWorkspaceID(r *http.Request, task db.AgentTaskQueue) string {
 	if task.IssueID.Valid {
 		if issue, err := h.Queries.GetIssue(r.Context(), task.IssueID); err == nil {
@@ -106,6 +107,13 @@ func (h *Handler) resolveTaskWorkspaceID(r *http.Request, task db.AgentTaskQueue
 	if task.ChatSessionID.Valid {
 		if cs, err := h.Queries.GetChatSession(r.Context(), task.ChatSessionID); err == nil {
 			return uuidToString(cs.WorkspaceID)
+		}
+	}
+	if task.AutopilotRunID.Valid {
+		if run, err := h.Queries.GetAutopilotRun(r.Context(), task.AutopilotRunID); err == nil {
+			if ap, err := h.Queries.GetAutopilot(r.Context(), run.AutopilotID); err == nil {
+				return uuidToString(ap.WorkspaceID)
+			}
 		}
 	}
 	return ""
