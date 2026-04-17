@@ -32,12 +32,13 @@ import { api } from "@multica/core/api";
 import { paths } from "@multica/core/paths";
 import type { Workspace } from "@multica/core/types";
 import { useNavigation } from "../../navigation";
+import { DeleteWorkspaceDialog } from "./delete-workspace-dialog";
 
 export function WorkspaceTab() {
   const user = useAuthStore((s) => s.user);
   const workspace = useCurrentWorkspace();
   const wsId = useWorkspaceId();
-  const { data: members = [] } = useQuery(memberListOptions(wsId));
+  const { data: members = [], isFetched: membersFetched } = useQuery(memberListOptions(wsId));
   const qc = useQueryClient();
   const leaveWorkspace = useLeaveWorkspace();
   const deleteWorkspace = useDeleteWorkspace();
@@ -73,10 +74,18 @@ export function WorkspaceTab() {
     variant?: "destructive";
     onConfirm: () => Promise<void>;
   } | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const currentMember = members.find((m) => m.user_id === user?.id) ?? null;
   const canManageWorkspace = currentMember?.role === "owner" || currentMember?.role === "admin";
   const isOwner = currentMember?.role === "owner";
+  // Mirror the backend invariant (server/internal/handler/workspace.go:569):
+  // a workspace must always have at least one owner, so the sole owner can't
+  // leave. Pre-flight here instead of letting the 400 round-trip become a
+  // confusing toast — disable Leave and tell the user what they need to do.
+  const ownerCount = members.filter((m) => m.role === "owner").length;
+  const isSoleOwner = isOwner && ownerCount <= 1;
+  const isSoleMember = members.length <= 1;
 
   useEffect(() => {
     setName(workspace?.name ?? "");
@@ -124,24 +133,18 @@ export function WorkspaceTab() {
     });
   };
 
-  const handleDeleteWorkspace = () => {
+  const handleConfirmDelete = async () => {
     if (!workspace) return;
-    setConfirmAction({
-      title: "Delete workspace",
-      description: `Delete ${workspace.name}? This cannot be undone. All issues, agents, and data will be permanently removed.`,
-      variant: "destructive",
-      onConfirm: async () => {
-        setActionId("delete-workspace");
-        try {
-          await deleteWorkspace.mutateAsync(workspace.id);
-          await navigateAwayFromCurrentWorkspace();
-        } catch (e) {
-          toast.error(e instanceof Error ? e.message : "Failed to delete workspace");
-        } finally {
-          setActionId(null);
-        }
-      },
-    });
+    setActionId("delete-workspace");
+    try {
+      await deleteWorkspace.mutateAsync(workspace.id);
+      setDeleteDialogOpen(false);
+      await navigateAwayFromCurrentWorkspace();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete workspace");
+    } finally {
+      setActionId(null);
+    }
   };
 
   if (!workspace) return null;
@@ -211,7 +214,10 @@ export function WorkspaceTab() {
         </Card>
       </section>
 
-      {/* Danger Zone */}
+      {/* Danger Zone — gated on the member query settling so the owner-only
+          Delete button and the sole-owner Leave guidance don't flash in
+          after mount. */}
+      {membersFetched && (
       <section className="space-y-4">
         <div className="flex items-center gap-2">
           <LogOut className="h-4 w-4 text-muted-foreground" />
@@ -224,14 +230,18 @@ export function WorkspaceTab() {
               <div>
                 <p className="text-sm font-medium">Leave workspace</p>
                 <p className="text-xs text-muted-foreground">
-                  Remove yourself from this workspace.
+                  {isSoleOwner
+                    ? isSoleMember
+                      ? "You're the only member. Delete the workspace to leave."
+                      : "You're the only owner. Promote another member to owner first, or delete the workspace."
+                    : "Remove yourself from this workspace."}
                 </p>
               </div>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleLeaveWorkspace}
-                disabled={actionId === "leave"}
+                disabled={actionId === "leave" || isSoleOwner}
               >
                 {actionId === "leave" ? "Leaving..." : "Leave workspace"}
               </Button>
@@ -248,7 +258,7 @@ export function WorkspaceTab() {
                 <Button
                   variant="destructive"
                   size="sm"
-                  onClick={handleDeleteWorkspace}
+                  onClick={() => setDeleteDialogOpen(true)}
                   disabled={actionId === "delete-workspace"}
                 >
                   {actionId === "delete-workspace" ? "Deleting..." : "Delete workspace"}
@@ -258,6 +268,7 @@ export function WorkspaceTab() {
           </CardContent>
         </Card>
       </section>
+      )}
 
       <AlertDialog open={!!confirmAction} onOpenChange={(v) => { if (!v) setConfirmAction(null); }}>
         <AlertDialogContent>
@@ -279,6 +290,19 @@ export function WorkspaceTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <DeleteWorkspaceDialog
+        workspaceName={workspace.name}
+        loading={actionId === "delete-workspace"}
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          // Ignore close requests while the delete mutation is in flight
+          // so the user can't accidentally dismiss mid-operation.
+          if (actionId === "delete-workspace" && !open) return;
+          setDeleteDialogOpen(open);
+        }}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 }
