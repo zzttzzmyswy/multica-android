@@ -81,8 +81,8 @@ export function CustomArgsTab({
             Custom Arguments
           </Label>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Additional CLI arguments appended to the agent command at launch
-            (e.g. --model claude-sonnet-4-20250514)
+            Additional CLI arguments appended to the agent command at launch.
+            Supported flags depend on the agent's CLI.
           </p>
           {launchHeader && (
             <p className="mt-2 text-xs text-muted-foreground">
@@ -111,7 +111,7 @@ export function CustomArgsTab({
               <Input
                 value={entry.value}
                 onChange={(e) => updateEntry(index, e.target.value)}
-                placeholder="--model claude-sonnet-4-20250514"
+                placeholder="--flag value"
                 className="flex-1 font-mono text-xs"
               />
               <button
