@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -496,18 +497,56 @@ func (h *Handler) DaemonHeartbeat(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// logClaimEndpointSlow emits one structured log when the /tasks/claim endpoint
+// exceeds 500ms, splitting auth / claim / response-build phases so the prod
+// tail can be diagnosed without flooding logs at normal poll rates.
+func logClaimEndpointSlow(runtimeID, outcome string, start time.Time, authMs, claimMs, buildMs int64) {
+	totalMs := time.Since(start).Milliseconds()
+	if totalMs < 500 {
+		return
+	}
+	slog.Info("claim_endpoint slow",
+		"runtime_id", runtimeID,
+		"outcome", outcome,
+		"total_ms", totalMs,
+		"auth_ms", authMs,
+		"claim_ms", claimMs,
+		"build_ms", buildMs,
+	)
+}
+
 // ClaimTaskByRuntime atomically claims the next queued task for a runtime.
 // The response includes the agent's name and skills, fetched fresh from the DB.
 func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 	runtimeID := chi.URLParam(r, "runtimeId")
+	start := time.Now()
+
+	var (
+		outcome                    = "unauth"
+		authMs, claimMs, buildMs   int64
+		buildStart                 time.Time
+	)
+	defer func() {
+		// Emit at function exit so error / unauth paths also carry timing.
+		// build_ms is computed from buildStart only when we entered the
+		// response-build phase (otherwise stays 0).
+		if !buildStart.IsZero() {
+			buildMs = time.Since(buildStart).Milliseconds()
+		}
+		logClaimEndpointSlow(runtimeID, outcome, start, authMs, claimMs, buildMs)
+	}()
 
 	// Verify the caller owns this runtime's workspace.
 	if _, ok := h.requireDaemonRuntimeAccess(w, r, runtimeID); !ok {
 		return
 	}
+	authMs = time.Since(start).Milliseconds()
 
+	claimStart := time.Now()
 	task, err := h.TaskService.ClaimTaskForRuntime(r.Context(), parseUUID(runtimeID))
+	claimMs = time.Since(claimStart).Milliseconds()
 	if err != nil {
+		outcome = "error_claim"
 		writeError(w, http.StatusInternalServerError, "failed to claim task: "+err.Error())
 		return
 	}
@@ -515,8 +554,12 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 	if task == nil {
 		slog.Debug("no task to claim", "runtime_id", runtimeID)
 		writeJSON(w, http.StatusOK, map[string]any{"task": nil})
+		outcome = "no_task"
 		return
 	}
+
+	outcome = "claimed"
+	buildStart = time.Now()
 
 	// Build response with fresh agent data (name + skills + custom_env + custom_args).
 	resp := taskToResponse(*task)
