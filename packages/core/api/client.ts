@@ -542,7 +542,11 @@ export class ApiClient {
   }
 
   // App Config
-  async getConfig(): Promise<{ cdn_domain: string }> {
+  async getConfig(): Promise<{
+    cdn_domain: string;
+    posthog_key?: string;
+    posthog_host?: string;
+  }> {
     return this.fetch("/api/config");
   }
 

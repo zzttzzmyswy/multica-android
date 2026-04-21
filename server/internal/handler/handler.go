@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/multica-ai/multica/server/internal/analytics"
 	"github.com/multica-ai/multica/server/internal/auth"
 	"github.com/multica-ai/multica/server/internal/events"
 	"github.com/multica-ai/multica/server/internal/middleware"
@@ -51,13 +52,18 @@ type Handler struct {
 	ModelListStore   *ModelListStore
 	Storage          storage.Storage
 	CFSigner         *auth.CloudFrontSigner
+	Analytics        analytics.Client
 	cfg              Config
 }
 
-func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub, bus *events.Bus, emailService *service.EmailService, store storage.Storage, cfSigner *auth.CloudFrontSigner, cfg Config) *Handler {
+func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub, bus *events.Bus, emailService *service.EmailService, store storage.Storage, cfSigner *auth.CloudFrontSigner, analyticsClient analytics.Client, cfg Config) *Handler {
 	var executor dbExecutor
 	if candidate, ok := txStarter.(dbExecutor); ok {
 		executor = candidate
+	}
+
+	if analyticsClient == nil {
+		analyticsClient = analytics.NoopClient{}
 	}
 
 	taskSvc := service.NewTaskService(queries, txStarter, hub, bus)
@@ -75,6 +81,7 @@ func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub, bus *event
 		ModelListStore:   NewModelListStore(),
 		Storage:          store,
 		CFSigner:         cfSigner,
+		Analytics:        analyticsClient,
 		cfg:              cfg,
 	}
 }
