@@ -54,6 +54,15 @@ const pendingOps: PendingOp[] = [];
 // event until a full reload.
 let superProperties: Record<string, unknown> = {};
 
+export {
+  captureDownloadIntent,
+  captureDownloadPageViewed,
+  captureDownloadInitiated,
+  type DownloadIntentSource,
+  type DownloadDetectPayload,
+  type DownloadInitiatedPayload,
+} from "./download";
+
 export interface AnalyticsConfig {
   key: string;
   host: string;
