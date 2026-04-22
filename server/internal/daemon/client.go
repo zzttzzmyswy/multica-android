@@ -122,7 +122,7 @@ func (c *Client) ReportTaskUsage(ctx context.Context, taskID string, usage []Tas
 	}, nil)
 }
 
-func (c *Client) FailTask(ctx context.Context, taskID, errMsg, sessionID, workDir string) error {
+func (c *Client) FailTask(ctx context.Context, taskID, errMsg, sessionID, workDir, failureReason string) error {
 	body := map[string]any{"error": errMsg}
 	if sessionID != "" {
 		body["session_id"] = sessionID
@@ -130,7 +130,33 @@ func (c *Client) FailTask(ctx context.Context, taskID, errMsg, sessionID, workDi
 	if workDir != "" {
 		body["work_dir"] = workDir
 	}
+	if failureReason != "" {
+		body["failure_reason"] = failureReason
+	}
 	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/tasks/%s/fail", taskID), body, nil)
+}
+
+// PinTaskSession persists the agent's session_id and work_dir on the task
+// row mid-flight so a daemon crash doesn't lose the resume pointer.
+func (c *Client) PinTaskSession(ctx context.Context, taskID, sessionID, workDir string) error {
+	if sessionID == "" && workDir == "" {
+		return nil
+	}
+	body := map[string]any{}
+	if sessionID != "" {
+		body["session_id"] = sessionID
+	}
+	if workDir != "" {
+		body["work_dir"] = workDir
+	}
+	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/tasks/%s/session", taskID), body, nil)
+}
+
+// RecoverOrphans tells the server to fail any dispatched/running tasks the
+// previous daemon process for this runtime left behind. The server will
+// auto-retry eligible tasks.
+func (c *Client) RecoverOrphans(ctx context.Context, runtimeID string) error {
+	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/runtimes/%s/recover-orphans", runtimeID), map[string]any{}, nil)
 }
 
 // GetTaskStatus returns the current status of a task. Used by the daemon to
