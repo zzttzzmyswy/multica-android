@@ -10,6 +10,7 @@ import { MulticaIcon } from "@multica/ui/components/common/multica-icon";
 import { Toaster } from "sonner";
 import { DesktopLoginPage } from "./pages/login";
 import { DesktopShell } from "./components/desktop-layout";
+import { PageviewTracker } from "./components/pageview-tracker";
 import { UpdateNotification } from "./components/update-notification";
 import { useTabStore } from "./stores/tab-store";
 import { useWindowOverlayStore } from "./stores/window-overlay-store";
@@ -160,8 +161,15 @@ function AppContent() {
     );
   }
 
-  if (!user) return <DesktopLoginPage />;
-  return <DesktopShell />;
+  // Pageview tracker sits at the app root so it covers every visible
+  // surface (login, overlays, tab paths) — mounting it inside DesktopShell
+  // would miss the logged-out and overlay states.
+  return (
+    <>
+      <PageviewTracker />
+      {user ? <DesktopShell /> : <DesktopLoginPage />}
+    </>
+  );
 }
 
 // Backend the daemon should connect to — same URL the renderer talks to.
