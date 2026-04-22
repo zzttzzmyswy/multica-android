@@ -3,6 +3,7 @@ package daemon
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -57,11 +58,75 @@ func TestListRuntimeLocalSkills_Claude(t *testing.T) {
 	if skill.Description != "Review pull requests" {
 		t.Fatalf("description = %q", skill.Description)
 	}
-	if skill.FileCount != 1 {
-		t.Fatalf("file_count = %d, want 1", skill.FileCount)
+	// 2 = supporting file (templates/check.md) + SKILL.md itself.
+	// Bundle file count purposely excludes SKILL.md (it travels in
+	// `Content`) but the summary count adds it back so the user sees
+	// the real total.
+	if skill.FileCount != 2 {
+		t.Fatalf("file_count = %d, want 2", skill.FileCount)
 	}
 	if skill.SourcePath != "~/.claude/skills/review-helper" {
 		t.Fatalf("source_path = %q", skill.SourcePath)
+	}
+}
+
+// Skill installers (for example lark-cli) place every skill at a shared
+// location like ~/.agents/skills/<name> and symlink each one into the
+// runtime root (~/.claude/skills/<name>). The previous filepath.WalkDir
+// path filtered every symlink out via os.ModeSymlink, so users with
+// dozens of installed skills only saw the few they had cloned in place.
+// listRuntimeLocalSkills must follow those symlinks.
+func TestListRuntimeLocalSkills_FollowsSymlinkedSkillDirs(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// Real skill lives outside the runtime root.
+	target := writeTestLocalSkill(t, filepath.Join(home, ".agents", "skills"), "lark-doc", map[string]string{
+		"SKILL.md":  "---\nname: Lark Doc\ndescription: Drive lark docs\n---\n# Lark Doc\n",
+		"helper.md": "stub",
+	})
+
+	// Runtime root points at it via symlink, the way installers ship it.
+	skillsRoot := filepath.Join(home, ".claude", "skills")
+	if err := os.MkdirAll(skillsRoot, 0o755); err != nil {
+		t.Fatalf("mkdir skills root: %v", err)
+	}
+	if err := os.Symlink(target, filepath.Join(skillsRoot, "lark-doc")); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+
+	// Sanity: also seed a regular non-symlink skill so we know enumeration
+	// returns both, in stable order.
+	writeTestLocalSkill(t, skillsRoot, "review-helper", map[string]string{
+		"SKILL.md": "---\nname: Review Helper\n---\n",
+	})
+
+	skills, supported, err := listRuntimeLocalSkills("claude")
+	if err != nil {
+		t.Fatalf("listRuntimeLocalSkills: %v", err)
+	}
+	if !supported {
+		t.Fatal("claude should be supported")
+	}
+	if len(skills) != 2 {
+		t.Fatalf("expected 2 skills, got %d (%v)", len(skills), skills)
+	}
+
+	bySymlinkKey := skills[0]
+	if bySymlinkKey.Key != "lark-doc" {
+		bySymlinkKey = skills[1]
+	}
+	if bySymlinkKey.Key != "lark-doc" {
+		t.Fatalf("symlinked skill missing from result: %v", skills)
+	}
+	if bySymlinkKey.Name != "Lark Doc" {
+		t.Fatalf("symlinked skill name = %q, want Lark Doc", bySymlinkKey.Name)
+	}
+	// Source path is reported relative to the *runtime root* (~/.claude/...),
+	// not the resolved target — that's what the user expects to see in the
+	// import dialog and matches the non-symlink case.
+	if bySymlinkKey.SourcePath != "~/.claude/skills/lark-doc" {
+		t.Fatalf("symlinked skill source_path = %q", bySymlinkKey.SourcePath)
 	}
 }
 
@@ -93,6 +158,55 @@ func TestListRuntimeLocalSkills_CodexUsesSharedCODEXHOME(t *testing.T) {
 	}
 	if skills[0].SourcePath != filepath.Join(codexHome, "skills", "debugger") {
 		t.Fatalf("source_path = %q", skills[0].SourcePath)
+	}
+}
+
+// opencode (and possibly future providers) lay skills out one level deep,
+// e.g. ~/.config/opencode/skills/release/reporter/SKILL.md.
+// loadRuntimeLocalSkillBundle already accepts that nested key, so the list
+// endpoint must surface those skills too — otherwise the import dialog
+// hides skills the load endpoint can fetch and users can't pick them.
+//
+// The walker also has to short-circuit at the outermost SKILL.md it finds:
+// nested SKILL.md files inside an already-registered skill (e.g. inside
+// `top/SKILL.md`'s own template tree) are part of the parent skill's
+// bundle, not separate skills.
+func TestListRuntimeLocalSkills_DescendsIntoNestedSkillDirs(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	root := filepath.Join(home, ".config", "opencode", "skills")
+
+	// Top-level skill — should register at key="top" and its child SKILL.md
+	// must NOT register as a separate skill.
+	writeTestLocalSkill(t, root, "top", map[string]string{
+		"SKILL.md":            "---\nname: Top\n---\n",
+		"templates/SKILL.md":  "not a real skill — sub-template that happens to share the filename",
+	})
+
+	// Nested skill — only valid SKILL.md is at depth 2.
+	writeTestLocalSkill(t, root, "release/reporter", map[string]string{
+		"SKILL.md": "---\nname: Release Reporter\n---\n",
+	})
+
+	skills, supported, err := listRuntimeLocalSkills("opencode")
+	if err != nil {
+		t.Fatalf("listRuntimeLocalSkills: %v", err)
+	}
+	if !supported {
+		t.Fatal("opencode should be supported")
+	}
+
+	keys := make([]string, 0, len(skills))
+	for _, s := range skills {
+		keys = append(keys, s.Key)
+	}
+	// Two registered skills, "top" and "release/reporter" — and crucially
+	// NOT "top/templates" (the inner SKILL.md must be ignored once the
+	// parent qualified).
+	wantKeys := []string{"release/reporter", "top"}
+	if !reflect.DeepEqual(keys, wantKeys) {
+		t.Fatalf("keys = %v, want %v", keys, wantKeys)
 	}
 }
 
