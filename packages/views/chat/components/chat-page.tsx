@@ -256,12 +256,7 @@ export function ChatPage() {
           <EmptyState agentName={activeAgent?.name} onPickPrompt={handleSend} />
         )}
 
-        <div
-          className={cn(
-            "mx-auto w-full max-w-3xl pb-4",
-            hasMessages ? "" : "pb-8",
-          )}
-        >
+        <div className="mx-auto w-full max-w-3xl pb-4">
           <ChatInput
             onSend={handleSend}
             onStop={handleStop}
