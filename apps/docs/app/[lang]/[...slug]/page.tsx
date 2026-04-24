@@ -8,9 +8,13 @@ import {
 import { notFound } from "next/navigation";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import type { Metadata } from "next";
+import { docsAlternates } from "@/lib/site";
 
-export default function Page() {
-  const page = source.getPage([]);
+export default async function Page(props: {
+  params: Promise<{ lang: string; slug: string[] }>;
+}) {
+  const params = await props.params;
+  const page = source.getPage(params.slug, params.lang);
   if (!page) notFound();
 
   const MDX = page.data.body;
@@ -26,12 +30,20 @@ export default function Page() {
   );
 }
 
-export function generateMetadata(): Metadata {
-  const page = source.getPage([]);
+export function generateStaticParams() {
+  return source.generateParams().filter((p) => p.slug.length > 0);
+}
+
+export async function generateMetadata(props: {
+  params: Promise<{ lang: string; slug: string[] }>;
+}): Promise<Metadata> {
+  const params = await props.params;
+  const page = source.getPage(params.slug, params.lang);
   if (!page) notFound();
 
   return {
     title: page.data.title,
     description: page.data.description,
+    alternates: docsAlternates(params.slug),
   };
 }
