@@ -4,7 +4,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-const mockListSkills = vi.hoisted(() => vi.fn());
 const mockResolveRuntimeLocalSkillImport = vi.hoisted(() => vi.fn());
 const mockRuntimeListOptions = vi.hoisted(() => vi.fn());
 const mockRuntimeLocalSkillsOptions = vi.hoisted(() => vi.fn());
@@ -13,28 +12,14 @@ vi.mock("@multica/core/hooks", () => ({
   useWorkspaceId: () => "ws-1",
 }));
 
-// The runtime selector now filters to runtimes owned by the current user
-// to mirror the Runtimes page's "Mine" default. Stub useAuthStore so the
-// panel sees user-1 — the owner of the seeded runtime in beforeEach.
 vi.mock("@multica/core/auth", () => {
   const stateUser = { id: "user-1", email: "u@example.com", name: "User" };
-  const useAuthStore = (selector?: any) => {
+  const useAuthStore = (selector?: (s: { user: typeof stateUser }) => unknown) => {
     const state = { user: stateUser };
     return selector ? selector(state) : state;
   };
   return { useAuthStore };
 });
-
-vi.mock("@multica/core/api", () => ({
-  api: {
-    listSkills: (...args: unknown[]) => mockListSkills(...args),
-    createSkill: vi.fn(),
-    importSkill: vi.fn(),
-    updateSkill: vi.fn(),
-    deleteSkill: vi.fn(),
-    getSkill: vi.fn(),
-  },
-}));
 
 vi.mock("@multica/core/runtimes", () => ({
   runtimeListOptions: (...args: unknown[]) => mockRuntimeListOptions(...args),
@@ -47,19 +32,6 @@ vi.mock("@multica/core/runtimes", () => ({
     mockResolveRuntimeLocalSkillImport(...args),
 }));
 
-vi.mock("react-resizable-panels", () => ({
-  useDefaultLayout: () => ({
-    defaultLayout: undefined,
-    onLayoutChanged: vi.fn(),
-  }),
-}));
-
-vi.mock("@multica/ui/components/ui/resizable", () => ({
-  ResizablePanelGroup: ({ children }: any) => <div>{children}</div>,
-  ResizablePanel: ({ children }: any) => <div>{children}</div>,
-  ResizableHandle: () => <div data-testid="resize-handle" />,
-}));
-
 vi.mock("sonner", () => ({
   toast: {
     error: vi.fn(),
@@ -67,29 +39,23 @@ vi.mock("sonner", () => ({
   },
 }));
 
-import SkillsPage from "./skills-page";
+import { RuntimeLocalSkillImportPanel } from "./runtime-local-skill-import-panel";
 
-function renderSkillsPage() {
+function renderPanel() {
   const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-      },
-    },
+    defaultOptions: { queries: { retry: false } },
   });
-
   return render(
     <QueryClientProvider client={queryClient}>
-      <SkillsPage />
+      <RuntimeLocalSkillImportPanel />
     </QueryClientProvider>,
   );
 }
 
-describe("SkillsPage", () => {
+describe("RuntimeLocalSkillImportPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockListSkills.mockResolvedValue([]);
     mockRuntimeListOptions.mockReturnValue({
       queryKey: ["runtimes", "ws-1", "list"],
       queryFn: () =>
@@ -145,36 +111,40 @@ describe("SkillsPage", () => {
     });
   });
 
-  it("imports a local skill via the From Runtime tab in the Add Skill dialog", async () => {
-    renderSkillsPage();
+  it("imports a local skill from the selected runtime", async () => {
+    renderPanel();
 
-    // Old flow had a dedicated "Import From Runtime" button. The dialog
-    // now has a single "+ Add skill" entry point with three tabs; the
-    // empty-state row also surfaces the same "Add Skill" button. Either
-    // opens the unified dialog.
-    const addButtons = await screen.findAllByRole("button", { name: /Add Skill/i });
-    fireEvent.click(addButtons[0]!);
-
-    expect(await screen.findByText("Add Workspace Skill")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("tab", { name: /From Runtime/i }));
-
-    expect(await screen.findByText("Review Helper")).toBeInTheDocument();
+    // Five-step async cascade (runtime list → setSelectedRuntimeId effect →
+    // skills query → auto-select effect → row render). Fast locally, slow on
+    // CI — bump timeouts above RTL's 1 s default so the jsdom/Vitest work
+    // queue actually has time to drain.
+    expect(
+      await screen.findByText("Review Helper", {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
 
     const importButton = screen.getByRole("button", {
       name: /Import to Workspace/i,
     });
-    await waitFor(() => {
-      expect(importButton).not.toBeDisabled();
-    });
+    await waitFor(
+      () => {
+        expect(importButton).not.toBeDisabled();
+      },
+      { timeout: 5000 },
+    );
     fireEvent.click(importButton);
 
-    await waitFor(() => {
-      expect(mockResolveRuntimeLocalSkillImport).toHaveBeenCalledWith("runtime-1", {
-        skill_key: "review-helper",
-        name: "Review Helper",
-        description: "Review pull requests",
-      });
-    });
+    await waitFor(
+      () => {
+        expect(mockResolveRuntimeLocalSkillImport).toHaveBeenCalledWith(
+          "runtime-1",
+          {
+            skill_key: "review-helper",
+            name: "Review Helper",
+            description: "Review pull requests",
+          },
+        );
+      },
+      { timeout: 5000 },
+    );
   });
 });
