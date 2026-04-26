@@ -284,6 +284,27 @@ export function createEnDict(allowSignup: boolean): LandingDict {
     },
     entries: [
       {
+        version: "0.2.17",
+        date: "2026-04-26",
+        title: "Custom Agent Env, Better Failure Messages & Reliability Fixes",
+        changes: [],
+        features: [
+          "`multica agent create/update --custom-env KEY=VALUE` injects custom environment variables into agent runs",
+          "Agent failure messages now include a tail of the runtime CLI's stderr — much easier to debug runtime errors",
+          "CLI update download timeout is now configurable, so slow links no longer abort `multica update`",
+        ],
+        improvements: [
+          "Daemon reports cancelled tasks as `cancelled` instead of `timeout`, and reconciles agent status when an issue's tasks are cancelled",
+          "Server heartbeat split into probe/claim with slow-log + a model-list running-timeout, so a lost heartbeat no longer wedges the UI",
+        ],
+        fixes: [
+          "Server validates `assignee_id` on issue create/update so phantom IDs are rejected, and `DeleteIssue` uses the resolved issue ID",
+          "Pi runtime now reads/writes `.pi/skills` instead of the old `.pi/agent/skills` path",
+          "Windows daemon uses `CREATE_NEW_CONSOLE` so grandchild console popups no longer appear when launching agents",
+          "Autopilot run-only context is now properly forwarded to the agent",
+        ],
+      },
+      {
         version: "0.2.16",
         date: "2026-04-24",
         title: "Chat V2, Issue Right-Click Menu & In-App Feedback",
