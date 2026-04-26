@@ -284,6 +284,38 @@ export function createEnDict(allowSignup: boolean): LandingDict {
     },
     entries: [
       {
+        version: "0.2.16",
+        date: "2026-04-24",
+        title: "Chat V2, Issue Right-Click Menu & In-App Feedback",
+        changes: [],
+        features: [
+          "Chat V2 — dedicated sidebar entry and full main-area page for AI conversations",
+          "Right-click context menu on issues with a unified action set across list, board, and detail",
+          "In-app feedback flow with a new Help launcher centralizing docs, support, and feedback",
+          "Autopilot modal redesigned — simpler schema and consistent schedule UI across creation and edit",
+          "Skills page redesigned — list + detail pages, scroll-fade card layout, shared PageHeader and mobile nav",
+          "Bilingual flat-content rewrite of the docs site — English and Chinese sections share one tree",
+        ],
+        improvements: [
+          "Agent profile card appears on avatar hover for quick context",
+          "Native right-click menu on desktop with clipboard actions (copy / paste / cut / select all)",
+          "Daemon agent prompts hardened to break self-mention loops between agents",
+          "Server readiness health endpoints for proper rollout / ingress probes",
+          "Daemon GC defaults tightened and now accept flexible duration suffixes (e.g. `7d`, `12h`)",
+          "Test Connection / runtime ping removed — runtime reachability is detected automatically",
+        ],
+        fixes: [
+          "Chat no longer flickers when a streamed response finalizes, and the input box no longer jumps when sending the first message",
+          "Desktop reopens the last-used workspace on app start instead of falling back to the first one",
+          "Editor preserves nested ordered lists through the readonly render path",
+          "CLI `browser-login` now works from a machine that isn't running the server",
+          "Daemon suppresses extra terminal windows when launching agents on Windows, and retries local-skill reports on transient server errors",
+          "`/api/config` is publicly reachable again so unauthenticated clients can bootstrap",
+          "Defense-in-depth owner check on workspace deletion, and `/health/realtime` metrics restricted to authorized callers (security)",
+          "Hermes ACP runtime now receives the configured model; OpenClaw agent discovery timeout raised to 30s",
+        ],
+      },
+      {
         version: "0.2.15",
         date: "2026-04-22",
         title: "Local Skills, LaTeX, Focus Mode & Orphan-Task Recovery",
