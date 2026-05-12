@@ -178,6 +178,39 @@ func (q *Queries) GetGitHubPullRequest(ctx context.Context, arg GetGitHubPullReq
 	return i, err
 }
 
+const getSiblingPullRequestStateCountsForIssue = `-- name: GetSiblingPullRequestStateCountsForIssue :one
+SELECT
+    COALESCE(SUM(CASE WHEN pr.state IN ('open', 'draft') THEN 1 ELSE 0 END), 0)::bigint AS open_count,
+    COALESCE(SUM(CASE WHEN pr.state = 'merged' THEN 1 ELSE 0 END), 0)::bigint AS merged_count
+FROM github_pull_request pr
+JOIN issue_pull_request ipr ON ipr.pull_request_id = pr.id
+WHERE ipr.issue_id = $1
+  AND pr.id <> $2
+`
+
+type GetSiblingPullRequestStateCountsForIssueParams struct {
+	IssueID pgtype.UUID `json:"issue_id"`
+	ID      pgtype.UUID `json:"id"`
+}
+
+type GetSiblingPullRequestStateCountsForIssueRow struct {
+	OpenCount   int64 `json:"open_count"`
+	MergedCount int64 `json:"merged_count"`
+}
+
+// Returns, for the PRs linked to an issue excluding one PR by id (the PR
+// currently being processed by the webhook handler), how many are still in
+// flight (open or draft) and how many have already merged. The webhook
+// handler combines these with the current event's state to decide whether
+// to auto-advance the issue: the issue moves to done only when there is no
+// in-flight sibling AND at least one linked PR (current or sibling) merged.
+func (q *Queries) GetSiblingPullRequestStateCountsForIssue(ctx context.Context, arg GetSiblingPullRequestStateCountsForIssueParams) (GetSiblingPullRequestStateCountsForIssueRow, error) {
+	row := q.db.QueryRow(ctx, getSiblingPullRequestStateCountsForIssue, arg.IssueID, arg.ID)
+	var i GetSiblingPullRequestStateCountsForIssueRow
+	err := row.Scan(&i.OpenCount, &i.MergedCount)
+	return i, err
+}
+
 const linkIssueToPullRequest = `-- name: LinkIssueToPullRequest :exec
 
 INSERT INTO issue_pull_request (
