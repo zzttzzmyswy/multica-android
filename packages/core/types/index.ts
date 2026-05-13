@@ -100,3 +100,16 @@ export type {
   GetAutopilotResponse,
   ListAutopilotRunsResponse,
 } from "./autopilot";
+export type {
+  Squad,
+  SquadMember,
+  SquadMemberType,
+  SquadActivityLog,
+  SquadActivityOutcome,
+  CreateSquadRequest,
+  UpdateSquadRequest,
+  AddSquadMemberRequest,
+  RemoveSquadMemberRequest,
+  UpdateSquadMemberRoleRequest,
+  CreateSquadActivityLogRequest,
+} from "./squad";
