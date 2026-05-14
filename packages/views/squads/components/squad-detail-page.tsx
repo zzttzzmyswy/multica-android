@@ -53,6 +53,7 @@ import { ChevronDown, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import type { Squad, SquadMember, Agent, CreateAgentRequest, MemberWithUser } from "@multica/core/types";
 import { useT } from "../../i18n";
+import { matchesPinyin } from "../../editor/extensions/pinyin-match";
 
 export function SquadDetailPage() {
   const { t } = useT("squads");
@@ -509,8 +510,8 @@ function AddMemberDialog({
   const [submitting, setSubmitting] = useState(false);
 
   const query = pickerFilter.trim().toLowerCase();
-  const filteredMembers = availableMembers.filter((m) => m.name.toLowerCase().includes(query));
-  const filteredAgents = availableAgents.filter((a) => a.name.toLowerCase().includes(query));
+  const filteredMembers = availableMembers.filter((m) => m.name.toLowerCase().includes(query) || matchesPinyin(m.name, query));
+  const filteredAgents = availableAgents.filter((a) => a.name.toLowerCase().includes(query) || matchesPinyin(a.name, query));
 
   const canSubmit = !!target && !submitting;
 
