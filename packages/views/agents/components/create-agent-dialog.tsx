@@ -108,6 +108,7 @@ export function CreateAgentDialog({
   currentUserId,
   template,
   existingAgentNames,
+  squadId,
   onClose,
   onCreate,
 }: {
@@ -129,6 +130,14 @@ export function CreateAgentDialog({
   // when absent, default names are used verbatim and 409 stays the
   // safety net.
   existingAgentNames?: readonly string[];
+  // When set, every successful create (manual, duplicate, or template)
+  // is followed by addSquadMember(squadId, agent) so the new agent
+  // joins this squad. The template path also skips its usual
+  // navigation to the agent detail page so the user stays on the
+  // squad. If the squad-join call fails the agent still exists and
+  // the dialog surfaces a warning toast — the user can add it
+  // manually from the Members tab.
+  squadId?: string;
   onClose: () => void;
   // Returns the created Agent so the dialog can run a follow-up
   // setAgentSkills with the IDs the user picked in the form. Pre-skill-
@@ -208,6 +217,36 @@ export function CreateAgentDialog({
     setStep({ kind: "blank-form" });
   };
 
+  // Shared squad-join follow-up. Returns nothing — the caller has
+  // already shown its create-success toast; we only need to surface a
+  // warning when the agent landed but the squad-join failed. Cache
+  // invalidation for the squad's members list rides along so the
+  // Members tab re-renders without a manual refetch.
+  const attachToSquad = async (agentId: string, displayName: string) => {
+    if (!squadId) return;
+    try {
+      await api.addSquadMember(squadId, {
+        member_type: "agent",
+        member_id: agentId,
+      });
+      if (wsId) {
+        queryClient.invalidateQueries({
+          queryKey: [...workspaceKeys.squads(wsId), squadId, "members"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: [...workspaceKeys.squads(wsId), squadId],
+        });
+      }
+    } catch (err) {
+      toast.warning(
+        t(($) => $.create_dialog.squad_join_failed_toast, {
+          name: displayName,
+          error: err instanceof Error ? err.message : "unknown error",
+        }),
+      );
+    }
+  };
+
   // Template path is one-click — picker card click goes straight to the
   // API. Defaults: name auto-deduped, runtime = first usable one,
   // visibility = workspace. User refines on the detail page if needed.
@@ -253,6 +292,14 @@ export function CreateAgentDialog({
           t(($) => $.create_dialog.template_created_toast, { name: candidate }),
         );
       }
+      // Squad context: attach the freshly created agent to the squad
+      // before closing — and skip the agent-detail navigation so the
+      // user lands back on the squad page where they triggered the
+      // flow. Failures here are non-fatal; the agent exists and can be
+      // added manually if the join call 4xxs.
+      if (squadId && resp.agent.id) {
+        await attachToSquad(resp.agent.id, candidate);
+      }
       onClose();
       // Land on the new agent's detail page so the user can verify or
       // customise instructions / skills / avatar — matches the navigation
@@ -260,8 +307,9 @@ export function CreateAgentDialog({
       // response failed schema parsing (`agent.id === ""`, see schema
       // fallback) we skip the navigation: the agent was created server-
       // side, the list-invalidation above will surface it, and a push
-      // to `/agents/` would land on a broken detail page.
-      if (resp.agent.id) {
+      // to `/agents/` would land on a broken detail page. Squad-context
+      // entry also skips the push — the user wants to stay on Members.
+      if (resp.agent.id && !squadId) {
         navigation.push(paths.agentDetail(resp.agent.id));
       }
     } catch (err) {
@@ -348,6 +396,14 @@ export function CreateAgentDialog({
             }),
           );
         }
+      }
+      // Squad context: attach the agent after skills land so the
+      // squad's Members tab shows the agent with its skills already
+      // in place. Atomicity is best-effort by design (see plan in
+      // MUL-2178) — a partial failure surfaces a warning toast and
+      // the user can retry from the Add Member dialog.
+      if (createdAgent && squadId) {
+        await attachToSquad(createdAgent.id, createdAgent.name);
       }
       onClose();
     } catch (err) {
