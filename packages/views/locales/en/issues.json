@@ -191,7 +191,9 @@
     "squad_leader_no_action_reason": "evaluated: no action needed ({{reason}})",
     "squad_leader_failed": "evaluation failed",
     "squad_leader_failed_reason": "evaluation failed: {{reason}}",
-    "coalesced_badge": "×{{count}}"
+    "coalesced_badge": "×{{count}}",
+    "activity_count_one": "{{count}} activity",
+    "activity_count_other": "{{count}} activities"
   },
   "comment": {
     "delete_title": "Delete comment",
