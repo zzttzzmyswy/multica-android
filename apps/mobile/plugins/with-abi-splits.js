@@ -39,6 +39,53 @@ const ABI_SPLITS_GRADLE_BLOCK = `
     }
 `;
 
+// Dead-font stripper. expo-router pulls in `expo-symbols` (and through it
+// `@expo-google-fonts/material-symbols`) as a transitive dependency, which the
+// RN gradle plugin's `createBundle<variant>JsAndAssets` task copies into
+// `build/generated/res/react/<variant>/raw/` on every build — shorthand `res/raw`
+// font resources (~6.8MB across the 100Thin..700Bold weight variants). The app
+// imports zero of them and uses plain JS `<Tabs>` from expo-router (see
+// apps/mobile/app/(app)/[workspace]/(tabs)/_layout.tsx — NativeTabs was tried and
+// dropped), so no runtime code path ever `loadAsync`s these fonts; they are dead
+// weight whose `tools:keep` entry in the generated keep.xml hides them from
+// shrinkResources.
+//
+// We can't drop them at the JS/dependency layer (expo-router hard-depends on
+// expo-symbols), so we strip them from the generated res/react raw dir at the
+// start of each merge, then neutralise their keep.xml entries so resource
+// shrinking stays consistent. This must run inside the merge task (not just the
+// generator's doLast) because the generator re-creates the files every build and
+// an up-to-date generator would skip a doLast hook.
+const STRIP_DEAD_FONTS_GRADLE = `
+// Multica: strip expo-symbols' Material Symbols raw fonts (dead resources) and
+// their keep.xml entries before resource merging, injected from
+// plugins/with-abi-splits.js. Preserves ionicons (the one font the app loads).
+tasks.whenTaskAdded { t ->
+  if (t.name ==~ /merge.*Resources/) {
+    t.doFirst {
+      def reactRes = layout.buildDirectory.dir("generated/res/react").get().asFile
+      if (!reactRes.exists()) return
+      reactRes.eachDirRecurse { dir ->
+        if (dir.name != "raw") return
+        dir.listFiles({ f ->
+          f.isFile() && f.name.endsWith(".ttf") && f.name.toLowerCase().contains("materialsymbols")
+        } as java.io.FileFilter)?.each { f ->
+          logger.lifecycle("Multica: stripping dead font resource \${f.name}")
+          f.delete()
+        }
+        def keep = new File(dir, "keep.xml")
+        def s = keep.exists() ? keep.getText("UTF-8") : ""
+        def deadKeep = ",@raw/__node_modules_pnpm_expogooglefontsmaterialsymbols[^,]+"
+        def cleaned = s.replaceAll(deadKeep as String, "")
+        // Also drop a leading '@raw/...materialsymbols' if it was first.
+        cleaned = cleaned.replaceAll("@raw/__node_modules_pnpm_expogooglefontsmaterialsymbols[^,]+" as String, "")
+        if (cleaned != s) keep.setText(cleaned, "UTF-8")
+      }
+    }
+  }
+}
+`;
+
 // Default the release build to R8 + resource shrinking. The template reads
 // these via findProperty with a 'false' fallback, so seeding them ON here makes
 // shrink the default; `-Pandroid.enableMinifyInReleaseBuilds=false` still wins
@@ -68,6 +115,13 @@ module.exports = function withAbiSplits(config) {
           /(\n\s*androidResources \{)/,
           `${ABI_SPLITS_GRADLE_BLOCK}$1`,
         );
+      }
+      // The dead-font strip splice needs to sit at the end of the gradle file,
+      // outside the android {} block, so `tasks.whenTaskAdded` is active during
+      // configuration.
+      if (!cfg.modResults.contents.includes("strip expo-symbols' Material Symbols raw fonts")) {
+        cfg.modResults.contents =
+          cfg.modResults.contents.trimEnd() + "\n" + STRIP_DEAD_FONTS_GRADLE + "\n";
       }
       return cfg;
     }),
