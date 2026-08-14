@@ -5,6 +5,11 @@
   "main": "expo-router/entry",
   "scripts": {
     "dev": "expo start",
+    "dev:android": "expo start --android",
+    "android": "expo run:android",
+    "android:staging": "dotenv -e .env.staging -- cross-env APP_ENV=staging expo run:android",
+    "android:prod": "dotenv -e .env.production -- cross-env APP_ENV=production expo run:android",
+    "prebuild:android": "expo prebuild --platform android",
     "dev:staging": "dotenv -e .env.staging -- cross-env APP_ENV=staging expo start",
     "dev:prod": "dotenv -e .env.production -- cross-env APP_ENV=production expo start",
     "ios": "expo run:ios",

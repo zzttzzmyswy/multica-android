@@ -30,6 +30,16 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     // (apps/desktop/build/icon.png). Expo prebuild generates every required
     // iOS icon size from this single PNG.
     icon: "./assets/icon.png",
+    android: {
+      // Per-variant android package, mirroring the iOS bundleIdentifier so
+      // dev / staging / prod builds can coexist. This is the core Android
+      // adaptation that lets a single Expo codebase ship to Android too.
+      package: isProd
+        ? (process.env.EXPO_ANDROID_PACKAGE_PROD ?? "ai.multica.mobile")
+        : isStaging
+          ? "ai.multica.mobile.staging"
+          : (process.env.EXPO_ANDROID_PACKAGE_DEV ?? "ai.multica.mobile.dev"),
+    },
     ios: {
       supportsTablet: false,
       // Per-variant bundle id overrides exist for one reason: an Apple ID
