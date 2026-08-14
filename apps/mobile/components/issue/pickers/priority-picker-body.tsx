@@ -3,7 +3,7 @@
  * enum values. See status-picker-body.tsx for the split rationale.
  */
 import { Pressable, ScrollView, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { useColorScheme } from "nativewind";
 import type { IssuePriority } from "@multica/core/types";
 import { Text } from "@/components/ui/text";

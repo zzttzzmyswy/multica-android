@@ -6,7 +6,7 @@
  * in-flight, so the user can't double-tap.
  */
 import { ActivityIndicator, Pressable, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { cn } from "@/lib/utils";
 
 interface Props {

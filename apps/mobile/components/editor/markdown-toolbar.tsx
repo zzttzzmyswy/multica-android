@@ -16,7 +16,7 @@
  * before step 4 wires the picker + upload pipeline.
  */
 import { Pressable, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 

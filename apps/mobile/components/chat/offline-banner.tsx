@@ -12,7 +12,7 @@
  * fetch window — copy only appears when there's a real-world implication for
  * the message the user is about to send.
  */
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { View } from "react-native";
 import type { AgentAvailability } from "@multica/core/agents";
 import { Text } from "@/components/ui/text";

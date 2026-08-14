@@ -13,7 +13,7 @@
  * Theme picker stays inline (3 fixed options, fits in one section).
  */
 import { Alert, ActivityIndicator, Pressable, ScrollView, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import type { Workspace } from "@multica/core/types";

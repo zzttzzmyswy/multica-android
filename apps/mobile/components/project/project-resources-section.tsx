@@ -10,7 +10,7 @@
  */
 import { ActivityIndicator, Alert, Linking, Pressable, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import type {
   GithubRepoResourceRef,
   ProjectResource,

@@ -21,7 +21,7 @@
  * `packages/views/chat/components/chat-message-list.tsx`).
  */
 import { View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import type { TaskMessagePayload } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import {

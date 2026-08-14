@@ -10,7 +10,7 @@
  * already ships.
  */
 import { type ComponentProps } from "react";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { useTheme } from "@react-navigation/native";
 import { Button, type ButtonProps } from "@/components/ui/button";
 
