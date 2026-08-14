@@ -1,17 +1,27 @@
 /**
- * Pure-function tests for the mobile attachment URL resolver. We exercise
- * the with-base form because `resolveAttachmentUrl` itself is bound at
- * module load to `process.env.EXPO_PUBLIC_API_URL`, which is what we
- * intentionally don't want to mutate in tests — the with-base helper is
- * the same code path with the API base passed in explicitly.
+ * Pure-function tests for the mobile attachment URL resolver.
  *
  * Coverage target: every branch the call sites in the app rely on —
  *   - `comment-attachment-list.tsx`         → file chip Linking.openURL
  *   - `markdown-image.tsx`                  → mc:// + RN image loader
  *   - `composer-attachment-row.tsx`         → completed non-image chip
  *                                             tap → Linking.openURL
+ *
+ * The with-base form is the primary target. `resolveAttachmentUrl` re-reads
+ * the runtime API base from `server-config` on each call; that module's
+ * `expo-secure-store` dependency is mocked here so this pure Node suite
+ * stays runnable, and the env-bound `resolveAttachmentUrl` cases focus on
+ * branches that don't depend on a configured server (absolute URLs /
+ * nullish inputs — both short-circuit before touching the base).
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("expo-secure-store", () => ({
+  getItemAsync: vi.fn(),
+  setItemAsync: vi.fn(),
+  deleteItemAsync: vi.fn(),
+}));
+
 import {
   resolveAttachmentUrl,
   resolveAttachmentUrlWithBase,
@@ -109,15 +119,16 @@ describe("composer file chip — completed non-image attachment", () => {
   });
 });
 
-describe("resolveAttachmentUrl (env-bound)", () => {
-  it("matches the with-base form for an absolute URL regardless of EXPO_PUBLIC_API_URL", () => {
-    // The bound form is module-evaluation-time, but for absolute URLs the
-    // base is irrelevant — guarantees pass-through stays stable.
+describe("resolveAttachmentUrl (no server configured)", () => {
+  it("passes an absolute URL through unchanged (base is irrelevant)", () => {
     const absolute = "https://cdn.example.test/file.pdf?Signature=s";
     expect(resolveAttachmentUrl(absolute)).toBe(absolute);
   });
 
   it("returns null for empty input", () => {
+    // With no `EXPO_PUBLIC_API_URL` and no override, `getDisplayBaseUrl`
+    // yields "" — so a server-relative path resolves to "" → null via the
+    // with-base form's nullish guard.
     expect(resolveAttachmentUrl(undefined)).toBeNull();
     expect(resolveAttachmentUrl(null)).toBeNull();
     expect(resolveAttachmentUrl("")).toBeNull();

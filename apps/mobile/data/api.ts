@@ -119,12 +119,11 @@ import {
 } from "./schemas";
 import type { ZodType } from "zod";
 import { getCurrentSlug } from "./workspace-store";
+import { getApiBaseUrl, getEnvBaseUrl, setApiBaseUrl } from "./server-config";
 import { parseWithFallback } from "@/lib/parse-response";
 import { createRequestId } from "@/lib/request-id";
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
-
-if (!API_URL) {
+if (!getEnvBaseUrl()) {
   throw new Error(
     "EXPO_PUBLIC_API_URL is not set. Add it to apps/mobile/.env.development.local " +
       "(see apps/mobile/.env.staging for an example).",
@@ -189,6 +188,15 @@ class ApiClient {
     this.options = { ...this.options, ...options };
   }
 
+  /** Point the app at a different Multica server at runtime. Persists the
+   *  override and makes it effective immediately — the underlying fetch chain
+   *  re-reads `getApiBaseUrl()` per request, and the realtime socket rebuilds
+   *  on the change notification. Rejects with a validation error on a
+   *  non-http(s) / hostless URL. */
+  async setBaseUrl(url: string): Promise<void> {
+    await setApiBaseUrl(url);
+  }
+
   private async fetch<T>(
     path: string,
     init: RequestInit & { signal?: AbortSignal } = {},
@@ -241,7 +249,7 @@ class ApiClient {
 
     let res: Response;
     try {
-      res = await fetch(`${API_URL}${path}`, {
+      res = await fetch(`${getApiBaseUrl()}${path}`, {
         ...init,
         signal: controller.signal,
         headers,
@@ -1222,7 +1230,7 @@ class ApiClient {
 
     console.log(`[api] → POST ${path}`, { rid, filename: asset.name });
 
-    const res = await fetch(`${API_URL}${path}`, {
+    const res = await fetch(`${getApiBaseUrl()}${path}`, {
       method: "POST",
       headers,
       body: formData,

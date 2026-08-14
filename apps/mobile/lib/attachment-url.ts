@@ -14,8 +14,9 @@
  * exactly. We don't import the core helper because its `getBaseUrl()`
  * pulls from a singleton ApiClient that lives in `@multica/core/api` —
  * not on the mobile sharing whitelist (apps/mobile/CLAUDE.md "mirror,
- * don't import"). Mobile reads its own `EXPO_PUBLIC_API_URL` from the
- * Expo env, the same value the rest of `data/api.ts` uses.
+ * don't import"). Mobile resolves relative attachment URLs against the
+ * *current* runtime API base from `server-config`, so a user-pointed
+ * server switch re-bases subsequent attachment URLs too.
  *
  * Contract:
  *   - null / undefined / "" → null (caller should treat as "no URL").
@@ -24,8 +25,7 @@
  *                             slash (we trim trailing slashes from the
  *                             base before joining).
  */
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
+import { getDisplayBaseUrl } from "@/data/server-config";
 
 export function resolveAttachmentUrlWithBase(
   rawUrl: string | null | undefined,
@@ -37,8 +37,16 @@ export function resolveAttachmentUrlWithBase(
   return `${trimmedBaseUrl}${rawUrl}`;
 }
 
+/**
+ * Resolve a server-relative URL against the *current* runtime API base.
+ * `getDisplayBaseUrl` never throws and yields "" when no server is
+ * configured — an empty base produces null (returns unchanged for
+ * absolute URLs), matching the historical `EXPO_PUBLIC_API_URL ?? ""`
+ * fallback. Every call reads the base live, so a user-pointed server
+ * switch is picked up on the next render.
+ */
 export function resolveAttachmentUrl(
   rawUrl: string | null | undefined,
 ): string | null {
-  return resolveAttachmentUrlWithBase(rawUrl, API_URL);
+  return resolveAttachmentUrlWithBase(rawUrl, getDisplayBaseUrl());
 }
