@@ -83,6 +83,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           },
         },
       ],
+      // Keeps the ABI-splitting gradle config in tracked source (the generated
+      // android/ tree is gitignored); injects on every prebuild, idempotently.
+      "./plugins/with-abi-splits.js",
     ],
     extra: { APP_ENV: env },
   };
