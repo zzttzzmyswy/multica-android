@@ -13,6 +13,7 @@ import { api } from "@/data/api";
 import { queryClient } from "@/data/query-client";
 import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { loadApiBaseUrl } from "@/data/server-config";
 import { LightboxProvider, prewarmHighlighter } from "@/lib/markdown";
 import { NAV_THEME } from "@/lib/theme";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -51,7 +52,15 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
         })();
       },
     });
-    initialize();
+    void (async () => {
+      // Restore a user-configured custom server URL (set from the login
+      // screen's Server item) into the cache BEFORE the first authenticated
+      // request. Skipping this makes initialize() → getMe() hit the build-time
+      // default host on a cold start, where the self-hosted token 401s, the
+      // token gets cleared, and the user is force re-logged-in.
+      await loadApiBaseUrl();
+      await initialize();
+    })();
   }, [initialize, qc]);
 
   return <>{children}</>;
