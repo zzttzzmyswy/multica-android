@@ -515,6 +515,8 @@
   "chat.chooseAgent": "选择 agent",
   "picker.lead": "负责人",
   "timeline.activity": "活动",
+  "timeline.subtasks": "子任务",
+  "timeline.stage": "第 {{stage}} 阶段",
   "timeline.new": "新内容",
   "timeline.newCount": "{{count}} 条新内容",
   "timeline.jumpToNew": "跳至 {{count}} 条新内容",

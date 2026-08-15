@@ -729,5 +729,20 @@ export const EMPTY_ISSUE_FALLBACK: import("@multica/core/types").Issue = {
   updated_at: "",
 };
 
+// Child issues (direct sub-issues) of a parent — `GET /api/issues/:id/children`.
+// Mirrors core's ChildIssuesResponseSchema (packages/core/api/schemas.ts:1135).
+// `.default([])` keeps a missing `issues` key from taking the page down.
+export const ChildIssuesResponseSchema = z.object({
+  issues: z.array(IssueSchema).default([]),
+}).loose();
+
+// Fallback for the children response when the shape drifts. The list region
+// treats `issues.length === 0` as "no sub-issues" and hides itself entirely.
+export const EMPTY_CHILD_ISSUES_RESPONSE: {
+  issues: import("@multica/core/types").Issue[];
+} = {
+  issues: [],
+};
+
 // Helpers re-exported for ergonomic single-import at the call site.
 export type { Label, Project, ProjectResource };

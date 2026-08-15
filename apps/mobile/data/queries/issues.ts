@@ -94,3 +94,18 @@ export const issueAttachmentsOptions = (wsId: string | null, id: string) =>
     queryFn: ({ signal }) => api.listAttachments(id, { signal }),
     enabled: !!wsId && !!id,
   });
+
+/**
+ * Direct sub-issues (children) of a parent issue — drives the sub-issue
+ * section in the issue detail header. Mirrors web's `childIssuesOptions`
+ * (packages/core/issues/queries.ts:458): returns an empty array when the
+ * parent has no children, letting the section hide itself entirely.
+ * Children are keyed under `issueKeys.children(wsId, id)` so WS activity
+ * that mutates a child flips this cache via the shared invalidation surface.
+ */
+export const issueChildrenOptions = (wsId: string | null, id: string) =>
+  queryOptions({
+    queryKey: issueKeys.children(wsId, id),
+    queryFn: ({ signal }) => api.listChildIssues(id, { signal }),
+    enabled: !!wsId && !!id,
+  });

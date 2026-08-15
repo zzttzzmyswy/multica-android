@@ -93,6 +93,7 @@ import { Text } from "@/components/ui/text";
 import { IssueHeaderCard } from "./issue-header-card";
 import { IssueDescription } from "./issue-description";
 import { IssueReactionRow } from "./issue-reaction-row";
+import { IssueChildrenSection } from "./issue-children-section";
 import { ActivityRow } from "./activity-row";
 import { CommentCard } from "./comment-card";
 import { useLastViewedStore } from "@/data/stores/last-viewed-store";
@@ -113,6 +114,11 @@ interface Props {
   timelineLoading: boolean;
   refreshing: boolean;
   onRefresh: () => void;
+  /** Direct sub-issues of the parent, for the sub-task section in the
+   *  header. `undefined` covers loading/error; an empty array hides the
+   *  section. */
+  subIssues?: Issue[];
+  wsSlug?: string;
   /** Inbox deep-link target. Root comment id OR reply id — replies live
    *  inline inside their parent's CommentCard, so a reply target scrolls
    *  to the parent's row and the card highlights the matching child. */
@@ -146,6 +152,8 @@ export function TimelineList({
   timelineLoading,
   refreshing,
   onRefresh,
+  subIssues,
+  wsSlug,
   highlightCommentId,
   highlightNonce,
 }: Props) {
@@ -363,6 +371,7 @@ export function TimelineList({
       <IssueHeaderCard issue={issue} />
       <IssueDescription issueId={issue.id} description={issue.description} />
       <IssueReactionRow issue={issue} />
+      <IssueChildrenSection subIssues={subIssues} wsSlug={wsSlug} />
       <View className="px-4 pt-4 pb-2 border-t border-border">
         <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
           {t("timeline.activity")}

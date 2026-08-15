@@ -31,6 +31,7 @@ import {
   issueDetailOptions,
   issueKeys,
   issueTimelineOptions,
+  issueChildrenOptions,
 } from "@/data/queries/issues";
 import { useDeleteIssue } from "@/data/mutations/issues";
 import { pinListOptions } from "@/data/queries/pins";
@@ -62,6 +63,7 @@ export default function IssueDetail() {
 
   const detail = useQuery(issueDetailOptions(wsId, id));
   const timeline = useQuery(issueTimelineOptions(wsId, id));
+  const children = useQuery(issueChildrenOptions(wsId, id));
 
   // Subscribe to per-issue WS events: status/priority/assignee/label
   // changes, comments, activity, reactions, agent task progress.
@@ -95,6 +97,7 @@ export default function IssueDetail() {
     await Promise.all([
       detail.refetch(),
       qc.invalidateQueries({ queryKey: issueKeys.timeline(wsId, id) }),
+      qc.invalidateQueries({ queryKey: issueKeys.children(wsId, id) }),
     ]);
   }, [detail, qc, wsId, id]);
 
@@ -208,6 +211,8 @@ export default function IssueDetail() {
             onRefresh={onRefresh}
             highlightCommentId={highlight}
             highlightNonce={h}
+            subIssues={children.data}
+            wsSlug={wsSlug}
           />
           <InlineCommentComposer issueId={id} />
         </View>

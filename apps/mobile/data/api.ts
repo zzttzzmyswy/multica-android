@@ -75,6 +75,7 @@ import {
   ChatPendingTaskSchema,
   ChatSessionListSchema,
   ChatSessionSchema,
+  ChildIssuesResponseSchema,
   EMPTY_ACTIVE_TASKS_RESPONSE,
   EMPTY_AGENT_LIST,
   EMPTY_AGENT_TASK_LIST,
@@ -82,6 +83,7 @@ import {
   EMPTY_CHAT_MESSAGE_LIST,
   EMPTY_CHAT_PENDING_TASK,
   EMPTY_CHAT_SESSION_LIST,
+  EMPTY_CHILD_ISSUES_RESPONSE,
   EMPTY_COMMENT,
   EMPTY_INBOX_LIST,
   EMPTY_ISSUE_FALLBACK,
@@ -706,6 +708,23 @@ class ApiClient {
       EMPTY_AGENT_TASK_LIST,
       { ...opts, endpoint: "GET /api/issues/:id/task-runs" },
     );
+  }
+
+  // GET /api/issues/:id/children — direct sub-issues of a parent. Returns the
+  // inner `issues` array (handler wraps it in `{ issues: Issue[] }`, core
+  // client.ts:995). The sub-issue section reads this to render the parent's
+  // children list with title + status + stage grouping.
+  async listChildIssues(
+    issueId: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<Issue[]> {
+    const parsed = await this.fetchValidated(
+      `/api/issues/${issueId}/children`,
+      ChildIssuesResponseSchema,
+      EMPTY_CHILD_ISSUES_RESPONSE,
+      { ...opts, endpoint: "GET /api/issues/:id/children" },
+    );
+    return parsed.issues;
   }
 
   async createComment(

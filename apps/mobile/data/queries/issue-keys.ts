@@ -29,6 +29,12 @@ export const issueKeys = {
     [...issueKeys.all(wsId), "detail", id] as const,
   timeline: (wsId: string | null, id: string) =>
     [...issueKeys.all(wsId), "timeline", id] as const,
+  // Direct sub-issues (children) of a parent issue. Drives the sub-issue
+  // section in the issue detail header. Prefix mirrors core's
+  // `children(wsId, id)` key so the same WS invalidation surface eventually
+  // drives both clients.
+  children: (wsId: string | null, id: string) =>
+    [...issueKeys.all(wsId), "children", id] as const,
   // Currently-running tasks for an issue (queued/dispatched/running). Drives
   // the "Working" state of the AgentActivityRow inside IssueHeaderCard.
   activeTasks: (wsId: string | null, id: string) =>

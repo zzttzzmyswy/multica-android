@@ -515,6 +515,8 @@
   "chat.chooseAgent": "Choose an agent",
   "picker.lead": "Lead",
   "timeline.activity": "Activity",
+  "timeline.subtasks": "Sub-tasks",
+  "timeline.stage": "Stage {{stage}}",
   "timeline.new": "New",
   "timeline.newCount": "{{count}} new",
   "timeline.jumpToNew": "Jump to {{count}} new {{messages}}",
