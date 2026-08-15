@@ -70,6 +70,32 @@ export function getDisplayBaseUrl(): string {
   return customBaseUrl ?? ENV_BASE_URL;
 }
 
+/** Build-time web origin for the "open on web" / "copy link" actions.
+ *  Prefer an explicit `EXPO_PUBLIC_WEB_URL` (official & hosted deployments
+ *  serve the web UI on a different host than the API — e.g. api.multica.ai
+ *  vs multica.ai). When unset — the self-hosted case, where web and API
+ *  share one origin such as `mu.zztweb.top` with this same app — fall back
+ *  to the scheme+host of the *effective* API base, so the link honors the
+ *  runtime server override (`setApiBaseUrl`) instead of a stale build-time
+ *  default. Never throws: callers treat an empty string as "no web link". */
+export function getWebBaseUrl(): string {
+  if (process.env.EXPO_PUBLIC_WEB_URL) {
+    return process.env.EXPO_PUBLIC_WEB_URL;
+  }
+  let apiBase: string;
+  try {
+    apiBase = getApiBaseUrl();
+  } catch {
+    return "";
+  }
+  try {
+    const url = new URL(apiBase);
+    return url.origin;
+  } catch {
+    return "";
+  }
+}
+
 /** Validate a user-entered server URL: must be a valid http(s) absolute URL
  *  with a host. Trailing slashes are stripped for the returned value. */
 export function normalizeServerBaseUrl(input: string): string | null {

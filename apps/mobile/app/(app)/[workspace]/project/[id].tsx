@@ -43,6 +43,7 @@ import { useCreatePin, useDeletePin } from "@/data/mutations/pins";
 import { useAuthStore } from "@/data/auth-store";
 import { useProjectRealtime } from "@/data/realtime/use-project-realtime";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { getWebBaseUrl } from "@/data/server-config";
 import { ActionSheet } from "@/lib/action-sheet";
 import { useTranslation } from "@/lib/i18n/react";
 
@@ -88,7 +89,7 @@ export default function ProjectDetail() {
 
   const onPressMore = () => {
     if (!project) return;
-    const wsUrl = process.env.EXPO_PUBLIC_WEB_URL;
+    const wsUrl = getWebBaseUrl();
     type ActionEntry = { kind: string; label: string };
     const actions: ActionEntry[] = [
       { kind: "cancel", label: t("issue.cancel") },

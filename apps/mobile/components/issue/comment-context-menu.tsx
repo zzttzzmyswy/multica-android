@@ -28,6 +28,7 @@ import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useCommentSelectStore } from "@/data/comment-select-store";
 import { useReplyTargetStore } from "@/data/stores/reply-target-store";
+import { getWebBaseUrl } from "@/data/server-config";
 import { useActorLookup } from "@/data/use-actor-name";
 import {
   useDeleteComment,
@@ -58,7 +59,7 @@ export function useCommentLongPress(
     const isRoot = !entry.parent_id;
     const resolved = !!entry.resolved_at;
     const hasContent = !!entry.content;
-    const webUrl = process.env.EXPO_PUBLIC_WEB_URL;
+    const webUrl = getWebBaseUrl();
     const canCopyLink = !!(webUrl && wsSlug && issueIdentifier);
     const reactions = (entry.reactions ?? []) as Reaction[];
 

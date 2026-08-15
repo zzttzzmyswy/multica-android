@@ -24,12 +24,13 @@ vi.mock("expo-secure-store", () => ({
 
 /** Reload the module fresh so module-level state (env default + custom
  *  override cache + listener set) starts empty for each case. */
-async function loadFreshServerConfig(envUrl?: string) {
-  if (envUrl !== undefined) {
-    vi.stubEnv("EXPO_PUBLIC_API_URL", envUrl);
-  } else {
-    vi.unstubAllEnvs();
-  }
+async function loadFreshServerConfig(
+  envUrl?: string,
+  webUrl?: string,
+) {
+  vi.unstubAllEnvs();
+  if (envUrl !== undefined) vi.stubEnv("EXPO_PUBLIC_API_URL", envUrl);
+  if (webUrl !== undefined) vi.stubEnv("EXPO_PUBLIC_WEB_URL", webUrl);
   vi.resetModules();
   return await import("./server-config");
 }
@@ -185,5 +186,33 @@ describe("subscribeApiBaseUrl", () => {
     unsubscribe();
     await mod.setApiBaseUrl("https://again.example.com");
     expect(seen).toHaveLength(2); // no new notification after unsubscribe
+  });
+});
+
+describe("getWebBaseUrl", () => {
+  it("prefers an explicit EXPO_PUBLIC_WEB_URL when set", async () => {
+    const mod = await loadFreshServerConfig("https://api.example.com", "https://www.example.com");
+    expect(mod.getWebBaseUrl()).toBe("https://www.example.com");
+  });
+
+  it("derives the web origin from the effective API base when web env is unset", async () => {
+    const mod = await loadFreshServerConfig("https://mu.zztweb.top");
+    expect(mod.getWebBaseUrl()).toBe("https://mu.zztweb.top");
+  });
+
+  it("honors the runtime server override when deriving the web origin", async () => {
+    const mod = await loadFreshServerConfig();
+    await mod.setApiBaseUrl("https://selfhost.example.net");
+    expect(mod.getWebBaseUrl()).toBe("https://selfhost.example.net");
+  });
+
+  it("strips any path from the API base when deriving the origin", async () => {
+    const mod = await loadFreshServerConfig("https://api.example.com/prefix");
+    expect(mod.getWebBaseUrl()).toBe("https://api.example.com");
+  });
+
+  it("never throws — yields empty string when neither a web env nor any API base exists", async () => {
+    const mod = await loadFreshServerConfig();
+    expect(mod.getWebBaseUrl()).toBe("");
   });
 });
