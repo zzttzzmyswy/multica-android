@@ -13,7 +13,6 @@
  */
 import { ActivityIndicator, Pressable, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
-import type { TaskMessagePayload } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ChatTimeline } from "@/components/chat/chat-timeline";
 import { Markdown } from "@/lib/markdown";
@@ -61,7 +60,7 @@ export function RunLog({ taskId }: { taskId: string }) {
       {textFragments.map((text, i) => (
         <Markdown key={i} content={text} />
       ))}
-      <ChatTimeline items={processSteps as TaskMessagePayload[]} />
+      <ChatTimeline items={processSteps} />
     </View>
   );
 }

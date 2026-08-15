@@ -9,7 +9,10 @@
  * the legacy `useRunsSheetStore` is gone since the route system is the
  * single source of truth for what's open.
  *
- * Past-row tap is a no-op in v1 — transcript drilldown is deferred.
+ * Each past (terminal) run row is collapsible — tapping it expands an
+ * inline execution-log panel (`RunLog`) showing the agent's text narration
+ * and process steps, so users can inspect what a run actually did. Active
+ * rows show a Cancel button and are not expandable.
  */
 import { useMemo } from "react";
 import { ScrollView, View } from "react-native";

@@ -25,6 +25,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import type { TaskMessagePayload } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { useTranslation } from "@/lib/i18n/react";
+import { getToolSummary } from "@/lib/task-log";
 import {
   Collapsible,
   CollapsibleContent,
@@ -232,44 +233,4 @@ function ErrorRow({ item }: { item: TaskMessagePayload }) {
       </Text>
     </View>
   );
-}
-
-/**
- * Mirror of web's `getToolSummary` (chat-message-list.tsx) — picks the most
- * informative single-line summary from a tool_use payload. Order matters:
- * `query` / `file_path` / `pattern` are the headline params, `command` /
- * `prompt` get truncated, and a final loop catches whichever short string
- * a future tool might emit.
- */
-function getToolSummary(item: TaskMessagePayload): string {
-  if (!item.input) return "";
-  const inp = item.input as Record<string, unknown>;
-  const pick = (k: string): string | undefined => {
-    const v = inp[k];
-    return typeof v === "string" && v.length > 0 ? v : undefined;
-  };
-  const q = pick("query");
-  if (q) return q;
-  const fp = pick("file_path") ?? pick("path");
-  if (fp) return shortenPath(fp);
-  const p = pick("pattern");
-  if (p) return p;
-  const d = pick("description");
-  if (d) return d;
-  const cmd = pick("command");
-  if (cmd) return cmd.length > 100 ? `${cmd.slice(0, 100)}…` : cmd;
-  const prompt = pick("prompt");
-  if (prompt) return prompt.length > 100 ? `${prompt.slice(0, 100)}…` : prompt;
-  const skill = pick("skill");
-  if (skill) return skill;
-  for (const v of Object.values(inp)) {
-    if (typeof v === "string" && v.length > 0 && v.length < 120) return v;
-  }
-  return "";
-}
-
-function shortenPath(p: string): string {
-  const parts = p.split("/");
-  if (parts.length <= 3) return p;
-  return `…/${parts.slice(-2).join("/")}`;
 }
