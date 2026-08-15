@@ -1,19 +1,28 @@
 /**
  * Single row inside the agent-runs formSheet route
  * (`app/(app)/[workspace]/issue/[id]/runs.tsx`). Same component for active
- * and past tasks —
- * the trailing Cancel button is conditional on `status in {queued,
- * dispatched, running}`, and the status badge / colour swaps based on the
- * AgentTask.status enum.
+ * and past tasks.
  *
- * Tapping a past row is a no-op in v1 — the transcript-detail screen is
- * explicitly out of scope per /Users/qingnaiyuan/.claude/plans/
- * ok-plan-linked-taco.md.
+ * Active tasks (queued / dispatched / running) show a trailing Cancel button
+ * and are NOT expandable — the trace is still growing.
+ *
+ * Past tasks (completed / failed / cancelled) are collapsible: tapping the
+ * row expands an inline `<RunLog>` panel loaded from `GET /api/tasks/:id/messages`
+ * (agent's text narration + tool_use / tool_result / thinking / error steps).
+ * Text narration renders as markdown; process steps reuse the shared
+ * `ChatTimeline` fold. Empty logs surface `runs.noLogs`.
  */
 import { Alert, Pressable, View } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import type { AgentTask } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { RunLog } from "./run-log";
 import { useCancelTask } from "@/data/mutations/issues";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useTimeAgo } from "@/lib/time-ago";
@@ -41,7 +50,7 @@ export function RunRow({ task, issueId }: Props) {
   // long it's been waiting.
   const timestamp = task.completed_at || task.created_at;
 
-  return (
+  const row = (
     <View className="flex-row items-start gap-3 py-2">
       <ActorAvatar type="agent" id={task.agent_id} size={28} showPresence />
       <View className="flex-1 gap-1">
@@ -59,8 +68,33 @@ export function RunRow({ task, issueId }: Props) {
           </Text>
         </View>
       </View>
-      {isActive ? <CancelButton taskId={task.id} issueId={issueId} /> : null}
+      {isActive ? (
+        <CancelButton taskId={task.id} issueId={issueId} />
+      ) : (
+        <Ionicons name="chevron-forward" size={14} color="#71717a" />
+      )}
     </View>
+  );
+
+  // Active tasks aren't expandable — the trace is still growing and the row
+  // already carries a Cancel action. Only terminal tasks drill into their log.
+  if (isActive) return row;
+
+  return (
+    <Collapsible>
+      <CollapsibleTrigger asChild>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("runs.expandLog")}
+          className="active:bg-secondary"
+        >
+          {row}
+        </Pressable>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <RunLog taskId={task.id} />
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 

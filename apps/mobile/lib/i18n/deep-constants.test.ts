@@ -181,4 +181,18 @@ describe("deep-constant i18n", () => {
       "移除提及 Alice",
     );
   });
+
+  it("localizes agent-runs log keys for the expanded trace panel", () => {
+    // MYS-285 run-log expansion — empty / error / a11y labels stay symmetric
+    // across en and zh so the runs sheet never leaks a raw key.
+    expect(mod.translate("runs.noLogs")).toBe("No execution log");
+    expect(mod.translate("runs.logLoadError")).toBe(
+      "Couldn't load execution log",
+    );
+    expect(mod.translate("runs.expandLog")).toBe("View execution log");
+    mod.setLocale("zh");
+    expect(mod.translate("runs.noLogs")).toBe("暂无执行记录");
+    expect(mod.translate("runs.logLoadError")).toBe("加载执行日志失败");
+    expect(mod.translate("runs.expandLog")).toBe("查看执行日志");
+  });
 });
