@@ -15,6 +15,7 @@ import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { loadApiBaseUrl } from "@/data/server-config";
 import { LightboxProvider, prewarmHighlighter } from "@/lib/markdown";
+import { ActionSheetProvider } from "@/lib/action-sheet";
 import { NAV_THEME } from "@/lib/theme";
 import { useColorScheme } from "@/lib/use-color-scheme";
 
@@ -77,11 +78,13 @@ export default function RootLayout() {
               <AuthInitializer>
                 <LightboxProvider>
                   <StatusBar style={isDarkColorScheme ? "light" : "dark"} />
-                  <Stack screenOptions={{ headerShown: false }}>
-                    <Stack.Screen name="index" />
-                    <Stack.Screen name="(auth)" />
-                    <Stack.Screen name="(app)" />
-                  </Stack>
+                  <ActionSheetProvider>
+                    <Stack screenOptions={{ headerShown: false }}>
+                      <Stack.Screen name="index" />
+                      <Stack.Screen name="(auth)" />
+                      <Stack.Screen name="(app)" />
+                    </Stack>
+                  </ActionSheetProvider>
                   <PortalHost />
                 </LightboxProvider>
               </AuthInitializer>
