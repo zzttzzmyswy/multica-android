@@ -86,6 +86,7 @@ const NAV_ITEMS: NavItem[] = [
     icon: "flash",
     path: "/more/autopilots",
   },
+  { labelKey: "nav.agents", icon: "hardware-chip", path: "/more/agents" },
 ];
 
 export function MoreTabDropdownAnchor({
