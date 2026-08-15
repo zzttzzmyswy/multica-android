@@ -17,6 +17,8 @@ import type {
   Agent,
   AgentTask,
   Attachment,
+  Autopilot,
+  AutopilotRun,
   ChatMessage,
   ChatPendingTask,
   ChatSession,
@@ -25,11 +27,14 @@ import type {
   CreateLabelRequest,
   CreateProjectRequest,
   CreateProjectResourceRequest,
+  GetAutopilotResponse,
   InboxItem,
   Issue,
   IssueLabelsResponse,
   Label,
   IssueReaction,
+  ListAutopilotRunsResponse,
+  ListAutopilotsResponse,
   ListIssuesParams,
   ListIssuesResponse,
   ListLabelsResponse,
@@ -51,6 +56,7 @@ import type {
   NotificationPreferences,
   TaskMessagePayload,
   TimelineEntry,
+  UpdateAutopilotRequest,
   UpdateIssueRequest,
   UpdateMeRequest,
   UpdateProjectRequest,
@@ -58,9 +64,13 @@ import type {
   Workspace,
 } from "@multica/core/types";
 import {
+  AutopilotRunSchema,
+  EMPTY_LIST_AUTOPILOTS_RESPONSE,
   EMPTY_LIST_ISSUES_RESPONSE,
   EMPTY_TIMELINE_ENTRIES,
+  FALLBACK_AUTOPILOT_RUN,
   IssueSchema,
+  ListAutopilotsResponseSchema,
   ListIssuesResponseSchema,
   TimelineEntriesSchema,
 } from "@multica/core/api/schemas";
@@ -68,6 +78,7 @@ import {
   ActiveTasksResponseSchema,
   AgentListSchema,
   AgentTaskListSchema,
+  AutopilotDetailSchema,
   AttachmentListSchema,
   AttachmentSchema,
   ChatMessageListSchema,
@@ -79,6 +90,7 @@ import {
   EMPTY_ACTIVE_TASKS_RESPONSE,
   EMPTY_AGENT_LIST,
   EMPTY_AGENT_TASK_LIST,
+  EMPTY_AUTOPILOT_DETAIL,
   EMPTY_ATTACHMENT_LIST,
   EMPTY_CHAT_MESSAGE_LIST,
   EMPTY_CHAT_PENDING_TASK,
@@ -87,6 +99,7 @@ import {
   EMPTY_COMMENT,
   EMPTY_INBOX_LIST,
   EMPTY_ISSUE_FALLBACK,
+  EMPTY_LIST_AUTOPILOT_RUNS_RESPONSE,
   EMPTY_LIST_LABELS_RESPONSE,
   EMPTY_LIST_PROJECT_RESOURCES_RESPONSE,
   EMPTY_LIST_PROJECTS_RESPONSE,
@@ -102,6 +115,7 @@ import {
   EMPTY_WORKSPACE_LIST,
   InboxListSchema,
   NotificationPreferenceResponseSchema,
+  ListAutopilotRunsResponseSchema,
   ListLabelsResponseSchema,
   ListProjectResourcesResponseSchema,
   ListProjectsResponseSchema,
@@ -1157,6 +1171,86 @@ class ApiClient {
       TaskMessageListSchema,
       EMPTY_TASK_MESSAGE_LIST,
       { ...opts, endpoint: "GET /api/tasks/:id/messages" },
+    );
+  }
+
+  // --- Autopilots ---
+  //
+  // Mirror packages/core/api/client.ts:3499-3560. List/detail/runs are
+  // workspace-scoped via the X-Workspace-Slug header (fetch adds it); runs
+  // and the list parse through core schemas (drift defense), detail through
+  // the mobile-local AutopilotDetailSchema.
+
+  async listAutopilots(
+    params?: { status?: string },
+    opts?: { signal?: AbortSignal },
+  ): Promise<ListAutopilotsResponse> {
+    const search = new URLSearchParams();
+    if (params?.status) search.set("status", params.status);
+    const qs = search.toString();
+    return this.fetchValidated(
+      `/api/autopilots${qs ? `?${qs}` : ""}`,
+      ListAutopilotsResponseSchema,
+      EMPTY_LIST_AUTOPILOTS_RESPONSE as ListAutopilotsResponse,
+      { ...opts, endpoint: "GET /api/autopilots" },
+    );
+  }
+
+  async getAutopilot(
+    id: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<GetAutopilotResponse> {
+    const parsed = await this.fetchValidated(
+      `/api/autopilots/${id}`,
+      AutopilotDetailSchema,
+      // Fallback shape matches what the detail screen reads before data
+      // lands; triggers default to [] so "no triggers" renders, not a crash.
+      EMPTY_AUTOPILOT_DETAIL,
+      { ...opts, endpoint: "GET /api/autopilots/:id" },
+    );
+    return parsed as unknown as GetAutopilotResponse;
+  }
+
+  // PATCH response is not consumed by the UI (optimistic patch + invalidate
+  // on settle), so a raw fetch follows the write-endpoint rule — a malformed
+  // response surfaces naturally and rolls the optimistic patch back.
+  async updateAutopilot(
+    id: string,
+    data: UpdateAutopilotRequest,
+  ): Promise<Autopilot> {
+    return this.fetch<Autopilot>(`/api/autopilots/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async listAutopilotRuns(
+    id: string,
+    params?: { limit?: number; offset?: number },
+    opts?: { signal?: AbortSignal },
+  ): Promise<ListAutopilotRunsResponse> {
+    const search = new URLSearchParams();
+    if (params?.limit) search.set("limit", String(params.limit));
+    if (params?.offset) search.set("offset", String(params.offset));
+    const qs = search.toString();
+    return this.fetchValidated(
+      `/api/autopilots/${id}/runs${qs ? `?${qs}` : ""}`,
+      ListAutopilotRunsResponseSchema,
+      EMPTY_LIST_AUTOPILOT_RUNS_RESPONSE,
+      { ...opts, endpoint: "GET /api/autopilots/:id/runs" },
+    );
+  }
+
+  // Manual "run now" returns 200 even when admission blocks the run (status
+  // skipped/failed) — the UI branches on status/reason_code to avoid a
+  // false-success toast (MUL-4525), so the response must be schema-parsed.
+  async triggerAutopilot(id: string): Promise<AutopilotRun> {
+    return this.fetchValidatedWith(
+      `/api/autopilots/${id}/trigger`,
+      AutopilotRunSchema,
+      FALLBACK_AUTOPILOT_RUN,
+      { method: "POST" },
+      { endpoint: "POST /api/autopilots/:id/trigger" },
     );
   }
 

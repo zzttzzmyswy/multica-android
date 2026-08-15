@@ -77,9 +77,15 @@ interface NavItem {
 // Features promoted to first-class bottom tabs (Projects / Pinned / Issues
 // via my-issues) are NOT duplicated here. Only the Issues browse page stays
 // under "More" — it's a different surface than the "My Issues" tab (all
-// workspace issues vs. the user's own, status-grouped).
+// workspace issues vs. the user's own, status-grouped). Autopilots is a
+// dedicated push screen mirroring web's Autopilots page.
 const NAV_ITEMS: NavItem[] = [
   { labelKey: "nav.issues", icon: "list", path: "/more/issues" },
+  {
+    labelKey: "nav.autopilots",
+    icon: "flash",
+    path: "/more/autopilots",
+  },
 ];
 
 export function MoreTabDropdownAnchor({

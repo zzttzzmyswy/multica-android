@@ -296,6 +296,17 @@ export default function WorkspaceLayout() {
           options={{ title: t("screen.issues"), headerBackTitle: t("common.back") }}
         />
         <Stack.Screen
+          name="more/autopilots"
+          options={{ title: t("screen.autopilots"), headerBackTitle: t("common.back") }}
+        />
+        <Stack.Screen
+          name="more/autopilots/[id]"
+          options={{
+            title: t("screen.autopilots"),
+            headerBackTitle: t("screen.autopilots"),
+          }}
+        />
+        <Stack.Screen
           name="more/projects"
           options={{ title: t("screen.projects"), headerBackTitle: t("common.back") }}
         />

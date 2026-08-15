@@ -15,6 +15,8 @@ import type {
   AgentInvocationTarget,
   AgentTask,
   Attachment,
+  AutopilotRun,
+  AutopilotTrigger,
   ChatMessage,
   ChatPendingTask,
   ChatSession,
@@ -38,7 +40,7 @@ import type {
   User,
   Workspace,
 } from "@multica/core/types";
-import { IssueSchema } from "@multica/core/api/schemas";
+import { AutopilotRunSchema, IssueSchema } from "@multica/core/api/schemas";
 
 /** Upload response. Only fields mobile actually consumes — `url` to put
  *  into the markdown link, `filename` for the `[📎 name](url)` form, `id`
@@ -742,6 +744,143 @@ export const EMPTY_CHILD_ISSUES_RESPONSE: {
   issues: import("@multica/core/types").Issue[];
 } = {
   issues: [],
+};
+
+// ---------------------------------------------------------------------------
+// Autopilot detail + runs schemas. The LIST endpoint is covered by core's
+// ListAutopilotsResponseSchema (packages/core/api/schemas.ts:1821) and its
+// run objects by core's AutopilotRunSchema — both imported from
+// @multica/core/api/schemas by data/api.ts. Core ships no schema for the
+// detail (GET /api/autopilots/:id) or runs-list (GET /api/autopilots/:id/
+// runs) responses, so their shapes live here under the same drift rules:
+// enums stay z.string(), .loose() tolerates unknown fields, defaults keep a
+// reshaped response from taking the page down.
+// ---------------------------------------------------------------------------
+
+export const AutopilotTriggerSchema = z.object({
+  id: z.string(),
+  autopilot_id: z.string(),
+  kind: z.string(),
+  enabled: z.boolean(),
+  cron_expression: z.string().nullable(),
+  timezone: z.string().nullable(),
+  next_run_at: z.string().nullable(),
+  webhook_token: z.string().nullable(),
+  // webhook_path/webhook_url absent on older servers — optional.
+  webhook_path: z.string().nullable().optional(),
+  webhook_url: z.string().nullable().optional(),
+  label: z.string().nullable(),
+  // event_filters only present for webhook triggers (accept-all otherwise).
+  event_filters: z.unknown().nullable().optional(),
+  last_fired_at: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+}).loose();
+
+// Detail endpoint response (GetAutopilotResponse). `subscribers` /
+// `enough` fields only populate on detail; `can_write` / `can_manage_access`
+// are absent on older servers — optional by contract.
+export const AutopilotDetailSchema = z.object({
+  autopilot: z
+    .object({
+      id: z.string(),
+      workspace_id: z.string(),
+      title: z.string(),
+      description: z.string().nullable().optional(),
+      project_id: z.string().nullable().optional(),
+      // Pre-MUL-2429 servers omit assignee_type; "agent" is the default.
+      assignee_type: z.string().default("agent"),
+      assignee_id: z.string(),
+      status: z.string(),
+      execution_mode: z.string(),
+      issue_title_template: z.string().nullable().optional(),
+      created_by_type: z.string(),
+      created_by_id: z.string(),
+      last_run_at: z.string().nullable().optional(),
+      created_at: z.string(),
+      updated_at: z.string(),
+      trigger_kinds: z.array(z.string()).optional(),
+      next_run_at: z.string().nullable().optional(),
+      last_run_status: z.string().nullable().optional(),
+      can_write: z.boolean().optional(),
+      can_manage_access: z.boolean().optional(),
+      pause_reason: z.string().nullable().optional(),
+      subscribers: z.unknown().nullable().optional(),
+    })
+    .loose(),
+  // Only the detail endpoint populates triggers (list returns []).
+  triggers: z.array(AutopilotTriggerSchema).default([]),
+  // Members explicitly granted write access; absent on older servers.
+  collaborators: z.unknown().nullable().optional(),
+}).loose();
+
+export const EMPTY_AUTOPILOT_DETAIL: {
+  autopilot: {
+    id: string;
+    workspace_id: string;
+    title: string;
+    description: string | null | undefined;
+    project_id: string | null | undefined;
+    assignee_type: string;
+    assignee_id: string;
+    status: string;
+    execution_mode: string;
+    issue_title_template: string | null | undefined;
+    created_by_type: string;
+    created_by_id: string;
+    last_run_at: string | null | undefined;
+    created_at: string;
+    updated_at: string;
+    trigger_kinds: string[] | undefined;
+    next_run_at: string | null | undefined;
+    last_run_status: string | null | undefined;
+    can_write: boolean | undefined;
+    can_manage_access: boolean | undefined;
+    pause_reason: string | null | undefined;
+    subscribers: unknown | null | undefined;
+  };
+  triggers: AutopilotTrigger[];
+  collaborators: unknown | null | undefined;
+} = {
+  autopilot: {
+    id: "",
+    workspace_id: "",
+    title: "",
+    description: null,
+    project_id: null,
+    assignee_type: "agent",
+    assignee_id: "",
+    status: "",
+    execution_mode: "",
+    issue_title_template: null,
+    created_by_type: "",
+    created_by_id: "",
+    last_run_at: null,
+    created_at: "",
+    updated_at: "",
+    trigger_kinds: undefined,
+    next_run_at: null,
+    last_run_status: null,
+    can_write: undefined,
+    can_manage_access: undefined,
+    pause_reason: null,
+    subscribers: null,
+  },
+  triggers: [],
+  collaborators: null,
+};
+
+export const ListAutopilotRunsResponseSchema = z.object({
+  runs: z.array(AutopilotRunSchema).default([]),
+  total: z.number().default(0),
+}).loose();
+
+export const EMPTY_LIST_AUTOPILOT_RUNS_RESPONSE: {
+  runs: AutopilotRun[];
+  total: number;
+} = {
+  runs: [],
+  total: 0,
 };
 
 // Helpers re-exported for ergonomic single-import at the call site.
