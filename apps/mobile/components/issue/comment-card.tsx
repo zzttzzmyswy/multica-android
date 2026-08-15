@@ -55,6 +55,7 @@ import { cn } from "@/lib/utils";
 import { ReactionBar } from "./reaction-bar";
 import { useCommentLongPress } from "./comment-context-menu";
 import { useCommentSelectStore } from "@/data/comment-select-store";
+import { useTranslation } from "@/lib/i18n/react";
 
 interface Props {
   entry: TimelineEntry;
@@ -278,6 +279,7 @@ function ResolvedIndicator({
   entry: TimelineEntry;
   onCollapse: () => void;
 }) {
+  const { t } = useTranslation();
   const { getName } = useActorLookup();
   const { colorScheme } = useColorScheme();
   const mutedFg = THEME[colorScheme].mutedForeground;
@@ -291,17 +293,14 @@ function ResolvedIndicator({
       onPress={onCollapse}
       className="flex-row items-center gap-2 active:opacity-60"
       accessibilityRole="button"
-      accessibilityLabel="Collapse resolved thread"
+      accessibilityLabel={t("comment.collapseResolvedLabel")}
     >
       <Ionicons name="checkmark-circle" size={14} color={mutedFg} />
       <Text className="text-xs text-muted-foreground flex-1" numberOfLines={1}>
-        Resolved by{" "}
-        <Text className="text-xs text-foreground font-medium">
-          {resolverName}
-        </Text>
+        {t("comment.resolvedBy", { name: resolverName })}
         {entry.resolved_at ? ` · ${timeAgo(entry.resolved_at)}` : ""}
       </Text>
-      <Text className="text-xs text-muted-foreground">Collapse</Text>
+      <Text className="text-xs text-muted-foreground">{t("common.collapse")}</Text>
     </Pressable>
   );
 }
@@ -544,6 +543,7 @@ function FailedActions({
   onRetry: () => void;
   onDiscard: () => void;
 }) {
+  const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const destructive = THEME[colorScheme].destructive;
   return (
@@ -553,24 +553,24 @@ function FailedActions({
         className="flex-1 text-xs text-destructive"
         numberOfLines={1}
       >
-        {error || "Couldn't send"}
+        {error || t("comment.couldntSend")}
       </Text>
       <Pressable
         onPress={onRetry}
         hitSlop={6}
         accessibilityRole="button"
-        accessibilityLabel="Retry sending comment"
+        accessibilityLabel={t("comment.retryLabel")}
       >
-        <Text className="text-xs text-primary font-medium">Retry</Text>
+        <Text className="text-xs text-primary font-medium">{t("common.retry")}</Text>
       </Pressable>
       <Pressable
         onPress={onDiscard}
         hitSlop={6}
         accessibilityRole="button"
-        accessibilityLabel="Discard failed comment"
+        accessibilityLabel={t("comment.discardFailedLabel")}
       >
         <Text className="text-xs text-muted-foreground font-medium">
-          Discard
+          {t("comment.discard")}
         </Text>
       </Pressable>
     </View>

@@ -91,8 +91,10 @@ import { OfflineBanner } from "@/components/chat/offline-banner";
 import { RuntimeRequiredBanner } from "@/components/chat/runtime-required-banner";
 import { useChatSelectStore } from "@/data/chat-select-store";
 import { isAgentRuntimeBound } from "@/lib/is-agent-runtime-bound";
+import { useTranslation } from "@/lib/i18n/react";
 
 export default function ChatTab() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
@@ -261,8 +263,8 @@ export default function ChatTab() {
       if (!currentAgent) return;
       if (!runtimeBound) {
         Alert.alert(
-          "Runtime required",
-          "Bind a runtime to this agent on web or desktop before sending a message.",
+          t("chat.runtimeRequired"),
+          t("chat.bindRuntime"),
         );
         return;
       }
@@ -356,6 +358,7 @@ export default function ChatTab() {
       qc,
       promoteNewDraft,
       clearDraft,
+      t,
     ],
   );
 
@@ -402,12 +405,12 @@ export default function ChatTab() {
   const handleDeleteActive = useCallback(() => {
     if (!activeSession) return;
     Alert.alert(
-      "Delete this chat?",
-      activeSession.title || "Untitled chat",
+      t("chat.deleteTitle"),
+      activeSession.title || t("chat.untitled"),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Delete",
+          text: t("chat.deleteChat"),
           style: "destructive",
           onPress: () => {
             const id = activeSession.id;
@@ -418,7 +421,7 @@ export default function ChatTab() {
       ],
       { cancelable: true },
     );
-  }, [activeSession, deleteSession]);
+  }, [activeSession, deleteSession, t]);
 
   // ── Composer disabled-state ────────────────────────────────────────────
   const disabled =
@@ -427,13 +430,13 @@ export default function ChatTab() {
     isArchived === true ||
     !runtimeBound;
   const disabledReason = !currentAgent
-    ? "No agent selected"
+    ? t("chat.noAgentSelected")
     : availability === "none"
-      ? "No agents in this workspace"
+      ? t("chat.noAgentsInWorkspace")
       : isArchived
-        ? "This chat is archived"
+        ? t("chat.chatArchived")
         : !runtimeBound
-          ? "Agent needs a runtime"
+          ? t("chat.agentNeedsRuntime")
         : undefined;
 
   return (

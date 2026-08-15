@@ -26,13 +26,15 @@
  * vertical footprint minimal.
  */
 import { useMemo } from "react";
-import { ActivityIndicator, Linking, Pressable, ScrollView, View } from "react-native";
+import { Alert, ActivityIndicator, Pressable, ScrollView, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { resolveAttachmentUrl } from "@/lib/attachment-url";
 import { useLightbox } from "@/lib/markdown/lightbox-provider";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { Text } from "@/components/ui/text";
+import { useTranslation } from "@/lib/i18n/react";
+import { downloadAttachmentAndOpen } from "@/lib/download-attachment";
 
 /** Mention chip data — composer-local state. No store, no cross-route
  *  sharing. The composer owns the array and passes it in. */
@@ -178,6 +180,7 @@ function AttachmentChipView({ item, onRemove, onRetry }: AttachmentChipProps) {
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
   const { open } = useLightbox();
+  const { t } = useTranslation();
 
   const isImage = useMemo(
     () => item.mimeType.startsWith("image/"),
@@ -195,16 +198,24 @@ function AttachmentChipView({ item, onRemove, onRetry }: AttachmentChipProps) {
       // no signed-URL round-trip, works the same pre/post upload.
       open(item.localUri);
     } else {
-      // Non-image file chip: open the canonical download URL in Safari.
-      // `downloadUrl` comes from `api.uploadFile(...).download_url`, which
-      // on non-CloudFront deployments is a server-relative path like
-      // `/api/attachments/{id}/download` (MUL-2976). RN's `Linking.openURL`
-      // requires an absolute http(s) URL — `Cannot open URL` otherwise — so
-      // resolve against `EXPO_PUBLIC_API_URL` first. Already-absolute
-      // CloudFront/presigned URLs pass through unchanged. `null` (no
-      // downloadUrl yet) falls through to a no-op.
+      // Non-image file chip: download in-app with the session auth, then open
+      // via the system handler sheet. `downloadUrl` comes from
+      // `api.uploadFile(...).download_url`, which on non-CloudFront
+      // deployments is a server-relative path like
+      // `/api/attachments/{id}/download` (MUL-2976). Historically this went
+      // to `Linking.openURL` and the external browser sent no Authorization
+      // header → `missing authorization` (MYS-270). Now the request is made
+      // by ApiClient with the Bearer + slug headers.
       const target = resolveAttachmentUrl(item.downloadUrl);
-      if (target) void Linking.openURL(target);
+      if (target) {
+        void downloadAttachmentAndOpen(
+          target,
+          item.filename,
+          item.mimeType,
+        ).catch(() => {
+          Alert.alert(t("download.failedTitle"), t("download.failedMessage"));
+        });
+      }
     }
   };
 

@@ -22,7 +22,7 @@
  * + size hint, opening the canonical download URL on tap.
  */
 import { useMemo } from "react";
-import { Linking, Pressable, View } from "react-native";
+import { Alert, Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Attachment } from "@multica/core/types";
 import { standaloneAttachments } from "@/lib/attachment-dedup";
@@ -31,6 +31,8 @@ import { resolveAttachmentUrl } from "@/lib/attachment-url";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { Text } from "@/components/ui/text";
+import { useTranslation } from "@/lib/i18n/react";
+import { downloadAttachmentAndOpen } from "@/lib/download-attachment";
 
 interface Props {
   attachments?: Attachment[];
@@ -91,23 +93,26 @@ function FileCard({
   theme: typeof THEME["light"];
 }) {
   const sizeLabel = formatBytes(attachment.size_bytes);
+  const { t } = useTranslation();
   return (
     <Pressable
       onPress={() => {
-        // download_url is the canonical link — opening it hands off to
-        // Safari which handles auth-token-free download + previewing for
-        // common types (PDF, txt). Mirrors what the markdown link renderer
-        // does for `[name](url)`.
-        //
-        // The backend may return a server-relative URL like
-        // `/api/attachments/{id}/download` when no CloudFront signer is
-        // configured (MUL-2976). RN's `Linking.openURL` requires an
-        // absolute http(s) URL — it returns "Cannot open URL" otherwise —
-        // so resolve against `EXPO_PUBLIC_API_URL` first.
+        // MYS-270: opening `download_url` in the external browser sent no
+        // `Authorization` header, so the server rejected it with "missing
+        // authorization". Download in-app with the session auth (the request
+        // carries the Bearer header), then open the saved file via the system
+        // handler sheet. `content_type` from the server is the share hint; an
+        // absolute CloudFront URL was already usable via `Linking`, but going
+        // through our authenticated path keeps every storage mode working.
         const target = resolveAttachmentUrl(attachment.download_url);
-        if (target) {
-          void Linking.openURL(target);
-        }
+        if (!target) return;
+        void downloadAttachmentAndOpen(
+          target,
+          attachment.filename,
+          attachment.content_type,
+        ).catch(() => {
+          Alert.alert(t("download.failedTitle"), t("download.failedMessage"));
+        });
       }}
       accessibilityRole="button"
       accessibilityLabel={`Open ${attachment.filename}`}

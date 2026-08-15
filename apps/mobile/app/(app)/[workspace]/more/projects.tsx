@@ -28,8 +28,10 @@ import { IconButton } from "@/components/ui/icon-button";
 import { ProjectRow } from "@/components/project/project-row";
 import { projectListOptions } from "@/data/queries/projects";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { useTranslation } from "@/lib/i18n/react";
 
 export default function ProjectsPage() {
+  const { t } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
 
@@ -50,8 +52,8 @@ export default function ProjectsPage() {
   }, [wsSlug]);
 
   const headerRight = useCallback(() => {
-    return <PlusButton onPress={goCreate} />;
-  }, [goCreate]);
+    return <PlusButton onPress={goCreate} t={t} />;
+  }, [goCreate, t]);
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={[]}>
@@ -64,15 +66,15 @@ export default function ProjectsPage() {
       ) : error ? (
         <View className="px-4 gap-3 pt-4">
           <Text className="text-sm text-destructive">
-            Failed to load projects:{" "}
-            {error instanceof Error ? error.message : "unknown error"}
+            {t("projects.loadFailed")}
+            {error instanceof Error ? error.message : t("common.unknownError")}
           </Text>
           <Button variant="outline" onPress={() => refetch()}>
-            <Text>Retry</Text>
+            <Text>{t("common.retry")}</Text>
           </Button>
         </View>
       ) : sorted.length === 0 ? (
-        <EmptyState onCreate={goCreate} />
+        <EmptyState onCreate={goCreate} t={t} />
       ) : (
         <FlatList
           data={sorted}
@@ -98,28 +100,33 @@ export default function ProjectsPage() {
   );
 }
 
-function PlusButton({ onPress }: { onPress: () => void }) {
+function PlusButton({ onPress, t }: { onPress: () => void; t: (id: string) => string }) {
   return (
     <IconButton
       name="add"
       onPress={onPress}
-      accessibilityLabel="New project"
+      accessibilityLabel={t("projects.newProject")}
     />
   );
 }
 
-function EmptyState({ onCreate }: { onCreate: () => void }) {
+function EmptyState({
+  onCreate,
+  t,
+}: {
+  onCreate: () => void;
+  t: (id: string) => string;
+}) {
   return (
     <View className="flex-1 items-center justify-center px-6 gap-4">
       <Text className="text-base font-medium text-foreground">
-        No projects yet
+        {t("projects.emptyTitle")}
       </Text>
       <Text className="text-sm text-muted-foreground text-center">
-        Group related issues into a project to track progress and assign a
-        lead.
+        {t("projects.emptyMessage")}
       </Text>
       <Button variant="default" onPress={onCreate}>
-        <Text>Create project</Text>
+        <Text>{t("projects.create")}</Text>
       </Button>
     </View>
   );

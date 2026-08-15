@@ -118,10 +118,13 @@ import {
   WorkspaceListSchema,
 } from "./schemas";
 import type { ZodType } from "zod";
+import { File, Paths } from "expo-file-system";
 import { getCurrentSlug } from "./workspace-store";
 import { getApiBaseUrl, getEnvBaseUrl, setApiBaseUrl } from "./server-config";
 import { parseWithFallback } from "@/lib/parse-response";
 import { createRequestId } from "@/lib/request-id";
+import { resolveAttachmentUrl } from "@/lib/attachment-url";
+import { sanitizeBasename } from "@/lib/attachment-download";
 
 if (!getEnvBaseUrl()) {
   throw new Error(
@@ -143,6 +146,16 @@ export interface FileAsset {
   uri: string;
   name: string;
   type: string;
+}
+
+/** Result of `ApiClient.downloadFile` — a local copy of an attachment's
+ *  bytes written to the app cache, ready to hand to a system viewer/share
+ *  sheet. The original remote URL and auth are not echoed back. */
+export interface LocalDownload {
+  /** `file://` URI of the downloaded bytes on the device. */
+  uri: string;
+  /** The safe basename written to cache (derived from the requested name). */
+  name: string;
 }
 
 /** Web mirrors this from `packages/core/constants/upload.ts`. Mobile keeps
@@ -1277,6 +1290,64 @@ class ApiClient {
       throw new ApiError("Upload response invalid", res.status, json);
     }
     return parsed.data;
+  }
+
+  // --- File Download ---
+
+  /**
+   * Download an attachment to the app cache using the *current* session auth.
+   *
+   * Replaces the historic `Linking.openURL` handoff (MYS-270): opening the
+   * signed `download_url` in the external browser sent no `Authorization`
+   * header, so the server rejected it with `missing authorization`. This does
+   * the GET in-app with `Bearer` + workspace slug attached and writes the bytes
+   * to a cache file via expo-file-system, so the token never reaches a browser
+   * tab or a log line.
+   *
+   * `rawUrl` may be server-relative (`/api/attachments/<id>/download`) or an
+   * already-absolute presigned/CloudFront URL; relative paths are resolved
+   * against the current runtime API base. The saved filename is derived from
+   * `filename` and sanitized to a single safe cache basename.
+   *
+   * Throws `ApiError` on any failure (bad URL, non-2xx status — including the
+   * 401 `missing authorization` the browser path used to hit — or a native
+   * download error).
+   */
+  async downloadFile(rawUrl: string, filename: string): Promise<LocalDownload> {
+    const absUrl = resolveAttachmentUrl(rawUrl);
+    if (!absUrl) {
+      throw new ApiError("Attachment download URL is unavailable", 0);
+    }
+
+    const headers: Record<string, string> = {};
+    if (this.token) headers["Authorization"] = `Bearer ${this.token}`;
+    const slug = getCurrentSlug();
+    if (slug) headers["X-Workspace-Slug"] = slug;
+
+    const safeName = sanitizeBasename(filename) || "download";
+    const start = Date.now();
+    console.log(`[api] → GET ${absUrl}`, { rid: createRequestId() });
+
+    try {
+      const destination = new File(Paths.cache, safeName);
+      const file = await File.downloadFileAsync(absUrl, destination, {
+        headers,
+        idempotent: true,
+      });
+      console.log(`[api] ← saved ${file.name}`, {
+        duration: `${Date.now() - start}ms`,
+      });
+      return { uri: file.uri, name: safeName };
+    } catch (err) {
+      console.error(`[api] ← DOWNLOAD FAILED ${absUrl}`, {
+        duration: `${Date.now() - start}ms`,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw new ApiError(
+        err instanceof Error ? err.message : "Attachment download failed",
+        0,
+      );
+    }
   }
 }
 

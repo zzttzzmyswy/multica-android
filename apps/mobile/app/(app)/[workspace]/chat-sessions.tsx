@@ -20,8 +20,10 @@ import { useDeleteChatSession } from "@/data/mutations/chat";
 import { useChatSessionPickerStore } from "@/data/stores/chat-session-picker-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n/react";
 
 export default function ChatSessionsRoute() {
+  const { t } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { data: sessions = [] } = useQuery(chatSessionsOptions(wsId));
   const activeSessionId = useChatSessionPickerStore((s) => s.activeSessionId);
@@ -30,12 +32,12 @@ export default function ChatSessionsRoute() {
 
   const confirmDelete = (session: ChatSession) => {
     Alert.alert(
-      "Delete this chat?",
-      session.title || "Untitled chat",
+      t("chat.deleteTitle"),
+      session.title || t("chat.untitled"),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Delete",
+          text: t("chat.deleteChat"),
           style: "destructive",
           onPress: () => {
             deleteSession.mutate(session.id);
@@ -54,13 +56,13 @@ export default function ChatSessionsRoute() {
   return (
     <View className="flex-1">
       <View className="px-4 pt-4 pb-3">
-        <Text className="text-base font-semibold text-foreground">Chats</Text>
+        <Text className="text-base font-semibold text-foreground">{t("chat.chats")}</Text>
       </View>
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         {sessions.length === 0 ? (
           <View className="px-4 py-8">
             <Text className="text-sm text-muted-foreground text-center">
-              No chats yet.
+              {t("chat.noChatsYet")}
             </Text>
           </View>
         ) : (
@@ -100,11 +102,11 @@ export default function ChatSessionsRoute() {
                     )}
                     numberOfLines={1}
                   >
-                    {session.title || "Untitled chat"}
+                    {session.title || t("chat.untitled")}
                   </Text>
                   {archived ? (
                     <Text className="text-xs text-muted-foreground mt-0.5">
-                      archived
+                      {t("chat.archived")}
                     </Text>
                   ) : null}
                 </View>

@@ -21,6 +21,7 @@ import { useDeleteProjectResource } from "@/data/mutations/projects";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
+import { useTranslation } from "@/lib/i18n/react";
 
 interface Props {
   projectId: string;
@@ -28,6 +29,7 @@ interface Props {
 }
 
 export function ProjectResourcesSection({ projectId, onAdd }: Props) {
+  const { t } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { data: resources, isLoading } = useQuery(
     projectResourcesOptions(wsId, projectId),
@@ -45,12 +47,12 @@ export function ProjectResourcesSection({ projectId, onAdd }: Props) {
 
   const onLongPress = (resource: ProjectResource) => {
     Alert.alert(
-      "Detach resource?",
+      t("resource.detachTitle"),
       describeResource(resource),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Detach",
+          text: t("resource.detach"),
           style: "destructive",
           onPress: () => remove.mutate(resource.id),
         },
@@ -62,10 +64,10 @@ export function ProjectResourcesSection({ projectId, onAdd }: Props) {
     <View>
       <View className="flex-row items-center justify-between px-4 py-2 bg-background">
         <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
-          Resources
+          {t("resource.sectionTitle")}
         </Text>
         <Pressable onPress={onAdd} className="px-2 py-1 active:bg-secondary rounded">
-          <Text className="text-xs text-brand">Add</Text>
+          <Text className="text-xs text-brand">{t("resource.add")}</Text>
         </Pressable>
       </View>
       {isLoading ? (

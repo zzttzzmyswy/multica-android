@@ -19,14 +19,16 @@
 import { useLocalSearchParams } from "expo-router";
 import { MentionPickerBody } from "@/components/issue/pickers/mention-picker-body";
 import { useNativeSearchBar } from "@/lib/use-native-search-bar";
+import { useTranslation } from "@/lib/i18n/react";
 
 type Mode = "comment" | "chat";
 
 export default function MentionPickerRoute() {
+  const { t } = useTranslation();
   const { mode: rawMode } = useLocalSearchParams<{ mode?: string }>();
   const mode: Mode = rawMode === "chat" ? "chat" : "comment";
   const placeholder =
-    mode === "chat" ? "Reference an issue" : "Search people or issues";
+    mode === "chat" ? t("picker.referenceIssue") : t("picker.searchPeopleOrIssues");
   const query = useNativeSearchBar(placeholder, { autoFocus: true });
   return <MentionPickerBody mode={mode} query={query} />;
 }

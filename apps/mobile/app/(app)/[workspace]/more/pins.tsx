@@ -47,8 +47,10 @@ import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
+import { useTranslation } from "@/lib/i18n/react";
 
 export default function PinsPage() {
+  const { t } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const userId = useAuthStore((s) => s.user?.id ?? null);
@@ -76,11 +78,11 @@ export default function PinsPage() {
     return (
       <View className="flex-1 bg-background px-4 gap-3 pt-4">
         <Text className="text-sm text-destructive">
-          Failed to load pins:{" "}
-          {error instanceof Error ? error.message : "unknown error"}
+          {t("pins.loadFailed")}
+          {error instanceof Error ? error.message : t("common.unknownError")}
         </Text>
         <Button variant="outline" onPress={() => refetch()}>
-          <Text>Retry</Text>
+          <Text>{t("common.retry")}</Text>
         </Button>
       </View>
     );
@@ -90,8 +92,7 @@ export default function PinsPage() {
     return (
       <View className="flex-1 items-center justify-center bg-background px-6">
         <Text className="text-sm text-muted-foreground text-center">
-          No pins yet. Pin an issue or project from its actions menu to
-          surface it here.
+          {t("pins.empty")}
         </Text>
       </View>
     );

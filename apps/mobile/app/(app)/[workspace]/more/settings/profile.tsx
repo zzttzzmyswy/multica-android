@@ -61,7 +61,12 @@ export default function ProfileSettingsScreen() {
   const dirty = name.trim() !== (user?.name ?? "") && name.trim().length > 0;
 
   const handleAvatarPick = () => {
-    const options = ["Take Photo", "Choose from Library", "Remove Photo", "Cancel"];
+    const options = [
+      t("profile.takePhoto"),
+      t("profile.chooseFromLibrary"),
+      t("profile.removePhoto"),
+      t("common.cancel"),
+    ];
     const removeIndex = user?.avatar_url ? 2 : -1;
     const cancelIndex = user?.avatar_url ? 3 : 2;
     const visibleOptions = user?.avatar_url ? options : options.filter((_, i) => i !== 2);
@@ -84,7 +89,7 @@ export default function ProfileSettingsScreen() {
   const pickFromCamera = async () => {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert("Permission needed", "Camera access is required to take a photo.");
+      Alert.alert(t("profile.cameraPermissionTitle"), t("profile.cameraPermissionMessage"));
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
@@ -108,7 +113,7 @@ export default function ProfileSettingsScreen() {
 
   const uploadAvatar = async (asset: ImagePicker.ImagePickerAsset) => {
     if (asset.fileSize && asset.fileSize > MAX_AVATAR_BYTES) {
-      Alert.alert("Image too large", "Pick an image under 5 MB.");
+      Alert.alert(t("profile.imageTooLargeTitle"), t("profile.imageTooLargeMessage"));
       return;
     }
     const fileAsset: FileAsset = {
@@ -126,8 +131,8 @@ export default function ProfileSettingsScreen() {
       setUser(updated);
     } catch (err) {
       Alert.alert(
-        "Upload failed",
-        err instanceof Error ? err.message : "Could not upload avatar.",
+        t("profile.uploadFailedTitle"),
+        err instanceof Error ? err.message : t("profile.uploadFailedMessage"),
       );
     } finally {
       setUploading(false);
@@ -141,8 +146,8 @@ export default function ProfileSettingsScreen() {
       setUser(updated);
     } catch (err) {
       Alert.alert(
-        "Remove failed",
-        err instanceof Error ? err.message : "Could not remove avatar.",
+        t("profile.removeFailedTitle"),
+        err instanceof Error ? err.message : t("profile.removeFailedMessage"),
       );
     } finally {
       setUploading(false);
@@ -157,8 +162,8 @@ export default function ProfileSettingsScreen() {
       setUser(updated);
     } catch (err) {
       Alert.alert(
-        "Save failed",
-        err instanceof Error ? err.message : "Could not update profile.",
+        t("profile.saveFailedTitle"),
+        err instanceof Error ? err.message : t("profile.saveFailedMessage"),
       );
     } finally {
       setSaving(false);
@@ -173,7 +178,7 @@ export default function ProfileSettingsScreen() {
     >
       <View className="items-center gap-3">
         <Pressable onPress={handleAvatarPick} disabled={uploading}>
-          <Avatar alt={user?.name ?? "Your avatar"} className="size-24">
+          <Avatar alt={user?.name ?? t("profile.yourAvatar")} className="size-24">
             {user?.avatar_url ? (
               <AvatarImage source={{ uri: user.avatar_url }} />
             ) : null}
@@ -188,7 +193,7 @@ export default function ProfileSettingsScreen() {
           <ActivityIndicator />
         ) : (
           <Text className="text-xs text-muted-foreground">
-            Tap to change photo
+            {t("profile.tapToChangePhoto")}
           </Text>
         )}
       </View>
@@ -215,13 +220,13 @@ export default function ProfileSettingsScreen() {
             </Text>
           </View>
           <Text className="text-xs text-muted-foreground mt-1.5">
-            Email is set at sign-up and can&apos;t be changed here.
+            {t("profile.emailSetAtSignup")}
           </Text>
         </View>
       </View>
 
       <Button onPress={handleSave} disabled={!dirty || saving}>
-        <Text>{saving ? "Saving…" : "Save"}</Text>
+        <Text>{saving ? t("profile.saving") : t("profile.save")}</Text>
       </Button>
     </ScrollView>
   );

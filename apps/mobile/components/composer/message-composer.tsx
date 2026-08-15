@@ -58,6 +58,7 @@ import { useColorScheme } from "@/lib/use-color-scheme";
 import { stripMarkdown } from "@/lib/strip-markdown";
 import { THEME } from "@/lib/theme";
 import { Text } from "@/components/ui/text";
+import { useTranslation } from "@/lib/i18n/react";
 import { IconButton } from "@/components/ui/icon-button";
 import {
   ComposerAttachmentRow,
@@ -172,6 +173,7 @@ export function MessageComposer({
   disabledReason,
   manageKeyboard = true,
 }: Props) {
+  const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
   const insets = useSafeAreaInsets();
@@ -347,7 +349,7 @@ export function MessageComposer({
     const picked = picker.assets[0];
     if (!picked) return;
     if (picked.fileSize != null && picked.fileSize > MAX_FILE_SIZE) {
-      Alert.alert("File too large", "Files must be smaller than 100 MB.");
+      Alert.alert(t("common.fileTooLarge"), t("common.fileTooLargeMessage"));
       return;
     }
     const filename = picked.fileName ?? `image-${Date.now()}.jpg`;
@@ -369,7 +371,7 @@ export function MessageComposer({
       name: filename,
       type: mimeType,
     });
-  }, [startUpload]);
+  }, [startUpload, t]);
 
   const onFilePress = useCallback(async () => {
     const picker = await DocumentPicker.getDocumentAsync({
@@ -380,7 +382,7 @@ export function MessageComposer({
     const picked = picker.assets[0];
     if (!picked) return;
     if (picked.size != null && picked.size > MAX_FILE_SIZE) {
-      Alert.alert("File too large", "Files must be smaller than 100 MB.");
+      Alert.alert(t("common.fileTooLarge"), t("common.fileTooLargeMessage"));
       return;
     }
     const mimeType = picked.mimeType ?? "application/octet-stream";
@@ -401,7 +403,7 @@ export function MessageComposer({
       name: picked.name,
       type: mimeType,
     });
-  }, [startUpload]);
+  }, [startUpload, t]);
 
   const onRemoveAttachment = useCallback((localId: string) => {
     setAttachments((prev) => prev.filter((it) => it.localId !== localId));

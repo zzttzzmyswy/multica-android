@@ -73,7 +73,7 @@ export default function AddResourceRoute() {
           <TextField
             value={url}
             onChangeText={setUrl}
-            placeholder="https://github.com/owner/repo"
+            placeholder={t("resource.repoUrlPlaceholder")}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="url"
