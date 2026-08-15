@@ -34,7 +34,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
-  Platform,
   View,
 } from "react-native";
 import { router } from "expo-router";
@@ -91,6 +90,7 @@ import { OfflineBanner } from "@/components/chat/offline-banner";
 import { RuntimeRequiredBanner } from "@/components/chat/runtime-required-banner";
 import { useChatSelectStore } from "@/data/chat-select-store";
 import { isAgentRuntimeBound } from "@/lib/is-agent-runtime-bound";
+import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
 
 export default function ChatTab() {
@@ -465,7 +465,7 @@ export default function ChatTab() {
       />
       {availability === "none" ? <NoAgentBanner /> : null}
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={keyboardBehavior}
         className="flex-1"
       >
         <ChatMessageList

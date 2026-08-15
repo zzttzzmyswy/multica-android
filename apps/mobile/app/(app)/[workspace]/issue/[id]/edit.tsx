@@ -22,7 +22,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   TextInput,
@@ -39,6 +38,7 @@ import { issueDetailOptions } from "@/data/queries/issues";
 import { useUpdateIssue } from "@/data/mutations/issues";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useMentionInput } from "@/lib/use-mention-input";
+import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
 
 export default function EditIssue() {
@@ -151,7 +151,7 @@ export default function EditIssue() {
       <Stack.Screen options={{ headerLeft, headerRight }} />
       <KeyboardAvoidingView
         className="flex-1 bg-background"
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={keyboardBehavior}
       >
         <ScrollView
           className="flex-1"

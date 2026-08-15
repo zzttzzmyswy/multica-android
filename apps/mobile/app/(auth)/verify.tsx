@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, View } from "react-native";
+import { KeyboardAvoidingView, Pressable, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { MulticaLogo } from "@/components/brand/multica-logo";
 import { useAuthStore } from "@/data/auth-store";
 import { mapAuthError } from "@/lib/auth-error";
+import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
 
 const CODE_LENGTH = 6;
@@ -74,7 +75,7 @@ export default function Verify() {
     <SafeAreaView className="flex-1 bg-background">
       <KeyboardAvoidingView
         className="flex-1"
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={keyboardBehavior}
       >
         <View className="flex-1 justify-center px-6 gap-6">
           <View className="items-center gap-3">

@@ -18,7 +18,6 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
-  Platform,
   ScrollView,
   TextInput,
 } from "react-native";
@@ -31,6 +30,7 @@ import { MOBILE_PLACEHOLDER_COLOR } from "@/components/ui/input-tokens";
 import { useCreateIssue } from "@/data/mutations/issues";
 import { useNewIssueDraftStore } from "@/data/stores/new-issue-draft-store";
 import { useMentionInput } from "@/lib/use-mention-input";
+import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
 
 export default function NewIssueModal() {
@@ -112,7 +112,7 @@ export default function NewIssueModal() {
       <Stack.Screen options={{ headerRight }} />
       <KeyboardAvoidingView
         className="flex-1 bg-background"
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={keyboardBehavior}
       >
         <ScrollView
           className="flex-1"

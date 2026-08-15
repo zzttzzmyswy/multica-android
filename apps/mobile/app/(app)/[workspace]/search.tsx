@@ -17,7 +17,6 @@ import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   TextInput,
   View,
@@ -48,6 +47,7 @@ import { issueDetailOptions } from "@/data/queries/issues";
 import { issueStatusLabel } from "@/lib/issue-status";
 import { projectStatusLabel } from "@/lib/project-status";
 import { buildSearchRows, type RowItem } from "@/lib/search-rows";
+import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
 
 const DEBOUNCE_MS = 300;
@@ -427,7 +427,7 @@ export default function SearchModal() {
     <SafeAreaView className="flex-1 bg-background" edges={["bottom"]}>
       <KeyboardAvoidingView
         className="flex-1"
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={keyboardBehavior}
       >
         {/* Search input row */}
         <View className="flex-row items-center gap-3 border-b border-border px-4 py-2">

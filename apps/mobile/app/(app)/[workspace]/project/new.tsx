@@ -20,7 +20,6 @@ import {
   Alert,
   InteractionManager,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   TextInput,
@@ -42,6 +41,7 @@ import {
 import { useCreateProject } from "@/data/mutations/projects";
 import { useNewProjectDraftStore } from "@/data/stores/new-project-draft-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
 
 /**
@@ -181,7 +181,7 @@ export default function NewProject() {
       <Stack.Screen options={{ headerLeft, headerRight }} />
       <KeyboardAvoidingView
         className="flex-1 bg-background"
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={keyboardBehavior}
       >
         <ScrollView
           className="flex-1"
