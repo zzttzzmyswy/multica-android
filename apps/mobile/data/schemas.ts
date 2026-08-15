@@ -23,6 +23,7 @@ import type {
   Comment,
   CronPreviewResponse,
   InboxItem,
+  Invitation,
   IssueLabelsResponse,
   Label,
   ListLabelsResponse,
@@ -589,6 +590,38 @@ export const MemberWithUserSchema: z.ZodType<MemberWithUser> = z.object({
 
 export const MemberListSchema = z.array(MemberWithUserSchema).default([]);
 export const EMPTY_MEMBER_LIST: MemberWithUser[] = [];
+
+export const InvitationSchema: z.ZodType<Invitation> = z.object({
+  id: z.string(),
+  workspace_id: z.string().default(""),
+  inviter_id: z.string().default(""),
+  invitee_email: z.string().default(""),
+  invitee_user_id: z.string().nullable().default(null),
+  role: z.enum(["owner", "admin", "member"]).catch("member"),
+  status: z
+    .enum(["pending", "accepted", "declined", "expired"])
+    .catch("pending")
+    .default("pending"),
+  created_at: z.string().default(""),
+  updated_at: z.string().default(""),
+  expires_at: z.string().default(""),
+  inviter_name: z.string().optional(),
+  inviter_email: z.string().optional(),
+  workspace_name: z.string().optional(),
+}).loose();
+
+export const EMPTY_INVITATION: Invitation = {
+  id: "",
+  workspace_id: "",
+  inviter_id: "",
+  invitee_email: "",
+  invitee_user_id: null,
+  role: "member",
+  status: "pending",
+  created_at: "",
+  updated_at: "",
+  expires_at: "",
+};
 
 const AgentInvocationTargetSchema: z.ZodType<AgentInvocationTarget> = z
   .object({

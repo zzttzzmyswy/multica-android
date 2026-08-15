@@ -28,11 +28,13 @@ import type {
   CreateAutopilotTriggerRequest,
   CreateIssueRequest,
   CreateLabelRequest,
+  CreateMemberRequest,
   CreateProjectRequest,
   CreateProjectResourceRequest,
   CronPreviewResponse,
   GetAutopilotResponse,
   InboxItem,
+  Invitation,
   Issue,
   IssueLabelsResponse,
   Label,
@@ -45,6 +47,7 @@ import type {
   ListProjectResourcesResponse,
   ListProjectsResponse,
   MemberWithUser,
+  UpdateMemberRequest,
   PinnedItem,
   PinnedItemType,
   Project,
@@ -544,6 +547,40 @@ class ApiClient {
     );
     return parseWithFallback(raw, MemberListSchema, EMPTY_MEMBER_LIST, {
       endpoint: "listMembers",
+    });
+  }
+
+  // Workspace member write endpoints — mirror
+  // packages/core/api/client.ts:2449-2467. Write endpoints follow the
+  // write-endpoint rule (raw fetch — a malformed response surfaces
+  // naturally so the caller's error path owns the feedback).
+  async updateMemberRole(
+    workspaceId: string,
+    memberId: string,
+    data: UpdateMemberRequest,
+  ): Promise<MemberWithUser> {
+    return this.fetch<MemberWithUser>(
+      `/api/workspaces/${workspaceId}/members/${memberId}`,
+      { method: "PATCH", body: JSON.stringify(data) },
+    );
+  }
+
+  async removeMember(
+    workspaceId: string,
+    memberId: string,
+  ): Promise<void> {
+    await this.fetch<void>(`/api/workspaces/${workspaceId}/members/${memberId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async inviteMember(
+    workspaceId: string,
+    data: CreateMemberRequest,
+  ): Promise<Invitation> {
+    return this.fetch<Invitation>(`/api/workspaces/${workspaceId}/members`, {
+      method: "POST",
+      body: JSON.stringify(data),
     });
   }
 

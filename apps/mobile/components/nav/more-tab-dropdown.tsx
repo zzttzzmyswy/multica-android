@@ -87,6 +87,7 @@ const NAV_ITEMS: NavItem[] = [
     path: "/more/autopilots",
   },
   { labelKey: "nav.agents", icon: "hardware-chip", path: "/more/agents" },
+  { labelKey: "nav.members", icon: "people", path: "/more/members" },
 ];
 
 export function MoreTabDropdownAnchor({
