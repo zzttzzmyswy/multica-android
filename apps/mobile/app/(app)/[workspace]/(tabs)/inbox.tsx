@@ -28,12 +28,14 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { ActionSheet } from "@/lib/action-sheet";
 import { THEME } from "@/lib/theme";
+import { useTranslation } from "@/lib/i18n/react";
 import { deduplicateInboxItems } from "@/lib/inbox-display";
 
 export default function Inbox() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { colorScheme } = useColorScheme();
+  const { t } = useTranslation();
   const { data: rawItems, isLoading, error, refetch, isRefetching } = useQuery(
     inboxListOptions(wsId),
   );
@@ -77,36 +79,32 @@ export default function Inbox() {
   // the iOS red treatment + Alert confirm.
   const onPressMenu = () => {
     const options = [
-      "Cancel",
-      "Mark all read",
-      "Archive all read",
-      "Archive completed",
-      "Archive all",
+      t("common.cancel"),
+      t("inbox.menu.markAllRead"),
+      t("inbox.menu.archiveAllRead"),
+      t("inbox.menu.archiveCompleted"),
+      t("inbox.menu.archiveAll"),
     ];
     ActionSheet.showActionSheetWithOptions(
       {
         options,
         cancelButtonIndex: 0,
         destructiveButtonIndex: 4,
-        title: "Inbox",
+        title: t("inbox.title"),
       },
       (i) => {
         if (i === 1) markAllRead.mutate();
         else if (i === 2) archiveAllRead.mutate();
         else if (i === 3) archiveCompleted.mutate();
         else if (i === 4) {
-          Alert.alert(
-            "Archive all?",
-            "This archives every inbox item, read or unread. You can still find them via the issue pages.",
-            [
-              { text: "Cancel", style: "cancel" },
-              {
-                text: "Archive all",
-                style: "destructive",
-                onPress: () => archiveAll.mutate(),
-              },
-            ],
-          );
+          Alert.alert(t("inbox.archiveAllTitle"), t("inbox.archiveAllMessage"), [
+            { text: t("common.cancel"), style: "cancel" },
+            {
+              text: t("inbox.menu.archiveAll"),
+              style: "destructive",
+              onPress: () => archiveAll.mutate(),
+            },
+          ]);
         }
       },
     );
@@ -115,13 +113,13 @@ export default function Inbox() {
   return (
     <View className="flex-1 bg-background">
       <Header
-        title="Inbox"
+        title={t("inbox.title")}
         right={
           <>
             <IconButton
               name="ellipsis-horizontal"
               onPress={onPressMenu}
-              accessibilityLabel="Inbox actions"
+              accessibilityLabel={t("inbox.actions")}
             />
             <HeaderActions />
           </>
@@ -132,15 +130,15 @@ export default function Inbox() {
       ) : error ? (
         <View className="px-4 gap-3 pt-4">
           <Text className="text-sm text-destructive">
-            Failed to load inbox:{" "}
-            {error instanceof Error ? error.message : "unknown error"}
+            {t("inbox.loadError")}
+            {error instanceof Error ? error.message : t("common.unknownError")}
           </Text>
           <Button variant="outline" onPress={() => refetch()}>
-            <Text>Retry</Text>
+            <Text>{t("workspace.retry")}</Text>
           </Button>
         </View>
       ) : !data || data.length === 0 ? (
-        <InboxEmpty iconColor={THEME[colorScheme].mutedForeground} />
+        <InboxEmpty iconColor={THEME[colorScheme].mutedForeground} t={t} />
       ) : (
         <FlatList
           data={data}
@@ -183,16 +181,21 @@ function InboxLoading() {
   );
 }
 
-function InboxEmpty({ iconColor }: { iconColor: string }) {
+function InboxEmpty({
+  iconColor,
+  t,
+}: {
+  iconColor: string;
+  t: (id: string, params?: Record<string, string | number>) => string;
+}) {
   return (
     <View className="flex-1 items-center justify-center px-8 gap-3">
       <Ionicons name="mail-open-outline" size={42} color={iconColor} />
       <Text className="text-base font-medium text-foreground text-center">
-        Inbox zero
+        {t("inbox.zero")}
       </Text>
       <Text className="text-sm text-muted-foreground text-center">
-        When someone @mentions you, assigns an issue, or an agent finishes a
-        task, it shows up here.
+        {t("inbox.emptySubtitle")}
       </Text>
     </View>
   );

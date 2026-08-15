@@ -35,23 +35,25 @@ import { workspaceListOptions } from "@/data/queries/workspaces";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
+import { useTranslation } from "@/lib/i18n/react";
 import { cn } from "@/lib/utils";
 
 export default function SwitchWorkspaceRoute() {
   const activeSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { colorScheme } = useColorScheme();
   const t = THEME[colorScheme];
+  const tr = useTranslation();
   const { data, isLoading } = useQuery(workspaceListOptions());
 
   const onSelect = (ws: Workspace) => {
     if (ws.slug === activeSlug) return;
     Alert.alert(
-      "Switch workspace",
-      `Switch to "${ws.name}"?`,
+      tr.t("switchWorkspace.title"),
+      tr.t("switchWorkspace.message", { name: ws.name }),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: tr.t("common.cancel"), style: "cancel" },
         {
-          text: "Switch",
+          text: tr.t("switchWorkspace.confirm"),
           onPress: () => {
             router.dismiss();
             router.replace(`/${ws.slug}/inbox`);
@@ -65,7 +67,7 @@ export default function SwitchWorkspaceRoute() {
     <View className="flex-1">
       <View className="px-4 pt-4 pb-3">
         <Text className="text-base font-semibold text-foreground">
-          Switch workspace
+          {tr.t("switchWorkspace.title")}
         </Text>
       </View>
       {isLoading ? (

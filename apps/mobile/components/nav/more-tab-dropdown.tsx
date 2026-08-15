@@ -56,6 +56,7 @@ import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
+import { useTranslation } from "@/lib/i18n/react";
 import { cn } from "@/lib/utils";
 
 // iOS bottom tab bar default height (above safe-area). React Navigation
@@ -66,7 +67,7 @@ import { cn } from "@/lib/utils";
 const TAB_BAR_HEIGHT = 49;
 
 interface NavItem {
-  label: string;
+  labelKey: string;
   /** Ionicons glyph name, rendered via @expo/vector-icons (cross-platform). */
   icon: React.ComponentProps<typeof Ionicons>["name"];
   /** Path under /:slug/ — final href is `/${slug}${path}`. */
@@ -74,9 +75,9 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: "Pinned", icon: "pin", path: "/more/pins" },
-  { label: "Issues", icon: "list", path: "/more/issues" },
-  { label: "Projects", icon: "layers", path: "/more/projects" },
+  { labelKey: "nav.pinned", icon: "pin", path: "/more/pins" },
+  { labelKey: "nav.issues", icon: "list", path: "/more/issues" },
+  { labelKey: "nav.projects", icon: "layers", path: "/more/projects" },
 ];
 
 export function MoreTabDropdownAnchor({
@@ -89,7 +90,8 @@ export function MoreTabDropdownAnchor({
   const user = useAuthStore((s) => s.user);
   const pathname = usePathname();
   const { colorScheme } = useColorScheme();
-  const t = THEME[colorScheme];
+  const t2 = THEME[colorScheme];
+  const { t } = useTranslation();
   const currentWorkspace = useCurrentWorkspace(slug);
 
   const isActive = (path: string) => {
@@ -132,7 +134,7 @@ export function MoreTabDropdownAnchor({
           <UserCard
             user={user}
             onPress={() => slug && router.push(`/${slug}/more/settings`)}
-            chevronTint={t.mutedForeground}
+            chevronTint={t2.mutedForeground}
           />
 
           <DropdownMenuSeparator />
@@ -143,7 +145,7 @@ export function MoreTabDropdownAnchor({
             onPress={() =>
               slug && router.push(`/${slug}/switch-workspace`)
             }
-            chevronTint={t.mutedForeground}
+            chevronTint={t2.mutedForeground}
           />
 
           <DropdownMenuSeparator />
@@ -152,7 +154,7 @@ export function MoreTabDropdownAnchor({
             <DropdownMenuItem
               key={item.path}
               onPress={() => slug && router.push(`/${slug}${item.path}`)}
-              accessibilityLabel={item.label}
+              accessibilityLabel={t(item.labelKey)}
               className={cn(
                 "h-9 gap-3",
                 isActive(item.path) && "bg-secondary",
@@ -160,10 +162,10 @@ export function MoreTabDropdownAnchor({
             >
               <Ionicons
                 name={item.icon}
-                color={t.foreground}
+                color={t2.foreground}
                 size={18}
               />
-              <Text className="text-sm text-foreground">{item.label}</Text>
+              <Text className="text-sm text-foreground">{t(item.labelKey)}</Text>
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
@@ -188,11 +190,12 @@ function UserCard({
   chevronTint: string;
 }) {
   const initial = (user?.name ?? user?.email ?? "U").charAt(0).toUpperCase();
+  const { t } = useTranslation();
   return (
     <DropdownMenuItem
       onPress={onPress}
       className="h-12 gap-3"
-      accessibilityLabel="Account settings"
+      accessibilityLabel={t("settings.accountSettings")}
     >
       {user?.avatar_url ? (
         <Image
@@ -255,6 +258,7 @@ function WorkspaceCard({
 }) {
   const { data } = useQuery(workspaceListOptions());
   const canSwitch = (data?.length ?? 0) > 1;
+  const { t } = useTranslation();
 
   return (
     <DropdownMenuItem
@@ -262,7 +266,7 @@ function WorkspaceCard({
       disabled={!canSwitch}
       className="h-12 gap-3"
       accessibilityLabel={
-        canSwitch ? "Switch workspace" : currentWorkspaceName ?? "Workspace"
+        canSwitch ? t("settings.switchWorkspace") : currentWorkspaceName ?? t("settings.workspace")
       }
     >
       <WorkspaceAvatar

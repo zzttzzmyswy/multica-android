@@ -45,6 +45,7 @@ import {
 import { filterIssues } from "@/lib/filter-issues";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
+import { useTranslation } from "@/lib/i18n/react";
 
 // Mobile pill row has tight width on SE3 (375pt). Three pills + Filter icon
 // must fit in 343pt usable space, so the agents scope renders "Agents" — the
@@ -52,10 +53,10 @@ import { THEME } from "@/lib/theme";
 // under Dynamic Type. Semantics unchanged: same backend predicate
 // (`involves_user_id`, MUL-2397) covers owned agents + related squads; the
 // empty state copy still says "agents or squads".
-const SCOPES: { value: MyIssuesScope; label: string }[] = [
-  { value: "assigned", label: "Assigned" },
-  { value: "created", label: "Created" },
-  { value: "agents", label: "Agents" },
+const SCOPES: { value: MyIssuesScope; labelKey: string }[] = [
+  { value: "assigned", labelKey: "myIssues.scopeAssigned" },
+  { value: "created", labelKey: "myIssues.scopeCreated" },
+  { value: "agents", labelKey: "myIssues.scopeAgents" },
 ];
 
 type IssueSection = { status: IssueStatus; data: Issue[] };
@@ -65,6 +66,7 @@ export default function MyIssues() {
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
+  const { t } = useTranslation();
 
   const scope = useMyIssuesViewStore((s) => s.scope);
   const setScope = useMyIssuesViewStore((s) => s.setScope);
@@ -128,13 +130,14 @@ export default function MyIssues() {
 
   return (
     <View className="flex-1 bg-background">
-      <Header title="My Issues" right={<HeaderActions />} />
+      <Header title={t("myIssues.title")} right={<HeaderActions />} />
       <ScopeToolbar
         scopes={SCOPES}
         scope={scope}
         onChange={(v) => setScope(v)}
         onOpenFilter={openFilter}
         hasActiveFilters={hasActiveFilters}
+        t={t}
       />
       {hasActiveFilters ? (
         <ActiveFilterChips
@@ -153,19 +156,19 @@ export default function MyIssues() {
       ) : error ? (
         <View className="px-4 gap-3 pt-4">
           <Text className="text-sm text-destructive">
-            Failed to load issues:{" "}
-            {error instanceof Error ? error.message : "unknown error"}
+            {t("myIssues.loadError")}
+            {error instanceof Error ? error.message : t("common.unknownError")}
           </Text>
           <Button variant="outline" onPress={() => refetch()}>
-            <Text>Retry</Text>
+            <Text>{t("workspace.retry")}</Text>
           </Button>
         </View>
       ) : showEmptyState ? (
         <EmptyState
           message={
             hasActiveFilters
-              ? "No issues match the current filters."
-              : emptyMessageForScope(scope)
+              ? t("myIssues.filterEmpty")
+              : emptyMessageForScope(scope, t)
           }
         />
       ) : (
@@ -255,12 +258,14 @@ function ScopeToolbar<S extends string>({
   onChange,
   onOpenFilter,
   hasActiveFilters,
+  t,
 }: {
-  scopes: { value: S; label: string }[];
+  scopes: { value: S; labelKey: string }[];
   scope: S;
   onChange: (value: S) => void;
   onOpenFilter: () => void;
   hasActiveFilters: boolean;
+  t: (id: string, params?: Record<string, string | number>) => string;
 }) {
   return (
     <View className="flex-row items-center justify-between px-4 pt-2 pb-2">
@@ -280,7 +285,7 @@ function ScopeToolbar<S extends string>({
                 numberOfLines={1}
                 className={active ? "text-accent-foreground" : "text-muted-foreground"}
               >
-                {s.label}
+                {t(s.labelKey)}
               </Text>
             </Button>
           );
@@ -362,13 +367,16 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
-function emptyMessageForScope(scope: MyIssuesScope): string {
+function emptyMessageForScope(
+  scope: MyIssuesScope,
+  t: (id: string, params?: Record<string, string | number>) => string,
+): string {
   switch (scope) {
     case "assigned":
-      return "No issues assigned to you.";
+      return t("myIssues.emptyAssigned");
     case "created":
-      return "You haven't created any issues.";
+      return t("myIssues.emptyCreated");
     case "agents":
-      return "No issues assigned to your agents or squads yet.";
+      return t("myIssues.emptyAgents");
   }
 }

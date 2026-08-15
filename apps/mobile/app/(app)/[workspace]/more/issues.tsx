@@ -50,6 +50,7 @@ import {
 import { filterIssues } from "@/lib/filter-issues";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
+import { useTranslation } from "@/lib/i18n/react";
 
 type IssueSection = { status: IssueStatus; data: Issue[] };
 
@@ -58,15 +59,16 @@ type IssueSection = { status: IssueStatus; data: Issue[] };
 // either, and on SE3 (375pt) "(123)" appended to each label pushes the
 // row past the safe width when filter icon shares the row. Per-status
 // counts still appear on the SectionList headers below.
-const SCOPES: { value: IssuesScope; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "members", label: "Members" },
-  { value: "agents", label: "Agents" },
+const SCOPES: { value: IssuesScope; labelKey: string }[] = [
+  { value: "all", labelKey: "issues.scopeAll" },
+  { value: "members", labelKey: "issues.scopeMembers" },
+  { value: "agents", labelKey: "issues.scopeAgents" },
 ];
 
 export default function IssuesPage() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
+  const { t } = useTranslation();
 
   const scope = useIssuesViewStore((s) => s.scope);
   const setScope = useIssuesViewStore((s) => s.setScope);
@@ -143,6 +145,7 @@ export default function IssuesPage() {
         onChange={(v) => setScope(v)}
         onOpenFilter={openFilter}
         hasActiveFilters={hasActiveFilters}
+        t={t}
       />
       {hasActiveFilters ? (
         <ActiveFilterChips
@@ -161,19 +164,19 @@ export default function IssuesPage() {
       ) : error ? (
         <View className="px-4 gap-3 pt-4">
           <Text className="text-sm text-destructive">
-            Failed to load issues:{" "}
-            {error instanceof Error ? error.message : "unknown error"}
+            {t("issues.loadError")}
+            {error instanceof Error ? error.message : t("common.unknownError")}
           </Text>
           <Button variant="outline" onPress={() => refetch()}>
-            <Text>Retry</Text>
+            <Text>{t("workspace.retry")}</Text>
           </Button>
         </View>
       ) : showEmptyState ? (
         <EmptyState
           message={
             hasActiveFilters
-              ? "No issues match the current filters."
-              : emptyMessageForScope(scope)
+              ? t("issues.filterEmpty")
+              : emptyMessageForScope(scope, t)
           }
         />
       ) : (
@@ -256,12 +259,14 @@ function ScopeToolbar<S extends string>({
   onChange,
   onOpenFilter,
   hasActiveFilters,
+  t,
 }: {
-  scopes: { value: S; label: string }[];
+  scopes: { value: S; labelKey: string }[];
   scope: S;
   onChange: (value: S) => void;
   onOpenFilter: () => void;
   hasActiveFilters: boolean;
+  t: (id: string, params?: Record<string, string | number>) => string;
 }) {
   return (
     <View className="flex-row items-center justify-between px-4 pt-2 pb-2">
@@ -281,7 +286,7 @@ function ScopeToolbar<S extends string>({
                 numberOfLines={1}
                 className={active ? "text-accent-foreground" : "text-muted-foreground"}
               >
-                {s.label}
+                {t(s.labelKey)}
               </Text>
             </Button>
           );
@@ -371,13 +376,16 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
-function emptyMessageForScope(scope: IssuesScope): string {
+function emptyMessageForScope(
+  scope: IssuesScope,
+  t: (id: string, params?: Record<string, string | number>) => string,
+): string {
   switch (scope) {
     case "all":
-      return "No issues in this workspace.";
+      return t("issues.emptyAll");
     case "members":
-      return "No issues assigned to a member.";
+      return t("issues.emptyMembers");
     case "agents":
-      return "No issues assigned to agents or squads.";
+      return t("issues.emptyAgents");
   }
 }

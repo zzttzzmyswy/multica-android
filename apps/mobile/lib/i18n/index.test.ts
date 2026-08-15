@@ -77,6 +77,39 @@ describe("i18n translate", () => {
     mod.setLocale("en");
     expect(fn).toHaveBeenCalledTimes(1);
   });
+
+  it("localizes workspace selection, sign-out and empty-state strings", () => {
+    expect(mod.translate("workspace.selectTitle")).toBe(
+      "Select a workspace",
+    );
+    expect(mod.translate("workspace.signOut")).toBe("Sign out");
+    expect(mod.translate("settings.signOutTitle")).toBe("Sign out");
+    expect(mod.translate("myIssues.emptyAssigned")).toBe(
+      "No issues assigned to you.",
+    );
+    expect(mod.translate("issues.emptyAll")).toBe(
+      "No issues in this workspace.",
+    );
+
+    mod.setLocale("zh");
+    expect(mod.translate("workspace.selectTitle")).toBe("选择工作区");
+    expect(mod.translate("workspace.signOut")).toBe("退出登录");
+    expect(mod.translate("settings.signOutTitle")).toBe("退出登录");
+    expect(mod.translate("myIssues.emptyAssigned")).toBe(
+      "没有指派给您的问题。",
+    );
+    expect(mod.translate("issues.emptyAll")).toBe("此工作区没有问题。");
+  });
+
+  it("interpolates the switch-workspace confirm message", () => {
+    expect(mod.translate("switchWorkspace.message", { name: "Acme" })).toBe(
+      'Switch to "Acme"?',
+    );
+    mod.setLocale("zh");
+    expect(mod.translate("switchWorkspace.message", { name: "Acme" })).toBe(
+      "切换到「Acme」？",
+    );
+  });
 });
 
 describe("initI18n device-language resolution", () => {

@@ -19,46 +19,48 @@ import { Separator } from "@/components/ui/separator";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { notificationPreferenceOptions } from "@/data/queries/notification-preferences";
 import { useUpdateNotificationPreferences } from "@/data/mutations/notification-preferences";
+import { useTranslation } from "@/lib/i18n/react";
 
 const INBOX_GROUPS: Array<{
   key: Exclude<NotificationGroupKey, "system_notifications">;
-  label: string;
-  description: string;
+  labelKey: string;
+  descriptionKey: string;
 }> = [
   {
     key: "assignments",
-    label: "Assignments",
-    description: "When you're assigned an issue or removed as assignee.",
+    labelKey: "notif.groupAssignments",
+    descriptionKey: "notif.groupAssignmentsDesc",
   },
   {
     key: "status_changes",
-    label: "Status changes",
-    description: "When an issue's status changes.",
+    labelKey: "notif.groupStatusChanges",
+    descriptionKey: "notif.groupStatusChangesDesc",
   },
   {
     key: "comments",
-    label: "Comments",
-    description: "New comments on issues you're subscribed to.",
+    labelKey: "notif.groupComments",
+    descriptionKey: "notif.groupCommentsDesc",
   },
   {
     key: "mentions",
-    label: "Mentions",
-    description: "When someone @mentions you, including @all and @squad.",
+    labelKey: "notif.groupMentions",
+    descriptionKey: "notif.groupMentionsDesc",
   },
   {
     key: "updates",
-    label: "Issue updates",
-    description: "Edits to title, description, labels, priority, or due date.",
+    labelKey: "notif.groupUpdates",
+    descriptionKey: "notif.groupUpdatesDesc",
   },
   {
     key: "agent_activity",
-    label: "Agent activity",
-    description: "When an agent picks up, runs, or completes a task.",
+    labelKey: "notif.groupAgentActivity",
+    descriptionKey: "notif.groupAgentActivityDesc",
   },
 ];
 
 export default function NotificationsSettingsScreen() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const { t } = useTranslation();
   const { data, isLoading, error } = useQuery(
     notificationPreferenceOptions(wsId),
   );
@@ -91,7 +93,7 @@ export default function NotificationsSettingsScreen() {
     return (
       <View className="flex-1 items-center justify-center bg-background px-6">
         <Text className="text-sm text-destructive text-center">
-          Failed to load notification preferences.
+          {t("notif.loadError")}
         </Text>
       </View>
     );
@@ -103,8 +105,8 @@ export default function NotificationsSettingsScreen() {
       contentContainerClassName="px-4 py-4 gap-6"
     >
       <Section
-        title="Inbox notifications"
-        description="Which events show up in your inbox."
+        title={t("notif.inboxTitle")}
+        description={t("notif.inboxDescription")}
       >
         {INBOX_GROUPS.map((group, idx) => {
           const enabled = preferences[group.key] !== "muted";
@@ -114,10 +116,10 @@ export default function NotificationsSettingsScreen() {
               <View className="flex-row items-center px-4 py-3 gap-3">
                 <View className="flex-1">
                   <Text className="text-base font-medium text-foreground">
-                    {group.label}
+                    {t(group.labelKey)}
                   </Text>
                   <Text className="text-xs text-muted-foreground mt-0.5">
-                    {group.description}
+                    {t(group.descriptionKey)}
                   </Text>
                 </View>
                 <Switch
@@ -132,16 +134,16 @@ export default function NotificationsSettingsScreen() {
       </Section>
 
       <Section
-        title="System"
-        description="Multica-wide announcements and important account events."
+        title={t("notif.systemTitle")}
+        description={t("notif.systemDescription")}
       >
         <View className="flex-row items-center px-4 py-3 gap-3">
           <View className="flex-1">
             <Text className="text-base font-medium text-foreground">
-              System notifications
+              {t("notif.systemRow")}
             </Text>
             <Text className="text-xs text-muted-foreground mt-0.5">
-              Account changes, security alerts, product updates.
+              {t("notif.systemRowDescription")}
             </Text>
           </View>
           <Switch

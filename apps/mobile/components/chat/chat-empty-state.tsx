@@ -20,11 +20,12 @@
 import { View } from "react-native";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "@/lib/i18n/react";
 
-const STARTER_PROMPTS: { icon: string; text: string }[] = [
-  { icon: "📋", text: "List my open issues by priority" },
-  { icon: "📝", text: "Summarize what I did today" },
-  { icon: "💡", text: "Help me plan what to do next" },
+const STARTER_PROMPTS: { icon: string; textKey: string }[] = [
+  { icon: "📋", textKey: "chat.prompt1" },
+  { icon: "📝", textKey: "chat.prompt2" },
+  { icon: "💡", textKey: "chat.prompt3" },
 ];
 
 interface Props {
@@ -34,6 +35,8 @@ interface Props {
 }
 
 export function ChatEmptyState({ hasSessions, agentName, onPickPrompt }: Props) {
+  const { t } = useTranslation();
+
   // First-time experience: educate before suggesting actions. Starter
   // prompts here would presume the user already knows what chat is for.
   if (!hasSessions) {
@@ -41,19 +44,21 @@ export function ChatEmptyState({ hasSessions, agentName, onPickPrompt }: Props) 
       <View className="flex-1 items-center justify-center px-6 py-8">
         <View className="max-w-xs items-center gap-3">
           <Text className="text-base font-semibold text-foreground text-center">
-            Chat with your agents
+            {t("chat.emptyFirstTitle")}
           </Text>
           <Text className="text-sm text-muted-foreground text-center">
             <Text className="text-sm text-muted-foreground">
-              ✨ They know your workspace —{" "}
+              ✨ {t("chat.emptyFirstIntro")}
             </Text>
             <Text className="text-sm font-medium text-foreground">
-              issues, projects, skills
+              {t("chat.emptyFirstStrong")}
             </Text>
-            <Text className="text-sm text-muted-foreground">.</Text>
+            <Text className="text-sm text-muted-foreground">
+              {t("chat.emptyFirstOutro")}
+            </Text>
           </Text>
           <Text className="text-sm text-muted-foreground text-center">
-            Ask for a summary, plan your day, or hand off a small task.
+            {t("chat.emptyFirstLine")}
           </Text>
         </View>
       </View>
@@ -61,7 +66,9 @@ export function ChatEmptyState({ hasSessions, agentName, onPickPrompt }: Props) 
   }
 
   // Returning user: starter prompts are the fastest path back to action.
-  const title = agentName ? `Hi, I'm ${agentName}` : "Welcome back to Multica";
+  const title = agentName
+    ? t("chat.welcomeAgent", { name: agentName })
+    : t("chat.welcomeBack");
   return (
     <View className="flex-1 items-center justify-center px-6 py-8 gap-5">
       <View className="items-center gap-1">
@@ -69,24 +76,27 @@ export function ChatEmptyState({ hasSessions, agentName, onPickPrompt }: Props) 
           {title}
         </Text>
         <Text className="text-sm text-muted-foreground text-center">
-          Try asking
+          {t("chat.tryAsking")}
         </Text>
       </View>
       <View className="w-full max-w-xs gap-2">
-        {STARTER_PROMPTS.map((p) => (
-          <Button
-            key={p.text}
-            variant="outline"
-            onPress={() => onPickPrompt(p.text)}
-            className="h-auto justify-start px-3 py-2.5"
-            accessibilityLabel={p.text}
-          >
-            <Text className="text-sm text-foreground">
-              <Text className="text-sm">{p.icon}  </Text>
-              {p.text}
-            </Text>
-          </Button>
-        ))}
+        {STARTER_PROMPTS.map((p) => {
+          const promptText = t(p.textKey);
+          return (
+            <Button
+              key={p.textKey}
+              variant="outline"
+              onPress={() => onPickPrompt(promptText)}
+              className="h-auto justify-start px-3 py-2.5"
+              accessibilityLabel={promptText}
+            >
+              <Text className="text-sm text-foreground">
+                <Text className="text-sm">{p.icon}  </Text>
+                {promptText}
+              </Text>
+            </Button>
+          );
+        })}
       </View>
     </View>
   );

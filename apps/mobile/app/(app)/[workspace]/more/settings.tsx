@@ -25,17 +25,15 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { workspaceListOptions } from "@/data/queries/workspaces";
 import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import {
-  useColorScheme,
-  type ThemePreference,
-} from "@/lib/use-color-scheme";
+import { useColorScheme, type ThemePreference } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
+import { useTranslation } from "@/lib/i18n/react";
 import { cn } from "@/lib/utils";
 
-const THEME_OPTIONS: Array<{ value: ThemePreference; label: string }> = [
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-  { value: "system", label: "System" },
+const THEME_OPTIONS: Array<{ value: ThemePreference; labelKey: string }> = [
+  { value: "light", labelKey: "settings.themeLight" },
+  { value: "dark", labelKey: "settings.themeDark" },
+  { value: "system", labelKey: "settings.themeSystem" },
 ];
 
 function initialsOf(name: string | undefined): string {
@@ -58,6 +56,7 @@ export default function SettingsPage() {
   const { data, isLoading, error } = useQuery(workspaceListOptions());
   const { preference, setPreference, colorScheme } = useColorScheme();
   const mutedFg = THEME[colorScheme].mutedForeground;
+  const { t } = useTranslation();
 
   const onSwitch = async (ws: Workspace) => {
     if (ws.slug === currentSlug) return;
@@ -66,21 +65,17 @@ export default function SettingsPage() {
   };
 
   const onSignOut = () => {
-    Alert.alert(
-      "Sign out",
-      "You'll need to sign in again to use Multica on this device.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Sign out",
-          style: "destructive",
-          onPress: async () => {
-            await clearWorkspace();
-            await logout();
-          },
+    Alert.alert(t("settings.signOutTitle"), t("settings.signOutMessage"), [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: t("settings.signOutTitle"),
+        style: "destructive",
+        onPress: async () => {
+          await clearWorkspace();
+          await logout();
         },
-      ],
-    );
+      },
+    ]);
   };
 
   const goProfile = () => router.push(`/${currentSlug}/more/settings/profile`);
@@ -92,12 +87,12 @@ export default function SettingsPage() {
       className="flex-1 bg-background"
       contentContainerClassName="px-4 py-4 gap-6"
     >
-      <SectionGroup title="Account">
+      <SectionGroup title={t("settings.account")}>
         <NavRow
           onPress={goProfile}
           chevronColor={mutedFg}
           leading={
-            <Avatar alt={user?.name ?? "User avatar"} className="size-10">
+            <Avatar alt={user?.name ?? t("settings.accountSettings")} className="size-10">
               {user?.avatar_url ? (
                 <AvatarImage source={{ uri: user.avatar_url }} />
               ) : null}
@@ -115,12 +110,12 @@ export default function SettingsPage() {
         <NavRow
           onPress={goNotifications}
           chevronColor={mutedFg}
-          title="Notifications"
-          subtitle="Inbox and system alerts"
+          title={t("settings.notifications")}
+          subtitle={t("settings.notificationsSub")}
         />
       </SectionGroup>
 
-      <SectionGroup title="Workspaces">
+      <SectionGroup title={t("settings.workspaces")}>
         {isLoading ? (
           <View className="py-4 items-center">
             <ActivityIndicator />
@@ -128,7 +123,7 @@ export default function SettingsPage() {
         ) : error ? (
           <View className="p-4">
             <Text className="text-sm text-destructive">
-              Failed to load workspaces
+              {t("settings.workspacesLoadError")}
             </Text>
           </View>
         ) : (
@@ -151,7 +146,7 @@ export default function SettingsPage() {
         )}
       </SectionGroup>
 
-      <SectionGroup title="Appearance">
+      <SectionGroup title={t("settings.appearance")}>
         {/* Two converging entry points by design, NOT a double-fire:
               - Tap on small radio circle  → RadioGroupItem (Pressable, inner) consumes → onValueChange fires
               - Tap on text / row padding  → outer Pressable.onPress fires
@@ -174,7 +169,7 @@ export default function SettingsPage() {
                 >
                   <RadioGroupItem value={opt.value} />
                   <Text className="flex-1 text-base font-medium text-foreground">
-                    {opt.label}
+                    {t(opt.labelKey)}
                   </Text>
                 </Pressable>
                 {!isLast ? <Separator /> : null}
@@ -186,7 +181,7 @@ export default function SettingsPage() {
 
       <View className="pt-2">
         <Button variant="destructive" onPress={onSignOut}>
-          <Text>Sign out</Text>
+          <Text>{t("settings.signOutTitle")}</Text>
         </Button>
       </View>
     </ScrollView>

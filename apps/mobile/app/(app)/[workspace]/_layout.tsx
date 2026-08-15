@@ -17,6 +17,7 @@ import { ModalCloseButton } from "@/components/ui/modal-close-button";
 import { useNewIssueDraftResetOnWorkspaceChange } from "@/data/stores/new-issue-draft-store";
 import { useNewProjectDraftResetOnWorkspaceChange } from "@/data/stores/new-project-draft-store";
 import { useChatSessionPickerResetOnWorkspaceChange } from "@/data/stores/chat-session-picker-store";
+import { useTranslation } from "@/lib/i18n/react";
 
 /**
  * Shared Stack.Screen options for every iOS formSheet-presented sheet route.
@@ -103,6 +104,7 @@ export default function WorkspaceLayout() {
   const { workspace: slug } = useLocalSearchParams<{ workspace: string }>();
   const { data: workspaces, isLoading } = useQuery(workspaceListOptions());
   const setCurrentWorkspace = useWorkspaceStore((s) => s.setCurrentWorkspace);
+  const { t } = useTranslation();
 
   const matched = workspaces?.find((w) => w.slug === slug);
 
@@ -135,21 +137,21 @@ export default function WorkspaceLayout() {
         <Stack.Screen
           name="issue/[id]"
           options={{
-            title: "Issue",
-            headerBackTitle: "Back",
+            title: t("screen.issue"),
+            headerBackTitle: t("common.back"),
           }}
         />
         <Stack.Screen
           name="project/[id]"
           options={{
-            title: "Project",
-            headerBackTitle: "Back",
+            title: t("screen.project"),
+            headerBackTitle: t("common.back"),
           }}
         />
         <Stack.Screen
           name="project/[id]/edit"
           options={{
-            title: "Edit Project",
+            title: t("screen.editProject"),
             presentation: "modal",
             headerLeft: () => <ModalCloseButton />,
           }}
@@ -157,7 +159,7 @@ export default function WorkspaceLayout() {
         <Stack.Screen
           name="issue/[id]/edit"
           options={{
-            title: "Edit Issue",
+            title: t("screen.editIssue"),
             presentation: "modal",
             headerLeft: () => <ModalCloseButton />,
           }}
@@ -165,7 +167,7 @@ export default function WorkspaceLayout() {
         <Stack.Screen
           name="project/new"
           options={{
-            title: "New Project",
+            title: t("screen.newProject"),
             presentation: "modal",
             headerLeft: () => <ModalCloseButton />,
           }}
@@ -195,7 +197,7 @@ export default function WorkspaceLayout() {
           options={{
             ...SHEET_OPTIONS,
             headerShown: true,
-            title: "Assignee",
+            title: t("screen.assignee"),
           }}
         />
         <Stack.Screen
@@ -207,7 +209,7 @@ export default function WorkspaceLayout() {
           options={{
             ...SHEET_OPTIONS,
             headerShown: true,
-            title: "Mention",
+            title: t("screen.mention"),
           }}
         />
         <Stack.Screen
@@ -260,7 +262,7 @@ export default function WorkspaceLayout() {
           options={{
             ...SHEET_OPTIONS,
             headerShown: true,
-            title: "Assignee",
+            title: t("screen.assignee"),
           }}
         />
         <Stack.Screen
@@ -291,36 +293,36 @@ export default function WorkspaceLayout() {
         <Stack.Screen name="switch-workspace" options={SHEET_OPTIONS} />
         <Stack.Screen
           name="more/issues"
-          options={{ title: "Issues", headerBackTitle: "Back" }}
+          options={{ title: t("screen.issues"), headerBackTitle: t("common.back") }}
         />
         <Stack.Screen
           name="more/projects"
-          options={{ title: "Projects", headerBackTitle: "Back" }}
+          options={{ title: t("screen.projects"), headerBackTitle: t("common.back") }}
         />
         <Stack.Screen
           name="more/agents"
-          options={{ title: "Agents", headerBackTitle: "Back" }}
+          options={{ title: t("screen.agents"), headerBackTitle: t("common.back") }}
         />
         <Stack.Screen
           name="more/pins"
-          options={{ title: "Pinned", headerBackTitle: "Back" }}
+          options={{ title: t("screen.pinned"), headerBackTitle: t("common.back") }}
         />
         <Stack.Screen
           name="more/settings"
-          options={{ title: "Settings", headerBackTitle: "Back" }}
+          options={{ title: t("screen.settings"), headerBackTitle: t("common.back") }}
         />
         <Stack.Screen
           name="more/settings/profile"
-          options={{ title: "Profile", headerBackTitle: "Settings" }}
+          options={{ title: t("screen.profile"), headerBackTitle: t("screen.settings") }}
         />
         <Stack.Screen
           name="more/settings/notifications"
-          options={{ title: "Notifications", headerBackTitle: "Settings" }}
+          options={{ title: t("screen.notifications"), headerBackTitle: t("screen.settings") }}
         />
         <Stack.Screen
           name="new-issue"
           options={{
-            title: "New Issue",
+            title: t("screen.newIssue"),
             presentation: "modal",
             headerLeft: () => <ModalCloseButton />,
           }}
@@ -328,7 +330,7 @@ export default function WorkspaceLayout() {
         <Stack.Screen
           name="search"
           options={{
-            title: "Search",
+            title: t("screen.search"),
             presentation: "modal",
             headerLeft: () => <ModalCloseButton />,
           }}
