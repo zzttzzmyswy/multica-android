@@ -42,15 +42,12 @@ import {
   type IssuesScope,
 } from "@/data/stores/issues-view-store";
 import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-workspace-change";
-import {
-  BOARD_STATUSES,
-  PRIORITY_LABEL,
-  STATUS_LABEL,
-} from "@/lib/issue-status";
+import { BOARD_STATUSES } from "@/lib/issue-status";
 import { filterIssues } from "@/lib/filter-issues";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
+import { translate } from "@/lib/i18n";
 
 type IssueSection = { status: IssueStatus; data: Issue[] };
 
@@ -316,14 +313,14 @@ function ActiveFilterChips({
       {statusFilters.map((s) => (
         <Chip
           key={`s-${s}`}
-          label={STATUS_LABEL[s]}
+          label={translate(`enum.status.${s}`)}
           onClear={() => onClearStatus(s)}
         />
       ))}
       {priorityFilters.map((p) => (
         <Chip
           key={`p-${p}`}
-          label={PRIORITY_LABEL[p]}
+          label={translate(`enum.priority.${p}`)}
           onClear={() => onClearPriority(p)}
         />
       ))}
@@ -359,7 +356,7 @@ function SectionHeader({
     <View className="flex-row items-center gap-2 px-4 py-2 bg-background">
       <StatusIcon status={status} size={14} />
       <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
-        {STATUS_LABEL[status]}
+        {translate(`enum.status.${status}`)}
       </Text>
       <Text className="text-xs text-muted-foreground/60">{count}</Text>
     </View>

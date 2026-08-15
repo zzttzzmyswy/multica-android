@@ -32,7 +32,8 @@ import { IssueRow } from "@/components/issue/issue-row";
 import { IssuesLoading } from "@/components/issue/issues-loading";
 import { projectIssuesOptions } from "@/data/queries/projects";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import { BOARD_STATUSES, STATUS_LABEL } from "@/lib/issue-status";
+import { BOARD_STATUSES, issueStatusLabel } from "@/lib/issue-status";
+import { useTranslation } from "@/lib/i18n/react";
 
 interface Props {
   projectId: string;
@@ -41,6 +42,7 @@ interface Props {
 export function ProjectRelatedIssues({ projectId }: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
+  const { t } = useTranslation();
   const { data, isLoading, error, refetch } = useQuery(
     projectIssuesOptions(wsId, projectId),
   );
@@ -65,11 +67,11 @@ export function ProjectRelatedIssues({ projectId }: Props) {
     return (
       <View className="px-4 py-6 gap-3">
         <Text className="text-sm text-destructive">
-          Failed to load issues:{" "}
-          {error instanceof Error ? error.message : "unknown error"}
+          {t("issues.loadError")}
+          {error instanceof Error ? error.message : t("issue.notFound")}
         </Text>
         <Button variant="outline" onPress={() => refetch()}>
-          <Text>Retry</Text>
+          <Text>{t("issue.retry")}</Text>
         </Button>
       </View>
     );
@@ -78,7 +80,7 @@ export function ProjectRelatedIssues({ projectId }: Props) {
   if ((data?.length ?? 0) === 0) {
     return (
       <View className="px-4 py-6">
-        <Text className="text-sm text-muted-foreground">No issues yet.</Text>
+        <Text className="text-sm text-muted-foreground">{t("issues.emptyAll")}</Text>
       </View>
     );
   }
@@ -116,7 +118,7 @@ function SectionHeader({
     <View className="flex-row items-center gap-2 px-4 py-2 bg-background">
       <StatusIcon status={status} size={14} />
       <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
-        {STATUS_LABEL[status]}
+        {issueStatusLabel(status)}
       </Text>
       <Text className="text-xs text-muted-foreground/60">{count}</Text>
     </View>

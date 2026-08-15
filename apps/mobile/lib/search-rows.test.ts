@@ -1,9 +1,19 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import type {
   Issue,
   SearchIssueResult,
   SearchProjectResult,
 } from "@multica/core/types";
+
+vi.mock("expo-secure-store", () => ({
+  getItemAsync: vi.fn().mockResolvedValue(null),
+  setItemAsync: vi.fn(),
+  deleteItemAsync: vi.fn(),
+}));
+vi.mock("expo-localization", () => ({
+  getLocales: vi.fn().mockReturnValue([{ languageCode: "en" }]),
+}));
+
 import { buildSearchRows } from "./search-rows";
 
 function issue(

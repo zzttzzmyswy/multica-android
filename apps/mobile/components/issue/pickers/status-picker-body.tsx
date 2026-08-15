@@ -14,8 +14,9 @@ import { useColorScheme } from "nativewind";
 import type { IssueStatus } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { StatusIcon } from "@/components/ui/status-icon";
-import { BOARD_STATUSES, STATUS_LABEL } from "@/lib/issue-status";
+import { BOARD_STATUSES } from "@/lib/issue-status";
 import { THEME } from "@/lib/theme";
+import { useTranslation } from "@/lib/i18n/react";
 
 const ALL_STATUSES: IssueStatus[] = [...BOARD_STATUSES, "cancelled"];
 
@@ -26,13 +27,14 @@ interface Props {
 
 export function StatusPickerBody({ value, onChange }: Props) {
   const { colorScheme } = useColorScheme();
+  const { t } = useTranslation();
   const checkColor =
     colorScheme === "dark" ? THEME.dark.primary : THEME.light.primary;
 
   return (
     <ScrollView showsVerticalScrollIndicator={false}>
       <View className="px-4 pt-3 pb-2">
-        <Text className="text-lg font-semibold text-foreground">Status</Text>
+        <Text className="text-lg font-semibold text-foreground">{t("picker.status")}</Text>
       </View>
       <View className="px-2">
         {ALL_STATUSES.map((status) => {
@@ -45,7 +47,7 @@ export function StatusPickerBody({ value, onChange }: Props) {
             >
               <StatusIcon status={status} size={18} />
               <Text className="flex-1 text-base text-foreground">
-                {STATUS_LABEL[status]}
+                {t(`enum.status.${status}`)}
               </Text>
               {selected ? (
                 <Ionicons name="checkmark" size={20} color={checkColor} />

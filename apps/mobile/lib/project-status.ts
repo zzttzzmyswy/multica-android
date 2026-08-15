@@ -14,6 +14,7 @@
  *     mobile picks an i18n lib (web uses i18next).
  */
 import type { ProjectPriority, ProjectStatus } from "@multica/core/types";
+import { translate } from "./i18n";
 
 export const PROJECT_STATUSES: ProjectStatus[] = [
   "planned",
@@ -69,13 +70,20 @@ export const PROJECT_PRIORITY_BARS: Record<ProjectPriority, number> = {
 };
 
 // Fallback for unknown server values per "Enum drift downgrades, not crashes"
-// (root CLAUDE.md "API Response Compatibility"). Returns a sensible default
-// so a future enum value still renders a labelled chip.
+// (root CLAUDE.md "API Response Compatibility"). Returns a localized label, or
+// the canonical English label, or the raw value when neither the dictionary nor
+// the mirror map knows it.
 export function projectStatusLabel(value: string): string {
+  const id = `enum.projectStatus.${value}`;
+  const localized = translate(id);
+  if (localized !== id) return localized;
   return (PROJECT_STATUS_LABEL as Record<string, string>)[value] ?? value;
 }
 
 export function projectPriorityLabel(value: string): string {
+  const id = `enum.projectPriority.${value}`;
+  const localized = translate(id);
+  if (localized !== id) return localized;
   return (PROJECT_PRIORITY_LABEL as Record<string, string>)[value] ?? value;
 }
 

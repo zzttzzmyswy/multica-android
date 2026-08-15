@@ -22,7 +22,7 @@ import { formatDateOnly } from "@multica/core/issues/date";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useNewIssueDraftStore } from "@/data/stores/new-issue-draft-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import { PRIORITY_LABEL, STATUS_LABEL } from "@/lib/issue-status";
+import { useTranslation } from "@/lib/i18n/react";
 
 /**
  * Picker fields the new-issue draft form can open. Bound to a typed map
@@ -46,6 +46,7 @@ const NEW_ISSUE_PICKER_PATHNAMES = {
 
 export function CreateFormAttributeRow() {
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
+  const { t } = useTranslation();
   const status = useNewIssueDraftStore((s) => s.status);
   const priority = useNewIssueDraftStore((s) => s.priority);
   const assignee = useNewIssueDraftStore((s) => s.assignee);
@@ -55,9 +56,9 @@ export function CreateFormAttributeRow() {
   const { getName } = useActorLookup();
   const assigneeLabel = assignee
     ? getName(assignee.type, assignee.id)
-    : "Assignee";
+    : t("attr.assignee");
   const priorityLabel =
-    priority === "none" ? "Priority" : PRIORITY_LABEL[priority];
+    priority === "none" ? t("attr.priority") : t(`enum.priority.${priority}`);
 
   const open = (field: NewIssuePickerField) => {
     if (!wsSlug) return;
@@ -72,7 +73,7 @@ export function CreateFormAttributeRow() {
       <View className="flex-row flex-wrap gap-2">
         <AttributeChip
           icon={<StatusIcon status={status} size={12} />}
-          label={STATUS_LABEL[status]}
+          label={t(`enum.status.${status}`)}
           variant="filled"
           onPress={() => open("status")}
         />
@@ -111,7 +112,7 @@ export function CreateFormAttributeRow() {
               color={dueDate ? undefined : "#a1a1aa"}
             />
           }
-          label={dueDate ? formatDueDate(dueDate) : "Due date"}
+          label={dueDate ? formatDueDate(dueDate) : t("attr.dueDate")}
           variant={dueDate ? "filled" : "dimmed"}
           onPress={() => open("due-date")}
         />
@@ -123,7 +124,7 @@ export function CreateFormAttributeRow() {
               <Ionicons name="folder-outline" size={14} color="#a1a1aa" />
             )
           }
-          label={project?.title ?? "Project"}
+          label={project?.title ?? t("attr.project")}
           variant={project ? "filled" : "dimmed"}
           onPress={() => open("project")}
         />

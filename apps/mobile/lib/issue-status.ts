@@ -11,6 +11,7 @@
  * (apps/mobile/CLAUDE.md) intact.
  */
 import type { IssuePriority, IssueStatus } from "@multica/core/types";
+import { translate } from "./i18n";
 
 /** Statuses surfaced in list/board views (matches web — `cancelled` excluded). */
 export const BOARD_STATUSES: IssueStatus[] = [
@@ -39,3 +40,22 @@ export const PRIORITY_LABEL: Record<IssuePriority, string> = {
   high: "High",
   urgent: "Urgent",
 };
+
+/**
+ * Localized status label for an issue status value. Falls back to the
+ * canonical English map when the dictionary key is missing (unknown future
+ * enum value or a bilingual key gap), so enum drift degrades to English
+ * rather than exposing the raw wire id.
+ */
+export function issueStatusLabel(value: string): string {
+  const id = `enum.status.${value}`;
+  const localized = translate(id);
+  return localized === id ? (STATUS_LABEL as Record<string, string>)[value] ?? value : localized;
+}
+
+/** Localized priority label, same fallback strategy as `issueStatusLabel`. */
+export function issuePriorityLabel(value: string): string {
+  const id = `enum.priority.${value}`;
+  const localized = translate(id);
+  return localized === id ? (PRIORITY_LABEL as Record<string, string>)[value] ?? value : localized;
+}

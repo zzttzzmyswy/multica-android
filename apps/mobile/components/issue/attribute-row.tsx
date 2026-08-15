@@ -19,10 +19,7 @@ import { useMemo } from "react";
 import { View } from "react-native";
 import { router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
-import type {
-  Issue,
-  IssuePriority,
-} from "@multica/core/types";
+import type { Issue } from "@multica/core/types";
 import { formatDateOnly } from "@multica/core/issues/date";
 import { Text } from "@/components/ui/text";
 import { StatusIcon } from "@/components/ui/status-icon";
@@ -33,17 +30,7 @@ import { AttributeChip } from "./attribute-chip";
 import { useActorLookup } from "@/data/use-actor-name";
 import { findProject, projectListOptions } from "@/data/queries/projects";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import {
-  STATUS_LABEL,
-  PRIORITY_LABEL as PRIORITY_FULL_LABEL,
-} from "@/lib/issue-status";
-
-// Chip placeholder shortens `none` from "No priority" → "Priority" so the
-// unset chip reads as a placeholder, not as a confusing assigned value.
-const PRIORITY_CHIP_LABEL: Record<IssuePriority, string> = {
-  ...PRIORITY_FULL_LABEL,
-  none: "Priority",
-};
+import { useTranslation } from "@/lib/i18n/react";
 
 /**
  * The picker fields the issue-detail attribute row can open. Bound to a
@@ -79,6 +66,7 @@ export function AttributeRow({ issue }: { issue: Issue }) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { getName } = useActorLookup();
+  const { t } = useTranslation();
 
   // Project read-only — fetch list to look up the title + icon. Cheap
   // (cached after first issue-detail visit).
@@ -113,7 +101,7 @@ export function AttributeRow({ issue }: { issue: Issue }) {
       {/* Status — always shown */}
       <AttributeChip
         icon={<StatusIcon status={issue.status} size={14} />}
-        label={STATUS_LABEL[issue.status]}
+        label={t(`enum.status.${issue.status}`)}
         variant="filled"
         onPress={() => openPicker("status")}
       />
@@ -121,7 +109,7 @@ export function AttributeRow({ issue }: { issue: Issue }) {
       {/* Priority */}
       <AttributeChip
         icon={<PriorityIcon priority={issue.priority} size={14} />}
-        label={PRIORITY_CHIP_LABEL[issue.priority]}
+        label={issue.priority === "none" ? t("attr.priority") : t(`enum.priority.${issue.priority}`)}
         variant={issue.priority === "none" ? "dimmed" : "filled"}
         onPress={() => openPicker("priority")}
       />
@@ -137,7 +125,7 @@ export function AttributeRow({ issue }: { issue: Issue }) {
               showPresence
             />
           }
-          label={assigneeName ?? "Unknown"}
+          label={assigneeName ?? t("attr.unknown")}
           variant="filled"
           onPress={() => openPicker("assignee")}
         />
@@ -146,7 +134,7 @@ export function AttributeRow({ issue }: { issue: Issue }) {
           icon={
             <View className="size-4 rounded-full border border-dashed border-muted-foreground/40" />
           }
-          label="Assignee"
+          label={t("attr.assignee")}
           variant="dimmed"
           onPress={() => openPicker("assignee")}
         />
@@ -173,7 +161,7 @@ export function AttributeRow({ issue }: { issue: Issue }) {
       {labels.length === 0 ? (
         <AttributeChip
           icon={<Text className="text-xs text-muted-foreground/70">◯</Text>}
-          label="Label"
+          label={t("attr.label")}
           variant="dimmed"
           onPress={() => openPicker("label")}
         />
@@ -192,7 +180,7 @@ export function AttributeRow({ issue }: { issue: Issue }) {
           icon={
             <View className="size-3.5 rounded-sm border border-dashed border-muted-foreground/40" />
           }
-          label="Project"
+          label={t("attr.project")}
           variant="dimmed"
           onPress={() => openPicker("project")}
         />
@@ -201,7 +189,7 @@ export function AttributeRow({ issue }: { issue: Issue }) {
       {/* Due date */}
       <AttributeChip
         icon={<Text className="text-xs text-muted-foreground/80">📅</Text>}
-        label={dueLabel ?? "Due date"}
+        label={dueLabel ?? t("attr.dueDate")}
         variant={dueLabel ? "filled" : "dimmed"}
         onPress={() => openPicker("due-date")}
       />

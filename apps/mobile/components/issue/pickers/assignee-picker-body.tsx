@@ -33,6 +33,7 @@ import { useScrollToTopOnChange } from "@/lib/use-scroll-to-top-on-change";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { isAgentRuntimeBound } from "@/lib/is-agent-runtime-bound";
+import { useTranslation } from "@/lib/i18n/react";
 
 const AVATAR_SIZE = 36;
 
@@ -65,6 +66,7 @@ function isRowSelected(value: AssigneeValue, row: Row): boolean {
 
 export function AssigneePickerBody({ value, query, onChange }: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const { t } = useTranslation();
   const { data: members = [] } = useQuery(memberListOptions(wsId));
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
   const { data: squads = [] } = useQuery(squadListOptions(wsId));
@@ -184,7 +186,7 @@ export function AssigneePickerBody({ value, query, onChange }: Props) {
           )}
           <Text className="flex-1 text-base text-foreground">
             {item.kind === "unassigned"
-              ? "Unassigned"
+              ? t("picker.unassigned")
               : item.kind === "member"
                 ? item.member.name
                 : item.kind === "agent"
@@ -197,11 +199,11 @@ export function AssigneePickerBody({ value, query, onChange }: Props) {
               the same row. Members carry no tag (they're the default actor). */}
           {item.kind === "agent" ? (
             <Text className="text-sm text-muted-foreground">
-              {isAgentRuntimeBound(item.agent) ? "Agent" : "Needs runtime"}
+              {isAgentRuntimeBound(item.agent) ? t("picker.agent") : t("picker.needsRuntime")}
             </Text>
           ) : item.kind === "squad" ? (
             <Text className="text-sm text-muted-foreground">
-              {needsRuntime ? "Leader needs runtime" : "Squad"}
+              {needsRuntime ? t("picker.leaderNeedsRuntime") : t("picker.squad")}
             </Text>
           ) : null}
           {isSelected(item) ? (
@@ -212,7 +214,7 @@ export function AssigneePickerBody({ value, query, onChange }: Props) {
       }}
       ListEmptyComponent={
         <View className="px-3 py-8 items-center">
-          <Text className="text-sm text-muted-foreground">No matches.</Text>
+          <Text className="text-sm text-muted-foreground">{t("picker.noMatches")}</Text>
         </View>
       }
     />

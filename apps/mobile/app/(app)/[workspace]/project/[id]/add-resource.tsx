@@ -13,12 +13,14 @@ import { useLocalSearchParams, router } from "expo-router";
 import { Text } from "@/components/ui/text";
 import { TextField } from "@/components/ui/text-field";
 import { useCreateProjectResource } from "@/data/mutations/projects";
+import { useTranslation } from "@/lib/i18n/react";
 
 const GITHUB_PATTERN = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+(\/|$)/i;
 
 export default function AddResourceRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const createResource = useCreateProjectResource(id);
+  const { t } = useTranslation();
 
   const [url, setUrl] = useState("");
   const [label, setLabel] = useState("");
@@ -38,19 +40,19 @@ export default function AddResourceRoute() {
         onSuccess: () => router.back(),
         onError: (err) => {
           Alert.alert(
-            "Failed to attach resource",
-            err instanceof Error ? err.message : "Unknown error",
+            t("resource.failedTitle"),
+            err instanceof Error ? err.message : t("newIssue.unknownError"),
           );
         },
       },
     );
-  }, [valid, submitting, createResource, url, label]);
+  }, [valid, submitting, createResource, url, label, t]);
 
   return (
     <View className="flex-1">
       <View className="flex-row items-center justify-between px-4 pt-4 pb-2">
         <Text className="text-base font-semibold text-foreground">
-          Attach repository
+          {t("resource.title")}
         </Text>
         <Pressable
           onPress={onSubmit}
@@ -61,13 +63,13 @@ export default function AddResourceRoute() {
           }`}
         >
           <Text className="text-sm font-semibold text-primary">
-            {submitting ? "Attaching…" : "Attach"}
+            {submitting ? t("resource.attaching") : t("resource.attach")}
           </Text>
         </Pressable>
       </View>
       <View className="px-4 pt-4 gap-4">
         <View className="gap-1">
-          <Text className="text-xs text-muted-foreground">Repository URL</Text>
+          <Text className="text-xs text-muted-foreground">{t("resource.repoUrl")}</Text>
           <TextField
             value={url}
             onChangeText={setUrl}
@@ -80,12 +82,12 @@ export default function AddResourceRoute() {
         </View>
         <View className="gap-1">
           <Text className="text-xs text-muted-foreground">
-            Label (optional)
+            {t("resource.label")}
           </Text>
           <TextField
             value={label}
             onChangeText={setLabel}
-            placeholder="e.g. Backend"
+            placeholder={t("resource.labelHint")}
           />
         </View>
       </View>

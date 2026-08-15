@@ -26,6 +26,7 @@ import {
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
+import { useTranslation } from "@/lib/i18n/react";
 
 interface Props {
   issueId: string;
@@ -35,6 +36,7 @@ export function AgentActivityRow({ issueId }: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { colorScheme } = useColorScheme();
+  const { t } = useTranslation();
   const mutedFg = THEME[colorScheme].mutedForeground;
 
   const { data: activeTasks = [] } = useQuery(
@@ -77,30 +79,45 @@ export function AgentActivityRow({ issueId }: Props) {
             type: "agent",
             id: t.agent_id,
           }))}
+          t={t}
         />
       ) : (
-        <IdleContent count={pastCount} mutedFg={mutedFg} />
+        <IdleContent count={pastCount} mutedFg={mutedFg} t={t} />
       )}
       <Ionicons name="chevron-forward" size={16} color={mutedFg} />
     </Pressable>
   );
 }
 
-function ActiveContent({ actors }: { actors: StackActor[] }) {
+function ActiveContent({
+  actors,
+  t,
+}: {
+  actors: StackActor[];
+  t: (id: string) => string;
+}) {
   return (
     <View className="flex-1 flex-row items-center gap-2">
       <AvatarStack actors={actors} max={3} size={24} />
       <PulseDot />
-      <Text className="text-sm font-medium text-foreground">Working</Text>
+      <Text className="text-sm font-medium text-foreground">{t("issue.working")}</Text>
     </View>
   );
 }
 
-function IdleContent({ count, mutedFg }: { count: number; mutedFg: string }) {
+function IdleContent({
+  count,
+  mutedFg,
+  t,
+}: {
+  count: number;
+  mutedFg: string;
+  t: (id: string, params?: Record<string, string | number>) => string;
+}) {
   return (
     <View className="flex-1 flex-row items-center gap-2">
       <Ionicons name="time-outline" size={16} color={mutedFg} />
-      <Text className="text-sm text-foreground">Runs · {count}</Text>
+      <Text className="text-sm text-foreground">{t("issue.runsCount", { count })}</Text>
     </View>
   );
 }

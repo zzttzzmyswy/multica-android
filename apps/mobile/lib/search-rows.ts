@@ -11,6 +11,7 @@ import type {
   SearchProjectResult,
 } from "@multica/core/types";
 import { partitionAggregatedSearchResults } from "@multica/core/search/cancelled-rank";
+import { translate } from "./i18n";
 
 export type RowItem =
   | { kind: "header"; key: string; title: string }
@@ -47,7 +48,7 @@ export function buildSearchRows({
   if (!trimmedQuery) {
     if (recentIssues.length === 0) return [];
     return [
-      { kind: "header", key: "h-recent", title: "Recent" },
+      { kind: "header", key: "h-recent", title: translate("search.recent") },
       ...recentIssues.map<RowItem>((issue) => ({
         kind: "recent",
         key: `r-${issue.id}`,
@@ -64,19 +65,19 @@ export function buildSearchRows({
 
   const rows: RowItem[] = [];
   if (parts.liveProjects.length > 0) {
-    rows.push({ kind: "header", key: "h-projects", title: "Projects" });
+    rows.push({ kind: "header", key: "h-projects", title: translate("search.projects") });
     for (const project of parts.liveProjects) {
       rows.push({ kind: "project", key: `p-${project.id}`, project, query: trimmedQuery });
     }
   }
   if (parts.liveIssues.length > 0) {
-    rows.push({ kind: "header", key: "h-issues", title: "Issues" });
+    rows.push({ kind: "header", key: "h-issues", title: translate("search.issues") });
     for (const issue of parts.liveIssues) {
       rows.push({ kind: "issue", key: `i-${issue.id}`, issue, query: trimmedQuery });
     }
   }
   if (parts.hasCancelled) {
-    rows.push({ kind: "header", key: "h-cancelled", title: "Cancelled" });
+    rows.push({ kind: "header", key: "h-cancelled", title: translate("search.cancelled") });
     for (const project of parts.cancelledProjects) {
       rows.push({ kind: "project", key: `p-${project.id}`, project, query: trimmedQuery });
     }

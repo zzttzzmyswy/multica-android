@@ -17,8 +17,9 @@ import { StatusIcon } from "@/components/ui/status-icon";
 import { PriorityIcon } from "@/components/ui/priority-icon";
 import { useIssuesViewStore } from "@/data/stores/issues-view-store";
 import { useMyIssuesViewStore } from "@/data/stores/my-issues-view-store";
-import { BOARD_STATUSES, STATUS_LABEL } from "@/lib/issue-status";
+import { BOARD_STATUSES } from "@/lib/issue-status";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n/react";
 
 const ALL_STATUSES: IssueStatus[] = [...BOARD_STATUSES, "cancelled"];
 
@@ -31,21 +32,12 @@ const PRIORITY_ORDER: IssuePriority[] = [
   "none",
 ];
 
-// Label map duplicated across several mobile files — out of scope to
-// consolidate per the SheetShell migration plan.
-const PRIORITY_LABEL: Record<IssuePriority, string> = {
-  urgent: "Urgent",
-  high: "High",
-  medium: "Medium",
-  low: "Low",
-  none: "No priority",
-};
-
 type Scope = "my" | "all";
 
 export default function IssuesFilterRoute() {
   const { scope } = useLocalSearchParams<{ scope?: string }>();
   const resolvedScope: Scope = scope === "all" ? "all" : "my";
+  const { t } = useTranslation();
 
   const statusFilters = useScopedFilters(resolvedScope, "status");
   const priorityFilters = useScopedFilters(resolvedScope, "priority");
@@ -77,19 +69,19 @@ export default function IssuesFilterRoute() {
   return (
     <View className="flex-1">
       <View className="flex-row items-center justify-between px-4 pt-4 pb-3">
-        <Text className="text-base font-semibold text-foreground">Filter</Text>
+        <Text className="text-base font-semibold text-foreground">{t("filter.title")}</Text>
         {hasActive ? (
           <Pressable
             onPress={onClearFilters}
             hitSlop={8}
             className="px-2 py-1 active:opacity-60"
           >
-            <Text className="text-sm text-primary font-medium">Reset</Text>
+            <Text className="text-sm text-primary font-medium">{t("filter.reset")}</Text>
           </Pressable>
         ) : null}
       </View>
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        <SectionLabel>Status</SectionLabel>
+        <SectionLabel>{t("filter.status")}</SectionLabel>
         {ALL_STATUSES.map((status) => {
           const checked = statusFilters.includes(status);
           return (
@@ -103,14 +95,14 @@ export default function IssuesFilterRoute() {
             >
               <StatusIcon status={status} size={16} />
               <Text className="flex-1 text-sm text-foreground">
-                {STATUS_LABEL[status]}
+                {t(`enum.status.${status}`)}
               </Text>
               <CheckMark checked={checked} />
             </Pressable>
           );
         })}
 
-        <SectionLabel>Priority</SectionLabel>
+        <SectionLabel>{t("filter.priority")}</SectionLabel>
         {PRIORITY_ORDER.map((priority) => {
           const checked = priorityFilters.includes(priority);
           return (
@@ -124,7 +116,7 @@ export default function IssuesFilterRoute() {
             >
               <PriorityIcon priority={priority} />
               <Text className="flex-1 text-sm text-foreground">
-                {PRIORITY_LABEL[priority]}
+                {t(`enum.priority.${priority}`)}
               </Text>
               <CheckMark checked={checked} />
             </Pressable>
