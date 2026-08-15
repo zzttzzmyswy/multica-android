@@ -26,11 +26,18 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     orientation: "portrait",
     userInterfaceStyle: "automatic",
     scheme: "multica",
-    // 1024x1024 source shared with the desktop client
-    // (apps/desktop/build/icon.png). Expo prebuild generates every required
-    // iOS icon size from this single PNG.
+    // App icon master. No longer shares the desktop client's icon — this is a
+    // Multica-Android-specific polish: deep gradient background + the official
+    // Multica starburst mark recolored in white with a brand-red center node.
     icon: "./assets/icon.png",
     android: {
+      // Adaptive icon: separate full-bleed background + centered foreground so
+      // Android launchers can mask them into circles / squiggles cleanly.
+      adaptiveIcon: {
+        backgroundColor: "#05070b",
+        backgroundImage: "./assets/adaptive-bg.png",
+        foregroundImage: "./assets/adaptive-fg.png",
+      },
       // Per-variant android package, mirroring the iOS bundleIdentifier so
       // dev / staging / prod builds can coexist. This is the core Android
       // adaptation that lets a single Expo codebase ship to Android too.
