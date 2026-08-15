@@ -536,5 +536,9 @@
   "agents.comingSoon": "Agents coming soon.",
   "a11y.openFile": "Open {{filename}}",
   "a11y.currentWorkspace": "{{name}}, current workspace",
-  "a11y.switchTo": "Switch to {{name}}"
+  "a11y.switchTo": "Switch to {{name}}",
+  "a11y.removeMention": "Remove mention {{name}}",
+  "a11y.retryUpload": "Retry upload of {{file}}",
+  "a11y.removeFile": "Remove {{file}}",
+  "chat.noAgentsEmpty": "No agents available."
 }

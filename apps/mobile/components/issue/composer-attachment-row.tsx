@@ -134,6 +134,7 @@ function MentionChipView({
   onRemove: (type: MentionChipType, id: string) => void;
 }) {
   const { colorScheme } = useColorScheme();
+  const { t } = useTranslation();
   const theme = THEME[colorScheme];
 
   // Icon picks: @all → people; issue → git-branch (matches web's status icon
@@ -157,7 +158,7 @@ function MentionChipView({
         onPress={() => onRemove(mention.type, mention.id)}
         hitSlop={8}
         accessibilityRole="button"
-        accessibilityLabel={`Remove mention ${mention.name}`}
+        accessibilityLabel={t("a11y.removeMention", { name: mention.name })}
         className="h-4 w-4 items-center justify-center"
       >
         <Ionicons name="close" size={12} color={theme.mutedForeground} />
@@ -231,8 +232,8 @@ function AttachmentChipView({ item, onRemove, onRetry }: AttachmentChipProps) {
       accessibilityRole={item.status === "failed" ? "button" : "image"}
       accessibilityLabel={
         item.status === "failed"
-          ? `Retry upload of ${item.filename}`
-          : `Open ${item.filename}`
+          ? t("a11y.retryUpload", { file: item.filename })
+          : t("a11y.openFile", { filename: item.filename })
       }
       className="flex-row items-center gap-1 h-7 px-2 rounded-full bg-secondary active:opacity-80"
     >
@@ -259,7 +260,7 @@ function AttachmentChipView({ item, onRemove, onRetry }: AttachmentChipProps) {
         onPress={() => onRemove(item.localId)}
         hitSlop={8}
         accessibilityRole="button"
-        accessibilityLabel={`Remove ${item.filename}`}
+        accessibilityLabel={t("a11y.removeFile", { file: item.filename })}
         className="h-4 w-4 items-center justify-center"
       >
         <Ionicons name="close" size={12} color={theme.mutedForeground} />

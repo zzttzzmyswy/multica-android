@@ -58,7 +58,7 @@ export function AgentPickerSheet({
                 {agents.length === 0 ? (
                   <View className="px-4 py-8">
                     <Text className="text-sm text-muted-foreground text-center">
-                      {t("chat.noAgentsTitle")}.
+                      {t("chat.noAgentsEmpty")}
                     </Text>
                   </View>
                 ) : (

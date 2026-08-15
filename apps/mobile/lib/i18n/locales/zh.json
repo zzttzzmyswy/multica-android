@@ -514,7 +514,7 @@
   "timeline.activity": "活动",
   "timeline.new": "新内容",
   "timeline.newCount": "{{count}} 条新内容",
-  "timeline.jumpToNew": "跳至 {{count}} 条新{{messages}}",
+  "timeline.jumpToNew": "跳至 {{count}} 条新内容",
   "mention.recent": "最近",
   "mention.myIssues": "我的问题",
   "mention.members": "成员",
@@ -536,5 +536,9 @@
   "agents.comingSoon": "Agents 即将推出。",
   "a11y.openFile": "打开 {{filename}}",
   "a11y.currentWorkspace": "{{name}}，当前工作区",
-  "a11y.switchTo": "切换到 {{name}}"
+  "a11y.switchTo": "切换到 {{name}}",
+  "a11y.removeMention": "移除提及 {{name}}",
+  "a11y.retryUpload": "重试上传 {{file}}",
+  "a11y.removeFile": "移除 {{file}}",
+  "chat.noAgentsEmpty": "暂无可用 agent。"
 }

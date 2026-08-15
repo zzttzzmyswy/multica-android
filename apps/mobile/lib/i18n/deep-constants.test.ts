@@ -171,5 +171,14 @@ describe("deep-constant i18n", () => {
     expect(mod.translate("a11y.currentWorkspace", { name: "Acme" })).toBe(
       "Acme，当前工作区",
     );
+    // zh timeline "new" chip must not duplicate the message unit.
+    expect(mod.translate("timeline.newCount", { count: 2 })).toBe("2 条新内容");
+    expect(mod.translate("timeline.jumpToNew", { count: 2, messages: "条消息" })).toBe(
+      "跳至 2 条新内容",
+    );
+    expect(mod.translate("chat.noAgentsEmpty")).toBe("暂无可用 agent。");
+    expect(mod.translate("a11y.removeMention", { name: "Alice" })).toBe(
+      "移除提及 Alice",
+    );
   });
 });
