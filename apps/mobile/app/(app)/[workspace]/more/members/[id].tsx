@@ -42,6 +42,7 @@ import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { formatDateTime } from "@/lib/autopilot-format";
 import { ActionSheet } from "@/lib/action-sheet";
+import { memberManageGuards } from "@/lib/member-guards";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
@@ -73,15 +74,13 @@ export default function MemberDetailPage() {
     members?.find((m) => m.user_id === user?.id) ?? null;
 
   // === Management guards (web members-tab parity) ===
-  const currentRole = currentMember?.role;
-  const canManage = currentRole === "owner" || currentRole === "admin";
-  const isSelf =
-    member != null && user != null && member.user_id === user.id;
-  // Mobile deliberately drops the owner role from the change sheet (owner
-  // promotion/demotion remains a web action), so a target owner is never
-  // editable/removable here — mirroring the "克制" scope from MYS-303.
-  const canEditRole = canManage && !isSelf && member?.role !== "owner";
-  const canRemove = canManage && !isSelf && member?.role !== "owner";
+  // Extracted pure function (lib/member-guards.ts) so the self-protection
+  // / owner-protection rules are unit-tested — see member-guards.test.ts.
+  const { canEditRole, canRemove } = memberManageGuards({
+    currentRole: currentMember?.role,
+    currentUserId: user?.id,
+    target: member,
+  });
 
   const onChangeRolePress = useCallback(() => {
     if (!member) return;
