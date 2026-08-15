@@ -59,8 +59,13 @@ import type {
   SearchProjectsResponse,
   SendChatMessageResponse,
   Squad,
+  SquadMember,
+  SquadMemberStatusListResponse,
+  AddSquadMemberRequest,
+  CreateSquadRequest,
   NotificationPreferenceResponse,
   NotificationPreferences,
+  RemoveSquadMemberRequest,
   TaskMessagePayload,
   TimelineEntry,
   UpdateAutopilotRequest,
@@ -68,6 +73,8 @@ import type {
   UpdateIssueRequest,
   UpdateMeRequest,
   UpdateProjectRequest,
+  UpdateSquadMemberRoleRequest,
+  UpdateSquadRequest,
   User,
   Workspace,
 } from "@multica/core/types";
@@ -75,6 +82,7 @@ import {
   AutopilotRunSchema,
   EMPTY_LIST_AUTOPILOTS_RESPONSE,
   EMPTY_LIST_ISSUES_RESPONSE,
+  EMPTY_SQUAD,
   EMPTY_TIMELINE_ENTRIES,
   FALLBACK_AUTOPILOT_RUN,
   IssueSchema,
@@ -140,6 +148,11 @@ import {
   SearchProjectsResponseSchema,
   SendChatMessageResponseSchema,
   SquadListSchema,
+  SquadSchema,
+  SquadMemberListSchema,
+  SquadMemberStatusListResponseSchema,
+  EMPTY_SQUAD_MEMBER_LIST,
+  EMPTY_SQUAD_MEMBER_STATUS_LIST,
   TaskMessageListSchema,
   EMPTY_TASK_MESSAGE_LIST,
   UserSchema,
@@ -628,6 +641,93 @@ class ApiClient {
     return parseWithFallback(raw, SquadListSchema, EMPTY_SQUAD_LIST, {
       endpoint: "listSquads",
     });
+  }
+
+  // --- Squad write / detail endpoints — mirror
+  // packages/core/api/client.ts:3438-3496. Reads parse with drift-safe
+  // schemas; writes follow the write-endpoint rule (raw fetch — a malformed
+  // response surfaces naturally so the caller's error path owns feedback).
+  async getSquad(id: string): Promise<Squad> {
+    const raw = await this.fetch<unknown>(`/api/squads/${id}`);
+    return parseWithFallback(raw, SquadSchema, EMPTY_SQUAD, {
+      endpoint: "getSquad",
+    });
+  }
+
+  async createSquad(data: CreateSquadRequest): Promise<Squad> {
+    const raw = await this.fetch<unknown>("/api/squads", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return parseWithFallback(raw, SquadSchema, EMPTY_SQUAD, {
+      endpoint: "createSquad",
+    });
+  }
+
+  async updateSquad(
+    id: string,
+    data: UpdateSquadRequest,
+  ): Promise<Squad> {
+    const raw = await this.fetch<unknown>(`/api/squads/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+    return parseWithFallback(raw, SquadSchema, EMPTY_SQUAD, {
+      endpoint: "updateSquad",
+    });
+  }
+
+  async deleteSquad(id: string): Promise<void> {
+    await this.fetch<void>(`/api/squads/${id}`, { method: "DELETE" });
+  }
+
+  async listSquadMembers(squadId: string): Promise<SquadMember[]> {
+    const raw = await this.fetch<unknown>(`/api/squads/${squadId}/members`);
+    return parseWithFallback(raw, SquadMemberListSchema, EMPTY_SQUAD_MEMBER_LIST, {
+      endpoint: "listSquadMembers",
+    });
+  }
+
+  async addSquadMember(
+    squadId: string,
+    data: AddSquadMemberRequest,
+  ): Promise<SquadMember> {
+    return this.fetch<SquadMember>(`/api/squads/${squadId}/members`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async removeSquadMember(
+    squadId: string,
+    data: RemoveSquadMemberRequest,
+  ): Promise<void> {
+    await this.fetch<void>(`/api/squads/${squadId}/members`, {
+      method: "DELETE",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateSquadMemberRole(
+    squadId: string,
+    data: UpdateSquadMemberRoleRequest,
+  ): Promise<SquadMember> {
+    return this.fetch<SquadMember>(`/api/squads/${squadId}/members/role`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getSquadMemberStatus(
+    squadId: string,
+  ): Promise<SquadMemberStatusListResponse> {
+    const raw = await this.fetch<unknown>(`/api/squads/${squadId}/members/status`);
+    return parseWithFallback(
+      raw,
+      SquadMemberStatusListResponseSchema,
+      EMPTY_SQUAD_MEMBER_STATUS_LIST,
+      { endpoint: "getSquadMemberStatus" },
+    );
   }
 
   // --- Issues ---

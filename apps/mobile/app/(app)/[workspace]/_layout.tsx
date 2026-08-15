@@ -341,6 +341,21 @@ export default function WorkspaceLayout() {
           options={{ title: t("screen.members"), headerBackTitle: t("screen.members") }}
         />
         <Stack.Screen
+          name="more/squads"
+          options={{ title: t("screen.squads"), headerBackTitle: t("common.back") }}
+        />
+        <Stack.Screen
+          name="more/squads/[id]"
+          options={{ title: t("screen.squads"), headerBackTitle: t("screen.squads") }}
+        />
+        <Stack.Screen
+          name="more/squads/new"
+          options={{
+            title: t("squads.new.title"),
+            headerBackTitle: t("common.back"),
+          }}
+        />
+        <Stack.Screen
           name="more/pins"
           options={{ title: t("screen.pinned"), headerBackTitle: t("common.back") }}
         />
