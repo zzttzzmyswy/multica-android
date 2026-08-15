@@ -23,8 +23,8 @@
  * leaves the real tab button entirely alone.
  *
  * Visual conventions inside the popover (apps/mobile/CLAUDE.md):
- *   - All glyphs are SF Symbols rendered via expo-image (`sf:` source),
- *     so they share the visual language of the bottom tab bar icons.
+ *   - All glyphs are Ionicons rendered via @expo/vector-icons (they ship
+ *     their font in the APK), sharing the visual language of the tab bar.
  *   - All colours route through THEME tokens (foreground /
  *     mutedForeground / secondary), so dark mode is automatic.
  *   - Workspace is collapsed to a single `<WorkspaceCard>` row (icon +
@@ -36,7 +36,7 @@
  */
 import { useMemo } from "react";
 import { Image, Pressable, View } from "react-native";
-import { Image as ExpoImage } from "expo-image";
+import { Ionicons } from "@expo/vector-icons";
 import { router, usePathname } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -67,16 +67,16 @@ const TAB_BAR_HEIGHT = 49;
 
 interface NavItem {
   label: string;
-  /** SF Symbol name, rendered via expo-image `source: "sf:<name>"`. */
-  icon: string;
+  /** Ionicons glyph name, rendered via @expo/vector-icons (cross-platform). */
+  icon: React.ComponentProps<typeof Ionicons>["name"];
   /** Path under /:slug/ — final href is `/${slug}${path}`. */
   path: string;
 }
 
 const NAV_ITEMS: NavItem[] = [
   { label: "Pinned", icon: "pin", path: "/more/pins" },
-  { label: "Issues", icon: "list.bullet", path: "/more/issues" },
-  { label: "Projects", icon: "square.stack", path: "/more/projects" },
+  { label: "Issues", icon: "list", path: "/more/issues" },
+  { label: "Projects", icon: "layers", path: "/more/projects" },
 ];
 
 export function MoreTabDropdownAnchor({
@@ -158,10 +158,10 @@ export function MoreTabDropdownAnchor({
                 isActive(item.path) && "bg-secondary",
               )}
             >
-              <ExpoImage
-                source={`sf:${item.icon}`}
-                tintColor={t.foreground}
-                style={{ width: 18, height: 18 }}
+              <Ionicons
+                name={item.icon}
+                color={t.foreground}
+                size={18}
               />
               <Text className="text-sm text-foreground">{item.label}</Text>
             </DropdownMenuItem>
@@ -222,11 +222,7 @@ function UserCard({
           </Text>
         ) : null}
       </View>
-      <ExpoImage
-        source="sf:chevron.right"
-        tintColor={chevronTint}
-        style={{ width: 12, height: 12 }}
-      />
+      <Ionicons name="chevron-forward" color={chevronTint} size={12} />
     </DropdownMenuItem>
   );
 }
@@ -283,11 +279,7 @@ function WorkspaceCard({
         </Text>
       </View>
       {canSwitch ? (
-        <ExpoImage
-          source="sf:chevron.right"
-          tintColor={chevronTint}
-          style={{ width: 12, height: 12 }}
-        />
+        <Ionicons name="chevron-forward" color={chevronTint} size={12} />
       ) : null}
     </DropdownMenuItem>
   );
