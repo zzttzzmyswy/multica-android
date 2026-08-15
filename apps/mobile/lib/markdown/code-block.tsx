@@ -38,6 +38,7 @@ import Svg, { Path, Rect } from "react-native-svg";
 import { Text } from "@/components/ui/text";
 import { THEME } from "@/lib/theme";
 import { useColorScheme } from "@/lib/use-color-scheme";
+import { useTranslation } from "@/lib/i18n/react";
 import {
   CODE_BLOCK_CONTAINER_CLASS,
   CODE_BLOCK_LANG_LABEL_CLASS,
@@ -149,7 +150,8 @@ function HighlightedCode({
 
 function CodeBlockHeader({ code, lang }: Props) {
   const { isDarkColorScheme } = useColorScheme();
-  const t = isDarkColorScheme ? THEME.dark : THEME.light;
+  const theme = isDarkColorScheme ? THEME.dark : THEME.light;
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -192,12 +194,12 @@ function CodeBlockHeader({ code, lang }: Props) {
         onPress={onCopy}
         hitSlop={8}
         accessibilityRole="button"
-        accessibilityLabel={copied ? "Code copied" : "Copy code"}
+        accessibilityLabel={copied ? t("a11y.codeCopied") : t("a11y.copyCode")}
       >
         {copied ? (
-          <CheckIcon color={t.success} />
+          <CheckIcon color={theme.success} />
         ) : (
-          <CopyIcon color={t.mutedForeground} />
+          <CopyIcon color={theme.mutedForeground} />
         )}
       </Pressable>
     </View>

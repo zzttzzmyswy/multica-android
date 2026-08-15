@@ -185,7 +185,7 @@ function ToolResultRow({ item }: { item: TaskMessagePayload }) {
   const preview = output.length > 80 ? `${output.slice(0, 80)}…` : output;
   const prefix = item.tool
     ? t("chat.resultPrefix", { tool: item.tool })
-    : "result: ";
+    : t("chat.resultPrefixNoTool");
   return (
     <Collapsible>
       <CollapsibleTrigger asChild>

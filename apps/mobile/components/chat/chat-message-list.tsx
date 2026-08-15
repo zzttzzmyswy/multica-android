@@ -372,6 +372,7 @@ function AssistantRow({
   onQuickAction?: (action: ChatQuickAction) => void | Promise<unknown>;
   quickActionsDisabled: boolean;
 }) {
+  const { t } = useTranslation();
   // Read the cached timeline if any. `enabled` (in taskMessagesOptions) is
   // gated on isTaskMessageTaskId — optimistic id prefixes never fetch, so
   // freshly-sent messages don't spam the API while waiting for the real
@@ -446,6 +447,7 @@ function QuickActions({
   disabled: boolean;
   onSelect: (action: ChatQuickAction) => void | Promise<unknown>;
 }) {
+  const { t } = useTranslation();
   const [submitting, setSubmitting] = useState(false);
   const blocked = disabled || submitting;
 
@@ -465,7 +467,7 @@ function QuickActions({
   return (
     <View
       className="flex-row flex-wrap gap-2 pt-0.5"
-      accessibilityLabel="Suggested follow-ups"
+      accessibilityLabel={t("a11y.suggestedFollowUps")}
     >
       {actions.slice(0, 3).map((action, index) => (
         <Pressable
@@ -536,6 +538,7 @@ function FailureBubble({
   isSelecting: boolean;
   longPress: ReturnType<typeof useChatMessageLongPress>;
 }) {
+  const { t } = useTranslation();
   const hasRawError = rawError.trim().length > 0;
 
   // B6: pass `selectable={isSelecting}` rather than hard-coding
@@ -561,7 +564,7 @@ function FailureBubble({
             <CollapsibleTrigger asChild>
               <View
                 accessibilityRole="button"
-                accessibilityLabel="Show error details"
+                accessibilityLabel={t("a11y.showErrorDetails")}
                 className="mt-1 flex-row items-center gap-1 active:opacity-70"
               >
                 <Ionicons
@@ -570,7 +573,7 @@ function FailureBubble({
                   color="#71717a"
                 />
                 <Text className="text-xs text-muted-foreground">
-                  Show details
+                  {t("a11y.showDetails")}
                 </Text>
               </View>
             </CollapsibleTrigger>

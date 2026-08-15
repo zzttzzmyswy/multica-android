@@ -21,6 +21,7 @@ import { Alert } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { api, MAX_FILE_SIZE, type FileAsset } from "@/data/api";
+import { useTranslation } from "@/lib/i18n/react";
 
 export interface FileAttachResult {
   /** Attachment id from the server. Callers MUST carry this to the mutation
@@ -43,6 +44,7 @@ interface PickedAsset extends FileAsset {
 }
 
 export function useFileAttach() {
+  const { t } = useTranslation();
   const [uploading, setUploading] = useState(false);
 
   const upload = useCallback(
@@ -52,8 +54,8 @@ export function useFileAttach() {
     ): Promise<FileAttachResult | null> => {
       if (asset.size != null && asset.size > MAX_FILE_SIZE) {
         Alert.alert(
-          "File too large",
-          "Files must be smaller than 100 MB.",
+          t("common.fileTooLarge"),
+          t("common.fileTooLargeMessage"),
         );
         return null;
       }
@@ -67,15 +69,15 @@ export function useFileAttach() {
         };
       } catch (err) {
         Alert.alert(
-          "Upload failed",
-          err instanceof Error ? err.message : "Unknown error",
+          t("common.uploadFailed"),
+          err instanceof Error ? err.message : t("common.unknownError"),
         );
         return null;
       } finally {
         setUploading(false);
       }
     },
-    [],
+    [t],
   );
 
   const pickAndUploadImage = useCallback(

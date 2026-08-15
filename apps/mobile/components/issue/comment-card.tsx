@@ -213,6 +213,7 @@ function ResolvedThreadBar({
 }) {
   const { getName } = useActorLookup();
   const { colorScheme } = useColorScheme();
+  const { t } = useTranslation();
   const mutedFg = THEME[colorScheme].mutedForeground;
 
   // Unique participant set across root + replies, preserving chronological
@@ -239,6 +240,7 @@ function ResolvedThreadBar({
   }, [entry, replies, getName]);
 
   const total = 1 + replies.length;
+  const messageCount = t(total === 1 ? "comment.message" : "comment.messages");
 
   return (
     <View className="px-4">
@@ -246,15 +248,22 @@ function ResolvedThreadBar({
         onPress={onExpand}
         className="flex-row items-center gap-2.5 px-4 py-3 rounded-2xl bg-surface-1 active:opacity-70"
         accessibilityRole="button"
-        accessibilityLabel={`Resolved thread by ${authorsLabel}, ${total} ${total === 1 ? "message" : "messages"}. Tap to expand.`}
+        accessibilityLabel={t("comment.resolvedBarLabel", {
+          authors: authorsLabel,
+          count: total,
+          messageCount,
+        })}
       >
         <Ionicons name="checkmark-circle" size={18} color={mutedFg} />
         <Text
           className="flex-1 text-sm text-muted-foreground"
           numberOfLines={1}
         >
-          Resolved · {total} {total === 1 ? "message" : "messages"} by{" "}
-          {authorsLabel}
+          {t("comment.resolvedBar", {
+            count: total,
+            messageCount,
+            authors: authorsLabel,
+          })}
         </Text>
         <Ionicons name="chevron-down" size={14} color={mutedFg} />
       </Pressable>
@@ -394,6 +403,7 @@ function CommentBody({
   const userId = useAuthStore((s) => s.user?.id);
   const timeAgo = useTimeAgo();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const { t } = useTranslation();
   const toggle = useToggleCommentReaction(issueId);
   const qc = useQueryClient();
   const createComment = useCreateComment(issueId);
@@ -490,7 +500,7 @@ function CommentBody({
         <Text className="text-sm font-medium text-foreground">{name}</Text>
         <Text className="text-xs text-muted-foreground">
           · {timeAgo(entry.created_at)}
-          {edited ? " · (edited)" : ""}
+          {edited ? ` · ${t("comment.edited")}` : ""}
         </Text>
       </View>
       {entry.content ? (

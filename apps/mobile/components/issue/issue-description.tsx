@@ -18,6 +18,7 @@ import { Text } from "@/components/ui/text";
 import { Markdown } from "@/lib/markdown";
 import { issueAttachmentsOptions } from "@/data/queries/issues";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { useTranslation } from "@/lib/i18n/react";
 
 export function IssueDescription({
   issueId,
@@ -26,6 +27,7 @@ export function IssueDescription({
   issueId: string;
   description: string | null;
 }) {
+  const { t } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { data: attachments } = useQuery(
     issueAttachmentsOptions(wsId, issueId),
@@ -35,7 +37,7 @@ export function IssueDescription({
     return (
       <View className="px-4 pb-4">
         <Text className="text-sm text-muted-foreground italic">
-          No description.
+          {t("issue.noDescription")}
         </Text>
       </View>
     );

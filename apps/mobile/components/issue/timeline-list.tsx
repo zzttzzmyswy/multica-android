@@ -105,6 +105,7 @@ import type { ImageSequenceBlock } from "@multica/core/attachments/image-sequenc
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { useCommentSelectStore } from "@/data/comment-select-store";
+import { useTranslation } from "@/lib/i18n/react";
 
 interface Props {
   issue: Issue;
@@ -148,6 +149,7 @@ export function TimelineList({
   highlightCommentId,
   highlightNonce,
 }: Props) {
+  const { t } = useTranslation();
   // Top-level selection subscription gates the outer "tap-outside-to-dismiss"
   // Pressable below. When null, the Pressable stays disabled and every tap
   // passes through to comment cards / chip rows / reactions normally.
@@ -363,7 +365,7 @@ export function TimelineList({
       <IssueReactionRow issue={issue} />
       <View className="px-4 pt-4 pb-2 border-t border-border">
         <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
-          Activity
+          {t("timeline.activity")}
         </Text>
       </View>
       {timelineLoading && (!entries || entries.length === 0) ? (
@@ -499,11 +501,12 @@ function RowSeparator() {
  * disappears the next time the user scrolls past and unmounts the screen).
  */
 function UnreadDivider() {
+  const { t } = useTranslation();
   return (
     <View className="flex-row items-center gap-2 px-4">
       <View className="flex-1 h-px bg-destructive/40" />
       <Text className="text-[10px] uppercase tracking-wider font-medium text-destructive">
-        New
+        {t("timeline.new")}
       </Text>
       <View className="flex-1 h-px bg-destructive/40" />
     </View>
@@ -529,13 +532,15 @@ function NewCommentChip({
   onPress: () => void;
 }) {
   const { colorScheme } = useColorScheme();
+  const { t } = useTranslation();
   const fg = THEME[colorScheme].primaryForeground;
+  const messages = t(count === 1 ? "comment.message" : "comment.messages");
   return (
     <Pressable
       onPress={onPress}
       className="absolute bottom-3 self-center px-3.5 py-1.5 rounded-full bg-primary active:opacity-80 flex-row items-center gap-1.5"
       accessibilityRole="button"
-      accessibilityLabel={`Jump to ${count} new ${count === 1 ? "message" : "messages"}`}
+      accessibilityLabel={t("timeline.jumpToNew", { count, messages })}
       style={{
         // shadow comes from system, not Tailwind — keeps the chip readable
         // against either light or dark timeline content beneath.
@@ -548,7 +553,7 @@ function NewCommentChip({
     >
       <Ionicons name="arrow-down" size={14} color={fg} />
       <Text className="text-xs font-semibold text-primary-foreground">
-        {count} new
+        {t("timeline.newCount", { count })}
       </Text>
     </Pressable>
   );

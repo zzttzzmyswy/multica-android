@@ -216,12 +216,14 @@ function MissingPinRow({
   itemId: string;
 }) {
   const { colorScheme } = useColorScheme();
+  const { t } = useTranslation();
   const deletePin = useDeletePin();
+  const typeLabel = t(itemType === "issue" ? "screen.issue" : "screen.project");
   return (
     <Pressable
       onPress={() => deletePin.mutate({ itemType, itemId })}
       className="px-4 py-3 flex-row items-center gap-3 active:bg-secondary opacity-60"
-      accessibilityLabel={`Unavailable ${itemType}, tap to unpin`}
+      accessibilityLabel={t("pins.unavailable", { itemType: typeLabel })}
     >
       <Ionicons
         name="alert-circle-outline"
@@ -229,7 +231,7 @@ function MissingPinRow({
         color={THEME[colorScheme].mutedForeground}
       />
       <Text className="flex-1 text-sm text-muted-foreground" numberOfLines={1}>
-        Unavailable {itemType} — tap to unpin
+        {t("pins.unavailable", { itemType: typeLabel })}
       </Text>
     </Pressable>
   );

@@ -31,6 +31,7 @@ import {
   type ActionSheetOptions,
   type ActionSheetCallback,
 } from "@/lib/action-sheet-core";
+import { useTranslation } from "@/lib/i18n/react";
 
 export type { ActionSheetOptions, ActionSheetCallback };
 
@@ -56,6 +57,7 @@ export const ActionSheet: ActionSheetApi = {
 };
 
 export function ActionSheetProvider({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation();
   const [request, setRequest] = useState<
     { options: ActionSheetOptions; callback: ActionSheetCallback } | null
   >(null);
@@ -94,7 +96,7 @@ export function ActionSheetProvider({ children }: { children: React.ReactNode })
           <Pressable
             className="flex-1 bg-black/40"
             onPress={() => onPress(cancelIndex)}
-            accessibilityLabel="Dismiss action sheet"
+            accessibilityLabel={t("a11y.dismissActionSheet")}
           />
           <View className="bg-background rounded-t-2xl pb-6 px-2 pt-2">
             {request?.options.title ? (

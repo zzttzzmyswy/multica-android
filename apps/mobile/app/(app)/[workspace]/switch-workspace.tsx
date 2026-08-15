@@ -102,14 +102,15 @@ function WorkspaceRow({
   onPress: () => void;
   iconTint: string;
 }) {
+  const tr = useTranslation();
   return (
     <Pressable
       onPress={onPress}
       disabled={active}
       accessibilityLabel={
         active
-          ? `${workspace.name}, current workspace`
-          : `Switch to ${workspace.name}`
+          ? tr.t("a11y.currentWorkspace", { name: workspace.name })
+          : tr.t("a11y.switchTo", { name: workspace.name })
       }
       className={cn(
         "flex-row items-center gap-3 px-4 py-3 active:bg-secondary",

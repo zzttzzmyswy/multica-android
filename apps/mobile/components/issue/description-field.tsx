@@ -16,17 +16,20 @@ import { AutosizeTextArea } from "@/components/ui/autosize-textarea";
 import { MIN_BODY_INPUT_HEIGHT_PX } from "@/components/ui/input-tokens";
 import { cn } from "@/lib/utils";
 import type { UseMentionInputReturn } from "@/lib/use-mention-input";
+import { useTranslation } from "@/lib/i18n/react";
 
 export function DescriptionField({
   description,
   disabled,
-  placeholder = "Description… (type @ to mention)",
+  placeholder,
 }: {
   description: UseMentionInputReturn;
   disabled: boolean;
   placeholder?: string;
 }) {
+  const { t } = useTranslation();
   const [focused, setFocused] = useState(false);
+  const resolvedPlaceholder = placeholder ?? t("issue.descriptionPlaceholder");
   return (
     <View
       className={cn(
@@ -43,7 +46,7 @@ export function DescriptionField({
         onSelectionChange={description.handlers.onSelectionChange}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        placeholder={placeholder}
+        placeholder={resolvedPlaceholder}
         className="py-2"
         minHeight={MIN_BODY_INPUT_HEIGHT_PX}
         editable={!disabled}
