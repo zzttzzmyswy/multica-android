@@ -19,14 +19,18 @@ import type {
   Attachment,
   Autopilot,
   AutopilotRun,
+  AutopilotTrigger,
   ChatMessage,
   ChatPendingTask,
   ChatSession,
   Comment,
+  CreateAutopilotRequest,
+  CreateAutopilotTriggerRequest,
   CreateIssueRequest,
   CreateLabelRequest,
   CreateProjectRequest,
   CreateProjectResourceRequest,
+  CronPreviewResponse,
   GetAutopilotResponse,
   InboxItem,
   Issue,
@@ -57,6 +61,7 @@ import type {
   TaskMessagePayload,
   TimelineEntry,
   UpdateAutopilotRequest,
+  UpdateAutopilotTriggerRequest,
   UpdateIssueRequest,
   UpdateMeRequest,
   UpdateProjectRequest,
@@ -79,6 +84,7 @@ import {
   AgentListSchema,
   AgentTaskListSchema,
   AutopilotDetailSchema,
+  AutopilotTriggerSchema,
   AttachmentListSchema,
   AttachmentSchema,
   ChatMessageListSchema,
@@ -87,16 +93,19 @@ import {
   ChatSessionListSchema,
   ChatSessionSchema,
   ChildIssuesResponseSchema,
+  CronPreviewResponseSchema,
   EMPTY_ACTIVE_TASKS_RESPONSE,
   EMPTY_AGENT_LIST,
   EMPTY_AGENT_TASK_LIST,
   EMPTY_AUTOPILOT_DETAIL,
+  EMPTY_AUTOPILOT_TRIGGER,
   EMPTY_ATTACHMENT_LIST,
   EMPTY_CHAT_MESSAGE_LIST,
   EMPTY_CHAT_PENDING_TASK,
   EMPTY_CHAT_SESSION_LIST,
   EMPTY_CHILD_ISSUES_RESPONSE,
   EMPTY_COMMENT,
+  EMPTY_CRON_PREVIEW_RESPONSE,
   EMPTY_INBOX_LIST,
   EMPTY_ISSUE_FALLBACK,
   EMPTY_LIST_AUTOPILOT_RUNS_RESPONSE,
@@ -1251,6 +1260,95 @@ class ApiClient {
       FALLBACK_AUTOPILOT_RUN,
       { method: "POST" },
       { endpoint: "POST /api/autopilots/:id/trigger" },
+    );
+  }
+
+  // Create/delete/trigger/rotate endpoints — mirror
+  // packages/core/api/client.ts:3528-3631. Write endpoints follow the
+  // write-endpoint rule (raw fetch — a malformed response surfaces
+  // naturally). createAutopilot's response id drives the follow-up trigger
+  // create, so it's captured raw like core.
+  async createAutopilot(
+    data: CreateAutopilotRequest,
+  ): Promise<Autopilot> {
+    return this.fetch<Autopilot>("/api/autopilots", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAutopilot(id: string): Promise<void> {
+    await this.fetch<void>(`/api/autopilots/${id}`, { method: "DELETE" });
+  }
+
+  // Trigger create/update responses are not consumed by the UI (the detail
+  // query refetch on settle is authoritative) — raw fetch per the
+  // write-endpoint rule.
+  async createAutopilotTrigger(
+    autopilotId: string,
+    data: CreateAutopilotTriggerRequest,
+  ): Promise<AutopilotTrigger> {
+    return this.fetch<AutopilotTrigger>(
+      `/api/autopilots/${autopilotId}/triggers`,
+      { method: "POST", body: JSON.stringify(data) },
+    );
+  }
+
+  async updateAutopilotTrigger(
+    autopilotId: string,
+    triggerId: string,
+    data: UpdateAutopilotTriggerRequest,
+  ): Promise<AutopilotTrigger> {
+    return this.fetch<AutopilotTrigger>(
+      `/api/autopilots/${autopilotId}/triggers/${triggerId}`,
+      { method: "PATCH", body: JSON.stringify(data) },
+    );
+  }
+
+  async deleteAutopilotTrigger(
+    autopilotId: string,
+    triggerId: string,
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/autopilots/${autopilotId}/triggers/${triggerId}`,
+      { method: "DELETE" },
+    );
+  }
+
+  // Rotate returns the updated trigger carrying the NEW webhook token/url,
+  // which the UI surfaces to the user right after rotation — parse it
+  // through the mobile-local trigger schema so a drifted body degrades to
+  // a generic row (id === "" detectable) instead of a crash.
+  async rotateAutopilotWebhookToken(
+    autopilotId: string,
+    triggerId: string,
+  ): Promise<AutopilotTrigger> {
+    return this.fetchValidatedWith(
+      `/api/autopilots/${autopilotId}/triggers/${triggerId}/rotate-webhook-token`,
+      AutopilotTriggerSchema,
+      EMPTY_AUTOPILOT_TRIGGER,
+      { method: "POST" },
+      {
+        endpoint:
+          "POST /api/autopilots/:id/triggers/:triggerId/rotate-webhook-token",
+      },
+    );
+  }
+
+  // Schedule-form pre-validation. The server answers with 400 for a
+  // rejected cron expression / timezone — callers surface the classified
+  // rejection (invalid_cron vs invalid_timezone) before the trigger POST.
+  async cronPreview(
+    params: { expr: string; tz: string },
+  ): Promise<CronPreviewResponse> {
+    const search = new URLSearchParams();
+    search.set("expr", params.expr);
+    search.set("tz", params.tz);
+    return this.fetchValidated(
+      `/api/autopilots/cron-preview?${search}`,
+      CronPreviewResponseSchema,
+      EMPTY_CRON_PREVIEW_RESPONSE,
+      { endpoint: "GET /api/autopilots/cron-preview" },
     );
   }
 

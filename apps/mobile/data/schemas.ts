@@ -21,6 +21,7 @@ import type {
   ChatPendingTask,
   ChatSession,
   Comment,
+  CronPreviewResponse,
   InboxItem,
   IssueLabelsResponse,
   Label,
@@ -874,6 +875,69 @@ export const ListAutopilotRunsResponseSchema = z.object({
   runs: z.array(AutopilotRunSchema).default([]),
   total: z.number().default(0),
 }).loose();
+
+// Fallback for a rotated-webhook-token response that drifts: id stays empty
+// so callers can detect "could not read the updated trigger" downstream.
+// kind reads "webhook" because rotate is only offered on webhook triggers,
+// so that is the only kind this fallback is ever handed out for.
+export const EMPTY_AUTOPILOT_TRIGGER: AutopilotTrigger = {
+  id: "",
+  autopilot_id: "",
+  kind: "webhook",
+  enabled: false,
+  cron_expression: null,
+  timezone: null,
+  next_run_at: null,
+  webhook_token: null,
+  webhook_path: null,
+  webhook_url: null,
+  label: null,
+  event_filters: null,
+  last_fired_at: null,
+  created_at: "",
+  updated_at: "",
+};
+
+// GET /api/autopilots/cron-preview — used by the schedule trigger form to
+// pre-validate a cron expression before POST. `null` next_runs is the
+// client-side sentinel for "unreadable response" (never "never fires").
+export const CronPreviewResponseSchema = z.object({
+  next_runs: z.array(z.string()).nullable().default(null),
+}).loose();
+
+export const EMPTY_CRON_PREVIEW_RESPONSE: CronPreviewResponse = {
+  next_runs: null,
+};
+
+// ---------------------------------------------------------------------------
+// Autopilot create/trigger FORM request contracts. Core ships these only as
+// TS interfaces (packages/core/types/autopilot.ts) — no zod — so the form
+// layer owns the zod contract that validates "the form state is shaped
+// correctly before we POST" (drift defense: server enums stay z.string(),
+// a reshaped payload must not reach the wire). The trigger form schema also
+// covers edit mode (enabled absent → unchanged).
+// ---------------------------------------------------------------------------
+
+export const CreateAutopilotFormSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().optional(),
+  project_id: z.string().nullable().optional(),
+  assignee_type: z.string().default("agent"),
+  assignee_id: z.string().min(1),
+  execution_mode: z.string().min(1),
+});
+
+export const AutopilotTriggerFormSchema = z.object({
+  kind: z.enum(["schedule", "webhook"]),
+  cron_expression: z.string().optional(),
+  timezone: z.string().optional(),
+  label: z.string().optional(),
+  enabled: z.boolean().optional(),
+});
+
+export type AutopilotTriggerFormValues = z.infer<
+  typeof AutopilotTriggerFormSchema
+>;
 
 export const EMPTY_LIST_AUTOPILOT_RUNS_RESPONSE: {
   runs: AutopilotRun[];

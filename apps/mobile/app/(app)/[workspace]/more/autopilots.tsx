@@ -11,13 +11,15 @@
  * trigger-kinds rendering match web's semantics (server-driven enums, any
  * unknown value degrades to a neutral fallback, never a crash).
  */
+import { useCallback } from "react";
 import { ActivityIndicator, FlatList, Pressable, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
-import { router } from "expo-router";
+import { Stack, router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Autopilot } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { autopilotListOptions } from "@/data/queries/autopilots";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { formatDateTime } from "@/lib/autopilot-format";
@@ -82,8 +84,21 @@ export default function AutopilotsPage() {
 
   const showEmpty = !isLoading && !error && autopilots.length === 0;
 
+  const headerRight = useCallback(() => {
+    if (!wsSlug) return null;
+    return (
+      <IconButton
+        name="add"
+        onPress={() => router.push(`/${wsSlug}/more/autopilots/new`)}
+        accessibilityLabel={t("autopilots.new.title")}
+      />
+    );
+  }, [wsSlug, t]);
+
   return (
-    <View className="flex-1 bg-background">
+    <>
+      <Stack.Screen options={{ headerRight }} />
+      <View className="flex-1 bg-background">
       {isLoading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator />
@@ -134,7 +149,8 @@ export default function AutopilotsPage() {
           }
         />
       )}
-    </View>
+      </View>
+    </>
   );
 }
 

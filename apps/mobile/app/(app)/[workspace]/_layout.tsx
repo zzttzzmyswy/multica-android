@@ -307,6 +307,20 @@ export default function WorkspaceLayout() {
           }}
         />
         <Stack.Screen
+          name="more/autopilots/new"
+          options={{
+            title: t("autopilots.new.title"),
+            headerBackTitle: t("common.back"),
+          }}
+        />
+        <Stack.Screen
+          name="more/autopilots/[id]/trigger"
+          options={{
+            title: t("autopilots.trigger.adding"),
+            headerBackTitle: t("common.back"),
+          }}
+        />
+        <Stack.Screen
           name="more/projects"
           options={{ title: t("screen.projects"), headerBackTitle: t("common.back") }}
         />

@@ -9,6 +9,12 @@
  *    (authoritative server payload wins).
  *  - `useTriggerAutopilot` — no optimistic patch (the resulting run's
  *    id/status are server-authoritative); invalidate runs + detail on settle.
+ *  - `useDeleteAutopilot` — optimistic list removal + detail-cache eviction,
+ *    rolled back on error (mirrors core, no async onMutate here per the RN
+ *    sync-before-await rule).
+ *  - Trigger mutations — no optimistic patching: the detail query refetch on
+ *    settle owns the (un)present rows; rotate's new URL is read off the
+ *    mutation's resolved value, not the cache.
  *
  * The list cache is `Autopilot[]` (autopilotListOptions selects
  * `data.autopilots`), unlike web's `ListAutopilotsResponse` — patch the
@@ -16,9 +22,12 @@
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
+  CreateAutopilotRequest,
+  CreateAutopilotTriggerRequest,
   GetAutopilotResponse,
   ListAutopilotsResponse,
   UpdateAutopilotRequest,
+  UpdateAutopilotTriggerRequest,
 } from "@multica/core/types";
 import { api } from "@/data/api";
 import { autopilotKeys } from "@/data/queries/autopilots";
@@ -98,6 +107,141 @@ export function useTriggerAutopilot() {
       if (!wsId) return;
       void qc.invalidateQueries({ queryKey: autopilotKeys.runs(wsId, id) });
       void qc.invalidateQueries({ queryKey: autopilotKeys.detail(wsId, id) });
+    },
+  });
+}
+
+export function useCreateAutopilot() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: (data: CreateAutopilotRequest) => api.createAutopilot(data),
+    onSettled: () => {
+      if (!wsId) return;
+      void qc.invalidateQueries({ queryKey: autopilotKeys.list(wsId) });
+    },
+  });
+}
+
+// Optimistic removal returns the user to the list instantly; the detail row
+// is evicted rather than patched (it's gone). onError restores the list.
+export function useDeleteAutopilot() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: (id: string) => api.deleteAutopilot(id),
+    onMutate: (id) => {
+      if (!wsId) return undefined;
+      const listKey = autopilotKeys.list(wsId);
+      const prevList = qc.getQueryData<ListAutopilotsResponse>(listKey);
+      qc.setQueryData<ListAutopilotsResponse>(listKey, (old) =>
+        old
+          ? {
+              ...old,
+              autopilots: old.autopilots.filter((a) => a.id !== id),
+              total: Math.max(0, old.total - 1),
+            }
+          : old,
+      );
+      qc.removeQueries({ queryKey: autopilotKeys.detail(wsId, id) });
+      return { prevList };
+    },
+    onError: (_err, _id, ctx) => {
+      if (!wsId || !ctx?.prevList) return;
+      qc.setQueryData(autopilotKeys.list(wsId), ctx.prevList);
+    },
+    onSettled: () => {
+      if (!wsId) return;
+      void qc.invalidateQueries({ queryKey: autopilotKeys.list(wsId) });
+    },
+  });
+}
+
+export function useCreateAutopilotTrigger() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: ({
+      autopilotId,
+      ...data
+    }: { autopilotId: string } & CreateAutopilotTriggerRequest) =>
+      api.createAutopilotTrigger(autopilotId, data),
+    onSettled: (_data, _err, vars) => {
+      if (!wsId) return;
+      void qc.invalidateQueries({
+        queryKey: autopilotKeys.detail(wsId, vars.autopilotId),
+      });
+    },
+  });
+}
+
+export function useUpdateAutopilotTrigger() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: ({
+      autopilotId,
+      triggerId,
+      ...data
+    }: {
+      autopilotId: string;
+      triggerId: string;
+    } & UpdateAutopilotTriggerRequest) =>
+      api.updateAutopilotTrigger(autopilotId, triggerId, data),
+    onSettled: (_data, _err, vars) => {
+      if (!wsId) return;
+      void qc.invalidateQueries({
+        queryKey: autopilotKeys.detail(wsId, vars.autopilotId),
+      });
+    },
+  });
+}
+
+export function useDeleteAutopilotTrigger() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: ({
+      autopilotId,
+      triggerId,
+    }: {
+      autopilotId: string;
+      triggerId: string;
+    }) => api.deleteAutopilotTrigger(autopilotId, triggerId),
+    onSettled: (_data, _err, vars) => {
+      if (!wsId) return;
+      void qc.invalidateQueries({
+        queryKey: autopilotKeys.detail(wsId, vars.autopilotId),
+      });
+    },
+  });
+}
+
+// The returned trigger carries the fresh webhook URL — callers read it off
+// the resolved value to show the user, then settle invalidates the detail
+// query so the trigger card masks the new token on next render.
+export function useRotateAutopilotWebhookToken() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: ({
+      autopilotId,
+      triggerId,
+    }: {
+      autopilotId: string;
+      triggerId: string;
+    }) => api.rotateAutopilotWebhookToken(autopilotId, triggerId),
+    onSettled: (_data, _err, vars) => {
+      if (!wsId) return;
+      void qc.invalidateQueries({
+        queryKey: autopilotKeys.detail(wsId, vars.autopilotId),
+      });
     },
   });
 }

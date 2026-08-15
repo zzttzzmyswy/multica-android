@@ -20,8 +20,16 @@
  *  MYS-300 scope), so controls are status + run-now only. can_write absence
  *  is treated as allowed — the backend is the real gate (matches web).
  */
-import { ActivityIndicator, Alert, Pressable, ScrollView, View } from "react-native";
-import { useLocalSearchParams, router } from "expo-router";
+import { useCallback } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  View,
+} from "react-native";
+import * as Clipboard from "expo-clipboard";
+import { Stack, useLocalSearchParams, router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { AutopilotRun, AutopilotTrigger } from "@multica/core/types";
@@ -29,11 +37,19 @@ import { buildAutopilotWebhookUrl, maskAutopilotWebhookUrl } from "@multica/core
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { IconButton } from "@/components/ui/icon-button";
+import { ActionSheet } from "@/lib/action-sheet";
 import {
   autopilotDetailOptions,
   autopilotRunsOptions,
 } from "@/data/queries/autopilots";
-import { useUpdateAutopilot, useTriggerAutopilot } from "@/data/mutations/autopilots";
+import {
+  useDeleteAutopilot,
+  useDeleteAutopilotTrigger,
+  useRotateAutopilotWebhookToken,
+  useUpdateAutopilot,
+  useTriggerAutopilot,
+} from "@/data/mutations/autopilots";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { getApiBaseUrl } from "@/data/server-config";
@@ -97,6 +113,9 @@ export default function AutopilotDetailPage() {
   const runs = useQuery(autopilotRunsOptions(wsId, id, { limit: 20 }));
   const updateAutopilot = useUpdateAutopilot();
   const triggerAutopilot = useTriggerAutopilot();
+  const deleteAutopilot = useDeleteAutopilot();
+  const rotateToken = useRotateAutopilotWebhookToken();
+  const deleteTrigger = useDeleteAutopilotTrigger();
   const { getName } = useActorLookup();
 
   const autopilot = detail.data?.autopilot;
@@ -128,6 +147,141 @@ export default function AutopilotDetailPage() {
     }
   };
 
+  const onPressMore = useCallback(() => {
+    ActionSheet.showActionSheetWithOptions(
+      {
+        title: t("autopilots.detail.actions"),
+        options: [t("autopilots.detail.delete"), t("common.cancel")],
+        cancelButtonIndex: 1,
+        destructiveButtonIndex: 0,
+      },
+      (index) => {
+        if (index === 0 && autopilot) {
+          Alert.alert(
+            t("autopilots.detail.deleteTitle"),
+            t("autopilots.detail.deleteMessage", { title: autopilot.title }),
+            [
+              { text: t("common.cancel"), style: "cancel" },
+              {
+                text: t("autopilots.detail.delete"),
+                style: "destructive",
+                onPress: () => {
+                  deleteAutopilot.mutate(autopilot.id, {
+                    onSuccess: () => router.back(),
+                    onError: (err) =>
+                      Alert.alert(
+                        t("autopilots.detail.deleteFailed"),
+                        err instanceof Error
+                          ? err.message
+                          : t("common.unknownError"),
+                      ),
+                  });
+                },
+              },
+            ],
+          );
+        }
+      },
+    );
+  }, [autopilot, deleteAutopilot, t]);
+
+  const onAddTrigger = useCallback(
+    (kind: "schedule" | "webhook") => {
+      if (!id) return;
+      router.push({
+        pathname: `/${wsSlug}/more/autopilots/${id}/trigger`,
+        params: { kind },
+      });
+    },
+    [id, wsSlug],
+  );
+
+  const onEditTrigger = useCallback(
+    (trigger: AutopilotTrigger) => {
+      if (!id) return;
+      router.push({
+        pathname: `/${wsSlug}/more/autopilots/${id}/trigger`,
+        params: { triggerId: trigger.id },
+      });
+    },
+    [id, wsSlug],
+  );
+
+  const onDeleteTrigger = useCallback(
+    (trigger: AutopilotTrigger) => {
+      if (!id) return;
+      Alert.alert(
+        t("autopilots.trigger.deleteTitle"),
+        t("autopilots.trigger.deleteMessage"),
+        [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("autopilots.trigger.delete"),
+            style: "destructive",
+            onPress: () =>
+              deleteTrigger.mutate(
+                { autopilotId: id, triggerId: trigger.id },
+                {
+                  onError: (err) =>
+                    Alert.alert(
+                      t("autopilots.trigger.deleteFailed"),
+                      err instanceof Error
+                        ? err.message
+                        : t("common.unknownError"),
+                    ),
+                },
+              ),
+          },
+        ],
+      );
+    },
+    [id, deleteTrigger, t],
+  );
+
+  const onRotateUrl = useCallback(
+    (trigger: AutopilotTrigger) => {
+      if (!id) return;
+      Alert.alert(
+        t("autopilots.trigger.rotateConfirmTitle"),
+        t("autopilots.trigger.rotateConfirmMessage"),
+        [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("autopilots.trigger.rotateUrl"),
+            onPress: () => {
+              void rotateToken
+                .mutateAsync({ autopilotId: id, triggerId: trigger.id })
+                .then((updated) => {
+                  if (!updated.id) return;
+                  const url = buildAutopilotWebhookUrl({
+                    trigger: updated,
+                    apiBaseUrl: getApiBaseUrl(),
+                  });
+                  if (!url) return;
+                  Alert.alert(t("autopilots.trigger.rotatedTitle"), url, [
+                    {
+                      text: t("autopilots.trigger.copyUrl"),
+                      onPress: () => void Clipboard.setStringAsync(url),
+                    },
+                    { text: t("common.done"), style: "default" },
+                  ]);
+                })
+                .catch((err) =>
+                  Alert.alert(
+                    t("autopilots.trigger.rotateFailed"),
+                    err instanceof Error
+                      ? err.message
+                      : t("common.unknownError"),
+                  ),
+                );
+            },
+          },
+        ],
+      );
+    },
+    [id, rotateToken, t],
+  );
+
   if (detail.isLoading) {
     return (
       <View className="flex-1 items-center justify-center bg-background">
@@ -150,7 +304,21 @@ export default function AutopilotDetailPage() {
   const runningNow = triggerAutopilot.isPending;
 
   return (
-    <ScrollView className="flex-1 bg-background" contentContainerClassName="pb-8">
+    <>
+      <Stack.Screen
+        options={{
+          headerRight: canWrite
+            ? () => (
+                <IconButton
+                  name="ellipsis-horizontal"
+                  onPress={onPressMore}
+                  accessibilityLabel={t("autopilots.detail.actions")}
+                />
+              )
+            : undefined,
+        }}
+      />
+      <ScrollView className="flex-1 bg-background" contentContainerClassName="pb-8">
       {/* Status switch + run-now actions */}
       <View className="px-4 pt-3 flex-row items-center justify-between">
         <View className="flex-row items-center gap-2">
@@ -220,12 +388,36 @@ export default function AutopilotDetailPage() {
       </View>
 
       {/* Triggers */}
-      <SectionTitle>{t("autopilots.detail.triggers")}</SectionTitle>
+      <View className="flex-row items-center justify-between pr-4">
+        <SectionTitle>{t("autopilots.detail.triggers")}</SectionTitle>
+        {canWrite ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            onPress={() => onAddTrigger("schedule")}
+            accessibilityLabel={t("autopilots.detail.addTrigger")}
+          >
+            <Ionicons name="add" size={15} color={theme.foreground} />
+            <Text>{t("autopilots.detail.addTrigger")}</Text>
+          </Button>
+        ) : null}
+      </View>
       <View className="px-4 gap-2">
         {triggers.length === 0 ? (
-          <Text className="text-sm text-muted-foreground">
-            {t("autopilots.detail.noTriggers")}
-          </Text>
+          <View className="gap-2">
+            <Text className="text-sm text-muted-foreground">
+              {t("autopilots.detail.noTriggers")}
+            </Text>
+            {canWrite ? (
+              <Button
+                variant="outline"
+                onPress={() => onAddTrigger("schedule")}
+              >
+                <Ionicons name="add" size={15} color={theme.mutedForeground} />
+                <Text>{t("autopilots.detail.addTrigger")}</Text>
+              </Button>
+            ) : null}
+          </View>
         ) : (
           triggers.map((trigger) => (
             <TriggerCard
@@ -233,6 +425,10 @@ export default function AutopilotDetailPage() {
               trigger={trigger}
               muted={theme.mutedForeground}
               t={t}
+              canEdit={canWrite}
+              onEdit={onEditTrigger}
+              onDelete={onDeleteTrigger}
+              onRotate={onRotateUrl}
             />
           ))
         )}
@@ -257,13 +453,25 @@ export default function AutopilotDetailPage() {
           ))
         )}
       </View>
-    </ScrollView>
+      </ScrollView>
+    </>
   );
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
+function SectionTitle({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <Text className="px-4 pt-5 pb-2 text-xs uppercase tracking-wider text-muted-foreground font-medium">
+    <Text
+      className={cn(
+        "px-4 pt-5 pb-2 text-xs uppercase tracking-wider text-muted-foreground font-medium",
+        className,
+      )}
+    >
       {children}
     </Text>
   );
@@ -296,10 +504,18 @@ function TriggerCard({
   trigger,
   muted,
   t,
+  canEdit,
+  onEdit,
+  onDelete,
+  onRotate,
 }: {
   trigger: AutopilotTrigger;
   muted: string;
   t: (id: string, params?: Record<string, string | number>) => string;
+  canEdit: boolean;
+  onEdit: (trigger: AutopilotTrigger) => void;
+  onDelete: (trigger: AutopilotTrigger) => void;
+  onRotate: (trigger: AutopilotTrigger) => void;
 }) {
   const isWebhook = trigger.kind === "webhook";
   const webhookUrl = isWebhook
@@ -353,7 +569,64 @@ function TriggerCard({
           {maskAutopilotWebhookUrl(webhookUrl)}
         </Text>
       ) : null}
+      {canEdit ? (
+        <View className="mt-2 flex-row items-center gap-4 border-t border-border pt-1.5">
+          <TriggerAction
+            icon="create-outline"
+            label={t("autopilots.trigger.edit")}
+            onPress={() => onEdit(trigger)}
+          />
+          {isWebhook ? (
+            <TriggerAction
+              icon="refresh"
+              label={t("autopilots.trigger.rotateUrl")}
+              onPress={() => onRotate(trigger)}
+            />
+          ) : null}
+          <TriggerAction
+            icon="trash-outline"
+            label={t("autopilots.trigger.delete")}
+            destructive
+            onPress={() => onDelete(trigger)}
+          />
+        </View>
+      ) : null}
     </View>
+  );
+}
+
+function TriggerAction({
+  icon,
+  label,
+  destructive,
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  label: string;
+  destructive?: boolean;
+  onPress: () => void;
+}) {
+  const { colorScheme } = useColorScheme();
+  const color = destructive
+    ? THEME[colorScheme].destructive
+    : (THEME[colorScheme].mutedForeground as string);
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityLabel={label}
+      hitSlop={8}
+      className="flex-row items-center gap-1 py-1 pr-1"
+    >
+      <Ionicons name={icon} size={13} color={color} />
+      <Text
+        className={cn(
+          "text-xs",
+          destructive ? "text-destructive" : "text-muted-foreground",
+        )}
+      >
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
