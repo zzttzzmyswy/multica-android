@@ -21,11 +21,13 @@ import * as Haptics from "expo-haptics";
 import { ActionSheet } from "@/lib/action-sheet";
 import type { ChatMessage } from "@multica/core/types";
 import { useChatSelectStore } from "@/data/chat-select-store";
+import { useTranslation } from "@/lib/i18n/react";
 
 export function useChatMessageLongPress(
   message: ChatMessage,
 ): { onLongPress: () => void; isPressed: boolean } {
   const [isPressed, setIsPressed] = useState(false);
+  const { t } = useTranslation();
 
   const onLongPress = useCallback(() => {
     const hasContent = !!message.content;
@@ -46,10 +48,10 @@ export function useChatMessageLongPress(
     };
 
     if (hasContent) {
-      push("Copy", { kind: "copy" });
-      push("Select Text", { kind: "select" });
+      push(t("menu.copy"), { kind: "copy" });
+      push(t("menu.selectText"), { kind: "select" });
     }
-    push("Cancel", { kind: "cancel" });
+    push(t("menu.cancel"), { kind: "cancel" });
 
     const cancelButtonIndex = options.length - 1;
 
@@ -75,7 +77,7 @@ export function useChatMessageLongPress(
         }
       },
     );
-  }, [message]);
+  }, [message, t]);
 
   return { onLongPress, isPressed };
 }
