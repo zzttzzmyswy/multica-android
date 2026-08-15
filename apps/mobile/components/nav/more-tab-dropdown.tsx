@@ -89,6 +89,7 @@ const NAV_ITEMS: NavItem[] = [
   { labelKey: "nav.agents", icon: "hardware-chip", path: "/more/agents" },
   { labelKey: "nav.members", icon: "people", path: "/more/members" },
   { labelKey: "nav.squads", icon: "people-circle", path: "/more/squads" },
+  { labelKey: "nav.labels", icon: "pricetags", path: "/more/labels" },
 ];
 
 export function MoreTabDropdownAnchor({

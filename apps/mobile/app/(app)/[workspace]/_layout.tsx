@@ -356,6 +356,24 @@ export default function WorkspaceLayout() {
           }}
         />
         <Stack.Screen
+          name="more/labels"
+          options={{ title: t("screen.labels"), headerBackTitle: t("common.back") }}
+        />
+        <Stack.Screen
+          name="more/labels/new"
+          options={{
+            title: t("labels.new.title"),
+            headerBackTitle: t("common.back"),
+          }}
+        />
+        <Stack.Screen
+          name="more/labels/[id]"
+          options={{
+            title: t("labels.edit.title"),
+            headerBackTitle: t("screen.labels"),
+          }}
+        />
+        <Stack.Screen
           name="more/pins"
           options={{ title: t("screen.pinned"), headerBackTitle: t("common.back") }}
         />

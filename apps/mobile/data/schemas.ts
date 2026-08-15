@@ -132,14 +132,26 @@ export const EMPTY_NOTIFICATION_PREFERENCES = {
   preferences: {},
 } as const;
 
-const LabelSchema = z.object({
+export const LabelSchema = z.object({
   id: z.string(),
   workspace_id: z.string(),
+  resource_type: z.string().optional(),
   name: z.string(),
+  description: z.string().nullable().optional(),
   color: z.string(),
+  usage_count: z.number().optional(),
   created_at: z.string(),
   updated_at: z.string(),
 }).loose();
+
+export const EMPTY_LABEL: Label = {
+  id: "",
+  workspace_id: "",
+  name: "",
+  color: "",
+  created_at: "",
+  updated_at: "",
+};
 
 export const ListLabelsResponseSchema = z.object({
   labels: z.array(LabelSchema).default([]),

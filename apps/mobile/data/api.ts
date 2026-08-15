@@ -71,6 +71,7 @@ import type {
   UpdateAutopilotRequest,
   UpdateAutopilotTriggerRequest,
   UpdateIssueRequest,
+  UpdateLabelRequest,
   UpdateMeRequest,
   UpdateProjectRequest,
   UpdateSquadMemberRoleRequest,
@@ -120,6 +121,7 @@ import {
   EMPTY_INBOX_LIST,
   EMPTY_ISSUE_FALLBACK,
   EMPTY_LIST_AUTOPILOT_RUNS_RESPONSE,
+  EMPTY_LABEL,
   EMPTY_LIST_LABELS_RESPONSE,
   EMPTY_LIST_PROJECT_RESOURCES_RESPONSE,
   EMPTY_LIST_PROJECTS_RESPONSE,
@@ -137,6 +139,7 @@ import {
   NotificationPreferenceResponseSchema,
   ListAutopilotRunsResponseSchema,
   ListLabelsResponseSchema,
+  LabelSchema,
   ListProjectResourcesResponseSchema,
   ListProjectsResponseSchema,
   MemberListSchema,
@@ -1041,6 +1044,34 @@ class ApiClient {
       method: "POST",
       body: JSON.stringify(body),
     });
+  }
+
+  // Get a single label by id. Drift defense via LabelSchema + EMPTY_LABEL
+  // fallback — mirrors getSquad for this read-only endpoint.
+  async getLabel(id: string): Promise<Label> {
+    const raw = await this.fetch<unknown>(`/api/labels/${id}`);
+    return parseWithFallback(raw, LabelSchema, EMPTY_LABEL, {
+      endpoint: "GET /api/labels/{id}",
+    });
+  }
+
+  // Update label fields (PUT). parseWithFallback to LabelSchema — the
+  // authoritative response then patches the flattened Label[] list cache in
+  // useUpdateLabel.onSuccess.
+  async updateLabel(id: string, body: UpdateLabelRequest): Promise<Label> {
+    const raw = await this.fetch<unknown>(`/api/labels/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+    return parseWithFallback(raw, LabelSchema, EMPTY_LABEL, {
+      endpoint: "PUT /api/labels/{id}",
+    });
+  }
+
+  // Backend returns 204 No Content on success; this.fetch already
+  // short-circuits 204 → undefined, so no body parsing needed.
+  async deleteLabel(id: string): Promise<void> {
+    await this.fetch<void>(`/api/labels/${id}`, { method: "DELETE" });
   }
 
   async attachLabel(
