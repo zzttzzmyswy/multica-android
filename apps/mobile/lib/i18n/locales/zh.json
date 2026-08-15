@@ -1,0 +1,31 @@
+{
+  "common.server": "服务器",
+  "common.save": "保存",
+  "common.saving": "保存中…",
+  "common.reset": "重置",
+  "common.cancel": "取消",
+
+  "login.title": "登录 Multica",
+  "login.subtitle": "输入邮箱，我们会向您发送验证码。",
+  "login.emailPlaceholder": "you@example.com",
+  "login.sendCode": "发送验证码",
+  "login.sending": "发送中…",
+  "login.emailRequiredError": "请输入邮箱。",
+  "login.server": "服务器",
+  "login.usingCustomServer": "正在使用自定义服务器。",
+  "login.serverPlaceholder": "https://api.example.com",
+  "login.serverUpdated": "服务器已更新——下次请求将使用它。",
+  "login.serverInvalid": "请输入有效的服务器地址，例如 https://api.example.com",
+  "login.sendCodeError": "无法发送验证码，请重试。",
+
+  "verify.title": "输入验证码",
+  "verify.subtitle": "我们已将 6 位验证码发送至 {{email}}",
+  "verify.verify": "验证",
+  "verify.verifying": "验证中…",
+  "verify.resend": "重新发送验证码",
+  "verify.resendCooldown": "{{count}} 秒后可重新发送",
+  "verify.sending": "发送中…",
+  "verify.differentEmail": "使用其他邮箱",
+  "verify.codeError": "验证码验证失败，请重试。",
+  "verify.resendError": "无法重新发送验证码，请重试。"
+}

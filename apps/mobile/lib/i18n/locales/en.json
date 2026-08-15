@@ -1,0 +1,31 @@
+{
+  "common.server": "Server",
+  "common.save": "Save",
+  "common.saving": "Saving...",
+  "common.reset": "Reset",
+  "common.cancel": "Cancel",
+
+  "login.title": "Sign in to Multica",
+  "login.subtitle": "Enter your email and we'll send you a verification code.",
+  "login.emailPlaceholder": "you@example.com",
+  "login.sendCode": "Send code",
+  "login.sending": "Sending...",
+  "login.emailRequiredError": "Enter your email.",
+  "login.server": "Server",
+  "login.usingCustomServer": "Using a custom server.",
+  "login.serverPlaceholder": "https://api.example.com",
+  "login.serverUpdated": "Server updated — the next request will use it.",
+  "login.serverInvalid": "Enter a valid server URL, e.g. https://api.example.com",
+  "login.sendCodeError": "Couldn't send the code. Try again.",
+
+  "verify.title": "Enter verification code",
+  "verify.subtitle": "We sent a 6-digit code to {{email}}",
+  "verify.verify": "Verify",
+  "verify.verifying": "Verifying...",
+  "verify.resend": "Resend code",
+  "verify.resendCooldown": "Resend code in {{count}}s",
+  "verify.sending": "Sending...",
+  "verify.differentEmail": "Use a different email",
+  "verify.codeError": "Couldn't verify the code. Try again.",
+  "verify.resendError": "Couldn't resend the code. Try again."
+}

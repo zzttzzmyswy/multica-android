@@ -21,8 +21,10 @@ import {
   resetApiBaseUrl,
 } from "@/data/server-config";
 import { mapAuthError } from "@/lib/auth-error";
+import { useTranslation } from "@/lib/i18n/react";
 
 export default function Login() {
+  const { t } = useTranslation();
   const sendCode = useAuthStore((s) => s.sendCode);
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -45,7 +47,7 @@ export default function Login() {
       router.push({ pathname: "/verify", params: { email: trimmed } });
     } catch (err) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError(mapAuthError(err, "Couldn't send the code. Try again."));
+      setError(mapAuthError(err, t("login.sendCodeError")));
     } finally {
       setSubmitting(false);
     }
@@ -67,7 +69,7 @@ export default function Login() {
       setServerError(
         err instanceof Error
           ? err.message
-          : "Enter a valid server URL, e.g. https://api.example.com",
+          : t("login.serverInvalid"),
       );
     } finally {
       setServerSaving(false);
@@ -93,10 +95,10 @@ export default function Login() {
             <MulticaLogo size={32} />
             <View className="gap-1 items-center">
               <Text className="text-2xl font-semibold text-foreground">
-                Sign in to Multica
+                {t("login.title")}
               </Text>
               <Text className="text-sm text-muted-foreground text-center">
-                Enter your email and we&apos;ll send you a verification code.
+                {t("login.subtitle")}
               </Text>
             </View>
           </View>
@@ -107,7 +109,7 @@ export default function Login() {
               autoComplete="email"
               autoFocus
               keyboardType="email-address"
-              placeholder="you@example.com"
+              placeholder={t("login.emailPlaceholder")}
               value={email}
               onChangeText={setEmail}
               onSubmitEditing={onSubmit}
@@ -125,7 +127,7 @@ export default function Login() {
             disabled={submitting || !email.trim()}
             onPress={onSubmit}
           >
-            <Text>{submitting ? "Sending..." : "Send code"}</Text>
+            <Text>{submitting ? t("login.sending") : t("login.sendCode")}</Text>
           </Button>
 
           <Collapsible
@@ -140,7 +142,7 @@ export default function Login() {
                 className="flex-row items-center justify-between active:opacity-70"
               >
                 <Text className="text-xs font-medium text-muted-foreground">
-                  Server
+                  {t("login.server")}
                 </Text>
                 <View className="flex-row items-center gap-2 flex-1 justify-end">
                   {currentServer ? (
@@ -163,7 +165,7 @@ export default function Login() {
               <View className="mt-3 gap-2">
                 {hasCustomApiBaseUrl() ? (
                   <Text className="text-xs text-muted-foreground">
-                    Using a custom server.
+                    {t("login.usingCustomServer")}
                   </Text>
                 ) : null}
                 <TextField
@@ -171,7 +173,7 @@ export default function Login() {
                   autoCorrect={false}
                   autoComplete="off"
                   keyboardType="url"
-                  placeholder="https://api.example.com"
+                  placeholder={t("login.serverPlaceholder")}
                   value={serverInput}
                   onChangeText={setServerInput}
                   editable={!serverSaving}
@@ -182,7 +184,7 @@ export default function Login() {
                 ) : null}
                 {serverSaved ? (
                   <Text className="text-sm text-foreground">
-                    Server updated — the next request will use it.
+                    {t("login.serverUpdated")}
                   </Text>
                 ) : null}
                 <View className="flex-row gap-2">
@@ -193,7 +195,7 @@ export default function Login() {
                     disabled={serverSaving || !serverInput.trim()}
                     onPress={onSaveServer}
                   >
-                    <Text>{serverSaving ? "Saving..." : "Save"}</Text>
+                    <Text>{serverSaving ? t("common.saving") : t("common.save")}</Text>
                   </Button>
                   <Button
                     variant="ghost"
@@ -202,7 +204,7 @@ export default function Login() {
                     disabled={serverSaving || !hasCustomApiBaseUrl()}
                     onPress={onResetServer}
                   >
-                    <Text>Reset</Text>
+                    <Text>{t("common.reset")}</Text>
                   </Button>
                 </View>
               </View>
