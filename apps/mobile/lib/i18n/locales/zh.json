@@ -400,5 +400,17 @@
   "resource.detachTitle": "解绑资源？",
   "resource.detach": "解绑",
   "download.failedTitle": "下载失败",
-  "download.failedMessage": "无法下载此文件。"
+  "download.failedMessage": "无法下载此文件。",
+  "menu.reply": "回复",
+  "menu.react": "表情…",
+  "menu.moreReactions": "更多表情…",
+  "menu.copy": "复制",
+  "menu.selectText": "选择文本",
+  "menu.copyLink": "复制链接",
+  "menu.resolveThread": "已解决",
+  "menu.unresolveThread": "取消已解决",
+  "menu.delete": "删除",
+  "menu.cancel": "取消",
+  "comment.deleteCommentTitle": "删除这条评论？",
+  "comment.deleteCommentMessage": "评论将被永久删除，线程内的回复也会一并移除，且无法撤销。"
 }

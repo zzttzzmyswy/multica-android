@@ -35,6 +35,7 @@ import {
   useToggleCommentReaction,
 } from "@/data/mutations/issues";
 import { QUICK_EMOJIS } from "@/lib/quick-emojis";
+import { useTranslation } from "@/lib/i18n/react";
 
 const QUICK_ROW_SIZE = 5;
 
@@ -44,6 +45,7 @@ export function useCommentLongPress(
   issueIdentifier: string | undefined,
 ): { onLongPress: () => void; isPressed: boolean } {
   const [isPressed, setIsPressed] = useState(false);
+  const { t } = useTranslation();
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const userId = useAuthStore((s) => s.user?.id);
   const toggleReaction = useToggleCommentReaction(issueId);
@@ -80,20 +82,21 @@ export function useCommentLongPress(
       actions.push(action);
     };
 
-    push("Reply", { kind: "reply" });
-    push("React…", { kind: "react" });
+    push(t("menu.reply"), { kind: "reply" });
+    push(t("menu.react"), { kind: "react" });
     if (hasContent) {
-      push("Copy", { kind: "copy" });
-      push("Select Text", { kind: "select" });
+      push(t("menu.copy"), { kind: "copy" });
+      push(t("menu.selectText"), { kind: "select" });
     }
-    if (canCopyLink) push("Copy Link", { kind: "copyLink" });
+    if (canCopyLink) push(t("menu.copyLink"), { kind: "copyLink" });
     if (isRoot) {
-      push(resolved ? "Unresolve Thread" : "Resolve Thread", {
-        kind: "resolve",
-      });
+      push(
+        resolved ? t("menu.unresolveThread") : t("menu.resolveThread"),
+        { kind: "resolve" },
+      );
     }
-    if (isOwn) push("Delete", { kind: "delete" });
-    push("Cancel", { kind: "cancel" });
+    if (isOwn) push(t("menu.delete"), { kind: "delete" });
+    push(t("menu.cancel"), { kind: "cancel" });
 
     const cancelButtonIndex = options.length - 1;
     const destructiveButtonIndex = isOwn
@@ -134,6 +137,7 @@ export function useCommentLongPress(
             // Present the nested React sheet from inside this completion
             // callback — see file header for why.
             presentReactSheet({
+              t,
               entry,
               reactions,
               userId,
@@ -175,12 +179,12 @@ export function useCommentLongPress(
             return;
           case "delete":
             Alert.alert(
-              "Delete comment?",
-              "This comment will be permanently deleted. Replies in the thread will also be removed. This cannot be undone.",
+              t("comment.deleteCommentTitle"),
+              t("comment.deleteCommentMessage"),
               [
-                { text: "Cancel", style: "cancel" },
+                { text: t("menu.cancel"), style: "cancel" },
                 {
-                  text: "Delete",
+                  text: t("menu.delete"),
                   style: "destructive",
                   onPress: () => deleteComment.mutate(entry.id),
                 },
@@ -191,6 +195,7 @@ export function useCommentLongPress(
       },
     );
   }, [
+    t,
     entry,
     issueId,
     issueIdentifier,
@@ -199,12 +204,14 @@ export function useCommentLongPress(
     toggleReaction,
     deleteComment,
     resolveComment,
+    getName,
   ]);
 
   return { onLongPress, isPressed };
 }
 
 function presentReactSheet(args: {
+  t: (id: string, params?: Record<string, string | number>) => string;
   entry: TimelineEntry;
   reactions: Reaction[];
   userId: string | undefined;
@@ -212,9 +219,13 @@ function presentReactSheet(args: {
   issueId: string;
   toggle: (emoji: string, existing: Reaction | undefined) => void;
 }) {
-  const { entry, reactions, userId, wsSlug, issueId, toggle } = args;
+  const { t, entry, reactions, userId, wsSlug, issueId, toggle } = args;
   const emojis = QUICK_EMOJIS.slice(0, QUICK_ROW_SIZE);
-  const options = [...emojis, "More reactions…", "Cancel"];
+  const options = [
+    ...emojis,
+    t("menu.moreReactions"),
+    t("menu.cancel"),
+  ];
   const cancelButtonIndex = options.length - 1;
 
   ActionSheet.showActionSheetWithOptions(

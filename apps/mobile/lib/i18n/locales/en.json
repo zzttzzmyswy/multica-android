@@ -400,5 +400,17 @@
   "resource.detachTitle": "Detach resource?",
   "resource.detach": "Detach",
   "download.failedTitle": "Download failed",
-  "download.failedMessage": "Could not download this file."
+  "download.failedMessage": "Could not download this file.",
+  "menu.reply": "Reply",
+  "menu.react": "React…",
+  "menu.moreReactions": "More reactions…",
+  "menu.copy": "Copy",
+  "menu.selectText": "Select Text",
+  "menu.copyLink": "Copy Link",
+  "menu.resolveThread": "Resolve Thread",
+  "menu.unresolveThread": "Unresolve Thread",
+  "menu.delete": "Delete",
+  "menu.cancel": "Cancel",
+  "comment.deleteCommentTitle": "Delete comment?",
+  "comment.deleteCommentMessage": "This comment will be permanently deleted. Replies in the thread will also be removed. This cannot be undone."
 }
