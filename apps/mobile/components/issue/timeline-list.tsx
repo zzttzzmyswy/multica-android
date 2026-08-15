@@ -107,7 +107,11 @@ import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { useCommentSelectStore } from "@/data/comment-select-store";
 import { useTranslation } from "@/lib/i18n/react";
-import { isNearBottom } from "@/lib/scroll-bottom";
+import {
+  isNearBottom,
+  AT_BOTTOM_SLACK_PX,
+  nextFabVisibility,
+} from "@/lib/scroll-bottom";
 import { ScrollToBottomFAB } from "@/components/ui/scroll-to-bottom-fab";
 
 interface Props {
@@ -137,11 +141,6 @@ interface Props {
  *  to land at the bottom, realise the target is an older comment, and
  *  scroll up to it — the overlay still fires when the row mounts. */
 const HIGHLIGHT_HOLD_MS = 5000;
-
-/** Pixel slack at the bottom edge — inside this band we treat the user as
- *  "already at bottom" so the new-comment chip doesn't fire for entries
- *  the user is already about to see. */
-const AT_BOTTOM_SLACK_PX = 80;
 
 /** Sentinel id for the "New since last view" divider row injected into the
  *  FlatList data. Picked because it can never collide with a real comment
@@ -257,8 +256,13 @@ export function TimelineList({
   // content. `handleScroll` already tracks at-bottom; we fold the FAB flip
   // into it so a habitually-churned scroll handler doesn't re-render per
   // frame (state update only fires on an actual visibility change).
-  const [showJumpFab, setShowJumpFab] = useState(false);
-  const showJumpFabRef = useRef(false);
+  //
+  // A normal issue-open lands at the TOP (header first) — the FAB should
+  // greet the reader immediately. Only a deep-link (`highlightCommentId`)
+  // starts at the bottom (FlashList `startRenderingFromBottom`), where the
+  // FAB starts hidden.
+  const [showJumpFab, setShowJumpFab] = useState(!highlightCommentId);
+  const showJumpFabRef = useRef(!highlightCommentId);
 
   const lastDataLenRef = useRef(0);
   useEffect(() => {
@@ -276,12 +280,13 @@ export function TimelineList({
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-      const nowAtBottom = isNearBottom({
+      const metrics = {
         contentOffsetY: contentOffset.y,
         contentHeight: contentSize.height,
         viewportHeight: layoutMeasurement.height,
         slackPx: AT_BOTTOM_SLACK_PX,
-      });
+      };
+      const nowAtBottom = isNearBottom(metrics);
       const wasAtBottom = isAtBottomRef.current;
       isAtBottomRef.current = nowAtBottom;
       // Reaching the bottom clears the unread-new chip — same iMessage /
@@ -291,10 +296,10 @@ export function TimelineList({
       }
       // FAB shows when scrolled up, hides when at bottom. `onScroll` fires
       // every frame; only re-render when the FAB's visibility flips.
-      const wantFab = !nowAtBottom;
-      if (wantFab === showJumpFabRef.current) return;
-      showJumpFabRef.current = wantFab;
-      setShowJumpFab(wantFab);
+      const nextFab = nextFabVisibility(showJumpFabRef.current, metrics);
+      if (nextFab === showJumpFabRef.current) return;
+      showJumpFabRef.current = nextFab;
+      setShowJumpFab(nextFab);
     },
     [newCount],
   );

@@ -17,6 +17,14 @@ export interface ScrollMetrics {
   slackPx: number;
 }
 
+/**
+ * Shared bottom-edge slack (px) used by both the chat message list and the
+ * issue timeline: within this band the user counts as "at bottom" and the
+ * jump-to-bottom FAB hides. Single source of truth so the two screens feel
+ * consistent.
+ */
+export const AT_BOTTOM_SLACK_PX = 80;
+
 /** Distance in px between the viewport's bottom edge and the content end
  *  (>= 0 means the viewport is at or past the very bottom). */
 export function distanceFromBottom(m: ScrollMetrics): number {
@@ -28,4 +36,25 @@ export function distanceFromBottom(m: ScrollMetrics): number {
  *  should be hidden. */
 export function isNearBottom(m: ScrollMetrics): boolean {
   return distanceFromBottom(m) <= m.slackPx;
+}
+
+/** The FAB's desired visibility for a scroll sample: shown when scrolled up
+ *  away from the bottom, hidden when at/near it. */
+export function wantJumpFab(m: ScrollMetrics): boolean {
+  return !isNearBottom(m);
+}
+
+/**
+ * Next FAB visibility for a high-frequency scroll stream, deduplicated: when
+ * the sample's desired visibility equals the currently-rendered one, return
+ * the current value unchanged (the callers skip their `setState` in that
+ * case to avoid a re-render every frame). Returns the new value only when it
+ * actually changes.
+ */
+export function nextFabVisibility(
+  current: boolean,
+  sample: ScrollMetrics,
+): boolean {
+  const want = wantJumpFab(sample);
+  return want === current ? current : want;
 }

@@ -10,6 +10,8 @@ import { describe, expect, it } from "vitest";
 import {
   distanceFromBottom,
   isNearBottom,
+  nextFabVisibility,
+  wantJumpFab,
   type ScrollMetrics,
 } from "./scroll-bottom";
 
@@ -70,5 +72,36 @@ describe("isNearBottom", () => {
         slackPx: 80,
       }),
     ).toBe(true);
+  });
+});
+
+describe("wantJumpFab", () => {
+  it("is false when at the bottom", () => {
+    expect(wantJumpFab(metrics({}))).toBe(false);
+  });
+
+  it("is true when scrolled up away from the bottom", () => {
+    expect(wantJumpFab(metrics({ contentOffsetY: 400 }))).toBe(true);
+  });
+});
+
+describe("nextFabVisibility", () => {
+  const hidden = metrics({}); // at bottom → FAB hidden
+  const shown = metrics({ contentOffsetY: 200 }); // scrolled up → FAB shown
+
+  it("stays hidden when a scroll sample keeps the user at the bottom", () => {
+    expect(nextFabVisibility(false, hidden)).toBe(false);
+  });
+
+  it("stays shown when a scroll sample keeps the user scrolled up", () => {
+    expect(nextFabVisibility(true, shown)).toBe(true);
+  });
+
+  it("shows the FAB once the user scrolls up away from the bottom", () => {
+    expect(nextFabVisibility(false, shown)).toBe(true);
+  });
+
+  it("hides the FAB once the user returns to the bottom", () => {
+    expect(nextFabVisibility(true, hidden)).toBe(false);
   });
 });

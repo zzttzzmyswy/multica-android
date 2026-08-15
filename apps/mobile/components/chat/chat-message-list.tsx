@@ -75,7 +75,10 @@ import { ChatTimeline } from "./chat-timeline";
 import { CommentAttachmentList } from "@/components/issue/comment-attachment-list";
 import { StatusPill } from "./status-pill";
 import { useTranslation } from "@/lib/i18n/react";
-import { isNearBottom } from "@/lib/scroll-bottom";
+import {
+  AT_BOTTOM_SLACK_PX,
+  nextFabVisibility,
+} from "@/lib/scroll-bottom";
 import { ScrollToBottomFAB } from "@/components/ui/scroll-to-bottom-fab";
 import {
   Collapsible,
@@ -154,9 +157,6 @@ export function ChatMessageList({
   // wants to leap back to the newest content.
   const { t } = useTranslation();
   const listRef = useRef<FlashListRef<ChatMessage>>(null);
-  // Pixel band at the bottom edge that counts as "caught up" — matches the
-  // issue timeline's AT_BOTTOM_SLACK so both screens feel consistent.
-  const AT_BOTTOM_SLACK_PX = 80;
   const [showJumpFab, setShowJumpFab] = useState(false);
   // `onScroll` fires every frame; guard setState so we only re-render when
   // the flag actually flips, keeping the high-frequency scroll handler cheap.
@@ -165,7 +165,7 @@ export function ChatMessageList({
   const handleChatScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-      const wantFab = !isNearBottom({
+      const next = nextFabVisibility(showJumpFabRef.current, {
         contentOffsetY: contentOffset.y,
         contentHeight: contentSize.height,
         viewportHeight: layoutMeasurement.height,
@@ -173,9 +173,9 @@ export function ChatMessageList({
       });
       // `onScroll` fires every frame; only re-render when the FAB's
       // visibility actually flips.
-      if (wantFab === showJumpFabRef.current) return;
-      showJumpFabRef.current = wantFab;
-      setShowJumpFab(wantFab);
+      if (next === showJumpFabRef.current) return;
+      showJumpFabRef.current = next;
+      setShowJumpFab(next);
     },
     [],
   );

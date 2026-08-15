@@ -7,16 +7,18 @@
  * show/hide decision (derived from `isNearBottom`) and the scroll action;
  * this component is purely presentation.
  *
- * Reanimated entrance mirrors the fade/slide idiom used by toast-style
- * overlays elsewhere in the app (`NewCommentChip` uses a plain jump-cut;
- * we keep the arrow button slightly animated so appearing/disappearing
- * doesn't snap). Content is a single Ionicon glyph — no text — so no i18n
- * is needed for the visible label; the caller passes an accessibility
- * label so screen readers announce the intent in the current locale.
+ * Reanimated `entering` gives a quick fade-in-from-below when the button
+ * appears; there is intentionally no `exiting` animation — the caller flips
+ * `visible` and we `return null` the same frame, so an exit preset would
+ * have nothing to play against (the node unmounts synchronously). This is
+ * the same jump-cut disappearance `NewCommentChip` uses. Content is a single
+ * Ionicon glyph — no text — so no i18n is needed for the visible label; the
+ * caller passes an accessibility label so screen readers announce the intent
+ * in the current locale.
  */
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Pressable } from "react-native";
-import Animated, { FadeInDown, FadeOutUp } from "react-native-reanimated";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 
@@ -51,7 +53,6 @@ export function ScrollToBottomFAB({
   return (
     <Animated.View
       entering={FadeInDown.duration(150)}
-      exiting={FadeOutUp.duration(120)}
       style={{
         position: "absolute",
         bottom,
