@@ -142,6 +142,17 @@
   "chat.prompt1": "按优先级列出我未完成的问题",
   "chat.prompt2": "总结我今天做了什么",
   "chat.prompt3": "帮我规划接下来要做什么",
+  "chat.placeholder": "输入消息…",
+  "chat.agentWorking": "Agent 正在执行…",
+  "chat.unavailable": "聊天不可用",
+  "chat.stopAgent": "停止 agent",
+
+  "comment.placeholder": "添加评论…",
+  "comment.pillLabel": "添加评论，@ 提及…",
+
+  "settings.name": "名称",
+  "settings.namePlaceholder": "您的名称",
+  "settings.email": "邮箱",
 
   "common.unknownError": "未知错误",
   "common.back": "返回",

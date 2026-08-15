@@ -28,6 +28,7 @@ import { useAuthStore } from "@/data/auth-store";
 import { api } from "@/data/api";
 import type { FileAsset } from "@/data/api";
 import { ActionSheet } from "@/lib/action-sheet";
+import { useTranslation } from "@/lib/i18n/react";
 
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024; // 5 MB — matches what's reasonable on cellular.
 
@@ -43,6 +44,7 @@ function initialsOf(name: string | undefined): string {
 }
 
 export default function ProfileSettingsScreen() {
+  const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
 
@@ -195,18 +197,18 @@ export default function ProfileSettingsScreen() {
 
       <View className="gap-4">
         <View>
-          <Text className="text-xs text-muted-foreground mb-1.5">Name</Text>
+          <Text className="text-xs text-muted-foreground mb-1.5">{t("settings.name")}</Text>
           <TextField
             value={name}
             onChangeText={setName}
-            placeholder="Your name"
+            placeholder={t("settings.namePlaceholder")}
             autoCapitalize="words"
             autoCorrect={false}
             returnKeyType="done"
           />
         </View>
         <View>
-          <Text className="text-xs text-muted-foreground mb-1.5">Email</Text>
+          <Text className="text-xs text-muted-foreground mb-1.5">{t("settings.email")}</Text>
           <View className="rounded-md border border-border bg-muted px-3 py-2.5">
             <Text className="text-base text-muted-foreground">
               {user?.email ?? "—"}

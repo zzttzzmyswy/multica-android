@@ -147,4 +147,15 @@ describe("initI18n device-language resolution", () => {
     const locale = await mod.initI18n();
     expect(locale).toBe("en");
   });
+
+  it("localizes deep-UI composer and profile placeholders", () => {
+    expect(mod.translate("comment.placeholder")).toBe("Add a comment…");
+    expect(mod.translate("chat.placeholder")).toBe("Message…");
+    expect(mod.translate("chat.agentWorking")).toBe("Agent is working…");
+    mod.setLocale("zh");
+    expect(mod.translate("comment.placeholder")).toBe("添加评论…");
+    expect(mod.translate("chat.placeholder")).toBe("输入消息…");
+    expect(mod.translate("chat.agentWorking")).toBe("Agent 正在执行…");
+    expect(mod.translate("settings.namePlaceholder")).toBe("您的名称");
+  });
 });

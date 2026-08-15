@@ -142,6 +142,17 @@
   "chat.prompt1": "List my open issues by priority",
   "chat.prompt2": "Summarize what I did today",
   "chat.prompt3": "Help me plan what to do next",
+  "chat.placeholder": "Message…",
+  "chat.agentWorking": "Agent is working…",
+  "chat.unavailable": "Chat unavailable",
+  "chat.stopAgent": "Stop agent",
+
+  "comment.placeholder": "Add a comment…",
+  "comment.pillLabel": "Add a comment, @ to mention…",
+
+  "settings.name": "Name",
+  "settings.namePlaceholder": "Your name",
+  "settings.email": "Email",
 
   "common.unknownError": "Unknown error",
   "common.back": "Back",
