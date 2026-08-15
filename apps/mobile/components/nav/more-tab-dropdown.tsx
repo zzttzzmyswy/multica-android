@@ -74,10 +74,12 @@ interface NavItem {
   path: string;
 }
 
+// Features promoted to first-class bottom tabs (Projects / Pinned / Issues
+// via my-issues) are NOT duplicated here. Only the Issues browse page stays
+// under "More" — it's a different surface than the "My Issues" tab (all
+// workspace issues vs. the user's own, status-grouped).
 const NAV_ITEMS: NavItem[] = [
-  { labelKey: "nav.pinned", icon: "pin", path: "/more/pins" },
   { labelKey: "nav.issues", icon: "list", path: "/more/issues" },
-  { labelKey: "nav.projects", icon: "layers", path: "/more/projects" },
 ];
 
 export function MoreTabDropdownAnchor({
