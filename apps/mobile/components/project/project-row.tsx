@@ -18,7 +18,7 @@ import {
   projectPriorityLabel,
   projectStatusLabel,
 } from "@/lib/project-status";
-import { timeAgo } from "@/lib/time-ago";
+import { useTimeAgo } from "@/lib/time-ago";
 
 interface Props {
   project: Project;
@@ -26,6 +26,7 @@ interface Props {
 }
 
 export function ProjectRow({ project, onPress }: Props) {
+  const timeAgo = useTimeAgo();
   const totalIssues = project.issue_count;
   const showCount = totalIssues > 0;
 

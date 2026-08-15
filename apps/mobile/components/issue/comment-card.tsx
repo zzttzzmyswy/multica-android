@@ -36,7 +36,7 @@ import type { Reaction, TimelineEntry } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { useActorLookup } from "@/data/use-actor-name";
-import { timeAgo } from "@/lib/time-ago";
+import { useTimeAgo } from "@/lib/time-ago";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Markdown } from "@/lib/markdown";
 import { CommentAttachmentList } from "@/components/issue/comment-attachment-list";
@@ -281,6 +281,7 @@ function ResolvedIndicator({
 }) {
   const { t } = useTranslation();
   const { getName } = useActorLookup();
+  const timeAgo = useTimeAgo();
   const { colorScheme } = useColorScheme();
   const mutedFg = THEME[colorScheme].mutedForeground;
   const resolverName = getName(
@@ -391,6 +392,7 @@ function CommentBody({
   );
   const { getName } = useActorLookup();
   const userId = useAuthStore((s) => s.user?.id);
+  const timeAgo = useTimeAgo();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const toggle = useToggleCommentReaction(issueId);
   const qc = useQueryClient();

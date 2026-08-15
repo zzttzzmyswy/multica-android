@@ -31,7 +31,7 @@ import { StatusIcon } from "@/components/ui/status-icon";
 import { PriorityIcon } from "@/components/ui/priority-icon";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { formatActivity } from "@/lib/format-activity";
-import { timeAgo } from "@/lib/time-ago";
+import { useTimeAgo } from "@/lib/time-ago";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
@@ -109,6 +109,7 @@ function LeadIcon({
 export function ActivityRow({ entry }: { entry: TimelineEntry }) {
   const { getName } = useActorLookup();
   const { colorScheme } = useColorScheme();
+  const timeAgo = useTimeAgo();
   const mutedFg = THEME[colorScheme].mutedForeground;
   const resolveName = (
     type: string | null | undefined,

@@ -47,7 +47,7 @@ export default function Login() {
       router.push({ pathname: "/verify", params: { email: trimmed } });
     } catch (err) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError(mapAuthError(err, t("login.sendCodeError")));
+      setError(mapAuthError(err, t("login.sendCodeError"), t));
     } finally {
       setSubmitting(false);
     }

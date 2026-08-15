@@ -40,6 +40,7 @@ import type { AgentAvailability } from "@multica/core/agents";
 import { Text } from "@/components/ui/text";
 import { formatElapsedSecs } from "@/lib/format-elapsed";
 import { useColorScheme } from "@/lib/use-color-scheme";
+import { useTranslation } from "@/lib/i18n/react";
 import { THEME } from "@/lib/theme";
 
 interface Props {
@@ -57,42 +58,43 @@ interface Stage {
   static?: boolean;
 }
 
-const TOOL_LABELS: Record<string, string> = {
-  bash: "Running command",
-  exec: "Running command",
-  read: "Reading files",
-  glob: "Reading files",
-  grep: "Searching code",
-  write: "Making edits",
-  edit: "Making edits",
-  multi_edit: "Making edits",
-  multiedit: "Making edits",
-  web_search: "Searching web",
-  websearch: "Searching web",
+const TOOL_KEYS: Record<string, string> = {
+  bash: "tool.command",
+  exec: "tool.command",
+  read: "tool.reading",
+  glob: "tool.reading",
+  grep: "tool.searchingCode",
+  write: "tool.makingEdits",
+  edit: "tool.makingEdits",
+  multi_edit: "tool.makingEdits",
+  multiedit: "tool.makingEdits",
+  web_search: "tool.searchingWeb",
+  websearch: "tool.searchingWeb",
 };
 
 function pickStage(
   status: string | undefined,
   taskMessages: readonly TaskMessagePayload[],
   availability: AgentAvailability | undefined,
+  t: (id: string, params?: Record<string, string | number>) => string,
 ): Stage {
   // Mirrors web: deferred is an older turn waiting for retry backoff, not
   // active model work, so it must not fall through to "Thinking".
-  if (status === "deferred") return { label: "Retrying" };
+  if (status === "deferred") return { label: t("status.retrying") };
   if (
     (status === "queued" || status === "dispatched") &&
     availability === "offline"
   ) {
-    return { label: "Offline", static: true };
+    return { label: t("status.offline"), static: true };
   }
   if (
     (status === "queued" || status === "dispatched") &&
     availability === "unstable"
   ) {
-    return { label: "Reconnecting" };
+    return { label: t("status.reconnecting") };
   }
-  if (status === "queued") return { label: "Queued" };
-  if (status === "dispatched") return { label: "Starting up" };
+  if (status === "queued") return { label: t("status.queued") };
+  if (status === "dispatched") return { label: t("status.startingUp") };
 
   let latest: TaskMessagePayload | null = null;
   for (let i = taskMessages.length - 1; i >= 0; i--) {
@@ -102,14 +104,14 @@ function pickStage(
       break;
     }
   }
-  if (!latest) return { label: "Thinking" };
-  if (latest.type === "thinking") return { label: "Thinking" };
-  if (latest.type === "text") return { label: "Typing" };
+  if (!latest) return { label: t("status.thinking") };
+  if (latest.type === "thinking") return { label: t("status.thinking") };
+  if (latest.type === "text") return { label: t("status.typing") };
   if (latest.type === "tool_use") {
     const slug = (latest.tool ?? "").toLowerCase();
-    return { label: TOOL_LABELS[slug] ?? "Working" };
+    return { label: t(TOOL_KEYS[slug] ?? "status.working") };
   }
-  return { label: "Thinking" };
+  return { label: t("status.thinking") };
 }
 
 // Tabular figures for the 1Hz counter — proportional digits change the text
@@ -127,6 +129,7 @@ export function StatusPill({
   taskMessages = [],
   availability,
 }: Props) {
+  const { t } = useTranslation();
   const taskId = pendingTask?.task_id;
   const createdAt = pendingTask?.created_at;
 
@@ -154,7 +157,7 @@ export function StatusPill({
         ? "running"
         : pendingTask?.status;
   const elapsedSec = Math.max(0, Math.floor((Date.now() - anchorMs) / 1000));
-  const stage = pickStage(status, taskMessages, availability);
+  const stage = pickStage(status, taskMessages, availability, t);
 
   return (
     <View

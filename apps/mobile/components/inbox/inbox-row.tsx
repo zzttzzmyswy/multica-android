@@ -17,7 +17,7 @@ import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { InboxDetailLabel } from "@/components/inbox/detail-label";
 import { getInboxDisplayTitle } from "@/lib/inbox-display";
-import { timeAgo } from "@/lib/time-ago";
+import { useTimeAgo } from "@/lib/time-ago";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -26,6 +26,7 @@ interface Props {
 }
 
 export function InboxRow({ item, onPress }: Props) {
+  const timeAgo = useTimeAgo();
   const isUnread = !item.read;
   const displayTitle = getInboxDisplayTitle(item);
   const actorType = item.actor_type ?? item.recipient_type;

@@ -217,13 +217,14 @@ function FilterButton({
   hasActiveFilters: boolean;
 }) {
   const { colorScheme } = useColorScheme();
+  const { t } = useTranslation();
   return (
     <View style={{ position: "relative" }} className="ml-2">
       <Button
         variant="outline"
         size="sm"
         onPress={onPress}
-        accessibilityLabel="Filter"
+        accessibilityLabel={t("a11y.filter")}
         className="w-9 px-0"
       >
         <Ionicons

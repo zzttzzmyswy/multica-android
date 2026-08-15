@@ -45,7 +45,7 @@ export default function Verify() {
       router.replace("/");
     } catch (err) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError(mapAuthError(err, t("verify.codeError")));
+      setError(mapAuthError(err, t("verify.codeError"), t));
       setSubmitting(false);
       otpRef.current?.clear();
       setCode("");
@@ -64,7 +64,7 @@ export default function Verify() {
       setCode("");
     } catch (err) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError(mapAuthError(err, t("verify.resendError")));
+      setError(mapAuthError(err, t("verify.resendError"), t));
     } finally {
       setResending(false);
     }

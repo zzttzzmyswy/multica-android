@@ -493,13 +493,13 @@ export function MessageComposer({
               className="flex-1 text-xs font-medium text-muted-foreground"
               numberOfLines={1}
             >
-              Replying to {replyTarget.actorName}
+              {t("chat.replyingTo", { name: replyTarget.actorName })}
             </Text>
             <Pressable
               onPress={onClearReplyTarget}
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel="Cancel reply"
+              accessibilityLabel={t("a11y.cancelReply")}
             >
               <Ionicons
                 name="close-circle"
@@ -557,21 +557,21 @@ export function MessageComposer({
             iconSize={20}
             color={mentions.length > 0 ? theme.primary : undefined}
             onPress={onAtPress}
-            accessibilityLabel="Mention someone or an issue"
+            accessibilityLabel={t("a11y.mentionSomeone")}
             className="h-8 w-8"
           />
           <IconButton
             name="image-outline"
             iconSize={20}
             onPress={onImagePress}
-            accessibilityLabel="Upload image"
+            accessibilityLabel={t("a11y.uploadImage")}
             className="h-8 w-8"
           />
           <IconButton
             name="attach-outline"
             iconSize={20}
             onPress={onFilePress}
-            accessibilityLabel="Upload file"
+            accessibilityLabel={t("a11y.uploadFile")}
             className="h-8 w-8"
           />
           <View className="flex-1" />
@@ -587,7 +587,7 @@ export function MessageComposer({
               disabled={!canSend}
               hitSlop={12}
               className="h-8 w-8 rounded-full"
-              accessibilityLabel="Send"
+              accessibilityLabel={t("a11y.send")}
               accessibilityState={{ disabled: !canSend }}
             />
           )}

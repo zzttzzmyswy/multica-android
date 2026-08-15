@@ -16,6 +16,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { View } from "react-native";
 import type { AgentAvailability } from "@multica/core/agents";
 import { Text } from "@/components/ui/text";
+import { useTranslation } from "@/lib/i18n/react";
 
 interface Props {
   /** Display name for the copy. */
@@ -29,8 +30,9 @@ interface Props {
 }
 
 export function OfflineBanner({ agentName, availability }: Props) {
+  const { t } = useTranslation();
   if (availability !== "offline" && availability !== "unstable") return null;
-  const name = agentName?.trim() || "This agent";
+  const name = agentName?.trim() || t("chat.thisAgent");
 
   if (availability === "unstable") {
     return (
@@ -40,7 +42,7 @@ export function OfflineBanner({ agentName, availability }: Props) {
           className="flex-1 text-xs text-warning"
           numberOfLines={1}
         >
-          {name} may have just disconnected — your message will queue.
+          {t("chat.offlineUnstable", { name })}
         </Text>
       </View>
     );
@@ -53,7 +55,7 @@ export function OfflineBanner({ agentName, availability }: Props) {
         className="flex-1 text-xs text-muted-foreground"
         numberOfLines={1}
       >
-        {name} is offline. Messages will wait until its runtime is back.
+        {t("chat.offlineHard", { name })}
       </Text>
     </View>
   );

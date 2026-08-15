@@ -68,6 +68,7 @@ import { ChatTimeline } from "./chat-timeline";
 // referenced inline in the message content, with same-file dedup.
 import { CommentAttachmentList } from "@/components/issue/comment-attachment-list";
 import { StatusPill } from "./status-pill";
+import { useTranslation } from "@/lib/i18n/react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -270,6 +271,7 @@ function MessageRow({
   onQuickAction?: (action: ChatQuickAction) => void | Promise<unknown>;
   quickActionsDisabled: boolean;
 }) {
+  const { t } = useTranslation();
   const isUser = message.role === "user";
   const isFailure = !!message.failure_reason;
   const isSelecting = useChatSelectStore(
@@ -280,7 +282,7 @@ function MessageRow({
   if (isFailure) {
     return (
       <FailureBubble
-        reasonLabel={failureReasonLabel(message.failure_reason)}
+        reasonLabel={failureReasonLabel(message.failure_reason, t)}
         rawError={message.content}
         elapsedMs={message.elapsed_ms ?? null}
         isSelecting={isSelecting}
@@ -390,7 +392,7 @@ function AssistantRow({
       ) : null}
       {isNoResponse ? (
         <Text className="text-sm italic text-muted-foreground">
-          The agent finished this turn without a text reply.
+          {t("chat.finishedWithoutReply")}
         </Text>
       ) : (
         <Markdown
@@ -508,12 +510,14 @@ function ElapsedCaption({
   variant: "replied" | "failed" | "finished";
   elapsedMs: number;
 }) {
+  const { t } = useTranslation();
+  const elapsed = formatElapsedMs(elapsedMs);
   const label =
     variant === "replied"
-      ? `Replied in ${formatElapsedMs(elapsedMs)}`
+      ? t("chat.repliedIn", { elapsed })
       : variant === "finished"
-        ? `Finished in ${formatElapsedMs(elapsedMs)}`
-        : `Failed after ${formatElapsedMs(elapsedMs)}`;
+        ? t("chat.finishedIn", { elapsed })
+        : t("chat.failedAfter", { elapsed });
   return (
     <Text className="text-xs text-muted-foreground/80 mt-1">{label}</Text>
   );
