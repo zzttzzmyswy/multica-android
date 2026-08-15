@@ -89,7 +89,16 @@ export function CodeBlock({ code, lang, selectable = true }: Props) {
   return (
     <View className={CODE_BLOCK_CONTAINER_CLASS}>
       <CodeBlockHeader code={code} lang={lang} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <ScrollView
+        horizontal
+        // Without nestedScrollEnabled the enclosing vertical list intercepts
+        // every horizontal drag on Android (RN's ReactScrollView only yields
+        // to nested horizontal scroll views that opt into nested scrolling),
+        // so wide code lines could never be swiped — same defect class as the
+        // MYS-277 wide-table scroll bug.
+        nestedScrollEnabled
+        showsHorizontalScrollIndicator={false}
+      >
         {lines ? (
           <HighlightedCode lines={lines} selectable={selectable} />
         ) : (

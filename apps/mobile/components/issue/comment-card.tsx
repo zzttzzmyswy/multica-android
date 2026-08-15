@@ -39,6 +39,7 @@ import { useActorLookup } from "@/data/use-actor-name";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Markdown } from "@/lib/markdown";
+import { LongPressView } from "@/components/ui/long-press-view";
 import { CommentAttachmentList } from "@/components/issue/comment-attachment-list";
 import {
   discardFailedComment,
@@ -533,9 +534,9 @@ function CommentBody({
   if (isSelecting) return body;
 
   return (
-    <Pressable onLongPress={longPress.onLongPress} delayLongPress={500}>
+    <LongPressView onLongPress={longPress.onLongPress} delayLongPress={500}>
       {body}
-    </Pressable>
+    </LongPressView>
   );
 }
 
