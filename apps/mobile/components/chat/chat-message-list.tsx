@@ -40,9 +40,15 @@
  * `startRenderingFromBottom` (initial paint at bottom, no setTimeout
  * hacks). Cell recycling also keeps scroll-up smooth.
  */
-import { useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, View } from "react-native";
-import { FlashList } from "@shopify/flash-list";
+import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from "react-native";
+import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useQuery } from "@tanstack/react-query";
 import type {
@@ -69,6 +75,8 @@ import { ChatTimeline } from "./chat-timeline";
 import { CommentAttachmentList } from "@/components/issue/comment-attachment-list";
 import { StatusPill } from "./status-pill";
 import { useTranslation } from "@/lib/i18n/react";
+import { isNearBottom } from "@/lib/scroll-bottom";
+import { ScrollToBottomFAB } from "@/components/ui/scroll-to-bottom-fab";
 import {
   Collapsible,
   CollapsibleContent,
@@ -138,6 +146,44 @@ export function ChatMessageList({
     [messages],
   );
 
+  // ── "Jump to bottom" floating button ─────────────────────────────────
+  // Shows when the user scrolls up away from the latest message and hides
+  // as soon as they return to the bottom. The chat list already auto-scrolls
+  // to the bottom on new arrivals (maintainVisibleContentPosition), so this
+  // is a manual affordance for a user mid-way through reading history who
+  // wants to leap back to the newest content.
+  const { t } = useTranslation();
+  const listRef = useRef<FlashListRef<ChatMessage>>(null);
+  // Pixel band at the bottom edge that counts as "caught up" — matches the
+  // issue timeline's AT_BOTTOM_SLACK so both screens feel consistent.
+  const AT_BOTTOM_SLACK_PX = 80;
+  const [showJumpFab, setShowJumpFab] = useState(false);
+  // `onScroll` fires every frame; guard setState so we only re-render when
+  // the flag actually flips, keeping the high-frequency scroll handler cheap.
+  const showJumpFabRef = useRef(false);
+
+  const handleChatScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+      const wantFab = !isNearBottom({
+        contentOffsetY: contentOffset.y,
+        contentHeight: contentSize.height,
+        viewportHeight: layoutMeasurement.height,
+        slackPx: AT_BOTTOM_SLACK_PX,
+      });
+      // `onScroll` fires every frame; only re-render when the FAB's
+      // visibility actually flips.
+      if (wantFab === showJumpFabRef.current) return;
+      showJumpFabRef.current = wantFab;
+      setShowJumpFab(wantFab);
+    },
+    [],
+  );
+
+  const onJumpToBottom = useCallback(() => {
+    listRef.current?.scrollToEnd({ animated: true });
+  }, []);
+
   if (loading && messages.length === 0) {
     return (
       <View className="flex-1 items-center justify-center">
@@ -183,6 +229,7 @@ export function ChatMessageList({
     // also dismiss, matching iOS Notes / iMessage behaviour. Scroll
     // gestures are unaffected (Pressable only intercepts non-drag taps).
     <ImageSequenceProvider blocks={imageBlocks}>
+    <View className="flex-1">
     <Pressable
       onPress={
         selectingId
@@ -198,6 +245,7 @@ export function ChatMessageList({
         scroll position). Cheap because sessions are switched, not
         re-rendered every keystroke. */}
     <FlashList
+      ref={listRef}
       key={messages[0]?.id ?? "empty"}
       data={messages}
       keyExtractor={(m) => m.id}
@@ -209,6 +257,7 @@ export function ChatMessageList({
         />
       )}
       ItemSeparatorComponent={MessageSeparator}
+      onScroll={handleChatScroll}
       ListFooterComponent={
         showLiveSection ? (
           <View style={{ paddingTop: 12 }} className="gap-2">
@@ -254,6 +303,12 @@ export function ChatMessageList({
       keyboardShouldPersistTaps="handled"
     />
     </Pressable>
+    <ScrollToBottomFAB
+      visible={showJumpFab}
+      onPress={onJumpToBottom}
+      accessibilityLabel={t("a11y.jumpToBottom")}
+    />
+    </View>
     </ImageSequenceProvider>
   );
 }

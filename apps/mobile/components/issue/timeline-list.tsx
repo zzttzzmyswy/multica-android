@@ -107,6 +107,8 @@ import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { useCommentSelectStore } from "@/data/comment-select-store";
 import { useTranslation } from "@/lib/i18n/react";
+import { isNearBottom } from "@/lib/scroll-bottom";
+import { ScrollToBottomFAB } from "@/components/ui/scroll-to-bottom-fab";
 
 interface Props {
   issue: Issue;
@@ -246,6 +248,18 @@ export function TimelineList({
   // clears the counter; reaching the bottom by hand also clears it.
   const [newCount, setNewCount] = useState(0);
   const isAtBottomRef = useRef(true);
+
+  // ── "Jump to bottom" floating button ─────────────────────────────────
+  // Shown while the user is scrolled up away from the latest comment and
+  // hidden once they return to the bottom. Distinct from the "↓ N new"
+  // chip: that chip only appears when WS appends arrive while scrolled up,
+  // whereas the FAB reflects the bare at-bottom state regardless of new
+  // content. `handleScroll` already tracks at-bottom; we fold the FAB flip
+  // into it so a habitually-churned scroll handler doesn't re-render per
+  // frame (state update only fires on an actual visibility change).
+  const [showJumpFab, setShowJumpFab] = useState(false);
+  const showJumpFabRef = useRef(false);
+
   const lastDataLenRef = useRef(0);
   useEffect(() => {
     const grew = data.length > lastDataLenRef.current;
@@ -262,15 +276,25 @@ export function TimelineList({
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-      const distFromBottom =
-        contentSize.height - (contentOffset.y + layoutMeasurement.height);
+      const nowAtBottom = isNearBottom({
+        contentOffsetY: contentOffset.y,
+        contentHeight: contentSize.height,
+        viewportHeight: layoutMeasurement.height,
+        slackPx: AT_BOTTOM_SLACK_PX,
+      });
       const wasAtBottom = isAtBottomRef.current;
-      isAtBottomRef.current = distFromBottom < AT_BOTTOM_SLACK_PX;
+      isAtBottomRef.current = nowAtBottom;
       // Reaching the bottom clears the unread-new chip — same iMessage /
       // chat-app semantic: "I've caught up".
-      if (!wasAtBottom && isAtBottomRef.current && newCount > 0) {
+      if (!wasAtBottom && nowAtBottom && newCount > 0) {
         setNewCount(0);
       }
+      // FAB shows when scrolled up, hides when at bottom. `onScroll` fires
+      // every frame; only re-render when the FAB's visibility flips.
+      const wantFab = !nowAtBottom;
+      if (wantFab === showJumpFabRef.current) return;
+      showJumpFabRef.current = wantFab;
+      setShowJumpFab(wantFab);
     },
     [newCount],
   );
@@ -488,6 +512,11 @@ export function TimelineList({
       {newCount > 0 ? (
         <NewCommentChip count={newCount} onPress={onJumpToNew} />
       ) : null}
+      <ScrollToBottomFAB
+        visible={showJumpFab}
+        onPress={onJumpToNew}
+        accessibilityLabel={t("a11y.jumpToBottom")}
+      />
     </View>
     </ImageSequenceProvider>
   );
