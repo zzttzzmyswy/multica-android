@@ -28,6 +28,7 @@ import type { TriggerRef } from "@rn-primitives/dropdown-menu";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
+import { useTranslation } from "@/lib/i18n/react";
 import {
   useInboxUnreadCount,
   useChatUnreadMessageCount,
@@ -46,6 +47,7 @@ const BADGE_STYLE = {
 export default function TabsLayout() {
   const { colorScheme } = useColorScheme();
   const t = THEME[colorScheme];
+  const { t: translate } = useTranslation();
 
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const inboxUnread = useInboxUnreadCount(wsId);
@@ -77,7 +79,7 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="inbox"
           options={{
-            title: "Inbox",
+            title: translate("nav.inbox"),
             tabBarBadge: inboxBadge,
             tabBarBadgeStyle: BADGE_STYLE,
             tabBarIcon: ({ color, size, focused }) => (
@@ -92,7 +94,7 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="my-issues"
           options={{
-            title: "My Issues",
+            title: translate("nav.myIssues"),
             tabBarIcon: ({ color, size, focused }) => (
               <Ionicons
                 name={focused ? "checkbox" : "checkbox-outline"}
@@ -105,7 +107,7 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="chat"
           options={{
-            title: "Chat",
+            title: translate("nav.chat"),
             tabBarBadge: chatBadge,
             tabBarBadgeStyle: BADGE_STYLE,
             tabBarIcon: ({ color, size, focused }) => (
@@ -120,7 +122,7 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="more"
           options={{
-            title: "More",
+            title: translate("nav.more"),
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="ellipsis-horizontal" color={color} size={size} />
             ),

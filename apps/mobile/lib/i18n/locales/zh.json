@@ -27,5 +27,10 @@
   "verify.sending": "发送中…",
   "verify.differentEmail": "使用其他邮箱",
   "verify.codeError": "验证码验证失败，请重试。",
-  "verify.resendError": "无法重新发送验证码，请重试。"
+  "verify.resendError": "无法重新发送验证码，请重试。",
+
+  "nav.inbox": "收件箱",
+  "nav.myIssues": "我的问题",
+  "nav.chat": "聊天",
+  "nav.more": "更多"
 }

@@ -27,5 +27,10 @@
   "verify.sending": "Sending...",
   "verify.differentEmail": "Use a different email",
   "verify.codeError": "Couldn't verify the code. Try again.",
-  "verify.resendError": "Couldn't resend the code. Try again."
+  "verify.resendError": "Couldn't resend the code. Try again.",
+
+  "nav.inbox": "Inbox",
+  "nav.myIssues": "My Issues",
+  "nav.chat": "Chat",
+  "nav.more": "More"
 }

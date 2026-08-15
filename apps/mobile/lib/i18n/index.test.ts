@@ -55,6 +55,19 @@ describe("i18n translate", () => {
     );
   });
 
+  it("localizes bottom-nav tab labels", () => {
+    expect(mod.translate("nav.inbox")).toBe("Inbox");
+    expect(mod.translate("nav.myIssues")).toBe("My Issues");
+    expect(mod.translate("nav.chat")).toBe("Chat");
+    expect(mod.translate("nav.more")).toBe("More");
+
+    mod.setLocale("zh");
+    expect(mod.translate("nav.inbox")).toBe("收件箱");
+    expect(mod.translate("nav.myIssues")).toBe("我的问题");
+    expect(mod.translate("nav.chat")).toBe("聊天");
+    expect(mod.translate("nav.more")).toBe("更多");
+  });
+
   it("notifies locale-change subscribers", () => {
     const fn = vi.fn();
     const unsub = mod.subscribeLocale(fn);
