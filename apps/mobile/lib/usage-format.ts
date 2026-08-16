@@ -13,8 +13,8 @@
  *  - aggregateDailyTokens sorts dates ascending (chart x-axis oldest→newest)
  *  - computeDailyTotals sums task_count across rows (an accepted KPI
  *    approximation — a task spanning two days/models counts twice, same as web)
- *  - bucketUnknownAgentRows keeps deleted/restricted spend visible instead of
- *    dropping it so per-agent rows reconcile with the KPI totals (MUL-3776)
+ *  - deleted/restricted spend folding now lives in lib/usage-time.ts
+ *    (bucketAgentDashboardRows), which carries the merged token+run-time rows
  */
 import type { DashboardUsageByAgent, DashboardUsageDaily } from "@multica/core/types";
 
@@ -151,30 +151,4 @@ export function aggregateByAgent(rows: DashboardUsageByAgent[]): AgentUsageRow[]
     map.set(r.agent_id, entry);
   }
   return Array.from(map.values()).sort((a, b) => b.tokens - a.tokens);
-}
-
-/**
- * Fold usage rows whose agent no longer exists into one "Deleted agents" row
- * instead of dropping them (parity: MUL-3776). Rows from the server's
- * restricted bucket pass through named. `knownAgentIds` null (agent list still
- * loading) → pass through untouched rather than collapsing into one bucket.
- */
-export function bucketUnknownAgentRows(
-  rows: AgentUsageRow[],
-  knownAgentIds: ReadonlySet<string> | null,
-): AgentUsageRow[] {
-  if (!knownAgentIds) return rows;
-  const known: AgentUsageRow[] = [];
-  const bucket: AgentUsageRow = { agentId: DELETED_AGENTS_ROW_ID, tokens: 0, taskCount: 0 };
-  let hasDeleted = false;
-  for (const r of rows) {
-    if (knownAgentIds.has(r.agentId) || r.agentId === RESTRICTED_AGENTS_ROW_ID) {
-      known.push(r);
-      continue;
-    }
-    hasDeleted = true;
-    bucket.tokens += r.tokens;
-    bucket.taskCount += r.taskCount;
-  }
-  return hasDeleted ? [...known, bucket] : known;
 }

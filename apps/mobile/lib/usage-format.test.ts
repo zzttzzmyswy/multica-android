@@ -3,7 +3,6 @@ import {
   activeAgentCount,
   aggregateByAgent,
   aggregateDailyTokens,
-  bucketUnknownAgentRows,
   computeDailyTotals,
   DELETED_AGENTS_ROW_ID,
   formatTokens,
@@ -111,48 +110,7 @@ describe("aggregateByAgent", () => {
   });
 });
 
-describe("bucketUnknownAgentRows", () => {
-  const known = new Set<string>(["a", "b"]);
-
-  it("passes rows through untouched while the agent list is loading", () => {
-    const rows = [{ agentId: "x", tokens: 1, taskCount: 0 }];
-    expect(bucketUnknownAgentRows(rows, null)).toEqual(rows);
-  });
-
-  it("folds unknown agents into the deleted bucket, keeping spend visible", () => {
-    const rows = [
-      { agentId: "a", tokens: 100, taskCount: 1 },
-      { agentId: "nope", tokens: 50, taskCount: 2 },
-      { agentId: "b", tokens: 30, taskCount: 1 },
-      { agentId: "also-nope", tokens: 10, taskCount: 0 },
-    ];
-    const out = bucketUnknownAgentRows(rows, known);
-    expect(out).toHaveLength(3);
-    const bucket = out.find((r) => r.agentId === DELETED_AGENTS_ROW_ID)!;
-    expect(bucket.tokens).toBe(60);
-    expect(bucket.taskCount).toBe(2);
-  });
-
-  it("keeps the server restricted bucket as itself, not folded into deleted", () => {
-    const rows = [
-      { agentId: RESTRICTED_AGENTS_ROW_ID, tokens: 7, taskCount: 1 },
-      { agentId: "a", tokens: 3, taskCount: 0 },
-    ];
-    const out = bucketUnknownAgentRows(rows, known);
-    expect(out.some((r) => r.agentId === RESTRICTED_AGENTS_ROW_ID)).toBe(true);
-    expect(out.some((r) => r.agentId === DELETED_AGENTS_ROW_ID)).toBe(false);
-  });
-
-  it("adds no bucket when every row is known", () => {
-    const rows = [
-      { agentId: "a", tokens: 1, taskCount: 0 },
-      { agentId: "b", tokens: 2, taskCount: 1 },
-    ];
-    const out = bucketUnknownAgentRows(rows, known);
-    expect(out.some((r) => r.agentId === DELETED_AGENTS_ROW_ID)).toBe(false);
-    expect(out).toHaveLength(2);
-  });
-
+describe("isSyntheticAgentRow", () => {
   it("recognises both synthetic sentinels", () => {
     expect(isSyntheticAgentRow(DELETED_AGENTS_ROW_ID)).toBe(true);
     expect(isSyntheticAgentRow(RESTRICTED_AGENTS_ROW_ID)).toBe(true);

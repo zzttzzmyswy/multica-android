@@ -24,8 +24,10 @@ import type {
   Comment,
   CreatePersonalAccessTokenResponse,
   CronPreviewResponse,
+  DashboardAgentRunTime,
   DashboardFailureByAgent,
   DashboardFailureDaily,
+  DashboardRunTimeDaily,
   DashboardUsageByAgent,
   DashboardUsageDaily,
   InboxItem,
@@ -1211,6 +1213,44 @@ export const DashboardFailureByAgentListSchema = z
   .default([]);
 
 export const EMPTY_DASHBOARD_FAILURE_BY_AGENT: DashboardFailureByAgent[] = [];
+
+// Dashboard run-time rollups (iteration-45 Time/Tasks dimension). Mirrors
+// core's DashboardAgentRunTimeSchema / DashboardRunTimeDailySchema
+// field-for-field (packages/core/api/schemas.ts:1237) — cancelled_count
+// defaults to 0 so a backend that predates cancellation still renders (those
+// rows carry no cancelled segment, which is exactly what that backend
+// measured).
+export const DashboardAgentRunTimeSchema: z.ZodType<DashboardAgentRunTime> = z
+  .object({
+    agent_id: z.string().default(""),
+    total_seconds: z.number().default(0),
+    task_count: z.number().default(0),
+    failed_count: z.number().default(0),
+    cancelled_count: z.number().default(0),
+  })
+  .loose();
+
+export const DashboardAgentRunTimeListSchema = z
+  .array(DashboardAgentRunTimeSchema)
+  .default([]);
+
+export const EMPTY_DASHBOARD_AGENT_RUN_TIME: DashboardAgentRunTime[] = [];
+
+export const DashboardRunTimeDailySchema: z.ZodType<DashboardRunTimeDaily> = z
+  .object({
+    date: z.string().default(""),
+    total_seconds: z.number().default(0),
+    task_count: z.number().default(0),
+    failed_count: z.number().default(0),
+    cancelled_count: z.number().default(0),
+  })
+  .loose();
+
+export const DashboardRunTimeDailyListSchema = z
+  .array(DashboardRunTimeDailySchema)
+  .default([]);
+
+export const EMPTY_DASHBOARD_RUN_TIME_DAILY: DashboardRunTimeDaily[] = [];
 
 // Personal access tokens (account-level, mirrors packages/core/types/api.ts
 // PersonalAccessToken). Lenient: nullable dates default to null so a drifted

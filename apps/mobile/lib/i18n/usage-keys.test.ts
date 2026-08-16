@@ -81,6 +81,20 @@ describe("usage i18n", () => {
     "usage.errors.class.runtime": "运行时",
     "usage.errors.class.agent": "智能体",
     "usage.errors.class.other": "其他",
+    "usage.totalRunTime": "运行时长",
+    "usage.totalRunTimeHint": "共 {{tasks}} 个 task",
+    "usage.totalTasksHint": "失败 {{failed}} 个",
+    "usage.metricTokens": "Token",
+    "usage.metricTime": "运行时长",
+    "usage.metricTasks": "task 数",
+    "usage.metricCostNote": "费用维度需依赖模型定价表，暂未提供",
+    "usage.dayTrendTimeTitle": "每日运行时长",
+    "usage.dayTrendTasksTitle": "每日 task 数",
+    "usage.timeLabel": "时长",
+    "usage.completedLabel": "完成",
+    "usage.failedLabel": "失败",
+    "usage.cancelledLabel": "取消",
+    "usage.lessThanMinute": "<1分钟",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {

@@ -68,8 +68,10 @@ import type {
   Reaction,
   ReorderPinsRequest,
   RuntimeDevice,
+  DashboardAgentRunTime,
   DashboardFailureByAgent,
   DashboardFailureDaily,
+  DashboardRunTimeDaily,
   DashboardUsageDaily,
   DashboardUsageByAgent,
   SearchIssuesResponse,
@@ -151,6 +153,10 @@ import {
   CronPreviewResponseSchema,
   DashboardFailureDailyListSchema,
   DashboardFailureByAgentListSchema,
+  DashboardAgentRunTimeListSchema,
+  DashboardRunTimeDailyListSchema,
+  EMPTY_DASHBOARD_AGENT_RUN_TIME,
+  EMPTY_DASHBOARD_RUN_TIME_DAILY,
   EMPTY_DASHBOARD_FAILURE_DAILY,
   EMPTY_DASHBOARD_FAILURE_BY_AGENT,
   DashboardUsageDailyListSchema,
@@ -980,6 +986,40 @@ class ApiClient {
       DashboardFailureByAgentListSchema,
       EMPTY_DASHBOARD_FAILURE_BY_AGENT,
       { endpoint: "getDashboardFailuresByAgent" },
+    );
+  }
+
+  // Dashboard run-time rollups (iteration-45 Time/Tasks dimension) — mirror
+  // packages/core/api/client.ts getDashboardAgentRunTime / getDashboardRunTimeDaily.
+  // cancelled_count defaults to 0 so an older backend's rows carry no
+  // cancelled segment — exactly what that backend measured.
+  async getDashboardAgentRunTime(
+    days: number,
+    opts?: { signal?: AbortSignal },
+  ): Promise<DashboardAgentRunTime[]> {
+    const raw = await this.fetch<unknown>(`/api/dashboard/agent-runtime?days=${days}`, {
+      signal: opts?.signal,
+    });
+    return parseWithFallback(
+      raw,
+      DashboardAgentRunTimeListSchema,
+      EMPTY_DASHBOARD_AGENT_RUN_TIME,
+      { endpoint: "getDashboardAgentRunTime" },
+    );
+  }
+
+  async getDashboardRunTimeDaily(
+    days: number,
+    opts?: { signal?: AbortSignal },
+  ): Promise<DashboardRunTimeDaily[]> {
+    const raw = await this.fetch<unknown>(`/api/dashboard/runtime/daily?days=${days}`, {
+      signal: opts?.signal,
+    });
+    return parseWithFallback(
+      raw,
+      DashboardRunTimeDailyListSchema,
+      EMPTY_DASHBOARD_RUN_TIME_DAILY,
+      { endpoint: "getDashboardRunTimeDaily" },
     );
   }
 

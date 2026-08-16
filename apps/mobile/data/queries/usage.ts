@@ -41,3 +41,22 @@ export const dashboardFailuresByAgentOptions = (wsId: string | null, days: numbe
     enabled: !!wsId,
     staleTime: 60_000,
   });
+
+// Dashboard run-time rollups for the Time/Tasks dimension (iteration 45).
+// Same contract as the usage/failures rollups above: days part of the key
+// so the 7/30 toggle refetches and the previous range stays cached.
+export const dashboardAgentRunTimeOptions = (wsId: string | null, days: number) =>
+  queryOptions({
+    queryKey: ["dashboard", "agent-runtime", wsId, days] as const,
+    queryFn: ({ signal }) => api.getDashboardAgentRunTime(days, { signal }),
+    enabled: !!wsId,
+    staleTime: 60_000,
+  });
+
+export const dashboardRunTimeDailyOptions = (wsId: string | null, days: number) =>
+  queryOptions({
+    queryKey: ["dashboard", "runtime-daily", wsId, days] as const,
+    queryFn: ({ signal }) => api.getDashboardRunTimeDaily(days, { signal }),
+    enabled: !!wsId,
+    staleTime: 60_000,
+  });

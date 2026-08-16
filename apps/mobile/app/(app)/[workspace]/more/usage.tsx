@@ -37,8 +37,10 @@ import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import {
+  dashboardAgentRunTimeOptions,
   dashboardFailuresByAgentOptions,
   dashboardFailuresDailyOptions,
+  dashboardRunTimeDailyOptions,
   dashboardUsageByAgentOptions,
   dashboardUsageDailyOptions,
 } from "@/data/queries/usage";
@@ -48,15 +50,23 @@ import {
   activeAgentCount,
   aggregateByAgent,
   aggregateDailyTokens,
-  bucketUnknownAgentRows,
   computeDailyTotals,
   DELETED_AGENTS_ROW_ID,
   formatTokens,
   isSyntheticAgentRow,
   RESTRICTED_AGENTS_ROW_ID,
-  type AgentUsageRow,
   type UsageDailyAggregate,
 } from "@/lib/usage-format";
+import {
+  aggregateDailyTasks,
+  aggregateDailyTime,
+  bucketAgentDashboardRows,
+  formatDuration,
+  mergeAgentDashboardRows,
+  type AgentDashboardRow,
+  type DailyTasksRow,
+  type DailyTimeRow,
+} from "@/lib/usage-time";
 import {
   aggregateAgentFailures,
   aggregateDailyErrors,
@@ -85,6 +95,7 @@ import { cn } from "@/lib/utils";
 
 type Range = 7 | 30;
 type ViewMode = "trend" | "leaderboard" | "errors";
+type UsageMetric = "tokens" | "time" | "tasks";
 
 const RANGES: Range[] = [7, 30];
 
@@ -102,9 +113,24 @@ export default function UsagePage() {
 
   const [range, setRange] = useState<Range>(7);
   const [mode, setMode] = useState<ViewMode>("trend");
+  const [metric, setMetric] = useState<UsageMetric>("tokens");
 
   const daily = useQuery(dashboardUsageDailyOptions(wsId, range));
   const byAgent = useQuery(dashboardUsageByAgentOptions(wsId, range));
+  // Run-time / task-count rollups power the Time/Tasks metric toggle, the
+  // Run time / Tasks KPI tiles and the leaderboard's run-time column
+  // (iteration 45). Fetched up front like the token rollups — smaller than
+  // the failure payloads, and the KPI row always shows them.
+  const runTime = useQuery({
+    ...dashboardAgentRunTimeOptions(wsId, range),
+    // These power the KPI row and the Time/Tasks trend; the Errors tab
+    // shows neither, so skip the per-second refetch while it is open.
+    enabled: !!wsId && mode !== "errors",
+  });
+  const runTimeDaily = useQuery({
+    ...dashboardRunTimeDailyOptions(wsId, range),
+    enabled: !!wsId && mode !== "errors",
+  });
   // include_archived so a retired agent keeps its name on the leaderboard
   // instead of collapsing into the deleted bucket (web parity).
   const agents = useQuery({
@@ -129,11 +155,15 @@ export default function UsagePage() {
   const isLoading =
     daily.isLoading ||
     byAgent.isLoading ||
+    runTime.isLoading ||
+    runTimeDaily.isLoading ||
     agents.isLoading ||
     (mode === "errors" && errorsLoading);
   const error =
     daily.error ??
     byAgent.error ??
+    runTime.error ??
+    runTimeDaily.error ??
     agents.error ??
     (mode === "errors" ? errorsError : null);
 
@@ -146,10 +176,40 @@ export default function UsagePage() {
     [daily.data],
   );
 
+  const dailyTime = useMemo(
+    () => aggregateDailyTime(runTimeDaily.data ?? []),
+    [runTimeDaily.data],
+  );
+  const dailyTasks = useMemo(
+    () => aggregateDailyTasks(runTimeDaily.data ?? []),
+    [runTimeDaily.data],
+  );
+  // Whole-window run-time / task totals for the KPI tiles, summed from the
+  // per-agent run-time rollup (web parity: that rollup is the source of the
+  // dashboard's Run time / Tasks tiles).
+  const runTimeTotals = useMemo(() => {
+    let totalSeconds = 0;
+    let taskCount = 0;
+    let failedCount = 0;
+    for (const r of runTime.data ?? []) {
+      totalSeconds += r.total_seconds;
+      taskCount += r.task_count;
+      failedCount += r.failed_count;
+    }
+    return { totalSeconds, taskCount, failedCount };
+  }, [runTime.data]);
+
+  // Leaderboard rows: token totals merged with the run-time rollup so
+  // taskCount is the accurate distinct count and run time rides along.
+  // Unknown agents fold into the deleted bucket (spend kept, time/tasks
+  // dashed out — deleted agents never contributed to the run-time rollup).
   const agentRows = useMemo(() => {
     const known = agents.data ? new Set(agents.data.map((a) => a.id)) : null;
-    return bucketUnknownAgentRows(aggregateByAgent(byAgent.data ?? []), known);
-  }, [byAgent.data, agents.data]);
+    return bucketAgentDashboardRows(
+      mergeAgentDashboardRows(aggregateByAgent(byAgent.data ?? []), runTime.data ?? []),
+      known,
+    );
+  }, [byAgent.data, runTime.data, agents.data]);
 
   const agentName = useMemo(() => {
     const byId = new Map((agents.data ?? []).map((a) => [a.id, a.name]));
@@ -190,6 +250,18 @@ export default function UsagePage() {
     () => dailyRows.reduce((m, d) => Math.max(m, d.total), 0),
     [dailyRows],
   );
+  const maxTime = useMemo(
+    () => dailyTime.reduce((m, d) => Math.max(m, d.totalSeconds), 0),
+    [dailyTime],
+  );
+  const maxTasks = useMemo(
+    () =>
+      dailyTasks.reduce(
+        (m, d) => Math.max(m, d.completed + d.failed + d.cancelled),
+        0,
+      ),
+    [dailyTasks],
+  );
   const maxAgent = useMemo(
     () => agentRows.reduce((m, r) => Math.max(m, r.tokens), 0),
     [agentRows],
@@ -221,6 +293,8 @@ export default function UsagePage() {
               onPress={() => {
                 void daily.refetch();
                 void byAgent.refetch();
+                void runTime.refetch();
+                void runTimeDaily.refetch();
                 if (mode === "errors") {
                   void failuresDaily.refetch();
                   void failuresByAgent.refetch();
@@ -246,10 +320,17 @@ export default function UsagePage() {
             className="flex-1"
             refreshControl={
               <RefreshControl
-                refreshing={daily.isRefetching || byAgent.isRefetching}
+                refreshing={
+                  daily.isRefetching ||
+                  byAgent.isRefetching ||
+                  runTime.isRefetching ||
+                  runTimeDaily.isRefetching
+                }
                 onRefresh={() => {
                   void daily.refetch();
                   void byAgent.refetch();
+                  void runTime.refetch();
+                  void runTimeDaily.refetch();
                   if (mode === "errors") {
                     void failuresDaily.refetch();
                     void failuresByAgent.refetch();
@@ -286,7 +367,9 @@ export default function UsagePage() {
               </View>
             </View>
 
-            {/* KPI tiles — usage metrics; the Errors tab brings its own */}
+            {/* KPI tiles — usage metrics; the Errors tab brings its own.
+                Tasks / Run time source from the run-time rollup (accurate
+                distinct counts), web parity. */}
             {mode !== "errors" ? (
               <View className="flex-row gap-3 px-4 py-3">
                 <KpiCard
@@ -295,9 +378,19 @@ export default function UsagePage() {
                   value={formatTokens(totals.total)}
                 />
                 <KpiCard
+                  icon="time-outline"
+                  label={t("usage.totalRunTime")}
+                  value={formatDuration(
+                    runTimeTotals.totalSeconds,
+                    t("usage.lessThanMinute"),
+                  )}
+                  hint={t("usage.totalRunTimeHint", { tasks: runTimeTotals.taskCount })}
+                />
+                <KpiCard
                   icon="checkmark-circle-outline"
                   label={t("usage.totalTasks")}
-                  value={String(totals.taskCount)}
+                  value={String(runTimeTotals.taskCount)}
+                  hint={t("usage.totalTasksHint", { failed: runTimeTotals.failedCount })}
                 />
                 <KpiCard
                   icon="people-outline"
@@ -324,8 +417,14 @@ export default function UsagePage() {
 
             {mode === "trend" ? (
               <TrendSection
-                rows={dailyRows}
-                max={maxDaily}
+                metric={metric}
+                onMetricChange={setMetric}
+                dailyTokens={dailyRows}
+                dailyTime={dailyTime}
+                dailyTasks={dailyTasks}
+                maxTokens={maxDaily}
+                maxTime={maxTime}
+                maxTasks={maxTasks}
                 colorScheme={colorScheme}
               />
             ) : mode === "leaderboard" ? (
@@ -393,11 +492,21 @@ function KpiCard({
     <View className="flex-1 rounded-xl border border-border bg-card px-3 py-2.5">
       <View className="flex-row items-center gap-1.5">
         <Ionicons name={icon} size={13} color={theme.mutedForeground} />
-        <Text className="text-[11px] text-muted-foreground" numberOfLines={1}>
+        <Text
+          className="text-[11px] text-muted-foreground"
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.8}
+        >
           {label}
         </Text>
       </View>
-      <Text className="mt-1 text-lg font-semibold text-foreground" numberOfLines={1}>
+      <Text
+        className="mt-1 text-lg font-semibold text-foreground"
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
+      >
         {value}
       </Text>
       {hint ? (
@@ -409,83 +518,320 @@ function KpiCard({
   );
 }
 
+const METRIC_ORDER: UsageMetric[] = ["tokens", "time", "tasks"];
+
+const METRIC_LABEL: Record<UsageMetric, string> = {
+  tokens: "usage.metricTokens",
+  time: "usage.metricTime",
+  tasks: "usage.metricTasks",
+};
+
+/**
+ * Spend / run time / tasks over time: one x-axis, three metrics behind a
+ * toggle so the reader can mentally overlay them (web UsageTrendCard parity;
+ * cost is omitted — it needs a client-side model pricing table). Pure RN
+ * Views, no chart dependency.
+ */
 function TrendSection({
-  rows,
-  max,
+  metric,
+  onMetricChange,
+  dailyTokens,
+  dailyTime,
+  dailyTasks,
+  maxTokens,
+  maxTime,
+  maxTasks,
   colorScheme,
 }: {
-  rows: UsageDailyAggregate[];
-  max: number;
+  metric: UsageMetric;
+  onMetricChange: (m: UsageMetric) => void;
+  dailyTokens: UsageDailyAggregate[];
+  dailyTime: DailyTimeRow[];
+  dailyTasks: DailyTasksRow[];
+  maxTokens: number;
+  maxTime: number;
+  maxTasks: number;
   colorScheme: "light" | "dark";
 }) {
   const { t } = useTranslation();
-  const muted = THEME[colorScheme].mutedForeground;
-  const brand = THEME[colorScheme].brand;
+  const theme = THEME[colorScheme];
+  const muted = theme.mutedForeground;
+  const brand = theme.brand;
 
-  const labelEvery = rows.length > 8 ? 2 : 1;
+  const title =
+    metric === "tokens"
+      ? t("usage.dayTrendTitle")
+      : metric === "time"
+        ? t("usage.dayTrendTimeTitle")
+        : t("usage.dayTrendTasksTitle");
 
   return (
     <View className="mt-3 px-4 gap-3">
       <View className="rounded-xl border border-border bg-card p-3">
-        <Text className="text-xs font-medium text-foreground mb-3">
-          {t("usage.dayTrendTitle")}
-        </Text>
-        {rows.length === 0 ? (
-          <Text className="text-xs text-muted-foreground">{t("usage.noData")}</Text>
-        ) : (
-          <View className="flex-row items-end gap-1.5" style={{ height: CHART_HEIGHT + 22 }}>
-            {rows.map((d) => {
-              const h = max > 0 ? Math.max((d.total / max) * CHART_HEIGHT, 2) : 2;
-              const i = rows.indexOf(d);
-              return (
-                <View key={d.date} className="flex-1 items-center gap-1">
-                  <View
-                    style={{
-                      height: h,
-                      borderTopLeftRadius: 4,
-                      borderTopRightRadius: 4,
-                      backgroundColor: brand,
-                      opacity: d.total > 0 ? 0.85 : 0.15,
-                      width: "100%",
-                      maxWidth: 26,
-                    }}
-                  />
-                  {i % labelEvery === 0 ? (
-                    <Text className="text-[9px] text-muted-foreground" numberOfLines={1}>
-                      {d.label}
-                    </Text>
-                  ) : (
-                    <Text className="text-[9px] text-transparent" numberOfLines={1}>
-                      ·
-                    </Text>
-                  )}
-                </View>
-              );
-            })}
+        <View className="mb-3 flex-row flex-wrap items-center justify-between gap-2">
+          <Text className="text-xs font-medium text-foreground">{title}</Text>
+          <View className="flex-row items-center gap-1">
+            {METRIC_ORDER.map((m) => (
+              <MetricPill
+                key={m}
+                active={metric === m}
+                label={t(METRIC_LABEL[m])}
+                onPress={() => onMetricChange(m)}
+              />
+            ))}
           </View>
+        </View>
+
+        {metric === "tokens" ? (
+          <TrendBars
+            rows={dailyTokens.map((d) => ({ date: d.date, label: d.label, value: d.total }))}
+            max={maxTokens}
+            color={brand}
+            noDataLabel={t("usage.noData")}
+          />
+        ) : metric === "time" ? (
+          <TrendBars
+            rows={dailyTime.map((d) => ({ date: d.date, label: d.label, value: d.totalSeconds }))}
+            max={maxTime}
+            color={brand}
+            noDataLabel={t("usage.noData")}
+          />
+        ) : (
+          <TasksStack rows={dailyTasks} max={maxTasks} theme={theme} noDataLabel={t("usage.noData")} />
         )}
+
+        <Text className="mt-2 text-[9px] text-muted-foreground/70">
+          {t("usage.metricCostNote")}
+        </Text>
       </View>
 
-      {/* Daily breakdown rows (input / output / cache / total per day) */}
+      {/* Per-day detail rows for the active metric */}
       <View className="rounded-xl border border-border bg-card px-3">
-        {rows.map((d, idx) => (
-          <View
-            key={d.date}
-            className={cn(
-              "flex-row items-center gap-2 py-2.5",
-              idx > 0 && "border-t border-border/60",
-            )}
-          >
-            <Text className="w-14 text-xs font-medium text-foreground">{d.label}</Text>
-            <TokenCell label={t("usage.inputLabel")} value={d.input} muted={muted} />
-            <TokenCell label={t("usage.outputLabel")} value={d.output} muted={muted} />
-            <TokenCell label={t("usage.cacheLabel")} value={d.cacheRead + d.cacheWrite} muted={muted} />
-            <Text className="w-16 text-right text-xs font-semibold text-foreground">
-              {formatTokens(d.total)}
-            </Text>
-          </View>
-        ))}
+        {metric === "tokens"
+          ? dailyTokens.map((d, idx) => (
+              <View
+                key={d.date}
+                className={cn(
+                  "flex-row items-center gap-2 py-2.5",
+                  idx > 0 && "border-t border-border/60",
+                )}
+              >
+                <Text className="w-14 text-xs font-medium text-foreground">{d.label}</Text>
+                <TokenCell label={t("usage.inputLabel")} value={d.input} muted={muted} />
+                <TokenCell label={t("usage.outputLabel")} value={d.output} muted={muted} />
+                <TokenCell
+                  label={t("usage.cacheLabel")}
+                  value={d.cacheRead + d.cacheWrite}
+                  muted={muted}
+                />
+                <Text className="w-16 text-right text-xs font-semibold text-foreground">
+                  {formatTokens(d.total)}
+                </Text>
+              </View>
+            ))
+          : metric === "time"
+            ? dailyTime.map((d, idx) => {
+                const tasksRow = dailyTasks.find((x) => x.date === d.date);
+                const taskCount = tasksRow
+                  ? tasksRow.completed + tasksRow.failed + tasksRow.cancelled
+                  : 0;
+                const failed = tasksRow?.failed ?? 0;
+                return (
+                  <View
+                    key={d.date}
+                    className={cn(
+                      "flex-row items-center gap-2 py-2.5",
+                      idx > 0 && "border-t border-border/60",
+                    )}
+                  >
+                    <Text className="w-14 text-xs font-medium text-foreground">{d.label}</Text>
+                    <StatCell
+                      value={formatDuration(d.totalSeconds, t("usage.lessThanMinute"))}
+                      sublabel={t("usage.timeLabel")}
+                      muted={muted}
+                    />
+                    <StatCell value={String(taskCount)} sublabel={t("usage.totalTasks")} muted={muted} />
+                    <StatCell value={String(failed)} sublabel={t("usage.failedLabel")} muted={muted} />
+                  </View>
+                );
+              })
+            : dailyTasks.map((d, idx) => (
+                <View
+                  key={d.date}
+                  className={cn(
+                    "flex-row items-center gap-2 py-2.5",
+                    idx > 0 && "border-t border-border/60",
+                  )}
+                >
+                  <Text className="w-14 text-xs font-medium text-foreground">{d.label}</Text>
+                  <StatCell value={String(d.completed)} sublabel={t("usage.completedLabel")} muted={muted} />
+                  <StatCell value={String(d.failed)} sublabel={t("usage.failedLabel")} muted={muted} />
+                  <StatCell value={String(d.cancelled)} sublabel={t("usage.cancelledLabel")} muted={muted} />
+                </View>
+              ))}
       </View>
+    </View>
+  );
+}
+
+function MetricPill({
+  active,
+  label,
+  onPress,
+}: {
+  active: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      className={cn("rounded-full px-2.5 py-1", active ? "bg-foreground" : "bg-muted")}
+    >
+      <Text
+        className={cn(
+          "text-[10px] font-medium",
+          active ? "text-background" : "text-muted-foreground",
+        )}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+/** Single-series bar row, shared by the tokens and run-time metrics. */
+function TrendBars({
+  rows,
+  max,
+  color,
+  noDataLabel,
+}: {
+  rows: { date: string; label: string; value: number }[];
+  max: number;
+  color: string;
+  noDataLabel: string;
+}) {
+  if (rows.length === 0) {
+    return <Text className="text-xs text-muted-foreground">{noDataLabel}</Text>;
+  }
+  const labelEvery = rows.length > 8 ? 2 : 1;
+  return (
+    <View className="flex-row items-end gap-1.5" style={{ height: CHART_HEIGHT + 22 }}>
+      {rows.map((d, i) => {
+        const h = max > 0 ? Math.max((d.value / max) * CHART_HEIGHT, 2) : 2;
+        return (
+          <View key={d.date} className="flex-1 items-center gap-1">
+            <View
+              style={{
+                height: h,
+                borderTopLeftRadius: 4,
+                borderTopRightRadius: 4,
+                backgroundColor: color,
+                opacity: d.value > 0 ? 0.85 : 0.15,
+                width: "100%",
+                maxWidth: 26,
+              }}
+            />
+            {i % labelEvery === 0 ? (
+              <Text className="text-[9px] text-muted-foreground" numberOfLines={1}>
+                {d.label}
+              </Text>
+            ) : (
+              <Text className="text-[9px] text-transparent" numberOfLines={1}>
+                ·
+              </Text>
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+/**
+ * Task-outcome stacked bars: completed at the bottom (brand), cancelled in
+ * the middle (muted — a manual stop is an outcome, not an error), failed on
+ * top (destructive emphasis). Lets the reader see the day-over-day failure
+ * trend without a separate chart (web DailyTasksChart parity).
+ */
+function TasksStack({
+  rows,
+  max,
+  theme,
+  noDataLabel,
+}: {
+  rows: DailyTasksRow[];
+  max: number;
+  theme: { brand: string; destructive: string; mutedForeground: string };
+  noDataLabel: string;
+}) {
+  if (rows.length === 0) {
+    return <Text className="text-xs text-muted-foreground">{noDataLabel}</Text>;
+  }
+  const labelEvery = rows.length > 8 ? 2 : 1;
+  return (
+    <View className="flex-row items-end gap-1.5" style={{ height: CHART_HEIGHT + 22 }}>
+      {rows.map((d, i) => {
+        const total = d.completed + d.failed + d.cancelled;
+        const h = max > 0 ? Math.max((total / max) * CHART_HEIGHT, 2) : 2;
+        return (
+          <View key={d.date} className="flex-1 items-center gap-1">
+            <View
+              style={{
+                height: h,
+                width: "100%",
+                maxWidth: 26,
+                borderRadius: 4,
+                overflow: "hidden",
+                backgroundColor: theme.mutedForeground,
+                opacity: total > 0 ? 0.9 : 0.15,
+                flexDirection: "column-reverse",
+              }}
+            >
+              {/* column-reverse: first child renders at the bottom. */}
+              <View style={{ flex: d.completed, backgroundColor: theme.brand }} />
+              <View style={{ flex: d.cancelled, backgroundColor: theme.mutedForeground }} />
+              <View style={{ flex: d.failed, backgroundColor: theme.destructive }} />
+            </View>
+            {i % labelEvery === 0 ? (
+              <Text className="text-[9px] text-muted-foreground" numberOfLines={1}>
+                {d.label}
+              </Text>
+            ) : (
+              <Text className="text-[9px] text-transparent" numberOfLines={1}>
+                ·
+              </Text>
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+/** Right-aligned value + sublabel cell for the per-day breakdown rows. */
+function StatCell({
+  value,
+  sublabel,
+  muted,
+}: {
+  value: string;
+  sublabel: string;
+  muted: string;
+}) {
+  return (
+    <View className="flex-1">
+      <Text className="text-right text-xs font-medium text-foreground" numberOfLines={1}>
+        {value}
+      </Text>
+      <Text
+        className="text-right text-[9px] text-muted-foreground"
+        style={{ color: muted }}
+        numberOfLines={1}
+      >
+        {sublabel}
+      </Text>
     </View>
   );
 }
@@ -517,13 +863,14 @@ function LeaderboardSection({
   agentName,
   colorScheme,
 }: {
-  rows: AgentUsageRow[];
+  rows: AgentDashboardRow[];
   max: number;
   agentName: (agentId: string) => string;
   colorScheme: "light" | "dark";
 }) {
   const { t } = useTranslation();
   const brand = THEME[colorScheme].brand;
+  const less = t("usage.lessThanMinute");
 
   if (rows.length === 0) {
     return (
@@ -538,6 +885,7 @@ function LeaderboardSection({
       <View className="rounded-xl border border-border bg-card px-3 py-1">
         {rows.map((r, idx) => {
           const synthetic = isSyntheticAgentRow(r.agentId);
+          const deleted = r.agentId === DELETED_AGENTS_ROW_ID;
           const pct = max > 0 ? (r.tokens / max) * 1 : 0;
           return (
             <View
@@ -573,9 +921,27 @@ function LeaderboardSection({
               <Text className="w-16 text-right text-xs font-semibold text-foreground">
                 {formatTokens(r.tokens)}
               </Text>
+              <View className="w-16 items-end">
+                {deleted ? (
+                  <Text className="text-xs text-muted-foreground">—</Text>
+                ) : (
+                  <>
+                    <Text className="text-xs text-muted-foreground">
+                      {formatDuration(r.seconds, less)}
+                    </Text>
+                    <Text className="text-[9px] text-muted-foreground/70">{t("usage.timeLabel")}</Text>
+                  </>
+                )}
+              </View>
               <View className="w-12 items-end">
-                <Text className="text-xs text-muted-foreground">{r.taskCount}</Text>
-                <Text className="text-[9px] text-muted-foreground/70">{t("usage.tasksShort")}</Text>
+                {deleted ? (
+                  <Text className="text-xs text-muted-foreground">—</Text>
+                ) : (
+                  <>
+                    <Text className="text-xs text-muted-foreground">{r.taskCount}</Text>
+                    <Text className="text-[9px] text-muted-foreground/70">{t("usage.tasksShort")}</Text>
+                  </>
+                )}
               </View>
             </View>
           );
