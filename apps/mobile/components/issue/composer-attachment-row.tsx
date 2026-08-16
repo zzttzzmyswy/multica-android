@@ -213,6 +213,7 @@ function AttachmentChipView({ item, onRemove, onRetry }: AttachmentChipProps) {
           target,
           item.filename,
           item.mimeType,
+          { kind: "chat" },
         ).catch(() => {
           Alert.alert(t("download.failedTitle"), t("download.failedMessage"));
         });

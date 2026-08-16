@@ -1,44 +1,52 @@
 /**
- * Authenticated in-app attachment download + system-handler open.
+ * Authenticated in-app attachment download + system-handler open, routed
+ * through the download manager.
  *
- * Fixes MYS-270: the composer file-chip and comment file-card used to hand
- * `download_url` to `Linking.openURL`, pushing the request to the external
- * browser. In token-mode the browser tab carries no `Authorization` header, so
- * the server rejected it with `missing authorization`. This module replaces
- * that handoff with:
+ * MYS-270 (original): handing `download_url` to `Linking.openURL` pushed the
+ * request to the external browser, which carries no `Authorization` header,
+ * so the server rejected it with `missing authorization`. Downloads have to
+ * happen in-app with the session token (it stays inside ApiClient — never
+ * logged or exposed).
  *
- *   1. an in-app, authenticated download to the app cache via
- *      `api.downloadFile` (token stays inside ApiClient — never logged or
- *      exposed), then
- *   2. `expo-sharing`'s system handler sheet so the user opens the file with
- *      any installed app (expo-sharing safely re-exposes the cached `file://`
- *      URI as a content URI, avoiding Android's FileUriExposedException).
+ * MYS-336 (this iteration): the app-wide download manager replaced the
+ * previous fire-and-forget `api.downloadFile` + immediate share. Every
+ * attachment download now registers a task in `useDownloadsStore` — visible
+ * in More → Downloads with progress, an entry in the persisted history, and
+ * retry/cancel support — and the manager presents the system handler sheet
+ * (`expo-sharing`) itself when the download completes, re-exposing the
+ * cached `file://` URI as a content URI to avoid Android's
+ * FileUriExposedException.
  *
  * Pure helpers (`sanitizeBasename`, `mimeTypeForFilename`) live in
- * `lib/attachment-download.ts` so the safety invariants are unit-tested in the
- * Node vitest lane.
+ * `lib/attachment-download.ts` so the safety invariants are unit-tested in
+ * the Node vitest lane.
  */
-import { api, type LocalDownload } from "@/data/api";
-import * as Sharing from "expo-sharing";
-import { mimeTypeForFilename } from "@/lib/attachment-download";
+import { useDownloadsStore } from "@/data/downloads-store";
+import type { DownloadSource } from "@/lib/download-store";
 
-export type { LocalDownload };
+export type { LocalDownload } from "@/data/api";
 
 /**
- * Download `rawUrl` in-app with the session auth headers, then open the saved
- * file through the system handler sheet. `mimeType` is optional — when absent
- * it is derived from `filename` so Android can route the share intent.
+ * Register `rawUrl` with the download manager and await its terminal state.
+ * The manager runs the authenticated download, records progress/history
+ * (persistently), and opens the saved file through the system handler sheet
+ * on success. `mimeType` is optional — when absent it is derived from
+ * `filename` so Android can route the share intent.
  *
- * Throws `ApiError` on any failure (network, 401/403, write error) — callers
- * translate to a user-facing alert. The raw URL may be server-relative; the
- * ApiClient resolves it against the current base.
+ * Never rejects: user-facing failure surfaces in the download history with
+ * the reason, where it can be retried or deleted. The raw URL may be
+ * server-relative; the ApiClient resolves it against the current base.
  */
 export async function downloadAttachmentAndOpen(
   rawUrl: string,
   filename: string,
   mimeType?: string,
+  source?: DownloadSource,
 ): Promise<void> {
-  const local = await api.downloadFile(rawUrl, filename);
-  const shareMime = mimeType ?? mimeTypeForFilename(local.name);
-  await Sharing.shareAsync(local.uri, { mimeType: shareMime });
+  await useDownloadsStore.getState().downloadAndOpen(
+    rawUrl,
+    filename,
+    mimeType,
+    source,
+  );
 }

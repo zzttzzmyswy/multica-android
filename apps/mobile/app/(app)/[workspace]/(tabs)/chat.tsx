@@ -498,6 +498,7 @@ export default function ChatTab() {
           loading={messagesLoading}
           hasSessions={sessions.length > 0}
           agentName={currentAgent?.name}
+          sessionTitle={activeSession?.title}
           onPickPrompt={(text) => setDraft(draftKey, text)}
           onQuickAction={(action) =>
             handleSend(action.prompt, [], { clearDraft: false })

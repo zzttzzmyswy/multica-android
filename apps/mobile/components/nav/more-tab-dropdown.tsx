@@ -34,7 +34,7 @@
  *     Earlier shape (every workspace inlined here) made the popover long
  *     and offered no friction against accidental taps.
  */
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Image, Pressable, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, usePathname } from "expo-router";
@@ -55,6 +55,7 @@ import { workspaceListOptions } from "@/data/queries/workspaces";
 import { memberListOptions } from "@/data/queries/members";
 import { useAuthStore } from "@/data/auth-store";
 import { useUpdateStore } from "@/data/update-store";
+import { useActiveDownloadCount, useDownloadsStore } from "@/data/downloads-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
@@ -99,6 +100,11 @@ const NAV_ITEMS: NavItem[] = [
   { labelKey: "nav.skills", icon: "extension-puzzle", path: "/more/skills" },
   { labelKey: "nav.runtimes", icon: "server", path: "/more/runtimes" },
   { labelKey: "nav.usage", icon: "bar-chart", path: "/more/usage" },
+  {
+    labelKey: "nav.downloads",
+    icon: "download-outline",
+    path: "/more/downloads",
+  },
   // App lifecycle: About page also hosts the manual update check. A red dot
   // is painted next to this row while a newer APK exists (see below).
   { labelKey: "nav.about", icon: "information-circle", path: "/more/about" },
@@ -120,6 +126,14 @@ export function MoreTabDropdownAnchor({
   const currentWorkspace = useCurrentWorkspace(slug);
   // True while a newer APK exists — paints the dot on the About row.
   const hasUpdate = useUpdateStore((s) => s.hasUpdate);
+  // In-flight downloads — the Downloads row carries a count badge while > 0.
+  const activeDownloads = useActiveDownloadCount();
+
+  // Restore the persisted download history once so the badge counts real
+  // in-flight rows (persisted `downloading` rows downgrade to failed).
+  useEffect(() => {
+    void useDownloadsStore.getState().hydrate();
+  }, []);
 
   // Property management is owner/admin-only (same gate as web's settings
   // properties-tab). Non-managers don't even see the entry.
@@ -209,6 +223,16 @@ export function MoreTabDropdownAnchor({
                   className="ml-auto size-2 rounded-full bg-destructive"
                   accessibilityLabel={t("update.hasNew")}
                 />
+              ) : null}
+              {activeDownloads > 0 && item.path === "/more/downloads" ? (
+                <View
+                  className="ml-auto min-w-[18px] h-[18px] rounded-full bg-primary items-center justify-center px-1"
+                  accessibilityLabel={t("downloads.tab.active")}
+                >
+                  <Text className="text-[10px] font-semibold text-white">
+                    {activeDownloads}
+                  </Text>
+                </View>
               ) : null}
             </DropdownMenuItem>
           ))}

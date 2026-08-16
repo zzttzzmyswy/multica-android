@@ -212,6 +212,7 @@ import {
 } from "./schemas";
 import type { ZodType } from "zod";
 import { File, Paths } from "expo-file-system";
+import { createDownloadResumable } from "expo-file-system/legacy";
 import { getCurrentSlug } from "./workspace-store";
 import { getApiBaseUrl, getEnvBaseUrl, setApiBaseUrl } from "./server-config";
 import { parseWithFallback } from "@/lib/parse-response";
@@ -286,6 +287,16 @@ export class ApiError extends Error {
     this.name = "ApiError";
     this.status = status;
     this.body = body;
+  }
+}
+
+/** Raised when a progress-tracked download is aborted by the user (or the
+ *  task is superseded). Callers that record a download history map this to
+ *  the "cancelled" terminal state instead of a failure. */
+export class DownloadCancelledError extends Error {
+  constructor() {
+    super("Download cancelled");
+    this.name = "DownloadCancelledError";
   }
 }
 
@@ -2206,6 +2217,83 @@ class ApiClient {
         0,
       );
     }
+  }
+
+  /**
+   * Progress-tracked, cancellable authenticated download — the download
+   * manager's engine. `downloadFile` above keeps its fire-and-forget
+   * semantics for callers that only need the bytes; this variant wraps
+   * `expo-file-system/legacy`'s `createDownloadResumable` so the caller can
+   * render progress and abort mid-flight.
+   *
+   * Returns `null` when `rawUrl` can't be resolved to an absolute URL (same
+   * gate as `downloadFile`). `onProgress` fires with the byte counters the
+   * native stack reports (`-1` expected when the server sends no
+   * Content-Length). The returned `cancel()` aborts the native task; the
+   * `done` promise then rejects with `DownloadCancelledError` — never an
+   * `ApiError`, so history records the cancel as its own state.
+   */
+  createDownloadTask(
+    rawUrl: string,
+    filename: string,
+    onProgress?: (data: {
+      totalBytesWritten: number;
+      totalBytesExpectedToWrite: number;
+    }) => void,
+  ): { done: Promise<LocalDownload>; cancel: () => void } | null {
+    const absUrl = resolveAttachmentUrl(rawUrl);
+    if (!absUrl) return null;
+
+    const headers: Record<string, string> = {};
+    if (this.token) headers["Authorization"] = `Bearer ${this.token}`;
+    const slug = getCurrentSlug();
+    if (slug) headers["X-Workspace-Slug"] = slug;
+
+    const safeName = sanitizeBasename(filename) || "download";
+    const destination = new File(Paths.cache, safeName).uri;
+    const start = Date.now();
+    console.log(`[api] → GET ${absUrl}`, { rid: createRequestId() });
+
+    const resumable = createDownloadResumable(
+      absUrl,
+      destination,
+      { headers },
+      (data) => onProgress?.(data),
+    );
+    let cancelled = false;
+
+    const done = resumable
+      .downloadAsync()
+      .then((result) => {
+        // `undefined` is the native contract for an aborted task.
+        if (cancelled || !result) throw new DownloadCancelledError();
+        console.log(`[api] ← saved ${result.uri}`, {
+          duration: `${Date.now() - start}ms`,
+        });
+        return { uri: result.uri, name: safeName };
+      })
+      .catch((err: unknown) => {
+        if (err instanceof DownloadCancelledError) throw err;
+        console.error(`[api] ← DOWNLOAD FAILED ${absUrl}`, {
+          duration: `${Date.now() - start}ms`,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        throw new ApiError(
+          err instanceof Error ? err.message : "Attachment download failed",
+          0,
+        );
+      });
+
+    return {
+      done,
+      cancel: () => {
+        if (cancelled) return;
+        cancelled = true;
+        void resumable.cancelAsync().catch(() => {
+          // The task may already have settled; nothing left to abort.
+        });
+      },
+    };
   }
 }
 

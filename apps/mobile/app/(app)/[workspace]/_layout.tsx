@@ -457,6 +457,13 @@ export default function WorkspaceLayout() {
           }}
         />
         <Stack.Screen
+          name="more/downloads"
+          options={{
+            title: t("screen.downloads"),
+            headerBackTitle: t("common.back"),
+          }}
+        />
+        <Stack.Screen
           name="more/runtimes/[id]"
           options={{
             title: t("screen.runtimes"),

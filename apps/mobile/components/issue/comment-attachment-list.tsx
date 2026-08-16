@@ -33,6 +33,7 @@ import { THEME } from "@/lib/theme";
 import { Text } from "@/components/ui/text";
 import { useTranslation } from "@/lib/i18n/react";
 import { downloadAttachmentAndOpen } from "@/lib/download-attachment";
+import type { DownloadSource } from "@/lib/download-store";
 
 interface Props {
   attachments?: Attachment[];
@@ -42,9 +43,13 @@ interface Props {
    *  body — that disables the inline-reference filter and renders all
    *  supplied attachments. */
   content?: string;
+  /** Where this attachment lives (issue / chat), recorded into the download
+   *  manager's history. Pass the issue identifier / session title as `name`
+   *  when the caller has it. */
+  source?: DownloadSource;
 }
 
-export function CommentAttachmentList({ attachments, content }: Props) {
+export function CommentAttachmentList({ attachments, content, source }: Props) {
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
 
@@ -78,6 +83,7 @@ export function CommentAttachmentList({ attachments, content }: Props) {
             key={attachment.id}
             attachment={attachment}
             theme={theme}
+            source={source}
           />
         );
       })}
@@ -88,9 +94,11 @@ export function CommentAttachmentList({ attachments, content }: Props) {
 function FileCard({
   attachment,
   theme,
+  source,
 }: {
   attachment: Attachment;
   theme: typeof THEME["light"];
+  source?: DownloadSource;
 }) {
   const sizeLabel = formatBytes(attachment.size_bytes);
   const { t } = useTranslation();
@@ -110,6 +118,7 @@ function FileCard({
           target,
           attachment.filename,
           attachment.content_type,
+          source,
         ).catch(() => {
           Alert.alert(t("download.failedTitle"), t("download.failedMessage"));
         });

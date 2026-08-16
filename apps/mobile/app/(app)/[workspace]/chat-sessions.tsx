@@ -16,6 +16,7 @@ import type { ChatSession } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { chatSessionsOptions } from "@/data/queries/chat";
+import { agentListOptions } from "@/data/queries/agents";
 import { useDeleteChatSession } from "@/data/mutations/chat";
 import { useChatSessionPickerStore } from "@/data/stores/chat-session-picker-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
@@ -26,6 +27,11 @@ export default function ChatSessionsRoute() {
   const { t } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { data: sessions = [] } = useQuery(chatSessionsOptions(wsId));
+  // agent_id → display name, so each session row can say who it's chatting
+  // with (MYS-335). Sessions can outlive their agent (archived / removed),
+  // so unknown ids fall back to a placeholder.
+  const { data: agents = [] } = useQuery(agentListOptions(wsId));
+  const agentNameById = new Map(agents.map((a) => [a.id, a.name]));
   const activeSessionId = useChatSessionPickerStore((s) => s.activeSessionId);
   const requestSelect = useChatSessionPickerStore((s) => s.requestSelect);
   const deleteSession = useDeleteChatSession();
@@ -103,6 +109,9 @@ export default function ChatSessionsRoute() {
                     numberOfLines={1}
                   >
                     {session.title || t("chat.untitled")}
+                  </Text>
+                  <Text className="text-xs text-muted-foreground mt-0.5" numberOfLines={1}>
+                    {agentNameById.get(session.agent_id) ?? t("chat.agentUnknown")}
                   </Text>
                   {archived ? (
                     <Text className="text-xs text-muted-foreground mt-0.5">

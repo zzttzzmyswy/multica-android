@@ -514,6 +514,7 @@ function CommentBody({
       <CommentAttachmentList
         attachments={entry.attachments}
         content={entry.content}
+        source={{ kind: "issue", name: issueIdentifier }}
       />
       {failed ? (
         <FailedActions

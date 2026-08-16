@@ -94,6 +94,9 @@ interface Props {
   hasSessions: boolean;
   /** Currently picked / inherited agent's display name. */
   agentName?: string;
+  /** Current session's title — recorded into the download manager's history
+   *  as the source name for attachments downloaded from this list. */
+  sessionTitle?: string;
   /** Receive a starter-prompt tap. Caller writes into the draft store
    *  (or focuses the composer with the text) — empty state stays neutral
    *  about send vs. preview. */
@@ -119,6 +122,7 @@ export function ChatMessageList({
   loading,
   hasSessions,
   agentName,
+  sessionTitle,
   onPickPrompt,
   onQuickAction,
   quickActionsDisabled = false,
@@ -253,6 +257,7 @@ export function ChatMessageList({
       renderItem={({ item }) => (
         <MessageRow
           message={item}
+          sessionTitle={sessionTitle}
           onQuickAction={onQuickAction}
           quickActionsDisabled={quickActionsDisabled}
         />
@@ -320,14 +325,17 @@ function MessageSeparator() {
 
 function MessageRow({
   message,
+  sessionTitle,
   onQuickAction,
   quickActionsDisabled,
 }: {
   message: ChatMessage;
+  sessionTitle?: string;
   onQuickAction?: (action: ChatQuickAction) => void | Promise<unknown>;
   quickActionsDisabled: boolean;
 }) {
   const { t } = useTranslation();
+  const chatSource = { kind: "chat", name: sessionTitle } as const;
   const isUser = message.role === "user";
   const isFailure = !!message.failure_reason;
   const isSelecting = useChatSelectStore(
@@ -370,10 +378,12 @@ function MessageRow({
           attachments={message.attachments}
           selectable={isSelecting}
           compact
+          downloadSource={chatSource}
         />
         <CommentAttachmentList
           attachments={message.attachments}
           content={message.content}
+          source={chatSource}
         />
       </View>
     );
@@ -393,6 +403,7 @@ function MessageRow({
   return (
     <AssistantRow
       message={message}
+      sessionTitle={sessionTitle}
       isSelecting={isSelecting}
       longPress={longPress}
       onQuickAction={onQuickAction}
@@ -417,18 +428,21 @@ function MessageRow({
  */
 function AssistantRow({
   message,
+  sessionTitle,
   isSelecting,
   longPress,
   onQuickAction,
   quickActionsDisabled,
 }: {
   message: ChatMessage;
+  sessionTitle?: string;
   isSelecting: boolean;
   longPress: ReturnType<typeof useChatMessageLongPress>;
   onQuickAction?: (action: ChatQuickAction) => void | Promise<unknown>;
   quickActionsDisabled: boolean;
 }) {
   const { t } = useTranslation();
+  const chatSource = { kind: "chat", name: sessionTitle } as const;
   // Read the cached timeline if any. `enabled` (in taskMessagesOptions) is
   // gated on isTaskMessageTaskId — optimistic id prefixes never fetch, so
   // freshly-sent messages don't spam the API while waiting for the real
@@ -456,6 +470,7 @@ function AssistantRow({
           content={message.content}
           attachments={message.attachments}
           selectable={isSelecting}
+          downloadSource={chatSource}
         />
       )}
       {/* Standalone attachment cards for anything not referenced inline. An
@@ -465,6 +480,7 @@ function AssistantRow({
       <CommentAttachmentList
         attachments={message.attachments}
         content={message.content}
+        source={chatSource}
       />
       {message.elapsed_ms != null ? (
         <ElapsedCaption

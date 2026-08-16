@@ -47,6 +47,7 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { getDisplayBaseUrl, getWebBaseUrl } from "@/data/server-config";
 import { useTranslation } from "@/lib/i18n/react";
 import { downloadAttachmentAndOpen } from "@/lib/download-attachment";
+import type { DownloadSource } from "@/lib/download-store";
 import {
   isAttachmentDownloadUrl,
   filenameFromDownloadUrl,
@@ -112,6 +113,9 @@ interface Props {
    * case.
    */
   compact?: boolean;
+  /** Where this markdown lives (issue / chat), recorded into the download
+   *  manager's history for attachment links tapped inside the body. */
+  downloadSource?: DownloadSource;
 }
 
 export function Markdown({
@@ -119,6 +123,7 @@ export function Markdown({
   attachments,
   selectable = true,
   compact = false,
+  downloadSource,
 }: Props) {
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { t } = useTranslation();
@@ -189,6 +194,7 @@ export function Markdown({
           matched.download_url ?? url,
           matched.filename,
           matched.content_type,
+          downloadSource,
         ).catch(() => {
           Alert.alert(t("download.failedTitle"), t("download.failedMessage"));
         });
@@ -204,6 +210,8 @@ export function Markdown({
         void downloadAttachmentAndOpen(
           target,
           filenameFromDownloadUrl(url),
+          undefined,
+          downloadSource,
         ).catch(() => {
           Alert.alert(
             t("download.failedTitle"),
@@ -219,7 +227,7 @@ export function Markdown({
         // Silent: failing loudly is worse than a no-op tap.
       });
     },
-    [attachments, t, wsSlug],
+    [attachments, t, wsSlug, downloadSource],
   );
 
   if (segments.length === 0) return null;
