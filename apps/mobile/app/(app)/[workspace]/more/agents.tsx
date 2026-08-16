@@ -5,6 +5,10 @@
  * description, and a presence line (availability dot + label, active task
  * count, model).
  *
+ * The "New" action (header + empty state) opens the create-method chooser
+ * (more/agents/new), which leads to the manual form — mirroring web's agents
+ * page toolbar (packages/views/agents).
+ *
  * Task count + availability come from the shared derive-presence pipeline
  * (`@multica/core/agents` → `useWorkspacePresenceMap`), so the numbers read
  * identically to web: active = running + queued from the workspace task
@@ -15,7 +19,7 @@
  * archived; within a tier, more active tasks first, then name. Archived
  * rows are dimmed so a retired agent is never missed.
  */
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { ActivityIndicator, FlatList, Pressable, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
@@ -24,6 +28,7 @@ import type { Agent } from "@multica/core/types";
 import { isAgentRuntimeBound, type AgentPresenceDetail } from "@multica/core/agents";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PresenceDot } from "@/components/ui/presence-dot";
 import { agentListOptions } from "@/data/queries/agents";
@@ -95,9 +100,22 @@ export default function AgentsPage() {
 
   const showEmpty = !isLoading && !error && (data ?? []).length === 0;
 
+  // "New" header action — opens the create-method chooser (mirrors the
+  // skills/autopilots "+" header action).
+  const headerRight = useCallback(() => {
+    if (!wsSlug) return null;
+    return (
+      <IconButton
+        name="add"
+        onPress={() => router.push(`/${wsSlug}/more/agents/new`)}
+        accessibilityLabel={t("agents.createButton")}
+      />
+    );
+  }, [wsSlug, t]);
+
   return (
     <>
-      <Stack.Screen options={{ title: t("screen.agents") }} />
+      <Stack.Screen options={{ title: t("screen.agents"), headerRight }} />
       <View className="flex-1 bg-background">
         {isLoading ? (
           <View className="flex-1 items-center justify-center">
@@ -123,14 +141,19 @@ export default function AgentsPage() {
               {t("agents.emptyDescription")}
             </Text>
             {wsSlug ? (
-              <Button
-                variant="outline"
-                className="mt-3"
-                onPress={() => router.push(`/${wsSlug}/chat-sessions`)}
-              >
-                <Ionicons name="chatbubbles-outline" size={15} color={muted} />
-                <Text>{t("agents.goChat")}</Text>
-              </Button>
+              <View className="flex-row gap-2 mt-3">
+                <Button
+                  variant="outline"
+                  onPress={() => router.push(`/${wsSlug}/chat-sessions`)}
+                >
+                  <Ionicons name="chatbubbles-outline" size={15} color={muted} />
+                  <Text>{t("agents.goChat")}</Text>
+                </Button>
+                <Button onPress={() => router.push(`/${wsSlug}/more/agents/new`)}>
+                  <Ionicons name="add" size={15} color={THEME[colorScheme].primaryForeground} />
+                  <Text>{t("agents.createButton")}</Text>
+                </Button>
+              </View>
             ) : null}
           </View>
         ) : (

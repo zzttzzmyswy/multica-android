@@ -24,6 +24,7 @@ import type {
   ChatPendingTask,
   ChatSession,
   Comment,
+  CreateAgentRequest,
   CreateAutopilotRequest,
   CreateAutopilotTriggerRequest,
   CreateIssueRequest,
@@ -702,6 +703,20 @@ class ApiClient {
     });
     return parseWithFallback(raw, AgentListSchema, EMPTY_AGENT_LIST, {
       endpoint: "listAgents",
+    });
+  }
+
+  // POST /api/agents — mirrors packages/core/api/client.ts:1226. Write
+  // endpoint per the mobile write-endpoint rule (raw fetch — a malformed
+  // response surfaces naturally so the create form's error path owns the
+  // feedback; the returned id drives navigation to the detail screen). The
+  // server answers 409 on a duplicate name, 400 on >255-char description or
+  // a missing runtime — the form classifies these (duplicate → name field,
+  // others → form-level alert).
+  async createAgent(data: CreateAgentRequest): Promise<Agent> {
+    return this.fetch<Agent>("/api/agents", {
+      method: "POST",
+      body: JSON.stringify(data),
     });
   }
 
