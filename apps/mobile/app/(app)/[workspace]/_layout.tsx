@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { workspaceListOptions } from "@/data/queries/workspaces";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { RealtimeProvider } from "@/data/realtime/realtime-provider";
+import { UpdateProvider } from "@/components/update/update-provider";
 import { useInboxRealtime } from "@/data/realtime/use-inbox-realtime";
 import { useIssuesRealtime } from "@/data/realtime/use-issues-realtime";
 import { useMyIssuesRealtime } from "@/data/realtime/use-my-issues-realtime";
@@ -130,9 +131,10 @@ export default function WorkspaceLayout() {
   // Tabs hide their own header; pushed screens (issue/[id]) get a native
   // iOS Stack header with the standard back button + swipe-to-dismiss.
   return (
-    <RealtimeProvider>
-      <RealtimeSubscriptions />
-      <Stack>
+    <UpdateProvider>
+      <RealtimeProvider>
+        <RealtimeSubscriptions />
+        <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen
           name="issue/[id]"
@@ -406,6 +408,13 @@ export default function WorkspaceLayout() {
           }}
         />
         <Stack.Screen
+          name="more/about"
+          options={{
+            title: t("screen.about"),
+            headerBackTitle: t("common.back"),
+          }}
+        />
+        <Stack.Screen
           name="more/pins"
           options={{ title: t("screen.pinned"), headerBackTitle: t("common.back") }}
         />
@@ -442,6 +451,7 @@ export default function WorkspaceLayout() {
           }}
         />
       </Stack>
-    </RealtimeProvider>
+      </RealtimeProvider>
+    </UpdateProvider>
   );
 }

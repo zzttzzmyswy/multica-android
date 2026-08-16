@@ -53,6 +53,7 @@ import { Text } from "@/components/ui/text";
 import { WorkspaceAvatar } from "@/components/workspace/workspace-avatar";
 import { workspaceListOptions } from "@/data/queries/workspaces";
 import { useAuthStore } from "@/data/auth-store";
+import { useUpdateStore } from "@/data/update-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
@@ -92,6 +93,9 @@ const NAV_ITEMS: NavItem[] = [
   { labelKey: "nav.labels", icon: "pricetags", path: "/more/labels" },
   { labelKey: "nav.skills", icon: "extension-puzzle", path: "/more/skills" },
   { labelKey: "nav.runtimes", icon: "server", path: "/more/runtimes" },
+  // App lifecycle: About page also hosts the manual update check. A red dot
+  // is painted next to this row while a newer APK exists (see below).
+  { labelKey: "nav.about", icon: "information-circle", path: "/more/about" },
 ];
 
 export function MoreTabDropdownAnchor({
@@ -107,6 +111,8 @@ export function MoreTabDropdownAnchor({
   const t2 = THEME[colorScheme];
   const { t } = useTranslation();
   const currentWorkspace = useCurrentWorkspace(slug);
+  // True while a newer APK exists — paints the dot on the About row.
+  const hasUpdate = useUpdateStore((s) => s.hasUpdate);
 
   const isActive = (path: string) => {
     if (!slug) return false;
@@ -180,6 +186,12 @@ export function MoreTabDropdownAnchor({
                 size={18}
               />
               <Text className="text-sm text-foreground">{t(item.labelKey)}</Text>
+              {hasUpdate && item.path === "/more/about" ? (
+                <View
+                  className="ml-auto size-2 rounded-full bg-destructive"
+                  accessibilityLabel={t("update.hasNew")}
+                />
+              ) : null}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
