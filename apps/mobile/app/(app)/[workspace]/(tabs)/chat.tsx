@@ -4,18 +4,20 @@
  * Layout:
  *   View ─ Header(center: ChatTitleButton, right: ChatSessionActions)
  *        ─ (NoAgentBanner?)
- *        ─ ChatMessageList (includes live status + timeline in its
- *                           ListFooterComponent)
- *        ─ OfflineBanner
- *        ─ ChatComposer
+ *        ─ KeyboardAvoidingView(behavior="height") ─ ChatMessageList
+ *                                        ─ OfflineBanner
+ *                                        ─ ChatComposer
  *
- * Keyboard: the composer owns its keyboard handling via `MessageComposer`'s
- * built-in `KeyboardStickyView` (react-native-keyboard-controller, the app
- * already mounts its `KeyboardProvider` at root) — the same path the inline
- * issue comment composer uses, so chat and issue stick to the keyboard
- * identically on Android edge-to-edge. RN's own KeyboardAvoidingView is
- * unreliable there (adjustResize is ignored once the window opts out of
- * decor-fitting), so it must not be layered on top.
+ * Keyboard: the whole content area sits in react-native-keyboard-controller's
+ * `KeyboardAvoidingView` with `behavior="height"`. RNC's version computes the
+ * compressed height from the *relative* keyboard height (its own frame bottom
+ * vs the real IME top), so it works under Android edge-to-edge AND below the
+ * bottom tab bar — where the composer starts too high for KeyboardStickyView's
+ * full-keyboard-height lift (which left the chat composer floating above the
+ * IME). RN's built-in KeyboardAvoidingView is unreliable here (adjustResize is
+ * ignored once the window opts out of decor-fitting), so the RNC one is used
+ * instead; `ChatComposer` passes `manageKeyboard={false}` to keep the
+ * composer from stacking its own keyboard handling on top.
  * Session switching, agent selection, and session deletion all happen
  * inside this screen via Modal sheets — there is no `/chat/[id]` sub-route.
  *
@@ -38,6 +40,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, View } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { router } from "expo-router";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -80,7 +83,7 @@ import {
 } from "@/data/realtime/chat-ws-updaters";
 import { canAssignAgent } from "@/lib/can-assign-agent";
 import { useWorkspaceAgentAvailability } from "@/lib/workspace-agent-availability";
-import { didPendingTaskFinish } from "@/lib/chat-task-polling";
+import { didPendingTaskFinish, isPendingTaskActive } from "@/lib/chat-task-polling";
 import { useAgentPresence } from "@/lib/use-agent-presence";
 import { Header } from "@/components/ui/header";
 import { ChatTitleButton } from "@/components/chat/chat-title-button";
@@ -164,13 +167,17 @@ export default function ChatTab() {
     }
   }, [pendingTask, activeSessionId, qc]);
   // Live execution trace for the in-flight task. `task:message` WS events
-  // append rows to this same cache key via `appendTaskMessage`, so the
-  // list/pill stay in sync without a polling fetch. `enabled` is gated by
-  // `isTaskMessageTaskId` inside taskMessagesOptions — optimistic ids
-  // never hit the network.
-  const { data: liveTaskMessages = [] } = useQuery(
-    taskMessagesOptions(pendingTask?.task_id),
-  );
+  // append rows to this same cache key via `appendTaskMessage`. WS is the
+  // primary stream, but on flaky mobile networks events drop and the agent's
+  // thinking / tool_use / tool_result trace never appears (web streams them).
+  // While the task is active, poll the task-message endpoint every 2s so the
+  // trace shows within a tick or two of the server writing rows; for historical
+  // messages (taskMessageOptions callers in run-log / message-list) nothing
+  // changes — this override lives only in the active-task query.
+  const { data: liveTaskMessages = [] } = useQuery({
+    ...taskMessagesOptions(pendingTask?.task_id),
+    refetchInterval: isPendingTaskActive(pendingTask) ? 2_000 : false,
+  });
 
   // ── Derived ────────────────────────────────────────────────────────────
   const memberRole = useMemo(
@@ -482,7 +489,11 @@ export default function ChatTab() {
         }
       />
       {availability === "none" ? <NoAgentBanner /> : null}
-      <View className="flex-1">
+      <KeyboardAvoidingView
+        behavior="height"
+        style={{ flex: 1 }}
+        className="flex-1"
+      >
         <ChatMessageList
           messages={visibleMessages}
           loading={messagesLoading}
@@ -515,7 +526,7 @@ export default function ChatTab() {
           disabled={disabled}
           disabledReason={disabledReason}
         />
-      </View>
+      </KeyboardAvoidingView>
 
       <AgentPickerSheet
         visible={agentPickerOpen}
