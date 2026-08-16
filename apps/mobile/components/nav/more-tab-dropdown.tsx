@@ -93,6 +93,7 @@ const NAV_ITEMS: NavItem[] = [
   { labelKey: "nav.labels", icon: "pricetags", path: "/more/labels" },
   { labelKey: "nav.skills", icon: "extension-puzzle", path: "/more/skills" },
   { labelKey: "nav.runtimes", icon: "server", path: "/more/runtimes" },
+  { labelKey: "nav.usage", icon: "bar-chart", path: "/more/usage" },
   // App lifecycle: About page also hosts the manual update check. A red dot
   // is painted next to this row while a newer APK exists (see below).
   { labelKey: "nav.about", icon: "information-circle", path: "/more/about" },

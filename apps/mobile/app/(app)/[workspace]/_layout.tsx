@@ -401,6 +401,13 @@ export default function WorkspaceLayout() {
           }}
         />
         <Stack.Screen
+          name="more/usage"
+          options={{
+            title: t("screen.usage"),
+            headerBackTitle: t("common.back"),
+          }}
+        />
+        <Stack.Screen
           name="more/runtimes/[id]"
           options={{
             title: t("screen.runtimes"),

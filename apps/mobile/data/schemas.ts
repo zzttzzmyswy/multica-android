@@ -22,6 +22,8 @@ import type {
   ChatSession,
   Comment,
   CronPreviewResponse,
+  DashboardUsageByAgent,
+  DashboardUsageDaily,
   InboxItem,
   Invitation,
   IssueLabelsResponse,
@@ -1074,3 +1076,52 @@ export { SkillSchema, EMPTY_SKILL };
 
 export const SkillListSchema = z.array(SkillSchema).default([]);
 export const EMPTY_SKILL_LIST: SkillSummary[] = [];
+
+// Workspace usage rollups (iteration-34 usage screen). Mirrors core's
+// DashboardUsageDailySchema / DashboardUsageByAgentSchema field-for-field
+// (packages/core/api/schemas.ts:1206) so the token buckets aggregate
+// identically to web; numeric defaults degrade a drift response to zeros
+// rather than crashing the page.
+const CostSplitShape = {
+  cost_usd_ticks: z.number().default(0),
+  uncosted_input_tokens: z.number().default(0),
+  uncosted_output_tokens: z.number().default(0),
+  uncosted_cache_read_tokens: z.number().default(0),
+  uncosted_cache_write_tokens: z.number().default(0),
+};
+
+export const DashboardUsageDailySchema: z.ZodType<DashboardUsageDaily> = z
+  .object({
+    date: z.string().default(""),
+    provider: z.string().default(""),
+    model: z.string().default(""),
+    input_tokens: z.number().default(0),
+    output_tokens: z.number().default(0),
+    cache_read_tokens: z.number().default(0),
+    cache_write_tokens: z.number().default(0),
+    ...CostSplitShape,
+    task_count: z.number().default(0),
+  })
+  .loose();
+
+export const DashboardUsageDailyListSchema = z
+  .array(DashboardUsageDailySchema)
+  .default([]);
+
+export const DashboardUsageByAgentSchema: z.ZodType<DashboardUsageByAgent> = z
+  .object({
+    agent_id: z.string().default(""),
+    provider: z.string().default(""),
+    model: z.string().default(""),
+    input_tokens: z.number().default(0),
+    output_tokens: z.number().default(0),
+    cache_read_tokens: z.number().default(0),
+    cache_write_tokens: z.number().default(0),
+    ...CostSplitShape,
+    task_count: z.number().default(0),
+  })
+  .loose();
+
+export const DashboardUsageByAgentListSchema = z
+  .array(DashboardUsageByAgentSchema)
+  .default([]);

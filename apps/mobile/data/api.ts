@@ -55,6 +55,8 @@ import type {
   Reaction,
   ReorderPinsRequest,
   RuntimeDevice,
+  DashboardUsageDaily,
+  DashboardUsageByAgent,
   SearchIssuesResponse,
   SearchProjectsResponse,
   SendChatMessageResponse,
@@ -111,6 +113,8 @@ import {
   ChatSessionSchema,
   ChildIssuesResponseSchema,
   CronPreviewResponseSchema,
+  DashboardUsageDailyListSchema,
+  DashboardUsageByAgentListSchema,
   EMPTY_ACTIVE_TASKS_RESPONSE,
   EMPTY_AGENT_LIST,
   EMPTY_AGENT_TASK_LIST,
@@ -688,8 +692,12 @@ class ApiClient {
     );
   }
 
-  async listAgents(opts?: { signal?: AbortSignal }): Promise<Agent[]> {
-    const raw = await this.fetch<unknown>("/api/agents", {
+  async listAgents(opts?: {
+    signal?: AbortSignal;
+    includeArchived?: boolean;
+  }): Promise<Agent[]> {
+    const qs = opts?.includeArchived ? "?include_archived=true" : "";
+    const raw = await this.fetch<unknown>(`/api/agents${qs}`, {
       signal: opts?.signal,
     });
     return parseWithFallback(raw, AgentListSchema, EMPTY_AGENT_LIST, {
@@ -707,6 +715,40 @@ class ApiClient {
     return parseWithFallback(raw, RuntimeListSchema, EMPTY_RUNTIME_LIST, {
       endpoint: "listRuntimes",
     });
+  }
+
+  // Workspace usage rollups — mirror packages/core/dashboard queries. Workspace
+  // is resolved by the X-Workspace-Slug header (fetch adds it); the 30s
+  // in-flight cap applies like every other route. Parsing degrades a drift
+  // response to [] so a changed backend never crashes the page.
+  async getDashboardUsageDaily(
+    days: number,
+    opts?: { signal?: AbortSignal },
+  ): Promise<DashboardUsageDaily[]> {
+    const raw = await this.fetch<unknown>(`/api/dashboard/usage/daily?days=${days}`, {
+      signal: opts?.signal,
+    });
+    return parseWithFallback(
+      raw,
+      DashboardUsageDailyListSchema,
+      [],
+      { endpoint: "getDashboardUsageDaily" },
+    );
+  }
+
+  async getDashboardUsageByAgent(
+    days: number,
+    opts?: { signal?: AbortSignal },
+  ): Promise<DashboardUsageByAgent[]> {
+    const raw = await this.fetch<unknown>(`/api/dashboard/usage/by-agent?days=${days}`, {
+      signal: opts?.signal,
+    });
+    return parseWithFallback(
+      raw,
+      DashboardUsageByAgentListSchema,
+      [],
+      { endpoint: "getDashboardUsageByAgent" },
+    );
   }
 
   // Workspace-wide active agent tasks + each agent's most recent terminal —
