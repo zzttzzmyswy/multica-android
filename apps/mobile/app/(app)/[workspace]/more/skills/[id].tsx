@@ -199,6 +199,19 @@ export default function SkillDetailPage() {
               </View>
             ) : null}
           </View>
+
+          {canEdit ? (
+            <Pressable
+              onPress={() => setEditing(true)}
+              className="mt-3 flex-row items-center justify-center gap-2 rounded-md border border-border px-3 py-2.5 active:bg-secondary"
+              accessibilityLabel={t("skills.detail.edit")}
+            >
+              <Ionicons name="create-outline" size={15} color={theme.mutedForeground} />
+              <Text className="text-sm font-medium text-foreground">
+                {t("skills.detail.edit")}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
 
         {/* SKILL.md */}
