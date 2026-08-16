@@ -38,11 +38,20 @@
  * default elsewhere.
  */
 import { useCallback, useMemo } from "react";
-import { Linking, View } from "react-native";
+import { Alert, Linking, View } from "react-native";
 import { router } from "expo-router";
 import { EnrichedMarkdownText } from "react-native-enriched-markdown";
 import type { Attachment } from "@multica/core/types";
+import { matchAttachmentByURL } from "@multica/core/attachments/image-sequence";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { getDisplayBaseUrl, getWebBaseUrl } from "@/data/server-config";
+import { useTranslation } from "@/lib/i18n/react";
+import { downloadAttachmentAndOpen } from "@/lib/download-attachment";
+import {
+  isAttachmentDownloadUrl,
+  filenameFromDownloadUrl,
+  rebaseDownloadUrl,
+} from "@/lib/attachment-download";
 import { preprocessMobileMarkdown } from "./preprocess";
 import { useMarkdownStyle } from "./markdown-style";
 import { splitMarkdown } from "./split-markdown";
@@ -112,6 +121,7 @@ export function Markdown({
   compact = false,
 }: Props) {
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
+  const { t } = useTranslation();
   const baseStyle = useMarkdownStyle();
   const markdownStyle = useMemo(
     () =>
@@ -163,6 +173,45 @@ export function Markdown({
         }
         return;
       }
+      // Attachment / upload download URLs must NEVER go to the external
+      // browser: the browser tab carries no `Authorization` header, so the
+      // backend rejects them with `missing authorization` (MYS-327, same
+      // root cause as the MYS-270 chip fix). Download in-app with the
+      // session auth, then open the saved file via the system handler
+      // sheet.
+      const matched = matchAttachmentByURL(url, attachments);
+      if (matched) {
+        // Known attachment → mirror the standalone file-card path: use the
+        // attachment's download_url (server-relative or presigned), which
+        // resolves against the current API base, and its real filename /
+        // content-type.
+        void downloadAttachmentAndOpen(
+          matched.download_url ?? url,
+          matched.filename,
+          matched.content_type,
+        ).catch(() => {
+          Alert.alert(t("download.failedTitle"), t("download.failedMessage"));
+        });
+        return;
+      }
+      if (isAttachmentDownloadUrl(url, getDisplayBaseUrl(), getWebBaseUrl())) {
+        // Unmatched bare link (e.g. a hand-written download URL in a message
+        // with no attachment row). `isAttachmentDownloadUrl`'s host gate
+        // keeps the bearer token off foreign origins; rebase the request
+        // onto the configured API base so a sibling-ingress markdown_url
+        // never receives it either.
+        const target = rebaseDownloadUrl(url, getDisplayBaseUrl()) ?? url;
+        void downloadAttachmentAndOpen(
+          target,
+          filenameFromDownloadUrl(url),
+        ).catch(() => {
+          Alert.alert(
+            t("download.failedTitle"),
+            t("download.failedMessage"),
+          );
+        });
+        return;
+      }
       // Everything else — http(s), mailto, tel, app-scheme deep links —
       // hand off to the system. Linking.openURL throws if no app handles
       // the URL; the catch keeps a stray tap from crashing the screen.
@@ -170,7 +219,7 @@ export function Markdown({
         // Silent: failing loudly is worse than a no-op tap.
       });
     },
-    [wsSlug],
+    [attachments, t, wsSlug],
   );
 
   if (segments.length === 0) return null;

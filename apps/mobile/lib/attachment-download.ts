@@ -73,3 +73,145 @@ export function mimeTypeForFilename(
   const ext = filename.slice(lastDot + 1).toLowerCase();
   return EXT_MIME[ext] ?? fallback;
 }
+
+// ---------------------------------------------------------------------------
+// Download-URL recognition (MYS-327)
+// ---------------------------------------------------------------------------
+
+/**
+ * UUID shape canonical to the backend's attachment download endpoints —
+ * kept in sync with `lib/markdown/preprocess.ts` (same literal). Used to
+ * recognize a download URL in a tapped markdown link, where the earlier
+ * MYS-270 fix (attachment cards in the message) does not apply.
+ */
+const ATTACHMENT_UUID =
+  "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
+
+/** Server paths that require the session auth header to download:
+ *  stable `/api/attachments/<uuid>/download` (the persisted `markdown_url`
+ *  shape — the server self-resigns/proxies it on every request) and
+ *  `/uploads/<file>` (storage-relative). A bare `/uploads/` directory (no
+ *  file) and malformed UUIDs do not match, so a stray link can't be
+ *  intercepted as a download. */
+const DOWNLOAD_PATH_RE = new RegExp(
+  `^/api/attachments/${ATTACHMENT_UUID}/download([?#]|$)|^/uploads/[^?#]`,
+);
+
+function stripQueryAndFragment(url: string): string {
+  const q = url.indexOf("?");
+  const h = url.indexOf("#");
+  if (q < 0 && h < 0) return url;
+  const cut = q < 0 ? h : h < 0 ? q : Math.min(q, h);
+  return url.slice(0, cut);
+}
+
+/**
+ * True when tapping `rawUrl` should download the file in-app with the session
+ * auth instead of handing it to an external browser.
+ *
+ * The browser tab that `Linking.openURL` would open carries no `Authorization`
+ * header, so the backend rejects attachment/upload downloads with
+ * `missing authorization` (MYS-327, MYS-270). Matches:
+ *   - server-relative `/api/attachments/<uuid>/download` and `/uploads/...`
+ *     paths (no host — always our API origin), and
+ *   - absolute http(s) URLs with one of those paths whose host equals the API
+ *     or public web base, or is a subdomain of one (a self-hosted deployment
+ *     may split its API and web frontends across subdomains, e.g. the
+ *     persisted `markdown_url` on `api.example.test` while the app is pointed
+ *     at `example.test`). Presigned CDN URLs — foreign host or a host that
+ *     shares no suffix with either base — stay browser-routable: intercepting
+ *     them would send the Bearer token to a third party, which is why the
+ *     host gate is load-bearing.
+ *
+ * The hosts are compared after passing them in so this stays pure (the
+ * caller reads the live base from `server-config`).
+ */
+export function isAttachmentDownloadUrl(
+  rawUrl: string,
+  apiBase: string,
+  webBase = apiBase,
+): boolean {
+  if (!rawUrl) return false;
+  const isRelative = rawUrl.startsWith("/");
+  const isHttp = /^https?:\/\//i.test(rawUrl);
+  if (!isRelative && !isHttp) return false;
+
+  let path: string;
+  if (isRelative) {
+    path = rawUrl;
+  } else {
+    try {
+      const url = new URL(rawUrl);
+      const baseHost = new URL(apiBase).host;
+      const webHost = new URL(webBase).host;
+      if (
+        !hostMatches(url.host, baseHost) &&
+        !hostMatches(url.host, webHost)
+      ) {
+        return false;
+      }
+      path = url.pathname;
+    } catch {
+      return false;
+    }
+  }
+  return DOWNLOAD_PATH_RE.test(stripQueryAndFragment(path));
+}
+
+/** Host equality or same-zone subdomain (`api.zone.test` ⊂ `zone.test`).
+ *  Leading-dot comparison prevents prefix-boundary false positives
+ *  (`notzone.test` never matches `.zone.test`). */
+function hostMatches(rawHost: string, baseHost: string): boolean {
+  const raw = rawHost.toLowerCase();
+  const base = baseHost.toLowerCase();
+  return raw === base || raw.endsWith(`.${base}`);
+}
+
+/**
+ * Rewrite an absolute attachment download URL onto `base` (our configured API
+ * origin) so the authenticated request always targets the origin the user
+ * configured — never the host embedded in `rawUrl`. A persisted markdown_url
+ * may point at a sibling ingress (`api.example.test`) while the app's base is
+ * `example.test`; both serve the same backend, but the bearer token must only
+ * travel to the configured base. Server-relative URLs are already
+ * base-relative and pass through unchanged; non-http(s) returns `null`.
+ */
+export function rebaseDownloadUrl(
+  rawUrl: string,
+  base: string,
+): string | null {
+  if (!rawUrl) return null;
+  if (rawUrl.startsWith("/")) return rawUrl;
+  if (!/^https?:\/\//i.test(rawUrl)) return null;
+  try {
+    const url = new URL(rawUrl);
+    const trimmedBase = base.replace(/\/+$/, "");
+    if (!trimmedBase) return null;
+    return `${trimmedBase}${url.pathname}${url.search}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fallback filename for a download URL when the tap never resolves to an
+ * `Attachment` record: the last URL path segment, percent-decoded. The
+ * generic `/api/attachments/<uuid>/download` endpoint carries no name (its
+ * last segment is literally "download"), so it folds back to `fallback` —
+ * callers that also have the attachment list should prefer
+ * `Attachment.filename` first.
+ */
+export function filenameFromDownloadUrl(
+  rawUrl: string,
+  fallback = "download",
+): string {
+  if (!rawUrl) return fallback;
+  const withoutQuery = stripQueryAndFragment(rawUrl);
+  const lastSegment = withoutQuery.split("/").pop();
+  if (!lastSegment || lastSegment === "download") return fallback;
+  try {
+    return decodeURIComponent(lastSegment);
+  } catch {
+    return lastSegment;
+  }
+}
