@@ -37,6 +37,8 @@ import type {
   SearchIssuesResponse,
   SearchProjectsResponse,
   SendChatMessageResponse,
+  Skill,
+  SkillSummary,
   Squad,
   SquadMember,
   SquadMemberPreview,
@@ -44,7 +46,12 @@ import type {
   User,
   Workspace,
 } from "@multica/core/types";
-import { AutopilotRunSchema, IssueSchema } from "@multica/core/api/schemas";
+import {
+  AutopilotRunSchema,
+  IssueSchema,
+  SkillSchema,
+  EMPTY_SKILL,
+} from "@multica/core/api/schemas";
 
 /** Upload response. Only fields mobile actually consumes — `url` to put
  *  into the markdown link, `filename` for the `[📎 name](url)` form, `id`
@@ -1058,4 +1065,12 @@ export const EMPTY_LIST_AUTOPILOT_RUNS_RESPONSE: {
 };
 
 // Helpers re-exported for ergonomic single-import at the call site.
-export type { Label, Project, ProjectResource };
+export type { Label, Project, ProjectResource, Skill, SkillSummary };
+
+// Skills. `SkillSchema` has drift defense (`.loose()` + defaults) in core —
+// re-export it alongside a list-level schema so api.listSkills can apply
+// the same defense to a bare `SkillSummary[]` payload.
+export { SkillSchema, EMPTY_SKILL };
+
+export const SkillListSchema = z.array(SkillSchema).default([]);
+export const EMPTY_SKILL_LIST: SkillSummary[] = [];

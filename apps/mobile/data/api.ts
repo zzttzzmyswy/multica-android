@@ -58,6 +58,10 @@ import type {
   SearchIssuesResponse,
   SearchProjectsResponse,
   SendChatMessageResponse,
+  Skill,
+  SkillSummary,
+  CreateSkillRequest,
+  UpdateSkillRequest,
   Squad,
   SquadMember,
   SquadMemberStatusListResponse,
@@ -153,6 +157,10 @@ import {
   SearchIssuesResponseSchema,
   SearchProjectsResponseSchema,
   SendChatMessageResponseSchema,
+  SkillListSchema,
+  EMPTY_SKILL_LIST,
+  SkillSchema,
+  EMPTY_SKILL,
   SquadListSchema,
   SquadSchema,
   SquadMemberListSchema,
@@ -1152,6 +1160,52 @@ class ApiClient {
   // short-circuits 204 → undefined, so no body parsing needed.
   async deleteLabel(id: string): Promise<void> {
     await this.fetch<void>(`/api/labels/${id}`, { method: "DELETE" });
+  }
+
+  // --- Skills ---
+  // List endpoint returns a bare `SkillSummary[]` (no `content`/`files`
+  // bodies). Drift defense via SkillListSchema; the fallback empties the
+  // list instead of crashing the page, same as listLabels.
+  async listSkills(opts?: {
+    signal?: AbortSignal;
+  }): Promise<SkillSummary[]> {
+    const raw = await this.fetch<unknown>("/api/skills", {
+      signal: opts?.signal,
+    });
+    return parseWithFallback(raw, SkillListSchema, EMPTY_SKILL_LIST, {
+      endpoint: "GET /api/skills",
+    });
+  }
+
+  // Full skill: `content` + `files[]` included. Drift defense mirrors
+  // getLabel for this read-only endpoint.
+  async getSkill(id: string): Promise<Skill> {
+    const raw = await this.fetch<unknown>(`/api/skills/${id}`);
+    return parseWithFallback(raw, SkillSchema, EMPTY_SKILL, {
+      endpoint: "GET /api/skills/{id}",
+    });
+  }
+
+  async createSkill(body: CreateSkillRequest): Promise<Skill> {
+    return this.fetch<Skill>("/api/skills", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
+  async updateSkill(id: string, body: UpdateSkillRequest): Promise<Skill> {
+    const raw = await this.fetch<unknown>(`/api/skills/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+    return parseWithFallback(raw, SkillSchema, EMPTY_SKILL, {
+      endpoint: "PUT /api/skills/{id}",
+    });
+  }
+
+  // 204 No Content on success, same as deleteLabel.
+  async deleteSkill(id: string): Promise<void> {
+    await this.fetch<void>(`/api/skills/${id}`, { method: "DELETE" });
   }
 
   async attachLabel(
