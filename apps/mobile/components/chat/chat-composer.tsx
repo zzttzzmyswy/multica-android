@@ -19,12 +19,13 @@
  *     server back-fills `chat_message_id` on each row when the message
  *     persists (server-side). `MessageComposer` calls `api.uploadFile`
  *     without `{ issueId, commentId }`.
- *   - **Keyboard**: `MessageComposer` keeps its default `manageKeyboard`
- *     (its built-in `KeyboardStickyView` lifts the composer above the IME
- *     and adds the safe-area bottom inset) — the same keyboard-aware path
- *     the inline issue comment composer uses, so chat and issue behave
- *     identically on Android edge-to-edge. chat.tsx must not add its own
- *     keyboard wrapper on top.
+ *   - **Parent owns keyboard**: chat.tsx wraps the composer in a
+ *     `KeyboardStickyView` (react-native-keyboard-controller), so
+ *     `manageKeyboard={false}` stops the composer from stacking its own
+ *     keyboard handling on top. The Chat screen also sets
+ *     `tabBarHideOnKeyboard` ((tabs)/_layout.tsx) so the full-keyboard-
+ *     height lift lands flush against the IME — with the tab bar visible
+ *     the composer would float above the keyboard by the bar's height.
  *
  * Previously a hand-written 400-LOC twin of inline-comment-composer.tsx;
  * now ~50 LOC plus the StopButton subcomponent.
@@ -121,6 +122,7 @@ export function ChatComposer({
       disabledReason={disabledReason}
       isSending={sending}
       renderStop={allowStop ? () => <StopButton onPress={handleStop} /> : undefined}
+      manageKeyboard={false}
     />
   );
 }

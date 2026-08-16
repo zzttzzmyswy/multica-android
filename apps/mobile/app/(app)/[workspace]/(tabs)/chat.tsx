@@ -4,20 +4,23 @@
  * Layout:
  *   View ─ Header(center: ChatTitleButton, right: ChatSessionActions)
  *        ─ (NoAgentBanner?)
- *        ─ KeyboardAvoidingView(behavior="height") ─ ChatMessageList
+ *        ─ KeyboardStickyView ─ ChatMessageList
  *                                        ─ OfflineBanner
  *                                        ─ ChatComposer
  *
- * Keyboard: the whole content area sits in react-native-keyboard-controller's
- * `KeyboardAvoidingView` with `behavior="height"`. RNC's version computes the
- * compressed height from the *relative* keyboard height (its own frame bottom
- * vs the real IME top), so it works under Android edge-to-edge AND below the
- * bottom tab bar — where the composer starts too high for KeyboardStickyView's
- * full-keyboard-height lift (which left the chat composer floating above the
- * IME). RN's built-in KeyboardAvoidingView is unreliable here (adjustResize is
- * ignored once the window opts out of decor-fitting), so the RNC one is used
- * instead; `ChatComposer` passes `manageKeyboard={false}` to keep the
- * composer from stacking its own keyboard handling on top.
+ * Keyboard: the composer sits in a `KeyboardStickyView` from
+ * react-native-keyboard-controller (the app already mounts its
+ * `KeyboardProvider` at root) that lifts it by the full IME height. For
+ * that lift to land exactly on the keyboard top, the composer's resting
+ * position must be the bottom of the screen's content area — which under
+ * the bottom tab bar it is not (the bar occupies the gap), so the tab bar
+ * is hidden while the keyboard is open via the Chat screen's
+ * `tabBarHideOnKeyboard` option in (tabs)/_layout.tsx. With the bar gone
+ * the composer lifts flush against the IME, matching the issue page.
+ * RN's built-in KeyboardAvoidingView is unreliable on Android edge-to-edge
+ * (adjustResize is ignored once the window opts out of decor-fitting);
+ * `ChatComposer` passes `manageKeyboard={false}` so the composer does not
+ * stack its own keyboard handling on top of the sticky view.
  * Session switching, agent selection, and session deletion all happen
  * inside this screen via Modal sheets — there is no `/chat/[id]` sub-route.
  *
@@ -40,7 +43,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, View } from "react-native";
-import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+import { KeyboardStickyView } from "react-native-keyboard-controller";
 import { router } from "expo-router";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -489,11 +492,7 @@ export default function ChatTab() {
         }
       />
       {availability === "none" ? <NoAgentBanner /> : null}
-      <KeyboardAvoidingView
-        behavior="height"
-        style={{ flex: 1 }}
-        className="flex-1"
-      >
+      <View className="flex-1">
         <ChatMessageList
           messages={visibleMessages}
           loading={messagesLoading}
@@ -516,17 +515,19 @@ export default function ChatTab() {
         ) : currentAgent ? (
           <RuntimeRequiredBanner agentName={currentAgent.name} />
         ) : null}
-        <ChatComposer
-          value={draft}
-          onChangeText={(next) => setDraft(draftKey, next)}
-          onSend={handleSend}
-          onStop={handleStop}
-          sending={sending}
-          allowStop={pendingTask?.status !== "queued"}
-          disabled={disabled}
-          disabledReason={disabledReason}
-        />
-      </KeyboardAvoidingView>
+        <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
+          <ChatComposer
+            value={draft}
+            onChangeText={(next) => setDraft(draftKey, next)}
+            onSend={handleSend}
+            onStop={handleStop}
+            sending={sending}
+            allowStop={pendingTask?.status !== "queued"}
+            disabled={disabled}
+            disabledReason={disabledReason}
+          />
+        </KeyboardStickyView>
+      </View>
 
       <AgentPickerSheet
         visible={agentPickerOpen}

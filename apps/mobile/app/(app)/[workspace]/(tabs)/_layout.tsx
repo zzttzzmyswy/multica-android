@@ -134,6 +134,11 @@ export default function TabsLayout() {
           name="chat"
           options={{
             title: translate("nav.chat"),
+            // Hide the tab bar while the keyboard is open: the keyboard
+            // covers it anyway, and without the bar the chat composer's
+            // KeyboardStickyView full-keyboard-height lift lands flush on
+            // the IME instead of floating above it (see chat.tsx).
+            tabBarHideOnKeyboard: true,
             tabBarBadge: chatBadge,
             tabBarBadgeStyle: BADGE_STYLE,
             tabBarIcon: ({ color, size, focused }) => (
