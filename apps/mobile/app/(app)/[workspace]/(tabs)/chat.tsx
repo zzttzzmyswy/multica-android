@@ -7,16 +7,15 @@
  *        ─ ChatMessageList (includes live status + timeline in its
  *                           ListFooterComponent)
  *        ─ OfflineBanner
- *        ─ KeyboardStickyView ─ ChatComposer
+ *        ─ ChatComposer
  *
- * Keyboard: the composer sits in a `KeyboardStickyView` from
- * react-native-keyboard-controller (the app already mounts its
- * `KeyboardProvider` at root). RN's own KeyboardAvoidingView is unreliable
- * on Android edge-to-edge (adjustResize is ignored once the window opts out
- * of decor-fitting; `behavior="height"` then miscalculates and bottom-anchored
- * inputs stay covered by the IME). The sticky view animates with the real
- * IME height, so the composer lifts above the keyboard on every Android
- * version.
+ * Keyboard: the composer owns its keyboard handling via `MessageComposer`'s
+ * built-in `KeyboardStickyView` (react-native-keyboard-controller, the app
+ * already mounts its `KeyboardProvider` at root) — the same path the inline
+ * issue comment composer uses, so chat and issue stick to the keyboard
+ * identically on Android edge-to-edge. RN's own KeyboardAvoidingView is
+ * unreliable there (adjustResize is ignored once the window opts out of
+ * decor-fitting), so it must not be layered on top.
  * Session switching, agent selection, and session deletion all happen
  * inside this screen via Modal sheets — there is no `/chat/[id]` sub-route.
  *
@@ -39,7 +38,6 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, View } from "react-native";
-import { KeyboardStickyView } from "react-native-keyboard-controller";
 import { router } from "expo-router";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -507,18 +505,16 @@ export default function ChatTab() {
         ) : currentAgent ? (
           <RuntimeRequiredBanner agentName={currentAgent.name} />
         ) : null}
-        <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
-          <ChatComposer
-            value={draft}
-            onChangeText={(next) => setDraft(draftKey, next)}
-            onSend={handleSend}
-            onStop={handleStop}
-            sending={sending}
-            allowStop={pendingTask?.status !== "queued"}
-            disabled={disabled}
-            disabledReason={disabledReason}
-          />
-        </KeyboardStickyView>
+        <ChatComposer
+          value={draft}
+          onChangeText={(next) => setDraft(draftKey, next)}
+          onSend={handleSend}
+          onStop={handleStop}
+          sending={sending}
+          allowStop={pendingTask?.status !== "queued"}
+          disabled={disabled}
+          disabledReason={disabledReason}
+        />
       </View>
 
       <AgentPickerSheet
