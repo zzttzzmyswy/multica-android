@@ -24,13 +24,16 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { workspaceListOptions } from "@/data/queries/workspaces";
 import { useAuthStore } from "@/data/auth-store";
+import { api } from "@/data/api";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useColorScheme, type ThemePreference } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
+import { getSavedLocaleOverride, resetLocale, setLocale } from "@/lib/i18n";
+import { LANGUAGE_OPTIONS, languageOptionForSaved, serverLanguageFor, type LanguageOptionId } from "@/lib/settings-language";
 import { cn } from "@/lib/utils";
 
-const THEME_OPTIONS: Array<{ value: ThemePreference; labelKey: string }> = [
+const THEME_OPTIONS: { value: ThemePreference; labelKey: string }[] = [
   { value: "light", labelKey: "settings.themeLight" },
   { value: "dark", labelKey: "settings.themeDark" },
   { value: "system", labelKey: "settings.themeSystem" },
@@ -49,6 +52,7 @@ function initialsOf(name: string | undefined): string {
 
 export default function SettingsPage() {
   const user = useAuthStore((s) => s.user);
+  const setUser = useAuthStore((s) => s.setUser);
   const logout = useAuthStore((s) => s.logout);
   const currentSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const setCurrentWorkspace = useWorkspaceStore((s) => s.setCurrentWorkspace);
@@ -84,6 +88,31 @@ export default function SettingsPage() {
   const goTokens = () => router.push(`/${currentSlug}/more/settings/tokens`);
   const goWorkspaceSettings = () =>
     router.push(`/${currentSlug}/more/settings/workspace`);
+
+  // Language follows the theme picker's tap-to-act pattern. The local switch
+  // takes effect immediately (setLocale/resetLocale persist + notify), and
+  // the PATCH /api/me sync is best-effort — same contract as web
+  // preferences-tab, where a failed sync warns but never blocks the change.
+  const onLanguageChange = async (option: LanguageOptionId) => {
+    const current = languageOptionForSaved(getSavedLocaleOverride());
+    if (option === current) return;
+
+    if (option === "system") {
+      await resetLocale();
+    } else {
+      setLocale(option);
+    }
+
+    const serverLang = serverLanguageFor(option);
+    if (serverLang) {
+      api
+        .updateMe({ language: serverLang })
+        .then((updated) => setUser(updated))
+        .catch(() => {
+          Alert.alert(t("settings.languageSyncFailed"));
+        });
+    }
+  };
 
   return (
     <ScrollView
@@ -185,6 +214,35 @@ export default function SettingsPage() {
                   className="flex-row items-center px-4 py-3.5 active:bg-secondary gap-3"
                 >
                   <RadioGroupItem value={opt.value} />
+                  <Text className="flex-1 text-base font-medium text-foreground">
+                    {t(opt.labelKey)}
+                  </Text>
+                </Pressable>
+                {!isLast ? <Separator /> : null}
+              </View>
+            );
+          })}
+        </RadioGroup>
+      </SectionGroup>
+
+      <SectionGroup title={t("settings.language")}>
+        {/* Same convergent-tap structure as the theme picker above: choosing a
+            language pins it (setLocale, persisted + synced to user.language);
+            "Follow system" clears the pin and falls back to the device. */}
+        <RadioGroup
+          value={languageOptionForSaved(getSavedLocaleOverride())}
+          onValueChange={(v) => void onLanguageChange(v as LanguageOptionId)}
+          className="gap-0"
+        >
+          {LANGUAGE_OPTIONS.map((opt, idx) => {
+            const isLast = idx === LANGUAGE_OPTIONS.length - 1;
+            return (
+              <View key={opt.id}>
+                <Pressable
+                  onPress={() => void onLanguageChange(opt.id)}
+                  className="flex-row items-center px-4 py-3.5 active:bg-secondary gap-3"
+                >
+                  <RadioGroupItem value={opt.id} />
                   <Text className="flex-1 text-base font-medium text-foreground">
                     {t(opt.labelKey)}
                   </Text>

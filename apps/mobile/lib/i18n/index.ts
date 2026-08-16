@@ -39,6 +39,7 @@ let ready: Promise<AppLocale> | null = null;
 export function resetI18nForTests(): void {
   ready = null;
   currentLocale = "en";
+  savedLocale = null;
 }
 
 /** Load the effective app locale (persisted override, else device language)
@@ -52,6 +53,7 @@ export function initI18n(): Promise<AppLocale> {
   if (!ready) {
     ready = (async () => {
       const saved = await getSavedLocale();
+      savedLocale = saved;
       const locale = saved ?? deviceLanguage();
       currentLocale = locale;
       // Mark both bundled dictionaries as referenced so bundlers keep them.
@@ -73,14 +75,26 @@ const DICTIONARIES: Record<AppLocale, Record<string, string>> = {
 
 let currentLocale: AppLocale = "en";
 
+/** In-memory copy of the persisted override ("en"/"zh"), or null when the
+ *  user follows the device language. Populated by initI18n at startup and
+ *  kept accurate by setLocale/resetLocale, so settings can read which of the
+ *  three options is selected without an extra SecureStore round-trip. */
+let savedLocale: AppLocale | null = null;
+
 /** Fetch the currently effective locale (device default until set). */
 export function getCurrentLocale(): AppLocale {
   return currentLocale;
 }
 
+/** The persisted locale override, or null when following the device. */
+export function getSavedLocaleOverride(): AppLocale | null {
+  return savedLocale;
+}
+
 /** Switch locale at runtime and persist the user's choice. */
 export function setLocale(locale: AppLocale): void {
   currentLocale = locale;
+  savedLocale = locale;
   void SecureStore.setItemAsync(LOCALE_KEY, locale);
   notifyLocaleChange();
 }
@@ -88,6 +102,7 @@ export function setLocale(locale: AppLocale): void {
 /** Replace the effective locale with the device one and clear the choice. */
 export async function resetLocale(): Promise<void> {
   currentLocale = deviceLanguage();
+  savedLocale = null;
   await SecureStore.deleteItemAsync(LOCALE_KEY);
   notifyLocaleChange();
 }
