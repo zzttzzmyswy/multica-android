@@ -1,13 +1,25 @@
 /**
- * Manual agent-create form (more/agents/new/manual). Fields mirror web
+ * Manual agent form — create (more/agents/new/manual) AND edit
+ * (more/agents/[id]/edit) modes. Fields mirror web
  * `packages/views/agents/create/agent-configuration-panel.tsx`, organised in
  * the same four sections (Identity / Behavior / Execution / Access).
  *
- * Submission uses core's `buildCreateAgentRequest` (draft.ts) → `POST
- * /api/agents`, then pushes the new agent's detail screen. The duplicate-name
+ * Create submission uses core's `buildCreateAgentRequest` (draft.ts) → `POST
+ * /api/agents`, then pushes the new agent's detail screen. Edit submission
+ * uses `buildUpdateAgentRequest` (same draft module) → `PUT /api/agents/{id}`
+ * (+ `setAgentSkills` when the skill set changed), then pops back to the
+ * detail screen whose list cache the mutations invalidate. The duplicate-name
  * 409 is classified to the name field inline (web use-create-agent-submit);
  * everything else — 400 (description over 255 / runtime missing), network —
  * surfaces as a form-level alert.
+ *
+ * Edit-mode divergences from create (each documented at its site):
+ *  - The seeded draft keeps the agent's own runtime even when it is offline
+ *    (an edit must not force a rebind); the gate only requires a selection.
+ *  - Access is OWNER-ONLY server-side (MUL-3963): a non-owner admin sees the
+ *    radios disabled and the access fields are omitted from the PUT body.
+ *  - No autoFocus on the name field (the user landed to make one small change,
+ *    not to type).
  *
  * Deliberate mobile divergences (each documented at its site):
  *  - Model / thinking / speed are plain optional text fields. Web loads a
@@ -23,12 +35,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, View } from "react-native";
 import { router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import type { Agent } from "@multica/core/types";
 import {
   AGENT_DESCRIPTION_MAX_LENGTH,
   EMPTY_AGENT_DRAFT,
   applyDraftModelChange,
   applyDraftRuntimeChange,
   buildCreateAgentRequest,
+  buildUpdateAgentRequest,
+  seedDraftFromAgent,
   type AgentDraft,
 } from "@multica/core/agents";
 import { runtimeDisplayLabel } from "@multica/core/runtimes";
@@ -43,8 +58,13 @@ import { AgentEmojiPickerSheet } from "@/components/agent/agent-emoji-picker-she
 import { RuntimePickerSheet } from "@/components/agent/runtime-picker-sheet";
 import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
 import { agentCreateGate, classifyAgentCreateError, usableRuntimes } from "@/lib/agent-create";
+import { agentEditGate } from "@/lib/agent-edit";
 import { formatAvatarEmoji, parseAvatarEmoji } from "@/lib/agent-avatar";
-import { useCreateAgent } from "@/data/mutations/agents";
+import {
+  useCreateAgent,
+  useSetAgentSkills,
+  useUpdateAgent,
+} from "@/data/mutations/agents";
 import { memberListOptions } from "@/data/queries/members";
 import { runtimeListOptions } from "@/data/queries/runtimes";
 import { skillListOptions } from "@/data/queries/skills";
@@ -67,7 +87,7 @@ const PERMISSION_SCOPES: {
   { value: "members", titleKey: "agents.new.accessMembers", descKey: "agents.new.accessMembersDesc" },
 ];
 
-export function ManualAgentForm() {
+export function ManualAgentForm({ agent }: { agent?: Agent | null }) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
@@ -75,7 +95,20 @@ export function ManualAgentForm() {
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
 
-  const [draft, setDraft] = useState<AgentDraft>(EMPTY_AGENT_DRAFT);
+  // `agent` present → edit mode: seed the draft from the agent (once; the
+  // edit page only renders the form with a loaded agent). Create mode starts
+  // empty.
+  const isEdit = agent != null;
+  const [draft, setDraft] = useState<AgentDraft>(() =>
+    isEdit ? seedDraftFromAgent(agent) : EMPTY_AGENT_DRAFT,
+  );
+  const initialSkills = useMemo(
+    () => new Set((agent?.skills ?? []).map((skill) => skill.id)),
+    [agent],
+  );
+  // Access fields are owner-only writes (MUL-3963): a non-owner admin edit
+  // keeps the agent's grants untouched and the radios disabled.
+  const canEditAccess = !isEdit || agent.owner_id === currentUserId;
   const [showErrors, setShowErrors] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -94,20 +127,35 @@ export function ManualAgentForm() {
     () => usableRuntimes(runtimes, currentUserId),
     [runtimes, currentUserId],
   );
+  // Edit mode keeps the agent's own runtime selectable even when offline —
+  // the picker list is the online+usable set PLUS the current binding (the
+  // binding must stay honest and re-choosable; an offline runtime is still
+  // the agent's home).
+  const pickerRuntimes = useMemo(() => {
+    if (!isEdit || !agent?.runtime_id || !draft.runtimeId) return usable;
+    if (usable.some((r) => r.id === draft.runtimeId)) return usable;
+    const bound = runtimes.find((r) => r.id === draft.runtimeId);
+    return bound ? [bound, ...usable] : usable;
+  }, [usable, runtimes, isEdit, agent?.runtime_id, draft.runtimeId]);
   const selectedRuntime =
-    runtimes.find((r) => r.id === draft.runtimeId) ?? null;
+    runtimes.find((r) => r.id === draft.runtimeId) ??
+    (isEdit ? pickerRuntimes.find((r) => r.id === draft.runtimeId) ?? null : null);
 
-  // Seeds the picker with the first usable runtime so the form is submittable
-  // without a manual selection — mirrors use-create-agent-form.ts, which only
-  // fills an empty slot (a runtime the user chose wins).
+  // Seeds the picker with the first usable runtime so the CREATE form is
+  // submittable without a manual selection — mirrors use-create-agent-form.ts.
+  // Edit drafts already carry their runtime binding, so this never fires there.
   useEffect(() => {
     if (draft.runtimeId || usable.length === 0) return;
     setDraft((current) => ({ ...current, runtimeId: usable[0].id }));
   }, [draft.runtimeId, usable]);
 
   const createAgent = useCreateAgent();
-  const gate = agentCreateGate(draft, selectedRuntime, currentUserId);
-  const isSubmitting = createAgent.isPending;
+  const updateAgent = useUpdateAgent(agent?.id ?? "");
+  const setSkills = useSetAgentSkills(agent?.id ?? "");
+  const gate = isEdit
+    ? agentEditGate(draft)
+    : agentCreateGate(draft, selectedRuntime, currentUserId);
+  const isSubmitting = createAgent.isPending || updateAgent.isPending || setSkills.isPending;
   const canCreate =
     !isSubmitting &&
     !gate.nameMissing &&
@@ -115,6 +163,8 @@ export function ManualAgentForm() {
     !gate.accessInvalid &&
     !gate.descriptionOverLimit &&
     nameError == null;
+  const skillsChanged =
+    isEdit && (draft.skillIds.size !== initialSkills.size || ![...draft.skillIds].every((id) => initialSkills.has(id)));
 
   const set = <K extends keyof AgentDraft>(key: K, value: AgentDraft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
@@ -165,25 +215,52 @@ export function ManualAgentForm() {
     setNameError(null);
     setFormError(null);
     try {
-      const agent = await createAgent.mutateAsync(
-        buildCreateAgentRequest({
-          draft,
-          runtimeId: draft.runtimeId,
-          template: "mobile-manual",
-        }),
-      );
-      if (wsSlug) router.replace(`/${wsSlug}/more/agents/${agent.id}`);
-      else router.back();
+      if (isEdit && agent) {
+        await updateAgent.mutateAsync(
+          buildUpdateAgentRequest({
+            draft,
+            runtimeId: draft.runtimeId,
+            includeAccess: canEditAccess,
+          }),
+        );
+        if (skillsChanged) {
+          await setSkills.mutateAsync({ skill_ids: [...draft.skillIds] });
+        }
+        router.back();
+      } else {
+        const created = await createAgent.mutateAsync(
+          buildCreateAgentRequest({
+            draft,
+            runtimeId: draft.runtimeId,
+            template: "mobile-manual",
+          }),
+        );
+        if (wsSlug) router.replace(`/${wsSlug}/more/agents/${created.id}`);
+        else router.back();
+      }
     } catch (err) {
       const next = classifyAgentCreateError(
         err,
-        t("agents.new.failedMessage"),
+        isEdit ? t("agents.edit.failedMessage") : t("agents.new.failedMessage"),
         t("agents.new.nameConflict"),
       );
       setNameError(next.nameError);
       setFormError(next.formError);
     }
-  }, [canCreate, gate.accessInvalid, draft, wsSlug, createAgent, t]);
+  }, [
+    canCreate,
+    gate.accessInvalid,
+    isEdit,
+    agent,
+    draft,
+    canEditAccess,
+    skillsChanged,
+    wsSlug,
+    createAgent,
+    updateAgent,
+    setSkills,
+    t,
+  ]);
 
   const avatarEmoji = parseAvatarEmoji(draft.avatarUrl);
 
@@ -221,7 +298,7 @@ export function ManualAgentForm() {
             invalid={(showErrors && gate.nameMissing) || !!nameError}
             editable={!isSubmitting}
             maxLength={120}
-            autoFocus
+            autoFocus={!isEdit}
           />
           {nameError ? <FieldError text={nameError} /> : null}
           {showErrors && gate.nameMissing && !nameError ? (
@@ -370,7 +447,7 @@ export function ManualAgentForm() {
         ) : null}
         <RuntimePickerSheet
           visible={runtimePickerOpen}
-          runtimes={usable}
+          runtimes={pickerRuntimes}
           loading={runtimesLoading}
           selectedId={draft.runtimeId}
           onPick={(runtime) => handleRuntimePick(runtime.id)}
@@ -427,13 +504,18 @@ export function ManualAgentForm() {
       <SectionLabel
         icon="lock-closed-outline"
         title={t("agents.new.access")}
-        hint={t("agents.new.accessHint")}
+        hint={
+          isEdit && !canEditAccess
+            ? t("agents.edit.accessOwnerOnly")
+            : t("agents.new.accessHint")
+        }
       />
 
       <View className="gap-1">
         <RadioGroup
           value={draft.permissionScope}
           onValueChange={(v) => set("permissionScope", v as PermissionScope)}
+          disabled={!canEditAccess || isSubmitting}
         >
           {PERMISSION_SCOPES.map((scope) => {
             const active = draft.permissionScope === scope.value;
@@ -441,7 +523,7 @@ export function ManualAgentForm() {
               <Pressable
                 key={scope.value}
                 onPress={() => set("permissionScope", scope.value)}
-                disabled={isSubmitting}
+                disabled={!canEditAccess || isSubmitting}
                 className={cn(
                   "flex-row items-center gap-2.5 rounded-md px-2 py-2",
                   active && "bg-secondary",
@@ -450,7 +532,7 @@ export function ManualAgentForm() {
                 <RadioGroupItem
                   value={scope.value}
                   aria-label={t(scope.titleKey)}
-                  disabled={isSubmitting}
+                  disabled={!canEditAccess || isSubmitting}
                 />
                 <View className="flex-1">
                   <Text className="text-sm font-medium text-foreground">
@@ -470,7 +552,7 @@ export function ManualAgentForm() {
         <View className="gap-1.5">
           <Pressable
             onPress={() => setMemberPickerOpen(true)}
-            disabled={isSubmitting}
+            disabled={!canEditAccess || isSubmitting}
             accessibilityLabel={t("agents.new.membersLabel")}
             className={cn(
               "flex-row items-center gap-2.5 rounded-md border px-3 py-2.5",
@@ -531,7 +613,13 @@ export function ManualAgentForm() {
 
       <Button onPress={() => void handleSubmit()} disabled={isSubmitting}>
         <Text>
-          {isSubmitting ? t("agents.new.creating") : t("agents.new.create")}
+          {isSubmitting
+            ? isEdit
+              ? t("agents.edit.saving")
+              : t("agents.new.creating")
+            : isEdit
+              ? t("agents.edit.save")
+              : t("agents.new.create")}
         </Text>
       </Button>
     </View>

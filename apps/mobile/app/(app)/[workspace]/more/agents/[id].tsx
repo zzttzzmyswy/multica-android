@@ -1,9 +1,10 @@
 /**
- * Agent detail screen. Reached from the agents list row. Mirrors web
- * `packages/views/agents` semantics without the management surface (no
- * create/edit/archive on mobile — see MYS-302 scope):
+ * Agent detail screen. Reached from the agents list row. Mirrors
+ * `packages/views/agents` semantics — the management surface (edit / archive /
+ * restore / environment) lives behind the header "⋯" menu (MYS-330):
  *
- *  - Header: avatar + name + lifecycle pill + 2-line description.
+ *  - Header: avatar + name + lifecycle pill + "⋯" action menu + 2-line
+ *    description. Archived agents show a banner with a Restore action.
  *  - Profile: model, visibility, runtime mode, runtime presence (dot +
  *    availability label), owner, created date.
  *  - Running tasks: the workspace agent-task snapshot filtered to this agent
@@ -19,6 +20,7 @@
 import { useMemo } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -31,9 +33,11 @@ import type { AgentTask } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PresenceDot } from "@/components/ui/presence-dot";
-import { agentListOptions } from "@/data/queries/agents";
+import { AgentDetailActions } from "@/components/agent/agent-detail-actions";
+import { agentListAllOptions } from "@/data/queries/agents";
 import { agentTaskSnapshotOptions } from "@/data/queries/agent-task-snapshot";
 import { runtimeListOptions } from "@/data/queries/runtimes";
+import { useRestoreAgent } from "@/data/mutations/agents";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useWorkspacePresenceMap } from "@/lib/use-agent-presence";
@@ -110,13 +114,26 @@ export default function AgentDetailPage() {
   const theme = THEME[colorScheme];
   const { getName } = useActorLookup();
 
-  const agents = useQuery(agentListOptions(wsId));
+  const agents = useQuery(agentListAllOptions(wsId));
   const tasks = useQuery(agentTaskSnapshotOptions(wsId));
   const runtimes = useQuery(runtimeListOptions(wsId));
   const presence = useWorkspacePresenceMap(wsId);
+  const restoreAgent = useRestoreAgent();
 
   const agent = agents.data?.find((a) => a.id === id);
   const archived = agent != null && isArchived(agent);
+  const restoreWithFeedback = () => {
+    if (!agent) return;
+    restoreAgent.mutate(agent.id, {
+      onError: (err) =>
+        Alert.alert(
+          t("agents.detail.restoreFailedTitle"),
+          err instanceof Error && err.message
+            ? err.message
+            : t("agents.detail.restoreFailedMessage"),
+        ),
+    });
+  };
   const detail = agent ? presence.byAgent.get(agent.id) : undefined;
   const availability = archived
     ? "archived"
@@ -197,11 +214,32 @@ export default function AgentDetailPage() {
                 </Text>
               </View>
             ) : null}
+            <AgentDetailActions agent={agent} />
           </View>
           {agent.description ? (
             <Text className="px-4 pt-2 text-sm text-muted-foreground">
               {agent.description}
             </Text>
+          ) : null}
+          {archived ? (
+            <View className="mx-4 mt-3 flex-row items-center justify-between gap-3 rounded-md border border-border bg-secondary/50 px-3 py-2.5">
+              <Text className="flex-1 text-xs text-muted-foreground leading-5">
+                {t("agents.detail.archivedBanner")}
+              </Text>
+              <Pressable
+                onPress={restoreWithFeedback}
+                disabled={restoreAgent.isPending}
+                accessibilityRole="button"
+                accessibilityLabel={t("agents.detail.menu.restore")}
+                className="active:opacity-70"
+              >
+                <Text className="text-xs font-semibold text-brand">
+                  {restoreAgent.isPending
+                    ? t("agents.detail.restoring")
+                    : t("agents.detail.menu.restore")}
+                </Text>
+              </Pressable>
+            </View>
           ) : null}
 
           {/* Profile */}

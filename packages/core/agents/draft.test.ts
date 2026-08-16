@@ -6,8 +6,10 @@ import {
   buildCreateAgentRequest,
   buildDuplicateDraft,
   buildInvocationTargets,
+  buildUpdateAgentRequest,
   deriveDuplicateAccess,
   isDraftDescriptionWithinLimit,
+  seedDraftFromAgent,
   type AgentDraft,
 } from "./draft";
 
@@ -263,5 +265,97 @@ describe("agent draft execution overrides", () => {
     // Runes, not UTF-16 units: 255 CJK characters are exactly at the limit.
     expect(isDraftDescriptionWithinLimit("汉".repeat(255))).toBe(true);
     expect(isDraftDescriptionWithinLimit("汉".repeat(256))).toBe(false);
+  });
+});
+
+describe("seedDraftFromAgent", () => {
+  it("round-trips an agent's fields plus its derived grants", () => {
+    const seeded = seedDraftFromAgent(
+      sourceAgent({
+        permission_mode: "public_to",
+        invocation_targets: [{ target_type: "member", target_id: "member-1" }],
+      }),
+    );
+
+    expect(seeded).toMatchObject({
+      name: "Fast Codex",
+      description: "Ships quickly",
+      instructions: "Be quick",
+      runtimeId: "runtime-1",
+      model: "gpt-5.6-sol",
+      thinkingLevel: "high",
+      serviceTier: "priority",
+      permissionScope: "members",
+    });
+    expect([...seeded.memberIds]).toEqual(["member-1"]);
+    expect([...seeded.skillIds]).toEqual(["skill-1"]);
+  });
+
+  it("keeps the agent's own runtime even when it is offline — an edit must not force a rebind", () => {
+    const seeded = seedDraftFromAgent(
+      sourceAgent({ runtime_id: "runtime-2" }),
+    );
+    expect(seeded.runtimeId).toBe("runtime-2");
+  });
+});
+
+describe("buildUpdateAgentRequest", () => {
+  it("assembles the PUT body from a draft, clearing overrides explicitly", () => {
+    const request = buildUpdateAgentRequest({
+      draft: {
+        ...draft(),
+        name: "  Renamed ",
+        description: "  New desc  ",
+        model: "",
+        thinkingLevel: "",
+        serviceTier: "",
+      },
+      runtimeId: "runtime-1",
+    });
+
+    expect(request).toMatchObject({
+      name: "Renamed",
+      description: "New desc",
+      runtime_id: "runtime-1",
+      // Tri-state semantics: "" is the explicit "clear / fall back to runtime
+      // default" signal on UPDATE, where an omitted field would preserve the
+      // saved override.
+      model: "",
+      thinking_level: "",
+    });
+    // Instructions ride along (an edit form is a full editor); an empty
+    // avatar_url is omitted so a null avatar preserves the current one.
+    expect(request.instructions).toBe("Old instructions");
+    expect(request.avatar_url).toBeUndefined();
+  });
+
+  it("maps a members scope to public_to grants", () => {
+    const request = buildUpdateAgentRequest({
+      draft: {
+        ...draft(),
+        permissionScope: "members",
+        memberIds: new Set(["member-1"]),
+        teamIds: new Set(["team-1"]),
+      },
+      runtimeId: "runtime-1",
+    });
+
+    expect(request.permission_mode).toBe("public_to");
+    expect(request.invocation_targets).toEqual([
+      { target_type: "member", target_id: "member-1" },
+      { target_type: "team", target_id: "team-1" },
+    ]);
+  });
+
+  it("omits access fields for a non-owner admin edit (owner-only writes)", () => {
+    const request = buildUpdateAgentRequest({
+      draft: { ...draft(), permissionScope: "workspace" },
+      runtimeId: "runtime-1",
+      includeAccess: false,
+    });
+
+    expect(request.permission_mode).toBeUndefined();
+    expect(request.invocation_targets).toBeUndefined();
+    expect(request.name).toBe("Old name");
   });
 });

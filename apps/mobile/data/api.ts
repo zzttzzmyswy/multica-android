@@ -15,6 +15,7 @@
  */
 import type {
   Agent,
+  AgentEnvResponse,
   AgentTask,
   Attachment,
   Autopilot,
@@ -61,6 +62,7 @@ import type {
   SearchIssuesResponse,
   SearchProjectsResponse,
   SendChatMessageResponse,
+  SetAgentSkillsRequest,
   Skill,
   SkillSummary,
   CreateSkillRequest,
@@ -75,6 +77,8 @@ import type {
   RemoveSquadMemberRequest,
   TaskMessagePayload,
   TimelineEntry,
+  UpdateAgentEnvRequest,
+  UpdateAgentRequest,
   UpdateAutopilotRequest,
   UpdateAutopilotTriggerRequest,
   UpdateIssueRequest,
@@ -101,6 +105,7 @@ import {
 } from "@multica/core/api/schemas";
 import {
   ActiveTasksResponseSchema,
+  AgentEnvSchema,
   AgentListSchema,
   AgentTaskListSchema,
   AutopilotDetailSchema,
@@ -117,6 +122,7 @@ import {
   DashboardUsageDailyListSchema,
   DashboardUsageByAgentListSchema,
   EMPTY_ACTIVE_TASKS_RESPONSE,
+  EMPTY_AGENT_ENV,
   EMPTY_AGENT_LIST,
   EMPTY_AGENT_TASK_LIST,
   EMPTY_AUTOPILOT_DETAIL,
@@ -716,6 +722,65 @@ class ApiClient {
   async createAgent(data: CreateAgentRequest): Promise<Agent> {
     return this.fetch<Agent>("/api/agents", {
       method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  // PUT /api/agents/{id} — mirrors packages/core/api/client.ts:1341. Write
+  // endpoint per the mobile write-endpoint rule (raw fetch; a malformed
+  // response surfaces naturally so the edit form owns error feedback). The
+  // server answers 400 on a >255-char description / bad thinking token and
+  // 403 when a non-owner tries to change access fields (the edit form omits
+  // those for non-owners).
+  async updateAgent(id: string, data: UpdateAgentRequest): Promise<Agent> {
+    return this.fetch<Agent>(`/api/agents/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async archiveAgent(id: string): Promise<Agent> {
+    return this.fetch<Agent>(`/api/agents/${id}/archive`, { method: "POST" });
+  }
+
+  async restoreAgent(id: string): Promise<Agent> {
+    return this.fetch<Agent>(`/api/agents/${id}/restore`, { method: "POST" });
+  }
+
+  // GET /api/agents/{id}/env — the dedicated env endpoint (MUL-2600). Unlike
+  // web, mobile never auto-fetches this on mount: every call writes an
+  // `agent_env_revealed` audit row server-side, so the reveal is intentional
+  // (the env screen gates it behind a Reveal action).
+  async getAgentEnv(id: string): Promise<AgentEnvResponse> {
+    const raw = await this.fetch<unknown>(`/api/agents/${id}/env`);
+    return parseWithFallback(raw, AgentEnvSchema, EMPTY_AGENT_ENV, {
+      endpoint: "getAgentEnv",
+    });
+  }
+
+  // PUT /api/agents/{id}/env — wholesale custom_env replace. Values equal to
+  // "****" are preserved server-side (the sentinel guard), so a masked map
+  // round-trip can never clobber real secrets.
+  async updateAgentEnv(
+    id: string,
+    data: UpdateAgentEnvRequest,
+  ): Promise<AgentEnvResponse> {
+    const raw = await this.fetch<unknown>(`/api/agents/${id}/env`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+    return parseWithFallback(raw, AgentEnvSchema, EMPTY_AGENT_ENV, {
+      endpoint: "updateAgentEnv",
+    });
+  }
+
+  // PUT /api/agents/{id}/skills — wholesale skill replace for the edit form.
+  async setAgentSkills(
+    agentId: string,
+    data: SetAgentSkillsRequest,
+  ): Promise<void> {
+    await this.fetch<void>(`/api/agents/${agentId}/skills`, {
+      method: "PUT",
       body: JSON.stringify(data),
     });
   }

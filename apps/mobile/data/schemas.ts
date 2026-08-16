@@ -12,6 +12,7 @@
 import { z } from "zod";
 import type {
   Agent,
+  AgentEnvResponse,
   AgentInvocationTarget,
   AgentTask,
   Attachment,
@@ -681,8 +682,8 @@ export const AgentSchema: z.ZodType<Agent> = z.object({
   custom_args: z.array(z.string()).default([]),
   // MUL-2600: agent resource shape no longer carries custom_env or
   // custom_env_redacted. Mobile keeps only the coarse metadata that
-  // mirrors web's expectations. Real env values are reachable via the
-  // dedicated /env endpoint and we don't expose env editing on mobile.
+  // mirrors web's expectations (the env screen reads the key count here
+  // and reveals real values only via the dedicated /env endpoint).
   has_custom_env: z.boolean().optional(),
   custom_env_key_count: z.number().optional(),
   visibility: z.string().catch("workspace") as unknown as z.ZodType<
@@ -705,6 +706,18 @@ export const AgentSchema: z.ZodType<Agent> = z.object({
 
 export const AgentListSchema = z.array(AgentSchema).default([]);
 export const EMPTY_AGENT_LIST: Agent[] = [];
+
+// Wire shape of `GET /api/agents/{id}/env` (MUL-2600). Kept deliberately
+// distinct from `AgentSchema` so a read of /env can never be served from a
+// generic agent cache by name confusion — the only field worth anything here
+// is the plaintext map, served only to the owner / workspace owner+admin.
+export const AgentEnvSchema: z.ZodType<AgentEnvResponse> = z
+  .object({
+    agent_id: z.string().default(""),
+    custom_env: z.record(z.string(), z.string()).default({}),
+  })
+  .loose();
+export const EMPTY_AGENT_ENV: AgentEnvResponse = { agent_id: "", custom_env: {} };
 
 // Runtime device — the daemon (local or cloud) an agent binds to. Mobile reads
 // it for the presence dot: `status` + `last_seen_at` drive the three-state

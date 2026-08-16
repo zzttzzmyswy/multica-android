@@ -31,7 +31,7 @@ import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PresenceDot } from "@/components/ui/presence-dot";
-import { agentListOptions } from "@/data/queries/agents";
+import { agentListAllOptions } from "@/data/queries/agents";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useWorkspacePresenceMap } from "@/lib/use-agent-presence";
 import { useTranslation } from "@/lib/i18n/react";
@@ -80,7 +80,7 @@ export default function AgentsPage() {
   const muted = THEME[colorScheme].mutedForeground;
 
   const { data, isLoading, error, refetch, isRefetching } = useQuery(
-    agentListOptions(wsId),
+    agentListAllOptions(wsId),
   );
   const presence = useWorkspacePresenceMap(wsId);
 

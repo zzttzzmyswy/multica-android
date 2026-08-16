@@ -5,6 +5,7 @@ import type {
   AgentPermissionScope,
   CreateAgentRequest,
   RuntimeDevice,
+  UpdateAgentRequest,
 } from "../types";
 import {
   AGENT_DESCRIPTION_MAX_LENGTH,
@@ -239,6 +240,70 @@ export function buildCreateAgentRequest(options: {
     ) {
       request.max_concurrent_tasks = sourceConcurrency;
     }
+  }
+  return request;
+}
+
+/**
+ * Seeds an edit draft from an existing agent. Mirror of
+ * `buildDuplicateDraft` minus the create-only runtime fallback: an edit stays
+ * on the agent's own runtime (which may legitimately be offline — the agent
+ * keeps its binding), so `runtimeId` is copied verbatim even when the runtime
+ * isn't currently usable. Access derives from `permission_mode` +
+ * `invocation_targets` so the form re-renders the agent's real grants
+ * (`deriveDuplicateAccess`), not the legacy `visibility` mapping.
+ */
+export function seedDraftFromAgent(agent: Agent): AgentDraft {
+  return {
+    ...EMPTY_AGENT_DRAFT,
+    name: agent.name,
+    description: agent.description ?? "",
+    instructions: agent.instructions ?? "",
+    avatarUrl: agent.avatar_url ?? null,
+    runtimeId: agent.runtime_id ?? "",
+    model: agent.model ?? "",
+    thinkingLevel: agent.thinking_level ?? "",
+    serviceTier: agent.service_tier ?? "",
+    skillIds: new Set((agent.skills ?? []).map((skill) => skill.id)),
+    ...deriveDuplicateAccess(agent),
+  };
+}
+
+/**
+ * Assembles the `PUT /api/agents/{id}` body from an edit form's draft.
+ *
+ * Unlike create (`buildCreateAgentRequest`), empty execution overrides are
+ * sent EXPLICITLY as `""` rather than omitted: on UPDATE an omitted field
+ * preserves the saved value (tri-state semantics), so a user clearing the
+ * form's model / thinking / speed input would silently leave the old override
+ * in place. Sending `""` is the documented "clear" signal for
+ * model/thinking_level/service_tier and lets the runtime resolve its own
+ * default, matching what the create path achieves by omitting.
+ *
+ * Access fields are owner-only writes server-side (403 for a real change from
+ * a non-owner). Pass `includeAccess: false` when the caller is not the agent
+ * owner so a read-only admin edit doesn't resubmit grants they may not touch.
+ */
+export function buildUpdateAgentRequest(options: {
+  draft: AgentDraft;
+  runtimeId: string;
+  includeAccess?: boolean;
+}): UpdateAgentRequest {
+  const { draft, runtimeId, includeAccess = true } = options;
+  const request: UpdateAgentRequest = {
+    name: draft.name.trim(),
+    description: draft.description.trim(),
+    instructions: draft.instructions.trim(),
+    avatar_url: draft.avatarUrl ?? undefined,
+    model: draft.model.trim(),
+    thinking_level: draft.thinkingLevel.trim(),
+    service_tier: draft.serviceTier.trim(),
+  };
+  if (runtimeId) request.runtime_id = runtimeId;
+  if (includeAccess) {
+    request.permission_mode =
+      draft.permissionScope === "private" ? "private" : "public_to";
+    request.invocation_targets = buildInvocationTargets(draft);
   }
   return request;
 }
