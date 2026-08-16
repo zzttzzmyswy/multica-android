@@ -78,6 +78,7 @@ import {
 } from "@/data/realtime/chat-ws-updaters";
 import { canAssignAgent } from "@/lib/can-assign-agent";
 import { useWorkspaceAgentAvailability } from "@/lib/workspace-agent-availability";
+import { didPendingTaskFinish } from "@/lib/chat-task-polling";
 import { useAgentPresence } from "@/lib/use-agent-presence";
 import { Header } from "@/components/ui/header";
 import { ChatTitleButton } from "@/components/chat/chat-title-button";
@@ -145,6 +146,22 @@ export default function ChatTab() {
     pendingChatTaskOptions(activeSessionId),
   );
   const visibleMessages = hideQueuedChatMessages(messages, pendingTask);
+
+  // When the in-flight task clears (the server finished the turn), refetch
+  // the authoritative messages so the final reply renders even if the WS
+  // terminal event never arrived. Without this, stale caches (staleTime:
+  // Infinity) keep the "Thinking" pill up until the user sends another
+  // message — the bug this fallback closes.
+  const prevPendingTaskRef = useRef<ChatPendingTask | null | undefined>(
+    pendingTask,
+  );
+  useEffect(() => {
+    const prev = prevPendingTaskRef.current;
+    prevPendingTaskRef.current = pendingTask;
+    if (didPendingTaskFinish(prev, pendingTask) && activeSessionId) {
+      qc.invalidateQueries({ queryKey: chatKeys.messages(activeSessionId) });
+    }
+  }, [pendingTask, activeSessionId, qc]);
   // Live execution trace for the in-flight task. `task:message` WS events
   // append rows to this same cache key via `appendTaskMessage`, so the
   // list/pill stay in sync without a polling fetch. `enabled` is gated by

@@ -17,6 +17,7 @@
  */
 import { queryOptions } from "@tanstack/react-query";
 import { api } from "@/data/api";
+import { pendingTaskPollMs } from "@/lib/chat-task-polling";
 
 export const chatKeys = {
   all: (wsId: string | null) => ["chat", wsId] as const,
@@ -70,6 +71,11 @@ export const pendingChatTaskOptions = (sessionId: string | null) =>
     queryFn: ({ signal }) => api.getPendingChatTask(sessionId!, { signal }),
     enabled: !!sessionId,
     staleTime: Infinity,
+    // Poll the tiny pending-task endpoint while a task is in flight. WS is
+    // the primary refresh path but can go silent on mobile networks without
+    // firing onclose; the poll is the independent fallback that unsticks the
+    // "Thinking" pill and the missing final reply.
+    refetchInterval: pendingTaskPollMs,
   });
 
 export const taskMessagesOptions = (taskId: string | null | undefined) =>
