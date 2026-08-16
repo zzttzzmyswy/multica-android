@@ -12,6 +12,7 @@
  *
  * Theme picker stays inline (3 fixed options, fits in one section).
  */
+import { useReducer } from "react";
 import { Alert, ActivityIndicator, Pressable, ScrollView, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router } from "expo-router";
@@ -61,6 +62,11 @@ export default function SettingsPage() {
   const { preference, setPreference, colorScheme } = useColorScheme();
   const mutedFg = THEME[colorScheme].mutedForeground;
   const { t } = useTranslation();
+  // The language picker's value is derived from the i18n override store, so a
+  // switch to "Follow system" that leaves the effective locale unchanged (e.g.
+  // device language is already en) would skip the subscription re-render and
+  // keep the old radio highlight. bump() forces one render after switching.
+  const [, bump] = useReducer((x: number) => x + 1, 0);
 
   const onSwitch = async (ws: Workspace) => {
     if (ws.slug === currentSlug) return;
@@ -102,6 +108,7 @@ export default function SettingsPage() {
     } else {
       setLocale(option);
     }
+    bump();
 
     const serverLang = serverLanguageFor(option);
     if (serverLang) {
