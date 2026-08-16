@@ -9,10 +9,11 @@
  * the legacy `useRunsSheetStore` is gone since the route system is the
  * single source of truth for what's open.
  *
- * Each past (terminal) run row is collapsible — tapping it expands an
- * inline execution-log panel (`RunLog`) showing the agent's text narration
- * and process steps, so users can inspect what a run actually did. Active
- * rows show a Cancel button and are not expandable.
+ * Rows are collapsible in both sections: past (terminal) runs expand to an
+ * inline execution-log panel (`RunLog`), and active runs expand to the same
+ * panel in `live` mode — a short poll keeps the still-growing trace
+ * refreshing, so a running agent's work-in-progress is inspectable just like
+ * web's live transcript.
  */
 import { useMemo } from "react";
 import { ScrollView, View } from "react-native";

@@ -271,6 +271,8 @@
   "runs.active": "进行中",
   "runs.past": "历史",
   "runs.noLogs": "暂无执行记录",
+  "runs.noLogsYet": "执行日志生成中…",
+  "runs.liveLog": "实时",
   "runs.logLoadError": "加载执行日志失败",
   "runs.expandLog": "查看执行日志",
   "runs.kind.comment": "评论任务",

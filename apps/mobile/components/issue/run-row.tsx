@@ -3,14 +3,18 @@
  * (`app/(app)/[workspace]/issue/[id]/runs.tsx`). Same component for active
  * and past tasks.
  *
- * Active tasks (queued / dispatched / running) show a trailing Cancel button
- * and are NOT expandable — the trace is still growing.
- *
  * Past tasks (completed / failed / cancelled) are collapsible: tapping the
  * row expands an inline `<RunLog>` panel loaded from `GET /api/tasks/:id/messages`
  * (agent's text narration + tool_use / tool_result / thinking / error steps).
+ *
+ * Active tasks (queued / dispatched / running) are ALSO expandable now —
+ * tapping the row opens the trace while it is still growing, backed by a
+ * short poll interval (`RunLog live`) so progress shows up even if a WS
+ * event is lost. The Cancel button sits outside the expandable area so the
+ * two actions never conflict.
+ *
  * Text narration renders as markdown; process steps reuse the shared
- * `ChatTimeline` fold. Empty logs surface `runs.noLogs`.
+ * `ChatTimeline` fold. Empty logs surface `runs.noLogs` / `runs.noLogsYet`.
  */
 import { Alert, Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -36,6 +40,9 @@ interface Props {
 const ACTIVE_STATUSES: readonly AgentTask["status"][] = [
   "queued",
   "dispatched",
+  // Daemon-parked task on a busy local_directory — still active (waiting on
+  // a path lock), not terminal. Matches web's active-task filter.
+  "waiting_local_directory",
   "running",
 ];
 
@@ -50,7 +57,7 @@ export function RunRow({ task, issueId }: Props) {
   // long it's been waiting.
   const timestamp = task.completed_at || task.created_at;
 
-  const row = (
+  const info = (
     <View className="flex-row items-start gap-3 py-2">
       <ActorAvatar type="agent" id={task.agent_id} size={28} showPresence />
       <View className="flex-1 gap-1">
@@ -68,17 +75,43 @@ export function RunRow({ task, issueId }: Props) {
           </Text>
         </View>
       </View>
-      {isActive ? (
-        <CancelButton taskId={task.id} issueId={issueId} />
-      ) : (
-        <Ionicons name="chevron-forward" size={14} color="#71717a" />
-      )}
     </View>
   );
 
-  // Active tasks aren't expandable — the trace is still growing and the row
-  // already carries a Cancel action. Only terminal tasks drill into their log.
-  if (isActive) return row;
+  // Active tasks expand into a live, polled trace (matching web's live
+  // transcript affordance); the Cancel action sits beside — never inside —
+  // the expandable area so tapping either one does exactly what it says.
+  if (isActive) {
+    return (
+      <Collapsible>
+        <View className="flex-row items-center">
+          <CollapsibleTrigger asChild>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("runs.expandLog")}
+              className="flex-1 active:bg-secondary"
+            >
+              <View className="flex-row items-start gap-3 pr-1">
+                {info}
+                <Ionicons
+                  name="chevron-down"
+                  size={14}
+                  color="#71717a"
+                  style={{ marginTop: 14 }}
+                />
+              </View>
+            </Pressable>
+          </CollapsibleTrigger>
+          <View className="pl-2 pr-1">
+            <CancelButton taskId={task.id} issueId={issueId} />
+          </View>
+        </View>
+        <CollapsibleContent>
+          <RunLog taskId={task.id} live />
+        </CollapsibleContent>
+      </Collapsible>
+    );
+  }
 
   return (
     <Collapsible>
@@ -86,9 +119,15 @@ export function RunRow({ task, issueId }: Props) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t("runs.expandLog")}
-          className="active:bg-secondary"
+          className="flex-row items-start active:bg-secondary"
         >
-          {row}
+          {info}
+          <Ionicons
+            name="chevron-forward"
+            size={14}
+            color="#71717a"
+            style={{ marginTop: 14 }}
+          />
         </Pressable>
       </CollapsibleTrigger>
       <CollapsibleContent>

@@ -271,6 +271,8 @@
   "runs.active": "Active",
   "runs.past": "Past",
   "runs.noLogs": "No execution log",
+  "runs.noLogsYet": "Log is being generated…",
+  "runs.liveLog": "Live",
   "runs.logLoadError": "Couldn't load execution log",
   "runs.expandLog": "View execution log",
   "runs.kind.comment": "Comment task",
