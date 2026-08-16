@@ -119,6 +119,7 @@ import {
   EMPTY_COMMENT,
   EMPTY_CRON_PREVIEW_RESPONSE,
   EMPTY_INBOX_LIST,
+  EMPTY_INVITATION_LIST,
   EMPTY_ISSUE_FALLBACK,
   EMPTY_LIST_AUTOPILOT_RUNS_RESPONSE,
   EMPTY_LABEL,
@@ -136,6 +137,7 @@ import {
   EMPTY_USER,
   EMPTY_WORKSPACE_LIST,
   InboxListSchema,
+  InvitationListSchema,
   NotificationPreferenceResponseSchema,
   ListAutopilotRunsResponseSchema,
   ListLabelsResponseSchema,
@@ -598,6 +600,32 @@ class ApiClient {
       method: "POST",
       body: JSON.stringify(data),
     });
+  }
+
+  // Workspace invitation reads/writes — mirror
+  // packages/core/api/client.ts:2483-2490. The list is the pending-invitation
+  // feed for the members page; reads parse with a drift-safe schema.
+  async listWorkspaceInvitations(
+    workspaceId: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<Invitation[]> {
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/invitations`,
+      { signal: opts?.signal },
+    );
+    return parseWithFallback(raw, InvitationListSchema, EMPTY_INVITATION_LIST, {
+      endpoint: "listWorkspaceInvitations",
+    });
+  }
+
+  async revokeInvitation(
+    workspaceId: string,
+    invitationId: string,
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/workspaces/${workspaceId}/invitations/${invitationId}`,
+      { method: "DELETE" },
+    );
   }
 
   async listAgents(opts?: { signal?: AbortSignal }): Promise<Agent[]> {

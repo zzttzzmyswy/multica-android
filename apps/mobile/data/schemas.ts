@@ -637,6 +637,9 @@ export const EMPTY_INVITATION: Invitation = {
   expires_at: "",
 };
 
+export const InvitationListSchema = z.array(InvitationSchema).default([]);
+export const EMPTY_INVITATION_LIST: Invitation[] = [];
+
 const AgentInvocationTargetSchema: z.ZodType<AgentInvocationTarget> = z
   .object({
     target_type: z.enum(["workspace", "member", "team"]).catch("team"),

@@ -15,7 +15,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { MemberRole } from "@multica/core/types";
 import { api } from "@/data/api";
-import { memberListOptions } from "@/data/queries/members";
+import { memberListOptions, invitationListOptions } from "@/data/queries/members";
 import { useWorkspaceStore } from "@/data/workspace-store";
 
 export function useUpdateMemberRole() {
@@ -60,6 +60,26 @@ export function useInviteMember() {
     onSettled: () => {
       if (!wsId) return;
       void qc.invalidateQueries({ queryKey: memberListOptions(wsId).queryKey });
+      void qc.invalidateQueries({
+        queryKey: invitationListOptions(wsId).queryKey,
+      });
+    },
+  });
+}
+
+export function useRevokeInvitation() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: (invitationId: string) =>
+      api.revokeInvitation(wsId!, invitationId),
+    onSettled: () => {
+      if (!wsId) return;
+      void qc.invalidateQueries({ queryKey: memberListOptions(wsId).queryKey });
+      void qc.invalidateQueries({
+        queryKey: invitationListOptions(wsId).queryKey,
+      });
     },
   });
 }
