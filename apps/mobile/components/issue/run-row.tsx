@@ -16,7 +16,7 @@
  * Text narration renders as markdown; process steps reuse the shared
  * `ChatTimeline` fold. Empty logs surface `runs.noLogs` / `runs.noLogsYet`.
  */
-import { Alert, Pressable, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { AgentTask } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
@@ -27,10 +27,11 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { RunLog } from "./run-log";
-import { useCancelTask } from "@/data/mutations/issues";
+import { useCancelTask, useRerunIssue } from "@/data/mutations/issues";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useTranslation } from "@/lib/i18n/react";
+import { canRerunRun, isInvocationBlocked } from "@/lib/run-retry";
 
 interface Props {
   task: AgentTask;
@@ -113,23 +114,35 @@ export function RunRow({ task, issueId }: Props) {
     );
   }
 
+  // Past (terminal) rows: retry for failed/cancelled — the rerun targets
+  // this SPECIFIC row's agent via task.id (web execution-log-section.tsx:471),
+  // so it sits beside the expandable trace like the active-row Cancel.
   return (
     <Collapsible>
-      <CollapsibleTrigger asChild>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("runs.expandLog")}
-          className="flex-row items-start active:bg-secondary"
-        >
-          {info}
-          <Ionicons
-            name="chevron-forward"
-            size={14}
-            color="#71717a"
-            style={{ marginTop: 14 }}
-          />
-        </Pressable>
-      </CollapsibleTrigger>
+      <View className="flex-row items-center">
+        <CollapsibleTrigger asChild>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("runs.expandLog")}
+            className="flex-1 active:bg-secondary"
+          >
+            <View className="flex-row items-start pr-1">
+              {info}
+              <Ionicons
+                name="chevron-forward"
+                size={14}
+                color="#71717a"
+                style={{ marginTop: 14 }}
+              />
+            </View>
+          </Pressable>
+        </CollapsibleTrigger>
+        {canRerunRun(task.status) && (
+          <View className="pl-2 pr-1">
+            <RerunButton taskId={task.id} issueId={issueId} />
+          </View>
+        )}
+      </View>
       <CollapsibleContent>
         <RunLog taskId={task.id} />
       </CollapsibleContent>
@@ -189,6 +202,56 @@ function CancelButton({
       className="px-3 py-1.5 rounded-md bg-secondary active:opacity-70"
     >
       <Text className="text-xs font-medium text-foreground">{t("runs.cancel")}</Text>
+    </Pressable>
+  );
+}
+
+function RerunButton({
+  taskId,
+  issueId,
+}: {
+  taskId: string;
+  issueId: string;
+}) {
+  const mutation = useRerunIssue(issueId);
+  const { t } = useTranslation();
+
+  const onPress = () => {
+    mutation.mutate(taskId, {
+      // A rerun is re-gated on the operator's invoke permission (MUL-4525):
+      // a structured 403 means the agent can't be triggered, not a transient
+      // failure — localize it instead of echoing the generic message (web
+      // execution-log-section.tsx:485).
+      onError: (err) => {
+        Alert.alert(
+          t("runs.retryTitle"),
+          isInvocationBlocked(err)
+            ? t("runs.retryBlocked")
+            : t("runs.retryFailed"),
+        );
+      },
+    });
+  };
+
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={mutation.isPending}
+      accessibilityLabel={
+        mutation.isPending ? t("runs.retryRunning") : t("runs.retry")
+      }
+      className="px-3 py-1.5 rounded-md bg-secondary active:opacity-70"
+    >
+      {mutation.isPending ? (
+        <ActivityIndicator size="small" color="#71717a" />
+      ) : (
+        <View className="flex-row items-center gap-1">
+          <Ionicons name="refresh" size={12} color="#71717a" />
+          <Text className="text-xs font-medium text-foreground">
+            {t("runs.retry")}
+          </Text>
+        </View>
+      )}
     </Pressable>
   );
 }

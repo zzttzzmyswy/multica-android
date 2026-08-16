@@ -109,3 +109,17 @@ export const issueChildrenOptions = (wsId: string | null, id: string) =>
     queryFn: ({ signal }) => api.listChildIssues(id, { signal }),
     enabled: !!wsId && !!id,
   });
+
+/**
+ * Who is subscribed to an issue and why — drives the Subscribe control in
+ * the issue detail Activity header. Mirrors web's
+ * `issueSubscribersOptions` (packages/core/issues/queries.ts). The component
+ * renders nothing until this resolves (`subscriptionKnown`), so an unresolved
+ * query never flashes the wrong button (web MUL-5714).
+ */
+export const issueSubscribersOptions = (wsId: string | null, id: string) =>
+  queryOptions({
+    queryKey: issueKeys.subscribers(wsId, id),
+    queryFn: ({ signal }) => api.listIssueSubscribers(id, { signal }),
+    enabled: !!wsId && !!id,
+  });

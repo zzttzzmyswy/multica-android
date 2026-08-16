@@ -48,6 +48,7 @@ import type {
   IssuePropertiesResponse,
   IssueProperty,
   IssuePropertyValue,
+  IssueSubscriber,
   Label,
   IssueReaction,
   ListAutopilotRunsResponse,
@@ -214,6 +215,10 @@ import {
   WorkspaceMcpServerListSchema,
   EMPTY_WORKSPACE_MCP_SERVER,
   EMPTY_WORKSPACE_MCP_SERVER_LIST,
+  IssueSubscriberListSchema,
+  EMPTY_ISSUE_SUBSCRIBER_LIST,
+  SubscribeStatusSchema,
+  type SubscribeStatusResponse,
 } from "./schemas";
 import type { ZodType } from "zod";
 import { File, Paths } from "expo-file-system";
@@ -1173,6 +1178,78 @@ class ApiClient {
       { ...opts, endpoint: "GET /api/issues/:id/active-task" },
     );
     return parsed.tasks;
+  }
+
+  // ---- Issue subscriptions ------------------------------------------------
+  // Subscribers pay attention to an issue's updates (status/milestone changes
+  // and direct deliveries) and are the notice surface for issue activity.
+  // Mirrors packages/core/api/client.ts semantics; subscribe/unsubscribe
+  // answer the *resulting* state so callers can flip a toggle without a
+  // follow-up fetch.
+
+  async listIssueSubscribers(
+    issueId: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<IssueSubscriber[]> {
+    return this.fetchValidated(
+      `/api/issues/${issueId}/subscribers`,
+      IssueSubscriberListSchema,
+      EMPTY_ISSUE_SUBSCRIBER_LIST,
+      { ...opts, endpoint: "GET /api/issues/:id/subscribers" },
+    );
+  }
+
+  async subscribeIssue(
+    issueId: string,
+  ): Promise<SubscribeStatusResponse> {
+    return this.fetchValidatedWith(
+      `/api/issues/${issueId}/subscribe`,
+      SubscribeStatusSchema,
+      { subscribed: false },
+      { method: "POST" },
+      { endpoint: "POST /api/issues/:id/subscribe" },
+    );
+  }
+
+  async unsubscribeIssue(
+    issueId: string,
+  ): Promise<SubscribeStatusResponse> {
+    return this.fetchValidatedWith(
+      `/api/issues/${issueId}/unsubscribe`,
+      SubscribeStatusSchema,
+      { subscribed: false },
+      { method: "POST" },
+      { endpoint: "POST /api/issues/:id/unsubscribe" },
+    );
+  }
+
+  async unsubscribeIssueSubtree(
+    issueId: string,
+  ): Promise<SubscribeStatusResponse> {
+    return this.fetchValidatedWith(
+      `/api/issues/${issueId}/unsubscribe/subtree`,
+      SubscribeStatusSchema,
+      { subscribed: false },
+      { method: "POST" },
+      { endpoint: "POST /api/issues/:id/unsubscribe/subtree" },
+    );
+  }
+
+  // Re-run the agent execution for an issue. `taskId` targets the SPECIFIC
+  // past run's agent — without it the server falls back to the issue's
+  // current assignee, which can fire the wrong agent on runs whose assignee
+  // has since been displaced (web execution-log-section.tsx:471).
+  async rerunIssue(
+    issueId: string,
+    taskId?: string,
+  ): Promise<AgentTask> {
+    return this.fetch(
+      `/api/issues/${issueId}/rerun`,
+      {
+        method: "POST",
+        body: JSON.stringify(taskId ? { task_id: taskId } : {}),
+      },
+    );
   }
 
   // All tasks (any status) for an issue — drives the "Runs" history section.

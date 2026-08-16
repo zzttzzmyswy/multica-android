@@ -94,6 +94,7 @@ import { IssueHeaderCard } from "./issue-header-card";
 import { IssueDescription } from "./issue-description";
 import { IssueReactionRow } from "./issue-reaction-row";
 import { IssueChildrenSection } from "./issue-children-section";
+import { SubscriptionControl } from "./subscription-control";
 import { ActivityRow } from "./activity-row";
 import { CommentCard } from "./comment-card";
 import { useLastViewedStore } from "@/data/stores/last-viewed-store";
@@ -402,9 +403,20 @@ export function TimelineList({
       <IssueReactionRow issue={issue} />
       <IssueChildrenSection subIssues={subIssues} wsSlug={wsSlug} />
       <View className="px-4 pt-4 pb-2 border-t border-border">
-        <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
-          {t("timeline.activity")}
-        </Text>
+        <View className="flex-row items-center justify-between gap-2">
+          <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+            {t("timeline.activity")}
+          </Text>
+          {/* Subscribe / unsubscribe — mirrors web's Activity-header
+           * subscription control (issue-detail.tsx:2888). Renders nothing
+           * until the subscribers query resolves. `subIssues` length is the
+           * "known children" signal that decides whether the unsubscribe
+           * menu needs the subtree entry. */}
+          <SubscriptionControl
+            issueId={issue.id}
+            childCount={subIssues ? subIssues.length : null}
+          />
+        </View>
       </View>
       {timelineLoading && (!entries || entries.length === 0) ? (
         <View className="py-6 items-center">

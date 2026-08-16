@@ -1263,5 +1263,21 @@
   "mcp.agent.removeAction": "移除",
   "mcp.agent.toggleAria": "切换 {{name}}",
   "mcp.agent.removeAria": "移除 {{name}}",
-  "mcp.agent.loadError": "加载 MCP 服务器失败。"
+  "mcp.agent.loadError": "加载 MCP 服务器失败。",
+  "subscription.subscribe": "订阅",
+  "subscription.unsubscribe": "取消订阅",
+  "subscription.unsubscribeThis": "取消订阅本问题",
+  "subscription.unsubscribeSubtree": "取消订阅本问题及子任务",
+  "subscription.delegatedBadge": "由 agent 代为关注",
+  "subscription.delegatedHintTitle": "为什么你在关注",
+  "subscription.delegatedHint": "你的 agent 代你创建了此问题，因此你在关注它。可随时取消订阅。",
+  "subscription.updateFailedTitle": "订阅更新失败",
+  "subscription.updateFailed": "无法更新订阅状态，请重试。",
+  "subscription.unsubscribeSubtreeFailedTitle": "退订失败",
+  "subscription.unsubscribeSubtreeFailed": "无法退订本问题及其子任务，请重试。",
+  "runs.retry": "重试",
+  "runs.retryTitle": "重试执行",
+  "runs.retryRunning": "重试中…",
+  "runs.retryFailed": "重试失败，可能任务已启动或 agent 不可用。",
+  "runs.retryBlocked": "你没有权限触发该 agent。"
 }

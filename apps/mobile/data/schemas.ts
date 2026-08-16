@@ -29,6 +29,7 @@ import type {
   InboxItem,
   Invitation,
   IssueLabelsResponse,
+  IssueSubscriber,
   Label,
   ListLabelsResponse,
   ListProjectResourcesResponse,
@@ -485,6 +486,40 @@ export interface ActiveTasksResponse {
 
 export const EMPTY_AGENT_TASK_LIST: AgentTask[] = [];
 export const EMPTY_ACTIVE_TASKS_RESPONSE: ActiveTasksResponse = { tasks: [] };
+
+// =====================================================
+// Issue subscriptions
+// =====================================================
+// Who is subscribed to an issue and why (`reason`). Server-driven and
+// open-ended (core/types/subscriber.ts): `delegated` means an agent created
+// the issue on the member's behalf — the UI must explain that subscription.
+// Treat an unrecognised reason as a direct subscription rather than dropping
+// the row, matching core's policy.
+
+export const IssueSubscriberSchema = z.object({
+  issue_id: z.string(),
+  user_type: z.string(),
+  user_id: z.string(),
+  reason: z.string().default("manual"),
+  created_at: z.string(),
+}).loose();
+
+export const IssueSubscriberListSchema = z
+  .array(IssueSubscriberSchema)
+  .default([]);
+
+export const EMPTY_ISSUE_SUBSCRIBER_LIST: IssueSubscriber[] = [];
+
+// Subscribe / unsubscribe mutations answer the *resulting* state
+// (`{"subscribed": true}`), and core's client discards it. Mobile keeps it so
+// tests can assert the caller-visible transition without a follow-up fetch.
+export const SubscribeStatusSchema = z
+  .object({ subscribed: z.boolean().default(false) })
+  .loose();
+
+export interface SubscribeStatusResponse {
+  subscribed: boolean;
+}
 
 // =====================================================
 // User / Workspace / Inbox / Member / Agent

@@ -46,4 +46,10 @@ export const issueKeys = {
   // markdown renderer to resolve `mc://file/<id>` URIs to download_url.
   attachments: (wsId: string | null, id: string) =>
     [...issueKeys.all(wsId), "attachments", id] as const,
+  // Who is subscribed to an issue and why — drives the Subscribe control in
+  // the issue detail Activity header (web issue-detail.tsx).
+  subscribersAll: (wsId: string | null) =>
+    [...issueKeys.all(wsId), "subscribers"] as const,
+  subscribers: (wsId: string | null, id: string) =>
+    [...issueKeys.subscribersAll(wsId), id] as const,
 };

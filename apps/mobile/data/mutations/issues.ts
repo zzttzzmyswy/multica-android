@@ -19,6 +19,7 @@ import type {
   CreateIssueRequest,
   Issue,
   IssueReaction,
+  IssueSubscriber,
   Label,
   Reaction,
   TimelineEntry,
@@ -30,6 +31,7 @@ import { inboxKeys } from "@/data/queries/inbox";
 import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useFailedCommentsStore } from "@/data/stores/failed-comments-store";
+import { patchSubscribersList } from "@/lib/subscription";
 
 export type ToggleCommentReactionVars = {
   commentId: string;
@@ -659,6 +661,111 @@ export function useCancelTask(issueId: string) {
     onError: (_err, _taskId, ctx) => {
       if (ctx?.prev) qc.setQueryData(ctx.activeKey, ctx.prev);
     },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: issueKeys.activeTasks(wsId, issueId) });
+      qc.invalidateQueries({ queryKey: issueKeys.tasks(wsId, issueId) });
+    },
+  });
+}
+
+/**
+ * Subscribe / unsubscribe the current user to an issue. Server-driven toggle:
+ * POST /subscribe or POST /unsubscribe — both answer the *resulting* state
+ * (`{subscribed}`), which is irrelevant to the cache patch: we simply add or
+ * remove a synthetic subscriber row locally.
+ *
+ * Web's `useToggleIssueSubscriber` sends `user_id`/`user_type` to target a
+ * *member's* subscription (used for the delegated case). Mobile only toggles
+ * the signed-in user's own subscription, so no body is sent (core client.ts:
+ * subscribeToIssue with no userId).
+ *
+ * Optimistic patch: append/remove `{ user_id: userId, user_type: "member",
+ * reason: "manual" }` to the subscribers cache; roll back on error. Settle
+ * invalidates so the server's authoritative row (real `reason`, e.g.
+ * `delegated`) replaces the optimistic one.
+ */
+export function useToggleIssueSubscribe(issueId: string) {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: (subscribed: boolean) =>
+      subscribed ? api.unsubscribeIssue(issueId) : api.subscribeIssue(issueId),
+    onMutate: async (subscribed) => {
+      const userId = useAuthStore.getState().user?.id;
+      const key = issueKeys.subscribers(wsId, issueId);
+      await qc.cancelQueries({ queryKey: key });
+      const prev = qc.getQueryData<IssueSubscriber[]>(key);
+      qc.setQueryData<IssueSubscriber[]>(key, (old) =>
+        patchSubscribersList(old, issueId, userId, subscribed),
+      );
+      return { prev, key };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev !== undefined && ctx.key) {
+        qc.setQueryData(ctx.key, ctx.prev);
+      }
+    },
+    onSettled: () => {
+      qc.invalidateQueries({
+        queryKey: issueKeys.subscribers(wsId, issueId),
+      });
+    },
+  });
+}
+
+/**
+ * Opt out of this issue AND all future/present descendants — web's
+ * "Unsubscribe subtree" (issue-detail.tsx:2928). Distinct from a plain
+ * unsubscribe: a subtree tombstone also keeps FUTURE children from
+ * re-subscribing the user. Same optimistic patch as the plain opt-out.
+ */
+export function useUnsubscribeIssueSubtree(issueId: string) {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: () => api.unsubscribeIssueSubtree(issueId),
+    onMutate: async () => {
+      const userId = useAuthStore.getState().user?.id;
+      const key = issueKeys.subscribers(wsId, issueId);
+      await qc.cancelQueries({ queryKey: key });
+      const prev = qc.getQueryData<IssueSubscriber[]>(key);
+      qc.setQueryData<IssueSubscriber[]>(key, (old) =>
+        patchSubscribersList(old, issueId, userId, true),
+      );
+      return { prev, key };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev !== undefined && ctx.key) {
+        qc.setQueryData(ctx.key, ctx.prev);
+      }
+    },
+    onSettled: () => {
+      // The subtree write touches an unknown number of OTHER issues'
+      // subscriber lists, so invalidate the whole workspace subscribers
+      // prefix, not just this issue's key (web issues/mutations.ts
+      // useUnsubscribeFromIssueSubtree → issueKeys.subscribersAll()).
+      qc.invalidateQueries({
+        queryKey: issueKeys.subscribersAll(wsId),
+      });
+    },
+  });
+}
+
+/**
+ * Re-run an issue's agent execution. Callers pass the SPECIFIC past run's
+ * taskId so the server targets that run's agent — without it the fallback is
+ * the issue's current assignee, which fires the wrong agent on displaced
+ * runs (web execution-log-section.tsx:471). Success invalidates the runs
+ * caches so the new queued task appears immediately.
+ */
+export function useRerunIssue(issueId: string) {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: (taskId: string) => api.rerunIssue(issueId, taskId),
     onSettled: () => {
       qc.invalidateQueries({ queryKey: issueKeys.activeTasks(wsId, issueId) });
       qc.invalidateQueries({ queryKey: issueKeys.tasks(wsId, issueId) });

@@ -1263,5 +1263,21 @@
   "mcp.agent.removeAction": "Remove",
   "mcp.agent.toggleAria": "Toggle {{name}}",
   "mcp.agent.removeAria": "Remove {{name}}",
-  "mcp.agent.loadError": "Failed to load MCP servers."
+  "mcp.agent.loadError": "Failed to load MCP servers.",
+  "subscription.subscribe": "Subscribe",
+  "subscription.unsubscribe": "Unsubscribe",
+  "subscription.unsubscribeThis": "Unsubscribe this issue",
+  "subscription.unsubscribeSubtree": "Unsubscribe issue and subtasks",
+  "subscription.delegatedBadge": "Watching via agent",
+  "subscription.delegatedHintTitle": "Why you're watching",
+  "subscription.delegatedHint": "Your agent created this issue on your behalf, so you are watching it. You can unsubscribe at any time.",
+  "subscription.updateFailedTitle": "Subscription update failed",
+  "subscription.updateFailed": "Couldn't update your subscription. Please try again.",
+  "subscription.unsubscribeSubtreeFailedTitle": "Couldn't unsubscribe",
+  "subscription.unsubscribeSubtreeFailed": "Couldn't unsubscribe from this issue and its subtasks. Please try again.",
+  "runs.retry": "Retry",
+  "runs.retryTitle": "Retry run",
+  "runs.retryRunning": "Retrying…",
+  "runs.retryFailed": "Retry failed. The run may have already started or the agent is unavailable.",
+  "runs.retryBlocked": "You are not allowed to trigger this agent."
 }
