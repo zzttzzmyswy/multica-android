@@ -81,6 +81,8 @@ export default function SettingsPage() {
   const goProfile = () => router.push(`/${currentSlug}/more/settings/profile`);
   const goNotifications = () =>
     router.push(`/${currentSlug}/more/settings/notifications`);
+  const goWorkspaceSettings = () =>
+    router.push(`/${currentSlug}/more/settings/workspace`);
 
   return (
     <ScrollView
@@ -144,6 +146,13 @@ export default function SettingsPage() {
             );
           })
         )}
+        <Separator />
+        <NavRow
+          onPress={goWorkspaceSettings}
+          chevronColor={mutedFg}
+          title={t("settings.workspaceSettings")}
+          subtitle={t("settings.workspaceSettingsSub")}
+        />
       </SectionGroup>
 
       <SectionGroup title={t("settings.appearance")}>

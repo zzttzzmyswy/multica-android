@@ -78,6 +78,7 @@ import type {
   UpdateSquadRequest,
   User,
   Workspace,
+  WorkspaceRepo,
 } from "@multica/core/types";
 import {
   AutopilotRunSchema,
@@ -192,6 +193,20 @@ export interface FileAsset {
   uri: string;
   name: string;
   type: string;
+}
+
+/** PATCH /api/workspaces/{id} body — mirrors the param shape of
+ *  packages/core/api/client.ts:updateWorkspace. The server trims `name`
+ *  and rejects an empty one with 400 "name is required"; a non-empty
+ *  rename also notifies the daemon + pushes EventWorkspaceUpdated. */
+export interface UpdateWorkspaceRequest {
+  name?: string;
+  description?: string;
+  context?: string;
+  settings?: Record<string, unknown>;
+  repos?: WorkspaceRepo[];
+  issue_prefix?: string;
+  avatar_url?: string;
 }
 
 /** Result of `ApiClient.downloadFile` — a local copy of an attachment's
@@ -504,6 +519,43 @@ class ApiClient {
     });
     return parseWithFallback(raw, WorkspaceListSchema, EMPTY_WORKSPACE_LIST, {
       endpoint: "listWorkspaces",
+    });
+  }
+
+  // Workspace read/write endpoints — all mirror packages/core/api/client.ts
+  // (getWorkspace: client.ts:2258, updateWorkspace: 2260, leaveWorkspace:
+  // 2472, deleteWorkspace: 2509). The write endpoints follow the write-endpoint
+  // rule (raw fetch — a malformed response surfaces naturally so the caller's
+  // error path owns the feedback). `name` is trimmed by the server and an
+  // empty one returns 400.
+  async getWorkspace(
+    workspaceId: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<Workspace> {
+    return this.fetch<Workspace>(`/api/workspaces/${workspaceId}`, {
+      signal: opts?.signal,
+    });
+  }
+
+  async updateWorkspace(
+    workspaceId: string,
+    data: UpdateWorkspaceRequest,
+  ): Promise<Workspace> {
+    return this.fetch<Workspace>(`/api/workspaces/${workspaceId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async leaveWorkspace(workspaceId: string): Promise<void> {
+    await this.fetch<void>(`/api/workspaces/${workspaceId}/leave`, {
+      method: "POST",
+    });
+  }
+
+  async deleteWorkspace(workspaceId: string): Promise<void> {
+    await this.fetch<void>(`/api/workspaces/${workspaceId}`, {
+      method: "DELETE",
     });
   }
 

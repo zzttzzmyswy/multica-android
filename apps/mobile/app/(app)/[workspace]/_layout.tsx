@@ -386,6 +386,10 @@ export default function WorkspaceLayout() {
           options={{ title: t("screen.profile"), headerBackTitle: t("screen.settings") }}
         />
         <Stack.Screen
+          name="more/settings/workspace"
+          options={{ title: t("screen.workspaceSettings"), headerBackTitle: t("screen.settings") }}
+        />
+        <Stack.Screen
           name="more/settings/notifications"
           options={{ title: t("screen.notifications"), headerBackTitle: t("screen.settings") }}
         />

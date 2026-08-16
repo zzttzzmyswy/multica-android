@@ -16,6 +16,18 @@
  */
 import type { MemberRole } from "@multica/core/types";
 
+/** Shared coarse "manager" check — owner or admin. Both member management
+ *  and workspace-level management (settings rename / leave / delete gating)
+ *  use the same tier: web's canManageWorkspace
+ *  (packages/views/settings/components/workspace-tab.tsx:146) is exactly
+ *  `owner || admin`. Kept in member-guards because that's where the tier
+ *  was first encoded; workspace-guards reuses it. */
+export function canManageRole(
+  role: MemberRole | null | undefined,
+): boolean {
+  return role === "owner" || role === "admin";
+}
+
 export interface MemberManageGuardsInput {
   /** Role of the current user's own membership row (null before the member
    *  list resolves or if their own membership isn't visible). */
@@ -36,7 +48,7 @@ export function memberManageGuards({
   currentUserId,
   target,
 }: MemberManageGuardsInput): MemberManageGuards {
-  const canManage = currentRole === "owner" || currentRole === "admin";
+  const canManage = canManageRole(currentRole);
   const isSelf =
     target != null &&
     currentUserId != null &&
