@@ -91,6 +91,7 @@ const NAV_ITEMS: NavItem[] = [
   { labelKey: "nav.squads", icon: "people-circle", path: "/more/squads" },
   { labelKey: "nav.labels", icon: "pricetags", path: "/more/labels" },
   { labelKey: "nav.skills", icon: "extension-puzzle", path: "/more/skills" },
+  { labelKey: "nav.runtimes", icon: "server", path: "/more/runtimes" },
 ];
 
 export function MoreTabDropdownAnchor({

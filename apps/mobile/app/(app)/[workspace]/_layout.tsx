@@ -392,6 +392,20 @@ export default function WorkspaceLayout() {
           }}
         />
         <Stack.Screen
+          name="more/runtimes"
+          options={{
+            title: t("screen.runtimes"),
+            headerBackTitle: t("common.back"),
+          }}
+        />
+        <Stack.Screen
+          name="more/runtimes/[id]"
+          options={{
+            title: t("screen.runtimes"),
+            headerBackTitle: t("screen.runtimes"),
+          }}
+        />
+        <Stack.Screen
           name="more/pins"
           options={{ title: t("screen.pinned"), headerBackTitle: t("common.back") }}
         />
