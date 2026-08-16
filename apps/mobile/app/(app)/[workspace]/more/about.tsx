@@ -65,12 +65,11 @@ export default function AboutPage() {
 
   const onCheck = async () => {
     setPhase("checking");
-    try {
-      await query.refetch();
-      setPhase("idle");
-    } catch {
-      setPhase("network-error");
-    }
+    // refetch() resolves with the query result instead of rejecting on
+    // failure (TanStack swallows the error unless throwOnError is set), so
+    // detect the error via the result shape.
+    const result = await query.refetch().catch(() => null);
+    setPhase(result?.isError ? "network-error" : "idle");
   };
 
   const onDownloadInstall = async () => {

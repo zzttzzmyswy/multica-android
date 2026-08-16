@@ -36,28 +36,17 @@ export const latestReleaseOptions = (enabled: boolean) =>
   queryOptions({
     queryKey: ["github-latest-release"] as const,
     queryFn: async () => {
-      console.log("[update] probe start", GITHUB_RELEASES_API);
       const controller = new AbortController();
-      const timer = setTimeout(() => {
-        console.warn("[update] probe timed out, aborting");
-        controller.abort();
-      }, FETCH_TIMEOUT_MS);
+      const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
       try {
         const res = await fetch(GITHUB_RELEASES_API, {
           headers: { Accept: "application/vnd.github+json" },
           signal: controller.signal,
         });
-        console.log("[update] probe http", res.status);
         if (!res.ok) {
           throw new Error(`GitHub returned ${res.status}`);
         }
         return parseLatestRelease(await res.json());
-      } catch (err) {
-        console.warn(
-          "[update] probe failed",
-          err instanceof Error ? err.message : String(err),
-        );
-        throw err;
       } finally {
         clearTimeout(timer);
       }
