@@ -81,6 +81,7 @@ export default function SettingsPage() {
   const goProfile = () => router.push(`/${currentSlug}/more/settings/profile`);
   const goNotifications = () =>
     router.push(`/${currentSlug}/more/settings/notifications`);
+  const goTokens = () => router.push(`/${currentSlug}/more/settings/tokens`);
   const goWorkspaceSettings = () =>
     router.push(`/${currentSlug}/more/settings/workspace`);
 
@@ -114,6 +115,13 @@ export default function SettingsPage() {
           chevronColor={mutedFg}
           title={t("settings.notifications")}
           subtitle={t("settings.notificationsSub")}
+        />
+        <Separator />
+        <NavRow
+          onPress={goTokens}
+          chevronColor={mutedFg}
+          title={t("settings.apiTokens")}
+          subtitle={t("settings.apiTokensSub")}
         />
       </SectionGroup>
 

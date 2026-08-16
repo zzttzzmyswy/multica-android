@@ -467,6 +467,10 @@ export default function WorkspaceLayout() {
           options={{ title: t("screen.notifications"), headerBackTitle: t("screen.settings") }}
         />
         <Stack.Screen
+          name="more/settings/tokens"
+          options={{ title: t("screen.tokens"), headerBackTitle: t("screen.settings") }}
+        />
+        <Stack.Screen
           name="new-issue"
           options={{
             title: t("screen.newIssue"),

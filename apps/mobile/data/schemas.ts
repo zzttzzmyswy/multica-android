@@ -22,6 +22,7 @@ import type {
   ChatPendingTask,
   ChatSession,
   Comment,
+  CreatePersonalAccessTokenResponse,
   CronPreviewResponse,
   DashboardUsageByAgent,
   DashboardUsageDaily,
@@ -34,6 +35,7 @@ import type {
   ListProjectsResponse,
   MemberWithUser,
   PinnedItem,
+  PersonalAccessToken,
   Project,
   ProjectResource,
   RuntimeDevice,
@@ -1138,3 +1140,28 @@ export const DashboardUsageByAgentSchema: z.ZodType<DashboardUsageByAgent> = z
 export const DashboardUsageByAgentListSchema = z
   .array(DashboardUsageByAgentSchema)
   .default([]);
+
+// Personal access tokens (account-level, mirrors packages/core/types/api.ts
+// PersonalAccessToken). Lenient: nullable dates default to null so a drifted
+// body degrades to a row with blank metadata instead of a crash.
+const personalAccessTokenShape = {
+  id: z.string().default(""),
+  name: z.string().default(""),
+  token_prefix: z.string().default(""),
+  expires_at: z.string().nullable().default(null),
+  last_used_at: z.string().nullable().default(null),
+  created_at: z.string().default(""),
+};
+
+export const PersonalAccessTokenSchema: z.ZodType<PersonalAccessToken> = z
+  .object(personalAccessTokenShape)
+  .loose();
+
+export const PersonalAccessTokenListSchema = z
+  .array(PersonalAccessTokenSchema)
+  .default([]);
+
+export const CreatePersonalAccessTokenResponseSchema: z.ZodType<CreatePersonalAccessTokenResponse> =
+  z
+    .object({ ...personalAccessTokenShape, token: z.string().default("") })
+    .loose();

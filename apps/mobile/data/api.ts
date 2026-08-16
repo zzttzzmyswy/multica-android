@@ -31,6 +31,8 @@ import type {
   CreateIssueRequest,
   CreateLabelRequest,
   CreateMemberRequest,
+  CreatePersonalAccessTokenRequest,
+  CreatePersonalAccessTokenResponse,
   CreateProjectRequest,
   CreateProjectResourceRequest,
   CronPreviewResponse,
@@ -74,6 +76,7 @@ import type {
   CreateSquadRequest,
   NotificationPreferenceResponse,
   NotificationPreferences,
+  PersonalAccessToken,
   RemoveSquadMemberRequest,
   TaskMessagePayload,
   TimelineEntry,
@@ -118,6 +121,7 @@ import {
   ChatSessionListSchema,
   ChatSessionSchema,
   ChildIssuesResponseSchema,
+  CreatePersonalAccessTokenResponseSchema,
   CronPreviewResponseSchema,
   DashboardUsageDailyListSchema,
   DashboardUsageByAgentListSchema,
@@ -161,6 +165,7 @@ import {
   ListProjectResourcesResponseSchema,
   ListProjectsResponseSchema,
   MemberListSchema,
+  PersonalAccessTokenListSchema,
   PinListSchema,
   PinnedItemSchema,
   ProjectSchema,
@@ -1948,6 +1953,44 @@ class ApiClient {
    * 401 `missing authorization` the browser path used to hit — or a native
    * download error).
    */
+  // --- Personal access tokens ---
+  //
+  // Account-level (not workspace-scoped), mirrors
+  // packages/core/api/client.ts:2606-2619. The list is read through the
+  // validated rail so a drifted row degrades to blank metadata instead of a
+  // crash; create parses the response (it carries the full token, shown once
+  // and never cached) and revoke is a raw DELETE.
+
+  async listPersonalAccessTokens(
+    opts?: { signal?: AbortSignal },
+  ): Promise<PersonalAccessToken[]> {
+    return this.fetchValidated(
+      "/api/tokens",
+      PersonalAccessTokenListSchema,
+      [],
+      { ...opts, endpoint: "GET /api/tokens" },
+    );
+  }
+
+  async createPersonalAccessToken(
+    data: CreatePersonalAccessTokenRequest,
+  ): Promise<CreatePersonalAccessTokenResponse> {
+    return this.fetchValidatedWith(
+      "/api/tokens",
+      CreatePersonalAccessTokenResponseSchema,
+      { id: "", name: "", token_prefix: "", expires_at: null, last_used_at: null, created_at: "", token: "" },
+      { method: "POST", body: JSON.stringify(data) },
+      { endpoint: "POST /api/tokens" },
+    );
+  }
+
+  async revokePersonalAccessToken(id: string): Promise<void> {
+    await this.fetch<void>(
+      `/api/tokens/${id}`,
+      { method: "DELETE" },
+    );
+  }
+
   async downloadFile(rawUrl: string, filename: string): Promise<LocalDownload> {
     const absUrl = resolveAttachmentUrl(rawUrl);
     if (!absUrl) {
