@@ -16,6 +16,7 @@ import type { Issue } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { AttributeRow } from "./attribute-row";
 import { AgentActivityRow } from "./agent-activity-row";
+import { CustomPropertyRow } from "./custom-property-row";
 
 export function IssueHeaderCard({ issue }: { issue: Issue }) {
   return (
@@ -30,6 +31,10 @@ export function IssueHeaderCard({ issue }: { issue: Issue }) {
        *  Conditionally renders null when there are no tasks at all. */}
       <AgentActivityRow issueId={issue.id} />
       <AttributeRow issue={issue} />
+      {/* Workspace custom-property values, resolved against the workspace
+       *  definition catalog (MYS-334). Renders null when no values exist
+       *  and nothing is addable. */}
+      <CustomPropertyRow issue={issue} />
     </View>
   );
 }

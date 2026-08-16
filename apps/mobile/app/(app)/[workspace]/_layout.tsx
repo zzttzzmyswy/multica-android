@@ -222,6 +222,16 @@ export default function WorkspaceLayout() {
           name="issue/[id]/picker/due-date"
           options={SHEET_OPTIONS}
         />
+        {/* Workspace custom-property pickers (MYS-334): single-property value
+            editor + add-property list. Both share the standard sheet config. */}
+        <Stack.Screen
+          name="issue/[id]/picker/property"
+          options={SHEET_OPTIONS}
+        />
+        <Stack.Screen
+          name="issue/[id]/picker/properties"
+          options={SHEET_OPTIONS}
+        />
         <Stack.Screen name="issue/[id]/runs" options={SHEET_OPTIONS} />
         {/* Full emoji picker for a comment reaction. Pushed from the "+"
             button inside the comment long-press tapback row — see

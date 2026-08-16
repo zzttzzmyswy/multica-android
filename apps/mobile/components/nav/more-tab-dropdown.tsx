@@ -52,6 +52,7 @@ import {
 import { Text } from "@/components/ui/text";
 import { WorkspaceAvatar } from "@/components/workspace/workspace-avatar";
 import { workspaceListOptions } from "@/data/queries/workspaces";
+import { memberListOptions } from "@/data/queries/members";
 import { useAuthStore } from "@/data/auth-store";
 import { useUpdateStore } from "@/data/update-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
@@ -79,7 +80,8 @@ interface NavItem {
 // via my-issues) are NOT duplicated here. Only the Issues browse page stays
 // under "More" — it's a different surface than the "My Issues" tab (all
 // workspace issues vs. the user's own, status-grouped). Autopilots is a
-// dedicated push screen mirroring web's Autopilots page.
+// dedicated push screen mirroring web's Autopilots page. Properties is an
+// owner/admin-only management surface (see canManageProperties below).
 const NAV_ITEMS: NavItem[] = [
   { labelKey: "nav.issues", icon: "list", path: "/more/issues" },
   {
@@ -91,6 +93,9 @@ const NAV_ITEMS: NavItem[] = [
   { labelKey: "nav.members", icon: "people", path: "/more/members" },
   { labelKey: "nav.squads", icon: "people-circle", path: "/more/squads" },
   { labelKey: "nav.labels", icon: "pricetags", path: "/more/labels" },
+  // Workspace custom properties manage page (MYS-334). Owner/admin only —
+  // same gate as web's settings properties-tab.
+  { labelKey: "nav.properties", icon: "options", path: "/more/properties" },
   { labelKey: "nav.skills", icon: "extension-puzzle", path: "/more/skills" },
   { labelKey: "nav.runtimes", icon: "server", path: "/more/runtimes" },
   { labelKey: "nav.usage", icon: "bar-chart", path: "/more/usage" },
@@ -106,6 +111,7 @@ export function MoreTabDropdownAnchor({
 }) {
   const insets = useSafeAreaInsets();
   const slug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const user = useAuthStore((s) => s.user);
   const pathname = usePathname();
   const { colorScheme } = useColorScheme();
@@ -114,6 +120,17 @@ export function MoreTabDropdownAnchor({
   const currentWorkspace = useCurrentWorkspace(slug);
   // True while a newer APK exists — paints the dot on the About row.
   const hasUpdate = useUpdateStore((s) => s.hasUpdate);
+
+  // Property management is owner/admin-only (same gate as web's settings
+  // properties-tab). Non-managers don't even see the entry.
+  const { data: members = [] } = useQuery(memberListOptions(wsId));
+  const currentMember = members.find((m) => m.user_id === user?.id);
+  const canManageProperties =
+    wsId !== null &&
+    (currentMember?.role === "owner" || currentMember?.role === "admin");
+  const navItems = canManageProperties
+    ? NAV_ITEMS
+    : NAV_ITEMS.filter((item) => item.path !== "/more/properties");
 
   const isActive = (path: string) => {
     if (!slug) return false;
@@ -171,7 +188,7 @@ export function MoreTabDropdownAnchor({
 
           <DropdownMenuSeparator />
 
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <DropdownMenuItem
               key={item.path}
               onPress={() => slug && router.push(`/${slug}${item.path}`)}

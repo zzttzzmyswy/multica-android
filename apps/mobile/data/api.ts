@@ -36,6 +36,7 @@ import type {
   CreateMemberRequest,
   CreatePersonalAccessTokenRequest,
   CreatePersonalAccessTokenResponse,
+  CreatePropertyRequest,
   CreateProjectRequest,
   CreateProjectResourceRequest,
   CronPreviewResponse,
@@ -44,6 +45,9 @@ import type {
   Invitation,
   Issue,
   IssueLabelsResponse,
+  IssuePropertiesResponse,
+  IssueProperty,
+  IssuePropertyValue,
   Label,
   IssueReaction,
   ListAutopilotRunsResponse,
@@ -53,6 +57,7 @@ import type {
   ListLabelsResponse,
   ListProjectResourcesResponse,
   ListProjectsResponse,
+  ListPropertiesResponse,
   MemberWithUser,
   UpdateMemberRequest,
   PinnedItem,
@@ -92,6 +97,7 @@ import type {
   UpdateLabelRequest,
   UpdateMeRequest,
   UpdateProjectRequest,
+  UpdatePropertyRequest,
   UpdateSquadMemberRoleRequest,
   UpdateSquadRequest,
   User,
@@ -105,14 +111,20 @@ import {
   AutopilotRunSchema,
   EMPTY_AGENT_BUILDER_SESSION,
   EMPTY_AGENT_BUILDER_SESSION_LIST,
+  EMPTY_ISSUE_PROPERTY,
+  EMPTY_ISSUE_PROPERTIES_RESPONSE,
   EMPTY_LIST_AUTOPILOTS_RESPONSE,
   EMPTY_LIST_ISSUES_RESPONSE,
+  EMPTY_LIST_PROPERTIES_RESPONSE,
   EMPTY_SQUAD,
   EMPTY_TIMELINE_ENTRIES,
   FALLBACK_AUTOPILOT_RUN,
+  IssuePropertiesResponseSchema,
+  IssuePropertySchema,
   IssueSchema,
   ListAutopilotsResponseSchema,
   ListIssuesResponseSchema,
+  ListPropertiesResponseSchema,
   TimelineEntriesSchema,
   agentBuilderRuntimeSwitchFallback,
 } from "@multica/core/api/schemas";
@@ -1361,6 +1373,86 @@ class ApiClient {
   // short-circuits 204 → undefined, so no body parsing needed.
   async deleteLabel(id: string): Promise<void> {
     await this.fetch<void>(`/api/labels/${id}`, { method: "DELETE" });
+  }
+
+  // --- Custom issue properties ---
+  // Workspace property-definition catalog (MUL-4463). Active definitions by
+  // default; includeArchived=true surfaces archived ones for the management
+  // page. A backend predating custom properties 404s here — treat it as an
+  // empty catalog (empty property UI) rather than an error, same convention
+  // as web's core client.
+  async listProperties(opts?: {
+    includeArchived?: boolean;
+    signal?: AbortSignal;
+  }): Promise<ListPropertiesResponse> {
+    const suffix = opts?.includeArchived ? "?include_archived=true" : "";
+    let raw: unknown;
+    try {
+      raw = await this.fetch<unknown>(`/api/properties${suffix}`, {
+        signal: opts?.signal,
+      });
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return EMPTY_LIST_PROPERTIES_RESPONSE;
+      }
+      throw error;
+    }
+    return parseWithFallback(raw, ListPropertiesResponseSchema, EMPTY_LIST_PROPERTIES_RESPONSE, {
+      endpoint: "GET /api/properties",
+    });
+  }
+
+  // Create a property definition. Raw fetch (same convention as createLabel):
+  // the returned definition is consumed directly, and a parseWithFallback
+  // fallback would mask server validation errors.
+  async createProperty(body: CreatePropertyRequest): Promise<IssueProperty> {
+    return this.fetch<IssueProperty>("/api/properties", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
+  // Rename / re-option / archive a definition. PATCH with drift defense to
+  // IssuePropertySchema — the authoritative response replaces the row in the
+  // management-page list cache.
+  async updateProperty(id: string, body: UpdatePropertyRequest): Promise<IssueProperty> {
+    const raw = await this.fetch<unknown>(`/api/properties/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+    return parseWithFallback(raw, IssuePropertySchema, EMPTY_ISSUE_PROPERTY, {
+      endpoint: "PATCH /api/properties/{id}",
+    });
+  }
+
+  // Set one property value on an issue. The response is the full
+  // post-mutation value bag, letting callers reconcile the whole set.
+  async setIssueProperty(
+    issueId: string,
+    propertyId: string,
+    value: IssuePropertyValue,
+  ): Promise<IssuePropertiesResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/issues/${issueId}/properties/${propertyId}`,
+      { method: "PUT", body: JSON.stringify({ value }) },
+    );
+    return parseWithFallback(raw, IssuePropertiesResponseSchema, EMPTY_ISSUE_PROPERTIES_RESPONSE, {
+      endpoint: "PUT /api/issues/{id}/properties/{propertyId}",
+    });
+  }
+
+  // Remove a property value from an issue. Returns the remaining value bag.
+  async unsetIssueProperty(
+    issueId: string,
+    propertyId: string,
+  ): Promise<IssuePropertiesResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/issues/${issueId}/properties/${propertyId}`,
+      { method: "DELETE" },
+    );
+    return parseWithFallback(raw, IssuePropertiesResponseSchema, EMPTY_ISSUE_PROPERTIES_RESPONSE, {
+      endpoint: "DELETE /api/issues/{id}/properties/{propertyId}",
+    });
   }
 
   // --- Skills ---
