@@ -4,12 +4,19 @@
  * Layout:
  *   View ─ Header(center: ChatTitleButton, right: ChatSessionActions)
  *        ─ (NoAgentBanner?)
- *        ─ KeyboardAvoidingView ─ ChatMessageList (includes live status
- *                                                  + timeline in its
- *                                                  ListFooterComponent)
- *                                ─ OfflineBanner
- *                                ─ ChatComposer
+ *        ─ ChatMessageList (includes live status + timeline in its
+ *                           ListFooterComponent)
+ *        ─ OfflineBanner
+ *        ─ KeyboardStickyView ─ ChatComposer
  *
+ * Keyboard: the composer sits in a `KeyboardStickyView` from
+ * react-native-keyboard-controller (the app already mounts its
+ * `KeyboardProvider` at root). RN's own KeyboardAvoidingView is unreliable
+ * on Android edge-to-edge (adjustResize is ignored once the window opts out
+ * of decor-fitting; `behavior="height"` then miscalculates and bottom-anchored
+ * inputs stay covered by the IME). The sticky view animates with the real
+ * IME height, so the composer lifts above the keyboard on every Android
+ * version.
  * Session switching, agent selection, and session deletion all happen
  * inside this screen via Modal sheets — there is no `/chat/[id]` sub-route.
  *
@@ -31,11 +38,8 @@
  *   patch pendingTask with server task_id + created_at.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Alert,
-  KeyboardAvoidingView,
-  View,
-} from "react-native";
+import { Alert, View } from "react-native";
+import { KeyboardStickyView } from "react-native-keyboard-controller";
 import { router } from "expo-router";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -91,7 +95,6 @@ import { OfflineBanner } from "@/components/chat/offline-banner";
 import { RuntimeRequiredBanner } from "@/components/chat/runtime-required-banner";
 import { useChatSelectStore } from "@/data/chat-select-store";
 import { isAgentRuntimeBound } from "@/lib/is-agent-runtime-bound";
-import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
 
 export default function ChatTab() {
@@ -481,10 +484,7 @@ export default function ChatTab() {
         }
       />
       {availability === "none" ? <NoAgentBanner /> : null}
-      <KeyboardAvoidingView
-        behavior={keyboardBehavior}
-        className="flex-1"
-      >
+      <View className="flex-1">
         <ChatMessageList
           messages={visibleMessages}
           loading={messagesLoading}
@@ -507,17 +507,19 @@ export default function ChatTab() {
         ) : currentAgent ? (
           <RuntimeRequiredBanner agentName={currentAgent.name} />
         ) : null}
-        <ChatComposer
-          value={draft}
-          onChangeText={(next) => setDraft(draftKey, next)}
-          onSend={handleSend}
-          onStop={handleStop}
-          sending={sending}
-          allowStop={pendingTask?.status !== "queued"}
-          disabled={disabled}
-          disabledReason={disabledReason}
-        />
-      </KeyboardAvoidingView>
+        <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
+          <ChatComposer
+            value={draft}
+            onChangeText={(next) => setDraft(draftKey, next)}
+            onSend={handleSend}
+            onStop={handleStop}
+            sending={sending}
+            allowStop={pendingTask?.status !== "queued"}
+            disabled={disabled}
+            disabledReason={disabledReason}
+          />
+        </KeyboardStickyView>
+      </View>
 
       <AgentPickerSheet
         visible={agentPickerOpen}
