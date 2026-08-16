@@ -68,6 +68,8 @@ import type {
   Reaction,
   ReorderPinsRequest,
   RuntimeDevice,
+  DashboardFailureByAgent,
+  DashboardFailureDaily,
   DashboardUsageDaily,
   DashboardUsageByAgent,
   SearchIssuesResponse,
@@ -147,6 +149,10 @@ import {
   ChildIssuesResponseSchema,
   CreatePersonalAccessTokenResponseSchema,
   CronPreviewResponseSchema,
+  DashboardFailureDailyListSchema,
+  DashboardFailureByAgentListSchema,
+  EMPTY_DASHBOARD_FAILURE_DAILY,
+  EMPTY_DASHBOARD_FAILURE_BY_AGENT,
   DashboardUsageDailyListSchema,
   DashboardUsageByAgentListSchema,
   EMPTY_ACTIVE_TASKS_RESPONSE,
@@ -940,6 +946,40 @@ class ApiClient {
       DashboardUsageByAgentListSchema,
       [],
       { endpoint: "getDashboardUsageByAgent" },
+    );
+  }
+
+  // Dashboard failure rollups (iteration-44 Errors tab) — mirror
+  // packages/core/api/client.ts getDashboardFailuresDaily/ByAgent. The empty
+  // `failure_reason` string is the *succeeded* bucket; a drift response
+  // degrades to [] so the Errors view renders its no-data state.
+  async getDashboardFailuresDaily(
+    days: number,
+    opts?: { signal?: AbortSignal },
+  ): Promise<DashboardFailureDaily[]> {
+    const raw = await this.fetch<unknown>(`/api/dashboard/failures/daily?days=${days}`, {
+      signal: opts?.signal,
+    });
+    return parseWithFallback(
+      raw,
+      DashboardFailureDailyListSchema,
+      EMPTY_DASHBOARD_FAILURE_DAILY,
+      { endpoint: "getDashboardFailuresDaily" },
+    );
+  }
+
+  async getDashboardFailuresByAgent(
+    days: number,
+    opts?: { signal?: AbortSignal },
+  ): Promise<DashboardFailureByAgent[]> {
+    const raw = await this.fetch<unknown>(`/api/dashboard/failures/by-agent?days=${days}`, {
+      signal: opts?.signal,
+    });
+    return parseWithFallback(
+      raw,
+      DashboardFailureByAgentListSchema,
+      EMPTY_DASHBOARD_FAILURE_BY_AGENT,
+      { endpoint: "getDashboardFailuresByAgent" },
     );
   }
 

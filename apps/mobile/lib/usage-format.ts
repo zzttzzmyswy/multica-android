@@ -94,7 +94,7 @@ export function formatTokens(n: number): string {
   return `${Number(scaled.toFixed(1))}${unit.suffix}`;
 }
 
-function formatDateLabel(d: string): string {
+export function formatDateLabel(d: string): string {
   // Anchor to local midnight so the label matches the workspace-tz bucket the
   // server picked; `new Date(d)` would parse as UTC and shift by the offset.
   const date = new Date(`${d}T00:00:00`);

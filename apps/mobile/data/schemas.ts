@@ -24,6 +24,8 @@ import type {
   Comment,
   CreatePersonalAccessTokenResponse,
   CronPreviewResponse,
+  DashboardFailureByAgent,
+  DashboardFailureDaily,
   DashboardUsageByAgent,
   DashboardUsageDaily,
   InboxItem,
@@ -1176,6 +1178,39 @@ export const DashboardUsageByAgentSchema: z.ZodType<DashboardUsageByAgent> = z
 export const DashboardUsageByAgentListSchema = z
   .array(DashboardUsageByAgentSchema)
   .default([]);
+
+// Dashboard failure rollups (iteration-44 Errors tab). Mirrors core's
+// DashboardFailureDailySchema / DashboardFailureByAgentSchema field-for-field
+// (packages/core/api/schemas.ts:1265) — the empty `failure_reason` string is
+// the *succeeded* bucket, so numeric defaults degrade a drift response to a
+// zero-count row rather than inventing a failure.
+export const DashboardFailureDailySchema: z.ZodType<DashboardFailureDaily> = z
+  .object({
+    date: z.string().default(""),
+    failure_reason: z.string().default(""),
+    task_count: z.number().default(0),
+  })
+  .loose();
+
+export const DashboardFailureDailyListSchema = z
+  .array(DashboardFailureDailySchema)
+  .default([]);
+
+export const EMPTY_DASHBOARD_FAILURE_DAILY: DashboardFailureDaily[] = [];
+
+export const DashboardFailureByAgentSchema: z.ZodType<DashboardFailureByAgent> = z
+  .object({
+    agent_id: z.string().default(""),
+    failure_reason: z.string().default(""),
+    task_count: z.number().default(0),
+  })
+  .loose();
+
+export const DashboardFailureByAgentListSchema = z
+  .array(DashboardFailureByAgentSchema)
+  .default([]);
+
+export const EMPTY_DASHBOARD_FAILURE_BY_AGENT: DashboardFailureByAgent[] = [];
 
 // Personal access tokens (account-level, mirrors packages/core/types/api.ts
 // PersonalAccessToken). Lenient: nullable dates default to null so a drifted

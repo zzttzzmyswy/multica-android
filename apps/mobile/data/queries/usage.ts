@@ -22,3 +22,22 @@ export const dashboardUsageByAgentOptions = (wsId: string | null, days: number) 
     enabled: !!wsId,
     staleTime: 60_000,
   });
+
+// Dashboard failure rollups for the Errors tab (iteration 44). Same contract
+// as the usage rollups above: days part of the key so the 7/30 toggle
+// refetches and the previous range stays cached.
+export const dashboardFailuresDailyOptions = (wsId: string | null, days: number) =>
+  queryOptions({
+    queryKey: ["dashboard", "failures-daily", wsId, days] as const,
+    queryFn: ({ signal }) => api.getDashboardFailuresDaily(days, { signal }),
+    enabled: !!wsId,
+    staleTime: 60_000,
+  });
+
+export const dashboardFailuresByAgentOptions = (wsId: string | null, days: number) =>
+  queryOptions({
+    queryKey: ["dashboard", "failures-by-agent", wsId, days] as const,
+    queryFn: ({ signal }) => api.getDashboardFailuresByAgent(days, { signal }),
+    enabled: !!wsId,
+    staleTime: 60_000,
+  });
