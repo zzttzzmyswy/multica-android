@@ -15,6 +15,9 @@
  */
 import type {
   Agent,
+  AgentBuilderRuntimeSwitch,
+  AgentBuilderSession,
+  AgentBuilderSessionSummary,
   AgentEnvResponse,
   AgentTask,
   Attachment,
@@ -67,6 +70,7 @@ import type {
   SetAgentSkillsRequest,
   Skill,
   SkillSummary,
+  StoredAgentDraft,
   CreateSkillRequest,
   UpdateSkillRequest,
   Squad,
@@ -95,7 +99,12 @@ import type {
   WorkspaceRepo,
 } from "@multica/core/types";
 import {
+  AgentBuilderRuntimeSwitchSchema,
+  AgentBuilderSessionListSchema,
+  AgentBuilderSessionSchema,
   AutopilotRunSchema,
+  EMPTY_AGENT_BUILDER_SESSION,
+  EMPTY_AGENT_BUILDER_SESSION_LIST,
   EMPTY_LIST_AUTOPILOTS_RESPONSE,
   EMPTY_LIST_ISSUES_RESPONSE,
   EMPTY_SQUAD,
@@ -105,6 +114,7 @@ import {
   ListAutopilotsResponseSchema,
   ListIssuesResponseSchema,
   TimelineEntriesSchema,
+  agentBuilderRuntimeSwitchFallback,
 } from "@multica/core/api/schemas";
 import {
   ActiveTasksResponseSchema,
@@ -788,6 +798,70 @@ class ApiClient {
       method: "PUT",
       body: JSON.stringify(data),
     });
+  }
+
+  // Agent-builders: creation conversations (web Creation Studio). Mirrors
+  // packages/core/api/client.ts:1262-1339. The first POST creates the hidden
+  // carrier session; GET lists the caller's unfinished ones (404 on an older
+  // backend degrades to no drafts, matching listChatDraftRestores); PUT saves
+  // the arrived-at configuration; PATCH rebinds the live conversation's
+  // execution runtime.
+  async createAgentBuilderSession(data: {
+    runtime_id: string;
+    model?: string;
+  }): Promise<AgentBuilderSession> {
+    const raw = await this.fetch<unknown>("/api/agent-builder/sessions", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return parseWithFallback(
+      raw,
+      AgentBuilderSessionSchema,
+      EMPTY_AGENT_BUILDER_SESSION,
+      { endpoint: "POST /api/agent-builder/sessions" },
+    );
+  }
+
+  async listAgentBuilderSessions(): Promise<AgentBuilderSessionSummary[]> {
+    let raw: unknown;
+    try {
+      raw = await this.fetch<unknown>("/api/agent-builder/sessions");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return [];
+      throw err;
+    }
+    return parseWithFallback(
+      raw,
+      AgentBuilderSessionListSchema,
+      EMPTY_AGENT_BUILDER_SESSION_LIST,
+      { endpoint: "GET /api/agent-builder/sessions" },
+    ).sessions;
+  }
+
+  async saveAgentBuilderDraft(
+    sessionId: string,
+    draft: StoredAgentDraft,
+  ): Promise<void> {
+    await this.fetch(`/api/agent-builder/sessions/${sessionId}/draft`, {
+      method: "PUT",
+      body: JSON.stringify({ draft }),
+    });
+  }
+
+  async switchAgentBuilderRuntime(
+    sessionId: string,
+    data: { runtime_id: string },
+  ): Promise<AgentBuilderRuntimeSwitch> {
+    const raw = await this.fetch<unknown>(
+      `/api/agent-builder/sessions/${sessionId}/runtime`,
+      { method: "PATCH", body: JSON.stringify(data) },
+    );
+    return parseWithFallback(
+      raw,
+      AgentBuilderRuntimeSwitchSchema,
+      agentBuilderRuntimeSwitchFallback(data.runtime_id),
+      { endpoint: "PATCH /api/agent-builder/sessions/:id/runtime" },
+    );
   }
 
   // Workspace runtimes — feeds the presence dot's availability dimension
@@ -1517,6 +1591,20 @@ class ApiClient {
 
   async deleteChatSession(id: string): Promise<void> {
     await this.fetch<void>(`/api/chat/sessions/${id}`, { method: "DELETE" });
+  }
+
+  /** PATCH /api/chat/sessions/:id/archive — retires a builder conversation
+   *  once its agent exists (archived = read-only + dropped from the drafts
+   *  list; the conversation stays as the record of how the agent was
+   *  designed). Mirrors packages/core/api/client.ts:2734. */
+  async setChatSessionArchived(
+    id: string,
+    archived: boolean,
+  ): Promise<ChatSession> {
+    return this.fetch<ChatSession>(`/api/chat/sessions/${id}/archive`, {
+      method: "PATCH",
+      body: JSON.stringify({ archived }),
+    });
   }
 
   async listChatMessages(

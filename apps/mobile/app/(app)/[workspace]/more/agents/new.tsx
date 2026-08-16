@@ -3,10 +3,10 @@
  * `packages/views/agents/create/choose-create-method-page.tsx`: two entry
  * cards — manual ("Start blank") and AI ("Build with AI").
  *
- * The AI entry is a disabled "coming soon" card this round: the web AI flow
- * is a full builder-session conversation (ai-builder-session-page.tsx +
- * use-builder-session) that depends on the backend agent-builder session
- * API; both are P1 and deliberately do not block manual creation (MYS-329).
+ * The AI card opens the AI-builder setup (more/agents/new/ai): pick a runtime,
+ * resume an unfinished creation conversation or start a new builder-session
+ * chat that back-fills the configuration form from the assistant's
+ * `<agent_draft>` replies.
  */
 import { Pressable, ScrollView, View } from "react-native";
 import { Stack, router } from "expo-router";
@@ -16,7 +16,6 @@ import { Text } from "@/components/ui/text";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
-import { cn } from "@/lib/utils";
 
 export default function ChooseAgentCreateMethodPage() {
   const { t } = useTranslation();
@@ -30,7 +29,6 @@ export default function ChooseAgentCreateMethodPage() {
       icon: "document-text-outline" as const,
       title: t("agents.new.manual.title"),
       description: t("agents.new.manual.description"),
-      disabled: false,
       onPress: () => {
         if (wsSlug) router.push(`/${wsSlug}/more/agents/new/manual`);
       },
@@ -40,9 +38,9 @@ export default function ChooseAgentCreateMethodPage() {
       icon: "chatbubble-ellipses-outline" as const,
       title: t("agents.new.ai.title"),
       description: t("agents.new.ai.description"),
-      comingSoon: true,
-      disabled: true,
-      onPress: () => {},
+      onPress: () => {
+        if (wsSlug) router.push(`/${wsSlug}/more/agents/new/ai`);
+      },
     },
   ];
 
@@ -73,27 +71,14 @@ export default function ChooseAgentCreateMethodPage() {
         {modes.map((mode) => (
           <Pressable
             key={mode.key}
-            disabled={mode.disabled}
             onPress={mode.onPress}
             accessibilityLabel={mode.title}
-            className={cn(
-              "rounded-xl border px-5 py-5 gap-1.5",
-              mode.disabled
-                ? "border-border bg-secondary/30 opacity-70"
-                : "border-primary/30 bg-primary/[0.025] active:bg-secondary",
-            )}
+            className="rounded-xl border border-primary/30 bg-primary/[0.025] px-5 py-5 gap-1.5 active:bg-secondary"
           >
             <View className="flex-row items-center gap-2">
               <View className="size-10 items-center justify-center rounded-lg bg-muted">
                 <Ionicons name={mode.icon} size={20} color={theme.mutedForeground} />
               </View>
-              {mode.comingSoon ? (
-                <View className="px-2 py-0.5 rounded-full border border-border bg-muted">
-                  <Text className="text-[10px] font-medium text-muted-foreground">
-                    {t("agents.new.comingSoon")}
-                  </Text>
-                </View>
-              ) : null}
             </View>
             <Text className="text-base font-semibold text-foreground">
               {mode.title}
@@ -101,14 +86,12 @@ export default function ChooseAgentCreateMethodPage() {
             <Text className="text-sm leading-5 text-muted-foreground">
               {mode.description}
             </Text>
-            {!mode.comingSoon ? (
-              <View className="flex-row items-center gap-1 pt-1">
-                <Text className="text-xs font-medium text-foreground">
-                  {t("agents.new.continue")}
-                </Text>
-                <Ionicons name="chevron-forward" size={13} color={theme.mutedForeground} />
-              </View>
-            ) : null}
+            <View className="flex-row items-center gap-1 pt-1">
+              <Text className="text-xs font-medium text-foreground">
+                {t("agents.new.continue")}
+              </Text>
+              <Ionicons name="chevron-forward" size={13} color={theme.mutedForeground} />
+            </View>
           </Pressable>
         ))}
       </ScrollView>

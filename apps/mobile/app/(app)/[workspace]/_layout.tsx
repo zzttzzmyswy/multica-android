@@ -360,6 +360,20 @@ export default function WorkspaceLayout() {
           }}
         />
         <Stack.Screen
+          name="more/agents/new/ai"
+          options={{
+            title: t("agents.new.title"),
+            headerBackTitle: t("common.back"),
+          }}
+        />
+        <Stack.Screen
+          name="more/agents/builder/[sessionId]"
+          options={{
+            title: t("agents.new.ai.sessionTitle"),
+            headerBackTitle: t("common.back"),
+          }}
+        />
+        <Stack.Screen
           name="more/members"
           options={{ title: t("screen.members"), headerBackTitle: t("common.back") }}
         />

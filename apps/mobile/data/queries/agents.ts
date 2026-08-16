@@ -8,6 +8,9 @@ export const agentKeys = {
   // a retired agent is still viewable, just dimmed).
   listAll: (wsId: string | null) => ["agents", wsId, "all"] as const,
   env: (agentId: string) => ["agent-env", agentId] as const,
+  // AI-builder creation conversations (web Creation Studio). Keyed on the
+  // workspace; rows are the unfinished sessions the studio re-lists.
+  builderSessions: (wsId: string | null) => ["agent-builder-sessions", wsId] as const,
 };
 
 export const agentListOptions = (wsId: string | null) =>
@@ -39,4 +42,15 @@ export const agentEnvOptions = (agentId: string) =>
     queryKey: agentKeys.env(agentId),
     queryFn: () => api.getAgentEnv(agentId),
     enabled: false,
+  });
+
+// Unfinished AI-builder creation conversations. Mirrors web's
+// `agentBuilderSessionListOptions` (packages/core/agents/queries.ts). The
+// list is invalidated by every session lifecycle event (start / first turn /
+// discard / archive) so the drafts banner on the AI setup screen stays fresh.
+export const agentBuilderSessionListOptions = (wsId: string | null) =>
+  queryOptions({
+    queryKey: agentKeys.builderSessions(wsId),
+    queryFn: () => api.listAgentBuilderSessions(),
+    enabled: !!wsId,
   });
