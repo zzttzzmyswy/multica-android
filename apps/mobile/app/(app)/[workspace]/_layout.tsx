@@ -443,6 +443,24 @@ export default function WorkspaceLayout() {
           }}
         />
         <Stack.Screen
+          name="more/mcp-servers"
+          options={{ title: t("screen.mcpServers"), headerBackTitle: t("common.back") }}
+        />
+        <Stack.Screen
+          name="more/mcp-servers/new"
+          options={{
+            title: t("mcp.form.createTitle"),
+            headerBackTitle: t("screen.mcpServers"),
+          }}
+        />
+        <Stack.Screen
+          name="more/mcp-servers/[id]"
+          options={{
+            title: t("mcp.form.editTitle"),
+            headerBackTitle: t("screen.mcpServers"),
+          }}
+        />
+        <Stack.Screen
           name="more/runtimes"
           options={{
             title: t("screen.runtimes"),

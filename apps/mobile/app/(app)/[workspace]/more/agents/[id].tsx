@@ -34,6 +34,7 @@ import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PresenceDot } from "@/components/ui/presence-dot";
 import { AgentDetailActions } from "@/components/agent/agent-detail-actions";
+import { AgentMcpSection } from "@/components/agent/agent-mcp-section";
 import { agentListAllOptions } from "@/data/queries/agents";
 import { agentTaskSnapshotOptions } from "@/data/queries/agent-task-snapshot";
 import { runtimeListOptions } from "@/data/queries/runtimes";
@@ -295,6 +296,10 @@ export default function AgentDetailPage() {
               </PropertyRow>
             ) : null}
           </View>
+
+          {/* MCP servers — archived agents render none (a retired agent can't
+              be assigned MCP servers). */}
+          {!archived ? <AgentMcpSection agent={agent} /> : null}
 
           {/* Tasks */}
           <SectionTitle>{t("agents.detail.tasks")}</SectionTitle>

@@ -98,6 +98,7 @@ const NAV_ITEMS: NavItem[] = [
   // same gate as web's settings properties-tab.
   { labelKey: "nav.properties", icon: "options", path: "/more/properties" },
   { labelKey: "nav.skills", icon: "extension-puzzle", path: "/more/skills" },
+  { labelKey: "nav.mcpServers", icon: "server", path: "/more/mcp-servers" },
   { labelKey: "nav.runtimes", icon: "server", path: "/more/runtimes" },
   { labelKey: "nav.usage", icon: "bar-chart", path: "/more/usage" },
   {

@@ -50,6 +50,7 @@ import type {
   TaskMessagePayload,
   User,
   Workspace,
+  WorkspaceMcpServer,
 } from "@multica/core/types";
 import {
   AutopilotRunSchema,
@@ -1165,3 +1166,36 @@ export const CreatePersonalAccessTokenResponseSchema: z.ZodType<CreatePersonalAc
   z
     .object({ ...personalAccessTokenShape, token: z.string().default("") })
     .loose();
+
+/** One workspace MCP server library / agent-assignment entry (mirrors
+ *  packages/core/api/schemas.ts WorkspaceMcpServerSchema + GH #6062). The
+ *  API is deliberately write-only: only identity + transport round-trip, the
+ *  stored `config` never returns. `enabled` is present only on an agent's
+ *  assignment list (the per-binding toggle); the library listing omits it.
+ *  `.loose()` so a newer server can add fields without breaking mobile. */
+export const WorkspaceMcpServerSchema: z.ZodType<WorkspaceMcpServer> = z
+  .object({
+    id: z.string().default(""),
+    workspace_id: z.string().default(""),
+    name: z.string().default(""),
+    transport: z.string().default("unknown"),
+    enabled: z.boolean().optional(),
+    created_at: z.string().default(""),
+    updated_at: z.string().default(""),
+  })
+  .loose();
+
+export const WorkspaceMcpServerListSchema = z
+  .array(WorkspaceMcpServerSchema)
+  .default([]);
+
+export const EMPTY_WORKSPACE_MCP_SERVER: WorkspaceMcpServer = {
+  id: "",
+  workspace_id: "",
+  name: "",
+  transport: "unknown",
+  created_at: "",
+  updated_at: "",
+};
+
+export const EMPTY_WORKSPACE_MCP_SERVER_LIST: WorkspaceMcpServer[] = [];
