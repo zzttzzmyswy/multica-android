@@ -5,6 +5,10 @@
  * fold to per-agent, unknown agents collapse into the same sentinel buckets
  * web renders, and token counts format through the same K/M/B notation.
  *
+ * ES2023 array methods (.toSorted / .findLastIndex, etc.) are avoided: the
+ * app's Hermes runtime doesn't implement them, so the code below uses the
+ * ES5-era equivalents (.sort, an explicit reverse index loop).
+ *
  * Behavior-parity points with web:
  *  - aggregateDailyTokens sorts dates ascending (chart x-axis oldest→newest)
  *  - computeDailyTotals sums task_count across rows (an accepted KPI
@@ -74,8 +78,11 @@ const TOKEN_UNITS = [
 export function formatTokens(n: number): string {
   if (!Number.isFinite(n)) return "0";
   const magnitude = Math.abs(n);
-  let unitIndex = TOKEN_UNITS.findLastIndex(({ divisor }) => magnitude >= divisor);
-  unitIndex = Math.max(unitIndex, 0);
+  // Hermes has no Array.prototype.findLastIndex — walk backwards ourselves.
+  let unitIndex = TOKEN_UNITS.length - 1;
+  while (unitIndex > 0 && TOKEN_UNITS[unitIndex]!.divisor > magnitude) {
+    unitIndex--;
+  }
   if (unitIndex === 0) return n.toLocaleString();
   let unit = TOKEN_UNITS[unitIndex]!;
   let scaled = n / unit.divisor;
@@ -110,7 +117,7 @@ export function aggregateDailyTokens(
     map.set(u.date, entry);
   }
   return Array.from(map.entries())
-    .toSorted(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, t]) => ({ date, label: formatDateLabel(date), ...t }));
 }
 
@@ -143,7 +150,7 @@ export function aggregateByAgent(rows: DashboardUsageByAgent[]): AgentUsageRow[]
     entry.taskCount += r.task_count;
     map.set(r.agent_id, entry);
   }
-  return Array.from(map.values()).toSorted((a, b) => b.tokens - a.tokens);
+  return Array.from(map.values()).sort((a, b) => b.tokens - a.tokens);
 }
 
 /**
