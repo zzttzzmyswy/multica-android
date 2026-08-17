@@ -12,7 +12,7 @@
  *
  * Theme picker stays inline (3 fixed options, fits in one section).
  */
-import { useReducer } from "react";
+import { useReducer, useState } from "react";
 import { Alert, ActivityIndicator, Pressable, ScrollView, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router } from "expo-router";
@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { SettingsTimezonePicker } from "@/components/settings/timezone-picker";
 import { workspaceListOptions } from "@/data/queries/workspaces";
 import { useAuthStore } from "@/data/auth-store";
 import { api } from "@/data/api";
@@ -32,6 +33,7 @@ import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
 import { getSavedLocaleOverride, resetLocale, setLocale } from "@/lib/i18n";
 import { LANGUAGE_OPTIONS, languageOptionForSaved, serverLanguageFor, type LanguageOptionId } from "@/lib/settings-language";
+import { resolveViewingTimezone, timezoneLabel } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
 
 const THEME_OPTIONS: { value: ThemePreference; labelKey: string }[] = [
@@ -67,6 +69,8 @@ export default function SettingsPage() {
   // device language is already en) would skip the subscription re-render and
   // keep the old radio highlight. bump() forces one render after switching.
   const [, bump] = useReducer((x: number) => x + 1, 0);
+  const [timezoneOpen, setTimezoneOpen] = useState(false);
+  const effectiveTimezone = resolveViewingTimezone(user);
 
   const onSwitch = async (ws: Workspace) => {
     if (ws.slug === currentSlug) return;
@@ -118,6 +122,23 @@ export default function SettingsPage() {
         .catch(() => {
           Alert.alert(t("settings.languageSyncFailed"));
         });
+    }
+  };
+
+  // Timezone follows the same best-effort sync contract as the language
+  // picker: the server update is fire-and-forget, a failure is surfaced as a
+  // readable alert, and the row reflects the stored preference immediately.
+  // Selecting "Follow system" (null) clears the preference with `""` — web's
+  // TimezoneRow payload semantics (`""` falls back to the device zone).
+  const onTimezoneSelect = async (tz: string | null) => {
+    setTimezoneOpen(false);
+    const stored = user?.timezone ?? null;
+    if (tz === stored) return;
+    try {
+      const updated = await api.updateMe({ timezone: tz ?? "" });
+      setUser(updated);
+    } catch {
+      Alert.alert(t("settings.timezoneSyncFailed"));
     }
   };
 
@@ -261,11 +282,30 @@ export default function SettingsPage() {
         </RadioGroup>
       </SectionGroup>
 
+      <SectionGroup title={t("settings.timezoneTitle")}>
+        <NavRow
+          onPress={() => setTimezoneOpen(true)}
+          chevronColor={mutedFg}
+          leading={
+            <Ionicons name="globe-outline" size={18} color={mutedFg} />
+          }
+          title={timezoneLabel(effectiveTimezone)}
+          subtitle={user?.timezone ? undefined : t("settings.languageSystem")}
+        />
+      </SectionGroup>
+
       <View className="pt-2">
         <Button variant="destructive" onPress={onSignOut}>
           <Text>{t("settings.signOutTitle")}</Text>
         </Button>
       </View>
+
+      <SettingsTimezonePicker
+        visible={timezoneOpen}
+        value={user?.timezone ?? null}
+        onSelect={onTimezoneSelect}
+        onClose={() => setTimezoneOpen(false)}
+      />
     </ScrollView>
   );
 }
