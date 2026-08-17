@@ -21,6 +21,7 @@
 // through Node `require`, so a plain .js module works where a raw .ts would
 // fail to resolve.
 const {
+  withAndroidManifest,
   withAppBuildGradle,
   withGradleProperties,
 } = require("@expo/config-plugins");
@@ -106,9 +107,34 @@ function withReleaseMinify(config) {
   });
 }
 
+// Self-update APK install authorization. Without `REQUEST_INSTALL_PACKAGES`
+// the system PackageInstaller refuses the hand-off outright ("Requesting uid
+// ... needs to declare permission android.permission.REQUEST_INSTALL_PACKAGES")
+// — the ACTION_VIEW lands on InstallStart and dies, so the GitHub-Release
+// update flow (lib/install-update.ts) can never complete even after the user
+// permits unknown sources. Declaring it makes the per-app "install unknown
+// apps" toggle available, which `openUnknownAppSourcesSettings()` deep-links
+// to. Idempotent: no-op when the permission is already present.
+function withInstallUnknownSourcesPermission(config) {
+  return withAndroidManifest(config, (cfg) => {
+    const usesPermissions = cfg.modResults.manifest["uses-permission"] ?? [];
+    const declared = usesPermissions.some(
+      (p) => p.$?.["android:name"] === "android.permission.REQUEST_INSTALL_PACKAGES",
+    );
+    if (!declared) {
+      usesPermissions.push({
+        $: { "android:name": "android.permission.REQUEST_INSTALL_PACKAGES" },
+      });
+      cfg.modResults.manifest["uses-permission"] = usesPermissions;
+    }
+    return cfg;
+  });
+}
+
 module.exports = function withAbiSplits(config) {
-  return withReleaseMinify(
-    withAppBuildGradle(config, (cfg) => {
+  return withInstallUnknownSourcesPermission(
+    withReleaseMinify(
+      withAppBuildGradle(config, (cfg) => {
       if (!cfg.modResults.contents.includes("splits {")) {
         // Insert at the end of the android { } block, just before androidResources.
         cfg.modResults.contents = cfg.modResults.contents.replace(
@@ -124,6 +150,7 @@ module.exports = function withAbiSplits(config) {
           cfg.modResults.contents.trimEnd() + "\n" + STRIP_DEAD_FONTS_GRADLE + "\n";
       }
       return cfg;
-    }),
+      }),
+    ),
   );
 };

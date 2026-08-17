@@ -33,6 +33,13 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     // `lib/brand-assets.test.ts`. MYS-355.
     icon: "./assets/icon.png",
     android: {
+      // Explicit versionCode — `expo prebuild` defaults to 1 when unset, which
+      // regresses on every fresh prebuild (`adb install -r` then fails with
+      // INSTALL_FAILED_VERSION_DOWNGRADE against a previously installed build).
+      // Convention: major*100 + minor*10 + patch — keep it monotonic with every
+      // `version` bump so self-hosted APK updates always upgrade. Shown as the
+      // About-page "build" number (Constants.platform.android.versionCode).
+      versionCode: 500,
       // Adaptive icon: separate full-bleed background + centered foreground so
       // Android launchers can mask them into circles / squiggles cleanly.
       adaptiveIcon: {
