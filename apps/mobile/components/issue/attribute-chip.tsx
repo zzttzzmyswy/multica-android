@@ -19,6 +19,9 @@ interface Props {
   variant?: "filled" | "dimmed";
   onPress?: () => void;
   className?: string;
+  /** Optional a11y label override — e.g. the quick-create actor chip
+   *  announces "choose agent" instead of the current agent's name. */
+  accessibilityLabel?: string;
 }
 
 export function AttributeChip({
@@ -27,6 +30,7 @@ export function AttributeChip({
   variant = "filled",
   onPress,
   className,
+  accessibilityLabel,
 }: Props) {
   const containerClass = cn(
     "flex-row items-center gap-1.5 rounded-full border px-2.5 py-1",
@@ -55,6 +59,7 @@ export function AttributeChip({
     return (
       <Pressable
         onPress={onPress}
+        accessibilityLabel={accessibilityLabel}
         className={cn(containerClass, "active:bg-secondary")}
         hitSlop={4}
       >

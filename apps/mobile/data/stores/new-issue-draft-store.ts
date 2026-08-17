@@ -29,29 +29,43 @@ import type {
 } from "@multica/core/types";
 import type { AssigneeValue } from "@/components/issue/pickers/assignee-picker-body";
 
+/**
+ * Actor picked in the agent-mode quick-create panel (`new-issue.tsx` →
+ * `quick-create-panel.tsx`). Unlike `assignee` (member/agent/squad, manual
+ * mode only), agent mode accepts exactly agent | squad — the thing that
+ * will process the natural-language prompt.
+ */
+export type AgentActorValue = {
+  type: "agent" | "squad";
+  id: string;
+} | null;
+
 interface NewIssueDraftState {
   status: IssueStatus;
   priority: IssuePriority;
   assignee: AssigneeValue;
   dueDate: string | null;
   project: Project | null;
+  agentActor: AgentActorValue;
   setStatus: (next: IssueStatus) => void;
   setPriority: (next: IssuePriority) => void;
   setAssignee: (next: AssigneeValue) => void;
   setDueDate: (next: string | null) => void;
   setProject: (next: Project | null) => void;
+  setAgentActor: (next: AgentActorValue) => void;
   reset: () => void;
 }
 
 const INITIAL: Pick<
   NewIssueDraftState,
-  "status" | "priority" | "assignee" | "dueDate" | "project"
+  "status" | "priority" | "assignee" | "dueDate" | "project" | "agentActor"
 > = {
   status: "todo",
   priority: "none",
   assignee: null,
   dueDate: null,
   project: null,
+  agentActor: null,
 };
 
 export const useNewIssueDraftStore = create<NewIssueDraftState>((set) => ({
@@ -61,6 +75,7 @@ export const useNewIssueDraftStore = create<NewIssueDraftState>((set) => ({
   setAssignee: (next) => set({ assignee: next }),
   setDueDate: (next) => set({ dueDate: next }),
   setProject: (next) => set({ project: next }),
+  setAgentActor: (next) => set({ agentActor: next }),
   reset: () => set({ ...INITIAL }),
 }));
 

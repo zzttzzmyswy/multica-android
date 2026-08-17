@@ -278,6 +278,14 @@ export default function WorkspaceLayout() {
           }}
         />
         <Stack.Screen
+          name="new-issue-picker/agent"
+          options={{
+            ...SHEET_OPTIONS,
+            headerShown: true,
+            title: t("newIssue.agentSelectAgent"),
+          }}
+        />
+        <Stack.Screen
           name="new-issue-picker/project"
           options={SHEET_OPTIONS}
         />

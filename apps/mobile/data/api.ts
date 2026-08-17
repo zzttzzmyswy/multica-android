@@ -49,6 +49,7 @@ import type {
   Invitation,
   Issue,
   IssueLabelsResponse,
+  IssuePriority,
   IssuePropertiesResponse,
   IssueProperty,
   IssuePropertyValue,
@@ -1457,6 +1458,31 @@ class ApiClient {
   // applies its own defaults for anything omitted.
   async createIssue(body: CreateIssueRequest): Promise<Issue> {
     return this.fetch<Issue>("/api/issues", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
+  // Agent-mode issue creation — mirrors
+  // packages/core/api/client.ts:quickCreateIssue and POST
+  // /api/issues/quick-create (server/internal/handler/issue.go
+  // QuickCreateIssue). The user types natural language + picks an actor
+  // (agent or squad); the server validates the actor's reachability,
+  // enqueues a quick-create task and returns 202 `{task_id}` immediately.
+  // The agent authors the issue in the background; success and failure
+  // surface as inbox notifications. Exactly one of agent_id/squad_id is
+  // required; the rest are optional and omitted when unset.
+  async quickCreateIssue(body: {
+    agent_id?: string;
+    squad_id?: string;
+    prompt: string;
+    priority?: IssuePriority;
+    due_date?: string;
+    project_id?: string | null;
+    parent_issue_id?: string | null;
+    attachment_ids?: string[];
+  }): Promise<{ task_id: string }> {
+    return this.fetch("/api/issues/quick-create", {
       method: "POST",
       body: JSON.stringify(body),
     });

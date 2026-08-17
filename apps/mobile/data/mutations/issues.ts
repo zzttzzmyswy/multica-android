@@ -18,6 +18,7 @@ import type {
   AgentTask,
   CreateIssueRequest,
   Issue,
+  IssuePriority,
   IssueReaction,
   IssueSubscriber,
   Label,
@@ -677,6 +678,41 @@ export function useCreateIssue() {
     },
   });
 }
+
+/**
+ * Agent-mode issue creation (POST /api/issues/quick-create). Unlike
+ * `useCreateIssue` the returned `task_id` is the enqueued quick-create
+ * task, not an issue — the agent authors the issue in the background and
+ * success/failure surface as inbox notifications. Same invalidation
+ * surface: the eventual rows land in my-issues / inbox.
+ */
+export function useQuickCreateIssue() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: (body: QuickCreateIssueBody) => api.quickCreateIssue(body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: issueKeys.myAll(wsId) });
+      qc.invalidateQueries({ queryKey: inboxKeys.all(wsId) });
+    },
+  });
+}
+
+/**
+ * Body for POST /api/issues/quick-create — exactly one of agent_id/squad_id
+ * plus the natural-language prompt; the rest optional. Mirrors the
+ * quickCreateIssue param shape so mutation call sites stay as portable as
+ * the web client.
+ */
+type QuickCreateIssueBody = {
+  agent_id?: string;
+  squad_id?: string;
+  prompt: string;
+  priority?: IssuePriority;
+  due_date?: string;
+  project_id?: string | null;
+};
 
 /**
  * Cancel an in-flight agent task. Optimistically removes the task from the

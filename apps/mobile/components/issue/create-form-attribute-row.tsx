@@ -24,12 +24,11 @@ import { useNewIssueDraftStore } from "@/data/stores/new-issue-draft-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
 
-/**
- * Picker fields the new-issue draft form can open. Bound to a typed map
- * of Expo Router pathnames so typos become compile errors (previously
- * the call site used `as never` on a template string).
- */
-type NewIssuePickerField =
+/** Picker fields the new-issue draft form can open. Bound to a typed map
+ *  of Expo Router pathnames so typos become compile errors (previously
+ *  the call site used `as never` on a template string). Exported so the
+ *  agent quick-create panel can filter which chips render via `fields`. */
+export type NewIssuePickerField =
   | "status"
   | "priority"
   | "assignee"
@@ -44,7 +43,24 @@ const NEW_ISSUE_PICKER_PATHNAMES = {
   "due-date": "/[workspace]/new-issue-picker/due-date",
 } as const satisfies Record<NewIssuePickerField, string>;
 
-export function CreateFormAttributeRow() {
+/** Stable default for `fields` — module-level so the component keeps
+ *  rendering the full chip row when the prop is omitted. */
+const ALL_FIELDS: NewIssuePickerField[] = [
+  "status",
+  "priority",
+  "assignee",
+  "due-date",
+  "project",
+];
+
+interface Props {
+  /** Which draft-field chips to render. Default: all five (manual form).
+   *  Agent quick-create passes `["project", "priority", "due-date"]` —
+   *  its actor chip + prompt field are owned by the panel itself. */
+  fields?: NewIssuePickerField[];
+}
+
+export function CreateFormAttributeRow({ fields = ALL_FIELDS }: Props) {
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { t } = useTranslation();
   const status = useNewIssueDraftStore((s) => s.status);
@@ -68,66 +84,91 @@ export function CreateFormAttributeRow() {
     });
   };
 
+  // Field → chip element. `fields` controls which render; the agent-mode
+  // panel drops status + assignee (its actor is a separate field).
+  const renderChip = (field: NewIssuePickerField) => {
+    switch (field) {
+      case "status":
+        return (
+          <AttributeChip
+            icon={<StatusIcon status={status} size={12} />}
+            label={t(`enum.status.${status}`)}
+            variant="filled"
+            onPress={() => open("status")}
+          />
+        );
+      case "priority":
+        return (
+          <AttributeChip
+            icon={<PriorityIcon priority={priority} />}
+            label={priorityLabel}
+            variant={priority === "none" ? "dimmed" : "filled"}
+            onPress={() => open("priority")}
+          />
+        );
+      case "assignee":
+        return (
+          <AttributeChip
+            icon={
+              assignee ? (
+                <ActorAvatar
+                  type={assignee.type}
+                  id={assignee.id}
+                  size={16}
+                  showPresence
+                />
+              ) : (
+                <Ionicons
+                  name="person-circle-outline"
+                  size={16}
+                  color="#a1a1aa"
+                />
+              )
+            }
+            label={assigneeLabel}
+            variant={assignee ? "filled" : "dimmed"}
+            onPress={() => open("assignee")}
+          />
+        );
+      case "due-date":
+        return (
+          <AttributeChip
+            icon={
+              <Ionicons
+                name="calendar-outline"
+                size={14}
+                color={dueDate ? undefined : "#a1a1aa"}
+              />
+            }
+            label={dueDate ? formatDueDate(dueDate, t) : t("attr.dueDate")}
+            variant={dueDate ? "filled" : "dimmed"}
+            onPress={() => open("due-date")}
+          />
+        );
+      case "project":
+        return (
+          <AttributeChip
+            icon={
+              project ? (
+                <ProjectIcon icon={project.icon} size="sm" />
+              ) : (
+                <Ionicons name="folder-outline" size={14} color="#a1a1aa" />
+              )
+            }
+            label={project?.title ?? t("attr.project")}
+            variant={project ? "filled" : "dimmed"}
+            onPress={() => open("project")}
+          />
+        );
+    }
+  };
+
   return (
     <View>
       <View className="flex-row flex-wrap gap-2">
-        <AttributeChip
-          icon={<StatusIcon status={status} size={12} />}
-          label={t(`enum.status.${status}`)}
-          variant="filled"
-          onPress={() => open("status")}
-        />
-        <AttributeChip
-          icon={<PriorityIcon priority={priority} />}
-          label={priorityLabel}
-          variant={priority === "none" ? "dimmed" : "filled"}
-          onPress={() => open("priority")}
-        />
-        <AttributeChip
-          icon={
-            assignee ? (
-              <ActorAvatar
-                type={assignee.type}
-                id={assignee.id}
-                size={16}
-                showPresence
-              />
-            ) : (
-              <Ionicons
-                name="person-circle-outline"
-                size={16}
-                color="#a1a1aa"
-              />
-            )
-          }
-          label={assigneeLabel}
-          variant={assignee ? "filled" : "dimmed"}
-          onPress={() => open("assignee")}
-        />
-        <AttributeChip
-          icon={
-            <Ionicons
-              name="calendar-outline"
-              size={14}
-              color={dueDate ? undefined : "#a1a1aa"}
-            />
-          }
-          label={dueDate ? formatDueDate(dueDate, t) : t("attr.dueDate")}
-          variant={dueDate ? "filled" : "dimmed"}
-          onPress={() => open("due-date")}
-        />
-        <AttributeChip
-          icon={
-            project ? (
-              <ProjectIcon icon={project.icon} size="sm" />
-            ) : (
-              <Ionicons name="folder-outline" size={14} color="#a1a1aa" />
-            )
-          }
-          label={project?.title ?? t("attr.project")}
-          variant={project ? "filled" : "dimmed"}
-          onPress={() => open("project")}
-        />
+        {fields.map((field) => (
+          <View key={field}>{renderChip(field)}</View>
+        ))}
       </View>
     </View>
   );
