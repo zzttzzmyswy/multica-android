@@ -32,6 +32,7 @@ import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useFailedCommentsStore } from "@/data/stores/failed-comments-store";
 import { patchSubscribersList } from "@/lib/subscription";
+import { patchIssueBatch } from "@/lib/batch-issues";
 
 export type ToggleCommentReactionVars = {
   commentId: string;
@@ -455,6 +456,107 @@ export function useUpdateIssue(issueId: string) {
       qc.invalidateQueries({ queryKey: issueKeys.detail(wsId, issueId) });
       qc.invalidateQueries({ queryKey: issueKeys.myAll(wsId) });
       qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
+    },
+  });
+}
+
+/**
+ * Batch update on a multi-selection of issues (web parity —
+ * batch-action-toolbar's status / priority / assignee actions). Optimistically
+ * patches every matching row in the my-issues + workspace list caches, restores
+ * the snapshot on error, and lets settled invalidations reconcile with the
+ * server's committed rows.
+ */
+export function useBatchUpdateIssues() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: ({
+      ids,
+      updates,
+    }: {
+      ids: string[];
+      updates: UpdateIssueRequest;
+    }) => api.batchUpdateIssues(ids, updates),
+    onMutate: async ({ ids, updates }) => {
+      const listKey = issueKeys.list(wsId);
+      const myAllKey = issueKeys.myAll(wsId);
+      await Promise.all([
+        qc.cancelQueries({ queryKey: listKey }),
+        qc.cancelQueries({ queryKey: myAllKey }),
+      ]);
+      const prevList = qc.getQueryData<Issue[]>(listKey);
+      const prevMy = qc.getQueriesData<Issue[]>({ queryKey: myAllKey });
+      qc.setQueryData<Issue[]>(listKey, (old) =>
+        old ? patchIssueBatch(old, ids, updates) : old,
+      );
+      qc.setQueriesData<Issue[]>({ queryKey: myAllKey }, (old) =>
+        old ? patchIssueBatch(old, ids, updates) : old,
+      );
+      return { prevList, prevMy, listKey, myAllKey };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (!ctx) return;
+      if (ctx.prevList !== undefined) {
+        qc.setQueryData(ctx.listKey, ctx.prevList);
+      }
+      for (const [key, value] of ctx.prevMy) {
+        qc.setQueryData(key, value);
+      }
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
+      qc.invalidateQueries({ queryKey: issueKeys.myAll(wsId) });
+    },
+  });
+}
+
+/**
+ * Batch delete on a multi-selection of issues. Optimistically drops the rows
+ * from the my-issues + workspace list caches and purges their detail/timeline
+ * caches, mirroring useDeleteIssue; settled invalidations reconcile counts.
+ */
+export function useBatchDeleteIssues() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: (ids: string[]) => api.batchDeleteIssues(ids),
+    onMutate: async (ids) => {
+      const listKey = issueKeys.list(wsId);
+      const myAllKey = issueKeys.myAll(wsId);
+      await Promise.all([
+        qc.cancelQueries({ queryKey: listKey }),
+        qc.cancelQueries({ queryKey: myAllKey }),
+      ]);
+      const prevList = qc.getQueryData<Issue[]>(listKey);
+      const prevMy = qc.getQueriesData<Issue[]>({ queryKey: myAllKey });
+      const drop = new Set(ids);
+      qc.setQueryData<Issue[]>(listKey, (old) =>
+        old ? old.filter((i) => !drop.has(i.id)) : old,
+      );
+      qc.setQueriesData<Issue[]>({ queryKey: myAllKey }, (old) =>
+        old ? old.filter((i) => !drop.has(i.id)) : old,
+      );
+      return { prevList, prevMy, listKey, myAllKey };
+    },
+    onError: (_err, _ids, ctx) => {
+      if (!ctx) return;
+      if (ctx.prevList !== undefined) {
+        qc.setQueryData(ctx.listKey, ctx.prevList);
+      }
+      for (const [key, value] of ctx.prevMy) {
+        qc.setQueryData(key, value);
+      }
+    },
+    onSettled: (_data, _err, ids) => {
+      qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
+      qc.invalidateQueries({ queryKey: issueKeys.myAll(wsId) });
+      for (const id of ids) {
+        qc.removeQueries({ queryKey: issueKeys.detail(wsId, id) });
+        qc.removeQueries({ queryKey: issueKeys.timeline(wsId, id) });
+      }
     },
   });
 }

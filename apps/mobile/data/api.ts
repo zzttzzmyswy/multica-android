@@ -231,6 +231,12 @@ import {
   EMPTY_ISSUE_SUBSCRIBER_LIST,
   SubscribeStatusSchema,
   type SubscribeStatusResponse,
+  BatchUpdateResultSchema,
+  EMPTY_BATCH_UPDATE_RESULT,
+  type BatchUpdateResult,
+  BatchDeleteResultSchema,
+  EMPTY_BATCH_DELETE_RESULT,
+  type BatchDeleteResult,
 } from "./schemas";
 import type { ZodType } from "zod";
 import { File, Paths } from "expo-file-system";
@@ -1492,6 +1498,41 @@ class ApiClient {
   // short-circuits 204 → undefined (api.ts:270), so no body parsing needed.
   async deleteIssue(id: string): Promise<void> {
     await this.fetch<void>(`/api/issues/${id}`, { method: "DELETE" });
+  }
+
+  // Batch writes — mirror packages/core/api/client.ts (POST
+  // /api/issues/batch-update|batch-delete). Responses are counts
+  // (`{ updated: N }` / `{ deleted: N }`); lenient parse so drift
+  // downgrades to a 0 count rather than throwing.
+  async batchUpdateIssues(
+    issueIds: string[],
+    updates: UpdateIssueRequest,
+  ): Promise<BatchUpdateResult> {
+    return this.fetchValidatedWith(
+      "/api/issues/batch-update",
+      BatchUpdateResultSchema,
+      EMPTY_BATCH_UPDATE_RESULT,
+      {
+        method: "POST",
+        body: JSON.stringify({ issue_ids: issueIds, updates }),
+      },
+      { endpoint: "POST /api/issues/batch-update" },
+    );
+  }
+
+  async batchDeleteIssues(
+    issueIds: string[],
+  ): Promise<BatchDeleteResult> {
+    return this.fetchValidatedWith(
+      "/api/issues/batch-delete",
+      BatchDeleteResultSchema,
+      EMPTY_BATCH_DELETE_RESULT,
+      {
+        method: "POST",
+        body: JSON.stringify({ issue_ids: issueIds }),
+      },
+      { endpoint: "POST /api/issues/batch-delete" },
+    );
   }
 
   // --- Labels ---

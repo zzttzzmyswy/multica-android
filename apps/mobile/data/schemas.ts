@@ -525,6 +525,30 @@ export interface SubscribeStatusResponse {
   subscribed: boolean;
 }
 
+// Batch issue write endpoints answer a count (`{"updated": N}` /
+// `{"deleted": N}`). Lenient parse so a shape drift downgrades to a 0 count
+// instead of throwing, mirroring the core client's `{ updated: number }`
+// return type (packages/core/api/client.ts batchUpdateIssues).
+export const BatchUpdateResultSchema = z
+  .object({ updated: z.number().default(0) })
+  .loose();
+
+export interface BatchUpdateResult {
+  updated: number;
+}
+
+export const EMPTY_BATCH_UPDATE_RESULT: BatchUpdateResult = { updated: 0 };
+
+export const BatchDeleteResultSchema = z
+  .object({ deleted: z.number().default(0) })
+  .loose();
+
+export interface BatchDeleteResult {
+  deleted: number;
+}
+
+export const EMPTY_BATCH_DELETE_RESULT: BatchDeleteResult = { deleted: 0 };
+
 // =====================================================
 // User / Workspace / Inbox / Member / Agent
 // =====================================================

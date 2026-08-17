@@ -1326,5 +1326,20 @@
   "runs.retryTitle": "Retry run",
   "runs.retryRunning": "Retrying…",
   "runs.retryFailed": "Retry failed. The run may have already started or the agent is unavailable.",
-  "runs.retryBlocked": "You are not allowed to trigger this agent."
+  "runs.retryBlocked": "You are not allowed to trigger this agent.",
+  "batch.selected": "{{count}} selected",
+  "batch.exit": "Done",
+  "batch.status": "Status",
+  "batch.priority": "Priority",
+  "batch.assignee": "Assignee",
+  "batch.delete": "Delete",
+  "batch.pickAssignee": "Choose assignee…",
+  "batch.clearAssignee": "Clear assignee",
+  "batch.pickAssigneeTitle": "Assign selected issues to…",
+  "batch.deleteTitle": "Delete {{count}} issues?",
+  "batch.deleteMessage": "This permanently deletes the selected issues. This cannot be undone.",
+  "batch.updateFailedTitle": "Update failed",
+  "batch.updateFailedBody": "Couldn't update the selected issues. Please try again.",
+  "batch.deleteFailedTitle": "Delete failed",
+  "batch.deleteFailedBody": "Couldn't delete the selected issues. Please try again."
 }

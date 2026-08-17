@@ -1326,5 +1326,20 @@
   "runs.retryTitle": "重试执行",
   "runs.retryRunning": "重试中…",
   "runs.retryFailed": "重试失败，可能任务已启动或 agent 不可用。",
-  "runs.retryBlocked": "你没有权限触发该 agent。"
+  "runs.retryBlocked": "你没有权限触发该 agent。",
+  "batch.selected": "已选 {{count}} 项",
+  "batch.exit": "完成",
+  "batch.status": "状态",
+  "batch.priority": "优先级",
+  "batch.assignee": "负责人",
+  "batch.delete": "删除",
+  "batch.pickAssignee": "选择负责人…",
+  "batch.clearAssignee": "清除负责人",
+  "batch.pickAssigneeTitle": "将选中的问题指派给…",
+  "batch.deleteTitle": "删除 {{count}} 个问题？",
+  "batch.deleteMessage": "将永久删除选中的问题，且无法撤销。",
+  "batch.updateFailedTitle": "更新失败",
+  "batch.updateFailedBody": "无法更新选中的问题，请重试。",
+  "batch.deleteFailedTitle": "删除失败",
+  "batch.deleteFailedBody": "无法删除选中的问题，请重试。"
 }

@@ -25,23 +25,57 @@
  *     squad assignees instead.
  */
 import { Pressable, View } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Issue } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PriorityIcon } from "@/components/ui/priority-icon";
 import { StatusIcon } from "@/components/ui/status-icon";
+import { useColorScheme } from "@/lib/use-color-scheme";
+import { THEME } from "@/lib/theme";
 
 interface Props {
   issue: Issue;
   onPress: () => void;
   /** Render the status icon inline at the start of the row. Default: false. */
   showStatus?: boolean;
+  /**
+   * Multi-select mode (batch actions). When true, the row renders a leading
+   * selection indicator and `onPress` toggles membership instead of
+   * navigating. Opted in by list surfaces that host the BatchActionBar.
+   */
+  selectionMode?: boolean;
+  /** Whether this row's issue is in the active selection. */
+  selected?: boolean;
+  /** Long-press enters multi-select pre-selecting this row. */
+  onLongPress?: () => void;
 }
 
-export function IssueRow({ issue, onPress, showStatus = false }: Props) {
+export function IssueRow({
+  issue,
+  onPress,
+  showStatus = false,
+  selectionMode = false,
+  selected = false,
+  onLongPress,
+}: Props) {
+  const { colorScheme } = useColorScheme();
+  const checkColor = THEME[colorScheme].primary;
   return (
-    <Pressable onPress={onPress} className="active:bg-secondary px-4 py-3">
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      className={`active:bg-secondary px-4 py-3 ${selected ? "bg-primary/5" : ""}`}
+      accessibilityState={{ selected }}
+    >
       <View className="flex-row items-center gap-3">
+        {selectionMode ? (
+          <Ionicons
+            name={selected ? "checkmark-circle" : "ellipse-outline"}
+            size={22}
+            color={selected ? checkColor : THEME[colorScheme].mutedForeground}
+          />
+        ) : null}
         {showStatus ? <StatusIcon status={issue.status} size={14} /> : null}
         <PriorityIcon priority={issue.priority} size={14} />
         <Text className="text-xs text-muted-foreground shrink-0 w-16">

@@ -27,12 +27,14 @@ import { Header } from "@/components/ui/header";
 import { HeaderActions } from "@/components/ui/app-header-actions";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { IssueRow } from "@/components/issue/issue-row";
+import { BatchActionBar } from "@/components/issue/batch-action-bar";
 import { IssuesLoading } from "@/components/issue/issues-loading";
 import {
   buildMyIssuesFilter,
   myIssueListOptions,
 } from "@/data/queries/my-issues";
 import type { MyIssuesScope } from "@/data/queries/issue-keys";
+import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection-store";
 import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useMyIssuesViewStore } from "@/data/stores/my-issues-view-store";
@@ -80,6 +82,12 @@ export default function MyIssues() {
 
   useClearFiltersOnWorkspaceChange(
     useMyIssuesViewStore.getState().clearFilters,
+    wsId,
+  );
+
+  // Batch selection is workspace-scoped — drop it when switching workspaces.
+  useClearFiltersOnWorkspaceChange(
+    useIssueBatchSelectionStore.getState().exitSelection,
     wsId,
   );
 
@@ -184,9 +192,9 @@ export default function MyIssues() {
           )}
           contentContainerClassName="pb-6"
           renderItem={({ item }) => (
-            <IssueRow
+            <IssueRowCell
               issue={item}
-              onPress={() => {
+              onOpen={() => {
                 if (wsSlug) router.push(`/${wsSlug}/issue/${item.id}`);
               }}
             />
@@ -196,7 +204,43 @@ export default function MyIssues() {
         />
       )}
 
+      {filtered.length > 0 ? <BatchActionBar issues={filtered} /> : null}
+
     </View>
+  );
+}
+
+/**
+ * Row cell wired to the batch-selection store: in selection mode the row
+ * toggles membership on tap instead of navigating, and long-press enters
+ * selection mode pre-selecting this row. Non-selecting callers (project
+ * related issues, workspace-wide issues) don't opt in and keep native
+ * tap-to-navigate.
+ */
+function IssueRowCell({
+  issue,
+  onOpen,
+}: {
+  issue: Issue;
+  onOpen: () => void;
+}) {
+  const selectionMode = useIssueBatchSelectionStore((s) => s.selectionMode);
+  const selected = useIssueBatchSelectionStore((s) =>
+    s.selectedIds.has(issue.id),
+  );
+  const toggle = useIssueBatchSelectionStore((s) => s.toggle);
+  const enterSelection = useIssueBatchSelectionStore((s) => s.enterSelection);
+  return (
+    <IssueRow
+      issue={issue}
+      selectionMode={selectionMode}
+      selected={selected}
+      onPress={() => {
+        if (selectionMode) toggle(issue.id);
+        else onOpen();
+      }}
+      onLongPress={() => enterSelection(issue.id)}
+    />
   );
 }
 
