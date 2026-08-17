@@ -1377,14 +1377,11 @@
   "batch.updateFailedBody": "无法更新选中的问题，请重试。",
   "batch.deleteFailedTitle": "删除失败",
   "batch.deleteFailedBody": "无法删除选中的问题，请重试。",
-
   "screen.quickActions": "快捷操作",
   "screen.repositories": "代码仓库",
   "screen.integrations": "集成",
-
   "workspaceSettings.management": "工作区管理",
   "workspaceSettings.managementSub": "快捷操作、代码仓库与集成",
-
   "quickActions.title": "快捷操作",
   "quickActions.description": "预先配置好执行的 Agent 和提示词，之后在任意 issue 侧边栏一键触发。",
   "quickActions.add": "新建快捷操作",
@@ -1424,7 +1421,6 @@
   "quickActions.deleteTitle": "删除这条快捷操作？",
   "quickActions.deleteDescription": "它会从所有 issue 侧边栏消失，历史运行记录仍保留在执行日志中。如果以后可能还要用，建议改为归档。",
   "quickActions.manageHint": "仅所有者和管理员可管理快捷操作。",
-
   "repositories.title": "代码仓库",
   "repositories.description": "与该工作区关联的 Git 仓库。Agent 会从这里 clone 代码并完成工作。",
   "repositories.urlPlaceholder": "https://git.example.com/org/repo.git 或 git@git.example.com:org/repo.git",
@@ -1454,7 +1450,6 @@
   "repositories.githubSelectedCount": "已选择 {{count}} 个",
   "repositories.githubCancel": "取消",
   "repositories.githubImport": "添加",
-
   "integrations.title": "集成",
   "integrations.description": "该工作区的第三方渠道连接。GitHub 有独立的连接管理；其余渠道在网页端绑定。",
   "integrations.githubTitle": "GitHub",
@@ -1469,5 +1464,29 @@
   "integrations.channel.slack": "Slack",
   "integrations.channel.dingtalk": "钉钉",
   "integrations.channel.wecom": "企业微信",
-  "agents.notBound": "未绑定运行时"
+  "agents.notBound": "未绑定运行时",
+  "invite.notFoundTitle": "未找到邀请",
+  "invite.notFoundDesc": "此邀请可能已过期、已被撤销，或不属于你的账号。",
+  "invite.acceptedTitle": "你已加入 {{workspace_name}}！",
+  "invite.redirecting": "正在跳转到工作区...",
+  "invite.declinedTitle": "已拒绝邀请",
+  "invite.declinedDesc": "你将不会加入此工作区。",
+  "invite.joinTitle": "加入 {{workspace_name}}",
+  "invite.fallbackWorkspaceName": "工作区",
+  "invite.invitedRoleAdmin": "邀请你以管理员身份加入。",
+  "invite.invitedRoleMember": "邀请你以成员身份加入。",
+  "invite.alreadyHandledAccepted": "此邀请已被接受。",
+  "invite.alreadyHandledDeclined": "此邀请已被拒绝。",
+  "invite.expired": "此邀请已过期。",
+  "invite.decline": "拒绝",
+  "invite.declining": "拒绝中...",
+  "invite.accept": "接受并加入",
+  "invite.joining": "加入中...",
+  "invite.acceptFailed": "接受邀请失败",
+  "invite.declineFailed": "拒绝邀请失败",
+  "invite.pendingTitle": "待处理邀请",
+  "invite.pendingJoin": "加入",
+  "invite.errorTitle": "出错了",
+  "invite.signOut": "退出登录",
+  "invite.back": "返回"
 }

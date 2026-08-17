@@ -1377,14 +1377,11 @@
   "batch.updateFailedBody": "Couldn't update the selected issues. Please try again.",
   "batch.deleteFailedTitle": "Delete failed",
   "batch.deleteFailedBody": "Couldn't delete the selected issues. Please try again.",
-
   "screen.quickActions": "Quick Actions",
   "screen.repositories": "Repositories",
   "screen.integrations": "Integrations",
-
   "workspaceSettings.management": "Workspace management",
   "workspaceSettings.managementSub": "Quick actions, repositories and integrations",
-
   "quickActions.title": "Quick Actions",
   "quickActions.description": "Preset an agent and a prompt once, then trigger it from any issue's sidebar with a single click.",
   "quickActions.add": "New quick action",
@@ -1424,7 +1421,6 @@
   "quickActions.deleteTitle": "Delete this quick action?",
   "quickActions.deleteDescription": "It disappears from every issue sidebar. Past runs stay in the execution log. Archive instead if you may want it back.",
   "quickActions.manageHint": "Only owners and admins can manage quick actions.",
-
   "repositories.title": "Repositories",
   "repositories.description": "Git repositories associated with this workspace. Agents use these to clone and work on code.",
   "repositories.urlPlaceholder": "https://git.example.com/org/repo.git or git@git.example.com:org/repo.git",
@@ -1454,7 +1450,6 @@
   "repositories.githubSelectedCount": "{{count}} selected",
   "repositories.githubCancel": "Cancel",
   "repositories.githubImport": "Add",
-
   "integrations.title": "Integrations",
   "integrations.description": "Third-party channel connections for this workspace. GitHub has its own management page; the other channels are connected via the web app.",
   "integrations.githubTitle": "GitHub",
@@ -1469,5 +1464,29 @@
   "integrations.channel.slack": "Slack",
   "integrations.channel.dingtalk": "DingTalk",
   "integrations.channel.wecom": "WeCom",
-  "agents.notBound": "Not bound to a runtime"
+  "agents.notBound": "Not bound to a runtime",
+  "invite.notFoundTitle": "Invitation not found",
+  "invite.notFoundDesc": "This invitation may have expired, been revoked, or doesn't belong to your account.",
+  "invite.acceptedTitle": "You joined {{workspace_name}}!",
+  "invite.redirecting": "Redirecting to workspace...",
+  "invite.declinedTitle": "Invitation declined",
+  "invite.declinedDesc": "You won't be added to this workspace.",
+  "invite.joinTitle": "Join {{workspace_name}}",
+  "invite.fallbackWorkspaceName": "workspace",
+  "invite.invitedRoleAdmin": "invited you to join as an admin.",
+  "invite.invitedRoleMember": "invited you to join as a member.",
+  "invite.alreadyHandledAccepted": "This invitation has already been accepted.",
+  "invite.alreadyHandledDeclined": "This invitation has already been declined.",
+  "invite.expired": "This invitation has expired.",
+  "invite.decline": "Decline",
+  "invite.declining": "Declining...",
+  "invite.accept": "Accept & Join",
+  "invite.joining": "Joining...",
+  "invite.acceptFailed": "Failed to accept invitation",
+  "invite.declineFailed": "Failed to decline invitation",
+  "invite.pendingTitle": "Pending invitations",
+  "invite.pendingJoin": "Join",
+  "invite.errorTitle": "Something went wrong",
+  "invite.signOut": "Sign out",
+  "invite.back": "Back"
 }

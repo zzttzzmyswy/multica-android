@@ -195,6 +195,7 @@ import {
   EMPTY_CRON_PREVIEW_RESPONSE,
   EMPTY_INBOX_LIST,
   EMPTY_INVITATION_LIST,
+  EMPTY_INVITATION,
   EMPTY_ISSUE_FALLBACK,
   EMPTY_LIST_AUTOPILOT_RUNS_RESPONSE,
   EMPTY_LABEL,
@@ -212,6 +213,7 @@ import {
   EMPTY_USER,
   EMPTY_WORKSPACE_LIST,
   InboxListSchema,
+  InvitationSchema,
   InvitationListSchema,
   NotificationPreferenceResponseSchema,
   ListAutopilotRunsResponseSchema,
@@ -782,6 +784,48 @@ class ApiClient {
       `/api/workspaces/${workspaceId}/invitations/${invitationId}`,
       { method: "DELETE" },
     );
+  }
+
+  // My pending invitations + accept/decline — mirror
+  // packages/core/api/client.ts:2486-2506. These are the global (non-workspace)
+  // endpoints backing the "accept invitation" flow: the invite landing page and
+  // the pending-invitation feed on the workspace selector. Reads parse with a
+  // drift-safe schema, writes use the mobile write-endpoint rule.
+  async listMyInvitations(opts?: {
+    signal?: AbortSignal;
+  }): Promise<Invitation[]> {
+    const raw = await this.fetch<unknown>("/api/invitations", {
+      signal: opts?.signal,
+    });
+    return parseWithFallback(raw, InvitationListSchema, EMPTY_INVITATION_LIST, {
+      endpoint: "listMyInvitations",
+    });
+  }
+
+  async getInvitation(
+    invitationId: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<Invitation> {
+    const raw = await this.fetch<unknown>(
+      `/api/invitations/${invitationId}`,
+      { signal: opts?.signal },
+    );
+    return parseWithFallback(raw, InvitationSchema, EMPTY_INVITATION, {
+      endpoint: "getInvitation",
+    });
+  }
+
+  async acceptInvitation(invitationId: string): Promise<MemberWithUser> {
+    return this.fetch<MemberWithUser>(
+      `/api/invitations/${invitationId}/accept`,
+      { method: "POST" },
+    );
+  }
+
+  async declineInvitation(invitationId: string): Promise<void> {
+    await this.fetch<void>(`/api/invitations/${invitationId}/decline`, {
+      method: "POST",
+    });
   }
 
   async listAgents(opts?: {
