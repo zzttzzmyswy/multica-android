@@ -21,16 +21,18 @@ import { Alert } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { api, MAX_FILE_SIZE, type FileAsset } from "@/data/api";
+import { pickAttachmentMarkdownUrl } from "@/lib/description-upload";
 import { useTranslation } from "@/lib/i18n/react";
 
 export interface FileAttachResult {
   /** Attachment id from the server. Callers MUST carry this to the mutation
-   *  that creates / updates the comment, so the backend can re-parent the
-   *  attachment from "issue-scoped" to "comment-scoped" (otherwise the
-   *  attachment lives at the issue level forever and never cascades on
-   *  comment delete). */
+   *  that creates / updates the comment / issue, so the backend can bind the
+   *  attachment (comment-scoped re-parent, or issue `attachment_ids`). */
   id: string;
   url: string;
+  /** URL the caller should write into markdown: server durable
+   *  `markdown_url` when present, else `url` (core `pickMarkdownLink`). */
+  markdownUrl: string;
   filename: string;
 }
 
@@ -65,6 +67,11 @@ export function useFileAttach() {
         return {
           id: attachment.id,
           url: attachment.url,
+          markdownUrl: pickAttachmentMarkdownUrl({
+            url: attachment.url,
+            markdown_url: attachment.markdown_url,
+            filename: attachment.filename,
+          }),
           filename: attachment.filename,
         };
       } catch (err) {

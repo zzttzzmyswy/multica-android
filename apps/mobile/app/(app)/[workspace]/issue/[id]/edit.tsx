@@ -52,6 +52,13 @@ export default function EditIssue() {
   const [descriptionBase, setDescriptionBase] = useState("");
   const description = useMentionInput();
   const [seeded, setSeeded] = useState(false);
+  // Attachment ids freshly uploaded from the description toolbar; carried
+  // into the update payload so the server binds them to the issue.
+  const [uploadedAttachmentIds, setUploadedAttachmentIds] = useState<string[]>(
+    [],
+  );
+  // In-flight description upload — hold save until the picked file lands.
+  const [uploadsPending, setUploadsPending] = useState(false);
   // `useMentionInput` returns `setText` from `useState`, which is a stable
   // identity across renders. Pulling it out of the hook return lets us list
   // it explicitly in the seeding effect's dep array without the whole
@@ -80,7 +87,11 @@ export default function EditIssue() {
   }, [detail.data, seeded, title, currentDescription, descriptionBase]);
 
   const canSave =
-    seeded && title.trim().length > 0 && dirty && !update.isPending;
+    seeded &&
+    title.trim().length > 0 &&
+    dirty &&
+    !update.isPending &&
+    !uploadsPending;
 
   const onCancel = useCallback(() => {
     if (!dirty) {
@@ -110,6 +121,9 @@ export default function EditIssue() {
       title: title.trim(),
       description: currentDescription.trim(),
       description_base: descriptionBase,
+      ...(uploadedAttachmentIds.length > 0
+        ? { attachment_ids: uploadedAttachmentIds }
+        : {}),
     };
     update.mutate(patch, {
       onSuccess: () => router.back(),
@@ -120,7 +134,15 @@ export default function EditIssue() {
         );
       },
     });
-  }, [canSave, title, currentDescription, descriptionBase, update, t]);
+  }, [
+    canSave,
+    title,
+    currentDescription,
+    descriptionBase,
+    uploadedAttachmentIds,
+    update,
+    t,
+  ]);
 
   const headerLeft = useCallback(
     () => (
@@ -178,6 +200,13 @@ export default function EditIssue() {
                 <DescriptionField
                   description={description}
                   disabled={update.isPending}
+                  issueId={id}
+                  onAttachmentUploaded={(uploadedId) =>
+                    setUploadedAttachmentIds((prev) =>
+                      prev.includes(uploadedId) ? prev : [...prev, uploadedId],
+                    )
+                  }
+                  onUploadingChange={setUploadsPending}
                 />
               </Field>
             </>

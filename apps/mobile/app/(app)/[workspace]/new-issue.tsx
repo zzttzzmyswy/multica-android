@@ -11,8 +11,9 @@
  * recognised by util.ParseMentions on the server.
  *
  * The description input carries the `MarkdownToolbar` (via `DescriptionField`)
- * for markdown-syntax insertion; attachment upload is deferred to a later
- * release.
+ * for markdown-syntax insertion plus image / file upload; freshly uploaded
+ * attachment ids ride along on create via `attachment_ids` so the files
+ * surface on the issue (web content-editor parity).
  */
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -59,7 +60,17 @@ export default function NewIssueModal() {
   const createIssue = useCreateIssue();
   const isSubmitting = createIssue.isPending;
 
-  const canSubmit = !isSubmitting && title.trim().length > 0;
+  // Attachment ids freshly uploaded from the description toolbar. Carried
+  // into the create payload so the server binds them to the issue.
+  const [uploadedAttachmentIds, setUploadedAttachmentIds] = useState<string[]>(
+    [],
+  );
+  // In-flight description upload — hold submit until the picked file lands,
+  // else its attachment id never reaches the create payload.
+  const [uploadsPending, setUploadsPending] = useState(false);
+
+  const canSubmit =
+    !isSubmitting && !uploadsPending && title.trim().length > 0;
 
   const onSubmit = useCallback(async () => {
     const trimmedTitle = title.trim();
@@ -76,6 +87,9 @@ export default function NewIssueModal() {
           : {}),
         ...(dueDate ? { due_date: dueDate } : {}),
         ...(project ? { project_id: project.id } : {}),
+        ...(uploadedAttachmentIds.length > 0
+          ? { attachment_ids: uploadedAttachmentIds }
+          : {}),
       });
       router.back();
     } catch (err) {
@@ -92,6 +106,7 @@ export default function NewIssueModal() {
     assignee,
     dueDate,
     project,
+    uploadedAttachmentIds,
     createIssue,
     t,
   ]);
@@ -132,6 +147,12 @@ export default function NewIssueModal() {
           <DescriptionField
             description={description}
             disabled={isSubmitting}
+            onAttachmentUploaded={(id) =>
+              setUploadedAttachmentIds((prev) =>
+                prev.includes(id) ? prev : [...prev, id],
+              )
+            }
+            onUploadingChange={setUploadsPending}
           />
           <CreateFormAttributeRow />
         </ScrollView>

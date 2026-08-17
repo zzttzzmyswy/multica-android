@@ -438,6 +438,10 @@ export function useUpdateIssue(issueId: string) {
         const {
           description: _description,
           description_base: _descriptionBase,
+          // attachment_ids are "register new" registrations, not a full
+          // replacement — never patch them into the optimistic Issue (web
+          // mutations.ts note). The server's response carries the final list.
+          attachment_ids: _attachmentIds,
           ...optimisticPatch
         } = patch;
         qc.setQueryData<Issue>(key, { ...prev, ...optimisticPatch });
