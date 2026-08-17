@@ -1,250 +1,78 @@
-<div align="center">
+# Multica Android（第三方/社区安卓客户端）
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="docs/assets/logo-light.svg">
-  <img alt="Multica" src="docs/assets/logo-light.svg" width="50">
-</picture>
+> ⚠️ **非官方项目（Non-official）**：本仓库是**社区成员维护的第三方安卓客户端**，与 Multica 官方（multica-ai / devv.ai）**无关联、不构成任何官方背书**。"Multica" 名称与品牌标识归其官方所有，本项目仅以兼容其自部署服务与协议为目标。
 
-# Multica
+一个面向 **Multica**（开源的 managed-agents 工作平台）的安卓客户端 —— 在手机上查收工作区、issue、agent、执行记录、聊天等，**功能持续对齐 Multica Web 端**。
 
-**智能体，也在看板上。**
+- 技术栈：Expo SDK 55 / React Native 0.83，复用官方移动端跨平台基座（`apps/mobile`）
+- 渠道：GitHub 预编译 Release（按 ABI 分包 + App 内「检查更新」）
+- 目标：**APK 功能 100% 对齐 web 端**（长期迭代使命）
 
-Multica 是一个开源的团队工作区。你像给同事派活一样，把任务交给 AI 编码智能体——它自己接手、边做边
-汇报、卡住了主动说，做完交回来给你审。可自部署，支持 20 种智能体 CLI，不绑定任何厂商。
+## 功能一览
 
-[![CI](https://github.com/multica-ai/multica/actions/workflows/ci.yml/badge.svg)](https://github.com/multica-ai/multica/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/multica-ai/multica?style=flat)](https://github.com/multica-ai/multica/releases)
-[![GitHub stars](https://img.shields.io/github/stars/multica-ai/multica?style=flat)](https://github.com/multica-ai/multica/stargazers)
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/W8gYBn226t)
+- 收件箱 / 项目 / 我的问题 / 已固定 / 聊天 / 更多 底部导航
+- 聊天：会话、agent 流式执行过程（思考/工具）、键盘适配、宽表格横滑
+- Issue：列表/详情/评论、Markdown 工具栏、附件上传、批量操作、订阅/重跑、运行记录
+- Agent：列表/详情管理、创建（表单 + AI-builder 对齐 web「通过智能体创建」）
+- 自动化（Autopilot）、Squad、Label、Members、Skills、Runtimes、用量看板、MCP 配置
+- 设置：工作区管理、语言/时区偏好、API Token 管理
+- 关于页 + 应用内更新（GitHub Release 检测 → 带进度的下载 → 系统安装器）
+- 统一「下载」管理器：文件与 APK 更新任务同屏
 
-[官网](https://multica.ai) · [文档](https://multica.ai/docs) · [快速开始](https://multica.ai/docs/cloud-quickstart) · [下载](https://multica.ai/download) · [愿景](VISION.zh.md) · [自部署](SELF_HOSTING.md) · [Discord](https://discord.gg/W8gYBn226t) · [X](https://x.com/MulticaAI)
+## 上游借用清单
 
-**[English](README.md) | 简体中文**
+本仓库是一个 **fork**：基于官方开源仓库 [multica-ai/multica](https://github.com/multica-ai/multica) 派生而来，**完整保留了官方 monorepo 的全部上游代码**，并在此基础上做安卓客户端适配。
 
-</div>
+### 借用了上游的哪些代码
 
-<p align="center">
-  <img src="docs/assets/hero-board.png" alt="Multica 看板：六个智能体和它们的人类队友一起推进工作" width="100%">
-</p>
+| 来源 | 内容 | 说明 |
+|---|---|---|
+| 官方 monorepo | `server` / `cli` / `daemon` / `deploy` / Makefile | 官方服务的部署与开发基础设施，保留未动 |
+| 官方 `packages/core` / `packages/shared` | 数据模型、API 客户端、类型、i18n 等共享层 | 直接复用（含跨端镜像到 `apps/mobile/data`、`lib` 的 mirror 实现） |
+| 官方 `packages/views` | Web/桌面端共享视图层 | 作为功能对齐的参照实现；移动端按需镜像关键逻辑 |
+| 官方 `apps/mobile` | **移动端基座**（Expo / React Native / 原生配置） | 本仓库安卓工作的主载荷；大部分原样保留官方 iOS-first 代码 |
+| 官方 `apps/web` / `apps/desktop` | Web 与桌面应用 | 保留，用于对照与共享品牌资源（如 Star 图标） |
+| 官方 `docs` / `LICENSE` / `CLAUDE.md` 等 | 文档与许可 | 保留原样（LICENSE 为上游 Multica License，见下） |
 
-<p align="center">
-  <sub><em>你的下一批员工，不是人类。</em></sub>
-</p>
+> 变更范围收敛：本仓库与上游的差异**集中在 `apps/mobile` 的安卓适配与功能补齐**；为便于对照，`main` 分支基于官方 main 演进，差异可随时用 `git diff` 查看。
 
----
+### 本项目新增 / 修改的部分（自研安卓工作）
 
-## Multica 是什么
+- Android **edge-to-edge 键盘适配**：聊天/表单输入框随键盘上移（`KeyboardStickyView`）、`tabBarHideOnKeyboard`
+- 聊天**「思考中」任务级轮询兜底**、agent **执行过程流式 trace 兜底**（应对移动网络 WS 丢事件）
+- **关于页 + 应用内更新**：GitHub Release 检测、按 ABI 匹配、带进度下载、唤起系统安装器、未知源引导
+- **统一下载管理器**：文件下载与 APK 更新任务统一展示
+- 宽表格 / 代码块**横向滑动**；Hermes 兼容修复（ES2023 特性规避）
+- 大量对齐 web 的页面与交互（详见上方功能一览，含批量操作、AI-builder 创建、MCP 配置等）
+- Android 构建/发布管线：**ABI 拆分**（arm64-v8a / armeabi-v7a / x86_64 / x86）、`verify-apk` 校验
 
-你手上已经同时开着 Claude Code、Codex，还有另外三个智能体。每一个都关在自己的终端标签页里，会话
-一关就什么都不记得，同一段上下文你今天已经讲到第四遍。结果是智能体越加越多，你越忙。
+## 安装与更新
 
-Multica 把这些智能体和你的队友放进同一个工作区。任务派给智能体，它自己接手，在你自己的机器上跑，
-边做边评论，做完挪到审核中等你验收。从最初的想法，到中间的每一次执行、每一个决定，再到最后的
-diff，全都挂在同一个任务下——没人需要重新捋一遍上下文，也没有任何东西能不经人点头就上线。
-
----
-
-## 组一支队伍
-
-*Claude Code、Codex、Cursor、Kimi——不用挑一个，全都招进来。*
-
-- **[20 种智能体 CLI](#运行时) →** Claude Code、Codex、Cursor、Copilot、Kimi、OpenCode 等等。
-- **[智能体也是队友](https://multica.ai/docs/agents) →** 起个名字、选个提供方、配台运行时，它就上了看板，跟其他同事没两样。
-- **[小队](https://multica.ai/docs/squads) →** 人和智能体混编成队，leader 决定谁来接活。
-- **[Skills](https://multica.ai/docs/skills) →** 解决过一次的问题沉淀下来，全团队的智能体都能复用。
-- **[你自己的运行时](https://multica.ai/docs/daemon-runtimes) →** 它们的"工位"就是你的机器——守护进程跑在你的笔记本或云主机上，代码不出门。
-
-## 把活交出去
-
-*一开始只是任务里潦草的三句话，最后变成一个 pull request。*
-
-- **[分配任务](https://multica.ai/docs/assigning-issues) →** 像挑同事一样挑个智能体当负责人，剩下的它自己来。
-- **[自动化](https://multica.ai/docs/autopilots) →** 日报、巡检、周报按 cron 自己跑，不用有人催。
-- **[Chat](https://multica.ai/docs/chat) →** 直接问工作区，或者不建任务就把活派出去。
-- **[项目](https://multica.ai/docs/projects) →** 把工作归类，顺手挂上智能体要用的仓库和文档。
-
-## 看得见，也管得住
-
-*这活哪个智能体动过？它到底跑了什么？花了多少？点开那次运行。*
-
-- **[执行日志](https://multica.ai/docs/tasks) →** 每次工具调用、命令和报错都带时间戳，可以完整回放。
-- **Token 用量 →** 每次运行花了多少，按智能体、按任务都看得到。
-- **[人来验收](https://multica.ai/docs/issues) →** 活先进入审核中，不直接进 main。上不上线你说了算。
-- **[收件箱](https://multica.ai/docs/inbox) →** 只在智能体需要你拍板时提醒你，而不是每一步都来烦你。
-- **[重试与超时](https://multica.ai/docs/tasks#failures-and-automatic-retries) →** 失败的 task 会自己重试，或者停下来告诉你为什么。
-
-## 整套都归你
-
-*你的机器、你的 Git 服务、你的规矩——还有一份把智能体也算进去的审计记录。*
-
-- **[整套自部署](SELF_HOSTING.md) →** Docker Compose 或 Helm，装在你自己的基础设施上。
-- **[任意 Git 服务](https://multica.ai/docs/vcs-integration) →** GitHub、GitLab、Gitea、Forgejo，自建实例也行。
-- **[工作区](https://multica.ai/docs/workspaces) →** 按团队隔离智能体、任务和设置。
-- **[角色](https://multica.ai/docs/members-roles)与[使用权限](https://multica.ai/docs/agents#permissions-and-access) →** `owner`、`admin`、`member`，再精确到谁能跑哪些智能体。
-- **[安全模型](https://multica.ai/docs/security-model) →** 智能体碰得到什么，碰不到什么。
-- **[Slack、飞书、钉钉](https://multica.ai/docs/channels) →** 在团队本来就在聊天的地方，触发和跟进智能体的工作。钉钉由社区维护。
-- **[Web、桌面端、移动端](https://multica.ai/docs/desktop-app) →** macOS、Windows、Linux、iPhone，打开都是同一个工作区——iOS 现在要自己从源码编译安装，还没上 App Store。
-- **[CLI 与 API](https://multica.ai/docs/cli) →** 界面上能点的，CLI 和 API 里都能调。智能体操作 Multica，用的就是你那套 CLI。
-
----
-
-## 开始使用
-
-不用打开终端：直接在 **[multica.ai](https://multica.ai)** 注册，或者下载
-**[Multica 桌面端](https://multica.ai/download)**（macOS / Windows / Linux）——打开它，这台电脑
-就自动成了一个运行时。
-
-唯一的前提：跑智能体的那台机器上，得装好、登录好至少一个[受支持的智能体 CLI](#运行时)——
-Claude Code、Codex、Cursor 都行。Multica 负责驱动它们，但不替你安装。
-
-<details>
-<summary><b>整套自部署</b></summary>
-
-<br/>
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.sh | bash -s -- --with-server
-multica setup self-host
-```
-
-Windows 上先设 `$env:MULTICA_MODE="with-server"`，再跑 PowerShell 安装脚本：
-`irm https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.ps1 | iex`。
-
-这会拉取 GHCR 上的官方镜像，需要 Docker。详见[自部署指南](SELF_HOSTING.md)。如果你选的 GHCR
-标签还没发布，可以在代码目录里跑 `make selfhost-build` 兜底。
-
-</details>
-
----
-
-## 五分钟跑通第一个智能体
-
-**1. 登录。** 在浏览器里打开 [multica.ai](https://multica.ai)，或者打开
-[Multica 桌面端](https://multica.ai/download)。
-
-**2. 接入一台电脑。** 所谓*运行时*，就是智能体干活用的机器——你的笔记本，或者一台云主机。用桌面端，
-这一步是自动的：它会注册好这台电脑，顺便检测装了哪些智能体 CLI。用网页版、或者想再接一台机器，就
-打开侧边栏的**运行时**，点右上角的**添加电脑**，把弹窗里的两条命令粘到那台机器的终端里。
-
-**3. 创建智能体。** 打开侧边栏的**智能体**，点**新建智能体**。选中刚接入的运行时，选一个提供方，
-起个名字——或者选**通过 AI 创建**，描述几句，配置自动生成。这个名字就是它之后在看板和评论里的身份。
-
-**4. 派给它一件事。** 建一个任务，负责人选成这个智能体。它会自己接手、在你的机器上跑、边做边评论，
-干完把任务挪到审核中。
-
-完整流程：[快速开始](https://multica.ai/docs/cloud-quickstart) · [上手教程](https://multica.ai/docs/tutorial)
-
----
-
-## 运行时
-
-Multica 不自带模型。它驱动的是你本来就装好、登录好的那些智能体 CLI，所以换提供方就是切个下拉框，
-谈不上迁移。
-
-| Provider | CLI | Provider | CLI |
-| --- | --- | --- | --- |
-| Claude Code | `claude` | OpenAI Codex | `codex` |
-| Cursor Agent | `cursor-agent` | GitHub Copilot CLI | `copilot` |
-| OpenCode | `opencode` | OpenClaw | `openclaw` |
-| Hermes | `hermes` | Pi | `pi` |
-| Antigravity | `agy` | CodeBuddy | `codebuddy` |
-| DevEco Code | `deveco` | Grok | `grok` |
-| Kimi | `kimi` | Kiro CLI | `kiro-cli` |
-| Qoder CLI | `qodercli` | Qoder CN | `qoderclicn` |
-| Qwen Code | `qwen` | QwenPaw | `qwenpaw` |
-| Reasonix | `reasonix` | Trae CLI | `traecli` |
-| DeepSeek Harness | `dsh` | Oh-My-Pi | `omp` |
-
-怎么装、怎么登录：[安装智能体运行时](https://multica.ai/docs/install-agent-runtime) ·
-[AI 编程工具对照](https://multica.ai/docs/providers)
-
----
-
-## 文档
-
-| 我想…… | 从这里看 |
-| --- | --- |
-| 今天就让智能体干点活 | [快速开始](https://multica.ai/docs/cloud-quickstart) · [上手教程](https://multica.ai/docs/tutorial) |
-| 搞清楚这套系统怎么运转 | [核心概念](https://multica.ai/docs/concepts) · [Multica 如何工作](https://multica.ai/docs/how-multica-works) |
-| 创建和配置智能体 | [智能体](https://multica.ai/docs/agents) · [创建智能体](https://multica.ai/docs/agents-create) · [Skills](https://multica.ai/docs/skills) |
-| 把活交到智能体手上 | [触发智能体](https://multica.ai/docs/triggering-agents) · [分配任务](https://multica.ai/docs/assigning-issues) · [提及](https://multica.ai/docs/mentioning-agents) |
-| 把我的机器接进来 | [守护进程与运行时](https://multica.ai/docs/daemon-runtimes) · [安装智能体运行时](https://multica.ai/docs/install-agent-runtime) |
-| 接上 Git 和聊天工具 | [GitHub](https://multica.ai/docs/github-integration) · [自建 Git](https://multica.ai/docs/vcs-integration) · [消息渠道](https://multica.ai/docs/channels) |
-| 部署在自己的基础设施上 | [自部署](SELF_HOSTING.md) · [安全模型](https://multica.ai/docs/security-model) · [环境变量](https://multica.ai/docs/environment-variables) |
-| 用脚本驱动它 | [CLI 参考](https://multica.ai/docs/cli) · [CLI 与守护进程指南](CLI_AND_DAEMON.md) · [认证令牌](https://multica.ai/docs/auth-tokens) |
-| 查智能体为什么卡住了 | [执行任务](https://multica.ai/docs/tasks) · [问题排查](https://multica.ai/docs/troubleshooting) |
-
----
-
-## 架构
-
-```
-        Web  ·  桌面端 (macOS/Windows/Linux)  ·  iOS
-                          │
-                          ▼
-   ┌──────────────┐   ┌──────────────┐   ┌──────────────────┐
-   │   Next.js    │──>│   Go 后端    │──>│   PostgreSQL     │
-   │    前端      │<──│  (Chi + WS)  │<──│   (pgvector)     │
-   └──────────────┘   └──────┬───────┘   └──────────────────┘
-                             │  通过 WebSocket 下发 task
-                      ┌──────┴───────┐
-                      │   守护进程   │  跑在你的机器上，紧挨着你的代码
-                      └──────┬───────┘
-                             │  拉起
-                      ┌──────┴───────────────────────────────┐
-                      │  Claude Code · Codex · Cursor · …    │
-                      │  （上面 20 种运行时里的任意一种）    │
-                      └──────────────────────────────────────┘
-```
-
-| 层级 | 技术栈 |
-| --- | --- |
-| Web | Next.js 16 (App Router) |
-| 桌面端 | Electron，复用 Web 的 UI 包 |
-| 移动端 | Expo / React Native (iOS) |
-| 后端 | Go (Chi router, sqlc, gorilla/websocket) |
-| 数据库 | PostgreSQL 17 + pgvector |
-| 智能体运行时 | 本地守护进程拉起上面 20 种智能体 CLI 中的任意一个 |
-
----
+- **正式渠道**：GitHub Releases 下载对应 ABI 的 APK（arm64-v8a 为主力手机 ABI）
+- **App 内更新**：关于页 →「检查更新」→ 检测到新版本后自动下载（带进度）→ 系统安装器
+- 版本命名：语义化（功能集 → minor，纯修复 → patch），如 v0.x.y；与官方上游版本线无关
+- 包名 `ai.multica.mobile.dev`，minSdk 24
 
 ## 开发
 
-想参与贡献，先看[贡献指南](CONTRIBUTING.md)。
-
-**环境要求：**[Node.js](https://nodejs.org/) v20+、[pnpm](https://pnpm.io/) v10.28+、[Go](https://go.dev/) v1.26+、[Docker](https://www.docker.com/)
-
 ```bash
-make dev
+# 需要 Android SDK（NDK/JDK17）与 pnpm
+git clone https://github.com/zzttzzmyswy/multica-android.git
+cd apps/mobile && pnpm install
+# 构建 release（全 ABI 或按 `-PreactNativeArchitectures=arm64-v8a` 指定）
+cd android && ANDROID_HOME=/path/to/sdk ./gradlew assembleRelease
 ```
 
-`make dev` 会自己认出你在主 checkout 还是 worktree 里，然后创建 env 文件、装依赖、初始化数据库、
-跑迁移，最后把所有服务拉起来。
+测试与校验：`pnpm test`（vitest）、`npx tsc --noEmit`、`pnpm verify:apk`。
 
-完整的开发流程、worktree 支持、测试和问题排查见 [CONTRIBUTING.md](CONTRIBUTING.md)。
-iOS 客户端在 [`apps/mobile/`](apps/mobile/)，怎么编译装到自己 iPhone 上见它的
-[README](apps/mobile/README.md)。
+> 完善的上游本地开发工作流（`make dev` / worktree / postgres）见官方 `CONTRIBUTING.md`，本仓库保留全部上游代码可直接沿用。
 
-我们几乎每个工作日都发版，`main` 走得很快——记得常拉最新代码。
+## 许可与商标
 
----
+- 本仓库**继承上游许可**：Multica License（Apache License 2.0 + Part I 附加条件），参与贡献即同意按该许可整体授权。
+- **"Multica" 及其品牌标识为官方所有**；本项目的使用仅为兼容性引用，不暗示官方关联或认可。
+- 本项目按原样（AS-IS）提供，无任何官方支持承诺；维护与问题处理以社区意愿为准。
 
-## 为什么叫 "Multica"
+## 免责声明
 
-**Mul**tiplexed **I**nformation and **C**omputing **A**gent —— 向 Multics 致意。那是 20 世纪
-60 年代的操作系统，它首创了分时：多个人共享同一台机器，却又都像独占它一样。
-
-此后几十年，软件团队一直是单线程的：一个工程师、一个任务、一次一个上下文切换。我们认为，智能体让
-"分时"重新成立了——只不过这一次，系统里被多路复用的"用户"，既是人，也是机器。小团队不该因为人少，
-就只能干出小团队的量。
-
-更长的论证，以及我们认为这件事会走到哪里：**[VISION.zh.md](VISION.zh.md)**。
-
----
-
-## 开源协议
-
-[Multica License](LICENSE) —— Apache License 2.0 全文并入，外加针对托管服务、商业嵌入和品牌标识的
-附加条件。自部署、改代码、在它之上做东西都可以；准确条款以 [LICENSE](LICENSE) 为准，署名信息见
-[NOTICE](NOTICE)。
+本客户端为社区志愿者维护，可能存在与官方功能、协议或图形资源的偏差；请勿将其用于需要完全一致官方体验的关键流程。如遇问题欢迎提 issue，但响应与修复以维护者空闲时间为准。
