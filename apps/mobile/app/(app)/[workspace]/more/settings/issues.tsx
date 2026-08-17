@@ -9,9 +9,9 @@
  * and re-surfaces automatically while it holds a value, so hiding is never
  * destructive. Same contract web encodes in its IssueTab card copy.
  *
- * Mobile renders the store's *capability* fields — web's manual list also
- * has labels/start_date, which this form cannot input yet (iteration-57
- * gap, recorded in the issue).
+ * Covers the full web field set: quick = project / priority / due date;
+ * manual = status / priority / assignee / labels / project / due date /
+ * start date.
  */
 import { ScrollView, View } from "react-native";
 import { Stack } from "expo-router";
@@ -39,8 +39,10 @@ const MANUAL_FIELD_LABEL: Record<ManualCreateField, string> = {
   status: "settings.issue.fields.status",
   priority: "settings.issue.fields.priority",
   assignee: "settings.issue.fields.assignee",
+  labels: "settings.issue.fields.labels",
   project: "settings.issue.fields.project",
   "due-date": "settings.issue.fields.dueDate",
+  "start-date": "settings.issue.fields.startDate",
 };
 
 export default function IssueSettingsScreen() {

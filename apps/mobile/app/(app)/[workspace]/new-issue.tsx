@@ -73,6 +73,8 @@ export default function NewIssueModal() {
   const priority = useNewIssueDraftStore((s) => s.priority);
   const assignee = useNewIssueDraftStore((s) => s.assignee);
   const dueDate = useNewIssueDraftStore((s) => s.dueDate);
+  const startDate = useNewIssueDraftStore((s) => s.startDate);
+  const labels = useNewIssueDraftStore((s) => s.labels);
   const project = useNewIssueDraftStore((s) => s.project);
   const agentActor = useNewIssueDraftStore((s) => s.agentActor);
   const resetDraft = useNewIssueDraftStore((s) => s.reset);
@@ -154,6 +156,8 @@ export default function NewIssueModal() {
           ? { assignee_type: assignee.type, assignee_id: assignee.id }
           : {}),
         ...(dueDate ? { due_date: dueDate } : {}),
+        ...(startDate ? { start_date: startDate } : {}),
+        ...(labels.length > 0 ? { label_ids: labels.map((l) => l.id) } : {}),
         ...(project ? { project_id: project.id } : {}),
         ...(uploadedAttachmentIds.length > 0
           ? { attachment_ids: uploadedAttachmentIds }
@@ -173,6 +177,8 @@ export default function NewIssueModal() {
     priority,
     assignee,
     dueDate,
+    startDate,
+    labels,
     project,
     uploadedAttachmentIds,
     createIssue,

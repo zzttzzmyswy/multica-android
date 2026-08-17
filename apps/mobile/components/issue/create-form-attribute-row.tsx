@@ -32,6 +32,7 @@
 import { View } from "react-native";
 import { router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import type { Label } from "@multica/core/types";
 import { AttributeChip } from "@/components/issue/attribute-chip";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PriorityIcon } from "@/components/ui/priority-icon";
@@ -58,30 +59,38 @@ import {
 /** Picker fields the new-issue draft form can open. Bound to a typed map
  *  of Expo Router pathnames so typos become compile errors (previously
  *  the call site used `as never` on a template string). Shared with the
- *  issue-create-settings store constants. */
+ *  issue-create-settings store constants. Covers the full web manual field
+ *  set (labels / start-date included since iteration 58). */
 export type NewIssuePickerField =
   | "status"
   | "priority"
   | "assignee"
+  | "labels"
   | "project"
-  | "due-date";
+  | "due-date"
+  | "start-date";
 
 const NEW_ISSUE_PICKER_PATHNAMES = {
   status: "/[workspace]/new-issue-picker/status",
   priority: "/[workspace]/new-issue-picker/priority",
   assignee: "/[workspace]/new-issue-picker/assignee",
+  labels: "/[workspace]/new-issue-picker/labels",
   project: "/[workspace]/new-issue-picker/project",
   "due-date": "/[workspace]/new-issue-picker/due-date",
+  "start-date": "/[workspace]/new-issue-picker/start-date",
 } as const satisfies Record<NewIssuePickerField, string>;
 
 /** Stable default for `fields` — module-level so the component keeps
- *  rendering the full chip row when the prop is omitted. */
+ *  rendering the full chip row when the prop is omitted. Canonical order
+ *  mirrors web `MANUAL_CREATE_FIELDS`. */
 const ALL_FIELDS: NewIssuePickerField[] = [
   "status",
   "priority",
   "assignee",
-  "due-date",
+  "labels",
   "project",
+  "due-date",
+  "start-date",
 ];
 
 /** Which toolbar this row is rendering for. Drives which settings list
@@ -110,6 +119,8 @@ export function CreateFormAttributeRow({ fields = ALL_FIELDS, mode }: Props) {
   const priority = useNewIssueDraftStore((s) => s.priority);
   const assignee = useNewIssueDraftStore((s) => s.assignee);
   const dueDate = useNewIssueDraftStore((s) => s.dueDate);
+  const startDate = useNewIssueDraftStore((s) => s.startDate);
+  const labels = useNewIssueDraftStore((s) => s.labels);
   const project = useNewIssueDraftStore((s) => s.project);
 
   const { getName } = useActorLookup();
@@ -142,10 +153,14 @@ export function CreateFormAttributeRow({ fields = ALL_FIELDS, mode }: Props) {
         return priority !== "none";
       case "assignee":
         return assignee !== null;
+      case "labels":
+        return labels.length > 0;
       case "project":
         return project !== null;
       case "due-date":
         return dueDate !== null;
+      case "start-date":
+        return startDate !== null;
     }
   };
 
@@ -157,15 +172,19 @@ export function CreateFormAttributeRow({ fields = ALL_FIELDS, mode }: Props) {
         return t("attr.priority");
       case "assignee":
         return t("attr.assignee");
+      case "labels":
+        return t("attr.labels");
       case "project":
         return t("attr.project");
       case "due-date":
         return t("attr.dueDate");
+      case "start-date":
+        return t("attr.startDate");
     }
   };
 
   // The candidate pool for this mode: web's quick/manual field lists. The
-  // mobile capability set is a strict subset (no labels/start-date chips).
+  // mobile capability set now matches web's full manual field set.
   const pool: NewIssuePickerField[] = mode
     ? mode === "agent"
       ? (QUICK_CREATE_FIELDS as NewIssuePickerField[])
@@ -272,6 +291,41 @@ export function CreateFormAttributeRow({ fields = ALL_FIELDS, mode }: Props) {
             onPress={() => open("due-date")}
           />
         );
+      case "start-date":
+        return (
+          <AttributeChip
+            icon={
+              <Ionicons
+                name="calendar-clear-outline"
+                size={14}
+                color={startDate ? undefined : "#a1a1aa"}
+              />
+            }
+            label={
+              startDate ? formatDueDate(startDate, t) : t("attr.startDate")
+            }
+            variant={startDate ? "filled" : "dimmed"}
+            onPress={() => open("start-date")}
+          />
+        );
+      case "labels":
+        return labels.length > 0 ? (
+          <AttributeChip
+            icon={<LabelDots labels={labels} />}
+            label={summarizeLabels(labels, t("attr.labels"))}
+            variant="filled"
+            onPress={() => open("labels")}
+          />
+        ) : (
+          <AttributeChip
+            icon={
+              <Ionicons name="pricetags-outline" size={14} color="#a1a1aa" />
+            }
+            label={t("attr.labels")}
+            variant="dimmed"
+            onPress={() => open("labels")}
+          />
+        );
       case "project":
         return (
           <AttributeChip
@@ -320,5 +374,31 @@ function formatDueDate(iso: string, t: (id: string) => string): string {
   return (
     formatDateOnly(iso, { month: "short", day: "numeric" }) ||
     t("attr.dueDate")
+  );
+}
+
+/** Compact multi-select summary for the labels chip: single label shows its
+ *  name, several collapse to "first +N" (same shape web's board chip row
+ *  uses — no point columns-elbowing on a phone). */
+function summarizeLabels(labels: Label[], fallback: string): string {
+  if (labels.length === 1) return labels[0].name;
+  return `${labels[0].name} +${labels.length - 1}`;
+}
+
+/** Up to three stacked color dots previewing the selected label colors. */
+function LabelDots({ labels }: { labels: Label[] }) {
+  return (
+    <View className="flex-row items-center">
+      {labels.slice(0, 3).map((label, i) => (
+        <View
+          key={label.id}
+          className="size-2.5 rounded-full border border-background"
+          style={{
+            backgroundColor: label.color,
+            marginLeft: i === 0 ? 0 : -3,
+          }}
+        />
+      ))}
+    </View>
   );
 }

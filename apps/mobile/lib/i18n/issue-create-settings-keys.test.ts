@@ -28,6 +28,8 @@ describe("issue-create-settings i18n", () => {
 
   const ZH_SPOT: Record<string, string> = {
     "attr.status": "状态",
+    "attr.labels": "标签",
+    "attr.startDate": "开始日期",
     "settings.issueTitle": "任务",
     "settings.issueSubtitle": "选择各创建方式工具栏常驻显示的字段。",
     "settings.issue.quickCreateTitle": "通过智能体创建",
@@ -35,8 +37,10 @@ describe("issue-create-settings i18n", () => {
     "settings.issue.fields.status": "状态",
     "settings.issue.fields.priority": "优先级",
     "settings.issue.fields.assignee": "负责人",
+    "settings.issue.fields.labels": "标签",
     "settings.issue.fields.project": "项目",
     "settings.issue.fields.dueDate": "截止日期",
+    "settings.issue.fields.startDate": "开始日期",
     "settings.issue.customizeFields": "自定义字段",
     "newIssue.moreFieldsTitle": "更多字段",
   };

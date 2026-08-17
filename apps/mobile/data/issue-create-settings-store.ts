@@ -16,10 +16,11 @@
  * workspace-aware storage. Persisted to a per-workspace JSON file through
  * expo-file-system (same best-effort pattern as downloads-store).
  *
- * Mobile's field set is its *capability* set: this form has no labels /
- * start-date chips yet, so web's `labels` / `start_date` manual fields are
- * intentionally absent here (recorded as a backlog gap in the iteration-57
- * issue) — toggling them would be a dead switch.
+ * Mobile's manual field set matches web's full seven (status / priority /
+ * assignee / labels / project / due-date / start-date); quick create stays
+ * the three-field agent toolbar web defines (no labels/start-date there).
+ * Defaults mirror web: quick = project only; manual = the classic five plus
+ * labels, with both dates living in the ⋯ overflow until switched on.
  */
 import { useEffect } from "react";
 import { create } from "zustand";
@@ -30,8 +31,10 @@ export type ManualCreateField =
   | "status"
   | "priority"
   | "assignee"
+  | "labels"
   | "project"
-  | "due-date";
+  | "due-date"
+  | "start-date";
 
 // Canonical field order — the settings rows render in this order and
 // setters normalize persisted arrays against it (same contract as web).
@@ -44,19 +47,21 @@ export const MANUAL_CREATE_FIELDS: ManualCreateField[] = [
   "status",
   "priority",
   "assignee",
+  "labels",
   "project",
   "due-date",
+  "start-date",
 ];
 
 // Web mirrors its dialog defaults: quick create shows project only, and
-// manual shows the classic five minus due/start which live in the overflow.
-// Mobile's manual set has no labels, so ["status","priority","assignee",
-// "project"] is the same default web would persist here.
+// manual shows the classic five plus labels; both dates live in the
+// overflow until toggled on. Same shape as web DEFAULT_MANUAL_CREATE_FIELDS.
 export const DEFAULT_QUICK_CREATE_FIELDS: QuickCreateField[] = ["project"];
 export const DEFAULT_MANUAL_CREATE_FIELDS: ManualCreateField[] = [
   "status",
   "priority",
   "assignee",
+  "labels",
   "project",
 ];
 

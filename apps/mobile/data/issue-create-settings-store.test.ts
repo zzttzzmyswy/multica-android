@@ -76,16 +76,20 @@ describe("issue-create-settings-store", () => {
       "status",
       "priority",
       "assignee",
+      "labels",
       "project",
       "due-date",
+      "start-date",
     ]);
     // Web mirrors its toolbar defaults (quick = project only; manual = the
-    // classic five minus due/start which live in the overflow).
+    // classic five plus labels, while due/start date live in the overflow —
+    // same shape as web DEFAULT_MANUAL_CREATE_FIELDS).
     expect(DEFAULT_QUICK_CREATE_FIELDS).toEqual(["project"]);
     expect(DEFAULT_MANUAL_CREATE_FIELDS).toEqual([
       "status",
       "priority",
       "assignee",
+      "labels",
       "project",
     ]);
   });
@@ -96,7 +100,7 @@ describe("issue-create-settings-store", () => {
     const state = useIssueCreateSettingsStore.getState();
     expect(state.byWorkspace[WS_A]).toEqual({
       quick: ["project"],
-      manual: ["status", "priority", "assignee", "project"],
+      manual: ["status", "priority", "assignee", "labels", "project"],
     });
     expect(state.hydrated[WS_A]).toBe(true);
   });
@@ -113,7 +117,7 @@ describe("issue-create-settings-store", () => {
     await flush();
     expect(readPersistedFile(WS_A)).toEqual({
       quick: ["project", "priority"],
-      manual: ["status", "priority", "assignee", "project"],
+      manual: ["status", "priority", "assignee", "labels", "project"],
     });
     expect(readPersistedFile(WS_B)).toBeUndefined();
   });
@@ -150,7 +154,7 @@ describe("issue-create-settings-store", () => {
     await state.hydrate(WS_B);
     expect(useIssueCreateSettingsStore.getState().byWorkspace[WS_B]).toEqual({
       quick: ["project"],
-      manual: ["status", "priority", "assignee", "project"],
+      manual: ["status", "priority", "assignee", "labels", "project"],
     });
   });
 
@@ -168,6 +172,7 @@ describe("issue-create-settings-store", () => {
       "status",
       "priority",
       "assignee",
+      "labels",
       "project",
       "due-date",
     ]);
@@ -187,7 +192,7 @@ describe("issue-create-settings-store", () => {
     await s2.hydrate(WS_A);
     expect(useIssueCreateSettingsStore.getState().byWorkspace[WS_A]).toEqual({
       quick: ["project", "priority"],
-      manual: ["status", "priority", "project", "due-date"],
+      manual: ["status", "priority", "labels", "project", "due-date"],
     });
   });
 

@@ -278,6 +278,14 @@ export default function WorkspaceLayout() {
           }}
         />
         <Stack.Screen
+          name="new-issue-picker/labels"
+          options={{
+            ...SHEET_OPTIONS,
+            headerShown: true,
+            title: t("attr.labels"),
+          }}
+        />
+        <Stack.Screen
           name="new-issue-picker/agent"
           options={{
             ...SHEET_OPTIONS,
@@ -291,6 +299,10 @@ export default function WorkspaceLayout() {
         />
         <Stack.Screen
           name="new-issue-picker/due-date"
+          options={SHEET_OPTIONS}
+        />
+        <Stack.Screen
+          name="new-issue-picker/start-date"
           options={SHEET_OPTIONS}
         />
         {/* New-project draft formSheet pickers — same pattern as
