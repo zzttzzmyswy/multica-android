@@ -24,38 +24,46 @@
  * deliberately does NOT reset `scope` so a workspace switch keeps the
  * user on the same scope tab (web's URL-driven scope reset is incidental
  * to its routing model, not an invariant mobile should mirror).
+ *
+ * Filter / sort / grouping fields beyond status+priority come from the
+ * shared `issue-filter-slice.ts` — same field shape as web's
+ * `packages/core/issues/stores/view-store.ts` FilterSnapshot so the same
+ * filter input produces the same visible set on both clients.
  */
 import { create } from "zustand";
-import type { IssuePriority, IssueStatus } from "@multica/core/types";
+import {
+  createIssueFilterActions,
+  defaultIssueFilterSlice,
+  hasActiveIssueFilters,
+  type ActorFilterValue,
+  type IssueFilterSlice,
+  type IssueGrouping,
+  type IssueSortDirection,
+  type IssueSortField,
+} from "./issue-filter-slice";
 
 export type IssuesScope = "all" | "members" | "agents";
 
-interface IssuesViewState {
+export interface IssuesViewState extends IssueFilterSlice {
   scope: IssuesScope;
-  statusFilters: IssueStatus[];
-  priorityFilters: IssuePriority[];
   setScope: (scope: IssuesScope) => void;
-  toggleStatusFilter: (status: IssueStatus) => void;
-  togglePriorityFilter: (priority: IssuePriority) => void;
-  clearFilters: () => void;
 }
 
 export const useIssuesViewStore = create<IssuesViewState>((set) => ({
   scope: "all",
-  statusFilters: [],
-  priorityFilters: [],
+  ...defaultIssueFilterSlice(),
   setScope: (scope) => set({ scope }),
-  toggleStatusFilter: (status) =>
-    set((state) => ({
-      statusFilters: state.statusFilters.includes(status)
-        ? state.statusFilters.filter((s) => s !== status)
-        : [...state.statusFilters, status],
-    })),
-  togglePriorityFilter: (priority) =>
-    set((state) => ({
-      priorityFilters: state.priorityFilters.includes(priority)
-        ? state.priorityFilters.filter((p) => p !== priority)
-        : [...state.priorityFilters, priority],
-    })),
-  clearFilters: () => set({ statusFilters: [], priorityFilters: [] }),
+  ...createIssueFilterActions<IssuesViewState>(set),
 }));
+
+/** Re-exported convenience: whether any filter dimension is active. */
+export function useIssuesViewHasActiveFilters(): boolean {
+  return hasActiveIssueFilters(useIssuesViewStore.getState());
+}
+
+export type {
+  ActorFilterValue,
+  IssueGrouping,
+  IssueSortDirection,
+  IssueSortField,
+};

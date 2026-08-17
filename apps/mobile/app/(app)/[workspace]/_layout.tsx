@@ -318,6 +318,11 @@ export default function WorkspaceLayout() {
         {/* Shared filter sheet for My Issues and the workspace Issues page —
             chooses the right view-store via `?scope=my|all` URL param. */}
         <Stack.Screen name="issues-filter" options={SHEET_OPTIONS} />
+        {/* Multi-select dimension picker pushed from the filter panel
+            (`?dim=assignee|creator|project|label` + `?scope=`). Registered
+            with the stock SHEET_OPTIONS; the body draws its own title+Done
+            header like the parent panel. */}
+        <Stack.Screen name="issues-filter-picker" options={SHEET_OPTIONS} />
         {/* Chat session-switch sheet. */}
         <Stack.Screen name="chat-sessions" options={SHEET_OPTIONS} />
         {/* Workspace switcher — reached from the More popover's collapsed

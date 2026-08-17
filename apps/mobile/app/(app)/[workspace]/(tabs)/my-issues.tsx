@@ -7,12 +7,15 @@
  *
  * Issues are grouped by status using SectionList in `BOARD_STATUSES` order;
  * empty status sections are filtered out so the screen doesn't fill with
- * "(0)" headers. Section grouping uses `BOARD_STATUSES` (cancelled excluded)
- * to match web — same source `packages/views/my-issues/components/my-issues-page.tsx:117-125`.
+ * "(0)" headers. Since iteration 62 grouping can switch to by-assignee
+ * (web GROUPING_OPTIONS), filter dimensions extend to assignee / creator /
+ * project / label, and the list carries a client sort (web sortIssues).
  *
- * Status + Priority filters mirror web's MyIssuesHeader filter sub-menus.
  * Filter state lives in `useMyIssuesViewStore` and is cleared on workspace
- * change via the shared `useClearFiltersOnWorkspaceChange` hook.
+ * change via the shared `useClearFiltersOnWorkspaceChange` hook. The store's
+ * filter window travels as server params into `myIssueListOptions`, and the
+ * client re-runs `applyIssueFilters` + `sortIssues` as a belt-and-suspenders
+ * pass (same as the workspace Issues page).
  */
 import { useMemo } from "react";
 import { Pressable, SectionList, View } from "react-native";
@@ -25,6 +28,7 @@ import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/ui/header";
 import { HeaderActions } from "@/components/ui/app-header-actions";
+import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { IssueRow } from "@/components/issue/issue-row";
 import { BatchActionBar } from "@/components/issue/batch-action-bar";
@@ -34,17 +38,26 @@ import {
   myIssueListOptions,
 } from "@/data/queries/my-issues";
 import type { MyIssuesScope } from "@/data/queries/issue-keys";
+import { projectListOptions } from "@/data/queries/projects";
+import { labelListOptions } from "@/data/queries/labels";
 import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection-store";
 import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useMyIssuesViewStore } from "@/data/stores/my-issues-view-store";
+import { buildIssueWindow } from "@/data/stores/issue-filter-slice";
 import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-workspace-change";
 import { BOARD_STATUSES } from "@/lib/issue-status";
-import { filterIssues } from "@/lib/filter-issues";
+import {
+  applyIssueFilters,
+  groupIssues,
+  sortIssues,
+  type IssueFilterState,
+} from "@/lib/filter-issues";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
 import { translate } from "@/lib/i18n";
+import { useActorLookup } from "@/data/use-actor-name";
 
 // Mobile pill row has tight width on SE3 (375pt). Three pills + Filter icon
 // must fit in 343pt usable space, so the agents scope renders "Agents" — the
@@ -58,7 +71,14 @@ const SCOPES: { value: MyIssuesScope; labelKey: string }[] = [
   { value: "agents", labelKey: "myIssues.scopeAgents" },
 ];
 
-type IssueSection = { status: IssueStatus; data: Issue[] };
+type IssueSection = {
+  key: string;
+  data: Issue[];
+  status?: IssueStatus;
+  assigneeType?: "member" | "agent" | "squad";
+  assigneeId?: string;
+  unassigned?: boolean;
+};
 
 export default function MyIssues() {
   const isFocused = useIsFocused();
@@ -70,8 +90,41 @@ export default function MyIssues() {
 
   const scope = useMyIssuesViewStore((s) => s.scope);
   const setScope = useMyIssuesViewStore((s) => s.setScope);
+  const grouping = useMyIssuesViewStore((s) => s.grouping);
+  const sortBy = useMyIssuesViewStore((s) => s.sortBy);
+  const sortDirection = useMyIssuesViewStore((s) => s.sortDirection);
   const statusFilters = useMyIssuesViewStore((s) => s.statusFilters);
   const priorityFilters = useMyIssuesViewStore((s) => s.priorityFilters);
+  const assigneeFilters = useMyIssuesViewStore((s) => s.assigneeFilters);
+  const includeNoAssignee = useMyIssuesViewStore((s) => s.includeNoAssignee);
+  const creatorFilters = useMyIssuesViewStore((s) => s.creatorFilters);
+  const projectFilters = useMyIssuesViewStore((s) => s.projectFilters);
+  const includeNoProject = useMyIssuesViewStore((s) => s.includeNoProject);
+  const labelFilters = useMyIssuesViewStore((s) => s.labelFilters);
+  // Stable dedup feeding applyIssueFilters — each field is its own
+  // subscription above.
+  const filterState = useMemo<IssueFilterState>(
+    () => ({
+      statusFilters,
+      priorityFilters,
+      assigneeFilters,
+      includeNoAssignee,
+      creatorFilters,
+      projectFilters,
+      includeNoProject,
+      labelFilters,
+    }),
+    [
+      statusFilters,
+      priorityFilters,
+      assigneeFilters,
+      includeNoAssignee,
+      creatorFilters,
+      projectFilters,
+      includeNoProject,
+      labelFilters,
+    ],
+  );
 
   const openFilter = () => {
     if (!wsSlug) return;
@@ -97,42 +150,75 @@ export default function MyIssues() {
     [scope, userId],
   );
 
+  // Server window (scope filter from `filter`, grid dimensions from the
+  // shared slice mapped through buildIssueWindow).
+  const window = useMemo(
+    () =>
+      buildIssueWindow({
+        statusFilters: filterState.statusFilters,
+        priorityFilters: filterState.priorityFilters,
+        assigneeFilters: filterState.assigneeFilters,
+        includeNoAssignee: filterState.includeNoAssignee,
+        creatorFilters: filterState.creatorFilters,
+        projectFilters: filterState.projectFilters,
+        includeNoProject: filterState.includeNoProject,
+        labelFilters: filterState.labelFilters,
+        sortBy,
+        sortDirection,
+      }),
+    [filterState, sortBy, sortDirection],
+  );
+
   const { data, isLoading, error, refetch, isRefetching } = useQuery({
-    ...myIssueListOptions(wsId, scope, filter),
+    ...myIssueListOptions(wsId, scope, filter, window),
     enabled: !!wsId && !!userId,
   });
 
-  // Apply client-side status + priority filter. Mirrors the predicate at
-  // packages/views/issues/utils/filter.ts:30-34 via filterIssues().
+  // Client predicate — same window re-applied so WS-patched rows that fell
+  // out of it drop at render time (mirrors the workspace Issues page).
   const filtered = useMemo(
-    () => filterIssues(data ?? [], statusFilters, priorityFilters),
-    [data, statusFilters, priorityFilters],
+    () => applyIssueFilters(data ?? [], filterState),
+    [data, filterState],
   );
 
-  // When statusFilters is non-empty, intersect visible status order with it
-  // so hidden statuses don't render an empty section header. Uses
-  // BOARD_STATUSES (cancelled excluded) to match web.
+  const sorted = useMemo(
+    () => sortIssues(filtered, sortBy, sortDirection),
+    [filtered, sortBy, sortDirection],
+  );
+
   const sections = useMemo<IssueSection[]>(() => {
-    if (filtered.length === 0) return [];
-    const byStatus = new Map<IssueStatus, Issue[]>();
-    for (const issue of filtered) {
-      const list = byStatus.get(issue.status);
-      if (list) list.push(issue);
-      else byStatus.set(issue.status, [issue]);
-    }
-    const visibleStatuses = statusFilters.length > 0
-      ? BOARD_STATUSES.filter((s) => statusFilters.includes(s))
-      : BOARD_STATUSES;
-    return visibleStatuses
-      .map((status) => ({ status, data: byStatus.get(status) ?? [] }))
-      .filter((s) => s.data.length > 0);
-  }, [filtered, statusFilters]);
+    const groups = groupIssues(sorted, grouping, BOARD_STATUSES);
+    return groups.map((g) => {
+      if (grouping === "status" && g.status) {
+        return { key: g.key, status: g.status, data: g.data };
+      }
+      if (g.unassigned) {
+        return { key: g.key, unassigned: true, data: g.data };
+      }
+      return {
+        key: g.key,
+        assigneeType: g.assigneeType,
+        assigneeId: g.assigneeId,
+        data: g.data,
+      };
+    });
+  }, [sorted, grouping]);
 
-  const hasActiveFilters =
-    statusFilters.length > 0 || priorityFilters.length > 0;
+  const hasActiveFilterChips = useMemo(() => {
+    const f = filterState;
+    return (
+      f.statusFilters.length > 0 ||
+      f.priorityFilters.length > 0 ||
+      f.assigneeFilters.length > 0 ||
+      f.includeNoAssignee ||
+      f.creatorFilters.length > 0 ||
+      f.projectFilters.length > 0 ||
+      f.includeNoProject ||
+      f.labelFilters.length > 0
+    );
+  }, [filterState]);
 
-  const showEmptyState =
-    !isLoading && !error && filtered.length === 0;
+  const showEmptyState = !isLoading && !error && sorted.length === 0;
 
   return (
     <View className="flex-1 bg-background">
@@ -142,18 +228,41 @@ export default function MyIssues() {
         scope={scope}
         onChange={(v) => setScope(v)}
         onOpenFilter={openFilter}
-        hasActiveFilters={hasActiveFilters}
+        hasActiveFilters={hasActiveFilterChips}
         t={t}
       />
-      {hasActiveFilters ? (
+      {hasActiveFilterChips ? (
         <ActiveFilterChips
-          statusFilters={statusFilters}
-          priorityFilters={priorityFilters}
+          filterState={filterState}
+          statusFilters={filterState.statusFilters}
+          priorityFilters={filterState.priorityFilters}
+          assigneeFilters={filterState.assigneeFilters}
+          creatorFilters={filterState.creatorFilters}
+          projectFilters={filterState.projectFilters}
+          labelFilters={filterState.labelFilters}
           onClearStatus={(s) =>
             useMyIssuesViewStore.getState().toggleStatusFilter(s)
           }
           onClearPriority={(p) =>
             useMyIssuesViewStore.getState().togglePriorityFilter(p)
+          }
+          onClearAssignee={(v) =>
+            useMyIssuesViewStore.getState().toggleAssigneeFilter(v)
+          }
+          onClearCreator={(v) =>
+            useMyIssuesViewStore.getState().toggleCreatorFilter(v)
+          }
+          onClearProject={(id) =>
+            useMyIssuesViewStore.getState().toggleProjectFilter(id)
+          }
+          onClearLabel={(id) =>
+            useMyIssuesViewStore.getState().toggleLabelFilter(id)
+          }
+          onClearNoAssignee={() =>
+            useMyIssuesViewStore.getState().toggleNoAssignee()
+          }
+          onClearNoProject={() =>
+            useMyIssuesViewStore.getState().toggleNoProject()
           }
         />
       ) : null}
@@ -172,7 +281,7 @@ export default function MyIssues() {
       ) : showEmptyState ? (
         <EmptyState
           message={
-            hasActiveFilters
+            hasActiveFilterChips
               ? t("myIssues.filterEmpty")
               : emptyMessageForScope(scope, t)
           }
@@ -186,10 +295,7 @@ export default function MyIssues() {
             <View className="h-px bg-border ml-4" />
           )}
           renderSectionHeader={({ section }) => (
-            <SectionHeader
-              status={section.status}
-              count={section.data.length}
-            />
+            <SectionHeader section={section} />
           )}
           contentContainerClassName={
             batchSelectionMode ? "pb-48" : "pb-6"
@@ -207,7 +313,7 @@ export default function MyIssues() {
         />
       )}
 
-      {filtered.length > 0 ? <BatchActionBar issues={filtered} /> : null}
+      {sorted.length > 0 ? <BatchActionBar issues={sorted} /> : null}
 
     </View>
   );
@@ -344,17 +450,53 @@ function ScopeToolbar<S extends string>({
   );
 }
 
+/**
+ * Chips bar — one chip per selected value, each clears only that value
+ * (web filter-chips-bar semantics). Project/label chips resolve names from
+ * the workspace catalogs; actor chips reuse `useActorLookup`.
+ */
 function ActiveFilterChips({
+  filterState,
   statusFilters,
   priorityFilters,
+  assigneeFilters,
+  creatorFilters,
+  projectFilters,
+  labelFilters,
   onClearStatus,
   onClearPriority,
+  onClearAssignee,
+  onClearCreator,
+  onClearProject,
+  onClearLabel,
+  onClearNoAssignee,
+  onClearNoProject,
 }: {
+  filterState: IssueFilterState;
   statusFilters: IssueStatus[];
   priorityFilters: IssuePriority[];
+  assigneeFilters: { type: "member" | "agent" | "squad"; id: string }[];
+  creatorFilters: { type: "member" | "agent" | "squad"; id: string }[];
+  projectFilters: string[];
+  labelFilters: string[];
   onClearStatus: (s: IssueStatus) => void;
   onClearPriority: (p: IssuePriority) => void;
+  onClearAssignee: (v: { type: "member" | "agent" | "squad"; id: string }) => void;
+  onClearCreator: (v: { type: "member" | "agent" | "squad"; id: string }) => void;
+  onClearProject: (id: string) => void;
+  onClearLabel: (id: string) => void;
+  onClearNoAssignee: () => void;
+  onClearNoProject: () => void;
 }) {
+  const { getName } = useActorLookup();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const { data: projects = [] } = useQuery(projectListOptions(wsId));
+  const { data: labels = [] } = useQuery(labelListOptions(wsId));
+  const projectName = (id: string) =>
+    projects.find((p) => p.id === id)?.title ?? id.slice(0, 8);
+  const labelName = (id: string) =>
+    labels.find((l) => l.id === id)?.name ?? id.slice(0, 8);
+
   return (
     <View className="flex-row flex-wrap gap-1.5 px-4 pb-2">
       {statusFilters.map((s) => (
@@ -362,6 +504,40 @@ function ActiveFilterChips({
       ))}
       {priorityFilters.map((p) => (
         <Chip key={`p-${p}`} label={translate(`enum.priority.${p}`)} onClear={() => onClearPriority(p)} />
+      ))}
+      {assigneeFilters.map((a) => (
+        <Chip
+          key={`a-${a.type}:${a.id}`}
+          label={getName(a.type, a.id)}
+          onClear={() => onClearAssignee(a)}
+        />
+      ))}
+      {filterState.includeNoAssignee ? (
+        <Chip
+          key="no-assignee"
+          label={translate("filter.noAssignee")}
+          onClear={onClearNoAssignee}
+        />
+      ) : null}
+      {creatorFilters.map((c) => (
+        <Chip
+          key={`c-${c.type}:${c.id}`}
+          label={getName(c.type, c.id)}
+          onClear={() => onClearCreator(c)}
+        />
+      ))}
+      {projectFilters.map((id) => (
+        <Chip key={`pr-${id}`} label={projectName(id)} onClear={() => onClearProject(id)} />
+      ))}
+      {filterState.includeNoProject ? (
+        <Chip
+          key="no-project"
+          label={translate("filter.noProject")}
+          onClear={onClearNoProject}
+        />
+      ) : null}
+      {labelFilters.map((id) => (
+        <Chip key={`l-${id}`} label={labelName(id)} onClear={() => onClearLabel(id)} />
       ))}
     </View>
   );
@@ -384,20 +560,52 @@ function Chip({ label, onClear }: { label: string; onClear: () => void }) {
   );
 }
 
-function SectionHeader({
-  status,
-  count,
-}: {
-  status: IssueStatus;
-  count: number;
-}) {
+/**
+ * Section header for both grouping modes. Assignee lanes render actor
+ * avatar + name; the unassigned lane renders "Unassigned".
+ */
+function SectionHeader({ section }: { section: IssueSection }) {
+  const { getName } = useActorLookup();
+  if (section.status) {
+    return (
+      <View className="flex-row items-center gap-2 px-4 py-2 bg-background">
+        <StatusIcon status={section.status} size={14} />
+        <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+          {translate(`enum.status.${section.status}`)}
+        </Text>
+        <Text className="text-xs text-muted-foreground/60">
+          {section.data.length}
+        </Text>
+      </View>
+    );
+  }
   return (
     <View className="flex-row items-center gap-2 px-4 py-2 bg-background">
-      <StatusIcon status={status} size={14} />
-      <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
-        {translate(`enum.status.${status}`)}
+      {section.unassigned ? (
+        <>
+          <View className="w-[18px]" />
+          <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+            {translate("filter.noAssignee")}
+          </Text>
+        </>
+      ) : (
+        <>
+          <ActorAvatar
+            type={section.assigneeType}
+            id={section.assigneeId}
+            size={18}
+          />
+          <Text
+            numberOfLines={1}
+            className="flex-1 text-xs font-medium text-muted-foreground"
+          >
+            {getName(section.assigneeType, section.assigneeId)}
+          </Text>
+        </>
+      )}
+      <Text className="text-xs text-muted-foreground/60">
+        {section.data.length}
       </Text>
-      <Text className="text-xs text-muted-foreground/60">{count}</Text>
     </View>
   );
 }

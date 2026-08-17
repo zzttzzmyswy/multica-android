@@ -1469,9 +1469,34 @@ class ApiClient {
       if (Array.isArray(v)) {
         // Backend parses comma-separated lists (server/internal/handler/issue.go
         // uses strings.Split on a single query value). Match web's serialization
-        // in packages/core/api/client.ts:407 — repeated keys would silently
+        // in packages/core/api/client.ts:781-782 — repeated keys would silently
         // collapse to the first value only.
-        if (v.length > 0) search.set(k, v.map(String).join(","));
+        if (v.length > 0) {
+          // Actor filters are `{type, id}` objects — serialize each as
+          // `type:id` (server parseActorFilterList, issue.go:1435). Match web
+          // client.ts:756-761 exactly: this is NOT `String(v)` which would
+          // produce "[object Object]".
+          if (k === "assignee_filters" || k === "creator_filters") {
+            search.set(
+              k,
+              v
+                .map(
+                  (f) =>
+                    `${(f as { type: string }).type}:${(f as { id: string }).id}`,
+                )
+                .join(","),
+            );
+          } else {
+            search.set(k, v.map(String).join(","));
+          }
+        }
+      } else if (k === "sort_by") {
+        // Server reads `sort` / `direction` (issue.go:990/1026); the API
+        // client type uses sort_by / sort_direction. Map like web
+        // client.ts:783-784.
+        search.set("sort", String(v));
+      } else if (k === "sort_direction") {
+        search.set("direction", String(v));
       } else {
         search.set(k, String(v));
       }
