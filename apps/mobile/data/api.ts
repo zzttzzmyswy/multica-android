@@ -2408,6 +2408,33 @@ class ApiClient {
     await this.fetch<void>(`/api/chat/sessions/${id}`, { method: "DELETE" });
   }
 
+  /** PATCH /api/chat/sessions/:id — rename a session (title only; the web
+   *  build also patches project_id, which mobile never edits). Mirrors
+   *  packages/core/api/client.ts updateChatSession, restored for MYS-409
+   *  after the v1 cut dropped it. */
+  async updateChatSession(
+    id: string,
+    data: { title: string },
+  ): Promise<ChatSession> {
+    return this.fetch<ChatSession>(`/api/chat/sessions/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  /** PATCH /api/chat/sessions/:id/pin — pin/unpin a session so it sorts
+   *  above unpinned ones. Mirrors packages/core/api/client.ts
+   *  setChatSessionPinned. */
+  async setChatSessionPinned(
+    id: string,
+    pinned: boolean,
+  ): Promise<ChatSession> {
+    return this.fetch<ChatSession>(`/api/chat/sessions/${id}/pin`, {
+      method: "PATCH",
+      body: JSON.stringify({ pinned }),
+    });
+  }
+
   /** PATCH /api/chat/sessions/:id/archive — retires a builder conversation
    *  once its agent exists (archived = read-only + dropped from the drafts
    *  list; the conversation stays as the record of how the agent was

@@ -35,32 +35,49 @@ import type {
   TaskQueuedPayload,
   TaskDispatchPayload,
 } from "@multica/core/types";
-import { chatKeys } from "@/data/queries/chat";
+import { chatKeys, sortChatSessions } from "@/data/queries/chat";
 
 // =====================================================
 // Sessions list (ChatSession[] keyed by wsId)
 // =====================================================
 
-export function patchSessionListAfterRename(
+/**
+ * Patch one session row from a `chat:session_updated` event and re-sort the
+ * list. The event carries whatever changed (title for renames, `pinned` for
+ * pin/unpin, `updated_at` for activity) — fields absent from the payload are
+ * left untouched so older servers that emit a sparse shape can't clobber the
+ * client's view. Sorting after the patch keeps a freshly-pinned session at the
+ * top and drops an unpinned one back into activity order, matching web's
+ * `sortChatSessions` behaviour on the same event.
+ */
+export function patchSessionListAfterUpdate(
   qc: QueryClient,
   wsId: string | null,
   payload: {
     chat_session_id: string;
     title?: string;
     updated_at?: string;
+    pinned?: boolean;
   },
 ) {
-  qc.setQueryData<ChatSession[]>(chatKeys.sessions(wsId), (old) =>
-    old?.map((s) =>
+  qc.setQueryData<ChatSession[]>(chatKeys.sessions(wsId), (old) => {
+    if (!old) return old;
+    const next = old.map((s) =>
       s.id === payload.chat_session_id
         ? {
             ...s,
-            title: payload.title ?? s.title,
-            updated_at: payload.updated_at ?? s.updated_at,
+            ...(payload.title !== undefined ? { title: payload.title } : {}),
+            ...(payload.updated_at !== undefined
+              ? { updated_at: payload.updated_at }
+              : {}),
+            ...(payload.pinned !== undefined
+              ? { pinned: payload.pinned }
+              : {}),
           }
         : s,
-    ),
-  );
+    );
+    return sortChatSessions(next);
+  });
 }
 
 export function dropSessionFromList(

@@ -16,6 +16,7 @@
  * use-chat-session-realtime.ts).
  */
 import { queryOptions } from "@tanstack/react-query";
+import type { ChatSession } from "@multica/core/types";
 import { api } from "@/data/api";
 import { pendingTaskPollMs } from "@/lib/chat-task-polling";
 
@@ -47,6 +48,28 @@ export function isTaskMessageTaskId(
   taskId: string | null | undefined,
 ): taskId is string {
   return typeof taskId === "string" && UUID_PATTERN.test(taskId);
+}
+
+/**
+ * Orders the chat list the same way web + the server do: pinned chats first,
+ * then everyone else by most-recent activity. Used both to render the session
+ * sheet and to re-sort the cache after an optimistic pin/unpin or a WS patch,
+ * so a mutated flat cache never renders out of order. Returns a new array;
+ * stable for equal keys (Array.prototype.sort is stable), so pinned rows keep
+ * their server order when pin timestamps aren't carried in the list payload.
+ *
+ * Mirrors `sortChatSessions` in `packages/core/chat/queries.ts`; mobile ranks
+ * on `updated_at` (the v1 ChatSession doesn't carry `last_message`).
+ */
+export function sortChatSessions(sessions: ChatSession[]): ChatSession[] {
+  return [...sessions].sort((a, b) => {
+    const ap = a.pinned ? 1 : 0;
+    const bp = b.pinned ? 1 : 0;
+    if (ap !== bp) return bp - ap;
+    return (
+      new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    );
+  });
 }
 
 export const chatSessionsOptions = (wsId: string | null) =>

@@ -67,11 +67,11 @@ import {
   chatMessagesOptions,
   chatSessionsOptions,
   pendingChatTaskOptions,
+  sortChatSessions,
   taskMessagesOptions,
 } from "@/data/queries/chat";
 import {
   useCreateChatSession,
-  useDeleteChatSession,
   useMarkChatSessionRead,
 } from "@/data/mutations/chat";
 import {
@@ -91,6 +91,7 @@ import { useAgentPresence } from "@/lib/use-agent-presence";
 import { Header } from "@/components/ui/header";
 import { ChatTitleButton } from "@/components/chat/chat-title-button";
 import { ChatSessionActions } from "@/components/chat/chat-session-actions";
+import { useChatSessionActions } from "@/components/chat/session-actions";
 import { ChatMessageList } from "@/components/chat/chat-message-list";
 import { ChatComposer } from "@/components/chat/chat-composer";
 import { AgentPickerSheet } from "@/components/chat/agent-picker-sheet";
@@ -111,6 +112,10 @@ export default function ChatTab() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [agentPickerOpen, setAgentPickerOpen] = useState(false);
+  // Rename / pin / archive / delete menu — shares its action sheet + rename
+  // dialog with the session-switch sheet (components/chat/session-actions).
+  const { showActions: showSessionActions, renameDialog } =
+    useChatSessionActions();
 
   // Bridge to the chat-sessions formSheet route. Mirror local
   // activeSessionId into the store so the picker can render the current
@@ -144,7 +149,7 @@ export default function ChatTab() {
       return;
     }
     hydratedWsRef.current = wsId;
-    setActiveSessionId(sessions[0].id);
+    setActiveSessionId(sortChatSessions(sessions)[0].id);
   }, [wsId, sessions]);
   const { data: messages = [], isLoading: messagesLoading } = useQuery(
     chatMessagesOptions(activeSessionId),
@@ -254,7 +259,6 @@ export default function ChatTab() {
 
   // ── Mutations ──────────────────────────────────────────────────────────
   const createSession = useCreateChatSession();
-  const deleteSession = useDeleteChatSession();
 
   // ── Send burst ─────────────────────────────────────────────────────────
   const sessionPromiseRef = useRef<Promise<string | null> | null>(null);
@@ -430,26 +434,14 @@ export default function ChatTab() {
     consumeSelect();
   }, [selectRequest, consumeSelect]);
 
-  const handleDeleteActive = useCallback(() => {
+  // ⋯ menu on the active session — rename / pin / archive / delete via the
+  // shared session-actions sheet (clears the active session on delete).
+  const handleSessionMenu = useCallback(() => {
     if (!activeSession) return;
-    Alert.alert(
-      t("chat.deleteTitle"),
-      activeSession.title || t("chat.untitled"),
-      [
-        { text: t("common.cancel"), style: "cancel" },
-        {
-          text: t("chat.deleteChat"),
-          style: "destructive",
-          onPress: () => {
-            const id = activeSession.id;
-            setActiveSessionId(null);
-            deleteSession.mutate(id);
-          },
-        },
-      ],
-      { cancelable: true },
-    );
-  }, [activeSession, deleteSession, t]);
+    showSessionActions(activeSession, {
+      onDeleted: () => setActiveSessionId(null),
+    });
+  }, [activeSession, showSessionActions]);
 
   // ── Composer disabled-state ────────────────────────────────────────────
   const disabled =
@@ -486,7 +478,7 @@ export default function ChatTab() {
         right={
           <ChatSessionActions
             showMore={!!activeSession}
-            onMorePress={handleDeleteActive}
+            onMorePress={handleSessionMenu}
             onNewPress={handleNewChat}
           />
         }
@@ -537,6 +529,8 @@ export default function ChatTab() {
         onPick={handlePickAgent}
         onClose={() => setAgentPickerOpen(false)}
       />
+
+      {renameDialog}
     </View>
   );
 }

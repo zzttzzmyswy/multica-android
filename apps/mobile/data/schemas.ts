@@ -308,6 +308,10 @@ export const ChatSessionSchema: z.ZodType<ChatSession> = z.object({
   // so the badge math can tell "older server didn't send it" from a real 0 —
   // the tab badge sums `unread_count ?? 0`, same rule as web's sidebar.
   unread_count: z.number().optional(),
+  // Pinned chats sort above unpinned ones (web chatThreadList parity). Older
+  // servers omit the flag — default false so the row still sorts by activity;
+  // catch protects against malformed values the same way the enum does above.
+  pinned: z.boolean().default(false).catch(false),
   created_at: z.string().default(""),
   updated_at: z.string().default(""),
 }).loose();

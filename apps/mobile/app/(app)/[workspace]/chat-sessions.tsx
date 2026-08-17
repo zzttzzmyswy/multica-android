@@ -9,17 +9,17 @@
  * on a separate route screen, we need a cross-screen channel. Same minimum
  * pattern as `useNewIssueDraftStore` for the new-issue form.
  */
-import { Alert, Pressable, ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import type { ChatSession } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
-import { chatSessionsOptions } from "@/data/queries/chat";
+import { chatSessionsOptions, sortChatSessions } from "@/data/queries/chat";
 import { agentListOptions } from "@/data/queries/agents";
-import { useDeleteChatSession } from "@/data/mutations/chat";
 import { useChatSessionPickerStore } from "@/data/stores/chat-session-picker-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { useChatSessionActions } from "@/components/chat/session-actions";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
 
@@ -27,6 +27,7 @@ export default function ChatSessionsRoute() {
   const { t } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { data: sessions = [] } = useQuery(chatSessionsOptions(wsId));
+  const { showActions, renameDialog } = useChatSessionActions();
   // agent_id → display name, so each session row can say who it's chatting
   // with (MYS-335). Sessions can outlive their agent (archived / removed),
   // so unknown ids fall back to a placeholder.
@@ -34,30 +35,20 @@ export default function ChatSessionsRoute() {
   const agentNameById = new Map(agents.map((a) => [a.id, a.name]));
   const activeSessionId = useChatSessionPickerStore((s) => s.activeSessionId);
   const requestSelect = useChatSessionPickerStore((s) => s.requestSelect);
-  const deleteSession = useDeleteChatSession();
+  // Pinned rows sort above the rest (web parity); keep a memoized copy so the
+  // sheet's order follows pin/unpin without a refetch.
+  const sortedSessions = sortChatSessions(sessions);
 
-  const confirmDelete = (session: ChatSession) => {
-    Alert.alert(
-      t("chat.deleteTitle"),
-      session.title || t("chat.untitled"),
-      [
-        { text: t("common.cancel"), style: "cancel" },
-        {
-          text: t("chat.deleteChat"),
-          style: "destructive",
-          onPress: () => {
-            deleteSession.mutate(session.id);
-            // If we just deleted the active one, the chat tab clears its
-            // local activeSessionId via the picker-store request.
-            if (session.id === activeSessionId) {
-              requestSelect(null);
-            }
-          },
-        },
-      ],
-      { cancelable: true },
-    );
-  };
+  const openActions = (session: ChatSession) =>
+    showActions(session, {
+      onDeleted: (dead) => {
+        // If we just deleted the active one, the chat tab clears its
+        // local activeSessionId via the picker-store request.
+        if (dead.id === activeSessionId) {
+          requestSelect(null);
+        }
+      },
+    });
 
   return (
     <View className="flex-1">
@@ -65,14 +56,14 @@ export default function ChatSessionsRoute() {
         <Text className="text-base font-semibold text-foreground">{t("chat.chats")}</Text>
       </View>
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        {sessions.length === 0 ? (
+        {sortedSessions.length === 0 ? (
           <View className="px-4 py-8">
             <Text className="text-sm text-muted-foreground text-center">
               {t("chat.noChatsYet")}
             </Text>
           </View>
         ) : (
-          sessions.map((session) => {
+          sortedSessions.map((session) => {
             const selected = session.id === activeSessionId;
             const archived = session.status === "archived";
             return (
@@ -82,7 +73,7 @@ export default function ChatSessionsRoute() {
                   requestSelect(session.id);
                   router.back();
                 }}
-                onLongPress={() => confirmDelete(session)}
+                onLongPress={() => openActions(session)}
                 className={cn(
                   "flex-row items-center gap-3 px-4 py-3 active:bg-secondary",
                   selected && "bg-secondary/60",
@@ -101,15 +92,22 @@ export default function ChatSessionsRoute() {
                   showPresence
                 />
                 <View className="flex-1">
-                  <Text
-                    className={cn(
-                      "text-sm text-foreground",
-                      session.has_unread && "font-semibold",
-                    )}
-                    numberOfLines={1}
-                  >
-                    {session.title || t("chat.untitled")}
-                  </Text>
+                  <View className="flex-row items-center gap-1">
+                    <Text
+                      className={cn(
+                        "text-sm text-foreground shrink",
+                        session.has_unread && "font-semibold",
+                      )}
+                      numberOfLines={1}
+                    >
+                      {session.title || t("chat.untitled")}
+                    </Text>
+                    {session.pinned ? (
+                      <Text className="text-[10px] text-muted-foreground">
+                        {t("chat.pinned")}
+                      </Text>
+                    ) : null}
+                  </View>
                   <Text className="text-xs text-muted-foreground mt-0.5" numberOfLines={1}>
                     {agentNameById.get(session.agent_id) ?? t("chat.agentUnknown")}
                   </Text>
@@ -127,6 +125,7 @@ export default function ChatSessionsRoute() {
           })
         )}
       </ScrollView>
+      {renameDialog}
     </View>
   );
 }

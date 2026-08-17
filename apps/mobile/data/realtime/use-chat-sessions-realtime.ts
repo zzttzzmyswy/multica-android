@@ -15,7 +15,7 @@ import { chatKeys } from "@/data/queries/chat";
 import { useWSSubscriptions } from "@/lib/use-ws-subscriptions";
 import {
   dropSessionFromList,
-  patchSessionListAfterRename,
+  patchSessionListAfterUpdate,
 } from "./chat-ws-updaters";
 
 export function useChatSessionsRealtime() {
@@ -37,14 +37,15 @@ export function useChatSessionsRealtime() {
         // web/desktop on the same account).
         ws.on("chat:session_read", invalidateSessions),
         // chat:session_updated has no formal payload type yet — server
-        // emits {chat_session_id, title?, updated_at?}. Narrow inline.
+        // emits {chat_session_id, title?, updated_at?, pinned?}. Narrow inline.
         ws.on("chat:session_updated", (p) => {
           const payload = p as {
             chat_session_id: string;
             title?: string;
             updated_at?: string;
+            pinned?: boolean;
           };
-          patchSessionListAfterRename(qc, wsId, payload);
+          patchSessionListAfterUpdate(qc, wsId, payload);
         }),
         ws.on("chat:session_deleted", (payload) => {
           dropSessionFromList(qc, wsId, payload);
