@@ -295,6 +295,34 @@ export default function WorkspaceSettingsScreen() {
         </SectionGroup>
       ) : null}
 
+      {canManage && membersReady ? (
+        <SectionGroup title={t("workspaceSettings.management")}>
+          <ManageNavRow
+            icon="flash"
+            title={t("quickActions.title")}
+            onPress={() =>
+              router.push(`/${workspace.slug}/more/settings/quick-actions`)
+            }
+          />
+          <Separator />
+          <ManageNavRow
+            icon="git-branch-outline"
+            title={t("repositories.title")}
+            onPress={() =>
+              router.push(`/${workspace.slug}/more/settings/repositories`)
+            }
+          />
+          <Separator />
+          <ManageNavRow
+            icon="git-merge-outline"
+            title={t("integrations.title")}
+            onPress={() =>
+              router.push(`/${workspace.slug}/more/settings/integrations`)
+            }
+          />
+        </SectionGroup>
+      ) : null}
+
       <SectionGroup title={t("workspaceSettings.info")}>
         <View className="py-1">
           <InfoRow label={t("workspaceSettings.name")} value={workspace.name} />
@@ -444,6 +472,29 @@ function InfoRow({
         {value}
       </Text>
     </View>
+  );
+}
+
+function ManageNavRow({
+  icon,
+  title,
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  title: string;
+  onPress: () => void;
+}) {
+  const { colorScheme } = useColorScheme();
+  const theme = THEME[colorScheme];
+  return (
+    <Pressable
+      onPress={onPress}
+      className="flex-row items-center px-4 py-3.5 gap-3 active:bg-secondary"
+    >
+      <Ionicons name={icon} size={16} color={theme.mutedForeground} />
+      <Text className="flex-1 text-sm font-medium text-foreground">{title}</Text>
+      <Ionicons name="chevron-forward" size={16} color={theme.mutedForeground} />
+    </Pressable>
   );
 }
 

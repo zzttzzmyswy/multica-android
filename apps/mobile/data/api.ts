@@ -39,8 +39,12 @@ import type {
   CreatePropertyRequest,
   CreateProjectRequest,
   CreateProjectResourceRequest,
+  CreateQuickActionRequest,
   CronPreviewResponse,
   GetAutopilotResponse,
+  GitHubConnectResponse,
+  GitHubInstallation,
+  GitHubRepository,
   InboxItem,
   Invitation,
   Issue,
@@ -53,14 +57,19 @@ import type {
   IssueReaction,
   ListAutopilotRunsResponse,
   ListAutopilotsResponse,
+  ListGitHubInstallationsResponse,
+  ListGitHubRepositoriesResponse,
   ListIssuesParams,
   ListIssuesResponse,
   ListLabelsResponse,
   ListProjectResourcesResponse,
   ListProjectsResponse,
   ListPropertiesResponse,
+  ListQuickActionsResponse,
   MemberWithUser,
   UpdateMemberRequest,
+  QuickAction,
+  UpdateQuickActionRequest,
   PinnedItem,
   PinnedItemType,
   Project,
@@ -119,18 +128,28 @@ import {
   EMPTY_AGENT_BUILDER_SESSION_LIST,
   EMPTY_ISSUE_PROPERTY,
   EMPTY_ISSUE_PROPERTIES_RESPONSE,
+  EMPTY_GITHUB_CONNECT_RESPONSE,
   EMPTY_LIST_AUTOPILOTS_RESPONSE,
+  EMPTY_LIST_GITHUB_INSTALLATIONS_RESPONSE,
+  EMPTY_LIST_GITHUB_REPOSITORIES_RESPONSE,
   EMPTY_LIST_ISSUES_RESPONSE,
   EMPTY_LIST_PROPERTIES_RESPONSE,
+  EMPTY_LIST_QUICK_ACTIONS_RESPONSE,
+  EMPTY_QUICK_ACTION,
   EMPTY_SQUAD,
   EMPTY_TIMELINE_ENTRIES,
   FALLBACK_AUTOPILOT_RUN,
+  GitHubConnectResponseSchema,
   IssuePropertiesResponseSchema,
   IssuePropertySchema,
   IssueSchema,
   ListAutopilotsResponseSchema,
+  ListGitHubInstallationsResponseSchema,
+  ListGitHubRepositoriesResponseSchema,
   ListIssuesResponseSchema,
   ListPropertiesResponseSchema,
+  ListQuickActionsResponseSchema,
+  QuickActionSchema,
   TimelineEntriesSchema,
   agentBuilderRuntimeSwitchFallback,
 } from "@multica/core/api/schemas";
@@ -972,6 +991,109 @@ class ApiClient {
       method: "POST",
       body: JSON.stringify({ expected_active_agent_ids: expectedActiveAgentIds }),
     });
+  }
+
+  // Workspace quick actions (iteration-52) — workspace-level issue presets.
+  // Mirrors packages/core/api/client.ts listQuickActions..deleteQuickAction.
+  // Schemas + fallbacks come from @multica/core/api/schemas; a drift response
+  // degrades to an empty catalog so the page never crashes.
+  async listQuickActions(opts?: {
+    includeArchived?: boolean;
+  }): Promise<ListQuickActionsResponse> {
+    const suffix = opts?.includeArchived ? "?include_archived=true" : "";
+    const raw = await this.fetch<unknown>(`/api/quick-actions${suffix}`);
+    return parseWithFallback(
+      raw,
+      ListQuickActionsResponseSchema,
+      EMPTY_LIST_QUICK_ACTIONS_RESPONSE,
+      { endpoint: "listQuickActions" },
+    );
+  }
+
+  async createQuickAction(
+    data: CreateQuickActionRequest,
+  ): Promise<QuickAction> {
+    const raw = await this.fetch<unknown>("/api/quick-actions", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return parseWithFallback(raw, QuickActionSchema, EMPTY_QUICK_ACTION, {
+      endpoint: "createQuickAction",
+    });
+  }
+
+  async updateQuickAction(
+    id: string,
+    data: UpdateQuickActionRequest,
+  ): Promise<QuickAction> {
+    const raw = await this.fetch<unknown>(`/api/quick-actions/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+    return parseWithFallback(raw, QuickActionSchema, EMPTY_QUICK_ACTION, {
+      endpoint: "updateQuickAction",
+    });
+  }
+
+  async deleteQuickAction(id: string): Promise<void> {
+    await this.fetch<void>(`/api/quick-actions/${id}`, { method: "DELETE" });
+  }
+
+  // GitHub integration (iteration-52) — installation list, repository browser
+  // and connect-URL minting. Mirrors packages/core/api/client.ts:3673-3724;
+  // response schemas + fallbacks from @multica/core/api/schemas.
+  async listGitHubInstallations(
+    workspaceId: string,
+  ): Promise<ListGitHubInstallationsResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/github/installations`,
+    );
+    return parseWithFallback(
+      raw,
+      ListGitHubInstallationsResponseSchema,
+      EMPTY_LIST_GITHUB_INSTALLATIONS_RESPONSE,
+      { endpoint: "listGitHubInstallations" },
+    );
+  }
+
+  async listGitHubInstallationRepositories(
+    workspaceId: string,
+    installationId: string,
+    params: { page?: number; per_page?: number; signal?: AbortSignal } = {},
+  ): Promise<ListGitHubRepositoriesResponse> {
+    const search = new URLSearchParams();
+    if (params.page !== undefined) search.set("page", String(params.page));
+    if (params.per_page !== undefined)
+      search.set("per_page", String(params.per_page));
+    const suffix = search.size > 0 ? `?${search.toString()}` : "";
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/github/installations/${installationId}/repositories${suffix}`,
+      { signal: params.signal },
+    );
+    return parseWithFallback(
+      raw,
+      ListGitHubRepositoriesResponseSchema,
+      EMPTY_LIST_GITHUB_REPOSITORIES_RESPONSE,
+      { endpoint: "listGitHubInstallationRepositories" },
+    );
+  }
+
+  async getGitHubConnectURL(
+    workspaceId: string,
+    returnTo?: "github" | "repositories",
+  ): Promise<GitHubConnectResponse> {
+    const search = new URLSearchParams();
+    if (returnTo) search.set("return_to", returnTo);
+    const suffix = search.size > 0 ? `?${search.toString()}` : "";
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/github/connect${suffix}`,
+    );
+    return parseWithFallback(
+      raw,
+      GitHubConnectResponseSchema,
+      EMPTY_GITHUB_CONNECT_RESPONSE,
+      { endpoint: "getGitHubConnectURL" },
+    );
   }
 
   // Workspace usage rollups — mirror packages/core/dashboard queries. Workspace
