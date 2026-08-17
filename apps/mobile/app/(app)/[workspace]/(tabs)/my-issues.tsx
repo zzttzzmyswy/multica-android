@@ -65,6 +65,7 @@ export default function MyIssues() {
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
+  const batchSelectionMode = useIssueBatchSelectionStore((s) => s.selectionMode);
   const { t } = useTranslation();
 
   const scope = useMyIssuesViewStore((s) => s.scope);
@@ -190,7 +191,9 @@ export default function MyIssues() {
               count={section.data.length}
             />
           )}
-          contentContainerClassName="pb-6"
+          contentContainerClassName={
+            batchSelectionMode ? "pb-48" : "pb-6"
+          }
           renderItem={({ item }) => (
             <IssueRowCell
               issue={item}
