@@ -2541,14 +2541,17 @@ class ApiClient {
       totalBytesWritten: number;
       totalBytesExpectedToWrite: number;
     }) => void,
+    opts?: { authenticated?: boolean },
   ): { done: Promise<LocalDownload>; cancel: () => void } | null {
     const absUrl = resolveAttachmentUrl(rawUrl);
     if (!absUrl) return null;
 
     const headers: Record<string, string> = {};
-    if (this.token) headers["Authorization"] = `Bearer ${this.token}`;
-    const slug = getCurrentSlug();
-    if (slug) headers["X-Workspace-Slug"] = slug;
+    if (opts?.authenticated !== false) {
+      if (this.token) headers["Authorization"] = `Bearer ${this.token}`;
+      const slug = getCurrentSlug();
+      if (slug) headers["X-Workspace-Slug"] = slug;
+    }
 
     const safeName = sanitizeBasename(filename) || "download";
     const destination = new File(Paths.cache, safeName).uri;

@@ -21,6 +21,7 @@ import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { api, DownloadCancelledError, type LocalDownload } from "@/data/api";
 import { mimeTypeForFilename, sanitizeBasename } from "@/lib/attachment-download";
+import { installApkFile } from "@/lib/install-update";
 import { createRequestId } from "@/lib/request-id";
 import {
   activeDownloadCount,
@@ -48,6 +49,20 @@ export const DOWNLOAD_ERROR_INTERRUPTED = "interrupted";
 
 /** Registry of native abort handles, keyed by task id. */
 const cancelHandles = new Map<string, () => void>();
+
+/**
+ * Per-task terminal-outcome promises, so a deduped caller handed an
+ * in-flight task can still await its completion.
+ */
+const taskOutcomes = new Map<string, Promise<DownloadOutcome>>();
+
+/** Terminal result of a managed download (MYS-361): the row is already in
+ *  the task list before this resolves; `localUri` is set on completion. */
+export interface DownloadOutcome {
+  status: "completed" | "cancelled" | "failed";
+  localUri?: string | null;
+  error?: string | null;
+}
 
 /** Serialize file writes so a burst of progress events can't interleave. */
 let persistChain: Promise<void> = Promise.resolve();
@@ -129,6 +144,21 @@ interface DownloadsState {
     mimeType?: string,
     source?: DownloadSource,
   ) => Promise<{ id: string }>;
+  /**
+   * Enqueue + run a download with caller-controlled terminal behavior.
+   * The row is tracked like any file download, but `onCompleted` replaces
+   * the system share sheet (e.g. APK install). `done` resolves with the
+   * terminal outcome and rejects only when `onCompleted` throws.
+   */
+  downloadManaged: (opts: {
+    url: string;
+    filename: string;
+    mimeType?: string;
+    source?: DownloadSource;
+    /** Public CDN URLs need no internal auth headers (default true). */
+    authenticated?: boolean;
+    onCompleted?: (local: LocalDownload) => Promise<void> | void;
+  }) => Promise<{ id: string; done: Promise<DownloadOutcome> }>;
   cancel: (id: string) => void;
   retry: (id: string) => void;
   removeTask: (id: string) => Promise<void>;
@@ -147,18 +177,27 @@ export const useDownloadsStore = create<DownloadsState>((set, get) => {
     if (!get().hydrated) await get().hydrate();
   }
 
-  /** Drive the native download and fold its lifecycle into the task list.
-   *   - complete  → share sheet + `completed` row;
-   *   - cancelled → `cancelled` row (the UI already marked it or the native
-   *     task aborted);
-   *   - other errors → `failed` row with the API message. */
+  /**
+   * Drive the native download and fold its lifecycle into the task list:
+   *   - complete → `completed` row, then the default share sheet or the
+   *     caller's `onCompleted` (whose throws propagate to `done` — the row
+   *     is already terminal by then);
+   *   - cancelled → `cancelled` row (the UI already marked it or the
+   *     native task aborted);
+   *   - other errors → `failed` row with the API message.
+   * Resolves the registered `taskOutcomes` promise with the outcome.
+   */
   function runDownload(
     id: string,
     url: string,
     filename: string,
     mimeType: string | undefined,
     source: DownloadSource,
-  ): void {
+    opts: {
+      authenticated?: boolean;
+      onCompleted?: (local: LocalDownload) => Promise<void> | void;
+    } = {},
+  ): Promise<DownloadOutcome> {
     const task = api.createDownloadTask(
       url,
       filename,
@@ -171,7 +210,11 @@ export const useDownloadsStore = create<DownloadsState>((set, get) => {
         };
         applyTasks(get, set, downloadReducer(get().tasks, action));
       },
+      opts.authenticated === false ? { authenticated: false } : undefined,
     );
+
+    const begin = (action: DownloadAction) =>
+      applyTasks(get, set, downloadReducer(get().tasks, action));
 
     if (!task) {
       const action: DownloadAction = {
@@ -180,14 +223,17 @@ export const useDownloadsStore = create<DownloadsState>((set, get) => {
         error: "Attachment download URL is unavailable",
         at: Date.now(),
       };
-      applyTasks(get, set, downloadReducer(get().tasks, action));
-      return;
+      begin(action);
+      return Promise.resolve({
+        status: "failed",
+        error: "Attachment download URL is unavailable",
+      });
     }
 
     cancelHandles.set(id, task.cancel);
 
-    void task.done
-      .then((local: LocalDownload) => {
+    const outcome = task.done
+      .then(async (local: LocalDownload): Promise<DownloadOutcome> => {
         cancelHandles.delete(id);
         const action: DownloadAction = {
           type: "complete",
@@ -195,33 +241,52 @@ export const useDownloadsStore = create<DownloadsState>((set, get) => {
           localUri: local.uri,
           at: Date.now(),
         };
-        applyTasks(get, set, downloadReducer(get().tasks, action));
-        const shareMime = mimeType ?? mimeTypeForFilename(local.name);
-        // Open is fire-and-forget; a missing viewer must not flip a
-        // completed download back to failed.
-        void Sharing.shareAsync(local.uri, { mimeType: shareMime }).catch(
-          () => {},
-        );
+        begin(action);
+        if (opts.onCompleted) {
+          // Custom terminal action (e.g. APK install); a throw here means
+          // the download itself succeeded and must reach the caller — the
+          // row stays `completed`.
+          await opts.onCompleted(local);
+        } else {
+          const shareMime = mimeType ?? mimeTypeForFilename(local.name);
+          // Open is fire-and-forget; a missing viewer must not flip a
+          // completed download back to failed.
+          void Sharing.shareAsync(local.uri, { mimeType: shareMime }).catch(
+            () => {},
+          );
+        }
+        return { status: "completed", localUri: local.uri };
       })
-      .catch((err: unknown) => {
+      .catch((err: unknown): DownloadOutcome => {
         cancelHandles.delete(id);
         const cancelled =
           err instanceof DownloadCancelledError ||
           // The user already hit cancel in the UI first.
           get().tasks.some((t) => t.id === id && t.status === "cancelled");
-        const action: DownloadAction = cancelled
-          ? { type: "cancel", id, at: Date.now() }
-          : {
-              type: "fail",
-              id,
-              error:
-                err instanceof Error
-                  ? err.message
-                  : "Attachment download failed",
-              at: Date.now(),
-            };
-        applyTasks(get, set, downloadReducer(get().tasks, action));
+        if (cancelled) {
+          const action: DownloadAction = { type: "cancel", id, at: Date.now() };
+          begin(action);
+          return { status: "cancelled" };
+        }
+        // The row already completed but `onCompleted` threw — surface the
+        // downstream failure instead of rewriting history as `failed`.
+        if (get().tasks.some((t) => t.id === id && t.status === "completed")) {
+          throw err;
+        }
+        const message =
+          err instanceof Error ? err.message : "Attachment download failed";
+        const action: DownloadAction = {
+          type: "fail",
+          id,
+          error: message,
+          at: Date.now(),
+        };
+        begin(action);
+        return { status: "failed", error: message };
       });
+
+    taskOutcomes.set(id, outcome);
+    return outcome;
   }
 
   return {
@@ -235,31 +300,59 @@ export const useDownloadsStore = create<DownloadsState>((set, get) => {
     },
 
     downloadAndOpen: async (url, filename, mimeType, source) => {
+      const { id } = await get().downloadManaged({
+        url,
+        filename,
+        mimeType,
+        source,
+      });
+      return { id };
+    },
+
+    downloadManaged: async (opts) => {
       await ensureHydrated();
-      const safeName = sanitizeBasename(filename) || "download";
-      // Dedup: same URL + same safe name already downloading → reuse it.
+      const safeName = sanitizeBasename(opts.filename) || "download";
+      // Dedup: same URL + same safe name already downloading → reuse it,
+      // sharing its pending terminal outcome so the new caller can await it.
       const inFlight = get().tasks.find(
         (t) =>
           t.status === "downloading" &&
-          t.url === url &&
+          t.url === opts.url &&
           t.filename === safeName,
       );
-      if (inFlight) return { id: inFlight.id };
+      if (inFlight) {
+        const stale: DownloadOutcome = {
+          status: "failed",
+          error: DOWNLOAD_ERROR_INTERRUPTED,
+        };
+        return {
+          id: inFlight.id,
+          done: taskOutcomes.get(inFlight.id) ?? Promise.resolve(stale),
+        };
+      }
 
       const id = createRequestId();
       const now = Date.now();
+      const source = opts.source ?? { kind: "other" };
       const action: DownloadAction = {
         type: "begin",
         id,
         filename: safeName,
-        url,
-        mimeType,
-        source: source ?? { kind: "other" },
+        url: opts.url,
+        mimeType: opts.mimeType,
+        source,
         createdAt: now,
       };
       applyTasks(get, set, downloadReducer(get().tasks, action));
-      runDownload(id, url, safeName, mimeType, source ?? { kind: "other" });
-      return { id };
+      const done = runDownload(
+        id,
+        opts.url,
+        safeName,
+        opts.mimeType,
+        source,
+        { authenticated: opts.authenticated, onCompleted: opts.onCompleted },
+      );
+      return { id, done };
     },
 
     cancel: async (id) => {
@@ -288,6 +381,18 @@ export const useDownloadsStore = create<DownloadsState>((set, get) => {
         createdAt: now,
       };
       applyTasks(get, set, downloadReducer(get().tasks, action));
+      if (task.source.kind === "update") {
+        // An update task must never attach internal auth headers to the
+        // public CDN URL, and completing it hands the APK to the installer
+        // instead of the share sheet — mirroring the About-page flow.
+        runDownload(newId, task.url, task.filename, task.mimeType, task.source, {
+          authenticated: false,
+          onCompleted: async (local) => {
+            await installApkFile(new File(local.uri));
+          },
+        });
+        return;
+      }
       runDownload(newId, task.url, task.filename, task.mimeType, task.source);
     },
 
@@ -296,6 +401,7 @@ export const useDownloadsStore = create<DownloadsState>((set, get) => {
       const task = get().tasks.find((t) => t.id === id);
       cancelHandles.get(id)?.();
       cancelHandles.delete(id);
+      taskOutcomes.delete(id);
       await deleteLocalFile(task?.localUri);
       const action: DownloadAction = { type: "remove", id };
       applyTasks(get, set, downloadReducer(get().tasks, action));
@@ -306,6 +412,7 @@ export const useDownloadsStore = create<DownloadsState>((set, get) => {
       const active = get().tasks.filter((t) => t.status === "downloading");
       const removed = get().tasks.filter((t) => isTerminalStatus(t.status));
       await Promise.all(removed.map((t) => deleteLocalFile(t.localUri)));
+      for (const t of removed) taskOutcomes.delete(t.id);
       set({ tasks: active });
       if (get().hydrated) writePersistedTasks(active);
     },

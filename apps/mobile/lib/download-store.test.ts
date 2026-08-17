@@ -186,6 +186,7 @@ describe("source helpers", () => {
   it("maps kinds to i18n label keys", () => {
     expect(downloadSourceLabelKey({ kind: "chat" })).toBe("downloads.source.chat");
     expect(downloadSourceLabelKey({ kind: "issue" })).toBe("downloads.source.issue");
+    expect(downloadSourceLabelKey({ kind: "update" })).toBe("downloads.source.update");
     expect(downloadSourceLabelKey({ kind: "other" })).toBe("downloads.source.other");
   });
 
@@ -197,6 +198,7 @@ describe("source helpers", () => {
   it("formats a readable non-localized label", () => {
     expect(formatDownloadSource({ kind: "issue", name: "修复登录" })).toBe("Issue · 修复登录");
     expect(formatDownloadSource({ kind: "chat" })).toBe("Chat");
+    expect(formatDownloadSource({ kind: "update", name: "v0.3.1" })).toBe("Update · v0.3.1");
     expect(formatDownloadSource({ kind: "other", name: "data.json" })).toBe("Other · data.json");
   });
 });

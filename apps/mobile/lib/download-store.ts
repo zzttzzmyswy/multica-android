@@ -15,7 +15,7 @@
 export type DownloadStatus = "downloading" | "completed" | "failed" | "cancelled";
 
 /** Where a download originated — rendered as the list's source column. */
-export type DownloadSourceKind = "chat" | "issue" | "other";
+export type DownloadSourceKind = "chat" | "issue" | "update" | "other";
 
 export interface DownloadSource {
   kind: DownloadSourceKind;
@@ -193,6 +193,8 @@ export function downloadSourceLabelKey(source: DownloadSource): string {
       return "downloads.source.chat";
     case "issue":
       return "downloads.source.issue";
+    case "update":
+      return "downloads.source.update";
     default:
       return "downloads.source.other";
   }
@@ -207,7 +209,14 @@ export function downloadSourceName(source: DownloadSource): string | undefined {
  * Readable, locale-independent source label — used as a test oracle and a
  * fallback; the UI renders `t(downloadSourceLabelKey(source))` instead.
  */
+const SOURCE_KIND_LABEL: Record<DownloadSourceKind, string> = {
+  chat: "Chat",
+  issue: "Issue",
+  update: "Update",
+  other: "Other",
+};
+
 export function formatDownloadSource(source: DownloadSource): string {
-  const kind = source.kind.charAt(0).toUpperCase() + source.kind.slice(1);
+  const kind = SOURCE_KIND_LABEL[source.kind] ?? "Other";
   return source.name ? `${kind} · ${source.name}` : kind;
 }

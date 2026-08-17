@@ -42,6 +42,7 @@ describe("about i18n", () => {
     "about.updateAvailable": "发现新版本 v{{version}}。",
     "about.downloadAndInstall": "下载并安装",
     "about.downloading": "正在下载…",
+    "about.downloadingWithPct": "正在下载… {{pct}}%",
     "update.hasNew": "有新版本",
     "update.installUnknownSourcesHint": "若安装被系统阻止，请允许此应用“安装未知应用”。",
     "update.openSettings": "打开设置",
