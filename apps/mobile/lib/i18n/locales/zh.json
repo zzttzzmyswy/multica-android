@@ -1591,5 +1591,7 @@
   "settings.issue.fields.startDate": "开始日期",
   "settings.issue.customizeFields": "自定义字段",
   "newIssue.moreFieldsTitle": "更多字段",
-  "newIssue.moreFieldsA11y": "更多字段"
+  "newIssue.moreFieldsA11y": "更多字段",
+  "skills.detail.labels": "标签",
+  "skills.detail.noLabels": "无标签"
 }

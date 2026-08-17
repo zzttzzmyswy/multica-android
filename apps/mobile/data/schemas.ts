@@ -43,6 +43,7 @@ import type {
   PersonalAccessToken,
   Project,
   ProjectResource,
+  ResourceLabelsResponse,
   RuntimeDevice,
   SearchIssuesResponse,
   SearchProjectsResponse,
@@ -189,6 +190,18 @@ export const IssueLabelsResponseSchema = z.object({
 }).loose();
 
 export const EMPTY_ISSUE_LABELS_RESPONSE: IssueLabelsResponse = {
+  labels: [],
+};
+
+// Labels attached to a resource (agent/skill). Same shape as the issue-labels
+// response — `{ labels: Label[] }` per packages/core/types/label.ts
+// (`ResourceLabelsResponse = IssueLabelsResponse`). Drift-degrades to [] so a
+// malformed payload just renders as "no labels" rather than blanking the page.
+export const ResourceLabelsResponseSchema = z.object({
+  labels: z.array(LabelSchema).default([]),
+}).loose();
+
+export const EMPTY_RESOURCE_LABELS_RESPONSE: ResourceLabelsResponse = {
   labels: [],
 };
 

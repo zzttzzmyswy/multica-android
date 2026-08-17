@@ -8,6 +8,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateLabelRequest,
   Label,
+  LabelResourceType,
   UpdateLabelRequest,
 } from "@multica/core/types";
 import { api } from "@/data/api";
@@ -82,5 +83,73 @@ export function useDeleteLabel() {
       patchList((old) => old.filter((l) => l.id !== id));
     },
     onSettled: invalidate,
+  });
+}
+
+// --- Resource (agent/skill) label attach/detach ---
+
+/** Optimistically toggles one label in the resource's attached-label cache. */
+function usePatchResourceLabels(
+  wsId: string | null,
+  resourceType: LabelResourceType,
+  resourceId: string,
+) {
+  const qc = useQueryClient();
+  const key = labelKeys.byResource(wsId, resourceType, resourceId);
+  return (updater: (old: Label[]) => Label[]) => {
+    qc.setQueryData<Label[]>(key, (old) => (old ? updater(old) : old));
+  };
+}
+
+export function useAttachResourceLabel(
+  resourceType: LabelResourceType,
+  resourceId: string,
+) {
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const qc = useQueryClient();
+  const patch = usePatchResourceLabels(wsId, resourceType, resourceId);
+
+  return useMutation({
+    mutationFn: (labelId: string) =>
+      api.attachLabelToResource(resourceType, resourceId, labelId),
+    // The server returns the post-mutation label list — replace the cache
+    // with the authoritative payload instead of guessing.
+    onSuccess: (res) => {
+      patch(() => {
+        const labels = res.labels ?? [];
+        return labels;
+      });
+    },
+    onSettled: () => {
+      if (wsId) {
+        void qc.invalidateQueries({
+          queryKey: labelKeys.byResource(wsId, resourceType, resourceId),
+        });
+      }
+    },
+  });
+}
+
+export function useDetachResourceLabel(
+  resourceType: LabelResourceType,
+  resourceId: string,
+) {
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const qc = useQueryClient();
+  const patch = usePatchResourceLabels(wsId, resourceType, resourceId);
+
+  return useMutation({
+    mutationFn: (labelId: string) =>
+      api.detachLabelFromResource(resourceType, resourceId, labelId),
+    onSuccess: (res) => {
+      patch(() => res.labels ?? []);
+    },
+    onSettled: () => {
+      if (wsId) {
+        void qc.invalidateQueries({
+          queryKey: labelKeys.byResource(wsId, resourceType, resourceId),
+        });
+      }
+    },
   });
 }

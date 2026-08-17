@@ -55,6 +55,7 @@ import type {
   IssuePropertyValue,
   IssueSubscriber,
   Label,
+  LabelResourceType,
   IssueReaction,
   ListAutopilotRunsResponse,
   ListAutopilotsResponse,
@@ -104,6 +105,7 @@ import type {
   NotificationPreferenceResponse,
   NotificationPreferences,
   PersonalAccessToken,
+  ResourceLabelsResponse,
   RemoveSquadMemberRequest,
   TaskMessagePayload,
   TimelineEntry,
@@ -266,6 +268,8 @@ import {
   ListVCSConnectionsResponseSchema,
   ConnectVCSResponseSchema,
   EMPTY_LIST_VCS_CONNECTIONS_RESPONSE,
+  ResourceLabelsResponseSchema,
+  EMPTY_RESOURCE_LABELS_RESPONSE,
 } from "./schemas";
 import type { ZodType } from "zod";
 import { File, Paths } from "expo-file-system";
@@ -1874,10 +1878,18 @@ class ApiClient {
   }
 
   // --- Labels ---
+  // resourceType scopes the catalog (server defaults to `issue` when absent):
+  // `listLabels` without a resourceType keeps the legacy workspace-issue list
+  // (issue pickers / labels page), while `{ resourceType: "skill" }` fetch the
+  // skill catalog for the skill detail labels picker (mirrors web
+  // `api.listLabels(resourceType)`). See server handler/label.go
+  // `parseLabelResourceType`.
   async listLabels(opts?: {
     signal?: AbortSignal;
+    resourceType?: LabelResourceType;
   }): Promise<ListLabelsResponse> {
-    const raw = await this.fetch<unknown>("/api/labels", {
+    const qs = opts?.resourceType ? `?resource_type=${opts.resourceType}` : "";
+    const raw = await this.fetch<unknown>(`/api/labels${qs}`, {
       signal: opts?.signal,
     });
     return parseWithFallback(
@@ -1885,6 +1897,67 @@ class ApiClient {
       ListLabelsResponseSchema,
       EMPTY_LIST_LABELS_RESPONSE,
       { endpoint: "GET /api/labels" },
+    );
+  }
+
+  // --- Labels on resources (agent/skill) ---
+  // Mirrors packages/core/api/client.ts listLabelsForResource /
+  // attachLabelToResource / detachLabelFromResource against
+  // `/api/{agents|skills}/{id}/labels`. Agent labels are removed from the
+  // product (MUL-5600) but the endpoints still exist and the skill side is
+  // live — drive them through the same helpers.
+  private resourceLabelsBase(resourceType: LabelResourceType, resourceId: string): string {
+    const plural = resourceType === "agent" ? "agents" : "skills";
+    return `/api/${plural}/${resourceId}/labels`;
+  }
+
+  async listLabelsForResource(
+    resourceType: LabelResourceType,
+    resourceId: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<ResourceLabelsResponse> {
+    const raw = await this.fetch<unknown>(this.resourceLabelsBase(resourceType, resourceId), {
+      signal: opts?.signal,
+    });
+    return parseWithFallback(
+      raw,
+      ResourceLabelsResponseSchema,
+      EMPTY_RESOURCE_LABELS_RESPONSE,
+      { endpoint: `GET /api/${resourceType === "agent" ? "agents" : "skills"}/{id}/labels` },
+    );
+  }
+
+  async attachLabelToResource(
+    resourceType: LabelResourceType,
+    resourceId: string,
+    labelId: string,
+  ): Promise<ResourceLabelsResponse> {
+    const raw = await this.fetch<unknown>(this.resourceLabelsBase(resourceType, resourceId), {
+      method: "POST",
+      body: JSON.stringify({ label_id: labelId }),
+    });
+    return parseWithFallback(
+      raw,
+      ResourceLabelsResponseSchema,
+      EMPTY_RESOURCE_LABELS_RESPONSE,
+      { endpoint: `POST /api/${resourceType === "agent" ? "agents" : "skills"}/{id}/labels` },
+    );
+  }
+
+  async detachLabelFromResource(
+    resourceType: LabelResourceType,
+    resourceId: string,
+    labelId: string,
+  ): Promise<ResourceLabelsResponse> {
+    const raw = await this.fetch<unknown>(
+      `${this.resourceLabelsBase(resourceType, resourceId)}/${labelId}`,
+      { method: "DELETE" },
+    );
+    return parseWithFallback(
+      raw,
+      ResourceLabelsResponseSchema,
+      EMPTY_RESOURCE_LABELS_RESPONSE,
+      { endpoint: `DELETE /api/${resourceType === "agent" ? "agents" : "skills"}/{id}/labels/{labelId}` },
     );
   }
 

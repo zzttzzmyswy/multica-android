@@ -1591,5 +1591,7 @@
   "settings.issue.fields.startDate": "Start date",
   "settings.issue.customizeFields": "Customize fields",
   "newIssue.moreFieldsTitle": "More fields",
-  "newIssue.moreFieldsA11y": "More fields"
+  "newIssue.moreFieldsA11y": "More fields",
+  "skills.detail.labels": "Labels",
+  "skills.detail.noLabels": "No labels"
 }

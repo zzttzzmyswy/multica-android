@@ -16,11 +16,12 @@
 import { useMemo } from "react";
 import { FlatList, Pressable, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
+import type { UseQueryOptions } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useColorScheme } from "nativewind";
 import type { Label } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
-import { labelListOptions } from "@/data/queries/labels";
+import { labelCatalogOptions, labelListOptions } from "@/data/queries/labels";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useScrollToTopOnChange } from "@/lib/use-scroll-to-top-on-change";
 import { pickInlineColor } from "@/lib/inline-color";
@@ -38,6 +39,13 @@ interface Props {
   onDetach: (labelId: string) => void;
   /** Create-and-attach in one motion. `query` is the entered text. */
   onCreate: (name: string, color: string) => void;
+  /**
+   * Resource-scope the picker's catalog (defaults to the workspace issue
+   * list for the issue flows). When set (e.g. "skill" from the skill-detail
+   * labels picker), the catalog is fetched with `?resource_type=` so only
+   * labels of that type are offered — mirrors web resource-label-picker.
+   */
+  catalogResourceType?: "issue" | "agent" | "skill";
 }
 
 export function LabelPickerBody({
@@ -46,10 +54,16 @@ export function LabelPickerBody({
   onAttach,
   onDetach,
   onCreate,
+  catalogResourceType,
 }: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
-  const { data: labels = [] } = useQuery(labelListOptions(wsId));
+  // Issue-list and resource-scoped catalogs return the same Label[] shape but
+  // carry different query keys — widen the union so useQuery accepts either.
+  const catalog = (catalogResourceType
+    ? labelCatalogOptions(wsId, catalogResourceType)
+    : labelListOptions(wsId)) as UseQueryOptions<Label[]>;
+  const { data: labels = [] } = useQuery(catalog);
   const listRef = useScrollToTopOnChange(query);
   const { colorScheme } = useColorScheme();
   const checkColor =
