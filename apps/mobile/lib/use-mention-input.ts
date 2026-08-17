@@ -75,6 +75,13 @@ export interface UseMentionInputReturn {
    *  the caret). Used by list / checkbox / quote toolbar buttons — those
    *  semantically attach to a line, not the caret. */
   insertAtLineStart: (prefix: string) => void;
+  /** Apply an externally-computed markdown insert (the pure
+   *  `insertMarkdown` result) and close any open mention suggestion —
+   *  toolbar inserts never produce a mention. */
+  applyMarkdownInsert: (next: {
+    text: string;
+    selection: { start: number; end: number };
+  }) => void;
   serialize: () => string;
   snapshot: () => MentionInputSnapshot;
   restore: (snap: MentionInputSnapshot) => void;
@@ -212,6 +219,17 @@ export function useMentionInput(): UseMentionInputReturn {
     [],
   );
 
+  const applyMarkdownInsert = useCallback(
+    (next: { text: string; selection: { start: number; end: number } }) => {
+      textRef.current = next.text;
+      selectionRef.current = next.selection;
+      setText(next.text);
+      setSelection(next.selection);
+      setMentioning(null);
+    },
+    [],
+  );
+
   const serialize = useCallback(
     () => serializeMentions(text, markers),
     [text, markers],
@@ -265,6 +283,7 @@ export function useMentionInput(): UseMentionInputReturn {
     suggestionBar,
     insertAtCursor,
     insertAtLineStart,
+    applyMarkdownInsert,
     serialize,
     snapshot,
     restore,

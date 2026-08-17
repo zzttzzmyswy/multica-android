@@ -6,13 +6,13 @@
  * toolbar. Property chips are part of the form, not pinned above keyboard.
  * MentionSuggestionBar floats above keyboard only when the user is mid-@.
  *
- * No markdown toolbar / upload buttons in v1: mobile users creating an
- * issue rarely format markdown, and attachment upload is deferred to a
- * later release (see plan-issue-majestic-rabin.md "skip uploads").
- *
  * Mention pipeline shares `useMentionInput` with `issue/[id]/new-comment.tsx`
  * — both surfaces produce canonical `[@name](mention://type/id)` markdown
  * recognised by util.ParseMentions on the server.
+ *
+ * The description input carries the `MarkdownToolbar` (via `DescriptionField`)
+ * for markdown-syntax insertion; attachment upload is deferred to a later
+ * release.
  */
 import { useCallback, useEffect, useState } from "react";
 import {
