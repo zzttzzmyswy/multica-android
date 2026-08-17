@@ -26,15 +26,17 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     orientation: "portrait",
     userInterfaceStyle: "automatic",
     scheme: "multica",
-    // App icon master. No longer shares the desktop client's icon — this is a
-    // Multica-Android-specific polish: deep gradient background + the official
-    // Multica starburst mark recolored in white with a brand-red center node.
+    // App icon master — the official Multica starburst, same polygon as the
+    // web favicon (apps/web/public/favicon.svg), light-gray fill over the
+    // desktop icon's deep slate radial gradient. Regenerate with
+    // `node scripts/generate-brand-icons.ts`; invariants are locked by
+    // `lib/brand-assets.test.ts`. MYS-355.
     icon: "./assets/icon.png",
     android: {
       // Adaptive icon: separate full-bleed background + centered foreground so
       // Android launchers can mask them into circles / squiggles cleanly.
       adaptiveIcon: {
-        backgroundColor: "#05070b",
+        backgroundColor: "#131824",
         backgroundImage: "./assets/adaptive-bg.png",
         foregroundImage: "./assets/adaptive-fg.png",
       },
@@ -93,6 +95,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // Keeps the ABI-splitting gradle config in tracked source (the generated
       // android/ tree is gitignored); injects on every prebuild, idempotently.
       "./plugins/with-abi-splits.js",
+      // Copies the white starburst notification small icon into res/drawable-*
+      // and points system notifications at it (idempotent). See the plugin.
+      "./plugins/with-brand-icons.js",
     ],
     extra: { APP_ENV: env },
   };
