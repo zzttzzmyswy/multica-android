@@ -10,7 +10,10 @@ vi.mock("expo-file-system", () => ({
     uri = "file:///mock";
     exists = false;
   },
-  Paths: { document: { uri: "file:///doc" } },
+  Paths: {
+    document: { uri: "file:///doc" },
+    cache: { uri: "file:///cache" },
+  },
 }));
 
 vi.mock("expo-file-system/legacy", () => ({
@@ -179,6 +182,43 @@ describe("runtime management api methods (iteration-51)", () => {
       agents_unbound: 2,
       tasks_cancelled: 3,
       autopilots_paused: 1,
+    });
+  });
+});
+describe("createDownloadTask", () => {
+  async function mockResumableOnce(result: unknown) {
+    const { createDownloadResumable } = await import("expo-file-system/legacy");
+    const m = createDownloadResumable as unknown as ReturnType<typeof vi.fn>;
+    m.mockReturnValue({
+      downloadAsync: vi.fn().mockResolvedValue(result),
+      cancelAsync: vi.fn().mockResolvedValue(undefined),
+    });
+    return m;
+  }
+
+  it("rejects non-2xx responses instead of saving the error body", async () => {
+    const m = await mockResumableOnce({
+      uri: "file:///cache/x.bin",
+      status: 404,
+    });
+    const task = api.createDownloadTask("/api/attachments/abc/download", "x.bin");
+    expect(task).not.toBeNull();
+    await expect(task!.done).rejects.toThrow(/HTTP 404/);
+    // The request carried the internal auth header and resolved the
+    // server-relative URL against the configured base.
+    expect(m).toHaveBeenCalledWith(
+      "https://api.test/api/attachments/abc/download",
+      expect.any(String),
+      expect.any(Object),
+      expect.any(Function),
+    );
+  });
+
+  it("resolves the saved uri for 2xx responses", async () => {
+    await mockResumableOnce({ uri: "file:///cache/x.bin", status: 200 });
+    const task = api.createDownloadTask("/api/attachments/abc/download", "x.bin");
+    await expect(task!.done).resolves.toMatchObject({
+      uri: "file:///cache/x.bin",
     });
   });
 });

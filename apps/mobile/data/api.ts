@@ -2844,6 +2844,15 @@ class ApiClient {
       .then((result) => {
         // `undefined` is the native contract for an aborted task.
         if (cancelled || !result) throw new DownloadCancelledError();
+        // The native resumable downloader writes the response body verbatim,
+        // so a non-2xx reply (e.g. 401/404 JSON) would otherwise be saved as
+        // a "successful" file and handed to the share/installer sheet — the
+        // corrupt-40-byte-attachment bug. Surface the HTTP status instead.
+        const status = (result as { status?: number }).status;
+        if (status != null && (status < 200 || status >= 300)) {
+          console.error(`[api] ← DOWNLOAD HTTP ${status} ${absUrl}`);
+          throw new ApiError(`Failed to download (HTTP ${status})`, status);
+        }
         console.log(`[api] ← saved ${result.uri}`, {
           duration: `${Date.now() - start}ms`,
         });
