@@ -94,6 +94,16 @@ describe("timezoneOptions", () => {
     expect(options.filter((z) => z === device)).toHaveLength(1);
   });
 
+  it("collapses to a single pinned row when preferred equals the device zone", () => {
+    const device = browserTimezone();
+    if (!device) return;
+    const options = timezoneOptions(device);
+    expect(options[0]).toBe(device);
+    expect(options.filter((z) => z === device)).toHaveLength(1);
+    // Same zone as device → no second pinned copy right behind it.
+    expect(options[1]).not.toBe(device);
+  });
+
   it("contains every curated common zone", () => {
     const options = timezoneOptions();
     for (const tz of COMMON_TIMEZONES) {
@@ -130,6 +140,13 @@ describe("timezoneOptions", () => {
     const options = timezoneOptions("");
     expect(options.length).toBeGreaterThan(0);
     const device = browserTimezone();
+    if (device) expect(options[0]).toBe(device);
+  });
+
+  it("treats a whitespace-only preferred value as no preference", () => {
+    const device = browserTimezone();
+    const options = timezoneOptions("   ");
+    expect(options.filter((z) => z === "   ")).toHaveLength(0);
     if (device) expect(options[0]).toBe(device);
   });
 });

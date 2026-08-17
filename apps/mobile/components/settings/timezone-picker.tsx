@@ -13,7 +13,6 @@ import { Text } from "@/components/ui/text";
 import {
   browserTimezone,
   cityLabel,
-  timezoneLabel,
   timezoneOptions,
   tzOffset,
 } from "@/lib/timezone";
@@ -50,13 +49,31 @@ export function SettingsTimezonePicker({
 
   const all = useMemo(() => timezoneOptions(effective), [effective]);
 
+  // GMT offsets are stable per zone for a session and each lookup cold-builds
+  // an Intl.DateTimeFormat, so compute them once per options set instead of on
+  // every search keystroke (the filter would otherwise pay ~400 lookups per
+  // keypress on the JS thread).
+  const offsets = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const tz of all) map.set(tz, tzOffset(tz));
+    return map;
+  }, [all]);
+
+  const labelOf = (tz: string) => {
+    if (!tz) return tz;
+    if (tz === "UTC") return "UTC";
+    const offset = offsets.get(tz);
+    return offset ? `${offset} ${tz}` : tz;
+  };
+
   const rows = useMemo<Row[]>(() => {
     const q = query.trim().toLowerCase();
     const systemRow: Row = { key: "__system__", kind: "system" };
 
     if (q) {
       const matches = all.filter((tz) => {
-        const haystack = `${tz} ${cityLabel(tz)} ${tzOffset(tz)}`.toLowerCase();
+        const haystack =
+          `${tz} ${cityLabel(tz)} ${offsets.get(tz) ?? ""}`.toLowerCase();
         return haystack.includes(q);
       });
       return [
@@ -65,7 +82,10 @@ export function SettingsTimezonePicker({
       ];
     }
 
-    const pinnedTzs = Array.from(new Set([effective, deviceTz]));
+    // While following system (value null) the device zone is already shown in
+    // the Follow-system row's subtitle, so skip the redundant pinned row.
+    const pinnedTzs =
+      value === null ? [] : Array.from(new Set([effective, deviceTz]));
     const pinned = pinnedTzs.map(
       (tz, i): Row => ({
         key: `p:${tz}`,
@@ -146,7 +166,7 @@ export function SettingsTimezonePicker({
                           {t("settings.languageSystem")}
                         </Text>
                         <Text className="text-xs text-muted-foreground mt-0.5">
-                          {timezoneLabel(deviceTz)}
+                          {labelOf(deviceTz)}
                         </Text>
                       </View>
                       {selected ? (
@@ -186,7 +206,7 @@ export function SettingsTimezonePicker({
                         )}
                         numberOfLines={1}
                       >
-                        {timezoneLabel(item.tz)}
+                        {labelOf(item.tz)}
                       </Text>
                       {selected ? (
                         <Ionicons name="checkmark" size={18} color={theme.primary} />

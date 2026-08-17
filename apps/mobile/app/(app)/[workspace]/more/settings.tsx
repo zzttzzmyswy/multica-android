@@ -302,7 +302,7 @@ export default function SettingsPage() {
 
       <SettingsTimezonePicker
         visible={timezoneOpen}
-        value={user?.timezone ?? null}
+        value={user?.timezone || null}
         onSelect={onTimezoneSelect}
         onClose={() => setTimezoneOpen(false)}
       />
