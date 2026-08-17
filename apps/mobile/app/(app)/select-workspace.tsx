@@ -90,6 +90,8 @@ export default function SelectWorkspace() {
     (inv) => inv.status === "pending",
   );
 
+  const notOnboarded = user != null && !user.onboarded_at;
+
   return (
     <SafeAreaView className="flex-1 bg-background">
       <ScrollView contentContainerClassName="px-6 py-6 gap-6">
@@ -99,6 +101,26 @@ export default function SelectWorkspace() {
           </Text>
           <Text className="text-base text-foreground">{user?.email}</Text>
         </View>
+
+        {/* Onboarding entry — first-run setup. Shown until the user has
+            finished onboarding (server-side `onboarded_at`). With an empty
+            list this is the classic new-user welcome path; with an existing
+            workspace it gently re-offers the guide. */}
+        {notOnboarded && data !== undefined && (
+          <View className="gap-3 rounded-lg border border-border p-4 bg-secondary/30">
+            <View className="gap-1">
+              <Text className="text-base font-semibold text-foreground">
+                {t("onboarding.bannerTitle")}
+              </Text>
+              <Text className="text-sm text-muted-foreground">
+                {t("onboarding.bannerLede")}
+              </Text>
+            </View>
+            <Button onPress={() => router.push("/onboarding")}>
+              <Text>{t("onboarding.bannerAction")}</Text>
+            </Button>
+          </View>
+        )}
 
         {pending.length > 0 && (
           <View className="gap-2">
@@ -169,9 +191,24 @@ export default function SelectWorkspace() {
               </Button>
             </View>
           ) : !data || data.length === 0 ? (
-            <Text className="text-sm text-muted-foreground">
-              {t("workspace.empty")}
-            </Text>
+            <View className="gap-4 py-3">
+              <Text className="text-sm text-muted-foreground">
+                {t("workspace.empty")}
+              </Text>
+              <Text className="text-sm text-foreground">
+                {t("workspace.emptyHint")}
+              </Text>
+              <Button
+                onPress={() =>
+                  router.push({
+                    pathname: "/onboarding",
+                    params: { mode: "new_workspace" },
+                  })
+                }
+              >
+                <Text>{t("workspace.createWorkspace")}</Text>
+              </Button>
+            </View>
           ) : (
             <View className="gap-3">
               {data.map((ws) => (

@@ -585,6 +585,25 @@ class ApiClient {
     );
   }
 
+  // POST /api/me/onboarding/complete — flips the user's `onboarded_at`.
+  // Mirrors web client.ts:692 (parseWithFallback so the returned user is
+  // validated before it's written into the auth store). `completion_path`
+  // is a free-form string: the server treats unknown paths as the
+  // "unknown" analytics bucket (onboarding.go validCompletionPaths), so
+  // mobile can report "mobile_onboarding" without a core-types change.
+  async markOnboardingComplete(payload?: {
+    completion_path?: string;
+    workspace_id?: string;
+  }): Promise<User> {
+    const raw = await this.fetch<unknown>("/api/me/onboarding/complete", {
+      method: "POST",
+      body: payload ? JSON.stringify(payload) : undefined,
+    });
+    return parseWithFallback(raw, UserSchema, EMPTY_USER, {
+      endpoint: "markOnboardingComplete",
+    });
+  }
+
   // --- Notification preferences ---
   async getNotificationPreferences(
     opts?: { signal?: AbortSignal },
@@ -625,6 +644,21 @@ class ApiClient {
     });
     return parseWithFallback(raw, WorkspaceListSchema, EMPTY_WORKSPACE_LIST, {
       endpoint: "listWorkspaces",
+    });
+  }
+
+  // POST /api/workspaces — create a workspace (web client.ts:2253).
+  // Follows the write-endpoint rule below: raw fetch, no fallback — a 400
+  // (bad slug / reserved slug) or 409 (slug conflict) surfaces to the
+  // caller's error path, which owns the form feedback.
+  async createWorkspace(data: {
+    name: string;
+    slug: string;
+    description?: string;
+  }): Promise<Workspace> {
+    return this.fetch<Workspace>("/api/workspaces", {
+      method: "POST",
+      body: JSON.stringify(data),
     });
   }
 

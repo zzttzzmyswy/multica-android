@@ -85,6 +85,25 @@ export default function SwitchWorkspaceRoute() {
               iconTint={t.foreground}
             />
           ))}
+          {/* Create-new entry — pushes the onboarding create step
+              (new_workspace mode: no welcome/about-you, straight to the
+              form). After creation the flow dismisses back down to HERE out
+              of the sheet stack and lands in the new workspace. */}
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: "/onboarding",
+                params: { mode: "new_workspace" },
+              })
+            }
+            accessibilityLabel={tr.t("workspace.createNew")}
+            className="flex-row items-center gap-2 px-4 py-3"
+          >
+            <Ionicons name="add-circle-outline" size={20} color={t.foreground} />
+            <Text className="text-sm font-medium text-foreground">
+              {tr.t("workspace.createNew")}
+            </Text>
+          </Pressable>
         </ScrollView>
       )}
     </View>
