@@ -807,6 +807,13 @@ export const RuntimeSchema: z.ZodType<RuntimeDevice> = z.object({
   last_seen_at: z.string().nullable().default(null),
   device_info: z.string().default(""),
   metadata: z.record(z.string(), z.unknown()).default({}),
+  // Custom display-name override (MUL-4217) and the runtime profile id
+  // (MUL-3284) — loaded-bearing for the runtime management actions and the
+  // "Built-in vs Custom" badge. Explicit null defaults match web's
+  // @multica/core/types RuntimeDevice; a backend that omits the fields is
+  // treated as "no override / built-in".
+  custom_name: z.string().nullable().default(null),
+  profile_id: z.string().nullable().default(null),
   owner_id: z.string().nullable().default(null),
   visibility: z.string().catch("private") as unknown as z.ZodType<
     RuntimeDevice["visibility"]

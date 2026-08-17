@@ -1,8 +1,12 @@
 /**
- * Runtime detail screen (read-only). Reached from the runtimes list row.
- * Mirrors web `packages/views/runtimes/components/runtime-detail.tsx` read
+ * Runtime detail screen (read-only + management, iteration-51). Reached from
+ * the runtimes list row. Mirrors web `packages/views/runtimes/components/runtime-detail.tsx`
  * semantics on a phone: identity card (icon + display name + kind badge +
- * derived health) over a meta sheet of the server fields the workspace sees.
+ * derived health) over a meta sheet of the server fields the workspace sees,
+ * plus a Diagnostics card with the management actions — visibility editor
+ * (owner-only, MUL-6126), custom-name rename (admin/owner, MUL-4217), and
+ * delete (custom-profile admin-only, built-in admin-or-owner) with the
+ * unbind-agents cascade (MUL-5559).
  *
  * The server has no GET /api/runtimes/:id endpoint (router.go only exposes
  * list + PATCH/DELETE + usage), so this screen reuses the same workspace
@@ -14,8 +18,13 @@
  * use-runtime-health.
  */
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, View } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  View,
+} from "react-native";
+import { useLocalSearchParams, router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { deriveRuntimeHealth, runtimeDisplayLabel } from "@multica/core/runtimes";
@@ -23,13 +32,28 @@ import type { RuntimeHealth } from "@multica/core/runtimes";
 import type { AgentRuntime } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
+import { TextField } from "@/components/ui/text-field";
+import { Switch } from "@/components/ui/switch";
 import { runtimeListOptions } from "@/data/queries/runtimes";
+import { memberListOptions } from "@/data/queries/members";
+import { agentListOptions } from "@/data/queries/agents";
+import {
+  useUpdateRuntime,
+  useDeleteRuntime,
+  useUnbindAgentsAndDeleteRuntime,
+} from "@/data/mutations/runtimes";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { useAuthStore } from "@/data/auth-store";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import {
+  deriveRuntimePermissions,
+  isSelfHealingRuntime,
+  parseActiveAgentsConflict,
+} from "@/lib/runtime-management";
 
 const MODE_ICON: Record<AgentRuntime["runtime_mode"], keyof typeof Ionicons.glyphMap> = {
   local: "hardware-chip",
@@ -75,6 +99,7 @@ function MetaRow({
 export default function RuntimeDetailPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const user = useAuthStore((s) => s.user);
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
@@ -88,9 +113,32 @@ export default function RuntimeDetailPage() {
   }, []);
 
   const { data = [], isLoading, error, refetch } = useQuery(runtimeListOptions(wsId));
+  const { data: members = [] } = useQuery(memberListOptions(wsId));
+  const {
+    data: agents = [],
+    refetch: refetchAgents,
+  } = useQuery(agentListOptions(wsId));
+
+  const updateRuntime = useUpdateRuntime();
+  const deleteRuntime = useDeleteRuntime();
+  const unbindDelete = useUnbindAgentsAndDeleteRuntime();
+
   const runtime = useMemo(
     () => (id ? data.find((r) => r.id === id) : undefined),
     [data, id],
+  );
+
+  // Rename inline editor state.
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [nameInput, setNameInput] = useState("");
+  const [applyToMachine, setApplyToMachine] = useState(false);
+
+  const activeAgents = useMemo(
+    () =>
+      agents.filter(
+        (a) => a.runtime_id === runtime?.id && !a.archived_at,
+      ),
+    [agents, runtime?.id],
   );
 
   if (isLoading) {
@@ -120,6 +168,177 @@ export default function RuntimeDetailPage() {
   const lastSeen = runtime.last_seen_at
     ? timeAgo(runtime.last_seen_at)
     : t("runtimes.detail.never");
+  const selfHeal = isSelfHealingRuntime(runtime);
+  const access = deriveRuntimePermissions({
+    members: members.map((m) => ({ role: m.role, user_id: m.user_id })),
+    currentUserId: user?.id ?? null,
+    runtime,
+  });
+  const displayName = runtimeDisplayLabel(runtime);
+  const isPublic = runtime.visibility === "public";
+
+  const openRename = () => {
+    setNameInput(runtime.custom_name ?? runtime.name);
+    setRenameOpen(true);
+  };
+
+  const flipVisibility = (next: "private" | "public") => {
+    if (next === runtime.visibility) return;
+    updateRuntime.mutate(
+      { runtimeId: runtime.id, patch: { visibility: next } },
+      {
+        onSuccess: () => Alert.alert(t("runtimes.detail.visibilityUpdated")),
+        onError: (err) =>
+          Alert.alert(
+            t("runtimes.detail.visibilityFailed"),
+            err instanceof Error ? err.message : t("runtimes.detail.unknown"),
+          ),
+      },
+    );
+  };
+
+  const handleRenameSave = () => {
+    const trimmed = nameInput.trim();
+    setRenameOpen(false);
+    updateRuntime.mutate(
+      {
+        runtimeId: runtime.id,
+        patch: {
+          custom_name: trimmed,
+          ...(applyToMachine ? { apply_to_machine: true } : {}),
+        },
+      },
+      {
+        onSuccess: () => Alert.alert(t("runtimes.detail.renameUpdated")),
+        onError: (err) =>
+          Alert.alert(
+            t("runtimes.detail.renameFailed"),
+            err instanceof Error ? err.message : t("runtimes.detail.unknown"),
+          ),
+      },
+    );
+  };
+
+  const buildLightMessage = () => {
+    const parts = [t("runtimes.detail.deleteConfirmMessage", { name: displayName })];
+    if (selfHeal) parts.push(t("runtimes.detail.selfHealHint"));
+    return parts.join("\n\n");
+  };
+
+  const buildCascadeMessage = (plan: { id: string; name: string }[]) => {
+    const count = plan.length;
+    const names = plan.slice(0, 8).map((a) => a.name).join("、");
+    const parts = [
+      t("runtimes.detail.deleteWithAgentsMessage", {
+        count,
+        name: displayName,
+      }),
+      t("runtimes.detail.deleteBanner"),
+      names,
+    ];
+    if (selfHeal) parts.push(t("runtimes.detail.selfHealHint"));
+    return parts.join("\n\n");
+  };
+
+  const runUnbindDelete = (agentIds: string[]) => {
+    unbindDelete.mutate(
+      { runtimeId: runtime.id, expectedActiveAgentIds: agentIds },
+      {
+        onSuccess: () => router.back(),
+        onError: (err) => {
+          const conflict = parseActiveAgentsConflict(err);
+          if (conflict?.code === "runtime_delete_plan_changed") {
+            // Plan moved under us — refresh the agent list and force a
+            // re-confirm against the server's authoritative snapshot.
+            void refetchAgents();
+            Alert.alert(
+              t("runtimes.detail.deleteWithAgentsTitle"),
+              `${t("runtimes.detail.planChangedRetry")}\n\n${buildCascadeMessage(conflict.activeAgents)}`,
+              [
+                { text: t("runtimes.detail.renameCancel"), style: "cancel" },
+                {
+                  text: t("runtimes.detail.deleteButton"),
+                  style: "destructive",
+                  onPress: () =>
+                    runUnbindDelete(conflict.activeAgents.map((a) => a.id)),
+                },
+              ],
+            );
+            return;
+          }
+          Alert.alert(
+            t("runtimes.detail.deleteFailed"),
+            err instanceof Error ? err.message : t("runtimes.detail.unknown"),
+          );
+        },
+      },
+    );
+  };
+
+  const confirmLightDelete = () => {
+    deleteRuntime.mutate(runtime.id, {
+      onSuccess: () => router.back(),
+      onError: (err) => {
+        const conflict = parseActiveAgentsConflict(err);
+        if (conflict?.code === "runtime_has_active_agents") {
+          // Agents were bound between dialog-open and confirm — pivot to
+          // the cascade flow with the server's authoritative list.
+          Alert.alert(
+            t("runtimes.detail.deleteWithAgentsTitle"),
+            buildCascadeMessage(conflict.activeAgents),
+            [
+              { text: t("runtimes.detail.renameCancel"), style: "cancel" },
+              {
+                text: t("runtimes.detail.deleteButton"),
+                style: "destructive",
+                onPress: () =>
+                  runUnbindDelete(conflict.activeAgents.map((a) => a.id)),
+              },
+            ],
+          );
+          return;
+        }
+        Alert.alert(
+          t("runtimes.detail.deleteFailed"),
+          err instanceof Error ? err.message : t("runtimes.detail.unknown"),
+        );
+      },
+    });
+  };
+
+  const confirmCascadeDelete = () => {
+    runUnbindDelete(activeAgents.map((a) => a.id));
+  };
+
+  const handleDeletePress = () => {
+    if (activeAgents.length > 0) {
+      Alert.alert(
+        t("runtimes.detail.deleteWithAgentsTitle"),
+        buildCascadeMessage(activeAgents),
+        [
+          { text: t("runtimes.detail.renameCancel"), style: "cancel" },
+          {
+            text: t("runtimes.detail.deleteButton"),
+            style: "destructive",
+            onPress: confirmCascadeDelete,
+          },
+        ],
+      );
+    } else {
+      Alert.alert(
+        t("runtimes.detail.deleteConfirmTitle"),
+        buildLightMessage(),
+        [
+          { text: t("runtimes.detail.renameCancel"), style: "cancel" },
+          {
+            text: t("runtimes.detail.deleteButton"),
+            style: "destructive",
+            onPress: confirmLightDelete,
+          },
+        ],
+      );
+    }
+  };
 
   return (
     <ScrollView className="flex-1 bg-background" contentContainerClassName="pb-10">
@@ -136,13 +355,20 @@ export default function RuntimeDetailPage() {
           <View className="flex-1 min-w-0 gap-1">
             <View className="flex-row items-center gap-1.5 flex-wrap">
               <Text className="text-base font-semibold text-foreground">
-                {runtimeDisplayLabel(runtime)}
+                {displayName}
               </Text>
               <View className="px-1.5 py-px rounded-full bg-secondary">
                 <Text className="text-[10px] text-muted-foreground font-medium">
                   {isCustom ? t("runtimes.kind.custom") : t("runtimes.kind.builtin")}
                 </Text>
               </View>
+              {!access.canEditRuntime ? (
+                <View className="px-1.5 py-px rounded-full bg-secondary">
+                  <Text className="text-[10px] text-muted-foreground font-medium">
+                    {t("runtimes.detail.readOnly")}
+                  </Text>
+                </View>
+              ) : null}
             </View>
             <View className="flex-row items-center gap-1.5">
               <View className={cn("size-2 rounded-full", HEALTH_DOT[health])} />
@@ -245,6 +471,162 @@ export default function RuntimeDetailPage() {
               />
             </View>
           ) : null}
+        </View>
+
+        {/* Diagnostics card — visibility / rename / delete */}
+        <View className="mt-4 rounded-lg border border-border">
+          <View className="border-b border-border px-3 py-2">
+            <Text className="text-xs font-semibold text-foreground">
+              {t("runtimes.detail.diagnostics")}
+            </Text>
+          </View>
+          <View className="p-3 gap-3">
+            {/* Visibility */}
+            <View className="gap-1.5">
+              <Text className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                {t("runtimes.detail.visibility")}
+              </Text>
+              {access.canEditVisibility ? (
+                <View className="gap-1.5">
+                  <View className="flex-row gap-1.5">
+                    <Button
+                      size="sm"
+                      variant={!isPublic ? "secondary" : "outline"}
+                      onPress={() => flipVisibility("private")}
+                      disabled={updateRuntime.isPending}
+                    >
+                      <Ionicons
+                        name="lock-closed-outline"
+                        size={14}
+                        color={theme.mutedForeground}
+                      />
+                      <Text>{t("runtimes.visibility.private")}</Text>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={isPublic ? "secondary" : "outline"}
+                      onPress={() => flipVisibility("public")}
+                      disabled={updateRuntime.isPending}
+                    >
+                      <Ionicons
+                        name="globe-outline"
+                        size={14}
+                        color={theme.mutedForeground}
+                      />
+                      <Text>{t("runtimes.visibility.public")}</Text>
+                    </Button>
+                  </View>
+                  <Text className="text-xs text-muted-foreground">
+                    {t(
+                      isPublic
+                        ? "runtimes.detail.visibilityHint.public"
+                        : "runtimes.detail.visibilityHint.private",
+                    )}
+                  </Text>
+                </View>
+              ) : (
+                <View className="gap-1.5">
+                  <View className="flex-row items-center gap-1.5">
+                    <Ionicons
+                      name={isPublic ? "globe-outline" : "lock-closed-outline"}
+                      size={14}
+                      color={theme.mutedForeground}
+                    />
+                    <Text className="text-xs font-medium text-foreground">
+                      {isPublic
+                        ? t("runtimes.visibility.public")
+                        : t("runtimes.visibility.private")}
+                    </Text>
+                  </View>
+                  <Text className="text-xs text-muted-foreground">
+                    {t(
+                      isPublic
+                        ? "runtimes.detail.visibilityReadonly.public"
+                        : "runtimes.detail.visibilityReadonly.private",
+                    )}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Rename */}
+            {access.canEditRuntime ? (
+              <View className="border-t border-border pt-3 gap-1.5">
+                {renameOpen ? (
+                  <>
+                    <TextField
+                      value={nameInput}
+                      onChangeText={setNameInput}
+                      placeholder={t("runtimes.detail.renamePlaceholder")}
+                      autoFocus
+                      maxLength={80}
+                    />
+                    <View className="flex-row items-center justify-between gap-3">
+                      <Text className="text-xs text-muted-foreground flex-1">
+                        {t("runtimes.detail.renameApplyMachine")}
+                      </Text>
+                      <Switch
+                        checked={applyToMachine}
+                        onCheckedChange={setApplyToMachine}
+                      />
+                    </View>
+                    <View className="flex-row gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onPress={() => setRenameOpen(false)}
+                      >
+                        <Text>{t("runtimes.detail.renameCancel")}</Text>
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="flex-1"
+                        onPress={handleRenameSave}
+                        disabled={updateRuntime.isPending}
+                      >
+                        <Text>{t("runtimes.detail.renameSave")}</Text>
+                      </Button>
+                    </View>
+                  </>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 justify-start gap-2 px-0"
+                    onPress={openRename}
+                  >
+                    <Ionicons
+                      name="pencil-outline"
+                      size={14}
+                      color={theme.mutedForeground}
+                    />
+                    <Text className="text-xs text-foreground">
+                      {t("runtimes.detail.renameButton")}
+                    </Text>
+                  </Button>
+                )}
+              </View>
+            ) : null}
+
+            {/* Delete */}
+            {access.canDelete ? (
+              <View className="border-t border-border pt-3">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 justify-start gap-2 px-0"
+                  onPress={handleDeletePress}
+                  disabled={deleteRuntime.isPending || unbindDelete.isPending}
+                >
+                  <Ionicons name="trash-outline" size={14} color={theme.destructive} />
+                  <Text className="text-xs text-destructive">
+                    {t("runtimes.detail.deleteButton")}
+                  </Text>
+                </Button>
+              </View>
+            ) : null}
+          </View>
         </View>
       </View>
     </ScrollView>

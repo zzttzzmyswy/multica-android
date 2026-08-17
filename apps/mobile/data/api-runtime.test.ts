@@ -109,3 +109,76 @@ describe("dashboard run-time api methods", () => {
     expect(res).toEqual([]);
   });
 });
+
+describe("runtime management api methods (iteration-51)", () => {
+  it("updateRuntime PATCHes /api/runtimes/:id with the patch body", async () => {
+    const spy = fetchSpy().mockResolvedValue({ id: "r1", visibility: "public" });
+    const res = await api.updateRuntime("r1", {
+      visibility: "public",
+      custom_name: "my machine",
+    });
+    expect(spy).toHaveBeenCalledWith(
+      "/api/runtimes/r1",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          visibility: "public",
+          custom_name: "my machine",
+        }),
+      }),
+    );
+    expect(res).toMatchObject({ id: "r1", visibility: "public" });
+  });
+
+  it("updateRuntime can clear a custom name with an empty string", async () => {
+    const spy = fetchSpy().mockResolvedValue({ id: "r1" });
+    await api.updateRuntime("r1", { custom_name: "" });
+    expect(spy).toHaveBeenCalledWith(
+      "/api/runtimes/r1",
+      expect.objectContaining({ body: JSON.stringify({ custom_name: "" }) }),
+    );
+  });
+
+  it("updateRuntime passes apply_to_machine through for machine-wide renames", async () => {
+    const spy = fetchSpy().mockResolvedValue({ id: "r1" });
+    await api.updateRuntime("r1", { custom_name: "x", apply_to_machine: true });
+    expect(spy).toHaveBeenCalledWith(
+      "/api/runtimes/r1",
+      expect.objectContaining({
+        body: JSON.stringify({ custom_name: "x", apply_to_machine: true }),
+      }),
+    );
+  });
+
+  it("deleteRuntime DELETEs /api/runtimes/:id", async () => {
+    const spy = fetchSpy().mockResolvedValue(undefined);
+    await api.deleteRuntime("r1");
+    expect(spy).toHaveBeenCalledWith(
+      "/api/runtimes/r1",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("unbindAgentsAndDeleteRuntime POSTs the confirmed agent set", async () => {
+    const spy = fetchSpy().mockResolvedValue({
+      status: "ok",
+      agents_unbound: 2,
+      tasks_cancelled: 3,
+      autopilots_paused: 1,
+    });
+    const res = await api.unbindAgentsAndDeleteRuntime("r1", ["a1", "a2"]);
+    expect(spy).toHaveBeenCalledWith(
+      "/api/runtimes/r1/unbind-agents-and-delete",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ expected_active_agent_ids: ["a1", "a2"] }),
+      }),
+    );
+    expect(res).toMatchObject({
+      status: "ok",
+      agents_unbound: 2,
+      tasks_cancelled: 3,
+      autopilots_paused: 1,
+    });
+  });
+});

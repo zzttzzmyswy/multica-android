@@ -927,6 +927,53 @@ class ApiClient {
     });
   }
 
+  // Runtime management (iteration-51) — mirror packages/core/api/client.ts
+  // updateRuntime/deleteRuntime/unbindAgentsAndDeleteRuntime. The strict
+  // DELETE refuses with a structured 409 (`code: "runtime_has_active_agents"`)
+  // when active agents are bound; the UI then opens the confirmation flow and
+  // calls unbindAgentsAndDeleteRuntime with the user-confirmed agent set.
+  async updateRuntime(
+    runtimeId: string,
+    patch: {
+      visibility?: "private" | "public";
+      /** Empty string clears the custom name (server reverts to default). */
+      custom_name?: string;
+      /** Apply custom_name to every runtime on the same machine. */
+      apply_to_machine?: boolean;
+    },
+  ): Promise<RuntimeDevice> {
+    return this.fetch<RuntimeDevice>(`/api/runtimes/${runtimeId}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
+  }
+
+  async deleteRuntime(runtimeId: string): Promise<void> {
+    await this.fetch<void>(`/api/runtimes/${runtimeId}`, { method: "DELETE" });
+  }
+
+  async unbindAgentsAndDeleteRuntime(
+    runtimeId: string,
+    expectedActiveAgentIds: string[],
+  ): Promise<{
+    status: string;
+    agents_unbound?: number;
+    agents_archived?: number;
+    tasks_cancelled: number;
+    autopilots_paused?: number;
+  }> {
+    return this.fetch<{
+      status: string;
+      agents_unbound?: number;
+      agents_archived?: number;
+      tasks_cancelled: number;
+      autopilots_paused?: number;
+    }>(`/api/runtimes/${runtimeId}/unbind-agents-and-delete`, {
+      method: "POST",
+      body: JSON.stringify({ expected_active_agent_ids: expectedActiveAgentIds }),
+    });
+  }
+
   // Workspace usage rollups — mirror packages/core/dashboard queries. Workspace
   // is resolved by the X-Workspace-Slug header (fetch adds it); the 30s
   // in-flight cap applies like every other route. Parsing degrades a drift
