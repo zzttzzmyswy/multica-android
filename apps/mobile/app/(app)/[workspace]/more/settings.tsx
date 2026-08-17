@@ -96,6 +96,8 @@ export default function SettingsPage() {
   const goNotifications = () =>
     router.push(`/${currentSlug}/more/settings/notifications`);
   const goTokens = () => router.push(`/${currentSlug}/more/settings/tokens`);
+  const goIssueSettings = () =>
+    router.push(`/${currentSlug}/more/settings/issues`);
   const goWorkspaceSettings = () =>
     router.push(`/${currentSlug}/more/settings/workspace`);
 
@@ -172,6 +174,13 @@ export default function SettingsPage() {
           chevronColor={mutedFg}
           title={t("settings.notifications")}
           subtitle={t("settings.notificationsSub")}
+        />
+        <Separator />
+        <NavRow
+          onPress={goIssueSettings}
+          chevronColor={mutedFg}
+          title={t("settings.issueTitle")}
+          subtitle={t("settings.issueSubtitle")}
         />
         <Separator />
         <NavRow

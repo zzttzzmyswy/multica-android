@@ -258,7 +258,7 @@ export default function NewIssueModal() {
                 }
                 onUploadingChange={setUploadsPending}
               />
-              <CreateFormAttributeRow />
+              <CreateFormAttributeRow mode="manual" />
             </>
           ) : (
             <QuickCreatePanel

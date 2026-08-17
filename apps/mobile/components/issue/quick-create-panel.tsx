@@ -2,7 +2,8 @@
  * Agent-mode body of the new-issue modal (`new-issue.tsx`). Renders the
  * natural-language prompt field, the actor (agent/squad) chip that opens
  * the `new-issue-picker/agent` formSheet, and the shared attribute row
- * filtered to project / priority / due-date.
+ * filtered to the quick-create settings (project / priority / due-date or
+ * whatever Settings → Issue keeps visible; hidden fields live in the ⋯).
  *
  * Mirrors web's AgentCreatePanel
  * (packages/views/modals/quick-create-issue.tsx): the prompt describes the
@@ -22,10 +23,7 @@ import { router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { AttributeChip } from "@/components/issue/attribute-chip";
-import {
-  CreateFormAttributeRow,
-  type NewIssuePickerField,
-} from "@/components/issue/create-form-attribute-row";
+import { CreateFormAttributeRow } from "@/components/issue/create-form-attribute-row";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { MOBILE_PLACEHOLDER_COLOR } from "@/components/ui/input-tokens";
 import { agentListOptions } from "@/data/queries/agents";
@@ -34,10 +32,6 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
 import { isAgentRuntimeBound } from "@/lib/is-agent-runtime-bound";
 import { useTranslation } from "@/lib/i18n/react";
-
-/** Stable filter array — module-level so CreateFormAttributeRow keeps its
- *  render list identity across renders. */
-const AGENT_FIELDS: NewIssuePickerField[] = ["project", "priority", "due-date"];
 
 interface Props {
   prompt: string;
@@ -114,7 +108,7 @@ export function QuickCreatePanel({ prompt, onPromptChange, disabled }: Props) {
           accessibilityLabel={t("a11y.newIssueAgentPicker")}
         />
       </View>
-      <CreateFormAttributeRow fields={AGENT_FIELDS} />
+      <CreateFormAttributeRow mode="agent" />
     </View>
   );
 }

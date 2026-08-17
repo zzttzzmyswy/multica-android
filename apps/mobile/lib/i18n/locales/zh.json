@@ -1537,5 +1537,21 @@
   "onboarding.back": "返回",
   "onboarding.bannerTitle": "完成账号设置",
   "onboarding.bannerLede": "创建你的第一个工作区，几分钟即可开始。",
-  "onboarding.bannerAction": "开始引导"
+  "onboarding.bannerAction": "开始引导",
+  "attr.status": "状态",
+  "settings.issueTitle": "任务",
+  "settings.issueSubtitle": "选择各创建方式工具栏常驻显示的字段。",
+  "settings.issue.description": "选择各创建方式的工具栏中常驻显示的字段。隐藏的字段仍可从 ⋯ 菜单使用，有值时会自动显示。",
+  "settings.issue.quickCreateTitle": "通过智能体创建",
+  "settings.issue.quickCreateDescription": "快速创建工具栏中显示的字段。",
+  "settings.issue.manualCreateTitle": "手动创建",
+  "settings.issue.manualCreateDescription": "手动创建工具栏中显示的字段。",
+  "settings.issue.fields.status": "状态",
+  "settings.issue.fields.priority": "优先级",
+  "settings.issue.fields.assignee": "负责人",
+  "settings.issue.fields.project": "项目",
+  "settings.issue.fields.dueDate": "截止日期",
+  "settings.issue.customizeFields": "自定义字段",
+  "newIssue.moreFieldsTitle": "更多字段",
+  "newIssue.moreFieldsA11y": "更多字段"
 }
