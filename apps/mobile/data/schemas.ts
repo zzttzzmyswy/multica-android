@@ -54,6 +54,9 @@ import type {
   SquadMemberPreview,
   TaskMessagePayload,
   User,
+  VCSConnection,
+  ListVCSConnectionsResponse,
+  ConnectVCSResponse,
   Workspace,
   WorkspaceMcpServer,
 } from "@multica/core/types";
@@ -1340,3 +1343,71 @@ export const EMPTY_WORKSPACE_MCP_SERVER: WorkspaceMcpServer = {
 };
 
 export const EMPTY_WORKSPACE_MCP_SERVER_LIST: WorkspaceMcpServer[] = [];
+
+// ── VCS integration (iteration-59) ──────────────────────────────────────────
+// Self-hosted Git provider connections (Forgejo / Gitea / GitLab), mirroring
+// `packages/core/types/vcs.ts`. Secrets never round-trip; the list endpoint
+// returns identities only. `webhook_url` is empty when the server has no
+// public URL configured (the UI then prefixes `webhook_path`). The three
+// deployment/visibility flags (`available` / `configured` / `can_manage`) are
+// optional — older backends omit them, and each is defaulted to the policy
+// core's client contract (available→true so the section still renders,
+// configured→false, can_manage→false) rather than crashing the page.
+//
+// The provider field is z.string() (not z.enum) so a future server-side
+// provider value renders verbatim instead of failing the whole parse — same
+// drift-downgrades-not-crashes rule as NotificationPreferenceResponseSchema.
+// The base object is kept untyped (ZodObject) so Connect... can safeExtend it;
+// the exported schemas carry the core type via `as unknown as`, same pattern
+// as CommentSchema above.
+const VCSConnectionObjectSchema = z
+  .object({
+    id: z.string().default(""),
+    workspace_id: z.string().default(""),
+    provider: z.string().default("forgejo"),
+    instance_url: z.string().default(""),
+    account_login: z.string().default(""),
+    webhook_url: z.string().default(""),
+    webhook_path: z.string().default(""),
+    created_at: z.string().default(""),
+  })
+  .loose();
+
+export const VCSConnectionSchema: z.ZodType<VCSConnection> =
+  VCSConnectionObjectSchema as unknown as z.ZodType<VCSConnection>;
+
+export const ListVCSConnectionsResponseSchema: z.ZodType<ListVCSConnectionsResponse> =
+  z
+    .object({
+      connections: z.array(VCSConnectionSchema).default([]),
+      // visibility / deployment flags — all optional (see note above)
+      available: z.boolean().optional(),
+      configured: z.boolean().optional(),
+      can_manage: z.boolean().optional(),
+    })
+    .loose() as unknown as z.ZodType<ListVCSConnectionsResponse>;
+
+export const EMPTY_VCS_CONNECTION: VCSConnection = {
+  id: "",
+  workspace_id: "",
+  provider: "forgejo",
+  instance_url: "",
+  account_login: "",
+  webhook_url: "",
+  webhook_path: "",
+  created_at: "",
+};
+
+/** Connection response after connecting (or rotating) — the one-time
+ *  plaintext webhook secret is included exactly once. */
+export const ConnectVCSResponseSchema: z.ZodType<ConnectVCSResponse> =
+  VCSConnectionObjectSchema.safeExtend({
+    webhook_secret: z.string().default(""),
+  }) as unknown as z.ZodType<ConnectVCSResponse>;
+
+export const EMPTY_LIST_VCS_CONNECTIONS_RESPONSE: ListVCSConnectionsResponse = {
+  connections: [],
+  available: true,
+  configured: false,
+  can_manage: false,
+};

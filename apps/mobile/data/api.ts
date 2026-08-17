@@ -60,6 +60,9 @@ import type {
   ListAutopilotsResponse,
   ListGitHubInstallationsResponse,
   ListGitHubRepositoriesResponse,
+  ListVCSConnectionsResponse,
+  ConnectVCSRequest,
+  ConnectVCSResponse,
   ListIssuesParams,
   ListIssuesResponse,
   ListLabelsResponse,
@@ -259,6 +262,10 @@ import {
   BatchDeleteResultSchema,
   EMPTY_BATCH_DELETE_RESULT,
   type BatchDeleteResult,
+  VCSConnectionSchema,
+  ListVCSConnectionsResponseSchema,
+  ConnectVCSResponseSchema,
+  EMPTY_LIST_VCS_CONNECTIONS_RESPONSE,
 } from "./schemas";
 import type { ZodType } from "zod";
 import { File, Paths } from "expo-file-system";
@@ -1172,6 +1179,64 @@ class ApiClient {
       GitHubConnectResponseSchema,
       EMPTY_GITHUB_CONNECT_RESPONSE,
       { endpoint: "getGitHubConnectURL" },
+    );
+  }
+
+  // VCS integration (iteration-59) — self-hosted Git providers (Forgejo /
+  // Gitea / GitLab). Mirrors packages/core/api/client.ts:3741-3770. Unlike
+  // GitHub there is no App/installation model: each workspace stores a
+  // token-based connection to a provider instance. Secrets never return on
+  // the list; the one-time webhook secret arrives exactly once on connect /
+  // rotate. The list shares the endpoints used by web's
+  // packages/views/settings/components/vcs-tab.tsx.
+  async listVCSConnections(workspaceId: string): Promise<ListVCSConnectionsResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/vcs/connections`,
+    );
+    return parseWithFallback(
+      raw,
+      ListVCSConnectionsResponseSchema,
+      EMPTY_LIST_VCS_CONNECTIONS_RESPONSE,
+      { endpoint: "listVCSConnections" },
+    );
+  }
+
+  async connectVCS(
+    workspaceId: string,
+    body: ConnectVCSRequest,
+  ): Promise<ConnectVCSResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/vcs/connections`,
+      { method: "POST", body: JSON.stringify(body) },
+    );
+    return parseWithFallback(
+      raw,
+      ConnectVCSResponseSchema,
+      ConnectVCSResponseSchema.parse({}),
+      { endpoint: "connectVCS" },
+    );
+  }
+
+  async deleteVCSConnection(workspaceId: string, connectionId: string): Promise<void> {
+    await this.fetch<void>(
+      `/api/workspaces/${workspaceId}/vcs/connections/${connectionId}`,
+      { method: "DELETE" },
+    );
+  }
+
+  async rotateVCSWebhook(
+    workspaceId: string,
+    connectionId: string,
+  ): Promise<ConnectVCSResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/vcs/connections/${connectionId}/rotate-webhook`,
+      { method: "POST" },
+    );
+    return parseWithFallback(
+      raw,
+      ConnectVCSResponseSchema,
+      ConnectVCSResponseSchema.parse({}),
+      { endpoint: "rotateVCSWebhook" },
     );
   }
 

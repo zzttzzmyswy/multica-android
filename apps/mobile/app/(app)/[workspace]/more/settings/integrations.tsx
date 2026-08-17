@@ -10,13 +10,14 @@
  * browser.
  */
 import { useState } from "react";
-import { Linking, Pressable, View } from "react-native";
+import { Linking, Pressable, ScrollView, View } from "react-native";
 import { Stack } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useQuery } from "@tanstack/react-query";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { githubInstallationsOptions } from "@/data/queries/github";
+import { VCSIntegrationSection } from "@/components/settings/vcs-integration-section";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { getWebBaseUrl } from "@/data/server-config";
 import { useTranslation } from "@/lib/i18n/react";
@@ -70,7 +71,7 @@ export default function IntegrationsPage() {
   return (
     <>
       <Stack.Screen options={{ title: t("screen.integrations") }} />
-      <View className="flex-1 bg-background">
+      <ScrollView className="flex-1 bg-background">
         <View className="border-b border-border px-4 py-2.5">
           <Text className="text-xs text-muted-foreground leading-4">
             {t("integrations.description")}
@@ -153,6 +154,12 @@ export default function IntegrationsPage() {
             </View>
           </View>
 
+          {/* VCS — self-hosted Git providers (Forgejo / Gitea / GitLab).
+              Read + manage live inside the app (unlike the IM channels,
+              which bind in the web app). Hidden entirely when the deployment
+              reports available=false, matching web's integrations-tab. */}
+          <VCSIntegrationSection />
+
           <Button variant="outline" onPress={openWebSettings}>
             <Ionicons name="globe-outline" size={15} color={muted} />
             <Text>{t("integrations.openInBrowser")}</Text>
@@ -167,7 +174,7 @@ export default function IntegrationsPage() {
             {t("integrations.readOnlyHint")}
           </Text>
         </View>
-      </View>
+      </ScrollView>
     </>
   );
 }
