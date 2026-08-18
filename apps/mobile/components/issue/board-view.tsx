@@ -21,8 +21,11 @@ import type { Issue, IssueStatus } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { StatusIcon } from "@/components/ui/status-icon";
-import { issueStatusLabel } from "@/lib/issue-status";
+import { BOARD_STATUSES, issueStatusLabel } from "@/lib/issue-status";
 import { translate } from "@/lib/i18n";
+import { useTranslation } from "@/lib/i18n/react";
+import { ActionSheet } from "@/lib/action-sheet";
+import { useUpdateIssue } from "@/data/mutations/issues";
 import type { IssueGrouping } from "@/data/stores/issue-filter-slice";
 import { useActorLookup } from "@/data/use-actor-name";
 import {
@@ -90,7 +93,7 @@ function BoardColumn({
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <View className="px-2 pb-2">
-              <BoardCard issue={item} onPress={() => onOpenIssue(item)} />
+              <IssueCardWithMenu issue={item} onOpen={() => onOpenIssue(item)} />
             </View>
           )}
           nestedScrollEnabled
@@ -101,6 +104,44 @@ function BoardColumn({
       )}
     </View>
   );
+}
+
+/**
+ * Board card + long-press "move to status" menu (web board-view drag parity:
+ * the phone has no drag-and-drop, so the long-press action sheet is the
+ * move mechanism — the same status mutation the detail page's picker uses).
+ * Tap still opens the issue; long-press on the current status re-commits the
+ * same value (a no-op server-side, harmless).
+ */
+function IssueCardWithMenu({
+  issue,
+  onOpen,
+}: {
+  issue: Issue;
+  onOpen: () => void;
+}) {
+  const { t } = useTranslation();
+  const updateIssue = useUpdateIssue(issue.id);
+
+  const onLongPress = () => {
+    const options = [
+      ...BOARD_STATUSES.map((s) => issueStatusLabel(s)),
+      t("common.cancel"),
+    ];
+    ActionSheet.showActionSheetWithOptions(
+      {
+        title: t("filter.moveToStatus"),
+        options,
+        cancelButtonIndex: options.length - 1,
+      },
+      (index) => {
+        if (index == null || index >= BOARD_STATUSES.length) return;
+        updateIssue.mutate({ status: BOARD_STATUSES[index] });
+      },
+    );
+  };
+
+  return <BoardCard issue={issue} onPress={onOpen} onLongPress={onLongPress} />;
 }
 
 export function BoardView({

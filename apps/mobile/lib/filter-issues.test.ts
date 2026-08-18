@@ -9,6 +9,7 @@ import type { Issue, IssueStatus, Label } from "@multica/core/types";
 import {
   applyIssueFilters,
   groupIssues,
+  issueMatchesPropertyFilters,
   sortIssues,
   type IssueFilterState,
 } from "./filter-issues";
@@ -42,6 +43,7 @@ function issue(partial: Partial<Issue>): Issue {
     creator_id: partial.creator_id,
     project_id: partial.project_id,
     labels: partial.labels,
+    properties: partial.properties,
     start_date: partial.start_date,
     due_date: partial.due_date,
   } as Issue;
@@ -67,6 +69,8 @@ const noFilters: IssueFilterState = {
   projectFilters: [],
   includeNoProject: false,
   labelFilters: [],
+  propertyFilters: {},
+  dateFilter: null,
 };
 
 describe("applyIssueFilters", () => {
@@ -300,5 +304,78 @@ describe("groupIssues", () => {
     expect(groups[0]?.unassigned).toBe(true);
     expect(groups[0]?.data.map((i) => i.id)).toEqual(["b"]);
     expect(groups[1]?.assigneeId).toBe("ag1");
+  });
+});
+/**
+ * Custom-property filters (MYS-419). Mirrors web's `issueMatchesPropertyFilters`
+ * at packages/views/issues/utils/filter.ts:61-82: OR within a definition, AND
+ * across definitions; an issue with no value for a filtered definition never
+ * matches it.
+ */
+describe("issueMatchesPropertyFilters", () => {
+  const mk = (properties?: Record<string, unknown>) =>
+    issue({ id: "p", properties } as Partial<Issue>);
+
+  it("empty / undefined filters match everything", () => {
+    expect(issueMatchesPropertyFilters(mk(), undefined)).toBe(true);
+    expect(issueMatchesPropertyFilters(mk(), {})).toBe(true);
+  });
+
+  it("select matches its single option value", () => {
+    const item = mk({ def: "opt-a" });
+    expect(issueMatchesPropertyFilters(item, { def: ["opt-a"] })).toBe(true);
+    expect(issueMatchesPropertyFilters(item, { def: ["opt-b"] })).toBe(false);
+  });
+
+  it("multi_select matches when any selected option is present (OR within)", () => {
+    const item = mk({ def: ["opt-a", "opt-c"] });
+    expect(issueMatchesPropertyFilters(item, { def: ["opt-b", "opt-a"] })).toBe(
+      true,
+    );
+    expect(issueMatchesPropertyFilters(item, { def: ["opt-b", "opt-d"] })).toBe(
+      false,
+    );
+  });
+
+  it("checkbox compares booleans via the true/false pseudo-options", () => {
+    const checked = mk({ chk: true });
+    expect(issueMatchesPropertyFilters(checked, { chk: ["true"] })).toBe(true);
+    expect(issueMatchesPropertyFilters(checked, { chk: ["false"] })).toBe(false);
+    const unchecked = mk({ chk: false });
+    expect(issueMatchesPropertyFilters(unchecked, { chk: ["false"] })).toBe(
+      true,
+    );
+  });
+
+  it("an issue with no value for a filtered definition never matches", () => {
+    expect(issueMatchesPropertyFilters(mk({ other: "x" }), { def: ["a"] })).toBe(
+      false,
+    );
+  });
+
+  it("AND across definitions — all must pass", () => {
+    const item = mk({ defA: "a", defB: "b" });
+    expect(
+      issueMatchesPropertyFilters(item, { defA: ["a"], defB: ["b"] }),
+    ).toBe(true);
+    expect(
+      issueMatchesPropertyFilters(item, { defA: ["a"], defB: ["c"] }),
+    ).toBe(false);
+  });
+});
+
+describe("applyIssueFilters with propertyFilters", () => {
+  it("filters by property while keeping other dimensions", () => {
+    const list = [
+      issue({ id: "a", status: "todo", properties: { def: "x" } }),
+      issue({ id: "b", status: "todo", properties: { def: "y" } }),
+      issue({ id: "c", status: "done", properties: { def: "x" } }),
+    ];
+    const filtered = applyIssueFilters(list, {
+      ...noFilters,
+      statusFilters: ["todo"],
+      propertyFilters: { def: ["x"] },
+    });
+    expect(filtered.map((i) => i.id)).toEqual(["a"]);
   });
 });

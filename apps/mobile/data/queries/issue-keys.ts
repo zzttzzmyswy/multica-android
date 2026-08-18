@@ -16,13 +16,34 @@ export type MyIssuesFilter = Pick<
   "assignee_id" | "assignee_ids" | "creator_id" | "involves_user_id"
 >;
 
+/** Stable, order-insensitive string form of a params value for query-key
+ *  inclusion. Arrays are order-insensitive comparisons in the UI (filters
+ *  are sets) and objects (custom-property bags) are inserted with an
+ *  unspecified key order, so both are normalized before stringifying to
+ *  avoid pointless refetches. */
+function stableKeyValue(v: unknown): unknown {
+  if (Array.isArray(v)) {
+    return v
+      .map(stableKeyValue)
+      .sort(
+        (a, b) =>
+          (JSON.stringify(a) < JSON.stringify(b) ? -1 : 1),
+      );
+  }
+  if (v !== null && typeof v === "object") {
+    return Object.entries(v as Record<string, unknown>)
+      .sort(([ka], [kb]) => ka.localeCompare(kb))
+      .map(([k, val]) => [k, stableKeyValue(val)]);
+  }
+  return v;
+}
+
 /** Stable string form of a params bag for query-key inclusion — the cache
  *  must refetch when a filter/sort changes, so the key carries the full
- *  bag. Arrays are order-insensitive comparisons in the UI (filters are
- *  sets), so sort them before stringifying to avoid pointless refetches. */
+ *  bag. See `stableKeyValue`. */
 export function issueParamsKey(params: ListIssuesParams): string {
   const entries = Object.entries(params)
-    .map(([k, v]) => [k, Array.isArray(v) ? [...v].sort() : v] as const)
+    .map(([k, v]) => [k, stableKeyValue(v)] as const)
     .sort((a, b) => a[0].localeCompare(b[0]));
   return JSON.stringify(entries);
 }
@@ -39,6 +60,10 @@ export type IssueListWindowParams = Pick<
   | "project_ids"
   | "include_no_project"
   | "label_ids"
+  | "properties"
+  | "date_field"
+  | "date_start"
+  | "date_end"
   | "sort_by"
   | "sort_direction"
 >;

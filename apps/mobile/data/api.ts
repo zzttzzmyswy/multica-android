@@ -1497,6 +1497,12 @@ class ApiClient {
         search.set("sort", String(v));
       } else if (k === "sort_direction") {
         search.set("direction", String(v));
+      } else if (typeof v === "object") {
+        // Structured params (custom-property bag `properties`, metadata jsonb)
+        // are serialized as their JSON literal — the server's
+        // parsePropertiesFilterParam / parseMetadataFilterParam expect a
+        // JSON-encoded query value (server/property.go:894).
+        search.set(k, JSON.stringify(v));
       } else {
         search.set(k, String(v));
       }

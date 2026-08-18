@@ -55,9 +55,9 @@ export const issueListOptions = (
   });
 
 /** True when the window bag holds at least one active dimension. Every
- *  field is a filter array or a sort pair; `sort_by: "position"` with no
- *  direction is the manual default and does NOT count as a window — it
- *  round-trips the same rows as an empty bag. */
+ *  field is a filter array, a date band, or a sort pair; `sort_by:
+ *  "position"` with no direction is the manual default and does NOT count
+ *  as a window — it round-trips the same rows as an empty bag. */
 function hasWindow(window: IssueListWindowParams): boolean {
   if (
     window.statuses?.length ||
@@ -67,7 +67,11 @@ function hasWindow(window: IssueListWindowParams): boolean {
     window.creator_filters?.length ||
     window.project_ids?.length ||
     window.include_no_project ||
-    window.label_ids?.length
+    window.label_ids?.length ||
+    (window.properties && Object.keys(window.properties).length > 0) ||
+    window.date_field ||
+    window.date_start ||
+    window.date_end
   ) {
     return true;
   }

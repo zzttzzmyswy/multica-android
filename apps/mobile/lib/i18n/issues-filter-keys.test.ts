@@ -49,6 +49,25 @@ describe("issue filter/sort/group i18n", () => {
     "filter.group.title": "分组方式",
     "filter.group.status": "按状态",
     "filter.group.assignee": "按经办人",
+    // Iteration 64 (MYS-419): custom-property + date dims.
+    "filter.property": "自定义属性",
+    "filter.propertyEmpty": "没有可过滤的自定义属性",
+    "filter.propertyTrue": "是",
+    "filter.propertyFalse": "否",
+    "filter.date": "日期",
+    "filter.dateField": "日期字段",
+    "filter.dateCreated": "创建时间",
+    "filter.dateUpdated": "更新时间",
+    "filter.dateToday": "今天",
+    "filter.dateLast3Days": "最近 3 天",
+    "filter.dateLast7Days": "最近 7 天",
+    "filter.dateCustomRange": "自定义区间",
+    "filter.dateRange": "区间",
+    "filter.dateStart": "开始日期",
+    "filter.dateEnd": "结束日期",
+    "filter.dateRangeHint": "区间含首尾，由服务端过滤",
+    "filter.dateClear": "清除日期筛选",
+    "filter.moveToStatus": "移动到状态",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {

@@ -23,6 +23,7 @@ import type {
 } from "@multica/core/types";
 import type {
   ActorFilterValue,
+  IssueDateFilterValue,
   IssueGrouping,
   IssueSortDirection,
   IssueSortField,
@@ -37,6 +38,16 @@ export interface IssueFilterState {
   projectFilters: string[];
   includeNoProject: boolean;
   labelFilters: string[];
+  /** Custom-property definition id → selected option ids (checkbox
+   *  definitions use "true"/"false"). OR within a definition, AND across
+   *  — filtered in `issueMatchesPropertyFilters`. */
+  propertyFilters: Record<string, string[]>;
+  /**
+   * Date window. Carried for chip rendering + active-detection only — the
+   * FILTER itself is applied server-side (date_field/date_start/date_end
+   * window), exactly like web: the client predicate has no date branch.
+   */
+  dateFilter: IssueDateFilterValue | null;
 }
 
 /** Empty filter snapshot — "show all". */
@@ -49,14 +60,47 @@ export const EMPTY_ISSUE_FILTER: IssueFilterState = {
   projectFilters: [],
   includeNoProject: false,
   labelFilters: [],
+  propertyFilters: {},
+  dateFilter: null,
 };
+
+/**
+ * Match one issue against the property filters. Mirrors web's
+ * `issueMatchesPropertyFilters` (packages/views/issues/utils/filter.ts:61-82):
+ * select values are single option-id strings, multi_select values are
+ * option-id arrays, checkbox values are booleans compared against the
+ * "true"/"false" pseudo-options. An issue with no value for a filtered
+ * definition never matches it.
+ */
+export function issueMatchesPropertyFilters(
+  issue: Issue,
+  propertyFilters: Record<string, string[]> | undefined,
+): boolean {
+  if (!propertyFilters || Object.keys(propertyFilters).length === 0)
+    return true;
+  for (const [propertyId, selected] of Object.entries(propertyFilters)) {
+    if (selected.length === 0) continue;
+    const value = issue.properties?.[propertyId];
+    if (value === undefined) return false;
+    if (typeof value === "string") {
+      if (!selected.includes(value)) return false;
+    } else if (Array.isArray(value)) {
+      if (!value.some((id) => selected.includes(id))) return false;
+    } else if (typeof value === "boolean") {
+      if (!selected.includes(String(value))) return false;
+    } else {
+      return false;
+    }
+  }
+  return true;
+}
 
 /**
  * Apply every filter dimension. Mirrors web `applyIssueFilters` at
  * packages/views/issues/utils/filter.ts (status/priority/assignee+no-
- * assignee/creator/project+no-project/label). Custom-property + date +
- * working filters are not yet exposed on mobile — deferred dimensions are
- * documented in the filter panel.
+ * assignee/creator/project+no-project/label/property). Date is intentionally
+ * absent — its server window is the single source of truth (web does the
+ * same). Working-only is not exposed on mobile.
  */
 export function applyIssueFilters(
   issues: Issue[],
@@ -71,6 +115,7 @@ export function applyIssueFilters(
     projectFilters,
     includeNoProject,
     labelFilters,
+    propertyFilters,
   } = filters;
 
   const hasAssigneeFilter =
@@ -137,6 +182,8 @@ export function applyIssueFilters(
       if (!labels || labels.length === 0) return false;
       if (!labels.some((l) => labelFilters.includes(l.id))) return false;
     }
+
+    if (!issueMatchesPropertyFilters(issue, propertyFilters)) return false;
 
     return true;
   });

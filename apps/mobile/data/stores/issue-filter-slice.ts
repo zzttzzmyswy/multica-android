@@ -17,6 +17,7 @@
  */
 import type { StateCreator } from "zustand";
 import type { IssuePriority, IssueStatus } from "@multica/core/types";
+import { dateOnlyToLocalDate } from "@multica/core/issues/date";
 import type { IssueListWindowParams } from "@/data/queries/issue-keys";
 
 export type ActorFilterValue = {
@@ -40,6 +41,24 @@ export type IssueSortDirection = "asc" | "desc";
 
 /** Grouping mirroring web `GROUPING_OPTIONS` (status / assignee). */
 export type IssueGrouping = "status" | "assignee";
+
+/**
+ * Custom-property filter snapshot mirroring web's
+ * `view-store.ts` `propertyFilters`: definition id → selected option ids
+ * (checkbox definitions use the pseudo-options "true"/"false"). Empty array
+ * = no filter for that definition; matching is OR within a definition and
+ * AND across definitions, like every other filter group.
+ */
+export type PropertyFilterValue = Record<string, string[]>;
+
+/** Date window mirroring web's `IssueDateFilter` (calendar-day, no time).
+ *  `field` picks which issue timestamp participates; `from`/`to` are
+ *  date-only "YYYY-MM-DD" strings (local calendar). */
+export interface IssueDateFilterValue {
+  field: "created_at" | "updated_at";
+  from: string;
+  to: string;
+}
 
 /**
  * Issue-workbench view mode. Mobile surface of web `ViewMode` — only the
@@ -85,6 +104,8 @@ export interface IssueFilterSlice {
   projectFilters: string[];
   includeNoProject: boolean;
   labelFilters: string[];
+  propertyFilters: PropertyFilterValue;
+  dateFilter: IssueDateFilterValue | null;
   sortBy: IssueSortField;
   sortDirection: IssueSortDirection;
   grouping: IssueGrouping;
@@ -96,13 +117,21 @@ export interface IssueFilterSlice {
   toggleProjectFilter: (projectId: string) => void;
   toggleNoProject: () => void;
   toggleLabelFilter: (labelId: string) => void;
+  /** Toggle one option of a custom-property definition (OR within a
+   *  definition). Dropping the last selected option removes the definition
+   *  from the record — an empty record on the wire is no filter. */
+  togglePropertyFilter: (propertyId: string, optionId: string) => void;
+  /** Drop every selection of one custom-property definition. */
+  clearPropertyFilter: (propertyId: string) => void;
+  setDateFilter: (filter: IssueDateFilterValue | null) => void;
   setSortBy: (field: IssueSortField) => void;
   setSortDirection: (dir: IssueSortDirection) => void;
   setGrouping: (grouping: IssueGrouping) => void;
   clearFilters: () => void;
   /** Clear one filter dimension (a filter-bar chip). Paired boolean flags
    *  (no-assignee / no-project) clear with their dimension — matches web's
-   *  `clearFilterDimension`. */
+   *  `clearFilterDimension`. `property:<id>` clears that definition's entry
+   *  only; `"date"` clears the date window. */
   clearFilterDimension: (dimension: FilterDimension) => void;
 }
 
@@ -112,7 +141,20 @@ export type FilterDimension =
   | "assignee"
   | "creator"
   | "project"
-  | "label";
+  | "label"
+  | "date"
+  | `property:${string}`;
+
+export const PROPERTY_FILTER_PREFIX = "property:";
+
+/** Strip the dimension prefix off a property chip key. */
+export function propertyIdFromDimension(
+  dimension: FilterDimension,
+): string | null {
+  return dimension.startsWith(PROPERTY_FILTER_PREFIX)
+    ? dimension.slice(PROPERTY_FILTER_PREFIX.length)
+    : null;
+}
 
 /** Default slice state — all filters empty, manual position sort asc,
  *  status grouping. Web's defaults are `sortBy: "position"` +
@@ -127,6 +169,8 @@ export const defaultIssueFilterSlice = (): Pick<
   | "projectFilters"
   | "includeNoProject"
   | "labelFilters"
+  | "propertyFilters"
+  | "dateFilter"
   | "sortBy"
   | "sortDirection"
   | "grouping"
@@ -139,6 +183,8 @@ export const defaultIssueFilterSlice = (): Pick<
   projectFilters: [],
   includeNoProject: false,
   labelFilters: [],
+  propertyFilters: {},
+  dateFilter: null,
   sortBy: "position",
   sortDirection: "asc",
   grouping: "status",
@@ -170,6 +216,9 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
   | "setSortBy"
   | "setSortDirection"
   | "setGrouping"
+  | "togglePropertyFilter"
+  | "clearPropertyFilter"
+  | "setDateFilter"
   | "clearFilters"
   | "clearFilterDimension"
 > {
@@ -226,6 +275,25 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
     setSortBy: (sortBy) => set({ sortBy }),
     setSortDirection: (sortDirection) => set({ sortDirection }),
     setGrouping: (grouping) => set({ grouping }),
+    togglePropertyFilter: (propertyId, optionId) =>
+      set((state) => {
+        const current = state.propertyFilters[propertyId] ?? [];
+        const next = current.includes(optionId)
+          ? current.filter((id) => id !== optionId)
+          : [...current, optionId];
+        const propertyFilters = { ...state.propertyFilters };
+        if (next.length === 0) delete propertyFilters[propertyId];
+        else propertyFilters[propertyId] = next;
+        return { propertyFilters };
+      }),
+    clearPropertyFilter: (propertyId) =>
+      set((state) => {
+        if (!(propertyId in state.propertyFilters)) return state;
+        const propertyFilters = { ...state.propertyFilters };
+        delete propertyFilters[propertyId];
+        return { propertyFilters };
+      }),
+    setDateFilter: (dateFilter) => set({ dateFilter }),
     clearFilters: () =>
       set({
         statusFilters: [],
@@ -236,6 +304,8 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
         projectFilters: [],
         includeNoProject: false,
         labelFilters: [],
+        propertyFilters: {},
+        dateFilter: null,
       }),
     clearFilterDimension: (dimension) =>
       set((state) => {
@@ -252,6 +322,17 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
             return { projectFilters: [], includeNoProject: false };
           case "label":
             return { labelFilters: [] };
+          case "date":
+            return { dateFilter: null };
+          default: {
+            const propertyId = propertyIdFromDimension(dimension);
+            if (!propertyId || !(propertyId in state.propertyFilters)) {
+              return state;
+            }
+            const propertyFilters = { ...state.propertyFilters };
+            delete propertyFilters[propertyId];
+            return { propertyFilters };
+          }
         }
       }),
   };
@@ -267,8 +348,34 @@ export function hasActiveIssueFilters(state: IssueFilterSlice): boolean {
     state.creatorFilters.length > 0 ||
     state.projectFilters.length > 0 ||
     state.includeNoProject ||
-    state.labelFilters.length > 0
+    state.labelFilters.length > 0 ||
+    Object.keys(state.propertyFilters).length > 0 ||
+    state.dateFilter !== null
   );
+}
+
+/**
+ * Convert the date-only window to the half-open instant band the server
+ * expects. Mirrors web's `issueDateFilterToApiParams`
+ * (packages/views/issues/surface/use-issue-surface-controller.ts:129-152):
+ * local-midnight of `from` … local-midnight of `to` + 1 day, emitted as
+ * ISO instants. Ordering of from/to is normalized (from ≤ to).
+ */
+export function dateFilterToWindowParams(
+  filter: IssueDateFilterValue,
+): Pick<IssueListWindowParams, "date_field" | "date_start" | "date_end"> {
+  const from = dateOnlyToLocalDate(filter.from);
+  const to = dateOnlyToLocalDate(filter.to);
+  if (!from || !to) return {};
+  const start = from <= to ? from : to;
+  const endSource = from <= to ? to : from;
+  const end = new Date(endSource);
+  end.setDate(end.getDate() + 1);
+  return {
+    date_field: filter.field,
+    date_start: start.toISOString(),
+    date_end: end.toISOString(),
+  };
 }
 
 /** Map the slice's filter/sort dimensions into the server window params
@@ -287,6 +394,8 @@ export function buildIssueWindow(
     | "projectFilters"
     | "includeNoProject"
     | "labelFilters"
+    | "propertyFilters"
+    | "dateFilter"
     | "sortBy"
     | "sortDirection"
   >,
@@ -304,6 +413,14 @@ export function buildIssueWindow(
     window.project_ids = state.projectFilters;
   if (state.includeNoProject) window.include_no_project = true;
   if (state.labelFilters.length > 0) window.label_ids = state.labelFilters;
+  if (Object.keys(state.propertyFilters).length > 0)
+    window.properties = state.propertyFilters;
+  if (state.dateFilter) {
+    const band = dateFilterToWindowParams(state.dateFilter);
+    if (band.date_field) window.date_field = band.date_field;
+    if (band.date_start) window.date_start = band.date_start;
+    if (band.date_end) window.date_end = band.date_end;
+  }
   if (state.sortBy !== "position") window.sort_by = state.sortBy;
   if (state.sortBy !== "position" && state.sortDirection === "desc")
     window.sort_direction = state.sortDirection;

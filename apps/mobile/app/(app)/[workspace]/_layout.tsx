@@ -323,6 +323,9 @@ export default function WorkspaceLayout() {
             with the stock SHEET_OPTIONS; the body draws its own title+Done
             header like the parent panel. */}
         <Stack.Screen name="issues-filter-picker" options={SHEET_OPTIONS} />
+        {/* Custom date-range picker for the filter panel's date section
+            (`?scope=` mirrors the other filter routes). */}
+        <Stack.Screen name="issues-filter-date" options={SHEET_OPTIONS} />
         {/* Chat session-switch sheet. */}
         <Stack.Screen name="chat-sessions" options={SHEET_OPTIONS} />
         {/* Workspace switcher — reached from the More popover's collapsed

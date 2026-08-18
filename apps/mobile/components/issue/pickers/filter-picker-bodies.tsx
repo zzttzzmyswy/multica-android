@@ -25,7 +25,13 @@ import { FlatList, Pressable, TextInput, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useColorScheme } from "nativewind";
-import type { Agent, MemberWithUser, Project, Squad } from "@multica/core/types";
+import type {
+  Agent,
+  IssueProperty,
+  MemberWithUser,
+  Project,
+  Squad,
+} from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { ProjectIcon } from "@/components/ui/project-icon";
@@ -41,6 +47,14 @@ import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme as useSystemColorScheme } from "@/lib/use-color-scheme";
+
+/** One row rendered by `FilterPropertyPickerBody` — a filterable property
+ *  option (or the true/false pseudo-options of a checkbox definition). */
+interface FilterPropertyOption {
+  id: string;
+  name: string;
+  color?: string;
+}
 
 const AVATAR_SIZE = 36;
 
@@ -367,6 +381,91 @@ export function FilterLabelPickerBody({
           <View className="px-3 py-8 items-center">
             <Text className="text-sm text-muted-foreground text-center">
               {query ? t("picker.noMatches") : t("picker.noLabels")}
+            </Text>
+          </View>
+        }
+      />
+    </View>
+  );
+}
+
+/**
+ * Multi-select one custom-property definition's options (web
+ * `PropertyFilterOptions` in issues-header.tsx). Checkbox definitions expose
+ * the "true"/"false" pseudo-options with Yes/No labels; select and
+ * multi_select list the definition's option catalog. OR within the
+ * definition — every toggle keeps this sheet open.
+ */
+export function FilterPropertyPickerBody({
+  property,
+  selected,
+  onToggle,
+}: {
+  property: IssueProperty;
+  selected: string[];
+  onToggle: (optionId: string) => void;
+}) {
+  const { t } = useTranslation();
+  const checkColor = useCheckColor();
+
+  const options = useMemo((): FilterPropertyOption[] => {
+    if (property.type === "checkbox") {
+      return [
+        { id: "true", name: t("filter.propertyTrue"), color: undefined },
+        { id: "false", name: t("filter.propertyFalse"), color: undefined },
+      ];
+    }
+    return (property.config.options ?? []).map((option) => ({
+      id: option.id,
+      name: option.name,
+      color: option.color,
+    }));
+  }, [property, t]);
+
+  return (
+    <View className="flex-1">
+      <FlatList
+        data={options}
+        className="flex-1"
+        keyExtractor={(option) => `v:${option.id}`}
+        renderItem={({ item }) => {
+          const isSelected = selected.includes(item.id);
+          return (
+            <Pressable
+              onPress={() => onToggle(item.id)}
+              className={cn(
+                "flex-row items-center gap-3 px-4 py-3 active:bg-secondary",
+                isSelected && "bg-secondary/60",
+              )}
+            >
+              {item.color ? (
+                <View
+                  className="size-3 rounded-full"
+                  style={{ backgroundColor: item.color }}
+                />
+              ) : (
+                <Ionicons
+                  name="pricetag-outline"
+                  size={16}
+                  color={MOBILE_PLACEHOLDER_COLOR}
+                />
+              )}
+              <Text
+                className="flex-1 text-base text-foreground"
+                numberOfLines={1}
+              >
+                {item.name}
+              </Text>
+              {isSelected ? (
+                <Ionicons name="checkmark" size={20} color={checkColor} />
+              ) : null}
+            </Pressable>
+          );
+        }}
+        ListEmptyComponent={
+          <View className="px-3 py-8 items-center">
+            <Text className="text-sm text-muted-foreground text-center">
+              {t("picker.noMatches")}
             </Text>
           </View>
         }

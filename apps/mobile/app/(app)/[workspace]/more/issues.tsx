@@ -42,6 +42,7 @@ import { IssuesLoading } from "@/components/issue/issues-loading";
 import { issueListOptions } from "@/data/queries/issues";
 import { projectListOptions } from "@/data/queries/projects";
 import { labelListOptions } from "@/data/queries/labels";
+import { propertyActiveOptions } from "@/data/queries/properties";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import {
   useIssuesViewStore,
@@ -103,6 +104,8 @@ export default function IssuesPage() {
   const projectFilters = useIssuesViewStore((s) => s.projectFilters);
   const includeNoProject = useIssuesViewStore((s) => s.includeNoProject);
   const labelFilters = useIssuesViewStore((s) => s.labelFilters);
+  const propertyFilters = useIssuesViewStore((s) => s.propertyFilters);
+  const dateFilter = useIssuesViewStore((s) => s.dateFilter);
   // Stable dedup of the object that feeds applyIssueFilters (each field is
   // its own subscription above, so the assembled object only changes when a
   // dimension actually changes).
@@ -116,6 +119,8 @@ export default function IssuesPage() {
       projectFilters,
       includeNoProject,
       labelFilters,
+      propertyFilters,
+      dateFilter,
     }),
     [
       statusFilters,
@@ -126,6 +131,8 @@ export default function IssuesPage() {
       projectFilters,
       includeNoProject,
       labelFilters,
+      propertyFilters,
+      dateFilter,
     ],
   );
 
@@ -156,6 +163,8 @@ export default function IssuesPage() {
         projectFilters: filterState.projectFilters,
         includeNoProject: filterState.includeNoProject,
         labelFilters: filterState.labelFilters,
+        propertyFilters: filterState.propertyFilters,
+        dateFilter: filterState.dateFilter,
         sortBy,
         sortDirection,
       }),
@@ -222,7 +231,9 @@ export default function IssuesPage() {
       f.creatorFilters.length > 0 ||
       f.projectFilters.length > 0 ||
       f.includeNoProject ||
-      f.labelFilters.length > 0
+      f.labelFilters.length > 0 ||
+      Object.keys(f.propertyFilters).length > 0 ||
+      f.dateFilter !== null
     );
   }, [filterState]);
 
@@ -249,6 +260,8 @@ export default function IssuesPage() {
           creatorFilters={filterState.creatorFilters}
           projectFilters={filterState.projectFilters}
           labelFilters={filterState.labelFilters}
+          propertyFilters={filterState.propertyFilters}
+          dateFilter={filterState.dateFilter}
           onClearStatus={(s) =>
             useIssuesViewStore.getState().toggleStatusFilter(s)
           }
@@ -272,6 +285,12 @@ export default function IssuesPage() {
           }
           onClearNoProject={() =>
             useIssuesViewStore.getState().toggleNoProject()
+          }
+          onClearProperty={(id) =>
+            useIssuesViewStore.getState().clearPropertyFilter(id)
+          }
+          onClearDate={() =>
+            useIssuesViewStore.getState().setDateFilter(null)
           }
         />
       ) : null}
@@ -499,6 +518,8 @@ function ActiveFilterChips({
   creatorFilters,
   projectFilters,
   labelFilters,
+  propertyFilters,
+  dateFilter,
   onClearStatus,
   onClearPriority,
   onClearAssignee,
@@ -507,6 +528,8 @@ function ActiveFilterChips({
   onClearLabel,
   onClearNoAssignee,
   onClearNoProject,
+  onClearProperty,
+  onClearDate,
 }: {
   filterState: IssueFilterState;
   statusFilters: IssueStatus[];
@@ -515,6 +538,8 @@ function ActiveFilterChips({
   creatorFilters: { type: "member" | "agent" | "squad"; id: string }[];
   projectFilters: string[];
   labelFilters: string[];
+  propertyFilters: Record<string, string[]>;
+  dateFilter: IssueFilterState["dateFilter"];
   onClearStatus: (s: IssueStatus) => void;
   onClearPriority: (p: IssuePriority) => void;
   onClearAssignee: (v: { type: "member" | "agent" | "squad"; id: string }) => void;
@@ -523,15 +548,44 @@ function ActiveFilterChips({
   onClearLabel: (id: string) => void;
   onClearNoAssignee: () => void;
   onClearNoProject: () => void;
+  onClearProperty: (id: string) => void;
+  onClearDate: () => void;
 }) {
   const { getName } = useActorLookup();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { data: projects = [] } = useQuery(projectListOptions(wsId));
   const { data: labels = [] } = useQuery(labelListOptions(wsId));
+  const { data: properties = [] } = useQuery(propertyActiveOptions(wsId));
   const projectName = (id: string) =>
     projects.find((p) => p.id === id)?.title ?? id.slice(0, 8);
   const labelName = (id: string) =>
     labels.find((l) => l.id === id)?.name ?? id.slice(0, 8);
+  // Property chips mirror web filter-chips-bar.tsx: one chip per DEFINITION
+  // carrying the definition name and its selected options (checkbox renders
+  // the true/false pseudo-option labels). Clear removes that definition only.
+  const propertyChip = (propertyId: string, selected: string[]) => {
+    const definition = properties.find((p) => p.id === propertyId);
+    if (!definition) return null;
+    const optionName = (optionId: string) => {
+      if (definition.type === "checkbox") {
+        return optionId === "true"
+          ? translate("filter.propertyTrue")
+          : translate("filter.propertyFalse");
+      }
+      return (
+        definition.config.options?.find((o) => o.id === optionId)?.name ??
+        optionId
+      );
+    };
+    return {
+      label: `${definition.name}: ${selected.map(optionName).join(", ")}`,
+      onClear: () => onClearProperty(propertyId),
+    };
+  };
+  const dateShort = (dateOnly: string) => {
+    const [, m, d] = dateOnly.split("-");
+    return `${Number(m)}/${Number(d)}`;
+  };
 
   return (
     <View className="flex-row flex-wrap gap-1.5 px-4 pb-2">
@@ -575,6 +629,29 @@ function ActiveFilterChips({
       {labelFilters.map((id) => (
         <Chip key={`l-${id}`} label={labelName(id)} onClear={() => onClearLabel(id)} />
       ))}
+      {Object.entries(propertyFilters).map(([propertyId, selected]) => {
+        if (selected.length === 0) return null;
+        const chip = propertyChip(propertyId, selected);
+        if (!chip) return null;
+        return (
+          <Chip key={`prop-${propertyId}`} label={chip.label} onClear={chip.onClear} />
+        );
+      })}
+      {dateFilter ? (
+        <Chip
+          key="date"
+          label={`${translate(
+            dateFilter.field === "created_at"
+              ? "filter.dateCreated"
+              : "filter.dateUpdated",
+          )}: ${
+            dateFilter.from === dateFilter.to
+              ? dateShort(dateFilter.from)
+              : `${dateShort(dateFilter.from)} - ${dateShort(dateFilter.to)}`
+          }`}
+          onClear={onClearDate}
+        />
+      ) : null}
     </View>
   );
 }

@@ -59,6 +59,10 @@ function myWindowSuffix(window: IssueListWindowParams): string {
     window.project_ids?.length ||
     window.include_no_project ||
     window.label_ids?.length ||
+    (window.properties && Object.keys(window.properties).length > 0) ||
+    window.date_field ||
+    window.date_start ||
+    window.date_end ||
     (window.sort_by &&
       (window.sort_by !== "position" || window.sort_direction === "desc"));
   if (!active || Object.keys(window).length === 0) return "";

@@ -8,6 +8,9 @@
  *   - `?dim=creator`    → same actor list, for creator
  *   - `?dim=project`    → projects + "No project" row
  *   - `?dim=label`      → labels (no inline create)
+ *   - `?dim=property:<definitionId>` → one custom-property definition's
+ *                         options (select / multi_select / checkbox; the
+ *                         checkbox exposes true/false rows)
  *
  * The body toggles the store directly and stays open across taps — filter
  * dimensions are positive-selection SETS (web view-store FilterSnapshot), so
@@ -20,14 +23,20 @@
 import { useLocalSearchParams, useNavigation } from "expo-router";
 import { useLayoutEffect } from "react";
 import { Pressable, View } from "react-native";
+import { useQuery } from "@tanstack/react-query";
 import { Text } from "@/components/ui/text";
 import {
   FilterActorPickerBody,
   FilterLabelPickerBody,
   FilterProjectPickerBody,
+  FilterPropertyPickerBody,
 } from "@/components/issue/pickers/filter-picker-bodies";
 import { useIssuesViewStore } from "@/data/stores/issues-view-store";
 import { useMyIssuesViewStore } from "@/data/stores/my-issues-view-store";
+import { PROPERTY_FILTER_PREFIX } from "@/data/stores/issue-filter-slice";
+import { propertyActiveOptions } from "@/data/queries/properties";
+import { useWorkspaceStore } from "@/data/workspace-store";
+import type { IssueProperty } from "@multica/core/types";
 import type {
   ActorFilterValue,
   IssueFilterSlice,
@@ -35,7 +44,12 @@ import type {
 import { useTranslation } from "@/lib/i18n/react";
 
 type Scope = "my" | "all";
-export type FilterDim = "assignee" | "creator" | "project" | "label";
+export type FilterDim =
+  | "assignee"
+  | "creator"
+  | "project"
+  | "label"
+  | `property:${string}`;
 
 export default function IssuesFilterPickerRoute() {
   const { scope: scopeParam, dim } = useLocalSearchParams<{
@@ -43,12 +57,26 @@ export default function IssuesFilterPickerRoute() {
     dim?: string;
   }>();
   const resolvedScope: Scope = scopeParam === "all" ? "all" : "my";
-  const resolvedDim: FilterDim =
-    dim === "creator" || dim === "project" || dim === "label"
-      ? dim
-      : "assignee";
   const { t } = useTranslation();
   const navigation = useNavigation();
+
+  // property:<id> dims resolve their definition from the property catalog;
+  // the other four are the classic simple dims.
+  const propertyId =
+    dim?.startsWith(PROPERTY_FILTER_PREFIX) && dim.length > PROPERTY_FILTER_PREFIX.length
+      ? dim.slice(PROPERTY_FILTER_PREFIX.length)
+      : null;
+  const resolvedDim: FilterDim = propertyId
+    ? (`property:${propertyId}` as const)
+    : dim === "creator" || dim === "project" || dim === "label"
+      ? dim
+      : "assignee";
+
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const { data: properties = [] } = useQuery(propertyActiveOptions(wsId));
+  const propertyDef = propertyId
+    ? properties.find((p) => p.id === propertyId)
+    : undefined;
 
   const titleKey =
     resolvedDim === "assignee"
@@ -57,19 +85,23 @@ export default function IssuesFilterPickerRoute() {
         ? "filter.creator"
         : resolvedDim === "project"
           ? "filter.project"
-          : "filter.label";
+          : resolvedDim === "label"
+            ? "filter.label"
+            : null;
 
   // Inline header (the filter panel sheet has `headerShown: false`, and this
   // pushed picker inherits the same SHEET_OPTIONS registration).
   useLayoutEffect(() => {
-    navigation.setOptions({ title: t(titleKey) });
-  }, [navigation, titleKey, t]);
+    navigation.setOptions({
+      title: propertyId ? (propertyDef?.name ?? propertyId) : t(titleKey!),
+    });
+  }, [navigation, titleKey, propertyId, propertyDef, t]);
 
   const close = () => navigation.goBack();
 
   if (resolvedDim === "assignee" || resolvedDim === "creator") {
     return (
-      <PickerChrome title={t(titleKey)} onDone={close} t={t}>
+      <PickerChrome title={t(titleKey!)} onDone={close} t={t}>
         <ActorPickerBody
           dim={resolvedDim}
           scope={resolvedScope}
@@ -81,15 +113,37 @@ export default function IssuesFilterPickerRoute() {
 
   if (resolvedDim === "project") {
     return (
-      <PickerChrome title={t(titleKey)} onDone={close} t={t}>
+      <PickerChrome title={t(titleKey!)} onDone={close} t={t}>
         <ProjectPickerBody scope={resolvedScope} />
       </PickerChrome>
     );
   }
 
+  if (resolvedDim === "label") {
+    return (
+      <PickerChrome title={t(titleKey!)} onDone={close} t={t}>
+        <LabelPickerBody scope={resolvedScope} />
+      </PickerChrome>
+    );
+  }
+
+  // property:<id> — the definition must still exist in the active catalog
+  // (it can be archived while a stale filter lingers); skip the body when
+  // gone so the sheet doesn't render against a ghost.
   return (
-    <PickerChrome title={t(titleKey)} onDone={close} t={t}>
-      <LabelPickerBody scope={resolvedScope} />
+    <PickerChrome title={propertyDef?.name ?? propertyId ?? ""} onDone={close} t={t}>
+      {propertyDef ? (
+        <PropertyPickerBody
+          property={propertyDef}
+          scope={resolvedScope}
+        />
+      ) : (
+        <View className="px-3 py-8 items-center">
+          <Text className="text-sm text-muted-foreground">
+            {t("picker.noMatches")}
+          </Text>
+        </View>
+      )}
     </PickerChrome>
   );
 }
@@ -176,6 +230,39 @@ function LabelPickerBody({ scope }: { scope: Scope }) {
         if (scope === "all")
           useIssuesViewStore.getState().toggleLabelFilter(id);
         else useMyIssuesViewStore.getState().toggleLabelFilter(id);
+      }}
+    />
+  );
+}
+
+/** Custom-property multi-select body — one definition's options, writing
+ *  `togglePropertyFilter(definitionId, optionId)` to the scoped store. */
+function PropertyPickerBody({
+  property,
+  scope,
+}: {
+  property: IssueProperty;
+  scope: Scope;
+}) {
+  const allState = useIssuesViewStore();
+  const myState = useMyIssuesViewStore();
+  const s =
+    scope === "all"
+      ? (allState as IssueFilterSlice)
+      : (myState as IssueFilterSlice);
+  return (
+    <FilterPropertyPickerBody
+      property={property}
+      selected={s.propertyFilters[property.id] ?? []}
+      onToggle={(optionId) => {
+        if (scope === "all")
+          useIssuesViewStore
+            .getState()
+            .togglePropertyFilter(property.id, optionId);
+        else
+          useMyIssuesViewStore
+            .getState()
+            .togglePropertyFilter(property.id, optionId);
       }}
     />
   );

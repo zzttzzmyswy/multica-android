@@ -30,9 +30,11 @@ function formatDayOnly(date: string): string {
 export function BoardCard({
   issue,
   onPress,
+  onLongPress,
 }: {
   issue: Issue;
   onPress: () => void;
+  onLongPress?: () => void;
 }) {
   const labels = issue.labels ?? [];
   // Footer date summary mirrors web's "due date now" affordance: show what
@@ -48,6 +50,8 @@ export function BoardCard({
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={350}
       className="rounded-lg border border-border bg-card px-3 py-2.5 active:bg-secondary"
       accessibilityRole="button"
       accessibilityLabel={`${issue.title}${issue.status ? `, ${issueStatusLabel(issue.status)}` : ""}`}

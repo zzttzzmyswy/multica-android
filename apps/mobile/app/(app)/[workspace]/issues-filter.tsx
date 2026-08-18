@@ -19,19 +19,25 @@
  * Sort / grouping mirror web's SORT_OPTIONS + GROUPING_OPTIONS
  * (packages/core/issues/stores/view-store.ts:145-159).
  */
+import { useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, View } from "react-native";
+import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { IssuePriority, IssueStatus } from "@multica/core/types";
+import { addDaysDateOnly, todayDateOnly } from "@multica/core/issues/date";
 import { Text } from "@/components/ui/text";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { PriorityIcon } from "@/components/ui/priority-icon";
 import { useIssuesViewStore } from "@/data/stores/issues-view-store";
 import { useMyIssuesViewStore } from "@/data/stores/my-issues-view-store";
+import { propertyActiveOptions } from "@/data/queries/properties";
+import { useWorkspaceStore } from "@/data/workspace-store";
 import {
   ISSUE_GROUPING_OPTIONS,
   ISSUE_SORT_OPTIONS,
   hasActiveIssueFilters,
+  type IssueDateFilterValue,
   type IssueFilterSlice,
 } from "@/data/stores/issue-filter-slice";
 import { BOARD_STATUSES } from "@/lib/issue-status";
@@ -51,8 +57,27 @@ const PRIORITY_ORDER: IssuePriority[] = [
   "none",
 ];
 
+/** Date presets mirroring web `DateSubContent.applyPreset`
+ *  (issues-header.tsx:781-787): field-prefixed range ending today. */
+const DATE_PRESETS: { days: 1 | 3 | 7; labelKey: string }[] = [
+  { days: 1, labelKey: "filter.dateToday" },
+  { days: 3, labelKey: "filter.dateLast3Days" },
+  { days: 7, labelKey: "filter.dateLast7Days" },
+];
+
 type Scope = "my" | "all";
-type FilterDim = "assignee" | "creator" | "project" | "label";
+type FilterDim =
+  | "assignee"
+  | "creator"
+  | "project"
+  | "label"
+  | `property:${string}`;
+
+/** Web's chips use `M/D` for date chip values (filter-chips-bar.tsx). */
+function shortDate(dateOnly: string): string {
+  const [, m, d] = dateOnly.split("-");
+  return `${Number(m)}/${Number(d)}`;
+}
 
 export default function IssuesFilterRoute() {
   const { scope, workspace: workspaceSlug } = useLocalSearchParams<{
@@ -81,9 +106,17 @@ export default function IssuesFilterRoute() {
   const projectFilters = s.projectFilters;
   const includeNoProject = s.includeNoProject;
   const labelFilters = s.labelFilters;
+  const propertyFilters = s.propertyFilters;
+  const dateFilter = s.dateFilter;
   const sortBy = s.sortBy;
   const sortDirection = s.sortDirection;
   const grouping = s.grouping;
+
+  // The date section's field radio is UI-local until a preset/custom commits
+  // (web DateSubContent keeps the same split).
+  const [dateField, setDateField] = useState<
+    IssueDateFilterValue["field"]
+  >(dateFilter?.field ?? "created_at");
 
   const hasActive = hasActiveIssueFilters(s);
 
@@ -93,11 +126,35 @@ export default function IssuesFilterRoute() {
       ? useIssuesViewStore.getState()
       : useMyIssuesViewStore.getState();
 
+  // Custom-property definitions that can drive a filter — same
+  // filterable-property set web uses (issues-header.tsx:1175-1181).
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const { data: properties = [] } = useQuery(propertyActiveOptions(wsId));
+  const filterableProperties = properties.filter(
+    (p) => p.type === "select" || p.type === "multi_select" || p.type === "checkbox",
+  );
+
   const openDim = (dim: FilterDim) => {
     if (!workspaceSlug) return;
     router.push({
       pathname: "/[workspace]/issues-filter-picker",
       params: { workspace: workspaceSlug, scope: resolvedScope, dim },
+    });
+  };
+
+  const openDateRange = () => {
+    if (!workspaceSlug) return;
+    router.push({
+      pathname: "/[workspace]/issues-filter-date",
+      params: { workspace: workspaceSlug, scope: resolvedScope },
+    });
+  };
+
+  const applyDatePreset = (days: 1 | 3 | 7) => {
+    act().setDateFilter({
+      field: dateField,
+      from: addDaysDateOnly(1 - days),
+      to: todayDateOnly(),
     });
   };
 
@@ -223,6 +280,134 @@ export default function IssuesFilterRoute() {
           onPress={() => openDim("label")}
           t={t}
         />
+
+        {/* ——— Custom properties ——— */}
+        <SectionLabel>{t("filter.property")}</SectionLabel>
+        {filterableProperties.length === 0 ? (
+          <View className="px-4 py-3">
+            <Text className="text-sm text-muted-foreground">
+              {t("filter.propertyEmpty")}
+            </Text>
+          </View>
+        ) : (
+          filterableProperties.map((property) => {
+            const selected = propertyFilters[property.id] ?? [];
+            return (
+              <FilterDimensionRow
+                key={property.id}
+                label={property.name}
+                summary={selected.length > 0 ? `${selected.length}` : ""}
+                count={selected.length}
+                tint={tint}
+                onPress={() => openDim(`property:${property.id}`)}
+                t={t}
+              />
+            );
+          })
+        )}
+
+        {/* ——— Date ——— */}
+        <SectionLabel>{t("filter.date")}</SectionLabel>
+        {(["created_at", "updated_at"] as const).map((option) => {
+          const selected = dateField === option;
+          return (
+            <Pressable
+              key={option}
+              onPress={() => {
+                setDateField(option);
+                // Web keeps a committed window and just swaps its field.
+                if (dateFilter) act().setDateFilter({ ...dateFilter, field: option });
+              }}
+              className={cn(
+                "flex-row items-center gap-3 px-4 py-2.5 active:bg-secondary",
+                selected && "bg-secondary/60",
+              )}
+            >
+              <Ionicons
+                name={selected ? "radio-button-on" : "radio-button-off"}
+                size={18}
+                color={selected ? tint : THEME[colorScheme].mutedForeground}
+              />
+              <Text className="flex-1 text-sm text-foreground">
+                {t(option === "created_at" ? "filter.dateCreated" : "filter.dateUpdated")}
+              </Text>
+            </Pressable>
+          );
+        })}
+        {DATE_PRESETS.map((preset) => (
+          <Pressable
+            key={preset.days}
+            onPress={() => applyDatePreset(preset.days)}
+            className={cn(
+              "flex-row items-center gap-3 px-4 py-2.5 active:bg-secondary",
+              dateFilter &&
+                dateFilter.field === dateField &&
+                dateFilter.to === todayDateOnly() &&
+                dateFilter.from === addDaysDateOnly(1 - preset.days) &&
+                "bg-secondary/60",
+            )}
+          >
+            <Ionicons
+              name="calendar-outline"
+              size={18}
+              color={THEME[colorScheme].mutedForeground}
+            />
+            <Text className="flex-1 text-sm text-foreground">
+              {t(preset.labelKey)}
+            </Text>
+            {dateFilter &&
+            dateFilter.field === dateField &&
+            dateFilter.to === todayDateOnly() &&
+            dateFilter.from === addDaysDateOnly(1 - preset.days) ? (
+              <CheckMark checked />
+            ) : null}
+          </Pressable>
+        ))}
+        <Pressable
+          onPress={openDateRange}
+          className="flex-row items-center gap-3 px-4 py-2.5 active:bg-secondary"
+        >
+          <Ionicons
+            name="calendar-outline"
+            size={18}
+            color={THEME[colorScheme].mutedForeground}
+          />
+          <Text className="flex-1 text-sm text-foreground">
+            {t("filter.dateCustomRange")}
+          </Text>
+          {dateFilter ? (
+            <Text className="text-sm text-muted-foreground">
+              {shortDate(dateFilter.from)}
+              {dateFilter.from === dateFilter.to
+                ? ""
+                : ` - ${shortDate(dateFilter.to)}`}
+            </Text>
+          ) : (
+            <Text className="text-xs text-muted-foreground/70">
+              {t("filter.choose")}
+            </Text>
+          )}
+          <Ionicons
+            name="chevron-forward"
+            size={16}
+            color={THEME[colorScheme].mutedForeground}
+          />
+        </Pressable>
+        {dateFilter ? (
+          <Pressable
+            onPress={() => act().setDateFilter(null)}
+            className="flex-row items-center gap-3 px-4 py-2.5 active:bg-secondary"
+          >
+            <Ionicons
+              name="close-circle-outline"
+              size={18}
+              color={THEME[colorScheme].mutedForeground}
+            />
+            <Text className="flex-1 text-sm text-destructive">
+              {t("filter.dateClear")}
+            </Text>
+          </Pressable>
+        ) : null}
 
         {/* ——— Sort ——— */}
         <SectionLabel>{t("filter.sort.title")}</SectionLabel>
