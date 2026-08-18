@@ -23,7 +23,6 @@
  */
 import type { IssueView } from "@multica/core/api/schemas";
 import type { IssuePriority, IssueStatus } from "@multica/core/types";
-import { BOARD_STATUSES } from "@/lib/issue-status";
 import type {
   ActorFilterValue,
   IssueFilterSnapshot,
@@ -35,8 +34,22 @@ import type {
   PropertyFilterValue,
 } from "./issue-filter-slice";
 
-/** Enum lists for sanitization (mirror web baseline: unknown members drop). */
-const ALL_STATUSES: readonly IssueStatus[] = [...BOARD_STATUSES, "cancelled"];
+/**
+ * Enum lists for sanitization (mirror web baseline: unknown members drop).
+ * Kept local instead of importing `@/lib/issue-status`: this module is pure
+ * data and must stay importable from the Node vitest lane — issue-status
+ * pulls in the i18n runtime, which drags react-native in. The lists mirror
+ * BOARD_STATUSES + "cancelled" and the core priority order exactly.
+ */
+const ALL_STATUSES: readonly IssueStatus[] = [
+  "backlog",
+  "todo",
+  "in_progress",
+  "in_review",
+  "done",
+  "blocked",
+  "cancelled",
+];
 const ALL_PRIORITIES = ["urgent", "high", "medium", "low", "none"];
 const SORT_FIELDS: readonly IssueSortField[] = [
   "position",
@@ -74,7 +87,10 @@ function stringRecord(value: unknown): PropertyFilterValue {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const record: PropertyFilterValue = {};
   for (const [id, selected] of Object.entries(value as Record<string, unknown>)) {
-    const values = stringArray(selected);
+    // Empty-string options are meaningless in every definition type
+    // (select option ids / checkbox "true"/"false" are never empty) — drop
+    // them as bad data alongside non-strings.
+    const values = stringArray(selected).filter((x) => x.length > 0);
     if (values.length > 0) record[id] = values;
   }
   return record;
