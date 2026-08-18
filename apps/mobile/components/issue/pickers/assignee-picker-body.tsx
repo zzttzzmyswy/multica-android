@@ -55,6 +55,12 @@ interface Props {
   value: AssigneeValue;
   query: string;
   onChange: (next: AssigneeValue) => void;
+  /** True when a batch selection spans different assignees ("mixed"): no row
+   *  is checked, including the unassigned row. Distinct from `value` being
+   *  `null`, which means every selected issue is genuinely unassigned and the
+   *  unassigned row should be checked. Mirrors web `AssigneePicker.mixed`
+   *  (packages/views/issues/components/pickers/assignee-picker.tsx). */
+  mixed?: boolean;
   /** Restrict which actor kinds are listed. Default: all three. The
    *  agent-mode quick-create picker passes `["agent", "squad"]` to hide
    *  members. */
@@ -85,6 +91,7 @@ export function AssigneePickerBody({
   value,
   query,
   onChange,
+  mixed = false,
   kinds = ALL_KINDS,
   showUnassigned = true,
 }: Props) {
@@ -141,8 +148,9 @@ export function AssigneePickerBody({
     // require this — it's a product UX choice that speeds up the common
     // "see who's assigned + reassign nearby" path. Skipped when query is
     // active because search-result order should reflect matches, not state.
+    // A mixed batch selection has no single current actor to pin.
     const all = [...memberRows, ...agentRows, ...squadRows];
-    const selectedRow = all.find((r) => isRowSelected(value, r));
+    const selectedRow = mixed ? undefined : all.find((r) => isRowSelected(value, r));
     return [
       ...(showUnassigned ? ([{ kind: "unassigned" }] as const) : []),
       ...(selectedRow ? [selectedRow] : []),
@@ -150,9 +158,10 @@ export function AssigneePickerBody({
       ...agentRows.filter((r) => !isRowSelected(value, r)),
       ...squadRows.filter((r) => !isRowSelected(value, r)),
     ];
-  }, [members, agents, squads, query, value, kinds, showUnassigned]);
+  }, [members, agents, squads, query, value, kinds, showUnassigned, mixed]);
 
-  const isSelected = (row: Row) => isRowSelected(value, row);
+  const isSelected = (row: Row) =>
+    !mixed && isRowSelected(value, row);
 
   const select = (row: Row) => {
     if (row.kind === "unassigned") onChange(null);

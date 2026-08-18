@@ -37,6 +37,7 @@ import { ActorAvatar } from "@/components/ui/actor-avatar";
 // IssuesHeader pattern (scope + filter share a row).
 import { StatusIcon } from "@/components/ui/status-icon";
 import { IssueRow } from "@/components/issue/issue-row";
+import { BatchActionBar } from "@/components/issue/batch-action-bar";
 import { BoardView } from "@/components/issue/board-view";
 import { ViewModeToggle } from "@/components/issue/view-mode-toggle";
 import { IssueViewBar } from "@/components/issue/issue-view-bar";
@@ -51,6 +52,7 @@ import {
   useIssuesViewStore,
   type IssuesScope,
 } from "@/data/stores/issues-view-store";
+import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection-store";
 import {
   issueViewContainerKey,
   useActiveIssueViewStore,
@@ -102,6 +104,7 @@ const SCOPES: { value: IssuesScope; labelKey: string }[] = [
 export default function IssuesPage() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
+  const batchSelectionMode = useIssueBatchSelectionStore((s) => s.selectionMode);
   const { t } = useTranslation();
 
   const scope = useIssuesViewStore((s) => s.scope);
@@ -161,6 +164,13 @@ export default function IssuesPage() {
 
   useClearFiltersOnWorkspaceChange(
     useIssuesViewStore.getState().clearFilters,
+    wsId,
+  );
+
+  // Batch selection is workspace-scoped — drop it when switching workspaces
+  // (same hook the my-issues tab uses).
+  useClearFiltersOnWorkspaceChange(
+    useIssueBatchSelectionStore.getState().exitSelection,
     wsId,
   );
 
@@ -434,11 +444,13 @@ export default function IssuesPage() {
           renderSectionHeader={({ section }) => (
             <IssuesSectionHeader section={section} />
           )}
-          contentContainerClassName="pb-6"
+          contentContainerClassName={
+            batchSelectionMode ? "pb-48" : "pb-6"
+          }
           renderItem={({ item }) => (
-            <IssueRow
+            <IssueRowCell
               issue={item}
-              onPress={() => {
+              onOpen={() => {
                 if (wsSlug) router.push(`/${wsSlug}/issue/${item.id}`);
               }}
             />
@@ -447,7 +459,43 @@ export default function IssuesPage() {
           onRefresh={refetch}
         />
       )}
+
+      {view === "list" && sorted.length > 0 ? (
+        <BatchActionBar issues={sorted} />
+      ) : null}
     </View>
+  );
+}
+
+/**
+ * Row cell wired to the batch-selection store — same contract as the
+ * my-issues tab: in selection mode the row toggles membership on tap instead
+ * of navigating, and long-press enters selection mode pre-selecting this row.
+ */
+function IssueRowCell({
+  issue,
+  onOpen,
+}: {
+  issue: Issue;
+  onOpen: () => void;
+}) {
+  const selectionMode = useIssueBatchSelectionStore((s) => s.selectionMode);
+  const selected = useIssueBatchSelectionStore((s) =>
+    s.selectedIds.has(issue.id),
+  );
+  const toggle = useIssueBatchSelectionStore((s) => s.toggle);
+  const enterSelection = useIssueBatchSelectionStore((s) => s.enterSelection);
+  return (
+    <IssueRow
+      issue={issue}
+      selectionMode={selectionMode}
+      selected={selected}
+      onPress={() => {
+        if (selectionMode) toggle(issue.id);
+        else onOpen();
+      }}
+      onLongPress={() => enterSelection(issue.id)}
+    />
   );
 }
 

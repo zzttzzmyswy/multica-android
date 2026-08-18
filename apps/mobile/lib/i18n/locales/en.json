@@ -1669,5 +1669,18 @@
   "issueViews.saved": "View saved",
   "issueViews.saveFailed": "Could not save the view",
   "issueViews.sharedBadge": "Shared",
-  "issueViews.noViews": "No saved views yet — the filters, sort and grouping you set here can be saved for later."
+  "issueViews.noViews": "No saved views yet — the filters, sort and grouping you set here can be saved for later.",
+  "batch.updateSuccess": "Updated {{count}} issues",
+  "batch.deleteSuccess": "Deleted {{count}} issues",
+  "batch.selectAll": "Select all",
+  "batch.clearSelection": "Clear selection",
+  "batch.confirmAssignTitle": "Confirm assignment?",
+  "batch.confirmAssignOne": "Assign this issue to {{name}}. They'll start right away if the run conditions are met.",
+  "batch.confirmAssignBatch": "Assign {{count}} issues to {{name}}. They'll start right away if the run conditions are met.",
+  "batch.handoffNote": "Handoff note (optional)",
+  "batch.handoffPlaceholder": "Tell them what matters — scope, focus, or what to avoid…",
+  "batch.confirmAssign": "Confirm assignment",
+  "batch.dontStart": "Don't start yet",
+  "batch.assignFailedTitle": "Assignment failed",
+  "batch.assignFailedBody": "Couldn't assign the selected issues. Please try again."
 }

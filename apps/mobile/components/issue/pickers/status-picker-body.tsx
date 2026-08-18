@@ -21,7 +21,9 @@ import { useTranslation } from "@/lib/i18n/react";
 const ALL_STATUSES: IssueStatus[] = [...BOARD_STATUSES, "cancelled"];
 
 interface Props {
-  value: IssueStatus;
+  /** Currently selected status. `null` means "mixed selection" for batch
+   *  pickers — no row is checked, and picking one applies it to the batch. */
+  value: IssueStatus | null;
   onChange: (next: IssueStatus) => void;
 }
 
@@ -38,7 +40,7 @@ export function StatusPickerBody({ value, onChange }: Props) {
       </View>
       <View className="px-2">
         {ALL_STATUSES.map((status) => {
-          const selected = status === value;
+          const selected = value !== null && status === value;
           return (
             <Pressable
               key={status}

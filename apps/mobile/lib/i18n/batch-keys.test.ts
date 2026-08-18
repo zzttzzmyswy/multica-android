@@ -9,8 +9,10 @@ vi.mock("expo-localization", () => ({
   getLocales: vi.fn(),
 }));
 
-// Iteration-46 batch-action i18n. Same contract as subscription-keys.test.ts:
-// every key resolves in BOTH locales and the zh value is actually translated.
+// Iteration-46 batch-action i18n (extended in iteration-66 with success copy
+// and the agent/squad assignment run-confirm). Same contract as
+// subscription-keys.test.ts: every key resolves in BOTH locales and the zh
+// value is actually translated.
 describe("batch action i18n", () => {
   let mod: Awaited<ReturnType<typeof loadI18n>>;
 
@@ -40,6 +42,20 @@ describe("batch action i18n", () => {
     "batch.updateFailedBody": "无法更新选中的问题，请重试。",
     "batch.deleteFailedTitle": "删除失败",
     "batch.deleteFailedBody": "无法删除选中的问题，请重试。",
+    // Iteration-66 additions: success copy + run-confirm for agent/squad assign.
+    "batch.updateSuccess": "已更新 {{count}} 项",
+    "batch.deleteSuccess": "已删除 {{count}} 项",
+    "batch.selectAll": "全选",
+    "batch.clearSelection": "清空",
+    "batch.confirmAssignTitle": "确认指派？",
+    "batch.confirmAssignOne": "将这个任务指派给 {{name}}；符合运行条件时会立即开始处理。",
+    "batch.confirmAssignBatch": "将 {{count}} 个任务指派给 {{name}}；符合运行条件时会立即开始处理。",
+    "batch.handoffNote": "交接说明（可选）",
+    "batch.handoffPlaceholder": "交代一句——范围、重点、或别碰什么……",
+    "batch.confirmAssign": "确认指派",
+    "batch.dontStart": "暂不开始",
+    "batch.assignFailedTitle": "指派失败",
+    "batch.assignFailedBody": "无法指派选中的问题，请重试。",
   };
 
   it("resolves every batch key in both locales with a real zh translation", () => {
