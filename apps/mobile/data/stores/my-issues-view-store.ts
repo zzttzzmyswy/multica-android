@@ -22,17 +22,22 @@ import {
   defaultIssueFilterSlice,
   hasActiveIssueFilters,
   type IssueFilterSlice,
+  type IssueViewMode,
 } from "./issue-filter-slice";
 
 export interface MyIssuesViewState extends IssueFilterSlice {
   scope: MyIssuesScope;
+  view: IssueViewMode;
   setScope: (scope: MyIssuesScope) => void;
+  setView: (view: IssueViewMode) => void;
 }
 
 export const useMyIssuesViewStore = create<MyIssuesViewState>((set) => ({
   scope: "assigned",
+  view: "list",
   ...defaultIssueFilterSlice(),
   setScope: (scope) => set({ scope }),
+  setView: (view) => set({ view }),
   ...createIssueFilterActions<MyIssuesViewState>(set),
 }));
 

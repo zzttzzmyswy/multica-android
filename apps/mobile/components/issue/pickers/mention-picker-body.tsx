@@ -178,7 +178,7 @@ export function MentionPickerBody({ query, mode = "comment" }: Props) {
       }
     }
     return out;
-  }, [mode, members, agents, squads, issueResults, query, t]);
+  }, [members, agents, squads, issueResults, query, t]);
 
   const pick = (row: Row) => {
     let chip: MentionChipDraft | null = null;

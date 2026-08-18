@@ -286,14 +286,21 @@ export interface IssueGroupSection {
 }
 
 /**
- * Build SectionList sections for the given grouping. `status` uses
- * BOARD_STATUSES order (web issues-page.tsx) filtered to non-empty;
- * `assignee` uses the role lane order. Consumed by both issue list screens.
+ * Build SectionList sections / board columns for the given grouping.
+ * `status` uses BOARD_STATUSES order (web issues-page.tsx); `assignee`
+ * uses the role lane order. Consumed by both issue list screens.
+ *
+ * `includeEmpty` keeps empty status columns (board mode needs every status
+ * as a visible column, like web's `buildGroups` at
+ * packages/views/issues/components/board-view.tsx — the list keeps dropping
+ * empty sections). Assignee lanes are data-driven, so the flag has no
+ * effect on that grouping.
  */
 export function groupIssues(
   issues: Issue[],
   grouping: IssueGrouping,
   statusOrder: readonly IssueStatus[],
+  includeEmpty = false,
 ): IssueGroupSection[] {
   if (grouping === "assignee") {
     const byKey = new Map<
@@ -343,5 +350,5 @@ export function groupIssues(
       unassigned: false,
       data: byStatus.get(status) ?? [],
     }))
-    .filter((s) => s.data.length > 0);
+    .filter((s) => includeEmpty || s.data.length > 0);
 }

@@ -269,6 +269,30 @@ describe("groupIssues", () => {
     expect(groups[0]?.data.map((i) => i.id)).toEqual(["a", "b"]);
   });
 
+  it("status grouping keeps empty columns in BOARD_STATUSES order when includeEmpty is set", () => {
+    const groups = groupIssues([c, a, b], "status", BOARD_STATUSES, true);
+    const statuses = groups.map((g) => g.status);
+    expect(statuses).toEqual([
+      "backlog",
+      "todo",
+      "in_progress",
+      "in_review",
+      "done",
+      "blocked",
+    ]);
+    const asMap = new Map(groups.map((g) => [g.status, g.data]));
+    expect(asMap.get("done")?.map((i) => i.id)).toEqual(["c"]);
+    expect(asMap.get("backlog")).toEqual([]);
+    expect(asMap.get("blocked")).toEqual([]);
+  });
+
+  it("assignee grouping ignores includeEmpty (lanes are data-driven)", () => {
+    const plain = groupIssues([a, b, c], "assignee", BOARD_STATUSES);
+    const withEmpty = groupIssues([a, b, c], "assignee", BOARD_STATUSES, true);
+    expect(withEmpty.map((g) => g.key)).toEqual(plain.map((g) => g.key));
+    expect(withEmpty.map((g) => g.data)).toEqual(plain.map((g) => g.data));
+  });
+
   it("assignee grouping: unassigned lane first, then alphabetical by key", () => {
     const groups = groupIssues([a, b, c], "assignee", BOARD_STATUSES);
     const keys = groups.map((g) => g.key);

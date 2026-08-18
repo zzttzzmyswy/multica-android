@@ -32,6 +32,8 @@ import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { IssueRow } from "@/components/issue/issue-row";
 import { BatchActionBar } from "@/components/issue/batch-action-bar";
+import { BoardView } from "@/components/issue/board-view";
+import { ViewModeToggle } from "@/components/issue/view-mode-toggle";
 import { IssuesLoading } from "@/components/issue/issues-loading";
 import {
   buildMyIssuesFilter,
@@ -90,6 +92,8 @@ export default function MyIssues() {
 
   const scope = useMyIssuesViewStore((s) => s.scope);
   const setScope = useMyIssuesViewStore((s) => s.setScope);
+  const view = useMyIssuesViewStore((s) => s.view);
+  const setView = useMyIssuesViewStore((s) => s.setView);
   const grouping = useMyIssuesViewStore((s) => s.grouping);
   const sortBy = useMyIssuesViewStore((s) => s.sortBy);
   const sortDirection = useMyIssuesViewStore((s) => s.sortDirection);
@@ -229,6 +233,8 @@ export default function MyIssues() {
         onChange={(v) => setScope(v)}
         onOpenFilter={openFilter}
         hasActiveFilters={hasActiveFilterChips}
+        view={view}
+        onViewChange={setView}
         t={t}
       />
       {hasActiveFilterChips ? (
@@ -286,6 +292,20 @@ export default function MyIssues() {
               : emptyMessageForScope(scope, t)
           }
         />
+      ) : view === "board" ? (
+        <BoardView
+          issues={sorted}
+          grouping={grouping}
+          statusOrder={BOARD_STATUSES}
+          onOpenIssue={(issue) => {
+            if (wsSlug) router.push(`/${wsSlug}/issue/${issue.id}`);
+          }}
+          emptyLabel={
+            hasActiveFilterChips
+              ? t("myIssues.filterEmpty")
+              : emptyMessageForScope(scope, t)
+          }
+        />
       ) : (
         <SectionList
           sections={sections}
@@ -313,7 +333,9 @@ export default function MyIssues() {
         />
       )}
 
-      {sorted.length > 0 ? <BatchActionBar issues={sorted} /> : null}
+      {view === "list" && sorted.length > 0 ? (
+        <BatchActionBar issues={sorted} />
+      ) : null}
 
     </View>
   );
@@ -409,6 +431,8 @@ function ScopeToolbar<S extends string>({
   onChange,
   onOpenFilter,
   hasActiveFilters,
+  view,
+  onViewChange,
   t,
 }: {
   scopes: { value: S; labelKey: string }[];
@@ -416,6 +440,8 @@ function ScopeToolbar<S extends string>({
   onChange: (value: S) => void;
   onOpenFilter: () => void;
   hasActiveFilters: boolean;
+  view: "list" | "board";
+  onViewChange: (view: "list" | "board") => void;
   t: (id: string, params?: Record<string, string | number>) => string;
 }) {
   return (
@@ -442,10 +468,13 @@ function ScopeToolbar<S extends string>({
           );
         })}
       </View>
-      <FilterButton
-        onPress={onOpenFilter}
-        hasActiveFilters={hasActiveFilters}
-      />
+      <View className="flex-row items-center gap-1.5 ml-2">
+        <ViewModeToggle view={view} onChange={onViewChange} />
+        <FilterButton
+          onPress={onOpenFilter}
+          hasActiveFilters={hasActiveFilters}
+        />
+      </View>
     </View>
   );
 }

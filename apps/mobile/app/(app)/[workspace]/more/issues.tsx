@@ -36,6 +36,8 @@ import { ActorAvatar } from "@/components/ui/actor-avatar";
 // IssuesHeader pattern (scope + filter share a row).
 import { StatusIcon } from "@/components/ui/status-icon";
 import { IssueRow } from "@/components/issue/issue-row";
+import { BoardView } from "@/components/issue/board-view";
+import { ViewModeToggle } from "@/components/issue/view-mode-toggle";
 import { IssuesLoading } from "@/components/issue/issues-loading";
 import { issueListOptions } from "@/data/queries/issues";
 import { projectListOptions } from "@/data/queries/projects";
@@ -88,6 +90,8 @@ export default function IssuesPage() {
 
   const scope = useIssuesViewStore((s) => s.scope);
   const setScope = useIssuesViewStore((s) => s.setScope);
+  const view = useIssuesViewStore((s) => s.view);
+  const setView = useIssuesViewStore((s) => s.setView);
   const grouping = useIssuesViewStore((s) => s.grouping);
   const sortBy = useIssuesViewStore((s) => s.sortBy);
   const sortDirection = useIssuesViewStore((s) => s.sortDirection);
@@ -232,6 +236,8 @@ export default function IssuesPage() {
         onChange={(v) => setScope(v)}
         onOpenFilter={openFilter}
         hasActiveFilters={hasActiveFilterChips}
+        view={view}
+        onViewChange={setView}
         t={t}
       />
       {hasActiveFilterChips ? (
@@ -284,6 +290,20 @@ export default function IssuesPage() {
       ) : showEmptyState ? (
         <EmptyState
           message={
+            hasActiveFilterChips
+              ? t("issues.filterEmpty")
+              : emptyMessageForScope(scope, t)
+          }
+        />
+      ) : view === "board" ? (
+        <BoardView
+          issues={sorted}
+          grouping={grouping}
+          statusOrder={BOARD_STATUSES}
+          onOpenIssue={(issue) => {
+            if (wsSlug) router.push(`/${wsSlug}/issue/${issue.id}`);
+          }}
+          emptyLabel={
             hasActiveFilterChips
               ? t("issues.filterEmpty")
               : emptyMessageForScope(scope, t)
@@ -417,6 +437,8 @@ function ScopeToolbar<S extends string>({
   onChange,
   onOpenFilter,
   hasActiveFilters,
+  view,
+  onViewChange,
   t,
 }: {
   scopes: { value: S; labelKey: string }[];
@@ -424,6 +446,8 @@ function ScopeToolbar<S extends string>({
   onChange: (value: S) => void;
   onOpenFilter: () => void;
   hasActiveFilters: boolean;
+  view: "list" | "board";
+  onViewChange: (view: "list" | "board") => void;
   t: (id: string, params?: Record<string, string | number>) => string;
 }) {
   return (
@@ -450,10 +474,13 @@ function ScopeToolbar<S extends string>({
           );
         })}
       </View>
-      <FilterButton
-        onPress={onOpenFilter}
-        hasActiveFilters={hasActiveFilters}
-      />
+      <View className="flex-row items-center gap-1.5 ml-2">
+        <ViewModeToggle view={view} onChange={onViewChange} />
+        <FilterButton
+          onPress={onOpenFilter}
+          hasActiveFilters={hasActiveFilters}
+        />
+      </View>
     </View>
   );
 }

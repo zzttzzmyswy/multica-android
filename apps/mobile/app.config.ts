@@ -39,7 +39,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // Convention: major*100 + minor*10 + patch — keep it monotonic with every
       // `version` bump so self-hosted APK updates always upgrade. Shown as the
       // About-page "build" number (Constants.platform.android.versionCode).
-      versionCode: 500,
+      versionCode: 501,
       // Adaptive icon: separate full-bleed background + centered foreground so
       // Android launchers can mask them into circles / squiggles cleanly.
       adaptiveIcon: {

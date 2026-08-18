@@ -40,19 +40,24 @@ import {
   type IssueGrouping,
   type IssueSortDirection,
   type IssueSortField,
+  type IssueViewMode,
 } from "./issue-filter-slice";
 
 export type IssuesScope = "all" | "members" | "agents";
 
 export interface IssuesViewState extends IssueFilterSlice {
   scope: IssuesScope;
+  view: IssueViewMode;
   setScope: (scope: IssuesScope) => void;
+  setView: (view: IssueViewMode) => void;
 }
 
 export const useIssuesViewStore = create<IssuesViewState>((set) => ({
   scope: "all",
+  view: "list",
   ...defaultIssueFilterSlice(),
   setScope: (scope) => set({ scope }),
+  setView: (view) => set({ view }),
   ...createIssueFilterActions<IssuesViewState>(set),
 }));
 

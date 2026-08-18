@@ -41,6 +41,21 @@ export type IssueSortDirection = "asc" | "desc";
 /** Grouping mirroring web `GROUPING_OPTIONS` (status / assignee). */
 export type IssueGrouping = "status" | "assignee";
 
+/**
+ * Issue-workbench view mode. Mobile surface of web `ViewMode` — only the
+ * two modes that make sense on a phone are exposed (web also has table /
+ * swimlane / gantt). Lives here so both issue-list view stores share one
+ * wire default, but the field itself lives on each store (like `scope`),
+ * NOT in the filter slice — clearing filters must not reset the user's
+ * chosen view.
+ */
+export type IssueViewMode = "list" | "board";
+
+export const ISSUE_VIEW_MODES: { value: IssueViewMode; labelKey: string }[] = [
+  { value: "list", labelKey: "issues.viewList" },
+  { value: "board", labelKey: "issues.viewBoard" },
+];
+
 export const ISSUE_SORT_OPTIONS: { value: IssueSortField; labelKey: string }[] =
   [
     { value: "position", labelKey: "filter.sort.position" },
