@@ -20,6 +20,7 @@ import type {
   Issue,
   IssuePriority,
   IssueStatus,
+  IssueStatusCategory,
 } from "@multica/core/types";
 import type {
   ActorFilterValue,
@@ -28,6 +29,7 @@ import type {
   IssueSortDirection,
   IssueSortField,
 } from "@/data/stores/issue-filter-slice";
+import { issueStatusCategoryOfIssue } from "./issue-status-catalog";
 
 export interface IssueFilterState {
   statusFilters: IssueStatus[];
@@ -342,12 +344,23 @@ export interface IssueGroupSection {
  * packages/views/issues/components/board-view.tsx — the list keeps dropping
  * empty sections). Assignee lanes are data-driven, so the flag has no
  * effect on that grouping.
+ *
+ * Status grouping folds by CATEGORY (MUL-6243): each issue bucketed via
+ * `statusCategoryOf` — server-backfilled `status_category` first, built-in
+ * key fallback — so a custom status lands in the column whose behavior it
+ * inherits instead of gaining a column of its own. A status the resolver
+ * cannot categorize (custom key before the catalog loaded) stays out of the
+ * fixed columns, same as unknown keys always have been. With no custom
+ * statuses the result is byte-identical to key grouping.
  */
 export function groupIssues(
   issues: Issue[],
   grouping: IssueGrouping,
   statusOrder: readonly IssueStatus[],
   includeEmpty = false,
+  statusCategoryOf: (
+    issue: Issue,
+  ) => IssueStatusCategory | null = issueStatusCategoryOfIssue,
 ): IssueGroupSection[] {
   if (grouping === "assignee") {
     const byKey = new Map<
@@ -383,13 +396,18 @@ export function groupIssues(
     });
   }
 
-  // status grouping — web issues-page.tsx order
+  // status grouping — web issues-page.tsx order, folded by category.
   const byStatus = new Map<IssueStatus, Issue[]>();
   for (const issue of issues) {
-    const list = byStatus.get(issue.status);
+    const statusKey = statusCategoryOf(issue) ?? issue.status;
+    const list = byStatus.get(statusKey);
     if (list) list.push(issue);
-    else byStatus.set(issue.status, [issue]);
+    else byStatus.set(statusKey, [issue]);
   }
+  // Note: a status whose category the resolver could not determine (a custom
+  // key before the catalog landed) buckets by its raw key and falls outside
+  // `statusOrder`, so it renders in no column — exactly the pre-catalog
+  // contract (unknown keys / cancelled never gain a column).
   return statusOrder
     .map((status) => ({
       key: status,
