@@ -100,6 +100,7 @@ export default function SettingsPage() {
     router.push(`/${currentSlug}/more/settings/issues`);
   const goWorkspaceSettings = () =>
     router.push(`/${currentSlug}/more/settings/workspace`);
+  const goBilling = () => router.push(`/${currentSlug}/more/settings/billing`);
 
   // Language follows the theme picker's tap-to-act pattern. The local switch
   // takes effect immediately (setLocale/resetLocale persist + notify), and
@@ -226,6 +227,13 @@ export default function SettingsPage() {
           chevronColor={mutedFg}
           title={t("settings.workspaceSettings")}
           subtitle={t("settings.workspaceSettingsSub")}
+        />
+        <Separator />
+        <NavRow
+          onPress={goBilling}
+          chevronColor={mutedFg}
+          title={t("screen.billing")}
+          subtitle={t("billing.description")}
         />
       </SectionGroup>
 

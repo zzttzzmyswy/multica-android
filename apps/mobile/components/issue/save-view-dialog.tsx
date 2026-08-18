@@ -23,8 +23,17 @@ export interface SaveViewDialogProps {
    *  workspace-scoped surfaces (server constrains my views to private). */
   visibilityAllowed: boolean;
   initialVisibility?: "private" | "workspace";
+  /** Show the sort-direction toggle (iteration-67, mirrors web
+   *  save-view-dialog.tsx:157-198 sort section). Defaults to off so the few
+   *  surfaces that don't track a slice keep the minimal form. */
+  sortDirectionAllowed?: boolean;
+  initialSortDirection?: "asc" | "desc";
   onCancel: () => void;
-  onSubmit: (name: string, visibility: "private" | "workspace") => void;
+  onSubmit: (
+    name: string,
+    visibility: "private" | "workspace",
+    sortDirection: "asc" | "desc",
+  ) => void;
 }
 
 /** Server-side cap on a view name (server issue_view.go issueViewNameMaxLen). */
@@ -35,6 +44,8 @@ export function SaveViewDialog({
   initialName = "",
   visibilityAllowed,
   initialVisibility = "private",
+  sortDirectionAllowed = false,
+  initialSortDirection = "asc",
   onCancel,
   onSubmit,
 }: SaveViewDialogProps) {
@@ -43,10 +54,14 @@ export function SaveViewDialog({
   const [visibility, setVisibility] = useState<"private" | "workspace">(
     initialVisibility,
   );
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">(
+    initialSortDirection,
+  );
 
   const handleShow = () => {
     setDraft(initialName);
     setVisibility(initialVisibility);
+    setSortDirection(initialSortDirection);
   };
 
   const trimmed = draft.trim();
@@ -54,7 +69,11 @@ export function SaveViewDialog({
 
   const confirm = () => {
     if (!dirty) return;
-    onSubmit(trimmed, visibilityAllowed ? visibility : "private");
+    onSubmit(
+      trimmed,
+      visibilityAllowed ? visibility : "private",
+      sortDirection,
+    );
   };
 
   return (
@@ -110,6 +129,31 @@ export function SaveViewDialog({
                       accessibilityState={{ selected: visibility === "workspace" }}
                     >
                       <Text>{t("issueViews.visibilityWorkspace")}</Text>
+                    </Button>
+                  </View>
+                </View>
+              ) : null}
+              {sortDirectionAllowed ? (
+                <View className="gap-1">
+                  <Text className="text-xs text-muted-foreground">
+                    {t("issueViews.sortLabel")}
+                  </Text>
+                  <View className="flex-row gap-2">
+                    <Button
+                      variant={sortDirection === "asc" ? "default" : "outline"}
+                      size="sm"
+                      onPress={() => setSortDirection("asc")}
+                      accessibilityState={{ selected: sortDirection === "asc" }}
+                    >
+                      <Text>{t("issueViews.sortAsc")}</Text>
+                    </Button>
+                    <Button
+                      variant={sortDirection === "desc" ? "default" : "outline"}
+                      size="sm"
+                      onPress={() => setSortDirection("desc")}
+                      accessibilityState={{ selected: sortDirection === "desc" }}
+                    >
+                      <Text>{t("issueViews.sortDesc")}</Text>
                     </Button>
                   </View>
                 </View>

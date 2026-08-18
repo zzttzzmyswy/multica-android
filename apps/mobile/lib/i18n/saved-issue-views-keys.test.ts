@@ -35,6 +35,16 @@ describe("saved issue views i18n", () => {
     "issueViews.unshare": "设为私密",
     "issueViews.delete": "删除视图",
     "issueViews.modified": "该视图有未保存的修改",
+    "issueViews.hide": "从栏中隐藏",
+    "issueViews.show": "在栏中显示",
+    "issueViews.manageViews": "管理视图",
+    "issueViews.reorderHint": "调整可见视图顺序，或隐藏/重新显示。隐藏的视图仍会保留。",
+    "issueViews.hidden": "已隐藏",
+    "issueViews.moveUp": "上移",
+    "issueViews.moveDown": "下移",
+    "issueViews.sortLabel": "排序方向",
+    "issueViews.sortAsc": "升序",
+    "issueViews.sortDesc": "降序",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {

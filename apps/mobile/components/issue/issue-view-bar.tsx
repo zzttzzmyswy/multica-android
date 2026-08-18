@@ -15,15 +15,24 @@
  *     exactly web's save-view-dialog payload).
  *
  * Long-pressing a chip opens the manage action sheet: Rename / Duplicate /
- * share or unshare (workspace-scoped views only) / Delete — all gated by
- * the same `canManageIssueView` affordance rule the server re-checks on
- * write. This mirrors web's manage-views-dialog in a phone-native shape.
+ * share or unshare (workspace-scoped views only) / Hide (bar preference) /
+ * Delete — all gated by the same `canManageIssueView` affordance rule the
+ * server re-checks on write (Hide/Show is a personal preference, always
+ * available). This mirrors web's manage-views-dialog + view-bar.tsx:202-262
+ * in a phone-native shape.
+ *
+ * Iteration-67 adds the view-bar preference: a per-scope `{hidden, order}`
+ * doc persisted via /api/issue-view-preferences (get/put with optimistic
+ * patch) — hiding the active view auto-exits it, the "reorder-three" button
+ * opens a manage list (hide/reveal + move up/down), and applying a view lets
+ * the user pick its sort direction in the save/edit dialog (sent in
+ * `display.sortDirection`).
  *
  * Date and scope remain user layers on top of a view (web semantics) — the
  * save dialog only captures the nine filter dims + display defaults.
  */
-import { useCallback, useState } from "react";
-import { Alert, Pressable, ScrollView, View } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { Alert, Modal, Pressable, ScrollView, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -40,6 +49,15 @@ import {
   issueViewListOptions,
 } from "@/data/queries/issue-views";
 import {
+  applyViewBarPrefs,
+  EMPTY_VIEW_BAR_PREFS,
+  issueViewPreferenceOptions,
+  sanitizeViewBarPrefs,
+  viewBarItemId,
+  type ViewBarPrefs,
+} from "@/data/queries/issue-view-prefs";
+import { useUpdateIssueViewPreference } from "@/data/mutations/issue-view-prefs";
+import {
   useCreateIssueView,
   useDeleteIssueView,
   useUpdateIssueView,
@@ -47,6 +65,7 @@ import {
 import { memberListOptions } from "@/data/queries/members";
 import {
   type IssueViewSnapshotSource,
+  sanitizeViewDisplay,
   viewDisplayFromState,
   viewQueryFromSnapshot,
 } from "@/data/stores/issue-view-codec";
@@ -93,11 +112,50 @@ export function IssueViewBar({
   const updateView = useUpdateIssueView(wsId, scope);
   const deleteView = useDeleteIssueView(wsId, scope);
 
+  // View-bar preference (hidden + order, per scope) — iteration-67. Mirrors
+  // web view-bar.tsx:204-206 / preferences.ts applyViewBarPrefs. The doc is
+  // upserted optimistically on every toggle/reorder via the mutation below.
+  const { data: preference } = useQuery({
+    ...issueViewPreferenceOptions(wsId, scope),
+  });
+  const prefs: ViewBarPrefs = preference?.prefs ?? EMPTY_VIEW_BAR_PREFS;
+  const updatePreference = useUpdateIssueViewPreference(wsId, scope);
+
+  const allViewItems = useMemo(
+    () => (views ?? []).map((view) => ({ barItemId: viewBarItemId(view.id), view })),
+    [views],
+  );
+  const { visible: visibleItems, hiddenSet } = useMemo(
+    () => applyViewBarPrefs(allViewItems, prefs),
+    [allViewItems, prefs],
+  );
+
+  /** Persist a prefs doc, dropping stale ids (deleted views) — mirrors web
+   *  view-bar.tsx:305-317 savePrefs. */
+  const savePrefs = (next: ViewBarPrefs) => {
+    updatePreference.mutate(
+      sanitizeViewBarPrefs(next, (views ?? []).map((v) => viewBarItemId(v.id))),
+    );
+  };
+
+  /** Hide/reveal a view. Hiding the active view exits it first — mirrors web
+   *  view-bar.tsx:345-356 toggleHidden. */
+  const toggleHidden = (view: IssueView, hidden: boolean) => {
+    const id = viewBarItemId(view.id);
+    const nextHidden = new Set(hiddenSet);
+    if (hidden) nextHidden.add(id);
+    else nextHidden.delete(id);
+    if (hidden && activeViewId === view.id) onExitView();
+    const nextOrder = allViewItems.map((item) => item.barItemId);
+    savePrefs({ hidden: [...nextHidden], order: nextOrder });
+  };
+
   const [dialog, setDialog] = useState<
     | { mode: "create" }
     | { mode: "edit"; view: IssueView }
     | null
   >(null);
+  const [manageOpen, setManageOpen] = useState(false);
 
   const canManage = useCallback(
     (view: IssueView) =>
@@ -107,11 +165,26 @@ export function IssueViewBar({
 
   const openSaveDialog = () => setDialog({ mode: "create" });
 
-  const submitSave = (name: string, visibility: "private" | "workspace") => {
+  const submitSave = (
+    name: string,
+    visibility: "private" | "workspace",
+    sortDirection: "asc" | "desc",
+  ) => {
     if (dialog?.mode === "edit") {
       const target = dialog.view;
+      const currentSort = sanitizeViewDisplay(
+        target.display ?? {},
+        slice.sortBy,
+      ).sortDirection;
       updateView.mutate(
-        { id: target.id, name, expected_revision: target.revision },
+        {
+          id: target.id,
+          name,
+          expected_revision: target.revision,
+          ...(currentSort !== sortDirection
+            ? { display: { ...target.display, sortDirection } }
+            : {}),
+        },
         { onSettled: () => setDialog(null) },
       );
       return;
@@ -130,7 +203,7 @@ export function IssueViewBar({
           view: viewMode,
           grouping: slice.grouping,
           sortBy: slice.sortBy,
-          sortDirection: slice.sortDirection,
+          sortDirection,
         }),
       },
       {
@@ -152,6 +225,7 @@ export function IssueViewBar({
       | { kind: "duplicate" }
       | { kind: "share" }
       | { kind: "unshare" }
+      | { kind: "hide" }
       | { kind: "delete" }
       | { kind: "cancel" };
 
@@ -174,6 +248,14 @@ export function IssueViewBar({
           : { kind: "share" },
       );
     }
+    // Iteration-67: hide/reveal is a personal bar preference, not a manager
+    // action — always available (web view-bar.tsx:202-262).
+    push(
+      hiddenSet.has(viewBarItemId(view.id))
+        ? t("issueViews.show")
+        : t("issueViews.hide"),
+      { kind: "hide" },
+    );
     if (manageable) push(t("issueViews.delete"), { kind: "delete" });
     push(t("menu.cancel"), { kind: "cancel" });
 
@@ -215,6 +297,9 @@ export function IssueViewBar({
               expected_revision: view.revision,
             });
             break;
+          case "hide":
+            toggleHidden(view, !hiddenSet.has(viewBarItemId(view.id)));
+            break;
           case "delete":
             Alert.alert(
               t("issueViews.deleteConfirmTitle"),
@@ -251,7 +336,7 @@ export function IssueViewBar({
           showsHorizontalScrollIndicator={false}
           contentContainerClassName="gap-1.5 items-center pr-2"
         >
-          {views && views.length === 0 ? (
+          {visibleItems.length === 0 ? (
             <Text
               className="text-xs text-muted-foreground py-1 max-w-72"
               numberOfLines={1}
@@ -259,7 +344,7 @@ export function IssueViewBar({
               {t("issueViews.noViews")}
             </Text>
           ) : (
-            (views ?? []).map((view) => {
+            visibleItems.map(({ view }) => {
               const active = activeViewId === view.id;
               const shared = view.visibility === "workspace";
               const showDot = active && modifiedActive;
@@ -302,12 +387,23 @@ export function IssueViewBar({
             })
           )}
         </ScrollView>
+        {allViewItems.length > 1 ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            onPress={() => setManageOpen(true)}
+            accessibilityLabel={t("issueViews.manageViews")}
+            className="ml-auto shrink-0"
+          >
+            <Ionicons name="reorder-three" size={20} color={dim} />
+          </Button>
+        ) : null}
         <Button
           variant="ghost"
           size="icon"
           onPress={openSaveDialog}
           accessibilityLabel={t("issueViews.saveView")}
-          className="ml-auto shrink-0"
+          className="shrink-0"
         >
           <Ionicons name="add" size={18} color={fg} />
         </Button>
@@ -323,9 +419,148 @@ export function IssueViewBar({
             : "private"
         }
         visibilityAllowed={scope.scope_type === "workspace"}
+        sortDirectionAllowed
+        initialSortDirection={
+          dialog?.mode === "edit"
+            ? sanitizeViewDisplay(dialog.view.display ?? {}, slice.sortBy)
+                .sortDirection
+            : slice.sortDirection
+        }
         onCancel={() => setDialog(null)}
         onSubmit={submitSave}
       />
+      <ViewBarManageModal
+        visible={manageOpen}
+        items={allViewItems}
+        prefs={prefs}
+        hiddenSet={hiddenSet}
+        onToggleHidden={(view, hidden) => toggleHidden(view, hidden)}
+        onMove={(viewId, direction) => {
+          const current = applyViewBarPrefs(allViewItems, prefs).ordered.map(
+            (i) => i.barItemId,
+          );
+          const id = viewBarItemId(viewId);
+          const index = current.indexOf(id);
+          const target = direction === "up" ? index - 1 : index + 1;
+          if (index < 0 || target < 0 || target >= current.length) return;
+          const next = [...current];
+          const [moved] = next.splice(index, 1);
+          next.splice(target, 0, moved);
+          savePrefs({ hidden: [...hiddenSet], order: next });
+        }}
+        onClose={() => setManageOpen(false)}
+      />
     </>
+  );
+}
+
+function ViewBarManageModal({
+  visible,
+  items,
+  prefs,
+  hiddenSet,
+  onToggleHidden,
+  onMove,
+  onClose,
+}: {
+  visible: boolean;
+  items: { barItemId: string; view: IssueView }[];
+  prefs: ViewBarPrefs;
+  hiddenSet: Set<string>;
+  onToggleHidden: (view: IssueView, hidden: boolean) => void;
+  onMove: (viewId: string, direction: "up" | "down") => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const { colorScheme } = useColorScheme();
+  const dim = THEME[colorScheme].mutedForeground;
+  const ordered = applyViewBarPrefs(items, prefs).ordered;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <Pressable className="flex-1 bg-black/40" onPress={onClose}>
+        <View className="flex-1 items-center justify-center px-6">
+          <Pressable onPress={() => {}} className="w-full max-w-sm">
+            <View className="bg-popover rounded-2xl overflow-hidden p-4 gap-3">
+              <Text className="text-base font-semibold text-foreground">
+                {t("issueViews.manageViews")}
+              </Text>
+              <Text className="text-xs text-muted-foreground leading-4">
+                {t("issueViews.reorderHint")}
+              </Text>
+              <View className="max-h-80 gap-1">
+                {ordered.map(({ view }, index) => {
+                  const hidden = hiddenSet.has(viewBarItemId(view.id));
+                  return (
+                    <View
+                      key={view.id}
+                      className="flex-row items-center gap-2 rounded-lg bg-secondary/30 px-2 py-2"
+                    >
+                      <Pressable
+                        onPress={() => onToggleHidden(view, !hidden)}
+                        hitSlop={6}
+                        accessibilityLabel={
+                          hidden
+                            ? t("issueViews.show")
+                            : t("issueViews.hide")
+                        }
+                      >
+                        <Ionicons
+                          name={hidden ? "eye-off-outline" : "eye-outline"}
+                          size={17}
+                          color={hidden ? dim : THEME[colorScheme].foreground}
+                        />
+                      </Pressable>
+                      <Text
+                        numberOfLines={1}
+                        className={[
+                          "flex-1 text-sm font-medium",
+                          hidden ? "text-muted-foreground line-through" : "text-foreground",
+                        ].join(" ")}
+                      >
+                        {view.name}
+                      </Text>
+                      {hidden ? (
+                        <Text className="text-[10px] text-muted-foreground">
+                          {t("issueViews.hidden")}
+                        </Text>
+                      ) : null}
+                      <Pressable
+                        onPress={() => onMove(view.id, "up")}
+                        disabled={index === 0}
+                        hitSlop={6}
+                        className="p-1 disabled:opacity-30"
+                        accessibilityLabel={t("issueViews.moveUp")}
+                      >
+                        <Ionicons name="chevron-up" size={15} color={dim} />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => onMove(view.id, "down")}
+                        disabled={index === ordered.length - 1}
+                        hitSlop={6}
+                        className="p-1 disabled:opacity-30"
+                        accessibilityLabel={t("issueViews.moveDown")}
+                      >
+                        <Ionicons name="chevron-down" size={15} color={dim} />
+                      </Pressable>
+                    </View>
+                  );
+                })}
+              </View>
+              <View className="flex-row justify-end">
+                <Button variant="ghost" onPress={onClose}>
+                  <Text>{t("common.done")}</Text>
+                </Button>
+              </View>
+            </View>
+          </Pressable>
+        </View>
+      </Pressable>
+    </Modal>
   );
 }

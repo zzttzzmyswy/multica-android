@@ -124,6 +124,13 @@ import type {
   Workspace,
   WorkspaceMcpServer,
   WorkspaceRepo,
+  CreateWorkspaceSubscriptionCheckoutRequest,
+  CreateWorkspaceSubscriptionCheckoutResponse,
+  CreateWorkspaceSubscriptionPortalResponse,
+  WorkspaceSubscriptionEntitlements,
+  WorkspaceSubscriptionPrices,
+  WorkspaceSubscriptionSeatReconcileResult,
+  WorkspaceSubscriptionSummary,
 } from "@multica/core/types";
 import {
   AgentBuilderRuntimeSwitchSchema,
@@ -146,6 +153,8 @@ import {
   EMPTY_SQUAD,
   EMPTY_TIMELINE_ENTRIES,
   FALLBACK_AUTOPILOT_RUN,
+  CreateWorkspaceSubscriptionCheckoutResponseSchema,
+  CreateWorkspaceSubscriptionPortalResponseSchema,
   GitHubConnectResponseSchema,
   IssuePropertiesResponseSchema,
   IssuePropertySchema,
@@ -161,6 +170,10 @@ import {
   ListQuickActionsResponseSchema,
   QuickActionSchema,
   TimelineEntriesSchema,
+  WorkspaceSubscriptionEntitlementsSchema,
+  WorkspaceSubscriptionPricesSchema,
+  WorkspaceSubscriptionSeatReconcileResultSchema,
+  WorkspaceSubscriptionSummarySchema,
   agentBuilderRuntimeSwitchFallback,
 } from "@multica/core/api/schemas";
 import type {
@@ -1339,6 +1352,89 @@ class ApiClient {
       method: "PUT",
       body: JSON.stringify(data),
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // Workspace subscriptions (iteration-67 Billing) — the server resolves the
+  // workspace from the X-Workspace-Slug header, so no caller names one.
+  // Mirrors packages/core/api/client.ts:1577-1680 and `packages/core/billing/*`.
+  //
+  // Two distinct failure paths, both of which a caller must render as
+  // "unavailable" and neither of which may look like Free:
+  //
+  //   - non-2xx throws ApiError from `fetch` (React Query sees `isError`);
+  //   - a 2xx body that does not match the contract returns null here.
+  // -------------------------------------------------------------------------
+
+  async getWorkspaceSubscriptionEntitlements(): Promise<WorkspaceSubscriptionEntitlements | null> {
+    const raw = await this.fetch<unknown>("/api/cloud-subscriptions/entitlements");
+    return parseWithFallback(raw, WorkspaceSubscriptionEntitlementsSchema, null, {
+      endpoint: "GET /api/cloud-subscriptions/entitlements",
+    });
+  }
+
+  async getWorkspaceSubscriptionSummary(): Promise<WorkspaceSubscriptionSummary | null> {
+    const raw = await this.fetch<unknown>("/api/cloud-subscriptions/summary");
+    return parseWithFallback(raw, WorkspaceSubscriptionSummarySchema, null, {
+      endpoint: "GET /api/cloud-subscriptions/summary",
+    });
+  }
+
+  async getWorkspaceSubscriptionPrices(): Promise<WorkspaceSubscriptionPrices | null> {
+    const raw = await this.fetch<unknown>("/api/cloud-subscriptions/prices");
+    return parseWithFallback(raw, WorkspaceSubscriptionPricesSchema, null, {
+      endpoint: "GET /api/cloud-subscriptions/prices",
+    });
+  }
+
+  async createWorkspaceSubscriptionCheckout(
+    data: CreateWorkspaceSubscriptionCheckoutRequest,
+  ): Promise<CreateWorkspaceSubscriptionCheckoutResponse | null> {
+    const raw = await this.fetch<unknown>("/api/cloud-subscriptions/checkout-sessions", {
+      method: "POST",
+      body: JSON.stringify({
+        interval: data.interval,
+        idempotency_key: data.idempotencyKey,
+        ...(data.customerEmail ? { customer_email: data.customerEmail } : {}),
+      }),
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": data.idempotencyKey,
+      },
+    });
+    return parseWithFallback(
+      raw,
+      CreateWorkspaceSubscriptionCheckoutResponseSchema,
+      null,
+      { endpoint: "POST /api/cloud-subscriptions/checkout-sessions" },
+    );
+  }
+
+  async reconcileWorkspaceSubscriptionSeats(): Promise<WorkspaceSubscriptionSeatReconcileResult | null> {
+    const raw = await this.fetch<unknown>("/api/cloud-subscriptions/seats/reconcile", {
+      method: "POST",
+    });
+    return parseWithFallback(
+      raw,
+      WorkspaceSubscriptionSeatReconcileResultSchema,
+      null,
+      { endpoint: "POST /api/cloud-subscriptions/seats/reconcile" },
+    );
+  }
+
+  async createWorkspaceSubscriptionPortal(
+    idempotencyKey: string,
+  ): Promise<CreateWorkspaceSubscriptionPortalResponse | null> {
+    const raw = await this.fetch<unknown>("/api/cloud-subscriptions/portal-sessions", {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey },
+    });
+    return parseWithFallback(
+      raw,
+      CreateWorkspaceSubscriptionPortalResponseSchema,
+      null,
+      { endpoint: "POST /api/cloud-subscriptions/portal-sessions" },
+    );
   }
 
   // Workspace usage rollups — mirror packages/core/dashboard queries. Workspace
