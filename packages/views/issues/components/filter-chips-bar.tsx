@@ -29,6 +29,7 @@ import {
   type IssueViewBaseline,
 } from "@multica/core/issue-views/baseline";
 import { useViewStore, useViewStoreApi } from "@multica/core/issues/stores/view-store-context";
+import { isIssueStatusCategory } from "@multica/core/issues";
 import { StatusIcon } from "./status-icon";
 import { PriorityIcon } from "./priority-icon";
 import { ActorAvatar } from "../../common/actor-avatar";
@@ -290,7 +291,9 @@ function useFilterChips(
       ),
       value:
         onlyStatus !== undefined && deltaStatus.length === 1
-          ? t(($) => $.status[onlyStatus])
+          ? isIssueStatusCategory(onlyStatus)
+            ? t(($) => $.status[onlyStatus])
+            : onlyStatus
           : t(($) => $.filters.chip_status_count, { count: deltaStatus.length }),
       onRemove: () => clearDimension("status"),
     });

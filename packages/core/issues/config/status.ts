@@ -1,6 +1,12 @@
-import type { IssueStatus } from "../../types";
+import type { IssueStatusCategory } from "../../types";
 
-export const STATUS_ORDER: IssueStatus[] = [
+// These are keyed on CATEGORY, not on status key. A workspace can define any
+// number of custom statuses, but every one of them belongs to exactly one of
+// the 7 categories below — so board columns and the presentation config keep a
+// fixed shape. Resolve a status KEY to its category before indexing these.
+// (MUL-6243)
+
+export const STATUS_ORDER: IssueStatusCategory[] = [
   "backlog",
   "todo",
   "in_progress",
@@ -10,7 +16,7 @@ export const STATUS_ORDER: IssueStatus[] = [
   "cancelled",
 ];
 
-export const ALL_STATUSES: IssueStatus[] = [
+export const ALL_STATUSES: IssueStatusCategory[] = [
   "backlog",
   "todo",
   "in_progress",
@@ -21,7 +27,7 @@ export const ALL_STATUSES: IssueStatus[] = [
 ];
 
 export const STATUS_CONFIG: Record<
-  IssueStatus,
+  IssueStatusCategory,
   {
     label: string;
     iconColor: string;

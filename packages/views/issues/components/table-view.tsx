@@ -73,6 +73,7 @@ import { cn } from "@multica/ui/lib/utils";
 import { ApiError } from "@multica/core/api";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { ALL_STATUSES } from "@multica/core/issues/config";
+import { isIssueStatusCategory } from "@multica/core/issues";
 import {
   issueKeys,
   issueTableGroupsOptions,
@@ -98,7 +99,7 @@ import type {
   Issue,
   IssueProperty,
   IssuePropertyValue,
-  IssueStatus,
+  IssueStatusCategory,
   IssueTableGroupDescriptor,
   IssueTableGroupSpec,
   IssueTableQuerySpec,
@@ -1738,8 +1739,8 @@ export function TableView({
     (descriptor: IssueTableGroupDescriptor) => {
       const value = descriptor.value;
       if (value.kind === "status") {
-        if (ALL_STATUSES.includes(value.status as IssueStatus)) {
-          return t(($) => $.status[value.status as IssueStatus]);
+        if (ALL_STATUSES.includes(value.status as IssueStatusCategory)) {
+          return t(($) => $.status[value.status as IssueStatusCategory]);
         }
         // Installed clients can receive a status introduced by a newer
         // backend. Keep the group usable instead of collapsing the response
@@ -2287,8 +2288,12 @@ export function TableView({
               return issue.title;
             case "identifier":
               return issue.identifier;
-            case "status":
-              return t(($) => $.status[issue.status]);
+            case "status": {
+              const entryStatus = issue.status;
+              return isIssueStatusCategory(entryStatus)
+                ? t(($) => $.status[entryStatus])
+                : entryStatus;
+            }
             case "priority":
               return t(($) => $.priority[issue.priority]);
             case "assignee":

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { IssueStatus, UpdateIssueRequest } from "@multica/core/types";
 import { ALL_STATUSES, STATUS_CONFIG } from "@multica/core/issues/config";
+import { isIssueStatusCategory } from "@multica/core/issues";
 import { StatusIcon } from "../status-icon";
 import { PropertyPicker, PickerItem } from "./property-picker";
 import { useT } from "../../../i18n";
@@ -47,7 +48,9 @@ export function StatusPicker({
         (status != null ? (
           <>
             <StatusIcon status={status} className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">{t(($) => $.status[status])}</span>
+            <span className="truncate">
+              {isIssueStatusCategory(status) ? t(($) => $.status[status]) : status}
+            </span>
           </>
         ) : null)
       }

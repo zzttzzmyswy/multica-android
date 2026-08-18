@@ -7,6 +7,7 @@ import { MulticaIcon } from "@multica/ui/components/common/multica-icon";
 import { cn } from "@multica/ui/lib/utils";
 import { DragStrip } from "@multica/views/platform";
 import { STATUS_CONFIG } from "@multica/core/issues/config";
+import { isIssueStatusCategory } from "@multica/core/issues";
 import type { IssueStatus } from "@multica/core/types";
 import { StatusIcon } from "../../issues/components/status-icon";
 import { ProviderLogo } from "../../runtimes/components/provider-logo";
@@ -364,7 +365,9 @@ function StatusFooter({
   status: IssueStatus;
   timestamp?: string;
 }) {
-  const cfg = STATUS_CONFIG[status];
+  const cfg = isIssueStatusCategory(status)
+    ? STATUS_CONFIG[status]
+    : STATUS_CONFIG.todo;
   return (
     <div className="mt-3 flex items-center gap-2 text-caption">
       <span
