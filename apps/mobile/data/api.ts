@@ -37,6 +37,7 @@ import type {
   CreatePersonalAccessTokenRequest,
   CreatePersonalAccessTokenResponse,
   CreatePropertyRequest,
+  CreateIssueStatusRequest,
   CreateProjectRequest,
   CreateProjectResourceRequest,
   CreateQuickActionRequest,
@@ -70,6 +71,7 @@ import type {
   ListProjectResourcesResponse,
   ListProjectsResponse,
   ListPropertiesResponse,
+  ListIssueStatusesResponse,
   ListQuickActionsResponse,
   MemberWithUser,
   UpdateMemberRequest,
@@ -118,6 +120,9 @@ import type {
   UpdateMeRequest,
   UpdateProjectRequest,
   UpdatePropertyRequest,
+  UpdateIssueStatusRequest,
+  IssueStatusCategory,
+  IssueStatusEntry,
   UpdateSquadMemberRoleRequest,
   UpdateSquadRequest,
   User,
@@ -292,6 +297,10 @@ import {
   EMPTY_LIST_VCS_CONNECTIONS_RESPONSE,
   ResourceLabelsResponseSchema,
   EMPTY_RESOURCE_LABELS_RESPONSE,
+  IssueStatusEntrySchema,
+  ListIssueStatusesResponseSchema,
+  EMPTY_ISSUE_STATUS_ENTRY,
+  EMPTY_LIST_ISSUE_STATUSES_RESPONSE,
 } from "./schemas";
 import type { ZodType } from "zod";
 import { File, Paths } from "expo-file-system";
@@ -2271,6 +2280,99 @@ class ApiClient {
     });
     return parseWithFallback(raw, IssuePropertySchema, EMPTY_ISSUE_PROPERTY, {
       endpoint: "PATCH /api/properties/{id}",
+    });
+  }
+
+  // --- Issue status catalog (MUL-6243) ---
+  // Workspace status catalog CRUD. Reads are open to any workspace member;
+  // the writes are owner/admin only and return 403 otherwise (mirrors web
+  // packages/core/api/client.ts).
+
+  // Active statuses by default; includeArchived=true surfaces retired ones
+  // for the management page. A backend predating this endpoint 404s here —
+  // treat it as an EMPTY catalog (built-in 7 statuses still render via the
+  // built-in fallback paths), never as an error, scanning a 404 like
+  // listProperties does.
+  async listIssueStatuses(opts?: {
+    includeArchived?: boolean;
+    signal?: AbortSignal;
+  }): Promise<ListIssueStatusesResponse> {
+    const suffix = opts?.includeArchived ? "?include_archived=true" : "";
+    let raw: unknown;
+    try {
+      raw = await this.fetch<unknown>(`/api/issue-statuses${suffix}`, {
+        signal: opts?.signal,
+      });
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return EMPTY_LIST_ISSUE_STATUSES_RESPONSE;
+      }
+      throw error;
+    }
+    return parseWithFallback(
+      raw,
+      ListIssueStatusesResponseSchema,
+      EMPTY_LIST_ISSUE_STATUSES_RESPONSE,
+      { endpoint: "GET /api/issue-statuses" },
+    );
+  }
+
+  // Create a custom status. Raw this.fetch (same convention as createLabel):
+  // a parseWithFallback fallback would mask server validation errors, and a
+  // flag-gated backend's 403 must surface as a real error.
+  async createIssueStatus(
+    body: CreateIssueStatusRequest,
+  ): Promise<IssueStatusEntry> {
+    return this.fetch<IssueStatusEntry>("/api/issue-statuses", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
+  // Update name/description/color/position. PATCH with drift defense to
+  // IssueStatusEntrySchema — the authoritative response patches the cached
+  // catalog rows.
+  async updateIssueStatus(
+    id: string,
+    body: UpdateIssueStatusRequest,
+  ): Promise<IssueStatusEntry> {
+    const raw = await this.fetch<unknown>(`/api/issue-statuses/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+    return parseWithFallback(raw, IssueStatusEntrySchema, EMPTY_ISSUE_STATUS_ENTRY, {
+      endpoint: "PATCH /api/issue-statuses/{id}",
+    });
+  }
+
+  // Rewrites one category's custom-status order in a single server-side
+  // statement. Not expressible as a sequence of updates: a row rejected
+  // mid-sequence would leave earlier rows already reordered.
+  async reorderIssueStatuses(
+    category: IssueStatusCategory,
+    ids: string[],
+  ): Promise<ListIssueStatusesResponse> {
+    const raw = await this.fetch<unknown>(`/api/issue-statuses/reorder`, {
+      method: "PATCH",
+      body: JSON.stringify({ category, ids }),
+    });
+    return parseWithFallback(
+      raw,
+      ListIssueStatusesResponseSchema,
+      EMPTY_LIST_ISSUE_STATUSES_RESPONSE,
+      { endpoint: "PATCH /api/issue-statuses/reorder" },
+    );
+  }
+
+  // Archives a custom status, retiring it from future assignment. Issues
+  // already on it keep it and keep behaving as their category prescribes;
+  // built-in statuses return 403.
+  async archiveIssueStatus(id: string): Promise<IssueStatusEntry> {
+    const raw = await this.fetch<unknown>(`/api/issue-statuses/${id}`, {
+      method: "DELETE",
+    });
+    return parseWithFallback(raw, IssueStatusEntrySchema, EMPTY_ISSUE_STATUS_ENTRY, {
+      endpoint: "DELETE /api/issue-statuses/{id}",
     });
   }
 

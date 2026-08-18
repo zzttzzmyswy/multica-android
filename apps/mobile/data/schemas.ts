@@ -33,8 +33,11 @@ import type {
   InboxItem,
   Invitation,
   IssueLabelsResponse,
+  IssueStatusCategory,
+  IssueStatusEntry,
   IssueSubscriber,
   Label,
+  ListIssueStatusesResponse,
   ListLabelsResponse,
   ListProjectResourcesResponse,
   ListProjectsResponse,
@@ -200,6 +203,65 @@ export const EMPTY_ISSUE_LABELS_RESPONSE: IssueLabelsResponse = {
 export const ResourceLabelsResponseSchema = z.object({
   labels: z.array(LabelSchema).default([]),
 }).loose();
+
+// --- Issue status catalog (MUL-6243) ---
+// Workspace status catalog contract. `category` is parsed as a plain string
+// rather than an enum: a newer server could report a category this build does
+// not know, and failing the whole catalog parse would leave the UI with no
+// statuses at all. Consumers resolve through the catalog, which falls back to
+// rendering by name/color for unrecognized categories.
+export const IssueStatusEntrySchema = z.object({
+  id: z.string(),
+  workspace_id: z.string(),
+  key: z.string(),
+  name: z.string(),
+  description: z.string().optional().default(""),
+  category: z.string(),
+  color: z.string().optional().default("#6b7280"),
+  is_system: z.boolean().optional().default(false),
+  position: z.number().optional().default(0),
+  archived_at: z.string().nullable().optional().default(null),
+  created_at: z.string(),
+  updated_at: z.string(),
+}).loose();
+
+export const EMPTY_ISSUE_STATUS_ENTRY: IssueStatusEntry = {
+  id: "",
+  workspace_id: "",
+  key: "",
+  name: "",
+  description: "",
+  category: "backlog",
+  color: "#6b7280",
+  is_system: false,
+  position: 0,
+  archived_at: null,
+  created_at: "",
+  updated_at: "",
+};
+
+export const ListIssueStatusesResponseSchema = z.object({
+  statuses: z.array(IssueStatusEntrySchema).default([]),
+  categories: z.array(z.string()).default([]),
+  total: z.number().default(0),
+}).loose();
+
+// The fallback carries the 7 built-ins' keys as categories, so a client
+// talking to a server that predates this endpoint still has the canonical
+// list.
+export const EMPTY_LIST_ISSUE_STATUSES_RESPONSE: ListIssueStatusesResponse = {
+  statuses: [],
+  categories: [
+    "backlog",
+    "todo",
+    "in_progress",
+    "in_review",
+    "done",
+    "blocked",
+    "cancelled",
+  ],
+  total: 0,
+};
 
 export const EMPTY_RESOURCE_LABELS_RESPONSE: ResourceLabelsResponse = {
   labels: [],
