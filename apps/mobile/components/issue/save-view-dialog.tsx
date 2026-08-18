@@ -1,9 +1,11 @@
 /**
  * Save / rename saved-view dialog (iteration-65) — a centered Modal with the
- * view name input and, for workspace-scoped surfaces, a visibility toggle
- * (private ⇄ workspace). Mirrors web's save-view-dialog (name + visibility)
- * at the level mobile needs: web's display-defaults editor is beyond the
- * phone surface, so the dialog captures the CURRENT window silently.
+ * view name input and, for non-my-scoped surfaces (workspace + project), a
+ * visibility toggle (private ⇄ workspace). Mirrors web's save-view-dialog
+ * (name + visibility, visibility row shown for every scope.kind != my,
+ * save-view-dialog.tsx:718-726) at the level mobile needs: web's
+ * display-defaults editor is beyond the phone surface, so the dialog
+ * captures the CURRENT window silently.
  *
  * Same style family as `rename-chat-dialog.tsx` (bg-popover rounded-2xl
  * card on a dimmed backdrop).
@@ -14,13 +16,15 @@ import { Text } from "@/components/ui/text";
 import { TextField } from "@/components/ui/text-field";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/lib/i18n/react";
+import { resolveSubmittedVisibility } from "@/data/queries/issue-views";
 
 export interface SaveViewDialogProps {
   visible: boolean;
   /** edit mode pre-fills the name and reuses the same form. */
   initialName?: string;
   /** my-scope views are always private — the toggle only shows for
-   *  workspace-scoped surfaces (server constrains my views to private). */
+   *  non-my-scoped surfaces (workspace + project; server constrains my
+   *  views to private). */
   visibilityAllowed: boolean;
   initialVisibility?: "private" | "workspace";
   /** Show the sort-direction toggle (iteration-67, mirrors web
@@ -71,7 +75,7 @@ export function SaveViewDialog({
     if (!dirty) return;
     onSubmit(
       trimmed,
-      visibilityAllowed ? visibility : "private",
+      resolveSubmittedVisibility(visibilityAllowed, visibility),
       sortDirection,
     );
   };

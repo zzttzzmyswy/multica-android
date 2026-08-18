@@ -1,37 +1,40 @@
 /**
- * Workspace-wide Issues page. Mirrors web `packages/views/issues/components/
- * issues-page.tsx:32-94`: fetch every issue in the workspace, expose
- * `all / members / agents` scope tabs, group by status, allow status +
- * priority filtering.
+ * Project-scoped issue workbench (iteration-68) — the project detail page's
+ * full IssueSurface, replacing the read-only `ProjectRelatedIssues` list.
  *
- * Since iteration 62 the page also carries web's full issue-workbench
- * dimensions: assignee / creator / project / label filters + sort + grouping.
- * Filter/sort state lives in `useIssuesViewStore` (shared with the filter
- * sheet); the list query passes the active window as server params
- * (`issueListOptions(wsId, window)`) so the cache is keyed per filter, and
- * the client re-runs `applyIssueFilters` + `sortIssues` on the result as a
- * belt-and-suspenders pass for WS-patched rows.
+ * Composes the same building blocks the workspace-wide Issues page and My
+ * Issues use, scoped to one project:
  *
- * Scope is a **client-side** filter on `assignee_type` — matches web
- * `issues-page.tsx:90-94`. This keeps `issueListOptions(wsId)` workspace-
- * scoped (no scope param on the wire), so `issueKeys.list(wsId)` and
- * `useIssuesRealtime` need no changes.
+ *   - scope tabs all / members / agents (mirrors web's project-page issue
+ *     tabs, `issues-scope-store` keyed `project:<id>`) — a CLIENT-side
+ *     filter on `assignee_type` like the workspace Issues page
+ *   - `IssueViewBar` with the project view container
+ *     `{ scope_type: "project", scope_id }` (saved views + view-bar
+ *     preferences persist per project — web save-view-dialog.tsx:573-575)
+ *   - list/board toggle, filter sheet (`scope=project`), sort, grouping —
+ *     all through `useProjectIssuesViewStore`, which is isolated from the
+ *     workspace/my stores
+ *   - batch multi-select via the same `batch-action-bar` the other
+ *     surfaces use
  *
- * Grouping (status / assignee) is client-side via `groupIssues` — mirrors
- * web GROUPING_OPTIONS. Assignee grouping resolves actor names through
- * `useActorLookup`, same source as the assignee filter picker.
+ * Data source is `projectIssuesOptions` (issues pre-fetched by project_id,
+ * living under the issues cache prefix); filters/sort/grouping re-run
+ * client-side, so WS-patched rows that drift out of the active window drop
+ * at render-time like the other surfaces.
+ *
+ * The page passes its detail meta (header card / properties / resources) as
+ * `header`: in list mode it renders as the SectionList's ListHeaderComponent
+ * (scrolls away with the content, matching the page's previous
+ * everything-in-one-scroll UX), in board mode it stays pinned above the
+ * board. Pull-to-refresh refreshes issues and meta together.
  */
 import { useCallback, useMemo } from "react";
-import { SectionList, View } from "react-native";
+import { ScrollView, SectionList, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
-import type { IssueView } from "@multica/core/api/schemas";
+import type { CreateIssueViewRequest, IssueView } from "@multica/core/api/schemas";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
-// Header chrome (back + "Issues" title) comes from the parent Stack
-// (`apps/mobile/app/(app)/[workspace]/_layout.tsx:269`). The Filter
-// affordance now lives in <IssueSurfaceScopeToolbar> below, matching web's
-// IssuesHeader pattern (scope + filter share a row).
 import { BatchActionBar } from "@/components/issue/batch-action-bar";
 import { BoardView } from "@/components/issue/board-view";
 import { IssueViewBar } from "@/components/issue/issue-view-bar";
@@ -44,13 +47,10 @@ import {
   IssueSurfaceScopeToolbar,
   SurfaceEmptyState,
 } from "@/components/issue/issue-surface-chrome";
-import { issueListOptions } from "@/data/queries/issues";
+import { projectIssuesOptions } from "@/data/queries/projects";
 import { issueViewListOptions } from "@/data/queries/issue-views";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import {
-  useIssuesViewStore,
-  type IssuesScope,
-} from "@/data/stores/issues-view-store";
+import { useProjectIssuesViewStore } from "@/data/stores/project-issues-view-store";
 import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection-store";
 import {
   issueViewContainerKey,
@@ -61,10 +61,7 @@ import {
   sanitizeViewQuery,
   viewMatchesSlice,
 } from "@/data/stores/issue-view-codec";
-import {
-  buildIssueWindow,
-  defaultIssueFilterSlice,
-} from "@/data/stores/issue-filter-slice";
+import { defaultIssueFilterSlice } from "@/data/stores/issue-filter-slice";
 import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-workspace-change";
 import { BOARD_STATUSES } from "@/lib/issue-status";
 import {
@@ -74,44 +71,58 @@ import {
   type IssueFilterState,
 } from "@/lib/filter-issues";
 import { useTranslation } from "@/lib/i18n/react";
+import type { IssuesScope } from "@/data/stores/issues-view-store";
 
-// Scope tab definitions. Mirrors web `issuesScopeStore`. Counts are NOT
-// rendered on the pill labels — web's `IssuesHeader` doesn't show them
-// either, and on SE3 (375pt) "(123)" appended to each label pushes the
-// row past the safe width when filter icon shares the row. Per-status
-// counts still appear on the SectionList headers below.
+// Scope tab definitions — mirrors web's project-page issue tabs
+// (`issues-scope-store` keyed `project:<id>`), same vocabulary as the
+// workspace-wide Issues page.
 const SCOPES: { value: IssuesScope; labelKey: string }[] = [
   { value: "all", labelKey: "issues.scopeAll" },
   { value: "members", labelKey: "issues.scopeMembers" },
   { value: "agents", labelKey: "issues.scopeAgents" },
 ];
 
-export default function IssuesPage() {
+interface Props {
+  projectId: string;
+  /** Detail meta rendered as the list header (scrolls with content in list
+   *  mode, pinned above the board in board mode). */
+  header?: React.ReactElement;
+  /** Extra refresh work the owning page runs alongside the issues refetch
+   *  (detail refetch / cache invalidations). */
+  onRefreshMeta?: () => void | Promise<void>;
+  refreshingMeta?: boolean;
+}
+
+export function ProjectIssueSurface({
+  projectId,
+  header,
+  onRefreshMeta,
+  refreshingMeta = false,
+}: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const batchSelectionMode = useIssueBatchSelectionStore((s) => s.selectionMode);
   const { t } = useTranslation();
 
-  const scope = useIssuesViewStore((s) => s.scope);
-  const setScope = useIssuesViewStore((s) => s.setScope);
-  const view = useIssuesViewStore((s) => s.view);
-  const setView = useIssuesViewStore((s) => s.setView);
-  const grouping = useIssuesViewStore((s) => s.grouping);
-  const sortBy = useIssuesViewStore((s) => s.sortBy);
-  const sortDirection = useIssuesViewStore((s) => s.sortDirection);
-  const statusFilters = useIssuesViewStore((s) => s.statusFilters);
-  const priorityFilters = useIssuesViewStore((s) => s.priorityFilters);
-  const assigneeFilters = useIssuesViewStore((s) => s.assigneeFilters);
-  const includeNoAssignee = useIssuesViewStore((s) => s.includeNoAssignee);
-  const creatorFilters = useIssuesViewStore((s) => s.creatorFilters);
-  const projectFilters = useIssuesViewStore((s) => s.projectFilters);
-  const includeNoProject = useIssuesViewStore((s) => s.includeNoProject);
-  const labelFilters = useIssuesViewStore((s) => s.labelFilters);
-  const propertyFilters = useIssuesViewStore((s) => s.propertyFilters);
-  const dateFilter = useIssuesViewStore((s) => s.dateFilter);
-  // Stable dedup of the object that feeds applyIssueFilters (each field is
-  // its own subscription above, so the assembled object only changes when a
-  // dimension actually changes).
+  const scope = useProjectIssuesViewStore((s) => s.scope);
+  const setScope = useProjectIssuesViewStore((s) => s.setScope);
+  const view = useProjectIssuesViewStore((s) => s.view);
+  const setView = useProjectIssuesViewStore((s) => s.setView);
+  const grouping = useProjectIssuesViewStore((s) => s.grouping);
+  const sortBy = useProjectIssuesViewStore((s) => s.sortBy);
+  const sortDirection = useProjectIssuesViewStore((s) => s.sortDirection);
+  const statusFilters = useProjectIssuesViewStore((s) => s.statusFilters);
+  const priorityFilters = useProjectIssuesViewStore((s) => s.priorityFilters);
+  const assigneeFilters = useProjectIssuesViewStore((s) => s.assigneeFilters);
+  const includeNoAssignee = useProjectIssuesViewStore((s) => s.includeNoAssignee);
+  const creatorFilters = useProjectIssuesViewStore((s) => s.creatorFilters);
+  const projectFilters = useProjectIssuesViewStore((s) => s.projectFilters);
+  const includeNoProject = useProjectIssuesViewStore((s) => s.includeNoProject);
+  const labelFilters = useProjectIssuesViewStore((s) => s.labelFilters);
+  const propertyFilters = useProjectIssuesViewStore((s) => s.propertyFilters);
+  const dateFilter = useProjectIssuesViewStore((s) => s.dateFilter);
+  // Stable dedup feeding applyIssueFilters — each field is its own
+  // subscription above.
   const filterState = useMemo<IssueFilterState>(
     () => ({
       statusFilters,
@@ -143,39 +154,39 @@ export default function IssuesPage() {
     if (!wsSlug) return;
     router.push({
       pathname: "/[workspace]/issues-filter",
-      params: { workspace: wsSlug, scope: "all" },
+      params: { workspace: wsSlug, scope: "project" },
     });
   };
 
+  // Filter + batch-selection state is workspace-scoped — drop it when
+  // switching workspaces (same hooks the two other surfaces use).
   useClearFiltersOnWorkspaceChange(
-    useIssuesViewStore.getState().clearFilters,
+    useProjectIssuesViewStore.getState().clearFilters,
     wsId,
   );
-
-  // Batch selection is workspace-scoped — drop it when switching workspaces
-  // (same hook the my-issues tab uses).
   useClearFiltersOnWorkspaceChange(
     useIssueBatchSelectionStore.getState().exitSelection,
     wsId,
   );
 
-  // Saved views (iteration-65): the workspace-scope container holds this
-  // page's views. The bar owns the list query (cached, shared with the bar);
-  // applying a view resets the slice to its snapshot + display defaults and
-  // remembers which view is active per container (in-memory, like the rest
-  // of mobile's view state). `scopeVariant` is the current scope tab in the
-  // view-variant vocabulary captured into NEW views (null = All tab).
-  const issueScope = useMemo(
-    () => ({ scope_type: "workspace" as const }),
-    [],
+  // Saved views (iteration-68): the project container holds this surface's
+  // views, keyed { scope_type: "project", scope_id }. Scope tabs map to
+  // the view-variant vocabulary (members/agents; "all" → null, matching
+  // web save-view-dialog scope_variant mapping).
+  const projectScope = useMemo(
+    () => ({ scope_type: "project" as const, scope_id: projectId }),
+    [projectId],
   );
-  const scopeVariant = scope === "all" ? null : scope;
+  const scopeVariant = useMemo<CreateIssueViewRequest["scope_variant"]>(
+    () => (scope === "all" ? null : scope),
+    [scope],
+  );
   const containerKey = useMemo(
-    () => issueViewContainerKey(wsId, issueScope),
-    [wsId, issueScope],
+    () => issueViewContainerKey(wsId, projectScope),
+    [wsId, projectScope],
   );
   const { data: savedViews = [] } = useQuery({
-    ...issueViewListOptions(wsId, issueScope),
+    ...issueViewListOptions(wsId, projectScope),
   });
   const activeViewId = useActiveIssueViewStore(
     (s) => s.active[containerKey] ?? null,
@@ -184,20 +195,22 @@ export default function IssuesPage() {
     () => savedViews.find((v) => v.id === activeViewId) ?? null,
     [savedViews, activeViewId],
   );
-  // Union of the filter dims + display defaults the views save/compare.
   const snapshotSource = useMemo(
     () => ({ ...filterState, sortBy, sortDirection, grouping }),
     [filterState, sortBy, sortDirection, grouping],
   );
   const modifiedActive = useMemo(
-    () => (activeView ? !viewMatchesSlice(activeView, snapshotSource, view) : false),
+    () =>
+      activeView
+        ? !viewMatchesSlice(activeView, snapshotSource, view)
+        : false,
     [activeView, snapshotSource, view],
   );
   const applyView = useCallback(
     (v: IssueView) => {
       const snapshot = sanitizeViewQuery(v.query);
       const display = sanitizeViewDisplay(v.display, sortBy);
-      useIssuesViewStore.setState({
+      useProjectIssuesViewStore.setState({
         ...snapshot,
         dateFilter: null,
         sortBy: display.sortBy,
@@ -205,9 +218,9 @@ export default function IssuesPage() {
         grouping: display.grouping,
         view: display.viewMode,
       });
-      // The scope axis a workspace view captured is part of the VIEW (web
-      // semantics) — switching to it lands on the right tab, but the
-      // user's own tab is exactly where they left it once the view closes.
+      // The scope-axis a project view captured is part of the VIEW — land
+      // on the right tab, while the user's own tab is untouched once the
+      // view closes (same semantics as the workspace surface).
       setScope(
         v.scope_variant === "members"
           ? "members"
@@ -220,7 +233,7 @@ export default function IssuesPage() {
     [containerKey, setScope, sortBy],
   );
   const exitView = useCallback(() => {
-    useIssuesViewStore.setState({
+    useProjectIssuesViewStore.setState({
       ...defaultIssueFilterSlice(),
       scope: "all",
       view: "list",
@@ -228,34 +241,12 @@ export default function IssuesPage() {
     useActiveIssueViewStore.getState().setActive(containerKey, null);
   }, [containerKey]);
 
-  // The active window travels as server params → filter/sort changes refetch
-  // and the cache is keyed per window (issueKeys.listFiltered). Identity is
-  // memoized on the slice values so the query key stays stable.
-  const window = useMemo(
-    () =>
-      buildIssueWindow({
-        statusFilters: filterState.statusFilters,
-        priorityFilters: filterState.priorityFilters,
-        assigneeFilters: filterState.assigneeFilters,
-        includeNoAssignee: filterState.includeNoAssignee,
-        creatorFilters: filterState.creatorFilters,
-        projectFilters: filterState.projectFilters,
-        includeNoProject: filterState.includeNoProject,
-        labelFilters: filterState.labelFilters,
-        propertyFilters: filterState.propertyFilters,
-        dateFilter: filterState.dateFilter,
-        sortBy,
-        sortDirection,
-      }),
-    [filterState, sortBy, sortDirection],
-  );
-
   const { data, isLoading, error, refetch, isRefetching } = useQuery(
-    issueListOptions(wsId, window),
+    projectIssuesOptions(wsId, projectId),
   );
 
-  // Scope pre-filter — mirrors web `issues-page.tsx:90-94`. Applied before
-  // other filtering so chip filters operate on the visible slice.
+  // Scope pre-filter — mirrors web issues-page.tsx:90-94. Applied before
+  // the other filters so chip filters operate on the visible slice.
   const scopedIssues = useMemo(() => {
     const allIssues = data ?? [];
     if (scope === "members") {
@@ -269,8 +260,8 @@ export default function IssuesPage() {
     return allIssues;
   }, [data, scope]);
 
-  // Client predicate — the same filters the server window applied, re-run
-  // so rows that drifted out of the window via WS patches drop at render.
+  // Client predicate — the same window the workspace/my surfaces apply,
+  // re-run so WS-patched rows outside it drop at render time.
   const filtered = useMemo(
     () => applyIssueFilters(scopedIssues, filterState),
     [scopedIssues, filterState],
@@ -287,7 +278,6 @@ export default function IssuesPage() {
       if (grouping === "status" && g.status) {
         return { key: g.key, status: g.status, data: g.data };
       }
-      // Assignee grouping lane.
       if (g.unassigned) {
         return { key: g.key, unassigned: true, data: g.data };
       }
@@ -318,6 +308,19 @@ export default function IssuesPage() {
 
   const showEmptyState = !isLoading && !error && sorted.length === 0;
 
+  const onRefresh = useCallback(async () => {
+    await Promise.all([refetch(), onRefreshMeta?.()]);
+  }, [refetch, onRefreshMeta]);
+  const refreshing = isRefetching || refreshingMeta;
+
+  const navigateToIssue = (id: string) => {
+    if (wsSlug) router.push(`/${wsSlug}/issue/${id}`);
+  };
+
+  const emptyMessage = hasActiveFilterChips
+    ? t("issues.filterEmpty")
+    : emptyMessageForScope(scope, t);
+
   return (
     <View className="flex-1 bg-background">
       <IssueSurfaceScopeToolbar
@@ -332,7 +335,7 @@ export default function IssuesPage() {
       />
       <IssueViewBar
         wsId={wsId}
-        scope={issueScope}
+        scope={projectScope}
         scopeVariant={scopeVariant}
         slice={snapshotSource}
         viewMode={view}
@@ -353,34 +356,34 @@ export default function IssuesPage() {
           propertyFilters={filterState.propertyFilters}
           dateFilter={filterState.dateFilter}
           onClearStatus={(s) =>
-            useIssuesViewStore.getState().toggleStatusFilter(s)
+            useProjectIssuesViewStore.getState().toggleStatusFilter(s)
           }
           onClearPriority={(p) =>
-            useIssuesViewStore.getState().togglePriorityFilter(p)
+            useProjectIssuesViewStore.getState().togglePriorityFilter(p)
           }
           onClearAssignee={(v) =>
-            useIssuesViewStore.getState().toggleAssigneeFilter(v)
+            useProjectIssuesViewStore.getState().toggleAssigneeFilter(v)
           }
           onClearCreator={(v) =>
-            useIssuesViewStore.getState().toggleCreatorFilter(v)
+            useProjectIssuesViewStore.getState().toggleCreatorFilter(v)
           }
           onClearProject={(id) =>
-            useIssuesViewStore.getState().toggleProjectFilter(id)
+            useProjectIssuesViewStore.getState().toggleProjectFilter(id)
           }
           onClearLabel={(id) =>
-            useIssuesViewStore.getState().toggleLabelFilter(id)
+            useProjectIssuesViewStore.getState().toggleLabelFilter(id)
           }
           onClearNoAssignee={() =>
-            useIssuesViewStore.getState().toggleNoAssignee()
+            useProjectIssuesViewStore.getState().toggleNoAssignee()
           }
           onClearNoProject={() =>
-            useIssuesViewStore.getState().toggleNoProject()
+            useProjectIssuesViewStore.getState().toggleNoProject()
           }
           onClearProperty={(id) =>
-            useIssuesViewStore.getState().clearPropertyFilter(id)
+            useProjectIssuesViewStore.getState().clearPropertyFilter(id)
           }
           onClearDate={() =>
-            useIssuesViewStore.getState().setDateFilter(null)
+            useProjectIssuesViewStore.getState().setDateFilter(null)
           }
         />
       ) : null}
@@ -397,27 +400,29 @@ export default function IssuesPage() {
           </Button>
         </View>
       ) : showEmptyState ? (
-        <SurfaceEmptyState
-          message={
-            hasActiveFilterChips
-              ? t("issues.filterEmpty")
-              : emptyMessageForScope(scope, t)
-          }
-        />
+        <SurfaceEmptyState message={emptyMessage} />
       ) : view === "board" ? (
-        <BoardView
-          issues={sorted}
-          grouping={grouping}
-          statusOrder={BOARD_STATUSES}
-          onOpenIssue={(issue) => {
-            if (wsSlug) router.push(`/${wsSlug}/issue/${issue.id}`);
-          }}
-          emptyLabel={
-            hasActiveFilterChips
-              ? t("issues.filterEmpty")
-              : emptyMessageForScope(scope, t)
-          }
-        />
+        <View className="flex-1">
+          {header ? (
+            // Board lanes need vertical room — keep the meta reachable but
+            // capped at 40% of the surface so the columns stay usable
+            // (list mode scrolls it as the ListHeaderComponent instead).
+            <ScrollView
+              className="flex-shrink"
+              style={{ maxHeight: "40%" }}
+              showsVerticalScrollIndicator={false}
+            >
+              {header}
+            </ScrollView>
+          ) : null}
+          <BoardView
+            issues={sorted}
+            grouping={grouping}
+            statusOrder={BOARD_STATUSES}
+            onOpenIssue={(issue) => navigateToIssue(issue.id)}
+            emptyLabel={emptyMessage}
+          />
+        </View>
       ) : (
         <SectionList
           sections={sections}
@@ -429,19 +434,18 @@ export default function IssuesPage() {
           renderSectionHeader={({ section }) => (
             <IssueSectionHeader section={section} />
           )}
+          ListHeaderComponent={header ?? null}
           contentContainerClassName={
             batchSelectionMode ? "pb-48" : "pb-6"
           }
           renderItem={({ item }) => (
             <IssueSelectionRow
               issue={item}
-              onOpen={() => {
-                if (wsSlug) router.push(`/${wsSlug}/issue/${item.id}`);
-              }}
+              onOpen={() => navigateToIssue(item.id)}
             />
           )}
-          refreshing={isRefetching}
-          onRefresh={refetch}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
         />
       )}
 
@@ -452,14 +456,13 @@ export default function IssuesPage() {
   );
 }
 
-
 function emptyMessageForScope(
   scope: IssuesScope,
   t: (id: string, params?: Record<string, string | number>) => string,
 ): string {
   switch (scope) {
     case "all":
-      return t("issues.emptyAll");
+      return t("project.emptyIssues");
     case "members":
       return t("issues.emptyMembers");
     case "agents":

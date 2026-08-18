@@ -12,8 +12,8 @@
  *   - Done commits the current local draft to the view store and closes;
  *     Clear (shown when a date filter is active) removes it and closes.
  *
- * Scope param (`?scope=my|all`) selects which view-store to write, matching
- * the panel + picker routes.
+ * Scope param (`?scope=my|all|project`) selects which view-store to write,
+ * matching the panel + picker routes.
  */
 import { useLocalSearchParams, useNavigation } from "expo-router";
 import { useLayoutEffect, useState } from "react";
@@ -22,30 +22,30 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { dateOnlyToLocalDate, toDateOnly } from "@multica/core/issues/date";
 import { Text } from "@/components/ui/text";
-import { useIssuesViewStore } from "@/data/stores/issues-view-store";
-import { useMyIssuesViewStore } from "@/data/stores/my-issues-view-store";
+import {
+  issueFilterStoreForScope,
+  parseFilterScope,
+  type IssueFilterScope,
+} from "@/data/stores/issue-filter-store-registry";
 import type { IssueDateFilterValue } from "@/data/stores/issue-filter-slice";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
 
-type Scope = "my" | "all";
+type Scope = IssueFilterScope;
 type DateField = IssueDateFilterValue["field"];
 
 export default function IssuesFilterDateRoute() {
   const { scope: scopeParam } = useLocalSearchParams<{ scope?: string }>();
-  const resolvedScope: Scope = scopeParam === "all" ? "all" : "my";
+  const resolvedScope: Scope = parseFilterScope(scopeParam);
   const { t } = useTranslation();
   const navigation = useNavigation();
   const { colorScheme } = useColorScheme();
   const tint = THEME[colorScheme].primary;
   const muted = THEME[colorScheme].mutedForeground;
 
-  const live =
-    resolvedScope === "all"
-      ? useIssuesViewStore.getState()
-      : useMyIssuesViewStore.getState();
+  const live = issueFilterStoreForScope(resolvedScope).getState();
   const initialFilter = live.dateFilter;
 
   const [field, setField] = useState<DateField>(

@@ -1,12 +1,14 @@
 /**
  * Issue filter sheet — status / priority / assignee / creator / project /
  * label filters + sort + grouping. Presented as a formSheet by the parent
- * Stack. Shared by My Issues and the workspace-wide Issues page; which
- * view-store to read/write is selected by the `scope` URL param.
+ * Stack. Shared by My Issues, the workspace-wide Issues page and the
+ * project-detail issue surface; which view-store to read/write is selected
+ * by the `scope` URL param.
  *
  * Routes that open this sheet:
- *   - /[workspace]/issues-filter?scope=my   →  useMyIssuesViewStore
- *   - /[workspace]/issues-filter?scope=all  →  useIssuesViewStore
+ *   - /[workspace]/issues-filter?scope=my      →  useMyIssuesViewStore
+ *   - /[workspace]/issues-filter?scope=all     →  useIssuesViewStore
+ *   - /[workspace]/issues-filter?scope=project →  useProjectIssuesViewStore
  *
  * Self-contained: reads/writes the store directly, no callback passing.
  *
@@ -29,8 +31,11 @@ import { addDaysDateOnly, todayDateOnly } from "@multica/core/issues/date";
 import { Text } from "@/components/ui/text";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { PriorityIcon } from "@/components/ui/priority-icon";
-import { useIssuesViewStore } from "@/data/stores/issues-view-store";
-import { useMyIssuesViewStore } from "@/data/stores/my-issues-view-store";
+import {
+  issueFilterStoreForScope,
+  parseFilterScope,
+  type IssueFilterScope,
+} from "@/data/stores/issue-filter-store-registry";
 import { propertyActiveOptions } from "@/data/queries/properties";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import {
@@ -65,7 +70,7 @@ const DATE_PRESETS: { days: 1 | 3 | 7; labelKey: string }[] = [
   { days: 7, labelKey: "filter.dateLast7Days" },
 ];
 
-type Scope = "my" | "all";
+type Scope = IssueFilterScope;
 type FilterDim =
   | "assignee"
   | "creator"
@@ -84,19 +89,15 @@ export default function IssuesFilterRoute() {
     scope?: string;
     workspace?: string;
   }>();
-  const resolvedScope: Scope = scope === "all" ? "all" : "my";
+  const resolvedScope: Scope = parseFilterScope(scope);
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const tint = THEME[colorScheme].primary;
 
-  // Subscribe both stores (unconditional hooks), pick the live one by
-  // scope. Both state shapes extend `IssueFilterSlice`, so the union stays
-  // narrow enough for `s.statusFilters` etc. Actions go through getState()
-  // below.
-  const allState = useIssuesViewStore();
-  const myState = useMyIssuesViewStore();
-  const s: IssueFilterSlice =
-    resolvedScope === "all" ? allState : myState;
+  // Subscribe the matching store (one unconditional hook — the scope param
+  // is fixed for a route instance). All three state shapes extend
+  // `IssueFilterSlice`, so `s.statusFilters` etc. stay narrow.
+  const s: IssueFilterSlice = issueFilterStoreForScope(resolvedScope)();
 
   const statusFilters = s.statusFilters;
   const priorityFilters = s.priorityFilters;
@@ -121,10 +122,7 @@ export default function IssuesFilterRoute() {
   const hasActive = hasActiveIssueFilters(s);
 
   // Action dispatcher — pick the matching store's imperative API.
-  const act = () =>
-    resolvedScope === "all"
-      ? useIssuesViewStore.getState()
-      : useMyIssuesViewStore.getState();
+  const act = () => issueFilterStoreForScope(resolvedScope).getState();
 
   // Custom-property definitions that can drive a filter — same
   // filterable-property set web uses (issues-header.tsx:1175-1181).

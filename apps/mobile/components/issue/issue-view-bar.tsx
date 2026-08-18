@@ -47,6 +47,7 @@ import { useAuthStore } from "@/data/auth-store";
 import {
   canManageIssueView,
   issueViewListOptions,
+  scopeAllowsViewVisibility,
 } from "@/data/queries/issue-views";
 import {
   applyViewBarPrefs,
@@ -217,8 +218,11 @@ export function IssueViewBar({
   const openManage = (view: IssueView) => {
     Haptics.selectionAsync().catch(() => {});
     const manageable = canManage(view);
+    // Any non-my scope can carry workspace-visibility views (web
+    // save-view-dialog shows the visibility row for every scope.kind != my)
+    // — so share/unshare shows for workspace AND project scopes.
     const workspaceCommentable =
-      scope.scope_type === "workspace" && manageable;
+      scopeAllowsViewVisibility(scope.scope_type) && manageable;
 
     type Action =
       | { kind: "rename" }
@@ -418,7 +422,7 @@ export function IssueViewBar({
               : "private"
             : "private"
         }
-        visibilityAllowed={scope.scope_type === "workspace"}
+        visibilityAllowed={scopeAllowsViewVisibility(scope.scope_type)}
         sortDirectionAllowed
         initialSortDirection={
           dialog?.mode === "edit"

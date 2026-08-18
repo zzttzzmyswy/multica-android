@@ -2,7 +2,7 @@
  * Multi-select picker sheet for one ISSUE FILTER dimension. Opened from the
  * `issues-filter` panel rows:
  *
- *   - `?scope=my|all`   → which view-store the selection persists into
+ *   - `?scope=my|all|project` → which view-store the selection persists into
  *   - `?dim=assignee`   → members/agents/squads filter (no-unassigned row;
  *                         the panel owns includeNoAssignee)
  *   - `?dim=creator`    → same actor list, for creator
@@ -31,19 +31,19 @@ import {
   FilterProjectPickerBody,
   FilterPropertyPickerBody,
 } from "@/components/issue/pickers/filter-picker-bodies";
-import { useIssuesViewStore } from "@/data/stores/issues-view-store";
-import { useMyIssuesViewStore } from "@/data/stores/my-issues-view-store";
+import {
+  issueFilterStoreForScope,
+  parseFilterScope,
+  type IssueFilterScope,
+} from "@/data/stores/issue-filter-store-registry";
 import { PROPERTY_FILTER_PREFIX } from "@/data/stores/issue-filter-slice";
 import { propertyActiveOptions } from "@/data/queries/properties";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import type { IssueProperty } from "@multica/core/types";
-import type {
-  ActorFilterValue,
-  IssueFilterSlice,
-} from "@/data/stores/issue-filter-slice";
+import type { ActorFilterValue } from "@/data/stores/issue-filter-slice";
 import { useTranslation } from "@/lib/i18n/react";
 
-type Scope = "my" | "all";
+type Scope = IssueFilterScope;
 export type FilterDim =
   | "assignee"
   | "creator"
@@ -56,7 +56,7 @@ export default function IssuesFilterPickerRoute() {
     scope?: string;
     dim?: string;
   }>();
-  const resolvedScope: Scope = scopeParam === "all" ? "all" : "my";
+  const resolvedScope: Scope = parseFilterScope(scopeParam);
   const { t } = useTranslation();
   const navigation = useNavigation();
 
@@ -149,10 +149,9 @@ export default function IssuesFilterPickerRoute() {
 }
 
 /**
- * Actor multi-select body wired straight to the view store, split by scope
- * so the selector hooks are unconditional (both branches subscribe the
- * concrete store). Selected set and toggle come from the same store the
- * panel edits — no callbacks.
+ * Actor multi-select body wired straight to the view store — one
+ * unconditional subscription to the store the scope param resolves. Selected
+ * set and toggle come from that same store the panel edits — no callbacks.
  */
 function ActorPickerBody({
   dim,
@@ -163,23 +162,12 @@ function ActorPickerBody({
   scope: Scope;
   searchPlaceholder: string;
 }) {
-  const allState = useIssuesViewStore();
-  const myState = useMyIssuesViewStore();
-  const s =
-    scope === "all"
-      ? (allState as IssueFilterSlice)
-      : (myState as IssueFilterSlice);
+  const s = issueFilterStoreForScope(scope)();
   const selected = dim === "assignee" ? s.assigneeFilters : s.creatorFilters;
   const toggle = (value: ActorFilterValue) => {
-    if (dim === "assignee") {
-      if (scope === "all")
-        useIssuesViewStore.getState().toggleAssigneeFilter(value);
-      else useMyIssuesViewStore.getState().toggleAssigneeFilter(value);
-    } else {
-      if (scope === "all")
-        useIssuesViewStore.getState().toggleCreatorFilter(value);
-      else useMyIssuesViewStore.getState().toggleCreatorFilter(value);
-    }
+    if (dim === "assignee")
+      issueFilterStoreForScope(scope).getState().toggleAssigneeFilter(value);
+    else issueFilterStoreForScope(scope).getState().toggleCreatorFilter(value);
   };
   return (
     <FilterActorPickerBody
@@ -190,47 +178,32 @@ function ActorPickerBody({
   );
 }
 
-/** Project multi-select body — subscribes both stores unconditionally. */
+/** Project multi-select body — subscribes the scope's store only. */
 function ProjectPickerBody({ scope }: { scope: Scope }) {
-  const allState = useIssuesViewStore();
-  const myState = useMyIssuesViewStore();
-  const s =
-    scope === "all"
-      ? (allState as IssueFilterSlice)
-      : (myState as IssueFilterSlice);
+  const s = issueFilterStoreForScope(scope)();
   return (
     <FilterProjectPickerBody
       selected={s.projectFilters}
       includeNoProject={s.includeNoProject}
-      onToggle={(id) => {
-        if (scope === "all")
-          useIssuesViewStore.getState().toggleProjectFilter(id);
-        else useMyIssuesViewStore.getState().toggleProjectFilter(id);
-      }}
-      onToggleNoProject={() => {
-        if (scope === "all") useIssuesViewStore.getState().toggleNoProject();
-        else useMyIssuesViewStore.getState().toggleNoProject();
-      }}
+      onToggle={(id) =>
+        issueFilterStoreForScope(scope).getState().toggleProjectFilter(id)
+      }
+      onToggleNoProject={() =>
+        issueFilterStoreForScope(scope).getState().toggleNoProject()
+      }
     />
   );
 }
 
-/** Label multi-select body — subscribes both stores unconditionally. */
+/** Label multi-select body — subscribes the scope's store only. */
 function LabelPickerBody({ scope }: { scope: Scope }) {
-  const allState = useIssuesViewStore();
-  const myState = useMyIssuesViewStore();
-  const s =
-    scope === "all"
-      ? (allState as IssueFilterSlice)
-      : (myState as IssueFilterSlice);
+  const s = issueFilterStoreForScope(scope)();
   return (
     <FilterLabelPickerBody
       selected={s.labelFilters}
-      onToggle={(id) => {
-        if (scope === "all")
-          useIssuesViewStore.getState().toggleLabelFilter(id);
-        else useMyIssuesViewStore.getState().toggleLabelFilter(id);
-      }}
+      onToggle={(id) =>
+        issueFilterStoreForScope(scope).getState().toggleLabelFilter(id)
+      }
     />
   );
 }
@@ -244,26 +217,16 @@ function PropertyPickerBody({
   property: IssueProperty;
   scope: Scope;
 }) {
-  const allState = useIssuesViewStore();
-  const myState = useMyIssuesViewStore();
-  const s =
-    scope === "all"
-      ? (allState as IssueFilterSlice)
-      : (myState as IssueFilterSlice);
+  const s = issueFilterStoreForScope(scope)();
   return (
     <FilterPropertyPickerBody
       property={property}
       selected={s.propertyFilters[property.id] ?? []}
-      onToggle={(optionId) => {
-        if (scope === "all")
-          useIssuesViewStore
-            .getState()
-            .togglePropertyFilter(property.id, optionId);
-        else
-          useMyIssuesViewStore
-            .getState()
-            .togglePropertyFilter(property.id, optionId);
-      }}
+      onToggle={(optionId) =>
+        issueFilterStoreForScope(scope)
+          .getState()
+          .togglePropertyFilter(property.id, optionId)
+      }
     />
   );
 }

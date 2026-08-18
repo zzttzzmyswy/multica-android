@@ -67,3 +67,26 @@ export function canManageIssueView(
   if (view.owner_id === userId) return true;
   return view.visibility === "workspace" && (role === "owner" || role === "admin");
 }
+
+/**
+ * Whether a surface's saved-view dialog offers the visibility toggle
+ * (private ⇄ workspace) for a given scope type. Mirrors web
+ * save-view-dialog.tsx:718-726 — the visibility row renders for every
+ * scope.kind != my (workspace AND project); my-scope views are always
+ * private (server constrains them).
+ */
+export function scopeAllowsViewVisibility(
+  scope_type: IssueViewScope["scope_type"],
+): boolean {
+  return scope_type !== "my";
+}
+
+/** The visibility value the dialog actually submits — a my-scope surface
+ *  that somehow passes "workspace" is forced back to private (defence-in-
+ *  depth behind the toggle's absence). */
+export function resolveSubmittedVisibility(
+  visibilityAllowed: boolean,
+  visibility: "private" | "workspace",
+): "private" | "workspace" {
+  return visibilityAllowed ? visibility : "private";
+}

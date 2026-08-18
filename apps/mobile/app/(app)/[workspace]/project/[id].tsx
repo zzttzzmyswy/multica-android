@@ -1,10 +1,15 @@
 /**
- * Project detail screen. Single column, scrolling:
+ * Project detail screen. Collapsible header + full issue workbench:
  *
  *   Header card (icon + title + description, tap → edit)
  *   Properties section (Status / Priority / Lead — tap chip → picker)
  *   Resources section (read-only by default, "Add" button → resource form)
- *   Related issues (Open / Done bucketed list)
+ *   ── ProjectIssueSurface (iteration-68) ──
+ *   Scope tabs (all/members/agents), saved-view bar, list ⇄ board toggle,
+ *   filter/sort/grouping, batch multi-select — the meta block above becomes
+ *   the list header in list mode (scrolls with content) and stays pinned
+ *   above the board in board mode. Replaces the old read-only
+ *   ProjectRelatedIssues list.
  *
  * Per-record realtime: `useProjectRealtime(id, onDeleted=back)` subscribes
  * to `project:updated` (full replace) and `project:deleted` (pop back).
@@ -14,14 +19,7 @@
  * a second tap).
  */
 import { useCallback } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Linking,
-  RefreshControl,
-  ScrollView,
-  View,
-} from "react-native";
+import { ActivityIndicator, Alert, Linking, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -30,13 +28,12 @@ import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { ProjectHeaderCard } from "@/components/project/project-header-card";
 import { ProjectPropertiesSection } from "@/components/project/project-properties-section";
-import { ProjectRelatedIssues } from "@/components/project/project-related-issues";
+import { ProjectIssueSurface } from "@/components/project/project-issue-surface";
 import { ProjectResourcesSection } from "@/components/project/project-resources-section";
 import {
   projectDetailOptions,
   projectResourcesOptions,
 } from "@/data/queries/projects";
-import { issueKeys } from "@/data/queries/issue-keys";
 import { useDeleteProject } from "@/data/mutations/projects";
 import { pinListOptions } from "@/data/queries/pins";
 import { useCreatePin, useDeletePin } from "@/data/mutations/pins";
@@ -61,12 +58,13 @@ export default function ProjectDetail() {
   // viewing, pop back so the user isn't stranded on a 404.
   useProjectRealtime(id, () => router.back());
 
-  const onRefresh = useCallback(async () => {
+  // Pull-to-refresh for the issue surface: refresh the detail + resources
+  // caches down here (the surface refreshes its own issues query).
+  const onRefreshMeta = useCallback(async () => {
     await Promise.all([
       detail.refetch(),
-      qc.invalidateQueries({ queryKey: projectResourcesOptions(wsId, id).queryKey }),
       qc.invalidateQueries({
-        queryKey: [...issueKeys.list(wsId), "byProject", id],
+        queryKey: projectResourcesOptions(wsId, id).queryKey,
       }),
     ]);
   }, [detail, qc, wsId, id]);
@@ -186,59 +184,58 @@ export default function ProjectDetail() {
           </Button>
         </View>
       ) : (
-        <ScrollView
-          contentContainerClassName="pb-10"
-          refreshControl={
-            <RefreshControl
-              refreshing={detail.isRefetching}
-              onRefresh={onRefresh}
-            />
-          }
-          keyboardDismissMode="on-drag"
-        >
-          <ProjectHeaderCard
-            project={project}
-            onEdit={() => {
-              if (wsSlug) router.push(`/${wsSlug}/project/${id}/edit`);
-            }}
-          />
-          <ProjectPropertiesSection
-            project={project}
-            onPressStatus={() => {
-              if (wsSlug)
-                router.push({
-                  pathname: "/[workspace]/project/[id]/picker/status",
-                  params: { workspace: wsSlug, id },
-                });
-            }}
-            onPressPriority={() => {
-              if (wsSlug)
-                router.push({
-                  pathname: "/[workspace]/project/[id]/picker/priority",
-                  params: { workspace: wsSlug, id },
-                });
-            }}
-            onPressLead={() => {
-              if (wsSlug)
-                router.push({
-                  pathname: "/[workspace]/project/[id]/picker/lead",
-                  params: { workspace: wsSlug, id },
-                });
-            }}
-          />
-          <ProjectResourcesSection
+        <View className="flex-1">
+          <ProjectIssueSurface
             projectId={id}
-            onAdd={() => {
-              if (wsSlug)
-                router.push({
-                  pathname: "/[workspace]/project/[id]/add-resource",
-                  params: { workspace: wsSlug, id },
-                });
-            }}
+            onRefreshMeta={onRefreshMeta}
+            refreshingMeta={detail.isRefetching}
+            header={
+              <View>
+                <ProjectHeaderCard
+                  project={project}
+                  onEdit={() => {
+                    if (wsSlug) router.push(`/${wsSlug}/project/${id}/edit`);
+                  }}
+                />
+                <ProjectPropertiesSection
+                  project={project}
+                  onPressStatus={() => {
+                    if (wsSlug)
+                      router.push({
+                        pathname: "/[workspace]/project/[id]/picker/status",
+                        params: { workspace: wsSlug, id },
+                      });
+                  }}
+                  onPressPriority={() => {
+                    if (wsSlug)
+                      router.push({
+                        pathname: "/[workspace]/project/[id]/picker/priority",
+                        params: { workspace: wsSlug, id },
+                      });
+                  }}
+                  onPressLead={() => {
+                    if (wsSlug)
+                      router.push({
+                        pathname: "/[workspace]/project/[id]/picker/lead",
+                        params: { workspace: wsSlug, id },
+                      });
+                  }}
+                />
+                <ProjectResourcesSection
+                  projectId={id}
+                  onAdd={() => {
+                    if (wsSlug)
+                      router.push({
+                        pathname: "/[workspace]/project/[id]/add-resource",
+                        params: { workspace: wsSlug, id },
+                      });
+                  }}
+                />
+                <View className="h-3" />
+              </View>
+            }
           />
-          <View className="h-3" />
-          <ProjectRelatedIssues projectId={id} />
-        </ScrollView>
+        </View>
       )}
     </SafeAreaView>
   );
