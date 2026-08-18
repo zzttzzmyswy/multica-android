@@ -17,13 +17,14 @@
  * client re-runs `applyIssueFilters` + `sortIssues` as a belt-and-suspenders
  * pass (same as the workspace Issues page).
  */
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { Pressable, SectionList, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useIsFocused } from "@react-navigation/native";
 import { router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Issue, IssuePriority, IssueStatus } from "@multica/core/types";
+import type { CreateIssueViewRequest, IssueView } from "@multica/core/api/schemas";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/ui/header";
@@ -34,11 +35,13 @@ import { IssueRow } from "@/components/issue/issue-row";
 import { BatchActionBar } from "@/components/issue/batch-action-bar";
 import { BoardView } from "@/components/issue/board-view";
 import { ViewModeToggle } from "@/components/issue/view-mode-toggle";
+import { IssueViewBar } from "@/components/issue/issue-view-bar";
 import { IssuesLoading } from "@/components/issue/issues-loading";
 import {
   buildMyIssuesFilter,
   myIssueListOptions,
 } from "@/data/queries/my-issues";
+import { issueViewListOptions } from "@/data/queries/issue-views";
 import type { MyIssuesScope } from "@/data/queries/issue-keys";
 import { projectListOptions } from "@/data/queries/projects";
 import { labelListOptions } from "@/data/queries/labels";
@@ -47,7 +50,16 @@ import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection
 import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useMyIssuesViewStore } from "@/data/stores/my-issues-view-store";
-import { buildIssueWindow } from "@/data/stores/issue-filter-slice";
+import {
+  issueViewContainerKey,
+  useActiveIssueViewStore,
+} from "@/data/stores/active-issue-view-store";
+import {
+  sanitizeViewDisplay,
+  sanitizeViewQuery,
+  viewMatchesSlice,
+} from "@/data/stores/issue-view-codec";
+import { buildIssueWindow, defaultIssueFilterSlice } from "@/data/stores/issue-filter-slice";
 import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-workspace-change";
 import { BOARD_STATUSES } from "@/lib/issue-status";
 import {
@@ -156,6 +168,79 @@ export default function MyIssues() {
     wsId,
   );
 
+  // Saved views (iteration-65): the my-scope container holds this page's
+  // views. My scopes map to the view-variant vocabulary (assigned/created/
+  // involved — mobile "agents" ≈ web "involved"); applying a view resets the
+  // slice + display defaults and lands on the scope axis the view captured.
+  const myScope = useMemo(() => ({ scope_type: "my" as const }), []);
+  const scopeVariant = useMemo<CreateIssueViewRequest["scope_variant"]>(
+    () =>
+      scope === "assigned"
+        ? "assigned"
+        : scope === "created"
+          ? "created"
+          : scope === "agents"
+            ? "involved"
+            : null,
+    [scope],
+  );
+  const containerKey = useMemo(
+    () => issueViewContainerKey(wsId, myScope),
+    [wsId, myScope],
+  );
+  const { data: savedViews = [] } = useQuery({
+    ...issueViewListOptions(wsId, myScope),
+  });
+  const activeViewId = useActiveIssueViewStore(
+    (s) => s.active[containerKey] ?? null,
+  );
+  const activeView = useMemo(
+    () => savedViews.find((v) => v.id === activeViewId) ?? null,
+    [savedViews, activeViewId],
+  );
+  const snapshotSource = useMemo(
+    () => ({ ...filterState, sortBy, sortDirection, grouping }),
+    [filterState, sortBy, sortDirection, grouping],
+  );
+  const modifiedActive = useMemo(
+    () => (activeView ? !viewMatchesSlice(activeView, snapshotSource, view) : false),
+    [activeView, snapshotSource, view],
+  );
+  const applyView = useCallback(
+    (v: IssueView) => {
+      const snapshot = sanitizeViewQuery(v.query);
+      const display = sanitizeViewDisplay(v.display, sortBy);
+      useMyIssuesViewStore.setState({
+        ...snapshot,
+        dateFilter: null,
+        sortBy: display.sortBy,
+        sortDirection: display.sortDirection,
+        grouping: display.grouping,
+        view: display.viewMode,
+      });
+      // The scope axis a my-view captured is part of the VIEW — landing on
+      // the right tab, while the user's own tab stays untouched once the
+      // view closes.
+      setScope(
+        v.scope_variant === "created"
+          ? "created"
+          : v.scope_variant === "involved"
+            ? "agents"
+            : "assigned",
+      );
+      useActiveIssueViewStore.getState().setActive(containerKey, v.id);
+    },
+    [containerKey, setScope, sortBy],
+  );
+  const exitView = useCallback(() => {
+    useMyIssuesViewStore.setState({
+      ...defaultIssueFilterSlice(),
+      scope: "assigned",
+      view: "list",
+    });
+    useActiveIssueViewStore.getState().setActive(containerKey, null);
+  }, [containerKey]);
+
   const filter = useMemo(
     () => (userId ? buildMyIssuesFilter(scope, userId) : { assignee_id: "" }),
     [scope, userId],
@@ -247,6 +332,17 @@ export default function MyIssues() {
         view={view}
         onViewChange={setView}
         t={t}
+      />
+      <IssueViewBar
+        wsId={wsId}
+        scope={myScope}
+        scopeVariant={scopeVariant}
+        slice={snapshotSource}
+        viewMode={view}
+        activeViewId={activeViewId}
+        modifiedActive={modifiedActive}
+        onApplyView={applyView}
+        onExitView={exitView}
       />
       {hasActiveFilterChips ? (
         <ActiveFilterChips

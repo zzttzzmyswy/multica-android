@@ -162,7 +162,11 @@ describe("viewMatchesSlice", () => {
 
   it("true even with a user-layer date filter on top (date is not part of a view)", () => {
     expect(
-      viewMatchesSlice(VIEW, { ...SLICE, dateFilter: { field: "created_at", from: "2026-08-01", to: "2026-08-18" } }, "board"),
+      viewMatchesSlice(
+        VIEW,
+        { ...SLICE, dateFilter: { field: "created_at", from: "2026-08-01", to: "2026-08-18" } } as unknown as IssueFilterSlice,
+        "board",
+      ),
     ).toBe(true);
   });
 

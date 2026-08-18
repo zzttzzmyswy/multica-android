@@ -21,12 +21,13 @@
  * web GROUPING_OPTIONS. Assignee grouping resolves actor names through
  * `useActorLookup`, same source as the assignee filter picker.
  */
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { Pressable, SectionList, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Issue, IssuePriority, IssueStatus } from "@multica/core/types";
+import type { IssueView } from "@multica/core/api/schemas";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
@@ -38,8 +39,10 @@ import { StatusIcon } from "@/components/ui/status-icon";
 import { IssueRow } from "@/components/issue/issue-row";
 import { BoardView } from "@/components/issue/board-view";
 import { ViewModeToggle } from "@/components/issue/view-mode-toggle";
+import { IssueViewBar } from "@/components/issue/issue-view-bar";
 import { IssuesLoading } from "@/components/issue/issues-loading";
 import { issueListOptions } from "@/data/queries/issues";
+import { issueViewListOptions } from "@/data/queries/issue-views";
 import { projectListOptions } from "@/data/queries/projects";
 import { labelListOptions } from "@/data/queries/labels";
 import { propertyActiveOptions } from "@/data/queries/properties";
@@ -48,7 +51,19 @@ import {
   useIssuesViewStore,
   type IssuesScope,
 } from "@/data/stores/issues-view-store";
-import { buildIssueWindow } from "@/data/stores/issue-filter-slice";
+import {
+  issueViewContainerKey,
+  useActiveIssueViewStore,
+} from "@/data/stores/active-issue-view-store";
+import {
+  sanitizeViewDisplay,
+  sanitizeViewQuery,
+  viewMatchesSlice,
+} from "@/data/stores/issue-view-codec";
+import {
+  buildIssueWindow,
+  defaultIssueFilterSlice,
+} from "@/data/stores/issue-filter-slice";
 import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-workspace-change";
 import { BOARD_STATUSES } from "@/lib/issue-status";
 import {
@@ -148,6 +163,75 @@ export default function IssuesPage() {
     useIssuesViewStore.getState().clearFilters,
     wsId,
   );
+
+  // Saved views (iteration-65): the workspace-scope container holds this
+  // page's views. The bar owns the list query (cached, shared with the bar);
+  // applying a view resets the slice to its snapshot + display defaults and
+  // remembers which view is active per container (in-memory, like the rest
+  // of mobile's view state). `scopeVariant` is the current scope tab in the
+  // view-variant vocabulary captured into NEW views (null = All tab).
+  const issueScope = useMemo(
+    () => ({ scope_type: "workspace" as const }),
+    [],
+  );
+  const scopeVariant = scope === "all" ? null : scope;
+  const containerKey = useMemo(
+    () => issueViewContainerKey(wsId, issueScope),
+    [wsId, issueScope],
+  );
+  const { data: savedViews = [] } = useQuery({
+    ...issueViewListOptions(wsId, issueScope),
+  });
+  const activeViewId = useActiveIssueViewStore(
+    (s) => s.active[containerKey] ?? null,
+  );
+  const activeView = useMemo(
+    () => savedViews.find((v) => v.id === activeViewId) ?? null,
+    [savedViews, activeViewId],
+  );
+  // Union of the filter dims + display defaults the views save/compare.
+  const snapshotSource = useMemo(
+    () => ({ ...filterState, sortBy, sortDirection, grouping }),
+    [filterState, sortBy, sortDirection, grouping],
+  );
+  const modifiedActive = useMemo(
+    () => (activeView ? !viewMatchesSlice(activeView, snapshotSource, view) : false),
+    [activeView, snapshotSource, view],
+  );
+  const applyView = useCallback(
+    (v: IssueView) => {
+      const snapshot = sanitizeViewQuery(v.query);
+      const display = sanitizeViewDisplay(v.display, sortBy);
+      useIssuesViewStore.setState({
+        ...snapshot,
+        dateFilter: null,
+        sortBy: display.sortBy,
+        sortDirection: display.sortDirection,
+        grouping: display.grouping,
+        view: display.viewMode,
+      });
+      // The scope axis a workspace view captured is part of the VIEW (web
+      // semantics) — switching to it lands on the right tab, but the
+      // user's own tab is exactly where they left it once the view closes.
+      setScope(
+        v.scope_variant === "members"
+          ? "members"
+          : v.scope_variant === "agents"
+            ? "agents"
+            : "all",
+      );
+      useActiveIssueViewStore.getState().setActive(containerKey, v.id);
+    },
+    [containerKey, setScope, sortBy],
+  );
+  const exitView = useCallback(() => {
+    useIssuesViewStore.setState({
+      ...defaultIssueFilterSlice(),
+      scope: "all",
+      view: "list",
+    });
+    useActiveIssueViewStore.getState().setActive(containerKey, null);
+  }, [containerKey]);
 
   // The active window travels as server params → filter/sort changes refetch
   // and the cache is keyed per window (issueKeys.listFiltered). Identity is
@@ -250,6 +334,17 @@ export default function IssuesPage() {
         view={view}
         onViewChange={setView}
         t={t}
+      />
+      <IssueViewBar
+        wsId={wsId}
+        scope={issueScope}
+        scopeVariant={scopeVariant}
+        slice={snapshotSource}
+        viewMode={view}
+        activeViewId={activeViewId}
+        modifiedActive={modifiedActive}
+        onApplyView={applyView}
+        onExitView={exitView}
       />
       {hasActiveFilterChips ? (
         <ActiveFilterChips

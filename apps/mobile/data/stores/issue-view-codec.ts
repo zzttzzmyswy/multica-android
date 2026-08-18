@@ -209,6 +209,26 @@ function sameActors(a: ActorFilterValue[], b: ActorFilterValue[]): boolean {
   );
 }
 
+/** The live-window fields a saved view captures — the nine filter dims plus
+ *  the display defaults. Structural so either surface can pass its own
+ *  filter state object (workspace Issues and My Issues keep separate
+ *  stores). */
+export type IssueViewSnapshotSource = Pick<
+  IssueFilterSlice,
+  | "statusFilters"
+  | "priorityFilters"
+  | "assigneeFilters"
+  | "includeNoAssignee"
+  | "creatorFilters"
+  | "projectFilters"
+  | "includeNoProject"
+  | "labelFilters"
+  | "propertyFilters"
+  | "sortBy"
+  | "sortDirection"
+  | "grouping"
+>;
+
 /**
  * True when the live slice is exactly what the view fixes — drives the
  * "modified" dot next to the active view's name. Scope + dateFilter are
@@ -216,7 +236,7 @@ function sameActors(a: ActorFilterValue[], b: ActorFilterValue[]): boolean {
  */
 export function viewMatchesSlice(
   view: Pick<IssueView, "query" | "display">,
-  slice: IssueFilterSlice,
+  slice: IssueViewSnapshotSource,
   viewMode: IssueViewMode,
 ): boolean {
   const want = sanitizeViewQuery(view.query);

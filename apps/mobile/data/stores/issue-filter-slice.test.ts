@@ -230,3 +230,61 @@ describe("hasActiveIssueFilters", () => {
     expect(hasActiveIssueFilters(store.getState())).toBe(true);
   });
 });
+describe("resetFiltersTo (iteration-65)", () => {
+  let store: ReturnType<typeof makeStore>;
+
+  beforeEach(() => {
+    store = makeStore();
+  });
+
+  it("replaces every filter dimension in one shot (saved-view open)", () => {
+    store.getState().toggleStatusFilter("in_progress");
+    store.getState().togglePriorityFilter("high");
+    store.getState().togglePropertyFilter("def-1", "a");
+    store.getState().setSortBy("priority");
+    store.getState().setGrouping("assignee");
+
+    store.getState().resetFiltersTo({
+      statusFilters: ["todo"],
+      priorityFilters: [],
+      assigneeFilters: [{ type: "agent", id: "ag-1" }],
+      includeNoAssignee: true,
+      creatorFilters: [],
+      projectFilters: ["prj-1"],
+      includeNoProject: false,
+      labelFilters: [],
+      propertyFilters: {},
+    });
+
+    const state = store.getState();
+    expect(state.statusFilters).toEqual(["todo"]);
+    expect(state.priorityFilters).toEqual([]);
+    expect(state.assigneeFilters).toEqual([{ type: "agent", id: "ag-1" }]);
+    expect(state.includeNoAssignee).toBe(true);
+    expect(state.projectFilters).toEqual(["prj-1"]);
+    expect(state.propertyFilters).toEqual({});
+    // Non-filter fields are untouched by resetFiltersTo.
+    expect(state.sortBy).toBe("priority");
+    expect(state.grouping).toBe("assignee");
+  });
+
+  it("does not clear the date window (date is not part of a saved view)", () => {
+    store.getState().setDateFilter({
+      field: "created_at",
+      from: "2026-08-01",
+      to: "2026-08-18",
+    });
+    store.getState().resetFiltersTo({
+      statusFilters: [],
+      priorityFilters: [],
+      assigneeFilters: [],
+      includeNoAssignee: false,
+      creatorFilters: [],
+      projectFilters: [],
+      includeNoProject: false,
+      labelFilters: [],
+      propertyFilters: {},
+    });
+    expect(store.getState().dateFilter).not.toBeNull();
+  });
+});
