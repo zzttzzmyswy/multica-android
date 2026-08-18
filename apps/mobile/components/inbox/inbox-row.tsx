@@ -26,11 +26,20 @@ interface Props {
   onPress: () => void;
   /** Long-press opens the row's action menu (archive / mark-unread). */
   onLongPress?: () => void;
+  /**
+   * Rendered inside the archived sub-view. Archived rows deliberately render
+   * as read — matching web's `showUnread = item.read !== true &&
+   * !isArchivedView` (packages/views/inbox/components/inbox-list-item.tsx:69):
+   * archiving leaves `read` untouched so unarchiving restores the real state,
+   * and the unread count excludes archived items, so an unread dot there
+   * would mark something the badge never counts.
+   */
+  archived?: boolean;
 }
 
-export function InboxRow({ item, onPress, onLongPress }: Props) {
+export function InboxRow({ item, onPress, onLongPress, archived }: Props) {
   const timeAgo = useTimeAgo();
-  const isUnread = !item.read;
+  const isUnread = !archived && !item.read;
   const displayTitle = getInboxDisplayTitle(item);
   const actorType = item.actor_type ?? item.recipient_type;
   const actorId = item.actor_id ?? item.recipient_id;

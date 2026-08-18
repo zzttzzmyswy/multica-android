@@ -297,6 +297,7 @@ export default function Inbox() {
               <SwipeableInboxRow
                 item={item}
                 action="restore"
+                archived
                 onPress={() => onPressItem(item)}
                 onAction={() => unarchive.mutate(item.id)}
                 onLongPress={() => onLongPressItem(item)}

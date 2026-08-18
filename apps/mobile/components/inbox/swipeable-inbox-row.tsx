@@ -56,6 +56,8 @@ interface Props {
   onAction: () => void;
   /** Long-press opens the row's menu (archive / mark-unread …). */
   onLongPress?: () => void;
+  /** Archived sub-view styling: rows render as read (no unread dot). */
+  archived?: boolean;
 }
 
 export function SwipeableInboxRow({
@@ -64,6 +66,7 @@ export function SwipeableInboxRow({
   onAction,
   onLongPress,
   action = "archive",
+  archived,
 }: Props) {
   const ref = useRef<SwipeableMethods>(null);
 
@@ -87,7 +90,12 @@ export function SwipeableInboxRow({
         />
       )}
     >
-      <InboxRow item={item} onPress={onPress} onLongPress={onLongPress} />
+      <InboxRow
+        item={item}
+        onPress={onPress}
+        onLongPress={onLongPress}
+        archived={archived}
+      />
     </ReanimatedSwipeable>
   );
 }
