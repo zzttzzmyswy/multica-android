@@ -29,6 +29,8 @@ import { ProjectIcon } from "@/components/ui/project-icon";
 import { AttributeChip } from "./attribute-chip";
 import { useActorLookup } from "@/data/use-actor-name";
 import { findProject, projectListOptions } from "@/data/queries/projects";
+import { useIssueStatuses } from "@/data/queries/issue-statuses";
+import { useStatusLabel } from "@/lib/status-options";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
 
@@ -67,6 +69,8 @@ export function AttributeRow({ issue }: { issue: Issue }) {
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { getName } = useActorLookup();
   const { t } = useTranslation();
+  const statusLabel = useStatusLabel(wsId);
+  const statusEntry = useIssueStatuses(wsId).entryOf(issue.status);
 
   // Project read-only — fetch list to look up the title + icon. Cheap
   // (cached after first issue-detail visit).
@@ -100,8 +104,15 @@ export function AttributeRow({ issue }: { issue: Issue }) {
     <View className="flex-row flex-wrap gap-2">
       {/* Status — always shown */}
       <AttributeChip
-        icon={<StatusIcon status={issue.status} size={14} />}
-        label={t(`enum.status.${issue.status}`)}
+        icon={
+          <StatusIcon
+            status={issue.status}
+            category={statusEntry?.category}
+            color={statusEntry?.is_system ? undefined : (statusEntry?.color ?? undefined)}
+            size={14}
+          />
+        }
+        label={statusLabel(issue.status)}
         variant="filled"
         onPress={() => openPicker("status")}
       />

@@ -32,7 +32,12 @@ type RawIssueColumn = "title" | "identifier" | "start_date" | "due_date" | "crea
 /** Lookups the serialization needs — supplied by the component from the
  *  surface's catalogs + i18n, so this module stays pure and Node-testable. */
 export interface IssueTableExportContext {
-  /** Localized status label keyed by IssueStatus. */
+  /**
+   * Status label keyed by status key. The component builds it from the
+   * catalog-aware resolver: built-ins -> i18n, custom statuses -> their
+   * catalog name, keys the catalog never saw -> the raw key. The fallback
+   * below (`?? status`) is the same "never render blank" rule.
+   */
   statusLabels: Record<string, string>;
   /** Localized priority label keyed by IssuePriority. */
   priorityLabels: Record<string, string>;

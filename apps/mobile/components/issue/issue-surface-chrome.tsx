@@ -30,6 +30,7 @@ import { labelListOptions } from "@/data/queries/labels";
 import { propertyActiveOptions } from "@/data/queries/properties";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
+import { useStatusLabel } from "@/lib/status-options";
 import {
   type IssueFilterState,
 } from "@/lib/filter-issues";
@@ -229,6 +230,7 @@ export function ActiveFilterChips({
 }) {
   const { getName } = useActorLookup();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const statusLabel = useStatusLabel(wsId);
   const { data: projects = [] } = useQuery(projectListOptions(wsId));
   const { data: labels = [] } = useQuery(labelListOptions(wsId));
   const { data: properties = [] } = useQuery(propertyActiveOptions(wsId));
@@ -266,7 +268,7 @@ export function ActiveFilterChips({
   return (
     <View className="flex-row flex-wrap gap-1.5 px-4 pb-2">
       {statusFilters.map((s) => (
-        <Chip key={`s-${s}`} label={translate(`enum.status.${s}`)} onClear={() => onClearStatus(s)} />
+        <Chip key={`s-${s}`} label={statusLabel(s)} onClear={() => onClearStatus(s)} />
       ))}
       {priorityFilters.map((p) => (
         <Chip key={`p-${p}`} label={translate(`enum.priority.${p}`)} onClear={() => onClearPriority(p)} />
@@ -356,12 +358,13 @@ function Chip({ label, onClear }: { label: string; onClear: () => void }) {
  */
 export function IssueSectionHeader({ section }: { section: IssueSection }) {
   const { getName } = useActorLookup();
+  const statusLabel = useStatusLabel();
   if (section.status) {
     return (
       <View className="flex-row items-center gap-2 px-4 py-2 bg-background">
         <StatusIcon status={section.status} size={14} />
         <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
-          {translate(`enum.status.${section.status}`)}
+          {statusLabel(section.status)}
         </Text>
         <Text className="text-xs text-muted-foreground/60">
           {section.data.length}

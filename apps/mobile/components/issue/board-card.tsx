@@ -17,8 +17,9 @@ import type { Issue } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PriorityIcon } from "@/components/ui/priority-icon";
-import { issueStatusLabel } from "@/lib/issue-status";
+import { useStatusLabel } from "@/lib/status-options";
 import { translate } from "@/lib/i18n";
+import { CustomStatusChip } from "./custom-status-chip";
 
 /** Column width in pt — ~1.6 lanes visible on a 375pt phone. */
 export const BOARD_COLUMN_WIDTH = 272;
@@ -37,6 +38,7 @@ export function BoardCard({
   onLongPress?: () => void;
 }) {
   const labels = issue.labels ?? [];
+  const statusLabel = useStatusLabel();
   // Footer date summary mirrors web's "due date now" affordance: show what
   // the issue is waiting on without eating the card's line budget.
   const hasStart = !!issue.start_date;
@@ -54,7 +56,7 @@ export function BoardCard({
       delayLongPress={350}
       className="rounded-lg border border-border bg-card px-3 py-2.5 active:bg-secondary"
       accessibilityRole="button"
-      accessibilityLabel={`${issue.title}${issue.status ? `, ${issueStatusLabel(issue.status)}` : ""}`}
+      accessibilityLabel={`${issue.title}${issue.status ? `, ${statusLabel(issue.status)}` : ""}`}
     >
       <View className="flex-row items-start gap-1.5">
         <View className="pt-0.5">
@@ -63,6 +65,11 @@ export function BoardCard({
         <Text numberOfLines={2} className="flex-1 text-sm font-medium leading-snug">
           {issue.title}
         </Text>
+        {issue.status ? (
+          <View className="pt-0.5">
+            <CustomStatusChip status={issue.status} />
+          </View>
+        ) : null}
       </View>
 
       {labels.length > 0 ? (

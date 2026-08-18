@@ -16,6 +16,7 @@ import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { InboxDetailLabel } from "@/components/inbox/detail-label";
+import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { getInboxDisplayTitle } from "@/lib/inbox-display";
 import { useTimeAgo } from "@/lib/time-ago";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,10 @@ export function InboxRow({ item, onPress }: Props) {
   const displayTitle = getInboxDisplayTitle(item);
   const actorType = item.actor_type ?? item.recipient_type;
   const actorId = item.actor_id ?? item.recipient_id;
+  const statusCatalog = useIssueStatuses();
+  const statusEntry = item.issue_status
+    ? statusCatalog.entryOf(item.issue_status)
+    : undefined;
 
   return (
     <Pressable onPress={onPress} className="bg-background active:bg-secondary px-4 py-3">
@@ -56,7 +61,12 @@ export function InboxRow({ item, onPress }: Props) {
               </Text>
             </View>
             {item.issue_status ? (
-              <StatusIcon status={item.issue_status} size={14} />
+              <StatusIcon
+                status={item.issue_status}
+                category={statusEntry?.category}
+                color={statusEntry?.is_system ? undefined : (statusEntry?.color ?? undefined)}
+                size={14}
+              />
             ) : null}
           </View>
           {/* Bottom row: [type-aware detail label] (left) | [time] (right).

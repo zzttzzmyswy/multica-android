@@ -45,7 +45,7 @@ export function issueStatusListOptions(wsId: string | null) {
  * into the catalog's defensive fallbacks — built-in keys always resolve — so
  * surfaces can render with no extra branching.
  */
-export function useIssueStatuses(wsId: string | null): IssueStatusCatalog {
+export function useIssueStatuses(wsId?: string | null): IssueStatusCatalog {
   const storeWsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const resolvedWsId = wsId ?? storeWsId;
   const query = useQuery(issueStatusListOptions(resolvedWsId));

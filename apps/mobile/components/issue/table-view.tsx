@@ -40,7 +40,7 @@ import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
-import type { Issue, IssueProperty } from "@multica/core/types";
+import type { Issue, IssueProperty, IssueStatusEntry } from "@multica/core/types";
 import { formatDateOnly } from "@multica/core/issues/date";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
@@ -64,6 +64,8 @@ import type {
 } from "@/data/stores/issue-filter-slice";
 import { propertyActiveOptions } from "@/data/queries/properties";
 import { projectListOptions } from "@/data/queries/projects";
+import { useIssueStatuses } from "@/data/queries/issue-statuses";
+import { useStatusLabel } from "@/lib/status-options";
 import { formatPropertyValue } from "@/lib/issue-properties";
 import { ActionSheet } from "@/lib/action-sheet";
 import {
@@ -157,6 +159,8 @@ export function IssueTableView({
   emptyLabel,
 }: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const statusLabel = useStatusLabel(wsId);
+  const { activeStatuses } = useIssueStatuses(wsId);
   const { data: properties = [] } = useQuery(propertyActiveOptions(wsId));
   const { data: projects = [] } = useQuery(projectListOptions(wsId));
   const { getName } = useActorLookup();
@@ -288,8 +292,13 @@ export function IssueTableView({
         const scope = choices[index];
         const rows = scope === "all" ? issues : selectedIssues;
         const ctx: IssueTableExportContext = {
+          // Built-ins resolve through i18n; custom statuses append their
+          // catalog keys and resolve through the catalog name.
           statusLabels: Object.fromEntries(
-            STATUSES.map((s) => [s, t(`enum.status.${s}`)]),
+            [...STATUSES, ...activeStatuses.map((e) => e.key)].map((s) => [
+              s,
+              statusLabel(s),
+            ]),
           ),
           priorityLabels: Object.fromEntries(
             PRIORITIES.map((p) => [p, t(`enum.priority.${p}`)]),
@@ -626,6 +635,8 @@ function DataRow({
   selected: boolean;
 }) {
   const { t } = useTranslation();
+  const statusLabel = useStatusLabel();
+  const statusEntry = useIssueStatuses().entryOf(issue.status);
   return (
     <View
       style={{ height }}
@@ -644,6 +655,8 @@ function DataRow({
             projects={projects}
             getName={getName}
             t={t}
+            statusLabel={statusLabel}
+            statusEntry={statusEntry}
           />
         </View>
       ))}
@@ -658,6 +671,8 @@ function DataCell({
   projects,
   getName,
   t,
+  statusLabel,
+  statusEntry,
 }: {
   issue: Issue;
   column: TableColumnKey;
@@ -668,6 +683,8 @@ function DataCell({
     id: string | null | undefined,
   ) => string;
   t: Translate;
+  statusLabel: (statusKey: string) => string;
+  statusEntry: IssueStatusEntry | undefined;
 }) {
   switch (column) {
     case "identifier":
@@ -679,9 +696,14 @@ function DataCell({
     case "status":
       return (
         <View className="flex-row items-center gap-1">
-          <StatusIcon status={issue.status} size={13} />
+          <StatusIcon
+            status={issue.status}
+            category={statusEntry?.category}
+            color={statusEntry?.is_system ? undefined : (statusEntry?.color ?? undefined)}
+            size={13}
+          />
           <Text className="text-xs text-foreground" numberOfLines={1}>
-            {t(`enum.status.${issue.status}`)}
+            {statusLabel(issue.status)}
           </Text>
         </View>
       );

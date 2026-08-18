@@ -40,6 +40,8 @@ import { ProjectIcon } from "@/components/ui/project-icon";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { formatDateOnly } from "@multica/core/issues/date";
 import { useActorLookup } from "@/data/use-actor-name";
+import { useIssueStatuses } from "@/data/queries/issue-statuses";
+import { useStatusLabel } from "@/lib/status-options";
 import { useNewIssueDraftStore } from "@/data/stores/new-issue-draft-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import {
@@ -115,7 +117,9 @@ export function CreateFormAttributeRow({ fields = ALL_FIELDS, mode }: Props) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const muted = THEME[colorScheme].mutedForeground;
+  const statusLabel = useStatusLabel(wsId);
   const status = useNewIssueDraftStore((s) => s.status);
+  const statusEntry = useIssueStatuses(wsId).entryOf(status);
   const priority = useNewIssueDraftStore((s) => s.priority);
   const assignee = useNewIssueDraftStore((s) => s.assignee);
   const dueDate = useNewIssueDraftStore((s) => s.dueDate);
@@ -237,8 +241,15 @@ export function CreateFormAttributeRow({ fields = ALL_FIELDS, mode }: Props) {
       case "status":
         return (
           <AttributeChip
-            icon={<StatusIcon status={status} size={12} />}
-            label={t(`enum.status.${status}`)}
+            icon={
+              <StatusIcon
+                status={status}
+                category={statusEntry?.category}
+                color={statusEntry?.is_system ? undefined : (statusEntry?.color ?? undefined)}
+                size={12}
+              />
+            }
+            label={statusLabel(status)}
             variant="filled"
             onPress={() => open("status")}
           />

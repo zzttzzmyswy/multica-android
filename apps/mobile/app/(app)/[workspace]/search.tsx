@@ -44,7 +44,8 @@ import {
   useViewedIssuesStore,
 } from "@/data/viewed-issues-store";
 import { issueDetailOptions } from "@/data/queries/issues";
-import { issueStatusLabel } from "@/lib/issue-status";
+import { useIssueStatuses } from "@/data/queries/issue-statuses";
+import { useStatusLabel } from "@/lib/status-options";
 import { projectStatusLabel } from "@/lib/project-status";
 import { buildSearchRows, type RowItem } from "@/lib/search-rows";
 import { keyboardBehavior } from "@/lib/keyboard";
@@ -162,14 +163,20 @@ function SearchIssueRow({ item, query, slug }: SearchIssueRowProps) {
   // (server/internal/handler/issue.go:592). Keep mobile strictly aligned.
   const showSnippet =
     item.match_source === "comment" && !!item.matched_snippet;
-  const statusLabel = issueStatusLabel(item.status as IssueStatus);
+  const statusLabel = useStatusLabel()(item.status);
+  const statusEntry = useIssueStatuses().entryOf(item.status);
   return (
     <Pressable
       onPress={() => navigateOnTap(slug, `/${slug}/issue/${item.id}`)}
       className="active:bg-secondary px-4 py-3"
     >
       <View className="flex-row items-center gap-3">
-        <StatusIcon status={item.status as IssueStatus} size={14} />
+        <StatusIcon
+          status={item.status}
+          category={statusEntry?.category}
+          color={statusEntry?.is_system ? undefined : (statusEntry?.color ?? undefined)}
+          size={14}
+        />
         <PriorityIcon priority={item.priority} size={14} />
         <Text className="text-xs text-muted-foreground shrink-0 w-16">
           {item.identifier}
@@ -261,14 +268,20 @@ interface RecentRowProps {
 }
 
 function RecentRow({ item, slug }: RecentRowProps) {
-  const statusLabel = issueStatusLabel(item.status as IssueStatus);
+  const statusLabel = useStatusLabel()(item.status);
+  const statusEntry = useIssueStatuses().entryOf(item.status);
   return (
     <Pressable
       onPress={() => navigateOnTap(slug, `/${slug}/issue/${item.id}`)}
       className="active:bg-secondary px-4 py-3"
     >
       <View className="flex-row items-center gap-3">
-        <StatusIcon status={item.status as IssueStatus} size={14} />
+        <StatusIcon
+          status={item.status}
+          category={statusEntry?.category}
+          color={statusEntry?.is_system ? undefined : (statusEntry?.color ?? undefined)}
+          size={14}
+        />
         <Text className="text-xs text-muted-foreground shrink-0 w-16">
           {item.identifier}
         </Text>

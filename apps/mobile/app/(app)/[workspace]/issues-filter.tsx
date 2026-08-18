@@ -26,7 +26,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import type { IssuePriority, IssueStatus } from "@multica/core/types";
+import type { IssuePriority } from "@multica/core/types";
 import { addDaysDateOnly, todayDateOnly } from "@multica/core/issues/date";
 import { Text } from "@/components/ui/text";
 import { StatusIcon } from "@/components/ui/status-icon";
@@ -45,13 +45,11 @@ import {
   type IssueDateFilterValue,
   type IssueFilterSlice,
 } from "@/data/stores/issue-filter-slice";
-import { BOARD_STATUSES } from "@/lib/issue-status";
+import { useStatusOptions } from "@/lib/status-options";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
-
-const ALL_STATUSES: IssueStatus[] = [...BOARD_STATUSES, "cancelled"];
 
 // Mirrors PRIORITY_ORDER in packages/core/issues/config/priority.ts.
 const PRIORITY_ORDER: IssuePriority[] = [
@@ -127,6 +125,7 @@ export default function IssuesFilterRoute() {
   // Custom-property definitions that can drive a filter — same
   // filterable-property set web uses (issues-header.tsx:1175-1181).
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const statusOptions = useStatusOptions(wsId);
   const { data: properties = [] } = useQuery(propertyActiveOptions(wsId));
   const filterableProperties = properties.filter(
     (p) => p.type === "select" || p.type === "multi_select" || p.type === "checkbox",
@@ -173,25 +172,41 @@ export default function IssuesFilterRoute() {
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         {/* ——— Status ——— */}
         <SectionLabel>{t("filter.status")}</SectionLabel>
-        {ALL_STATUSES.map((status) => {
-          const checked = statusFilters.includes(status);
-          return (
-            <Pressable
-              key={status}
-              onPress={() => act().toggleStatusFilter(status)}
-              className={cn(
-                "flex-row items-center gap-3 px-4 py-2.5 active:bg-secondary",
-                checked && "bg-secondary/60",
-              )}
-            >
-              <StatusIcon status={status} size={16} />
-              <Text className="flex-1 text-sm text-foreground">
-                {t(`enum.status.${status}`)}
-              </Text>
-              <CheckMark checked={checked} />
-            </Pressable>
-          );
-        })}
+        {statusOptions.groups.map((group) => (
+          <View key={group.category}>
+            {statusOptions.hasCustom && group.options.length > 1 ? (
+              <View className="px-4 pt-1.5 pb-1">
+                <Text className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
+                  {t(`enum.status.${group.category}`)}
+                </Text>
+              </View>
+            ) : null}
+            {group.options.map((option) => {
+              const checked = statusFilters.includes(option.key);
+              return (
+                <Pressable
+                  key={option.key}
+                  onPress={() => act().toggleStatusFilter(option.key)}
+                  className={cn(
+                    "flex-row items-center gap-3 px-4 py-2.5 active:bg-secondary",
+                    checked && "bg-secondary/60",
+                  )}
+                >
+                  <StatusIcon
+                    status={option.key}
+                    category={option.category}
+                    color={option.color ?? undefined}
+                    size={16}
+                  />
+                  <Text className="flex-1 text-sm text-foreground">
+                    {option.label}
+                  </Text>
+                  <CheckMark checked={checked} />
+                </Pressable>
+              );
+            })}
+          </View>
+        ))}
 
         {/* ——— Priority ——— */}
         <SectionLabel>{t("filter.priority")}</SectionLabel>

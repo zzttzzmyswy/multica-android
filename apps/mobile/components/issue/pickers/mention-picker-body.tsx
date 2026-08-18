@@ -37,6 +37,7 @@ import type {
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { StatusIcon } from "@/components/ui/status-icon";
+import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { memberListOptions } from "@/data/queries/members";
 import { agentListOptions } from "@/data/queries/agents";
 import { squadListOptions } from "@/data/queries/squads";
@@ -75,6 +76,7 @@ interface Props {
 
 export function MentionPickerBody({ query, mode = "comment" }: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const statusCatalog = useIssueStatuses(wsId);
   const { t } = useTranslation();
   const { data: members = [] } = useQuery(memberListOptions(wsId));
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
@@ -235,6 +237,10 @@ export function MentionPickerBody({ query, mode = "comment" }: Props) {
           (item.kind === "agent" && !isAgentRuntimeBound(item.agent)) ||
           (item.kind === "squad" &&
             !runnableAgentIds.has(item.squad.leader_id));
+        const statusEntry =
+          item.kind === "issue"
+            ? statusCatalog.entryOf(item.issue.status)
+            : undefined;
         return (
           <Pressable
             disabled={needsRuntime}
@@ -266,7 +272,12 @@ export function MentionPickerBody({ query, mode = "comment" }: Props) {
                 className="items-center justify-center"
                 style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}
               >
-                <StatusIcon status={item.issue.status} size={22} />
+                <StatusIcon
+                  status={item.issue.status}
+                  category={statusEntry?.category}
+                  color={statusEntry?.is_system ? undefined : (statusEntry?.color ?? undefined)}
+                  size={22}
+                />
               </View>
             )}
             {item.kind === "issue" ? (

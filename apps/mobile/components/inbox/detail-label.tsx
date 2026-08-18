@@ -23,7 +23,9 @@ import { StatusIcon } from "@/components/ui/status-icon";
 import { PriorityIcon } from "@/components/ui/priority-icon";
 import { useActorLookup } from "@/data/use-actor-name";
 import { cn } from "@/lib/utils";
-import { issuePriorityLabel, issueStatusLabel } from "@/lib/issue-status";
+import { issuePriorityLabel } from "@/lib/issue-status";
+import { useStatusLabel } from "@/lib/status-options";
+import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { useTranslation } from "@/lib/i18n/react";
 
 function typeLabel(t: (id: string) => string, type: InboxItemType): string {
@@ -48,17 +50,25 @@ export function InboxDetailLabel({
 }) {
   const { getName } = useActorLookup();
   const { t } = useTranslation();
+  const statusLabel = useStatusLabel();
+  const statusCatalog = useIssueStatuses();
   const details = item.details ?? {};
 
   // Cases with inline icons → Row layout.
   if (item.type === "status_changed" && details.to) {
     const status = details.to as IssueStatus;
+    const statusEntry = statusCatalog.entryOf(status);
     return (
       <View className={cn("flex-row items-center gap-1", className)}>
         <Text className="text-xs text-muted-foreground">{t("inbox.setStatusTo")}</Text>
-        <StatusIcon status={status} size={12} />
+        <StatusIcon
+          status={status}
+          category={statusEntry?.category}
+          color={statusEntry?.is_system ? undefined : (statusEntry?.color ?? undefined)}
+          size={12}
+        />
         <Text className="text-xs text-muted-foreground" numberOfLines={1}>
-          {issueStatusLabel(status)}
+          {statusLabel(status)}
         </Text>
       </View>
     );

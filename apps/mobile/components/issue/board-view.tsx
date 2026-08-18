@@ -21,11 +21,12 @@ import type { Issue, IssueStatus } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { StatusIcon } from "@/components/ui/status-icon";
-import { BOARD_STATUSES, issueStatusLabel } from "@/lib/issue-status";
+import { useStatusLabel, useStatusOptions } from "@/lib/status-options";
 import { translate } from "@/lib/i18n";
 import { useTranslation } from "@/lib/i18n/react";
 import { ActionSheet } from "@/lib/action-sheet";
 import { useUpdateIssue } from "@/data/mutations/issues";
+import { useWorkspaceStore } from "@/data/workspace-store";
 import type { IssueGrouping } from "@/data/stores/issue-filter-slice";
 import { useActorLookup } from "@/data/use-actor-name";
 import {
@@ -36,10 +37,11 @@ import { BoardCard, BOARD_COLUMN_WIDTH } from "./board-card";
 
 function ColumnHeader({ column }: { column: IssueGroupSection }) {
   const { getName } = useActorLookup();
+  const statusLabel = useStatusLabel();
   let leading: React.ReactNode = null;
   let label = "";
   if (column.status) {
-    label = issueStatusLabel(column.status);
+    label = statusLabel(column.status);
     leading = <StatusIcon status={column.status} size={14} />;
   } else if (column.unassigned) {
     label = translate("filter.noAssignee");
@@ -122,21 +124,24 @@ function IssueCardWithMenu({
 }) {
   const { t } = useTranslation();
   const updateIssue = useUpdateIssue(issue.id);
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  // Shared with the picker/filter — every entry point that can set a status
+  // offers the same set (catalog active statuses incl. custom keys).
+  const { options } = useStatusOptions(wsId);
 
   const onLongPress = () => {
-    const options = [
-      ...BOARD_STATUSES.map((s) => issueStatusLabel(s)),
-      t("common.cancel"),
-    ];
+    const labels = options.map((o) => o.label);
+    const optionKeys = options.map((o) => o.key);
+    const optionsWithCancel = [...labels, t("common.cancel")];
     ActionSheet.showActionSheetWithOptions(
       {
         title: t("filter.moveToStatus"),
-        options,
-        cancelButtonIndex: options.length - 1,
+        options: optionsWithCancel,
+        cancelButtonIndex: optionsWithCancel.length - 1,
       },
       (index) => {
-        if (index == null || index >= BOARD_STATUSES.length) return;
-        updateIssue.mutate({ status: BOARD_STATUSES[index] });
+        if (index == null || index >= optionKeys.length) return;
+        updateIssue.mutate({ status: optionKeys[index] });
       },
     );
   };

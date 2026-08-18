@@ -31,8 +31,10 @@ import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PriorityIcon } from "@/components/ui/priority-icon";
 import { StatusIcon } from "@/components/ui/status-icon";
+import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
+import { CustomStatusChip } from "./custom-status-chip";
 
 interface Props {
   issue: Issue;
@@ -60,6 +62,7 @@ export function IssueRow({
   onLongPress,
 }: Props) {
   const { colorScheme } = useColorScheme();
+  const statusEntry = useIssueStatuses().entryOf(issue.status);
   const checkColor = THEME[colorScheme].primary;
   return (
     <Pressable
@@ -76,7 +79,17 @@ export function IssueRow({
             color={selected ? checkColor : THEME[colorScheme].mutedForeground}
           />
         ) : null}
-        {showStatus ? <StatusIcon status={issue.status} size={14} /> : null}
+        {showStatus ? (
+          <View className="flex-row items-center gap-1.5">
+            <StatusIcon
+              status={issue.status}
+              category={statusEntry?.category}
+              color={statusEntry?.is_system ? undefined : (statusEntry?.color ?? undefined)}
+              size={14}
+            />
+            <CustomStatusChip status={issue.status} />
+          </View>
+        ) : null}
         <PriorityIcon priority={issue.priority} size={14} />
         <Text className="text-xs text-muted-foreground shrink-0 w-16">
           {issue.identifier}

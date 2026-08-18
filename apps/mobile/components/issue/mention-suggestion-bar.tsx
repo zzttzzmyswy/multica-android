@@ -30,6 +30,8 @@ import { canAssignAgentToIssue } from "@multica/core/permissions";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { StatusIcon } from "@/components/ui/status-icon";
+import { useIssueStatuses } from "@/data/queries/issue-statuses";
+import { issueStatusCategoryOfIssue } from "@/lib/issue-status-catalog";
 import { memberListOptions } from "@/data/queries/members";
 import { agentListOptions } from "@/data/queries/agents";
 import { squadListOptions } from "@/data/queries/squads";
@@ -77,6 +79,7 @@ export function MentionSuggestionBar({
 }: Props) {
   const { t } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const statusCatalog = useIssueStatuses(wsId);
   const isChat = mode === "chat";
 
   // Comment-mode data — disabled in chat mode to avoid wasted fetches.
@@ -353,10 +356,11 @@ export function MentionSuggestionBar({
               </Pressable>
             );
           }
-          // issue
-          const closed =
-            item.issue.status === "done" ||
-            item.issue.status === "cancelled";
+          // issue — status-coupled behavior resolves by CATEGORY, so a custom
+          // status in the done/cancelled category still closes the row.
+          const statusEntry = statusCatalog.entryOf(item.issue.status);
+          const statusCategory = issueStatusCategoryOfIssue(item.issue);
+          const closed = statusCategory === "done" || statusCategory === "cancelled";
           return (
             <Pressable
               onPress={() =>
@@ -372,7 +376,12 @@ export function MentionSuggestionBar({
               )}
             >
               <View className="size-7 items-center justify-center">
-                <StatusIcon status={item.issue.status} size={16} />
+                <StatusIcon
+                  status={item.issue.status}
+                  category={statusEntry?.category}
+                  color={statusEntry?.is_system ? undefined : (statusEntry?.color ?? undefined)}
+                  size={16}
+                />
               </View>
               <Text className="text-sm font-medium text-foreground">
                 {item.issue.identifier}
