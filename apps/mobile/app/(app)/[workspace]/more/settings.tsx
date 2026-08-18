@@ -101,6 +101,8 @@ export default function SettingsPage() {
   const goWorkspaceSettings = () =>
     router.push(`/${currentSlug}/more/settings/workspace`);
   const goBilling = () => router.push(`/${currentSlug}/more/settings/billing`);
+  const goIssueStatuses = () =>
+    router.push(`/${currentSlug}/more/settings/issue-statuses`);
 
   // Language follows the theme picker's tap-to-act pattern. The local switch
   // takes effect immediately (setLocale/resetLocale persist + notify), and
@@ -221,6 +223,18 @@ export default function SettingsPage() {
             );
           })
         )}
+        <Separator />
+        <NavRow
+          onPress={goIssueStatuses}
+          chevronColor={mutedFg}
+          leading={
+            <View className="size-10 rounded-md bg-secondary items-center justify-center">
+              <Ionicons name="git-commit-outline" size={20} color={mutedFg} />
+            </View>
+          }
+          title={t("settings.issueStatusesTitle")}
+          subtitle={t("settings.issueStatusesSubtitle")}
+        />
         <Separator />
         <NavRow
           onPress={goWorkspaceSettings}
