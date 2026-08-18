@@ -61,18 +61,18 @@ export interface IssueDateFilterValue {
 }
 
 /**
- * Issue-workbench view mode. Mobile surface of web `ViewMode` — only the
- * two modes that make sense on a phone are exposed (web also has table /
- * swimlane / gantt). Lives here so both issue-list view stores share one
- * wire default, but the field itself lives on each store (like `scope`),
- * NOT in the filter slice — clearing filters must not reset the user's
- * chosen view.
+ * Issue-workbench view mode. Mobile surface of web `ViewMode` — the three
+ * modes that make sense on a phone are exposed (web also has swimlane and
+ * gantt). Lives here so all issue-list view stores share one wire default,
+ * but the field itself lives on each store (like `scope`), NOT in the
+ * filter slice — clearing filters must not reset the user's chosen view.
  */
-export type IssueViewMode = "list" | "board";
+export type IssueViewMode = "list" | "board" | "table";
 
 export const ISSUE_VIEW_MODES: { value: IssueViewMode; labelKey: string }[] = [
   { value: "list", labelKey: "issues.viewList" },
   { value: "board", labelKey: "issues.viewBoard" },
+  { value: "table", labelKey: "issues.viewTable" },
 ];
 
 export const ISSUE_SORT_OPTIONS: { value: IssueSortField; labelKey: string }[] =

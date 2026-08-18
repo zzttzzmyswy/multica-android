@@ -29,9 +29,17 @@ import {
   type IssueFilterSlice,
   type IssueViewMode,
 } from "./issue-filter-slice";
+import {
+  createTableColumnActions,
+  defaultTableColumns,
+  type TableColumnKey,
+  type TableColumnsSlice,
+} from "./issue-table-columns";
 import type { IssuesScope } from "./issues-view-store";
 
-export interface ProjectIssuesViewState extends IssueFilterSlice {
+export interface ProjectIssuesViewState
+  extends IssueFilterSlice,
+    TableColumnsSlice {
   /** Scope tab — all / members / agents, mirroring web's project-page
    *  issue tabs (`issues-scope-store` keyed `project:<id>`). */
   scope: IssuesScope;
@@ -44,10 +52,12 @@ export const useProjectIssuesViewStore = create<ProjectIssuesViewState>(
   (set) => ({
     scope: "all",
     view: "list",
+    tableColumns: defaultTableColumns(),
     ...defaultIssueFilterSlice(),
     setScope: (scope) => set({ scope }),
     setView: (view) => set({ view }),
     ...createIssueFilterActions<ProjectIssuesViewState>(set),
+    ...createTableColumnActions<ProjectIssuesViewState>(set),
   }),
 );
 

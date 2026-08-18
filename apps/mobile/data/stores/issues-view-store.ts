@@ -42,10 +42,18 @@ import {
   type IssueSortField,
   type IssueViewMode,
 } from "./issue-filter-slice";
+import {
+  createTableColumnActions,
+  defaultTableColumns,
+  type TableColumnKey,
+  type TableColumnsSlice,
+} from "./issue-table-columns";
 
 export type IssuesScope = "all" | "members" | "agents";
 
-export interface IssuesViewState extends IssueFilterSlice {
+export interface IssuesViewState
+  extends IssueFilterSlice,
+    TableColumnsSlice {
   scope: IssuesScope;
   view: IssueViewMode;
   setScope: (scope: IssuesScope) => void;
@@ -55,10 +63,12 @@ export interface IssuesViewState extends IssueFilterSlice {
 export const useIssuesViewStore = create<IssuesViewState>((set) => ({
   scope: "all",
   view: "list",
+  tableColumns: defaultTableColumns(),
   ...defaultIssueFilterSlice(),
   setScope: (scope) => set({ scope }),
   setView: (view) => set({ view }),
   ...createIssueFilterActions<IssuesViewState>(set),
+  ...createTableColumnActions<IssuesViewState>(set),
 }));
 
 /** Re-exported convenience: whether any filter dimension is active. */

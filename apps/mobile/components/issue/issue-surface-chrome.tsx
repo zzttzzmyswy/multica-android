@@ -33,6 +33,7 @@ import { useActorLookup } from "@/data/use-actor-name";
 import {
   type IssueFilterState,
 } from "@/lib/filter-issues";
+import type { IssueViewMode } from "@/data/stores/issue-filter-slice";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
@@ -141,8 +142,8 @@ export function IssueSurfaceScopeToolbar<S extends string>({
   onChange: (value: S) => void;
   onOpenFilter: () => void;
   hasActiveFilters: boolean;
-  view: "list" | "board";
-  onViewChange: (view: "list" | "board") => void;
+  view: IssueViewMode;
+  onViewChange: (view: IssueViewMode) => void;
   t: (id: string, params?: Record<string, string | number>) => string;
 }) {
   return (

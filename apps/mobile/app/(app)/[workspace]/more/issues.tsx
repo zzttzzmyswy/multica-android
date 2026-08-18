@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { BatchActionBar } from "@/components/issue/batch-action-bar";
 import { BoardView } from "@/components/issue/board-view";
 import { IssueViewBar } from "@/components/issue/issue-view-bar";
+import { IssueTableView } from "@/components/issue/table-view";
 import { IssuesLoading } from "@/components/issue/issues-loading";
 import {
   ActiveFilterChips,
@@ -96,6 +97,8 @@ export default function IssuesPage() {
   const setScope = useIssuesViewStore((s) => s.setScope);
   const view = useIssuesViewStore((s) => s.view);
   const setView = useIssuesViewStore((s) => s.setView);
+  const tableColumns = useIssuesViewStore((s) => s.tableColumns);
+  const toggleTableColumn = useIssuesViewStore((s) => s.toggleTableColumn);
   const grouping = useIssuesViewStore((s) => s.grouping);
   const sortBy = useIssuesViewStore((s) => s.sortBy);
   const sortDirection = useIssuesViewStore((s) => s.sortDirection);
@@ -418,6 +421,26 @@ export default function IssuesPage() {
               : emptyMessageForScope(scope, t)
           }
         />
+      ) : view === "table" ? (
+        <IssueTableView
+          issues={sorted}
+          columns={tableColumns}
+          onToggleColumn={toggleTableColumn}
+          sortBy={sortBy}
+          sortDirection={sortDirection}
+          onSort={(field, direction) => {
+            useIssuesViewStore.getState().setSortBy(field);
+            useIssuesViewStore.getState().setSortDirection(direction);
+          }}
+          onOpenIssue={(issue) => {
+            if (wsSlug) router.push(`/${wsSlug}/issue/${issue.id}`);
+          }}
+          emptyLabel={
+            hasActiveFilterChips
+              ? t("issues.filterEmpty")
+              : emptyMessageForScope(scope, t)
+          }
+        />
       ) : (
         <SectionList
           sections={sections}
@@ -445,7 +468,7 @@ export default function IssuesPage() {
         />
       )}
 
-      {view === "list" && sorted.length > 0 ? (
+      {view !== "board" && sorted.length > 0 ? (
         <BatchActionBar issues={sorted} />
       ) : null}
     </View>

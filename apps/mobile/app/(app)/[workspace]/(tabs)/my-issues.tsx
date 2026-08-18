@@ -30,6 +30,7 @@ import { HeaderActions } from "@/components/ui/app-header-actions";
 import { BatchActionBar } from "@/components/issue/batch-action-bar";
 import { BoardView } from "@/components/issue/board-view";
 import { IssueViewBar } from "@/components/issue/issue-view-bar";
+import { IssueTableView } from "@/components/issue/table-view";
 import { IssuesLoading } from "@/components/issue/issues-loading";
 import {
   ActiveFilterChips,
@@ -93,6 +94,8 @@ export default function MyIssues() {
   const setScope = useMyIssuesViewStore((s) => s.setScope);
   const view = useMyIssuesViewStore((s) => s.view);
   const setView = useMyIssuesViewStore((s) => s.setView);
+  const tableColumns = useMyIssuesViewStore((s) => s.tableColumns);
+  const toggleTableColumn = useMyIssuesViewStore((s) => s.toggleTableColumn);
   const grouping = useMyIssuesViewStore((s) => s.grouping);
   const sortBy = useMyIssuesViewStore((s) => s.sortBy);
   const sortDirection = useMyIssuesViewStore((s) => s.sortDirection);
@@ -407,6 +410,26 @@ export default function MyIssues() {
               : emptyMessageForScope(scope, t)
           }
         />
+      ) : view === "table" ? (
+        <IssueTableView
+          issues={sorted}
+          columns={tableColumns}
+          onToggleColumn={toggleTableColumn}
+          sortBy={sortBy}
+          sortDirection={sortDirection}
+          onSort={(field, direction) => {
+            useMyIssuesViewStore.getState().setSortBy(field);
+            useMyIssuesViewStore.getState().setSortDirection(direction);
+          }}
+          onOpenIssue={(issue) => {
+            if (wsSlug) router.push(`/${wsSlug}/issue/${issue.id}`);
+          }}
+          emptyLabel={
+            hasActiveFilterChips
+              ? t("myIssues.filterEmpty")
+              : emptyMessageForScope(scope, t)
+          }
+        />
       ) : (
         <SectionList
           sections={sections}
@@ -434,7 +457,7 @@ export default function MyIssues() {
         />
       )}
 
-      {view === "list" && sorted.length > 0 ? (
+      {view !== "board" && sorted.length > 0 ? (
         <BatchActionBar issues={sorted} />
       ) : null}
 
