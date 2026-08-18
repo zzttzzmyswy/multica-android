@@ -70,9 +70,33 @@ export function getInboxDisplayTitle(item: InboxItem): string {
  *   5. Sort the result newest-first.
  */
 export function deduplicateInboxItems(items: InboxItem[]): InboxItem[] {
-  const active = items.filter((i) => !i.archived);
+  return groupInboxItemsByIssue(items.filter((i) => !i.archived));
+}
+
+/**
+ * Same grouping for the archived sub-view. The `archived` filter is what
+ * makes an optimistic unarchive drop the row out of the archived list
+ * immediately — mirroring how `deduplicateInboxItems`' filter drops an
+ * optimistically archived row out of the main list. Mirrors packages/core/
+ * inbox/queries.ts deduplicateArchivedInboxItems (identical behavior; the
+ * comment_id anchor dance stays intact).
+ */
+export function deduplicateArchivedInboxItems(items: InboxItem[]): InboxItem[] {
+  return groupInboxItemsByIssue(items.filter((i) => i.archived));
+}
+
+/**
+ * Group inbox items by issue and keep the newest row per issue.
+ *
+ * The shared core of `deduplicateInboxItems` / `deduplicateArchivedInboxItems`
+ * — mirrors packages/core/inbox/queries.ts groupInboxItemsByIssue. **MUST not
+ * drift from web**: the comment_id-anchor handling below is what keeps a
+ * newer status/metadata row from losing the tap-through highlight that an
+ * older comment row carried.
+ */
+export function groupInboxItemsByIssue(items: InboxItem[]): InboxItem[] {
   const groups = new Map<string, InboxItem[]>();
-  for (const item of active) {
+  for (const item of items) {
     const key = item.issue_id ?? item.id;
     const group = groups.get(key) ?? [];
     group.push(item);

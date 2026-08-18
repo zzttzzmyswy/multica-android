@@ -12,7 +12,10 @@
  *     server-side (FK ON DELETE CASCADE in the DB); the cache should drop
  *     them too, otherwise tapping an inbox row navigates to a 404 issue.
  *
- * Listing-level only; use-inbox-realtime wires these into the WS layer.
+ * Both patch the MAIN and ARCHIVED lists — archived rows render the same
+ * status icon and reference the same issues (mirrors packages/core/inbox/
+ * ws-updaters.ts). Listing-level only; use-inbox-realtime wires these into
+ * the WS layer.
  */
 import type { QueryClient } from "@tanstack/react-query";
 import type { InboxItem, IssueStatus } from "@multica/core/types";
@@ -24,11 +27,12 @@ export function patchInboxIssueStatus(
   issueId: string,
   status: IssueStatus,
 ) {
-  qc.setQueryData<InboxItem[]>(inboxKeys.list(wsId), (old) =>
+  const patch = (old: InboxItem[] | undefined) =>
     old?.map((i) =>
       i.issue_id === issueId ? { ...i, issue_status: status } : i,
-    ),
-  );
+    );
+  qc.setQueryData<InboxItem[]>(inboxKeys.list(wsId), patch);
+  qc.setQueryData<InboxItem[]>(inboxKeys.archived(wsId), patch);
 }
 
 export function dropInboxItemsByIssue(
@@ -36,7 +40,8 @@ export function dropInboxItemsByIssue(
   wsId: string,
   issueId: string,
 ) {
-  qc.setQueryData<InboxItem[]>(inboxKeys.list(wsId), (old) =>
-    old?.filter((i) => i.issue_id !== issueId),
-  );
+  const drop = (old: InboxItem[] | undefined) =>
+    old?.filter((i) => i.issue_id !== issueId);
+  qc.setQueryData<InboxItem[]>(inboxKeys.list(wsId), drop);
+  qc.setQueryData<InboxItem[]>(inboxKeys.archived(wsId), drop);
 }

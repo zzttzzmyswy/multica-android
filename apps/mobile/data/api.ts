@@ -759,6 +759,25 @@ class ApiClient {
     return this.fetch<InboxItem>(`/api/inbox/${id}/read`, { method: "POST" });
   }
 
+  async markInboxUnread(id: string): Promise<InboxItem> {
+    return this.fetch<InboxItem>(`/api/inbox/${id}/unread`, { method: "POST" });
+  }
+
+  // Archived notifications, backing the inbox's "Archived" sub-view. Capped
+  // server-side (no pagination in v1). Schema-guarded like listInbox so a
+  // contract drift renders an empty archive instead of taking the inbox down
+  // with it — note the endpoint label used by parseWithFallback's warning.
+  async listArchivedInbox(opts?: {
+    signal?: AbortSignal;
+  }): Promise<InboxItem[]> {
+    const raw = await this.fetch<unknown>("/api/inbox/archived", {
+      signal: opts?.signal,
+    });
+    return parseWithFallback(raw, InboxListSchema, EMPTY_INBOX_LIST, {
+      endpoint: "listArchivedInbox",
+    });
+  }
+
   // Archive endpoints — write surface. Match web's surface in
   // packages/core/api/client.ts:981-1003. No parseWithFallback (mirrors
   // markInboxRead above and the project write endpoints): a malformed
@@ -766,6 +785,12 @@ class ApiClient {
   // rolls back.
   async archiveInbox(id: string): Promise<InboxItem> {
     return this.fetch<InboxItem>(`/api/inbox/${id}/archive`, { method: "POST" });
+  }
+
+  async unarchiveInbox(id: string): Promise<InboxItem> {
+    return this.fetch<InboxItem>(`/api/inbox/${id}/unarchive`, {
+      method: "POST",
+    });
   }
 
   async markAllInboxRead(): Promise<{ count: number }> {

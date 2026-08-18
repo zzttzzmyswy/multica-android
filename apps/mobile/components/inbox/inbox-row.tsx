@@ -24,9 +24,11 @@ import { cn } from "@/lib/utils";
 interface Props {
   item: InboxItem;
   onPress: () => void;
+  /** Long-press opens the row's action menu (archive / mark-unread). */
+  onLongPress?: () => void;
 }
 
-export function InboxRow({ item, onPress }: Props) {
+export function InboxRow({ item, onPress, onLongPress }: Props) {
   const timeAgo = useTimeAgo();
   const isUnread = !item.read;
   const displayTitle = getInboxDisplayTitle(item);
@@ -38,7 +40,11 @@ export function InboxRow({ item, onPress }: Props) {
     : undefined;
 
   return (
-    <Pressable onPress={onPress} className="bg-background active:bg-secondary px-4 py-3">
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      className="bg-background active:bg-secondary px-4 py-3"
+    >
       <View className="flex-row gap-3">
         <ActorAvatar type={actorType} id={actorId} size={36} showPresence />
         <View className="flex-1 min-w-0">
