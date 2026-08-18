@@ -19,6 +19,7 @@ import type {
   AutopilotRun,
   AutopilotTrigger,
   ChatMessage,
+  ChatLastMessage,
   ChatPendingTask,
   ChatSession,
   Comment,
@@ -44,6 +45,7 @@ import type {
   MemberWithUser,
   PinnedItem,
   PersonalAccessToken,
+  PendingChatTasksResponse,
   Project,
   ProjectResource,
   ResourceLabelsResponse,
@@ -356,6 +358,19 @@ export const EMPTY_LIST_PROJECT_RESOURCES_RESPONSE: ListProjectResourcesResponse
 // agent/creator ids). `.loose()` so server-added fields pass through. The two
 // fields mobile keys behaviour on — `id` and `chat_session_id` — are required.
 
+/** Preview of a session's most recent message — drives the IM-style row's
+ *  subtitle (web chat-thread-list.tsx). Optional so older / non-list payloads
+ *  stay valid; `message_kind` and `failure_reason` follow the core types. */
+export const ChatLastMessageSchema: z.ZodType<ChatLastMessage> = z.object({
+  content: z.string().default(""),
+  role: z.enum(["user", "assistant"]).catch("assistant"),
+  created_at: z.string().default(""),
+  failure_reason: z.string().nullable().optional(),
+  message_kind: z
+    .enum(["message", "no_response", "onboarding_kickoff", "onboarding_opening"])
+    .optional(),
+}).loose();
+
 export const ChatSessionSchema: z.ZodType<ChatSession> = z.object({
   id: z.string(),
   workspace_id: z.string().default(""),
@@ -374,6 +389,10 @@ export const ChatSessionSchema: z.ZodType<ChatSession> = z.object({
   // servers omit the flag — default false so the row still sorts by activity;
   // catch protects against malformed values the same way the enum does above.
   pinned: z.boolean().default(false).catch(false),
+  // Latest message preview (IM-style subtitle). Optional so list payloads that
+  // predate the field still parse; older servers may also send `null` for an
+  // empty conversation.
+  last_message: ChatLastMessageSchema.nullable().optional(),
   created_at: z.string().default(""),
   updated_at: z.string().default(""),
 }).loose();
@@ -439,6 +458,26 @@ export const ChatPendingTaskSchema: z.ZodType<ChatPendingTask> = z.object({
 }).loose();
 
 export const EMPTY_CHAT_PENDING_TASK: ChatPendingTask = {};
+
+/** Aggregate of in-flight chat tasks for the current user in this workspace
+ *  (GET /api/chat/pending-tasks) — the IM list's "typing…" indicator source.
+ *  Mirrors web's `PendingChatTasksResponse` shape. */
+export const PendingChatTasksSchema: z.ZodType<PendingChatTasksResponse> =
+  z.object({
+    tasks: z
+      .array(
+        z.object({
+          task_id: z.string(),
+          status: z.string().default(""),
+          chat_session_id: z.string(),
+        }).loose(),
+      )
+      .default([]),
+  }).loose();
+
+export const EMPTY_PENDING_CHAT_TASKS: PendingChatTasksResponse = {
+  tasks: [],
+};
 
 export const SendChatMessageResponseSchema: z.ZodType<SendChatMessageResponse> = z.object({
   message_id: z.string(),

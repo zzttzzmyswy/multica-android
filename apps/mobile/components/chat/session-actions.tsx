@@ -30,6 +30,10 @@ interface ShowOptions {
   /** Called right after the user confirms deletion of `session` (before the
    *  delete mutation lands) so screens can drop local state for the row. */
   onDeleted?: (session: ChatSession) => void;
+  /** True when the menu is opened from the session sheet's archived view.
+   *  Restricted menu matching web's `chat-thread-list.tsx` archived view:
+   *  Unarchive · Delete — no rename / pin (and no delete anywhere else). */
+  archivedView?: boolean;
 }
 
 export function useChatSessionActions() {
@@ -58,19 +62,33 @@ export function useChatSessionActions() {
         actions.push(action);
       };
 
-      push(t("chat.rename"), { kind: "rename" });
-      push(session.pinned ? t("chat.unpin") : t("chat.pin"), { kind: "pin" });
-      push(
-        session.status === "archived"
-          ? t("chat.unarchive")
-          : t("common.archive"),
-        { kind: "archive" },
-      );
-      push(t("chat.deleteChat"), { kind: "delete" });
+      if (opts?.archivedView) {
+        // Web chat-thread-list archived view: unarchive · delete (red).
+        push(t("chat.unarchive"), { kind: "archive" });
+        push(t("chat.deleteChat"), { kind: "delete" });
+      } else if (session.status === "archived") {
+        // Archived session opened from elsewhere (e.g. the chat header):
+        // hard delete is offered only once a chat is archived — web
+        // chat-session-header.tsx keeps delete for archived sessions too.
+        push(t("chat.rename"), { kind: "rename" });
+        push(t("chat.unarchive"), { kind: "archive" });
+        push(t("chat.deleteChat"), { kind: "delete" });
+      } else {
+        // Active session: rename · pin · archive — no hard delete. Web offers
+        // delete only once a chat is archived (chat-session-header.tsx:172
+        // "Hard delete is offered only once a chat is archived." / thread
+        // list history view: pin + archive only).
+        push(t("chat.rename"), { kind: "rename" });
+        push(session.pinned ? t("chat.unpin") : t("chat.pin"), { kind: "pin" });
+        push(t("common.archive"), { kind: "archive" });
+      }
       push(t("menu.cancel"), { kind: "cancel" });
 
       const cancelButtonIndex = options.length - 1;
-      const destructiveButtonIndex = options.length - 2; // delete
+      // Red "delete" only when the menu actually offers it (active sessions
+      // never reach the destructive slot).
+      const destructiveButtonIndex =
+        actions[actions.length - 2]?.kind === "delete" ? cancelButtonIndex - 1 : undefined;
 
       ActionSheet.showActionSheetWithOptions(
         { options, cancelButtonIndex, destructiveButtonIndex },

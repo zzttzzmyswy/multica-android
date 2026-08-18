@@ -33,6 +33,12 @@ describe("chat session management i18n", () => {
     "chat.unpin": "取消置顶",
     "chat.pinned": "已置顶",
     "chat.unarchive": "取消归档",
+    "chat.archivedTitle": "已归档",
+    "chat.youPrefix": "你：",
+    "chat.typing": "正在输入…",
+    "chat.failedToSend": "发送失败",
+    "chat.noMessagesYet": "暂无消息",
+    "chat.noTextReply": "无文本回复",
   };
 
   it("resolves every chat-session key in both locales with a real zh translation", () => {

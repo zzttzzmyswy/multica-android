@@ -79,6 +79,7 @@ import type {
   UpdateQuickActionRequest,
   PinnedItem,
   PinnedItemType,
+  PendingChatTasksResponse,
   Project,
   ProjectResource,
   Reaction,
@@ -238,6 +239,7 @@ import {
   EMPTY_MEMBER_LIST,
   EMPTY_NOTIFICATION_PREFERENCES,
   EMPTY_PIN_LIST,
+  EMPTY_PENDING_CHAT_TASKS,
   EMPTY_PROJECT,
   EMPTY_RUNTIME_LIST,
   EMPTY_SEARCH_ISSUES_RESPONSE,
@@ -258,6 +260,7 @@ import {
   PersonalAccessTokenListSchema,
   PinListSchema,
   PinnedItemSchema,
+  PendingChatTasksSchema,
   ProjectSchema,
   RuntimeListSchema,
   SearchIssuesResponseSchema,
@@ -2697,9 +2700,14 @@ class ApiClient {
   // list in /Users/qingnaiyuan/.claude/plans/plan-velvety-puddle.md.
 
   async listChatSessions(
-    opts?: { signal?: AbortSignal },
+    opts?: { signal?: AbortSignal; status?: string },
   ): Promise<ChatSession[]> {
-    const raw = await this.fetch<unknown>("/api/chat/sessions", {
+    // `status=all` (web parity) is the ONLY call the app makes — the session
+    // sheet splits the flat cache into history / archived views locally, so
+    // the server must return the full list (active + archived). Leaving the
+    // query defaulted silently drops archived sessions and the Archived view.
+    const query = opts?.status ? `?status=${opts.status}` : "";
+    const raw = await this.fetch<unknown>(`/api/chat/sessions${query}`, {
       signal: opts?.signal,
     });
     return parseWithFallback(
@@ -2844,6 +2852,20 @@ class ApiClient {
     await this.fetch<void>(
       `/api/chat/sessions/${sessionId}/read`,
       { method: "POST" },
+    );
+  }
+
+  /** Aggregate of in-flight chat tasks for the current user in this workspace
+   *  (GET /api/chat/pending-tasks) — the IM session list's "typing…" indicator.
+   *  Mirrors web `api.listPendingChatTasks` in packages/core/api/client.ts. */
+  async listPendingChatTasks(
+    opts?: { signal?: AbortSignal },
+  ): Promise<PendingChatTasksResponse> {
+    return this.fetchValidated(
+      "/api/chat/pending-tasks",
+      PendingChatTasksSchema,
+      EMPTY_PENDING_CHAT_TASKS,
+      { ...opts, endpoint: "GET /api/chat/pending-tasks" },
     );
   }
 
