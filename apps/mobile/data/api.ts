@@ -134,6 +134,7 @@ import {
   EMPTY_AGENT_BUILDER_SESSION_LIST,
   EMPTY_ISSUE_PROPERTY,
   EMPTY_ISSUE_PROPERTIES_RESPONSE,
+  EMPTY_ISSUE_VIEW_PREFERENCE,
   EMPTY_GITHUB_CONNECT_RESPONSE,
   EMPTY_LIST_AUTOPILOTS_RESPONSE,
   EMPTY_LIST_GITHUB_INSTALLATIONS_RESPONSE,
@@ -149,6 +150,9 @@ import {
   IssuePropertiesResponseSchema,
   IssuePropertySchema,
   IssueSchema,
+  IssueViewListSchema,
+  IssueViewPreferenceSchema,
+  IssueViewSchema,
   ListAutopilotsResponseSchema,
   ListGitHubInstallationsResponseSchema,
   ListGitHubRepositoriesResponseSchema,
@@ -158,6 +162,11 @@ import {
   QuickActionSchema,
   TimelineEntriesSchema,
   agentBuilderRuntimeSwitchFallback,
+} from "@multica/core/api/schemas";
+import type {
+  CreateIssueViewRequest,
+  IssueView,
+  IssueViewPreference,
 } from "@multica/core/api/schemas";
 import {
   ActiveTasksResponseSchema,
@@ -1242,6 +1251,94 @@ class ApiClient {
       ConnectVCSResponseSchema.parse({}),
       { endpoint: "rotateVCSWebhook" },
     );
+  }
+
+  // Saved issue views (iteration-65) — server-backed filter snapshots with
+  // display defaults, mirroring packages/core/api/client.ts:3331-3405 and
+  // web's view-bar (packages/views/issues/components/view-bar.tsx). `query`
+  // is the nine-dimension filter snapshot, `display` the viewMode / sort /
+  // grouping initial state; both are opaque JSON to the server — the client
+  // owns the interpretation contract. Listed per (scope_type, scope_id): the
+  // workspace Issues page asks workspace scope, My Issues asks my scope.
+  async listIssueViews(params: {
+    scope_type: string;
+    scope_id?: string | null;
+  }): Promise<IssueView[]> {
+    const qs = new URLSearchParams({ scope_type: params.scope_type });
+    if (params.scope_id) qs.set("scope_id", params.scope_id);
+    const raw = await this.fetch<unknown>(`/api/issue-views?${qs.toString()}`);
+    return parseWithFallback(raw, IssueViewListSchema, [], {
+      endpoint: "listIssueViews",
+    });
+  }
+
+  async createIssueView(data: CreateIssueViewRequest): Promise<IssueView | null> {
+    const raw = await this.fetch<unknown>("/api/issue-views", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    // null fallback: a create that succeeded but returned an unparsable body
+    // must not crash the dialog — callers refetch the list (web's client
+    // contract handles the same way).
+    return parseWithFallback(raw, IssueViewSchema.nullable(), null, {
+      endpoint: "createIssueView",
+    });
+  }
+
+  async updateIssueView(
+    id: string,
+    data: {
+      name?: string;
+      visibility?: "private" | "workspace";
+      scope_variant?: string | null;
+      query?: Record<string, unknown>;
+      display?: Record<string, unknown>;
+      expected_revision: number;
+    },
+  ): Promise<IssueView | null> {
+    const raw = await this.fetch<unknown>(`/api/issue-views/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+    return parseWithFallback(raw, IssueViewSchema.nullable(), null, {
+      endpoint: "updateIssueView",
+    });
+  }
+
+  async getIssueView(id: string): Promise<IssueView | null> {
+    const raw = await this.fetch<unknown>(`/api/issue-views/${id}`);
+    return parseWithFallback(raw, IssueViewSchema.nullable(), null, {
+      endpoint: "getIssueView",
+    });
+  }
+
+  async deleteIssueView(id: string): Promise<void> {
+    await this.fetch<void>(`/api/issue-views/${id}`, { method: "DELETE" });
+  }
+
+  async getIssueViewPreference(params: {
+    scope_type: string;
+    scope_id?: string | null;
+  }): Promise<IssueViewPreference> {
+    const qs = new URLSearchParams({ scope_type: params.scope_type });
+    if (params.scope_id) qs.set("scope_id", params.scope_id);
+    const raw = await this.fetch<unknown>(
+      `/api/issue-view-preferences?${qs.toString()}`,
+    );
+    return parseWithFallback(raw, IssueViewPreferenceSchema, EMPTY_ISSUE_VIEW_PREFERENCE, {
+      endpoint: "getIssueViewPreference",
+    });
+  }
+
+  async putIssueViewPreference(data: {
+    scope_type: string;
+    scope_id?: string | null;
+    prefs: { hidden: string[]; order: string[] };
+  }): Promise<void> {
+    await this.fetch<void>("/api/issue-view-preferences", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
   }
 
   // Workspace usage rollups — mirror packages/core/dashboard queries. Workspace

@@ -95,6 +95,23 @@ export const ISSUE_GROUPING_OPTIONS: {
   { value: "assignee", labelKey: "filter.group.assignee" },
 ];
 
+/** The nine query-defining filter fields as one value — what a saved view
+ *  fixes, and what `resetFiltersTo` restores. Mirrors web
+ *  `view-store.ts` `FilterSnapshot` field-for-field so the same blob opens
+ *  the same visible set on either client. Date is excluded: `dateFilter`
+ *  lives outside the snapshot (views never carry a date window). */
+export interface IssueFilterSnapshot {
+  statusFilters: IssueStatus[];
+  priorityFilters: IssuePriority[];
+  assigneeFilters: ActorFilterValue[];
+  includeNoAssignee: boolean;
+  creatorFilters: ActorFilterValue[];
+  projectFilters: string[];
+  includeNoProject: boolean;
+  labelFilters: string[];
+  propertyFilters: PropertyFilterValue;
+}
+
 export interface IssueFilterSlice {
   statusFilters: IssueStatus[];
   priorityFilters: IssuePriority[];
@@ -128,6 +145,11 @@ export interface IssueFilterSlice {
   setSortDirection: (dir: IssueSortDirection) => void;
   setGrouping: (grouping: IssueGrouping) => void;
   clearFilters: () => void;
+  /** Replace every filter field at once — how opening a saved view returns
+   *  to the view's own conditions instead of to the prior session state.
+   *  Mirrors web `view-store.ts` `resetFiltersTo`. Like web, `dateFilter`
+   *  is NOT part of the snapshot (views never carry a date window). */
+  resetFiltersTo: (snapshot: IssueFilterSnapshot) => void;
   /** Clear one filter dimension (a filter-bar chip). Paired boolean flags
    *  (no-assignee / no-project) clear with their dimension — matches web's
    *  `clearFilterDimension`. `property:<id>` clears that definition's entry
@@ -220,6 +242,7 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
   | "clearPropertyFilter"
   | "setDateFilter"
   | "clearFilters"
+  | "resetFiltersTo"
   | "clearFilterDimension"
 > {
   const toggleInList = <T,>(list: T[], item: T): T[] =>
@@ -307,6 +330,7 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
         propertyFilters: {},
         dateFilter: null,
       }),
+    resetFiltersTo: (snapshot) => set({ ...snapshot }),
     clearFilterDimension: (dimension) =>
       set((state) => {
         switch (dimension) {
