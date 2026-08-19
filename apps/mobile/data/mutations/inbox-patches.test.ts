@@ -22,7 +22,11 @@ vi.mock("@/data/workspace-store", () => ({
 }));
 
 import type { InboxItem } from "@multica/core/types";
-import { markInboxUnreadPatch, unarchiveInboxPatch } from "./inbox";
+import {
+  archiveInboxPatch,
+  markInboxUnreadPatch,
+  unarchiveInboxPatch,
+} from "./inbox";
 
 function item(overrides: Partial<InboxItem>): InboxItem {
   return {
@@ -94,5 +98,32 @@ describe("unarchiveInboxPatch", () => {
 
   it("returns undefined for a cache miss", () => {
     expect(unarchiveInboxPatch(undefined, "a")).toBeUndefined();
+  });
+});
+
+describe("archiveInboxPatch", () => {
+  it("flips archived:true on the target and its issue siblings", () => {
+    const list = [
+      item({ id: "a", issue_id: "issue-1" }),
+      item({ id: "b", issue_id: "issue-1" }),
+      item({ id: "c", issue_id: "issue-2" }),
+    ];
+    const out = archiveInboxPatch(list, "a");
+
+    expect(out?.[0]?.archived).toBe(true);
+    expect(out?.[1]?.archived).toBe(true);
+    expect(out?.[2]?.archived).toBe(false);
+  });
+
+  it("preserves the read state verbatim on archive", () => {
+    const out = archiveInboxPatch(
+      [item({ id: "a", read: true })],
+      "a",
+    );
+    expect(out?.[0]).toMatchObject({ archived: true, read: true });
+  });
+
+  it("returns undefined for a cache miss", () => {
+    expect(archiveInboxPatch(undefined, "a")).toBeUndefined();
   });
 });

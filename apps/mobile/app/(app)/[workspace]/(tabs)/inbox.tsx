@@ -110,7 +110,12 @@ export default function Inbox() {
     // Archived rows don't trigger markRead — the archived list carries no
     // unread dots and the server's unread count excludes archived items, so
     // a flip there would report success and change nothing on screen.
-    if (item.issue_id && wsSlug) {
+    if (!wsSlug) return;
+    if (item.issue_id) {
+      // Issue-backed notification → the issue detail screen. Carries the
+      // inbox origin so that screen's header can offer the Archive /
+      // Unarchive toggle (reversed by the view being read in) and the
+      // marking of read — see issue/[id].tsx.
       router.push({
         pathname: "/[workspace]/issue/[id]",
         params: {
@@ -118,6 +123,21 @@ export default function Inbox() {
           id: item.issue_id,
           highlight: item.details?.comment_id,
           h: String(Date.now()),
+          inbox: "1",
+          inboxView: view,
+          inboxItemId: item.id,
+        },
+      });
+    } else {
+      // Plain notification (failed / unconfirmed quick-create, email …) with
+      // no issue behind it — its own detail screen with the archive toggle
+      // and the quick-create recovery affordance.
+      router.push({
+        pathname: "/[workspace]/inbox-item/[id]",
+        params: {
+          workspace: wsSlug,
+          id: item.id,
+          view,
         },
       });
     }

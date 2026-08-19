@@ -103,29 +103,40 @@ export function useArchiveInbox() {
       const key = inboxKeys.list(wsId);
       await qc.cancelQueries({ queryKey: key });
       const prev = qc.getQueryData<InboxItem[]>(key);
-      // Match web: archive every row that shares the same issue_id — the
-      // single archive endpoint archives all sibling rows server-side too
-      // (`server/internal/queries/inbox.sql` UPDATE … WHERE issue_id = ?).
-      // Patching only the tapped row would let dedup'd siblings briefly
-      // resurface between the request and the WS invalidate.
-      const target = prev?.find((i) => i.id === id);
-      const issueId = target?.issue_id ?? null;
-      qc.setQueryData<InboxItem[]>(key, (old) =>
-        old?.map((item) =>
-          item.id === id || (issueId && item.issue_id === issueId)
-            ? { ...item, archived: true }
-            : item,
-        ),
-      );
+      qc.setQueryData<InboxItem[]>(key, (old) => archiveInboxPatch(old, id));
       return { prev, key };
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.prev) qc.setQueryData(ctx.key, ctx.prev);
     },
     onSettled: () => {
-      qc.invalidateQueries({ queryKey: inboxKeys.list(wsId) });
+      // Both lists: the item just moved from the main inbox into the archive,
+      // and a sibling of the same issue could resurface in the archived view
+      // after the refetch (web invalidates all inbox keys too).
+      qc.invalidateQueries({ queryKey: inboxKeys.all(wsId) });
     },
   });
+}
+
+/**
+ * Pure optimistic patch for archiving: flip `archived:true` on the row AND on
+ * every sibling that shares the same issue_id — the single archive endpoint
+ * archives the whole issue group server-side, and patching only the tapped row
+ * would let the dedup'd siblings briefly resurface between the request and the
+ * WS invalidate. Exported for the pure-function tests (mutations/inbox-patches).
+ */
+export function archiveInboxPatch(
+  prev: InboxItem[] | undefined,
+  id: string,
+): InboxItem[] | undefined {
+  if (!prev) return undefined;
+  const target = prev.find((i) => i.id === id);
+  const issueId = target?.issue_id ?? null;
+  return prev.map((item) =>
+    item.id === id || (issueId && item.issue_id === issueId)
+      ? { ...item, archived: true }
+      : item,
+  );
 }
 
 /**

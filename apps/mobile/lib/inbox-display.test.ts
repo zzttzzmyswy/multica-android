@@ -3,7 +3,10 @@ import type { InboxItem } from "@multica/core/types";
 import {
   deduplicateArchivedInboxItems,
   deduplicateInboxItems,
+  getInboxArchiveMode,
+  getQuickCreateEditSeed,
   groupInboxItemsByIssue,
+  isQuickCreateOutcome,
 } from "./inbox-display";
 
 function item(overrides: Partial<InboxItem>): InboxItem {
@@ -149,5 +152,74 @@ describe("deduplicateArchivedInboxItems", () => {
 
     expect(main).toEqual(["b"]);
     expect(arch).toEqual(["a"]);
+  });
+});
+
+describe("isQuickCreateOutcome", () => {
+  it("treats failed + unconfirmed as recoverable quick-create outcomes", () => {
+    expect(isQuickCreateOutcome("quick_create_failed")).toBe(true);
+    expect(isQuickCreateOutcome("quick_create_unconfirmed")).toBe(true);
+  });
+
+  it("does not treat success or unrelated types as outcomes", () => {
+    expect(isQuickCreateOutcome("quick_create_done")).toBe(false);
+    expect(isQuickCreateOutcome("new_comment")).toBe(false);
+    expect(isQuickCreateOutcome("agent_blocked")).toBe(false);
+  });
+});
+
+describe("getQuickCreateEditSeed", () => {
+  it("returns prompt + agent when a failed outcome carries both", () => {
+    const seed = getQuickCreateEditSeed(
+      item({
+        id: "qc-failed",
+        type: "quick_create_failed",
+        issue_id: null,
+        details: {
+          original_prompt: "  build a login page  ",
+          agent_id: "agent-9",
+        },
+      }),
+    );
+    expect(seed).toEqual({
+      description: "build a login page",
+      agentId: "agent-9",
+    });
+  });
+
+  it("omits agentId when the outcome has no agent hint", () => {
+    const seed = getQuickCreateEditSeed(
+      item({
+        id: "qc-unconfirmed",
+        type: "quick_create_unconfirmed",
+        issue_id: null,
+        details: { original_prompt: "ship the settings screen" },
+      }),
+    );
+    expect(seed).toEqual({ description: "ship the settings screen" });
+  });
+
+  it("returns null when there is no prompt to recover", () => {
+    expect(
+      getQuickCreateEditSeed(
+        item({
+          id: "no-prompt",
+          type: "quick_create_failed",
+          issue_id: null,
+          details: {},
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("returns null for non-quick-create notifications", () => {
+    expect(getQuickCreateEditSeed(item({ type: "new_comment" }))).toBeNull();
+  });
+});
+
+describe("getInboxArchiveMode", () => {
+  it("reverses with the view the item is read in", () => {
+    expect(getInboxArchiveMode("inbox")).toBe("archive");
+    expect(getInboxArchiveMode("archived")).toBe("unarchive");
   });
 });

@@ -28,7 +28,10 @@ import { useStatusLabel } from "@/lib/status-options";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { useTranslation } from "@/lib/i18n/react";
 
-function typeLabel(t: (id: string) => string, type: InboxItemType): string {
+export function typeLabel(
+  t: (id: string) => string,
+  type: InboxItemType,
+): string {
   return t(`inbox.type.${type}`);
 }
 

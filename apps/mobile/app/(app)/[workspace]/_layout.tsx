@@ -143,6 +143,15 @@ export default function WorkspaceLayout() {
             headerBackTitle: t("common.back"),
           }}
         />
+        {/* Inbox notification without an issue behind it (failed / unconfirmed
+            quick-create, plain notifications) — see inbox-item/[id].tsx. */}
+        <Stack.Screen
+          name="inbox-item/[id]"
+          options={{
+            title: t("inbox.title"),
+            headerBackTitle: t("common.back"),
+          }}
+        />
         <Stack.Screen
           name="project/[id]"
           options={{

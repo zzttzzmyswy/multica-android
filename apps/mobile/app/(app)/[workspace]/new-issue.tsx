@@ -33,7 +33,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Stack, router } from "expo-router";
+import { Stack, router, useLocalSearchParams } from "expo-router";
 import { SubmitIssueButton } from "@/components/issue/submit-issue-button";
 import { CreateFormAttributeRow } from "@/components/issue/create-form-attribute-row";
 import { MentionSuggestionBar } from "@/components/issue/mention-suggestion-bar";
@@ -58,6 +58,13 @@ const MODES: { key: CreateMode; labelKey: string }[] = [
 
 export default function NewIssueModal() {
   const { t } = useTranslation();
+  // Quick-create recovery seed (inbox detail → "Edit as advanced form"): the
+  // original prompt + agent hint ride the URL and reseed the manual form so
+  // the user can finish the issue in the full editor instead of retyping.
+  const { seedDescription, seedAssigneeId } = useLocalSearchParams<{
+    seedDescription?: string;
+    seedAssigneeId?: string;
+  }>();
   const [mode, setMode] = useState<CreateMode>("manual");
   const [title, setTitle] = useState("");
   // Agent-mode natural-language prompt. Lives here (not in the panel) so a
@@ -72,6 +79,7 @@ export default function NewIssueModal() {
   const status = useNewIssueDraftStore((s) => s.status);
   const priority = useNewIssueDraftStore((s) => s.priority);
   const assignee = useNewIssueDraftStore((s) => s.assignee);
+  const setAssignee = useNewIssueDraftStore((s) => s.setAssignee);
   const dueDate = useNewIssueDraftStore((s) => s.dueDate);
   const startDate = useNewIssueDraftStore((s) => s.startDate);
   const labels = useNewIssueDraftStore((s) => s.labels);
@@ -86,6 +94,18 @@ export default function NewIssueModal() {
       resetDraft();
     };
   }, [resetDraft]);
+
+  // Apply the quick-create recovery seed AFTER the mount reset above (React
+  // runs effects in order), so a stale draft never wins over the seed. The
+  // assignee hint is a candidate, not a lock — still editable in the form.
+  // `description` is rebuilt every render; its setText is a stable setter, so
+  // alias it here to keep the effect dependency stable.
+  const descriptionTextSetter = description.setText;
+  useEffect(() => {
+    if (!seedDescription) return;
+    descriptionTextSetter(String(seedDescription));
+    if (seedAssigneeId) setAssignee({ type: "agent", id: String(seedAssigneeId) });
+  }, [seedDescription, seedAssigneeId, descriptionTextSetter, setAssignee]);
 
   const createIssue = useCreateIssue();
   const quickCreate = useQuickCreateIssue();
