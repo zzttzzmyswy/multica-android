@@ -52,7 +52,7 @@ export function DemoInboxCard({ rows }: Props) {
             key={row.id}
             onPress={() => toggle(row.id)}
             accessibilityRole="button"
-            accessibilityLabel={isUnread ? row.title : row.title}
+            accessibilityLabel={row.title}
             className={cn(
               "bg-background active:bg-secondary px-4 py-3",
               index > 0 && "border-t border-border",
