@@ -52,7 +52,6 @@ import {
 import { Text } from "@/components/ui/text";
 import { WorkspaceAvatar } from "@/components/workspace/workspace-avatar";
 import { workspaceListOptions } from "@/data/queries/workspaces";
-import { memberListOptions } from "@/data/queries/members";
 import { useAuthStore } from "@/data/auth-store";
 import { useUpdateStore } from "@/data/update-store";
 import { useActiveDownloadCount, useDownloadsStore } from "@/data/downloads-store";
@@ -94,9 +93,6 @@ const NAV_ITEMS: NavItem[] = [
   { labelKey: "nav.members", icon: "people", path: "/more/members" },
   { labelKey: "nav.squads", icon: "people-circle", path: "/more/squads" },
   { labelKey: "nav.labels", icon: "pricetags", path: "/more/labels" },
-  // Workspace custom properties manage page (MYS-334). Owner/admin only —
-  // same gate as web's settings properties-tab.
-  { labelKey: "nav.properties", icon: "options", path: "/more/properties" },
   { labelKey: "nav.skills", icon: "extension-puzzle", path: "/more/skills" },
   { labelKey: "nav.mcpServers", icon: "server", path: "/more/mcp-servers" },
   { labelKey: "nav.runtimes", icon: "server", path: "/more/runtimes" },
@@ -136,16 +132,7 @@ export function MoreTabDropdownAnchor({
     void useDownloadsStore.getState().hydrate();
   }, []);
 
-  // Property management is owner/admin-only (same gate as web's settings
-  // properties-tab). Non-managers don't even see the entry.
-  const { data: members = [] } = useQuery(memberListOptions(wsId));
-  const currentMember = members.find((m) => m.user_id === user?.id);
-  const canManageProperties =
-    wsId !== null &&
-    (currentMember?.role === "owner" || currentMember?.role === "admin");
-  const navItems = canManageProperties
-    ? NAV_ITEMS
-    : NAV_ITEMS.filter((item) => item.path !== "/more/properties");
+  const navItems = NAV_ITEMS;
 
   const isActive = (path: string) => {
     if (!slug) return false;
