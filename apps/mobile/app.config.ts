@@ -22,7 +22,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         ? "Multica (Staging)"
         : "Multica (Dev)",
     slug: "multica-mobile",
-    version: "0.5.4",
+    version: "0.5.5",
     orientation: "portrait",
     userInterfaceStyle: "automatic",
     scheme: "multica",
