@@ -16,9 +16,66 @@ export type MyIssuesFilter = Pick<
   "assignee_id" | "assignee_ids" | "creator_id" | "involves_user_id"
 >;
 
+/** Stable, order-insensitive string form of a params value for query-key
+ *  inclusion. Arrays are order-insensitive comparisons in the UI (filters
+ *  are sets) and objects (custom-property bags) are inserted with an
+ *  unspecified key order, so both are normalized before stringifying to
+ *  avoid pointless refetches. */
+function stableKeyValue(v: unknown): unknown {
+  if (Array.isArray(v)) {
+    return v
+      .map(stableKeyValue)
+      .sort(
+        (a, b) =>
+          (JSON.stringify(a) < JSON.stringify(b) ? -1 : 1),
+      );
+  }
+  if (v !== null && typeof v === "object") {
+    return Object.entries(v as Record<string, unknown>)
+      .sort(([ka], [kb]) => ka.localeCompare(kb))
+      .map(([k, val]) => [k, stableKeyValue(val)]);
+  }
+  return v;
+}
+
+/** Stable string form of a params bag for query-key inclusion — the cache
+ *  must refetch when a filter/sort changes, so the key carries the full
+ *  bag. See `stableKeyValue`. */
+export function issueParamsKey(params: ListIssuesParams): string {
+  const entries = Object.entries(params)
+    .map(([k, v]) => [k, stableKeyValue(v)] as const)
+    .sort((a, b) => a[0].localeCompare(b[0]));
+  return JSON.stringify(entries);
+}
+
+/** The additional window params the mobile issue lists pass through to
+ *  `GET /api/issues` — every filter/sort dimension the view stores expose. */
+export type IssueListWindowParams = Pick<
+  ListIssuesParams,
+  | "statuses"
+  | "priorities"
+  | "assignee_filters"
+  | "include_no_assignee"
+  | "creator_filters"
+  | "project_ids"
+  | "include_no_project"
+  | "label_ids"
+  | "properties"
+  | "date_field"
+  | "date_start"
+  | "date_end"
+  | "sort_by"
+  | "sort_direction"
+>;
+
 export const issueKeys = {
   all: (wsId: string | null) => ["issues", wsId] as const,
   list: (wsId: string | null) => [...issueKeys.all(wsId), "list"] as const,
+  /** Filtered workspace-wide list window. Keyed under `list(wsId)` so the
+   *  shared WS updaters (which prefix-match `list(wsId)`) reach every
+   *  filter variant with one `setQueriesData` call. */
+  listFiltered: (wsId: string | null, params: IssueListWindowParams) =>
+    [...issueKeys.list(wsId), "filtered", issueParamsKey(params)] as const,
   myAll: (wsId: string | null) => [...issueKeys.all(wsId), "my"] as const,
   myList: (
     wsId: string | null,

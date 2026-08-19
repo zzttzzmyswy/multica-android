@@ -357,7 +357,7 @@ function ListViewImpl({
             issueMap={issueMapRef.current}
             childProgressMap={childProgressMap}
             projectMap={projectMap}
-            page={statusPagination[status]}
+            page={statusPagination[status]!}
             projectId={projectId}
             onCreateIssue={onCreateIssue}
             dragEnabled={dragEnabled}

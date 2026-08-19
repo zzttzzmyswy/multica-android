@@ -5,11 +5,13 @@ import type {
   ChatMessage,
   ChatPendingTask,
   ChatQuickActionsPayload,
+  ChatSession,
 } from "@multica/core/types";
 
 import {
   applyChatDoneToCache,
   applyChatQuickActionsToCache,
+  patchSessionListAfterUpdate,
   promotePendingTaskToRunning,
   seedAcceptedPendingTask,
   seedPendingTaskFromQueued,
@@ -385,5 +387,99 @@ describe("applyChatQuickActionsToCache", () => {
       { label: "Draft it", prompt: "Draft the complete plan", primary: true },
     ]);
     unsub();
+  });
+});
+
+describe("patchSessionListAfterUpdate", () => {
+  function session(over: Partial<ChatSession> & { id: string }): ChatSession {
+    return {
+      workspace_id: "ws-1",
+      agent_id: "agent-1",
+      creator_id: "user-1",
+      title: "session",
+      status: "active",
+      has_unread: false,
+      pinned: false,
+      created_at: "2026-08-01T00:00:00Z",
+      updated_at: "2026-08-01T00:00:00Z",
+      ...over,
+    };
+  }
+
+  it("patches a renamed title onto the matching session", () => {
+    const qc = new QueryClient();
+    qc.setQueryData<ChatSession[]>(chatKeys.sessions("ws-1"), [
+      session({ id: "a", title: "old" }),
+      session({ id: "b", title: "keep" }),
+    ]);
+
+    patchSessionListAfterUpdate(qc, "ws-1", {
+      chat_session_id: "a",
+      title: "new title",
+    });
+
+    const rows = qc.getQueryData<ChatSession[]>(chatKeys.sessions("ws-1"));
+    expect(rows?.find((s) => s.id === "a")?.title).toBe("new title");
+    expect(rows?.find((s) => s.id === "b")?.title).toBe("keep");
+  });
+
+  it("hoists a freshly-pinned session to the top of the list", () => {
+    const qc = new QueryClient();
+    qc.setQueryData<ChatSession[]>(chatKeys.sessions("ws-1"), [
+      session({ id: "pinned", pinned: true, updated_at: "2026-08-01T00:00:00Z" }),
+      session({ id: "candidate", pinned: false, updated_at: "2026-08-05T00:00:00Z" }),
+    ]);
+
+    patchSessionListAfterUpdate(qc, "ws-1", {
+      chat_session_id: "candidate",
+      pinned: true,
+      updated_at: "2026-08-06T00:00:00Z",
+    });
+
+    const rows = qc.getQueryData<ChatSession[]>(chatKeys.sessions("ws-1"));
+    expect(rows?.map((s) => s.id)).toEqual(["candidate", "pinned"]);
+    expect(rows?.find((s) => s.id === "candidate")?.pinned).toBe(true);
+  });
+
+  it("un-pins a session and re-sorts it back by activity", () => {
+    const qc = new QueryClient();
+    qc.setQueryData<ChatSession[]>(chatKeys.sessions("ws-1"), [
+      session({ id: "top", pinned: true, updated_at: "2026-08-02T00:00:00Z" }),
+      session({ id: "other", pinned: false, updated_at: "2026-08-06T00:00:00Z" }),
+    ]);
+
+    patchSessionListAfterUpdate(qc, "ws-1", {
+      chat_session_id: "top",
+      pinned: false,
+      updated_at: "2026-08-01T00:00:00Z",
+    });
+
+    const rows = qc.getQueryData<ChatSession[]>(chatKeys.sessions("ws-1"));
+    // Both unpinned now — "other" has the newer activity, so it leads.
+    expect(rows?.map((s) => s.id)).toEqual(["other", "top"]);
+    expect(rows?.find((s) => s.id === "top")?.pinned).toBe(false);
+  });
+
+  it("only updates fields present in the payload (older servers omit pinned)", () => {
+    const qc = new QueryClient();
+    qc.setQueryData<ChatSession[]>(chatKeys.sessions("ws-1"), [
+      session({ id: "a", title: "old", updated_at: "2026-08-02T00:00:00Z" }),
+      session({ id: "b", title: "keep", updated_at: "2026-08-03T00:00:00Z" }),
+    ]);
+
+    // session_updated fired with title only — pinned flag must be untouched.
+    patchSessionListAfterUpdate(qc, "ws-1", {
+      chat_session_id: "a",
+      title: "new",
+      updated_at: "2026-08-04T00:00:00Z",
+    });
+
+    const rows = qc.getQueryData<ChatSession[]>(chatKeys.sessions("ws-1"));
+    expect(rows?.find((s) => s.id === "a")).toMatchObject({
+      title: "new",
+      pinned: false,
+    });
+    // "a" just got touched (updated_at newest), so it now leads the list.
+    expect(rows?.map((s) => s.id)).toEqual(["a", "b"]);
   });
 });

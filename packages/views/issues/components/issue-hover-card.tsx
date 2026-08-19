@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { childIssueProgressOptions, issueDetailOptions } from "@multica/core/issues/queries";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { useActorName } from "@multica/core/workspace/hooks";
+import { isIssueStatusCategory } from "@multica/core/issues";
 import {
   HoverCard,
   HoverCardTrigger,
@@ -164,6 +165,10 @@ function IssueHoverCardBody({
   // "none" dash holds a column there. This card has no column to hold, leaving
   // the dash a mark carrying no information in an already dense popup.
   const hasPriority = !!issue.priority && issue.priority !== "none";
+  const hoveredStatus = issue.status;
+  const statusAriaLabel = isIssueStatusCategory(hoveredStatus)
+    ? t(($) => $.status[hoveredStatus])
+    : hoveredStatus;
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -180,7 +185,7 @@ function IssueHoverCardBody({
         )}
         <span
           role="img"
-          aria-label={t(($) => $.status[issue.status])}
+          aria-label={statusAriaLabel}
           className="flex shrink-0"
         >
           <StatusIcon status={issue.status} className="h-3.5 w-3.5 shrink-0" />

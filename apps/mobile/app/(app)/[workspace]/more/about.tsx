@@ -17,6 +17,7 @@ import { useState } from "react";
 import { ActivityIndicator, Alert, Image, Linking, ScrollView, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
+import { File } from "expo-file-system";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -30,12 +31,13 @@ import {
   isNewer,
 } from "@/lib/release-check";
 import {
-  UpdateInstallError,
-  downloadUpdateApk,
+  APK_MIME_TYPE,
+  apkCacheFilename,
   installApkFile,
   openUnknownAppSourcesSettings,
   resolveDeviceAbi,
 } from "@/lib/install-update";
+import { useDownloadsStore } from "@/data/downloads-store";
 import { cn } from "@/lib/utils";
 
 type CheckPhase =
@@ -63,6 +65,16 @@ export default function AboutPage() {
   const release = query.data;
   const hasUpdate = release ? isNewer(release.tag_name, appVersion) : false;
 
+  // Live progress of the in-flight update download — the row lives in the
+  // download manager store (MYS-361), so the About page and the Downloads
+  // screen render the very same task.
+  const updateTask = useDownloadsStore((s) =>
+    s.tasks.find(
+      (task) => task.source?.kind === "update" && task.status === "downloading",
+    ),
+  );
+  const downloadProgress = updateTask?.progress ?? null;
+
   const onCheck = async () => {
     setPhase("checking");
     // refetch() resolves with the query result instead of rejecting on
@@ -82,27 +94,37 @@ export default function AboutPage() {
     }
     setPhase("downloading");
     try {
-      const { file } = await downloadUpdateApk(release, abi);
-      await installApkFile(file);
-      // The system installer screen is now on top; the user presses
-      // "Install" there. Leave the page in a neutral idle state.
-      setPhase("idle");
-    } catch (err) {
-      if (err instanceof UpdateInstallError && err.reason === "download") {
-        Alert.alert(t("screen.about"), t("update.error.downloadFailed", { message: err.message }), [
-          { text: t("common.ok") },
-        ]);
-      } else {
-        Alert.alert(t("screen.about"), t("update.error.installFailed"), [
-          { text: t("common.cancel"), style: "cancel" },
-          {
-            text: t("update.openSettings"),
-            onPress: () => void openUnknownAppSourcesSettings(),
-          },
-        ]);
+      const { done } = await useDownloadsStore.getState().downloadManaged({
+        url: asset.browser_download_url,
+        filename: apkCacheFilename(release.tag_name, abi),
+        mimeType: APK_MIME_TYPE,
+        source: { kind: "update", name: release.tag_name },
+        authenticated: false,
+        onCompleted: async (local) => {
+          await installApkFile(new File(local.uri));
+        },
+      });
+      const outcome = await done;
+      if (outcome.status === "failed") {
+        Alert.alert(
+          t("screen.about"),
+          t("update.error.downloadFailed", { message: outcome.error ?? "" }),
+          [{ text: t("common.ok") }],
+        );
       }
-      setPhase("idle");
+      // completed → the system installer is now on top; cancelled → the
+      // user aborted from the download manager. Both settle to idle.
+    } catch {
+      // The APK finished downloading but the install handoff failed.
+      Alert.alert(t("screen.about"), t("update.error.installFailed"), [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("update.openSettings"),
+          onPress: () => void openUnknownAppSourcesSettings(),
+        },
+      ]);
     }
+    setPhase("idle");
   };
 
   return (
@@ -141,6 +163,7 @@ export default function AboutPage() {
           phase={phase}
           hasUpdate={hasUpdate}
           latestTag={release?.tag_name}
+          progress={downloadProgress}
           onCheck={onCheck}
           onDownload={onDownloadInstall}
         />
@@ -179,12 +202,15 @@ function UpdateCard({
   phase,
   hasUpdate,
   latestTag,
+  progress,
   onCheck,
   onDownload,
 }: {
   phase: CheckPhase;
   hasUpdate: boolean;
   latestTag?: string;
+  /** 0..1 fraction of the in-flight update download, null when unknown. */
+  progress: number | null;
   onCheck: () => void;
   onDownload: () => void;
 }) {
@@ -203,7 +229,12 @@ function UpdateCard({
     status = t("update.error.noAsset");
     tone = "text-destructive";
   } else if (phase === "downloading") {
-    status = t("about.downloading");
+    const pct =
+      progress != null ? Math.round(progress * 100) : null;
+    status =
+      pct != null
+        ? t("about.downloadingWithPct", { pct })
+        : t("about.downloading");
   } else if (phase === "checking") {
     status = t("about.checking");
   } else if (hasUpdate && latestTag) {
@@ -237,6 +268,15 @@ function UpdateCard({
         </View>
         {busy && <ActivityIndicator size="small" color={theme.brand} />}
       </View>
+
+      {phase === "downloading" && progress != null ? (
+        <View className="h-1.5 overflow-hidden rounded-full bg-muted">
+          <View
+            className="h-full rounded-full bg-primary"
+            style={{ width: `${Math.round(progress * 100)}%` }}
+          />
+        </View>
+      ) : null}
 
       {busy ? null : showDownload ? (
         <Button onPress={onDownload}>

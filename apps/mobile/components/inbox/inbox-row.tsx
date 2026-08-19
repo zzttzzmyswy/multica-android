@@ -16,6 +16,7 @@ import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { InboxDetailLabel } from "@/components/inbox/detail-label";
+import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { getInboxDisplayTitle } from "@/lib/inbox-display";
 import { useTimeAgo } from "@/lib/time-ago";
 import { cn } from "@/lib/utils";
@@ -23,17 +24,36 @@ import { cn } from "@/lib/utils";
 interface Props {
   item: InboxItem;
   onPress: () => void;
+  /** Long-press opens the row's action menu (archive / mark-unread). */
+  onLongPress?: () => void;
+  /**
+   * Rendered inside the archived sub-view. Archived rows deliberately render
+   * as read — matching web's `showUnread = item.read !== true &&
+   * !isArchivedView` (packages/views/inbox/components/inbox-list-item.tsx:69):
+   * archiving leaves `read` untouched so unarchiving restores the real state,
+   * and the unread count excludes archived items, so an unread dot there
+   * would mark something the badge never counts.
+   */
+  archived?: boolean;
 }
 
-export function InboxRow({ item, onPress }: Props) {
+export function InboxRow({ item, onPress, onLongPress, archived }: Props) {
   const timeAgo = useTimeAgo();
-  const isUnread = !item.read;
+  const isUnread = !archived && !item.read;
   const displayTitle = getInboxDisplayTitle(item);
   const actorType = item.actor_type ?? item.recipient_type;
   const actorId = item.actor_id ?? item.recipient_id;
+  const statusCatalog = useIssueStatuses();
+  const statusEntry = item.issue_status
+    ? statusCatalog.entryOf(item.issue_status)
+    : undefined;
 
   return (
-    <Pressable onPress={onPress} className="bg-background active:bg-secondary px-4 py-3">
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      className="bg-background active:bg-secondary px-4 py-3"
+    >
       <View className="flex-row gap-3">
         <ActorAvatar type={actorType} id={actorId} size={36} showPresence />
         <View className="flex-1 min-w-0">
@@ -56,7 +76,12 @@ export function InboxRow({ item, onPress }: Props) {
               </Text>
             </View>
             {item.issue_status ? (
-              <StatusIcon status={item.issue_status} size={14} />
+              <StatusIcon
+                status={item.issue_status}
+                category={statusEntry?.category}
+                color={statusEntry?.is_system ? undefined : (statusEntry?.color ?? undefined)}
+                size={14}
+              />
             ) : null}
           </View>
           {/* Bottom row: [type-aware detail label] (left) | [time] (right).

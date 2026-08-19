@@ -10,11 +10,19 @@
  * must be updated to keep the "Counts and visibility must agree" rule
  * (apps/mobile/CLAUDE.md) intact.
  */
-import type { IssuePriority, IssueStatus } from "@multica/core/types";
+import type { IssuePriority, IssueStatus, IssueStatusCategory } from "@multica/core/types";
 import { translate } from "./i18n";
 
-/** Statuses surfaced in list/board views (matches web — `cancelled` excluded). */
-export const BOARD_STATUSES: IssueStatus[] = [
+/**
+ * Statuses surfaced in list/board views (matches web — `cancelled` excluded).
+ *
+ * Board columns / list sections are CATEGORIES, not status keys (MUL-6243):
+ * a workspace may define any number of custom statuses, but every one folds
+ * into one of these columns via its category. `groupIssues` mirrors this by
+ * bucketing through the catalog's category resolver before mapping onto this
+ * order.
+ */
+export const BOARD_STATUSES: IssueStatusCategory[] = [
   "backlog",
   "todo",
   "in_progress",

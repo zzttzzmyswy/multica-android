@@ -19,6 +19,7 @@ import type {
   AutopilotRun,
   AutopilotTrigger,
   ChatMessage,
+  ChatLastMessage,
   ChatPendingTask,
   ChatSession,
   Comment,
@@ -33,16 +34,21 @@ import type {
   InboxItem,
   Invitation,
   IssueLabelsResponse,
+  IssueStatusCategory,
+  IssueStatusEntry,
   IssueSubscriber,
   Label,
+  ListIssueStatusesResponse,
   ListLabelsResponse,
   ListProjectResourcesResponse,
   ListProjectsResponse,
   MemberWithUser,
   PinnedItem,
   PersonalAccessToken,
+  PendingChatTasksResponse,
   Project,
   ProjectResource,
+  ResourceLabelsResponse,
   RuntimeDevice,
   SearchIssuesResponse,
   SearchProjectsResponse,
@@ -54,6 +60,9 @@ import type {
   SquadMemberPreview,
   TaskMessagePayload,
   User,
+  VCSConnection,
+  ListVCSConnectionsResponse,
+  ConnectVCSResponse,
   Workspace,
   WorkspaceMcpServer,
 } from "@multica/core/types";
@@ -189,6 +198,77 @@ export const EMPTY_ISSUE_LABELS_RESPONSE: IssueLabelsResponse = {
   labels: [],
 };
 
+// Labels attached to a resource (agent/skill). Same shape as the issue-labels
+// response — `{ labels: Label[] }` per packages/core/types/label.ts
+// (`ResourceLabelsResponse = IssueLabelsResponse`). Drift-degrades to [] so a
+// malformed payload just renders as "no labels" rather than blanking the page.
+export const ResourceLabelsResponseSchema = z.object({
+  labels: z.array(LabelSchema).default([]),
+}).loose();
+
+// --- Issue status catalog (MUL-6243) ---
+// Workspace status catalog contract. `category` is parsed as a plain string
+// rather than an enum: a newer server could report a category this build does
+// not know, and failing the whole catalog parse would leave the UI with no
+// statuses at all. Consumers resolve through the catalog, which falls back to
+// rendering by name/color for unrecognized categories.
+export const IssueStatusEntrySchema = z.object({
+  id: z.string(),
+  workspace_id: z.string(),
+  key: z.string(),
+  name: z.string(),
+  description: z.string().optional().default(""),
+  category: z.string(),
+  color: z.string().optional().default("#6b7280"),
+  is_system: z.boolean().optional().default(false),
+  position: z.number().optional().default(0),
+  archived_at: z.string().nullable().optional().default(null),
+  created_at: z.string(),
+  updated_at: z.string(),
+}).loose();
+
+export const EMPTY_ISSUE_STATUS_ENTRY: IssueStatusEntry = {
+  id: "",
+  workspace_id: "",
+  key: "",
+  name: "",
+  description: "",
+  category: "backlog",
+  color: "#6b7280",
+  is_system: false,
+  position: 0,
+  archived_at: null,
+  created_at: "",
+  updated_at: "",
+};
+
+export const ListIssueStatusesResponseSchema = z.object({
+  statuses: z.array(IssueStatusEntrySchema).default([]),
+  categories: z.array(z.string()).default([]),
+  total: z.number().default(0),
+}).loose();
+
+// The fallback carries the 7 built-ins' keys as categories, so a client
+// talking to a server that predates this endpoint still has the canonical
+// list.
+export const EMPTY_LIST_ISSUE_STATUSES_RESPONSE: ListIssueStatusesResponse = {
+  statuses: [],
+  categories: [
+    "backlog",
+    "todo",
+    "in_progress",
+    "in_review",
+    "done",
+    "blocked",
+    "cancelled",
+  ],
+  total: 0,
+};
+
+export const EMPTY_RESOURCE_LABELS_RESPONSE: ResourceLabelsResponse = {
+  labels: [],
+};
+
 export const ProjectSchema = z.object({
   id: z.string(),
   workspace_id: z.string(),
@@ -278,6 +358,19 @@ export const EMPTY_LIST_PROJECT_RESOURCES_RESPONSE: ListProjectResourcesResponse
 // agent/creator ids). `.loose()` so server-added fields pass through. The two
 // fields mobile keys behaviour on — `id` and `chat_session_id` — are required.
 
+/** Preview of a session's most recent message — drives the IM-style row's
+ *  subtitle (web chat-thread-list.tsx). Optional so older / non-list payloads
+ *  stay valid; `message_kind` and `failure_reason` follow the core types. */
+export const ChatLastMessageSchema: z.ZodType<ChatLastMessage> = z.object({
+  content: z.string().default(""),
+  role: z.enum(["user", "assistant"]).catch("assistant"),
+  created_at: z.string().default(""),
+  failure_reason: z.string().nullable().optional(),
+  message_kind: z
+    .enum(["message", "no_response", "onboarding_kickoff", "onboarding_opening"])
+    .optional(),
+}).loose();
+
 export const ChatSessionSchema: z.ZodType<ChatSession> = z.object({
   id: z.string(),
   workspace_id: z.string().default(""),
@@ -292,6 +385,14 @@ export const ChatSessionSchema: z.ZodType<ChatSession> = z.object({
   // so the badge math can tell "older server didn't send it" from a real 0 —
   // the tab badge sums `unread_count ?? 0`, same rule as web's sidebar.
   unread_count: z.number().optional(),
+  // Pinned chats sort above unpinned ones (web chatThreadList parity). Older
+  // servers omit the flag — default false so the row still sorts by activity;
+  // catch protects against malformed values the same way the enum does above.
+  pinned: z.boolean().default(false).catch(false),
+  // Latest message preview (IM-style subtitle). Optional so list payloads that
+  // predate the field still parse; older servers may also send `null` for an
+  // empty conversation.
+  last_message: ChatLastMessageSchema.nullable().optional(),
   created_at: z.string().default(""),
   updated_at: z.string().default(""),
 }).loose();
@@ -357,6 +458,26 @@ export const ChatPendingTaskSchema: z.ZodType<ChatPendingTask> = z.object({
 }).loose();
 
 export const EMPTY_CHAT_PENDING_TASK: ChatPendingTask = {};
+
+/** Aggregate of in-flight chat tasks for the current user in this workspace
+ *  (GET /api/chat/pending-tasks) — the IM list's "typing…" indicator source.
+ *  Mirrors web's `PendingChatTasksResponse` shape. */
+export const PendingChatTasksSchema: z.ZodType<PendingChatTasksResponse> =
+  z.object({
+    tasks: z
+      .array(
+        z.object({
+          task_id: z.string(),
+          status: z.string().default(""),
+          chat_session_id: z.string(),
+        }).loose(),
+      )
+      .default([]),
+  }).loose();
+
+export const EMPTY_PENDING_CHAT_TASKS: PendingChatTasksResponse = {
+  tasks: [],
+};
 
 export const SendChatMessageResponseSchema: z.ZodType<SendChatMessageResponse> = z.object({
   message_id: z.string(),
@@ -807,6 +928,13 @@ export const RuntimeSchema: z.ZodType<RuntimeDevice> = z.object({
   last_seen_at: z.string().nullable().default(null),
   device_info: z.string().default(""),
   metadata: z.record(z.string(), z.unknown()).default({}),
+  // Custom display-name override (MUL-4217) and the runtime profile id
+  // (MUL-3284) — loaded-bearing for the runtime management actions and the
+  // "Built-in vs Custom" badge. Explicit null defaults match web's
+  // @multica/core/types RuntimeDevice; a backend that omits the fields is
+  // treated as "no override / built-in".
+  custom_name: z.string().nullable().default(null),
+  profile_id: z.string().nullable().default(null),
   owner_id: z.string().nullable().default(null),
   visibility: z.string().catch("private") as unknown as z.ZodType<
     RuntimeDevice["visibility"]
@@ -1333,3 +1461,71 @@ export const EMPTY_WORKSPACE_MCP_SERVER: WorkspaceMcpServer = {
 };
 
 export const EMPTY_WORKSPACE_MCP_SERVER_LIST: WorkspaceMcpServer[] = [];
+
+// ── VCS integration (iteration-59) ──────────────────────────────────────────
+// Self-hosted Git provider connections (Forgejo / Gitea / GitLab), mirroring
+// `packages/core/types/vcs.ts`. Secrets never round-trip; the list endpoint
+// returns identities only. `webhook_url` is empty when the server has no
+// public URL configured (the UI then prefixes `webhook_path`). The three
+// deployment/visibility flags (`available` / `configured` / `can_manage`) are
+// optional — older backends omit them, and each is defaulted to the policy
+// core's client contract (available→true so the section still renders,
+// configured→false, can_manage→false) rather than crashing the page.
+//
+// The provider field is z.string() (not z.enum) so a future server-side
+// provider value renders verbatim instead of failing the whole parse — same
+// drift-downgrades-not-crashes rule as NotificationPreferenceResponseSchema.
+// The base object is kept untyped (ZodObject) so Connect... can safeExtend it;
+// the exported schemas carry the core type via `as unknown as`, same pattern
+// as CommentSchema above.
+const VCSConnectionObjectSchema = z
+  .object({
+    id: z.string().default(""),
+    workspace_id: z.string().default(""),
+    provider: z.string().default("forgejo"),
+    instance_url: z.string().default(""),
+    account_login: z.string().default(""),
+    webhook_url: z.string().default(""),
+    webhook_path: z.string().default(""),
+    created_at: z.string().default(""),
+  })
+  .loose();
+
+export const VCSConnectionSchema: z.ZodType<VCSConnection> =
+  VCSConnectionObjectSchema as unknown as z.ZodType<VCSConnection>;
+
+export const ListVCSConnectionsResponseSchema: z.ZodType<ListVCSConnectionsResponse> =
+  z
+    .object({
+      connections: z.array(VCSConnectionSchema).default([]),
+      // visibility / deployment flags — all optional (see note above)
+      available: z.boolean().optional(),
+      configured: z.boolean().optional(),
+      can_manage: z.boolean().optional(),
+    })
+    .loose() as unknown as z.ZodType<ListVCSConnectionsResponse>;
+
+export const EMPTY_VCS_CONNECTION: VCSConnection = {
+  id: "",
+  workspace_id: "",
+  provider: "forgejo",
+  instance_url: "",
+  account_login: "",
+  webhook_url: "",
+  webhook_path: "",
+  created_at: "",
+};
+
+/** Connection response after connecting (or rotating) — the one-time
+ *  plaintext webhook secret is included exactly once. */
+export const ConnectVCSResponseSchema: z.ZodType<ConnectVCSResponse> =
+  VCSConnectionObjectSchema.safeExtend({
+    webhook_secret: z.string().default(""),
+  }) as unknown as z.ZodType<ConnectVCSResponse>;
+
+export const EMPTY_LIST_VCS_CONNECTIONS_RESPONSE: ListVCSConnectionsResponse = {
+  connections: [],
+  available: true,
+  configured: false,
+  can_manage: false,
+};

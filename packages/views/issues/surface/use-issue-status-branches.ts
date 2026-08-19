@@ -20,6 +20,7 @@ import {
 import type {
   Issue,
   IssueStatus,
+  IssueStatusCategory,
   IssueTableFacetsResponse,
   IssueTableQuerySpec,
   IssueTableRowsResponse,
@@ -91,7 +92,7 @@ function rebaseCursorState(
     state.identity === identity ? state : initialCursorState(identity, statuses);
   let cursors: StatusCursorState["cursors"] | null = null;
   for (const status of statuses) {
-    if (current.cursors[status].length > 0) continue;
+    if ((current.cursors[status]?.length ?? 0) > 0) continue;
     cursors ??= { ...current.cursors };
     cursors[status] = [null];
   }
@@ -104,7 +105,7 @@ function statusCountsFromFacets(
   const counts = new Map<IssueStatus, number>();
   const statusFacet = facets?.facets.find((facet) => facet.kind === "status");
   for (const value of statusFacet?.values ?? []) {
-    if (ALL_STATUSES.includes(value.key as IssueStatus)) {
+    if (ALL_STATUSES.includes(value.key as IssueStatusCategory)) {
       counts.set(value.key as IssueStatus, value.count);
     }
   }
@@ -165,7 +166,7 @@ export function useIssueStatusBranches({
     () =>
       enabled
         ? statuses.flatMap((status) =>
-            activeCursorState.cursors[status].map((cursor) => ({
+            (activeCursorState.cursors[status] ?? []).map((cursor) => ({
               status,
               cursor,
             })),
@@ -243,7 +244,7 @@ export function useIssueStatusBranches({
       if (
         target?.cursor === null &&
         queryResult?.isFetching &&
-        activeCursorState.cursors[target.status].length > 1
+        (activeCursorState.cursors[target.status]?.length ?? 0) > 1
       ) {
         headFetching.add(target.status);
       }
@@ -312,7 +313,7 @@ export function useIssueStatusBranches({
       next[status] = branch.headUpdatedAt;
       const seen = previous[status];
       if (
-        activeCursorState.cursors[status].length > 1 &&
+        (activeCursorState.cursors[status]?.length ?? 0) > 1 &&
         (branch.headFetching ||
           (seen !== undefined && seen !== branch.headUpdatedAt))
       ) {
@@ -342,7 +343,7 @@ export function useIssueStatusBranches({
       setCursorState((previous) => {
         if (previous.identity !== identity) return previous;
         const current = previous.cursors[status];
-        if (current.includes(cursor)) return previous;
+        if (!current || current.includes(cursor)) return previous;
         return {
           ...previous,
           cursors: {

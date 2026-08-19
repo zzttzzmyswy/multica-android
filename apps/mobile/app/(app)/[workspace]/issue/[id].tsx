@@ -34,11 +34,13 @@ import {
   issueChildrenOptions,
 } from "@/data/queries/issues";
 import { useDeleteIssue } from "@/data/mutations/issues";
+import { useArchiveInbox, useUnarchiveInbox } from "@/data/mutations/inbox";
 import { pinListOptions } from "@/data/queries/pins";
 import { useCreatePin, useDeletePin } from "@/data/mutations/pins";
 import { useAuthStore } from "@/data/auth-store";
 import { useIssueRealtime } from "@/data/realtime/use-issue-realtime";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { getInboxArchiveMode } from "@/lib/inbox-display";
 import { getWebBaseUrl } from "@/data/server-config";
 import { ActionSheet } from "@/lib/action-sheet";
 import { useViewedIssuesStore } from "@/data/viewed-issues-store";
@@ -50,12 +52,19 @@ export default function IssueDetail() {
   // `highlight` + `h` come from inbox deep-link (apps/mobile/app/(app)/
   // [workspace]/(tabs)/inbox.tsx). `highlight` is the target comment id;
   // `h` is a per-tap nonce so re-tapping the same row re-fires the
-  // scroll-and-flash effect.
-  const { id, workspace: wsSlug, highlight, h } = useLocalSearchParams<{
+  // scroll-and-flash effect. `inbox` / `inboxView` / `inboxItemId` carry the
+  // inbox origin so the header can offer the Archive / Unarchive toggle
+  // (reversed by the view the row was read in) — see onPressItem in
+  // (tabs)/inbox.tsx.
+  const { id, workspace: wsSlug, highlight, h, inbox, inboxView, inboxItemId } =
+    useLocalSearchParams<{
     id: string;
     workspace: string;
     highlight?: string;
     h?: string;
+    inbox?: string;
+    inboxView?: string;
+    inboxItemId?: string;
   }>();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const qc = useQueryClient();
@@ -103,7 +112,25 @@ export default function IssueDetail() {
 
   const issue = detail.data;
   const deleteIssue = useDeleteIssue();
+  const archive = useArchiveInbox();
+  const unarchive = useUnarchiveInbox();
+  // Inbox-originated detail (deep link from an inbox row): the header shows an
+  // Archive (main view) / Unarchive (archived view) toggle that mirrors web's
+  // inbox detail panel. Only rendered when the row actually carried an id.
+  const fromInbox = inbox === "1";
+  const archiveMode = fromInbox
+    ? getInboxArchiveMode(inboxView === "archived" ? "archived" : "inbox")
+    : null;
   const userId = useAuthStore((s) => s.user?.id ?? null);
+
+  const onToggleInboxArchive = useCallback(() => {
+    if (!inboxItemId || !archiveMode) return;
+    // Optimistic patch + invalidate both inbox lists live in the mutations;
+    // popping back to the list shows the row already gone (archived) or back
+    // in the main inbox (unarchived). Read state is preserved verbatim.
+    const mutate = archiveMode === "archive" ? archive : unarchive;
+    mutate.mutate(inboxItemId, { onSuccess: () => router.back() });
+  }, [inboxItemId, archiveMode, archive, unarchive]);
   const { data: pins } = useQuery(pinListOptions(wsId, userId));
   const isPinned =
     !!issue &&
@@ -171,6 +198,25 @@ export default function IssueDetail() {
           headerRight: issue
             ? () => (
                 <View className="flex-row items-center gap-2">
+                  {/* Inbox-origin archive toggle. Archive (main view) vs
+                   *  Unarchive (archived view), mirroring web's inbox detail
+                   *  panel; hidden for every other entry point into the issue.
+                   */}
+                  {fromInbox && inboxItemId && archiveMode ? (
+                    <IconButton
+                      name={
+                        archiveMode === "archive"
+                          ? "archive-outline"
+                          : "arrow-undo-outline"
+                      }
+                      onPress={onToggleInboxArchive}
+                      accessibilityLabel={t(
+                        archiveMode === "archive"
+                          ? "inbox.detail.archive"
+                          : "inbox.detail.unarchive",
+                      )}
+                    />
+                  ) : null}
                   {/* Ambient agent-working badge — renders null when no
                    *  active tasks, so it doesn't crowd the header in the
                    *  common case. See agent-header-badge.tsx. */}

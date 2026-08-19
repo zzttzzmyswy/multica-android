@@ -13,7 +13,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ChatSession } from "@multica/core/types";
 import { api } from "@/data/api";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import { chatKeys } from "@/data/queries/chat";
+import { chatKeys, sortChatSessions } from "@/data/queries/chat";
 
 export function useCreateChatSession() {
   const qc = useQueryClient();
@@ -84,6 +84,90 @@ export function useMarkChatSessionRead() {
       return { prev, key };
     },
     onError: (_err, _id, ctx) => {
+      if (ctx?.prev) qc.setQueryData(ctx.key, ctx.prev);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: chatKeys.sessions(wsId) });
+    },
+  });
+}
+
+export function useRenameChatSession() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: ({ id, title }: { id: string; title: string }) =>
+      api.updateChatSession(id, { title }),
+    onMutate: async ({ id, title }) => {
+      const key = chatKeys.sessions(wsId);
+      await qc.cancelQueries({ queryKey: key });
+      const prev = qc.getQueryData<ChatSession[]>(key);
+      qc.setQueryData<ChatSession[]>(key, (old) =>
+        old?.map((s) => (s.id === id ? { ...s, title } : s)),
+      );
+      return { prev, key };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(ctx.key, ctx.prev);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: chatKeys.sessions(wsId) });
+    },
+  });
+}
+
+export function useSetChatSessionPinned() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: ({ id, pinned }: { id: string; pinned: boolean }) =>
+      api.setChatSessionPinned(id, pinned),
+    onMutate: async ({ id, pinned }) => {
+      const key = chatKeys.sessions(wsId);
+      await qc.cancelQueries({ queryKey: key });
+      const prev = qc.getQueryData<ChatSession[]>(key);
+      // Flip the flag and re-sort immediately so a pin visibly jumps the row
+      // to the top (and an unpin drops it back into activity order) without
+      // waiting on the round-trip. Mirrors web's useSetChatSessionPinned.
+      qc.setQueryData<ChatSession[]>(key, (old) =>
+        old ? sortChatSessions(old.map((s) => (s.id === id ? { ...s, pinned } : s))) : old,
+      );
+      return { prev, key };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(ctx.key, ctx.prev);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: chatKeys.sessions(wsId) });
+    },
+  });
+}
+
+export function useSetChatSessionArchived() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: ({ id, archived }: { id: string; archived: boolean }) =>
+      api.setChatSessionArchived(id, archived),
+    onMutate: async ({ id, archived }) => {
+      const key = chatKeys.sessions(wsId);
+      await qc.cancelQueries({ queryKey: key });
+      const prev = qc.getQueryData<ChatSession[]>(key);
+      // Flip status locally so the sheet row shows archived immediately;
+      // the settle refetch reconciles flags the server derives.
+      qc.setQueryData<ChatSession[]>(key, (old) =>
+        old?.map((s) =>
+          s.id === id
+            ? { ...s, status: archived ? "archived" : "active" }
+            : s,
+        ),
+      );
+      return { prev, key };
+    },
+    onError: (_err, _vars, ctx) => {
       if (ctx?.prev) qc.setQueryData(ctx.key, ctx.prev);
     },
     onSettled: () => {

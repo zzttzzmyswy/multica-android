@@ -14,6 +14,10 @@
  *   5. Issues (server-side `api.searchIssues`, debounced 200ms; empty
  *      query → no issues section, matching web's mention-suggestion.tsx)
  *
+ * All modes render the people-style sections; `mode` only decides the
+ * surrounding chrome (chat shows "reference an issue" hint, comment groups
+ * everything the same way).
+ *
  * Mobile is the iOS-native equivalent of shadcn's `CommandDialog` — search
  * input from the native UISearchController (registered by the parent
  * route via `useNativeSearchBar`), groups via uppercase section labels,
@@ -33,6 +37,7 @@ import type {
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { StatusIcon } from "@/components/ui/status-icon";
+import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { memberListOptions } from "@/data/queries/members";
 import { agentListOptions } from "@/data/queries/agents";
 import { squadListOptions } from "@/data/queries/squads";
@@ -62,15 +67,16 @@ type Row =
 interface Props {
   query: string;
   /** "comment" (default) renders @all + People + Agents + Squads + Issues.
-   *  "chat" hides the people-style sections (member / agent / squad /
-   *  @all) because chat is user ↔ single agent — mentioning a person
-   *  there generates unintended notifications. Only Issues remain useful
-   *  in chat as "reference this ticket for context". */
+   *  "chat" and "comment" render the same sections (people / agents /
+   *  squads / issues). Chat previously hid the people-style rows as
+   *  single-agent noise, which left the directory empty on open — the
+   *  fix below (MYS-406). */
   mode?: "comment" | "chat";
 }
 
 export function MentionPickerBody({ query, mode = "comment" }: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const statusCatalog = useIssueStatuses(wsId);
   const { t } = useTranslation();
   const { data: members = [] } = useQuery(memberListOptions(wsId));
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
@@ -137,35 +143,34 @@ export function MentionPickerBody({ query, mode = "comment" }: Props) {
 
     const out: Row[] = [];
 
-    // People-style sections only render in comment mode. Chat is single-
-    // agent; @张三 / @squad / @all there are noise + notify the wrong
-    // people. The Issues section IS useful in chat ("reference ticket
-    // for context"), so it stays for both modes.
-    if (mode === "comment") {
-      if (!q || "all".includes(q)) {
-        out.push({ kind: "all" });
-      }
-      const memberRows = [...members]
-        .filter((m) => matchName(m.name))
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .map((m): Row => ({ kind: "member", member: m }));
-      if (memberRows.length > 0) {
-        out.push({ kind: "section", label: t("picker.people") }, ...memberRows);
-      }
-      const agentRows = [...agents]
-        .filter((a) => matchName(a.name))
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .map((a): Row => ({ kind: "agent", agent: a }));
-      if (agentRows.length > 0) {
-        out.push({ kind: "section", label: t("picker.agents") }, ...agentRows);
-      }
-      const squadRows = [...squads]
-        .filter((s) => !s.archived_at && matchName(s.name))
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .map((s): Row => ({ kind: "squad", squad: s }));
-      if (squadRows.length > 0) {
-        out.push({ kind: "section", label: t("picker.squads") }, ...squadRows);
-      }
+    // People-style sections render in every mode. Chat previously hid
+    // member / agent / squad / @all as "single-agent noise", but that left
+    // @ with an empty directory (issues only appear after typing) — users
+    // could not mention an agent / member / reference from chat. The Issues
+    // section stays for both modes ("reference ticket for context") too.
+    if (!q || "all".includes(q)) {
+      out.push({ kind: "all" });
+    }
+    const memberRows = [...members]
+      .filter((m) => matchName(m.name))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((m): Row => ({ kind: "member", member: m }));
+    if (memberRows.length > 0) {
+      out.push({ kind: "section", label: t("picker.people") }, ...memberRows);
+    }
+    const agentRows = [...agents]
+      .filter((a) => matchName(a.name))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((a): Row => ({ kind: "agent", agent: a }));
+    if (agentRows.length > 0) {
+      out.push({ kind: "section", label: t("picker.agents") }, ...agentRows);
+    }
+    const squadRows = [...squads]
+      .filter((s) => !s.archived_at && matchName(s.name))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((s): Row => ({ kind: "squad", squad: s }));
+    if (squadRows.length > 0) {
+      out.push({ kind: "section", label: t("picker.squads") }, ...squadRows);
     }
 
     if (issueResults.length > 0) {
@@ -175,7 +180,7 @@ export function MentionPickerBody({ query, mode = "comment" }: Props) {
       }
     }
     return out;
-  }, [mode, members, agents, squads, issueResults, query, t]);
+  }, [members, agents, squads, issueResults, query, t]);
 
   const pick = (row: Row) => {
     let chip: MentionChipDraft | null = null;
@@ -232,6 +237,10 @@ export function MentionPickerBody({ query, mode = "comment" }: Props) {
           (item.kind === "agent" && !isAgentRuntimeBound(item.agent)) ||
           (item.kind === "squad" &&
             !runnableAgentIds.has(item.squad.leader_id));
+        const statusEntry =
+          item.kind === "issue"
+            ? statusCatalog.entryOf(item.issue.status)
+            : undefined;
         return (
           <Pressable
             disabled={needsRuntime}
@@ -263,7 +272,12 @@ export function MentionPickerBody({ query, mode = "comment" }: Props) {
                 className="items-center justify-center"
                 style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}
               >
-                <StatusIcon status={item.issue.status} size={22} />
+                <StatusIcon
+                  status={item.issue.status}
+                  category={statusEntry?.category}
+                  color={statusEntry?.is_system ? undefined : (statusEntry?.color ?? undefined)}
+                  size={22}
+                />
               </View>
             )}
             {item.kind === "issue" ? (

@@ -42,10 +42,33 @@ export type AssigneeValue = {
   id: string;
 } | null;
 
+/** Actor kind used by `kinds` filtering + the agent-mode draft. `member`
+ *  is the default manual-form assignee; `agent`/`squad` are what the
+ *  quick-create agent panel accepts as its actor. */
+export type ActorKind = "member" | "agent" | "squad";
+
+/** Stable default for `kinds` — module-level so the `rows` useMemo dep
+ * keeps a predictable identity when the prop is omitted. */
+const ALL_KINDS: ActorKind[] = ["member", "agent", "squad"];
+
 interface Props {
   value: AssigneeValue;
   query: string;
   onChange: (next: AssigneeValue) => void;
+  /** True when a batch selection spans different assignees ("mixed"): no row
+   *  is checked, including the unassigned row. Distinct from `value` being
+   *  `null`, which means every selected issue is genuinely unassigned and the
+   *  unassigned row should be checked. Mirrors web `AssigneePicker.mixed`
+   *  (packages/views/issues/components/pickers/assignee-picker.tsx). */
+  mixed?: boolean;
+  /** Restrict which actor kinds are listed. Default: all three. The
+   *  agent-mode quick-create picker passes `["agent", "squad"]` to hide
+   *  members. */
+  kinds?: ActorKind[];
+  /** Hide the "Unassigned" row. Default: false (shown). Agent-mode picker
+   *  sets true — the quick-create actor is required, and clearing it to
+   *  nothing would dead-end the submit. */
+  showUnassigned?: boolean;
 }
 
 type Row =
@@ -64,7 +87,14 @@ function isRowSelected(value: AssigneeValue, row: Row): boolean {
   return value.type === "squad" && value.id === row.squad.id;
 }
 
-export function AssigneePickerBody({ value, query, onChange }: Props) {
+export function AssigneePickerBody({
+  value,
+  query,
+  onChange,
+  mixed = false,
+  kinds = ALL_KINDS,
+  showUnassigned = true,
+}: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
   const { data: members = [] } = useQuery(memberListOptions(wsId));
@@ -92,18 +122,24 @@ export function AssigneePickerBody({ value, query, onChange }: Props) {
     const q = query.trim().toLowerCase();
     const matchName = (name: string) => !q || name.toLowerCase().includes(q);
 
-    const memberRows: Row[] = [...members]
-      .filter((m) => matchName(m.name))
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map((m) => ({ kind: "member" as const, member: m }));
-    const agentRows: Row[] = [...agents]
-      .filter((a) => matchName(a.name))
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map((a) => ({ kind: "agent" as const, agent: a }));
-    const squadRows: Row[] = [...squads]
-      .filter((s) => !s.archived_at && matchName(s.name))
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map((s) => ({ kind: "squad" as const, squad: s }));
+    const memberRows: Row[] = kinds.includes("member")
+      ? [...members]
+          .filter((m) => matchName(m.name))
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map((m) => ({ kind: "member" as const, member: m }))
+      : [];
+    const agentRows: Row[] = kinds.includes("agent")
+      ? [...agents]
+          .filter((a) => matchName(a.name))
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map((a) => ({ kind: "agent" as const, agent: a }))
+      : [];
+    const squadRows: Row[] = kinds.includes("squad")
+      ? [...squads]
+          .filter((s) => !s.archived_at && matchName(s.name))
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map((s) => ({ kind: "squad" as const, squad: s }))
+      : [];
 
     if (q) return [...memberRows, ...agentRows, ...squadRows];
 
@@ -112,18 +148,20 @@ export function AssigneePickerBody({ value, query, onChange }: Props) {
     // require this — it's a product UX choice that speeds up the common
     // "see who's assigned + reassign nearby" path. Skipped when query is
     // active because search-result order should reflect matches, not state.
+    // A mixed batch selection has no single current actor to pin.
     const all = [...memberRows, ...agentRows, ...squadRows];
-    const selectedRow = all.find((r) => isRowSelected(value, r));
+    const selectedRow = mixed ? undefined : all.find((r) => isRowSelected(value, r));
     return [
-      { kind: "unassigned" },
+      ...(showUnassigned ? ([{ kind: "unassigned" }] as const) : []),
       ...(selectedRow ? [selectedRow] : []),
       ...memberRows.filter((r) => !isRowSelected(value, r)),
       ...agentRows.filter((r) => !isRowSelected(value, r)),
       ...squadRows.filter((r) => !isRowSelected(value, r)),
     ];
-  }, [members, agents, squads, query, value]);
+  }, [members, agents, squads, query, value, kinds, showUnassigned, mixed]);
 
-  const isSelected = (row: Row) => isRowSelected(value, row);
+  const isSelected = (row: Row) =>
+    !mixed && isRowSelected(value, row);
 
   const select = (row: Row) => {
     if (row.kind === "unassigned") onChange(null);

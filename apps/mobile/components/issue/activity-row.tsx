@@ -31,6 +31,8 @@ import { StatusIcon } from "@/components/ui/status-icon";
 import { PriorityIcon } from "@/components/ui/priority-icon";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { formatActivity } from "@/lib/format-activity";
+import { useStatusLabel } from "@/lib/status-options";
+import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -85,8 +87,17 @@ function LeadIcon({
   mutedFg: string;
 }) {
   const details = (entry.details ?? {}) as Record<string, string>;
+  const statusCatalog = useIssueStatuses();
   if (entry.action === "status_changed" && details.to) {
-    return <StatusIcon status={details.to as IssueStatus} size={14} />;
+    const statusEntry = statusCatalog.entryOf(details.to);
+    return (
+      <StatusIcon
+        status={details.to as IssueStatus}
+        category={statusEntry?.category}
+        color={statusEntry?.is_system ? undefined : (statusEntry?.color ?? undefined)}
+        size={14}
+      />
+    );
   }
   if (entry.action === "priority_changed" && details.to) {
     return <PriorityIcon priority={details.to as IssuePriority} size={14} />;
@@ -111,13 +122,14 @@ export function ActivityRow({ entry }: { entry: TimelineEntry }) {
   const { colorScheme } = useColorScheme();
   const timeAgo = useTimeAgo();
   const mutedFg = THEME[colorScheme].mutedForeground;
+  const statusLabel = useStatusLabel();
   const resolveName = (
     type: string | null | undefined,
     id: string | null | undefined,
   ): string =>
     getName(type as "member" | "agent" | null | undefined, id);
   const actorName = resolveName(entry.actor_type, entry.actor_id);
-  const verb = formatActivity(entry, resolveName);
+  const verb = formatActivity(entry, resolveName, statusLabel);
   const showCoalesceBadge =
     (entry.coalesced_count ?? 1) > 1 &&
     entry.action !== "task_completed" &&

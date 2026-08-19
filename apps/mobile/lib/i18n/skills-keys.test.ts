@@ -56,6 +56,8 @@ describe("skills management i18n", () => {
     "skills.detail.readme": "SKILL.md",
     "skills.detail.files": "附加文件",
     "skills.detail.noFiles": "无附加文件",
+    "skills.detail.labels": "标签",
+    "skills.detail.noLabels": "无标签",
     "skills.detail.edit": "编辑",
     "skills.detail.delete": "删除",
   };

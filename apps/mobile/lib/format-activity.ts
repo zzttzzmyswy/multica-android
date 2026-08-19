@@ -14,8 +14,11 @@ import { formatDateOnly } from "@multica/core/issues/date";
 import { translate } from "./i18n";
 import { issuePriorityLabel, issueStatusLabel } from "./issue-status";
 
-function statusName(s: string | undefined): string {
-  if (s) return issueStatusLabel(s);
+function statusName(
+  s: string | undefined,
+  resolver?: (statusKey: string) => string,
+): string {
+  if (s) return resolver ? resolver(s) : issueStatusLabel(s);
   return "?";
 }
 
@@ -37,6 +40,7 @@ export function formatActivity(
     type: string | null | undefined,
     id: string | null | undefined,
   ) => string,
+  statusLabel?: (statusKey: string) => string,
 ): string {
   const details = (entry.details ?? {}) as Record<string, string>;
   switch (entry.action) {
@@ -44,8 +48,8 @@ export function formatActivity(
       return translate("activity.created");
     case "status_changed":
       return translate("activity.statusChanged", {
-        from: statusName(details.from),
-        to: statusName(details.to),
+        from: statusName(details.from, statusLabel),
+        to: statusName(details.to, statusLabel),
       });
     case "priority_changed":
       return translate("activity.priorityChanged", {

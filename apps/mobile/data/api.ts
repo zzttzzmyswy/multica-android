@@ -37,32 +37,49 @@ import type {
   CreatePersonalAccessTokenRequest,
   CreatePersonalAccessTokenResponse,
   CreatePropertyRequest,
+  CreateIssueStatusRequest,
   CreateProjectRequest,
   CreateProjectResourceRequest,
+  CreateQuickActionRequest,
   CronPreviewResponse,
   GetAutopilotResponse,
+  GitHubConnectResponse,
+  GitHubInstallation,
+  GitHubRepository,
   InboxItem,
   Invitation,
   Issue,
   IssueLabelsResponse,
+  IssuePriority,
   IssuePropertiesResponse,
   IssueProperty,
   IssuePropertyValue,
   IssueSubscriber,
   Label,
+  LabelResourceType,
   IssueReaction,
   ListAutopilotRunsResponse,
   ListAutopilotsResponse,
+  ListGitHubInstallationsResponse,
+  ListGitHubRepositoriesResponse,
+  ListVCSConnectionsResponse,
+  ConnectVCSRequest,
+  ConnectVCSResponse,
   ListIssuesParams,
   ListIssuesResponse,
   ListLabelsResponse,
   ListProjectResourcesResponse,
   ListProjectsResponse,
   ListPropertiesResponse,
+  ListIssueStatusesResponse,
+  ListQuickActionsResponse,
   MemberWithUser,
   UpdateMemberRequest,
+  QuickAction,
+  UpdateQuickActionRequest,
   PinnedItem,
   PinnedItemType,
+  PendingChatTasksResponse,
   Project,
   ProjectResource,
   Reaction,
@@ -91,6 +108,7 @@ import type {
   NotificationPreferenceResponse,
   NotificationPreferences,
   PersonalAccessToken,
+  ResourceLabelsResponse,
   RemoveSquadMemberRequest,
   TaskMessagePayload,
   TimelineEntry,
@@ -103,12 +121,22 @@ import type {
   UpdateMeRequest,
   UpdateProjectRequest,
   UpdatePropertyRequest,
+  UpdateIssueStatusRequest,
+  IssueStatusCategory,
+  IssueStatusEntry,
   UpdateSquadMemberRoleRequest,
   UpdateSquadRequest,
   User,
   Workspace,
   WorkspaceMcpServer,
   WorkspaceRepo,
+  CreateWorkspaceSubscriptionCheckoutRequest,
+  CreateWorkspaceSubscriptionCheckoutResponse,
+  CreateWorkspaceSubscriptionPortalResponse,
+  WorkspaceSubscriptionEntitlements,
+  WorkspaceSubscriptionPrices,
+  WorkspaceSubscriptionSeatReconcileResult,
+  WorkspaceSubscriptionSummary,
 } from "@multica/core/types";
 import {
   AgentBuilderRuntimeSwitchSchema,
@@ -119,20 +147,45 @@ import {
   EMPTY_AGENT_BUILDER_SESSION_LIST,
   EMPTY_ISSUE_PROPERTY,
   EMPTY_ISSUE_PROPERTIES_RESPONSE,
+  EMPTY_ISSUE_VIEW_PREFERENCE,
+  EMPTY_GITHUB_CONNECT_RESPONSE,
   EMPTY_LIST_AUTOPILOTS_RESPONSE,
+  EMPTY_LIST_GITHUB_INSTALLATIONS_RESPONSE,
+  EMPTY_LIST_GITHUB_REPOSITORIES_RESPONSE,
   EMPTY_LIST_ISSUES_RESPONSE,
   EMPTY_LIST_PROPERTIES_RESPONSE,
+  EMPTY_LIST_QUICK_ACTIONS_RESPONSE,
+  EMPTY_QUICK_ACTION,
   EMPTY_SQUAD,
   EMPTY_TIMELINE_ENTRIES,
   FALLBACK_AUTOPILOT_RUN,
+  CreateWorkspaceSubscriptionCheckoutResponseSchema,
+  CreateWorkspaceSubscriptionPortalResponseSchema,
+  GitHubConnectResponseSchema,
   IssuePropertiesResponseSchema,
   IssuePropertySchema,
   IssueSchema,
+  IssueViewListSchema,
+  IssueViewPreferenceSchema,
+  IssueViewSchema,
   ListAutopilotsResponseSchema,
+  ListGitHubInstallationsResponseSchema,
+  ListGitHubRepositoriesResponseSchema,
   ListIssuesResponseSchema,
   ListPropertiesResponseSchema,
+  ListQuickActionsResponseSchema,
+  QuickActionSchema,
   TimelineEntriesSchema,
+  WorkspaceSubscriptionEntitlementsSchema,
+  WorkspaceSubscriptionPricesSchema,
+  WorkspaceSubscriptionSeatReconcileResultSchema,
+  WorkspaceSubscriptionSummarySchema,
   agentBuilderRuntimeSwitchFallback,
+} from "@multica/core/api/schemas";
+import type {
+  CreateIssueViewRequest,
+  IssueView,
+  IssueViewPreference,
 } from "@multica/core/api/schemas";
 import {
   ActiveTasksResponseSchema,
@@ -176,6 +229,7 @@ import {
   EMPTY_CRON_PREVIEW_RESPONSE,
   EMPTY_INBOX_LIST,
   EMPTY_INVITATION_LIST,
+  EMPTY_INVITATION,
   EMPTY_ISSUE_FALLBACK,
   EMPTY_LIST_AUTOPILOT_RUNS_RESPONSE,
   EMPTY_LABEL,
@@ -185,6 +239,7 @@ import {
   EMPTY_MEMBER_LIST,
   EMPTY_NOTIFICATION_PREFERENCES,
   EMPTY_PIN_LIST,
+  EMPTY_PENDING_CHAT_TASKS,
   EMPTY_PROJECT,
   EMPTY_RUNTIME_LIST,
   EMPTY_SEARCH_ISSUES_RESPONSE,
@@ -193,6 +248,7 @@ import {
   EMPTY_USER,
   EMPTY_WORKSPACE_LIST,
   InboxListSchema,
+  InvitationSchema,
   InvitationListSchema,
   NotificationPreferenceResponseSchema,
   ListAutopilotRunsResponseSchema,
@@ -204,6 +260,7 @@ import {
   PersonalAccessTokenListSchema,
   PinListSchema,
   PinnedItemSchema,
+  PendingChatTasksSchema,
   ProjectSchema,
   RuntimeListSchema,
   SearchIssuesResponseSchema,
@@ -237,6 +294,16 @@ import {
   BatchDeleteResultSchema,
   EMPTY_BATCH_DELETE_RESULT,
   type BatchDeleteResult,
+  VCSConnectionSchema,
+  ListVCSConnectionsResponseSchema,
+  ConnectVCSResponseSchema,
+  EMPTY_LIST_VCS_CONNECTIONS_RESPONSE,
+  ResourceLabelsResponseSchema,
+  EMPTY_RESOURCE_LABELS_RESPONSE,
+  IssueStatusEntrySchema,
+  ListIssueStatusesResponseSchema,
+  EMPTY_ISSUE_STATUS_ENTRY,
+  EMPTY_LIST_ISSUE_STATUSES_RESPONSE,
 } from "./schemas";
 import type { ZodType } from "zod";
 import { File, Paths } from "expo-file-system";
@@ -564,6 +631,25 @@ class ApiClient {
     );
   }
 
+  // POST /api/me/onboarding/complete — flips the user's `onboarded_at`.
+  // Mirrors web client.ts:692 (parseWithFallback so the returned user is
+  // validated before it's written into the auth store). `completion_path`
+  // is a free-form string: the server treats unknown paths as the
+  // "unknown" analytics bucket (onboarding.go validCompletionPaths), so
+  // mobile can report "mobile_onboarding" without a core-types change.
+  async markOnboardingComplete(payload?: {
+    completion_path?: string;
+    workspace_id?: string;
+  }): Promise<User> {
+    const raw = await this.fetch<unknown>("/api/me/onboarding/complete", {
+      method: "POST",
+      body: payload ? JSON.stringify(payload) : undefined,
+    });
+    return parseWithFallback(raw, UserSchema, EMPTY_USER, {
+      endpoint: "markOnboardingComplete",
+    });
+  }
+
   // --- Notification preferences ---
   async getNotificationPreferences(
     opts?: { signal?: AbortSignal },
@@ -604,6 +690,21 @@ class ApiClient {
     });
     return parseWithFallback(raw, WorkspaceListSchema, EMPTY_WORKSPACE_LIST, {
       endpoint: "listWorkspaces",
+    });
+  }
+
+  // POST /api/workspaces — create a workspace (web client.ts:2253).
+  // Follows the write-endpoint rule below: raw fetch, no fallback — a 400
+  // (bad slug / reserved slug) or 409 (slug conflict) surfaces to the
+  // caller's error path, which owns the form feedback.
+  async createWorkspace(data: {
+    name: string;
+    slug: string;
+    description?: string;
+  }): Promise<Workspace> {
+    return this.fetch<Workspace>("/api/workspaces", {
+      method: "POST",
+      body: JSON.stringify(data),
     });
   }
 
@@ -658,6 +759,25 @@ class ApiClient {
     return this.fetch<InboxItem>(`/api/inbox/${id}/read`, { method: "POST" });
   }
 
+  async markInboxUnread(id: string): Promise<InboxItem> {
+    return this.fetch<InboxItem>(`/api/inbox/${id}/unread`, { method: "POST" });
+  }
+
+  // Archived notifications, backing the inbox's "Archived" sub-view. Capped
+  // server-side (no pagination in v1). Schema-guarded like listInbox so a
+  // contract drift renders an empty archive instead of taking the inbox down
+  // with it — note the endpoint label used by parseWithFallback's warning.
+  async listArchivedInbox(opts?: {
+    signal?: AbortSignal;
+  }): Promise<InboxItem[]> {
+    const raw = await this.fetch<unknown>("/api/inbox/archived", {
+      signal: opts?.signal,
+    });
+    return parseWithFallback(raw, InboxListSchema, EMPTY_INBOX_LIST, {
+      endpoint: "listArchivedInbox",
+    });
+  }
+
   // Archive endpoints — write surface. Match web's surface in
   // packages/core/api/client.ts:981-1003. No parseWithFallback (mirrors
   // markInboxRead above and the project write endpoints): a malformed
@@ -665,6 +785,12 @@ class ApiClient {
   // rolls back.
   async archiveInbox(id: string): Promise<InboxItem> {
     return this.fetch<InboxItem>(`/api/inbox/${id}/archive`, { method: "POST" });
+  }
+
+  async unarchiveInbox(id: string): Promise<InboxItem> {
+    return this.fetch<InboxItem>(`/api/inbox/${id}/unarchive`, {
+      method: "POST",
+    });
   }
 
   async markAllInboxRead(): Promise<{ count: number }> {
@@ -763,6 +889,48 @@ class ApiClient {
       `/api/workspaces/${workspaceId}/invitations/${invitationId}`,
       { method: "DELETE" },
     );
+  }
+
+  // My pending invitations + accept/decline — mirror
+  // packages/core/api/client.ts:2486-2506. These are the global (non-workspace)
+  // endpoints backing the "accept invitation" flow: the invite landing page and
+  // the pending-invitation feed on the workspace selector. Reads parse with a
+  // drift-safe schema, writes use the mobile write-endpoint rule.
+  async listMyInvitations(opts?: {
+    signal?: AbortSignal;
+  }): Promise<Invitation[]> {
+    const raw = await this.fetch<unknown>("/api/invitations", {
+      signal: opts?.signal,
+    });
+    return parseWithFallback(raw, InvitationListSchema, EMPTY_INVITATION_LIST, {
+      endpoint: "listMyInvitations",
+    });
+  }
+
+  async getInvitation(
+    invitationId: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<Invitation> {
+    const raw = await this.fetch<unknown>(
+      `/api/invitations/${invitationId}`,
+      { signal: opts?.signal },
+    );
+    return parseWithFallback(raw, InvitationSchema, EMPTY_INVITATION, {
+      endpoint: "getInvitation",
+    });
+  }
+
+  async acceptInvitation(invitationId: string): Promise<MemberWithUser> {
+    return this.fetch<MemberWithUser>(
+      `/api/invitations/${invitationId}/accept`,
+      { method: "POST" },
+    );
+  }
+
+  async declineInvitation(invitationId: string): Promise<void> {
+    await this.fetch<void>(`/api/invitations/${invitationId}/decline`, {
+      method: "POST",
+    });
   }
 
   async listAgents(opts?: {
@@ -925,6 +1093,385 @@ class ApiClient {
     return parseWithFallback(raw, RuntimeListSchema, EMPTY_RUNTIME_LIST, {
       endpoint: "listRuntimes",
     });
+  }
+
+  // Runtime management (iteration-51) — mirror packages/core/api/client.ts
+  // updateRuntime/deleteRuntime/unbindAgentsAndDeleteRuntime. The strict
+  // DELETE refuses with a structured 409 (`code: "runtime_has_active_agents"`)
+  // when active agents are bound; the UI then opens the confirmation flow and
+  // calls unbindAgentsAndDeleteRuntime with the user-confirmed agent set.
+  async updateRuntime(
+    runtimeId: string,
+    patch: {
+      visibility?: "private" | "public";
+      /** Empty string clears the custom name (server reverts to default). */
+      custom_name?: string;
+      /** Apply custom_name to every runtime on the same machine. */
+      apply_to_machine?: boolean;
+    },
+  ): Promise<RuntimeDevice> {
+    return this.fetch<RuntimeDevice>(`/api/runtimes/${runtimeId}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
+  }
+
+  async deleteRuntime(runtimeId: string): Promise<void> {
+    await this.fetch<void>(`/api/runtimes/${runtimeId}`, { method: "DELETE" });
+  }
+
+  async unbindAgentsAndDeleteRuntime(
+    runtimeId: string,
+    expectedActiveAgentIds: string[],
+  ): Promise<{
+    status: string;
+    agents_unbound?: number;
+    agents_archived?: number;
+    tasks_cancelled: number;
+    autopilots_paused?: number;
+  }> {
+    return this.fetch<{
+      status: string;
+      agents_unbound?: number;
+      agents_archived?: number;
+      tasks_cancelled: number;
+      autopilots_paused?: number;
+    }>(`/api/runtimes/${runtimeId}/unbind-agents-and-delete`, {
+      method: "POST",
+      body: JSON.stringify({ expected_active_agent_ids: expectedActiveAgentIds }),
+    });
+  }
+
+  // Workspace quick actions (iteration-52) — workspace-level issue presets.
+  // Mirrors packages/core/api/client.ts listQuickActions..deleteQuickAction.
+  // Schemas + fallbacks come from @multica/core/api/schemas; a drift response
+  // degrades to an empty catalog so the page never crashes.
+  async listQuickActions(opts?: {
+    includeArchived?: boolean;
+  }): Promise<ListQuickActionsResponse> {
+    const suffix = opts?.includeArchived ? "?include_archived=true" : "";
+    const raw = await this.fetch<unknown>(`/api/quick-actions${suffix}`);
+    return parseWithFallback(
+      raw,
+      ListQuickActionsResponseSchema,
+      EMPTY_LIST_QUICK_ACTIONS_RESPONSE,
+      { endpoint: "listQuickActions" },
+    );
+  }
+
+  async createQuickAction(
+    data: CreateQuickActionRequest,
+  ): Promise<QuickAction> {
+    const raw = await this.fetch<unknown>("/api/quick-actions", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return parseWithFallback(raw, QuickActionSchema, EMPTY_QUICK_ACTION, {
+      endpoint: "createQuickAction",
+    });
+  }
+
+  async updateQuickAction(
+    id: string,
+    data: UpdateQuickActionRequest,
+  ): Promise<QuickAction> {
+    const raw = await this.fetch<unknown>(`/api/quick-actions/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+    return parseWithFallback(raw, QuickActionSchema, EMPTY_QUICK_ACTION, {
+      endpoint: "updateQuickAction",
+    });
+  }
+
+  async deleteQuickAction(id: string): Promise<void> {
+    await this.fetch<void>(`/api/quick-actions/${id}`, { method: "DELETE" });
+  }
+
+  // GitHub integration (iteration-52) — installation list, repository browser
+  // and connect-URL minting. Mirrors packages/core/api/client.ts:3673-3724;
+  // response schemas + fallbacks from @multica/core/api/schemas.
+  async listGitHubInstallations(
+    workspaceId: string,
+  ): Promise<ListGitHubInstallationsResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/github/installations`,
+    );
+    return parseWithFallback(
+      raw,
+      ListGitHubInstallationsResponseSchema,
+      EMPTY_LIST_GITHUB_INSTALLATIONS_RESPONSE,
+      { endpoint: "listGitHubInstallations" },
+    );
+  }
+
+  async listGitHubInstallationRepositories(
+    workspaceId: string,
+    installationId: string,
+    params: { page?: number; per_page?: number; signal?: AbortSignal } = {},
+  ): Promise<ListGitHubRepositoriesResponse> {
+    const search = new URLSearchParams();
+    if (params.page !== undefined) search.set("page", String(params.page));
+    if (params.per_page !== undefined)
+      search.set("per_page", String(params.per_page));
+    const suffix = search.size > 0 ? `?${search.toString()}` : "";
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/github/installations/${installationId}/repositories${suffix}`,
+      { signal: params.signal },
+    );
+    return parseWithFallback(
+      raw,
+      ListGitHubRepositoriesResponseSchema,
+      EMPTY_LIST_GITHUB_REPOSITORIES_RESPONSE,
+      { endpoint: "listGitHubInstallationRepositories" },
+    );
+  }
+
+  async getGitHubConnectURL(
+    workspaceId: string,
+    returnTo?: "github" | "repositories",
+  ): Promise<GitHubConnectResponse> {
+    const search = new URLSearchParams();
+    if (returnTo) search.set("return_to", returnTo);
+    const suffix = search.size > 0 ? `?${search.toString()}` : "";
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/github/connect${suffix}`,
+    );
+    return parseWithFallback(
+      raw,
+      GitHubConnectResponseSchema,
+      EMPTY_GITHUB_CONNECT_RESPONSE,
+      { endpoint: "getGitHubConnectURL" },
+    );
+  }
+
+  // VCS integration (iteration-59) — self-hosted Git providers (Forgejo /
+  // Gitea / GitLab). Mirrors packages/core/api/client.ts:3741-3770. Unlike
+  // GitHub there is no App/installation model: each workspace stores a
+  // token-based connection to a provider instance. Secrets never return on
+  // the list; the one-time webhook secret arrives exactly once on connect /
+  // rotate. The list shares the endpoints used by web's
+  // packages/views/settings/components/vcs-tab.tsx.
+  async listVCSConnections(workspaceId: string): Promise<ListVCSConnectionsResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/vcs/connections`,
+    );
+    return parseWithFallback(
+      raw,
+      ListVCSConnectionsResponseSchema,
+      EMPTY_LIST_VCS_CONNECTIONS_RESPONSE,
+      { endpoint: "listVCSConnections" },
+    );
+  }
+
+  async connectVCS(
+    workspaceId: string,
+    body: ConnectVCSRequest,
+  ): Promise<ConnectVCSResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/vcs/connections`,
+      { method: "POST", body: JSON.stringify(body) },
+    );
+    return parseWithFallback(
+      raw,
+      ConnectVCSResponseSchema,
+      ConnectVCSResponseSchema.parse({}),
+      { endpoint: "connectVCS" },
+    );
+  }
+
+  async deleteVCSConnection(workspaceId: string, connectionId: string): Promise<void> {
+    await this.fetch<void>(
+      `/api/workspaces/${workspaceId}/vcs/connections/${connectionId}`,
+      { method: "DELETE" },
+    );
+  }
+
+  async rotateVCSWebhook(
+    workspaceId: string,
+    connectionId: string,
+  ): Promise<ConnectVCSResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/vcs/connections/${connectionId}/rotate-webhook`,
+      { method: "POST" },
+    );
+    return parseWithFallback(
+      raw,
+      ConnectVCSResponseSchema,
+      ConnectVCSResponseSchema.parse({}),
+      { endpoint: "rotateVCSWebhook" },
+    );
+  }
+
+  // Saved issue views (iteration-65) — server-backed filter snapshots with
+  // display defaults, mirroring packages/core/api/client.ts:3331-3405 and
+  // web's view-bar (packages/views/issues/components/view-bar.tsx). `query`
+  // is the nine-dimension filter snapshot, `display` the viewMode / sort /
+  // grouping initial state; both are opaque JSON to the server — the client
+  // owns the interpretation contract. Listed per (scope_type, scope_id): the
+  // workspace Issues page asks workspace scope, My Issues asks my scope.
+  async listIssueViews(params: {
+    scope_type: string;
+    scope_id?: string | null;
+  }): Promise<IssueView[]> {
+    const qs = new URLSearchParams({ scope_type: params.scope_type });
+    if (params.scope_id) qs.set("scope_id", params.scope_id);
+    const raw = await this.fetch<unknown>(`/api/issue-views?${qs.toString()}`);
+    return parseWithFallback(raw, IssueViewListSchema, [], {
+      endpoint: "listIssueViews",
+    });
+  }
+
+  async createIssueView(data: CreateIssueViewRequest): Promise<IssueView | null> {
+    const raw = await this.fetch<unknown>("/api/issue-views", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    // null fallback: a create that succeeded but returned an unparsable body
+    // must not crash the dialog — callers refetch the list (web's client
+    // contract handles the same way).
+    return parseWithFallback(raw, IssueViewSchema.nullable(), null, {
+      endpoint: "createIssueView",
+    });
+  }
+
+  async updateIssueView(
+    id: string,
+    data: {
+      name?: string;
+      visibility?: "private" | "workspace";
+      scope_variant?: string | null;
+      query?: Record<string, unknown>;
+      display?: Record<string, unknown>;
+      expected_revision: number;
+    },
+  ): Promise<IssueView | null> {
+    const raw = await this.fetch<unknown>(`/api/issue-views/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+    return parseWithFallback(raw, IssueViewSchema.nullable(), null, {
+      endpoint: "updateIssueView",
+    });
+  }
+
+  async getIssueView(id: string): Promise<IssueView | null> {
+    const raw = await this.fetch<unknown>(`/api/issue-views/${id}`);
+    return parseWithFallback(raw, IssueViewSchema.nullable(), null, {
+      endpoint: "getIssueView",
+    });
+  }
+
+  async deleteIssueView(id: string): Promise<void> {
+    await this.fetch<void>(`/api/issue-views/${id}`, { method: "DELETE" });
+  }
+
+  async getIssueViewPreference(params: {
+    scope_type: string;
+    scope_id?: string | null;
+  }): Promise<IssueViewPreference> {
+    const qs = new URLSearchParams({ scope_type: params.scope_type });
+    if (params.scope_id) qs.set("scope_id", params.scope_id);
+    const raw = await this.fetch<unknown>(
+      `/api/issue-view-preferences?${qs.toString()}`,
+    );
+    return parseWithFallback(raw, IssueViewPreferenceSchema, EMPTY_ISSUE_VIEW_PREFERENCE, {
+      endpoint: "getIssueViewPreference",
+    });
+  }
+
+  async putIssueViewPreference(data: {
+    scope_type: string;
+    scope_id?: string | null;
+    prefs: { hidden: string[]; order: string[] };
+  }): Promise<void> {
+    await this.fetch<void>("/api/issue-view-preferences", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Workspace subscriptions (iteration-67 Billing) — the server resolves the
+  // workspace from the X-Workspace-Slug header, so no caller names one.
+  // Mirrors packages/core/api/client.ts:1577-1680 and `packages/core/billing/*`.
+  //
+  // Two distinct failure paths, both of which a caller must render as
+  // "unavailable" and neither of which may look like Free:
+  //
+  //   - non-2xx throws ApiError from `fetch` (React Query sees `isError`);
+  //   - a 2xx body that does not match the contract returns null here.
+  // -------------------------------------------------------------------------
+
+  async getWorkspaceSubscriptionEntitlements(): Promise<WorkspaceSubscriptionEntitlements | null> {
+    const raw = await this.fetch<unknown>("/api/cloud-subscriptions/entitlements");
+    return parseWithFallback(raw, WorkspaceSubscriptionEntitlementsSchema, null, {
+      endpoint: "GET /api/cloud-subscriptions/entitlements",
+    });
+  }
+
+  async getWorkspaceSubscriptionSummary(): Promise<WorkspaceSubscriptionSummary | null> {
+    const raw = await this.fetch<unknown>("/api/cloud-subscriptions/summary");
+    return parseWithFallback(raw, WorkspaceSubscriptionSummarySchema, null, {
+      endpoint: "GET /api/cloud-subscriptions/summary",
+    });
+  }
+
+  async getWorkspaceSubscriptionPrices(): Promise<WorkspaceSubscriptionPrices | null> {
+    const raw = await this.fetch<unknown>("/api/cloud-subscriptions/prices");
+    return parseWithFallback(raw, WorkspaceSubscriptionPricesSchema, null, {
+      endpoint: "GET /api/cloud-subscriptions/prices",
+    });
+  }
+
+  async createWorkspaceSubscriptionCheckout(
+    data: CreateWorkspaceSubscriptionCheckoutRequest,
+  ): Promise<CreateWorkspaceSubscriptionCheckoutResponse | null> {
+    const raw = await this.fetch<unknown>("/api/cloud-subscriptions/checkout-sessions", {
+      method: "POST",
+      body: JSON.stringify({
+        interval: data.interval,
+        idempotency_key: data.idempotencyKey,
+        ...(data.customerEmail ? { customer_email: data.customerEmail } : {}),
+      }),
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": data.idempotencyKey,
+      },
+    });
+    return parseWithFallback(
+      raw,
+      CreateWorkspaceSubscriptionCheckoutResponseSchema,
+      null,
+      { endpoint: "POST /api/cloud-subscriptions/checkout-sessions" },
+    );
+  }
+
+  async reconcileWorkspaceSubscriptionSeats(): Promise<WorkspaceSubscriptionSeatReconcileResult | null> {
+    const raw = await this.fetch<unknown>("/api/cloud-subscriptions/seats/reconcile", {
+      method: "POST",
+    });
+    return parseWithFallback(
+      raw,
+      WorkspaceSubscriptionSeatReconcileResultSchema,
+      null,
+      { endpoint: "POST /api/cloud-subscriptions/seats/reconcile" },
+    );
+  }
+
+  async createWorkspaceSubscriptionPortal(
+    idempotencyKey: string,
+  ): Promise<CreateWorkspaceSubscriptionPortalResponse | null> {
+    const raw = await this.fetch<unknown>("/api/cloud-subscriptions/portal-sessions", {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey },
+    });
+    return parseWithFallback(
+      raw,
+      CreateWorkspaceSubscriptionPortalResponseSchema,
+      null,
+      { endpoint: "POST /api/cloud-subscriptions/portal-sessions" },
+    );
   }
 
   // Workspace usage rollups — mirror packages/core/dashboard queries. Workspace
@@ -1152,9 +1699,40 @@ class ApiClient {
       if (Array.isArray(v)) {
         // Backend parses comma-separated lists (server/internal/handler/issue.go
         // uses strings.Split on a single query value). Match web's serialization
-        // in packages/core/api/client.ts:407 — repeated keys would silently
+        // in packages/core/api/client.ts:781-782 — repeated keys would silently
         // collapse to the first value only.
-        if (v.length > 0) search.set(k, v.map(String).join(","));
+        if (v.length > 0) {
+          // Actor filters are `{type, id}` objects — serialize each as
+          // `type:id` (server parseActorFilterList, issue.go:1435). Match web
+          // client.ts:756-761 exactly: this is NOT `String(v)` which would
+          // produce "[object Object]".
+          if (k === "assignee_filters" || k === "creator_filters") {
+            search.set(
+              k,
+              v
+                .map(
+                  (f) =>
+                    `${(f as { type: string }).type}:${(f as { id: string }).id}`,
+                )
+                .join(","),
+            );
+          } else {
+            search.set(k, v.map(String).join(","));
+          }
+        }
+      } else if (k === "sort_by") {
+        // Server reads `sort` / `direction` (issue.go:990/1026); the API
+        // client type uses sort_by / sort_direction. Map like web
+        // client.ts:783-784.
+        search.set("sort", String(v));
+      } else if (k === "sort_direction") {
+        search.set("direction", String(v));
+      } else if (typeof v === "object") {
+        // Structured params (custom-property bag `properties`, metadata jsonb)
+        // are serialized as their JSON literal — the server's
+        // parsePropertiesFilterParam / parseMetadataFilterParam expect a
+        // JSON-encoded query value (server/property.go:894).
+        search.set(k, JSON.stringify(v));
       } else {
         search.set(k, String(v));
       }
@@ -1210,6 +1788,31 @@ class ApiClient {
   // applies its own defaults for anything omitted.
   async createIssue(body: CreateIssueRequest): Promise<Issue> {
     return this.fetch<Issue>("/api/issues", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
+  // Agent-mode issue creation — mirrors
+  // packages/core/api/client.ts:quickCreateIssue and POST
+  // /api/issues/quick-create (server/internal/handler/issue.go
+  // QuickCreateIssue). The user types natural language + picks an actor
+  // (agent or squad); the server validates the actor's reachability,
+  // enqueues a quick-create task and returns 202 `{task_id}` immediately.
+  // The agent authors the issue in the background; success and failure
+  // surface as inbox notifications. Exactly one of agent_id/squad_id is
+  // required; the rest are optional and omitted when unset.
+  async quickCreateIssue(body: {
+    agent_id?: string;
+    squad_id?: string;
+    prompt: string;
+    priority?: IssuePriority;
+    due_date?: string;
+    project_id?: string | null;
+    parent_issue_id?: string | null;
+    attachment_ids?: string[];
+  }): Promise<{ task_id: string }> {
+    return this.fetch("/api/issues/quick-create", {
       method: "POST",
       body: JSON.stringify(body),
     });
@@ -1536,10 +2139,18 @@ class ApiClient {
   }
 
   // --- Labels ---
+  // resourceType scopes the catalog (server defaults to `issue` when absent):
+  // `listLabels` without a resourceType keeps the legacy workspace-issue list
+  // (issue pickers / labels page), while `{ resourceType: "skill" }` fetch the
+  // skill catalog for the skill detail labels picker (mirrors web
+  // `api.listLabels(resourceType)`). See server handler/label.go
+  // `parseLabelResourceType`.
   async listLabels(opts?: {
     signal?: AbortSignal;
+    resourceType?: LabelResourceType;
   }): Promise<ListLabelsResponse> {
-    const raw = await this.fetch<unknown>("/api/labels", {
+    const qs = opts?.resourceType ? `?resource_type=${opts.resourceType}` : "";
+    const raw = await this.fetch<unknown>(`/api/labels${qs}`, {
       signal: opts?.signal,
     });
     return parseWithFallback(
@@ -1547,6 +2158,67 @@ class ApiClient {
       ListLabelsResponseSchema,
       EMPTY_LIST_LABELS_RESPONSE,
       { endpoint: "GET /api/labels" },
+    );
+  }
+
+  // --- Labels on resources (agent/skill) ---
+  // Mirrors packages/core/api/client.ts listLabelsForResource /
+  // attachLabelToResource / detachLabelFromResource against
+  // `/api/{agents|skills}/{id}/labels`. Agent labels are removed from the
+  // product (MUL-5600) but the endpoints still exist and the skill side is
+  // live — drive them through the same helpers.
+  private resourceLabelsBase(resourceType: LabelResourceType, resourceId: string): string {
+    const plural = resourceType === "agent" ? "agents" : "skills";
+    return `/api/${plural}/${resourceId}/labels`;
+  }
+
+  async listLabelsForResource(
+    resourceType: LabelResourceType,
+    resourceId: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<ResourceLabelsResponse> {
+    const raw = await this.fetch<unknown>(this.resourceLabelsBase(resourceType, resourceId), {
+      signal: opts?.signal,
+    });
+    return parseWithFallback(
+      raw,
+      ResourceLabelsResponseSchema,
+      EMPTY_RESOURCE_LABELS_RESPONSE,
+      { endpoint: `GET /api/${resourceType === "agent" ? "agents" : "skills"}/{id}/labels` },
+    );
+  }
+
+  async attachLabelToResource(
+    resourceType: LabelResourceType,
+    resourceId: string,
+    labelId: string,
+  ): Promise<ResourceLabelsResponse> {
+    const raw = await this.fetch<unknown>(this.resourceLabelsBase(resourceType, resourceId), {
+      method: "POST",
+      body: JSON.stringify({ label_id: labelId }),
+    });
+    return parseWithFallback(
+      raw,
+      ResourceLabelsResponseSchema,
+      EMPTY_RESOURCE_LABELS_RESPONSE,
+      { endpoint: `POST /api/${resourceType === "agent" ? "agents" : "skills"}/{id}/labels` },
+    );
+  }
+
+  async detachLabelFromResource(
+    resourceType: LabelResourceType,
+    resourceId: string,
+    labelId: string,
+  ): Promise<ResourceLabelsResponse> {
+    const raw = await this.fetch<unknown>(
+      `${this.resourceLabelsBase(resourceType, resourceId)}/${labelId}`,
+      { method: "DELETE" },
+    );
+    return parseWithFallback(
+      raw,
+      ResourceLabelsResponseSchema,
+      EMPTY_RESOURCE_LABELS_RESPONSE,
+      { endpoint: `DELETE /api/${resourceType === "agent" ? "agents" : "skills"}/{id}/labels/{labelId}` },
     );
   }
 
@@ -1636,6 +2308,99 @@ class ApiClient {
     });
     return parseWithFallback(raw, IssuePropertySchema, EMPTY_ISSUE_PROPERTY, {
       endpoint: "PATCH /api/properties/{id}",
+    });
+  }
+
+  // --- Issue status catalog (MUL-6243) ---
+  // Workspace status catalog CRUD. Reads are open to any workspace member;
+  // the writes are owner/admin only and return 403 otherwise (mirrors web
+  // packages/core/api/client.ts).
+
+  // Active statuses by default; includeArchived=true surfaces retired ones
+  // for the management page. A backend predating this endpoint 404s here —
+  // treat it as an EMPTY catalog (built-in 7 statuses still render via the
+  // built-in fallback paths), never as an error, scanning a 404 like
+  // listProperties does.
+  async listIssueStatuses(opts?: {
+    includeArchived?: boolean;
+    signal?: AbortSignal;
+  }): Promise<ListIssueStatusesResponse> {
+    const suffix = opts?.includeArchived ? "?include_archived=true" : "";
+    let raw: unknown;
+    try {
+      raw = await this.fetch<unknown>(`/api/issue-statuses${suffix}`, {
+        signal: opts?.signal,
+      });
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return EMPTY_LIST_ISSUE_STATUSES_RESPONSE;
+      }
+      throw error;
+    }
+    return parseWithFallback(
+      raw,
+      ListIssueStatusesResponseSchema,
+      EMPTY_LIST_ISSUE_STATUSES_RESPONSE,
+      { endpoint: "GET /api/issue-statuses" },
+    );
+  }
+
+  // Create a custom status. Raw this.fetch (same convention as createLabel):
+  // a parseWithFallback fallback would mask server validation errors, and a
+  // flag-gated backend's 403 must surface as a real error.
+  async createIssueStatus(
+    body: CreateIssueStatusRequest,
+  ): Promise<IssueStatusEntry> {
+    return this.fetch<IssueStatusEntry>("/api/issue-statuses", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
+  // Update name/description/color/position. PATCH with drift defense to
+  // IssueStatusEntrySchema — the authoritative response patches the cached
+  // catalog rows.
+  async updateIssueStatus(
+    id: string,
+    body: UpdateIssueStatusRequest,
+  ): Promise<IssueStatusEntry> {
+    const raw = await this.fetch<unknown>(`/api/issue-statuses/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+    return parseWithFallback(raw, IssueStatusEntrySchema, EMPTY_ISSUE_STATUS_ENTRY, {
+      endpoint: "PATCH /api/issue-statuses/{id}",
+    });
+  }
+
+  // Rewrites one category's custom-status order in a single server-side
+  // statement. Not expressible as a sequence of updates: a row rejected
+  // mid-sequence would leave earlier rows already reordered.
+  async reorderIssueStatuses(
+    category: IssueStatusCategory,
+    ids: string[],
+  ): Promise<ListIssueStatusesResponse> {
+    const raw = await this.fetch<unknown>(`/api/issue-statuses/reorder`, {
+      method: "PATCH",
+      body: JSON.stringify({ category, ids }),
+    });
+    return parseWithFallback(
+      raw,
+      ListIssueStatusesResponseSchema,
+      EMPTY_LIST_ISSUE_STATUSES_RESPONSE,
+      { endpoint: "PATCH /api/issue-statuses/reorder" },
+    );
+  }
+
+  // Archives a custom status, retiring it from future assignment. Issues
+  // already on it keep it and keep behaving as their category prescribes;
+  // built-in statuses return 403.
+  async archiveIssueStatus(id: string): Promise<IssueStatusEntry> {
+    const raw = await this.fetch<unknown>(`/api/issue-statuses/${id}`, {
+      method: "DELETE",
+    });
+    return parseWithFallback(raw, IssueStatusEntrySchema, EMPTY_ISSUE_STATUS_ENTRY, {
+      endpoint: "DELETE /api/issue-statuses/{id}",
     });
   }
 
@@ -1960,9 +2725,14 @@ class ApiClient {
   // list in /Users/qingnaiyuan/.claude/plans/plan-velvety-puddle.md.
 
   async listChatSessions(
-    opts?: { signal?: AbortSignal },
+    opts?: { signal?: AbortSignal; status?: string },
   ): Promise<ChatSession[]> {
-    const raw = await this.fetch<unknown>("/api/chat/sessions", {
+    // `status=all` (web parity) is the ONLY call the app makes — the session
+    // sheet splits the flat cache into history / archived views locally, so
+    // the server must return the full list (active + archived). Leaving the
+    // query defaulted silently drops archived sessions and the Archived view.
+    const query = opts?.status ? `?status=${opts.status}` : "";
+    const raw = await this.fetch<unknown>(`/api/chat/sessions${query}`, {
       signal: opts?.signal,
     });
     return parseWithFallback(
@@ -1995,6 +2765,33 @@ class ApiClient {
 
   async deleteChatSession(id: string): Promise<void> {
     await this.fetch<void>(`/api/chat/sessions/${id}`, { method: "DELETE" });
+  }
+
+  /** PATCH /api/chat/sessions/:id — rename a session (title only; the web
+   *  build also patches project_id, which mobile never edits). Mirrors
+   *  packages/core/api/client.ts updateChatSession, restored for MYS-409
+   *  after the v1 cut dropped it. */
+  async updateChatSession(
+    id: string,
+    data: { title: string },
+  ): Promise<ChatSession> {
+    return this.fetch<ChatSession>(`/api/chat/sessions/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  /** PATCH /api/chat/sessions/:id/pin — pin/unpin a session so it sorts
+   *  above unpinned ones. Mirrors packages/core/api/client.ts
+   *  setChatSessionPinned. */
+  async setChatSessionPinned(
+    id: string,
+    pinned: boolean,
+  ): Promise<ChatSession> {
+    return this.fetch<ChatSession>(`/api/chat/sessions/${id}/pin`, {
+      method: "PATCH",
+      body: JSON.stringify({ pinned }),
+    });
   }
 
   /** PATCH /api/chat/sessions/:id/archive — retires a builder conversation
@@ -2080,6 +2877,20 @@ class ApiClient {
     await this.fetch<void>(
       `/api/chat/sessions/${sessionId}/read`,
       { method: "POST" },
+    );
+  }
+
+  /** Aggregate of in-flight chat tasks for the current user in this workspace
+   *  (GET /api/chat/pending-tasks) — the IM session list's "typing…" indicator.
+   *  Mirrors web `api.listPendingChatTasks` in packages/core/api/client.ts. */
+  async listPendingChatTasks(
+    opts?: { signal?: AbortSignal },
+  ): Promise<PendingChatTasksResponse> {
+    return this.fetchValidated(
+      "/api/chat/pending-tasks",
+      PendingChatTasksSchema,
+      EMPTY_PENDING_CHAT_TASKS,
+      { ...opts, endpoint: "GET /api/chat/pending-tasks" },
     );
   }
 
@@ -2541,14 +3352,17 @@ class ApiClient {
       totalBytesWritten: number;
       totalBytesExpectedToWrite: number;
     }) => void,
+    opts?: { authenticated?: boolean },
   ): { done: Promise<LocalDownload>; cancel: () => void } | null {
     const absUrl = resolveAttachmentUrl(rawUrl);
     if (!absUrl) return null;
 
     const headers: Record<string, string> = {};
-    if (this.token) headers["Authorization"] = `Bearer ${this.token}`;
-    const slug = getCurrentSlug();
-    if (slug) headers["X-Workspace-Slug"] = slug;
+    if (opts?.authenticated !== false) {
+      if (this.token) headers["Authorization"] = `Bearer ${this.token}`;
+      const slug = getCurrentSlug();
+      if (slug) headers["X-Workspace-Slug"] = slug;
+    }
 
     const safeName = sanitizeBasename(filename) || "download";
     const destination = new File(Paths.cache, safeName).uri;
@@ -2568,6 +3382,15 @@ class ApiClient {
       .then((result) => {
         // `undefined` is the native contract for an aborted task.
         if (cancelled || !result) throw new DownloadCancelledError();
+        // The native resumable downloader writes the response body verbatim,
+        // so a non-2xx reply (e.g. 401/404 JSON) would otherwise be saved as
+        // a "successful" file and handed to the share/installer sheet — the
+        // corrupt-40-byte-attachment bug. Surface the HTTP status instead.
+        const status = (result as { status?: number }).status;
+        if (status != null && (status < 200 || status >= 300)) {
+          console.error(`[api] ← DOWNLOAD HTTP ${status} ${absUrl}`);
+          throw new ApiError(`Failed to download (HTTP ${status})`, status);
+        }
         console.log(`[api] ← saved ${result.uri}`, {
           duration: `${Date.now() - start}ms`,
         });

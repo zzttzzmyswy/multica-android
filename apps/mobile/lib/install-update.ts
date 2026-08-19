@@ -1,11 +1,10 @@
 /**
- * APK download + system-installer handoff for the GitHub-Release update flow.
- *
- * Lives outside React (except the About-page button wiring): pure-enough
- * async steps over expo-file-system (download to cache), the legacy
- * `getContentUriAsync` bridge (expo-file-system's own FileSystemFileProvider
- * turns the `file://` cache path into a `content://` URI the installer can
- * read), and expo-intent-launcher (ACTION_VIEW with the APK MIME type).
+ * System-installer handoff for the GitHub-Release update flow: turns a
+ * downloaded APK's `file://` cache path into a `content://` URI
+ * (expo-file-system's own FileSystemFileProvider) and opens the Android
+ * package installer (expo-intent-launcher ACTION_VIEW). The download
+ * itself is managed by the download-manager store (`data/downloads-store.ts`
+ * `downloadManaged`, MYS-361) so progress/cancel/history stay unified.
  *
  * The legacy import is deliberate: the new `File` API exposes no
  * content-URI bridge, and the deprecated top-level `getContentUriAsync`
@@ -15,14 +14,8 @@
 import Constants from "expo-constants";
 import * as Device from "expo-device";
 import * as IntentLauncher from "expo-intent-launcher";
-import { File, Paths } from "expo-file-system";
+import { File } from "expo-file-system";
 import { getContentUriAsync } from "expo-file-system/legacy";
-
-import {
-  matchAssetForAbi,
-  type LatestRelease,
-  type ReleaseAsset,
-} from "./release-check";
 
 /** MIME type understood by the Android package installer. */
 export const APK_MIME_TYPE = "application/vnd.android.package-archive";
@@ -30,12 +23,7 @@ export const APK_MIME_TYPE = "application/vnd.android.package-archive";
 /** `Intent.FLAG_GRANT_READ_URI_PERMISSION` — lets the installer read our content URI. */
 export const FLAG_GRANT_READ_URI_PERMISSION = 1;
 
-export type InstallErrorReason =
-  | "no-match-abi"
-  | "download"
-  | "content-uri"
-  | "install"
-  | "unknown";
+export type InstallErrorReason = "content-uri" | "install";
 
 export class UpdateInstallError extends Error {
   constructor(
@@ -49,16 +37,10 @@ export class UpdateInstallError extends Error {
 
 function defaultMessage(reason: InstallErrorReason): string {
   switch (reason) {
-    case "no-match-abi":
-      return "No APK matches the device ABI";
-    case "download":
-      return "Download failed";
     case "content-uri":
       return "Failed to open the downloaded file";
     case "install":
       return "Failed to launch the installer";
-    case "unknown":
-      return "Unexpected update error";
   }
 }
 
@@ -82,46 +64,6 @@ export function resolveDeviceAbi(): string | null {
 export function apkCacheFilename(tagName: string, abi: string): string {
   const safeTag = tagName.replace(/[^a-zA-Z0-9._-]/g, "_");
   return `multica-update-${safeTag}-${abi}.apk`;
-}
-
-export interface DownloadedApk {
-  asset: ReleaseAsset;
-  file: File;
-}
-
-/**
- * Pick the ABI-matching asset and download it into the app cache.
- * Throws `UpdateInstallError("no-match-abi")` when the latest release ships
- * no APK for this device's architecture.
- */
-export async function downloadUpdateApk(
-  release: LatestRelease,
-  abi: string,
-): Promise<DownloadedApk> {
-  const asset = matchAssetForAbi(release.assets, abi);
-  if (!asset) {
-    throw new UpdateInstallError("no-match-abi");
-  }
-
-  const filename = apkCacheFilename(release.tag_name, abi);
-  const destination = new File(Paths.cache, filename);
-  if (destination.exists) {
-    destination.delete();
-  }
-
-  try {
-    const file = await File.downloadFileAsync(
-      asset.browser_download_url,
-      destination,
-      { idempotent: true },
-    );
-    return { asset, file };
-  } catch (err) {
-    throw new UpdateInstallError(
-      "download",
-      err instanceof Error ? err.message : "Download failed",
-    );
-  }
 }
 
 /**

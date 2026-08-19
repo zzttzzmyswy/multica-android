@@ -23,6 +23,7 @@
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "generate:icons": "node scripts/generate-brand-icons.ts",
     "verify:apk": "node scripts/verify-apk.mjs"
   },
   "dependencies": {

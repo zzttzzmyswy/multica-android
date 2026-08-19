@@ -37,7 +37,7 @@ export function ProjectRow({ project, onPress }: Props) {
         <View className="flex-1 gap-1">
           <Text
             className="text-base text-foreground font-medium"
-            numberOfLines={1}
+            numberOfLines={2}
           >
             {project.title}
           </Text>

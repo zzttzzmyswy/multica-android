@@ -53,6 +53,15 @@ describe("runtimes i18n", () => {
     "runtimes.detail.updatedAt": "更新时间",
     "runtimes.detail.launch": "启动方式",
     "runtimes.detail.never": "从未",
+    "runtimes.detail.diagnostics": "诊断",
+    "runtimes.detail.readOnly": "只读",
+    "runtimes.detail.visibilityHint.public": "工作区内的任何人都可以将其 agent 绑定到此运行时。",
+    "runtimes.detail.renameButton": "重命名运行时",
+    "runtimes.detail.renameApplyMachine": "同步应用到这台机器的所有运行时",
+    "runtimes.detail.renameSave": "保存",
+    "runtimes.detail.deleteButton": "删除运行时",
+    "runtimes.detail.deleteConfirmTitle": "删除运行时？",
+    "runtimes.detail.selfHealHint": "这是在线本地 daemon，删除后会自动重新注册。如需彻底移除，请先停止 daemon 进程。",
     "runtimes.notFound": "运行时不存在或已被移除",
   };
 

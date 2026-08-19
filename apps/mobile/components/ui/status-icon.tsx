@@ -13,7 +13,11 @@
  */
 import * as React from "react";
 import Svg, { Circle, G, Line, Path } from "react-native-svg";
-import type { IssueStatus } from "@multica/core/types";
+import type {
+  IssueStatus,
+  IssueStatusCategory,
+} from "@multica/core/types";
+import { isIssueStatusCategory } from "@/lib/issue-status-catalog";
 
 const CX = 7;
 const CY = 7;
@@ -21,8 +25,9 @@ const OUTER_R = 6;
 const FILL_R = 3.5;
 
 // Mirrors STATUS_CONFIG.iconColor in packages/core/issues/config/status.ts —
-// translated to hex (see apps/mobile/tailwind.config.js).
-const STATUS_COLOR: Record<IssueStatus, string> = {
+// translated to hex (see apps/mobile/tailwind.config.js). Keyed on the CATEGORY
+// (a built-in key IS its category, so indexing a built-in status still works).
+const STATUS_COLOR: Record<IssueStatusCategory, string> = {
   backlog: "#71717a", // muted-foreground
   todo: "#71717a",
   in_progress: "#eab308", // warning
@@ -127,35 +132,50 @@ function CancelledX({ color }: { color: string }) {
   );
 }
 
+/**
+ * Status glyph. The GLYPH follows the status's CATEGORY (MUL-6243) — a custom
+ * status in the `in_review` category renders the same ring/geometry as In
+ * Review so platform behavior and look agree. Color falls back to the
+ * category's token color unless a caller (a custom-status entry's `color`)
+ * provides one.
+ */
 export function StatusIcon({
   status,
   size = 16,
+  category,
+  color,
 }: {
   status: IssueStatus;
   size?: number;
+  /** The status's category — pass it when `status` is a custom key. */
+  category?: IssueStatusCategory;
+  /** Overrides the category token color (e.g. a custom status's own color). */
+  color?: string;
 }) {
-  const color = STATUS_COLOR[status];
+  const resolvedCategory =
+    category ?? (isIssueStatusCategory(status) ? status : "todo");
+  const resolvedColor = color ?? STATUS_COLOR[resolvedCategory];
   return (
     <Svg width={size} height={size} viewBox="0 0 14 14">
-      {status === "backlog" ? (
-        <BacklogIcon color={color} />
-      ) : status === "todo" ? (
-        <ProgressCircle progress={0} color={color} />
-      ) : status === "in_progress" ? (
-        <ProgressCircle progress={0.5} color={color} />
-      ) : status === "in_review" ? (
-        <ProgressCircle progress={0.75} color={color} />
-      ) : status === "done" ? (
-        <ProgressCircle progress={1} color={color}>
+      {resolvedCategory === "backlog" ? (
+        <BacklogIcon color={resolvedColor} />
+      ) : resolvedCategory === "todo" ? (
+        <ProgressCircle progress={0} color={resolvedColor} />
+      ) : resolvedCategory === "in_progress" ? (
+        <ProgressCircle progress={0.5} color={resolvedColor} />
+      ) : resolvedCategory === "in_review" ? (
+        <ProgressCircle progress={0.75} color={resolvedColor} />
+      ) : resolvedCategory === "done" ? (
+        <ProgressCircle progress={1} color={resolvedColor}>
           <DoneCheck />
         </ProgressCircle>
-      ) : status === "blocked" ? (
-        <ProgressCircle progress={0} color={color}>
-          <BlockedSlash color={color} />
+      ) : resolvedCategory === "blocked" ? (
+        <ProgressCircle progress={0} color={resolvedColor}>
+          <BlockedSlash color={resolvedColor} />
         </ProgressCircle>
       ) : (
-        <ProgressCircle progress={0} color={color}>
-          <CancelledX color={color} />
+        <ProgressCircle progress={0} color={resolvedColor}>
+          <CancelledX color={resolvedColor} />
         </ProgressCircle>
       )}
     </Svg>

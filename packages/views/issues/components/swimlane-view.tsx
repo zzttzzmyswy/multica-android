@@ -45,6 +45,7 @@ import {
 } from "@multica/ui/components/ui/dropdown-menu";
 import { sortIssues } from "../utils/sort";
 import { ALL_STATUSES, STATUS_CONFIG } from "@multica/core/issues/config";
+import { isIssueStatusCategory } from "@multica/core/issues";
 import { DraggableBoardCard, BoardCardContent } from "./board-card";
 import { StatusIcon } from "./status-icon";
 import { Button } from "@multica/ui/components/ui/button";
@@ -1384,7 +1385,9 @@ function SwimLaneViewImpl({
         <div className="sticky top-0 z-10 mb-2 bg-background/95 pb-2 backdrop-blur supports-[backdrop-filter]:bg-background/75">
           <div style={gridStyle}>
             {sortedStatuses.map((status) => {
-              const cfg = STATUS_CONFIG[status];
+              const cfg = isIssueStatusCategory(status)
+                ? STATUS_CONFIG[status]
+                : null;
               const total = statusTotals.get(status) ?? 0;
               return (
                 <div
@@ -1709,7 +1712,7 @@ function SwimLaneCell({
   // reject the drop, so visual confirmation would be misleading.
   const isOver = readOnly ? false : droppableIsOver;
   const { t } = useT("issues");
-  const cfg = STATUS_CONFIG[status];
+  const cfg = isIssueStatusCategory(status) ? STATUS_CONFIG[status] : null;
 
   const resolvedIssues = useMemo(
     () =>

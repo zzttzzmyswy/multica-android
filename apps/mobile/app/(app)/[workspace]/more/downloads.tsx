@@ -16,10 +16,12 @@
 import { Alert, Pressable, ScrollView, View } from "react-native";
 import { useEffect, useMemo, useState } from "react";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { File } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { Text } from "@/components/ui/text";
 import { useDownloadsStore } from "@/data/downloads-store";
 import { mimeTypeForFilename } from "@/lib/attachment-download";
+import { installApkFile, openUnknownAppSourcesSettings } from "@/lib/install-update";
 import {
   downloadSourceLabelKey,
   downloadSourceName,
@@ -84,6 +86,38 @@ export default function DownloadsPage() {
     );
   };
 
+  /** Terminal open action: an update APK goes to the system installer
+   *  (content-URI), everything else to the share/open sheet. Any `.apk`
+   *  filename routes to the installer even when a persisted task lost its
+   *  `update` source marker — a stale `update` kind silently falling back to
+   *  the share sheet left users with "tapping open does nothing". */
+  const openTask = (task: DownloadTask) => {
+    const uri = task.localUri;
+    if (!uri) return;
+    const isApk =
+      task.source.kind === "update" ||
+      task.filename?.toLowerCase().endsWith(".apk");
+    if (isApk) {
+      void installApkFile(new File(uri)).catch((err) => {
+        Alert.alert(
+          t("screen.downloads"),
+          [t("update.error.installFailed"), err instanceof Error ? err.message : ""]
+            .filter(Boolean)
+            .join("\n"),
+          [
+            { text: t("common.cancel"), style: "cancel" },
+            {
+              text: t("update.openSettings"),
+              onPress: () => void openUnknownAppSourcesSettings(),
+            },
+          ],
+        );
+      });
+      return;
+    }
+    void Sharing.shareAsync(uri, { mimeType: mimeTypeForFilename(task.filename) });
+  };
+
   return (
     <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
       <View className="flex-row items-center gap-2 px-4 pt-3">
@@ -132,9 +166,7 @@ export default function DownloadsPage() {
               key={task.id}
               task={task}
               theme={theme}
-              onOpen={(uri, mime) =>
-                void Sharing.shareAsync(uri, { mimeType: mime })
-              }
+              onOpen={(uri, mime) => openTask(task)}
               onRetry={() => useDownloadsStore.getState().retry(task.id)}
               onDelete={() => confirmRemove(task)}
             />

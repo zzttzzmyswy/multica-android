@@ -52,6 +52,50 @@ export function getInboxDisplayTitle(item: InboxItem): string {
 }
 
 /**
+ * The two non-success quick-create outcomes. They share a row shape (original
+ * prompt + recovery affordance) but must never share failure wording: the
+ * unconfirmed outcome means we could not verify the result, not that it failed.
+ *
+ * Mirrors `isQuickCreateOutcome` in
+ * packages/views/inbox/components/inbox-display.ts (Behavioral parity).
+ */
+export function isQuickCreateOutcome(type: InboxItem["type"]): boolean {
+  return type === "quick_create_failed" || type === "quick_create_unconfirmed";
+}
+
+/**
+ * Seed payload for the inbox detail's "Edit as advanced form" recovery
+ * affordance. Returns null when the item isn't a recoverable quick-create
+ * outcome (no original prompt to recover) — callers render no button then.
+ * Mirrors web inbox-page.tsx `detail.edit_advanced`: the prompt becomes the
+ * manual create-form's description and the outcome's agent hint becomes the
+ * assignee candidate (still editable).
+ */
+export function getQuickCreateEditSeed(item: InboxItem): {
+  description: string;
+  agentId?: string;
+} | null {
+  if (!isQuickCreateOutcome(item.type)) return null;
+  const prompt = (item.details?.original_prompt ?? "").trim();
+  if (!prompt) return null;
+  const agentId = item.details?.agent_id;
+  return {
+    description: prompt,
+    ...(agentId ? { agentId } : {}),
+  };
+}
+
+/**
+ * Which toggle action a details view offers for an inbox item — the button
+ * always reverses the view the item is being read in (web
+ * packages/views/inbox/components/inbox-page.tsx detail section): reading in
+ * the MAIN view offers Archive; reading in the ARCHIVED view offers Unarchive.
+ */
+export function getInboxArchiveMode(view: "inbox" | "archived"): "archive" | "unarchive" {
+  return view === "archived" ? "unarchive" : "archive";
+}
+
+/**
  * Deduplicate inbox items by issue_id (Linear-style: one entry per issue).
  *
  * Mirrors packages/core/inbox/queries.ts deduplicateInboxItems. **MUST stay
@@ -70,9 +114,33 @@ export function getInboxDisplayTitle(item: InboxItem): string {
  *   5. Sort the result newest-first.
  */
 export function deduplicateInboxItems(items: InboxItem[]): InboxItem[] {
-  const active = items.filter((i) => !i.archived);
+  return groupInboxItemsByIssue(items.filter((i) => !i.archived));
+}
+
+/**
+ * Same grouping for the archived sub-view. The `archived` filter is what
+ * makes an optimistic unarchive drop the row out of the archived list
+ * immediately — mirroring how `deduplicateInboxItems`' filter drops an
+ * optimistically archived row out of the main list. Mirrors packages/core/
+ * inbox/queries.ts deduplicateArchivedInboxItems (identical behavior; the
+ * comment_id anchor dance stays intact).
+ */
+export function deduplicateArchivedInboxItems(items: InboxItem[]): InboxItem[] {
+  return groupInboxItemsByIssue(items.filter((i) => i.archived));
+}
+
+/**
+ * Group inbox items by issue and keep the newest row per issue.
+ *
+ * The shared core of `deduplicateInboxItems` / `deduplicateArchivedInboxItems`
+ * — mirrors packages/core/inbox/queries.ts groupInboxItemsByIssue. **MUST not
+ * drift from web**: the comment_id-anchor handling below is what keeps a
+ * newer status/metadata row from losing the tap-through highlight that an
+ * older comment row carried.
+ */
+export function groupInboxItemsByIssue(items: InboxItem[]): InboxItem[] {
   const groups = new Map<string, InboxItem[]>();
-  for (const item of active) {
+  for (const item of items) {
     const key = item.issue_id ?? item.id;
     const group = groups.get(key) ?? [];
     group.push(item);

@@ -215,7 +215,11 @@ export function patchIssuesList(
   wsId: string,
   partial: Partial<Issue> & { id: string },
 ) {
-  qc.setQueryData<Issue[]>(issueKeys.list(wsId), (old) =>
+  // list(wsId) is also a prefix of the filtered window keys
+  // (listFiltered), so a prefix match reaches every cached window. Client
+  // predicates re-run at render time (`applyIssueFilters` + `sortIssues`),
+  // so a patched row drifting outside the active window is dropped there.
+  qc.setQueriesData<Issue[]>({ queryKey: issueKeys.list(wsId) }, (old) =>
     old ? old.map((i) => (i.id === partial.id ? { ...i, ...partial } : i)) : old,
   );
 }
@@ -225,7 +229,7 @@ export function prependToIssuesList(
   wsId: string,
   issue: Issue,
 ) {
-  qc.setQueryData<Issue[]>(issueKeys.list(wsId), (old) => {
+  qc.setQueriesData<Issue[]>({ queryKey: issueKeys.list(wsId) }, (old) => {
     if (!old) return old;
     if (old.some((i) => i.id === issue.id)) return old;
     return [issue, ...old];
@@ -237,7 +241,7 @@ export function removeFromIssuesList(
   wsId: string,
   issueId: string,
 ) {
-  qc.setQueryData<Issue[]>(issueKeys.list(wsId), (old) =>
+  qc.setQueriesData<Issue[]>({ queryKey: issueKeys.list(wsId) }, (old) =>
     old ? old.filter((i) => i.id !== issueId) : old,
   );
 }
@@ -341,7 +345,7 @@ export function patchIssueLabels(
       ? old.map((i) => (i.id === issueId ? { ...i, labels } : i))
       : old,
   );
-  qc.setQueryData<Issue[]>(issueKeys.list(wsId), (old) =>
+  qc.setQueriesData<Issue[]>({ queryKey: issueKeys.list(wsId) }, (old) =>
     old
       ? old.map((i) => (i.id === issueId ? { ...i, labels } : i))
       : old,

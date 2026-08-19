@@ -1,4 +1,5 @@
 import type { IssueStatus } from "@multica/core/types";
+import { isIssueStatusCategory } from "@multica/core/issues";
 import { STATUS_CONFIG } from "@multica/core/issues/config";
 
 // ---------------------------------------------------------------------------
@@ -166,7 +167,8 @@ export function StatusIcon({
   className?: string;
   inheritColor?: boolean;
 }) {
-  const knownStatus = status in STATUS_RENDERERS ? (status as IssueStatus) : null;
+  const knownStatus =
+    status in STATUS_RENDERERS && isIssueStatusCategory(status) ? status : null;
   const cfg = knownStatus ? STATUS_CONFIG[knownStatus] : null;
   const Renderer = knownStatus ? STATUS_RENDERERS[knownStatus] : TodoIcon;
 

@@ -1,259 +1,93 @@
-<div align="center">
+# Multica Android（第三方/社区安卓客户端）
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="docs/assets/logo-light.svg">
-  <img alt="Multica" src="docs/assets/logo-light.svg" width="50">
-</picture>
+> ⚠️ **非官方项目（Non-official）**：本仓库是**社区成员维护的第三方安卓客户端**，与 Multica 官方（multica-ai / devv.ai）**无关联、不构成任何官方背书**。"Multica" 名称与品牌标识归其官方所有，本项目仅以兼容兼容其自部署服务与协议为目标。
 
-# Multica
+一个面向 **Multica**（开源的 managed-agents 工作平台）的安卓客户端 —— 在手机上查收工作区、issue、agent、执行记录、聊天等，**功能持续对齐 Multica Web 端**。
 
-**Agents that show up on the board.**
+- 技术栈：Expo SDK 55 / React Native 0.83，复用官方移动端跨平台基座（`apps/mobile`）
+- 渠道：GitHub 预编译 Release（按 ABI 分包 + App 内「检查更新」）
+- 目标：**APK 功能 100% 对齐 web 端**（长期迭代使命）
 
-Multica is an open-source workspace where you assign work to AI coding agents the way you'd
-assign it to a teammate — they pick up the issue, report progress, raise blockers, and hand it
-back for review. Self-hostable, works with 20 agent CLIs, no lock-in.
-
-[![CI](https://github.com/multica-ai/multica/actions/workflows/ci.yml/badge.svg)](https://github.com/multica-ai/multica/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/multica-ai/multica?style=flat)](https://github.com/multica-ai/multica/releases)
-[![GitHub stars](https://img.shields.io/github/stars/multica-ai/multica?style=flat)](https://github.com/multica-ai/multica/stargazers)
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/W8gYBn226t)
-
-[Website](https://multica.ai) · [Docs](https://multica.ai/docs) · [Quickstart](https://multica.ai/docs/cloud-quickstart) · [Download](https://multica.ai/download) · [Vision](VISION.md) · [Self-Hosting](SELF_HOSTING.md) · [Discord](https://discord.gg/W8gYBn226t) · [X](https://x.com/MulticaAI)
-
-**English | [简体中文](README.zh.md)**
-
-</div>
-
-<p align="center">
-  <img src="docs/assets/hero-board.png" alt="A Multica board where six agents and their human teammates are moving work across columns" width="100%">
-</p>
-
-<p align="center">
-  <sub><em>Your next 10 hires won't be human.</em></sub>
-</p>
+---
+**简体中文** · [English Summary](#english)
 
 ---
 
-## What is Multica?
+## 功能一览
 
-You already run Claude Code, Codex, and three other agents. Each one lives in its own terminal
-tab, forgets everything when the session ends, and leaves you re-explaining the same context for
-the fourth time today. The more agents you add, the more of your day goes to babysitting them.
+- 收件箱 / 项目 / 我的问题 / 已固定 / 聊天 / 更多 底部导航
+- 聊天：会话、agent 流式执行过程（思考/工具）、键盘适配、宽表格横滑
+- Issue：列表/详情/评论、Markdown 工具栏、附件上传、批量操作、订阅/重跑、运行记录
+- Agent：列表/详情管理、创建（表单 + AI-builder 对齐 web「通过智能体创建」）
+- 自动化（Autopilot）、Squad、Label、Members、Skills、Runtimes、用量看板、MCP 配置
+- 设置：工作区管理、语言/时区偏好、API Token 管理
+- 关于页 + 应用内更新（GitHub Release 检测 → 带进度的下载 → 系统安装器）
+- 统一「下载」管理器：文件与 APK 更新任务同屏
 
-Multica puts those agents and your teammates in one workspace. An agent gets assigned an issue,
-picks it up on its own, works on a runtime you control, comments as it goes, and hands the result
-back for review. The intent, the run, the decisions, and the diff stay connected to the same
-issue — so nobody reconstructs context, and nothing ships without a human saying so.
+## 上游借用清单
 
----
+本仓库是一个 **fork**：基于官方开源仓库 [multica-ai/multica](https://github.com/multica-ai/multica) 派生而来，**完整保留了官方 monorepo 的全部上游代码**，并在此基础上做安卓客户端适配。
 
-## Build the team.
+### 借用了上游的哪些代码
 
-*Claude Code, Codex, Cursor, Kimi — you don't pick one. You hire them all.*
+| 来源 | 内容 | 说明 |
+|---|---|---|
+| 官方 monorepo | `server` / `cli` / `daemon` / `deploy` / Makefile | 官方服务的部署与开发基础设施，保留未动 |
+| 官方 `packages/core` / `packages/shared` | 数据模型、API 客户端、类型、i18n 等共享层 | 直接复用（含跨端镜像到 `apps/mobile/data`、`lib` 的 mirror 实现） |
+| 官方 `packages/views` | Web/桌面端共享视图层 | 作为功能对齐的参照实现；移动端按需镜像关键逻辑 |
+| 官方 `apps/mobile` | **移动端基座**（Expo / React Native / 原生配置） | 本仓库安卓工作的主载荷；大部分原样保留官方 iOS-first 代码 |
+| 官方 `apps/web` / `apps/desktop` | Web 与桌面应用 | 保留，用于对照与共享品牌资源（如 Star 图标） |
+| 官方 `docs` / `LICENSE` / `CLAUDE.md` 等 | 文档与许可 | 保留原样（LICENSE 为上游 Multica License，见下） |
 
-- **[20 agent CLIs](#runtimes) →** Claude Code, Codex, Cursor, Copilot, Kimi, OpenCode, and more.
-- **[Agents as teammates](https://multica.ai/docs/agents) →** Give each one a name, a provider, and a runtime — they show up on the board like anyone else.
-- **[Squads](https://multica.ai/docs/squads) →** Put agents and people on one team; the leader routes the work.
-- **[Skills](https://multica.ai/docs/skills) →** Turn a solved problem into a playbook every agent reuses.
-- **[Your own runtime](https://multica.ai/docs/daemon-runtimes) →** Their desk is your machine — a daemon on your laptop or cloud box. Code never leaves it.
+> 变更范围收敛：本仓库与上游的差异**集中在 `apps/mobile` 的安卓适配与功能补齐**；为便于对照，`main` 分支基于官方 main 演进，差异可随时用 `git diff` 查看。
 
-## Hand off the work.
+### 本项目新增 / 修改的部分（自研安卓工作）
 
-*It starts as three rough sentences in an issue. It ends as a pull request.*
+- Android **edge-to-edge 键盘适配**：聊天/表单输入框随键盘上移（`KeyboardStickyView`）、`tabBarHideOnKeyboard`
+- 聊天**「思考中」任务级轮询兜底**、agent **执行过程流式 trace 兜底**（应对移动网络 WS 丢事件）
+- **关于页 + 应用内更新**：GitHub Release 检测、按 ABI 匹配、带进度下载、唤起系统安装器、未知源引导
+- **统一下载管理器**：文件下载与 APK 更新任务统一展示
+- 宽表格 / 代码块**横向滑动**；Hermes 兼容修复（ES2023 特性规避）
+- 大量对齐 web 的页面与交互（详见上方功能一览，含批量操作、AI-builder 创建、MCP 配置等）
+- Android 构建/发布管线：**ABI 拆分**（arm64-v8a / armeabi-v7a / x86_64 / x86）、`verify-apk` 校验
 
-- **[Assign an issue](https://multica.ai/docs/assigning-issues) →** Pick an agent as assignee the way you'd pick a colleague — it takes the work from there.
-- **[Autopilots](https://multica.ai/docs/autopilots) →** Run standups, audits, and reports on a cron — nobody to remind.
-- **[Chat](https://multica.ai/docs/chat) →** Ask your workspace a question, or start work without filing anything.
-- **[Projects](https://multica.ai/docs/projects) →** Group work and attach the repos and docs agents need as context.
+## 安装与更新
 
-## Stay in the loop.
+- **正式渠道**：[GitHub Releases](https://github.com/zzttzzmyswy/multica-android/releases) 下载对应 ABI 的 APK（arm64-v8a 为主力手机 ABI）
+- **App 内更新**：关于页 →「检查更新」→ 检测到新版本后自动下载（带进度）→ 系统安装器
+- 版本命名：语义化（功能集 → minor，纯修复 → patch），如 v0.x.y；与官方上游版本线无关
+- 包名 `ai.multica.mobile.dev`，minSdk 24
 
-*Which agent touched this? What did it run? What did it cost? Open the run.*
-
-- **[Execution log](https://multica.ai/docs/tasks) →** Replay every tool call, command, and error, timestamped.
-- **Token usage →** See what each run cost, per agent and per issue.
-- **[Review gates](https://multica.ai/docs/issues) →** Work lands in review, not in main. You decide what ships.
-- **[Inbox](https://multica.ai/docs/inbox) →** Get pinged when an agent needs a call, not for every step.
-- **[Retries and timeouts](https://multica.ai/docs/tasks#failures-and-automatic-retries) →** Failed runs retry on their own, or stop and tell you why.
-
-## Make it yours.
-
-*Your machines, your Git host, your rules — with an audit trail that includes the robots.*
-
-- **[Self-host everything](SELF_HOSTING.md) →** Docker Compose or Helm, on your own infrastructure.
-- **[Any Git host](https://multica.ai/docs/vcs-integration) →** GitHub, GitLab, Gitea, or Forgejo — self-hosted included.
-- **[Workspaces](https://multica.ai/docs/workspaces) →** Separate agents, issues, and settings per team.
-- **[Roles](https://multica.ai/docs/members-roles) and [access scopes](https://multica.ai/docs/agents#permissions-and-access) →** `owner`, `admin`, and `member` — and exactly which agents each member can run.
-- **[Security model](https://multica.ai/docs/security-model) →** What an agent can reach, and what it can't.
-- **[Slack, Lark, DingTalk, and WeCom](https://multica.ai/docs/channels) →** Trigger and follow agent work where your team already talks. DingTalk and WeCom are community-maintained.
-- **[Web, desktop, and mobile](https://multica.ai/docs/desktop-app) →** The same workspace on macOS, Windows, Linux, and iPhone — iOS builds from source today, not yet on the App Store.
-- **[CLI and API](https://multica.ai/docs/cli) →** Every surface is scriptable. Agents drive Multica through the same CLI you do.
-
----
-
-## Get started
-
-No terminal required: sign up at **[multica.ai](https://multica.ai)**, or download
-**[Multica Desktop](https://multica.ai/download)** for macOS, Windows, and Linux — it connects
-the computer it runs on as a runtime automatically.
-
-The one prerequisite: the machine that will run agents needs at least one
-[supported agent CLI](#runtimes) installed and signed in — Claude Code, Codex, Cursor, and
-friends. Multica drives them; it doesn't ship them.
-
-<details>
-<summary><b>Self-hosting the whole thing</b></summary>
-
-<br/>
+## 开发
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.sh | bash -s -- --with-server
-multica setup self-host
+# 需要 Android SDK（NDK/JDK17）与 pnpm
+git clone https://github.com/zzttzzmyswy/multica-android.git
+cd apps/mobile && pnpm install
+# 构建 release（全 ABI 或按 `-PreactNativeArchitectures=arm64-v8a` 指定）
+cd android && ANDROID_HOME=/path/to/sdk ./gradlew assembleRelease
 ```
 
-On Windows, set `$env:MULTICA_MODE="with-server"`, then run the PowerShell installer:
-`irm https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.ps1 | iex`.
+测试与校验：`pnpm test`（vitest）、`npx tsc --noEmit`、`pnpm verify:apk`。
 
-This pulls the official images from GHCR and requires Docker. See the
-[Self-Hosting Guide](SELF_HOSTING.md); if the selected GHCR tag has not been published yet,
-fall back to `make selfhost-build` from a checkout.
+> 完善的上游本地开发工作流（`make dev` / worktree / postgres）见官方 `CONTRIBUTING.md`，本仓库保留全部上游代码可直接沿用。
 
-</details>
+## 许可与商标
 
----
+- 本仓库**继承上游许可**：[Multica License](LICENSE)（Apache License 2.0 + Part I 附加条件），参与贡献即同意按该许可整体授权。
+- **"Multica" 及其品牌标识为官方所有**；本项目的使用仅为兼容性引用，不暗示官方关联或认可。
+- 本项目按原样（AS-IS）提供，无任何官方支持承诺；维护与问题处理以社区意愿为准。
 
-## Your first agent in five minutes
+## 免责声明
 
-**1. Sign in.** [multica.ai](https://multica.ai) in the browser, or open
-[Multica Desktop](https://multica.ai/download).
-
-**2. Connect a computer.** A *runtime* is any machine agents can work on — your laptop, or a
-cloud box. Desktop registers the computer it's running on automatically and detects the agent
-CLIs installed there. On the web — or to add another machine — open **Runtimes** in the sidebar,
-click **Add a computer**, and paste the two commands it shows into a terminal on that machine.
-
-**3. Create an agent.** Open **Agents** in the sidebar and click **New agent**. Pick the runtime
-you just connected, pick a provider, and give it a name — or let **Build with AI** generate the
-configuration from a description. That name is how it shows up on the board and in comments.
-
-**4. Assign it something.** File an issue and set the agent as assignee. It picks the task up,
-runs it on your machine, comments as it goes, and moves the issue to review when it's done.
-
-Full walkthrough: [Quickstart](https://multica.ai/docs/cloud-quickstart) · [Tutorial](https://multica.ai/docs/tutorial)
+本客户端为社区志愿者维护，可能存在与官方功能、协议或图形资源的偏差；请勿将其用于需要完全一致官方体验的关键流程。如遇问题欢迎提 issue，但响应与修复以维护者空闲时间为准。
 
 ---
 
-## Runtimes
+## English
 
-Multica does not ship a model. It drives the agent CLIs you already have installed and
-authenticated, so switching providers is a dropdown, not a migration.
+**Multica Android** is an **unofficial, community-maintained Android client** for the open-source [Multica](https://github.com/multica-ai/multica) managed-agents platform. It is **not affiliated with or endorsed by the Multica team**.
 
-| Provider | CLI | Provider | CLI |
-| --- | --- | --- | --- |
-| Claude Code | `claude` | OpenAI Codex | `codex` |
-| Cursor Agent | `cursor-agent` | GitHub Copilot CLI | `copilot` |
-| OpenCode | `opencode` | OpenClaw | `openclaw` |
-| Hermes | `hermes` | Pi | `pi` |
-| Antigravity | `agy` | CodeBuddy | `codebuddy` |
-| DevEco Code | `deveco` | Grok | `grok` |
-| Kimi | `kimi` | Kiro CLI | `kiro-cli` |
-| Qoder CLI | `qodercli` | Qoder CN | `qoderclicn` |
-| Qwen Code | `qwen` | QwenPaw | `qwenpaw` |
-| Reasonix | `reasonix` | Trae CLI | `traecli` |
-| DeepSeek Harness | `dsh` | Oh-My-Pi | `omp` |
+It is a **fork of the official `multica-ai/multica` monorepo** that keeps all upstream code intact (server, CLI/daemon, shared packages, web/desktop apps) and adds Android-specific work concentrated in `apps/mobile` — including edge-to-edge keyboard handling, resilient chat task polling, an About page with in-app updates from GitHub Releases (progress + system installer), a unified Downloads manager, and many Web-aligned screens. The official mobile base (`apps/mobile`, Expo/React Native) and shared packages (`packages/core`, `packages/shared`) are reused as-is or mirrored per the "mirror, don't import" rule.
 
-Installing and authenticating them: [Install an agent runtime](https://multica.ai/docs/install-agent-runtime) ·
-[Providers](https://multica.ai/docs/providers)
-
----
-
-## Documentation
-
-| I want to… | Start here |
-| --- | --- |
-| Get an agent doing something today | [Quickstart](https://multica.ai/docs/cloud-quickstart) · [Tutorial](https://multica.ai/docs/tutorial) |
-| Understand how the pieces fit | [Core concepts](https://multica.ai/docs/concepts) · [How Multica works](https://multica.ai/docs/how-multica-works) |
-| Create and configure agents | [Agents](https://multica.ai/docs/agents) · [Create an agent](https://multica.ai/docs/agents-create) · [Skills](https://multica.ai/docs/skills) |
-| Get work to an agent | [Triggering agents](https://multica.ai/docs/triggering-agents) · [Assigning issues](https://multica.ai/docs/assigning-issues) · [Mentions](https://multica.ai/docs/mentioning-agents) |
-| Connect my machines | [Daemon and runtimes](https://multica.ai/docs/daemon-runtimes) · [Install an agent runtime](https://multica.ai/docs/install-agent-runtime) |
-| Connect Git and chat tools | [GitHub](https://multica.ai/docs/github-integration) · [Self-hosted Git](https://multica.ai/docs/vcs-integration) · [Channels](https://multica.ai/docs/channels) |
-| Run it on my own infrastructure | [Self-hosting](SELF_HOSTING.md) · [Security model](https://multica.ai/docs/security-model) · [Environment variables](https://multica.ai/docs/environment-variables) |
-| Script it | [CLI reference](https://multica.ai/docs/cli) · [CLI and daemon guide](CLI_AND_DAEMON.md) · [Auth tokens](https://multica.ai/docs/auth-tokens) |
-| Drive Multica from Codex, Claude Code, or Cursor | [Multica CLI skill](https://github.com/multica-ai/multica-cli) |
-| Work out why an agent is stuck | [Tasks](https://multica.ai/docs/tasks) · [Troubleshooting](https://multica.ai/docs/troubleshooting) |
-
----
-
-## Architecture
-
-```
-        Web  ·  Desktop (macOS/Windows/Linux)  ·  iOS
-                          │
-                          ▼
-   ┌──────────────┐   ┌──────────────┐   ┌──────────────────┐
-   │   Next.js    │──>│  Go backend  │──>│   PostgreSQL     │
-   │   frontend   │<──│  (Chi + WS)  │<──│   (pgvector)     │
-   └──────────────┘   └──────┬───────┘   └──────────────────┘
-                             │  tasks over WebSocket
-                      ┌──────┴───────┐
-                      │ Agent daemon │  runs on your machine, next to your code
-                      └──────┬───────┘
-                             │  spawns
-                      ┌──────┴───────────────────────────────┐
-                      │  Claude Code · Codex · Cursor · …    │
-                      │  (any of the 20 runtimes above)      │
-                      └──────────────────────────────────────┘
-```
-
-| Layer | Stack |
-| --- | --- |
-| Web | Next.js 16 (App Router) |
-| Desktop | Electron, sharing the web UI packages |
-| Mobile | Expo / React Native (iOS) |
-| Backend | Go (Chi router, sqlc, gorilla/websocket) |
-| Database | PostgreSQL 17 with pgvector |
-| Agent runtime | Local daemon executing any of the 20 agent CLIs above |
-
----
-
-## Development
-
-Contributors: start with the [Contributing Guide](CONTRIBUTING.md).
-
-**Prerequisites:** [Node.js](https://nodejs.org/) v20+, [pnpm](https://pnpm.io/) v10.28+, [Go](https://go.dev/) v1.26+, [Docker](https://www.docker.com/)
-
-```bash
-make dev
-```
-
-`make dev` auto-detects your environment (main checkout or worktree), creates the env file,
-installs dependencies, sets up the database, runs migrations, and starts every service.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow, worktree support, testing, and
-troubleshooting. The iOS client lives in [`apps/mobile/`](apps/mobile/) — its
-[README](apps/mobile/README.md) covers building it onto your own iPhone.
-
-We release most weekdays, so `main` moves quickly — pull often.
-
----
-
-## Why "Multica"?
-
-**Mul**tiplexed **I**nformation and **C**omputing **A**gent — a nod to Multics, the 1960s
-operating system that introduced time-sharing so several people could use one machine as if each
-had it to themselves.
-
-Software teams have been single-threaded ever since: one engineer, one task, one context switch
-at a time. We think agents make time-sharing relevant again, except the users multiplexing the
-system are now both humans and machines. A small team shouldn't feel small.
-
-The longer argument, and where we think this goes: **[VISION.md](VISION.md)**.
-
----
-
-## License
-
-[Multica License](LICENSE) — the complete Apache License 2.0 text plus additional conditions
-covering hosted services, commercial embedding, and branding. Self-host it, modify it, build on
-it; the exact terms are in the [LICENSE](LICENSE), attribution notices in [NOTICE](NOTICE).
+Licensed under the upstream **Multica License** (Apache-2.0 + additional conditions); "Multica" assets belong to their official owners. Install from [GitHub Releases](https://github.com/zzttzzmyswy/multica-android/releases) (per-ABI APKs, minSdk 24).

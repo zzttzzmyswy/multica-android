@@ -21,7 +21,9 @@ const PRIORITY_OPTIONS: IssuePriority[] = [
 ];
 
 interface Props {
-  value: IssuePriority;
+  /** Currently selected priority. `null` means "mixed selection" for batch
+   *  pickers — no row is checked, and picking one applies it to the batch. */
+  value: IssuePriority | null;
   onChange: (next: IssuePriority) => void;
 }
 
@@ -38,7 +40,7 @@ export function PriorityPickerBody({ value, onChange }: Props) {
       </View>
       <View className="px-2">
         {PRIORITY_OPTIONS.map((v) => {
-          const selected = v === value;
+          const selected = value !== null && v === value;
           return (
             <Pressable
               key={v}

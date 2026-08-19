@@ -25,17 +25,25 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  TextInput,
   View,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import type { SkillFile } from "@multica/core/types";
+import type { Label, SkillFile } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { SkillForm } from "@/components/skill/skill-form";
+import { LabelPickerBody } from "@/components/issue/pickers/label-picker-body";
 import { skillDetailOptions } from "@/data/queries/skills";
 import { memberListOptions } from "@/data/queries/members";
+import { labelKeys, resourceLabelsOptions } from "@/data/queries/labels";
+import {
+  useAttachResourceLabel,
+  useCreateLabel,
+  useDetachResourceLabel,
+} from "@/data/mutations/labels";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
 import { canEditSkill, ORIGIN_LABEL_KEY, readOrigin } from "@/lib/skill-guards";
@@ -91,6 +99,24 @@ function MetaRow({
   );
 }
 
+/** One attached-label chip: color dot + name (web `LabelChip` equivalent). */
+function LabelChip({ label }: { label: Label }) {
+  const { colorScheme } = useColorScheme();
+  const text =
+    colorScheme === "dark" ? THEME.dark.foreground : THEME.light.foreground;
+  return (
+    <View className="flex-row items-center gap-1 self-start rounded-full border border-border px-2 py-0.5">
+      <View
+        className="size-2 rounded-full"
+        style={{ backgroundColor: label.color }}
+      />
+      <Text className="text-[11px]" style={{ color: text }} numberOfLines={1}>
+        {label.name}
+      </Text>
+    </View>
+  );
+}
+
 export default function SkillDetailPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
@@ -103,8 +129,17 @@ export default function SkillDetailPage() {
 
   const { data, isLoading, error, refetch } = useQuery(skillDetailOptions(wsId, id));
   const { data: members = [] } = useQuery(memberListOptions(wsId));
+  const { data: skillLabels = [] } = useQuery(
+    resourceLabelsOptions(wsId, "skill", id),
+  );
   const [editing, setEditing] = useState(false);
   const [previewFile, setPreviewFile] = useState<SkillFile | null>(null);
+  const [showLabels, setShowLabels] = useState(false);
+  const [labelsQuery, setLabelsQuery] = useState("");
+  const qc = useQueryClient();
+  const attachLabel = useAttachResourceLabel("skill", id);
+  const detachLabel = useDetachResourceLabel("skill", id);
+  const createLabel = useCreateLabel();
 
   const skill = data;
   const canEdit = canEditSkill(skill, { userId, role });
@@ -198,6 +233,48 @@ export default function SkillDetailPage() {
                 />
               </View>
             ) : null}
+            {/* Labels — attached skill labels as chips; taps open the picker
+                sheet when the current member can edit (web Overview → Labels
+                PropertyRow + ResourceLabelPicker). Read-only row otherwise. */}
+            <View className="px-3 py-1.5">
+              <Pressable
+                onPress={() => canEdit && setShowLabels(true)}
+                disabled={!canEdit}
+                className="flex-row items-start gap-2"
+                accessibilityLabel={t("skills.detail.labels")}
+              >
+                <Ionicons
+                  name="pricetags-outline"
+                  size={14}
+                  color={theme.mutedForeground}
+                  style={{ marginTop: 1 }}
+                />
+                <Text className="text-xs text-muted-foreground w-16">
+                  {t("skills.detail.labels")}
+                </Text>
+                <View className="flex-1" pointerEvents={canEdit ? "none" : "box-none"}>
+                  {skillLabels.length > 0 ? (
+                    <View className="flex-row flex-wrap gap-1.5">
+                      {skillLabels.map((label) => (
+                        <LabelChip key={label.id} label={label} />
+                      ))}
+                    </View>
+                  ) : (
+                    <Text className="text-xs text-muted-foreground/70">
+                      {t("skills.detail.noLabels")}
+                    </Text>
+                  )}
+                </View>
+                {canEdit ? (
+                  <Ionicons
+                    name="add"
+                    size={16}
+                    color={theme.mutedForeground}
+                    style={{ marginTop: 1 }}
+                  />
+                ) : null}
+              </Pressable>
+            </View>
           </View>
 
           {canEdit ? (
@@ -321,6 +398,78 @@ export default function SkillDetailPage() {
               </Text>
             )}
           </ScrollView>
+        </View>
+      </Modal>
+    {/* Labels picker sheet — attach/detach/inline-create skill labels.
+          Mirrors the web ResourceLabelPicker (`resourceType="skill"`) exposed
+          on a phone: search + checklist of the skill catalog, with inline
+          create reacting to the typed query. */}
+      <Modal
+        visible={showLabels}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          setShowLabels(false);
+          setLabelsQuery("");
+        }}
+      >
+        <Pressable
+          className="flex-1 bg-black/40"
+          onPress={() => {
+            setShowLabels(false);
+            setLabelsQuery("");
+          }}
+        />
+        <View className="h-[75%] bg-background rounded-t-2xl overflow-hidden">
+          <View className="flex-row items-center gap-2 px-4 py-3 border-b border-border">
+            <Ionicons name="pricetags-outline" size={16} color={theme.mutedForeground} />
+            <Text className="text-sm font-medium text-foreground flex-1">
+              {t("skills.detail.labels")}
+            </Text>
+            <Pressable
+              onPress={() => {
+                setShowLabels(false);
+                setLabelsQuery("");
+              }}
+              accessibilityLabel={t("a11y.close")}
+            >
+              <Ionicons name="close" size={20} color={theme.mutedForeground} />
+            </Pressable>
+          </View>
+          <View className="px-4 py-2 border-b border-border">
+            <TextInput
+              value={labelsQuery}
+              onChangeText={setLabelsQuery}
+              placeholder={t("picker.searchLabels")}
+              placeholderTextColor={theme.mutedForeground}
+              className="border border-border rounded-md px-3 py-2 text-sm text-foreground"
+              autoFocus
+            />
+          </View>
+          <LabelPickerBody
+            attached={skillLabels}
+            query={labelsQuery}
+            catalogResourceType="skill"
+            onAttach={(label) => attachLabel.mutate(label.id)}
+            onDetach={(labelId) => detachLabel.mutate(labelId)}
+            onCreate={(name, color) => {
+              // Create a skill-type label, attach it, and refresh the skill
+              // catalog cache so the new label is offered next time.
+              createLabel.mutate(
+                { name, color, resource_type: "skill" },
+                {
+                  onSuccess: (label) => {
+                    attachLabel.mutate(label.id);
+                    if (wsId) {
+                      void qc.invalidateQueries({
+                        queryKey: labelKeys.catalog(wsId, "skill"),
+                      });
+                    }
+                  },
+                },
+              );
+            }}
+          />
         </View>
       </Modal>
     </>

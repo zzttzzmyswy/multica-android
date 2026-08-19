@@ -19,6 +19,7 @@ import {
   DropdownMenuItem,
 } from "@multica/ui/components/ui/dropdown-menu";
 import { STATUS_CONFIG } from "@multica/core/issues/config";
+import { isIssueStatusCategory } from "@multica/core/issues";
 import { useViewStoreApi } from "@multica/core/issues/stores/view-store-context";
 import { useViewBaseline } from "../surface/view-baseline-context";
 import { StatusHeading } from "./status-heading";
@@ -111,7 +112,8 @@ export const BoardColumn = memo(function BoardColumn({
   sortLabel?: string | null;
 }) {
   const status = group.status;
-  const cfg = status ? STATUS_CONFIG[status] : null;
+  const cfg =
+    status && isIssueStatusCategory(status) ? STATUS_CONFIG[status] : null;
   const { setNodeRef, isOver } = useDroppable({ id: group.id });
   const viewStoreApi = useViewStoreApi();
   // A status fixed by the open saved view cannot be hidden from the board —

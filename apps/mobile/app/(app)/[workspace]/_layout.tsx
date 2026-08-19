@@ -143,6 +143,15 @@ export default function WorkspaceLayout() {
             headerBackTitle: t("common.back"),
           }}
         />
+        {/* Inbox notification without an issue behind it (failed / unconfirmed
+            quick-create, plain notifications) — see inbox-item/[id].tsx. */}
+        <Stack.Screen
+          name="inbox-item/[id]"
+          options={{
+            title: t("inbox.title"),
+            headerBackTitle: t("common.back"),
+          }}
+        />
         <Stack.Screen
           name="project/[id]"
           options={{
@@ -278,11 +287,31 @@ export default function WorkspaceLayout() {
           }}
         />
         <Stack.Screen
+          name="new-issue-picker/labels"
+          options={{
+            ...SHEET_OPTIONS,
+            headerShown: true,
+            title: t("attr.labels"),
+          }}
+        />
+        <Stack.Screen
+          name="new-issue-picker/agent"
+          options={{
+            ...SHEET_OPTIONS,
+            headerShown: true,
+            title: t("newIssue.agentSelectAgent"),
+          }}
+        />
+        <Stack.Screen
           name="new-issue-picker/project"
           options={SHEET_OPTIONS}
         />
         <Stack.Screen
           name="new-issue-picker/due-date"
+          options={SHEET_OPTIONS}
+        />
+        <Stack.Screen
+          name="new-issue-picker/start-date"
           options={SHEET_OPTIONS}
         />
         {/* New-project draft formSheet pickers — same pattern as
@@ -298,6 +327,14 @@ export default function WorkspaceLayout() {
         {/* Shared filter sheet for My Issues and the workspace Issues page —
             chooses the right view-store via `?scope=my|all` URL param. */}
         <Stack.Screen name="issues-filter" options={SHEET_OPTIONS} />
+        {/* Multi-select dimension picker pushed from the filter panel
+            (`?dim=assignee|creator|project|label` + `?scope=`). Registered
+            with the stock SHEET_OPTIONS; the body draws its own title+Done
+            header like the parent panel. */}
+        <Stack.Screen name="issues-filter-picker" options={SHEET_OPTIONS} />
+        {/* Custom date-range picker for the filter panel's date section
+            (`?scope=` mirrors the other filter routes). */}
+        <Stack.Screen name="issues-filter-date" options={SHEET_OPTIONS} />
         {/* Chat session-switch sheet. */}
         <Stack.Screen name="chat-sessions" options={SHEET_OPTIONS} />
         {/* Workspace switcher — reached from the More popover's collapsed

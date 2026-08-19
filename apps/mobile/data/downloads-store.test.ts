@@ -38,6 +38,22 @@ vi.mock("expo-sharing", () => ({
   shareAsync: vi.fn(() => Promise.resolve()),
 }));
 
+// install-update.ts (reachable from the store's retry/update path) imports
+// these native modules at module scope — stub them for the Node lane.
+vi.mock("expo-constants", () => ({
+  default: { expoConfig: { android: { package: "com.multica.app" } } },
+}));
+vi.mock("expo-device", () => ({
+  supportedCpuArchitectures: ["arm64-v8a"],
+}));
+vi.mock("expo-intent-launcher", () => ({
+  startActivityAsync: vi.fn(() => Promise.resolve()),
+  ActivityAction: { MANAGE_UNKNOWN_APP_SOURCES: "android.settings.MANAGE_UNKNOWN_APP_SOURCES" },
+}));
+vi.mock("expo-file-system/legacy", () => ({
+  getContentUriAsync: vi.fn(() => Promise.resolve("content://multica/ml/apk")),
+}));
+
 vi.mock("@/data/api", () => {
   class MockApiError extends Error {
     readonly status: number;
@@ -64,6 +80,8 @@ vi.mock("@/data/api", () => {
 
 import { api, DownloadCancelledError } from "@/data/api";
 import * as Sharing from "expo-sharing";
+import * as IntentLauncher from "expo-intent-launcher";
+import { getContentUriAsync } from "expo-file-system/legacy";
 import { useDownloadsStore } from "./downloads-store";
 
 // `__fsStore` is a test-only export injected by the expo-file-system mock,
@@ -325,5 +343,113 @@ describe("downloads-store persistence", () => {
     await flush();
     expect(useDownloadsStore.getState().tasks).toEqual([]);
     expect(useDownloadsStore.getState().hydrated).toBe(true);
+  });
+
+  it("runs a managed update download: no auth headers, custom onCompleted instead of share", async () => {
+    const onCompleted = vi.fn(() => Promise.resolve());
+    mockedCreate.mockReturnValue(
+      handleWith(
+        Promise.resolve({
+          uri: "file:///cache/multica-update-v0.3.1-arm64-v8a.apk",
+          name: "multica-update-v0.3.1-arm64-v8a.apk",
+        }),
+      ),
+    );
+
+    const { id, done } = await useDownloadsStore.getState().downloadManaged({
+      url: "https://github.com/multica-ai/multica/releases/download/v0.3.1/app.apk",
+      filename: "multica-update-v0.3.1-arm64-v8a.apk",
+      mimeType: "application/vnd.android.package-archive",
+      source: { kind: "update", name: "v0.3.1" },
+      authenticated: false,
+      onCompleted,
+    });
+
+    expect(mockedCreate).toHaveBeenCalledTimes(1);
+    // Progress callback present, opts skip internal auth headers.
+    const calls = mockedCreate.mock
+      .calls as unknown as Array<[string, string, unknown, { authenticated: boolean } | undefined]>;
+    const optsArg = calls[0][3];
+    expect(optsArg).toEqual({ authenticated: false });
+
+    const outcome = await done;
+    expect(outcome).toMatchObject({ status: "completed" });
+    expect(onCompleted).toHaveBeenCalledTimes(1);
+    expect(onCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        uri: "file:///cache/multica-update-v0.3.1-arm64-v8a.apk",
+      }),
+    );
+    // Managed update task replaces the share sheet with its callback.
+    expect(mockedShare).not.toHaveBeenCalled();
+    expect(useDownloadsStore.getState().tasks[0]).toMatchObject({
+      id,
+      status: "completed",
+      source: { kind: "update", name: "v0.3.1" },
+    });
+  });
+
+  it("resolves failed outcome on download error with a readable message", async () => {
+    mockedCreate.mockReturnValue(
+      handleWith(Promise.reject(new Error("network reset"))),
+    );
+
+    const { id, done } = await useDownloadsStore.getState().downloadManaged({
+      url: URL,
+      filename: "x.apk",
+      source: { kind: "update" },
+    });
+
+    const outcome = await done;
+    expect(outcome).toMatchObject({ status: "failed", error: "network reset" });
+    expect(useDownloadsStore.getState().tasks[0]).toMatchObject({
+      id,
+      status: "failed",
+      error: "network reset",
+    });
+  });
+
+  it("retries a failed update task without auth headers and installs on completion", async () => {
+    const installUriSpy = vi.mocked(getContentUriAsync);
+    const intentSpy = vi.mocked(IntentLauncher.startActivityAsync);
+    installUriSpy.mockClear();
+    intentSpy.mockClear();
+
+    mockedCreate
+      .mockReturnValueOnce(handleWith(Promise.reject(new Error("boom"))))
+      .mockReturnValueOnce(
+        handleWith(
+          Promise.resolve({
+            uri: "file:///cache/multica-update-v0.3.1-arm64-v8a.apk",
+            name: "multica-update-v0.3.1-arm64-v8a.apk",
+          }),
+        ),
+      );
+
+    await useDownloadsStore.getState().downloadManaged({
+      url: "https://github.com/multica-ai/multica/releases/download/v0.3.1/app.apk",
+      filename: "multica-update-v0.3.1-arm64-v8a.apk",
+      source: { kind: "update", name: "v0.3.1" },
+      authenticated: false,
+    });
+    await flush();
+    const failedId = useDownloadsStore.getState().tasks[0].id;
+    expect(useDownloadsStore.getState().tasks[0].status).toBe("failed");
+
+    await useDownloadsStore.getState().retry(failedId);
+    await flush();
+
+    expect(mockedCreate).toHaveBeenCalledTimes(2);
+    // The retried task skips internal auth headers again and its terminal
+    // action is the system installer, not the share sheet.
+    const secondOpts = mockedCreate.mock.calls[1][3] as { authenticated: boolean };
+    expect(secondOpts).toEqual({ authenticated: false });
+    expect(useDownloadsStore.getState().tasks[0]).toMatchObject({
+      status: "completed",
+      source: { kind: "update", name: "v0.3.1" },
+    });
+    expect(installUriSpy).toHaveBeenCalledTimes(1);
+    expect(intentSpy).toHaveBeenCalledTimes(1);
+    expect(mockedShare).not.toHaveBeenCalled();
   });
 });

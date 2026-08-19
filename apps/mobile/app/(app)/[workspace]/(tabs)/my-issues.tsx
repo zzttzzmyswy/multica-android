@@ -7,44 +7,68 @@
  *
  * Issues are grouped by status using SectionList in `BOARD_STATUSES` order;
  * empty status sections are filtered out so the screen doesn't fill with
- * "(0)" headers. Section grouping uses `BOARD_STATUSES` (cancelled excluded)
- * to match web — same source `packages/views/my-issues/components/my-issues-page.tsx:117-125`.
+ * "(0)" headers. Since iteration 62 grouping can switch to by-assignee
+ * (web GROUPING_OPTIONS), filter dimensions extend to assignee / creator /
+ * project / label, and the list carries a client sort (web sortIssues).
  *
- * Status + Priority filters mirror web's MyIssuesHeader filter sub-menus.
  * Filter state lives in `useMyIssuesViewStore` and is cleared on workspace
- * change via the shared `useClearFiltersOnWorkspaceChange` hook.
+ * change via the shared `useClearFiltersOnWorkspaceChange` hook. The store's
+ * filter window travels as server params into `myIssueListOptions`, and the
+ * client re-runs `applyIssueFilters` + `sortIssues` as a belt-and-suspenders
+ * pass (same as the workspace Issues page).
  */
-import { useMemo } from "react";
-import { Pressable, SectionList, View } from "react-native";
+import { useCallback, useMemo } from "react";
+import { SectionList, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useIsFocused } from "@react-navigation/native";
 import { router } from "expo-router";
-import Ionicons from "@expo/vector-icons/Ionicons";
-import type { Issue, IssuePriority, IssueStatus } from "@multica/core/types";
+import type { CreateIssueViewRequest, IssueView } from "@multica/core/api/schemas";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/ui/header";
 import { HeaderActions } from "@/components/ui/app-header-actions";
-import { StatusIcon } from "@/components/ui/status-icon";
-import { IssueRow } from "@/components/issue/issue-row";
 import { BatchActionBar } from "@/components/issue/batch-action-bar";
+import { BoardView } from "@/components/issue/board-view";
+import { IssueViewBar } from "@/components/issue/issue-view-bar";
+import { IssueTableView } from "@/components/issue/table-view";
 import { IssuesLoading } from "@/components/issue/issues-loading";
+import {
+  ActiveFilterChips,
+  IssueSectionHeader,
+  IssueSelectionRow,
+  IssueSection,
+  IssueSurfaceScopeToolbar,
+  SurfaceEmptyState,
+} from "@/components/issue/issue-surface-chrome";
 import {
   buildMyIssuesFilter,
   myIssueListOptions,
 } from "@/data/queries/my-issues";
+import { issueViewListOptions } from "@/data/queries/issue-views";
 import type { MyIssuesScope } from "@/data/queries/issue-keys";
 import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection-store";
 import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useMyIssuesViewStore } from "@/data/stores/my-issues-view-store";
+import {
+  issueViewContainerKey,
+  useActiveIssueViewStore,
+} from "@/data/stores/active-issue-view-store";
+import {
+  sanitizeViewDisplay,
+  sanitizeViewQuery,
+  viewMatchesSlice,
+} from "@/data/stores/issue-view-codec";
+import { buildIssueWindow, defaultIssueFilterSlice } from "@/data/stores/issue-filter-slice";
 import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-workspace-change";
 import { BOARD_STATUSES } from "@/lib/issue-status";
-import { filterIssues } from "@/lib/filter-issues";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import {
+  applyIssueFilters,
+  groupIssues,
+  sortIssues,
+  type IssueFilterState,
+} from "@/lib/filter-issues";
 import { useTranslation } from "@/lib/i18n/react";
-import { translate } from "@/lib/i18n";
 
 // Mobile pill row has tight width on SE3 (375pt). Three pills + Filter icon
 // must fit in 343pt usable space, so the agents scope renders "Agents" — the
@@ -58,8 +82,6 @@ const SCOPES: { value: MyIssuesScope; labelKey: string }[] = [
   { value: "agents", labelKey: "myIssues.scopeAgents" },
 ];
 
-type IssueSection = { status: IssueStatus; data: Issue[] };
-
 export default function MyIssues() {
   const isFocused = useIsFocused();
   const userId = useAuthStore((s) => s.user?.id ?? null);
@@ -70,8 +92,51 @@ export default function MyIssues() {
 
   const scope = useMyIssuesViewStore((s) => s.scope);
   const setScope = useMyIssuesViewStore((s) => s.setScope);
+  const view = useMyIssuesViewStore((s) => s.view);
+  const setView = useMyIssuesViewStore((s) => s.setView);
+  const tableColumns = useMyIssuesViewStore((s) => s.tableColumns);
+  const toggleTableColumn = useMyIssuesViewStore((s) => s.toggleTableColumn);
+  const grouping = useMyIssuesViewStore((s) => s.grouping);
+  const sortBy = useMyIssuesViewStore((s) => s.sortBy);
+  const sortDirection = useMyIssuesViewStore((s) => s.sortDirection);
   const statusFilters = useMyIssuesViewStore((s) => s.statusFilters);
   const priorityFilters = useMyIssuesViewStore((s) => s.priorityFilters);
+  const assigneeFilters = useMyIssuesViewStore((s) => s.assigneeFilters);
+  const includeNoAssignee = useMyIssuesViewStore((s) => s.includeNoAssignee);
+  const creatorFilters = useMyIssuesViewStore((s) => s.creatorFilters);
+  const projectFilters = useMyIssuesViewStore((s) => s.projectFilters);
+  const includeNoProject = useMyIssuesViewStore((s) => s.includeNoProject);
+  const labelFilters = useMyIssuesViewStore((s) => s.labelFilters);
+  const propertyFilters = useMyIssuesViewStore((s) => s.propertyFilters);
+  const dateFilter = useMyIssuesViewStore((s) => s.dateFilter);
+  // Stable dedup feeding applyIssueFilters — each field is its own
+  // subscription above.
+  const filterState = useMemo<IssueFilterState>(
+    () => ({
+      statusFilters,
+      priorityFilters,
+      assigneeFilters,
+      includeNoAssignee,
+      creatorFilters,
+      projectFilters,
+      includeNoProject,
+      labelFilters,
+      propertyFilters,
+      dateFilter,
+    }),
+    [
+      statusFilters,
+      priorityFilters,
+      assigneeFilters,
+      includeNoAssignee,
+      creatorFilters,
+      projectFilters,
+      includeNoProject,
+      labelFilters,
+      propertyFilters,
+      dateFilter,
+    ],
+  );
 
   const openFilter = () => {
     if (!wsSlug) return;
@@ -92,68 +157,222 @@ export default function MyIssues() {
     wsId,
   );
 
+  // Saved views (iteration-65): the my-scope container holds this page's
+  // views. My scopes map to the view-variant vocabulary (assigned/created/
+  // involved — mobile "agents" ≈ web "involved"); applying a view resets the
+  // slice + display defaults and lands on the scope axis the view captured.
+  const myScope = useMemo(() => ({ scope_type: "my" as const }), []);
+  const scopeVariant = useMemo<CreateIssueViewRequest["scope_variant"]>(
+    () =>
+      scope === "assigned"
+        ? "assigned"
+        : scope === "created"
+          ? "created"
+          : scope === "agents"
+            ? "involved"
+            : null,
+    [scope],
+  );
+  const containerKey = useMemo(
+    () => issueViewContainerKey(wsId, myScope),
+    [wsId, myScope],
+  );
+  const { data: savedViews = [] } = useQuery({
+    ...issueViewListOptions(wsId, myScope),
+  });
+  const activeViewId = useActiveIssueViewStore(
+    (s) => s.active[containerKey] ?? null,
+  );
+  const activeView = useMemo(
+    () => savedViews.find((v) => v.id === activeViewId) ?? null,
+    [savedViews, activeViewId],
+  );
+  const snapshotSource = useMemo(
+    () => ({ ...filterState, sortBy, sortDirection, grouping }),
+    [filterState, sortBy, sortDirection, grouping],
+  );
+  const modifiedActive = useMemo(
+    () => (activeView ? !viewMatchesSlice(activeView, snapshotSource, view) : false),
+    [activeView, snapshotSource, view],
+  );
+  const applyView = useCallback(
+    (v: IssueView) => {
+      const snapshot = sanitizeViewQuery(v.query);
+      const display = sanitizeViewDisplay(v.display, sortBy);
+      useMyIssuesViewStore.setState({
+        ...snapshot,
+        dateFilter: null,
+        sortBy: display.sortBy,
+        sortDirection: display.sortDirection,
+        grouping: display.grouping,
+        view: display.viewMode,
+      });
+      // The scope axis a my-view captured is part of the VIEW — landing on
+      // the right tab, while the user's own tab stays untouched once the
+      // view closes.
+      setScope(
+        v.scope_variant === "created"
+          ? "created"
+          : v.scope_variant === "involved"
+            ? "agents"
+            : "assigned",
+      );
+      useActiveIssueViewStore.getState().setActive(containerKey, v.id);
+    },
+    [containerKey, setScope, sortBy],
+  );
+  const exitView = useCallback(() => {
+    useMyIssuesViewStore.setState({
+      ...defaultIssueFilterSlice(),
+      scope: "assigned",
+      view: "list",
+    });
+    useActiveIssueViewStore.getState().setActive(containerKey, null);
+  }, [containerKey]);
+
   const filter = useMemo(
     () => (userId ? buildMyIssuesFilter(scope, userId) : { assignee_id: "" }),
     [scope, userId],
   );
 
+  // Server window (scope filter from `filter`, grid dimensions from the
+  // shared slice mapped through buildIssueWindow).
+  const window = useMemo(
+    () =>
+      buildIssueWindow({
+        statusFilters: filterState.statusFilters,
+        priorityFilters: filterState.priorityFilters,
+        assigneeFilters: filterState.assigneeFilters,
+        includeNoAssignee: filterState.includeNoAssignee,
+        creatorFilters: filterState.creatorFilters,
+        projectFilters: filterState.projectFilters,
+        includeNoProject: filterState.includeNoProject,
+        labelFilters: filterState.labelFilters,
+        propertyFilters: filterState.propertyFilters,
+        dateFilter: filterState.dateFilter,
+        sortBy,
+        sortDirection,
+      }),
+    [filterState, sortBy, sortDirection],
+  );
+
   const { data, isLoading, error, refetch, isRefetching } = useQuery({
-    ...myIssueListOptions(wsId, scope, filter),
+    ...myIssueListOptions(wsId, scope, filter, window),
     enabled: !!wsId && !!userId,
   });
 
-  // Apply client-side status + priority filter. Mirrors the predicate at
-  // packages/views/issues/utils/filter.ts:30-34 via filterIssues().
+  // Client predicate — same window re-applied so WS-patched rows that fell
+  // out of it drop at render time (mirrors the workspace Issues page).
   const filtered = useMemo(
-    () => filterIssues(data ?? [], statusFilters, priorityFilters),
-    [data, statusFilters, priorityFilters],
+    () => applyIssueFilters(data ?? [], filterState),
+    [data, filterState],
   );
 
-  // When statusFilters is non-empty, intersect visible status order with it
-  // so hidden statuses don't render an empty section header. Uses
-  // BOARD_STATUSES (cancelled excluded) to match web.
+  const sorted = useMemo(
+    () => sortIssues(filtered, sortBy, sortDirection),
+    [filtered, sortBy, sortDirection],
+  );
+
   const sections = useMemo<IssueSection[]>(() => {
-    if (filtered.length === 0) return [];
-    const byStatus = new Map<IssueStatus, Issue[]>();
-    for (const issue of filtered) {
-      const list = byStatus.get(issue.status);
-      if (list) list.push(issue);
-      else byStatus.set(issue.status, [issue]);
-    }
-    const visibleStatuses = statusFilters.length > 0
-      ? BOARD_STATUSES.filter((s) => statusFilters.includes(s))
-      : BOARD_STATUSES;
-    return visibleStatuses
-      .map((status) => ({ status, data: byStatus.get(status) ?? [] }))
-      .filter((s) => s.data.length > 0);
-  }, [filtered, statusFilters]);
+    const groups = groupIssues(sorted, grouping, BOARD_STATUSES);
+    return groups.map((g) => {
+      if (grouping === "status" && g.status) {
+        return { key: g.key, status: g.status, data: g.data };
+      }
+      if (g.unassigned) {
+        return { key: g.key, unassigned: true, data: g.data };
+      }
+      return {
+        key: g.key,
+        assigneeType: g.assigneeType,
+        assigneeId: g.assigneeId,
+        data: g.data,
+      };
+    });
+  }, [sorted, grouping]);
 
-  const hasActiveFilters =
-    statusFilters.length > 0 || priorityFilters.length > 0;
+  const hasActiveFilterChips = useMemo(() => {
+    const f = filterState;
+    return (
+      f.statusFilters.length > 0 ||
+      f.priorityFilters.length > 0 ||
+      f.assigneeFilters.length > 0 ||
+      f.includeNoAssignee ||
+      f.creatorFilters.length > 0 ||
+      f.projectFilters.length > 0 ||
+      f.includeNoProject ||
+      f.labelFilters.length > 0 ||
+      Object.keys(f.propertyFilters).length > 0 ||
+      f.dateFilter !== null
+    );
+  }, [filterState]);
 
-  const showEmptyState =
-    !isLoading && !error && filtered.length === 0;
+  const showEmptyState = !isLoading && !error && sorted.length === 0;
 
   return (
     <View className="flex-1 bg-background">
       <Header title={t("myIssues.title")} right={<HeaderActions />} />
-      <ScopeToolbar
+      <IssueSurfaceScopeToolbar
         scopes={SCOPES}
         scope={scope}
         onChange={(v) => setScope(v)}
         onOpenFilter={openFilter}
-        hasActiveFilters={hasActiveFilters}
+        hasActiveFilters={hasActiveFilterChips}
+        view={view}
+        onViewChange={setView}
         t={t}
       />
-      {hasActiveFilters ? (
+      <IssueViewBar
+        wsId={wsId}
+        scope={myScope}
+        scopeVariant={scopeVariant}
+        slice={snapshotSource}
+        viewMode={view}
+        activeViewId={activeViewId}
+        modifiedActive={modifiedActive}
+        onApplyView={applyView}
+        onExitView={exitView}
+      />
+      {hasActiveFilterChips ? (
         <ActiveFilterChips
-          statusFilters={statusFilters}
-          priorityFilters={priorityFilters}
+          filterState={filterState}
+          statusFilters={filterState.statusFilters}
+          priorityFilters={filterState.priorityFilters}
+          assigneeFilters={filterState.assigneeFilters}
+          creatorFilters={filterState.creatorFilters}
+          projectFilters={filterState.projectFilters}
+          labelFilters={filterState.labelFilters}
+          propertyFilters={filterState.propertyFilters}
+          dateFilter={filterState.dateFilter}
           onClearStatus={(s) =>
             useMyIssuesViewStore.getState().toggleStatusFilter(s)
           }
           onClearPriority={(p) =>
             useMyIssuesViewStore.getState().togglePriorityFilter(p)
+          }
+          onClearAssignee={(v) =>
+            useMyIssuesViewStore.getState().toggleAssigneeFilter(v)
+          }
+          onClearCreator={(v) =>
+            useMyIssuesViewStore.getState().toggleCreatorFilter(v)
+          }
+          onClearProject={(id) =>
+            useMyIssuesViewStore.getState().toggleProjectFilter(id)
+          }
+          onClearLabel={(id) =>
+            useMyIssuesViewStore.getState().toggleLabelFilter(id)
+          }
+          onClearNoAssignee={() =>
+            useMyIssuesViewStore.getState().toggleNoAssignee()
+          }
+          onClearNoProject={() =>
+            useMyIssuesViewStore.getState().toggleNoProject()
+          }
+          onClearProperty={(id) =>
+            useMyIssuesViewStore.getState().clearPropertyFilter(id)
+          }
+          onClearDate={() =>
+            useMyIssuesViewStore.getState().setDateFilter(null)
           }
         />
       ) : null}
@@ -170,9 +389,43 @@ export default function MyIssues() {
           </Button>
         </View>
       ) : showEmptyState ? (
-        <EmptyState
+        <SurfaceEmptyState
           message={
-            hasActiveFilters
+            hasActiveFilterChips
+              ? t("myIssues.filterEmpty")
+              : emptyMessageForScope(scope, t)
+          }
+        />
+      ) : view === "board" ? (
+        <BoardView
+          issues={sorted}
+          grouping={grouping}
+          statusOrder={BOARD_STATUSES}
+          onOpenIssue={(issue) => {
+            if (wsSlug) router.push(`/${wsSlug}/issue/${issue.id}`);
+          }}
+          emptyLabel={
+            hasActiveFilterChips
+              ? t("myIssues.filterEmpty")
+              : emptyMessageForScope(scope, t)
+          }
+        />
+      ) : view === "table" ? (
+        <IssueTableView
+          issues={sorted}
+          columns={tableColumns}
+          onToggleColumn={toggleTableColumn}
+          sortBy={sortBy}
+          sortDirection={sortDirection}
+          onSort={(field, direction) => {
+            useMyIssuesViewStore.getState().setSortBy(field);
+            useMyIssuesViewStore.getState().setSortDirection(direction);
+          }}
+          onOpenIssue={(issue) => {
+            if (wsSlug) router.push(`/${wsSlug}/issue/${issue.id}`);
+          }}
+          emptyLabel={
+            hasActiveFilterChips
               ? t("myIssues.filterEmpty")
               : emptyMessageForScope(scope, t)
           }
@@ -186,16 +439,13 @@ export default function MyIssues() {
             <View className="h-px bg-border ml-4" />
           )}
           renderSectionHeader={({ section }) => (
-            <SectionHeader
-              status={section.status}
-              count={section.data.length}
-            />
+            <IssueSectionHeader section={section} />
           )}
           contentContainerClassName={
             batchSelectionMode ? "pb-48" : "pb-6"
           }
           renderItem={({ item }) => (
-            <IssueRowCell
+            <IssueSelectionRow
               issue={item}
               onOpen={() => {
                 if (wsSlug) router.push(`/${wsSlug}/issue/${item.id}`);
@@ -207,207 +457,10 @@ export default function MyIssues() {
         />
       )}
 
-      {filtered.length > 0 ? <BatchActionBar issues={filtered} /> : null}
-
-    </View>
-  );
-}
-
-/**
- * Row cell wired to the batch-selection store: in selection mode the row
- * toggles membership on tap instead of navigating, and long-press enters
- * selection mode pre-selecting this row. Non-selecting callers (project
- * related issues, workspace-wide issues) don't opt in and keep native
- * tap-to-navigate.
- */
-function IssueRowCell({
-  issue,
-  onOpen,
-}: {
-  issue: Issue;
-  onOpen: () => void;
-}) {
-  const selectionMode = useIssueBatchSelectionStore((s) => s.selectionMode);
-  const selected = useIssueBatchSelectionStore((s) =>
-    s.selectedIds.has(issue.id),
-  );
-  const toggle = useIssueBatchSelectionStore((s) => s.toggle);
-  const enterSelection = useIssueBatchSelectionStore((s) => s.enterSelection);
-  return (
-    <IssueRow
-      issue={issue}
-      selectionMode={selectionMode}
-      selected={selected}
-      onPress={() => {
-        if (selectionMode) toggle(issue.id);
-        else onOpen();
-      }}
-      onLongPress={() => enterSelection(issue.id)}
-    />
-  );
-}
-
-/**
- * Outline icon button matching the pill height so the toolbar row reads as
- * one visual group. Mirrors web `IssuesHeader` / `MyIssuesHeader` filter
- * trigger (`packages/views/my-issues/components/my-issues-header.tsx:174`),
- * which is also `variant="outline"` + icon-sized — NOT the ghost-style we'd
- * get from <IconButton>. Square (`w-9`) with `px-0` to suppress the sm
- * default `px-3`.
- */
-function FilterButton({
-  onPress,
-  hasActiveFilters,
-}: {
-  onPress: () => void;
-  hasActiveFilters: boolean;
-}) {
-  const { colorScheme } = useColorScheme();
-  const { t } = useTranslation();
-  return (
-    <View style={{ position: "relative" }} className="ml-2">
-      <Button
-        variant="outline"
-        size="sm"
-        onPress={onPress}
-        accessibilityLabel={t("a11y.filter")}
-        className="w-9 px-0"
-      >
-        <Ionicons
-          name="options-outline"
-          size={16}
-          color={THEME[colorScheme].mutedForeground}
-        />
-      </Button>
-      {hasActiveFilters ? (
-        <View
-          pointerEvents="none"
-          className="absolute top-1 right-1 size-1.5 rounded-full bg-brand"
-        />
+      {view !== "board" && sorted.length > 0 ? (
+        <BatchActionBar issues={sorted} />
       ) : null}
-    </View>
-  );
-}
 
-/**
- * Toolbar row mirroring web `MyIssuesHeader` / `IssuesHeader`
- * (`packages/views/my-issues/components/my-issues-header.tsx:138-163`):
- * left-aligned scope pill group + right-side Filter icon (red dot when
- * filters are active). Replaces the previous full-width segmented tabs +
- * Filter-in-title-bar split — keeps scope and the filter affordance in the
- * same row, because they both control the list directly below.
- */
-function ScopeToolbar<S extends string>({
-  scopes,
-  scope,
-  onChange,
-  onOpenFilter,
-  hasActiveFilters,
-  t,
-}: {
-  scopes: { value: S; labelKey: string }[];
-  scope: S;
-  onChange: (value: S) => void;
-  onOpenFilter: () => void;
-  hasActiveFilters: boolean;
-  t: (id: string, params?: Record<string, string | number>) => string;
-}) {
-  return (
-    <View className="flex-row items-center justify-between px-4 pt-2 pb-2">
-      <View className="flex-row items-center gap-1 flex-shrink min-w-0">
-        {scopes.map((s) => {
-          const active = scope === s.value;
-          return (
-            <Button
-              key={s.value}
-              variant="outline"
-              size="sm"
-              onPress={() => onChange(s.value)}
-              className={active ? "bg-accent" : ""}
-              accessibilityState={{ selected: active }}
-            >
-              <Text
-                numberOfLines={1}
-                className={active ? "text-accent-foreground" : "text-muted-foreground"}
-              >
-                {t(s.labelKey)}
-              </Text>
-            </Button>
-          );
-        })}
-      </View>
-      <FilterButton
-        onPress={onOpenFilter}
-        hasActiveFilters={hasActiveFilters}
-      />
-    </View>
-  );
-}
-
-function ActiveFilterChips({
-  statusFilters,
-  priorityFilters,
-  onClearStatus,
-  onClearPriority,
-}: {
-  statusFilters: IssueStatus[];
-  priorityFilters: IssuePriority[];
-  onClearStatus: (s: IssueStatus) => void;
-  onClearPriority: (p: IssuePriority) => void;
-}) {
-  return (
-    <View className="flex-row flex-wrap gap-1.5 px-4 pb-2">
-      {statusFilters.map((s) => (
-        <Chip key={`s-${s}`} label={translate(`enum.status.${s}`)} onClear={() => onClearStatus(s)} />
-      ))}
-      {priorityFilters.map((p) => (
-        <Chip key={`p-${p}`} label={translate(`enum.priority.${p}`)} onClear={() => onClearPriority(p)} />
-      ))}
-    </View>
-  );
-}
-
-function Chip({ label, onClear }: { label: string; onClear: () => void }) {
-  const { colorScheme } = useColorScheme();
-  return (
-    <Pressable
-      onPress={onClear}
-      className="flex-row items-center gap-1 pl-2.5 pr-2 py-1 rounded-full border border-border bg-secondary/40 active:bg-secondary"
-    >
-      <Text className="text-xs text-foreground">{label}</Text>
-      <Ionicons
-        name="close"
-        size={12}
-        color={THEME[colorScheme].mutedForeground}
-      />
-    </Pressable>
-  );
-}
-
-function SectionHeader({
-  status,
-  count,
-}: {
-  status: IssueStatus;
-  count: number;
-}) {
-  return (
-    <View className="flex-row items-center gap-2 px-4 py-2 bg-background">
-      <StatusIcon status={status} size={14} />
-      <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
-        {translate(`enum.status.${status}`)}
-      </Text>
-      <Text className="text-xs text-muted-foreground/60">{count}</Text>
-    </View>
-  );
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <View className="flex-1 items-center justify-center px-6">
-      <Text className="text-sm text-muted-foreground text-center">
-        {message}
-      </Text>
     </View>
   );
 }

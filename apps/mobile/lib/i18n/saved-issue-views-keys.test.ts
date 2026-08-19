@@ -1,0 +1,62 @@
+import { describe, expect, it, vi, beforeEach } from "vitest";
+
+vi.mock("expo-secure-store", () => ({
+  getItemAsync: vi.fn(),
+  setItemAsync: vi.fn(),
+  deleteItemAsync: vi.fn(),
+}));
+vi.mock("expo-localization", () => ({
+  getLocales: vi.fn(),
+}));
+
+// i18n parity for the iteration-65 saved-views bar (MYS-426). Same contract
+// as every keys test: every key resolves in BOTH locales and the zh value
+// is actually translated (symmetry + no raw fallback).
+describe("saved issue views i18n", () => {
+  let mod: Awaited<ReturnType<typeof loadI18n>>;
+
+  async function loadI18n() {
+    return await import("./index");
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    mod = await loadI18n();
+    mod.resetI18nForTests();
+    mod.setLocale("en");
+  });
+
+  const ZH_SPOT: Record<string, string> = {
+    "issueViews.saveView": "保存视图",
+    "issueViews.editViewTitle": "重命名视图",
+    "issueViews.rename": "重命名",
+    "issueViews.duplicate": "复制",
+    "issueViews.share": "共享到工作区",
+    "issueViews.unshare": "设为私密",
+    "issueViews.delete": "删除视图",
+    "issueViews.modified": "该视图有未保存的修改",
+    "issueViews.hide": "从栏中隐藏",
+    "issueViews.show": "在栏中显示",
+    "issueViews.manageViews": "管理视图",
+    "issueViews.reorderHint": "调整可见视图顺序，或隐藏/重新显示。隐藏的视图仍会保留。",
+    "issueViews.hidden": "已隐藏",
+    "issueViews.moveUp": "上移",
+    "issueViews.moveDown": "下移",
+    "issueViews.sortLabel": "排序方向",
+    "issueViews.sortAsc": "升序",
+    "issueViews.sortDesc": "降序",
+  };
+
+  it("resolves every key in both locales with a real zh translation", () => {
+    const keys = Object.keys(ZH_SPOT);
+    for (const key of keys) {
+      const en = mod.translate(key);
+      expect(en).not.toBe(key); // en present (not the raw id fallback)
+      expect(en.length).toBeGreaterThan(0);
+      mod.setLocale("zh");
+      const zhValue = mod.translate(key);
+      expect(zhValue).toBe(ZH_SPOT[key]); // zh spot matches
+      mod.setLocale("en");
+    }
+  });
+});

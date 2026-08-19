@@ -8,9 +8,16 @@
  */
 import { queryOptions } from "@tanstack/react-query";
 import { api } from "@/data/api";
-import { issueKeys } from "./issue-keys";
+import {
+  issueKeys,
+  type IssueListWindowParams,
+} from "./issue-keys";
 
-export { issueKeys } from "./issue-keys";
+export {
+  issueKeys,
+  issueParamsKey,
+  type IssueListWindowParams,
+} from "./issue-keys";
 
 /**
  * Workspace-wide issue list. Backend filters by `X-Workspace-Slug` header
@@ -23,16 +30,59 @@ export { issueKeys } from "./issue-keys";
  * myIssueListOptions. Pagination is deferred — web's `IssuesPage` also
  * fetches all in one shot today (`packages/views/issues/components/
  * issues-page.tsx:30`).
+ *
+ * `window` carries the view's filter/sort dimensions AS QUERY PARAMS —
+ * when non-empty the query key includes the stable param bag, so changing
+ * any filter/sort dimension refetches and the cache is keyed per window.
+ * The client still re-runs its full predicate (`applyIssueFilters` +
+ * `sortIssues`) on the result so WS-patched rows that drift outside the
+ * window are filtered at render time — same belt-and-suspenders web uses
+ * (server window + client predicate).
  */
-export const issueListOptions = (wsId: string | null) =>
+export const issueListOptions = (
+  wsId: string | null,
+  window: IssueListWindowParams = {},
+) =>
   queryOptions({
-    queryKey: issueKeys.list(wsId),
+    queryKey: hasWindow(window)
+      ? issueKeys.listFiltered(wsId, window)
+      : issueKeys.list(wsId),
     queryFn: async ({ signal }) => {
-      const res = await api.listIssues({}, { signal });
+      const res = await api.listIssues(window, { signal });
       return res.issues;
     },
     enabled: !!wsId,
   });
+
+/** True when the window bag holds at least one active dimension. Every
+ *  field is a filter array, a date band, or a sort pair; `sort_by:
+ *  "position"` with no direction is the manual default and does NOT count
+ *  as a window — it round-trips the same rows as an empty bag. */
+function hasWindow(window: IssueListWindowParams): boolean {
+  if (
+    window.statuses?.length ||
+    window.priorities?.length ||
+    window.assignee_filters?.length ||
+    window.include_no_assignee ||
+    window.creator_filters?.length ||
+    window.project_ids?.length ||
+    window.include_no_project ||
+    window.label_ids?.length ||
+    (window.properties && Object.keys(window.properties).length > 0) ||
+    window.date_field ||
+    window.date_start ||
+    window.date_end
+  ) {
+    return true;
+  }
+  if (
+    window.sort_by &&
+    (window.sort_by !== "position" || window.sort_direction === "desc")
+  ) {
+    return true;
+  }
+  return false;
+}
 
 export const issueDetailOptions = (wsId: string | null, id: string) =>
   queryOptions({

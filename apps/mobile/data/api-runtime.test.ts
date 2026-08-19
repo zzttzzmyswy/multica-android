@@ -10,7 +10,10 @@ vi.mock("expo-file-system", () => ({
     uri = "file:///mock";
     exists = false;
   },
-  Paths: { document: { uri: "file:///doc" } },
+  Paths: {
+    document: { uri: "file:///doc" },
+    cache: { uri: "file:///cache" },
+  },
 }));
 
 vi.mock("expo-file-system/legacy", () => ({
@@ -107,5 +110,115 @@ describe("dashboard run-time api methods", () => {
     fetchSpy().mockResolvedValue(null);
     const res = await api.getDashboardRunTimeDaily(7);
     expect(res).toEqual([]);
+  });
+});
+
+describe("runtime management api methods (iteration-51)", () => {
+  it("updateRuntime PATCHes /api/runtimes/:id with the patch body", async () => {
+    const spy = fetchSpy().mockResolvedValue({ id: "r1", visibility: "public" });
+    const res = await api.updateRuntime("r1", {
+      visibility: "public",
+      custom_name: "my machine",
+    });
+    expect(spy).toHaveBeenCalledWith(
+      "/api/runtimes/r1",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          visibility: "public",
+          custom_name: "my machine",
+        }),
+      }),
+    );
+    expect(res).toMatchObject({ id: "r1", visibility: "public" });
+  });
+
+  it("updateRuntime can clear a custom name with an empty string", async () => {
+    const spy = fetchSpy().mockResolvedValue({ id: "r1" });
+    await api.updateRuntime("r1", { custom_name: "" });
+    expect(spy).toHaveBeenCalledWith(
+      "/api/runtimes/r1",
+      expect.objectContaining({ body: JSON.stringify({ custom_name: "" }) }),
+    );
+  });
+
+  it("updateRuntime passes apply_to_machine through for machine-wide renames", async () => {
+    const spy = fetchSpy().mockResolvedValue({ id: "r1" });
+    await api.updateRuntime("r1", { custom_name: "x", apply_to_machine: true });
+    expect(spy).toHaveBeenCalledWith(
+      "/api/runtimes/r1",
+      expect.objectContaining({
+        body: JSON.stringify({ custom_name: "x", apply_to_machine: true }),
+      }),
+    );
+  });
+
+  it("deleteRuntime DELETEs /api/runtimes/:id", async () => {
+    const spy = fetchSpy().mockResolvedValue(undefined);
+    await api.deleteRuntime("r1");
+    expect(spy).toHaveBeenCalledWith(
+      "/api/runtimes/r1",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("unbindAgentsAndDeleteRuntime POSTs the confirmed agent set", async () => {
+    const spy = fetchSpy().mockResolvedValue({
+      status: "ok",
+      agents_unbound: 2,
+      tasks_cancelled: 3,
+      autopilots_paused: 1,
+    });
+    const res = await api.unbindAgentsAndDeleteRuntime("r1", ["a1", "a2"]);
+    expect(spy).toHaveBeenCalledWith(
+      "/api/runtimes/r1/unbind-agents-and-delete",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ expected_active_agent_ids: ["a1", "a2"] }),
+      }),
+    );
+    expect(res).toMatchObject({
+      status: "ok",
+      agents_unbound: 2,
+      tasks_cancelled: 3,
+      autopilots_paused: 1,
+    });
+  });
+});
+describe("createDownloadTask", () => {
+  async function mockResumableOnce(result: unknown) {
+    const { createDownloadResumable } = await import("expo-file-system/legacy");
+    const m = createDownloadResumable as unknown as ReturnType<typeof vi.fn>;
+    m.mockReturnValue({
+      downloadAsync: vi.fn().mockResolvedValue(result),
+      cancelAsync: vi.fn().mockResolvedValue(undefined),
+    });
+    return m;
+  }
+
+  it("rejects non-2xx responses instead of saving the error body", async () => {
+    const m = await mockResumableOnce({
+      uri: "file:///cache/x.bin",
+      status: 404,
+    });
+    const task = api.createDownloadTask("/api/attachments/abc/download", "x.bin");
+    expect(task).not.toBeNull();
+    await expect(task!.done).rejects.toThrow(/HTTP 404/);
+    // The request carried the internal auth header and resolved the
+    // server-relative URL against the configured base.
+    expect(m).toHaveBeenCalledWith(
+      "https://api.test/api/attachments/abc/download",
+      expect.any(String),
+      expect.any(Object),
+      expect.any(Function),
+    );
+  });
+
+  it("resolves the saved uri for 2xx responses", async () => {
+    await mockResumableOnce({ uri: "file:///cache/x.bin", status: 200 });
+    const task = api.createDownloadTask("/api/attachments/abc/download", "x.bin");
+    await expect(task!.done).resolves.toMatchObject({
+      uri: "file:///cache/x.bin",
+    });
   });
 });
