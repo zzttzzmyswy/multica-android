@@ -33,7 +33,7 @@ import {
   issueTimelineOptions,
   issueChildrenOptions,
 } from "@/data/queries/issues";
-import { useDeleteIssue } from "@/data/mutations/issues";
+import { useDeleteIssue, useUpdateIssueRelations } from "@/data/mutations/issues";
 import { useArchiveInbox, useUnarchiveInbox } from "@/data/mutations/inbox";
 import { pinListOptions } from "@/data/queries/pins";
 import { useCreatePin, useDeletePin } from "@/data/mutations/pins";
@@ -112,6 +112,7 @@ export default function IssueDetail() {
 
   const issue = detail.data;
   const deleteIssue = useDeleteIssue();
+  const updateRelations = useUpdateIssueRelations();
   const archive = useArchiveInbox();
   const unarchive = useUnarchiveInbox();
   // Inbox-originated detail (deep link from an inbox row): the header shows an
@@ -154,7 +155,19 @@ export default function IssueDetail() {
       { kind: "cancel", label: t("issue.cancel") },
       { kind: isPinned ? "unpin" : "pin", label: isPinned ? t("issue.unpin") : t("issue.pin") },
       { kind: "edit", label: t("issue.editDetails") },
+      // Issue-tree relations (MYS-493) — web's "Relations" submenu flattened
+      // into the mobile ActionSheet (one entry per action). Add sub-issue /
+      // set parent open searchable pickers; remove parent applies directly
+      // (reversible via set parent), mirroring web actions.removeParent().
+      { kind: "addChild", label: t("issueRelation.addChildTitle") },
+      { kind: "setParent", label: t("issueRelation.setParentTitle") },
     ];
+    if (issue.parent_issue_id) {
+      actions.push({
+        kind: "removeParent",
+        label: t("issueRelation.removeParentAction"),
+      });
+    }
     if (issueLink) actions.push({ kind: "copy", label: t("issue.copyLink") });
     if (issueLink) actions.push({ kind: "openWeb", label: t("issue.openWeb") });
     actions.push({ kind: "delete", label: t("issue.deleteIssue") });
@@ -174,6 +187,23 @@ export default function IssueDetail() {
           deletePin.mutate({ itemType: "issue", itemId: issue.id });
         } else if (kind === "edit") {
           if (wsSlug) router.push(`/${wsSlug}/issue/${issue.id}/edit`);
+        } else if (kind === "addChild") {
+          if (wsSlug)
+            router.push(`/${wsSlug}/issue/${issue.id}/picker/child`);
+        } else if (kind === "setParent") {
+          if (wsSlug)
+            router.push(`/${wsSlug}/issue/${issue.id}/picker/parent`);
+        } else if (kind === "removeParent") {
+          updateRelations.mutate(
+            { id: issue.id, patch: { parent_issue_id: null, stage: null } },
+            {
+              onError: (err) =>
+                Alert.alert(
+                  t("issueRelation.updateFailed"),
+                  err instanceof Error ? err.message : undefined,
+                ),
+            },
+          );
         } else if (kind === "copy" && issueLink) {
           Clipboard.setStringAsync(issueLink);
         } else if (kind === "openWeb" && issueLink) {
@@ -187,7 +217,7 @@ export default function IssueDetail() {
         }
       },
     );
-  }, [issue, wsSlug, deleteIssue, isPinned, createPin, deletePin, t]);
+  }, [issue, wsSlug, deleteIssue, isPinned, createPin, deletePin, updateRelations, t]);
 
   return (
     <View className="flex-1 bg-background">

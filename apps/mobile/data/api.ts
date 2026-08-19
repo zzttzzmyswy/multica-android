@@ -1973,6 +1973,20 @@ class ApiClient {
     return parsed.issues;
   }
 
+  /** Workspace-wide parent→(done/total) child progress map — drives the
+   *  nested-progress ring on sub-issue rows (MYS-493). Mirrors web's
+   *  `api.getChildIssueProgress` (packages/core/api/client.ts:1013): GET
+   *  /api/issues/child-progress, workspace resolved by the
+   *  `X-Workspace-Slug` header. Returns a flat entry list; the query
+   *  layer keys it by parent_issue_id. */
+  async getChildIssueProgress(): Promise<{
+    progress: { parent_issue_id: string; total: number; done: number }[];
+  }> {
+    return this.fetch<{
+      progress: { parent_issue_id: string; total: number; done: number }[];
+    }>("/api/issues/child-progress");
+  }
+
   async createComment(
     issueId: string,
     content: string,

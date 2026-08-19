@@ -14,6 +14,7 @@
  *   labels    →  issue/[id]/picker/label   (multi-select, stays open)
  *   project   →  issue/[id]/picker/project
  *   due_date  →  issue/[id]/picker/due-date
+ *   start_date → issue/[id]/picker/start-date  (MYS-493)
  */
 import { useMemo } from "react";
 import { View } from "react-native";
@@ -46,7 +47,8 @@ type IssuePickerField =
   | "assignee"
   | "label"
   | "project"
-  | "due-date";
+  | "due-date"
+  | "start-date";
 
 const ISSUE_PICKER_PATHNAMES = {
   status: "/[workspace]/issue/[id]/picker/status",
@@ -55,6 +57,7 @@ const ISSUE_PICKER_PATHNAMES = {
   label: "/[workspace]/issue/[id]/picker/label",
   project: "/[workspace]/issue/[id]/picker/project",
   "due-date": "/[workspace]/issue/[id]/picker/due-date",
+  "start-date": "/[workspace]/issue/[id]/picker/start-date",
 } as const satisfies Record<IssuePickerField, string>;
 
 // due_date is a calendar day — format timezone-safely so the day never shifts
@@ -91,6 +94,7 @@ export function AttributeRow({ issue }: { issue: Issue }) {
     ? getName(assigneeValue.type, assigneeValue.id)
     : null;
   const dueLabel = formatDueDate(issue.due_date);
+  const startLabel = formatDueDate(issue.start_date);
 
   const openPicker = (field: IssuePickerField) => {
     if (!wsSlug) return;
@@ -196,6 +200,15 @@ export function AttributeRow({ issue }: { issue: Issue }) {
           onPress={() => openPicker("project")}
         />
       )}
+
+      {/* Start date — MYS-493: existing-issue start_date edit, same
+          calendar-day convention as due_date. */}
+      <AttributeChip
+        icon={<Text className="text-xs text-muted-foreground/80">📅</Text>}
+        label={startLabel ?? t("attr.startDate")}
+        variant={startLabel ? "filled" : "dimmed"}
+        onPress={() => openPicker("start-date")}
+      />
 
       {/* Due date */}
       <AttributeChip

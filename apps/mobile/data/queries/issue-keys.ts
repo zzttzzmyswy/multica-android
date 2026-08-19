@@ -92,6 +92,11 @@ export const issueKeys = {
   // drives both clients.
   children: (wsId: string | null, id: string) =>
     [...issueKeys.all(wsId), "children", id] as const,
+  // Workspace-wide parent→(done/total) child-progress map (MYS-493). Drives
+  // the nested-progress ring on sub-issue rows; mirrors core's
+  // `issueKeys.childProgress(wsId)`.
+  childProgress: (wsId: string | null) =>
+    [...issueKeys.all(wsId), "child-progress"] as const,
   // Currently-running tasks for an issue (queued/dispatched/running). Drives
   // the "Working" state of the AgentActivityRow inside IssueHeaderCard.
   activeTasks: (wsId: string | null, id: string) =>

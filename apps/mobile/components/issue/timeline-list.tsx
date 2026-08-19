@@ -93,6 +93,7 @@ import { Text } from "@/components/ui/text";
 import { IssueHeaderCard } from "./issue-header-card";
 import { IssueDescription } from "./issue-description";
 import { IssueReactionRow } from "./issue-reaction-row";
+import { IssueParentSection } from "./issue-parent-section";
 import { IssueChildrenSection } from "./issue-children-section";
 import { SubscriptionControl } from "./subscription-control";
 import { ActivityRow } from "./activity-row";
@@ -401,7 +402,10 @@ export function TimelineList({
       <IssueHeaderCard issue={issue} />
       <IssueDescription issueId={issue.id} description={issue.description} />
       <IssueReactionRow issue={issue} />
-      <IssueChildrenSection subIssues={subIssues} wsSlug={wsSlug} />
+      {/* Parent block (MYS-493) — renders null when the issue has no
+          parent, so it doesn't crowd the header in the common case. */}
+      <IssueParentSection issue={issue} wsSlug={wsSlug} />
+      <IssueChildrenSection issueId={issue.id} subIssues={subIssues} wsSlug={wsSlug} />
       <View className="px-4 pt-4 pb-2 border-t border-border">
         <View className="flex-row items-center justify-between gap-2">
           <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">

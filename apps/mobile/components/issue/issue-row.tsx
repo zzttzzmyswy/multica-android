@@ -31,10 +31,12 @@ import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PriorityIcon } from "@/components/ui/priority-icon";
 import { StatusIcon } from "@/components/ui/status-icon";
+import { ProgressRing } from "@/components/ui/progress-ring";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { CustomStatusChip } from "./custom-status-chip";
+import type { ChildProgress } from "@/data/queries/issues";
 
 interface Props {
   issue: Issue;
@@ -51,6 +53,12 @@ interface Props {
   selected?: boolean;
   /** Long-press enters multi-select pre-selecting this row. */
   onLongPress?: () => void;
+  /** THIS issue's own children progress (it can itself be a parent). When
+   *  set and `total > 0`, a small ring + "done/total" renders at the row's
+   *  trailing edge — mirrors web's SubIssueRow `childProgress` chip
+   *  (issue-detail.tsx:775). Drives the nested progress ring on sub-issue
+   *  rows (MYS-493). */
+  childProgress?: ChildProgress;
 }
 
 export function IssueRow({
@@ -60,10 +68,12 @@ export function IssueRow({
   selectionMode = false,
   selected = false,
   onLongPress,
+  childProgress,
 }: Props) {
   const { colorScheme } = useColorScheme();
   const statusEntry = useIssueStatuses().entryOf(issue.status);
   const checkColor = THEME[colorScheme].primary;
+  const showChildProgress = childProgress && childProgress.total > 0;
   return (
     <Pressable
       onPress={onPress}
@@ -97,6 +107,14 @@ export function IssueRow({
         <Text className="flex-1 text-sm text-foreground" numberOfLines={1}>
           {issue.title}
         </Text>
+        {showChildProgress ? (
+          <View className="flex-row items-center gap-1 px-1.5 py-0.5 rounded-full bg-secondary shrink-0">
+            <ProgressRing done={childProgress.done} total={childProgress.total} size={11} />
+            <Text className="text-[11px] text-muted-foreground tabular-nums font-medium">
+              {childProgress.done}/{childProgress.total}
+            </Text>
+          </View>
+        ) : null}
         {issue.assignee_type && issue.assignee_id ? (
           <ActorAvatar
             type={issue.assignee_type}

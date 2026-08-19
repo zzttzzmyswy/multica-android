@@ -465,6 +465,82 @@ export function useUpdateIssue(issueId: string) {
   });
 }
 
+/** Variables for the issue-tree relations mutation. */
+export type UpdateIssueRelationsVars = {
+  /** The issue being edited. For "add child" this is the SELECTED issue
+   *  (the one becoming a sub-issue); for "set parent" / "remove parent" it
+   *  is the issue whose parent is changing. */
+  id: string;
+  patch: UpdateIssueRequest;
+};
+
+/**
+ * Issue-parent relations writes: add child (`parent_issue_id` set on the
+ * selected issue), set parent / remove parent (current issue's
+ * `parent_issue_id`). Unlike `useUpdateIssue(issueId)` — which is bound to a
+ * single known issue at hook time — the affected issue is only known at
+ * select time, so the mutation takes `{ id, patch }` vars.
+ *
+ * Optimistic patch targets the edited issue's detail cache (so the Parent
+ * block / children section flips instantly on screen); settle invalidates
+ * every children query in the workspace via the shared
+ * `["issues", wsId, "children"]` prefix (a sub-issue can move between
+ * parents, and a parent can gain/lose a child), plus the my-issues +
+ * workspace lists so any parent-affecting fields reconcile. Broad
+ * invalidate is cheap — TanStack Query only refetches active queries, and
+ * the web mutation surface (`packages/core/issues/mutations.ts`
+ * `useUpdateIssue.onSettled`) invalidates the same derivative keys.
+ */
+export function useUpdateIssueRelations() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationKey: ["updateIssueRelations"] as const,
+    mutationFn: ({ id, patch }: UpdateIssueRelationsVars) =>
+      api.updateIssue(id, patch),
+    onMutate: async ({ id, patch }) => {
+      const key = issueKeys.detail(wsId, id);
+      await qc.cancelQueries({ queryKey: key });
+      const prev = qc.getQueryData<Issue>(key);
+      if (prev) {
+        const {
+          description: _description,
+          description_base: _descriptionBase,
+          // attachment_ids are "register new" registrations, never patched
+          // into the optimistic Issue (see useUpdateIssue above).
+          attachment_ids: _attachmentIds,
+          ...optimisticPatch
+        } = patch;
+        qc.setQueryData<Issue>(key, { ...prev, ...optimisticPatch });
+      }
+      return { prev, key };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev !== undefined && ctx.key) {
+        qc.setQueryData(ctx.key, ctx.prev);
+      }
+    },
+    onSuccess: (server) => {
+      qc.setQueryData<Issue>(issueKeys.detail(wsId, server.id), server);
+    },
+    onSettled: () => {
+      // Every mounted children query (all parents in this workspace) — a
+      // child can move between parents, and the old + new parent both need a
+      // refetch. Prefix matches `issueKeys.children(wsId, anyId)`. The
+      // workspace progress map (each parent's done/total) changes too.
+      qc.invalidateQueries({
+        queryKey: [...issueKeys.all(wsId), "children"],
+      });
+      qc.invalidateQueries({
+        queryKey: issueKeys.childProgress(wsId),
+      });
+      qc.invalidateQueries({ queryKey: issueKeys.myAll(wsId) });
+      qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
+    },
+  });
+}
+
 /**
  * Batch update on a multi-selection of issues (web parity —
  * batch-action-toolbar's status / priority / assignee actions). Optimistically

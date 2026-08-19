@@ -160,6 +160,34 @@ export const issueChildrenOptions = (wsId: string | null, id: string) =>
     enabled: !!wsId && !!id,
   });
 
+export type ChildProgress = { done: number; total: number };
+
+/**
+ * Workspace-wide parent→(done/total) child-progress map (MYS-493). Drives
+ * the nested-progress ring on sub-issue rows — each sub-issue may itself be
+ * a parent, and this query lets its row show "x/y of ITS children done"
+ * without opening it. Mirrors web's `childIssueProgressOptions`
+ * (packages/core/issues/queries.ts:444) including the selected shape (map
+ * keyed by parent_issue_id). A shared workspace-level query is cheap: the
+ * backend returns the full map in one shot, and TanStack Query dedupes it
+ * across every mounted children section.
+ */
+export const issueChildProgressOptions = (wsId: string | null) =>
+  queryOptions<{
+    progress: { parent_issue_id: string; total: number; done: number }[];
+  }, Error, Record<string, ChildProgress>>({
+    queryKey: issueKeys.childProgress(wsId),
+    queryFn: ({ signal }) => api.getChildIssueProgress(),
+    enabled: !!wsId,
+    select: (data) => {
+      const map: Record<string, ChildProgress> = {};
+      for (const entry of data.progress) {
+        if (entry.total > 0) map[entry.parent_issue_id] = entry;
+      }
+      return map;
+    },
+  });
+
 /**
  * Who is subscribed to an issue and why — drives the Subscribe control in
  * the issue detail Activity header. Mirrors web's

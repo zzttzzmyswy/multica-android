@@ -231,6 +231,25 @@ export default function WorkspaceLayout() {
           name="issue/[id]/picker/due-date"
           options={SHEET_OPTIONS}
         />
+        {/* Issue-tree relation pickers (MYS-493): "add sub-issue" and "set
+            parent issue" both present a searchable issue list. Body-rendered
+            title + search input (SHEET_OPTIONS — no native header), so the
+            picker's search-first flow works on Android too (native
+            UISearchController is iOS-only). */}
+        <Stack.Screen
+          name="issue/[id]/picker/child"
+          options={SHEET_OPTIONS}
+        />
+        <Stack.Screen
+          name="issue/[id]/picker/parent"
+          options={SHEET_OPTIONS}
+        />
+        {/* Calendar-day edit for an existing issue's start_date — same
+            spinner + Done/Clear header as the due-date sheet (MYS-493). */}
+        <Stack.Screen
+          name="issue/[id]/picker/start-date"
+          options={SHEET_OPTIONS}
+        />
         {/* Workspace custom-property pickers (MYS-334): single-property value
             editor + add-property list. Both share the standard sheet config. */}
         <Stack.Screen

@@ -1847,5 +1847,18 @@
   "settings.statuses.editor.color": "颜色",
   "settings.statuses.editor.description": "描述",
   "settings.statuses.editor.save": "保存",
-  "settings.statuses.editor.cancel": "取消"
+  "settings.statuses.editor.cancel": "取消",
+  "issueRelation.parent": "父任务",
+  "issueRelation.addChildTitle": "添加子任务",
+  "issueRelation.addChildDescription": "搜索一个任务添加为子任务",
+  "issueRelation.setParentTitle": "设置父任务",
+  "issueRelation.setParentDescription": "搜索一个任务，将其设为当前任务的父级",
+  "issueRelation.removeParentAction": "移除父任务",
+  "issueRelation.updateFailed": "更新任务失败",
+  "issueRelation.addChildFailed": "添加子任务失败",
+  "issueRelation.setParentFailed": "更新任务失败",
+  "issueRelation.searchPlaceholder": "搜索任务…",
+  "issueRelation.searching": "搜索中…",
+  "issueRelation.noResults": "未找到任务。",
+  "issueRelation.promptToSearch": "输入关键词搜索任务"
 }

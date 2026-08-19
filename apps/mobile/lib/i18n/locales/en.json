@@ -1847,5 +1847,18 @@
   "settings.statuses.editor.color": "Color",
   "settings.statuses.editor.description": "Description",
   "settings.statuses.editor.save": "Save",
-  "settings.statuses.editor.cancel": "Cancel"
+  "settings.statuses.editor.cancel": "Cancel",
+  "issueRelation.parent": "Parent issue",
+  "issueRelation.addChildTitle": "Add sub-issue",
+  "issueRelation.addChildDescription": "Search for an issue to add as a sub-issue",
+  "issueRelation.setParentTitle": "Set parent issue",
+  "issueRelation.setParentDescription": "Search for an issue to set as the parent of this issue",
+  "issueRelation.removeParentAction": "Remove parent issue",
+  "issueRelation.updateFailed": "Failed to update issue",
+  "issueRelation.addChildFailed": "Failed to add sub-issue",
+  "issueRelation.setParentFailed": "Failed to update issue",
+  "issueRelation.searchPlaceholder": "Search issues…",
+  "issueRelation.searching": "Searching…",
+  "issueRelation.noResults": "No issues found.",
+  "issueRelation.promptToSearch": "Type to search issues"
 }
