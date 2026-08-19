@@ -52,7 +52,7 @@ export function unreadBadgeText(unread?: number | null): string {
 // its existing preview untouched.
 export function resolveSessionAgentName(
   agentId: string | null | undefined,
-  agentNameById: ReadonlyMap<string, string> | Map<string, string>,
+  agentNameById: ReadonlyMap<string, string>,
 ): string | null {
   if (!agentId) return null;
   const name = agentNameById.get(agentId);
