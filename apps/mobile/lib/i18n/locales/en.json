@@ -316,6 +316,7 @@
   "runs.agentRuns": "Agent Runs",
   "runs.active": "Active",
   "runs.past": "Past",
+  "runs.usageTotal": "Token usage for this issue",
   "runs.noLogs": "No execution log",
   "runs.noLogsYet": "Log is being generated…",
   "runs.liveLog": "Live",

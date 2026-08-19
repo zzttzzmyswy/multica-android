@@ -28,6 +28,12 @@ import {
 } from "@/data/queries/issues";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
+import { formatTokens } from "@/lib/usage-format";
+import {
+  formatUsd,
+  summarizeTaskUsageAcross,
+  type TaskUsageSummary,
+} from "@/lib/task-usage";
 
 const PAST_STATUS_ORDER: Record<AgentTask["status"], number> = {
   failed: 0,
@@ -70,12 +76,23 @@ export default function IssueRunsRoute() {
     });
   }, [allTasks]);
 
+  // Issue-level usage total, mirroring web's IssueUsageTotal on the
+  // execution-log header (execution-log-section.tsx): null when NO run has
+  // recorded usage → header chip hides entirely.
+  const usageTotal = useMemo(
+    () => summarizeTaskUsageAcross(allTasks.map((task) => task.usage)),
+    [allTasks],
+  );
+
   return (
     <View className="flex-1">
       <View className="px-4 pt-4 pb-3">
-        <Text className="text-base font-semibold text-foreground">
-          {t("runs.agentRuns")}
-        </Text>
+        <View className="flex-row items-center justify-between gap-2">
+          <Text className="flex-1 text-base font-semibold text-foreground">
+            {t("runs.agentRuns")}
+          </Text>
+          {usageTotal ? <UsageTotalChip total={usageTotal} /> : null}
+        </View>
       </View>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View className="px-4 gap-3 pb-4">
@@ -112,6 +129,32 @@ function Section({
         {title}
       </Text>
       <View>{children}</View>
+    </View>
+  );
+}
+
+/**
+ * Issue-level tokens + estimated cost chip, styled like web's IssueUsageTotal
+ * (`formatTokens · formatUsd`, cost in muted tone, tabular numerals). Renders
+ * nothing when every run lacks usage — a chip claiming "0 tokens · $0.00"
+ * would be a lie. Tap-to-open per-run breakdown is a later item.
+ */
+function UsageTotalChip({ total }: { total: TaskUsageSummary }) {
+  const { t } = useTranslation();
+  return (
+    <View
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel={t("runs.usageTotal")}
+      className="flex-row items-center gap-1 rounded-md bg-secondary px-2 py-1"
+    >
+      <Text className="text-xs font-medium text-foreground tabular-nums">
+        {formatTokens(total.tokens)}
+      </Text>
+      <Text className="text-xs text-muted-foreground">·</Text>
+      <Text className="text-xs text-muted-foreground tabular-nums">
+        {formatUsd(total.cost)}
+      </Text>
     </View>
   );
 }

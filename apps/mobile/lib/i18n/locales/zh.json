@@ -316,6 +316,7 @@
   "runs.agentRuns": "Agent 运行记录",
   "runs.active": "进行中",
   "runs.past": "历史",
+  "runs.usageTotal": "此任务的 token 用量",
   "runs.noLogs": "暂无执行记录",
   "runs.noLogsYet": "执行日志生成中…",
   "runs.liveLog": "实时",

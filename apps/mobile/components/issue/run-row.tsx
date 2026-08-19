@@ -16,6 +16,7 @@
  * Text narration renders as markdown; process steps reuse the shared
  * `ChatTimeline` fold. Empty logs surface `runs.noLogs` / `runs.noLogsYet`.
  */
+import { useMemo } from "react";
 import { ActivityIndicator, Alert, Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { AgentTask } from "@multica/core/types";
@@ -31,6 +32,8 @@ import { useCancelTask, useRerunIssue } from "@/data/mutations/issues";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useTranslation } from "@/lib/i18n/react";
+import { formatTokens } from "@/lib/usage-format";
+import { summarizeTaskUsage } from "@/lib/task-usage";
 import { canRerunRun, isInvocationBlocked } from "@/lib/run-retry";
 
 interface Props {
@@ -71,6 +74,7 @@ export function RunRow({ task, issueId }: Props) {
         </Text>
         <View className="flex-row items-center gap-2">
           <StatusBadge task={task} />
+          <UsageTokens task={task} />
           <Text className="text-xs text-muted-foreground">
             {timestamp ? timeAgo(timestamp) : ""}
           </Text>
@@ -147,6 +151,21 @@ export function RunRow({ task, issueId }: Props) {
         <RunLog taskId={task.id} />
       </CollapsibleContent>
     </Collapsible>
+  );
+}
+
+/**
+ * Compact per-run token usage, next to the status badge. No figure → an em
+ * dash, never 0: a run that predates usage reporting was not free, we just
+ * don't know (web execution-log-section.tsx renders the same pair).
+ * Display-only this round — the per-run breakdown dialog is a later item.
+ */
+function UsageTokens({ task }: { task: AgentTask }) {
+  const summary = useMemo(() => summarizeTaskUsage(task.usage), [task.usage]);
+  return (
+    <Text className="text-xs text-muted-foreground tabular-nums">
+      {summary ? formatTokens(summary.tokens) : "—"}
+    </Text>
   );
 }
 
