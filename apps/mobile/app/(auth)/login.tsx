@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, View } from "react-native";
+import { KeyboardAvoidingView, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -91,7 +91,12 @@ export default function Login() {
         className="flex-1"
         behavior={keyboardBehavior}
       >
-        <View className="flex-1 justify-center px-6 gap-6">
+        <ScrollView
+          className="flex-1"
+          contentContainerClassName="grow justify-center px-6 gap-6"
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           <View className="items-center gap-3">
             <MulticaLogo size={32} />
             <View className="gap-1 items-center">
@@ -216,7 +221,7 @@ export default function Login() {
               </View>
             </CollapsibleContent>
           </Collapsible>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
