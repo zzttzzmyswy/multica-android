@@ -35,6 +35,7 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { useChatSessionActions } from "@/components/chat/session-actions";
 import {
   formatChatTime,
+  resolveSessionAgentName,
   toPreview,
   unreadBadgeText,
 } from "@/lib/chat-thread-display";
@@ -102,6 +103,10 @@ export default function ChatSessionsRoute() {
       session.title?.trim() ||
       (session.agent_id ? (agentNameById.get(session.agent_id) ?? "") : "") ||
       t("chat.untitled");
+    // Per-row agent identity in the secondary line (web MUL-6264 / #7087):
+    // resolved name before the status/preview, null when the agent is missing
+    // or its name is blank so the existing preview is preserved.
+    const agentName = resolveSessionAgentName(session.agent_id, agentNameById);
 
     // Second line: typing → failed → no_response hint → preview.
     let preview: React.ReactNode;
@@ -187,9 +192,27 @@ export default function ChatSessionsRoute() {
               {timeText}
             </Text>
           </View>
-          {/* Line 2: preview + unread badge */}
+          {/* Line 2: agent name · preview + unread badge (web MUL-6264) */}
           <View className="mt-0.5 flex-row items-center gap-2">
-            <View className="flex-1 min-w-0">{preview}</View>
+            <View className="flex-1 min-w-0 flex-row items-center gap-1.5">
+              {agentName ? (
+                <>
+                  <Text
+                    className="max-w-[40%] shrink-0 text-xs font-medium text-muted-foreground"
+                    numberOfLines={1}
+                  >
+                    {agentName}
+                  </Text>
+                  <Text
+                    className="shrink-0 text-xs text-muted-foreground/60"
+                    numberOfLines={1}
+                  >
+                    ·
+                  </Text>
+                </>
+              ) : null}
+              <View className="min-w-0 flex-1">{preview}</View>
+            </View>
             {unread > 0 ? (
               <View className="min-w-[18px] h-[18px] rounded-full bg-destructive items-center justify-center px-1 shrink-0">
                 <Text className="text-[10px] font-semibold text-white">

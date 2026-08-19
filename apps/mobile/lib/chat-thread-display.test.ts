@@ -6,7 +6,12 @@
  * as web. Pure functions only — no RN / network imports, testable in Node.
  */
 import { describe, expect, it } from "vitest";
-import { formatChatTime, toPreview, unreadBadgeText } from "./chat-thread-display";
+import {
+  formatChatTime,
+  resolveSessionAgentName,
+  toPreview,
+  unreadBadgeText,
+} from "./chat-thread-display";
 
 describe("toPreview", () => {
   it("collapses fenced code blocks into a single space", () => {
@@ -68,5 +73,36 @@ describe("unreadBadgeText", () => {
   it("handles zero / non-invasive input types", () => {
     expect(unreadBadgeText(0)).toBe("0");
     expect(unreadBadgeText(undefined)).toBe("");
+  });
+});
+
+// Agent row identity (web MUL-6264 / #7087 parity). These cases mirror the web
+// `chat-thread-list.test.tsx` assertions: the caller owns the 40% width budget,
+// the resolver just decides whether an agent label exists at all.
+describe("resolveSessionAgentName", () => {
+  const names = new Map<string, string>([
+    ["agent-1", "Alpha"],
+    ["agent-2", "  Long agent name with surrounding space  "],
+    ["agent-3", "   "],
+  ]);
+
+  it("resolves a known agent id to its trimmed name", () => {
+    expect(resolveSessionAgentName("agent-1", names)).toBe("Alpha");
+  });
+
+  it("trims surrounding whitespace so the label stays tight", () => {
+    expect(resolveSessionAgentName("agent-2", names)).toBe(
+      "Long agent name with surrounding space",
+    );
+  });
+
+  it("returns null for an unknown / missing agent so the preview is kept", () => {
+    expect(resolveSessionAgentName("missing-agent-id", names)).toBeNull();
+    expect(resolveSessionAgentName(undefined, names)).toBeNull();
+    expect(resolveSessionAgentName(null, names)).toBeNull();
+  });
+
+  it("returns null for a blank agent name (web: name.trim() || null)", () => {
+    expect(resolveSessionAgentName("agent-3", names)).toBeNull();
   });
 });

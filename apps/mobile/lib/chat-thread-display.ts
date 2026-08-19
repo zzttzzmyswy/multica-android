@@ -6,6 +6,8 @@
  *   - formatChatTime: today → clock time, this year → M/D, else full date
  *   - toPreview: collapse a markdown / multi-line message into one line
  *   - unreadBadgeText: the red count badge text, capped at "99+"
+ *   - resolveSessionAgentName: per-row agent identity shown before the preview
+ *     (web MUL-6264 / #7087)
  *
  * Pure functions only — no RN / network imports, so they stay Node-testable.
  */
@@ -41,4 +43,20 @@ export function unreadBadgeText(unread?: number | null): string {
     return "";
   }
   return unread > 99 ? "99+" : String(unread);
+}
+
+// Per-row agent identity shown before the preview (web MUL-6264 / #7087):
+// resolve the agent name via the id→name map, trimming whitespace and treating
+// a blank / missing name as "no agent label". Mirrors web's
+// `agent?.name.trim() || null` so a session without a resolvable agent keeps
+// its existing preview untouched.
+export function resolveSessionAgentName(
+  agentId: string | null | undefined,
+  agentNameById: ReadonlyMap<string, string> | Map<string, string>,
+): string | null {
+  if (!agentId) return null;
+  const name = agentNameById.get(agentId);
+  if (!name) return null;
+  const trimmed = name.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
