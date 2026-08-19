@@ -131,6 +131,11 @@ export default function Login() {
             <Text>{submitting ? t("login.sending") : t("login.sendCode")}</Text>
           </Button>
 
+          {/* Pre-auth demo page — works fully offline with mock data. */}
+          <Button variant="ghost" size="lg" onPress={() => router.push("/demo")}>
+            <Text>{t("demo.login.entry")}</Text>
+          </Button>
+
           <Collapsible
             open={serverOpen}
             onOpenChange={setServerOpen}
