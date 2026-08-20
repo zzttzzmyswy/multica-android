@@ -85,3 +85,30 @@ export function useDeleteSkill() {
     onSettled: invalidate,
   });
 }
+
+/**
+ * Remote refresh — `POST /api/skills/:id/refresh`. Adopts the refreshed skill
+ * into the detail cache when the server echoes a valid skill (same id), so the
+ * open detail page updates without a refetch; a malformed fallback instead
+ * just drops the stale detail + list caches. Mirrors web
+ * refresh-skill-dialog.tsx's cache handling.
+ */
+export function useRefreshSkill() {
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const qc = useQueryClient();
+  const invalidate = useInvalidateSkills(wsId);
+
+  return useMutation({
+    mutationFn: (id: string) => api.refreshSkill(id),
+    onSuccess: (skill, id) => {
+      if (wsId && skill.id === id) {
+        qc.setQueryData<Skill>(skillKeys.detail(wsId, id), skill);
+      } else if (wsId) {
+        // Schema-degraded response (empty fallback): drop the stale detail
+        // cache instead of seeding it with the placeholder.
+        qc.invalidateQueries({ queryKey: skillKeys.detail(wsId, id) });
+      }
+    },
+    onSettled: invalidate,
+  });
+}

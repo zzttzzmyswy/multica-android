@@ -22,6 +22,7 @@
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -35,6 +36,8 @@ import type { Label, SkillFile } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { SkillForm } from "@/components/skill/skill-form";
+import { SkillFileEditor } from "@/components/skill/skill-file-editor";
+import { SkillFileTree } from "@/components/skill/skill-file-tree";
 import { LabelPickerBody } from "@/components/issue/pickers/label-picker-body";
 import { skillDetailOptions } from "@/data/queries/skills";
 import { memberListOptions } from "@/data/queries/members";
@@ -44,15 +47,22 @@ import {
   useCreateLabel,
   useDetachResourceLabel,
 } from "@/data/mutations/labels";
+import { useRefreshSkill } from "@/data/mutations/skills";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
-import { canEditSkill, ORIGIN_LABEL_KEY, readOrigin } from "@/lib/skill-guards";
+import {
+  canEditSkill,
+  isRefreshableOrigin,
+  ORIGIN_LABEL_KEY,
+  readOrigin,
+} from "@/lib/skill-guards";
 import { useSkillRole } from "@/lib/use-skill-role";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { Markdown } from "@/lib/markdown";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 function isMarkdownPath(path: string): boolean {
   return path.endsWith(".md") || path.endsWith(".mdx");
@@ -124,6 +134,7 @@ export default function SkillDetailPage() {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
+  const insets = useSafeAreaInsets();
   const role = useSkillRole(wsId);
   const timeAgo = useTimeAgo();
 
@@ -134,12 +145,17 @@ export default function SkillDetailPage() {
   );
   const [editing, setEditing] = useState(false);
   const [previewFile, setPreviewFile] = useState<SkillFile | null>(null);
+  // Path of the file currently open in the full-screen editor (SKILL.md or an
+  // attached file); null = closed. The editor modal is conditionally mounted
+  // with key={editingFile} so each open re-seeds from the latest server skill.
+  const [editingFile, setEditingFile] = useState<string | null>(null);
   const [showLabels, setShowLabels] = useState(false);
   const [labelsQuery, setLabelsQuery] = useState("");
   const qc = useQueryClient();
   const attachLabel = useAttachResourceLabel("skill", id);
   const detachLabel = useDetachResourceLabel("skill", id);
   const createLabel = useCreateLabel();
+  const refreshSkill = useRefreshSkill();
 
   const skill = data;
   const canEdit = canEditSkill(skill, { userId, role });
@@ -176,6 +192,45 @@ export default function SkillDetailPage() {
 
   const origin = readOrigin(skill);
   const files = skill.files ?? [];
+  const refreshable = canEdit && isRefreshableOrigin(origin);
+
+  /** Common open entry: SKILL.md opens straight in the editor (its read view
+   *  is the SKILL.md card above), other files open the preview sheet, whose
+   *  edit affordance hands them to the same editor. */
+  const openFile = (path: string) => {
+    if (path === "SKILL.md") {
+      setEditingFile("SKILL.md");
+    } else {
+      setPreviewFile(files.find((f) => f.path === path) ?? null);
+    }
+  };
+
+  const handleRefresh = () => {
+    if (!skill || refreshSkill.isPending) return;
+    const source = t(ORIGIN_LABEL_KEY[origin.type]);
+    const body = t("skills.detail.refreshConfirmBody", {
+      name: skill.name,
+      source,
+    });
+    Alert.alert(t("skills.detail.refreshConfirmTitle"), `${body}\n\n${t("skills.detail.refreshConfirmWarning")}`, [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: t("skills.detail.refresh"),
+        onPress: () => {
+          refreshSkill.mutate(skill.id, {
+            onSuccess: () => {
+              Alert.alert(t("skills.detail.refreshSuccess", { source }));
+            },
+            onError: (err) =>
+              Alert.alert(
+                t("skills.detail.refreshFailed"),
+                err instanceof Error ? err.message : t("common.unknownError"),
+              ),
+          });
+        },
+      },
+    ]);
+  };
 
   return (
     <>
@@ -278,22 +333,63 @@ export default function SkillDetailPage() {
           </View>
 
           {canEdit ? (
-            <Pressable
-              onPress={() => setEditing(true)}
-              className="mt-3 flex-row items-center justify-center gap-2 rounded-md border border-border px-3 py-2.5 active:bg-secondary"
-              accessibilityLabel={t("skills.detail.edit")}
-            >
-              <Ionicons name="create-outline" size={15} color={theme.mutedForeground} />
-              <Text className="text-sm font-medium text-foreground">
-                {t("skills.detail.edit")}
-              </Text>
-            </Pressable>
+            <View className="mt-3 flex-row items-center gap-2">
+              {canEdit ? (
+                <Pressable
+                  onPress={() => setEditing(true)}
+                  className="flex-1 flex-row items-center justify-center gap-2 rounded-md border border-border px-3 py-2.5 active:bg-secondary"
+                  accessibilityLabel={t("skills.detail.edit")}
+                >
+                  <Ionicons name="create-outline" size={15} color={theme.mutedForeground} />
+                  <Text className="text-sm font-medium text-foreground">
+                    {t("skills.detail.edit")}
+                  </Text>
+                </Pressable>
+              ) : null}
+              {refreshable ? (
+                <Pressable
+                  onPress={handleRefresh}
+                  disabled={refreshSkill.isPending}
+                  className="flex-1 flex-row items-center justify-center gap-2 rounded-md border border-border px-3 py-2.5 active:bg-secondary"
+                  accessibilityLabel={t("skills.detail.refresh")}
+                >
+                  {refreshSkill.isPending ? (
+                    <ActivityIndicator size="small" />
+                  ) : (
+                    <Ionicons
+                      name="refresh"
+                      size={15}
+                      color={theme.mutedForeground}
+                    />
+                  )}
+                  <Text className="text-sm font-medium text-foreground">
+                    {refreshSkill.isPending
+                      ? t("skills.detail.refreshing")
+                      : t("skills.detail.refresh")}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
           ) : null}
         </View>
 
         {/* SKILL.md */}
         <View className="mt-6 px-4 gap-2">
-          <SectionTitle icon="document-text-outline" title={t("skills.detail.readme")} />
+          <View className="flex-row items-center justify-between">
+            <SectionTitle icon="document-text-outline" title={t("skills.detail.readme")} />
+            {canEdit ? (
+              <Pressable
+                onPress={() => setEditingFile("SKILL.md")}
+                className="flex-row items-center gap-1 rounded-md border border-border px-2 py-1 active:bg-secondary"
+                accessibilityLabel={t("skills.editor.editFile")}
+              >
+                <Ionicons name="create-outline" size={13} color={theme.mutedForeground} />
+                <Text className="text-xs font-medium text-muted-foreground">
+                  {t("skills.editor.editFile")}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
           {skill.content?.trim() ? (
             <View className="rounded-lg border border-border px-3 py-2 bg-card">
               <Markdown content={skill.content} />
@@ -317,25 +413,11 @@ export default function SkillDetailPage() {
               </Text>
             </View>
           ) : (
-            <View className="rounded-lg border border-border divide-y divide-border">
-              {files.map((file) => (
-                <Pressable
-                  key={file.id}
-                  onPress={() => setPreviewFile(file)}
-                  className="flex-row items-center gap-2 px-3 py-3 active:bg-secondary"
-                  accessibilityLabel={file.path}
-                >
-                  <Ionicons name="document-outline" size={16} color={theme.mutedForeground} />
-                  <Text
-                    className="text-sm text-foreground flex-1"
-                    numberOfLines={1}
-                  >
-                    {file.path}
-                  </Text>
-                  <Ionicons name="chevron-forward" size={14} color={theme.mutedForeground} />
-                </Pressable>
-              ))}
-            </View>
+            <SkillFileTree
+              paths={["SKILL.md", ...files.map((f) => f.path)]}
+              selectedPath={editingFile ?? previewFile?.path ?? ""}
+              onSelect={openFile}
+            />
           )}
         </View>
       </ScrollView>
@@ -379,12 +461,33 @@ export default function SkillDetailPage() {
         onRequestClose={() => setPreviewFile(null)}
       >
         <Pressable className="flex-1 bg-black/40" onPress={() => setPreviewFile(null)} />
-        <View className="h-[75%] bg-background rounded-t-2xl overflow-hidden">
+        <View
+          className="h-[75%] bg-background rounded-t-2xl overflow-hidden"
+          // Bottom sheet draws under the status bar on Android; the header
+          // needs its own inset so the (new) edit entry stays tappable.
+          style={{ paddingTop: insets.top }}
+        >
           <View className="flex-row items-center gap-2 px-4 py-3 border-b border-border">
             <Ionicons name="document-outline" size={16} color={theme.mutedForeground} />
             <Text className="text-sm font-medium text-foreground flex-1" numberOfLines={1}>
               {previewFile?.path ?? ""}
             </Text>
+            {canEdit && previewFile ? (
+              <Pressable
+                onPress={() => {
+                  const path = previewFile.path;
+                  setPreviewFile(null);
+                  setEditingFile(path);
+                }}
+                className="flex-row items-center gap-1 rounded-md border border-border px-2 py-1 active:bg-secondary"
+                accessibilityLabel={t("skills.editor.editFile")}
+              >
+                <Ionicons name="create-outline" size={13} color={theme.mutedForeground} />
+                <Text className="text-xs font-medium text-muted-foreground">
+                  {t("skills.editor.editFile")}
+                </Text>
+              </Pressable>
+            ) : null}
             <Pressable onPress={() => setPreviewFile(null)} accessibilityLabel={t("a11y.close")}>
               <Ionicons name="close" size={20} color={theme.mutedForeground} />
             </Pressable>
@@ -400,6 +503,17 @@ export default function SkillDetailPage() {
           </ScrollView>
         </View>
       </Modal>
+
+      {/* Full-screen file editor (SKILL.md or an attached file). Mounted per
+          open with key={editingFile} so baseline re-seeds on each path. */}
+      {editingFile !== null ? (
+        <SkillFileEditor
+          key={editingFile}
+          path={editingFile}
+          skill={skill}
+          onClose={() => setEditingFile(null)}
+        />
+      ) : null}
     {/* Labels picker sheet — attach/detach/inline-create skill labels.
           Mirrors the web ResourceLabelPicker (`resourceType="skill"`) exposed
           on a phone: search + checklist of the skill catalog, with inline

@@ -5,7 +5,13 @@
  * same rules the server enforces on its own.
  */
 import { describe, expect, it } from "vitest";
-import { canEditSkill, ORIGIN_LABEL_KEY, readOrigin } from "./skill-guards";
+import {
+  canEditSkill,
+  isRefreshableOrigin,
+  ORIGIN_LABEL_KEY,
+  readOrigin,
+  type OriginInfo,
+} from "./skill-guards";
 
 describe("canEditSkill", () => {
   const skill = {
@@ -100,6 +106,38 @@ describe("readOrigin", () => {
       ).toEqual({ type });
     },
   );
+
+  it("carries source_url through when the origin has one", () => {
+    expect(
+      readOrigin({
+        ...base,
+        config: { origin: { type: "github", source_url: "https://github.com/a/b" } },
+      }),
+    ).toEqual({ type: "github", source_url: "https://github.com/a/b" });
+  });
+});
+
+describe("isRefreshableOrigin", () => {
+  const hosted = (source_url?: string): OriginInfo => ({
+    type: "github",
+    source_url,
+  });
+
+  it("true for a hosted origin with a source_url", () => {
+    expect(isRefreshableOrigin({ type: "github", source_url: "https://g/x" })).toBe(true);
+    expect(isRefreshableOrigin({ type: "skills_sh", source_url: "https://s/x.ts" })).toBe(true);
+    expect(isRefreshableOrigin({ type: "clawhub", source_url: "https://c/x" })).toBe(true);
+  });
+
+  it("false when source_url is missing or empty", () => {
+    expect(isRefreshableOrigin(hosted(undefined))).toBe(false);
+    expect(isRefreshableOrigin(hosted(""))).toBe(false);
+  });
+
+  it("false for runtime_local and manual origins", () => {
+    expect(isRefreshableOrigin({ type: "runtime_local" })).toBe(false);
+    expect(isRefreshableOrigin({ type: "manual" })).toBe(false);
+  });
 });
 
 describe("ORIGIN_LABEL_KEY", () => {

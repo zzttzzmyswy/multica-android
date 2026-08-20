@@ -24,6 +24,8 @@ export type SkillOriginType =
 
 export interface OriginInfo {
   type: SkillOriginType;
+  /** Upstream URL a refresh re-downloads from. Only hosted origins set it. */
+  source_url?: string;
 }
 
 /** i18n key for each origin badge (flat keys — see lib/i18n/locales). */
@@ -48,17 +50,38 @@ export function canEditSkill(
 export function readOrigin(skill: SkillSummary): OriginInfo {
   const raw = skill.config?.origin;
   if (raw && typeof raw === "object" && "type" in raw) {
-    const type = (raw as { type?: unknown }).type;
+    const origin = raw as { type?: unknown; source_url?: unknown };
+    const type = origin.type;
     if (
       type === "runtime_local" ||
       type === "clawhub" ||
       type === "skills_sh" ||
       type === "github"
     ) {
-      return { type };
+      const info: OriginInfo = { type };
+      if (typeof origin.source_url === "string" && origin.source_url.length > 0) {
+        info.source_url = origin.source_url;
+      }
+      return info;
     }
   }
   return { type: "manual" };
+}
+
+/**
+ * Whether the skill can be re-downloaded from where it was imported. Only
+ * hosted sources qualify: runtime-local copies re-import through the daemon,
+ * and manual / archive-uploaded skills have no upstream at all. The server
+ * enforces the same rule on `POST /api/skills/:id/refresh`.
+ */
+export function isRefreshableOrigin(origin: OriginInfo): boolean {
+  return (
+    (origin.type === "github" ||
+      origin.type === "skills_sh" ||
+      origin.type === "clawhub") &&
+    typeof origin.source_url === "string" &&
+    origin.source_url.length > 0
+  );
 }
 
 /** Full skill payload (detail endpoint) — SKILL.md body + attached files. */

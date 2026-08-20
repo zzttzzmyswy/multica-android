@@ -2516,6 +2516,18 @@ class ApiClient {
     await this.fetch<void>(`/api/skills/${id}`, { method: "DELETE" });
   }
 
+  // Re-downloads the skill from its stored config.origin source, replacing
+  // name/description/content/files in place while preserving the skill id and
+  // its agent bindings (web api.refreshSkill, POST /api/skills/:id/refresh).
+  async refreshSkill(id: string): Promise<Skill> {
+    const raw = await this.fetch<unknown>(`/api/skills/${id}/refresh`, {
+      method: "POST",
+    });
+    return parseWithFallback(raw, SkillSchema, EMPTY_SKILL, {
+      endpoint: "POST /api/skills/{id}/refresh",
+    });
+  }
+
   // --- Workspace MCP server library + agent assignments (GH #6062) ---
   // Semantics mirror packages/core/api/client.ts — identity + transport only
   // round-trip (config is write-only), and every agent-scoped write returns
