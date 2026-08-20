@@ -85,6 +85,9 @@ import type {
   Reaction,
   ReorderPinsRequest,
   RuntimeDevice,
+  RuntimeProfile,
+  CreateRuntimeProfileRequest,
+  UpdateRuntimeProfileRequest,
   DashboardAgentRunTime,
   DashboardFailureByAgent,
   DashboardFailureDaily,
@@ -139,6 +142,10 @@ import type {
   WorkspaceSubscriptionSeatReconcileResult,
   WorkspaceSubscriptionSummary,
 } from "@multica/core/types";
+import type {
+  CloudRuntimeNode,
+  CreateCloudRuntimeNodeRequest,
+} from "@multica/core/runtimes";
 import {
   AgentBuilderRuntimeSwitchSchema,
   AgentBuilderSessionListSchema,
@@ -308,6 +315,12 @@ import {
   ListIssueStatusesResponseSchema,
   EMPTY_ISSUE_STATUS_ENTRY,
   EMPTY_LIST_ISSUE_STATUSES_RESPONSE,
+  CloudRuntimeNodeListSchema,
+  CloudRuntimeNodeSchema,
+  EMPTY_CLOUD_RUNTIME_NODE,
+  EMPTY_CLOUD_RUNTIME_NODE_LIST,
+  RuntimeProfileListSchema,
+  EMPTY_RUNTIME_PROFILE_LIST,
 } from "./schemas";
 import type { ZodType } from "zod";
 import { File, Paths } from "expo-file-system";
@@ -1144,6 +1157,97 @@ class ApiClient {
       method: "POST",
       body: JSON.stringify({ expected_active_agent_ids: expectedActiveAgentIds }),
     });
+  }
+
+  // Cloud runtime nodes (iteration-82, A2.2) — proxy to multica-cloud;
+  // mirrors packages/core/api/client.ts listCloudRuntimeNodes..deleteCloudRuntimeNode.
+  // The routes are registered in server/cmd/server/router.go and return 503
+  // ("cloud runtime is not configured") when the hosting instance has no
+  // fleet adapter — the UI degrades to an explanatory card in that case.
+  async listCloudRuntimeNodes(params?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<CloudRuntimeNode[]> {
+    const search = new URLSearchParams();
+    if (params?.limit !== undefined) search.set("limit", String(params.limit));
+    if (params?.offset !== undefined)
+      search.set("offset", String(params.offset));
+    const query = search.toString();
+    const raw = await this.fetch<unknown>(
+      `/api/cloud-runtime/nodes${query ? `?${query}` : ""}`,
+      { signal: undefined },
+    );
+    return parseWithFallback(
+      raw,
+      CloudRuntimeNodeListSchema,
+      EMPTY_CLOUD_RUNTIME_NODE_LIST,
+      { endpoint: "GET /api/cloud-runtime/nodes" },
+    );
+  }
+
+  async createCloudRuntimeNode(
+    data: CreateCloudRuntimeNodeRequest,
+  ): Promise<CloudRuntimeNode> {
+    const raw = await this.fetch<unknown>("/api/cloud-runtime/nodes", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return parseWithFallback(
+      raw,
+      CloudRuntimeNodeSchema,
+      EMPTY_CLOUD_RUNTIME_NODE,
+      { endpoint: "POST /api/cloud-runtime/nodes" },
+    );
+  }
+
+  async deleteCloudRuntimeNode(instanceId: string): Promise<void> {
+    await this.fetch<void>("/api/cloud-runtime/nodes", {
+      method: "DELETE",
+      body: JSON.stringify({ instance_id: instanceId }),
+    });
+  }
+
+  // Custom runtime profiles (iteration-82, A2.3) — workspace-scoped CRUD;
+  // mirrors packages/core/api/client.ts listRuntimeProfiles..deleteRuntimeProfile.
+  async listRuntimeProfiles(wsId: string): Promise<RuntimeProfile[]> {
+    const raw = await this.fetch<{ runtime_profiles?: RuntimeProfile[] }>(
+      `/api/workspaces/${wsId}/runtime-profiles`,
+      { signal: undefined },
+    );
+    return parseWithFallback(
+      raw.runtime_profiles,
+      RuntimeProfileListSchema,
+      EMPTY_RUNTIME_PROFILE_LIST,
+      { endpoint: "GET /api/workspaces/:id/runtime-profiles" },
+    );
+  }
+
+  async createRuntimeProfile(
+    wsId: string,
+    body: CreateRuntimeProfileRequest,
+  ): Promise<RuntimeProfile> {
+    return this.fetch<RuntimeProfile>(
+      `/api/workspaces/${wsId}/runtime-profiles`,
+      { method: "POST", body: JSON.stringify(body) },
+    );
+  }
+
+  async updateRuntimeProfile(
+    wsId: string,
+    profileId: string,
+    patch: UpdateRuntimeProfileRequest,
+  ): Promise<RuntimeProfile> {
+    return this.fetch<RuntimeProfile>(
+      `/api/workspaces/${wsId}/runtime-profiles/${profileId}`,
+      { method: "PATCH", body: JSON.stringify(patch) },
+    );
+  }
+
+  async deleteRuntimeProfile(wsId: string, profileId: string): Promise<void> {
+    await this.fetch<void>(
+      `/api/workspaces/${wsId}/runtime-profiles/${profileId}`,
+      { method: "DELETE" },
+    );
   }
 
   // Workspace quick actions (iteration-52) — workspace-level issue presets.

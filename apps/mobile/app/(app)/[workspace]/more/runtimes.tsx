@@ -13,7 +13,7 @@
  * picks its row by id. Pull-to-refresh + friendly empty/loading/error states
  * matching the skills/squads pages.
  */
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
@@ -23,8 +23,13 @@ import type { RuntimeHealth } from "@multica/core/runtimes";
 import type { AgentRuntime } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { runtimeListOptions } from "@/data/queries/runtimes";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { ConnectRemoteDialog } from "@/components/runtimes/connect-remote-dialog";
+import { CloudRuntimeDialog } from "@/components/runtimes/cloud-runtime-dialog";
+import { RuntimeProfilesDialog } from "@/components/runtimes/runtime-profiles-dialog";
+import { ActionSheet } from "@/lib/action-sheet";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -54,6 +59,46 @@ export default function RuntimesPage() {
   const { colorScheme } = useColorScheme();
   const muted = THEME[colorScheme].mutedForeground;
 
+  // Runtime-supply entrypoints (iteration-82, A2): connect-remote / cloud
+  // runtime / custom profiles — web renders these as page-header actions, a
+  // phone fits them behind the "+" header action.
+  const [showConnect, setShowConnect] = useState(false);
+  const [showCloud, setShowCloud] = useState(false);
+  const [showProfiles, setShowProfiles] = useState(false);
+  const [profilesIntent, setProfilesIntent] = useState<"manage" | "create">("manage");
+
+  const openSupplySheet = useCallback(() => {
+    const options = [
+      t("runtimes.actions.connect"),
+      t("runtimes.actions.cloudRuntime"),
+      t("runtimes.actions.profiles"),
+      t("common.cancel"),
+    ];
+    const cancelIndex = options.length - 1;
+    ActionSheet.showActionSheetWithOptions(
+      { options, cancelButtonIndex: cancelIndex },
+      (index) => {
+        if (index === cancelIndex || index < 0) return;
+        if (index === 0) setShowConnect(true);
+        else if (index === 1) setShowCloud(true);
+        else {
+          setProfilesIntent("manage");
+          setShowProfiles(true);
+        }
+      },
+    );
+  }, [t]);
+
+  const headerRight = useCallback(() => {
+    return (
+      <IconButton
+        name="add"
+        onPress={openSupplySheet}
+        accessibilityLabel={t("runtimes.actions.connect")}
+      />
+    );
+  }, [openSupplySheet, t]);
+
   const { data, isLoading, error, refetch, isRefetching } = useQuery(
     runtimeListOptions(wsId),
   );
@@ -67,7 +112,19 @@ export default function RuntimesPage() {
 
   return (
     <>
-      <Stack.Screen options={{ headerBackTitle: t("common.back") }} />
+      <Stack.Screen options={{ headerBackTitle: t("common.back"), headerRight }} />
+      {showConnect ? (
+        <ConnectRemoteDialog onClose={() => setShowConnect(false)} />
+      ) : null}
+      {showCloud ? (
+        <CloudRuntimeDialog onClose={() => setShowCloud(false)} />
+      ) : null}
+      {showProfiles ? (
+        <RuntimeProfilesDialog
+          intent={profilesIntent}
+          onClose={() => setShowProfiles(false)}
+        />
+      ) : null}
       <View className="flex-1 bg-background">
         {isLoading ? (
           <View className="flex-1 items-center justify-center">
@@ -92,6 +149,15 @@ export default function RuntimesPage() {
             <Text className="text-xs text-muted-foreground/70 text-center">
               {t("runtimes.emptyDescription")}
             </Text>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onPress={() => setShowConnect(true)}
+            >
+              <Ionicons name="add" size={14} color={muted} />
+              <Text>{t("runtimes.actions.connect")}</Text>
+            </Button>
           </View>
         ) : (
           <FlatList

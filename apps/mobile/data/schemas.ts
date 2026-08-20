@@ -50,6 +50,7 @@ import type {
   ProjectResource,
   ResourceLabelsResponse,
   RuntimeDevice,
+  RuntimeProfile,
   SearchIssuesResponse,
   SearchProjectsResponse,
   SendChatMessageResponse,
@@ -66,6 +67,7 @@ import type {
   Workspace,
   WorkspaceMcpServer,
 } from "@multica/core/types";
+import type { CloudRuntimeNode } from "@multica/core/runtimes";
 import {
   AutopilotRunSchema,
   IssueSchema,
@@ -946,6 +948,75 @@ export const RuntimeSchema: z.ZodType<RuntimeDevice> = z.object({
 
 export const RuntimeListSchema = z.array(RuntimeSchema).default([]);
 export const EMPTY_RUNTIME_LIST: RuntimeDevice[] = [];
+
+// Cloud runtime node (iteration-82, A2.2) — mirrors
+// packages/core/runtimes/cloud-runtime.ts CloudRuntimeNode. Lenient fields
+// so a partially malformed row renders as an unknown-status node instead of
+// blanking the whole cloud-runtime dialog.
+export const CloudRuntimeNodeSchema: z.ZodType<CloudRuntimeNode> = z.object({
+  id: z.string().default(""),
+  owner_id: z.string().default(""),
+  instance_id: z.string().default(""),
+  region: z.string().default(""),
+  instance_type: z.string().default(""),
+  image_id: z.string().default(""),
+  subnet_id: z.string().default(""),
+  name: z.string().default(""),
+  status: z.string().default("unknown"),
+  tags: z.record(z.string(), z.string()).default({}),
+  metadata: z.record(z.string(), z.unknown()).default({}),
+  created_at: z.string().default(""),
+  updated_at: z.string().default(""),
+}).loose();
+
+export const CloudRuntimeNodeListSchema = z
+  .array(CloudRuntimeNodeSchema)
+  .default([]);
+export const EMPTY_CLOUD_RUNTIME_NODE: CloudRuntimeNode = {
+  id: "",
+  owner_id: "",
+  instance_id: "",
+  region: "",
+  instance_type: "",
+  image_id: "",
+  subnet_id: "",
+  name: "",
+  status: "unknown",
+  tags: {},
+  metadata: {},
+  created_at: "",
+  updated_at: "",
+};
+export const EMPTY_CLOUD_RUNTIME_NODE_LIST: CloudRuntimeNode[] = [];
+
+// Custom runtime profile (iteration-82, A2.3) — mirrors @multica/core/types
+// RuntimeProfile. The browse/create/edit dialog reads display_name,
+// protocol_family, command_name/fixed_args (reformatted for the command-line
+// field), description, enabled/visibility; every other field defaults so a
+// lean backend payload still renders.
+export const RuntimeProfileSchema: z.ZodType<RuntimeProfile> = z.object({
+  id: z.string().default(""),
+  workspace_id: z.string().default(""),
+  display_name: z.string().default(""),
+  protocol_family: z.string().default("claude") as unknown as z.ZodType<
+    RuntimeProfile["protocol_family"]
+  >,
+  command_name: z.string().default(""),
+  description: z.string().nullable().default(null),
+  fixed_args: z.array(z.string()).default([]),
+  visibility: z.string().catch("workspace") as unknown as z.ZodType<
+    RuntimeProfile["visibility"]
+  >,
+  created_by: z.string().nullable().default(null),
+  enabled: z.boolean().default(true),
+  created_at: z.string().default(""),
+  updated_at: z.string().default(""),
+}).loose();
+
+export const RuntimeProfileListSchema = z
+  .array(RuntimeProfileSchema)
+  .default([]);
+export const EMPTY_RUNTIME_PROFILE_LIST: RuntimeProfile[] = [];
 
 // Squad schema — fields mobile actually consumes for the @mention suggestion
 // bar (id, name, archived_at filter), the squad list/detail pages

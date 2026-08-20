@@ -34,6 +34,7 @@ import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { Switch } from "@/components/ui/switch";
+import { RuntimeProfilesDialog } from "@/components/runtimes/runtime-profiles-dialog";
 import { runtimeListOptions } from "@/data/queries/runtimes";
 import { memberListOptions } from "@/data/queries/members";
 import { agentListOptions } from "@/data/queries/agents";
@@ -122,6 +123,10 @@ export default function RuntimeDetailPage() {
   const updateRuntime = useUpdateRuntime();
   const deleteRuntime = useDeleteRuntime();
   const unbindDelete = useUnbindAgentsAndDeleteRuntime();
+
+  // "Add custom runtime" (web detail-page entry, intent=create) — opens the
+  // runtime-profiles dialog at the create form.
+  const [showProfiles, setShowProfiles] = useState(false);
 
   const runtime = useMemo(
     () => (id ? data.find((r) => r.id === id) : undefined),
@@ -342,6 +347,12 @@ export default function RuntimeDetailPage() {
 
   return (
     <ScrollView className="flex-1 bg-background" contentContainerClassName="pb-10">
+      {showProfiles ? (
+        <RuntimeProfilesDialog
+          intent="create"
+          onClose={() => setShowProfiles(false)}
+        />
+      ) : null}
       {/* Identity card */}
       <View className="px-4 pt-4 gap-1">
         <View className="flex-row items-center gap-3">
@@ -481,6 +492,28 @@ export default function RuntimeDetailPage() {
             </Text>
           </View>
           <View className="p-3 gap-3">
+            {/* Add custom runtime profile (iteration-82, A2.3) — web's
+                detail page gates this on canAddRuntime (owner/admin). */}
+            {access.canEditRuntime ? (
+              <View className="gap-1.5 pb-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 justify-start gap-2 px-0"
+                  onPress={() => setShowProfiles(true)}
+                >
+                  <Ionicons
+                    name="add-circle-outline"
+                    size={14}
+                    color={theme.mutedForeground}
+                  />
+                  <Text className="text-xs text-foreground">
+                    {t("runtimes.profiles.addCustom")}
+                  </Text>
+                </Button>
+              </View>
+            ) : null}
+
             {/* Visibility */}
             <View className="gap-1.5">
               <Text className="text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -608,6 +641,22 @@ export default function RuntimeDetailPage() {
                 )}
               </View>
             ) : null}
+
+            {/* Add custom runtime profile — web's RuntimeProfilesDialog
+                detail-page entry (intent=create). */}
+            <View className="border-t border-border pt-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 justify-start gap-2 px-0"
+                onPress={() => setShowProfiles(true)}
+              >
+                <Ionicons name="add-circle-outline" size={14} color={theme.mutedForeground} />
+                <Text className="text-xs text-foreground">
+                  {t("runtimes.profiles.addCustom")}
+                </Text>
+              </Button>
+            </View>
 
             {/* Delete */}
             {access.canDelete ? (
