@@ -15,15 +15,17 @@
  * refreshing, so a running agent's work-in-progress is inspectable just like
  * web's live transcript.
  */
-import { useMemo } from "react";
-import { ScrollView, View } from "react-native";
+import { useMemo, useState } from "react";
+import { Pressable, ScrollView, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import type { AgentTask } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { RunRow } from "@/components/issue/run-row";
+import { UsageBreakdownDialog } from "@/components/issue/usage-breakdown-dialog";
 import {
   issueActiveTasksOptions,
+  issueDetailOptions,
   issueTasksOptions,
 } from "@/data/queries/issues";
 import { useWorkspaceStore } from "@/data/workspace-store";
@@ -53,6 +55,12 @@ export default function IssueRunsRoute() {
     issueActiveTasksOptions(wsId, id),
   );
   const { data: allTasks = [] } = useQuery(issueTasksOptions(wsId, id));
+
+  // Issue detail supplies the human identifier for the breakdown subtitle
+  // ("MYS-568 · 5 runs"). Already cached — the runs sheet is pushed from the
+  // issue detail Stack, so this is not a new request in practice.
+  const { data: issue } = useQuery(issueDetailOptions(wsId, id));
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
 
   const active = useMemo(
     () =>
@@ -91,7 +99,9 @@ export default function IssueRunsRoute() {
           <Text className="flex-1 text-base font-semibold text-foreground">
             {t("runs.agentRuns")}
           </Text>
-          {usageTotal ? <UsageTotalChip total={usageTotal} /> : null}
+          {usageTotal ? (
+            <UsageTotalChip total={usageTotal} onPress={() => setBreakdownOpen(true)} />
+          ) : null}
         </View>
       </View>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -112,6 +122,13 @@ export default function IssueRunsRoute() {
           ) : null}
         </View>
       </ScrollView>
+
+      <UsageBreakdownDialog
+        visible={breakdownOpen}
+        onClose={() => setBreakdownOpen(false)}
+        identifier={issue?.identifier ?? ""}
+        tasks={allTasks}
+      />
     </View>
   );
 }
@@ -137,16 +154,26 @@ function Section({
  * Issue-level tokens + estimated cost chip, styled like web's IssueUsageTotal
  * (`formatTokens · formatUsd`, cost in muted tone, tabular numerals). Renders
  * nothing when every run lacks usage — a chip claiming "0 tokens · $0.00"
- * would be a lie. Tap-to-open per-run breakdown is a later item.
+ * would be a lie. Tapping it opens the per-run usage breakdown dialog
+ * (`UsageBreakdownDialog`), whose figures come from the same
+ * `summarizeTaskUsage` source — so the dialog's total can never disagree
+ * with the chip that opened it.
  */
-function UsageTotalChip({ total }: { total: TaskUsageSummary }) {
+function UsageTotalChip({
+  total,
+  onPress,
+}: {
+  total: TaskUsageSummary;
+  onPress: () => void;
+}) {
   const { t } = useTranslation();
   return (
-    <View
+    <Pressable
+      onPress={onPress}
       accessible
-      accessibilityRole="text"
+      accessibilityRole="button"
       accessibilityLabel={t("runs.usageTotal")}
-      className="flex-row items-center gap-1 rounded-md bg-secondary px-2 py-1"
+      className="flex-row items-center gap-1 rounded-md bg-secondary px-2 py-1 active:opacity-70"
     >
       <Text className="text-xs font-medium text-foreground tabular-nums">
         {formatTokens(total.tokens)}
@@ -155,6 +182,6 @@ function UsageTotalChip({ total }: { total: TaskUsageSummary }) {
       <Text className="text-xs text-muted-foreground tabular-nums">
         {formatUsd(total.cost)}
       </Text>
-    </View>
+    </Pressable>
   );
 }

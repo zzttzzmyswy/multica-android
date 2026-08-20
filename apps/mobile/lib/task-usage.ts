@@ -12,7 +12,6 @@
  *    whole row is priced from the table (matches web's `uncostedTokens`
  *    fallback for precisely this shape — see the TaskUsage docblock in
  *    `packages/core/types/agent.ts`)
- *  - `TaskUsageSummary` omits web's `cacheSavings` (nothing renders it here)
  *
  * ES2023 array methods (`.toSorted` / `.findLastIndex`) are avoided per the
  * Hermes note in `lib/usage-format.ts`.
@@ -24,6 +23,9 @@ export interface TaskUsageSummary {
   /** input + output + cacheRead + cacheWrite, matching the usage page's headline. */
   tokens: number;
   cost: number;
+  /** What cache reads would have cost at full input price minus the cache-hit
+   *  rate — a reconstruction of "money the cache saved", not real spend. */
+  cacheSavings: number;
   input: number;
   output: number;
   cacheRead: number;
@@ -50,6 +52,7 @@ export function summarizeTaskUsage(
   const summary: TaskUsageSummary = {
     tokens: 0,
     cost: 0,
+    cacheSavings: 0,
     input: 0,
     output: 0,
     cacheRead: 0,
@@ -63,6 +66,7 @@ export function summarizeTaskUsage(
     summary.cacheRead += slice.cache_read_tokens;
     summary.cacheWrite += slice.cache_write_tokens;
     summary.cost += estimateCost(slice);
+    summary.cacheSavings += estimateCacheSavings(slice);
     if (slice.model && !models.includes(slice.model)) models.push(slice.model);
   }
   summary.tokens =
@@ -108,6 +112,66 @@ export function estimateCost(slice: TaskUsage): number {
 export function formatUsd(n: number): string {
   if (n >= 100) return `$${n.toFixed(0)}`;
   return `$${n.toFixed(2)}`;
+}
+
+/**
+ * What this slice's cache *reads* would have cost at full input pricing minus
+ * what they actually cost at the discounted cache-hit rate. This is a
+ * reconstruction of "money the cache saved you", not real-world spend, so it
+ * is 0 for a model with no rate entry — no rate, no discount to price.
+ * Provider-reported `cost_usd_ticks` does not change it: that is a bill for
+ * the turn, while the discount is a rate-table fact (web parity).
+ */
+export function estimateCacheSavings(slice: TaskUsage): number {
+  const pricing = resolvePricing(slice.model, slice.provider);
+  if (!pricing) return 0;
+  return (
+    (slice.cache_read_tokens * pricing.input -
+      slice.cache_read_tokens * pricing.cacheRead) /
+    1_000_000
+  );
+}
+
+/**
+ * Canonical storage key for a (model, provider) pair: provider-qualified
+ * when a provider is known, else the bare model. `collectUnmappedModels`
+ * returns these, so `cursor/auto` from one provider never merges with a bare
+ * `auto` from another in the "unmapped" note (web parity).
+ */
+export function pricingKey(model: string, provider?: string): string {
+  const p = normalizeProvider(provider);
+  return p ? qualify(p, model) : model;
+}
+
+/** Whether a model string resolves to a rate-table entry. */
+export function isModelPriced(model: string, provider?: string): boolean {
+  return resolvePricing(model, provider) !== undefined;
+}
+
+/**
+ * Unique, sorted pricing keys among `rows` that do not resolve to a price —
+ * the "we counted these tokens but not their cost" footnote list. A row the
+ * provider priced in full (`cost_usd_ticks > 0` and nothing left to
+ * estimate) must not raise the warning: its cost is already exact, and asking
+ * for a rate would be asking the user to override a real bill with a guess.
+ * Empty when everything is priced or there are no rows.
+ */
+export function collectUnmappedModels(rows: readonly TaskUsage[]): string[] {
+  const set = new Set<string>();
+  for (const r of rows) {
+    if (!r.model || isModelPriced(r.model, r.provider)) continue;
+    // No `uncosted_*` split on the mobile wire, so a row counts as needing an
+    // estimate whenever it carries any tokens (web's uncostedTokens fallback).
+    const needsEstimate =
+      r.input_tokens > 0 ||
+      r.output_tokens > 0 ||
+      r.cache_read_tokens > 0 ||
+      r.cache_write_tokens > 0;
+    if (!needsEstimate && (r.cost_usd_ticks ?? 0) > 0) continue;
+    set.add(pricingKey(r.model, r.provider));
+  }
+  // Hermes has no Array.prototype.toSorted — sort a fresh array.
+  return Array.from(set).sort();
 }
 
 // ---------------------------------------------------------------------------
