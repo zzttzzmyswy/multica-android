@@ -16,7 +16,9 @@ import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -162,8 +164,13 @@ export function CloudRuntimeDialog({ onClose }: { onClose: () => void }) {
           </Pressable>
         </View>
 
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
         <ScrollView
           className="flex-1"
+          keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl
               refreshing={nodesQuery.isFetching}
@@ -341,6 +348,7 @@ export function CloudRuntimeDialog({ onClose }: { onClose: () => void }) {
             </Button>
           </View>
         )}
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );

@@ -17,7 +17,9 @@ import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   View,
@@ -590,7 +592,12 @@ function ProfileDetailsForm({
         : null;
 
   return (
-    <>
+    // KeyboardAvoidingView lifts the footer above the IME — without it the
+    // command field can't be submitted on Android (Modal doesn't resize).
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
       <ScrollView
         className="flex-1"
         keyboardShouldPersistTaps="handled"
@@ -623,9 +630,12 @@ function ProfileDetailsForm({
           </Text>
           <TextField
             value={values.displayName}
-            onChangeText={(value) =>
-              setValues((prev) => ({ ...prev, displayName: value }))
-            }
+            onChangeText={(value) => {
+              setValues((prev) => ({ ...prev, displayName: value }));
+              // Typing past a validation error clears it (web's live guards).
+              setErrors((prev) => prev.filter((f) => f !== "displayName"));
+              setDuplicateName(false);
+            }}
             placeholder={t("runtimes.profiles.form.displayNamePlaceholder")}
             autoCapitalize="words"
             maxLength={80}
@@ -648,9 +658,10 @@ function ProfileDetailsForm({
           </Text>
           <TextField
             value={values.commandLine}
-            onChangeText={(value) =>
-              setValues((prev) => ({ ...prev, commandLine: value }))
-            }
+            onChangeText={(value) => {
+              setValues((prev) => ({ ...prev, commandLine: value }));
+              setErrors((prev) => prev.filter((f) => f !== "commandLine"));
+            }}
             placeholder={t("runtimes.profiles.form.commandPlaceholder")}
             autoCapitalize="none"
             autoCorrect={false}
@@ -712,7 +723,7 @@ function ProfileDetailsForm({
           </Button>
         </View>
       </View>
-    </>
+    </KeyboardAvoidingView>
   );
 }
 
