@@ -130,6 +130,7 @@ import type {
   Workspace,
   WorkspaceMcpServer,
   WorkspaceRepo,
+  GitHubPullRequest,
   CreateWorkspaceSubscriptionCheckoutRequest,
   CreateWorkspaceSubscriptionCheckoutResponse,
   CreateWorkspaceSubscriptionPortalResponse,
@@ -231,8 +232,11 @@ import {
   EMPTY_INVITATION_LIST,
   EMPTY_INVITATION,
   EMPTY_ISSUE_FALLBACK,
+  EMPTY_ISSUE_PULL_REQUESTS_RESPONSE,
   EMPTY_LIST_AUTOPILOT_RUNS_RESPONSE,
   EMPTY_LABEL,
+  GitHubPullRequestSchema,
+  IssuePullRequestsResponseSchema,
   EMPTY_LIST_LABELS_RESPONSE,
   EMPTY_LIST_PROJECT_RESOURCES_RESPONSE,
   EMPTY_LIST_PROJECTS_RESPONSE,
@@ -1971,6 +1975,24 @@ class ApiClient {
       { ...opts, endpoint: "GET /api/issues/:id/children" },
     );
     return parsed.issues;
+  }
+
+  // GET /api/issues/:id/pull-requests — GitHub PRs linked to the issue via a
+  // routable issue key in the PR title/body/branch (server webhook). Mirrors
+  // web's `api.listIssuePullRequests` (packages/core/api/client.ts:3729).
+  // Returns the `{ pull_requests }` envelope; a failed parse or request
+  // falls back to an empty list so the PR section hides itself (same
+  // defensive default as web's parseWithFallback).
+  async listIssuePullRequests(
+    issueId: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<{ pull_requests: GitHubPullRequest[] }> {
+    return this.fetchValidated(
+      `/api/issues/${issueId}/pull-requests`,
+      IssuePullRequestsResponseSchema,
+      EMPTY_ISSUE_PULL_REQUESTS_RESPONSE,
+      { ...opts, endpoint: "GET /api/issues/:id/pull-requests" },
+    );
   }
 
   /** Workspace-wide parent→(done/total) child progress map — drives the

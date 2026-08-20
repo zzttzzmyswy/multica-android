@@ -1074,6 +1074,66 @@ export const EMPTY_CHILD_ISSUES_RESPONSE: {
 };
 
 // ---------------------------------------------------------------------------
+// Linked pull requests of an issue — `GET /api/issues/:id/pull-requests`.
+// Mirrors core's GitHubPullRequestSchema / IssuePullRequestsResponseSchema
+// (packages/core/api/schemas.ts:261,297). `.loose()` passes unknown server
+// fields through; every snapshot field is optional with a defensive default,
+// because older backends omit them and a missing field must never fabricate
+// a positive CI / mergeability verdict (src: packages/core/github/
+// pull-request-status.ts). The PR lifecycle is a single `state` enum
+// (open | closed | merged | draft); `merged_at` non-null confirms merged.
+// ---------------------------------------------------------------------------
+
+export const GitHubPullRequestSchema = z.object({
+  id: z.string(),
+  provider: z.string().optional().default("github"),
+  workspace_id: z.string(),
+  repo_owner: z.string(),
+  repo_name: z.string(),
+  number: z.number(),
+  title: z.string(),
+  state: z.string(),
+  html_url: z.string(),
+  branch: z.string().nullable(),
+  author_login: z.string().nullable(),
+  author_avatar_url: z.string().nullable(),
+  merged_at: z.string().nullable(),
+  closed_at: z.string().nullable(),
+  pr_created_at: z.string(),
+  pr_updated_at: z.string(),
+  mergeable: z.string().nullable().optional(),
+  merge_state_status: z.string().nullable().optional(),
+  snapshot_available: z.boolean().optional(),
+  checks_rollup: z.string().nullable().optional(),
+  checks_conclusion: z.string().nullable().optional(),
+  checks_total: z.number().optional().default(0),
+  checks_passed: z.number().optional().default(0),
+  checks_failed: z.number().optional().default(0),
+  checks_running: z.number().optional().default(0),
+  checks_pending: z.number().optional().default(0),
+  failed_check_names: z.array(z.string()).optional().default([]),
+  snapshot_stale: z.boolean().optional().default(false),
+  snapshot_fetched_at: z.string().nullable().optional(),
+  mergeable_state: z.string().nullable().optional(),
+  additions: z.number().optional().default(0),
+  deletions: z.number().optional().default(0),
+  changed_files: z.number().optional().default(0),
+}).loose();
+
+export const IssuePullRequestsResponseSchema = z.object({
+  pull_requests: z.array(GitHubPullRequestSchema).default([]),
+}).loose();
+
+// Fallback for the pull-requests response when the shape drifts or the
+// request fails — an empty list hides the section (same as web's
+// EMPTY_ISSUE_PULL_REQUESTS_RESPONSE).
+export const EMPTY_ISSUE_PULL_REQUESTS_RESPONSE: {
+  pull_requests: import("@multica/core/types").GitHubPullRequest[];
+} = {
+  pull_requests: [],
+};
+
+// ---------------------------------------------------------------------------
 // Autopilot detail + runs schemas. The LIST endpoint is covered by core's
 // ListAutopilotsResponseSchema (packages/core/api/schemas.ts:1821) and its
 // run objects by core's AutopilotRunSchema — both imported from

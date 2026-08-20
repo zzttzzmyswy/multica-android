@@ -40,6 +40,7 @@ import { useCreatePin, useDeletePin } from "@/data/mutations/pins";
 import { useAuthStore } from "@/data/auth-store";
 import { useIssueRealtime } from "@/data/realtime/use-issue-realtime";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { githubKeys } from "@/data/queries/github";
 import { getInboxArchiveMode } from "@/lib/inbox-display";
 import { getWebBaseUrl } from "@/data/server-config";
 import { ActionSheet } from "@/lib/action-sheet";
@@ -107,6 +108,7 @@ export default function IssueDetail() {
       detail.refetch(),
       qc.invalidateQueries({ queryKey: issueKeys.timeline(wsId, id) }),
       qc.invalidateQueries({ queryKey: issueKeys.children(wsId, id) }),
+      qc.invalidateQueries({ queryKey: githubKeys.pullRequests(id) }),
     ]);
   }, [detail, qc, wsId, id]);
 
