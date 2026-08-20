@@ -1497,7 +1497,7 @@
   "batch.updateFailedBody": "无法更新选中的问题，请重试。",
   "batch.deleteFailedTitle": "删除失败",
   "batch.deleteFailedBody": "无法删除选中的问题，请重试。",
-    "demo.title": "产品演示",
+  "demo.title": "产品演示",
   "demo.close": "关闭演示",
   "demo.hero.heading": "认识你的新同事：会干活的 AI 智能体",
   "demo.hero.lede": "Multica 是人与智能体、小队协作处理任务的平台——现在在你的手机上也一样顺手。",
@@ -1941,7 +1941,7 @@
   "settings.statuses.editor.color": "颜色",
   "settings.statuses.editor.description": "描述",
   "settings.statuses.editor.save": "保存",
-    "settings.statuses.editor.cancel": "取消",
+  "settings.statuses.editor.cancel": "取消",
   "issueRelation.parent": "父任务",
   "issueRelation.addChildTitle": "添加子任务",
   "issueRelation.addChildDescription": "搜索一个任务添加为子任务",
@@ -1955,5 +1955,13 @@
   "issueRelation.searching": "搜索中…",
   "issueRelation.noResults": "未找到任务。",
   "issueRelation.promptToSearch": "输入关键词搜索任务",
-  "settings.statuses.editor.cancel": "取消"
+  "agents.env.bulkEditAction": "批量编辑",
+  "agents.env.rowEditAction": "逐条编辑",
+  "agents.env.bulkPlaceholder": "API_KEY=值\nBASE_URL=https://example.com",
+  "agents.env.bulkPlaintextNotice": "批量编辑时，值以明文显示。",
+  "agents.env.parseErrorMalformed": "第 {{line}} 行不是 KEY=value 格式",
+  "agents.env.parseErrorDuplicate": "第 {{line}} 行的 key \"{{key}}\" 重复",
+  "agents.env.bulkUnsupportedTitle": "无法批量编辑",
+  "agents.env.bulkUnsupportedMessage": "\"{{key}}\" 的值无法用文本表示，请改用逐条编辑修改",
+  "agents.env.emptyEditable": "尚未配置环境变量。新增一条即可在智能体启动时注入。"
 }

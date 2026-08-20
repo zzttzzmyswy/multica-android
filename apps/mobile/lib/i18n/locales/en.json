@@ -1497,7 +1497,7 @@
   "batch.updateFailedBody": "Couldn't update the selected issues. Please try again.",
   "batch.deleteFailedTitle": "Delete failed",
   "batch.deleteFailedBody": "Couldn't delete the selected issues. Please try again.",
-    "demo.title": "Demo",
+  "demo.title": "Demo",
   "demo.close": "Close demo",
   "demo.hero.heading": "Meet your new teammates: AI agents that get work done",
   "demo.hero.lede": "Multica is a task platform where people, agents and squads work issues together — right from this phone.",
@@ -1941,7 +1941,7 @@
   "settings.statuses.editor.color": "Color",
   "settings.statuses.editor.description": "Description",
   "settings.statuses.editor.save": "Save",
-    "settings.statuses.editor.cancel": "Cancel",
+  "settings.statuses.editor.cancel": "Cancel",
   "issueRelation.parent": "Parent issue",
   "issueRelation.addChildTitle": "Add sub-issue",
   "issueRelation.addChildDescription": "Search for an issue to add as a sub-issue",
@@ -1955,5 +1955,13 @@
   "issueRelation.searching": "Searching…",
   "issueRelation.noResults": "No issues found.",
   "issueRelation.promptToSearch": "Type to search issues",
-  "settings.statuses.editor.cancel": "Cancel"
+  "agents.env.bulkEditAction": "Bulk edit",
+  "agents.env.rowEditAction": "Edit as rows",
+  "agents.env.bulkPlaceholder": "API_KEY=value\nBASE_URL=https://example.com",
+  "agents.env.bulkPlaintextNotice": "Values are shown in plain text while bulk editing.",
+  "agents.env.parseErrorMalformed": "Line {{line}} isn't a KEY=value assignment",
+  "agents.env.parseErrorDuplicate": "Duplicate key \"{{key}}\" on line {{line}}",
+  "agents.env.bulkUnsupportedTitle": "Cannot bulk edit",
+  "agents.env.bulkUnsupportedMessage": "\"{{key}}\" can't be shown as text — edit it as a row",
+  "agents.env.emptyEditable": "No environment variables configured. Add one to inject it into the agent at launch."
 }
