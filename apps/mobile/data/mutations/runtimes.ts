@@ -84,3 +84,25 @@ export function useUnbindAgentsAndDeleteRuntime() {
     },
   });
 }
+/**
+ * Kick off a daemon self-update (iteration-83, A2.4). Mirrors web's
+ * `api.initiateUpdate` trigger inside update-section.tsx — the resulting
+ * RuntimeUpdate row is then polled by the component's own 2s loop, so this
+ * mutation only fires the POST. On settle the runtime list invalidates: a
+ * completed update restarts the daemon, changing status / cli_version.
+ */
+export function useInitiateRuntimeUpdate() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: ({ runtimeId, targetVersion }: { runtimeId: string; targetVersion: string }) =>
+      api.initiateUpdate(runtimeId, targetVersion),
+    onSettled: () => {
+      if (!wsId) return;
+      void qc.invalidateQueries({
+        queryKey: runtimeListOptions(wsId).queryKey,
+      });
+    },
+  });
+}

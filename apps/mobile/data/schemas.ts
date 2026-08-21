@@ -51,6 +51,8 @@ import type {
   ResourceLabelsResponse,
   RuntimeDevice,
   RuntimeProfile,
+  RuntimeUpdate,
+  RuntimeUpdateStatus,
   SearchIssuesResponse,
   SearchProjectsResponse,
   SendChatMessageResponse,
@@ -948,6 +950,45 @@ export const RuntimeSchema: z.ZodType<RuntimeDevice> = z.object({
 
 export const RuntimeListSchema = z.array(RuntimeSchema).default([]);
 export const EMPTY_RUNTIME_LIST: RuntimeDevice[] = [];
+
+// Daemon self-update record (iteration-83, A2.4) — mirrors web
+// `@multica/core/types` RuntimeUpdate / RuntimeUpdateStatus. `output` / `error`
+// are only present once the daemon settles; a backend that omits them parses
+// as absent. A malformed body degrades to an explicit failed record so the
+// update section shows the failure instead of an endless spinner.
+export const RuntimeUpdateStatusSchema = z
+  .enum(["pending", "running", "completed", "failed", "timeout"])
+  .catch("failed") as unknown as z.ZodType<RuntimeUpdateStatus>;
+
+export const RuntimeUpdateSchema: z.ZodType<RuntimeUpdate> = z.object({
+  // id / runtime_id are required by the update endpoint — a body missing them
+  // is malformed and degrades to the fallback failed record rather than being
+  // silently blanked by defaults.
+  id: z.string(),
+  runtime_id: z.string(),
+  status: RuntimeUpdateStatusSchema,
+  target_version: z.string().default(""),
+  output: z.string().optional(),
+  error: z.string().optional(),
+  created_at: z.string().default(""),
+  updated_at: z.string().default(""),
+}).loose();
+
+export function failedRuntimeUpdate(
+  runtimeId: string,
+  error: string,
+): RuntimeUpdate {
+  return {
+    id: "",
+    runtime_id: runtimeId,
+    status: "failed",
+    target_version: "",
+    output: undefined,
+    error,
+    created_at: "",
+    updated_at: "",
+  };
+}
 
 // Cloud runtime node (iteration-82, A2.2) — mirrors
 // packages/core/runtimes/cloud-runtime.ts CloudRuntimeNode. Lenient fields

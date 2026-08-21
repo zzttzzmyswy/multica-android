@@ -35,9 +35,11 @@ import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { Switch } from "@/components/ui/switch";
 import { RuntimeProfilesDialog } from "@/components/runtimes/runtime-profiles-dialog";
+import { UpdateSection } from "@/components/runtimes/update-section";
 import { runtimeListOptions } from "@/data/queries/runtimes";
 import { memberListOptions } from "@/data/queries/members";
 import { agentListOptions } from "@/data/queries/agents";
+import { buildRuntimeMachines, machineUpdateRuntime, readRuntimeMetadata } from "@/lib/runtime-machines";
 import {
   useUpdateRuntime,
   useDeleteRuntime,
@@ -132,6 +134,36 @@ export default function RuntimeDetailPage() {
     () => (id ? data.find((r) => r.id === id) : undefined),
     [data, id],
   );
+
+  // Machine consolidation (iteration-83, A2.4) — the runtime belongs to a
+  // machine; the machine carries the daemon-wide CLI version / launched-by
+  // metadata and decides which (if any) runtime the viewer may use as the
+  // update command channel. Web resolves the same way in
+  // runtime-detail-page.tsx via machineUpdateRuntime (canManageAnyRuntime =
+  // workspace admin).
+  const isAdminViewer =
+    !!user?.id &&
+    members.some((m) => m.user_id === user.id && m.role === "admin");
+  const machines = useMemo(
+    () =>
+      user?.id
+        ? buildRuntimeMachines(data, { now: Date.now(), currentUserId: user.id })
+        : [],
+    [data, user?.id],
+  );
+  const machine = useMemo(
+    () => machines.find((m) => m.runtimes.some((r) => r.id === id)),
+    [machines, id],
+  );
+  const cliVersion =
+    machine?.cliVersion ?? (runtime ? readRuntimeMetadata(runtime, "cli_version") : null);
+  const launchedBy =
+    machine?.launchedBy ?? (runtime ? readRuntimeMetadata(runtime, "launched_by") : null);
+  const updateChannel = machine
+    ? machineUpdateRuntime(machine, user?.id, isAdminViewer)
+    : null;
+  const showVersionSection =
+    machine !== undefined && (!!cliVersion || !!launchedBy || updateChannel !== null);
 
   // Rename inline editor state.
   const [renameOpen, setRenameOpen] = useState(false);
@@ -483,6 +515,43 @@ export default function RuntimeDetailPage() {
             </View>
           ) : null}
         </View>
+
+        {/* Version & daemon-update card (iteration-83, A2.4) — web's
+            MachineCliSection: machine-wide CLI version, the Desktop-managed
+            marker, and the UpdateSection state machine for local machines. */}
+        {showVersionSection && machine ? (
+          <View className="mt-4 rounded-lg border border-border">
+            <View className="border-b border-border px-3 py-2">
+              <Text className="text-xs font-semibold text-foreground">
+                {t("runtimes.update.section_title")}
+              </Text>
+            </View>
+            <View className="p-3">
+              {machine.mode !== "local" ? (
+                <View className="flex-row items-center gap-2">
+                  <Ionicons
+                    name="cube-outline"
+                    size={14}
+                    color={theme.mutedForeground}
+                  />
+                  <Text className="text-xs text-muted-foreground">
+                    {t("runtimes.update.cli_version_label")}
+                  </Text>
+                  <Text className="text-xs font-mono text-foreground">
+                    {cliVersion ?? t("runtimes.update.version_unknown")}
+                  </Text>
+                </View>
+              ) : (
+                <UpdateSection
+                  runtimeId={updateChannel?.id ?? null}
+                  currentVersion={cliVersion}
+                  isOnline={updateChannel?.status === "online"}
+                  launchedBy={launchedBy}
+                />
+              )}
+            </View>
+          </View>
+        ) : null}
 
         {/* Diagnostics card — visibility / rename / delete */}
         <View className="mt-4 rounded-lg border border-border">

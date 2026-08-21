@@ -222,3 +222,70 @@ describe("createDownloadTask", () => {
     });
   });
 });
+
+describe("daemon self-update api methods (iteration-83, A2.4)", () => {
+  it("initiateUpdate POSTs /api/runtimes/:id/update with target_version", async () => {
+    const spy = fetchSpy().mockResolvedValue({
+      id: "update-1",
+      runtime_id: "r1",
+      status: "pending",
+      target_version: "0.4.20",
+      created_at: "2026-08-21T00:00:00Z",
+      updated_at: "2026-08-21T00:00:00Z",
+    });
+    const res = await api.initiateUpdate("r1", "0.4.20");
+    expect(spy).toHaveBeenCalledWith(
+      "/api/runtimes/r1/update",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ target_version: "0.4.20" }),
+      }),
+    );
+    expect(res).toMatchObject({
+      id: "update-1",
+      runtime_id: "r1",
+      status: "pending",
+      target_version: "0.4.20",
+    });
+  });
+
+  it("initiateUpdate degrades an unparseable body to a failed record", async () => {
+    fetchSpy().mockResolvedValue({ whatever: true });
+    const res = await api.initiateUpdate("r1", "0.4.20");
+    expect(res.status).toBe("failed");
+    expect(res.runtime_id).toBe("r1");
+    expect(res.error).toBeTruthy();
+  });
+
+  it("getUpdateResult GETs /api/runtimes/:id/update/:updateId", async () => {
+    const spy = fetchSpy().mockResolvedValue({
+      id: "update-1",
+      runtime_id: "r1",
+      status: "completed",
+      target_version: "0.4.20",
+      output: "installed",
+      created_at: "2026-08-21T00:00:00Z",
+      updated_at: "2026-08-21T00:00:01Z",
+    });
+    const res = await api.getUpdateResult("r1", "update-1");
+    expect(spy).toHaveBeenCalledOnce();
+    expect(spy).toHaveBeenCalledWith("/api/runtimes/r1/update/update-1");
+    expect(res).toMatchObject({
+      status: "completed",
+      target_version: "0.4.20",
+    });
+  });
+
+  it("getUpdateResult keeps a settled error body (failed + server error text)", async () => {
+    fetchSpy().mockResolvedValue({
+      id: "update-1",
+      runtime_id: "r1",
+      status: "failed",
+      target_version: "0.4.20",
+      error: "binary mismatch",
+    });
+    const res = await api.getUpdateResult("r1", "update-1");
+    expect(res.status).toBe("failed");
+    expect(res.error).toBe("binary mismatch");
+  });
+});

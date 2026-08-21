@@ -85,6 +85,7 @@ import type {
   Reaction,
   ReorderPinsRequest,
   RuntimeDevice,
+  RuntimeUpdate,
   RuntimeProfile,
   CreateRuntimeProfileRequest,
   UpdateRuntimeProfileRequest,
@@ -321,6 +322,8 @@ import {
   EMPTY_CLOUD_RUNTIME_NODE_LIST,
   RuntimeProfileListSchema,
   EMPTY_RUNTIME_PROFILE_LIST,
+  RuntimeUpdateSchema,
+  failedRuntimeUpdate,
 } from "./schemas";
 import type { ZodType } from "zod";
 import { File, Paths } from "expo-file-system";
@@ -1109,6 +1112,36 @@ class ApiClient {
     });
     return parseWithFallback(raw, RuntimeListSchema, EMPTY_RUNTIME_LIST, {
       endpoint: "listRuntimes",
+    });
+  }
+
+  // Daemon self-update flow (iteration-83, A2.4) — mirrors web
+  // packages/core/api/client.ts initiateUpdate / getUpdateResult. Both feed a
+  // UI state machine (poll while pending/running, then render or fail), so
+  // the response is validated rather than cast: an unparseable body degrades
+  // to an explicit failed record.
+  async initiateUpdate(
+    runtimeId: string,
+    targetVersion: string,
+  ): Promise<RuntimeUpdate> {
+    const raw = await this.fetch<unknown>(`/api/runtimes/${runtimeId}/update`, {
+      method: "POST",
+      body: JSON.stringify({ target_version: targetVersion }),
+    });
+    return parseWithFallback(raw, RuntimeUpdateSchema, failedRuntimeUpdate(runtimeId, "Initiate update failed"), {
+      endpoint: `POST /api/runtimes/{id}/update`,
+    });
+  }
+
+  async getUpdateResult(
+    runtimeId: string,
+    updateId: string,
+  ): Promise<RuntimeUpdate> {
+    const raw = await this.fetch<unknown>(
+      `/api/runtimes/${runtimeId}/update/${updateId}`,
+    );
+    return parseWithFallback(raw, RuntimeUpdateSchema, failedRuntimeUpdate(runtimeId, "Get update result failed"), {
+      endpoint: `GET /api/runtimes/{id}/update/{update_id}`,
     });
   }
 
