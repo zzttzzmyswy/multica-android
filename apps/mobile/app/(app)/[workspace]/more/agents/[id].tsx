@@ -35,11 +35,14 @@ import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PresenceDot } from "@/components/ui/presence-dot";
 import { AgentDetailActions } from "@/components/agent/agent-detail-actions";
 import { AgentMcpSection } from "@/components/agent/agent-mcp-section";
+import { AgentAccessPicker } from "@/components/agent/agent-access-picker";
 import { agentListAllOptions } from "@/data/queries/agents";
 import { agentTaskSnapshotOptions } from "@/data/queries/agent-task-snapshot";
+import { memberListOptions } from "@/data/queries/members";
 import { runtimeListOptions } from "@/data/queries/runtimes";
 import { useRestoreAgent } from "@/data/mutations/agents";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { useAuthStore } from "@/data/auth-store";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useWorkspacePresenceMap } from "@/lib/use-agent-presence";
 import { useTranslation } from "@/lib/i18n/react";
@@ -118,6 +121,8 @@ export default function AgentDetailPage() {
   const agents = useQuery(agentListAllOptions(wsId));
   const tasks = useQuery(agentTaskSnapshotOptions(wsId));
   const runtimes = useQuery(runtimeListOptions(wsId));
+  const { data: members = [] } = useQuery(memberListOptions(wsId));
+  const currentUserId = useAuthStore((s) => s.user?.id ?? null);
   const presence = useWorkspacePresenceMap(wsId);
   const restoreAgent = useRestoreAgent();
 
@@ -296,6 +301,20 @@ export default function AgentDetailPage() {
               </PropertyRow>
             ) : null}
           </View>
+
+          {/* Access — owner edits grants, everyone else sees a read-only
+              summary (iteration-84 A8, MUL-3963 parity). The picker renders
+              its own section header (px-4 title), so the wrapper only adds
+              the section gap. */}
+          {!archived ? (
+            <View className="pt-5">
+              <AgentAccessPicker
+                agent={agent}
+                members={members}
+                currentUserId={currentUserId}
+              />
+            </View>
+          ) : null}
 
           {/* MCP servers — archived agents render none (a retired agent can't
               be assigned MCP servers). */}
