@@ -7,6 +7,7 @@
  */
 import type {
   Issue,
+  MemberWithUser,
   SearchIssueResult,
   SearchProjectResult,
 } from "@multica/core/types";
@@ -17,6 +18,7 @@ export type RowItem =
   | { kind: "header"; key: string; title: string }
   | { kind: "issue"; key: string; issue: SearchIssueResult; query: string }
   | { kind: "project"; key: string; project: SearchProjectResult; query: string }
+  | { kind: "member"; key: string; member: MemberWithUser; query: string }
   | { kind: "recent"; key: string; issue: Issue };
 
 /**
@@ -36,11 +38,13 @@ export function buildSearchRows({
   query,
   issues,
   projects,
+  members,
   recentIssues,
 }: {
   query: string;
   issues: SearchIssueResult[];
   projects: SearchProjectResult[];
+  members?: MemberWithUser[];
   recentIssues: Issue[];
 }): RowItem[] {
   const trimmedQuery = query.trim();
@@ -64,6 +68,15 @@ export function buildSearchRows({
   });
 
   const rows: RowItem[] = [];
+  // Matched members (pre-filtered by the screen's filterMemberMatches) sit
+  // between the (absent) web Pages/Commands and the Projects section,
+  // mirroring web Cmd+K order: Members → Projects → Issues → Cancelled.
+  if (members && members.length > 0) {
+    rows.push({ kind: "header", key: "h-members", title: translate("search.members") });
+    for (const member of members) {
+      rows.push({ kind: "member", key: `m-${member.id}`, member, query: trimmedQuery });
+    }
+  }
   if (parts.liveProjects.length > 0) {
     rows.push({ kind: "header", key: "h-projects", title: translate("search.projects") });
     for (const project of parts.liveProjects) {

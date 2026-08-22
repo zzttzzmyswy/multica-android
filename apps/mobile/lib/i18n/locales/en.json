@@ -2273,5 +2273,6 @@
   "workspaceSettings.saving": "Saving…",
   "workspaceSettings.slug": "Slug",
   "workspaceSettings.typeToConfirmPrefix": "Type",
-  "workspaceSettings.typeToConfirmSuffix": "to confirm"
+  "workspaceSettings.typeToConfirmSuffix": "to confirm",
+  "search.members": "Members"
 }

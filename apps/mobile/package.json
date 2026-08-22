@@ -73,6 +73,7 @@
     "input-otp-native": "^0.5.0",
     "marked": "^18.0.3",
     "nativewind": "^4.1.23",
+    "pinyin-pro": "3.26.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-i18next": "catalog:",

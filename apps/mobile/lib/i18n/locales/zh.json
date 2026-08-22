@@ -2269,5 +2269,6 @@
   "workspaceSettings.saving": "保存中…",
   "workspaceSettings.slug": "标识",
   "workspaceSettings.typeToConfirmPrefix": "输入",
-  "workspaceSettings.typeToConfirmSuffix": "以确认"
+  "workspaceSettings.typeToConfirmSuffix": "以确认",
+  "search.members": "成员"
 }

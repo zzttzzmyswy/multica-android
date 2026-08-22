@@ -23,12 +23,13 @@ import {
   type ListRenderItem,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type {
   Issue,
   IssueStatus,
+  MemberWithUser,
   SearchIssueResult,
   SearchProjectResult,
 } from "@multica/core/types";
@@ -37,6 +38,7 @@ import { StatusIcon } from "@/components/ui/status-icon";
 import { PriorityIcon } from "@/components/ui/priority-icon";
 import { ProjectIcon } from "@/components/ui/project-icon";
 import { ProjectStatusIcon } from "@/components/ui/project-status-icon";
+import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { api } from "@/data/api";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import {
@@ -44,10 +46,12 @@ import {
   useViewedIssuesStore,
 } from "@/data/viewed-issues-store";
 import { issueDetailOptions } from "@/data/queries/issues";
+import { memberListOptions } from "@/data/queries/members";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { useStatusLabel } from "@/lib/status-options";
 import { projectStatusLabel } from "@/lib/project-status";
 import { buildSearchRows, type RowItem } from "@/lib/search-rows";
+import { filterMemberMatches } from "@/lib/member-search";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
 
@@ -262,6 +266,42 @@ function SearchProjectRow({ item, query, slug }: SearchProjectRowProps) {
   );
 }
 
+interface SearchMemberRowProps {
+  member: MemberWithUser;
+  query: string;
+  slug: string | null;
+}
+
+function SearchMemberRow({ member, query, slug }: SearchMemberRowProps) {
+  return (
+    <Pressable
+      onPress={() => navigateOnTap(slug, `/${slug}/more/members/${member.id}`)}
+      className="active:bg-secondary px-4 py-3"
+    >
+      <View className="flex-row items-center gap-3">
+        <ActorAvatar type="member" id={member.user_id} size={28} />
+        <View className="flex-1 min-w-0 gap-0.5">
+          <HighlightText
+            text={member.name}
+            query={query}
+            className="text-sm text-foreground"
+            numberOfLines={1}
+          />
+          <HighlightText
+            text={member.email}
+            query={query}
+            className="text-xs text-muted-foreground"
+            numberOfLines={1}
+          />
+        </View>
+        <Text className="text-xs text-muted-foreground shrink-0">
+          {member.role}
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+
 interface RecentRowProps {
   item: Issue;
   slug: string | null;
@@ -336,6 +376,11 @@ export default function SearchModal() {
     [recentQueries],
   );
 
+  // Members for the member search section (iteration 89). Loaded once per
+  // workspace; filtering happens client-side in filterMemberMatches
+  // (port of web search-command.tsx).
+  const { data: memberRows = [] } = useQuery(memberListOptions(wsId));
+
   // Cleanup pending debounce + abort on unmount. Without this, navigating
   // away mid-request leaves a dangling timeout + an in-flight fetch whose
   // setState would warn against an unmounted component.
@@ -398,8 +443,14 @@ export default function SearchModal() {
   );
 
   const trimmedQuery = query.trim();
+  const filteredMembers = useMemo(
+    () => filterMemberMatches(memberRows, trimmedQuery),
+    [memberRows, trimmedQuery],
+  );
   const hasResults =
-    results.issues.length > 0 || results.projects.length > 0;
+    results.issues.length > 0 ||
+    results.projects.length > 0 ||
+    filteredMembers.length > 0;
 
   // Build the FlatList data. One flat array of discriminated rows means a
   // single virtualised list covers Recent (empty-state) and the search results
@@ -411,9 +462,10 @@ export default function SearchModal() {
         query,
         issues: results.issues,
         projects: results.projects,
+        members: filteredMembers,
         recentIssues,
       }),
-    [query, results, recentIssues],
+    [query, results, filteredMembers, recentIssues],
   );
 
   const renderItem = useCallback<ListRenderItem<RowItem>>(
@@ -429,6 +481,8 @@ export default function SearchModal() {
           return <SearchIssueRow item={item.issue} query={item.query} slug={slug} />;
         case "project":
           return <SearchProjectRow item={item.project} query={item.query} slug={slug} />;
+        case "member":
+          return <SearchMemberRow member={item.member} query={item.query} slug={slug} />;
         case "recent":
           return <RecentRow item={item.issue} slug={slug} />;
       }

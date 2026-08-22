@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type {
   Issue,
+  MemberWithUser,
   SearchIssueResult,
   SearchProjectResult,
 } from "@multica/core/types";
@@ -43,6 +44,22 @@ function project(
 /** Header titles and row keys, top to bottom — what the user actually sees. */
 const shape = (rows: ReturnType<typeof buildSearchRows>) =>
   rows.map((r) => (r.kind === "header" ? `#${r.title}` : r.key));
+
+function member(
+  partial: Partial<MemberWithUser> & { id: string; name: string },
+): MemberWithUser {
+  const base: MemberWithUser = {
+    id: partial.id,
+    workspace_id: "ws-1",
+    user_id: `user-${partial.id}`,
+    role: "member",
+    created_at: "2026-01-01T00:00:00Z",
+    name: partial.name,
+    email: `${partial.name.toLowerCase()}@example.com`,
+    avatar_url: null,
+  };
+  return { ...base, ...partial };
+}
 
 describe("buildSearchRows", () => {
   it("renders Recent for an empty query", () => {
@@ -126,5 +143,59 @@ describe("buildSearchRows", () => {
       recentIssues: [],
     });
     expect(shape(rows)).toEqual(["#Projects", "p-p1", "#Issues", "i-i1"]);
+  });
+
+  // Iteration 89: members section sits before Projects, mirroring web's
+  // Cmd+K order (Pages → Commands → Members → Projects → Issues → Cancelled).
+  it("places matched members before projects and issues", () => {
+    const rows = buildSearchRows({
+      query: "liyun",
+      issues: [issue({ id: "i1", title: "liyun task" })],
+      projects: [project({ id: "p1", title: "liyun project" })],
+      members: [member({ id: "m1", name: "李云龙" })],
+      recentIssues: [],
+    });
+
+    expect(shape(rows)).toEqual([
+      "#Members",
+      "m-m1",
+      "#Projects",
+      "p-p1",
+      "#Issues",
+      "i-i1",
+    ]);
+  });
+
+  it("renders the members section when only members match", () => {
+    const rows = buildSearchRows({
+      query: "liyun",
+      issues: [],
+      projects: [],
+      members: [member({ id: "m1", name: "李云龙" })],
+      recentIssues: [],
+    });
+    expect(shape(rows)).toEqual(["#Members", "m-m1"]);
+  });
+
+  it("omits the members section when none remain after filtering", () => {
+    const rows = buildSearchRows({
+      query: "alice",
+      issues: [],
+      projects: [],
+      members: [],
+      recentIssues: [],
+    });
+    expect(shape(rows)).toEqual([]);
+  });
+
+  it("does not render members for an empty query (Recent only)", () => {
+    const rows = buildSearchRows({
+      query: "",
+      issues: [],
+      projects: [],
+      members: [member({ id: "m1", name: "Alice" })],
+      recentIssues: [{ id: "r1" } as Issue],
+    });
+    expect(shape(rows)).toEqual(["#Recent", "r-r1"]);
   });
 });
