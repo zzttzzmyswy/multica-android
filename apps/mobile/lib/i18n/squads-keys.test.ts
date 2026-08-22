@@ -53,6 +53,13 @@ describe("squads list/detail i18n", () => {
     "squads.detail.archive": "归档小队",
     "squads.detail.leaderChip": "队长",
     "squads.detail.activeTask": "正在运行任务…",
+    "squads.instructions.title": "指令",
+    "squads.instructions.description": "小队指引会在 Leader 智能体处理分配给该小队的任务时注入到它的 prompt 中。可用来给 Leader 提供贯穿全队的指导、协作规范，或每次 task 都应遵循的上下文。",
+    "squads.instructions.edit": "编辑指令",
+    "squads.instructions.empty": "还没有指令",
+    "squads.instructions.placeholder": "例如：始终先写一个会失败的测试；偏好小步、原子的提交。",
+    "squads.instructions.saved": "指令已保存",
+    "squads.instructions.unsaved": "有未保存的修改",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {

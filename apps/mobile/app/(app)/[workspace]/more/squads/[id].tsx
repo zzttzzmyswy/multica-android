@@ -37,6 +37,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { TextField } from "@/components/ui/text-field";
 import { AutosizeTextArea } from "@/components/ui/autosize-textarea";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { Markdown } from "@/lib/markdown";
 import { SquadMemberPicker } from "@/components/squad/squad-member-picker";
 import { squadDetailOptions, squadMemberListOptions, squadMemberStatusOptions } from "@/data/queries/squads";
 import { memberListOptions } from "@/data/queries/members";
@@ -143,6 +144,8 @@ export default function SquadDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [instructionsOpen, setInstructionsOpen] = useState(false);
+  const [instructionsValue, setInstructionsValue] = useState("");
   const [roleEdit, setRoleEdit] = useState<{
     member: SquadMember;
     value: string;
@@ -334,6 +337,30 @@ export default function SquadDetailPage() {
     );
   }, [squad, editName, editDescription, updateSquad, t]);
 
+  const onOpenInstructions = useCallback(() => {
+    if (!squad) return;
+    setInstructionsValue(squad.instructions ?? "");
+    setInstructionsOpen(true);
+  }, [squad]);
+
+  const onSaveInstructions = useCallback(() => {
+    if (!squad) return;
+    updateSquad.mutate(
+      { instructions: instructionsValue },
+      {
+        onSuccess: () => {
+          setInstructionsOpen(false);
+          Alert.alert(t("squads.instructions.saved"));
+        },
+        onError: (err) =>
+          Alert.alert(
+            t("squads.detail.updateFailed"),
+            err instanceof Error ? err.message : t("common.unknownError"),
+          ),
+      },
+    );
+  }, [squad, instructionsValue, updateSquad, t]);
+
   const onSaveRole = useCallback(() => {
     if (!roleEdit) return;
     updateRole.mutate(
@@ -466,6 +493,32 @@ export default function SquadDetailPage() {
                 </Button>
               ) : null}
             </View>
+
+            {/* Instructions */}
+            <SectionTitle>{t("squads.instructions.title")}</SectionTitle>
+            <View className="px-4 gap-2">
+              <Text className="text-xs text-muted-foreground/80 leading-4">
+                {t("squads.instructions.description")}
+              </Text>
+              {squad.instructions?.trim() ? (
+                <View className="rounded-lg border border-border px-3 py-2 bg-card">
+                  <Markdown content={squad.instructions} />
+                </View>
+              ) : (
+                <View className="rounded-lg border border-dashed border-border px-3 py-6 items-center">
+                  <Ionicons name="document-text-outline" size={22} color={theme.mutedForeground} />
+                  <Text className="text-xs text-muted-foreground/70 italic mt-1">
+                    {t("squads.instructions.empty")}
+                  </Text>
+                </View>
+              )}
+              {canManage ? (
+                <Button variant="outline" onPress={onOpenInstructions}>
+                  <Ionicons name="create-outline" size={15} color={theme.mutedForeground} />
+                  <Text>{t("squads.instructions.edit")}</Text>
+                </Button>
+              ) : null}
+            </View>
           </>
         ) : null}
       </ScrollView>
@@ -491,6 +544,17 @@ export default function SquadDetailPage() {
         onDescriptionChange={setEditDescription}
         onSave={onSaveEdit}
         onClose={() => setEditOpen(false)}
+      />
+
+      {/* Edit squad instructions */}
+      <InstructionsEditModal
+        visible={instructionsOpen}
+        value={instructionsValue}
+        original={squad?.instructions ?? ""}
+        saving={updateSquad.isPending}
+        onChange={setInstructionsValue}
+        onSave={onSaveInstructions}
+        onClose={() => setInstructionsOpen(false)}
       />
 
       {/* Edit role text */}
@@ -630,6 +694,67 @@ function EditSquadModal({
                   <Text>{t("common.cancel")}</Text>
                 </Button>
                 <Button size="sm" onPress={onSave} disabled={saving}>
+                  <Text>{saving ? t("common.saving") : t("common.save")}</Text>
+                </Button>
+              </View>
+            </View>
+          </Pressable>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function InstructionsEditModal({
+  visible,
+  value,
+  original,
+  saving,
+  onChange,
+  onSave,
+  onClose,
+}: {
+  visible: boolean;
+  value: string;
+  original: string;
+  saving: boolean;
+  onChange: (v: string) => void;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const dirty = value !== original;
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable className="flex-1 bg-black/40" onPress={onClose}>
+        <View className="flex-1 items-center justify-center px-6">
+          <Pressable onPress={() => {}} className="w-full max-w-sm">
+            <View className="bg-popover rounded-2xl p-4 gap-3">
+              <Text className="text-base font-semibold text-foreground">
+                {t("squads.instructions.title")}
+              </Text>
+              <Text className="text-xs text-muted-foreground/80 leading-4">
+                {t("squads.instructions.description")}
+              </Text>
+              <AutosizeTextArea
+                value={value}
+                onChangeText={onChange}
+                editable={!saving}
+                autoFocus
+                minHeight={160}
+                placeholder={t("squads.instructions.placeholder")}
+                className="border border-border rounded-md px-3 py-2"
+              />
+              {dirty ? (
+                <Text className="text-xs text-muted-foreground">
+                  {t("squads.instructions.unsaved")}
+                </Text>
+              ) : null}
+              <View className="flex-row justify-end gap-2">
+                <Button variant="outline" size="sm" onPress={onClose} disabled={saving}>
+                  <Text>{t("common.cancel")}</Text>
+                </Button>
+                <Button size="sm" onPress={onSave} disabled={!dirty || saving}>
                   <Text>{saving ? t("common.saving") : t("common.save")}</Text>
                 </Button>
               </View>
