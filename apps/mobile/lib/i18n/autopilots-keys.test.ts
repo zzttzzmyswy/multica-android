@@ -55,6 +55,22 @@ describe("autopilot create/trigger i18n", () => {
     "autopilots.deliveries.replay": "重放",
     "autopilots.deliveries.replaying": "重放中…",
     "autopilots.deliveries.replayed": "已重放该投递",
+    // Iteration-88 web alignment: edit mode / project / squad assignee.
+    "autopilots.detail.edit": "编辑",
+    "autopilots.detail.fieldProject": "项目",
+    "autopilots.detail.noProject": "无项目",
+    "autopilots.detail.projectUnavailable": "项目不可用",
+    "autopilots.edit.title": "编辑自动化",
+    "autopilots.edit.save": "保存",
+    "autopilots.edit.failedTitle": "更新自动化失败",
+    "autopilots.new.assignee": "执行对象",
+    "autopilots.new.selectAssignee": "选择智能体或 Squad…",
+    "autopilots.new.project": "项目",
+    "autopilots.new.noProject": "无项目",
+    "autopilots.new.selectProject": "选择项目…",
+    "autopilots.assigneePicker.title": "选择智能体或 Squad",
+    "autopilots.assigneePicker.empty": "当前工作区没有智能体或 Squad",
+    "autopilots.projectPicker.title": "选择项目",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {

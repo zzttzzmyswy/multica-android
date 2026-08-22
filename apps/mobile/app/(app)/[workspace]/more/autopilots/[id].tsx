@@ -56,6 +56,7 @@ import {
   useTriggerAutopilot,
 } from "@/data/mutations/autopilots";
 import { memberListOptions } from "@/data/queries/members";
+import { findProject, projectListOptions } from "@/data/queries/projects";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { getApiBaseUrl } from "@/data/server-config";
@@ -118,6 +119,7 @@ export default function AutopilotDetailPage() {
   const detail = useQuery(autopilotDetailOptions(wsId, id));
   const runs = useQuery(autopilotRunsOptions(wsId, id, { limit: 20 }));
   const { data: members = [] } = useQuery(memberListOptions(wsId));
+  const { data: projects = [] } = useQuery(projectListOptions(wsId));
   const updateAutopilot = useUpdateAutopilot();
   const triggerAutopilot = useTriggerAutopilot();
   const deleteAutopilot = useDeleteAutopilot();
@@ -201,15 +203,23 @@ export default function AutopilotDetailPage() {
   };
 
   const onPressMore = useCallback(() => {
+    const editLabel = t("autopilots.detail.edit");
+    const deleteLabel = t("autopilots.detail.delete");
+    const cancelLabel = t("common.cancel");
+    // Edit sits above Delete; absent can_write hides Edit entirely (read-only).
+    const options = canWrite
+      ? [editLabel, deleteLabel, cancelLabel]
+      : [deleteLabel, cancelLabel];
+    const deleteIndex = canWrite ? 1 : 0;
     ActionSheet.showActionSheetWithOptions(
       {
         title: t("autopilots.detail.actions"),
-        options: [t("autopilots.detail.delete"), t("common.cancel")],
-        cancelButtonIndex: 1,
-        destructiveButtonIndex: 0,
+        options,
+        cancelButtonIndex: options.length - 1,
+        destructiveButtonIndex: deleteIndex,
       },
       (index) => {
-        if (index === 0 && autopilot) {
+        if (index === deleteIndex && autopilot) {
           Alert.alert(
             t("autopilots.detail.deleteTitle"),
             t("autopilots.detail.deleteMessage", { title: autopilot.title }),
@@ -233,10 +243,12 @@ export default function AutopilotDetailPage() {
               },
             ],
           );
+        } else if (index === 0 && canWrite && autopilot) {
+          router.push(`/${wsSlug}/more/autopilots/${autopilot.id}/edit`);
         }
       },
     );
-  }, [autopilot, deleteAutopilot, t]);
+  }, [autopilot, deleteAutopilot, canWrite, wsSlug, t]);
 
   const onAddTrigger = useCallback(
     (kind: "schedule" | "webhook") => {
@@ -429,6 +441,16 @@ export default function AutopilotDetailPage() {
               : autopilot.execution_mode}
           </Text>
         </PropertyRow>
+        {autopilot.execution_mode === "create_issue" ? (
+          <PropertyRow label={t("autopilots.detail.fieldProject")} icon="folder-outline">
+            <Text className="text-sm text-foreground" numberOfLines={1}>
+              {autopilot.project_id
+                ? findProject(projects, autopilot.project_id)?.title ??
+                  t("autopilots.detail.projectUnavailable")
+                : t("autopilots.detail.noProject")}
+            </Text>
+          </PropertyRow>
+        ) : null}
         <PropertyRow label={t("autopilots.detail.fieldStatus")} icon="pulse-outline">
           <Text className="text-sm text-foreground">
             {autopilot.status === "active" ||
