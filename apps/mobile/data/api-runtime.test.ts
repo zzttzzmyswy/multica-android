@@ -66,9 +66,18 @@ describe("dashboard run-time api methods", () => {
 
   it("getDashboardAgentRunTime honours the abort signal", async () => {
     const spy = fetchSpy().mockResolvedValue([]);
-    await api.getDashboardAgentRunTime(30, { signal: undefined });
+    await api.getDashboardAgentRunTime(30, undefined, { signal: undefined });
     expect(spy).toHaveBeenCalledWith(
       "/api/dashboard/agent-runtime?days=30",
+      expect.objectContaining({ signal: undefined }),
+    );
+  });
+
+  it("getDashboardAgentRunTime appends project_id when a project is selected", async () => {
+    const spy = fetchSpy().mockResolvedValue([]);
+    await api.getDashboardAgentRunTime(7, "project-1");
+    expect(spy).toHaveBeenCalledWith(
+      "/api/dashboard/agent-runtime?days=7&project_id=project-1",
       expect.objectContaining({ signal: undefined }),
     );
   });
@@ -110,6 +119,15 @@ describe("dashboard run-time api methods", () => {
     fetchSpy().mockResolvedValue(null);
     const res = await api.getDashboardRunTimeDaily(7);
     expect(res).toEqual([]);
+  });
+
+  it("getDashboardRunTimeDaily appends project_id when a project is selected", async () => {
+    const spy = fetchSpy().mockResolvedValue([]);
+    await api.getDashboardRunTimeDaily(30, "project-2");
+    expect(spy).toHaveBeenCalledWith(
+      "/api/dashboard/runtime/daily?days=30&project_id=project-2",
+      expect.objectContaining({ signal: undefined }),
+    );
   });
 });
 

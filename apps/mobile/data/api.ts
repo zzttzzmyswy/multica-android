@@ -424,6 +424,18 @@ export class DownloadCancelledError extends Error {
   }
 }
 
+/** Build the query string for a dashboard rollup: ?days= plus an optional
+ *  ?project_id= (iteration-87 page-scoped project filter). A null/undefined
+ *  projectId keeps the URL byte-identical to the whole-workspace shape. */
+function dashboardRollupUrl(
+  path: string,
+  days: number,
+  projectId?: string | null,
+): string {
+  if (!projectId) return `${path}?days=${days}`;
+  return `${path}?days=${days}&project_id=${projectId}`;
+}
+
 export interface ApiClientOptions {
   /** Called once when the server returns 401. The platform layer wires this
    *  to clear the token + navigate to /login so a stale token doesn't keep
@@ -1630,11 +1642,15 @@ class ApiClient {
   // response to [] so a changed backend never crashes the page.
   async getDashboardUsageDaily(
     days: number,
+    projectId?: string | null,
     opts?: { signal?: AbortSignal },
   ): Promise<DashboardUsageDaily[]> {
-    const raw = await this.fetch<unknown>(`/api/dashboard/usage/daily?days=${days}`, {
-      signal: opts?.signal,
-    });
+    const raw = await this.fetch<unknown>(
+      dashboardRollupUrl("/api/dashboard/usage/daily", days, projectId),
+      {
+        signal: opts?.signal,
+      },
+    );
     return parseWithFallback(
       raw,
       DashboardUsageDailyListSchema,
@@ -1645,11 +1661,15 @@ class ApiClient {
 
   async getDashboardUsageByAgent(
     days: number,
+    projectId?: string | null,
     opts?: { signal?: AbortSignal },
   ): Promise<DashboardUsageByAgent[]> {
-    const raw = await this.fetch<unknown>(`/api/dashboard/usage/by-agent?days=${days}`, {
-      signal: opts?.signal,
-    });
+    const raw = await this.fetch<unknown>(
+      dashboardRollupUrl("/api/dashboard/usage/by-agent", days, projectId),
+      {
+        signal: opts?.signal,
+      },
+    );
     return parseWithFallback(
       raw,
       DashboardUsageByAgentListSchema,
@@ -1664,11 +1684,15 @@ class ApiClient {
   // degrades to [] so the Errors view renders its no-data state.
   async getDashboardFailuresDaily(
     days: number,
+    projectId?: string | null,
     opts?: { signal?: AbortSignal },
   ): Promise<DashboardFailureDaily[]> {
-    const raw = await this.fetch<unknown>(`/api/dashboard/failures/daily?days=${days}`, {
-      signal: opts?.signal,
-    });
+    const raw = await this.fetch<unknown>(
+      dashboardRollupUrl("/api/dashboard/failures/daily", days, projectId),
+      {
+        signal: opts?.signal,
+      },
+    );
     return parseWithFallback(
       raw,
       DashboardFailureDailyListSchema,
@@ -1679,11 +1703,15 @@ class ApiClient {
 
   async getDashboardFailuresByAgent(
     days: number,
+    projectId?: string | null,
     opts?: { signal?: AbortSignal },
   ): Promise<DashboardFailureByAgent[]> {
-    const raw = await this.fetch<unknown>(`/api/dashboard/failures/by-agent?days=${days}`, {
-      signal: opts?.signal,
-    });
+    const raw = await this.fetch<unknown>(
+      dashboardRollupUrl("/api/dashboard/failures/by-agent", days, projectId),
+      {
+        signal: opts?.signal,
+      },
+    );
     return parseWithFallback(
       raw,
       DashboardFailureByAgentListSchema,
@@ -1698,11 +1726,15 @@ class ApiClient {
   // cancelled segment — exactly what that backend measured.
   async getDashboardAgentRunTime(
     days: number,
+    projectId?: string | null,
     opts?: { signal?: AbortSignal },
   ): Promise<DashboardAgentRunTime[]> {
-    const raw = await this.fetch<unknown>(`/api/dashboard/agent-runtime?days=${days}`, {
-      signal: opts?.signal,
-    });
+    const raw = await this.fetch<unknown>(
+      dashboardRollupUrl("/api/dashboard/agent-runtime", days, projectId),
+      {
+        signal: opts?.signal,
+      },
+    );
     return parseWithFallback(
       raw,
       DashboardAgentRunTimeListSchema,
@@ -1713,11 +1745,15 @@ class ApiClient {
 
   async getDashboardRunTimeDaily(
     days: number,
+    projectId?: string | null,
     opts?: { signal?: AbortSignal },
   ): Promise<DashboardRunTimeDaily[]> {
-    const raw = await this.fetch<unknown>(`/api/dashboard/runtime/daily?days=${days}`, {
-      signal: opts?.signal,
-    });
+    const raw = await this.fetch<unknown>(
+      dashboardRollupUrl("/api/dashboard/runtime/daily", days, projectId),
+      {
+        signal: opts?.signal,
+      },
+    );
     return parseWithFallback(
       raw,
       DashboardRunTimeDailyListSchema,

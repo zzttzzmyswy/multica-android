@@ -56,9 +56,18 @@ describe("dashboard failure api methods", () => {
 
   it("getDashboardFailuresDaily honours the abort signal", async () => {
     const spy = fetchSpy().mockResolvedValue([]);
-    await api.getDashboardFailuresDaily(30, { signal: undefined });
+    await api.getDashboardFailuresDaily(30, undefined, { signal: undefined });
     expect(spy).toHaveBeenCalledWith(
       "/api/dashboard/failures/daily?days=30",
+      expect.objectContaining({ signal: undefined }),
+    );
+  });
+
+  it("getDashboardFailuresDaily appends project_id when a project is selected", async () => {
+    const spy = fetchSpy().mockResolvedValue([]);
+    await api.getDashboardFailuresDaily(7, "project-1");
+    expect(spy).toHaveBeenCalledWith(
+      "/api/dashboard/failures/daily?days=7&project_id=project-1",
       expect.objectContaining({ signal: undefined }),
     );
   });
@@ -86,5 +95,14 @@ describe("dashboard failure api methods", () => {
     fetchSpy().mockResolvedValue(null);
     const res = await api.getDashboardFailuresByAgent(7);
     expect(res).toEqual([]);
+  });
+
+  it("getDashboardFailuresByAgent appends project_id when a project is selected", async () => {
+    const spy = fetchSpy().mockResolvedValue([]);
+    await api.getDashboardFailuresByAgent(30, "project-2");
+    expect(spy).toHaveBeenCalledWith(
+      "/api/dashboard/failures/by-agent?days=30&project_id=project-2",
+      expect.objectContaining({ signal: undefined }),
+    );
   });
 });

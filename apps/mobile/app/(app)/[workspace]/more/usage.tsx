@@ -25,6 +25,8 @@
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  FlatList,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -33,9 +35,11 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import type { Project } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { ProjectIcon } from "@/components/ui/project-icon";
 import {
   dashboardAgentRunTimeOptions,
   dashboardFailuresByAgentOptions,
@@ -45,6 +49,7 @@ import {
   dashboardUsageDailyOptions,
 } from "@/data/queries/usage";
 import { api } from "@/data/api";
+import { projectListOptions } from "@/data/queries/projects";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import {
   activeAgentCount,
@@ -93,11 +98,14 @@ import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
-type Range = 7 | 30;
+type Range = 1 | 7 | 30 | 90 | 180;
 type ViewMode = "trend" | "leaderboard" | "errors";
 type UsageMetric = "tokens" | "time" | "tasks";
 
-const RANGES: Range[] = [7, 30];
+// Iteration 87: web TIME_RANGES parity (packages/views/dashboard/dashboard-shared).
+// The 1d/7d/30d/90d/180d set mirrors the web dashboard's page-scoped
+// TimeRangeFilter.
+const RANGES: Range[] = [1, 7, 30, 90, 180];
 
 const CHART_HEIGHT = 112;
 
@@ -111,24 +119,47 @@ export default function UsagePage() {
   const { colorScheme } = useColorScheme();
   const muted = THEME[colorScheme].mutedForeground;
 
-  const [range, setRange] = useState<Range>(7);
+  const [range, setRange] = useState<Range>(30);
   const [mode, setMode] = useState<ViewMode>("trend");
   const [metric, setMetric] = useState<UsageMetric>("tokens");
+  // Iteration 87 page-scoped project filter: null = whole workspace, mirroring
+  // web's ALL_PROJECTS->null derivation (dashboard-page.tsx). A project id
+  // that no longer resolves counts as no filter — same reading web applies.
+  const [projectValue, setProjectValue] = useState<string | null>(null);
+  const [rangeModalOpen, setRangeModalOpen] = useState(false);
+  const [projectModalOpen, setProjectModalOpen] = useState(false);
 
-  const daily = useQuery(dashboardUsageDailyOptions(wsId, range));
-  const byAgent = useQuery(dashboardUsageByAgentOptions(wsId, range));
+  // Project list feeds the page-level project filter (iteration 87). Same
+  // query as web's projectListOptions for the dashboard ProjectFilter.
+  const projectsQuery = useQuery({
+    ...projectListOptions(wsId),
+    enabled: !!wsId,
+  });
+  const projects = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data]);
+  // A project id that no longer resolves (deleted, or stale from another
+  // workspace) counts as no filter — the same reading web applies when it
+  // derives the effective `projectId` for the queries.
+  const effectiveProjectId = useMemo(() => {
+    if (!projectValue) return null;
+    return projects.some((p) => p.id === projectValue) ? projectValue : null;
+  }, [projectValue, projects]);
+  const selectedProject =
+    projects.find((p) => p.id === effectiveProjectId) ?? null;
+
+  const daily = useQuery(dashboardUsageDailyOptions(wsId, range, effectiveProjectId));
+  const byAgent = useQuery(dashboardUsageByAgentOptions(wsId, range, effectiveProjectId));
   // Run-time / task-count rollups power the Time/Tasks metric toggle, the
   // Run time / Tasks KPI tiles and the leaderboard's run-time column
   // (iteration 45). Fetched up front like the token rollups — smaller than
   // the failure payloads, and the KPI row always shows them.
   const runTime = useQuery({
-    ...dashboardAgentRunTimeOptions(wsId, range),
+    ...dashboardAgentRunTimeOptions(wsId, range, effectiveProjectId),
     // These power the KPI row and the Time/Tasks trend; the Errors tab
     // shows neither, so skip the per-second refetch while it is open.
     enabled: !!wsId && mode !== "errors",
   });
   const runTimeDaily = useQuery({
-    ...dashboardRunTimeDailyOptions(wsId, range),
+    ...dashboardRunTimeDailyOptions(wsId, range, effectiveProjectId),
     enabled: !!wsId && mode !== "errors",
   });
   // include_archived so a retired agent keeps its name on the leaderboard
@@ -142,11 +173,11 @@ export default function UsagePage() {
   // Failures rollups only fetched while the Errors tab is visible; switching
   // tabs back to it after a range change refetches via the days key.
   const failuresDaily = useQuery({
-    ...dashboardFailuresDailyOptions(wsId, range),
+    ...dashboardFailuresDailyOptions(wsId, range, effectiveProjectId),
     enabled: !!wsId && mode === "errors",
   });
   const failuresByAgent = useQuery({
-    ...dashboardFailuresByAgentOptions(wsId, range),
+    ...dashboardFailuresByAgentOptions(wsId, range, effectiveProjectId),
     enabled: !!wsId && mode === "errors",
   });
 
@@ -339,17 +370,21 @@ export default function UsagePage() {
               />
             }
           >
-            {/* Time range segmented control */}
-            <View className="flex-row items-center px-4 pt-3 pb-1">
-              <View className="flex-row items-center gap-2">
+            {/* Time range segmented control + page-level project filter
+                (iteration 87) — web dashboard TimeRangeFilter / ProjectFilter
+                parity, phone-sized. */}
+            <View className="flex-row items-center justify-between gap-2 px-4 pt-3 pb-1">
+              <View className="flex-row items-center gap-1">
                 {RANGES.map((r) => {
                   const active = range === r;
                   return (
                     <Pressable
                       key={r}
+                      accessibilityRole="button"
+                      accessibilityLabel={t(`usage.range${r}`)}
                       onPress={() => setRange(r)}
                       className={cn(
-                        "rounded-full px-3 py-1",
+                        "rounded-full px-2 py-1",
                         active ? "bg-foreground" : "bg-muted",
                       )}
                     >
@@ -359,12 +394,38 @@ export default function UsagePage() {
                           active ? "text-background" : "text-muted-foreground",
                         )}
                       >
-                        {r === 7 ? t("usage.range7") : t("usage.range30")}
+                        {t(`usage.range${r}`)}
                       </Text>
                     </Pressable>
                   );
                 })}
               </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("usage.projectFilterLabel")}
+                onPress={() => setProjectModalOpen(true)}
+                className="flex-row items-center gap-1 rounded-full border border-border px-2.5 py-1 max-w-[140px]"
+              >
+                <Ionicons
+                  name={selectedProject ? "folder" : "folder-outline"}
+                  size={13}
+                  color={muted}
+                />
+                <Text
+                  numberOfLines={1}
+                  className={cn(
+                    "text-xs font-medium flex-shrink",
+                    selectedProject
+                      ? "text-foreground"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {selectedProject
+                    ? selectedProject.title
+                    : t("usage.projectAll")}
+                </Text>
+                <Ionicons name="chevron-down" size={12} color={muted} />
+              </Pressable>
             </View>
 
             {/* KPI tiles — usage metrics; the Errors tab brings its own.
@@ -448,8 +509,183 @@ export default function UsagePage() {
             )}
           </ScrollView>
         )}
+        <RangePickerModal
+          visible={rangeModalOpen}
+          range={range}
+          onPick={(r) => {
+            setRange(r);
+            setRangeModalOpen(false);
+          }}
+          onClose={() => setRangeModalOpen(false)}
+        />
+        <ProjectPickerModal
+          visible={projectModalOpen}
+          projects={projects}
+          value={effectiveProjectId}
+          onPick={(id) => {
+            setProjectValue(id);
+            setProjectModalOpen(false);
+          }}
+          onClose={() => setProjectModalOpen(false)}
+        />
       </View>
     </>
+  );
+}
+
+/** Time-range single-select — web dashboard TimeRangeFilter DropdownMenu, as
+ *  a phone-sized Modal (iteration 87). */
+function RangePickerModal({
+  visible,
+  range,
+  onPick,
+  onClose,
+}: {
+  visible: boolean;
+  range: Range;
+  onPick: (next: Range) => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const { colorScheme } = useColorScheme();
+  const primary = THEME[colorScheme].primary;
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <Pressable className="flex-1 bg-black/40" onPress={onClose}>
+        <View className="flex-1 items-center justify-center px-6">
+          <Pressable onPress={() => {}} className="w-full max-w-sm">
+            <View className="bg-popover rounded-2xl overflow-hidden">
+              <View className="px-4 py-3 border-b border-border">
+                <Text className="text-base font-semibold text-foreground">
+                  {t("usage.periodLabel")}
+                </Text>
+              </View>
+              <View className="py-1">
+                {RANGES.map((r) => {
+                  const active = range === r;
+                  return (
+                    <Pressable
+                      key={r}
+                      accessibilityRole="button"
+                      onPress={() => onPick(r)}
+                      className="flex-row items-center justify-between px-4 py-3 active:bg-secondary"
+                    >
+                      <Text className="text-sm text-foreground">
+                        {t(`usage.range${r}`)}
+                      </Text>
+                      {active ? (
+                        <Ionicons name="checkmark" size={18} color={primary} />
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          </Pressable>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
+/** Page-level project filter — web dashboard ProjectFilter DropdownMenu, as a
+ *  phone-sized Modal (iteration 87). "All projects" is the null filter, the
+ *  same ALL_PROJECTS sentinel web derives to null. */
+function ProjectPickerModal({
+  visible,
+  projects,
+  value,
+  onPick,
+  onClose,
+}: {
+  visible: boolean;
+  projects: Project[];
+  value: string | null;
+  onPick: (id: string | null) => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const { colorScheme } = useColorScheme();
+  const primary = THEME[colorScheme].primary;
+  const muted = THEME[colorScheme].mutedForeground;
+  const rows: ({ kind: "all" } | { kind: "project"; project: Project })[] = [
+    { kind: "all" },
+    ...[...projects]
+      .sort((a, b) => a.title.localeCompare(b.title))
+      .map((p) => ({ kind: "project" as const, project: p })),
+  ];
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <Pressable className="flex-1 bg-black/40" onPress={onClose}>
+        <View className="flex-1 items-center justify-center px-6">
+          <Pressable onPress={() => {}} className="w-full max-w-sm">
+            <View className="bg-popover rounded-2xl overflow-hidden">
+              <View className="px-4 py-3 border-b border-border">
+                <Text className="text-base font-semibold text-foreground">
+                  {t("usage.projectFilterLabel")}
+                </Text>
+              </View>
+              <FlatList
+                data={rows}
+                className="max-h-96"
+                keyboardShouldPersistTaps="handled"
+                keyExtractor={(r) =>
+                  r.kind === "all" ? "__all__" : `p:${r.project.id}`
+                }
+                renderItem={({ item }) => {
+                  const selected =
+                    item.kind === "all"
+                      ? value === null
+                      : value === item.project.id;
+                  const label =
+                    item.kind === "all" ? t("usage.projectAll") : item.project.title;
+                  return (
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() =>
+                        onPick(item.kind === "all" ? null : item.project.id)
+                      }
+                      className="flex-row items-center justify-between px-4 py-3 active:bg-secondary"
+                    >
+                      <View className="flex-1 flex-row items-center gap-2 pr-2">
+                        {item.kind === "all" ? (
+                          <Ionicons
+                            name="folder-open-outline"
+                            size={16}
+                            color={muted}
+                          />
+                        ) : (
+                          <ProjectIcon icon={item.project.icon} size="sm" />
+                        )}
+                        <Text
+                          numberOfLines={1}
+                          className="flex-shrink text-sm text-foreground"
+                        >
+                          {label}
+                        </Text>
+                      </View>
+                      {selected ? (
+                        <Ionicons name="checkmark" size={18} color={primary} />
+                      ) : null}
+                    </Pressable>
+                  );
+                }}
+              />
+            </View>
+          </Pressable>
+        </View>
+      </Pressable>
+    </Modal>
   );
 }
 
