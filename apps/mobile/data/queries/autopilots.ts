@@ -16,6 +16,8 @@ export const autopilotKeys = {
     [...autopilotKeys.all(wsId), "detail", id] as const,
   runs: (wsId: string | null, id: string) =>
     [...autopilotKeys.all(wsId), "runs", id] as const,
+  deliveries: (wsId: string | null, id: string) =>
+    [...autopilotKeys.all(wsId), "deliveries", id] as const,
 };
 
 export const autopilotListOptions = (wsId: string | null) =>
@@ -44,4 +46,21 @@ export const autopilotRunsOptions = (
       api.listAutopilotRuns(id, { limit: options?.limit }, { signal }),
     select: (data) => data.runs,
     enabled: !!wsId && !!id,
+  });
+
+export const autopilotDeliveriesOptions = (
+  wsId: string | null,
+  id: string,
+  options?: { limit?: number; enabled?: boolean },
+) =>
+  queryOptions({
+    queryKey: autopilotKeys.deliveries(wsId, id),
+    queryFn: ({ signal }) =>
+      api.listAutopilotDeliveries(
+        id,
+        { limit: options?.limit ?? 20 },
+        { signal },
+      ),
+    select: (data) => data.deliveries,
+    enabled: !!wsId && !!id && options?.enabled !== false,
   });

@@ -15,6 +15,9 @@ export interface ScrollMetrics {
   viewportHeight: number;
   /** Pixel band at the bottom edge that counts as "already at bottom". */
   slackPx: number;
+  /** Pixel band at the top edge that counts as "already at top". Defaults
+   *  to `AT_TOP_SLACK_PX` when omitted. */
+  topSlackPx?: number;
 }
 
 /**
@@ -24,6 +27,10 @@ export interface ScrollMetrics {
  * consistent.
  */
 export const AT_BOTTOM_SLACK_PX = 80;
+
+/** Shared top-edge slack (px), symmetric to `AT_BOTTOM_SLACK_PX`: within
+ *  this band the user counts as "at top" and the jump-to-top button hides. */
+export const AT_TOP_SLACK_PX = 80;
 
 /** Distance in px between the viewport's bottom edge and the content end
  *  (>= 0 means the viewport is at or past the very bottom). */
@@ -38,10 +45,24 @@ export function isNearBottom(m: ScrollMetrics): boolean {
   return distanceFromBottom(m) <= m.slackPx;
 }
 
+/** True when the viewport sits within the top slack band — i.e. the user is
+ *  effectively "at the top" and a jump-to-top affordance should be hidden.
+ *  Negative offsets (pull-to-refresh overscroll) still count as at-top. */
+export function isNearTop(m: ScrollMetrics): boolean {
+  return m.contentOffsetY <= (m.topSlackPx ?? AT_TOP_SLACK_PX);
+}
+
 /** The FAB's desired visibility for a scroll sample: shown when scrolled up
  *  away from the bottom, hidden when at/near it. */
 export function wantJumpFab(m: ScrollMetrics): boolean {
   return !isNearBottom(m);
+}
+
+/** The jump-to-top button's desired visibility for a scroll sample: shown
+ *  only in the middle band (neither at the top, where it is pointless, nor
+ *  at the bottom, where it would break the clean "caught up" state). */
+export function wantJumpTopFab(m: ScrollMetrics): boolean {
+  return !isNearTop(m) && !isNearBottom(m);
 }
 
 /**
@@ -56,5 +77,18 @@ export function nextFabVisibility(
   sample: ScrollMetrics,
 ): boolean {
   const want = wantJumpFab(sample);
+  return want === current ? current : want;
+}
+
+/**
+ * `nextFabVisibility` twin for the jump-to-top button. Same dedup contract —
+ * returns the new value only when the sample actually flips the desired
+ * visibility, so a churned `onScroll` handler doesn't re-render per frame.
+ */
+export function nextJumpTopFabVisibility(
+  current: boolean,
+  sample: ScrollMetrics,
+): boolean {
+  const want = wantJumpTopFab(sample);
   return want === current ? current : want;
 }

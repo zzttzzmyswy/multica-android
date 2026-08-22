@@ -15,6 +15,7 @@ function scheduleState(overrides: Partial<TriggerFormState> = {}): TriggerFormSt
     timezone: "Asia/Shanghai",
     label: "",
     enabled: true,
+    eventFilters: [],
     ...overrides,
   };
 }
@@ -107,6 +108,21 @@ describe("buildTriggerCreate", () => {
       buildTriggerCreate(scheduleState({ cronExpression: "  ", timezone: "" })),
     ).toEqual({ kind: "schedule" });
   });
+
+  it("ships event_filters for a webhook with filters and omits them when empty", () => {
+    const withFilters = buildTriggerCreate(
+      scheduleState({
+        kind: "webhook",
+        eventFilters: [{ event: "workflow_run", actions: ["completed"] }],
+      }),
+    );
+    expect(withFilters).toEqual({
+      kind: "webhook",
+      event_filters: [{ event: "workflow_run", actions: ["completed"] }],
+    });
+    const empty = buildTriggerCreate(scheduleState({ kind: "webhook" }));
+    expect(empty.event_filters).toBeUndefined();
+  });
 });
 
 describe("buildTriggerUpdate", () => {
@@ -128,5 +144,23 @@ describe("buildTriggerUpdate", () => {
       label: "",
       enabled: true,
     });
+  });
+
+  it("omits event_filters unless explicitly passed (dirty gate)", () => {
+    const base = scheduleState({ kind: "webhook", label: "digest" });
+    expect(buildTriggerUpdate(base).event_filters).toBeUndefined();
+    expect(
+      buildTriggerUpdate(base, {
+        eventFilters: [{ event: "issue" }],
+      }).event_filters,
+    ).toEqual([{ event: "issue" }]);
+    expect(buildTriggerUpdate(base, { eventFilters: [] }).event_filters).toEqual([]);
+  });
+
+  it("never ships event_filters for schedule edits even when passed", () => {
+    const payload = buildTriggerUpdate(scheduleState(), {
+      eventFilters: [{ event: "issue" }],
+    });
+    expect(payload.event_filters).toBeUndefined();
   });
 });

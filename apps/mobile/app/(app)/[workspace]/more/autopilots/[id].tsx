@@ -20,7 +20,7 @@
  *  MYS-300 scope), so controls are status + run-now only. can_write absence
  *  is treated as allowed — the backend is the real gate (matches web).
  */
-import { useCallback } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -32,12 +32,15 @@ import * as Clipboard from "expo-clipboard";
 import { Stack, useLocalSearchParams, router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import type { AutopilotRun, AutopilotTrigger } from "@multica/core/types";
+import type { AutopilotCollaborator, AutopilotRun, AutopilotSubscriber, AutopilotTrigger } from "@multica/core/types";
 import { buildAutopilotWebhookUrl, maskAutopilotWebhookUrl } from "@multica/core/autopilots/webhook";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { IconButton } from "@/components/ui/icon-button";
+import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
+import { DeliveriesSection } from "@/components/autopilot/deliveries-section";
 import { ActionSheet } from "@/lib/action-sheet";
 import {
   autopilotDetailOptions,
@@ -46,10 +49,13 @@ import {
 import {
   useDeleteAutopilot,
   useDeleteAutopilotTrigger,
+  useGrantAutopilotAccess,
+  useRevokeAutopilotAccess,
   useRotateAutopilotWebhookToken,
   useUpdateAutopilot,
   useTriggerAutopilot,
 } from "@/data/mutations/autopilots";
+import { memberListOptions } from "@/data/queries/members";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { getApiBaseUrl } from "@/data/server-config";
@@ -111,19 +117,66 @@ export default function AutopilotDetailPage() {
 
   const detail = useQuery(autopilotDetailOptions(wsId, id));
   const runs = useQuery(autopilotRunsOptions(wsId, id, { limit: 20 }));
+  const { data: members = [] } = useQuery(memberListOptions(wsId));
   const updateAutopilot = useUpdateAutopilot();
   const triggerAutopilot = useTriggerAutopilot();
   const deleteAutopilot = useDeleteAutopilot();
   const rotateToken = useRotateAutopilotWebhookToken();
   const deleteTrigger = useDeleteAutopilotTrigger();
+  const grantAccess = useGrantAutopilotAccess();
+  const revokeAccess = useRevokeAutopilotAccess();
   const { getName } = useActorLookup();
+  const [accessPickerOpen, setAccessPickerOpen] = useState(false);
 
   const autopilot = detail.data?.autopilot;
   const triggers = detail.data?.triggers ?? [];
   const runList = runs.data ?? [];
+  const hasWebhookTrigger = triggers.some((tr) => tr.kind === "webhook");
+
+  // `subscribers` only populates on the detail endpoint; older servers omit
+  // it (undefined). Treat anything non-array as "no subscribers".
+  const subscriberList = useMemo(() => {
+    const raw = autopilot?.subscribers;
+    return Array.isArray(raw) ? (raw as unknown as AutopilotSubscriber[]) : [];
+  }, [autopilot]);
+
+  // Explicitly-granted collaborators (detail-endpoint-only; older servers
+  // omit the field → treat as empty).
+  const collaborators = useMemo(() => {
+    const raw = detail.data?.collaborators;
+    return Array.isArray(raw)
+      ? (raw as unknown as AutopilotCollaborator[])
+      : [];
+  }, [detail.data]);
+  const grantedAccessIds = useMemo(
+    () => new Set(collaborators.map((c) => c.user_id)),
+    [collaborators],
+  );
+
+  const handleAccessToggle = useCallback(
+    (userId: string) => {
+      if (!id) return;
+      const activate = grantedAccessIds.has(userId);
+      const pending = activate
+        ? revokeAccess.mutateAsync({ autopilotId: id, userId })
+        : grantAccess.mutateAsync({ autopilotId: id, userId });
+      void pending.catch((err) =>
+        Alert.alert(
+          t("autopilots.access.failedTitle"),
+          err instanceof Error ? err.message : t("common.unknownError"),
+        ),
+      );
+    },
+    [id, grantedAccessIds, grantAccess, revokeAccess, t],
+  );
 
   // Absent can_write (older server) is treated as allowed — matches web.
   const canWrite = autopilot?.can_write !== false;
+
+  // Managing the access list is narrower than write (matches web: granted
+  // collaborators can edit but not grant others) — `can_manage_access` on the
+  // detail payload, falling back to can_write on older servers.
+  const canManageAccess = autopilot?.can_manage_access ?? canWrite;
 
   const handleToggleStatus = (checked: boolean) => {
     if (!id) return;
@@ -387,6 +440,96 @@ export default function AutopilotDetailPage() {
         </PropertyRow>
       </View>
 
+      {/* Subscribers — auto-subscribed to issues this autopilot creates. */}
+      <SectionTitle>{t("autopilots.detail.subscribers")}</SectionTitle>
+      <View className="px-4">
+        {subscriberList.length === 0 ? (
+          <Text className="text-sm text-muted-foreground">
+            {t("autopilots.detail.noSubscribers")}
+          </Text>
+        ) : (
+          <View className="flex-row flex-wrap gap-1.5">
+            {subscriberList.map((s) => (
+              <View
+                key={s.user_id}
+                className="flex-row items-center gap-1 rounded-full border border-border bg-secondary/60 px-2 py-1"
+              >
+                <ActorAvatar type="member" id={s.user_id} size={18} />
+                <Text className="text-xs text-foreground">
+                  {getName("member", s.user_id)}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+
+      {/* Access management — grant/revoke explicit write access. Managers see the
+          add control and per-row remove; non-managers get a read-only list. */}
+      <SectionTitle>{t("autopilots.access.sectionLabel")}</SectionTitle>
+      <View className="px-4 gap-2">
+        {canManageAccess ? (
+          <Pressable
+            onPress={() => setAccessPickerOpen(true)}
+            accessibilityLabel={t("autopilots.access.add")}
+            className="self-start flex-row items-center gap-1 rounded-md border border-dashed border-border px-2.5 py-1.5"
+          >
+            <Ionicons name="add" size={14} color={theme.mutedForeground} />
+            <Text className="text-xs text-muted-foreground">
+              {t("autopilots.access.add")}
+            </Text>
+          </Pressable>
+        ) : null}
+        {collaborators.length === 0 ? (
+          <Text className="text-sm text-muted-foreground">
+            {t("autopilots.access.empty")}
+          </Text>
+        ) : (
+          collaborators.map((c) => (
+            <View
+              key={c.user_id}
+              className="flex-row items-center gap-2 rounded-md border border-border px-3 py-2"
+            >
+              <ActorAvatar type="member" id={c.user_id} size={24} />
+              <Text className="flex-1 text-sm text-foreground">
+                {getName("member", c.user_id)}
+              </Text>
+              {canManageAccess ? (
+                <Pressable
+                  onPress={() => handleAccessToggle(c.user_id)}
+                  hitSlop={8}
+                  accessibilityLabel={t("autopilots.access.remove")}
+                  className="p-0.5"
+                >
+                  <Ionicons
+                    name="close"
+                    size={15}
+                    color={theme.mutedForeground}
+                  />
+                </Pressable>
+              ) : null}
+            </View>
+          ))
+        )}
+        <Text className="text-[11px] leading-tight text-muted-foreground/80">
+          {t("autopilots.access.ownerNote")}
+        </Text>
+        {canManageAccess ? (
+          <MultiSelectSheet
+            visible={accessPickerOpen}
+            title={t("autopilots.access.add")}
+            rows={members.map((m) => ({ key: m.user_id, title: m.name }))}
+            selectedKeys={grantedAccessIds}
+            emptyText={t("autopilots.access.noResults")}
+            leading={(row) => (
+              <ActorAvatar type="member" id={row.key} size={32} />
+            )}
+            onToggle={handleAccessToggle}
+            onClose={() => setAccessPickerOpen(false)}
+          />
+        ) : null}
+      </View>
+
       {/* Triggers */}
       <View className="flex-row items-center justify-between pr-4">
         <SectionTitle>{t("autopilots.detail.triggers")}</SectionTitle>
@@ -453,6 +596,14 @@ export default function AutopilotDetailPage() {
           ))
         )}
       </View>
+
+      {/* Webhook deliveries — only when a webhook trigger exists. */}
+      <DeliveriesSection
+        wsId={wsId}
+        autopilotId={id}
+        hasWebhookTrigger={hasWebhookTrigger}
+        t={t}
+      />
       </ScrollView>
     </>
   );

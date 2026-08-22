@@ -25,10 +25,12 @@ import { Stack, router, useLocalSearchParams } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useQuery } from "@tanstack/react-query";
+import type { WebhookEventFilter } from "@multica/core/types";
 import { buildAutopilotWebhookUrl } from "@multica/core/autopilots/webhook";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
+import { EventFilterEditor } from "@/components/autopilot/event-filter-editor";
 import { TimezonePickerSheet } from "@/components/autopilot/timezone-picker-sheet";
 import { api } from "@/data/api";
 import { autopilotDetailOptions } from "@/data/queries/autopilots";
@@ -44,6 +46,7 @@ import {
   probeSchedule,
   type TriggerFormState,
 } from "@/lib/autopilot-trigger-form";
+import { serializeEventFilters } from "@/lib/autopilot-event-filter";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -87,6 +90,9 @@ export default function TriggerFormPage() {
   );
   const [label, setLabel] = useState(isEdit ? existing?.label ?? "" : "");
   const [enabled, setEnabled] = useState(isEdit ? existing?.enabled !== false : true);
+  const [eventFilters, setEventFilters] = useState<WebhookEventFilter[]>(
+    isEdit ? (existing?.event_filters ?? []) : [],
+  );
   const [tzPickerOpen, setTzPickerOpen] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
 
@@ -102,8 +108,24 @@ export default function TriggerFormPage() {
       setTimezone(existing.timezone ?? "Asia/Shanghai");
       setLabel(existing.label ?? "");
       setEnabled(existing.enabled !== false);
+      setEventFilters(existing.event_filters ?? []);
+      initialEventFiltersRef.current = serializeEventFilters(
+        existing.event_filters ?? [],
+      );
     }
   }, [isEdit, existing]);
+
+  // Dirty gate for webhook event filters — PATCH them only when the snapshot
+  // taken on open differs from the live state (web `eventFiltersDirty`).
+  // serializeEventFilters normalizes omitted-vs-empty actions so touching a
+  // field and reverting is not a phantom change.
+  const initialEventFiltersRef = useRef<string | null>(
+    isEdit ? serializeEventFilters(existing?.event_filters ?? []) : null,
+  );
+  const eventFiltersDirty =
+    isEdit &&
+    kind === "webhook" &&
+    serializeEventFilters(eventFilters) !== initialEventFiltersRef.current;
 
   const createTrigger = useCreateAutopilotTrigger();
   const updateTrigger = useUpdateAutopilotTrigger();
@@ -113,8 +135,8 @@ export default function TriggerFormPage() {
   const showCronError = showErrors && cronMissing;
 
   const state: TriggerFormState = useMemo(
-    () => ({ kind, cronExpression, timezone, label, enabled }),
-    [kind, cronExpression, timezone, label, enabled],
+    () => ({ kind, cronExpression, timezone, label, enabled, eventFilters }),
+    [kind, cronExpression, timezone, label, enabled, eventFilters],
   );
 
   const handleSubmit = useCallback(async () => {
@@ -144,7 +166,10 @@ export default function TriggerFormPage() {
         await updateTrigger.mutateAsync({
           autopilotId,
           triggerId,
-          ...buildTriggerUpdate(state),
+          ...buildTriggerUpdate(
+            state,
+            eventFiltersDirty ? { eventFilters } : undefined,
+          ),
         });
         router.back();
         return;
@@ -186,6 +211,8 @@ export default function TriggerFormPage() {
     triggerId,
     autopilotId,
     state,
+    eventFiltersDirty,
+    eventFilters,
     createTrigger,
     updateTrigger,
     t,
@@ -313,6 +340,15 @@ export default function TriggerFormPage() {
                 />
               </View>
             </View>
+          ) : null}
+
+          {/* Event filters — webhook only, both create and edit. */}
+          {kind === "webhook" ? (
+            <EventFilterEditor
+              filters={eventFilters}
+              onChange={setEventFilters}
+              editable={!isSubmitting}
+            />
           ) : null}
 
           {/* Label / enabled — edit only (new triggers start defaulted). */}

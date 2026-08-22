@@ -10,8 +10,11 @@ import { describe, expect, it } from "vitest";
 import {
   distanceFromBottom,
   isNearBottom,
+  isNearTop,
   nextFabVisibility,
+  nextJumpTopFabVisibility,
   wantJumpFab,
+  wantJumpTopFab,
   type ScrollMetrics,
 } from "./scroll-bottom";
 
@@ -103,5 +106,84 @@ describe("nextFabVisibility", () => {
 
   it("hides the FAB once the user returns to the bottom", () => {
     expect(nextFabVisibility(true, hidden)).toBe(false);
+  });
+});
+
+describe("isNearTop", () => {
+  it("is true at the very top", () => {
+    expect(isNearTop(metrics({ contentOffsetY: 0 }))).toBe(true);
+  });
+
+  it("is true on pull-to-refresh overscroll (negative offset)", () => {
+    expect(isNearTop(metrics({ contentOffsetY: -30 }))).toBe(true);
+  });
+
+  it("is true while the top scrollable tip is within the slack band", () => {
+    // 50px scrolled — inside the 80px top slack.
+    expect(isNearTop(metrics({ contentOffsetY: 50 }))).toBe(true);
+  });
+
+  it("is false once scrolled past the top slack band", () => {
+    expect(isNearTop(metrics({ contentOffsetY: 200 }))).toBe(false);
+  });
+
+  it("honours a custom top slack band", () => {
+    const tighter = { topSlackPx: 20 };
+    // 50px scrolled — true with 80px slack, false with 20px slack.
+    expect(isNearTop(metrics({ contentOffsetY: 50, ...tighter }))).toBe(false);
+  });
+});
+
+describe("wantJumpTopFab", () => {
+  it("is false at the top — the button is pointless", () => {
+    expect(wantJumpTopFab(metrics({ contentOffsetY: 0 }))).toBe(false);
+  });
+
+  it("is false at the bottom — keeps the caught-up state clean", () => {
+    expect(wantJumpTopFab(metrics({}))).toBe(false);
+  });
+
+  it("is false just above the bottom edge band", () => {
+    // 50px remains below the viewport — inside the 80px bottom slack.
+    expect(wantJumpTopFab(metrics({ contentOffsetY: 550 }))).toBe(false);
+  });
+
+  it("is true in the middle band, away from both edges", () => {
+    expect(wantJumpTopFab(metrics({ contentOffsetY: 300 }))).toBe(true);
+  });
+
+  it("is true just below the top slack band", () => {
+    // 100px scrolled — outside the 80px top slack, far from the bottom.
+    expect(wantJumpTopFab(metrics({ contentOffsetY: 100 }))).toBe(true);
+  });
+});
+
+describe("nextJumpTopFabVisibility", () => {
+  const atTop = metrics({ contentOffsetY: 0 });
+  const atBottom = metrics({});
+  const middle = metrics({ contentOffsetY: 300 });
+
+  it("stays hidden when a scroll sample keeps the user at the top", () => {
+    expect(nextJumpTopFabVisibility(false, atTop)).toBe(false);
+  });
+
+  it("stays hidden when a scroll sample keeps the user at the bottom", () => {
+    expect(nextJumpTopFabVisibility(false, atBottom)).toBe(false);
+  });
+
+  it("stays shown when a scroll sample keeps the user in the middle", () => {
+    expect(nextJumpTopFabVisibility(true, middle)).toBe(true);
+  });
+
+  it("shows the button once the user enters the middle band", () => {
+    expect(nextJumpTopFabVisibility(false, middle)).toBe(true);
+  });
+
+  it("hides the button once the user returns to the top", () => {
+    expect(nextJumpTopFabVisibility(true, atTop)).toBe(false);
+  });
+
+  it("hides the button once the user reaches the bottom", () => {
+    expect(nextJumpTopFabVisibility(true, atBottom)).toBe(false);
   });
 });

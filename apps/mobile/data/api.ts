@@ -22,8 +22,11 @@ import type {
   AgentTask,
   Attachment,
   Autopilot,
+  AutopilotCollaboratorsResponse,
   AutopilotRun,
   AutopilotTrigger,
+  WebhookDelivery,
+  ListWebhookDeliveriesResponse,
   ChatMessage,
   ChatPendingTask,
   ChatSession,
@@ -203,6 +206,12 @@ import {
   AgentTaskListSchema,
   AutopilotDetailSchema,
   AutopilotTriggerSchema,
+  AutopilotCollaboratorsResponseSchema,
+  EMPTY_AUTOPILOT_COLLABORATORS,
+  WebhookDeliverySchema,
+  ListWebhookDeliveriesResponseSchema,
+  EMPTY_LIST_WEBHOOK_DELIVERIES_RESPONSE,
+  FALLBACK_WEBHOOK_DELIVERY,
   AttachmentListSchema,
   AttachmentSchema,
   ChatMessageListSchema,
@@ -3148,6 +3157,97 @@ class ApiClient {
       method: "PATCH",
       body: JSON.stringify(data),
     });
+  }
+
+  // Grant/revoke explicit write access. Mirror
+  // packages/core/api/client.ts:3536-3546. Both return the full updated
+  // collaborator list — parsed through the drift-safe schema so a stray
+  // payload degrades to an empty list instead of a crash (the detail invalidate
+  // on settle is authoritative anyway).
+  async grantAutopilotAccess(
+    id: string,
+    userId: string,
+  ): Promise<AutopilotCollaboratorsResponse> {
+    return this.fetchValidatedWith(
+      `/api/autopilots/${id}/collaborators`,
+      AutopilotCollaboratorsResponseSchema,
+      EMPTY_AUTOPILOT_COLLABORATORS as unknown as AutopilotCollaboratorsResponse,
+      { method: "POST", body: JSON.stringify({ user_id: userId }) },
+      { endpoint: "POST /api/autopilots/:id/collaborators" },
+    );
+  }
+
+  async revokeAutopilotAccess(
+    id: string,
+    userId: string,
+  ): Promise<AutopilotCollaboratorsResponse> {
+    return this.fetchValidatedWith(
+      `/api/autopilots/${id}/collaborators/${userId}`,
+      AutopilotCollaboratorsResponseSchema,
+      EMPTY_AUTOPILOT_COLLABORATORS as unknown as AutopilotCollaboratorsResponse,
+      { method: "DELETE" },
+      { endpoint: "DELETE /api/autopilots/:id/collaborators/:userId" },
+    );
+  }
+
+  // Webhook deliveries — mirror packages/core/api/client.ts:3614-3668. List
+  // is slim (no raw_body / selected_headers / response_body); detail returns
+  // the full row. Both parse through a lenient schema so an unknown server
+  // status degrades to a generic row instead of dropping the list.
+  async listAutopilotDeliveries(
+    autopilotId: string,
+    params?: { limit?: number; offset?: number },
+    opts?: { signal?: AbortSignal },
+  ): Promise<ListWebhookDeliveriesResponse> {
+    const search = new URLSearchParams();
+    if (params?.limit) search.set("limit", String(params.limit));
+    if (params?.offset) search.set("offset", String(params.offset));
+    const qs = search.toString();
+    return this.fetchValidated(
+      `/api/autopilots/${autopilotId}/deliveries${qs ? `?${qs}` : ""}`,
+      ListWebhookDeliveriesResponseSchema,
+      EMPTY_LIST_WEBHOOK_DELIVERIES_RESPONSE as unknown as ListWebhookDeliveriesResponse,
+      { ...opts, endpoint: "GET /api/autopilots/:id/deliveries" },
+    );
+  }
+
+  async getAutopilotDelivery(
+    autopilotId: string,
+    deliveryId: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<WebhookDelivery> {
+    return this.fetchValidatedWith(
+      `/api/autopilots/${autopilotId}/deliveries/${deliveryId}`,
+      WebhookDeliverySchema,
+      {
+        ...FALLBACK_WEBHOOK_DELIVERY,
+        id: deliveryId,
+        autopilot_id: autopilotId,
+      },
+      { signal: opts?.signal },
+      { endpoint: "GET /api/autopilots/:id/deliveries/:deliveryId" },
+    );
+  }
+
+  // Replay creates a NEW delivery row referencing the original via
+  // `replayed_from_delivery_id`. The server is the source of truth on
+  // replayability (400 for signature-invalid / rejected) — the UI keeps the
+  // button disabled for those rows, but errors surface naturally.
+  async replayAutopilotDelivery(
+    autopilotId: string,
+    deliveryId: string,
+  ): Promise<WebhookDelivery> {
+    return this.fetchValidatedWith(
+      `/api/autopilots/${autopilotId}/deliveries/${deliveryId}/replay`,
+      WebhookDeliverySchema,
+      {
+        ...FALLBACK_WEBHOOK_DELIVERY,
+        autopilot_id: autopilotId,
+        replayed_from_delivery_id: deliveryId,
+      },
+      { method: "POST" },
+      { endpoint: "POST /api/autopilots/:id/deliveries/:deliveryId/replay" },
+    );
   }
 
   async listAutopilotRuns(

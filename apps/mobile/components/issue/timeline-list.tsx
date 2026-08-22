@@ -114,8 +114,9 @@ import {
   isNearBottom,
   AT_BOTTOM_SLACK_PX,
   nextFabVisibility,
+  nextJumpTopFabVisibility,
 } from "@/lib/scroll-bottom";
-import { ScrollToBottomFAB } from "@/components/ui/scroll-to-bottom-fab";
+import { ScrollJumpControl } from "@/components/ui/scroll-jump-control";
 
 interface Props {
   issue: Issue;
@@ -263,9 +264,12 @@ export function TimelineList({
   // A normal issue-open lands at the TOP (header first) — the FAB should
   // greet the reader immediately. Only a deep-link (`highlightCommentId`)
   // starts at the bottom (FlashList `startRenderingFromBottom`), where the
-  // FAB starts hidden.
+  // FAB starts hidden. The up button starts hidden either way: at the top it
+  // is pointless, and at the bottom the "caught up" state stays clean.
   const [showJumpFab, setShowJumpFab] = useState(!highlightCommentId);
   const showJumpFabRef = useRef(!highlightCommentId);
+  const [showJumpTopFab, setShowJumpTopFab] = useState(false);
+  const showJumpTopFabRef = useRef(false);
 
   const lastDataLenRef = useRef(0);
   useEffect(() => {
@@ -298,11 +302,20 @@ export function TimelineList({
         setNewCount(0);
       }
       // FAB shows when scrolled up, hides when at bottom. `onScroll` fires
-      // every frame; only re-render when the FAB's visibility flips.
+      // every frame; only re-render when a button's visibility flips.
       const nextFab = nextFabVisibility(showJumpFabRef.current, metrics);
-      if (nextFab === showJumpFabRef.current) return;
-      showJumpFabRef.current = nextFab;
-      setShowJumpFab(nextFab);
+      if (nextFab !== showJumpFabRef.current) {
+        showJumpFabRef.current = nextFab;
+        setShowJumpFab(nextFab);
+      }
+      const nextTopFab = nextJumpTopFabVisibility(
+        showJumpTopFabRef.current,
+        metrics,
+      );
+      if (nextTopFab !== showJumpTopFabRef.current) {
+        showJumpTopFabRef.current = nextTopFab;
+        setShowJumpTopFab(nextTopFab);
+      }
     },
     [newCount],
   );
@@ -310,6 +323,10 @@ export function TimelineList({
   const onJumpToNew = useCallback(() => {
     listRef.current?.scrollToEnd({ animated: true });
     setNewCount(0);
+  }, []);
+
+  const onJumpToTop = useCallback(() => {
+    listRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, []);
 
   // ── Inject divider as a sentinel row before its anchor entry ──────────
@@ -538,10 +555,13 @@ export function TimelineList({
       {newCount > 0 ? (
         <NewCommentChip count={newCount} onPress={onJumpToNew} />
       ) : null}
-      <ScrollToBottomFAB
-        visible={showJumpFab}
-        onPress={onJumpToNew}
-        accessibilityLabel={t("a11y.jumpToBottom")}
+      <ScrollJumpControl
+        showJumpToTop={showJumpTopFab}
+        showJumpToBottom={showJumpFab}
+        onJumpToTop={onJumpToTop}
+        onJumpToBottom={onJumpToNew}
+        jumpToTopLabel={t("a11y.jumpToTop")}
+        jumpToBottomLabel={t("a11y.jumpToBottom")}
       />
     </View>
     </ImageSequenceProvider>

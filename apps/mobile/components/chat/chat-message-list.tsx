@@ -79,8 +79,9 @@ import { useTranslation } from "@/lib/i18n/react";
 import {
   AT_BOTTOM_SLACK_PX,
   nextFabVisibility,
+  nextJumpTopFabVisibility,
 } from "@/lib/scroll-bottom";
-import { ScrollToBottomFAB } from "@/components/ui/scroll-to-bottom-fab";
+import { ScrollJumpControl } from "@/components/ui/scroll-jump-control";
 import {
   Collapsible,
   CollapsibleContent,
@@ -154,39 +155,54 @@ export function ChatMessageList({
     [messages],
   );
 
-  // ── "Jump to bottom" floating button ─────────────────────────────────
+  // ── "Jump to top / bottom" floating control ─────────────────────────
   // Shows when the user scrolls up away from the latest message and hides
   // as soon as they return to the bottom. The chat list already auto-scrolls
   // to the bottom on new arrivals (maintainVisibleContentPosition), so this
   // is a manual affordance for a user mid-way through reading history who
-  // wants to leap back to the newest content.
+  // wants to leap back to the newest content. The up button additionally
+  // hides at the top, where it is pointless.
   const { t } = useTranslation();
   const listRef = useRef<FlashListRef<ChatMessage>>(null);
   const [showJumpFab, setShowJumpFab] = useState(false);
+  const [showJumpTopFab, setShowJumpTopFab] = useState(false);
   // `onScroll` fires every frame; guard setState so we only re-render when
-  // the flag actually flips, keeping the high-frequency scroll handler cheap.
+  // a flag actually flips, keeping the high-frequency scroll handler cheap.
   const showJumpFabRef = useRef(false);
+  const showJumpTopFabRef = useRef(false);
 
   const handleChatScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-      const next = nextFabVisibility(showJumpFabRef.current, {
+      const metrics = {
         contentOffsetY: contentOffset.y,
         contentHeight: contentSize.height,
         viewportHeight: layoutMeasurement.height,
         slackPx: AT_BOTTOM_SLACK_PX,
-      });
-      // `onScroll` fires every frame; only re-render when the FAB's
-      // visibility actually flips.
-      if (next === showJumpFabRef.current) return;
-      showJumpFabRef.current = next;
-      setShowJumpFab(next);
+      };
+      const next = nextFabVisibility(showJumpFabRef.current, metrics);
+      if (next !== showJumpFabRef.current) {
+        showJumpFabRef.current = next;
+        setShowJumpFab(next);
+      }
+      const nextTop = nextJumpTopFabVisibility(
+        showJumpTopFabRef.current,
+        metrics,
+      );
+      if (nextTop !== showJumpTopFabRef.current) {
+        showJumpTopFabRef.current = nextTop;
+        setShowJumpTopFab(nextTop);
+      }
     },
     [],
   );
 
   const onJumpToBottom = useCallback(() => {
     listRef.current?.scrollToEnd({ animated: true });
+  }, []);
+
+  const onJumpToTop = useCallback(() => {
+    listRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, []);
 
   if (loading && messages.length === 0) {
@@ -309,10 +325,13 @@ export function ChatMessageList({
       keyboardShouldPersistTaps="handled"
     />
     </Pressable>
-    <ScrollToBottomFAB
-      visible={showJumpFab}
-      onPress={onJumpToBottom}
-      accessibilityLabel={t("a11y.jumpToBottom")}
+    <ScrollJumpControl
+      showJumpToTop={showJumpTopFab}
+      showJumpToBottom={showJumpFab}
+      onJumpToTop={onJumpToTop}
+      onJumpToBottom={onJumpToBottom}
+      jumpToTopLabel={t("a11y.jumpToTop")}
+      jumpToBottomLabel={t("a11y.jumpToBottom")}
     />
     </View>
     </ImageSequenceProvider>

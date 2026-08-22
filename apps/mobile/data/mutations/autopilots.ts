@@ -124,6 +124,52 @@ export function useCreateAutopilot() {
   });
 }
 
+// Access grant/revoke commit immediately through their own mutations
+// (mirrors web's AutopilotAccessManager — independent of the form's Save).
+// No optimistic patch: the detail query refetch on settle owns the updated
+// collaborator list.
+export function useGrantAutopilotAccess() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: ({
+      autopilotId,
+      userId,
+    }: {
+      autopilotId: string;
+      userId: string;
+    }) => api.grantAutopilotAccess(autopilotId, userId),
+    onSettled: (_data, _err, vars) => {
+      if (!wsId) return;
+      void qc.invalidateQueries({
+        queryKey: autopilotKeys.detail(wsId, vars.autopilotId),
+      });
+    },
+  });
+}
+
+export function useRevokeAutopilotAccess() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: ({
+      autopilotId,
+      userId,
+    }: {
+      autopilotId: string;
+      userId: string;
+    }) => api.revokeAutopilotAccess(autopilotId, userId),
+    onSettled: (_data, _err, vars) => {
+      if (!wsId) return;
+      void qc.invalidateQueries({
+        queryKey: autopilotKeys.detail(wsId, vars.autopilotId),
+      });
+    },
+  });
+}
+
 // Optimistic removal returns the user to the list instantly; the detail row
 // is evicted rather than patched (it's gone). onError restores the list.
 export function useDeleteAutopilot() {
@@ -241,6 +287,29 @@ export function useRotateAutopilotWebhookToken() {
       if (!wsId) return;
       void qc.invalidateQueries({
         queryKey: autopilotKeys.detail(wsId, vars.autopilotId),
+      });
+    },
+  });
+}
+
+// Replay creates a NEW delivery row — the deliveries list is invalidated so
+// the refetched list shows both the original and its replay.
+export function useReplayAutopilotDelivery() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: ({
+      autopilotId,
+      deliveryId,
+    }: {
+      autopilotId: string;
+      deliveryId: string;
+    }) => api.replayAutopilotDelivery(autopilotId, deliveryId),
+    onSettled: (_data, _err, vars) => {
+      if (!wsId) return;
+      void qc.invalidateQueries({
+        queryKey: autopilotKeys.deliveries(wsId, vars.autopilotId),
       });
     },
   });

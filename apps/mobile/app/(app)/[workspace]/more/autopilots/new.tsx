@@ -23,7 +23,7 @@ import { Stack, router } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useQuery } from "@tanstack/react-query";
-import type { AutopilotExecutionMode } from "@multica/core/types";
+import type { AutopilotExecutionMode, WebhookEventFilter } from "@multica/core/types";
 import { buildAutopilotWebhookUrl } from "@multica/core/autopilots/webhook";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
@@ -32,9 +32,12 @@ import { TextField } from "@/components/ui/text-field";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AgentPickerSheet } from "@/components/chat/agent-picker-sheet";
+import { EventFilterEditor } from "@/components/autopilot/event-filter-editor";
 import { TimezonePickerSheet } from "@/components/autopilot/timezone-picker-sheet";
+import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
 import { api } from "@/data/api";
 import { agentListOptions } from "@/data/queries/agents";
+import { memberListOptions } from "@/data/queries/members";
 import { useCreateAutopilot, useCreateAutopilotTrigger } from "@/data/mutations/autopilots";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { getApiBaseUrl } from "@/data/server-config";
@@ -67,11 +70,15 @@ export default function NewAutopilotPage() {
   const [triggerKind, setTriggerKind] = useState<TriggerChoice>("none");
   const [cronExpression, setCronExpression] = useState("");
   const [timezone, setTimezone] = useState("Asia/Shanghai");
+  const [eventFilters, setEventFilters] = useState<WebhookEventFilter[]>([]);
+  const [subscriberIds, setSubscriberIds] = useState<Set<string>>(new Set());
   const [agentPickerOpen, setAgentPickerOpen] = useState(false);
+  const [subscriberPickerOpen, setSubscriberPickerOpen] = useState(false);
   const [tzPickerOpen, setTzPickerOpen] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
 
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
+  const { data: members = [] } = useQuery(memberListOptions(wsId));
   const createAutopilot = useCreateAutopilot();
   const createTrigger = useCreateAutopilotTrigger();
 
@@ -80,6 +87,7 @@ export default function NewAutopilotPage() {
   const isSubmitting = createAutopilot.isPending || createTrigger.isPending;
 
   const selectedAgent = agents.find((a) => a.id === assigneeId) ?? null;
+  const selectedSubscribers = members.filter((m) => subscriberIds.has(m.user_id));
 
   const handleSubmit = useCallback(async () => {
     if (isSubmitting) return;
@@ -117,6 +125,12 @@ export default function NewAutopilotPage() {
         assignee_type: "agent",
         assignee_id: assigneeId as string,
         execution_mode: executionMode,
+        // Members-only subscribers, mirroring web's dialog: map the selected
+        // ids into AutopilotSubscriberInput before POST.
+        subscribers: Array.from(subscriberIds).map((user_id) => ({
+          user_type: "member",
+          user_id,
+        })),
       });
 
       let createdWebhookUrl: string | null = null;
@@ -132,6 +146,7 @@ export default function NewAutopilotPage() {
                   timezone,
                   label: "",
                   enabled: true,
+                  eventFilters: [],
                 })
               : buildTriggerCreate({
                   kind: "webhook",
@@ -139,6 +154,7 @@ export default function NewAutopilotPage() {
                   timezone: "",
                   label: "",
                   enabled: true,
+                  eventFilters,
                 })),
           });
           if (triggerKind === "webhook") {
@@ -187,6 +203,8 @@ export default function NewAutopilotPage() {
     triggerKind,
     cronExpression,
     timezone,
+    eventFilters,
+    subscriberIds,
     title,
     description,
     assigneeId,
@@ -328,6 +346,79 @@ export default function NewAutopilotPage() {
             />
           </View>
 
+          {/* Subscribers — auto-subscribed to every issue this autopilot
+              creates (mirrors web dialog.section_subscribers). */}
+          <View className="gap-1.5">
+            <FieldLabel
+              icon="people-outline"
+              text={t("autopilots.subscribers.sectionLabel")}
+            />
+            {selectedSubscribers.length > 0 ? (
+              <View className="flex-row flex-wrap gap-1.5">
+                {selectedSubscribers.map((m) => (
+                  <View
+                    key={m.user_id}
+                    className="flex-row items-center gap-1 rounded-full border border-border bg-secondary/60 px-2 py-1"
+                  >
+                    <ActorAvatar type="member" id={m.user_id} size={18} />
+                    <Text className="text-xs text-foreground">{m.name}</Text>
+                    <Pressable
+                      onPress={() => {
+                        const next = new Set(subscriberIds);
+                        next.delete(m.user_id);
+                        setSubscriberIds(next);
+                      }}
+                      hitSlop={8}
+                      accessibilityLabel={t("autopilots.subscribers.remove")}
+                      className="p-0.5"
+                    >
+                      <Ionicons
+                        name="close"
+                        size={12}
+                        color={THEME[colorScheme].mutedForeground}
+                      />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+            <Pressable
+              onPress={() => setSubscriberPickerOpen(true)}
+              disabled={isSubmitting}
+              accessibilityLabel={t("autopilots.subscribers.add")}
+              className="self-start flex-row items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1.5"
+            >
+              <Ionicons
+                name="add"
+                size={14}
+                color={THEME[colorScheme].mutedForeground}
+              />
+              <Text className="text-xs text-muted-foreground">
+                {t("autopilots.subscribers.add")}
+              </Text>
+            </Pressable>
+            <Text className="text-[11px] leading-tight text-muted-foreground/80">
+              {t("autopilots.subscribers.hint")}
+            </Text>
+            <MultiSelectSheet
+              visible={subscriberPickerOpen}
+              title={t("autopilots.subscribers.sectionLabel")}
+              rows={members.map((m) => ({ key: m.user_id, title: m.name }))}
+              selectedKeys={subscriberIds}
+              emptyText={t("autopilots.subscribers.empty")}
+              leading={(row) => (
+                <ActorAvatar type="member" id={row.key} size={32} />
+              )}
+              onToggle={(id) => {
+                const next = new Set(subscriberIds);
+                if (next.has(id)) next.delete(id);
+                else next.add(id);
+                setSubscriberIds(next);
+              }}
+              onClose={() => setSubscriberPickerOpen(false)}
+            />
+          </View>
+
           {/* Trigger */}
           <View className="gap-1.5">
             <FieldLabel icon="flash-outline" text={t("autopilots.new.trigger")} />
@@ -405,9 +496,13 @@ export default function NewAutopilotPage() {
             ) : null}
 
             {triggerKind === "webhook" ? (
-              <Text className="text-xs text-muted-foreground/80 mt-1">
-                {t("autopilots.new.webhookHint")}
-              </Text>
+              <View className="mt-2">
+                <EventFilterEditor
+                  filters={eventFilters}
+                  onChange={setEventFilters}
+                  editable={!isSubmitting}
+                />
+              </View>
             ) : null}
           </View>
         </ScrollView>

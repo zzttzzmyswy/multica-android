@@ -16,8 +16,10 @@ import type {
   AgentInvocationTarget,
   AgentTask,
   Attachment,
+  AutopilotCollaborator,
   AutopilotRun,
   AutopilotTrigger,
+  WebhookDelivery,
   ChatMessage,
   ChatLastMessage,
   ChatPendingTask,
@@ -1374,6 +1376,96 @@ export const ListAutopilotRunsResponseSchema = z.object({
   total: z.number().default(0),
 }).loose();
 
+// Grant/revoke access responses return the full updated collaborator list.
+// Members-only; `granted_by` / `created_at` may be absent on a stray payload,
+// so they default to empty rather than dropping the row.
+export const AutopilotCollaboratorSchema = z.object({
+  user_type: z.literal("member").default("member"),
+  user_id: z.string(),
+  granted_by: z.string().default(""),
+  created_at: z.string().default(""),
+}).loose();
+
+export const AutopilotCollaboratorsResponseSchema = z.object({
+  collaborators: z.array(AutopilotCollaboratorSchema).default([]),
+}).loose();
+
+export const EMPTY_AUTOPILOT_COLLABORATORS: {
+  collaborators: AutopilotCollaborator[];
+} = {
+  collaborators: [],
+};
+
+// Webhook deliveries — the list is slim (no raw_body / selected_headers /
+// response_body); detail returns the full row. Server enums (status /
+// signature_status) stay z.string() so a new server value degrades to a
+// generic row instead of dropping the whole list (API Response
+// Compatibility).
+export const WebhookDeliverySchema = z.object({
+  id: z.string(),
+  workspace_id: z.string(),
+  autopilot_id: z.string(),
+  trigger_id: z.string().default(""),
+  provider: z.string().default(""),
+  event: z.string().default(""),
+  dedupe_key: z.string().nullable().default(null),
+  dedupe_source: z.string().nullable().default(null),
+  signature_status: z.string().default("not_required"),
+  status: z.string().default("queued"),
+  attempt_count: z.number().default(0),
+  dispatch_attempts: z.number().default(0),
+  available_at: z.string().default(""),
+  content_type: z.string().nullable().default(null),
+  response_status: z.number().nullable().default(null),
+  autopilot_run_id: z.string().nullable().default(null),
+  replayed_from_delivery_id: z.string().nullable().default(null),
+  error: z.string().nullable().default(null),
+  received_at: z.string().default(""),
+  last_attempt_at: z.string().default(""),
+  created_at: z.string().default(""),
+  // Detail-only fields — the list endpoint omits them.
+  selected_headers: z.unknown().nullable().optional(),
+  raw_body: z.string().nullable().optional(),
+  response_body: z.string().nullable().optional(),
+}).loose();
+
+export const ListWebhookDeliveriesResponseSchema = z.object({
+  deliveries: z.array(WebhookDeliverySchema).default([]),
+  total: z.number().default(0),
+}).loose();
+
+export const EMPTY_LIST_WEBHOOK_DELIVERIES_RESPONSE: {
+  deliveries: WebhookDelivery[];
+  total: number;
+} = {
+  deliveries: [],
+  total: 0,
+};
+
+export const FALLBACK_WEBHOOK_DELIVERY: WebhookDelivery = {
+  id: "",
+  workspace_id: "",
+  autopilot_id: "",
+  trigger_id: "",
+  provider: "",
+  event: "",
+  dedupe_key: null,
+  dedupe_source: null,
+  signature_status: "not_required",
+  status: "queued",
+  attempt_count: 0,
+  dispatch_attempts: 0,
+  available_at: "",
+  content_type: null,
+  response_status: null,
+  autopilot_run_id: null,
+  replayed_from_delivery_id: null,
+  error: null,
+  received_at: "",
+  last_attempt_at: "",
+  created_at: "",
+};
+
 // Fallback for a rotated-webhook-token response that drifts: id stays empty
 // so callers can detect "could not read the updated trigger" downstream.
 // kind reads "webhook" because rotate is only offered on webhook triggers,
@@ -1423,6 +1515,17 @@ export const CreateAutopilotFormSchema = z.object({
   assignee_type: z.string().default("agent"),
   assignee_id: z.string().min(1),
   execution_mode: z.string().min(1),
+  // Member subscribers to auto-subscribe on every created issue. Zod strips
+  // unknown keys by default, so the form contract must carry it explicitly or
+  // a subscriber payload would silently vanish before POST.
+  subscribers: z
+    .array(
+      z.object({
+        user_type: z.literal("member"),
+        user_id: z.string(),
+      }),
+    )
+    .optional(),
 });
 
 export const AutopilotTriggerFormSchema = z.object({
@@ -1431,6 +1534,12 @@ export const AutopilotTriggerFormSchema = z.object({
   timezone: z.string().optional(),
   label: z.string().optional(),
   enabled: z.boolean().optional(),
+  // Webhook-only: event filters ({event, actions?}[]). Zod strips unknown
+  // keys by default, so without this field a trigger POST would silently drop
+  // the filters — the form-layer drift defense must carry it explicitly.
+  event_filters: z
+    .array(z.object({ event: z.string(), actions: z.array(z.string()).optional() }))
+    .optional(),
 });
 
 export type AutopilotTriggerFormValues = z.infer<

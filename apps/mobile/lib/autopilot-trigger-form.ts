@@ -18,6 +18,7 @@ import {
   AutopilotTriggerFormSchema,
   type AutopilotTriggerFormValues,
 } from "@/data/schemas";
+import type { WebhookEventFilter } from "@multica/core/types";
 
 /** Curated timezone fallback — mirror of packages/views/common/timezone-select.tsx. */
 export const COMMON_TIMEZONES: readonly string[] = [
@@ -56,6 +57,8 @@ export interface TriggerFormState {
   timezone: string;
   label: string;
   enabled: boolean;
+  /** Only meaningful for webhook triggers; [] means "accept all events". */
+  eventFilters: WebhookEventFilter[];
 }
 
 /** The server's rejection, split the way the editor is: which input is at
@@ -122,29 +125,51 @@ function scheduleFields(values: TriggerFormState): {
   };
 }
 
-/** Create payload — kind + schedule fields (webhook accepts all events). */
+/**
+ * Create payload — kind + schedule fields; a webhook trigger ships its event
+ * filters only when non-empty (empty = "accept all events", mirroring web's
+ * `event_filters: eventFilters.length > 0 ? eventFilters : undefined`).
+ */
 export function buildTriggerCreate(
   values: TriggerFormState,
 ): AutopilotTriggerFormValues {
+  const eventFilters =
+    values.kind === "webhook" && values.eventFilters.length > 0
+      ? values.eventFilters
+      : undefined;
   const parsed = AutopilotTriggerFormSchema.parse({
     kind: values.kind,
     ...scheduleFields(values),
+    ...(eventFilters ? { event_filters: eventFilters } : {}),
   });
   return parsed;
 }
 
-/** Update payload — label/enabled for both kinds, schedule fields only for
- *  schedule triggers. Absent optional fields mean "leave untouched" on PATCH.
- *  `kind` is not PATCH-able (in-place kind swaps are not supported — web
- *  converts via "delete old, create new"), so it is stripped here. */
+/**
+ * Update payload — label/enabled for both kinds, schedule fields only for
+ * schedule triggers. Absent optional fields mean "leave untouched" on PATCH.
+ * `kind` is not PATCH-able (in-place kind swaps are not supported — web
+ * converts via "delete old, create new"), so it is stripped here.
+ *
+ * `event_filters` is shipped ONLY when the caller passes it explicitly via
+ * `opts.eventFilters` (edit-mode dirty gate: the editor PATCHes filters only
+ * when its snapshot differs — web `eventFiltersDirty`). undefined = don't
+ * touch; [] = clear server-side; non-empty = set.
+ */
 export function buildTriggerUpdate(
   values: TriggerFormState,
+  opts?: { eventFilters?: WebhookEventFilter[] | null },
 ): Omit<AutopilotTriggerFormValues, "kind"> {
+  const eventFilters =
+    values.kind === "webhook"
+      ? opts?.eventFilters
+      : undefined;
   const parsed = AutopilotTriggerFormSchema.parse({
     kind: values.kind,
     ...scheduleFields(values),
     label: values.label.trim(),
     enabled: values.enabled,
+    ...(eventFilters !== undefined ? { event_filters: eventFilters } : {}),
   });
   const { kind: _kind, ...rest } = parsed;
   return rest;

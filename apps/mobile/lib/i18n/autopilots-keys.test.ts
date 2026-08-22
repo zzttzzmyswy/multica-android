@@ -36,6 +36,25 @@ describe("autopilot create/trigger i18n", () => {
     "autopilots.trigger.timezone": "时区",
     "autopilots.trigger.rotateUrl": "旋转 Webhook URL",
     "autopilots.trigger.urlCopied": "Webhook URL 已复制",
+    // Iteration-85 web alignment: event filters / subscribers / access.
+    "autopilots.eventFilter.label": "事件过滤",
+    "autopilots.eventFilter.hint": "只处理匹配这些事件的 webhook。留空则接受所有事件。",
+    "autopilots.subscribers.sectionLabel": "订阅者",
+    "autopilots.subscribers.add": "添加订阅者",
+    "autopilots.subscribers.hint": "每次跑出来的任务默认订阅",
+    "autopilots.detail.subscribers": "订阅者",
+    "autopilots.detail.noSubscribers": "暂无订阅者",
+    "autopilots.access.sectionLabel": "管理访问",
+    "autopilots.access.add": "添加成员",
+    "autopilots.access.empty": "还没有授权任何人。",
+    "autopilots.access.ownerNote": "创建者和工作区管理员始终拥有访问权限。",
+    "autopilots.access.failedTitle": "更新访问权限失败",
+    "autopilots.deliveries.sectionTitle": "Webhook 投递",
+    "autopilots.deliveries.empty": "暂无 Webhook 投递记录。向 Webhook URL 发送一次 POST 后会显示在这里。",
+    "autopilots.deliveries.status.queued": "排队中",
+    "autopilots.deliveries.replay": "重放",
+    "autopilots.deliveries.replaying": "重放中…",
+    "autopilots.deliveries.replayed": "已重放该投递",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {
