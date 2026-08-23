@@ -90,6 +90,8 @@ import type {
   RuntimeDevice,
   RuntimeUpdate,
   RuntimeProfile,
+  RuntimeUsage,
+  RuntimeUsageByAgent,
   CreateRuntimeProfileRequest,
   UpdateRuntimeProfileRequest,
   DashboardAgentRunTime,
@@ -232,6 +234,10 @@ import {
   EMPTY_DASHBOARD_FAILURE_BY_AGENT,
   DashboardUsageDailyListSchema,
   DashboardUsageByAgentListSchema,
+  EMPTY_RUNTIME_USAGE,
+  EMPTY_RUNTIME_USAGE_BY_AGENT,
+  RuntimeUsageListSchema,
+  RuntimeUsageByAgentListSchema,
   EMPTY_ACTIVE_TASKS_RESPONSE,
   EMPTY_AGENT_ENV,
   EMPTY_AGENT_LIST,
@@ -1133,6 +1139,44 @@ class ApiClient {
     });
     return parseWithFallback(raw, RuntimeListSchema, EMPTY_RUNTIME_LIST, {
       endpoint: "listRuntimes",
+    });
+  }
+
+  // Runtime-level usage rollups (iteration-93 runtime detail usage section).
+  // Mirrors web packages/core/api/client.ts getRuntimeUsage /
+  // getRuntimeUsageByAgent: `tz` drives the calendar-day boundary of the trend
+  // chart, `days` windows the report; both are part of the URL params.
+  async getRuntimeUsage(
+    runtimeId: string,
+    params?: { days?: number; tz?: string },
+    opts?: { signal?: AbortSignal },
+  ): Promise<RuntimeUsage[]> {
+    const search = new URLSearchParams();
+    if (params?.days) search.set("days", String(params.days));
+    if (params?.tz) search.set("tz", params.tz);
+    const raw = await this.fetch<unknown>(
+      `/api/runtimes/${runtimeId}/usage?${search}`,
+      { signal: opts?.signal },
+    );
+    return parseWithFallback(raw, RuntimeUsageListSchema, EMPTY_RUNTIME_USAGE, {
+      endpoint: "GET /api/runtimes/:id/usage",
+    });
+  }
+
+  async getRuntimeUsageByAgent(
+    runtimeId: string,
+    params?: { days?: number; tz?: string },
+    opts?: { signal?: AbortSignal },
+  ): Promise<RuntimeUsageByAgent[]> {
+    const search = new URLSearchParams();
+    if (params?.days) search.set("days", String(params.days));
+    if (params?.tz) search.set("tz", params.tz);
+    const raw = await this.fetch<unknown>(
+      `/api/runtimes/${runtimeId}/usage/by-agent?${search}`,
+      { signal: opts?.signal },
+    );
+    return parseWithFallback(raw, RuntimeUsageByAgentListSchema, EMPTY_RUNTIME_USAGE_BY_AGENT, {
+      endpoint: "GET /api/runtimes/:id/usage/by-agent",
     });
   }
 

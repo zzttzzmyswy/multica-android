@@ -2291,5 +2291,16 @@
   "workspaceSettings.slug": "Slug",
   "workspaceSettings.typeToConfirmPrefix": "Type",
   "workspaceSettings.typeToConfirmSuffix": "to confirm",
-  "search.members": "Members"
+  "search.members": "Members",
+  "runtimes.usage.title": "Usage",
+  "runtimes.usage.range7d": "7D",
+  "runtimes.usage.range30d": "30D",
+  "runtimes.usage.kpiCost": "Cost",
+  "runtimes.usage.kpiCache": "Cache savings",
+  "runtimes.usage.kpiTokens": "Tokens",
+  "runtimes.usage.kpiCacheHint": "{{pct}}% hit · {{reads}} read",
+  "runtimes.usage.kpiTokensHint": "{{input}} in · {{output}} out",
+  "runtimes.usage.chartTitle": "Daily cost",
+  "runtimes.usage.chartLegend": "per day",
+  "runtimes.usage.empty": "No usage recorded for this runtime yet."
 }

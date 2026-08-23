@@ -55,6 +55,8 @@ import type {
   RuntimeProfile,
   RuntimeUpdate,
   RuntimeUpdateStatus,
+  RuntimeUsage,
+  RuntimeUsageByAgent,
   SearchIssuesResponse,
   SearchProjectsResponse,
   SendChatMessageResponse,
@@ -1613,6 +1615,58 @@ export const DashboardUsageByAgentSchema: z.ZodType<DashboardUsageByAgent> = z
 export const DashboardUsageByAgentListSchema = z
   .array(DashboardUsageByAgentSchema)
   .default([]);
+
+// Runtime-level usage rollups (iteration-93 runtime detail usage section).
+// Mirrors core's RuntimeUsageSchema / RuntimeUsageByAgentSchema
+// (packages/core/api/schemas.ts:1290) — unlike the dashboard schemas, the
+// cost split fields stay `.optional()` so `estimateCost` can tell "old backend,
+// no split" (undefined → full-token estimate) apart from "0 tokens left"
+// (present 0 → straight through), the same way web's uncostedTokens does.
+// Cost arrives as integer sub-cent ticks (1e-10 USD).
+export const RuntimeUsageSchema: z.ZodType<RuntimeUsage> = z
+  .object({
+    runtime_id: z.string().default(""),
+    date: z.string().default(""),
+    provider: z.string().default(""),
+    model: z.string().default(""),
+    input_tokens: z.number().default(0),
+    output_tokens: z.number().default(0),
+    cache_read_tokens: z.number().default(0),
+    cache_write_tokens: z.number().default(0),
+    cost_usd_ticks: z.number().optional(),
+    uncosted_input_tokens: z.number().optional(),
+    uncosted_output_tokens: z.number().optional(),
+    uncosted_cache_read_tokens: z.number().optional(),
+    uncosted_cache_write_tokens: z.number().optional(),
+  })
+  .loose();
+
+export const RuntimeUsageListSchema = z.array(RuntimeUsageSchema).default([]);
+
+export const RuntimeUsageByAgentSchema: z.ZodType<RuntimeUsageByAgent> = z
+  .object({
+    agent_id: z.string().default(""),
+    provider: z.string().default(""),
+    model: z.string().default(""),
+    input_tokens: z.number().default(0),
+    output_tokens: z.number().default(0),
+    cache_read_tokens: z.number().default(0),
+    cache_write_tokens: z.number().default(0),
+    cost_usd_ticks: z.number().optional(),
+    uncosted_input_tokens: z.number().optional(),
+    uncosted_output_tokens: z.number().optional(),
+    uncosted_cache_read_tokens: z.number().optional(),
+    uncosted_cache_write_tokens: z.number().optional(),
+    task_count: z.number().default(0),
+  })
+  .loose();
+
+export const RuntimeUsageByAgentListSchema = z
+  .array(RuntimeUsageByAgentSchema)
+  .default([]);
+
+export const EMPTY_RUNTIME_USAGE: RuntimeUsage[] = [];
+export const EMPTY_RUNTIME_USAGE_BY_AGENT: RuntimeUsageByAgent[] = [];
 
 // Dashboard failure rollups (iteration-44 Errors tab). Mirrors core's
 // DashboardFailureDailySchema / DashboardFailureByAgentSchema field-for-field

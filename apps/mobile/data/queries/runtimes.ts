@@ -11,3 +11,35 @@ export const runtimeListOptions = (wsId: string | null) =>
     queryFn: ({ signal }) => api.listRuntimes({ signal }),
     enabled: !!wsId,
   });
+
+// Runtime-level usage (iteration-93 runtime detail usage section). Mirrors
+// web packages/core/runtimes/queries.ts runtimeUsageOptions /
+// runtimeUsageByAgentOptions — `tz` is the viewer's IANA name; every report
+// follows the viewer's tz so the calendar-day boundary matches the server.
+// days + tz are part of the key so the 7/30 range toggle refetches and each
+// (days, tz) combination stays cached independently.
+export const runtimeUsageOptions = (
+  runtimeId: string | null,
+  days: number,
+  tz: string,
+) =>
+  queryOptions({
+    queryKey: ["runtimes", "usage", runtimeId, days, tz] as const,
+    queryFn: ({ signal }) =>
+      api.getRuntimeUsage(runtimeId ?? "", { days, tz }, { signal }),
+    enabled: !!runtimeId,
+    staleTime: 60_000,
+  });
+
+export const runtimeUsageByAgentOptions = (
+  runtimeId: string | null,
+  days: number,
+  tz: string,
+) =>
+  queryOptions({
+    queryKey: ["runtimes", "usage", "by-agent", runtimeId, days, tz] as const,
+    queryFn: ({ signal }) =>
+      api.getRuntimeUsageByAgent(runtimeId ?? "", { days, tz }, { signal }),
+    enabled: !!runtimeId,
+    staleTime: 60_000,
+  });

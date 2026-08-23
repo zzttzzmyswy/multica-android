@@ -2287,5 +2287,16 @@
   "workspaceSettings.slug": "标识",
   "workspaceSettings.typeToConfirmPrefix": "输入",
   "workspaceSettings.typeToConfirmSuffix": "以确认",
-  "search.members": "成员"
+  "search.members": "成员",
+  "runtimes.usage.title": "用量",
+  "runtimes.usage.range7d": "7天",
+  "runtimes.usage.range30d": "30天",
+  "runtimes.usage.kpiCost": "费用",
+  "runtimes.usage.kpiCache": "缓存节省",
+  "runtimes.usage.kpiTokens": "Tokens",
+  "runtimes.usage.kpiCacheHint": "命中 {{pct}}% · 读取 {{reads}}",
+  "runtimes.usage.kpiTokensHint": "输入 {{input}} · 输出 {{output}}",
+  "runtimes.usage.chartTitle": "每日费用",
+  "runtimes.usage.chartLegend": "按天",
+  "runtimes.usage.empty": "该运行时暂无用量记录。"
 }

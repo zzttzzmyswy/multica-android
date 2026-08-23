@@ -36,6 +36,7 @@ import { TextField } from "@/components/ui/text-field";
 import { Switch } from "@/components/ui/switch";
 import { RuntimeProfilesDialog } from "@/components/runtimes/runtime-profiles-dialog";
 import { UpdateSection } from "@/components/runtimes/update-section";
+import { RuntimeUsageSection } from "@/components/runtimes/runtime-usage-section";
 import { runtimeListOptions } from "@/data/queries/runtimes";
 import { memberListOptions } from "@/data/queries/members";
 import { agentListOptions } from "@/data/queries/agents";
@@ -515,6 +516,10 @@ export default function RuntimeDetailPage() {
             </View>
           ) : null}
         </View>
+
+        {/* Usage section (iteration-93) — web usage-section parity: per-runtime
+            cost / tokens / cache-savings KPIs + daily cost bars. */}
+        <RuntimeUsageSection runtimeId={runtime.id} />
 
         {/* Version & daemon-update card (iteration-83, A2.4) — web's
             MachineCliSection: machine-wide CLI version, the Desktop-managed

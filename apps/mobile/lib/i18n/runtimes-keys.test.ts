@@ -113,6 +113,17 @@ describe("runtimes i18n", () => {
     "runtimes.update.status.completed": "更新完成。守护进程正在重启...",
     "runtimes.update.status.failed": "更新失败",
     "runtimes.update.status.timeout": "超时",
+    "runtimes.usage.title": "用量",
+    "runtimes.usage.range7d": "7天",
+    "runtimes.usage.range30d": "30天",
+    "runtimes.usage.kpiCost": "费用",
+    "runtimes.usage.kpiCache": "缓存节省",
+    "runtimes.usage.kpiTokens": "Tokens",
+    "runtimes.usage.kpiCacheHint": "命中 {{pct}}% · 读取 {{reads}}",
+    "runtimes.usage.kpiTokensHint": "输入 {{input}} · 输出 {{output}}",
+    "runtimes.usage.chartTitle": "每日费用",
+    "runtimes.usage.chartLegend": "按天",
+    "runtimes.usage.empty": "该运行时暂无用量记录。",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {
