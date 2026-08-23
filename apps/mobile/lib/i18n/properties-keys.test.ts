@@ -42,6 +42,10 @@ describe("properties management page i18n", () => {
     "properties.emptyDescription": "工作区自定义属性可让 issue 携带类型化字段，如单选、日期或数字。",
     "settings.propertiesTitle": "属性",
     "settings.propertiesSubtitle": "管理工作区的 issue 自定义属性",
+    "properties.form.icon": "图标",
+    "properties.form.iconChoose": "选择图标",
+    "properties.form.iconRemove": "移除图标",
+    "properties.form.iconPickerTitle": "选择图标",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {

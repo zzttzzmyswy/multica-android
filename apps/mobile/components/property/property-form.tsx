@@ -38,6 +38,7 @@ import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { AutosizeTextArea } from "@/components/ui/autosize-textarea";
 import { TextField } from "@/components/ui/text-field";
+import { PropertyIconPickerModal } from "@/components/property/property-icon-picker";
 import {
   DEFAULT_PROPERTY_OPTION_COLOR,
   isKnownPropertyType,
@@ -45,6 +46,7 @@ import {
   propertyTypeIcon,
   propertyTypeLabelKey,
 } from "@/lib/issue-properties";
+import { propertyIconGlyph, propertyIconLabel } from "@/lib/property-icons";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -109,6 +111,9 @@ export function PropertyForm({ property }: PropertyFormProps) {
       : "text",
   );
   const [description, setDescription] = useState(property?.description ?? "");
+  // Icon key persisted by the server (`property.icon`); "" means cleared.
+  const [iconDraft, setIconDraft] = useState(property?.icon ?? "");
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [options, setOptions] = useState<OptionDraft[]>(() =>
     property?.config?.options?.length
       ? property.config.options.map((o) => ({
@@ -166,7 +171,7 @@ export function PropertyForm({ property }: PropertyFormProps) {
     const common = {
       name: name.trim(),
       description: description.trim(),
-      icon: property?.icon ?? "",
+      icon: iconDraft,
       ...(config ? { config } : {}),
     };
     try {
@@ -193,6 +198,7 @@ export function PropertyForm({ property }: PropertyFormProps) {
     property,
     name,
     description,
+    iconDraft,
     type,
     update,
     create,
@@ -332,6 +338,45 @@ export function PropertyForm({ property }: PropertyFormProps) {
                 })}
               </View>
             )}
+          </View>
+
+          {/* Icon — after type, before description (web field order), mirrors
+              web's Popover trigger: preview current icon or a choose placeholder */}
+          <View className="gap-1.5">
+            <FieldLabel icon="image-outline" text={t("properties.form.icon")} />
+            <Pressable
+              onPress={() => setIconPickerOpen(true)}
+              disabled={isSubmitting}
+              accessibilityLabel={t("properties.form.iconChoose")}
+              className="flex-row items-center justify-between rounded-md border border-border px-3 py-2.5 active:bg-secondary"
+            >
+              <View className="flex-row items-center gap-2">
+                <Ionicons
+                  name={propertyIconGlyph(iconDraft)}
+                  size={17}
+                  color={
+                    iconDraft
+                      ? THEME[colorScheme].foreground
+                      : THEME[colorScheme].mutedForeground
+                  }
+                />
+                <Text
+                  className={cn(
+                    "text-sm",
+                    iconDraft ? "text-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  {iconDraft
+                    ? propertyIconLabel(iconDraft)
+                    : t("properties.form.iconChoose")}
+                </Text>
+              </View>
+              <Ionicons
+                name="chevron-down"
+                size={16}
+                color={THEME[colorScheme].mutedForeground}
+              />
+            </Pressable>
           </View>
 
           {/* Description */}
@@ -494,6 +539,12 @@ export function PropertyForm({ property }: PropertyFormProps) {
           ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
+      <PropertyIconPickerModal
+        visible={iconPickerOpen}
+        value={iconDraft}
+        onSelect={setIconDraft}
+        onClose={() => setIconPickerOpen(false)}
+      />
     </>
   );
 }

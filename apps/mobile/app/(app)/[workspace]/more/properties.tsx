@@ -35,6 +35,7 @@ import {
   propertyOptionChips,
 } from "@/lib/property-catalog";
 import { propertyTypeIcon, propertyTypeLabelKey } from "@/lib/issue-properties";
+import { propertyIconGlyph } from "@/lib/property-icons";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
@@ -240,13 +241,19 @@ function PropertyRow({
   const usage = property.usage_count ?? 0;
   const { chips, rest } = propertyOptionChips(property);
   const hasOptions = propertyHasOptions(property);
+  // Row head: prefer the server-persisted icon; fall back to the type icon
+  // when the property has none (web renders null there; a type glyph is the
+  // mobile fallback so the head is never blank).
+  const rowGlyph = property.icon
+    ? propertyIconGlyph(property.icon)
+    : propertyTypeIcon(property.type);
 
   return (
     <Pressable onPress={onPress} className="px-4 py-3 active:bg-secondary">
       <View className="flex-row items-center gap-3">
         <View className="size-9 rounded-lg bg-secondary items-center justify-center">
           <Ionicons
-            name={propertyTypeIcon(property.type)}
+            name={rowGlyph}
             size={18}
             color={muted}
           />
