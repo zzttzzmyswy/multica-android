@@ -44,7 +44,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Alert, Keyboard, Pressable, TextInput, View } from "react-native";
+import { useQuery } from "@tanstack/react-query";
+import { Alert, ActivityIndicator, Keyboard, Pressable, ScrollView, TextInput, View } from "react-native";
 import { KeyboardStickyView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -54,6 +55,16 @@ import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { api, MAX_FILE_SIZE } from "@/data/api";
 import { useMentionDraftStore } from "@/data/stores/mention-draft-store";
+import { useWorkspaceStore } from "@/data/workspace-store";
+import { quickActionListOptions } from "@/data/queries/quick-actions";
+import {
+  buildBuiltinCommandItems,
+  isQuickActionItem,
+  matchSlashTrigger,
+  quickActionIdFromItem,
+  replaceSlashTrigger,
+  type SlashCommandItem,
+} from "@/lib/slash-command";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { stripMarkdown } from "@/lib/strip-markdown";
 import { THEME } from "@/lib/theme";
@@ -129,6 +140,14 @@ interface Props {
    *  issue comment composer both use this. Pass false only when a parent
    *  already owns keyboard handling and bottom-inset compensation. */
   manageKeyboard?: boolean;
+
+  /** Enables the `/` command menu (MYS-681). Issue comment mode passes
+   *  the issueId: typing a trailing `/` arms the menu of active quick
+   *  actions + `/note`; picking a quick action inserts the server-
+   *  rendered body (editable before send), `/note` inserts the plain
+   *  prefix. Chat omits it — its `/` menu (agent-skill picker) is a
+   *  separate later alignment. */
+  slashCommands?: { issueId: string };
 }
 
 function makeLocalId(): string {
@@ -171,6 +190,7 @@ export function MessageComposer({
   disabled = false,
   disabledReason,
   manageKeyboard = true,
+  slashCommands,
 }: Props) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
@@ -202,6 +222,102 @@ export function MessageComposer({
   const mentions = useMentionDraftStore((s) => s.mentions);
   const removeMention = useMentionDraftStore((s) => s.remove);
   const clearMentions = useMentionDraftStore((s) => s.clear);
+
+  // --- `/` command menu (MYS-681) -------------------------------------
+  // Armed on a TRAILING whitespace-delimited `/token` (see matchSlashTrigger).
+  // The menu catalog re-derives on every render from the workspace's active
+  // quick actions — data arriving after the menu opens grows it in place.
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const { data: quickActions = [] } = useQuery({
+    ...quickActionListOptions(wsId, false),
+    enabled: !!wsId && !!slashCommands,
+  });
+  const activeQuickActions = quickActions.filter((a) => a.status === "active");
+  const [slashTrigger, setSlashTrigger] = useState<{
+    from: number;
+    query: string;
+  } | null>(null);
+  const [slashPendingId, setSlashPendingId] = useState<string | null>(null);
+  const textRef = useRef(text);
+  textRef.current = text;
+
+  // Recompute the menu per keystroke: a re-arm clears the trigger when the
+  // token stops matching; otherwise the visible items refilter live.
+  const onTextChange = useCallback(
+    (next: string) => {
+      setText(next);
+      if (!slashCommands) return;
+      const trig = matchSlashTrigger(next);
+      setSlashTrigger(
+        trig && buildBuiltinCommandItems(trig.query, activeQuickActions).length > 0
+          ? trig
+          : null,
+      );
+    },
+    [setText, slashCommands, activeQuickActions],
+  );
+
+  const slashMenuItems =
+    slashTrigger && slashCommands
+      ? buildBuiltinCommandItems(slashTrigger.query, activeQuickActions)
+      : [];
+  const slashMenuVisible =
+    slashTrigger !== null && slashCommands !== undefined && slashMenuItems.length > 0;
+
+  const pickSlashItem = useCallback(
+    (item: SlashCommandItem) => {
+      if (!slashTrigger || !slashCommands) return;
+      const { from, query } = slashTrigger;
+
+      if (isQuickActionItem(item)) {
+        const qaid = quickActionIdFromItem(item);
+        setSlashPendingId(qaid);
+        void (async () => {
+          try {
+            // The "/query" text is deliberately left in place while the
+            // request is in flight — web deletes nothing until the render
+            // resolves (slash-command-suggestion.tsx command handler).
+            const content = await api.renderQuickAction(
+              slashCommands.issueId,
+              qaid,
+            );
+            // Empty body = "insert nothing"; the command text stays put so
+            // the user can pick again or edit it by hand.
+            if (!content) return;
+            // Mid-flight edit guard: replaceSlashTrigger no-ops when the text
+            // under `from` no longer equals `/${query}`, mirroring web's doc
+            // snapshot check. Menu closes only on a real insert.
+            const applied = replaceSlashTrigger(
+              textRef.current,
+              from,
+              query,
+              content,
+            );
+            if (applied === textRef.current) return;
+            setText(applied);
+            setSlashTrigger(null);
+          } catch (err) {
+            // The command text is still there, so the user can retry.
+            Alert.alert(
+              t("composer.slashCommandErrorTitle"),
+              err instanceof Error ? err.message : "Unknown error",
+            );
+          } finally {
+            setSlashPendingId(null);
+          }
+        })();
+        return;
+      }
+
+      // Built-in `/note` — insert the plain-text prefix with a trailing space
+      // so the token stops matching and the menu does not re-open. Hand-typed
+      // and menu-picked `/note ` are byte-identical for the backend prefix
+      // match (web BUILTIN_COMMANDS).
+      setText(replaceSlashTrigger(textRef.current, from, query, "/note "));
+      setSlashTrigger(null);
+    },
+    [slashTrigger, slashCommands, setText, t],
+  );
 
   // Drop mention draft on composer unmount so navigating away doesn't
   // leak chips into the next composer's session.
@@ -264,6 +380,7 @@ export function MessageComposer({
 
     // Optimistic clear: text + chips empty out immediately so the next
     // typing tick doesn't double-include them. Restored on rejection.
+    setSlashTrigger(null);
     setText("");
     setAttachments([]);
     clearMentions();
@@ -446,6 +563,7 @@ export function MessageComposer({
       if (empty && !inputRef.current?.isFocused()) {
         setExpanded(false);
         onClearReplyTarget?.();
+        setSlashTrigger(null);
       }
     }, 80);
   }, [text, attachments.length, mentions.length, onClearReplyTarget]);
@@ -534,18 +652,78 @@ export function MessageComposer({
           </View>
         ) : null}
 
-        <TextInput
-          ref={inputRef}
-          value={text}
-          onChangeText={setText}
-          onBlur={onBlur}
-          placeholder={placeholder}
-          placeholderTextColor={theme.mutedForeground}
-          multiline
-          editable={!disabled}
-          className="px-4 pt-3 pb-1 text-base text-foreground"
-          style={{ minHeight: 28, maxHeight: 140, textAlignVertical: "top" }}
-        />
+        <View className="relative">
+          {slashMenuVisible ? (
+            <View
+              className="absolute left-2 right-2 bottom-full mb-1 z-50 overflow-hidden rounded-xl border border-border bg-card shadow-lg"
+              style={{ maxHeight: 240, elevation: 6 }}
+            >
+              <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+                {slashMenuItems.map((item) => {
+                  const qa = isQuickActionItem(item);
+                  const pending =
+                    qa && slashPendingId === quickActionIdFromItem(item);
+                  const description =
+                    item.id === "note"
+                      ? t("composer.slashNoteDescription")
+                      : item.description;
+                  return (
+                    <Pressable
+                      key={item.id}
+                      onPress={() => pickSlashItem(item)}
+                      disabled={pending}
+                      accessibilityRole="button"
+                      accessibilityLabel={`/${item.label}`}
+                      className="flex-row items-center gap-2 px-3 py-2 active:bg-secondary"
+                    >
+                      {pending ? (
+                        <ActivityIndicator
+                          size="small"
+                          color={theme.primary}
+                        />
+                      ) : (
+                        <Ionicons
+                          name={
+                            qa
+                              ? "flash-outline"
+                              : "document-text-outline"
+                          }
+                          size={16}
+                          color={theme.mutedForeground}
+                        />
+                      )}
+                      <View className="flex-1">
+                        <Text className="text-sm font-medium text-foreground">
+                          /{item.label}
+                        </Text>
+                        {description ? (
+                          <Text
+                            className="text-xs text-muted-foreground"
+                            numberOfLines={1}
+                          >
+                            {description}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          ) : null}
+          <TextInput
+            ref={inputRef}
+            value={text}
+            onChangeText={onTextChange}
+            onBlur={onBlur}
+            placeholder={placeholder}
+            placeholderTextColor={theme.mutedForeground}
+            multiline
+            editable={!disabled}
+            className="px-4 pt-3 pb-1 text-base text-foreground"
+            style={{ minHeight: 28, maxHeight: 140, textAlignVertical: "top" }}
+          />
+        </View>
 
         <View className="flex-row items-center px-2 pb-2 pt-1">
           {/* @ leads the toolbar — highest-signal attachment (only one

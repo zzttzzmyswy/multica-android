@@ -625,6 +625,8 @@
   "chat.welcomeBack": "欢迎回到 Multica",
   "chat.youPrefix": "你：",
   "comment.collapseResolvedLabel": "收起已解决的讨论",
+  "composer.slashNoteDescription": "添加备注——不触发任何 Agent",
+  "composer.slashCommandErrorTitle": "无法插入快捷操作",
   "comment.couldntSend": "发送失败",
   "comment.deleteCommentMessage": "评论将被永久删除，线程内的回复也会一并移除，且无法撤销。",
   "comment.deleteCommentTitle": "删除这条评论？",

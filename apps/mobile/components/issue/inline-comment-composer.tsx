@@ -61,6 +61,7 @@ export function InlineCommentComposer({ issueId }: { issueId: string }) {
       placeholder={t("comment.placeholder")}
       pillLabel={t("comment.pillLabel")}
       pillIcon="chatbubble-ellipses-outline"
+      slashCommands={{ issueId }}
       replyTarget={
         replyTarget
           ? {

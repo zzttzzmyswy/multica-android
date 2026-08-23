@@ -624,6 +624,8 @@
   "chat.welcomeAgent": "Hi, I'm {{name}}",
   "chat.welcomeBack": "Welcome back to Multica",
   "chat.youPrefix": "You: ",
+  "composer.slashNoteDescription": "Add a note — won't trigger any agents",
+  "composer.slashCommandErrorTitle": "Couldn't insert quick action",
   "comment.collapseResolvedLabel": "Collapse resolved thread",
   "comment.couldntSend": "Couldn't send",
   "comment.deleteCommentMessage": "This comment will be permanently deleted. Replies in the thread will also be removed. This cannot be undone.",

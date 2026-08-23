@@ -188,6 +188,7 @@ import {
   ListIssuesResponseSchema,
   ListPropertiesResponseSchema,
   ListQuickActionsResponseSchema,
+  QuickActionRenderSchema,
   QuickActionSchema,
   TimelineEntriesSchema,
   WorkspaceSubscriptionEntitlementsSchema,
@@ -1410,6 +1411,28 @@ class ApiClient {
     return parseWithFallback(raw, CommentSchema, EMPTY_COMMENT, {
       endpoint: "POST /api/issues/{id}/quick-actions/{quickActionId}/run",
     });
+  }
+
+  // What a quick action WOULD post, without posting it (MYS-681). Backs the
+  // composer `/` menu so the user sees the server-rendered body first and can
+  // edit before sending. Empty result means "insert nothing" — callers must
+  // not treat it as a cleared label. Mirrors packages/core/api/client.ts
+  // renderQuickAction.
+  async renderQuickAction(
+    issueId: string,
+    quickActionId: string,
+  ): Promise<string> {
+    const raw = await this.fetch<unknown>(
+      `/api/issues/${issueId}/quick-actions/${quickActionId}/render`,
+      { method: "POST" },
+    );
+    const parsed = parseWithFallback(
+      raw,
+      QuickActionRenderSchema,
+      { content: "" },
+      { endpoint: "POST /api/issues/{id}/quick-actions/{quickActionId}/render" },
+    );
+    return parsed.content;
   }
 
   // GitHub integration (iteration-52) — installation list, repository browser
