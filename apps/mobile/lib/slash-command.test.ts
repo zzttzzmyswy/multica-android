@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildBuiltinCommandItems,
+  buildChatSkillItems,
   isQuickActionItem,
   matchSlashTrigger,
   quickActionIdFromItem,
@@ -45,6 +46,12 @@ describe("matchSlashTrigger", () => {
   it("rejects tokens with characters outside the allowed set", () => {
     expect(matchSlashTrigger("hello /查")).toBeNull();
     expect(matchSlashTrigger("hello /query!")).toBeNull();
+  });
+
+  it("never arms on an @ mention token (chat menu exclusivity)", () => {
+    expect(matchSlashTrigger("@alice")).toBeNull();
+    expect(matchSlashTrigger("hello @alice")).toBeNull();
+    expect(matchSlashTrigger("hello @alice ")).toBeNull();
   });
 });
 
@@ -122,5 +129,66 @@ describe("replaceSlashTrigger", () => {
     expect(
       replaceSlashTrigger("hello /other", 6, "query", "**rendered**"),
     ).toBe("hello /other");
+  });
+});
+
+describe("buildChatSkillItems", () => {
+  const skills = [
+    { id: "s1", name: "Debug", description: "Find and fix bugs" },
+    { id: "s2", name: "Port", description: "Port features between platforms" },
+    { id: "s3", name: "shell", description: undefined },
+  ];
+
+  it("lists every skill for an empty query with name as label", () => {
+    expect(buildChatSkillItems("", skills)).toEqual([
+      { id: "s1", label: "Debug", description: "Find and fix bugs" },
+      {
+        id: "s2",
+        label: "Port",
+        description: "Port features between platforms",
+      },
+      { id: "s3", label: "shell", description: undefined },
+    ]);
+  });
+
+  it("substring-filters case-insensitively on skill name", () => {
+    expect(buildChatSkillItems("deb", skills).map((i) => i.id)).toEqual(["s1"]);
+    expect(buildChatSkillItems("DEBUG", skills).map((i) => i.id)).toEqual([
+      "s1",
+    ]);
+    expect(buildChatSkillItems("he", skills).map((i) => i.id)).toEqual([
+      "s3",
+    ]);
+    expect(buildChatSkillItems("po", skills).map((i) => i.id)).toEqual([
+      "s2",
+    ]);
+  });
+
+  it("matches a skill by its description too", () => {
+    expect(buildChatSkillItems("fix", skills).map((i) => i.id)).toEqual(["s1"]);
+    const withDescOnly = [
+      { id: "sx", name: "Test", description: "Run the test suites" },
+    ];
+    expect(buildChatSkillItems("SUITE", withDescOnly).map((i) => i.id)).toEqual([
+      "sx",
+    ]);
+  });
+
+  it("returns no items for an agent without skills", () => {
+    expect(buildChatSkillItems("", [])).toEqual([]);
+    expect(buildChatSkillItems("deb", [])).toEqual([]);
+  });
+
+  it("returns no items when nothing matches", () => {
+    expect(buildChatSkillItems("xyz", skills)).toEqual([]);
+  });
+
+  it("caps the menu at MAX_SLASH_ITEMS", () => {
+    const many = Array.from({ length: MAX_SLASH_ITEMS + 5 }, (_, i) => ({
+      id: `s${i}`,
+      name: `Skill ${i}`,
+      description: `d${i}`,
+    }));
+    expect(buildChatSkillItems("", many).length).toBe(MAX_SLASH_ITEMS);
   });
 });

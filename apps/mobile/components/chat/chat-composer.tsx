@@ -34,6 +34,7 @@ import { useCallback } from "react";
 import { Pressable, View } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import type { ChatSkillInput } from "@/lib/slash-command";
 import { MessageComposer } from "@/components/composer/message-composer";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -56,6 +57,11 @@ interface Props {
   sending: boolean;
   /** Queued tasks remain busy, but do not expose Stop without draft restore. */
   allowStop?: boolean;
+  /** The active agent's embedded skills (`Agent.skills`). Drives the `/`
+   *  skill picker (MYS-682): typing a trailing `/` lists them; picking one
+   *  inserts `/{name} ` verbatim. Empty when the agent has no skills — the
+   *  slash menu then stays quiet. */
+  activeAgentSkills?: ChatSkillInput[];
   /** Hard-disable typing + send. Used when there's no usable agent in the
    *  workspace or the session is archived (legacy). */
   disabled?: boolean;
@@ -74,6 +80,7 @@ export function ChatComposer({
   allowStop = true,
   disabled = false,
   disabledReason,
+  activeAgentSkills,
 }: Props) {
   const { t } = useTranslation();
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
@@ -121,6 +128,7 @@ export function ChatComposer({
       disabled={disabled}
       disabledReason={disabledReason}
       isSending={sending}
+      slashSkills={activeAgentSkills}
       renderStop={allowStop ? () => <StopButton onPress={handleStop} /> : undefined}
       manageKeyboard={false}
     />

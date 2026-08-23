@@ -59,10 +59,12 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { quickActionListOptions } from "@/data/queries/quick-actions";
 import {
   buildBuiltinCommandItems,
+  buildChatSkillItems,
   isQuickActionItem,
   matchSlashTrigger,
   quickActionIdFromItem,
   replaceSlashTrigger,
+  type ChatSkillInput,
   type SlashCommandItem,
 } from "@/lib/slash-command";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -145,9 +147,21 @@ interface Props {
    *  the issueId: typing a trailing `/` arms the menu of active quick
    *  actions + `/note`; picking a quick action inserts the server-
    *  rendered body (editable before send), `/note` inserts the plain
-   *  prefix. Chat omits it — its `/` menu (agent-skill picker) is a
-   *  separate later alignment. */
+   *  prefix. Chat omits it — its `/` menu is the agent-skill picker
+   *  below (`slashSkills`).
+   *
+   *  Exactly one of `slashCommands` / `slashSkills` is set per composer
+   *  instance; both arm on the same trailing `/token` trigger. */
   slashCommands?: { issueId: string };
+
+  /** Enables the chat `/` skill picker (MYS-682): typing a trailing `/`
+   *  opens the active agent's skills (name + description, prefix/
+   *  substring filter, MAX 20), picking one inserts `/{name} ` with a
+   *  trailing space so the token stops matching. Unlike the quick-action
+   *  menu the insert is synchronous plain text. An agent with no skills
+   *  arms nothing — web's "no skills configured" empty state is skipped
+   *  on mobile so normal typing is never interrupted (see MYS-682). */
+  slashSkills?: ChatSkillInput[];
 }
 
 function makeLocalId(): string {
@@ -191,6 +205,7 @@ export function MessageComposer({
   disabledReason,
   manageKeyboard = true,
   slashCommands,
+  slashSkills,
 }: Props) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
@@ -223,10 +238,12 @@ export function MessageComposer({
   const removeMention = useMentionDraftStore((s) => s.remove);
   const clearMentions = useMentionDraftStore((s) => s.clear);
 
-  // --- `/` command menu (MYS-681) -------------------------------------
+  // --- `/` menu: quick-action commands (issue comments, MYS-681) or
+  // agent-skill picker (chat, MYS-682) --------------------------------
   // Armed on a TRAILING whitespace-delimited `/token` (see matchSlashTrigger).
-  // The menu catalog re-derives on every render from the workspace's active
-  // quick actions — data arriving after the menu opens grows it in place.
+  // The menu catalog re-derives on every render from its source: the
+  // workspace's active quick actions (data arriving after the menu opens
+  // grows it in place) or the active agent's skills from the chat screen.
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { data: quickActions = [] } = useQuery({
     ...quickActionListOptions(wsId, false),
@@ -241,35 +258,60 @@ export function MessageComposer({
   const textRef = useRef(text);
   textRef.current = text;
 
+  // Which `/` catalog mode is active: issue-comment quick-action commands or
+  // the chat agent-skill picker. Exactly one prop is ever set per instance.
+  const slashMode: "commands" | "skills" | null = slashCommands
+    ? "commands"
+    : slashSkills
+      ? "skills"
+      : null;
+  const buildCatalog = useCallback(
+    (query: string): SlashCommandItem[] =>
+      slashMode === "commands"
+        ? buildBuiltinCommandItems(query, activeQuickActions)
+        : slashMode === "skills" && slashSkills
+          ? buildChatSkillItems(query, slashSkills)
+          : [],
+    [slashMode, activeQuickActions, slashSkills],
+  );
+
   // Recompute the menu per keystroke: a re-arm clears the trigger when the
-  // token stops matching; otherwise the visible items refilter live.
+  // token stops matching (or no item matches); otherwise the visible items
+  // refilter live.
   const onTextChange = useCallback(
     (next: string) => {
       setText(next);
-      if (!slashCommands) return;
+      if (!slashMode) return;
       const trig = matchSlashTrigger(next);
-      setSlashTrigger(
-        trig && buildBuiltinCommandItems(trig.query, activeQuickActions).length > 0
-          ? trig
-          : null,
-      );
+      setSlashTrigger(trig && buildCatalog(trig.query).length > 0 ? trig : null);
     },
-    [setText, slashCommands, activeQuickActions],
+    [setText, slashMode, buildCatalog],
   );
 
   const slashMenuItems =
-    slashTrigger && slashCommands
-      ? buildBuiltinCommandItems(slashTrigger.query, activeQuickActions)
-      : [];
+    slashTrigger && slashMode ? buildCatalog(slashTrigger.query) : [];
   const slashMenuVisible =
-    slashTrigger !== null && slashCommands !== undefined && slashMenuItems.length > 0;
+    slashTrigger !== null && slashMode !== null && slashMenuItems.length > 0;
 
   const pickSlashItem = useCallback(
     (item: SlashCommandItem) => {
-      if (!slashTrigger || !slashCommands) return;
+      if (!slashTrigger || !slashMode) return;
       const { from, query } = slashTrigger;
 
-      if (isQuickActionItem(item)) {
+      if (slashMode === "skills") {
+        // Chat skill picker — synchronous plain-text insert with a trailing
+        // space so the token stops matching and the menu does not re-open.
+        // Web inserts a slashCommand node rendered as `/[label]` (MYS-682);
+        // mobile has no such node type, and the byte-identical `/{name} `
+        // prefix is what the user sees either way.
+        setText(
+          replaceSlashTrigger(textRef.current, from, query, `/${item.label} `),
+        );
+        setSlashTrigger(null);
+        return;
+      }
+
+      if (slashMode === "commands" && slashCommands && isQuickActionItem(item)) {
         const qaid = quickActionIdFromItem(item);
         setSlashPendingId(qaid);
         void (async () => {
@@ -316,7 +358,7 @@ export function MessageComposer({
       setText(replaceSlashTrigger(textRef.current, from, query, "/note "));
       setSlashTrigger(null);
     },
-    [slashTrigger, slashCommands, setText, t],
+    [slashTrigger, slashMode, slashCommands, setText, t],
   );
 
   // Drop mention draft on composer unmount so navigating away doesn't
@@ -547,6 +589,10 @@ export function MessageComposer({
 
   const onAtPress = useCallback(() => {
     Haptics.selectionAsync().catch(() => {});
+    // `/` and `@` pickers never co-exist: opening the mention sheet closes
+    // any armed slash menu so it can't linger over the returned composer
+    // (MYS-682 exclusivity).
+    setSlashTrigger(null);
     router.push(mentionPickerPath);
   }, [mentionPickerPath]);
 
@@ -686,7 +732,9 @@ export function MessageComposer({
                           name={
                             qa
                               ? "flash-outline"
-                              : "document-text-outline"
+                              : slashMode === "skills"
+                                ? "sparkles-outline"
+                                : "document-text-outline"
                           }
                           size={16}
                           color={theme.mutedForeground}

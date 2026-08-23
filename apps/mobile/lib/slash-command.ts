@@ -1,9 +1,11 @@
 /**
- * Pure helpers backing the issue comment composer's `/` command menu —
- * mobile mirror of the pure-function parts of web's
+ * Pure helpers backing the issue comment composer's `/` command menu and the
+ * chat composer's `/` skill picker — mobile mirror of the pure-function
+ * parts of web's
  * `packages/views/editor/extensions/slash-command-suggestion.tsx`
- * (`buildBuiltinCommandItems`, quick-action id helpers) plus `use-quick-action-menu.ts`
- * catalog semantics (workspace active quick actions in front, `/note` built-in).
+ * (`buildBuiltinCommandItems`, `buildItems` skills section, quick-action id
+ * helpers) plus `use-quick-action-menu.ts` catalog semantics (workspace
+ * active quick actions in front, `/note` built-in).
  *
  * Platform divergence (documented in MYS-681): mobile's composer input is a
  * plain RN TextInput with no controlled selection, so it cannot detect "the
@@ -14,7 +16,19 @@
  * and the same path-paste case (`/usr/local/bin` can never be a single final
  * word) is rejected by the regex itself. Mid-line `/` stays an accepted
  * platform difference.
+ *
+ * Chat's skill picker (MYS-682) reuses the same trigger/replace helpers; the
+ * only difference from the issue-comment catalog is the item source (the
+ * active agent's `AgentSkillSummary[]` instead of workspace quick actions).
  */
+
+/** Narrow structural view of `@multica/core` `AgentSkillSummary` — the pure
+ *  module reads only id/name/description, so it stays import-free. */
+export interface ChatSkillInput {
+  id: string;
+  name: string;
+  description?: string | null;
+}
 
 export interface SlashCommandItem {
   id: string;
@@ -31,6 +45,30 @@ export interface SlashTriggerMatch {
 
 /** Web MAX_ITEMS — `slash-command-suggestion.tsx:31`. */
 export const MAX_SLASH_ITEMS = 20;
+
+/** Mirrors web `buildItems`' skills section (chat `/` picker, MYS-682):
+ *  case-insensitive substring match on name OR description, hard cap at
+ *  MAX_ITEMS. The agent's `skills` come from the `Agent` payload read up in
+ *  the chat screen (activeAgent.skills), so no new API is needed. */
+export function buildChatSkillItems(
+  query: string,
+  skills: ChatSkillInput[],
+): SlashCommandItem[] {
+  const q = query.toLowerCase();
+  return skills
+    .filter(
+      (s) =>
+        !q ||
+        s.name.toLowerCase().includes(q) ||
+        (s.description ?? "").toLowerCase().includes(q),
+    )
+    .slice(0, MAX_SLASH_ITEMS)
+    .map((s) => ({
+      id: s.id,
+      label: s.name,
+      description: s.description || undefined,
+    }));
+}
 
 /** Web QUICK_ACTION_ITEM_PREFIX — `slash-command-suggestion.tsx:269`. */
 export const QUICK_ACTION_ITEM_PREFIX = "quick-action:";

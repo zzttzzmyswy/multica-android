@@ -518,6 +518,9 @@ export default function ChatTab() {
             allowStop={pendingTask?.status !== "queued"}
             disabled={disabled}
             disabledReason={disabledReason}
+            // /\-menu catalog = the active agent's embedded skills (MYS-682);
+            // an agent with no skills simply never arms the menu.
+            activeAgentSkills={currentAgent?.skills ?? []}
           />
         </KeyboardStickyView>
       </View>
