@@ -51,7 +51,7 @@ export function PropertyIconPickerModal({
               className="max-h-[55%] min-h-[120px]"
               contentContainerClassName="px-4 py-3"
             >
-              <View className="flex-row flex-wrap gap-2">
+              <View className="flex-row flex-wrap">
                 {PROPERTY_ICON_OPTIONS.map((option) => {
                   const selected = option.value === value;
                   return (
@@ -63,20 +63,27 @@ export function PropertyIconPickerModal({
                       }}
                       accessibilityLabel={option.label}
                       accessibilityState={{ selected }}
-                      className={cn(
-                        "w-11 h-11 items-center justify-center rounded-md border",
-                        selected
-                          ? "bg-secondary border-foreground"
-                          : "border-transparent active:bg-secondary",
-                      )}
+                      // Fixed 6 columns like web's grid-cols-6; a cell holds
+                      // its inner box so rows keep a tight rhythm.
+                      style={{ width: "16.666%" }}
+                      className="h-12 items-center justify-center"
                     >
-                      <Ionicons
-                        name={option.glyph}
-                        size={20}
-                        color={
-                          selected ? theme.foreground : theme.mutedForeground
-                        }
-                      />
+                      <View
+                        className={cn(
+                          "size-10 items-center justify-center rounded-md border",
+                          selected
+                            ? "bg-secondary border-foreground"
+                            : "border-transparent active:bg-secondary",
+                        )}
+                      >
+                        <Ionicons
+                          name={option.glyph}
+                          size={20}
+                          color={
+                            selected ? theme.foreground : theme.mutedForeground
+                          }
+                        />
+                      </View>
                     </Pressable>
                   );
                 })}
