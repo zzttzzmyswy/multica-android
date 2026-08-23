@@ -5,7 +5,7 @@
  * row appears at the bottom when a selection exists. Rendered as a bottom
  * sheet so the 6-column grid stays reachable on small screens.
  */
-import { Modal, Pressable, ScrollView, View } from "react-native";
+import { Modal, Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
 import { PROPERTY_ICON_OPTIONS } from "@/lib/property-icons";
@@ -47,10 +47,7 @@ export function PropertyIconPickerModal({
                 <Ionicons name="close" size={20} color={theme.mutedForeground} />
               </Pressable>
             </View>
-            <ScrollView
-              className="max-h-[55%] min-h-[120px]"
-              contentContainerClassName="px-4 py-3"
-            >
+            <View className="px-4 py-3">
               <View className="flex-row flex-wrap">
                 {PROPERTY_ICON_OPTIONS.map((option) => {
                   const selected = option.value === value;
@@ -63,32 +60,27 @@ export function PropertyIconPickerModal({
                       }}
                       accessibilityLabel={option.label}
                       accessibilityState={{ selected }}
-                      // Fixed 6 columns like web's grid-cols-6; a cell holds
-                      // its inner box so rows keep a tight rhythm.
+                      // Fixed 6 columns like web's grid-cols-6.
                       style={{ width: "16.666%" }}
-                      className="h-12 items-center justify-center"
+                      className={cn(
+                        "h-12 items-center justify-center rounded-md border",
+                        selected
+                          ? "bg-secondary border-foreground"
+                          : "border-transparent active:bg-secondary",
+                      )}
                     >
-                      <View
-                        className={cn(
-                          "size-10 items-center justify-center rounded-md border",
-                          selected
-                            ? "bg-secondary border-foreground"
-                            : "border-transparent active:bg-secondary",
-                        )}
-                      >
-                        <Ionicons
-                          name={option.glyph}
-                          size={20}
-                          color={
-                            selected ? theme.foreground : theme.mutedForeground
-                          }
-                        />
-                      </View>
+                      <Ionicons
+                        name={option.glyph}
+                        size={22}
+                        color={
+                          selected ? theme.foreground : theme.mutedForeground
+                        }
+                      />
                     </Pressable>
                   );
                 })}
               </View>
-            </ScrollView>
+            </View>
             {value ? (
               <View className="border-t border-border px-4 py-2.5">
                 <Pressable
