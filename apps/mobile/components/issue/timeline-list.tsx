@@ -96,6 +96,7 @@ import { IssueReactionRow } from "./issue-reaction-row";
 import { IssueParentSection } from "./issue-parent-section";
 import { IssueChildrenSection } from "./issue-children-section";
 import { PullRequestList } from "./pull-request-list";
+import { QuickActionsSection } from "@/components/quick-action/quick-actions-section";
 import { SubscriptionControl } from "./subscription-control";
 import { ActivityRow } from "./activity-row";
 import { CommentCard } from "./comment-card";
@@ -428,6 +429,11 @@ export function TimelineList({
           between the sub-issue list and the Activity header; fetches its own
           data via issuePullRequestsOptions and re-renders on cache changes. */}
       <PullRequestList issueId={issue.id} />
+      {/* Issue-sidebar Quick Actions (MYS-680) — workspace-configured presets
+       * run on the issue with one tap, mirroring web's sidebar section.
+       * Renders null when the workspace has no active quick action, so it
+       * doesn't crowd the header in the common case. */}
+      <QuickActionsSection issueId={issue.id} />
       <View className="px-4 pt-4 pb-2 border-t border-border">
         <View className="flex-row items-center justify-between gap-2">
           <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">

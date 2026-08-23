@@ -1394,6 +1394,24 @@ class ApiClient {
     await this.fetch<void>(`/api/quick-actions/${id}`, { method: "DELETE" });
   }
 
+  // Run a quick action against one issue (MYS-680). The response is a Comment
+  // carrying `trigger_outcomes` — the same shape POST /comments returns — so
+  // callers reuse one result handler and inherit queued/coalesced/deferred/
+  // blocked. Mirrors packages/core/api/client.ts runQuickAction; CommentSchema
+  // is `.loose()` so the server's trigger_outcomes pass through untouched.
+  async runQuickAction(
+    issueId: string,
+    quickActionId: string,
+  ): Promise<Comment> {
+    const raw = await this.fetch<unknown>(
+      `/api/issues/${issueId}/quick-actions/${quickActionId}/run`,
+      { method: "POST" },
+    );
+    return parseWithFallback(raw, CommentSchema, EMPTY_COMMENT, {
+      endpoint: "POST /api/issues/{id}/quick-actions/{quickActionId}/run",
+    });
+  }
+
   // GitHub integration (iteration-52) — installation list, repository browser
   // and connect-URL minting. Mirrors packages/core/api/client.ts:3673-3724;
   // response schemas + fallbacks from @multica/core/api/schemas.
