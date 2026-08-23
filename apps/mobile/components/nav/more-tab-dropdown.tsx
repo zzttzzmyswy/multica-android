@@ -93,6 +93,11 @@ const NAV_ITEMS: NavItem[] = [
   { labelKey: "nav.members", icon: "people", path: "/more/members" },
   { labelKey: "nav.squads", icon: "people-circle", path: "/more/squads" },
   { labelKey: "nav.labels", icon: "pricetags", path: "/more/labels" },
+  {
+    labelKey: "nav.properties",
+    icon: "options-outline",
+    path: "/more/properties",
+  },
   { labelKey: "nav.skills", icon: "extension-puzzle", path: "/more/skills" },
   { labelKey: "nav.mcpServers", icon: "server", path: "/more/mcp-servers" },
   { labelKey: "nav.runtimes", icon: "server", path: "/more/runtimes" },

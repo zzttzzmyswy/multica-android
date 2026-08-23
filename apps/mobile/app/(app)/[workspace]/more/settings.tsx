@@ -103,6 +103,8 @@ export default function SettingsPage() {
   const goBilling = () => router.push(`/${currentSlug}/more/settings/billing`);
   const goIssueStatuses = () =>
     router.push(`/${currentSlug}/more/settings/issue-statuses`);
+  const goProperties = () =>
+    router.push(`/${currentSlug}/more/properties`);
 
   // Language follows the theme picker's tap-to-act pattern. The local switch
   // takes effect immediately (setLocale/resetLocale persist + notify), and
@@ -234,6 +236,18 @@ export default function SettingsPage() {
           }
           title={t("settings.issueStatusesTitle")}
           subtitle={t("settings.issueStatusesSubtitle")}
+        />
+        <Separator />
+        <NavRow
+          onPress={goProperties}
+          chevronColor={mutedFg}
+          leading={
+            <View className="size-10 rounded-md bg-secondary items-center justify-center">
+              <Ionicons name="options-outline" size={20} color={mutedFg} />
+            </View>
+          }
+          title={t("settings.propertiesTitle")}
+          subtitle={t("settings.propertiesSubtitle")}
         />
         <Separator />
         <NavRow
