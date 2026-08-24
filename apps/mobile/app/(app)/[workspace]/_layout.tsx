@@ -415,6 +415,13 @@ export default function WorkspaceLayout() {
           }}
         />
         <Stack.Screen
+          name="more/agents/[id]/custom-args"
+          options={{
+            title: t("agents.customArgs.title"),
+            headerBackTitle: t("agents.customArgs.title"),
+          }}
+        />
+        <Stack.Screen
           name="more/agents/new"
           options={{ title: t("screen.agents"), headerBackTitle: t("common.back") }}
         />
