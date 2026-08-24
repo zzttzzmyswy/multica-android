@@ -31,8 +31,8 @@ export function AgentDetailActions({ agent }: { agent: Agent }) {
 
   const openMenu = useCallback(() => {
     const options: string[] = [];
-    const actions: ("edit" | "env" | "args" | "archive" | "restore" | "cancel")[] = [];
-    const push = (label: string, action: "edit" | "env" | "args" | "archive" | "restore" | "cancel") => {
+    const actions: ("edit" | "env" | "args" | "integrations" | "archive" | "restore" | "cancel")[] = [];
+    const push = (label: string, action: "edit" | "env" | "args" | "integrations" | "archive" | "restore" | "cancel") => {
       options.push(label);
       actions.push(action);
     };
@@ -40,6 +40,7 @@ export function AgentDetailActions({ agent }: { agent: Agent }) {
     push(t("agents.detail.menu.edit"), "edit");
     push(t("agents.detail.menu.env"), "env");
     push(t("agents.detail.menu.args"), "args");
+    push(t("agents.detail.menu.integrations"), "integrations");
     if (archived) push(t("agents.detail.menu.restore"), "restore");
     else push(t("agents.detail.menu.archive"), "archive");
     push(t("menu.cancel"), "cancel");
@@ -60,7 +61,7 @@ export function AgentDetailActions({ agent }: { agent: Agent }) {
         const action = actions[index];
         if (!action || action === "cancel" || !wsSlug) return;
 
-        const nav = (route: "edit" | "env" | "custom-args") =>
+        const nav = (route: "edit" | "env" | "custom-args" | "integrations") =>
           router.push(`/${wsSlug}/more/agents/${agent.id}/${route}`);
 
         switch (action) {
@@ -72,6 +73,9 @@ export function AgentDetailActions({ agent }: { agent: Agent }) {
             return;
           case "args":
             nav("custom-args");
+            return;
+          case "integrations":
+            nav("integrations");
             return;
           case "restore":
             restoreAgent.mutate(agent.id, {

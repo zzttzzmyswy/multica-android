@@ -68,6 +68,10 @@ import type {
   ListVCSConnectionsResponse,
   ConnectVCSRequest,
   ConnectVCSResponse,
+  ListLarkInstallationsResponse,
+  ListSlackInstallationsResponse,
+  ListDingTalkInstallationsResponse,
+  ListWecomInstallationsResponse,
   ListIssuesParams,
   ListIssuesResponse,
   ListLabelsResponse,
@@ -326,6 +330,14 @@ import {
   ListVCSConnectionsResponseSchema,
   ConnectVCSResponseSchema,
   EMPTY_LIST_VCS_CONNECTIONS_RESPONSE,
+  ListLarkInstallationsResponseSchema,
+  EMPTY_LIST_LARK_INSTALLATIONS_RESPONSE,
+  ListSlackInstallationsResponseSchema,
+  EMPTY_LIST_SLACK_INSTALLATIONS_RESPONSE,
+  ListDingTalkInstallationsResponseSchema,
+  EMPTY_LIST_DINGTALK_INSTALLATIONS_RESPONSE,
+  ListWecomInstallationsResponseSchema,
+  EMPTY_LIST_WECOM_INSTALLATIONS_RESPONSE,
   ResourceLabelsResponseSchema,
   EMPTY_RESOURCE_LABELS_RESPONSE,
   IssueStatusEntrySchema,
@@ -1547,6 +1559,68 @@ class ApiClient {
       ConnectVCSResponseSchema,
       ConnectVCSResponseSchema.parse({}),
       { endpoint: "rotateVCSWebhook" },
+    );
+  }
+
+  // External-channel per-agent installations (iteration-98 / A14) — Lark /
+  // Slack / DingTalk / WeCom. Mirrors packages/core/api/client.ts:3770-3850
+  // and web's agent Integrations tab (packages/views/agents/components/tabs/
+  // integrations-tab.tsx). Each GET returns `{ installations[], configured,
+  // install_supported? }`; the UI filters installations down to the current
+  // agent via data/queries/integrations.ts channelState.
+  async listLarkInstallations(
+    workspaceId: string,
+  ): Promise<ListLarkInstallationsResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/lark/installations`,
+    );
+    return parseWithFallback(
+      raw,
+      ListLarkInstallationsResponseSchema,
+      EMPTY_LIST_LARK_INSTALLATIONS_RESPONSE,
+      { endpoint: "listLarkInstallations" },
+    );
+  }
+
+  async listSlackInstallations(
+    workspaceId: string,
+  ): Promise<ListSlackInstallationsResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/slack/installations`,
+    );
+    return parseWithFallback(
+      raw,
+      ListSlackInstallationsResponseSchema,
+      EMPTY_LIST_SLACK_INSTALLATIONS_RESPONSE,
+      { endpoint: "listSlackInstallations" },
+    );
+  }
+
+  async listDingTalkInstallations(
+    workspaceId: string,
+  ): Promise<ListDingTalkInstallationsResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/dingtalk/installations`,
+    );
+    return parseWithFallback(
+      raw,
+      ListDingTalkInstallationsResponseSchema,
+      EMPTY_LIST_DINGTALK_INSTALLATIONS_RESPONSE,
+      { endpoint: "listDingTalkInstallations" },
+    );
+  }
+
+  async listWecomInstallations(
+    workspaceId: string,
+  ): Promise<ListWecomInstallationsResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/wecom/installations`,
+    );
+    return parseWithFallback(
+      raw,
+      ListWecomInstallationsResponseSchema,
+      EMPTY_LIST_WECOM_INSTALLATIONS_RESPONSE,
+      { endpoint: "listWecomInstallations" },
     );
   }
 

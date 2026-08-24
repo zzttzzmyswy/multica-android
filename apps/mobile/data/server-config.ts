@@ -71,14 +71,20 @@ export function getDisplayBaseUrl(): string {
 }
 
 /** Build-time web origin for the "open on web" / "copy link" actions.
- *  Prefer an explicit `EXPO_PUBLIC_WEB_URL` (official & hosted deployments
- *  serve the web UI on a different host than the API — e.g. api.multica.ai
- *  vs multica.ai). When unset — the self-hosted case, where web and API
- *  share one origin such as `mu.zztweb.top` with this same app — fall back
- *  to the scheme+host of the *effective* API base, so the link honors the
- *  runtime server override (`setApiBaseUrl`) instead of a stale build-time
- *  default. Never throws: callers treat an empty string as "no web link". */
+ *  A runtime server override wins — switching the app to a self-hosted
+ *  server must switch every web link to that deployment's web origin, not a
+ *  stale build-time default (e.g. api.mu.zztweb.top → mu.zztweb.top via the
+ *  `api.` strip below). Otherwise prefer an explicit `EXPO_PUBLIC_WEB_URL`
+ *  (official & hosted deployments serve the web UI on a different host than
+ *  the API — e.g. api.multica.ai vs multica.ai), then derive from the
+ *  *effective* API base. Self-hosters commonly put the API behind an `api.`
+ *  subdomain while the web UI sits at the root domain, so a leading `api.`
+ *  is stripped from the derived origin; a host without it is used verbatim.
+ *  Never throws: callers treat an empty string as "no web link". */
 export function getWebBaseUrl(): string {
+  if (customBaseUrl) {
+    return webOriginFrom(customBaseUrl);
+  }
   if (process.env.EXPO_PUBLIC_WEB_URL) {
     return process.env.EXPO_PUBLIC_WEB_URL;
   }
@@ -88,9 +94,16 @@ export function getWebBaseUrl(): string {
   } catch {
     return "";
   }
+  return webOriginFrom(apiBase);
+}
+
+function webOriginFrom(apiBase: string): string {
   try {
     const url = new URL(apiBase);
-    return url.origin;
+    const host = url.hostname.startsWith("api.")
+      ? url.hostname.slice(4)
+      : url.hostname;
+    return `${url.protocol}//${host}`;
   } catch {
     return "";
   }

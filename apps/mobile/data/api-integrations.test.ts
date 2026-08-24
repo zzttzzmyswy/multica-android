@@ -106,6 +106,128 @@ describe("quick-actions api methods", () => {
   });
 });
 
+describe("channel installation api methods (iteration-98 A14)", () => {
+  it("listLarkInstallations GETs the workspace lark route and parses the listing", async () => {
+    const spy = fetchSpy().mockResolvedValue({
+      installations: [
+        {
+          id: "inst-1",
+          workspace_id: "ws-1",
+          agent_id: "agent-1",
+          app_id: "cli_xxx",
+          bot_open_id: "ou_xxx",
+          installer_user_id: "user-1",
+          status: "active",
+          region: "feishu",
+          installed_at: "2026-08-20T00:00:00Z",
+          created_at: "2026-08-20T00:00:00Z",
+          updated_at: "2026-08-20T00:00:00Z",
+        },
+      ],
+      configured: true,
+      install_supported: false,
+    });
+    const res = await api.listLarkInstallations("ws-1");
+    expect(spy).toHaveBeenCalledWith("/api/workspaces/ws-1/lark/installations");
+    expect(res.installations).toHaveLength(1);
+    expect(res.installations[0].status).toBe("active");
+    expect(res.installations[0].region).toBe("feishu");
+    expect(res.configured).toBe(true);
+  });
+
+  it("listLarkInstallations tolerates missing optional fields (older backend)", async () => {
+    const spy = fetchSpy().mockResolvedValue({
+      installations: [
+        {
+          id: "inst-1",
+          workspace_id: "ws-1",
+          agent_id: "agent-1",
+          app_id: "cli_xxx",
+          bot_open_id: "ou_xxx",
+          installer_user_id: "user-1",
+          status: "active",
+          created_at: "2026-08-20T00:00:00Z",
+          updated_at: "2026-08-20T00:00:00Z",
+        },
+      ],
+      configured: true,
+    });
+    const res = await api.listLarkInstallations("ws-1");
+    expect(res.installations[0].tenant_key).toBeUndefined();
+    expect(res.installations[0].region).toBeUndefined();
+    expect(res.install_supported).toBeUndefined();
+  });
+
+  it("listSlackInstallations GETs the workspace slack route", async () => {
+    const spy = fetchSpy().mockResolvedValue({
+      installations: [
+        {
+          id: "inst-1",
+          workspace_id: "ws-1",
+          agent_id: "agent-1",
+          team_id: "T123",
+          bot_user_id: "U456",
+          installer_user_id: "user-1",
+          status: "active",
+          installed_at: "2026-08-20T00:00:00Z",
+          created_at: "2026-08-20T00:00:00Z",
+          updated_at: "2026-08-20T00:00:00Z",
+        },
+      ],
+      configured: true,
+      install_supported: true,
+    });
+    const res = await api.listSlackInstallations("ws-1");
+    expect(spy).toHaveBeenCalledWith("/api/workspaces/ws-1/slack/installations");
+    expect(res.installations[0].team_id).toBe("T123");
+    expect(res.installations[0].bot_user_id).toBe("U456");
+    expect(res.configured).toBe(true);
+  });
+
+  it("listDingTalkInstallations GETs the workspace dingtalk route", async () => {
+    const spy = fetchSpy().mockResolvedValue({
+      installations: [
+        {
+          id: "inst-1",
+          workspace_id: "ws-1",
+          agent_id: "agent-1",
+          installer_user_id: "user-1",
+          status: "active",
+          installed_at: "2026-08-20T00:00:00Z",
+          created_at: "2026-08-20T00:00:00Z",
+          updated_at: "2026-08-20T00:00:00Z",
+        },
+      ],
+      configured: true,
+    });
+    const res = await api.listDingTalkInstallations("ws-1");
+    expect(spy).toHaveBeenCalledWith("/api/workspaces/ws-1/dingtalk/installations");
+    expect(res.installations).toHaveLength(1);
+    expect(res.installations[0].status).toBe("active");
+  });
+
+  it("listWecomInstallations GETs the workspace wecom route", async () => {
+    const spy = fetchSpy().mockResolvedValue({
+      installations: [
+        {
+          id: "inst-1",
+          workspace_id: "ws-1",
+          agent_id: "agent-1",
+          bot_id: "bot-1",
+          installer_user_id: "user-1",
+          status: "active",
+        },
+      ],
+      configured: true,
+      install_supported: true,
+    });
+    const res = await api.listWecomInstallations("ws-1");
+    expect(spy).toHaveBeenCalledWith("/api/workspaces/ws-1/wecom/installations");
+    expect(res.installations[0].bot_id).toBe("bot-1");
+    expect(res.configured).toBe(true);
+  });
+});
+
 describe("github api methods", () => {
   it("listGitHubInstallations GETs the workspace installations route", async () => {
     const spy = fetchSpy().mockResolvedValue({

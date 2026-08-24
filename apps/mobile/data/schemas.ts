@@ -70,6 +70,14 @@ import type {
   VCSConnection,
   ListVCSConnectionsResponse,
   ConnectVCSResponse,
+  LarkInstallation,
+  ListLarkInstallationsResponse,
+  SlackInstallation,
+  ListSlackInstallationsResponse,
+  DingTalkInstallation,
+  ListDingTalkInstallationsResponse,
+  WecomInstallation,
+  ListWecomInstallationsResponse,
   Workspace,
   WorkspaceMcpServer,
 } from "@multica/core/types";
@@ -1863,4 +1871,185 @@ export const EMPTY_LIST_VCS_CONNECTIONS_RESPONSE: ListVCSConnectionsResponse = {
   available: true,
   configured: false,
   can_manage: false,
+};
+
+// ── External-channel installations (iteration-98 / A14) ──────────────────────
+// Per-agent channel bindings (Lark / Slack / DingTalk / WeCom), mirroring
+// `packages/core/types/{lark,slack,dingtalk,wecom}.ts`. Each list endpoint
+// returns `{ installations[], configured, install_supported? }`:
+// `configured` gates the bind entry point (false → "ask the operator"),
+// `install_supported` gates NEW installs only — an already-bound agent still
+// renders its connected card when the flag flips off. Optional/lenient fields
+// follow the core "drift downgrades, never crashes" rule: a backend that omits
+// (or a future server that adds) a field never takes down the page; status
+// uses z.string() so an unknown lifecycle value renders instead of failing the
+// parse, and the UI only treats "active" as connected.
+const LarkInstallationObjectSchema = z
+  .object({
+    id: z.string().default(""),
+    workspace_id: z.string().default(""),
+    agent_id: z.string().default(""),
+    app_id: z.string().default(""),
+    tenant_key: z.string().nullable().optional(),
+    bot_open_id: z.string().default(""),
+    installer_user_id: z.string().default(""),
+    status: z.string().default("revoked"),
+    region: z.string().optional(),
+    installed_at: z.string().default(""),
+    created_at: z.string().default(""),
+    updated_at: z.string().default(""),
+  })
+  .loose();
+
+export const LarkInstallationSchema: z.ZodType<LarkInstallation> =
+  LarkInstallationObjectSchema as unknown as z.ZodType<LarkInstallation>;
+
+export const ListLarkInstallationsResponseSchema: z.ZodType<ListLarkInstallationsResponse> =
+  z
+    .object({
+      installations: z.array(LarkInstallationSchema).default([]),
+      configured: z.boolean().default(false),
+      install_supported: z.boolean().optional(),
+    })
+    .loose() as unknown as z.ZodType<ListLarkInstallationsResponse>;
+
+export const EMPTY_LARK_INSTALLATION: LarkInstallation = {
+  id: "",
+  workspace_id: "",
+  agent_id: "",
+  app_id: "",
+  bot_open_id: "",
+  installer_user_id: "",
+  status: "revoked",
+  installed_at: "",
+  created_at: "",
+  updated_at: "",
+};
+
+export const EMPTY_LIST_LARK_INSTALLATIONS_RESPONSE: ListLarkInstallationsResponse = {
+  installations: [],
+  configured: false,
+};
+
+const SlackInstallationObjectSchema = z
+  .object({
+    id: z.string().default(""),
+    workspace_id: z.string().default(""),
+    agent_id: z.string().default(""),
+    team_id: z.string().default(""),
+    bot_user_id: z.string().default(""),
+    installer_user_id: z.string().default(""),
+    status: z.string().default("revoked"),
+    installed_at: z.string().default(""),
+    created_at: z.string().default(""),
+    updated_at: z.string().default(""),
+  })
+  .loose();
+
+export const SlackInstallationSchema: z.ZodType<SlackInstallation> =
+  SlackInstallationObjectSchema as unknown as z.ZodType<SlackInstallation>;
+
+export const ListSlackInstallationsResponseSchema: z.ZodType<ListSlackInstallationsResponse> =
+  z
+    .object({
+      installations: z.array(SlackInstallationSchema).default([]),
+      configured: z.boolean().default(false),
+      install_supported: z.boolean().optional(),
+    })
+    .loose() as unknown as z.ZodType<ListSlackInstallationsResponse>;
+
+export const EMPTY_SLACK_INSTALLATION: SlackInstallation = {
+  id: "",
+  workspace_id: "",
+  agent_id: "",
+  team_id: "",
+  bot_user_id: "",
+  installer_user_id: "",
+  status: "revoked",
+  installed_at: "",
+  created_at: "",
+  updated_at: "",
+};
+
+export const EMPTY_LIST_SLACK_INSTALLATIONS_RESPONSE: ListSlackInstallationsResponse = {
+  installations: [],
+  configured: false,
+};
+
+const DingTalkInstallationObjectSchema = z
+  .object({
+    id: z.string().default(""),
+    workspace_id: z.string().default(""),
+    agent_id: z.string().default(""),
+    installer_user_id: z.string().default(""),
+    status: z.string().default("revoked"),
+    installed_at: z.string().default(""),
+    created_at: z.string().default(""),
+    updated_at: z.string().default(""),
+  })
+  .loose();
+
+export const DingTalkInstallationSchema: z.ZodType<DingTalkInstallation> =
+  DingTalkInstallationObjectSchema as unknown as z.ZodType<DingTalkInstallation>;
+
+export const ListDingTalkInstallationsResponseSchema: z.ZodType<ListDingTalkInstallationsResponse> =
+  z
+    .object({
+      installations: z.array(DingTalkInstallationSchema).default([]),
+      configured: z.boolean().default(false),
+      install_supported: z.boolean().optional(),
+    })
+    .loose() as unknown as z.ZodType<ListDingTalkInstallationsResponse>;
+
+export const EMPTY_DINGTALK_INSTALLATION: DingTalkInstallation = {
+  id: "",
+  workspace_id: "",
+  agent_id: "",
+  installer_user_id: "",
+  status: "revoked",
+  installed_at: "",
+  created_at: "",
+  updated_at: "",
+};
+
+export const EMPTY_LIST_DINGTALK_INSTALLATIONS_RESPONSE: ListDingTalkInstallationsResponse = {
+  installations: [],
+  configured: false,
+};
+
+const WecomInstallationObjectSchema = z
+  .object({
+    id: z.string().default(""),
+    workspace_id: z.string().default(""),
+    agent_id: z.string().default(""),
+    bot_id: z.string().default(""),
+    installer_user_id: z.string().default(""),
+    status: z.string().default("revoked"),
+  })
+  .loose();
+
+export const WecomInstallationSchema: z.ZodType<WecomInstallation> =
+  WecomInstallationObjectSchema as unknown as z.ZodType<WecomInstallation>;
+
+export const ListWecomInstallationsResponseSchema: z.ZodType<ListWecomInstallationsResponse> =
+  z
+    .object({
+      installations: z.array(WecomInstallationSchema).default([]),
+      configured: z.boolean().default(false),
+      install_supported: z.boolean().optional(),
+    })
+    .loose() as unknown as z.ZodType<ListWecomInstallationsResponse>;
+
+export const EMPTY_WECOM_INSTALLATION: WecomInstallation = {
+  id: "",
+  workspace_id: "",
+  agent_id: "",
+  bot_id: "",
+  installer_user_id: "",
+  status: "revoked",
+};
+
+export const EMPTY_LIST_WECOM_INSTALLATIONS_RESPONSE: ListWecomInstallationsResponse = {
+  installations: [],
+  configured: false,
 };

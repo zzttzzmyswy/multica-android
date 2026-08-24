@@ -207,8 +207,27 @@ describe("getWebBaseUrl", () => {
   });
 
   it("strips any path from the API base when deriving the origin", async () => {
-    const mod = await loadFreshServerConfig("https://api.example.com/prefix");
-    expect(mod.getWebBaseUrl()).toBe("https://api.example.com");
+    const mod = await loadFreshServerConfig("https://portal.example.com/prefix");
+    expect(mod.getWebBaseUrl()).toBe("https://portal.example.com");
+  });
+
+  it("strips a leading api. subdomain (self-host web/API split layout)", async () => {
+    const mod = await loadFreshServerConfig("https://api.mu.zztweb.top");
+    expect(mod.getWebBaseUrl()).toBe("https://mu.zztweb.top");
+  });
+
+  it("a runtime server override beats a baked web env (self-host deep links)", async () => {
+    const mod = await loadFreshServerConfig(
+      "https://api.example.com",
+      "https://multica.ai",
+    );
+    await mod.setApiBaseUrl("https://api.mu.zztweb.top");
+    expect(mod.getWebBaseUrl()).toBe("https://mu.zztweb.top");
+  });
+
+  it("keeps a non-api host verbatim when no web env is set", async () => {
+    const mod = await loadFreshServerConfig("https://selfhost.example.net");
+    expect(mod.getWebBaseUrl()).toBe("https://selfhost.example.net");
   });
 
   it("never throws — yields empty string when neither a web env nor any API base exists", async () => {
