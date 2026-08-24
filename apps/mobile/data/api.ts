@@ -15,6 +15,7 @@
  */
 import type {
   Agent,
+  AgentActivityBucket,
   AgentBuilderRuntimeSwitch,
   AgentBuilderSession,
   AgentBuilderSessionSummary,
@@ -366,6 +367,8 @@ import {
   EMPTY_PLUGIN_INSTALLATION,
   AppConfigSchema,
   EMPTY_APP_CONFIG,
+  AgentActivityBucketListSchema,
+  EMPTY_AGENT_ACTIVITY_BUCKET_LIST,
   CreateFeedbackResponseSchema,
   EMPTY_FEEDBACK_RESPONSE,
 } from "./schemas";
@@ -1955,6 +1958,39 @@ class ApiClient {
     });
     return parseWithFallback(raw, AgentTaskListSchema, EMPTY_AGENT_TASK_LIST, {
       endpoint: "listAgentTaskSnapshot",
+    });
+  }
+
+  // Workspace-wide per-agent daily activity for the last 30 days, anchored on
+  // completed_at. One fetch backs the 30d panel + sparkline of every agent's
+  // activity section (web parity: getWorkspaceAgentActivity30d).
+  async getWorkspaceAgentActivity30d(
+    opts?: { signal?: AbortSignal },
+  ): Promise<AgentActivityBucket[]> {
+    const raw = await this.fetch<unknown>("/api/agent-activity-30d", {
+      signal: opts?.signal,
+    });
+    return parseWithFallback(
+      raw,
+      AgentActivityBucketListSchema,
+      EMPTY_AGENT_ACTIVITY_BUCKET_LIST,
+      { endpoint: "getWorkspaceAgentActivity30d" },
+    );
+  }
+
+  /** Full task history for one agent (GET /api/agents/:id/tasks) — the
+   *  web Agent-activity "Recent work" list source. Mirrors web
+   *  `api.listAgentTasks` (packages/core/api/client.ts). Backend route at
+   *  server/cmd/server/router.go:1602. */
+  async listAgentTasks(
+    agentId: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<AgentTask[]> {
+    const raw = await this.fetch<unknown>(`/api/agents/${agentId}/tasks`, {
+      signal: opts?.signal,
+    });
+    return parseWithFallback(raw, AgentTaskListSchema, EMPTY_AGENT_TASK_LIST, {
+      endpoint: "listAgentTasks",
     });
   }
 

@@ -7,37 +7,26 @@
  *    description. Archived agents show a banner with a Restore action.
  *  - Profile: model, visibility, runtime mode, runtime presence (dot +
  *    availability label), owner, created date.
- *  - Running tasks: the workspace agent-task snapshot filtered to this agent
- *    — every active task plus each agent's most recent terminal task. Rows
- *    carry the task status (share `enum.taskStatus` vocabulary with the issue
- *    runs sheet) and the trigger summary; rows with an issue_id link into the
- *    issue. Order: running → dispatched → queued → terminal, then time.
+ *  - Access (owner editable, MUL-3963 parity) and MCP servers.
+ *  - Activity: `AgentActivitySection` — web Activity-tab port (Now / Last 30
+ *    days / Recent work), replacing the old mixed snapshot list.
  *
  * Archived agents render dimmed with the archived availability; their
- * leftover snapshot tasks would still read as stale, so the task section
- * hides them (a retired agent can't have "running" work).
+ * leftover snapshot tasks would still read as stale, so the activity
+ * section hides them (a retired agent can't have "running" work).
  */
-import { useMemo } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Pressable,
-  RefreshControl,
-  View,
-} from "react-native";
-import { useLocalSearchParams, router } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
+import { Alert, ActivityIndicator, FlatList, Pressable, RefreshControl, View } from "react-native";
+import { useLocalSearchParams } from "expo-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import type { AgentTask } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PresenceDot } from "@/components/ui/presence-dot";
 import { AgentDetailActions } from "@/components/agent/agent-detail-actions";
 import { AgentMcpSection } from "@/components/agent/agent-mcp-section";
 import { AgentAccessPicker } from "@/components/agent/agent-access-picker";
+import { AgentActivitySection } from "@/components/agent/agent-activity-section";
 import { agentListAllOptions } from "@/data/queries/agents";
-import { agentTaskSnapshotOptions } from "@/data/queries/agent-task-snapshot";
 import { memberListOptions } from "@/data/queries/members";
 import { runtimeListOptions } from "@/data/queries/runtimes";
 import { useRestoreAgent } from "@/data/mutations/agents";
@@ -83,32 +72,6 @@ const VISIBILITY_KEY: Record<string, string> = {
   private: "agents.visibility.private",
 };
 
-// Task status → sort tier + status color (shares the runs-sheet vocabulary).
-const TASK_ORDER: Record<string, number> = {
-  running: 0,
-  dispatched: 1,
-  queued: 2,
-  completed: 3,
-  failed: 4,
-  cancelled: 5,
-};
-const TASK_CLASS: Record<string, string> = {
-  queued: "text-muted-foreground",
-  dispatched: "text-brand",
-  waiting_local_directory: "text-muted-foreground",
-  running: "text-brand",
-  completed: "text-muted-foreground",
-  failed: "text-destructive",
-  cancelled: "text-muted-foreground",
-};
-
-const ACTIVE_STATUSES: ReadonlySet<string> = new Set([
-  "queued",
-  "dispatched",
-  "waiting_local_directory",
-  "running",
-]);
-
 export default function AgentDetailPage() {
   const { id } = useLocalSearchParams<{ id: string; workspace: string }>();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
@@ -117,9 +80,9 @@ export default function AgentDetailPage() {
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
   const { getName } = useActorLookup();
+  const queryClient = useQueryClient();
 
   const agents = useQuery(agentListAllOptions(wsId));
-  const tasks = useQuery(agentTaskSnapshotOptions(wsId));
   const runtimes = useQuery(runtimeListOptions(wsId));
   const { data: members = [] } = useQuery(memberListOptions(wsId));
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
@@ -146,17 +109,6 @@ export default function AgentDetailPage() {
     : (detail?.availability ?? "offline");
   const visual = availabilityVisual(availability);
 
-  const agentTasks = useMemo(() => {
-    const filtered = (tasks.data ?? []).filter((task) => task.agent_id === id);
-    if (archived) return [];
-    return [...filtered].sort((a, b) => {
-      const oa = TASK_ORDER[a.status] ?? 9;
-      const ob = TASK_ORDER[b.status] ?? 9;
-      if (oa !== ob) return oa - ob;
-      return (a.created_at ?? "").localeCompare(b.created_at ?? "");
-    });
-  }, [tasks.data, id, archived]);
-
   const runtime = runtimes.data?.find((r) => r.id === agent?.runtime_id) ?? null;
   const runtimeBound = runtime != null;
 
@@ -182,15 +134,21 @@ export default function AgentDetailPage() {
     <FlatList
       className="flex-1 bg-background"
       contentContainerClassName="pb-8"
-      data={agentTasks}
-      keyExtractor={(task) => task.id}
+      data={[]}
+      keyExtractor={(item) => String(item)}
+      renderItem={() => null}
       refreshControl={
         <RefreshControl
-          refreshing={agents.isRefetching || tasks.isRefetching}
+          refreshing={agents.isRefetching || runtimes.isRefetching}
           onRefresh={() => {
             void agents.refetch();
-            void tasks.refetch();
             void runtimes.refetch();
+            // The activity section's task/activity queries are workspace
+            // scoped — invalidate their prefixes so a pull also refreshes the
+            // Now / Last 30 days / Recent work panels.
+            queryClient.invalidateQueries({ queryKey: ["agent-task-snapshot", wsId] });
+            queryClient.invalidateQueries({ queryKey: ["agent-tasks", wsId] });
+            queryClient.invalidateQueries({ queryKey: ["agent-activity", wsId] });
           }}
           tintColor={theme.mutedForeground}
         />
@@ -320,19 +278,18 @@ export default function AgentDetailPage() {
               be assigned MCP servers). */}
           {!archived ? <AgentMcpSection agent={agent} /> : null}
 
-          {/* Tasks */}
-          <SectionTitle>{t("agents.detail.tasks")}</SectionTitle>
-          {agentTasks.length === 0 ? (
-            <Text className="px-4 text-sm text-muted-foreground">
-              {t("agents.detail.noTasks")}
-            </Text>
+          {/* Activity — Now / Last 30 days / Recent work (web activity-tab
+              port). Archived agents hide it: leftover snapshot tasks would
+              read as stale. */}
+          {!archived ? (
+            <AgentActivitySection
+              agent={agent}
+              wsSlug={wsSlug}
+              agents={agents.data}
+            />
           ) : null}
         </>
       }
-      renderItem={({ item }) => (
-        <TaskRow task={item} wsSlug={wsSlug} theme={theme} />
-      )}
-      ItemSeparatorComponent={() => <View className="h-px bg-border ml-4" />}
     />
   );
 }
@@ -366,67 +323,4 @@ function PropertyRow({
       <View className="flex-1 flex-row items-center">{children}</View>
     </View>
   );
-}
-
-function TaskRow({
-  task,
-  wsSlug,
-  theme,
-}: {
-  task: AgentTask;
-  wsSlug: string | null;
-  theme: (typeof THEME)["light"];
-}) {
-  const { t } = useTranslation();
-  const statusLabel = t(`enum.taskStatus.${task.status}`);
-  const statusClass = TASK_CLASS[task.status] ?? "text-muted-foreground";
-  const active = ACTIVE_STATUSES.has(task.status);
-  const hasIssue = Boolean(task.issue_id);
-  const summary = task.trigger_summary?.trim();
-  const time = task.completed_at || task.created_at;
-
-  const content = (
-    <View className="flex-row items-center gap-3 px-4 py-2.5">
-      <View
-        className={cn(
-          "size-2 rounded-full",
-          active ? "bg-brand" : task.status === "failed" ? "bg-destructive" : "bg-muted",
-        )}
-      />
-      <View className="flex-1 min-w-0 gap-0.5">
-        <Text className={cn("text-xs font-medium", statusClass)}>
-          {statusLabel}
-        </Text>
-        {summary ? (
-          <Text className="text-sm text-foreground" numberOfLines={2}>
-            {summary}
-          </Text>
-        ) : null}
-        <Text className="text-[11px] text-muted-foreground/70 tabular-nums">
-          {time ? formatDateTime(time) : ""}
-        </Text>
-      </View>
-      {hasIssue ? (
-        <Ionicons
-          name="open-outline"
-          size={16}
-          color={theme.mutedForeground}
-        />
-      ) : null}
-    </View>
-  );
-
-  if (hasIssue && wsSlug && task.issue_id) {
-    return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t("a11y.openIssue")}
-        onPress={() => router.push(`/${wsSlug}/issue/${task.issue_id}`)}
-        className="active:bg-secondary"
-      >
-        {content}
-      </Pressable>
-    );
-  }
-  return content;
 }

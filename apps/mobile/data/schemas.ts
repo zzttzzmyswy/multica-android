@@ -12,6 +12,7 @@
 import { z } from "zod";
 import type {
   Agent,
+  AgentActivityBucket,
   AgentEnvResponse,
   AgentInvocationTarget,
   AgentTask,
@@ -596,7 +597,15 @@ export const AgentTaskSchema: z.ZodType<AgentTask> = z.object({
   runtime_id: z.string().default(""),
   issue_id: z.string().default(""),
   status: z
-    .enum(["queued", "dispatched", "running", "completed", "failed", "cancelled"])
+    .enum([
+      "queued",
+      "dispatched",
+      "waiting_local_directory",
+      "running",
+      "completed",
+      "failed",
+      "cancelled",
+    ])
     .catch("queued"),
   priority: z.number().default(0),
   dispatched_at: z.string().nullable().default(null),
@@ -625,6 +634,23 @@ export const AgentTaskSchema: z.ZodType<AgentTask> = z.object({
 }).loose();
 
 export const AgentTaskListSchema = z.array(AgentTaskSchema).default([]);
+
+// Per-agent daily activity for the last 30 days, anchored on completed_at.
+// Mirrors AgentActivityBucket in packages/core/types/agent.ts:195-200, fed by
+// GET /api/agent-activity-30d. Lenient — numeric fields default so a missing
+// count renders the sparkline flat rather than crashing it.
+export const AgentActivityBucketSchema: z.ZodType<AgentActivityBucket> = z.object({
+  agent_id: z.string().default(""),
+  bucket_at: z.string().default(""),
+  task_count: z.number().default(0),
+  failed_count: z.number().default(0),
+}).loose();
+
+export const AgentActivityBucketListSchema = z
+  .array(AgentActivityBucketSchema)
+  .default([]);
+
+export const EMPTY_AGENT_ACTIVITY_BUCKET_LIST: AgentActivityBucket[] = [];
 
 export const ActiveTasksResponseSchema = z.object({
   tasks: z.array(AgentTaskSchema).default([]),
