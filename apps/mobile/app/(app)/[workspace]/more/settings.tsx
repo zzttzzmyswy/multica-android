@@ -103,6 +103,10 @@ export default function SettingsPage() {
     router.push(`/${currentSlug}/more/settings/workspace`);
   const goBilling = () => router.push(`/${currentSlug}/more/settings/billing`);
   const goPlugins = () => router.push(`/${currentSlug}/more/settings/plugins`);
+  // Feedback page = web HelpLauncher + FeedbackModal as a push screen
+  // (iteration-100): Feedback submit + Docs/Changelog/Discord external links
+  // + server version, mirroring the web help menu.
+  const goFeedback = () => router.push(`/${currentSlug}/more/settings/feedback`);
   const goIssueStatuses = () =>
     router.push(`/${currentSlug}/more/settings/issue-statuses`);
   const goProperties = () =>
@@ -358,6 +362,24 @@ export default function SettingsPage() {
           }
           title={timezoneLabel(effectiveTimezone)}
           subtitle={user?.timezone ? undefined : t("settings.languageSystem")}
+        />
+      </SectionGroup>
+
+      {/* Help & Feedback — web puts these in the global top-bar HelpLauncher
+          dropdown (Docs/Changelog/Discord + Feedback + server version);
+          mobile has no such global bar, so the same cluster lives here at
+          the bottom of Settings as a footer-style section. */}
+      <SectionGroup title={t("feedback.title")}>
+        <NavRow
+          onPress={goFeedback}
+          chevronColor={mutedFg}
+          leading={
+            <View className="size-10 rounded-md bg-secondary items-center justify-center">
+              <Ionicons name="help-buoy-outline" size={20} color={mutedFg} />
+            </View>
+          }
+          title={t("feedback.title")}
+          subtitle={t("feedback.entrySubtitle")}
         />
       </SectionGroup>
 

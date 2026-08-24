@@ -366,9 +366,15 @@ import {
   EMPTY_PLUGIN_INSTALLATION,
   AppConfigSchema,
   EMPTY_APP_CONFIG,
+  CreateFeedbackResponseSchema,
+  EMPTY_FEEDBACK_RESPONSE,
 } from "./schemas";
 import type { ZodType } from "zod";
 import type { AppConfigResponse } from "./schemas";
+import type {
+  CreateFeedbackInput,
+  CreateFeedbackResponse,
+} from "./schemas";
 import { File, Paths } from "expo-file-system";
 import { createDownloadResumable } from "expo-file-system/legacy";
 import { getCurrentSlug } from "./workspace-store";
@@ -4046,6 +4052,25 @@ class ApiClient {
     await this.fetch<void>(
       `/api/workspaces/${workspaceId}/plugins/${installationId}`,
       { method: "DELETE" },
+    );
+  }
+
+  // Feedback (iteration-100) — global help/feedback alignment, mirroring web
+  // packages/core/api/client.ts createFeedback. Server rejects (429 rate
+  // limit, "message is required", etc.) throw ApiError so the feedback page
+  // can surface the reason and let the user retry.
+  async createFeedback(
+    input: CreateFeedbackInput,
+  ): Promise<CreateFeedbackResponse> {
+    const raw = await this.fetch<unknown>("/api/feedback", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    return parseWithFallback(
+      raw,
+      CreateFeedbackResponseSchema,
+      EMPTY_FEEDBACK_RESPONSE,
+      { endpoint: "createFeedback" },
     );
   }
 }

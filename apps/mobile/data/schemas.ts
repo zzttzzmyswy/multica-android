@@ -2292,3 +2292,54 @@ export const EMPTY_APP_CONFIG: AppConfigResponse = {
   vcs_integration_available: false,
   feature_flags: {},
 };
+
+// ── Feedback (iteration-100) ───────────────────────────────────────────────
+// POST /api/feedback — global help/feedback alignment with web
+// (packages/core/feedback/types.ts + packages/core/api/client.ts createFeedback,
+//  server/internal/handler/feedback.go). Types are deliberately mobile-local
+// (core keeps them under packages/core/feedback, not core/types). Lenient:
+// kind may be absent (server falls back to "general"), extra fields pass
+// through, a drift response degrades to the empty shape.
+export const FEEDBACK_KINDS = ["bug", "feature", "general", "praise"] as const;
+
+export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
+
+export const FeedbackKindSchema = z.enum(FEEDBACK_KINDS);
+
+/** Request body for POST /api/feedback (mirrors web CreateFeedbackInput). */
+export interface CreateFeedbackInput {
+  message: string;
+  url?: string;
+  workspace_id?: string;
+  kind?: FeedbackKind;
+  context?: unknown;
+}
+
+export const CreateFeedbackInputSchema: z.ZodType<CreateFeedbackInput> = z
+  .object({
+    message: z.string(),
+    url: z.string().optional(),
+    workspace_id: z.string().optional(),
+    kind: FeedbackKindSchema.optional(),
+    context: z.unknown().optional(),
+  })
+  .loose() as unknown as z.ZodType<CreateFeedbackInput>;
+
+/** Response shape of POST /api/feedback (201). */
+export interface CreateFeedbackResponse {
+  id: string;
+  created_at: string;
+}
+
+export const CreateFeedbackResponseSchema: z.ZodType<CreateFeedbackResponse> =
+  z
+    .object({
+      id: z.string().default(""),
+      created_at: z.string().default(""),
+    })
+    .loose() as unknown as z.ZodType<CreateFeedbackResponse>;
+
+export const EMPTY_FEEDBACK_RESPONSE: CreateFeedbackResponse = {
+  id: "",
+  created_at: "",
+};
