@@ -80,6 +80,15 @@ import type {
   ListWecomInstallationsResponse,
   Workspace,
   WorkspaceMcpServer,
+  PluginBinding,
+  PluginBindingRequest,
+  PluginInstallation,
+  PluginInstallationListResponse,
+  PluginCatalogContribution,
+  PluginCatalogDiagnostic,
+  PluginCatalogRelease,
+  PluginCatalogResponse,
+  PluginReleaseRequest,
 } from "@multica/core/types";
 import type { CloudRuntimeNode } from "@multica/core/runtimes";
 import {
@@ -2052,4 +2061,234 @@ export const EMPTY_WECOM_INSTALLATION: WecomInstallation = {
 export const EMPTY_LIST_WECOM_INSTALLATIONS_RESPONSE: ListWecomInstallationsResponse = {
   installations: [],
   configured: false,
+};
+
+// ── Plugins (iteration-99) ──────────────────────────────────────────────────
+// Plugin catalog + workspace installations, mirroring `packages/core/types/
+// plugin.ts` and the zod schemas in `packages/core/api/schemas.ts:78-202`.
+// Lenient by design: a backend that omits (or a future server that adds) a
+// field never takes the page down — every array defaults to `[]`, booleans
+// default false, and unknown keys pass through via `.loose()`.
+const PluginBindingSchema = z
+  .object({
+    scope_type: z.string().default("workspace"),
+    scope_id: z.string().default(""),
+    enabled: z.boolean().default(false),
+    revision: z.number().default(0),
+  })
+  .loose();
+
+export const PluginInstallationSchema: z.ZodType<PluginInstallation> = z
+  .object({
+    id: z.string(),
+    plugin_key: z.string().default(""),
+    display_name: z.string().default(""),
+    desired_version: z.string().default(""),
+    active_version: z.string().optional(),
+    enabled: z.boolean().default(false),
+    desired_generation: z.number().default(0),
+    active_generation: z.number().default(0),
+    lifecycle_status: z.string().default("error"),
+    health_state: z.string().optional(),
+    health_reason: z.string().optional(),
+    description: z.string().optional(),
+    publisher: z.string().default(""),
+    publisher_type: z.string().default(""),
+    trust_tier: z.string().default(""),
+    source_kind: z.string().default("bundled"),
+    source_ref: z.string().default(""),
+    uploader_id: z.string().optional(),
+    manifest_digest: z.string().default(""),
+    archive_digest: z.string().default(""),
+    artifact_digest: z.string().default(""),
+    signature_verified: z.boolean().default(false),
+    requested_capabilities: z.array(z.string()).default([]),
+    available_versions: z.array(z.string()).default([]),
+    contributions: z.array(z.string()).default([]),
+    contribution_details: z.array(
+      z
+        .object({
+          key: z.string(),
+          type: z.string().default(""),
+          name: z.string().default(""),
+          description: z.string().default(""),
+          entry_path: z.string().default(""),
+          entry_digest: z.string().default(""),
+        })
+        .loose(),
+    ).default([]),
+    bindings: z.array(PluginBindingSchema).default([]),
+  })
+  .loose() as unknown as z.ZodType<PluginInstallation>;
+
+export const EMPTY_PLUGIN_INSTALLATION: PluginInstallation = {
+  id: "",
+  plugin_key: "",
+  display_name: "",
+  desired_version: "",
+  enabled: false,
+  desired_generation: 0,
+  active_generation: 0,
+  lifecycle_status: "error",
+  publisher: "",
+  publisher_type: "",
+  trust_tier: "",
+  source_kind: "bundled",
+  source_ref: "",
+  manifest_digest: "",
+  archive_digest: "",
+  artifact_digest: "",
+  signature_verified: false,
+  requested_capabilities: [],
+  available_versions: [],
+  contributions: [],
+  contribution_details: [],
+  bindings: [],
+};
+
+export const PluginInstallationListResponseSchema: z.ZodType<PluginInstallationListResponse> =
+  z
+    .object({
+      plugins: z.array(PluginInstallationSchema).default([]),
+    })
+    .loose() as unknown as z.ZodType<PluginInstallationListResponse>;
+
+export const EMPTY_PLUGIN_INSTALLATION_LIST: PluginInstallationListResponse = {
+  plugins: [],
+};
+
+const PluginCatalogContributionSchema: z.ZodType<PluginCatalogContribution> =
+  z
+    .object({
+      key: z.string(),
+      type: z.string().default(""),
+      name: z.string().default(""),
+      description: z.string().default(""),
+      entry_path: z.string().default(""),
+      entry_digest: z.string().default(""),
+    })
+    .loose() as unknown as z.ZodType<PluginCatalogContribution>;
+
+export const PluginCatalogReleaseSchema: z.ZodType<PluginCatalogRelease> = z
+  .object({
+    plugin_key: z.string(),
+    name: z.string().default(""),
+    description: z.string().default(""),
+    version: z.string(),
+    publisher: z.string().default(""),
+    publisher_type: z.string().default(""),
+    trust_tier: z.string().default(""),
+    source_kind: z.string().default("bundled"),
+    source_ref: z.string().default(""),
+    requested_capabilities: z.array(z.string()).default([]),
+    host_api: z.string().default(""),
+    required_daemon_features: z.array(z.string()).default([]),
+    signature_key_id: z.string().default(""),
+    signature_verified: z.boolean().default(false),
+    manifest_digest: z.string().default(""),
+    archive_digest: z.string().default(""),
+    artifact_digest: z.string().default(""),
+    compatible: z.boolean().default(false),
+    compatibility_reason: z.string().optional(),
+    contributions: z.array(PluginCatalogContributionSchema).default([]),
+    installation: PluginInstallationSchema.optional(),
+  })
+  .loose() as unknown as z.ZodType<PluginCatalogRelease>;
+
+export const PluginCatalogResponseSchema: z.ZodType<PluginCatalogResponse> = z
+  .object({
+    releases: z.array(PluginCatalogReleaseSchema).default([]),
+    diagnostics: z.array(
+      z
+        .object({
+          source_ref: z.string().default(""),
+          code: z.string().default("unknown"),
+          message: z.string().default(""),
+        })
+        .loose(),
+    ).default([]),
+    supported: z.boolean().optional().default(true),
+  })
+  .loose() as unknown as z.ZodType<PluginCatalogResponse>;
+
+export const EMPTY_PLUGIN_CATALOG: PluginCatalogResponse = {
+  releases: [],
+  diagnostics: [],
+  supported: false,
+};
+
+/** Request bodies for install / upgrade (mirrors core PluginReleaseRequest). */
+export const PluginReleaseRequestSchema: z.ZodType<PluginReleaseRequest> = z
+  .object({
+    plugin_key: z.string(),
+    version: z.string(),
+  })
+  .loose() as unknown as z.ZodType<PluginReleaseRequest>;
+
+/** Request body for enable/disable (mirrors core PluginBindingRequest). */
+export const PluginBindingRequestSchema: z.ZodType<PluginBindingRequest> = z
+  .object({
+    scope_type: z.string(),
+    scope_id: z.string(),
+  })
+  .loose() as unknown as z.ZodType<PluginBindingRequest>;
+
+// ── App config / feature flags (iteration-99) ───────────────────────────────
+// /api/config — once read by web at boot into `@multica/core/config`, mobile
+// now lazily fetches it to gate flag-controlled surfaces (Plugins etc.).
+// AppConfigResponse is deliberately mobile-local (core exposes the schema
+// under packages/core/api/schemas.ts, not core/types). Lenient: older servers
+// omit feature_flags / vcs_integration_available, each defaulting safe.
+export interface AppConfigResponse {
+  cdn_domain: string;
+  cdn_signed?: boolean;
+  allow_signup: boolean;
+  google_client_id?: string;
+  posthog_key?: string;
+  posthog_host?: string;
+  analytics_environment?: string;
+  daemon_server_url?: string;
+  daemon_app_url?: string;
+  workspace_creation_disabled?: boolean;
+  vcs_integration_available?: boolean;
+  feature_flags?: Record<string, boolean>;
+  server_version?: string;
+}
+
+const BooleanWithDefaultSchema = (fallback: boolean) =>
+  z.boolean().default(fallback);
+
+const FeatureFlagsSchema = z.record(
+  z.string(),
+  BooleanWithDefaultSchema(false),
+).default({});
+
+export const AppConfigSchema = z
+  .object({
+    cdn_domain: z.string().default(""),
+    cdn_signed: BooleanWithDefaultSchema(false),
+    allow_signup: BooleanWithDefaultSchema(true),
+    google_client_id: z.string().optional(),
+    posthog_key: z.string().optional(),
+    posthog_host: z.string().optional(),
+    analytics_environment: z.string().optional(),
+    daemon_server_url: z.string().optional(),
+    daemon_app_url: z.string().optional(),
+    workspace_creation_disabled: BooleanWithDefaultSchema(false).optional(),
+    vcs_integration_available: BooleanWithDefaultSchema(false).optional(),
+    feature_flags: FeatureFlagsSchema,
+    server_version: z.string().optional(),
+  })
+  .loose();
+
+export const EMPTY_APP_CONFIG: AppConfigResponse = {
+  cdn_domain: "",
+  cdn_signed: false,
+  allow_signup: true,
+  google_client_id: "",
+  daemon_server_url: "",
+  daemon_app_url: "",
+  workspace_creation_disabled: false,
+  vcs_integration_available: false,
+  feature_flags: {},
 };

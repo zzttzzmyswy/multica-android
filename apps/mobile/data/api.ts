@@ -151,6 +151,12 @@ import type {
   WorkspaceSubscriptionPrices,
   WorkspaceSubscriptionSeatReconcileResult,
   WorkspaceSubscriptionSummary,
+  PluginBinding,
+  PluginBindingRequest,
+  PluginInstallation,
+  PluginInstallationListResponse,
+  PluginCatalogResponse,
+  PluginReleaseRequest,
 } from "@multica/core/types";
 import type {
   CloudRuntimeNode,
@@ -352,8 +358,17 @@ import {
   EMPTY_RUNTIME_PROFILE_LIST,
   RuntimeUpdateSchema,
   failedRuntimeUpdate,
+  PluginCatalogResponseSchema,
+  EMPTY_PLUGIN_CATALOG,
+  PluginInstallationListResponseSchema,
+  EMPTY_PLUGIN_INSTALLATION_LIST,
+  PluginInstallationSchema,
+  EMPTY_PLUGIN_INSTALLATION,
+  AppConfigSchema,
+  EMPTY_APP_CONFIG,
 } from "./schemas";
 import type { ZodType } from "zod";
+import type { AppConfigResponse } from "./schemas";
 import { File, Paths } from "expo-file-system";
 import { createDownloadResumable } from "expo-file-system/legacy";
 import { getCurrentSlug } from "./workspace-store";
@@ -3898,6 +3913,140 @@ class ApiClient {
         });
       },
     };
+  }
+
+  // App config (iteration-99) — mirrors packages/core/api/client.ts:2237.
+  // Once loaded at boot by web into @multica/core/config; mobile fetches it
+  // lazily to gate flag-controlled surfaces. Workspace-independent, so no
+  // workspace id param (and the auth header, when present, is just extra
+  // context the endpoint ignores).
+  async getConfig(): Promise<AppConfigResponse> {
+    const raw = await this.fetch<unknown>("/api/config");
+    return parseWithFallback(raw, AppConfigSchema, EMPTY_APP_CONFIG, {
+      endpoint: "getConfig",
+    });
+  }
+
+  // Plugins (iteration-99) — workspace Plugin catalog + installations,
+  // mirroring packages/core/api/client.ts:2267-2445. 404s mean an older
+  // backend with no catalog; web collapses those to the empty shape so the
+  // page can show the "not available" state instead of crashing.
+  async listPluginCatalog(workspaceId: string): Promise<PluginCatalogResponse> {
+    let raw: unknown;
+    try {
+      raw = await this.fetch<unknown>(
+        `/api/workspaces/${workspaceId}/plugins/catalog`,
+      );
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return EMPTY_PLUGIN_CATALOG;
+      }
+      throw error;
+    }
+    return parseWithFallback(
+      raw,
+      PluginCatalogResponseSchema,
+      EMPTY_PLUGIN_CATALOG,
+      { endpoint: "listPluginCatalog" },
+    );
+  }
+
+  async listPluginInstallations(
+    workspaceId: string,
+  ): Promise<PluginInstallationListResponse> {
+    let raw: unknown;
+    try {
+      raw = await this.fetch<unknown>(
+        `/api/workspaces/${workspaceId}/plugins`,
+      );
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return EMPTY_PLUGIN_INSTALLATION_LIST;
+      }
+      throw error;
+    }
+    return parseWithFallback(
+      raw,
+      PluginInstallationListResponseSchema,
+      EMPTY_PLUGIN_INSTALLATION_LIST,
+      { endpoint: "listPluginInstallations" },
+    );
+  }
+
+  async installPlugin(
+    workspaceId: string,
+    request: PluginReleaseRequest,
+  ): Promise<PluginInstallation> {
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/plugins/install`,
+      { method: "POST", body: JSON.stringify(request) },
+    );
+    return parseWithFallback(
+      raw,
+      PluginInstallationSchema,
+      EMPTY_PLUGIN_INSTALLATION,
+      { endpoint: "installPlugin" },
+    );
+  }
+
+  async upgradePlugin(
+    workspaceId: string,
+    installationId: string,
+    request: PluginReleaseRequest,
+  ): Promise<PluginInstallation> {
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/plugins/${installationId}/upgrade`,
+      { method: "POST", body: JSON.stringify(request) },
+    );
+    return parseWithFallback(
+      raw,
+      PluginInstallationSchema,
+      EMPTY_PLUGIN_INSTALLATION,
+      { endpoint: "upgradePlugin" },
+    );
+  }
+
+  async setPluginEnabled(
+    workspaceId: string,
+    installationId: string,
+    enabled: boolean,
+    binding: PluginBindingRequest,
+  ): Promise<PluginInstallation> {
+    const action = enabled ? "enable" : "disable";
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/plugins/${installationId}/${action}`,
+      { method: "POST", body: JSON.stringify(binding) },
+    );
+    return parseWithFallback(
+      raw,
+      PluginInstallationSchema,
+      EMPTY_PLUGIN_INSTALLATION,
+      { endpoint: `setPluginEnabled(${action})` },
+    );
+  }
+
+  async rollbackPlugin(
+    workspaceId: string,
+    installationId: string,
+    version: string,
+  ): Promise<PluginInstallation> {
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/plugins/${installationId}/rollback`,
+      { method: "POST", body: JSON.stringify({ version }) },
+    );
+    return parseWithFallback(
+      raw,
+      PluginInstallationSchema,
+      EMPTY_PLUGIN_INSTALLATION,
+      { endpoint: "rollbackPlugin" },
+    );
+  }
+
+  async uninstallPlugin(workspaceId: string, installationId: string): Promise<void> {
+    await this.fetch<void>(
+      `/api/workspaces/${workspaceId}/plugins/${installationId}`,
+      { method: "DELETE" },
+    );
   }
 }
 

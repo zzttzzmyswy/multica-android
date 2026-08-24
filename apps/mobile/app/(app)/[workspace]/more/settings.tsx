@@ -25,6 +25,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { SettingsTimezonePicker } from "@/components/settings/timezone-picker";
 import { workspaceListOptions } from "@/data/queries/workspaces";
+import { useFeatureEnabled } from "@/data/queries/config";
 import { useAuthStore } from "@/data/auth-store";
 import { api } from "@/data/api";
 import { useWorkspaceStore } from "@/data/workspace-store";
@@ -101,10 +102,15 @@ export default function SettingsPage() {
   const goWorkspaceSettings = () =>
     router.push(`/${currentSlug}/more/settings/workspace`);
   const goBilling = () => router.push(`/${currentSlug}/more/settings/billing`);
+  const goPlugins = () => router.push(`/${currentSlug}/more/settings/plugins`);
   const goIssueStatuses = () =>
     router.push(`/${currentSlug}/more/settings/issue-statuses`);
   const goProperties = () =>
     router.push(`/${currentSlug}/more/properties`);
+  // Plugins is flag-gated server-side (`plugins_v1` via /api/config
+  // frontendPublicFlags) exactly like web's settings-page — the entry only
+  // exists on deployments that enable the Plugin catalog (iteration-99).
+  const pluginsEnabled = useFeatureEnabled("plugins_v1");
 
   // Language follows the theme picker's tap-to-act pattern. The local switch
   // takes effect immediately (setLocale/resetLocale persist + notify), and
@@ -263,6 +269,22 @@ export default function SettingsPage() {
           title={t("screen.billing")}
           subtitle={t("billing.description")}
         />
+        {pluginsEnabled ? (
+          <>
+            <Separator />
+            <NavRow
+              onPress={goPlugins}
+              chevronColor={mutedFg}
+              leading={
+                <View className="size-10 rounded-md bg-secondary items-center justify-center">
+                  <Ionicons name="cube-outline" size={20} color={mutedFg} />
+                </View>
+              }
+              title={t("plugins.title")}
+              subtitle={t("plugins.description")}
+            />
+          </>
+        ) : null}
       </SectionGroup>
 
       <SectionGroup title={t("settings.appearance")}>
