@@ -28,12 +28,14 @@ import {
   View,
 } from "react-native";
 import { Stack, useLocalSearchParams, router } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { MemberRole } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { ActorIssuesPanel } from "@/components/issue/actor-issues-panel";
 import { memberListOptions } from "@/data/queries/members";
+import { issueKeys } from "@/data/queries/issue-keys";
 import { useUpdateMemberRole, useRemoveMember } from "@/data/mutations/members";
 import { useAuthStore } from "@/data/auth-store";
 import { workspaceListOptions } from "@/data/queries/workspaces";
@@ -60,6 +62,7 @@ export default function MemberDetailPage() {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
+  const queryClient = useQueryClient();
 
   const { data: members, isLoading, refetch, isRefetching } = useQuery(
     memberListOptions(wsId),
@@ -149,7 +152,12 @@ export default function MemberDetailPage() {
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
-            onRefresh={() => refetch()}
+            onRefresh={() => {
+              void refetch();
+              // The actor-issues panel queries are actor-scoped — refresh the
+              // shared prefix so a pull updates the member's Issues surface.
+              queryClient.invalidateQueries({ queryKey: issueKeys.actorAll(wsId) });
+            }}
             tintColor={theme.mutedForeground}
           />
         }
@@ -200,6 +208,14 @@ export default function MemberDetailPage() {
                 </Text>
               </PropertyRow>
             </View>
+
+            {/* Issues — this member's assigned/created issues (web
+                common/actor-issues-panel.tsx, member-detail page). */}
+            <ActorIssuesPanel
+              actorType="member"
+              actorId={member.user_id}
+              sectionTitleKey="members.detail.issues"
+            />
 
             {/* Manage (owner/admin, non-self, non-owner target only) */}
             {canEditRole || canRemove ? (

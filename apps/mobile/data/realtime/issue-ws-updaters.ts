@@ -247,6 +247,35 @@ export function removeFromIssuesList(
 }
 
 // =====================================================
+// Actor Issues lists (member/agent detail "Issues" panels).
+// Row membership is server-decided (assignee_filters/creator_filters), so
+// creates must invalidate the actorAll(wsId) prefix instead of prepending —
+// we can't know whether a new issue belongs to a given actor list. For
+// updates/deletes the row is already present, so an in-place patch / removal
+// reaches every cached actor list under the prefix.
+// =====================================================
+
+export function patchActorIssuesList(
+  qc: QueryClient,
+  wsId: string,
+  partial: Partial<Issue> & { id: string },
+) {
+  qc.setQueriesData<Issue[]>({ queryKey: issueKeys.actorAll(wsId) }, (old) =>
+    old ? old.map((i) => (i.id === partial.id ? { ...i, ...partial } : i)) : old,
+  );
+}
+
+export function removeFromActorIssuesList(
+  qc: QueryClient,
+  wsId: string,
+  issueId: string,
+) {
+  qc.setQueriesData<Issue[]>({ queryKey: issueKeys.actorAll(wsId) }, (old) =>
+    old ? old.filter((i) => i.id !== issueId) : old,
+  );
+}
+
+// =====================================================
 // Reactions
 // =====================================================
 

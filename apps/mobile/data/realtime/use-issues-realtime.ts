@@ -27,8 +27,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { issueKeys } from "@/data/queries/issue-keys";
 import { useWSSubscriptions } from "@/lib/use-ws-subscriptions";
 import {
+  patchActorIssuesList,
   patchIssuesList,
   prependToIssuesList,
+  removeFromActorIssuesList,
   removeFromIssuesList,
 } from "./issue-ws-updaters";
 
@@ -39,16 +41,24 @@ export function useIssuesRealtime() {
     (ws, wsId) => {
       const invalidateList = () =>
         qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
+      // Actor panels decide membership server-side (assignee_filters /
+      // creator_filters) — a create may or may not land in a given panel,
+      // so refetch every mounted one (mirrors useMyIssuesRealtime).
+      const invalidateActorAll = () =>
+        qc.invalidateQueries({ queryKey: issueKeys.actorAll(wsId) });
 
       return [
         ws.on("issue:created", (payload) => {
           prependToIssuesList(qc, wsId, payload.issue);
+          invalidateActorAll();
         }),
         ws.on("issue:updated", (payload) => {
           patchIssuesList(qc, wsId, payload.issue);
+          patchActorIssuesList(qc, wsId, payload.issue);
         }),
         ws.on("issue:deleted", (payload) => {
           removeFromIssuesList(qc, wsId, payload.issue_id);
+          removeFromActorIssuesList(qc, wsId, payload.issue_id);
         }),
         ws.onReconnect(invalidateList),
       ];

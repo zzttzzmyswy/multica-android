@@ -2474,5 +2474,15 @@
   "feedback.helpChangelog": "Change log",
   "feedback.helpDiscord": "Discord",
   "feedback.serverVersion": "Server version {{version}}",
-  "feedback.entrySubtitle": "Docs, changelog, community & send feedback"
+  "feedback.entrySubtitle": "Docs, changelog, community & send feedback",
+  "actorIssues.empty.assigned.title": "No assigned issues",
+  "actorIssues.empty.assigned.description": "Issues assigned here will appear in this view.",
+  "actorIssues.empty.created.title": "No created issues",
+  "actorIssues.empty.created.description": "Issues created here will appear in this view.",
+  "actorIssues.searchEmpty": "No issues match your search.",
+  "actorIssues.searchPlaceholder": "Search issues...",
+  "members.detail.issues": "Issues",
+  "actorIssues.scopeAssigned": "Assigned",
+  "actorIssues.scopeCreated": "Created",
+  "agents.detail.workIssues": "Issues"
 }

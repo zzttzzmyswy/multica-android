@@ -26,7 +26,9 @@ import { AgentDetailActions } from "@/components/agent/agent-detail-actions";
 import { AgentMcpSection } from "@/components/agent/agent-mcp-section";
 import { AgentAccessPicker } from "@/components/agent/agent-access-picker";
 import { AgentActivitySection } from "@/components/agent/agent-activity-section";
+import { ActorIssuesPanel } from "@/components/issue/actor-issues-panel";
 import { agentListAllOptions } from "@/data/queries/agents";
+import { issueKeys } from "@/data/queries/issue-keys";
 import { memberListOptions } from "@/data/queries/members";
 import { runtimeListOptions } from "@/data/queries/runtimes";
 import { useRestoreAgent } from "@/data/mutations/agents";
@@ -149,6 +151,7 @@ export default function AgentDetailPage() {
             queryClient.invalidateQueries({ queryKey: ["agent-task-snapshot", wsId] });
             queryClient.invalidateQueries({ queryKey: ["agent-tasks", wsId] });
             queryClient.invalidateQueries({ queryKey: ["agent-activity", wsId] });
+            queryClient.invalidateQueries({ queryKey: issueKeys.actorAll(wsId) });
           }}
           tintColor={theme.mutedForeground}
         />
@@ -277,6 +280,15 @@ export default function AgentDetailPage() {
           {/* MCP servers — archived agents render none (a retired agent can't
               be assigned MCP servers). */}
           {!archived ? <AgentMcpSection agent={agent} /> : null}
+
+          {/* Related Issues — this agent's assigned/created issues (web
+              agent-overview-pane Work tab → ActorIssuesPanel). Shown for
+              archived agents too, matching web (issue records stay relevant). */}
+          <ActorIssuesPanel
+            actorType="agent"
+            actorId={agent.id}
+            sectionTitleKey="agents.detail.workIssues"
+          />
 
           {/* Activity — Now / Last 30 days / Recent work (web activity-tab
               port). Archived agents hide it: leftover snapshot tasks would

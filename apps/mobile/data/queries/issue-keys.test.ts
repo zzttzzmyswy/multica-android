@@ -66,3 +66,21 @@ describe("issueKeys.listFiltered", () => {
     expect(a).toEqual(b);
   });
 });
+
+describe("issueKeys.actorList", () => {
+  it("keys split by actor type, actor id, and relation", () => {
+    const assigned = issueKeys.actorList("ws-1", "agent", "ag_1", "assigned");
+    const created = issueKeys.actorList("ws-1", "agent", "ag_1", "created");
+    const otherId = issueKeys.actorList("ws-1", "agent", "ag_2", "assigned");
+    const member = issueKeys.actorList("ws-1", "member", "ag_1", "assigned");
+    expect(assigned).not.toEqual(created);
+    expect(assigned).not.toEqual(otherId);
+    expect(assigned).not.toEqual(member);
+  });
+
+  it("lives under the actorAll(wsId) prefix for broad invalidation", () => {
+    const key = issueKeys.actorList("ws-1", "agent", "ag_1", "assigned");
+    const prefix = issueKeys.actorAll("ws-1");
+    expect(key.slice(0, prefix.length)).toEqual(prefix);
+  });
+});

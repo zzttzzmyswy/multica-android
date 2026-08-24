@@ -2470,5 +2470,15 @@
   "feedback.helpChangelog": "更新日志",
   "feedback.helpDiscord": "Discord",
   "feedback.serverVersion": "服务器版本 {{version}}",
-  "feedback.entrySubtitle": "文档、更新日志、社区与提交反馈"
+  "feedback.entrySubtitle": "文档、更新日志、社区与提交反馈",
+  "actorIssues.empty.assigned.title": "没有已分配的任务",
+  "actorIssues.empty.assigned.description": "分配到这里的任务会显示在此视图中。",
+  "actorIssues.empty.created.title": "没有已创建的任务",
+  "actorIssues.empty.created.description": "由这里创建的任务会显示在此视图中。",
+  "actorIssues.searchEmpty": "没有匹配的任务。",
+  "actorIssues.searchPlaceholder": "搜索任务...",
+  "members.detail.issues": "任务",
+  "actorIssues.scopeAssigned": "已分配",
+  "actorIssues.scopeCreated": "已创建",
+  "agents.detail.workIssues": "关联任务"
 }

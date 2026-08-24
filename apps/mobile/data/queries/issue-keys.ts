@@ -82,6 +82,17 @@ export const issueKeys = {
     scope: MyIssuesScope,
     filter: MyIssuesFilter,
   ) => [...issueKeys.myAll(wsId), scope, filter] as const,
+  // Actor-scoped issue list — member/agent detail "Issues" panel (web
+  // `common/actor-issues-panel.tsx`). Keyed under its own `actorAll(wsId)`
+  // prefix so a WS handler can invalidate every actor panel with one call.
+  actorAll: (wsId: string | null) =>
+    [...issueKeys.all(wsId), "actor"] as const,
+  actorList: (
+    wsId: string | null,
+    actorType: "member" | "agent",
+    actorId: string,
+    relation: "assigned" | "created",
+  ) => [...issueKeys.actorAll(wsId), actorType, actorId, relation] as const,
   detail: (wsId: string | null, id: string) =>
     [...issueKeys.all(wsId), "detail", id] as const,
   timeline: (wsId: string | null, id: string) =>
