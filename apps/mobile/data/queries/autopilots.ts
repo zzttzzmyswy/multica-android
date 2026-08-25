@@ -18,6 +18,8 @@ export const autopilotKeys = {
     [...autopilotKeys.all(wsId), "runs", id] as const,
   deliveries: (wsId: string | null, id: string) =>
     [...autopilotKeys.all(wsId), "deliveries", id] as const,
+  delivery: (wsId: string | null, autopilotId: string, deliveryId: string) =>
+    [...autopilotKeys.all(wsId), "deliveries", autopilotId, deliveryId] as const,
 };
 
 export const autopilotListOptions = (wsId: string | null) =>
@@ -63,4 +65,20 @@ export const autopilotDeliveriesOptions = (
       ),
     select: (data) => data.deliveries,
     enabled: !!wsId && !!id && options?.enabled !== false,
+  });
+
+// Fetches the full delivery row including raw_body / selected_headers /
+// response_body — the slim list rows omit these. The detail dialog opens
+// this lazily (enabled while the modal is open), mirroring web.
+export const autopilotDeliveryOptions = (
+  wsId: string | null,
+  autopilotId: string,
+  deliveryId: string,
+  options?: { enabled?: boolean },
+) =>
+  queryOptions({
+    queryKey: autopilotKeys.delivery(wsId, autopilotId, deliveryId),
+    queryFn: ({ signal }) =>
+      api.getAutopilotDelivery(autopilotId, deliveryId, { signal }),
+    enabled: !!wsId && !!autopilotId && !!deliveryId && options?.enabled !== false,
   });

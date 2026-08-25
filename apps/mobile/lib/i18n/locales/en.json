@@ -2545,5 +2545,16 @@
   "runtimes.charts.heatmap_most_active_weekday": "Most active weekday",
   "runtimes.charts.heatmap_quietest_weekday": "Quietest weekday",
   "runtimes.charts.heatmap_average": "avg {{value}}",
-  "runtimes.charts.heatmap_window_total": "{{count}}d window total"
+  "runtimes.charts.heatmap_window_total": "{{count}}d window total",
+  "autopilots.deliveries.row.replayBadge": "Replay",
+  "autopilots.deliveries.row.attempts": "{{count}}× attempts",
+  "autopilots.deliveries.replay.disabledInvalidSignature": "Can't replay — signature was invalid",
+  "autopilots.deliveries.replay.disabledRejected": "Can't replay a rejected delivery",
+  "autopilots.deliveries.replay.disabledQueued": "Still queued — replay once it settles",
+  "autopilots.deliveries.truncatedMarker": "[truncated — tap Copy to get the full payload]",
+  "autopilots.deliveries.availableAt": "Next dispatch",
+  "autopilots.deliveries.dedupeKey": "Dedupe key",
+  "autopilots.deliveries.dedupeSource": "Dedupe source",
+  "autopilots.deliveries.contentType": "Content-Type",
+  "autopilots.deliveries.replayedFrom": "Replayed from"
 }

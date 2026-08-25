@@ -2,11 +2,12 @@
  * Webhook-deliveries section for the autopilot detail screen — mobile mirror
  * of web `packages/views/autopilots/components/webhook-deliveries-section.tsx`.
  *
- * List is slim (status/provider/event/time); tapping a row opens a detail
- * modal that lazily fetches the full row (raw body / selected headers /
- * response body) and offers Replay. Status visuals degrade to a neutral
- * "unknown" row when the server adds a new enum value (API Response
- * Compatibility), never a crash.
+ * List is slim (status/provider/event/time + replay/attempts badges); tapping
+ * a row opens a detail modal that LAZILY fetches the full row (raw body /
+ * selected headers / response body — the list endpoint omits these to keep
+ * the wire small) and offers Replay with a disable-hint. Status visuals
+ * degrade to a neutral "unknown" row when the server adds a new enum value
+ * (API Response Compatibility), never a crash.
  */
 import { useMemo, useState } from "react";
 import {
@@ -27,9 +28,17 @@ import type {
 } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
-import { autopilotDeliveriesOptions } from "@/data/queries/autopilots";
+import {
+  autopilotDeliveriesOptions,
+  autopilotDeliveryOptions,
+} from "@/data/queries/autopilots";
 import { useReplayAutopilotDelivery } from "@/data/mutations/autopilots";
 import { formatDateTime } from "@/lib/autopilot-format";
+import {
+  buildDeliveryMetaRows,
+  canReplay,
+  truncateForDisplay,
+} from "@/lib/autopilot-delivery";
 import { cn } from "@/lib/utils";
 
 // Status visuals — mirrors web STATUS_VISUAL. Unknown statuses (server enum
@@ -55,15 +64,6 @@ function visualForStatus(status: string) {
   return STATUS_VISUAL[status] ?? UNKNOWN;
 }
 
-// Mirror web canReplay: signature-invalid / rejected / still-queued
-// deliveries can't be replayed (the server is the gate and would 400).
-function canReplay(delivery: WebhookDelivery): boolean {
-  if (delivery.signature_status === "invalid") return false;
-  if (delivery.status === "rejected") return false;
-  if (delivery.status === "queued") return false;
-  return true;
-}
-
 const KNOWN_STATUSES: readonly WebhookDeliveryStatus[] = [
   "queued",
   "dispatched",
@@ -79,6 +79,20 @@ const KNOWN_SIGNATURES: readonly WebhookSignatureStatus[] = [
   "missing",
 ];
 
+/** Disabled-replay reason → i18n key, mirroring web `ReplayHint`. */
+function replayDisabledReasonKey(delivery: WebhookDelivery): string | null {
+  if (delivery.signature_status === "invalid") {
+    return "autopilots.deliveries.replay.disabledInvalidSignature";
+  }
+  if (delivery.status === "rejected") {
+    return "autopilots.deliveries.replay.disabledRejected";
+  }
+  if (delivery.status === "queued") {
+    return "autopilots.deliveries.replay.disabledQueued";
+  }
+  return null;
+}
+
 export function DeliveriesSection({
   wsId,
   autopilotId,
@@ -88,7 +102,7 @@ export function DeliveriesSection({
   wsId: string | null;
   autopilotId: string;
   hasWebhookTrigger: boolean;
-  t: (id: string) => string;
+  t: (id: string, params?: Record<string, string | number>) => string;
 }) {
   const { data: deliveries = [], isLoading } = useQuery(
     autopilotDeliveriesOptions(wsId, autopilotId, {
@@ -133,6 +147,15 @@ export function DeliveriesSection({
                     {delivery.event || t("autopilots.deliveries.unknownEvent")}
                   </Text>
                 </View>
+                {/* Row badges — replay / attempts (web DeliveryRow). */}
+                {delivery.replayed_from_delivery_id ? <RowBadge text={t("autopilots.deliveries.row.replayBadge")} icon="refresh" /> : null}
+                {delivery.attempt_count > 1 ? (
+                  <RowBadge
+                    text={t("autopilots.deliveries.row.attempts", {
+                      count: delivery.attempt_count,
+                    })}
+                  />
+                ) : null}
                 <Text className="text-xs text-muted-foreground tabular-nums">
                   {formatDateTime(delivery.received_at || delivery.created_at)}
                 </Text>
@@ -143,6 +166,7 @@ export function DeliveriesSection({
       )}
       {selected ? (
         <DeliveryDetailModal
+          wsId={wsId}
           autopilotId={autopilotId}
           delivery={selected}
           onClose={() => setSelected(null)}
@@ -158,7 +182,7 @@ function DeliveryVisual({
   t,
 }: {
   delivery: WebhookDelivery;
-  t: (id: string) => string;
+  t: (id: string, params?: Record<string, string | number>) => string;
 }) {
   const visual = visualForStatus(delivery.status);
   const label = KNOWN_STATUSES.includes(delivery.status as WebhookDeliveryStatus)
@@ -174,31 +198,53 @@ function DeliveryVisual({
   );
 }
 
+function RowBadge({ text, icon }: { text: string; icon?: React.ComponentProps<typeof Ionicons>["name"] }) {
+  return (
+    <View className="shrink-0 flex-row items-center gap-0.5 rounded border border-border px-1.5 py-0.5">
+      {icon ? <Ionicons name={icon} size={10} color="#a1a1aa" /> : null}
+      <Text className="text-[10px] text-muted-foreground">{text}</Text>
+    </View>
+  );
+}
+
 function DeliveryDetailModal({
+  wsId,
   autopilotId,
   delivery,
   onClose,
   t,
 }: {
+  wsId: string | null;
   autopilotId: string;
   delivery: WebhookDelivery;
   onClose: () => void;
-  t: (id: string) => string;
+  t: (id: string, params?: Record<string, string | number>) => string;
 }) {
   const replay = useReplayAutopilotDelivery();
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  const visual = visualForStatus(delivery.status);
-  const statusLabel = KNOWN_STATUSES.includes(
-    delivery.status as WebhookDeliveryStatus,
-  )
-    ? t(`autopilots.deliveries.status.${delivery.status}`)
-    : delivery.status;
+  // Lazily fetch the full row (raw_body / selected_headers / response_body
+  // are detail-only). Cached per deliveryId by react-query, so re-opens are
+  // instant. `full` falls back to the slim list row while loading.
+  const { data: detail, isLoading } = useQuery(
+    autopilotDeliveryOptions(wsId, autopilotId, delivery.id, { enabled: true }),
+  );
+  const full = detail ?? delivery;
+
+  const visual = visualForStatus(full.status);
+  const statusLabel = KNOWN_STATUSES.includes(full.status as WebhookDeliveryStatus)
+    ? t(`autopilots.deliveries.status.${full.status}`)
+    : full.status;
   const signatureLabel = KNOWN_SIGNATURES.includes(
-    delivery.signature_status as WebhookSignatureStatus,
+    full.signature_status as WebhookSignatureStatus,
   )
-    ? t(`autopilots.deliveries.signature.${delivery.signature_status}`)
-    : delivery.signature_status;
+    ? t(`autopilots.deliveries.signature.${full.signature_status}`)
+    : full.signature_status;
+
+  const metaRows = useMemo(
+    () => buildDeliveryMetaRows(full, t, formatDateTime),
+    [full, t],
+  );
 
   const handleCopy = async (key: string, value: string) => {
     await Clipboard.setStringAsync(value);
@@ -208,7 +254,7 @@ function DeliveryDetailModal({
 
   const handleReplay = async () => {
     try {
-      await replay.mutateAsync({ autopilotId, deliveryId: delivery.id });
+      await replay.mutateAsync({ autopilotId, deliveryId: full.id });
       Alert.alert(t("autopilots.deliveries.replayed"));
       onClose();
     } catch (err) {
@@ -219,25 +265,23 @@ function DeliveryDetailModal({
     }
   };
 
-  const headers = delivery.selected_headers;
+  const headers = full.selected_headers;
   const headerText =
     headers && typeof headers === "object"
       ? JSON.stringify(headers, null, 2)
       : null;
-  const replayDisabled = !canReplay(delivery) || replay.isPending;
+  const replayDisabled = !canReplay(full) || replay.isPending;
+  const disableReasonKey = replayDisabledReasonKey(full);
 
   const blocks: { key: string; label: string; value: string }[] = [];
-  if (delivery.raw_body) blocks.push({ key: "raw", label: t("autopilots.deliveries.rawBody"), value: delivery.raw_body });
-  if (headerText) blocks.push({ key: "headers", label: t("autopilots.deliveries.headers"), value: headerText });
-  if (delivery.response_body) blocks.push({ key: "response", label: t("autopilots.deliveries.responseBody"), value: delivery.response_body });
+  if (full.raw_body)
+    blocks.push({ key: "raw", label: t("autopilots.deliveries.rawBody"), value: full.raw_body });
+  if (headerText)
+    blocks.push({ key: "headers", label: t("autopilots.deliveries.headers"), value: headerText });
+  if (full.response_body)
+    blocks.push({ key: "response", label: t("autopilots.deliveries.responseBody"), value: full.response_body });
 
-  const metaRows: { label: string; value: string }[] = [
-    { label: t("autopilots.deliveries.receivedAt"), value: formatDateTime(delivery.received_at) },
-    { label: t("autopilots.deliveries.lastAttemptAt"), value: formatDateTime(delivery.last_attempt_at) },
-    { label: t("autopilots.deliveries.attempts"), value: String(delivery.attempt_count) },
-    { label: t("autopilots.deliveries.dispatchAttempts"), value: String(delivery.dispatch_attempts) },
-    { label: t("autopilots.deliveries.response"), value: delivery.response_status != null ? String(delivery.response_status) : "—" },
-  ];
+  const bodyLoading = isLoading && !detail;
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
@@ -255,118 +299,162 @@ function DeliveryDetailModal({
                 </Pressable>
               </View>
 
-              <ScrollView className="max-h-[80vh]">
-                <View className="gap-3 px-4 py-3">
-                  {/* Header row — status / provider / event / signature */}
-                  <View className="flex-row flex-wrap items-center gap-2">
-                    <View className="flex-row items-center gap-1.5">
-                      <Ionicons name={visual.icon} size={14} color={visual.color} />
-                      <Text className={cn("text-sm font-medium", visual.className)}>
-                        {statusLabel}
-                      </Text>
-                    </View>
-                    <Badge text={delivery.provider || "—"} />
-                    <Badge
-                      text={delivery.event || t("autopilots.deliveries.unknownEvent")}
-                      mono
-                    />
-                    <Badge
-                      text={signatureLabel}
-                      tone={
-                        delivery.signature_status === "invalid"
-                          ? "destructive"
-                          : delivery.signature_status === "valid"
-                            ? "default"
-                            : undefined
-                      }
-                    />
-                  </View>
-
-                  {/* Meta grid */}
-                  <View className="rounded-md border border-border px-3 py-2 gap-1.5">
-                    {metaRows.map((row) => (
-                      <View key={row.label} className="flex-row">
-                        <Text className="w-32 text-xs text-muted-foreground">
-                          {row.label}
-                        </Text>
-                        <Text className="flex-1 text-xs text-foreground">
-                          {row.value}
-                        </Text>
-                      </View>
-                    ))}
-                    {delivery.error ? (
-                      <View className="flex-row">
-                        <Text className="w-32 text-xs text-destructive">
-                          {t("autopilots.deliveries.error")}
-                        </Text>
-                        <Text className="flex-1 text-xs text-destructive">
-                          {delivery.error}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-
-                  {/* Code blocks */}
-                  {blocks.map((block) => (
-                    <View key={block.key} className="rounded-md border border-border overflow-hidden">
-                      <View className="flex-row items-center justify-between border-b border-border px-3 py-1.5">
-                        <Text className="text-[11px] font-medium text-muted-foreground">
-                          {block.label}
-                        </Text>
-                        <Pressable
-                          onPress={() => void handleCopy(block.key, block.value)}
-                          hitSlop={8}
-                          className="flex-row items-center gap-1 px-1 py-0.5"
-                          accessibilityLabel={t("autopilots.deliveries.copy")}
-                        >
-                          <Ionicons
-                            name={copiedKey === block.key ? "checkmark" : "copy-outline"}
-                            size={12}
-                            color={copiedKey === block.key ? "#22c55e" : "#a1a1aa"}
-                          />
-                          <Text className="text-[11px] text-muted-foreground">
-                            {copiedKey === block.key
-                              ? t("autopilots.deliveries.copied")
-                              : t("autopilots.deliveries.copy")}
-                          </Text>
-                        </Pressable>
-                      </View>
-                      <ScrollView
-                        className="max-h-40 bg-muted/40 px-3 py-2"
-                        nestedScrollEnabled
-                      >
-                        <Text className="text-xs font-mono text-foreground leading-relaxed">
-                          {block.value}
-                        </Text>
-                      </ScrollView>
-                    </View>
-                  ))}
-
-                  {/* Replay */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onPress={() => void handleReplay()}
-                    disabled={replayDisabled}
-                  >
-                    <Ionicons
-                      name="refresh"
-                      size={14}
-                      color={replayDisabled ? undefined : "#a1a1aa"}
-                    />
-                    <Text>
-                      {replay.isPending
-                        ? t("autopilots.deliveries.replaying")
-                        : t("autopilots.deliveries.replay")}
-                    </Text>
-                  </Button>
+              {bodyLoading ? (
+                <View className="gap-3 px-4 py-4">
+                  <View className="h-20 rounded-md bg-muted/50" />
+                  <View className="h-14 rounded-md bg-muted/50" />
                 </View>
-              </ScrollView>
+              ) : (
+                <ScrollView className="max-h-[80vh]">
+                  <View className="gap-3 px-4 py-3">
+                    {/* Header row — status / provider / event / signature */}
+                    <View className="flex-row flex-wrap items-center gap-2">
+                      <View className="flex-row items-center gap-1.5">
+                        <Ionicons name={visual.icon} size={14} color={visual.color} />
+                        <Text className={cn("text-sm font-medium", visual.className)}>
+                          {statusLabel}
+                        </Text>
+                      </View>
+                      <Badge text={full.provider || "—"} />
+                      <Badge
+                        text={full.event || t("autopilots.deliveries.unknownEvent")}
+                        mono
+                      />
+                      <Badge
+                        text={signatureLabel}
+                        tone={
+                          full.signature_status === "invalid"
+                            ? "destructive"
+                            : full.signature_status === "valid"
+                              ? "default"
+                              : undefined
+                        }
+                      />
+                    </View>
+
+                    {/* Meta grid — web order incl. queued-only + dedupe rows */}
+                    <View className="rounded-md border border-border px-3 py-2 gap-1.5">
+                      {metaRows.map((row) => (
+                        <View key={row.key} className="flex-row">
+                          <Text className="w-32 text-xs text-muted-foreground">
+                            {row.label}
+                          </Text>
+                          <Text
+                            className={cn(
+                              "flex-1 text-xs text-foreground",
+                              row.mono ? "font-mono" : undefined,
+                            )}
+                            numberOfLines={2}
+                          >
+                            {row.value}
+                          </Text>
+                        </View>
+                      ))}
+                      {full.error ? (
+                        <View className="flex-row">
+                          <Text className="w-32 text-xs text-destructive">
+                            {t("autopilots.deliveries.error")}
+                          </Text>
+                          <Text className="flex-1 text-xs text-destructive">
+                            {full.error}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+
+                    {/* Code blocks — sliced for display, Copy yields full */}
+                    {blocks.map((block) => (
+                      <CodeBlock
+                        key={block.key}
+                        label={block.label}
+                        value={block.value}
+                        copied={copiedKey === block.key}
+                        onCopy={() => void handleCopy(block.key, block.value)}
+                        copyLabel={
+                          copiedKey === block.key
+                            ? t("autopilots.deliveries.copied")
+                            : t("autopilots.deliveries.copy")
+                        }
+                        truncatedMarker={t("autopilots.deliveries.truncatedMarker")}
+                      />
+                    ))}
+
+                    {/* Replay + disabled reason */}
+                    <View className="gap-1.5">
+                      {disableReasonKey ? (
+                        <Text className="text-xs text-muted-foreground">
+                          {t(disableReasonKey)}
+                        </Text>
+                      ) : null}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onPress={() => void handleReplay()}
+                        disabled={replayDisabled}
+                      >
+                        <Ionicons
+                          name="refresh"
+                          size={14}
+                          color={replayDisabled ? undefined : "#a1a1aa"}
+                        />
+                        <Text>
+                          {replay.isPending
+                            ? t("autopilots.deliveries.replaying")
+                            : t("autopilots.deliveries.replay")}
+                        </Text>
+                      </Button>
+                    </View>
+                  </View>
+                </ScrollView>
+              )}
             </View>
           </Pressable>
         </View>
       </Pressable>
     </Modal>
+  );
+}
+
+function CodeBlock({
+  label,
+  value,
+  copied,
+  onCopy,
+  copyLabel,
+  truncatedMarker,
+}: {
+  label: string;
+  value: string;
+  copied: boolean;
+  onCopy: () => void;
+  copyLabel: string;
+  truncatedMarker: string;
+}) {
+  const { display, truncated } = truncateForDisplay(value);
+  return (
+    <View className="rounded-md border border-border overflow-hidden">
+      <View className="flex-row items-center justify-between border-b border-border px-3 py-1.5">
+        <Text className="text-[11px] font-medium text-muted-foreground">{label}</Text>
+        <Pressable
+          onPress={onCopy}
+          hitSlop={8}
+          className="flex-row items-center gap-1 px-1 py-0.5"
+        >
+          <Ionicons
+            name={copied ? "checkmark" : "copy-outline"}
+            size={12}
+            color={copied ? "#22c55e" : "#a1a1aa"}
+          />
+          <Text className="text-[11px] text-muted-foreground">{copyLabel}</Text>
+        </Pressable>
+      </View>
+      <ScrollView className="max-h-40 bg-muted/40 px-3 py-2" nestedScrollEnabled>
+        <Text className="text-xs font-mono text-foreground leading-relaxed">{display}</Text>
+        {truncated ? (
+          <Text className="pt-2 text-xs text-muted-foreground">{truncatedMarker}</Text>
+        ) : null}
+      </ScrollView>
+    </View>
   );
 }
 

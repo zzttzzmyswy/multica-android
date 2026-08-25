@@ -55,6 +55,19 @@ describe("autopilot create/trigger i18n", () => {
     "autopilots.deliveries.replay": "重放",
     "autopilots.deliveries.replaying": "重放中…",
     "autopilots.deliveries.replayed": "已重放该投递",
+    // Iteration-104 web alignment: full delivery detail (badges / meta grid /
+    // replay hints / truncation).
+    "autopilots.deliveries.row.replayBadge": "重放",
+    "autopilots.deliveries.row.attempts": "{{count}} 次尝试",
+    "autopilots.deliveries.availableAt": "下次分发时间",
+    "autopilots.deliveries.dedupeKey": "去重 Key",
+    "autopilots.deliveries.dedupeSource": "去重来源",
+    "autopilots.deliveries.contentType": "Content-Type",
+    "autopilots.deliveries.replayedFrom": "重放自",
+    "autopilots.deliveries.replay.disabledInvalidSignature": "无法重放——签名校验失败",
+    "autopilots.deliveries.replay.disabledRejected": "无法重放已拒绝的投递",
+    "autopilots.deliveries.replay.disabledQueued": "投递仍在排队，处理完成后再重放",
+    "autopilots.deliveries.truncatedMarker": "[已截断——点击复制获取完整内容]",
     // Iteration-88 web alignment: edit mode / project / squad assignee.
     "autopilots.detail.edit": "编辑",
     "autopilots.detail.fieldProject": "项目",
