@@ -16,9 +16,9 @@
  * no event filters (v1 mobile — accept-all). Non-runtime-bound agents/squads
  * are shown but disabled in the picker; the server is the real gate.
  */
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, View } from "react-native";
-import { Stack, router } from "expo-router";
+import { Stack, router, useLocalSearchParams } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { WebhookEventFilter } from "@multica/core/types";
@@ -37,6 +37,11 @@ import { useCreateAutopilot, useCreateAutopilotTrigger } from "@/data/mutations/
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { getApiBaseUrl } from "@/data/server-config";
 import { buildTriggerCreate, probeSchedule } from "@/lib/autopilot-trigger-form";
+import {
+  AUTOPILOT_TEMPLATES,
+  isTemplateId,
+  templateScheduleToCron,
+} from "@/lib/autopilot-templates";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
@@ -54,9 +59,25 @@ export default function NewAutopilotPage() {
   const muted = THEME[colorScheme].mutedForeground;
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
 
+  // Empty-state quick-start prefill: `?template=<id>` (list page template
+  // cards) fills title / prompt / a schedule trigger; unknown ids fall back
+  // to a blank create form (never a crash).
+  const { template: templateParam } = useLocalSearchParams<{
+    template?: string;
+  }>();
+  const template = useMemo(() => {
+    const raw = Array.isArray(templateParam) ? templateParam[0] : templateParam;
+    if (!isTemplateId(raw)) return null;
+    return AUTOPILOT_TEMPLATES.find((tpl) => tpl.id === raw) ?? null;
+  }, [templateParam]);
+
   const formRef = useRef<AutopilotFormHandle>(null);
-  const [triggerKind, setTriggerKind] = useState<TriggerChoice>("none");
-  const [cronExpression, setCronExpression] = useState("");
+  const [triggerKind, setTriggerKind] = useState<TriggerChoice>(
+    template ? "schedule" : "none",
+  );
+  const [cronExpression, setCronExpression] = useState(
+    template ? (templateScheduleToCron(template.schedule) ?? "") : "",
+  );
   const [timezone, setTimezone] = useState("Asia/Shanghai");
   const [eventFilters, setEventFilters] = useState<WebhookEventFilter[]>([]);
   const [tzPickerOpen, setTzPickerOpen] = useState(false);
@@ -196,8 +217,10 @@ export default function NewAutopilotPage() {
         ref={formRef}
         mode="create"
         initial={{
-          title: "",
-          description: "",
+          title: template
+            ? t(`autopilots.templates.${template.id}.title`)
+            : "",
+          description: template?.prompt ?? "",
           projectId: null,
           assigneeType: "agent",
           assigneeId: "",

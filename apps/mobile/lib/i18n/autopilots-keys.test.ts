@@ -84,6 +84,15 @@ describe("autopilot create/trigger i18n", () => {
     "autopilots.assigneePicker.title": "选择智能体或 Squad",
     "autopilots.assigneePicker.empty": "当前工作区没有智能体或 Squad",
     "autopilots.projectPicker.title": "选择项目",
+    // Iteration-105 web alignment: empty-state quick-start templates.
+    "autopilots.startBlank": "从空白开始",
+    "autopilots.templates.daily_news.title": "每日新闻摘要",
+    "autopilots.templates.daily_news.summary": "检索并汇总今天的团队相关新闻",
+    "autopilots.templates.pr_review.title": "PR 审阅提醒",
+    "autopilots.templates.bug_triage.title": "缺陷分类",
+    "autopilots.templates.weekly_progress.title": "每周进度报告",
+    "autopilots.templates.dependency_audit.title": "依赖审计",
+    "autopilots.templates.documentation_check.title": "文档检查",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {

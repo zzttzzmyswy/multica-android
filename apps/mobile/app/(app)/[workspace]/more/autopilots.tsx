@@ -12,7 +12,13 @@
  * unknown value degrades to a neutral fallback, never a crash).
  */
 import { useCallback } from "react";
-import { ActivityIndicator, FlatList, Pressable, View } from "react-native";
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  ScrollView,
+  View,
+} from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -23,6 +29,11 @@ import { IconButton } from "@/components/ui/icon-button";
 import { autopilotListOptions } from "@/data/queries/autopilots";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { formatDateTime } from "@/lib/autopilot-format";
+import {
+  AUTOPILOT_TEMPLATES,
+  type AutopilotTemplate,
+  type AutopilotTemplateId,
+} from "@/lib/autopilot-templates";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
@@ -70,6 +81,20 @@ function triggerLabel(kind: string, t: (id: string) => string): string | null {
   return kind;
 }
 
+// Empty-state quick-start templates — icon mapping for the six web templates
+// (autopilots-page.tsx TEMPLATES). Unknown ids fall back to the generic flash.
+const TEMPLATE_ICONS: Record<
+  AutopilotTemplateId,
+  React.ComponentProps<typeof Ionicons>["name"]
+> = {
+  daily_news: "newspaper-outline",
+  pr_review: "git-pull-request-outline",
+  bug_triage: "bug-outline",
+  weekly_progress: "bar-chart-outline",
+  dependency_audit: "shield-checkmark-outline",
+  documentation_check: "document-text-outline",
+};
+
 export default function AutopilotsPage() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
@@ -114,15 +139,42 @@ export default function AutopilotsPage() {
           </Button>
         </View>
       ) : showEmpty ? (
-        <View className="flex-1 items-center justify-center px-6 gap-1">
+        <ScrollView
+          className="flex-1"
+          contentContainerClassName="px-5 py-12 items-center"
+        >
           <Ionicons name="flash-off-outline" size={32} color={muted} />
           <Text className="text-sm text-muted-foreground text-center mt-2">
             {t("autopilots.empty")}
           </Text>
-          <Text className="text-xs text-muted-foreground/70 text-center">
+          <Text className="text-xs text-muted-foreground/70 text-center mt-1 max-w-[320px]">
             {t("autopilots.emptyHint")}
           </Text>
-        </View>
+          <View className="flex-row flex-wrap justify-center gap-3 mt-6 w-full max-w-[420px]">
+            {AUTOPILOT_TEMPLATES.map((tpl) => (
+              <TemplateCard
+                key={tpl.id}
+                tpl={tpl}
+                onPress={() => {
+                  if (wsSlug)
+                    router.push(
+                      `/${wsSlug}/more/autopilots/new?template=${tpl.id}`,
+                    );
+                }}
+              />
+            ))}
+          </View>
+          <Button
+            variant="outline"
+            className="mt-6 self-center"
+            onPress={() => {
+              if (wsSlug) router.push(`/${wsSlug}/more/autopilots/new`);
+            }}
+          >
+            <Ionicons name="add" size={16} color={muted} />
+            <Text>{t("autopilots.startBlank")}</Text>
+          </Button>
+        </ScrollView>
       ) : (
         <FlatList
           data={autopilots}
@@ -216,6 +268,47 @@ function AutopilotRow({
             </Text>
           </View>
         ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
+/** One empty-state quick-start card — icon + title + 2-line summary, matching
+ *  web autopilots-page.tsx TEMPLATES cards. Tapping pre-fills the create
+ *  form (title / prompt / schedule) via the `template` route param. */
+function TemplateCard({
+  tpl,
+  onPress,
+}: {
+  tpl: AutopilotTemplate;
+  onPress: () => void;
+}) {
+  const { t } = useTranslation();
+  const { colorScheme } = useColorScheme();
+  const muted = THEME[colorScheme].mutedForeground;
+  const icon = TEMPLATE_ICONS[tpl.id];
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={t(`autopilots.templates.${tpl.id}.title`)}
+      className="w-[47%] active:bg-secondary flex-row items-start gap-2.5 rounded-lg border border-border p-3"
+    >
+      <Ionicons name={icon} size={18} color={muted} className="mt-0.5" />
+      <View className="min-w-0 flex-1">
+        <Text
+          className="text-sm font-medium text-foreground"
+          numberOfLines={1}
+        >
+          {t(`autopilots.templates.${tpl.id}.title`)}
+        </Text>
+        <Text
+          className="mt-0.5 text-xs text-muted-foreground leading-snug"
+          numberOfLines={2}
+        >
+          {t(`autopilots.templates.${tpl.id}.summary`)}
+        </Text>
       </View>
     </Pressable>
   );
