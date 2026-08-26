@@ -26,6 +26,9 @@ import type {
   ChatPendingTask,
   ChatSession,
   Comment,
+  CommentTriggerOutcome,
+  CommentTriggerPreview,
+  CommentTriggerPreviewAgent,
   CreatePersonalAccessTokenResponse,
   CronPreviewResponse,
   DashboardAgentRunTime,
@@ -167,6 +170,53 @@ export const EMPTY_COMMENT: Comment = {
   resolved_at: null,
   resolved_by_type: null,
   resolved_by_id: null,
+};
+
+/** Agent this comment WOULD trigger — same shape as core's
+ *  `CommentTriggerPreviewAgentSchema`, mirrored locally (mobile schemas are
+ *  mobile-owned; see file header). The trigger-preview endpoint omits blocked
+ *  target NAMES (enumeration-safety), so `name` may be absent exactly when a
+ *  blocked outcome labels it. */
+export const CommentTriggerPreviewAgentSchema = z.object({
+  id: z.string(),
+  name: z.string().default(""),
+  avatar_url: z.string().optional(),
+  source: z.string().default(""),
+  reason: z.string().default(""),
+}).loose();
+
+/** Per-target outcome of an explicit @agent / @squad mention (MUL-4525 §2).
+ *  `target_id` is required to correlate with the client's rendered mention; a
+ *  malformed entry (missing id) is dropped rather than failing the whole
+ *  payload. */
+export const CommentTriggerOutcomeSchema = z.object({
+  target_type: z.string().default(""),
+  target_id: z.string(),
+  status: z.string().default(""),
+  reason_code: z.string().default(""),
+}).loose();
+
+/** `POST /api/issues/:id/comments/trigger-preview` response. Malformed
+ *  blocked entries are dropped INDIVIDUALLY so one bad item never discards
+ *  the valid set; a non-array degrades to []. Empty preview = "nobody
+ *  triggers" → the composer renders no chips. */
+export const CommentTriggerPreviewSchema = z.object({
+  agents: z.array(CommentTriggerPreviewAgentSchema).default([]),
+  blocked: z
+    .array(z.unknown())
+    .catch([])
+    .default([])
+    .transform((items) =>
+      items.flatMap((item) => {
+        const parsed = CommentTriggerOutcomeSchema.safeParse(item);
+        return parsed.success ? [parsed.data] : [];
+      }),
+    ),
+}).loose() as unknown as z.ZodType<CommentTriggerPreview>;
+
+export const EMPTY_COMMENT_TRIGGER_PREVIEW: CommentTriggerPreview = {
+  agents: [],
+  blocked: [],
 };
 
 /** GET/PUT /api/notification-preferences. Preferences are partial — absent

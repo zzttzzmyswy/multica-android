@@ -32,6 +32,7 @@ import type {
   ChatPendingTask,
   ChatSession,
   Comment,
+  CommentTriggerPreview,
   CreateAgentRequest,
   CreateAutopilotRequest,
   CreateAutopilotTriggerRequest,
@@ -371,6 +372,8 @@ import {
   EMPTY_AGENT_ACTIVITY_BUCKET_LIST,
   CreateFeedbackResponseSchema,
   EMPTY_FEEDBACK_RESPONSE,
+  CommentTriggerPreviewSchema,
+  EMPTY_COMMENT_TRIGGER_PREVIEW,
 } from "./schemas";
 import type { ZodType } from "zod";
 import type { AppConfigResponse } from "./schemas";
@@ -2410,7 +2413,12 @@ class ApiClient {
   async createComment(
     issueId: string,
     content: string,
-    opts?: { parentId?: string; type?: string; attachmentIds?: string[] },
+    opts?: {
+      parentId?: string;
+      type?: string;
+      attachmentIds?: string[];
+      suppressAgentIds?: string[];
+    },
   ): Promise<Comment> {
     // Body shape mirrors backend `CreateCommentRequest`
     // (server/internal/handler/comment.go:165). `parent_id` is sent only
@@ -2427,10 +2435,38 @@ class ApiClient {
           type: opts?.type ?? "comment",
           ...(opts?.parentId ? { parent_id: opts.parentId } : {}),
           ...(opts?.attachmentIds ? { attachment_ids: opts.attachmentIds } : {}),
+          ...(opts?.suppressAgentIds
+            ? { suppress_agent_ids: opts.suppressAgentIds }
+            : {}),
         }),
       },
       { endpoint: "createComment" },
     );
+  }
+
+  // POST /api/issues/:id/comments/trigger-preview — dry-run the comment's
+  // mentions against the live enqueue rules so the composer can show "who
+  // will start" chips before sending (MUL-4525 §2). Mirrors web
+  // packages/core/api/client.ts:previewCommentTriggers. `editing_comment_id`
+  // excludes the editing comment from self-trigger re-evaluation.
+  async previewCommentTriggers(
+    issueId: string,
+    content: string,
+    opts?: { parentId?: string; editingCommentId?: string },
+  ): Promise<CommentTriggerPreview> {
+    const raw = await this.fetch<unknown>(`/api/issues/${issueId}/comments/trigger-preview`, {
+      method: "POST",
+      body: JSON.stringify({
+        content,
+        ...(opts?.parentId ? { parent_id: opts.parentId } : {}),
+        ...(opts?.editingCommentId
+          ? { editing_comment_id: opts.editingCommentId }
+          : {}),
+      }),
+    });
+    return parseWithFallback(raw, CommentTriggerPreviewSchema, EMPTY_COMMENT_TRIGGER_PREVIEW, {
+      endpoint: "previewCommentTriggers",
+    });
   }
 
   // PUT /api/comments/:id — content edit (+ optional attachment swap).
@@ -2438,6 +2474,7 @@ class ApiClient {
     commentId: string,
     content: string,
     attachmentIds?: string[],
+    suppressAgentIds?: string[],
   ): Promise<Comment> {
     return this.fetchValidatedWith(
       `/api/comments/${commentId}`,
@@ -2448,6 +2485,7 @@ class ApiClient {
         body: JSON.stringify({
           content,
           ...(attachmentIds ? { attachment_ids: attachmentIds } : {}),
+          ...(suppressAgentIds ? { suppress_agent_ids: suppressAgentIds } : {}),
         }),
       },
       { endpoint: "updateComment" },

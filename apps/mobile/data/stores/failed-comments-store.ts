@@ -27,6 +27,9 @@ export interface FailedCommentPayload {
   parentId?: string;
   /** Attachment ids the user uploaded and referenced in `content`. */
   attachmentIds?: string[];
+  /** Agents the user skipped in the trigger preview — preserved across a
+   *  Retry so the re-fire sends exactly what the first attempt would have. */
+  suppressAgentIds?: string[];
   /** Human-readable error message from the failed mutation — surfaced
    *  inline so the user knows why the send didn't go through. */
   error: string;

@@ -455,6 +455,7 @@ function CommentBody({
       content: failed.content,
       parentId: failed.parentId,
       attachmentIds: failed.attachmentIds,
+      suppressAgentIds: failed.suppressAgentIds,
     });
   }, [failed, qc, wsId, issueId, entry.id, createComment]);
 

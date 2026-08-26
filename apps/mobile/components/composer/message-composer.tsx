@@ -93,6 +93,9 @@ interface Props {
     content: string;
     attachmentIds: string[];
     mentions: MentionChip[];
+    /** Agents the user skipped via the trigger preview. Populated by the
+     *  comment composer (see `suppressAgentIds` prop); chat ignores it. */
+    suppressAgentIds?: string[];
   }) => Promise<void>;
 
   /** Push target for the `@` button. The picker route reads /
@@ -136,6 +139,20 @@ interface Props {
   disabled?: boolean;
   disabledReason?: string;
 
+  /** Comment-mode trigger-preview slot: rendered BELOW the editor while
+   *  expanded, receiving the live draft (mention chips + plain text) so the
+   *  caller can rebuild the exact markdown the server will see and render
+   *  "who will start" chips. Mounts only when expanded, so the preview
+   *  fetch never runs for a collapsed pill. */
+  triggerPreviewSlot?: (draft: {
+    text: string;
+    mentions: MentionChip[];
+  }) => ReactNode;
+
+  /** Agents the user skipped via the trigger preview. Forwarded to
+   *  `onSubmit` so the server does not enqueue runs for these targets. */
+  suppressAgentIds?: string[];
+
   /** When true the composer renders flush at the bottom of its parent
    *  while a `KeyboardStickyView` lifts it above the IME and the
    *  safe-area bottom inset is added (default). Chat and the inline
@@ -172,8 +189,11 @@ function makeLocalId(): string {
  *  regex parser recognises. The string lands at the START of the
  *  outgoing content; mobile can't position mentions inline because the
  *  TextInput is plain. Acceptable semantic difference vs web/desktop's
- *  rich editor (web supports anywhere-in-text). */
-function serializeMentions(chips: MentionChip[]): string {
+ *  rich editor (web supports anywhere-in-text).
+ *
+ *  Exported so the comment-side trigger-preview slot rebuilds the EXACT
+ *  content the composer will submit — one source of truth for both. */
+export function serializeMentions(chips: MentionChip[]): string {
   return chips
     .map((m) => {
       const label =
@@ -206,6 +226,8 @@ export function MessageComposer({
   manageKeyboard = true,
   slashCommands,
   slashSkills,
+  triggerPreviewSlot,
+  suppressAgentIds,
 }: Props) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
@@ -434,6 +456,7 @@ export function MessageComposer({
         content,
         attachmentIds: activeIds,
         mentions: mentionsSnap,
+        suppressAgentIds,
       });
       // Success → fully exit composing mode. Explicit triple-step
       // because a missing blur leaves the keyboard up; missing
@@ -459,6 +482,7 @@ export function MessageComposer({
     setText,
     clearMentions,
     onSubmit,
+    suppressAgentIds,
   ]);
 
   /** Streams a picked asset to /api/upload-file, updating the matching
@@ -818,6 +842,12 @@ export function MessageComposer({
           )}
         </View>
       </View>
+
+      {triggerPreviewSlot ? (
+        <View className="rounded-lg bg-secondary/40 px-1.5 pb-0.5 pt-1">
+          {triggerPreviewSlot({ text, mentions })}
+        </View>
+      ) : null}
     </View>
   );
 

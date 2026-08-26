@@ -61,6 +61,9 @@ export type CreateCommentVars = {
    *  too. Mirrors web's `CommentInput.handleSubmit` `activeIds` derivation
    *  (`packages/views/issues/components/comment-input.tsx:76-78`). */
   attachmentIds?: string[];
+  /** Agents the user skipped via the trigger-preview chips — the server
+   *  does not enqueue a run for these targets on submit. */
+  suppressAgentIds?: string[];
 };
 
 export function useCreateComment(issueId: string) {
@@ -69,8 +72,12 @@ export function useCreateComment(issueId: string) {
   const userId = useAuthStore((s) => s.user?.id ?? null);
 
   return useMutation({
-    mutationFn: ({ content, parentId, attachmentIds }: CreateCommentVars) =>
-      api.createComment(issueId, content, { parentId, attachmentIds }),
+    mutationFn: ({ content, parentId, attachmentIds, suppressAgentIds }: CreateCommentVars) =>
+      api.createComment(issueId, content, {
+        parentId,
+        attachmentIds,
+        suppressAgentIds,
+      }),
     onMutate: async ({ content, parentId }) => {
       const key = issueKeys.timeline(wsId, issueId);
       await qc.cancelQueries({ queryKey: key });
@@ -112,6 +119,7 @@ export function useCreateComment(issueId: string) {
           content: vars.content,
           parentId: vars.parentId,
           attachmentIds: vars.attachmentIds,
+          suppressAgentIds: vars.suppressAgentIds,
           error: err instanceof Error ? err.message : "Send failed",
         });
       }
