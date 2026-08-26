@@ -2615,5 +2615,10 @@
   "autopilots.deliveries.dedupeKey": "Dedupe key",
   "autopilots.deliveries.dedupeSource": "Dedupe source",
   "autopilots.deliveries.contentType": "Content-Type",
-  "autopilots.deliveries.replayedFrom": "Replayed from"
+  "autopilots.deliveries.replayedFrom": "Replayed from",
+  "agents.rowActions.duplicate": "Duplicate",
+  "agents.duplicate.copySuffix": " (Copy)",
+  "agents.duplicate.title": "Duplicate {{name}}",
+  "agents.duplicate.envNotice": "Instructions, skills and command arguments are copied. Environment variables, MCP servers and machine-local runtime config are not.",
+  "agents.duplicate.runtimeResetNotice": "The original runtime is unavailable, so this copy runs on another one. Model, thinking level and speed were cleared because they only apply on the selected runtime."
 }

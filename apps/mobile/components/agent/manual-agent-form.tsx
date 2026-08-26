@@ -1,8 +1,17 @@
 /**
- * Manual agent form — create (more/agents/new/manual) AND edit
+ * Manual agent form — create (more/agents/new/manual), duplicate (same route
+ * with `?duplicate=<id>` — see `duplicateSource`) AND edit
  * (more/agents/[id]/edit) modes. Fields mirror web
  * `packages/views/agents/create/agent-configuration-panel.tsx`, organised in
  * the same four sections (Identity / Behavior / Execution / Access).
+ *
+ * Duplicate mode seeds the create draft from the source agent while the
+ * runtime query is settling, mirroring web's `useDuplicateDraftSeed`
+ * (manual-create-agent-page.tsx): the copy rides on the source runtime when it
+ * is still usable, otherwise falls back to another one and clears the
+ * model / thinking / speed (a banner explains the reset). Saving is disabled
+ * until the seed lands so the blank form is never submitted. After seeding it
+ * is the exact same screen as a fresh create, sharing the same submit path.
  *
  * Create submission uses core's `buildCreateAgentRequest` (draft.ts) → `POST
  * /api/agents`, then pushes the new agent's detail screen. Edit submission
@@ -31,7 +40,7 @@
  *  - Feedback is a native Alert (no toast infra on mobile — same choice as
  *    more/autopilots/new.tsx).
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, View } from "react-native";
 import { router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -57,7 +66,7 @@ import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { AgentEmojiPickerSheet } from "@/components/agent/agent-emoji-picker-sheet";
 import { RuntimePickerSheet } from "@/components/agent/runtime-picker-sheet";
 import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
-import { agentCreateGate, classifyAgentCreateError, usableRuntimes } from "@/lib/agent-create";
+import { agentCreateGate, classifyAgentCreateError, resolveDuplicateSeed, usableRuntimes } from "@/lib/agent-create";
 import { agentEditGate } from "@/lib/agent-edit";
 import { formatAvatarEmoji, parseAvatarEmoji } from "@/lib/agent-avatar";
 import {
@@ -87,7 +96,17 @@ const PERMISSION_SCOPES: {
   { value: "members", titleKey: "agents.new.accessMembers", descKey: "agents.new.accessMembersDesc" },
 ];
 
-export function ManualAgentForm({ agent }: { agent?: Agent | null }) {
+export function ManualAgentForm({
+  agent,
+  duplicateSource,
+}: {
+  agent?: Agent | null;
+  /** When set, the form starts in duplicate mode: the create draft is seeded
+   *  from this source agent (`?duplicate=<id>` flow, web parity). Null means
+   *  a blank create — a stale parameter that resolves to no agent silently
+   *  falls back to that, matching web's `duplicateAgent`-null handling. */
+  duplicateSource?: Agent | null;
+}) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
@@ -99,9 +118,20 @@ export function ManualAgentForm({ agent }: { agent?: Agent | null }) {
   // edit page only renders the form with a loaded agent). Create mode starts
   // empty.
   const isEdit = agent != null;
+  // `duplicateSource` present → duplicate mode: this page seeded a create
+  // draft from an existing agent. Edit takes precedence (the two props are
+  // never both set by the routes).
+  const isDuplicate = !isEdit && duplicateSource != null;
   const [draft, setDraft] = useState<AgentDraft>(() =>
     isEdit ? seedDraftFromAgent(agent) : EMPTY_AGENT_DRAFT,
   );
+  // Duplicate seeds asynchronously (it waits for the runtime query to
+  // settle). Saving before that lands would persist the empty form the seed
+  // is about to replace. Web parity: manual-create-agent-page.tsx keeps the
+  // same `duplicateSeeded` gate.
+  const [duplicateSeeded, setDuplicateSeeded] = useState(false);
+  const [duplicateRuntimeReset, setDuplicateRuntimeReset] = useState(false);
+  const duplicateSeededRef = useRef(false);
   const initialSkills = useMemo(
     () => new Set((agent?.skills ?? []).map((skill) => skill.id)),
     [agent],
@@ -117,7 +147,7 @@ export function ManualAgentForm({ agent }: { agent?: Agent | null }) {
   const [skillPickerOpen, setSkillPickerOpen] = useState(false);
   const [memberPickerOpen, setMemberPickerOpen] = useState(false);
 
-  const { data: runtimes = [], isLoading: runtimesLoading } = useQuery(
+  const { data: runtimes = [], isLoading: runtimesLoading, isPending: runtimesPending } = useQuery(
     runtimeListOptions(wsId),
   );
   const { data: members = [] } = useQuery(memberListOptions(wsId));
@@ -141,13 +171,42 @@ export function ManualAgentForm({ agent }: { agent?: Agent | null }) {
     runtimes.find((r) => r.id === draft.runtimeId) ??
     (isEdit ? pickerRuntimes.find((r) => r.id === draft.runtimeId) ?? null : null);
 
+  // Duplicate seed: compute the create draft from the source agent, but only
+  // once the runtime query has answered — seeding against a pending `[]`
+  // would read the source runtime as unavailable and wrongly clear a
+  // same-runtime copy's model / thinking / speed (web use-duplicate-draft-seed
+  // gates on the query being decidable the same way). Runs exactly once per
+  // source, mirroring web's ref-guarded effect.
+  const runtimesSettled = !runtimesPending;
+  useEffect(() => {
+    if (!isDuplicate || !duplicateSource || duplicateSeededRef.current) return;
+    const result = resolveDuplicateSeed({
+      source: duplicateSource,
+      runtimesSettled,
+      runtimes,
+      currentUserId,
+      fallbackRuntimeId: usable[0]?.id ?? "",
+      nameSuffix: t("agents.duplicate.copySuffix"),
+    });
+    if (!result) return;
+    duplicateSeededRef.current = true;
+    // Only the forced fallback gets the notice; a later manual runtime switch
+    // is the user's own doing and needs no explanation.
+    setDuplicateRuntimeReset(result.runtimeReset);
+    setDraft(result.draft);
+    setDuplicateSeeded(true);
+  }, [isDuplicate, duplicateSource, runtimesSettled, runtimes, currentUserId, usable, t]);
+
   // Seeds the picker with the first usable runtime so the CREATE form is
   // submittable without a manual selection — mirrors use-create-agent-form.ts.
-  // Edit drafts already carry their runtime binding, so this never fires there.
+  // Edit drafts already carry their runtime binding, so this never fires
+  // there, and a duplicate's runtime is decided by the seed above — pre-filling
+  // before it lands would fight it for the slot.
   useEffect(() => {
+    if (isDuplicate && !duplicateSeeded) return;
     if (draft.runtimeId || usable.length === 0) return;
     setDraft((current) => ({ ...current, runtimeId: usable[0].id }));
-  }, [draft.runtimeId, usable]);
+  }, [isDuplicate, duplicateSeeded, draft.runtimeId, usable]);
 
   const createAgent = useCreateAgent();
   const updateAgent = useUpdateAgent(agent?.id ?? "");
@@ -158,6 +217,7 @@ export function ManualAgentForm({ agent }: { agent?: Agent | null }) {
   const isSubmitting = createAgent.isPending || updateAgent.isPending || setSkills.isPending;
   const canCreate =
     !isSubmitting &&
+    (!isDuplicate || duplicateSeeded) &&
     !gate.nameMissing &&
     !gate.runtimeMissing &&
     !gate.accessInvalid &&
@@ -233,6 +293,7 @@ export function ManualAgentForm({ agent }: { agent?: Agent | null }) {
             draft,
             runtimeId: draft.runtimeId,
             template: "mobile-manual",
+            duplicateSource: duplicateSource ?? null,
           }),
         );
         if (wsSlug) router.replace(`/${wsSlug}/more/agents/${created.id}`);
@@ -253,6 +314,7 @@ export function ManualAgentForm({ agent }: { agent?: Agent | null }) {
     isEdit,
     agent,
     draft,
+    duplicateSource,
     canEditAccess,
     skillsChanged,
     wsSlug,
@@ -266,6 +328,25 @@ export function ManualAgentForm({ agent }: { agent?: Agent | null }) {
 
   return (
     <View className="px-4 pt-4 pb-10 gap-6">
+      {/* Duplicate banners (web parity: duplicate_env_notice / duplicate_
+          runtime_reset_notice in manual-create-agent-page.tsx). */}
+      {isDuplicate && duplicateSource ? (
+        <View className="flex-row items-start gap-2 rounded-md bg-warning/15 px-3 py-2.5">
+          <Ionicons name="copy-outline" size={15} color="#a16207" />
+          <Text className="flex-1 text-xs text-warning">
+            {t("agents.duplicate.envNotice")}
+          </Text>
+        </View>
+      ) : null}
+      {isDuplicate && duplicateRuntimeReset ? (
+        <View className="flex-row items-start gap-2 rounded-md bg-warning/15 px-3 py-2.5">
+          <Ionicons name="alert-circle-outline" size={15} color="#a16207" />
+          <Text className="flex-1 text-xs text-warning">
+            {t("agents.duplicate.runtimeResetNotice")}
+          </Text>
+        </View>
+      ) : null}
+
       {/* ---- Identity ---- */}
       <SectionLabel
         icon="person-outline"
@@ -298,7 +379,7 @@ export function ManualAgentForm({ agent }: { agent?: Agent | null }) {
             invalid={(showErrors && gate.nameMissing) || !!nameError}
             editable={!isSubmitting}
             maxLength={120}
-            autoFocus={!isEdit}
+            autoFocus={!isEdit && !isDuplicate}
           />
           {nameError ? <FieldError text={nameError} /> : null}
           {showErrors && gate.nameMissing && !nameError ? (

@@ -2611,5 +2611,10 @@
   "autopilots.deliveries.dedupeKey": "去重 Key",
   "autopilots.deliveries.dedupeSource": "去重来源",
   "autopilots.deliveries.contentType": "Content-Type",
-  "autopilots.deliveries.replayedFrom": "重放自"
+  "autopilots.deliveries.replayedFrom": "重放自",
+  "agents.rowActions.duplicate": "复制",
+  "agents.duplicate.copySuffix": "（副本）",
+  "agents.duplicate.title": "复制 {{name}}",
+  "agents.duplicate.envNotice": "指令、skill 和命令行参数会被复制。环境变量、MCP 服务器和本机运行时配置不会复制。",
+  "agents.duplicate.runtimeResetNotice": "原运行时当前不可用，副本已改用其他运行时。模型、思考等级和速度只在所选运行时上有效，因此已被清空。"
 }

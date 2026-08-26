@@ -36,6 +36,7 @@ type DetailAction =
   | "env"
   | "args"
   | "integrations"
+  | "duplicate"
   | "archive"
   | "restore"
   | "cancel-tasks"
@@ -72,6 +73,12 @@ export function AgentDetailActions({
     push(t("agents.detail.menu.env"), "env");
     push(t("agents.detail.menu.args"), "args");
     push(t("agents.detail.menu.integrations"), "integrations");
+    // Web parity: agent-row-actions showDuplicate — any workspace member may
+    // duplicate a non-archived agent; the copies land in the manual create
+    // form pre-filled from this one.
+    if (!archived) {
+      push(t("agents.rowActions.duplicate"), "duplicate");
+    }
     if (!archived && hasActiveWork) {
       push(t("agents.detail.cancelMenu"), "cancel-tasks");
     }
@@ -110,6 +117,9 @@ export function AgentDetailActions({
             return;
           case "integrations":
             nav("integrations");
+            return;
+          case "duplicate":
+            router.push(`/${wsSlug}/more/agents/new/manual?duplicate=${agent.id}`);
             return;
           case "restore":
             restoreAgent.mutate(agent.id, {

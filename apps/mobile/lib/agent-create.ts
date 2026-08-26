@@ -7,11 +7,12 @@
  * conflict split.
  */
 import {
+  buildDuplicateDraft,
   isDraftDescriptionWithinLimit,
   type AgentDraft,
 } from "@multica/core/agents";
 import { isRuntimeUsableForUser } from "@multica/core/runtimes";
-import type { RuntimeDevice } from "@multica/core/types";
+import type { Agent, RuntimeDevice } from "@multica/core/types";
 
 /** The subset of workspace runtimes the current member may create an agent
  *  on: online AND usable (owner of a private runtime, or member of a public
@@ -25,6 +26,47 @@ export function usableRuntimes(
       runtime.status === "online" &&
       isRuntimeUsableForUser(runtime, currentUserId),
   );
+}
+
+export interface DuplicateSeedResult {
+  draft: AgentDraft;
+  /** True when the copy had to leave the source runtime (gone, private to
+   *  somebody else, or ownerless), which clears the model / thinking / speed
+   *  fields. The banner explaining the empties shows only for this forced
+   *  fallback, never for a later manual switch. */
+  runtimeReset: boolean;
+}
+
+/**
+ * Computes the duplicate draft — but only from a runtime list that has
+ * actually answered. Mobile mirror of web's `useDuplicateDraftSeed`
+ * (packages/views/agents/create/use-duplicate-draft-seed.ts).
+ *
+ * Returns null while the source is absent (`?duplicate=` missing or the id
+ * unresolved in the agent list) or the runtime query is still pending, so the
+ * caller must not seed yet — seeding against a pending `[]` would read the
+ * source runtime as unavailable and permanently clear a same-runtime copy's
+ * model / thinking / speed. The caller mounts this gate once per source id
+ * (web keeps it in the hook's useEffect + a ref).
+ */
+export function resolveDuplicateSeed(options: {
+  source: Agent | null;
+  /** The runtime query succeeded or failed — false while it is pending. */
+  runtimesSettled: boolean;
+  runtimes: RuntimeDevice[];
+  currentUserId: string | null;
+  fallbackRuntimeId: string;
+  nameSuffix: string;
+}): DuplicateSeedResult | null {
+  const { source, runtimesSettled } = options;
+  if (!source || !runtimesSettled) return null;
+  const draft = buildDuplicateDraft(source, {
+    runtimes: options.runtimes,
+    currentUserId: options.currentUserId,
+    fallbackRuntimeId: options.fallbackRuntimeId,
+    nameSuffix: options.nameSuffix,
+  });
+  return { draft, runtimeReset: draft.runtimeId !== source.runtime_id };
 }
 
 export interface AgentCreateGate {
