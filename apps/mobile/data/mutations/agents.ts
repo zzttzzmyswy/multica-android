@@ -72,6 +72,26 @@ export function useRestoreAgent() {
   });
 }
 
+export function useCancelAgentTasks() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: (agentId: string) => api.cancelAgentTasks(agentId),
+    onSettled: () => {
+      if (!wsId) return;
+      void qc.invalidateQueries({ queryKey: agentKeys.list(wsId) });
+      void qc.invalidateQueries({ queryKey: agentKeys.listAll(wsId) });
+      // Presence (drives this action's visibility) and the activity panels
+      // read the task snapshot / task / activity queries — refresh them so
+      // the cancelled work leaves "Now" and the menu item disappears.
+      void qc.invalidateQueries({ queryKey: ["agent-task-snapshot", wsId] });
+      void qc.invalidateQueries({ queryKey: ["agent-tasks", wsId] });
+      void qc.invalidateQueries({ queryKey: ["agent-activity", wsId] });
+    },
+  });
+}
+
 export function useUpdateAgentEnv(agentId: string) {
   const qc = useQueryClient();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);

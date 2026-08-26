@@ -219,6 +219,7 @@ import {
   AgentEnvSchema,
   AgentListSchema,
   AgentTaskListSchema,
+  CancelAgentTasksResponseSchema,
   AutopilotDetailSchema,
   AutopilotTriggerSchema,
   AutopilotCollaboratorsResponseSchema,
@@ -255,6 +256,7 @@ import {
   EMPTY_AGENT_ENV,
   EMPTY_AGENT_LIST,
   EMPTY_AGENT_TASK_LIST,
+  EMPTY_CANCEL_AGENT_TASKS_RESPONSE,
   EMPTY_AUTOPILOT_DETAIL,
   EMPTY_AUTOPILOT_TRIGGER,
   EMPTY_ATTACHMENT_LIST,
@@ -376,7 +378,7 @@ import {
   EMPTY_COMMENT_TRIGGER_PREVIEW,
 } from "./schemas";
 import type { ZodType } from "zod";
-import type { AppConfigResponse } from "./schemas";
+import type { AppConfigResponse, CancelAgentTasksResponse } from "./schemas";
 import type {
   CreateFeedbackInput,
   CreateFeedbackResponse,
@@ -1995,6 +1997,23 @@ class ApiClient {
     return parseWithFallback(raw, AgentTaskListSchema, EMPTY_AGENT_TASK_LIST, {
       endpoint: "listAgentTasks",
     });
+  }
+
+  // POST /api/agents/{id}/cancel-tasks — mirrors web `api.cancelAgentTasks`
+  // (packages/core/api/client.ts:1385). The server answers 403 when the caller
+  // can't manage the agent and marks rows cancelled instantly, but child
+  // processes may take ~5s to fully halt (agent.go:cancelAgentTasksResponse).
+  async cancelAgentTasks(agentId: string): Promise<CancelAgentTasksResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/agents/${agentId}/cancel-tasks`,
+      { method: "POST" },
+    );
+    return parseWithFallback(
+      raw,
+      CancelAgentTasksResponseSchema,
+      EMPTY_CANCEL_AGENT_TASKS_RESPONSE,
+      { endpoint: "cancelAgentTasks" },
+    );
   }
 
   async listSquads(opts?: { signal?: AbortSignal }): Promise<Squad[]> {

@@ -713,6 +713,21 @@ export interface ActiveTasksResponse {
 export const EMPTY_AGENT_TASK_LIST: AgentTask[] = [];
 export const EMPTY_ACTIVE_TASKS_RESPONSE: ActiveTasksResponse = { tasks: [] };
 
+// POST /api/agents/:id/cancel-tasks → { cancelled: N }. Drift fallback is an
+// explicit zero so a mismatched backend degrades to "no active tasks" rather
+// than an unactionable error (web parity: agent-row-actions handleCancelTasks).
+export const CancelAgentTasksResponseSchema = z.object({
+  cancelled: z.number().default(0),
+}).loose();
+
+export interface CancelAgentTasksResponse {
+  cancelled: number;
+}
+
+export const EMPTY_CANCEL_AGENT_TASKS_RESPONSE: CancelAgentTasksResponse = {
+  cancelled: 0,
+};
+
 // =====================================================
 // Issue subscriptions
 // =====================================================

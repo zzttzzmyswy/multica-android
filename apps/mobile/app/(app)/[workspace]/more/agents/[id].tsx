@@ -181,7 +181,8 @@ export default function AgentDetailPage() {
                 </Text>
               </View>
             ) : null}
-            <AgentDetailActions agent={agent} />
+            {/* presence drives "Cancel all tasks" visibility (running + queued > 0) */}
+            <AgentDetailActions agent={agent} presence={detail} />
           </View>
           {agent.description ? (
             <Text className="px-4 pt-2 text-sm text-muted-foreground">

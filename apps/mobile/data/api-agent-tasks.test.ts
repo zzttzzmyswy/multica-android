@@ -99,4 +99,20 @@ describe("agent task / activity api methods", () => {
     const buckets = await api.getWorkspaceAgentActivity30d();
     expect(buckets).toEqual([]);
   });
+
+  it("cancelAgentTasks POSTs /api/agents/:id/cancel-tasks and parses the count", async () => {
+    const spy = fetchSpy().mockResolvedValue({ cancelled: 3 });
+    const res = await api.cancelAgentTasks("agent-1");
+    expect(spy).toHaveBeenCalledWith(
+      "/api/agents/agent-1/cancel-tasks",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(res.cancelled).toBe(3);
+  });
+
+  it("cancelAgentTasks falls back to zero on a malformed payload", async () => {
+    fetchSpy().mockResolvedValue({ oops: "not-a-count" });
+    const res = await api.cancelAgentTasks("agent-1");
+    expect(res.cancelled).toBe(0);
+  });
 });
