@@ -5,7 +5,8 @@
  *    (new triggers start enabled, accept-all events for webhook).
  *  - edit (`?triggerId=...`) — kind is locked (web converts kinds by
  *    "delete old, create new", PLAN.md), label + enabled become editable,
- *    and a schedule trigger also edits cron + timezone.
+ *    and a schedule trigger also edits its schedule via the shared
+ *    ScheduleEditor (mobile counterpart of web's AddScheduleTriggerDialog).
  *
  * Submit mirrors web's dialog: a schedule is probed against the server's
  * cron-preview BEFORE writing (a rejected expression must not persist a
@@ -31,7 +32,7 @@ import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { EventFilterEditor } from "@/components/autopilot/event-filter-editor";
-import { TimezonePickerSheet } from "@/components/autopilot/timezone-picker-sheet";
+import { ScheduleEditor } from "@/components/autopilot/schedule-editor";
 import { api } from "@/data/api";
 import { autopilotDetailOptions } from "@/data/queries/autopilots";
 import {
@@ -44,8 +45,12 @@ import {
   buildTriggerCreate,
   buildTriggerUpdate,
   probeSchedule,
+  scheduleFromTrigger,
   type TriggerFormState,
 } from "@/lib/autopilot-trigger-form";
+import { toCron } from "@/lib/schedule-editor-cron";
+import { getDefaultScheduleConfig } from "@/lib/schedule-editor-model";
+import type { ScheduleConfig } from "@/lib/schedule-editor-model";
 import { serializeEventFilters } from "@/lib/autopilot-event-filter";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
@@ -64,8 +69,6 @@ export default function TriggerFormPage() {
   const triggerId = params.triggerId;
   const isEdit = Boolean(triggerId);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   const detail = useQuery(autopilotDetailOptions(wsId, autopilotId));
@@ -82,19 +85,21 @@ export default function TriggerFormPage() {
         ? "webhook"
         : "schedule",
   );
-  const [cronExpression, setCronExpression] = useState(
-    isEdit ? existing?.cron_expression ?? "" : "",
+  // Structured schedule state for the ScheduleEditor. Create starts at the
+  // default; edit hydrates via scheduleFromTrigger when the detail query lands
+  // (a beyond-model expression keeps its `raw` verbatim for advanced mode).
+  const [schedule, setSchedule] = useState<ScheduleConfig>(() =>
+    isEdit && existing
+      ? scheduleFromTrigger(existing.cron_expression, existing.timezone)
+      : getDefaultScheduleConfig("Asia/Shanghai"),
   );
-  const [timezone, setTimezone] = useState(
-    isEdit ? existing?.timezone ?? "Asia/Shanghai" : "Asia/Shanghai",
-  );
+  // Mirrors the editor's inline rejection so the Save button stays in step.
+  const [scheduleValid, setScheduleValid] = useState(true);
   const [label, setLabel] = useState(isEdit ? existing?.label ?? "" : "");
   const [enabled, setEnabled] = useState(isEdit ? existing?.enabled !== false : true);
   const [eventFilters, setEventFilters] = useState<WebhookEventFilter[]>(
     isEdit ? (existing?.event_filters ?? []) : [],
   );
-  const [tzPickerOpen, setTzPickerOpen] = useState(false);
-  const [showErrors, setShowErrors] = useState(false);
 
   // Edit mode hydrates from the detail query, which resolves AFTER first
   // render — sync once when the existing trigger lands (or on triggerId
@@ -104,8 +109,7 @@ export default function TriggerFormPage() {
     if (isEdit && existing && prevExistingId.current !== existing.id) {
       prevExistingId.current = existing.id;
       setKind(existing.kind === "webhook" ? "webhook" : "schedule");
-      setCronExpression(existing.cron_expression ?? "");
-      setTimezone(existing.timezone ?? "Asia/Shanghai");
+      setSchedule(scheduleFromTrigger(existing.cron_expression, existing.timezone));
       setLabel(existing.label ?? "");
       setEnabled(existing.enabled !== false);
       setEventFilters(existing.event_filters ?? []);
@@ -131,27 +135,43 @@ export default function TriggerFormPage() {
   const updateTrigger = useUpdateAutopilotTrigger();
   const isSubmitting = createTrigger.isPending || updateTrigger.isPending;
 
+  // Editing before the detail query lands would overwrite the server's cron
+  // with the default schedule — keep submit disabled until hydrated.
+  const editHydrated = !isEdit || existing !== null;
+
+  // The editor always has a value; this guards the (impossible) empty-raw edge
+  // rather than the happy path (same shape as new.tsx).
+  const cronExpression = schedule.raw === null ? toCron(schedule) : schedule.raw;
   const cronMissing = kind === "schedule" && cronExpression.trim().length === 0;
-  const showCronError = showErrors && cronMissing;
 
   const state: TriggerFormState = useMemo(
-    () => ({ kind, cronExpression, timezone, label, enabled, eventFilters }),
-    [kind, cronExpression, timezone, label, enabled, eventFilters],
+    () => ({
+      kind,
+      cronExpression,
+      timezone: schedule.timezone,
+      label,
+      enabled,
+      eventFilters,
+    }),
+    [kind, cronExpression, schedule.timezone, label, enabled, eventFilters],
   );
 
   const handleSubmit = useCallback(async () => {
     if (isSubmitting) return;
+    if (!editHydrated) return;
     if (cronMissing) {
-      setShowErrors(true);
+      Alert.alert(
+        t("autopilots.trigger.scheduleInvalidTitle"),
+        t("autopilots.trigger.cronRequired"),
+      );
       return;
     }
-    setShowErrors(false);
     try {
       if (kind === "schedule") {
         const rejection = await probeSchedule(
           (p) => api.cronPreview(p),
           cronExpression.trim(),
-          timezone.trim(),
+          schedule.timezone.trim(),
         );
         if (rejection) {
           Alert.alert(
@@ -203,10 +223,11 @@ export default function TriggerFormPage() {
     }
   }, [
     isSubmitting,
+    editHydrated,
     cronMissing,
     kind,
     cronExpression,
-    timezone,
+    schedule.timezone,
     isEdit,
     triggerId,
     autopilotId,
@@ -220,13 +241,21 @@ export default function TriggerFormPage() {
 
   const headerRight = useCallback(
     () => (
-      <Button size="sm" disabled={isSubmitting} onPress={() => void handleSubmit()}>
+      <Button
+        size="sm"
+        disabled={
+          isSubmitting ||
+          !editHydrated ||
+          (kind === "schedule" && !scheduleValid)
+        }
+        onPress={() => void handleSubmit()}
+      >
         <Text>
           {isSubmitting ? t("autopilots.trigger.saving") : t("autopilots.trigger.save")}
         </Text>
       </Button>
     ),
-    [isSubmitting, handleSubmit, t],
+    [isSubmitting, editHydrated, kind, scheduleValid, handleSubmit, t],
   );
 
   return (
@@ -289,56 +318,18 @@ export default function TriggerFormPage() {
             </View>
           ) : null}
 
-          {/* Schedule fields */}
+          {/* Schedule fields — full ScheduleEditor (structured at/every/weekly/
+              monthly + advanced raw cron + next-runs preview; timezone is
+              inside the editor, matching web's AddScheduleTriggerDialog). */}
           {kind === "schedule" ? (
             <View className="gap-3">
-              <View className="gap-1.5">
-                <FieldLabel
-                  icon="time-outline"
-                  text={t("autopilots.trigger.cron")}
-                />
-                <TextField
-                  value={cronExpression}
-                  onChangeText={setCronExpression}
-                  placeholder={t("autopilots.trigger.cronPlaceholder")}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!isSubmitting}
-                  invalid={showCronError}
-                />
-                {showCronError ? (
-                  <Text className="text-xs text-destructive">
-                    {t("autopilots.trigger.cronRequired")}
-                  </Text>
-                ) : (
-                  <Text className="text-xs text-muted-foreground/80">
-                    {t("autopilots.trigger.cronHint")}
-                  </Text>
-                )}
-              </View>
-              <View className="gap-1.5">
-                <FieldLabel
-                  icon="globe-outline"
-                  text={t("autopilots.trigger.timezone")}
-                />
-                <Pressable
-                  onPress={() => setTzPickerOpen(true)}
-                  disabled={isSubmitting}
-                  accessibilityLabel={t("autopilots.trigger.timezone")}
-                  className="flex-row items-center gap-2 rounded-md border border-border bg-secondary/50 px-3 py-2.5"
-                >
-                  <Text className="flex-1 text-sm text-foreground">
-                    {timezone}
-                  </Text>
-                  <Ionicons name="chevron-down" size={16} color={muted} />
-                </Pressable>
-                <TimezonePickerSheet
-                  visible={tzPickerOpen}
-                  value={timezone}
-                  onPick={setTimezone}
-                  onClose={() => setTzPickerOpen(false)}
-                />
-              </View>
+              <ScheduleEditor
+                value={schedule}
+                onChange={setSchedule}
+                wsId={wsId ?? ""}
+                disabled={isSubmitting}
+                onValidityChange={setScheduleValid}
+              />
             </View>
           ) : null}
 

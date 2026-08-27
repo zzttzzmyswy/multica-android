@@ -19,6 +19,9 @@ import {
   type AutopilotTriggerFormValues,
 } from "@/data/schemas";
 import type { WebhookEventFilter } from "@multica/core/types";
+import { parseCron } from "./schedule-editor-cron";
+import { getDefaultScheduleConfig } from "./schedule-editor-model";
+import type { ScheduleConfig } from "./schedule-editor-model";
 
 /** Curated timezone fallback — mirror of packages/views/common/timezone-select.tsx. */
 export const COMMON_TIMEZONES: readonly string[] = [
@@ -59,6 +62,24 @@ export interface TriggerFormState {
   enabled: boolean;
   /** Only meaningful for webhook triggers; [] means "accept all events". */
   eventFilters: WebhookEventFilter[];
+}
+
+/**
+ * Hydrate an existing schedule trigger into the structured ScheduleConfig the
+ * editor edits. An empty/absent cron (never valid for a schedule trigger, but
+ * reachable while a detail query is still in flight) falls back to the
+ * default schedule; a beyond-model expression round-trips verbatim in `raw`.
+ * Trimming mirrors the webhook URL builder's whitespace hygiene.
+ */
+export function scheduleFromTrigger(
+  cronExpression: string | null | undefined,
+  timezone: string | null | undefined,
+): ScheduleConfig {
+  const tz = (timezone ?? "").trim() || "Asia/Shanghai";
+  const cron = (cronExpression ?? "").trim();
+  return cron.length === 0
+    ? getDefaultScheduleConfig(tz)
+    : parseCron(cron, tz);
 }
 
 /** The server's rejection, split the way the editor is: which input is at

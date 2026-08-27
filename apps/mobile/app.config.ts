@@ -22,7 +22,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         ? "Multica (Staging)"
         : "Multica (Dev)",
     slug: "multica-mobile",
-    version: "0.5.34",
+    version: "0.5.35",
     orientation: "portrait",
     userInterfaceStyle: "automatic",
     scheme: "multica",
@@ -39,7 +39,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // Convention: minor*100 + patch — keep it monotonic with every
       // `version` bump so self-hosted APK updates always upgrade. Shown as the
       // About-page "build" number (Constants.platform.android.versionCode).
-      versionCode: 534,
+      versionCode: 535,
       // Adaptive icon: separate full-bleed background + centered foreground so
       // Android launchers can mask them into circles / squiggles cleanly.
       adaptiveIcon: {

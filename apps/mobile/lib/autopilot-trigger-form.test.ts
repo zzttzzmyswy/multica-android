@@ -5,6 +5,7 @@ import {
   buildTriggerUpdate,
   classifyScheduleRejection,
   probeSchedule,
+  scheduleFromTrigger,
   type TriggerFormState,
 } from "./autopilot-trigger-form";
 
@@ -60,6 +61,61 @@ describe("classifyScheduleRejection", () => {
       body: {},
     });
     expect(rejection.detail).toBe("unexpected token");
+  });
+});
+
+describe("scheduleFromTrigger", () => {
+  it("defaults an empty/absent cron to the default schedule in the given timezone", () => {
+    expect(scheduleFromTrigger(null, "Asia/Shanghai")).toEqual({
+      time: { kind: "at", time: "09:00" },
+      days: { kind: "every" },
+      timezone: "Asia/Shanghai",
+      raw: null,
+    });
+    expect(scheduleFromTrigger(undefined, "UTC")).toEqual(
+      expect.objectContaining({ timezone: "UTC", raw: null }),
+    );
+    expect(scheduleFromTrigger("", "America/New_York")).toEqual(
+      expect.objectContaining({ timezone: "America/New_York" }),
+    );
+  });
+
+  it("falls back to Asia/Shanghai when timezone is absent", () => {
+    expect(scheduleFromTrigger("0 9 * * *", null).timezone).toBe("Asia/Shanghai");
+    expect(scheduleFromTrigger("0 9 * * *", undefined).timezone).toBe("Asia/Shanghai");
+  });
+
+  it("hydrates a model-level cron into structured form", () => {
+    const config = scheduleFromTrigger("0 9 * * 1-5", "Asia/Shanghai");
+    expect(config).toEqual({
+      time: { kind: "at", time: "09:00" },
+      days: { kind: "weekly", daysOfWeek: [1, 2, 3, 4, 5] },
+      timezone: "Asia/Shanghai",
+      raw: null,
+    });
+  });
+
+  it("honors an embedded TZ= prefix over the passed timezone", () => {
+    const config = scheduleFromTrigger("TZ=UTC 0 9 * * *", "Asia/Shanghai");
+    expect(config.timezone).toBe("UTC");
+    expect(config.raw).toBeNull();
+  });
+
+  it("keeps beyond-model expressions in raw (round-trip for advanced mode)", () => {
+    // Month field non-wildcard — outside the structured model.
+    const config = scheduleFromTrigger("0 9 * 1 *", "Asia/Shanghai");
+    expect(config.raw).toBe("0 9 * 1 *");
+    expect(config.timezone).toBe("Asia/Shanghai");
+    // TZ prefix with a beyond-model body: zone extracted, raw holds the body.
+    const prefixed = scheduleFromTrigger("TZ=America/New_York 0 9 * 1 *", "UTC");
+    expect(prefixed.timezone).toBe("America/New_York");
+    expect(prefixed.raw).toBe("0 9 * 1 *");
+  });
+
+  it("trims surrounding whitespace on both inputs", () => {
+    const config = scheduleFromTrigger("  0 9 * * *  ", "  Asia/Shanghai  ");
+    expect(config.timezone).toBe("Asia/Shanghai");
+    expect(config.raw).toBeNull();
   });
 });
 
