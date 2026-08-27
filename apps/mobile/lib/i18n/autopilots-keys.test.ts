@@ -68,6 +68,17 @@ describe("autopilot create/trigger i18n", () => {
     "autopilots.deliveries.replay.disabledRejected": "无法重放已拒绝的投递",
     "autopilots.deliveries.replay.disabledQueued": "投递仍在排队，处理完成后再重放",
     "autopilots.deliveries.truncatedMarker": "[已截断——点击复制获取完整内容]",
+    // Iteration-111 web alignment: webhook trigger payload preview
+    // (WebhookPayloadPreview).
+    "autopilots.webhookPayload.label": "Webhook 事件：",
+    "autopilots.webhookPayload.unknownEvent": "webhook.received",
+    "autopilots.webhookPayload.view": "查看载荷",
+    "autopilots.webhookPayload.none": "该 run 无触发载荷",
+    "autopilots.webhookPayload.payload": "Payload",
+    "autopilots.webhookPayload.contentType": "Content-Type：{{type}}",
+    "autopilots.webhookPayload.copy": "复制",
+    "autopilots.webhookPayload.copiedShort": "已复制",
+    "autopilots.webhookPayload.truncatedMarker": "[已截断——点击\"复制\"获取完整 payload]",
     // Iteration-88 web alignment: edit mode / project / squad assignee.
     "autopilots.detail.edit": "编辑",
     "autopilots.detail.fieldProject": "项目",

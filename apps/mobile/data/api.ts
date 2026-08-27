@@ -3576,6 +3576,23 @@ class ApiClient {
     );
   }
 
+  // Returns a single run including its full trigger_payload. List responses
+  // omit trigger_payload to keep them small (a webhook envelope can be up
+  // to 256 KiB × limit rows), so the run-detail view fetches on demand.
+  async getAutopilotRun(
+    autopilotId: string,
+    runId: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<AutopilotRun> {
+    return this.fetchValidatedWith(
+      `/api/autopilots/${autopilotId}/runs/${runId}`,
+      AutopilotRunSchema,
+      FALLBACK_AUTOPILOT_RUN,
+      { method: "GET" },
+      { ...opts, endpoint: "GET /api/autopilots/:id/runs/:runId" },
+    );
+  }
+
   // Manual "run now" returns 200 even when admission blocks the run (status
   // skipped/failed) — the UI branches on status/reason_code to avoid a
   // false-success toast (MUL-4525), so the response must be schema-parsed.

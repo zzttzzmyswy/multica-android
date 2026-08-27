@@ -41,9 +41,14 @@ import { IconButton } from "@/components/ui/icon-button";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
 import { DeliveriesSection } from "@/components/autopilot/deliveries-section";
+import {
+  TriggerPayloadPreview,
+  TriggerPayloadSkeleton,
+} from "@/components/autopilot/trigger-payload-preview";
 import { ActionSheet } from "@/lib/action-sheet";
 import {
   autopilotDetailOptions,
+  autopilotRunOptions,
   autopilotRunsOptions,
 } from "@/data/queries/autopilots";
 import {
@@ -614,6 +619,8 @@ export default function AutopilotDetailPage() {
               wsSlug={wsSlug}
               theme={theme}
               t={t}
+              wsId={wsId}
+              autopilotId={id}
             />
           ))
         )}
@@ -808,12 +815,26 @@ function RunRow({
   wsSlug,
   theme,
   t,
+  wsId,
+  autopilotId,
 }: {
   run: AutopilotRun;
   wsSlug: string | null;
   theme: (typeof THEME)["light"];
   t: (id: string) => string;
+  wsId: string | null;
+  autopilotId: string;
 }) {
+  const isWebhookRun = run.source === "webhook";
+  // The run-list endpoint omits trigger_payload; fetch the full run on
+  // demand (mirroring web's WebhookPayloadSlot) once the user expands.
+  const [payloadOpen, setPayloadOpen] = useState(false);
+  const payloadQuery = useQuery(
+    autopilotRunOptions(wsId, autopilotId, run.id, {
+      enabled: payloadOpen && isWebhookRun,
+    }),
+  );
+
   const visual = runVisual(run.status);
   const statusLabel =
     run.status === "issue_created" ||
@@ -881,15 +902,58 @@ function RunRow({
     </View>
   );
 
-  if (hasIssue && wsSlug && run.issue_id) {
-    return (
-      <Pressable
-        onPress={() => router.push(`/${wsSlug}/issue/${run.issue_id}`)}
-        className="active:bg-secondary rounded-lg border border-border px-3"
-      >
-        {content}
-      </Pressable>
-    );
-  }
-  return <View className="rounded-lg border border-border px-3">{content}</View>;
+  const main = hasIssue && wsSlug && run.issue_id ? (
+    <Pressable
+      onPress={() => router.push(`/${wsSlug}/issue/${run.issue_id}`)}
+      className="active:bg-secondary px-3"
+    >
+      {content}
+    </Pressable>
+  ) : (
+    <View className="px-3">{content}</View>
+  );
+
+  return (
+    <View className="rounded-lg border border-border overflow-hidden">
+      {main}
+      {isWebhookRun ? (
+        <>
+          <Pressable
+            onPress={() => setPayloadOpen((v) => !v)}
+            accessibilityRole="button"
+            className="flex-row items-center gap-1.5 border-t border-border px-3 py-1.5 active:bg-secondary"
+          >
+            <Ionicons
+              name="git-network-outline"
+              size={12}
+              color={theme.mutedForeground}
+            />
+            <Text className="flex-1 text-xs text-muted-foreground">
+              {t("autopilots.webhookPayload.view")}
+            </Text>
+            <Ionicons
+              name={payloadOpen ? "chevron-up" : "chevron-down"}
+              size={12}
+              color={theme.mutedForeground}
+            />
+          </Pressable>
+          {payloadOpen ? (
+            <View className="border-t border-border bg-background">
+              {payloadQuery.isLoading ? (
+                <TriggerPayloadSkeleton />
+              ) : payloadQuery.data?.trigger_payload != null ? (
+                <TriggerPayloadPreview
+                  payload={payloadQuery.data.trigger_payload}
+                />
+              ) : (
+                <Text className="px-3 py-2 text-xs text-muted-foreground">
+                  {t("autopilots.webhookPayload.none")}
+                </Text>
+              )}
+            </View>
+          ) : null}
+        </>
+      ) : null}
+    </View>
+  );
 }

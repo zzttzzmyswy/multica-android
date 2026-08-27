@@ -16,6 +16,8 @@ export const autopilotKeys = {
     [...autopilotKeys.all(wsId), "detail", id] as const,
   runs: (wsId: string | null, id: string) =>
     [...autopilotKeys.all(wsId), "runs", id] as const,
+  run: (wsId: string | null, autopilotId: string, runId: string) =>
+    [...autopilotKeys.all(wsId), "runs", autopilotId, "run", runId] as const,
   deliveries: (wsId: string | null, id: string) =>
     [...autopilotKeys.all(wsId), "deliveries", id] as const,
   delivery: (wsId: string | null, autopilotId: string, deliveryId: string) =>
@@ -48,6 +50,24 @@ export const autopilotRunsOptions = (
       api.listAutopilotRuns(id, { limit: options?.limit }, { signal }),
     select: (data) => data.runs,
     enabled: !!wsId && !!id,
+  });
+
+// Fetches a single run with its full trigger_payload. The list endpoint
+// (autopilotRunsOptions) omits trigger_payload to keep responses small, so
+// the run-detail view fetches this lazily when a webhook run is opened —
+// mirroring web `packages/core/autopilots/queries.ts` autopilotRunOptions.
+export const autopilotRunOptions = (
+  wsId: string | null,
+  autopilotId: string,
+  runId: string,
+  options?: { enabled?: boolean },
+) =>
+  queryOptions({
+    queryKey: autopilotKeys.run(wsId, autopilotId, runId),
+    queryFn: ({ signal }) =>
+      api.getAutopilotRun(autopilotId, runId, { signal }),
+    enabled:
+      !!wsId && !!autopilotId && !!runId && options?.enabled !== false,
   });
 
 export const autopilotDeliveriesOptions = (
