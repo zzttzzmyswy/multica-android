@@ -93,6 +93,18 @@ describe("autopilot create/trigger i18n", () => {
     "autopilots.templates.weekly_progress.title": "每周进度报告",
     "autopilots.templates.dependency_audit.title": "依赖审计",
     "autopilots.templates.documentation_check.title": "文档检查",
+    // Iteration-109 web alignment: schedule editor (at / every / weekly /
+    // monthly / advanced cron + next-runs preview).
+    "autopilots.schedule_editor.time_label": "时间",
+    "autopilots.schedule_editor.time_at": "定点",
+    "autopilots.schedule_editor.time_every": "按间隔",
+    "autopilots.schedule_editor.days_label": "重复",
+    "autopilots.schedule_editor.days_monthly": "每月",
+    "autopilots.schedule_editor.next_runs_label": "接下来",
+    "autopilots.schedule_editor.cron_invalid": "该 cron 表达式无效。",
+    "autopilots.schedule_editor.describe.time_every_minutes": "每 {{interval}} 分钟",
+    "autopilots.schedule_editor.describe.days_monthly": "每月 {{day}} 日",
+    "autopilots.schedule_editor.countdown.less_than_minute": "不到 1 分",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {

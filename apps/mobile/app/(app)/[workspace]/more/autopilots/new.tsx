@@ -25,9 +25,10 @@ import type { WebhookEventFilter } from "@multica/core/types";
 import { buildAutopilotWebhookUrl } from "@multica/core/autopilots/webhook";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
-import { TextField } from "@/components/ui/text-field";
 import { EventFilterEditor } from "@/components/autopilot/event-filter-editor";
-import { TimezonePickerSheet } from "@/components/autopilot/timezone-picker-sheet";
+import {
+  ScheduleEditor,
+} from "@/components/autopilot/schedule-editor";
 import {
   AutopilotForm,
   type AutopilotFormHandle,
@@ -37,6 +38,9 @@ import { useCreateAutopilot, useCreateAutopilotTrigger } from "@/data/mutations/
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { getApiBaseUrl } from "@/data/server-config";
 import { buildTriggerCreate, probeSchedule } from "@/lib/autopilot-trigger-form";
+import { getDefaultScheduleConfig } from "@/lib/schedule-editor-model";
+import type { ScheduleConfig } from "@/lib/schedule-editor-model";
+import { parseCron, toCron } from "@/lib/schedule-editor-cron";
 import {
   AUTOPILOT_TEMPLATES,
   isTemplateId,
@@ -55,9 +59,8 @@ type TriggerChoice = "none" | "schedule" | "webhook";
 
 export default function NewAutopilotPage() {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   // Empty-state quick-start prefill: `?template=<id>` (list page template
   // cards) fills title / prompt / a schedule trigger; unknown ids fall back
@@ -75,12 +78,15 @@ export default function NewAutopilotPage() {
   const [triggerKind, setTriggerKind] = useState<TriggerChoice>(
     template ? "schedule" : "none",
   );
-  const [cronExpression, setCronExpression] = useState(
-    template ? (templateScheduleToCron(template.schedule) ?? "") : "",
-  );
-  const [timezone, setTimezone] = useState("Asia/Shanghai");
+  // Structured schedule state for the ScheduleEditor. A template prefill is a
+  // cron expression — hydrate it back into the model (raw stays set when the
+  // template's schedule is beyond the model, e.g. weekdays-only).
+  const [schedule, setSchedule] = useState<ScheduleConfig>(() => {
+    const cron = template ? (templateScheduleToCron(template.schedule) ?? "") : "";
+    return cron ? parseCron(cron, "Asia/Shanghai") : getDefaultScheduleConfig("Asia/Shanghai");
+  });
+  const [scheduleValid, setScheduleValid] = useState(true);
   const [eventFilters, setEventFilters] = useState<WebhookEventFilter[]>([]);
-  const [tzPickerOpen, setTzPickerOpen] = useState(false);
 
   const createAutopilot = useCreateAutopilot();
   const createTrigger = useCreateAutopilotTrigger();
@@ -91,6 +97,9 @@ export default function NewAutopilotPage() {
       if (isSubmitting) return;
       try {
         const scheduleChosen = triggerKind === "schedule";
+        // The ScheduleEditor always has a value; this guards the (impossible)
+        // empty-raw edge rather than the happy path.
+        const cronExpression = schedule.raw === null ? toCron(schedule) : schedule.raw;
         if (scheduleChosen && cronExpression.trim().length === 0) {
           Alert.alert(
             t("autopilots.trigger.scheduleInvalidTitle"),
@@ -102,7 +111,7 @@ export default function NewAutopilotPage() {
           const rejection = await probeSchedule(
             (params) => api.cronPreview(params),
             cronExpression.trim(),
-            timezone.trim(),
+            schedule.timezone.trim(),
           );
           if (rejection) {
             Alert.alert(
@@ -126,7 +135,7 @@ export default function NewAutopilotPage() {
                 ? buildTriggerCreate({
                     kind: "schedule",
                     cronExpression,
-                    timezone,
+                    timezone: schedule.timezone,
                     label: "",
                     enabled: true,
                     eventFilters: [],
@@ -183,8 +192,7 @@ export default function NewAutopilotPage() {
     [
       isSubmitting,
       triggerKind,
-      cronExpression,
-      timezone,
+      schedule,
       eventFilters,
       wsSlug,
       createAutopilot,
@@ -197,7 +205,7 @@ export default function NewAutopilotPage() {
     () => (
       <Button
         size="sm"
-        disabled={isSubmitting}
+        disabled={isSubmitting || (triggerKind === "schedule" && !scheduleValid)}
         onPress={() => formRef.current?.submit()}
       >
         <Text>
@@ -207,7 +215,7 @@ export default function NewAutopilotPage() {
         </Text>
       </Button>
     ),
-    [isSubmitting, t],
+    [isSubmitting, triggerKind, scheduleValid, t],
   );
 
   return (
@@ -267,41 +275,13 @@ export default function NewAutopilotPage() {
           </View>
 
           {triggerKind === "schedule" ? (
-            <View className="mt-2 gap-3">
-              <View className="gap-1.5">
-                <FieldLabel
-                  icon="time-outline"
-                  text={t("autopilots.trigger.cron")}
-                />
-                <TextField
-                  value={cronExpression}
-                  onChangeText={setCronExpression}
-                  placeholder={t("autopilots.trigger.cronPlaceholder")}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!isSubmitting}
-                />
-                <Text className="text-xs text-muted-foreground/80">
-                  {t("autopilots.trigger.cronHint")}
-                </Text>
-              </View>
-              <Pressable
-                onPress={() => setTzPickerOpen(true)}
+            <View className="mt-2">
+              <ScheduleEditor
+                value={schedule}
+                onChange={setSchedule}
+                wsId={wsId ?? ""}
                 disabled={isSubmitting}
-                accessibilityLabel={t("autopilots.trigger.timezone")}
-                className="flex-row items-center gap-2 rounded-md border border-border bg-secondary/50 px-3 py-2.5"
-              >
-                <Ionicons name="globe-outline" size={16} color={muted} />
-                <Text className="flex-1 text-sm text-foreground">
-                  {timezone}
-                </Text>
-                <Ionicons name="chevron-down" size={16} color={muted} />
-              </Pressable>
-              <TimezonePickerSheet
-                visible={tzPickerOpen}
-                value={timezone}
-                onPick={setTimezone}
-                onClose={() => setTzPickerOpen(false)}
+                onValidityChange={setScheduleValid}
               />
             </View>
           ) : null}
