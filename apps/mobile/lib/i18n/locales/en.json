@@ -2703,5 +2703,13 @@
   "usage.totalCost": "Cost",
   "usage.metricCost": "Cost",
   "usage.dayTrendCostTitle": "Daily cost",
-  "usage.cacheWriteLabel": "Cache write"
+  "usage.cacheWriteLabel": "Cache write",
+  "chat.queue.title": "{{count}} queued messages",
+  "chat.queue.clear": "Clear all",
+  "chat.queue.steer": "Steer",
+  "chat.queue.steerUnavailable": "Steer is available after the current reply starts",
+  "chat.queue.edit": "Edit queued message",
+  "chat.queue.remove": "Remove queued message",
+  "chat.queue.fallback": "Queued message",
+  "chat.queue.actionFailed": "Couldn't update the queued message"
 }

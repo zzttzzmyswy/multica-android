@@ -52,6 +52,7 @@ import type {
   PinnedItem,
   PersonalAccessToken,
   PendingChatTasksResponse,
+  PrioritizeQueuedChatTaskResponse,
   Project,
   ProjectResource,
   ResourceLabelsResponse,
@@ -534,6 +535,18 @@ export const ChatPendingTaskSchema: z.ZodType<ChatPendingTask> = z.object({
 }).loose();
 
 export const EMPTY_CHAT_PENDING_TASK: ChatPendingTask = {};
+
+/** Mirrors web's PrioritizeQueuedChatTaskResponseSchema
+ *  (packages/core/api/schemas.ts:1516) — Steer 的响应携带被引导的
+ *  task_id 与（可选的）被抢占的 active_task_id。 */
+export const PrioritizeQueuedChatTaskResponseSchema:
+  z.ZodType<PrioritizeQueuedChatTaskResponse> = z.object({
+    task_id: z.string(),
+    active_task_id: z.string().optional(),
+  }).loose();
+
+export const EMPTY_PRIORITIZE_QUEUED_CHAT_TASK_RESPONSE:
+  PrioritizeQueuedChatTaskResponse = { task_id: "" };
 
 /** Aggregate of in-flight chat tasks for the current user in this workspace
  *  (GET /api/chat/pending-tasks) — the IM list's "typing…" indicator source.

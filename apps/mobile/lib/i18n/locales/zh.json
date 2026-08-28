@@ -2699,5 +2699,13 @@
   "usage.totalCost": "费用",
   "usage.metricCost": "费用",
   "usage.dayTrendCostTitle": "每日费用",
-  "usage.cacheWriteLabel": "缓存写入"
+  "usage.cacheWriteLabel": "缓存写入",
+  "chat.queue.title": "{{count}} 条排队消息",
+  "chat.queue.clear": "全部清空",
+  "chat.queue.steer": "引导",
+  "chat.queue.steerUnavailable": "当前回复开始后才能引导",
+  "chat.queue.edit": "编辑排队消息",
+  "chat.queue.remove": "移除排队消息",
+  "chat.queue.fallback": "排队消息",
+  "chat.queue.actionFailed": "无法更新排队消息"
 }

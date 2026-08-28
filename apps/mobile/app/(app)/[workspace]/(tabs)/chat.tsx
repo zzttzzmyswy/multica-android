@@ -51,10 +51,12 @@ import type {
   Agent,
   ChatMessage,
   ChatPendingTask,
+  ChatQueuedTask,
 } from "@multica/core/types";
 import {
   enqueuePendingChatTask,
   hideQueuedChatMessages,
+  prioritizePendingChatTask,
   removePendingChatTask,
 } from "@multica/core/chat/pending";
 import { api } from "@/data/api";
@@ -88,12 +90,14 @@ import { canAssignAgent } from "@/lib/can-assign-agent";
 import { useWorkspaceAgentAvailability } from "@/lib/workspace-agent-availability";
 import { didPendingTaskFinish, isPendingTaskActive } from "@/lib/chat-task-polling";
 import { useAgentPresence } from "@/lib/use-agent-presence";
+import { queueEditDraftText } from "@/lib/chat-queue";
 import { Header } from "@/components/ui/header";
 import { ChatTitleButton } from "@/components/chat/chat-title-button";
 import { ChatSessionActions } from "@/components/chat/chat-session-actions";
 import { useChatSessionActions } from "@/components/chat/session-actions";
 import { ChatMessageList } from "@/components/chat/chat-message-list";
 import { ChatComposer } from "@/components/chat/chat-composer";
+import { ChatQueue } from "@/components/chat/chat-queue";
 import { AgentPickerSheet } from "@/components/chat/agent-picker-sheet";
 import { NoAgentBanner } from "@/components/chat/no-agent-banner";
 import { OfflineBanner } from "@/components/chat/offline-banner";
@@ -410,6 +414,90 @@ export default function ChatTab() {
       .finally(() => invalidatePendingTask(qc, sessionId));
   }, [pendingTask?.task_id, pendingTask?.status, activeSessionId, qc]);
 
+  // ── Chat queue (queued-task) actions ───────────────────────────────────
+  const patchPending = useCallback(
+    (updater: (old: ChatPendingTask | undefined) => ChatPendingTask) => {
+      if (!activeSessionId) return;
+      qc.setQueryData<ChatPendingTask>(chatKeys.pendingTask(activeSessionId), updater);
+    },
+    [activeSessionId, qc],
+  );
+
+  const handleQueueSendNow = useCallback(
+    async (task: ChatQueuedTask) => {
+      if (!activeSessionId) return;
+      const sessionId = activeSessionId;
+      // 乐观把目标任务提到队首；无论成败 finally 一律以 pending-task 权威刷新。
+      patchPending((old) => prioritizePendingChatTask(old, task.task_id));
+      try {
+        const result = await api.prioritizeQueuedChatTask(
+          sessionId,
+          task.task_id,
+        );
+        if (result.task_id !== task.task_id) {
+          throw new Error("invalid prioritize response");
+        }
+        if (result.active_task_id) {
+          // 目标已接管 head —— 停掉先前 running 的任务（web 同路径经
+          // cancelChatTask 停止，见 use-chat-task-actions.ts）。
+          await api.cancelTaskById(result.active_task_id).catch(() => {
+            // Silent — the task may have already terminated.
+          });
+        }
+      } finally {
+        invalidatePendingTask(qc, sessionId);
+      }
+    },
+    [activeSessionId, patchPending, qc],
+  );
+
+  const handleQueueEdit = useCallback(
+    async (task: ChatQueuedTask) => {
+      if (!activeSessionId) return;
+      const sessionId = activeSessionId;
+      try {
+        // queue_action=edit 在服务端取消排队任务；成功后把内容回填 composer。
+        await api.cancelTaskById(task.task_id, {
+          queuedAction: "edit",
+          sessionId,
+        });
+        setDraft(sessionId, queueEditDraftText(task) ?? t("chat.queue.fallback"));
+      } finally {
+        patchPending((old) => removePendingChatTask(old, task.task_id));
+        invalidatePendingTask(qc, sessionId);
+      }
+    },
+    [activeSessionId, patchPending, setDraft, t, qc],
+  );
+
+  const handleQueueRemove = useCallback(
+    async (task: ChatQueuedTask) => {
+      if (!activeSessionId) return;
+      const sessionId = activeSessionId;
+      try {
+        await api.cancelTaskById(task.task_id, {
+          queuedAction: "remove",
+          sessionId,
+        });
+      } finally {
+        patchPending((old) => removePendingChatTask(old, task.task_id));
+        invalidatePendingTask(qc, sessionId);
+      }
+    },
+    [activeSessionId, patchPending, qc],
+  );
+
+  const handleQueueClear = useCallback(async () => {
+    if (!activeSessionId) return;
+    const sessionId = activeSessionId;
+    try {
+      await api.clearQueuedChatTasks(sessionId);
+      patchPending((old) => (old ? { ...old, queued_tasks: [] } : {}));
+    } finally {
+      invalidatePendingTask(qc, sessionId);
+    }
+  }, [activeSessionId, patchPending, qc]);
+
   // ── Header / sheet actions ─────────────────────────────────────────────
   const handleNewChat = useCallback(() => {
     if (availableAgents.length > 1) {
@@ -509,6 +597,13 @@ export default function ChatTab() {
           <RuntimeRequiredBanner agentName={currentAgent.name} />
         ) : null}
         <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
+          <ChatQueue
+            pendingTask={pendingTask}
+            onSendNow={handleQueueSendNow}
+            onEdit={handleQueueEdit}
+            onRemove={handleQueueRemove}
+            onClear={handleQueueClear}
+          />
           <ChatComposer
             value={draft}
             onChangeText={(next) => setDraft(draftKey, next)}
