@@ -26,9 +26,18 @@ import { Markdown } from "@/lib/markdown";
 import { taskMessagesOptions } from "@/data/queries/chat";
 import { liveLogPollMs } from "@/lib/task-log-live";
 import { partitionTaskLog } from "@/lib/task-log";
+import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
 
-export function RunLog({ taskId, live = false }: { taskId: string; live?: boolean }) {
+export function RunLog({
+  taskId,
+  live = false,
+  embedded = false,
+}: {
+  taskId: string;
+  live?: boolean;
+  embedded?: boolean;
+}) {
   const { t } = useTranslation();
   const { data = [], isLoading, isError, refetch } = useQuery({
     ...taskMessagesOptions(taskId),
@@ -62,7 +71,7 @@ export function RunLog({ taskId, live = false }: { taskId: string; live?: boolea
   const hasContent = processSteps.length > 0 || textFragments.length > 0;
   if (!hasContent) {
     return (
-      <View className="ml-9 mt-1 gap-1">
+      <View className={embedded ? "gap-1" : "ml-9 mt-1 gap-1"}>
         {live ? <LiveBadge label={t("runs.liveLog")} /> : null}
         <Text className="py-1 text-xs text-muted-foreground">{t("runs.noLogsYet")}</Text>
       </View>
@@ -70,7 +79,12 @@ export function RunLog({ taskId, live = false }: { taskId: string; live?: boolea
   }
 
   return (
-    <View className="ml-9 mt-1 rounded-lg border border-border bg-muted/20 px-2 py-2 gap-2">
+    <View
+      className={cn(
+        "rounded-lg border border-border bg-muted/20 px-2 py-2 gap-2",
+        !embedded && "ml-9 mt-1",
+      )}
+    >
       {live ? <LiveBadge label={t("runs.liveLog")} /> : null}
       {textFragments.map((text, i) => (
         <Markdown key={i} content={text} />

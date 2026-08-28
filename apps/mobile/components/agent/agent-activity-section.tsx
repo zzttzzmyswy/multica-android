@@ -56,6 +56,8 @@ import {
   sortRecentAgentTasks,
   summarizeActivityWindow,
 } from "@/lib/agent-activity";
+import { isTranscriptViewable } from "@/lib/task-transcript";
+import { RunTranscriptDialog } from "./run-transcript-dialog";
 
 // Task status → text color, sharing `enum.taskStatus` vocabulary with the
 // rest of the app.
@@ -306,11 +308,13 @@ function ActivityTaskRow({
   onCancel?: (taskId: string) => void;
 }) {
   const { t } = useTranslation();
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
 
   const hasIssue = Boolean(task.issue_id);
   const cancellable = Boolean(
     mode === "active" && onCancel && CANCELLABLE_TASK_STATUSES.has(task.status),
   );
+  const showTranscript = isTranscriptViewable(task.status);
   const statusLabel = t(`enum.taskStatus.${task.status}`);
   const statusClass = TASK_CLASS[task.status] ?? "text-muted-foreground";
 
@@ -410,11 +414,34 @@ function ActivityTaskRow({
       ) : cancelling ? (
         <ActivityIndicator size="small" color={theme.mutedForeground} />
       ) : null}
+      {showTranscript ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("agents.activity.viewTranscript")}
+          onPress={() => setTranscriptOpen(true)}
+          hitSlop={8}
+          className="active:opacity-60"
+        >
+          <Ionicons
+            name="document-text-outline"
+            size={18}
+            color={theme.mutedForeground}
+          />
+        </Pressable>
+      ) : null}
       {hasIssue ? (
         <Ionicons name="open-outline" size={16} color={theme.mutedForeground} />
       ) : null}
     </View>
   );
+
+  const transcriptDialog = transcriptOpen ? (
+    <RunTranscriptDialog
+      taskId={task.id}
+      taskStatus={task.status}
+      onClose={() => setTranscriptOpen(false)}
+    />
+  ) : null;
 
   if (hasIssue && wsSlug) {
     return (
@@ -425,10 +452,16 @@ function ActivityTaskRow({
         className="active:bg-secondary"
       >
         {content}
+        {transcriptDialog}
       </Pressable>
     );
   }
-  return content;
+  return (
+    <>
+      {content}
+      {transcriptDialog}
+    </>
+  );
 }
 
 function timeOf(task: AgentTask): string {

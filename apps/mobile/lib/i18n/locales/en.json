@@ -126,6 +126,8 @@
   "agents.activity.cancelTask": "Cancel",
   "agents.activity.cancelling": "Cancelling…",
   "agents.activity.cancelFailedToast": "Failed to cancel task",
+  "agents.activity.viewTranscript": "View transcript",
+  "agents.activity.transcriptTitle": "Task transcript",
   "agents.activity.startedPrefix": "Started {{when}}",
   "agents.activity.dispatchedPrefix": "Dispatched {{when}}",
   "agents.activity.queuedPrefix": "Queued {{when}}",

@@ -126,6 +126,8 @@
   "agents.activity.cancelTask": "取消",
   "agents.activity.cancelling": "取消中…",
   "agents.activity.cancelFailedToast": "取消失败，请重试",
+  "agents.activity.viewTranscript": "查看执行记录",
+  "agents.activity.transcriptTitle": "任务执行记录",
   "agents.activity.startedPrefix": "开始于 {{when}}",
   "agents.activity.dispatchedPrefix": "调度于 {{when}}",
   "agents.activity.queuedPrefix": "排队于 {{when}}",

@@ -72,6 +72,8 @@ describe("agents list/detail i18n", () => {
     "agents.activity.failedCount": "失败 {{count}} 次",
     "agents.activity.cancelTask": "取消",
     "agents.activity.cancelFailedToast": "取消失败，请重试",
+    "agents.activity.viewTranscript": "查看执行记录",
+    "agents.activity.transcriptTitle": "任务执行记录",
     "agents.createButton": "新建",
     "agents.rowActions.duplicate": "复制",
     "agents.duplicate.copySuffix": "（副本）",
