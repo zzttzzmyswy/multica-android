@@ -10,13 +10,16 @@
  * ES5-era equivalents (.sort, an explicit reverse index loop).
  *
  * Behavior-parity points with web:
- *  - aggregateDailyTokens sorts dates ascending (chart x-axis oldest→newest)
+ *  - aggregateDailyTokens / aggregateDailyCost sort dates ascending (chart
+ *    x-axis oldest→newest)
  *  - computeDailyTotals sums task_count across rows (an accepted KPI
  *    approximation — a task spanning two days/models counts twice, same as web)
+ *    and cost via estimateCost (authoritative ticks + rate-table estimate)
  *  - deleted/restricted spend folding now lives in lib/usage-time.ts
  *    (bucketAgentDashboardRows), which carries the merged token+run-time rows
  */
 import type { DashboardUsageByAgent, DashboardUsageDaily } from "@multica/core/types";
+import { estimateCost, estimateCostBreakdown } from "./runtime-usage";
 
 export interface UsageDailyAggregate {
   /** YYYY-MM-DD server bucket (already in workspace tz). */
@@ -37,12 +40,16 @@ export interface UsageTotals {
   cacheWrite: number;
   total: number;
   taskCount: number;
+  /** Whole-window cost (authoritative + rate-table estimate), USD. */
+  cost: number;
 }
 
 export interface AgentUsageRow {
   agentId: string;
   tokens: number;
   taskCount: number;
+  /** Per-agent cost (authoritative + estimated), USD (web leaderboard parity). */
+  cost: number;
 }
 
 /** Sentinel the SERVER emits for the bucket of agents it refuses to name. */
@@ -121,6 +128,17 @@ export function aggregateDailyTokens(
     .map(([date, t]) => ({ date, label: formatDateLabel(date), ...t }));
 }
 
+export interface DailyCostRow {
+  /** YYYY-MM-DD server bucket (already in workspace tz). */
+  date: string;
+  /** Short local label like "8/16", mirrors web formatDateLabel. */
+  label: string;
+  input: number;
+  output: number;
+  cacheWrite: number;
+  total: number;
+}
+
 /** Whole-window totals for the KPI tiles (token rollup, tasks are KPI-approx). */
 export function computeDailyTotals(usage: DashboardUsageDaily[]): UsageTotals {
   return usage.reduce<UsageTotals>(
@@ -132,22 +150,58 @@ export function computeDailyTotals(usage: DashboardUsageDaily[]): UsageTotals {
       total:
         acc.total + u.input_tokens + u.output_tokens + u.cache_read_tokens + u.cache_write_tokens,
       taskCount: acc.taskCount + u.task_count,
+      cost: acc.cost + estimateCost(u),
     }),
-    { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0, taskCount: 0 },
+    { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0, taskCount: 0, cost: 0 },
   );
 }
 
 /**
+ * Per-(date, model) rows → one row per date with cost broken into the three
+ * segments the stacked bar / breakdown rows consume (web aggregateDailyCost
+ * parity). Segments round to 2 decimals; unpriced rows land as an
+ * authoritative charge whole in the input bucket.
+ */
+export function aggregateDailyCost(usage: DashboardUsageDaily[]): DailyCostRow[] {
+  const map = new Map<string, { input: number; output: number; cacheWrite: number }>();
+  for (const u of usage) {
+    const b = estimateCostBreakdown(u);
+    const entry = map.get(u.date) ?? { input: 0, output: 0, cacheWrite: 0 };
+    entry.input += b.input;
+    entry.output += b.output;
+    entry.cacheWrite += b.cacheWrite;
+    map.set(u.date, entry);
+  }
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, s]) => {
+      const round = (n: number) => Math.round(n * 100) / 100;
+      const input = round(s.input);
+      const output = round(s.output);
+      const cacheWrite = round(s.cacheWrite);
+      return {
+        date,
+        label: formatDateLabel(date),
+        input,
+        output,
+        cacheWrite,
+        total: round(input + output + cacheWrite),
+      };
+    });
+}
+
+/**
  * Per-(agent, model) rows → one row per agent, tokens desc so the heaviest
- * spender lands first. Sorted by tokens: this backend reports cost zero
- * (uncosted), which is web's cost-desc tiebreaker exhausted to the same order.
+ * spender lands first (cost rides along — the leaderboard re-ranks by
+ * whichever metric the reader picks).
  */
 export function aggregateByAgent(rows: DashboardUsageByAgent[]): AgentUsageRow[] {
   const map = new Map<string, AgentUsageRow>();
   for (const r of rows) {
-    const entry = map.get(r.agent_id) ?? { agentId: r.agent_id, tokens: 0, taskCount: 0 };
+    const entry = map.get(r.agent_id) ?? { agentId: r.agent_id, tokens: 0, taskCount: 0, cost: 0 };
     entry.tokens += r.input_tokens + r.output_tokens + r.cache_read_tokens + r.cache_write_tokens;
     entry.taskCount += r.task_count;
+    entry.cost += estimateCost(r);
     map.set(r.agent_id, entry);
   }
   return Array.from(map.values()).sort((a, b) => b.tokens - a.tokens);

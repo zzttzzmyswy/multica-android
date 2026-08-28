@@ -36,8 +36,13 @@ const runTime = (
     cancelled_count,
   }));
 
-const token = (rows: [string, number, number][]): AgentUsageRow[] =>
-  rows.map(([agentId, tokens, taskCount]) => ({ agentId, tokens, taskCount }));
+const token = (rows: [string, number, number, number?][]): AgentUsageRow[] =>
+  rows.map(([agentId, tokens, taskCount, cost]) => ({
+    agentId,
+    tokens,
+    taskCount,
+    cost: cost ?? 0,
+  }));
 
 describe("aggregateDailyTime", () => {
   it("maps per-date run-time rows with a label, ascending", () => {
@@ -157,12 +162,30 @@ describe("mergeAgentDashboardRows", () => {
     expect(b?.taskCount).toBe(1);
   });
 
+  it("carries per-agent cost from the token rollup, zero for run-time-only", () => {
+    const merged = mergeAgentDashboardRows(
+      token([
+        ["agent-a", 1000, 1, 12.5],
+        ["agent-b", 200, 1],
+      ]),
+      runTime([
+        ["agent-a", 3600, 3, 1, 0],
+        ["agent-b", 60, 1, 0, 0],
+        ["agent-c", 120, 1, 1, 0], // spent no tokens but did run
+      ]),
+    );
+    const a = merged.find((r) => r.agentId === "agent-a");
+    expect(a?.cost).toBeCloseTo(12.5, 10);
+    const c = merged.find((r) => r.agentId === "agent-c");
+    expect(c?.cost).toBe(0);
+  });
+
   it("falls back to the token taskCount when an agent has no run-time row", () => {
     const merged = mergeAgentDashboardRows(
       token([["agent-a", 100, 4]]),
       runTime([]),
     );
-    expect(merged[0]).toMatchObject({ agentId: "agent-a", tokens: 100, taskCount: 4, seconds: 0 });
+    expect(merged[0]).toMatchObject({ agentId: "agent-a", tokens: 100, taskCount: 4, seconds: 0, cost: 0 });
   });
 
   it("sorts by tokens desc, tie-breaking on run time desc", () => {
@@ -198,9 +221,9 @@ describe("bucketAgentDashboardRows", () => {
   it("folds unknown agents into the deleted bucket, keeping spend visible", () => {
     const rows = mergeAgentDashboardRows(
       token([
-        ["a", 100, 1],
-        ["nope", 50, 2],
-        ["b", 30, 1],
+        ["a", 100, 1, 1.2],
+        ["nope", 50, 2, 0.8],
+        ["b", 30, 1, 0.3],
       ]),
       runTime([
         ["a", 60, 1, 0, 0],
@@ -210,6 +233,7 @@ describe("bucketAgentDashboardRows", () => {
     const out = bucketAgentDashboardRows(rows, new Set(["a", "b"]));
     const bucket = out.find((r) => r.agentId === DELETED_AGENTS_ROW_ID);
     expect(bucket?.tokens).toBe(50);
+    expect(bucket?.cost).toBeCloseTo(0.8, 10);
     // Deleted agents never contributed to the run-time rollups (they inner-join
     // the agent table), so the bucket carries no seconds or tasks (web parity).
     expect(bucket?.seconds).toBe(0);

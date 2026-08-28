@@ -36,6 +36,8 @@ export interface AgentDashboardRow {
   taskCount: number;
   /** Terminal-task run time in seconds (0 for agents with no finished runs). */
   seconds: number;
+  /** Per-agent cost (authoritative + estimated), USD (web leaderboard parity). */
+  cost: number;
 }
 
 export interface DailyTimeRow {
@@ -118,9 +120,10 @@ export function formatDuration(seconds: number, lessThanMinuteLabel: string): st
  * per-agent distinct count (COUNT(*) on (agent, terminal-task) in SQL). The
  * token rollup's per-(agent, model) counts double-count a task when it spans
  * multiple models, so we only fall back to it for agents with no terminal run
- * yet (in-flight tasks reported tokens but haven't completed). Sorted by
- * tokens desc, then run time desc (web merges on cost desc; mobile has no
- * pricing table, and its existing leaderboard already orders by tokens).
+ * yet (in-flight tasks reported tokens but haven't completed). Cost rides
+ * along from the token rollup (web merges on cost desc; the mobile
+ * leaderboard re-ranks client-side, so the default sort here stays tokens
+ * desc as before).
  */
 export function mergeAgentDashboardRows(
   tokenRows: AgentUsageRow[],
@@ -135,6 +138,7 @@ export function mergeAgentDashboardRows(
       tokens: r.tokens,
       seconds: rt?.total_seconds ?? 0,
       taskCount: rt ? rt.task_count : r.taskCount,
+      cost: r.cost,
     });
   }
   // Agents with run-time rows but zero tokens still belong on the list (a
@@ -146,6 +150,7 @@ export function mergeAgentDashboardRows(
       tokens: 0,
       seconds: r.total_seconds,
       taskCount: r.task_count,
+      cost: 0,
     });
   }
   return Array.from(merged.values()).sort(
@@ -174,6 +179,7 @@ export function bucketAgentDashboardRows(
     tokens: 0,
     seconds: 0,
     taskCount: 0,
+    cost: 0,
   };
   let hasDeleted = false;
   for (const r of rows) {
@@ -183,6 +189,7 @@ export function bucketAgentDashboardRows(
     }
     hasDeleted = true;
     bucket.tokens += r.tokens;
+    bucket.cost += r.cost;
   }
   return hasDeleted ? [...knownRows, bucket] : knownRows;
 }

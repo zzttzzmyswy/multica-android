@@ -2356,7 +2356,6 @@
   "usage.leaderboardTab": "Leaderboard",
   "usage.lessThanMinute": "<1m",
   "usage.loadError": "Failed to load usage: ",
-  "usage.metricCostNote": "Cost needs a client-side pricing table — not available yet",
   "usage.metricTasks": "Tasks",
   "usage.metricTime": "Time",
   "usage.metricTokens": "Tokens",
@@ -2700,5 +2699,9 @@
   "autopilots.schedule_editor.a11y.days_full.wed": "Wednesday",
   "autopilots.schedule_editor.a11y.days_full.thu": "Thursday",
   "autopilots.schedule_editor.a11y.days_full.fri": "Friday",
-  "autopilots.schedule_editor.a11y.days_full.sat": "Saturday"
+  "autopilots.schedule_editor.a11y.days_full.sat": "Saturday",
+  "usage.totalCost": "Cost",
+  "usage.metricCost": "Cost",
+  "usage.dayTrendCostTitle": "Daily cost",
+  "usage.cacheWriteLabel": "Cache write"
 }

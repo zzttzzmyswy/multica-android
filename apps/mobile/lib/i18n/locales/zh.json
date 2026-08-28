@@ -2352,7 +2352,6 @@
   "usage.leaderboardTab": "排行",
   "usage.lessThanMinute": "<1分钟",
   "usage.loadError": "加载用量失败：",
-  "usage.metricCostNote": "费用维度需依赖模型定价表，暂未提供",
   "usage.metricTasks": "task 数",
   "usage.metricTime": "运行时长",
   "usage.metricTokens": "Token",
@@ -2696,5 +2695,9 @@
   "autopilots.schedule_editor.a11y.days_full.wed": "周三",
   "autopilots.schedule_editor.a11y.days_full.thu": "周四",
   "autopilots.schedule_editor.a11y.days_full.fri": "周五",
-  "autopilots.schedule_editor.a11y.days_full.sat": "周六"
+  "autopilots.schedule_editor.a11y.days_full.sat": "周六",
+  "usage.totalCost": "费用",
+  "usage.metricCost": "费用",
+  "usage.dayTrendCostTitle": "每日费用",
+  "usage.cacheWriteLabel": "缓存写入"
 }

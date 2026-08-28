@@ -2,11 +2,17 @@
  * Workspace usage screen (push screen reached from the More popover).
  * Mirrors web `packages/views/dashboard` — the Usage and Errors surfaces:
  *
- *  - KPI tiles: total tokens, tasks, agent count.
- *  - Trend tab: per-day token bars (pure RN Views, no chart dep) + a daily
- *    breakdown (input / output / cache / total) — same numbers as web's
- *    UsageTrendCard via aggregateDailyTokens / computeDailyTotals.
- *  - Leaderboard tab: per-agent tokens + task counts, tokens desc. Unknown
+ *  - KPI tiles: Cost / Tokens / Run time / Tasks — the same four tiles as
+ *    web's KPI row; Cost sums estimateCost (authoritative ticks + the
+ *    rate-table estimate) via computeDailyTotals.
+ *  - Trend tab: per-day bars (pure RN Views, no chart dep) + a daily
+ *    breakdown, behind a four-way Tokens / Cost / Time / Tasks toggle — same
+ *    numbers as web's UsageTrendCard via aggregateDailyTokens /
+ *    aggregateDailyCost / computeDailyTotals. The Cost metric's detail rows
+ *    split input / output / cache-write dollars.
+ *  - Leaderboard tab: per-agent tokens / cost / run time / tasks with a
+ *    four-way rank control that re-orders the list, rescales the progress
+ *    bars, and adds a per-row `$` column (web Leaderboard parity). Unknown
  *    agents fold into the same synthetic buckets web renders (deleted /
  *    restricted), never a raw UUID — bucketUnknownAgentRows (MUL-3776 parity:
  *    per-agent rows must reconcile with the KPI totals, so spend is folded,
@@ -52,16 +58,18 @@ import { api } from "@/data/api";
 import { projectListOptions } from "@/data/queries/projects";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import {
-  activeAgentCount,
   aggregateByAgent,
+  aggregateDailyCost,
   aggregateDailyTokens,
   computeDailyTotals,
   DELETED_AGENTS_ROW_ID,
   formatTokens,
   isSyntheticAgentRow,
   RESTRICTED_AGENTS_ROW_ID,
+  type DailyCostRow,
   type UsageDailyAggregate,
 } from "@/lib/usage-format";
+import { formatUsd } from "@/lib/runtime-usage";
 import {
   aggregateDailyTasks,
   aggregateDailyTime,
@@ -100,7 +108,7 @@ import { cn } from "@/lib/utils";
 
 type Range = 1 | 7 | 30 | 90 | 180;
 type ViewMode = "trend" | "leaderboard" | "errors";
-type UsageMetric = "tokens" | "time" | "tasks";
+type UsageMetric = "tokens" | "cost" | "time" | "tasks";
 
 // Iteration 87: web TIME_RANGES parity (packages/views/dashboard/dashboard-shared).
 // The 1d/7d/30d/90d/180d set mirrors the web dashboard's page-scoped
@@ -202,6 +210,10 @@ export default function UsagePage() {
     () => aggregateDailyTokens(daily.data ?? []),
     [daily.data],
   );
+  const dailyCost = useMemo(
+    () => aggregateDailyCost(daily.data ?? []),
+    [daily.data],
+  );
   const totals = useMemo(
     () => computeDailyTotals(daily.data ?? []),
     [daily.data],
@@ -272,14 +284,13 @@ export default function UsagePage() {
     [failuresByAgent.data, agents.data],
   );
 
-  const agentCount = useMemo(
-    () => activeAgentCount(agentRows),
-    [agentRows],
-  );
-
   const maxDaily = useMemo(
     () => dailyRows.reduce((m, d) => Math.max(m, d.total), 0),
     [dailyRows],
+  );
+  const maxCost = useMemo(
+    () => dailyCost.reduce((m, d) => Math.max(m, d.total), 0),
+    [dailyCost],
   );
   const maxTime = useMemo(
     () => dailyTime.reduce((m, d) => Math.max(m, d.totalSeconds), 0),
@@ -292,10 +303,6 @@ export default function UsagePage() {
         0,
       ),
     [dailyTasks],
-  );
-  const maxAgent = useMemo(
-    () => agentRows.reduce((m, r) => Math.max(m, r.tokens), 0),
-    [agentRows],
   );
 
   const showEmpty =
@@ -429,10 +436,16 @@ export default function UsagePage() {
             </View>
 
             {/* KPI tiles — usage metrics; the Errors tab brings its own.
-                Tasks / Run time source from the run-time rollup (accurate
-                distinct counts), web parity. */}
+                Four tiles matching web's KPI row: Cost / Tokens / Run time /
+                Tasks. Cost comes from estimateCost via computeDailyTotals
+                (authoritative ticks + rate-table estimate). */}
             {mode !== "errors" ? (
               <View className="flex-row gap-3 px-4 py-3">
+                <KpiCard
+                  icon="cash-outline"
+                  label={t("usage.totalCost")}
+                  value={formatUsd(totals.cost)}
+                />
                 <KpiCard
                   icon="flash"
                   label={t("usage.totalTokens")}
@@ -452,11 +465,6 @@ export default function UsagePage() {
                   label={t("usage.totalTasks")}
                   value={String(runTimeTotals.taskCount)}
                   hint={t("usage.totalTasksHint", { failed: runTimeTotals.failedCount })}
-                />
-                <KpiCard
-                  icon="people-outline"
-                  label={t("usage.agents")}
-                  value={String(agentCount)}
                 />
               </View>
             ) : null}
@@ -481,9 +489,11 @@ export default function UsagePage() {
                 metric={metric}
                 onMetricChange={setMetric}
                 dailyTokens={dailyRows}
+                dailyCost={dailyCost}
                 dailyTime={dailyTime}
                 dailyTasks={dailyTasks}
                 maxTokens={maxDaily}
+                maxCost={maxCost}
                 maxTime={maxTime}
                 maxTasks={maxTasks}
                 colorScheme={colorScheme}
@@ -491,7 +501,6 @@ export default function UsagePage() {
             ) : mode === "leaderboard" ? (
               <LeaderboardSection
                 rows={agentRows}
-                max={maxAgent}
                 agentName={agentName}
                 colorScheme={colorScheme}
               />
@@ -754,27 +763,30 @@ function KpiCard({
   );
 }
 
-const METRIC_ORDER: UsageMetric[] = ["tokens", "time", "tasks"];
+const METRIC_ORDER: UsageMetric[] = ["tokens", "cost", "time", "tasks"];
 
 const METRIC_LABEL: Record<UsageMetric, string> = {
   tokens: "usage.metricTokens",
+  cost: "usage.metricCost",
   time: "usage.metricTime",
   tasks: "usage.metricTasks",
 };
 
 /**
- * Spend / run time / tasks over time: one x-axis, three metrics behind a
- * toggle so the reader can mentally overlay them (web UsageTrendCard parity;
- * cost is omitted — it needs a client-side model pricing table). Pure RN
+ * Spend over time: one x-axis, four metrics behind a toggle so the reader can
+ * mentally overlay them (web UsageTrendCard parity). Cost prices tokens via
+ * the same client-side rate table the runtime detail page uses. Pure RN
  * Views, no chart dependency.
  */
 function TrendSection({
   metric,
   onMetricChange,
   dailyTokens,
+  dailyCost,
   dailyTime,
   dailyTasks,
   maxTokens,
+  maxCost,
   maxTime,
   maxTasks,
   colorScheme,
@@ -782,9 +794,11 @@ function TrendSection({
   metric: UsageMetric;
   onMetricChange: (m: UsageMetric) => void;
   dailyTokens: UsageDailyAggregate[];
+  dailyCost: DailyCostRow[];
   dailyTime: DailyTimeRow[];
   dailyTasks: DailyTasksRow[];
   maxTokens: number;
+  maxCost: number;
   maxTime: number;
   maxTasks: number;
   colorScheme: "light" | "dark";
@@ -797,9 +811,11 @@ function TrendSection({
   const title =
     metric === "tokens"
       ? t("usage.dayTrendTitle")
-      : metric === "time"
-        ? t("usage.dayTrendTimeTitle")
-        : t("usage.dayTrendTasksTitle");
+      : metric === "cost"
+        ? t("usage.dayTrendCostTitle")
+        : metric === "time"
+          ? t("usage.dayTrendTimeTitle")
+          : t("usage.dayTrendTasksTitle");
 
   return (
     <View className="mt-3 px-4 gap-3">
@@ -825,6 +841,13 @@ function TrendSection({
             color={brand}
             noDataLabel={t("usage.noData")}
           />
+        ) : metric === "cost" ? (
+          <TrendBars
+            rows={dailyCost.map((d) => ({ date: d.date, label: d.label, value: d.total }))}
+            max={maxCost}
+            color={brand}
+            noDataLabel={t("usage.noData")}
+          />
         ) : metric === "time" ? (
           <TrendBars
             rows={dailyTime.map((d) => ({ date: d.date, label: d.label, value: d.totalSeconds }))}
@@ -835,10 +858,6 @@ function TrendSection({
         ) : (
           <TasksStack rows={dailyTasks} max={maxTasks} theme={theme} noDataLabel={t("usage.noData")} />
         )}
-
-        <Text className="mt-2 text-[9px] text-muted-foreground/70">
-          {t("usage.metricCostNote")}
-        </Text>
       </View>
 
       {/* Per-day detail rows for the active metric */}
@@ -865,8 +884,26 @@ function TrendSection({
                 </Text>
               </View>
             ))
-          : metric === "time"
-            ? dailyTime.map((d, idx) => {
+          : metric === "cost"
+            ? dailyCost.map((d, idx) => (
+                <View
+                  key={d.date}
+                  className={cn(
+                    "flex-row items-center gap-2 py-2.5",
+                    idx > 0 && "border-t border-border/60",
+                  )}
+                >
+                  <Text className="w-14 text-xs font-medium text-foreground">{d.label}</Text>
+                  <UsdCell label={t("usage.inputLabel")} value={d.input} muted={muted} />
+                  <UsdCell label={t("usage.outputLabel")} value={d.output} muted={muted} />
+                  <UsdCell label={t("usage.cacheWriteLabel")} value={d.cacheWrite} muted={muted} />
+                  <Text className="w-16 text-right text-xs font-semibold text-foreground">
+                    {formatUsd(d.total)}
+                  </Text>
+                </View>
+              ))
+            : metric === "time"
+              ? dailyTime.map((d, idx) => {
                 const tasksRow = dailyTasks.find((x) => x.date === d.date);
                 const taskCount = tasksRow
                   ? tasksRow.completed + tasksRow.failed + tasksRow.cancelled
@@ -1093,20 +1130,74 @@ function TokenCell({
   );
 }
 
+/** Right-aligned USD cell for the per-day cost breakdown rows. */
+function UsdCell({
+  label,
+  value,
+  muted,
+}: {
+  label: string;
+  value: number;
+  muted: string;
+}) {
+  return (
+    <View className="flex-1">
+      <Text className="text-right text-xs font-medium text-foreground" numberOfLines={1}>
+        {`$${value.toFixed(2)}`}
+      </Text>
+      <Text className="text-right text-[9px] text-muted-foreground" style={{ color: muted }} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+// Which metric ranks the leaderboard. Drives row order, progress bar width
+// and the emphasised column in lockstep (web parity).
+type LeaderboardMetric = "tokens" | "cost" | "time" | "tasks";
+
+const LEADERBOARD_METRIC: Record<LeaderboardMetric, (r: AgentDashboardRow) => number> = {
+  tokens: (r) => r.tokens,
+  cost: (r) => r.cost,
+  time: (r) => r.seconds,
+  tasks: (r) => r.taskCount,
+};
+
+const LEADERBOARD_SORT_LABEL: Record<LeaderboardMetric, string> = {
+  tokens: "usage.metricTokens",
+  cost: "usage.metricCost",
+  time: "usage.metricTime",
+  tasks: "usage.metricTasks",
+};
+
 function LeaderboardSection({
   rows,
-  max,
   agentName,
   colorScheme,
 }: {
   rows: AgentDashboardRow[];
-  max: number;
   agentName: (agentId: string) => string;
   colorScheme: "light" | "dark";
 }) {
   const { t } = useTranslation();
-  const brand = THEME[colorScheme].brand;
+  const theme = THEME[colorScheme];
+  const brand = theme.brand;
+  const muted = theme.mutedForeground;
   const less = t("usage.lessThanMinute");
+  const [sortBy, setSortBy] = useState<LeaderboardMetric>("tokens");
+
+  // Re-rank when the sort metric changes (web parity).
+  const sorted = useMemo(() => {
+    const metric = LEADERBOARD_METRIC[sortBy];
+    return rows.slice().sort((a, b) => metric(b) - metric(a));
+  }, [rows, sortBy]);
+
+  // Measured across every row so a bar means the same thing in any ranking —
+  // the leader always fills the track (web parity).
+  const maxValue = useMemo(() => {
+    const metric = LEADERBOARD_METRIC[sortBy];
+    return sorted.reduce((m, r) => Math.max(m, metric(r)), 0);
+  }, [sorted, sortBy]);
 
   if (rows.length === 0) {
     return (
@@ -1118,22 +1209,38 @@ function LeaderboardSection({
 
   return (
     <View className="mt-3 px-4">
-      <View className="rounded-xl border border-border bg-card px-3 py-1">
-        {rows.map((r, idx) => {
+      <View className="rounded-xl border border-border bg-card">
+        <View className="flex-row flex-wrap items-center justify-between gap-2 border-b border-border/60 px-3 pt-3 pb-2">
+          <Text className="text-xs font-medium text-foreground">
+            {t("usage.leaderboardTab")}
+          </Text>
+          <View className="flex-row items-center gap-1">
+            {(Object.keys(LEADERBOARD_METRIC) as LeaderboardMetric[]).map((m) => (
+              <SortPill
+                key={m}
+                active={sortBy === m}
+                label={t(LEADERBOARD_SORT_LABEL[m])}
+                onPress={() => setSortBy(m)}
+              />
+            ))}
+          </View>
+        </View>
+        {sorted.map((r, idx) => {
           const synthetic = isSyntheticAgentRow(r.agentId);
           const deleted = r.agentId === DELETED_AGENTS_ROW_ID;
-          const pct = max > 0 ? (r.tokens / max) * 1 : 0;
+          const value = LEADERBOARD_METRIC[sortBy](r);
+          const pct = maxValue > 0 ? (value / maxValue) * 100 : 0;
           return (
             <View
               key={r.agentId}
               className={cn(
-                "flex-row items-center gap-2 py-2.5",
+                "flex-row items-center gap-2 px-3 py-2.5",
                 idx > 0 && "border-t border-border/60",
               )}
             >
               <View className="w-5">
                 {synthetic ? (
-                  <Ionicons name="archive-outline" size={16} color={THEME[colorScheme].mutedForeground} />
+                  <Ionicons name="archive-outline" size={16} color={muted} />
                 ) : (
                   <ActorAvatar type="agent" id={r.agentId} size={20} />
                 )}
@@ -1145,7 +1252,7 @@ function LeaderboardSection({
                 <View className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted">
                   <View
                     style={{
-                      width: `${Math.max(pct * 100, r.tokens > 0 ? 4 : 0)}%`,
+                      width: `${Math.max(pct, value > 0 ? 4 : 0)}%`,
                       height: "100%",
                       borderRadius: 999,
                       backgroundColor: brand,
@@ -1154,27 +1261,48 @@ function LeaderboardSection({
                   />
                 </View>
               </View>
-              <Text className="w-16 text-right text-xs font-semibold text-foreground">
-                {formatTokens(r.tokens)}
-              </Text>
+              <View className="w-12 items-end">
+                <Text className="text-xs font-medium text-foreground" numberOfLines={1}>
+                  {formatTokens(r.tokens)}
+                </Text>
+                <Text className="text-[9px] text-muted-foreground" numberOfLines={1}>
+                  {t("usage.metricTokens")}
+                </Text>
+              </View>
               <View className="w-16 items-end">
-                {deleted ? (
-                  <Text className="text-xs text-muted-foreground">—</Text>
-                ) : (
-                  <>
-                    <Text className="text-xs text-muted-foreground">
-                      {formatDuration(r.seconds, less)}
-                    </Text>
-                    <Text className="text-[9px] text-muted-foreground/70">{t("usage.timeLabel")}</Text>
-                  </>
-                )}
+                <Text
+                  className={cn(
+                    "text-xs tabular-nums",
+                    sortBy === "cost" ? "font-semibold text-foreground" : "text-muted-foreground",
+                  )}
+                  numberOfLines={1}
+                >
+                  {`$${r.cost.toFixed(2)}`}
+                </Text>
+                <Text className="text-[9px] text-muted-foreground" numberOfLines={1}>
+                  {t("usage.metricCost")}
+                </Text>
               </View>
               <View className="w-12 items-end">
                 {deleted ? (
                   <Text className="text-xs text-muted-foreground">—</Text>
                 ) : (
                   <>
-                    <Text className="text-xs text-muted-foreground">{r.taskCount}</Text>
+                    <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+                      {formatDuration(r.seconds, less)}
+                    </Text>
+                    <Text className="text-[9px] text-muted-foreground/70">{t("usage.timeLabel")}</Text>
+                  </>
+                )}
+              </View>
+              <View className="w-10 items-end">
+                {deleted ? (
+                  <Text className="text-xs text-muted-foreground">—</Text>
+                ) : (
+                  <>
+                    <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+                      {r.taskCount}
+                    </Text>
                     <Text className="text-[9px] text-muted-foreground/70">{t("usage.tasksShort")}</Text>
                   </>
                 )}
