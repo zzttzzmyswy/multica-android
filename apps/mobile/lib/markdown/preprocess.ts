@@ -109,10 +109,15 @@ function preprocessTaskListStrikethrough(input: string): string {
  *     `<sub>2</sub>` becomes `2`. Loses formatting but keeps content; far
  *     better than showing raw HTML.
  *
+ * IMPORTANT: applied to *prose* only, after `splitMarkdown` has carved the
+ * fenced code blocks out (see markdown.tsx). It must NOT run over the whole
+ * document up front — that would shred the HTML body inside ` ```html `
+ * blocks, which render through the rich HtmlBlockPreview instead.
+ *
  * Does not parse — pure regex. Cannot handle nested tags with attributes
  * containing `>`, but those don't appear in our editor output.
  */
-function stripHtml(input: string): string {
+export function stripHtml(input: string): string {
   return input
     .replace(/<!--[\s\S]*?-->/g, "")
     .replace(/<br\s*\/?>/gi, "  \n")
@@ -122,6 +127,6 @@ function stripHtml(input: string): string {
 export function preprocessMobileMarkdown(input: string): string {
   if (!input) return "";
   return preprocessTaskListStrikethrough(
-    preprocessFileCards(preprocessMentionShortcodes(stripHtml(input))),
+    preprocessFileCards(preprocessMentionShortcodes(input)),
   );
 }

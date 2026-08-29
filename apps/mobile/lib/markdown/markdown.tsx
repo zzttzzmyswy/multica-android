@@ -23,11 +23,10 @@
  *
  *   content
  *     ↓ preprocessMobileMarkdown    legacy mention shortcodes + file
- *                                   cards + HTML strip with `<br>` →
- *                                   "  \n" (canonical CommonMark hard
- *                                   break)
+ *                                   cards + task-list strikethrough
  *     ↓ splitMarkdown               marked.lexer → segments[]
- *     ↓ render per-segment          prose / code / image components
+ *     ↓ render per-segment          prose (stripHtml → enriched) /
+ *                                   code (rich fence dispatch) / image
  *
  * Mention chip note: mobile renders `mention://` links via enriched's
  * default link styling (brand-colored, underlined), matching web's
@@ -53,9 +52,12 @@ import {
   filenameFromDownloadUrl,
   rebaseDownloadUrl,
 } from "@/lib/attachment-download";
-import { preprocessMobileMarkdown } from "./preprocess";
+import { preprocessMobileMarkdown, stripHtml } from "./preprocess";
 import { useMarkdownStyle } from "./markdown-style";
 import { splitMarkdown } from "./split-markdown";
+import { richFenceKind } from "@/lib/rich-content/blocks";
+import { MermaidBlock } from "@/components/rich-content/mermaid-block";
+import { HtmlBlockPreview } from "@/components/rich-content/html-block";
 import { CodeBlock } from "./code-block";
 import { MarkdownImage } from "./markdown-image";
 
@@ -247,13 +249,31 @@ export function Markdown({
               <EnrichedMarkdownText
                 key={i}
                 flavor="github"
-                markdown={seg.content}
+                markdown={stripHtml(seg.content)}
                 markdownStyle={markdownStyle}
                 onLinkPress={onLinkPress}
                 selectable={selectable}
               />
             );
-          case "code":
+          case "code": {
+            const kind = richFenceKind(seg.lang);
+            if (kind === "mermaid") {
+              return (
+                <MermaidBlock
+                  key={i}
+                  source={seg.code}
+                />
+              );
+            }
+            if (kind === "html") {
+              return (
+                <HtmlBlockPreview
+                  key={i}
+                  html={seg.code}
+                  selectable={selectable}
+                />
+              );
+            }
             return (
               <CodeBlock
                 key={i}
@@ -262,6 +282,7 @@ export function Markdown({
                 selectable={selectable}
               />
             );
+          }
           case "image":
             return (
               <MarkdownImage

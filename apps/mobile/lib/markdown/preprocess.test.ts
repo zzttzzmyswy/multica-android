@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { preprocessMobileMarkdown } from "./preprocess";
+import { preprocessMobileMarkdown, stripHtml } from "./preprocess";
 
 const UUID = "019f49e2-5b07-7970-beef-c0d537fb8c1d";
 const ABS_URL = `https://multica-app.copilothub.ai/api/attachments/${UUID}/download`;
@@ -10,7 +10,13 @@ describe("preprocessMobileMarkdown — !file file cards", () => {
     const image = `![](${REL_URL})`;
     const marker = `<!-- multica:channel-media:${UUID} -->`;
 
-    expect(preprocessMobileMarkdown(`${image}\n\n${marker}`)).toBe(`${image}\n\n`);
+    // The comment marker survives the string-level pass (stripHtml moved to
+    // the prose stage; see `stripHtml` describe below) but is removed when
+    // the prose island reaches the HTML stripper — mirror of the old
+    // whole-document behavior, now scoped.
+    const processed = preprocessMobileMarkdown(`${image}\n\n${marker}`);
+    expect(processed).toContain(image);
+    expect(stripHtml(processed)).toBe(`${image}\n\n`);
   });
 
   it("matches the CLI's escaped-bracket label and keeps it markdown-safe", () => {
@@ -58,5 +64,27 @@ describe("preprocessMobileMarkdown — !file file cards", () => {
     const input = `here is the file\n\n!file[a\\]b.pdf](${ABS_URL})\n\nlet me know`;
     const output = `here is the file\n\n[📎 a\\]b.pdf](${ABS_URL})\n\nlet me know`;
     expect(preprocessMobileMarkdown(input)).toBe(output);
+  });
+});
+
+describe("stripHtml — prose-stage HTML stripping", () => {
+  it("converts <br> to the CommonMark hard-break two-space newline", () => {
+    expect(stripHtml("a<br>b")).toBe("a  \nb");
+    expect(stripHtml("a<br/>b")).toBe("a  \nb");
+    expect(stripHtml("a<br />b")).toBe("a  \nb");
+  });
+
+  it("removes HTML comments (channel-media provenance markers)", () => {
+    expect(stripHtml(`x\n\n<!-- multica:channel-media:${UUID} -->`)).toBe(`x\n\n`);
+  });
+
+  it("strips tags but keeps their inner text", () => {
+    expect(stripHtml("<sub>2</sub>")).toBe("2");
+    expect(stripHtml("<p>hello <strong>world</strong></p>")).toBe("hello world");
+  });
+
+  it("leaves prose and markdown fences untouched — main deltas stay intact", () => {
+    const prose = "A **bold** link [x](https://example.com) `code`";
+    expect(stripHtml(prose)).toBe(prose);
   });
 });

@@ -105,6 +105,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // Copies the white starburst notification small icon into res/drawable-*
       // and points system notifications at it (idempotent). See the plugin.
       "./plugins/with-brand-icons.js",
+      // Copies mermaid.min.js (```mermaid fence runtime) into the APK's assets
+      // at prebuild time; android/ is gitignored so this is the only way a fresh
+      // clone builds a diagram-capable APK. See the plugin. Rich-content, MYS-799.
+      "./plugins/with-mermaid-asset.js",
     ],
     extra: { APP_ENV: env },
   };
