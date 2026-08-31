@@ -42,6 +42,8 @@ import { StatusIcon } from "@/components/ui/status-icon";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { useScrollToTopOnChange } from "@/lib/use-scroll-to-top-on-change";
 import { useTranslation } from "@/lib/i18n/react";
+import { useColorScheme } from "@/lib/use-color-scheme";
+import { THEME } from "@/lib/theme";
 import { api } from "@/data/api";
 import { keyboardBehavior } from "@/lib/keyboard";
 
@@ -66,6 +68,8 @@ export function IssuePickerBody({
   excludeIds,
   onSelect,
 }: Props) {
+  const { colorScheme } = useColorScheme();
+  const theme = THEME[colorScheme];
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Issue[]>([]);
@@ -150,12 +154,12 @@ export function IssuePickerBody({
       ) : null}
       {/* Search input row — same chrome as the workspace search modal. */}
       <View className="flex-row items-center gap-2 border-b border-border px-4 py-2">
-        <Ionicons name="search" size={20} color="#71717a" />
+        <Ionicons name="search" size={20} color={theme.mutedForeground} />
         <TextInput
           value={query}
           onChangeText={handleChange}
           placeholder={t("issueRelation.searchPlaceholder")}
-          placeholderTextColor="#a1a1aa"
+          placeholderTextColor={theme.mutedForeground}
           autoFocus
           autoCorrect={false}
           autoCapitalize="none"

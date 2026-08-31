@@ -15,7 +15,7 @@
  *     between lanes is deferred; the detail page's status picker is the
  *     move mechanism this iteration.
  */
-import { useMemo } from "react";
+import { memo, useCallback, useMemo } from "react";
 import { FlatList, ScrollView, View } from "react-native";
 import type { Issue, IssueStatus } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
@@ -68,13 +68,22 @@ function ColumnHeader({ column }: { column: IssueGroupSection }) {
   );
 }
 
-function BoardColumn({
+const BoardColumn = memo(function BoardColumn({
   column,
   onOpenIssue,
 }: {
   column: IssueGroupSection;
   onOpenIssue: (issue: Issue) => void;
 }) {
+  const renderItem = useCallback(
+    ({ item }: { item: Issue }) => (
+      <View className="px-2 pb-2">
+        <IssueCardWithMenu issue={item} onOpen={() => onOpenIssue(item)} />
+      </View>
+    ),
+    [onOpenIssue],
+  );
+
   return (
     <View
       style={{ width: BOARD_COLUMN_WIDTH, alignSelf: "stretch" }}
@@ -93,20 +102,24 @@ function BoardColumn({
         <FlatList
           data={column.data}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <View className="px-2 pb-2">
-              <IssueCardWithMenu issue={item} onOpen={() => onOpenIssue(item)} />
-            </View>
-          )}
+          renderItem={renderItem}
           nestedScrollEnabled
           showsVerticalScrollIndicator={false}
+          // Boards can hold dozens of cards; cap batch/initial renders so
+          // a board with many issues doesn't paint every card at once.
+          // `windowSize` scales the render window per column — the default
+          // 21 (viewports) is far past what a 272pt lane shows.
+          initialNumToRender={6}
+          windowSize={7}
+          maxToRenderPerBatch={8}
+          updateCellsBatchingPeriod={40}
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: 8 }}
         />
       )}
     </View>
   );
-}
+});
 
 /**
  * Board card + long-press "move to status" menu (web board-view drag parity:

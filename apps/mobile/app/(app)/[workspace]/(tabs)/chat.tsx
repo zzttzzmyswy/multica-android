@@ -52,6 +52,7 @@ import type {
   ChatMessage,
   ChatPendingTask,
   ChatQueuedTask,
+  ChatQuickAction,
 } from "@multica/core/types";
 import {
   enqueuePendingChatTask,
@@ -161,7 +162,13 @@ export default function ChatTab() {
   const { data: pendingTask } = useQuery(
     pendingChatTaskOptions(activeSessionId),
   );
-  const visibleMessages = hideQueuedChatMessages(messages, pendingTask);
+  // Stable ref — draft typing must not rebuild `visibleMessages` (a fresh
+  // array reference would defeat ChatMessageList's memo and re-render every
+  // bubble per keystroke). Rebuilds only when either input changes.
+  const visibleMessages = useMemo(
+    () => hideQueuedChatMessages(messages, pendingTask),
+    [messages, pendingTask],
+  );
 
   // When the in-flight task clears (the server finished the turn), refetch
   // the authoritative messages so the final reply renders even if the WS
@@ -398,6 +405,20 @@ export default function ChatTab() {
     ],
   );
 
+  // ── Quick-action follow-up (stable ref — feeds FlashList cells) ──────
+  const handleQuickAction = useCallback(
+    (action: ChatQuickAction) =>
+      handleSend(action.prompt, [], { clearDraft: false }),
+    [handleSend],
+  );
+
+  // Stable ref — passing an inline arrow would force ChatMessageList to
+  // re-render every bubble on every keystroke (draft → ChatTab re-render).
+  const handlePickPrompt = useCallback(
+    (text: string) => setDraft(draftKey, text),
+    [draftKey, setDraft],
+  );
+
   // ── Cancel in-flight ───────────────────────────────────────────────────
   const handleStop = useCallback(() => {
     if (!pendingTask?.task_id || !activeSessionId) return;
@@ -579,10 +600,8 @@ export default function ChatTab() {
           hasSessions={sessions.length > 0}
           agentName={currentAgent?.name}
           sessionTitle={activeSession?.title}
-          onPickPrompt={(text) => setDraft(draftKey, text)}
-          onQuickAction={(action) =>
-            handleSend(action.prompt, [], { clearDraft: false })
-          }
+          onPickPrompt={handlePickPrompt}
+          onQuickAction={handleQuickAction}
           quickActionsDisabled={sending || disabled}
           pendingTask={pendingTask}
           liveTaskMessages={liveTaskMessages}

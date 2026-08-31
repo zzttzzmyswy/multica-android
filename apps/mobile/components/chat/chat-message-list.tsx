@@ -40,7 +40,7 @@
  * `startRenderingFromBottom` (initial paint at bottom, no setTimeout
  * hacks). Cell recycling also keeps scroll-up smooth.
  */
-import { useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -118,7 +118,7 @@ interface Props {
   availability?: AgentAvailability;
 }
 
-export function ChatMessageList({
+export const ChatMessageList = memo(function ChatMessageList({
   messages,
   loading,
   hasSessions,
@@ -205,6 +205,22 @@ export function ChatMessageList({
     listRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, []);
 
+  // Stable renderItem identity so memoized cell components actually skip
+  // re-renders when a sibling bubble updates. `sessionTitle` changes only
+  // across sessions (string), `onQuickAction` is already a stable ref from
+  // the parent, `quickActionsDisabled` is a bool.
+  const renderItem = useCallback(
+    ({ item }: { item: ChatMessage }) => (
+      <MessageRow
+        message={item}
+        sessionTitle={sessionTitle}
+        onQuickAction={onQuickAction}
+        quickActionsDisabled={quickActionsDisabled}
+      />
+    ),
+    [sessionTitle, onQuickAction, quickActionsDisabled],
+  );
+
   if (loading && messages.length === 0) {
     return (
       <View className="flex-1 items-center justify-center">
@@ -270,14 +286,12 @@ export function ChatMessageList({
       key={messages[0]?.id ?? "empty"}
       data={messages}
       keyExtractor={(m) => m.id}
-      renderItem={({ item }) => (
-        <MessageRow
-          message={item}
-          sessionTitle={sessionTitle}
-          onQuickAction={onQuickAction}
-          quickActionsDisabled={quickActionsDisabled}
-        />
-      )}
+      renderItem={renderItem}
+      // Mixed cell types (user bubble / assistant bubble / failure bubble)
+      // — telling FlashList v2 apart means the recycler never reuses a
+      // failure bubble slot for a user bubble (v2 drops v1's
+      // estimatedItemSize requirement; it measures automatically).
+      getItemType={(item) => item.role}
       ItemSeparatorComponent={MessageSeparator}
       onScroll={handleChatScroll}
       ListFooterComponent={
@@ -336,13 +350,13 @@ export function ChatMessageList({
     </View>
     </ImageSequenceProvider>
   );
-}
+});
 
 function MessageSeparator() {
   return <View style={{ height: 12 }} />;
 }
 
-function MessageRow({
+const MessageRow = memo(function MessageRow({
   message,
   sessionTitle,
   onQuickAction,
@@ -374,44 +388,40 @@ function MessageRow({
     );
   }
 
+  const body = (
+    <View
+      className={cn(
+        "self-end max-w-[80%] gap-1.5 rounded-2xl border-2 px-3.5 py-2 transition-colors",
+        isSelecting
+          ? "bg-primary/5 border-primary/30"
+          : longPress.isPressed
+            ? "bg-muted border-primary/30"
+            : "bg-muted border-transparent",
+      )}
+    >
+      <Markdown
+        content={message.content}
+        attachments={message.attachments}
+        selectable={isSelecting}
+        compact
+        downloadSource={chatSource}
+      />
+      <CommentAttachmentList
+        attachments={message.attachments}
+        content={message.content}
+        source={chatSource}
+      />
+    </View>
+  );
+
   if (isUser) {
     // User bubble: same Markdown pipeline as assistant — `@mention`
     // serialisation `[MUL-1](mention://issue/<id>)`, inline links, and
     // inline code resolve identically to web's
     // `packages/views/chat/components/chat-message-list.tsx` user branch.
-    // Width is capped at 80% so the bubble keeps the iMessage-style
-    // trailing alignment instead of stretching across the column.
-    const body = (
-      <View
-        className={cn(
-          "self-end max-w-[80%] gap-1.5 rounded-2xl border-2 px-3.5 py-2 transition-colors",
-          isSelecting
-            ? "bg-primary/5 border-primary/30"
-            : longPress.isPressed
-              ? "bg-muted border-primary/30"
-              : "bg-muted border-transparent",
-        )}
-      >
-        <Markdown
-          content={message.content}
-          attachments={message.attachments}
-          selectable={isSelecting}
-          compact
-          downloadSource={chatSource}
-        />
-        <CommentAttachmentList
-          attachments={message.attachments}
-          content={message.content}
-          source={chatSource}
-        />
-      </View>
-    );
     if (isSelecting) return body;
     return (
-      <LongPressView
-        onLongPress={longPress.onLongPress}
-        delayLongPress={500}
-      >
+      <LongPressView onLongPress={longPress.onLongPress} delayLongPress={500}>
         {body}
       </LongPressView>
     );
@@ -429,7 +439,7 @@ function MessageRow({
       quickActionsDisabled={quickActionsDisabled}
     />
   );
-}
+});
 
 /**
  * Persisted assistant message. Renders:
@@ -661,7 +671,7 @@ function FailureBubble({
                 <Ionicons
                   name="chevron-forward"
                   size={12}
-                  color="#71717a"
+                  className="text-muted-foreground"
                 />
                 <Text className="text-xs text-muted-foreground">
                   {t("a11y.showDetails")}

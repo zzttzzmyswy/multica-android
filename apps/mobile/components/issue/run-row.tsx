@@ -18,6 +18,8 @@
  */
 import { useMemo } from "react";
 import { ActivityIndicator, Alert, Pressable, View } from "react-native";
+import { useColorScheme } from "@/lib/use-color-scheme";
+import { THEME } from "@/lib/theme";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { AgentTask } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
@@ -101,7 +103,7 @@ export function RunRow({ task, issueId }: Props) {
                 <Ionicons
                   name="chevron-down"
                   size={14}
-                  color="#71717a"
+                  className="text-muted-foreground"
                   style={{ marginTop: 14 }}
                 />
               </View>
@@ -135,7 +137,7 @@ export function RunRow({ task, issueId }: Props) {
               <Ionicons
                 name="chevron-forward"
                 size={14}
-                color="#71717a"
+                className="text-muted-foreground"
                 style={{ marginTop: 14 }}
               />
             </View>
@@ -233,6 +235,7 @@ function RerunButton({
   issueId: string;
 }) {
   const mutation = useRerunIssue(issueId);
+  const { colorScheme } = useColorScheme();
   const { t } = useTranslation();
 
   const onPress = () => {
@@ -262,10 +265,10 @@ function RerunButton({
       className="px-3 py-1.5 rounded-md bg-secondary active:opacity-70"
     >
       {mutation.isPending ? (
-        <ActivityIndicator size="small" color="#71717a" />
+        <ActivityIndicator size="small" color={THEME[colorScheme].mutedForeground} />
       ) : (
         <View className="flex-row items-center gap-1">
-          <Ionicons name="refresh" size={12} color="#71717a" />
+          <Ionicons name="refresh" size={12} className="text-muted-foreground" />
           <Text className="text-xs font-medium text-foreground">
             {t("runs.retry")}
           </Text>

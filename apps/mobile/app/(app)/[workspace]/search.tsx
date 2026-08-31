@@ -54,6 +54,8 @@ import { buildSearchRows, type RowItem } from "@/lib/search-rows";
 import { filterMemberMatches } from "@/lib/member-search";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
+import { useColorScheme } from "@/lib/use-color-scheme";
+import { THEME } from "@/lib/theme";
 
 const DEBOUNCE_MS = 300;
 const ISSUE_LIMIT = 20;
@@ -202,7 +204,7 @@ function SearchIssueRow({ item, query, slug }: SearchIssueRowProps) {
           <Ionicons
             name="chatbubble-outline"
             size={12}
-            color="#71717a"
+            className="text-muted-foreground"
             style={{ marginTop: 2 }}
           />
           <View className="flex-1">
@@ -350,6 +352,8 @@ const EMPTY_RESULTS: SearchResultsState = { issues: [], projects: [] };
 export default function SearchModal() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const slug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
+  const { colorScheme } = useColorScheme();
+  const theme = THEME[colorScheme];
   const { t } = useTranslation();
 
   const [query, setQuery] = useState("");
@@ -498,12 +502,12 @@ export default function SearchModal() {
       >
         {/* Search input row */}
         <View className="flex-row items-center gap-3 border-b border-border px-4 py-2">
-          <Ionicons name="search" size={20} color="#71717a" />
+          <Ionicons name="search" size={20} color={theme.mutedForeground} />
           <TextInput
             value={query}
             onChangeText={handleChange}
             placeholder={t("search.placeholder")}
-            placeholderTextColor="#a1a1aa"
+            placeholderTextColor={theme.mutedForeground}
             autoFocus
             autoCorrect={false}
             autoCapitalize="none"
@@ -523,7 +527,7 @@ export default function SearchModal() {
           ListEmptyComponent={
             isLoading ? (
               <View className="items-center justify-center py-12">
-                <ActivityIndicator color="#71717a" />
+                <ActivityIndicator color={theme.mutedForeground} />
               </View>
             ) : trimmedQuery && !hasResults ? (
               <View className="items-center justify-center py-12 px-6">
@@ -542,7 +546,7 @@ export default function SearchModal() {
           ListFooterComponent={
             isLoading && hasResults ? (
               <View className="items-center justify-center py-4">
-                <ActivityIndicator color="#71717a" />
+                <ActivityIndicator color={theme.mutedForeground} />
               </View>
             ) : null
           }

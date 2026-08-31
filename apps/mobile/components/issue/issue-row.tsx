@@ -101,7 +101,10 @@ export function IssueRow({
           </View>
         ) : null}
         <PriorityIcon priority={issue.priority} size={14} />
-        <Text className="text-xs text-muted-foreground shrink-0 w-16">
+        <Text
+          className="text-xs text-muted-foreground shrink-0 w-16"
+          numberOfLines={1}
+        >
           {issue.identifier}
         </Text>
         <Text className="flex-1 text-sm text-foreground" numberOfLines={1}>

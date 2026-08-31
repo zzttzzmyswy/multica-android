@@ -156,7 +156,6 @@ export function StatusPill({
       : taskMessages.length > 0
         ? "running"
         : pendingTask?.status;
-  const elapsedSec = Math.max(0, Math.floor((Date.now() - anchorMs) / 1000));
   const stage = pickStage(status, taskMessages, availability, t);
 
   return (
@@ -167,12 +166,29 @@ export function StatusPill({
       {stage.static ? null : <BreathingDots />}
       <Text className="text-xs text-muted-foreground" numberOfLines={1}>
         {stage.label}
-        <Text className="text-xs text-muted-foreground/70" style={TABULAR_NUMS}>
-          {" · "}
-          {formatElapsedSecs(elapsedSec)}
-        </Text>
+        <ElapsedCounter anchorMs={anchorMs} />
       </Text>
     </View>
+  );
+}
+
+/**
+ * The 1Hz "· 2s" counter. Owns its own tick so the once-a-second setState
+ * re-renders only this tiny Text — the parent StatusPill (and the
+ * BreathingDots animation nodes beside it) stay untouched. The parent
+ * re-renders only on task / phase changes, not every second.
+ */
+function ElapsedCounter({ anchorMs }: { anchorMs: number }) {
+  useTick(true, 1000);
+  const elapsedSec = Math.max(
+    0,
+    Math.floor((Date.now() - anchorMs) / 1000),
+  );
+  return (
+    <Text className="text-xs text-muted-foreground/70" style={TABULAR_NUMS}>
+      {" · "}
+      {formatElapsedSecs(elapsedSec)}
+    </Text>
   );
 }
 

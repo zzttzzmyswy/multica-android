@@ -56,7 +56,11 @@ export function ChatTimeline({ items, isStreaming = false }: Props) {
           accessibilityLabel={stepLabel}
           className="flex-row items-center gap-1 active:opacity-70"
         >
-          <Ionicons name="chevron-forward" size={12} color="#71717a" />
+          <Ionicons
+            name="chevron-forward"
+            size={12}
+            className="text-muted-foreground"
+          />
           {isStreaming ? <StreamingDot /> : null}
           <Text className="text-xs text-muted-foreground">
             {stepLabel}
@@ -107,7 +111,7 @@ function ThinkingRow({ item }: { item: TaskMessagePayload }) {
           <Ionicons
             name="bulb-outline"
             size={12}
-            color="#a1a1aa"
+            className="text-muted-foreground"
             style={{ marginTop: 2 }}
           />
           <Text
@@ -154,7 +158,11 @@ function ToolCallRow({ item }: { item: TaskMessagePayload }) {
     <Collapsible>
       <CollapsibleTrigger asChild>
         <View className="py-0.5 flex-row items-center gap-1.5 active:opacity-70">
-          <Ionicons name="chevron-forward" size={12} color="#71717a" />
+          <Ionicons
+            name="chevron-forward"
+            size={12}
+            className="text-muted-foreground"
+          />
           <Text className="text-xs font-medium text-foreground">
             {item.tool ?? "tool"}
           </Text>
@@ -225,7 +233,7 @@ function ErrorRow({ item }: { item: TaskMessagePayload }) {
       <Ionicons
         name="alert-circle"
         size={12}
-        color="#dc2626"
+        className="text-destructive"
         style={{ marginTop: 2 }}
       />
       <Text className="flex-1 text-xs text-destructive" numberOfLines={3}>

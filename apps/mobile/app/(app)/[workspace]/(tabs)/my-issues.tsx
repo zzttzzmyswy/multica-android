@@ -22,6 +22,7 @@ import { SectionList, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useIsFocused } from "@react-navigation/native";
 import { router } from "expo-router";
+import type { Issue } from "@multica/core/types";
 import type { CreateIssueViewRequest, IssueView } from "@multica/core/api/schemas";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
@@ -81,6 +82,11 @@ const SCOPES: { value: MyIssuesScope; labelKey: string }[] = [
   { value: "created", labelKey: "myIssues.scopeCreated" },
   { value: "agents", labelKey: "myIssues.scopeAgents" },
 ];
+
+// Row hairline aligned to the row's left padding (IssueRow uses px-4).
+function IssueSeparator() {
+  return <View className="h-px bg-border ml-4" />;
+}
 
 export default function MyIssues() {
   const isFocused = useIsFocused();
@@ -309,6 +315,17 @@ export default function MyIssues() {
 
   const showEmptyState = !isLoading && !error && sorted.length === 0;
 
+  // Stable nav callback shared by every issue container (board / table /
+  // list rows). BoardColumn + cells are memoized, so an inline arrow here
+  // would defeat the memo and re-render the whole board on unrelated
+  // updates (e.g. a filter-chip toggle) — the reference must stay put.
+  const openIssue = useCallback(
+    (issue: Issue) => {
+      if (wsSlug) router.push(`/${wsSlug}/issue/${issue.id}`);
+    },
+    [wsSlug],
+  );
+
   return (
     <View className="flex-1 bg-background">
       <Header title={t("myIssues.title")} right={<HeaderActions />} />
@@ -401,9 +418,7 @@ export default function MyIssues() {
           issues={sorted}
           grouping={grouping}
           statusOrder={BOARD_STATUSES}
-          onOpenIssue={(issue) => {
-            if (wsSlug) router.push(`/${wsSlug}/issue/${issue.id}`);
-          }}
+          onOpenIssue={openIssue}
           emptyLabel={
             hasActiveFilterChips
               ? t("myIssues.filterEmpty")
@@ -421,9 +436,7 @@ export default function MyIssues() {
             useMyIssuesViewStore.getState().setSortBy(field);
             useMyIssuesViewStore.getState().setSortDirection(direction);
           }}
-          onOpenIssue={(issue) => {
-            if (wsSlug) router.push(`/${wsSlug}/issue/${issue.id}`);
-          }}
+          onOpenIssue={openIssue}
           emptyLabel={
             hasActiveFilterChips
               ? t("myIssues.filterEmpty")
@@ -435,9 +448,11 @@ export default function MyIssues() {
           sections={sections}
           keyExtractor={(item) => item.id}
           stickySectionHeadersEnabled={false}
-          ItemSeparatorComponent={() => (
-            <View className="h-px bg-border ml-4" />
-          )}
+          ItemSeparatorComponent={IssueSeparator}
+          initialNumToRender={14}
+          windowSize={9}
+          maxToRenderPerBatch={10}
+          updateCellsBatchingPeriod={40}
           renderSectionHeader={({ section }) => (
             <IssueSectionHeader section={section} />
           )}
@@ -447,9 +462,7 @@ export default function MyIssues() {
           renderItem={({ item }) => (
             <IssueSelectionRow
               issue={item}
-              onOpen={() => {
-                if (wsSlug) router.push(`/${wsSlug}/issue/${item.id}`);
-              }}
+              onOpen={() => openIssue(item)}
             />
           )}
           refreshing={isFocused && isRefetching}

@@ -499,8 +499,17 @@ function CommentBody({
           size={24}
           showPresence
         />
-        <Text className="text-sm font-medium text-foreground">{name}</Text>
-        <Text className="text-xs text-muted-foreground">
+        <Text
+          numberOfLines={1}
+          ellipsizeMode="tail"
+          className="shrink text-sm font-medium text-foreground"
+        >
+          {name}
+        </Text>
+        <Text
+          numberOfLines={1}
+          className="shrink-0 text-xs text-muted-foreground"
+        >
           · {timeAgo(entry.created_at)}
           {edited ? ` · ${t("comment.edited")}` : ""}
         </Text>

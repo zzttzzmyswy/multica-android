@@ -28,6 +28,10 @@ import { projectListOptions } from "@/data/queries/projects";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
 
+function ProjectSeparator() {
+  return <View className="h-px bg-border ml-4" />;
+}
+
 export function ProjectsScreen({
   onCreate,
 }: {
@@ -80,9 +84,11 @@ export function ProjectsScreen({
     <FlatList
       data={sorted}
       keyExtractor={(item) => item.id}
-      ItemSeparatorComponent={() => (
-        <View className="h-px bg-border ml-4" />
-      )}
+      ItemSeparatorComponent={ProjectSeparator}
+      initialNumToRender={12}
+      windowSize={9}
+      maxToRenderPerBatch={10}
+      updateCellsBatchingPeriod={40}
       renderItem={({ item }) => (
         <ProjectRow
           project={item}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -40,6 +40,15 @@ import {
   deduplicateInboxItems,
   getInboxDisplayTitle,
 } from "@/lib/inbox-display";
+
+// Both inbox lists (main + archived) share one row-separator shape: a hairline
+// under each row aligned to the avatar gutter (avatar starts at px-4 → 36pt →
+// 16pt indent). Module-level so FlatList never allocates a new component type
+// per render (an inline `ItemSeparatorComponent={() => …}` also defeats
+// FlatList's row separators reuse).
+function InboxSeparator() {
+  return <View className="h-px bg-border ml-16" />;
+}
 
 export default function Inbox() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
@@ -309,9 +318,11 @@ export default function Inbox() {
           <FlatList
             data={archivedData}
             keyExtractor={(item) => item.id}
-            ItemSeparatorComponent={() => (
-              <View className="h-px bg-border ml-16" />
-            )}
+            ItemSeparatorComponent={InboxSeparator}
+            initialNumToRender={12}
+            windowSize={9}
+            maxToRenderPerBatch={10}
+            updateCellsBatchingPeriod={40}
             contentContainerClassName="pb-6"
             renderItem={({ item }) => (
               <SwipeableInboxRow
@@ -371,9 +382,11 @@ export default function Inbox() {
         <FlatList
           data={data}
           keyExtractor={(item) => item.id}
-          ItemSeparatorComponent={() => (
-            <View className="h-px bg-border ml-16" />
-          )}
+          ItemSeparatorComponent={InboxSeparator}
+          initialNumToRender={12}
+          windowSize={9}
+          maxToRenderPerBatch={10}
+          updateCellsBatchingPeriod={40}
           contentContainerClassName="pb-6"
           ListFooterComponent={archivedEntry}
           renderItem={({ item }) => (

@@ -91,6 +91,10 @@ export function MarkdownImage({ uri, attachments }: Props) {
       <View className="rounded-lg overflow-hidden bg-muted">
         <ExpoImage
           source={{ uri: resolvedUri }}
+          // recyclingKey keeps FlashList-cell reuse from flashing the
+          // previous cell's image while the new one decodes (expo-image
+          // docs: "highly recommended when used in a list").
+          recyclingKey={resolvedUri}
           style={{ width: "100%", aspectRatio: aspect ?? 16 / 9 }}
           contentFit="contain"
           transition={150}

@@ -37,7 +37,11 @@ export function OfflineBanner({ agentName, availability }: Props) {
   if (availability === "unstable") {
     return (
       <View className="mx-3 mb-1.5 flex-row items-center gap-1.5 rounded-md bg-warning/15 px-2.5 py-1.5">
-        <Ionicons name="alert-circle-outline" size={14} color="#a16207" />
+        <Ionicons
+          name="alert-circle-outline"
+          size={14}
+          className="text-warning"
+        />
         <Text
           className="flex-1 text-xs text-warning"
           numberOfLines={1}
@@ -50,7 +54,11 @@ export function OfflineBanner({ agentName, availability }: Props) {
 
   return (
     <View className="mx-3 mb-1.5 flex-row items-center gap-1.5 rounded-md bg-muted px-2.5 py-1.5">
-      <Ionicons name="cloud-offline-outline" size={14} color="#71717a" />
+      <Ionicons
+        name="cloud-offline-outline"
+        size={14}
+        className="text-muted-foreground"
+      />
       <Text
         className="flex-1 text-xs text-muted-foreground"
         numberOfLines={1}

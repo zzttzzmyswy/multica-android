@@ -472,6 +472,30 @@ export function TimelineList({
       ? `hl-${highlightNonce ?? "0"}`
       : "list";
 
+  // Stable renderItem — timeline rows re-render only when their slice of
+  // `dataWithDivider` actually changes, not on every parent render. Deps are
+  // the values renderItem closes over: issue identity + the transient
+  // highlight id.
+  const renderItem = useCallback(
+    ({ item }: { item: TimelineRow }) => {
+      if (item.entry.id === DIVIDER_ID) {
+        return <UnreadDivider />;
+      }
+      return item.entry.type === "comment" ? (
+        <CommentCard
+          entry={item.entry}
+          replies={item.replies}
+          issueId={issue.id}
+          issueIdentifier={issue.identifier}
+          highlightedCommentId={highlightedId}
+        />
+      ) : (
+        <ActivityRow entry={item.entry} />
+      );
+    },
+    [issue.id, issue.identifier, highlightedId],
+  );
+
   return (
     <ImageSequenceProvider blocks={imageBlocks}>
     <View className="flex-1">
@@ -524,22 +548,17 @@ export function TimelineList({
         // float above the list. (12 px = row-to-row gap, wrong here.)
         ListHeaderComponentStyle={{ marginBottom: 4 }}
         ItemSeparatorComponent={RowSeparator}
-        renderItem={({ item }) => {
-          if (item.entry.id === DIVIDER_ID) {
-            return <UnreadDivider />;
-          }
-          return item.entry.type === "comment" ? (
-            <CommentCard
-              entry={item.entry}
-              replies={item.replies}
-              issueId={issue.id}
-              issueIdentifier={issue.identifier}
-              highlightedCommentId={highlightedId}
-            />
-          ) : (
-            <ActivityRow entry={item.entry} />
-          );
-        }}
+        renderItem={renderItem}
+        // 区分 cell 类型（comment / activity / divider 哨兵），FlashList
+        // 复用时不把 divider 槽位塞给 comment。v2 自动测量尺寸，无需
+        // v1 的 estimatedItemSize。
+        getItemType={(item) =>
+          item.entry.id === DIVIDER_ID
+            ? "divider"
+            : item.entry.type === "comment"
+              ? "comment"
+              : "activity"
+        }
         onScroll={handleScroll}
         // Any user-initiated scroll exits comment text-selection mode —
         // matches iMessage's behavior where scrolling implicitly commits /
