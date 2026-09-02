@@ -71,8 +71,13 @@ import {
   chatSessionsOptions,
   pendingChatTaskOptions,
   sortChatSessions,
+  sessionActivityTime,
   taskMessagesOptions,
 } from "@/data/queries/chat";
+import {
+  loadLastChatSessionId,
+  saveLastChatSessionId,
+} from "@/data/stores/chat-last-session-store";
 import {
   useCreateChatSession,
   useMarkChatSessionRead,
@@ -143,8 +148,9 @@ export default function ChatTab() {
   // ── Auto-hydrate active session on first Chat tab entry ────────────────
   // Mobile-only deviation from web: web's chat-window opens to an empty
   // state when no `activeSessionId` is persisted; on a phone, picking
-  // a session is 4 taps, so jump straight to the most recent session.
-  // Hydration is one-shot per workspace.
+  // a session is 4 taps, so restore where the user left off. Prefer the
+  // last-viewed session; if another conversation has newer activity, open
+  // that most-recently-updated one instead (MYS-…). One-shot per workspace.
   const hydratedWsRef = useRef<string | null>(null);
   useEffect(() => {
     if (!wsId) return;
@@ -154,8 +160,23 @@ export default function ChatTab() {
       return;
     }
     hydratedWsRef.current = wsId;
-    setActiveSessionId(sortChatSessions(sessions)[0].id);
+    void (async () => {
+      const lastId = await loadLastChatSessionId();
+      const sorted = sortChatSessions(sessions);
+      const last = lastId ? (sessions.find((s) => s.id === lastId) ?? null) : null;
+      // The last-viewed session wins unless a different session has newer
+      // activity — then surface that one so the user sees the fresh turn.
+      const open =
+        last && sorted[0] && sessionActivityTime(sorted[0]) > sessionActivityTime(last)
+          ? sorted[0].id
+          : (last?.id ?? sorted[0].id);
+      setActiveSessionId(open);
+    })();
   }, [wsId, sessions]);
+  // Remember the session the user leaves open so the next launch restores it.
+  useEffect(() => {
+    if (activeSessionId) void saveLastChatSessionId(activeSessionId);
+  }, [activeSessionId]);
   const { data: messages = [], isLoading: messagesLoading } = useQuery(
     chatMessagesOptions(activeSessionId),
   );

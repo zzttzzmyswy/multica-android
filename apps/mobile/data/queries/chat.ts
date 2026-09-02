@@ -68,7 +68,7 @@ export function isTaskMessageTaskId(
  * ranked on `last_message.created_at` when present (web parity), falling back
  * to `updated_at` for sessions without a last message.
  */
-function sessionActivityTime(s: ChatSession): number {
+export function sessionActivityTime(s: ChatSession): number {
   return new Date(s.last_message?.created_at ?? s.updated_at).getTime();
 }
 
