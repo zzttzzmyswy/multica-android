@@ -61,10 +61,12 @@ export function buildTimelineRows(
   }
 
   function collectDescendants(parentId: string): TimelineEntry[] {
-    // BFS — children are inserted in chronological order during the scan
-    // above, so the bundle preserves "first reply first" without extra
-    // sorting. Reply-to-reply gets appended after all top-level replies of
-    // the same parent.
+    // BFS — children are inserted in scan order during the pass above, so
+    // the raw chain is adjacency-correct but NOT necessarily chronological
+    // (a reply-to-reply can carry an earlier timestamp than a sibling reply
+    // of its parent). Sort the flat bundle by (created_at, id) — the same
+    // deterministic order appendTimelineEntry uses — so the newest reply
+    // always sits at the bottom of the bubble.
     const out: TimelineEntry[] = [];
     const queue: string[] = [parentId];
     while (queue.length > 0) {
@@ -76,6 +78,12 @@ export function buildTimelineRows(
         queue.push(child.id);
       }
     }
+    out.sort((a, b) => {
+      if (a.created_at !== b.created_at) {
+        return a.created_at < b.created_at ? -1 : 1;
+      }
+      return a.id < b.id ? -1 : 1;
+    });
     return out;
   }
 
