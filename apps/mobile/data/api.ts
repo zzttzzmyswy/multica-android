@@ -465,6 +465,26 @@ export class ApiError extends Error {
   }
 }
 
+/** Thrown by getAttachmentTextContent when the server refuses to inline a
+ *  file because it exceeds the 2 MB cap (413). Mirrors core's
+ *  PreviewTooLargeError so UI can map to a "too large, please download"
+ *  affordance with the Download CTA still available. */
+export class PreviewTooLargeError extends ApiError {
+  constructor() {
+    super("attachment too large for inline preview", 413);
+    this.name = "PreviewTooLargeError";
+  }
+}
+
+/** Thrown by getAttachmentTextContent when the server's text whitelist
+ *  rejects the content type (415). Mirrors core's PreviewUnsupportedError. */
+export class PreviewUnsupportedError extends ApiError {
+  constructor() {
+    super("attachment type not supported for inline preview", 415);
+    this.name = "PreviewUnsupportedError";
+  }
+}
+
 /** Raised when a progress-tracked download is aborted by the user (or the
  *  task is superseded). Callers that record a download history map this to
  *  the "cancelled" terminal state instead of a failure. */
@@ -3949,6 +3969,64 @@ class ApiClient {
       `/api/tokens/${id}`,
       { method: "DELETE" },
     );
+  }
+
+  /**
+   * Body of an attachment through the /content proxy — the mobile twin of
+   * core's getAttachmentTextContent (packages/core/api/client.ts:2974). Used
+   * by the HTML attachment inline preview; 413 (too large) maps to
+   * PreviewTooLargeError and 415 (type not whitelisted) to
+   * PreviewUnsupportedError — typed twins of core's so UI can render the
+   * specific fallback instead of generic failure.
+   */
+  async getAttachmentTextContent(
+    id: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<{ text: string; originalContentType: string }> {
+    const rid = createRequestId();
+    const path = `/api/attachments/${id}/content`;
+    const headers: Record<string, string> = {};
+    if (this.token) headers["Authorization"] = `Bearer ${this.token}`;
+    const slug = getCurrentSlug();
+    if (slug) headers["X-Workspace-Slug"] = slug;
+
+    let res: Response;
+    try {
+      res = await fetch(`${getApiBaseUrl()}${path}`, {
+        method: "GET",
+        headers,
+        signal: opts?.signal,
+      });
+    } catch (err) {
+      console.warn(`[api] ← FAILED ${path}`, {
+        rid,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw new ApiError(
+        err instanceof Error ? err.message : "Attachment content fetch failed",
+        0,
+      );
+    }
+    if (!res.ok) {
+      let body: unknown;
+      try {
+        body = await res.json();
+      } catch {
+        body = undefined;
+      }
+      const message =
+        (body && typeof body === "object" && "message" in body
+          ? String((body as { message: unknown }).message)
+          : null) ?? `${res.status} ${res.statusText}`;
+      console.warn(`[api] ← ${res.status} ${path}`, { rid, error: message });
+      if (res.status === 413) throw new PreviewTooLargeError();
+      if (res.status === 415) throw new PreviewUnsupportedError();
+      throw new ApiError(message, res.status, body);
+    }
+    return {
+      text: await res.text(),
+      originalContentType: res.headers.get("X-Original-Content-Type") ?? "",
+    };
   }
 
   async downloadFile(rawUrl: string, filename: string): Promise<LocalDownload> {

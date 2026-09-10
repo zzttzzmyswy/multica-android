@@ -58,6 +58,7 @@ import { splitMarkdown } from "./split-markdown";
 import { richFenceKind } from "@/lib/rich-content/blocks";
 import { MermaidBlock } from "@/components/rich-content/mermaid-block";
 import { HtmlBlockPreview } from "@/components/rich-content/html-block";
+import { MathBlock } from "@/components/rich-content/math-block";
 import { CodeBlock } from "./code-block";
 import { MarkdownImage } from "./markdown-image";
 
@@ -283,6 +284,14 @@ export function Markdown({
               />
             );
           }
+          case "math":
+            return (
+              <MathBlock
+                key={i}
+                expression={seg.code}
+                displayMode
+              />
+            );
           case "image":
             return (
               <MarkdownImage

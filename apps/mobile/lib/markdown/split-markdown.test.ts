@@ -104,3 +104,50 @@ describe("GFM delimiter contract behind the raw-render reports (dd5ea713)", () =
     expect(content).not.toContain("---");
   });
 });
+describe("splitMarkdown — block math ($$) carves out of prose for KaTeX rendering", () => {
+  it("carves a standalone $$ block paragraph into a math segment", () => {
+    const out = segments("前文\n\n$$\nE=mc^2\n$$\n\n后文");
+    expect(out.map((s) => s.type)).toEqual(["prose", "math", "prose"]);
+    const math = out[1] as { type: "math"; code: string };
+    expect(math.code).toBe("E=mc^2");
+  });
+
+  it("carves a single-line $$...$$ paragraph", () => {
+    const out = segments("$$E=mc^2$$");
+    expect(out).toHaveLength(1);
+    expect(out[0]!.type).toBe("math");
+  });
+
+  it("keeps mixed prose+math paragraphs as prose (md4c inline math handles them)", () => {
+    const out = segments("文字 **加粗** 与 $$\nE=mc^2\n$$ 混排");
+    expect(out).toHaveLength(1);
+    expect(out[0]!.type).toBe("prose");
+  });
+
+  it("keeps dollar amounts literal — money is not math", () => {
+    const out = segments("金额 $100 与 $120 对比");
+    expect(out).toHaveLength(1);
+    expect(out[0]!.type).toBe("prose");
+  });
+
+  it("upgrades a ```math fence to a math segment (KaTeX beyond web's fence map)", () => {
+    // Web renders a ```math fence as plain highlighted source
+    // (isRichFenceLanguage only knows mermaid/html), but web renders $$/\( math
+    // through remark-math + rehype-katex. The mobile renderer has no KaTeX in
+    // md4c prose, so the splitter promotes the fence to a dedicated math
+    // segment rendered by MathBlock — superset of web's fence map, still
+    // whole-token exact (```mathlib stays code).
+    const out = segments("```math\n\\frac{a}{b}\n```");
+    expect(out).toHaveLength(1);
+    expect(out[0]!.type).toBe("math");
+    expect((out[0] as { code: string }).code).toBe("\\frac{a}{b}");
+  });
+
+  it("keeps a ```mathlib fence as a plain code segment (whole-token exact)", () => {
+    const out = segments("```mathlib\n\\frac{a}{b}\n```");
+    expect(out).toHaveLength(1);
+    expect(out[0]!.type).toBe("code");
+    expect((out[0] as { code: string }).code).toBe("\\frac{a}{b}");
+    expect((out[0] as { lang: string }).lang).toBe("mathlib");
+  });
+});

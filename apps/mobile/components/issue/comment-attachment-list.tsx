@@ -26,6 +26,7 @@ import { Alert, Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Attachment } from "@multica/core/types";
 import { standaloneAttachments } from "@/lib/attachment-dedup";
+import { HtmlAttachmentPreview } from "@/components/rich-content/html-attachment";
 import { MarkdownImage } from "@/lib/markdown/markdown-image";
 import { resolveAttachmentUrl } from "@/lib/attachment-url";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -75,6 +76,16 @@ export function CommentAttachmentList({ attachments, content, source }: Props) {
               uri={attachment.url}
               alt={attachment.filename}
               attachments={attachments}
+            />
+          );
+        }
+        if (attachment.content_type === "text/html") {
+          return (
+            <HtmlAttachmentPreview
+              key={attachment.id}
+              attachmentId={attachment.id}
+              filename={attachment.filename}
+              contentType={attachment.content_type}
             />
           );
         }

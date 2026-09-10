@@ -109,6 +109,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // at prebuild time; android/ is gitignored so this is the only way a fresh
       // clone builds a diagram-capable APK. See the plugin. Rich-content, MYS-799.
       "./plugins/with-mermaid-asset.js",
+      // Copies katex.min.js + katex.min.css + fonts/ (math-block WebView
+      // runtime) into the APK's assets at prebuild time — same gitignored-
+      // android/ reasoning as the mermaid plugin above. Rich-content, MYS-1005.
+      "./plugins/with-katex-asset.js",
     ],
     extra: { APP_ENV: env },
   };

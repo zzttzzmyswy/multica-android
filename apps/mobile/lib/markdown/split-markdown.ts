@@ -44,11 +44,13 @@
  * otherwise.
  */
 import { marked, type Tokens } from "marked";
+import { isStandaloneBlockMath, blockMathExpression } from "./block-math";
 
 export type MarkdownSegment =
   | { type: "prose"; content: string }
   | { type: "code"; lang: string | undefined; code: string }
-  | { type: "image"; uri: string; alt: string };
+  | { type: "image"; uri: string; alt: string }
+  | { type: "math"; code: string };
 
 export function splitMarkdown(input: string): MarkdownSegment[] {
   if (!input) return [];
@@ -69,6 +71,14 @@ export function splitMarkdown(input: string): MarkdownSegment[] {
     if (token.type === "code") {
       flushProse();
       const t = token as Tokens.Code;
+      // ```math fences upgrade to a math segment rendered through KaTeX
+      // (MathBlock). Superset of web's fence map — web's isRichFenceLanguage
+      // only knows mermaid/html and renders ```math as highlighted source —
+      // but still whole-token exact: ```mathlib stays ordinary code.
+      if (t.lang === "math") {
+        out.push({ type: "math", code: t.text });
+        continue;
+      }
       out.push({
         type: "code",
         lang: t.lang ? t.lang : undefined,
@@ -79,6 +89,18 @@ export function splitMarkdown(input: string): MarkdownSegment[] {
 
     if (token.type === "paragraph") {
       const para = token as Tokens.Paragraph;
+
+      // A paragraph whose entire body is a `$$…$$` fence upgrades to a
+      // block-math segment (mobile twin of web's blockMath tokenizer,
+      // packages/views/editor/extensions/math.tsx:138-158). Inline `$$`
+      // mixed with other text stays in prose — md4c renders it through the
+      // latexMath span path, matching web's inline MathSpan behaviour.
+      if (isStandaloneBlockMath(para.raw)) {
+        flushProse();
+        out.push({ type: "math", code: blockMathExpression(para.raw) });
+        continue;
+      }
+
       const inline = para.tokens ?? [];
       const hasImage = inline.some((t) => t.type === "image");
 
