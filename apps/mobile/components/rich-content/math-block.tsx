@@ -10,7 +10,7 @@
  * expression as plain code.
  */
 import { useState } from "react";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { WebView } from "react-native-webview";
 import type { WebViewMessageEvent } from "react-native-webview";
 import { Text } from "@/components/ui/text";

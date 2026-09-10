@@ -23,7 +23,6 @@ import { useColorScheme } from "@/lib/use-color-scheme";
 import { useTranslation } from "@/lib/i18n/react";
 import { CodeBlock } from "@/lib/markdown/code-block";
 import { buildHtmlPreviewDocument } from "@/lib/rich-content/html-preview-doc";
-import { THEME } from "@/lib/theme";
 
 const PREVIEW_HEIGHT_PX = 300;
 const ERROR_HEIGHT_PX = 80;
