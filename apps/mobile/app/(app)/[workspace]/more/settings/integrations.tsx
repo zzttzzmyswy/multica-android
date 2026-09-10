@@ -1,22 +1,35 @@
 /**
- * Workspace integrations page (iteration-52) — read-only status view.
+ * Workspace integrations page (iteration-52; GitHub features added in
+ * iteration-117).
  *
  * Mirrors web's github-tab + integrations-tab surfaces in a phone-friendly
  * form: a GitHub connection card (installed organizations vs. not connected)
- * and read-only rows for the other channel integrations (Lark / Slack /
- * DingTalk / WeCom). Binding and disconnecting all happen in the web app —
- * the OAuth handshake is browser-based — so each row's action opens the
- * workspace settings page (`{webBase}/{slug}/settings`) in the system
- * browser.
+ * with the four workspace-level feature switches from
+ * packages/views/settings/components/github-tab.tsx (master switch + PR
+ * sidebar / co-authored-by / auto-link, written via PATCH
+ * /api/workspaces/:id { settings }), and read-only rows for the other
+ * channel integrations (Lark / Slack / DingTalk / WeCom). Binding and
+ * disconnecting all happen in the web app — the OAuth handshake is
+ * browser-based — so each row's action opens the workspace settings page
+ * (`{webBase}/{slug}/settings`) in the system browser.
  */
 import { useState } from "react";
-import { Linking, Pressable, ScrollView, View } from "react-native";
+import { Alert, Linking, Pressable, ScrollView, View } from "react-native";
 import { Stack } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useQuery } from "@tanstack/react-query";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
 import { githubInstallationsOptions } from "@/data/queries/github";
+import { workspaceListOptions } from "@/data/queries/workspaces";
+import { useUpdateWorkspace } from "@/data/mutations/workspaces";
+import {
+  deriveGitHubSettings,
+  mergeGitHubSetting,
+  type GitHubSettingsKey,
+} from "@/lib/github-settings";
 import { VCSIntegrationSection } from "@/components/settings/vcs-integration-section";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { getWebBaseUrl } from "@/data/server-config";
@@ -54,6 +67,36 @@ export default function IntegrationsPage() {
   const connectedNames = installations
     .map((i) => i.account_login)
     .join(", ");
+  // `can_manage` comes from the installations response so the UI never
+  // claims management rights the server would reject (web github-tab.tsx:64).
+  const canManage = githubData?.can_manage === true;
+
+  const { data: workspaces } = useQuery(workspaceListOptions());
+  const workspace = workspaces?.find((w) => w.id === wsId);
+  const flags = deriveGitHubSettings(workspace);
+
+  const updateWorkspace = useUpdateWorkspace();
+  const [savingKey, setSavingKey] = useState<GitHubSettingsKey | null>(null);
+
+  // Web github-tab.tsx:persistSetting — spread the full existing settings
+  // bag (via mergeGitHubSetting), PATCH, invalidate; the list refetch is the
+  // source of truth (no optimistic patch, mirroring useUpdateWorkspace).
+  const persistSetting = async (key: GitHubSettingsKey, next: boolean) => {
+    if (!workspace || savingKey) return;
+    setSavingKey(key);
+    try {
+      await updateWorkspace.mutateAsync({
+        workspaceId: workspace.id,
+        patch: {
+          settings: mergeGitHubSetting(workspace.settings, key, next),
+        },
+      });
+    } catch {
+      Alert.alert(t("integrations.gh.saveFailed"));
+    } finally {
+      setSavingKey(null);
+    }
+  };
 
   const openWebSettings = () => {
     setOpenError(null);
@@ -117,6 +160,81 @@ export default function IntegrationsPage() {
             </View>
           </View>
 
+          {/* GitHub workspace-level feature switches — mirrors web
+              github-tab.tsx sections (master + PR sidebar / co-author /
+              auto-link). Rows disable while their PATCH is in flight; the
+              whole section is read-only without can_manage. */}
+          {workspace ? (
+            <View className="gap-2">
+              <Text className="text-xs uppercase tracking-wider text-muted-foreground px-1">
+                {t("integrations.gh.sectionFeatures")}
+              </Text>
+              <View className="rounded-md border border-border bg-card overflow-hidden">
+                <View className="flex-row items-center gap-3 px-4 py-3.5">
+                  <View className="size-8 rounded-md bg-secondary items-center justify-center">
+                    <Ionicons name="toggle-outline" size={16} color={muted} />
+                  </View>
+                  <View className="flex-1 min-w-0 gap-0.5">
+                    <Text className="text-sm font-medium text-foreground">
+                      {t("integrations.gh.masterTitle")}
+                    </Text>
+                    <Text className="text-xs text-muted-foreground mt-0.5">
+                      {flags.enabled
+                        ? t("integrations.gh.masterOn")
+                        : t("integrations.gh.masterOff")}
+                    </Text>
+                  </View>
+                  <Switch
+                    checked={flags.enabled}
+                    disabled={!canManage || savingKey !== null}
+                    onCheckedChange={(v) => persistSetting("github_enabled", v)}
+                  />
+                </View>
+                <Separator />
+                <FeatureRow
+                  mutedColor={muted}
+                  icon="albums-outline"
+                  label={t("integrations.gh.prSidebarLabel")}
+                  description={t("integrations.gh.prSidebarDesc")}
+                  checked={flags.prSidebar}
+                  disabled={!canManage || !flags.enabled || savingKey !== null}
+                  onCheckedChange={(v) =>
+                    persistSetting("github_pr_sidebar_enabled", v)
+                  }
+                />
+                <Separator />
+                <FeatureRow
+                  mutedColor={muted}
+                  icon="git-commit-outline"
+                  label={t("integrations.gh.coAuthorLabel")}
+                  description={`${t("integrations.gh.coAuthorPrefix")} Co-authored-by: multica-agent <github@multica.ai> ${t("integrations.gh.coAuthorSuffix")}`}
+                  checked={flags.coAuthor}
+                  disabled={!canManage || !flags.enabled || savingKey !== null}
+                  onCheckedChange={(v) =>
+                    persistSetting("co_authored_by_enabled", v)
+                  }
+                />
+                <Separator />
+                <FeatureRow
+                  mutedColor={muted}
+                  icon="git-pull-request-outline"
+                  label={t("integrations.gh.autoLinkLabel")}
+                  description={t("integrations.gh.autoLinkDesc")}
+                  checked={flags.autoLinkPRs}
+                  disabled={!canManage || !flags.enabled || savingKey !== null}
+                  onCheckedChange={(v) =>
+                    persistSetting("github_auto_link_prs_enabled", v)
+                  }
+                />
+              </View>
+              {!canManage ? (
+                <Text className="text-xs text-muted-foreground/70 px-1">
+                  {t("integrations.gh.readOnlyHint")}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+
           {/* Other channel rows */}
           <View className="gap-2">
             <Text className="text-xs uppercase tracking-wider text-muted-foreground px-1">
@@ -176,5 +294,42 @@ export default function IntegrationsPage() {
         </View>
       </ScrollView>
     </>
+  );
+}
+
+function FeatureRow({
+  icon,
+  label,
+  description,
+  checked,
+  disabled,
+  onCheckedChange,
+  mutedColor,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  label: string;
+  description: string;
+  checked: boolean;
+  disabled: boolean;
+  onCheckedChange: (v: boolean) => void;
+  mutedColor: string;
+}) {
+  return (
+    <View className="flex-row items-center gap-3 px-4 py-3.5">
+      <View className="size-8 rounded-md bg-secondary items-center justify-center">
+        <Ionicons name={icon} size={16} color={mutedColor} />
+      </View>
+      <View className="flex-1 min-w-0 gap-0.5">
+        <Text className="text-sm font-medium text-foreground">{label}</Text>
+        <Text className="text-xs text-muted-foreground mt-0.5">
+          {description}
+        </Text>
+      </View>
+      <Switch
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={onCheckedChange}
+      />
+    </View>
   );
 }

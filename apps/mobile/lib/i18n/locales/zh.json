@@ -2731,5 +2731,18 @@
   "chat.queue.edit": "编辑排队消息",
   "chat.queue.remove": "移除排队消息",
   "chat.queue.fallback": "排队消息",
-  "chat.queue.actionFailed": "无法更新排队消息"
+  "chat.queue.actionFailed": "无法更新排队消息",
+  "integrations.gh.sectionFeatures": "功能",
+  "integrations.gh.masterTitle": "启用 GitHub 功能",
+  "integrations.gh.masterOn": "关闭后，所有 GitHub 入口都会被隐藏，也不再产生新的副作用。后台已有数据不会被删除。",
+  "integrations.gh.masterOff": "GitHub 功能已关闭。PR 侧栏、Co-authored-by trailer 与自动关联都已暂停。后台数据未删除。",
+  "integrations.gh.prSidebarLabel": "Pull Request 侧栏",
+  "integrations.gh.prSidebarDesc": "在任务详情侧栏中展示关联的 Pull Request。",
+  "integrations.gh.coAuthorLabel": "Co-authored-by trailer",
+  "integrations.gh.coAuthorPrefix": "在智能体提交的 commit 中追加",
+  "integrations.gh.coAuthorSuffix": "。",
+  "integrations.gh.autoLinkLabel": "任务 ↔ PR 自动关联",
+  "integrations.gh.autoLinkDesc": "根据 PR 标题、正文和分支名匹配任务编号并自动建立链接。",
+  "integrations.gh.saveFailed": "更新 GitHub 设置失败",
+  "integrations.gh.readOnlyHint": "只读视图。只有管理员和所有者可以修改这些设置。"
 }

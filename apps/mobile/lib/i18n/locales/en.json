@@ -2735,5 +2735,18 @@
   "chat.queue.edit": "Edit queued message",
   "chat.queue.remove": "Remove queued message",
   "chat.queue.fallback": "Queued message",
-  "chat.queue.actionFailed": "Couldn't update the queued message"
+  "chat.queue.actionFailed": "Couldn't update the queued message",
+  "integrations.gh.sectionFeatures": "Features",
+  "integrations.gh.masterTitle": "Enable GitHub features",
+  "integrations.gh.masterOn": "When off, every GitHub UI affordance is hidden and no new side-effects are written. Existing data is kept on the backend.",
+  "integrations.gh.masterOff": "GitHub features are turned off. The PR sidebar, co-author trailer, and auto-link are paused. Data on the backend is not deleted.",
+  "integrations.gh.prSidebarLabel": "Pull Request sidebar",
+  "integrations.gh.prSidebarDesc": "Show linked pull requests inside the issue detail sidebar.",
+  "integrations.gh.coAuthorLabel": "Co-authored-by trailer",
+  "integrations.gh.coAuthorPrefix": "Append",
+  "integrations.gh.coAuthorSuffix": "to commits authored by agents.",
+  "integrations.gh.autoLinkLabel": "Auto-link issues and PRs",
+  "integrations.gh.autoLinkDesc": "Match PR titles, bodies, and branch names against issue identifiers and create the link automatically.",
+  "integrations.gh.saveFailed": "Failed to update GitHub settings",
+  "integrations.gh.readOnlyHint": "Read-only view. Only workspace admins and owners can change these."
 }
