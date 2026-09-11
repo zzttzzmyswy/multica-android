@@ -111,6 +111,11 @@ import type {
   SearchProjectsResponse,
   SendChatMessageResponse,
   SetAgentSkillsRequest,
+  SetAgentRuntimeSkillEnabledRequest,
+  RuntimeLocalSkillListRequest,
+  RuntimeLocalSkillsResult,
+  RuntimeLocalSkillSummary,
+  DisabledRuntimeSkill,
   Skill,
   SkillSummary,
   StoredAgentDraft,
@@ -1129,6 +1134,67 @@ class ApiClient {
       method: "PUT",
       body: JSON.stringify(data),
     });
+  }
+
+  // POST /api/agents/{id}/skills/add — incremental attach (server upserts
+  // with ON CONFLICT DO NOTHING), mirrors core client.addAgentSkills.
+  async addAgentSkills(
+    agentId: string,
+    data: SetAgentSkillsRequest,
+  ): Promise<void> {
+    await this.fetch<void>(`/api/agents/${agentId}/skills/add`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async removeAgentSkill(agentId: string, skillId: string): Promise<void> {
+    await this.fetch<void>(`/api/agents/${agentId}/skills/${skillId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async setAgentSkillEnabled(
+    agentId: string,
+    skillId: string,
+    enabled: boolean,
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/agents/${agentId}/skills/${skillId}/enabled`,
+      { method: "PUT", body: JSON.stringify({ enabled }) },
+    );
+  }
+
+  async setAgentRuntimeSkillEnabled(
+    agentId: string,
+    data: SetAgentRuntimeSkillEnabledRequest,
+  ): Promise<void> {
+    await this.fetch<void>(`/api/agents/${agentId}/runtime-skills/enabled`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Runtime local-skill discovery (web core runtimes/local-skills.ts port):
+  // POST kicks off a daemon request, then poll GET until it leaves
+  // pending/running. Old daemons claim one queued request per heartbeat
+  // (~15s), so the budget must cover queue wait plus discovery time.
+  async initiateListLocalSkills(
+    runtimeId: string,
+  ): Promise<RuntimeLocalSkillListRequest> {
+    return this.fetch<RuntimeLocalSkillListRequest>(
+      `/api/runtimes/${runtimeId}/local-skills`,
+      { method: "POST" },
+    );
+  }
+
+  async getListLocalSkillsResult(
+    runtimeId: string,
+    requestId: string,
+  ): Promise<RuntimeLocalSkillListRequest> {
+    return this.fetch<RuntimeLocalSkillListRequest>(
+      `/api/runtimes/${runtimeId}/local-skills/${requestId}`,
+    );
   }
 
   // Agent-builders: creation conversations (web Creation Studio). Mirrors
