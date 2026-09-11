@@ -1221,7 +1221,6 @@
   "issues.gantt.zoomMonth": "Month",
   "issues.gantt.showCompleted": "Show completed",
   "issues.gantt.empty": "No scheduled issues yet — set a start or due date on any issue to see it on the timeline.",
-  "issues.gantt.invertedDatesWarning": "Start date is after due date — bar shown from min to max.",
   "issues.gantt.tooltip.zoom": "Timeline zoom",
   "issues.gantt.tooltip.showCompleted": "Toggle completed issues on the timeline",
   "labels.createButton": "New label",
