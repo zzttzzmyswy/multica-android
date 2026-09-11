@@ -46,6 +46,7 @@ import {
   buildMyIssuesFilter,
   myIssueListOptions,
 } from "@/data/queries/my-issues";
+import { ganttIssuesOptions } from "@/data/queries/issues";
 import { issueViewListOptions } from "@/data/queries/issue-views";
 import type { MyIssuesScope } from "@/data/queries/issue-keys";
 import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection-store";
@@ -268,11 +269,40 @@ export default function MyIssues() {
     enabled: !!wsId && !!userId,
   });
 
+  // Gantt canvas data — paged scheduled-issue fetch. The regular list is
+  // capped at 100 rows server-side (GET /api/issues), which would silently
+  // drop scheduled issues past page 1 on busy workspaces. While the gantt
+  // view is active we switch the surface's data source to this dedicated
+  // fetch (mirrors web's `usesGantt` switch in use-issue-surface-data.ts);
+  // every other view keeps the regular list. The scope filter rides along so
+  // the canvas honours assigned / created / agents like the list does.
+  const ganttActive = view === "gantt";
+  const {
+    data: ganttIssues,
+    isLoading: ganttLoading,
+    error: ganttError,
+    refetch: refetchGantt,
+    isRefetching: ganttRefetching,
+  } = useQuery(
+    ganttIssuesOptions(wsId, ganttActive && !!userId, filter),
+  );
+
+  // Loading/error/refresh follow the ACTIVE source so a first gantt load
+  // shows a spinner instead of a stale "no scheduled issues" empty state.
+  const surfaceData = useMemo(
+    () => (ganttActive ? ganttIssues ?? [] : data ?? []),
+    [ganttActive, ganttIssues, data],
+  );
+  const surfaceLoading = ganttActive ? ganttLoading : isLoading;
+  const surfaceError = ganttActive ? ganttError : error;
+  const surfaceRefetch = ganttActive ? refetchGantt : refetch;
+  const surfaceRefetching = ganttActive ? ganttRefetching : isRefetching;
+
   // Client predicate — same window re-applied so WS-patched rows that fell
   // out of it drop at render time (mirrors the workspace Issues page).
   const filtered = useMemo(
-    () => applyIssueFilters(data ?? [], filterState),
-    [data, filterState],
+    () => applyIssueFilters(surfaceData, filterState),
+    [surfaceData, filterState],
   );
 
   const sorted = useMemo(
@@ -314,7 +344,10 @@ export default function MyIssues() {
     );
   }, [filterState]);
 
-  const showEmptyState = !isLoading && !error && sorted.length === 0;
+  // The gantt view owns its own empty state (the scheduled projection can't
+  // prove the window is empty — web never asserts surface-empty in gantt).
+  const showEmptyState =
+    !surfaceLoading && !surfaceError && !ganttActive && sorted.length === 0;
 
   // Stable nav callback shared by every issue container (board / table /
   // list rows). BoardColumn + cells are memoized, so an inline arrow here
@@ -394,15 +427,17 @@ export default function MyIssues() {
           }
         />
       ) : null}
-      {isLoading ? (
+      {surfaceLoading ? (
         <IssuesLoading />
-      ) : error ? (
+      ) : surfaceError ? (
         <View className="px-4 gap-3 pt-4">
           <Text className="text-sm text-destructive">
             {t("myIssues.loadError")}
-            {error instanceof Error ? error.message : t("common.unknownError")}
+            {surfaceError instanceof Error
+              ? surfaceError.message
+              : t("common.unknownError")}
           </Text>
-          <Button variant="outline" onPress={() => refetch()}>
+          <Button variant="outline" onPress={() => surfaceRefetch()}>
             <Text>{t("workspace.retry")}</Text>
           </Button>
         </View>
@@ -478,8 +513,8 @@ export default function MyIssues() {
               onOpen={() => openIssue(item)}
             />
           )}
-          refreshing={isFocused && isRefetching}
-          onRefresh={refetch}
+          refreshing={isFocused && surfaceRefetching}
+          onRefresh={surfaceRefetch}
         />
       )}
 
