@@ -8,6 +8,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateAgentRequest,
+  SetAgentRuntimeSkillEnabledRequest,
   SetAgentSkillsRequest,
   UpdateAgentEnvRequest,
   UpdateAgentRequest,
@@ -120,6 +121,70 @@ export function useSetAgentSkills(agentId: string) {
       if (!wsId) return;
       void qc.invalidateQueries({ queryKey: agentKeys.list(wsId) });
       void qc.invalidateQueries({ queryKey: agentKeys.listAll(wsId) });
+    },
+  });
+}
+
+// Agent-detail Skills section (web skills-tab parity). Every write invalidates
+// the agent list caches — the detail screen reads agent.skills from the
+// workspace list query, so a settle-driven refetch is what re-renders the
+// section. Runtime-skill toggles additionally invalidate the discovery cache
+// so the section reflects the server's authoritative disabled set.
+export function useAddAgentSkills(agentId: string) {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: (data: SetAgentSkillsRequest) => api.addAgentSkills(agentId, data),
+    onSettled: () => {
+      if (!wsId) return;
+      void qc.invalidateQueries({ queryKey: agentKeys.list(wsId) });
+      void qc.invalidateQueries({ queryKey: agentKeys.listAll(wsId) });
+    },
+  });
+}
+
+export function useRemoveAgentSkill(agentId: string) {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: (skillId: string) => api.removeAgentSkill(agentId, skillId),
+    onSettled: () => {
+      if (!wsId) return;
+      void qc.invalidateQueries({ queryKey: agentKeys.list(wsId) });
+      void qc.invalidateQueries({ queryKey: agentKeys.listAll(wsId) });
+    },
+  });
+}
+
+export function useSetAgentSkillEnabled(agentId: string) {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: ({ skillId, enabled }: { skillId: string; enabled: boolean }) =>
+      api.setAgentSkillEnabled(agentId, skillId, enabled),
+    onSettled: () => {
+      if (!wsId) return;
+      void qc.invalidateQueries({ queryKey: agentKeys.list(wsId) });
+      void qc.invalidateQueries({ queryKey: agentKeys.listAll(wsId) });
+    },
+  });
+}
+
+export function useSetAgentRuntimeSkillEnabled(agentId: string) {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: (data: SetAgentRuntimeSkillEnabledRequest) =>
+      api.setAgentRuntimeSkillEnabled(agentId, data),
+    onSettled: () => {
+      if (!wsId) return;
+      void qc.invalidateQueries({ queryKey: agentKeys.list(wsId) });
+      void qc.invalidateQueries({ queryKey: agentKeys.listAll(wsId) });
+      void qc.invalidateQueries({ queryKey: ["runtimes", "local-skills"] });
     },
   });
 }

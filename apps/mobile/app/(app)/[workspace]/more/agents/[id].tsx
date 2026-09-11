@@ -24,6 +24,7 @@ import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PresenceDot } from "@/components/ui/presence-dot";
 import { AgentDetailActions } from "@/components/agent/agent-detail-actions";
 import { AgentMcpSection } from "@/components/agent/agent-mcp-section";
+import { AgentSkillsSection } from "@/components/agent/agent-skills-section";
 import { AgentAccessPicker } from "@/components/agent/agent-access-picker";
 import { AgentActivitySection } from "@/components/agent/agent-activity-section";
 import { ActorIssuesPanel } from "@/components/issue/actor-issues-panel";
@@ -281,6 +282,10 @@ export default function AgentDetailPage() {
           {/* MCP servers — archived agents render none (a retired agent can't
               be assigned MCP servers). */}
           {!archived ? <AgentMcpSection agent={agent} /> : null}
+
+          {/* Skills — assigned workspace skills + inherited runtime-local
+              skills (web skills-tab parity). Archived agents render none. */}
+          {!archived ? <AgentSkillsSection agent={agent} runtime={runtime} /> : null}
 
           {/* Related Issues — this agent's assigned/created issues (web
               agent-overview-pane Work tab → ActorIssuesPanel). Shown for
