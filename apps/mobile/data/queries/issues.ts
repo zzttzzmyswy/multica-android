@@ -105,16 +105,20 @@ const GANTT_MAX_ISSUES = 10_000;
 export async function fetchGanttIssues(
   wsId: string,
   filter?: MyIssuesFilter,
+  signal?: AbortSignal,
 ): Promise<Issue[]> {
   const issues: Issue[] = [];
   let offset = 0;
   while (offset < GANTT_MAX_ISSUES) {
-    const res = await api.listIssues({
-      scheduled: true,
-      limit: GANTT_PAGE_LIMIT,
-      offset,
-      ...filter,
-    });
+    const res = await api.listIssues(
+      {
+        scheduled: true,
+        limit: GANTT_PAGE_LIMIT,
+        offset,
+        ...filter,
+      },
+      { signal },
+    );
     issues.push(...res.issues);
     if (res.issues.length < GANTT_PAGE_LIMIT) break;
     // `total > 0` guard: the schema defaults an absent total to 0, and a 0
@@ -143,7 +147,8 @@ export const ganttIssuesOptions = (
       "gantt",
       ...(filter ? ([filter] as const) : []),
     ],
-    queryFn: () => fetchGanttIssues(wsId as string, filter),
+    queryFn: ({ signal }) =>
+      fetchGanttIssues(wsId as string, filter, signal),
     enabled: !!wsId && enabled,
   });
 

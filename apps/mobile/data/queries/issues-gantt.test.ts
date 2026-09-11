@@ -64,6 +64,40 @@ describe("fetchGanttIssues", () => {
     expect(mockListIssues).toHaveBeenCalledTimes(1);
   });
 
+  it("stops via the total guard when pages come back full", async () => {
+    mockListIssues
+      .mockResolvedValueOnce({
+        issues: Array.from({ length: 100 }, (_, i) => fakeIssue(i)),
+        total: 300,
+      })
+      .mockResolvedValueOnce({
+        issues: Array.from({ length: 100 }, (_, i) => fakeIssue(100 + i)),
+        total: 300,
+      })
+      .mockResolvedValueOnce({
+        issues: Array.from({ length: 100 }, (_, i) => fakeIssue(200 + i)),
+        total: 300,
+      });
+
+    const issues = await fetchGanttIssues("ws-1");
+
+    expect(issues).toHaveLength(300);
+    expect(mockListIssues).toHaveBeenCalledTimes(3);
+    expect(mockListIssues.mock.calls[2][0]).toMatchObject({ offset: 200 });
+  });
+
+  it("threads the abort signal into every page request", async () => {
+    const controller = new AbortController();
+    mockListIssues.mockResolvedValue({ issues: [], total: 0 });
+
+    await fetchGanttIssues("ws-1", undefined, controller.signal);
+
+    expect(mockListIssues).toHaveBeenCalledWith(
+      expect.objectContaining({ scheduled: true }),
+      { signal: controller.signal },
+    );
+  });
+
   it("does not stop early when total is 0 (unset/unknown)", async () => {
     mockListIssues
       .mockResolvedValueOnce({
@@ -85,6 +119,7 @@ describe("fetchGanttIssues", () => {
 
     expect(mockListIssues).toHaveBeenCalledWith(
       expect.objectContaining({ scheduled: true, assignee_id: "user-1" }),
+      expect.anything(),
     );
   });
 });
@@ -120,6 +155,7 @@ describe("ganttIssuesOptions", () => {
 
     expect(mockListIssues).toHaveBeenCalledWith(
       expect.objectContaining({ involves_user_id: "u1" }),
+      expect.anything(),
     );
   });
 });
