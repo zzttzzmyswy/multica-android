@@ -63,7 +63,7 @@ const SORT_FIELDS: readonly IssueSortField[] = [
 ];
 const SORT_DIRECTIONS: readonly IssueSortDirection[] = ["asc", "desc"];
 const GROUPINGS: readonly IssueGrouping[] = ["status", "assignee"];
-const VIEW_MODES: readonly IssueViewMode[] = ["list", "board", "table"];
+const VIEW_MODES: readonly IssueViewMode[] = ["list", "board", "table", "gantt"];
 
 function stringArray(value: unknown): string[] {
   return Array.isArray(value)

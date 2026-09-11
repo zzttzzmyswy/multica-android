@@ -7,6 +7,7 @@
  * whole subtree with one call when needed.
  */
 import { queryOptions } from "@tanstack/react-query";
+import type { Issue } from "@multica/core/types";
 import { api } from "@/data/api";
 import {
   issueKeys,
@@ -83,6 +84,47 @@ function hasWindow(window: IssueListWindowParams): boolean {
   }
   return false;
 }
+
+/** Paged fetch of every scheduled issue in the workspace — the gantt
+ *  canvas's data source. Mirrors web's `fetchProjectGanttIssues`
+ *  (`packages/core/issues/queries.ts:358`) with `project_id` dropped: the
+ *  project dimension stays a client-side filter so the same fetch serves
+ *  the workspace Issues page and My Issues alike (web's gantt fetches per
+ *  project because its canvas lives on the project surface; mobile's lives
+ *  on workspace-wide lists). */
+const GANTT_PAGE_LIMIT = 500;
+const GANTT_MAX_ISSUES = 10_000;
+
+export async function fetchGanttIssues(wsId: string): Promise<Issue[]> {
+  const issues: Issue[] = [];
+  let offset = 0;
+  while (offset < GANTT_MAX_ISSUES) {
+    const res = await api.listIssues({
+      scheduled: true,
+      limit: GANTT_PAGE_LIMIT,
+      offset,
+    });
+    issues.push(...res.issues);
+    if (res.issues.length < GANTT_PAGE_LIMIT) break;
+    if (res.total != null && issues.length >= res.total) break;
+    offset += GANTT_PAGE_LIMIT;
+  }
+  return issues;
+}
+
+/** Gantt canvas data — all scheduled issues, fetched once per workspace.
+ *  Keyed under `list(wsId)` so the shared WS invalidation prefix reaches
+ *  it; enabled only while the gantt view is on screen (web gates the same
+ *  fetch on `usesGantt`). */
+export const ganttIssuesOptions = (
+  wsId: string | null,
+  enabled: boolean,
+) =>
+  queryOptions({
+    queryKey: [...issueKeys.list(wsId), "gantt"] as const,
+    queryFn: () => fetchGanttIssues(wsId as string),
+    enabled: !!wsId && enabled,
+  });
 
 export const issueDetailOptions = (wsId: string | null, id: string) =>
   queryOptions({

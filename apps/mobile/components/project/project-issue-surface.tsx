@@ -37,6 +37,7 @@ import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { BatchActionBar } from "@/components/issue/batch-action-bar";
 import { BoardView } from "@/components/issue/board-view";
+import { GanttView } from "@/components/issue/gantt-view";
 import { IssueViewBar } from "@/components/issue/issue-view-bar";
 import { IssueTableView } from "@/components/issue/table-view";
 import { IssuesLoading } from "@/components/issue/issues-loading";
@@ -437,6 +438,14 @@ export function ProjectIssueSurface({
             useProjectIssuesViewStore.getState().setSortBy(field);
             useProjectIssuesViewStore.getState().setSortDirection(direction);
           }}
+          onOpenIssue={(issue) => navigateToIssue(issue.id)}
+          emptyLabel={emptyMessage}
+        />
+      ) : view === "gantt" ? (
+        <GanttView
+          issues={sorted}
+          sortBy={sortBy}
+          sortDirection={sortDirection}
           onOpenIssue={(issue) => navigateToIssue(issue.id)}
           emptyLabel={emptyMessage}
         />

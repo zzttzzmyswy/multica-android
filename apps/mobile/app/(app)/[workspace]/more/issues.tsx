@@ -34,6 +34,7 @@ import { Button } from "@/components/ui/button";
 // IssuesHeader pattern (scope + filter share a row).
 import { BatchActionBar } from "@/components/issue/batch-action-bar";
 import { BoardView } from "@/components/issue/board-view";
+import { GanttView } from "@/components/issue/gantt-view";
 import { IssueViewBar } from "@/components/issue/issue-view-bar";
 import { IssueTableView } from "@/components/issue/table-view";
 import { IssuesLoading } from "@/components/issue/issues-loading";
@@ -439,6 +440,20 @@ export default function IssuesPage() {
             hasActiveFilterChips
               ? t("issues.filterEmpty")
               : emptyMessageForScope(scope, t)
+          }
+        />
+      ) : view === "gantt" ? (
+        <GanttView
+          issues={sorted}
+          sortBy={sortBy}
+          sortDirection={sortDirection}
+          onOpenIssue={(issue) => {
+            if (wsSlug) router.push(`/${wsSlug}/issue/${issue.id}`);
+          }}
+          emptyLabel={
+            hasActiveFilterChips
+              ? t("issues.filterEmpty")
+              : t("issues.gantt.empty")
           }
         />
       ) : (

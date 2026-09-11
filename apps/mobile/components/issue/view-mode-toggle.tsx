@@ -1,15 +1,15 @@
 /**
- * List / Board / Table view-mode toggle for the issue workbench — mobile
- * surface of web's `ViewBar` mode switch (`packages/views/issues/components/
- * view-bar.tsx`), restricted to the three phone-appropriate modes (web also
- * has gantt / swimlane).
+ * List / Board / Table / Gantt view-mode toggle for the issue workbench —
+ * mobile surface of web's `ViewBar` mode switch
+ * (`packages/views/issues/components/view-bar.tsx`); iter-118 adds gantt
+ * (swimlane stays phone-deferred: drag-to-reorder across lanes).
  *
  * Sits right of the scope pills on all issue-list surfaces, next to the
  * filter trigger. Reads/writes the `view` field on the screen's view store;
  * switching never clears filters or sort (same store, same query window).
  *
  * Glyphs: Ionicons `list` / `grid` for list / board, MaterialCommunityIcons
- * `table` for the table mode (Ionicons has no table glyph).
+ * `table` / `chart-gantt` for the table / gantt modes (Ionicons has neither).
  */
 import { Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -26,6 +26,7 @@ const OPTIONS: {
   { value: "list", a11yKey: "a11y.viewList" },
   { value: "board", a11yKey: "a11y.viewBoard" },
   { value: "table", a11yKey: "a11y.viewTable" },
+  { value: "gantt", a11yKey: "a11y.viewGantt" },
 ];
 
 function ModeGlyph({ value, color }: { value: IssueViewMode; color: string }) {
@@ -34,6 +35,8 @@ function ModeGlyph({ value, color }: { value: IssueViewMode; color: string }) {
       return <Ionicons name="grid" size={15} color={color} />;
     case "table":
       return <MaterialCommunityIcons name="table" size={16} color={color} />;
+    case "gantt":
+      return <MaterialCommunityIcons name="chart-gantt" size={16} color={color} />;
     case "list":
     default:
       return <Ionicons name="list" size={15} color={color} />;
