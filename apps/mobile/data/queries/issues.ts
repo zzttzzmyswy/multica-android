@@ -12,6 +12,7 @@ import { api } from "@/data/api";
 import {
   issueKeys,
   type IssueListWindowParams,
+  type MyIssuesFilter,
 } from "./issue-keys";
 
 export {
@@ -91,22 +92,39 @@ function hasWindow(window: IssueListWindowParams): boolean {
  *  project dimension stays a client-side filter so the same fetch serves
  *  the workspace Issues page and My Issues alike (web's gantt fetches per
  *  project because its canvas lives on the project surface; mobile's lives
- *  on workspace-wide lists). */
-const GANTT_PAGE_LIMIT = 500;
+ *  on workspace-wide lists). My Issues passes its scope filter (assigned /
+ *  created / agents) through so the gantt honours the same server-side
+ *  narrowing as the list. */
+// Page size must respect the server's GET /api/issues cap (100,
+// server/internal/handler/issue.go) — a larger page is silently clamped to
+// 100, so the `length < pageSize` short-page check would break after the
+// first page and truncate any workspace with >100 scheduled issues.
+const GANTT_PAGE_LIMIT = 100;
 const GANTT_MAX_ISSUES = 10_000;
 
-export async function fetchGanttIssues(wsId: string): Promise<Issue[]> {
+export async function fetchGanttIssues(
+  wsId: string,
+  filter?: MyIssuesFilter,
+  signal?: AbortSignal,
+): Promise<Issue[]> {
   const issues: Issue[] = [];
   let offset = 0;
   while (offset < GANTT_MAX_ISSUES) {
-    const res = await api.listIssues({
-      scheduled: true,
-      limit: GANTT_PAGE_LIMIT,
-      offset,
-    });
+    const res = await api.listIssues(
+      {
+        scheduled: true,
+        limit: GANTT_PAGE_LIMIT,
+        offset,
+        ...filter,
+      },
+      { signal },
+    );
     issues.push(...res.issues);
     if (res.issues.length < GANTT_PAGE_LIMIT) break;
-    if (res.total != null && issues.length >= res.total) break;
+    // `total > 0` guard: the schema defaults an absent total to 0, and a 0
+    // total must not be read as "we already have everything" on a non-empty
+    // first page — that would abort the walk mid-workspace.
+    if (res.total != null && res.total > 0 && issues.length >= res.total) break;
     offset += GANTT_PAGE_LIMIT;
   }
   return issues;
@@ -115,14 +133,22 @@ export async function fetchGanttIssues(wsId: string): Promise<Issue[]> {
 /** Gantt canvas data — all scheduled issues, fetched once per workspace.
  *  Keyed under `list(wsId)` so the shared WS invalidation prefix reaches
  *  it; enabled only while the gantt view is on screen (web gates the same
- *  fetch on `usesGantt`). */
+ *  fetch on `usesGantt`). `filter` carries the My Issues scope (assigned /
+ *  created / agents) into both the cache key and the page requests, so each
+ *  scope's canvas stays a separate cache entry. */
 export const ganttIssuesOptions = (
   wsId: string | null,
   enabled: boolean,
+  filter?: MyIssuesFilter,
 ) =>
   queryOptions({
-    queryKey: [...issueKeys.list(wsId), "gantt"] as const,
-    queryFn: () => fetchGanttIssues(wsId as string),
+    queryKey: [
+      ...issueKeys.list(wsId),
+      "gantt",
+      ...(filter ? ([filter] as const) : []),
+    ],
+    queryFn: ({ signal }) =>
+      fetchGanttIssues(wsId as string, filter, signal),
     enabled: !!wsId && enabled,
   });
 

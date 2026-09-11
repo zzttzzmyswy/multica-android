@@ -224,16 +224,38 @@ export function patchIssuesList(
   );
 }
 
+/** True when the query belongs to the gantt canvas. Gantt row membership is
+ *  decided server-side (scheduled ∧ optional My-Issues scope), so a blind
+ *  workspace-wide create prepend would leak rows onto a canvas window they
+ *  don't belong to — creates must invalidate these keys instead of
+ *  prepending (same rule the actor panels follow for creates). */
+function isGanttQueryKey(queryKey: readonly unknown[]): boolean {
+  return queryKey.indexOf("gantt") !== -1;
+}
+
 export function prependToIssuesList(
   qc: QueryClient,
   wsId: string,
   issue: Issue,
 ) {
-  qc.setQueriesData<Issue[]>({ queryKey: issueKeys.list(wsId) }, (old) => {
-    if (!old) return old;
-    if (old.some((i) => i.id === issue.id)) return old;
-    return [issue, ...old];
-  });
+  // list(wsId) is also a prefix of the gantt canvas keys (and the filtered
+  // window keys), so a prefix match reaches every cached list. Plain
+  // windows re-filter at render time, so a prepend is safe there; a gantt
+  // window has no client-side re-filter for server-decided membership, so
+  // skip those caches and invalidate them instead — the refetch decides
+  // whether the new issue belongs on the canvas.
+  qc.setQueriesData<Issue[]>(
+    {
+      queryKey: issueKeys.list(wsId),
+      predicate: (query) => !isGanttQueryKey(query.queryKey),
+    },
+    (old) => {
+      if (!old) return old;
+      if (old.some((i) => i.id === issue.id)) return old;
+      return [issue, ...old];
+    },
+  );
+  qc.invalidateQueries({ queryKey: [...issueKeys.list(wsId), "gantt"] });
 }
 
 export function removeFromIssuesList(

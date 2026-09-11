@@ -1221,7 +1221,6 @@
   "issues.gantt.zoomMonth": "月",
   "issues.gantt.showCompleted": "显示已完成",
   "issues.gantt.empty": "暂无已排期的任务 — 给任意任务设置开始或截止日期，即可显示在时间轴上。",
-  "issues.gantt.invertedDatesWarning": "开始日期晚于截止日期——已按区间最小/最大端绘制。",
   "issues.gantt.tooltip.zoom": "时间轴缩放",
   "issues.gantt.tooltip.showCompleted": "在时间轴上切换已完成任务的显示",
   "labels.createButton": "新建标签",
