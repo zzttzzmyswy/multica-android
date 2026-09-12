@@ -99,6 +99,7 @@ import type {
   RuntimeProfile,
   RuntimeUsage,
   RuntimeUsageByAgent,
+  RuntimeModelListRequest,
   CreateRuntimeProfileRequest,
   UpdateRuntimeProfileRequest,
   DashboardAgentRunTime,
@@ -213,6 +214,8 @@ import {
   WorkspaceSubscriptionPricesSchema,
   WorkspaceSubscriptionSeatReconcileResultSchema,
   WorkspaceSubscriptionSummarySchema,
+  RuntimeModelListRequestSchema,
+  MALFORMED_RUNTIME_MODEL_LIST_REQUEST,
   agentBuilderRuntimeSwitchFallback,
 } from "@multica/core/api/schemas";
 import type {
@@ -1271,6 +1274,46 @@ class ApiClient {
     return parseWithFallback(raw, RuntimeListSchema, EMPTY_RUNTIME_LIST, {
       endpoint: "listRuntimes",
     });
+  }
+
+  // Runtime model discovery (iteration-121 agent-create model picker).
+  // Mirrors packages/core/api/client.ts initiateListModels/getListModelsResult:
+  // POST kicks the daemon (heartbeat piggyback), GET /:requestId polls the
+  // record; the state machine itself lives in lib/runtime-models-poll.ts.
+  // A drift response degrades to the MALFORMED record (status "failed"),
+  // which the form surfaces as discovery-failure + manual entry instead of a
+  // fabricated empty catalog.
+  async initiateListModels(
+    runtimeId: string,
+  ): Promise<RuntimeModelListRequest> {
+    const raw = await this.fetch<unknown>(`/api/runtimes/${runtimeId}/models`, {
+      method: "POST",
+    });
+    return parseWithFallback<RuntimeModelListRequest>(
+      raw,
+      RuntimeModelListRequestSchema,
+      { ...MALFORMED_RUNTIME_MODEL_LIST_REQUEST, runtime_id: runtimeId },
+      { endpoint: "POST /api/runtimes/{id}/models" },
+    );
+  }
+
+  async getListModelsResult(
+    runtimeId: string,
+    requestId: string,
+  ): Promise<RuntimeModelListRequest> {
+    const raw = await this.fetch<unknown>(
+      `/api/runtimes/${runtimeId}/models/${requestId}`,
+    );
+    return parseWithFallback<RuntimeModelListRequest>(
+      raw,
+      RuntimeModelListRequestSchema,
+      {
+        ...MALFORMED_RUNTIME_MODEL_LIST_REQUEST,
+        id: requestId,
+        runtime_id: runtimeId,
+      },
+      { endpoint: "GET /api/runtimes/{id}/models/{requestId}" },
+    );
   }
 
   // Runtime-level usage rollups (iteration-93 runtime detail usage section).
