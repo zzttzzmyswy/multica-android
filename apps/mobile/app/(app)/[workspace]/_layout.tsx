@@ -281,6 +281,17 @@ export default function WorkspaceLayout() {
           name="project/[id]/picker/lead"
           options={SHEET_OPTIONS}
         />
+        {/* Project start/due date calendar sheets (MYS-1021): same
+            spinner + Done/Clear header as the issue date sheets, writing
+            project.start_date / project.due_date. */}
+        <Stack.Screen
+          name="project/[id]/picker/start-date"
+          options={SHEET_OPTIONS}
+        />
+        <Stack.Screen
+          name="project/[id]/picker/due-date"
+          options={SHEET_OPTIONS}
+        />
         <Stack.Screen
           name="project/[id]/add-resource"
           options={SHEET_OPTIONS}
