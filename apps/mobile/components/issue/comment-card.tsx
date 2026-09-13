@@ -57,6 +57,10 @@ import { ReactionBar } from "./reaction-bar";
 import { useCommentLongPress } from "./comment-context-menu";
 import { useCommentSelectStore } from "@/data/comment-select-store";
 import { useTranslation } from "@/lib/i18n/react";
+import {
+  deriveThreadResolution,
+  foldThreadReplies,
+} from "@/lib/thread-resolution";
 
 interface Props {
   entry: TimelineEntry;
@@ -86,10 +90,30 @@ export function CommentCard({
 }: Props) {
   // Resolved threads default to a single-line bar; tap expands in place for
   // the current session. Unmount (scroll out of viewport) resets — same
-  // behavior as iOS Mail's "tap to expand a thread" pattern. Replies cannot
-  // themselves be resolved (server enforces root-only), so the resolved flag
-  // on the root is the single source of truth for this card.
-  const resolved = !!entry.resolved_at;
+  // behavior as iOS Mail's "tap to expand a thread" pattern.
+  //
+  // `resolved_at` can sit on the ROOT ("Resolve thread" → the whole thread
+  // folds) or on a REPLY ("Resolve thread with comment" → that reply is the
+  // resolution, the other replies fold around it). Deriving it in one place
+  // keeps both shapes on the same code path — see `lib/thread-resolution`.
+  const resolution = useMemo(
+    () => deriveThreadResolution(entry, replies),
+    [entry, replies],
+  );
+  const rootResolved = resolution.kind === "root";
+  const replyResolutionId =
+    resolution.kind === "reply" ? resolution.resolutionId : null;
+  const foldedReplies = useMemo(
+    () => foldThreadReplies(replies, resolution),
+    [replies, resolution],
+  );
+  const resolutionReply = useMemo(
+    () =>
+      replyResolutionId
+        ? (replies.find((r) => r.id === replyResolutionId) ?? null)
+        : null,
+    [replies, replyResolutionId],
+  );
   const [expanded, setExpanded] = useState(false);
   // Highlight ring while a long-press action sheet is on screen — child
   // CommentBody flips this via onPressChange so the outer bubble shell can
@@ -114,20 +138,20 @@ export function CommentCard({
   const isSelectingHere =
     selectingId === entry.id || replies.some((r) => r.id === selectingId);
 
-  // Inbox deep-link target inside a resolved thread expands automatically —
+  // Inbox deep-link target inside a folded thread expands automatically —
   // otherwise tapping a notification would just reveal a bar with no content
   // and force the user to tap again.
   useEffect(() => {
-    if (!resolved || !highlightedCommentId) return;
+    if (resolution.kind === "none" || !highlightedCommentId) return;
     if (
       highlightedCommentId === entry.id ||
       replies.some((r) => r.id === highlightedCommentId)
     ) {
       setExpanded(true);
     }
-  }, [resolved, highlightedCommentId, entry.id, replies]);
+  }, [resolution.kind, highlightedCommentId, entry.id, replies]);
 
-  if (resolved && !expanded) {
+  if (rootResolved && !expanded) {
     return (
       <ResolvedThreadBar
         entry={entry}
@@ -156,12 +180,12 @@ export function CommentCard({
         <View
           className={cn(
             "bg-surface-1 rounded-2xl px-4 py-3 gap-3 border-2 border-transparent transition-colors",
-            resolved && "opacity-70",
+            rootResolved && "opacity-70",
             isHighlighted && "border-primary/30",
             isSelectingHere && "bg-primary/5 border-primary/30",
           )}
         >
-          {resolved ? (
+          {rootResolved ? (
             <ResolvedIndicator
               entry={entry}
               onCollapse={() => setExpanded(false)}
@@ -173,19 +197,51 @@ export function CommentCard({
             issueIdentifier={issueIdentifier}
             onPressChange={handlePressChange}
           />
-          {replies.map((reply) => (
-            <View key={reply.id} className="border-t border-border/60 pt-3">
-              <CommentBody
-                entry={reply}
-                issueId={issueId}
-                issueIdentifier={issueIdentifier}
-                onPressChange={handlePressChange}
-              />
-              <ReplyHighlightOverlay
-                active={highlightedCommentId === reply.id}
-              />
-            </View>
-          ))}
+          {replyResolutionId !== null && !expanded ? (
+            <>
+              {/* Reply-mode resolution, folded: the other replies collapse
+               *  behind one bar and the resolution stays pinned below it —
+               *  web's `replyFolded` branch in comment-card.tsx. The root
+               *  stays fully visible in both states. */}
+              {foldedReplies.length > 0 ? (
+                <View className="border-t border-border/60 pt-3">
+                  <CommentsFoldBar
+                    replies={foldedReplies}
+                    onExpand={() => setExpanded(true)}
+                  />
+                </View>
+              ) : null}
+              {resolutionReply ? (
+                <View className="border-t border-border/60 pt-3">
+                  <ResolutionBadge />
+                  <CommentBody
+                    entry={resolutionReply}
+                    issueId={issueId}
+                    issueIdentifier={issueIdentifier}
+                    onPressChange={handlePressChange}
+                  />
+                  <ReplyHighlightOverlay
+                    active={highlightedCommentId === resolutionReply.id}
+                  />
+                </View>
+              ) : null}
+            </>
+          ) : (
+            replies.map((reply) => (
+              <View key={reply.id} className="border-t border-border/60 pt-3">
+                {reply.id === replyResolutionId ? <ResolutionBadge /> : null}
+                <CommentBody
+                  entry={reply}
+                  issueId={issueId}
+                  issueIdentifier={issueIdentifier}
+                  onPressChange={handlePressChange}
+                />
+                <ReplyHighlightOverlay
+                  active={highlightedCommentId === reply.id}
+                />
+              </View>
+            ))
+          )}
         </View>
         <RootHighlightOverlay active={highlightedCommentId === entry.id} />
       </View>
@@ -268,6 +324,89 @@ function ResolvedThreadBar({
         </Text>
         <Ionicons name="chevron-down" size={14} color={mutedFg} />
       </Pressable>
+    </View>
+  );
+}
+
+/**
+ * Middle fold — the thread's resolution is a REPLY, so the other replies
+ * collapse behind this bar while the root and the resolution stay visible.
+ * Mobile port of web's `<CommentsFoldBar>`
+ * (`packages/views/issues/components/resolved-thread-bar.tsx`), at the same
+ * single-line section-row scale as `<ResolvedThreadBar>` above.
+ */
+function CommentsFoldBar({
+  replies,
+  onExpand,
+}: {
+  replies: TimelineEntry[];
+  onExpand: () => void;
+}) {
+  const { getName } = useActorLookup();
+  const { colorScheme } = useColorScheme();
+  const { t } = useTranslation();
+  const mutedFg = THEME[colorScheme].mutedForeground;
+
+  const authorsLabel = useMemo(() => {
+    const MAX_NAMED = 2;
+    const seen = new Set<string>();
+    const ordered: { type: string | null; id: string | null }[] = [];
+    for (const e of replies) {
+      const key = `${e.actor_type}:${e.actor_id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      ordered.push({ type: e.actor_type, id: e.actor_id });
+    }
+    const named = ordered
+      .slice(0, MAX_NAMED)
+      .map((a) =>
+        getName(a.type as "member" | "agent" | null | undefined, a.id),
+      )
+      .join(", ");
+    const remaining = ordered.length - MAX_NAMED;
+    return remaining > 0 ? `${named} +${remaining}` : named;
+  }, [replies, getName]);
+
+  const total = replies.length;
+  const messageCount = t(total === 1 ? "comment.message" : "comment.messages");
+
+  return (
+    <Pressable
+      onPress={onExpand}
+      className="flex-row items-center gap-2.5 px-3 py-2.5 rounded-xl bg-secondary/60 active:opacity-70"
+      accessibilityRole="button"
+      accessibilityLabel={t("comment.foldBarLabel", {
+        authors: authorsLabel,
+        count: total,
+        messageCount,
+      })}
+    >
+      <Ionicons name="chevron-forward" size={13} color={mutedFg} />
+      <Text className="flex-1 text-sm text-muted-foreground" numberOfLines={1}>
+        {t("comment.foldBar", {
+          count: total,
+          messageCount,
+          authors: authorsLabel,
+        })}
+      </Text>
+    </Pressable>
+  );
+}
+
+/**
+ * "Resolution" chip pinned above the reply that settled the thread
+ * ("Resolve thread with comment"). Web's `resolution_badge`; it only ever
+ * renders on the single derived resolution, never on the root (that case is
+ * carried by `<ResolvedIndicator>` / `<ResolvedThreadBar>`).
+ */
+function ResolutionBadge() {
+  const { t } = useTranslation();
+  return (
+    <View className="flex-row items-center gap-1 pb-1.5">
+      <Ionicons name="checkmark-circle" size={13} color="#22c55e" />
+      <Text className="text-xs font-medium text-emerald-500">
+        {t("comment.resolutionBadge")}
+      </Text>
     </View>
   );
 }

@@ -9,8 +9,8 @@
  *
  * Item set (conditional, mirrors web's comment context menu):
  *   Reply (stub) · React… (opens nested sheet) · Copy · Select Text ·
- *   Copy Link · Resolve/Unresolve Thread (root only) · Delete (own only) ·
- *   Cancel
+ *   Copy Link · Resolve/Unresolve Thread (root) · Resolve thread with
+ *   comment / Unresolve (reply) · Delete (own only) · Cancel
  *
  * The nested React… sheet (5 quick emojis + More reactions… + Cancel) is
  * fired from INSIDE the outer sheet's completion callback rather than
@@ -93,6 +93,17 @@ export function useCommentLongPress(
     if (isRoot) {
       push(
         resolved ? t("menu.unresolveThread") : t("menu.resolveThread"),
+        { kind: "resolve" },
+      );
+    } else {
+      // Resolving a REPLY is "Resolve thread with comment" — that reply
+      // becomes the thread's resolution and the other replies fold around
+      // it (web's `resolve_with_comment_action`). The server accepts a
+      // resolve on any comment in the thread and clears the previous
+      // resolution (`ClearOtherThreadResolutions`), so there is no
+      // root-only restriction to honour here.
+      push(
+        resolved ? t("comment.unresolve") : t("comment.resolveWithComment"),
         { kind: "resolve" },
       );
     }
