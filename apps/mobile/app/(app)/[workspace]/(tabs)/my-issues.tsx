@@ -31,6 +31,7 @@ import { HeaderActions } from "@/components/ui/app-header-actions";
 import { BatchActionBar } from "@/components/issue/batch-action-bar";
 import { BoardView } from "@/components/issue/board-view";
 import { GanttView } from "@/components/issue/gantt-view";
+import { SwimlaneView } from "@/components/issue/swimlane-view";
 import { IssueViewBar } from "@/components/issue/issue-view-bar";
 import { IssueTableView } from "@/components/issue/table-view";
 import { IssuesLoading } from "@/components/issue/issues-loading";
@@ -102,6 +103,7 @@ export default function MyIssues() {
   const setScope = useMyIssuesViewStore((s) => s.setScope);
   const view = useMyIssuesViewStore((s) => s.view);
   const setView = useMyIssuesViewStore((s) => s.setView);
+  const swimlaneGrouping = useMyIssuesViewStore((s) => s.swimlaneGrouping);
   const tableColumns = useMyIssuesViewStore((s) => s.tableColumns);
   const toggleTableColumn = useMyIssuesViewStore((s) => s.toggleTableColumn);
   const grouping = useMyIssuesViewStore((s) => s.grouping);
@@ -489,6 +491,21 @@ export default function MyIssues() {
             hasActiveFilterChips
               ? t("myIssues.filterEmpty")
               : t("issues.gantt.empty")
+          }
+        />
+      ) : view === "swimlane" ? (
+        <SwimlaneView
+          issues={sorted}
+          grouping={swimlaneGrouping}
+          onGroupingChange={(next) =>
+            useMyIssuesViewStore.getState().setSwimlaneGrouping(next)
+          }
+          statusOrder={BOARD_STATUSES}
+          onOpenIssue={openIssue}
+          emptyLabel={
+            hasActiveFilterChips
+              ? t("myIssues.filterEmpty")
+              : emptyMessageForScope(scope, t)
           }
         />
       ) : (

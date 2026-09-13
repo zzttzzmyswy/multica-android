@@ -335,6 +335,36 @@ export default function SkillDetailPage() {
                   {skill.description}
                 </Text>
               ) : null}
+              {/* Header counts — web's identity strip (`detail.header.files`
+                  + `detail.header.used_by`, skill-detail-page.tsx). What the
+                  skill is made of and who has it, without scrolling to the
+                  Files / Used-by sections. */}
+              <View className="flex-row flex-wrap items-center gap-3 pt-0.5">
+                <View className="flex-row items-center gap-1">
+                  <Ionicons
+                    name="document-text-outline"
+                    size={13}
+                    color={theme.mutedForeground}
+                  />
+                  <Text className="text-xs text-muted-foreground">
+                    {t("skills.detail.fileCount", { count: files.length + 1 })}
+                  </Text>
+                </View>
+                <View className="flex-row items-center gap-1">
+                  <Ionicons
+                    name="people-outline"
+                    size={13}
+                    color={theme.mutedForeground}
+                  />
+                  <Text className="text-xs text-muted-foreground">
+                    {usedByAgents.length === 1
+                      ? t("skills.usedBy.title", { count: 1 })
+                      : t("skills.usedBy.titleOther", {
+                          count: usedByAgents.length,
+                        })}
+                  </Text>
+                </View>
+              </View>
             </View>
           </View>
 

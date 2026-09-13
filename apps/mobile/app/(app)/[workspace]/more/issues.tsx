@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { BatchActionBar } from "@/components/issue/batch-action-bar";
 import { BoardView } from "@/components/issue/board-view";
 import { GanttView } from "@/components/issue/gantt-view";
+import { SwimlaneView } from "@/components/issue/swimlane-view";
 import { IssueViewBar } from "@/components/issue/issue-view-bar";
 import { IssueTableView } from "@/components/issue/table-view";
 import { IssuesLoading } from "@/components/issue/issues-loading";
@@ -98,6 +99,7 @@ export default function IssuesPage() {
   const setScope = useIssuesViewStore((s) => s.setScope);
   const view = useIssuesViewStore((s) => s.view);
   const setView = useIssuesViewStore((s) => s.setView);
+  const swimlaneGrouping = useIssuesViewStore((s) => s.swimlaneGrouping);
   const tableColumns = useIssuesViewStore((s) => s.tableColumns);
   const toggleTableColumn = useIssuesViewStore((s) => s.toggleTableColumn);
   const grouping = useIssuesViewStore((s) => s.grouping);
@@ -486,6 +488,23 @@ export default function IssuesPage() {
             hasActiveFilterChips
               ? t("issues.filterEmpty")
               : t("issues.gantt.empty")
+          }
+        />
+      ) : view === "swimlane" ? (
+        <SwimlaneView
+          issues={sorted}
+          grouping={swimlaneGrouping}
+          onGroupingChange={(next) =>
+            useIssuesViewStore.getState().setSwimlaneGrouping(next)
+          }
+          statusOrder={BOARD_STATUSES}
+          onOpenIssue={(issue) => {
+            if (wsSlug) router.push(`/${wsSlug}/issue/${issue.id}`);
+          }}
+          emptyLabel={
+            hasActiveFilterChips
+              ? t("issues.filterEmpty")
+              : emptyMessageForScope(scope, t)
           }
         />
       ) : (

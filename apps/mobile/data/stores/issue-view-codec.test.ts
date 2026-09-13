@@ -134,12 +134,16 @@ describe("sanitizeViewDisplay", () => {
       sanitizeViewDisplay({ viewMode: "board", grouping: "assignee" }, "position"),
     ).toEqual({ viewMode: "board", grouping: "assignee", sortBy: "position", sortDirection: "asc" });
     expect(
-      sanitizeViewDisplay({ viewMode: "swimlane", grouping: "nope", sortBy: "weird", sortDirection: "sideways" }, "created_at"),
+      sanitizeViewDisplay({ viewMode: "calendar", grouping: "nope", sortBy: "weird", sortDirection: "sideways" }, "created_at"),
     ).toEqual({ viewMode: "list", grouping: "status", sortBy: "created_at", sortDirection: "asc" });
     // "gantt" is a valid mobile mode since iter-118 — passes through.
     expect(
       sanitizeViewDisplay({ viewMode: "gantt" }, "created_at"),
     ).toEqual({ viewMode: "gantt", grouping: "status", sortBy: "created_at", sortDirection: "asc" });
+    // "swimlane" is a valid mobile mode since iter-122 — passes through.
+    expect(
+      sanitizeViewDisplay({ viewMode: "swimlane" }, "created_at"),
+    ).toEqual({ viewMode: "swimlane", grouping: "status", sortBy: "created_at", sortDirection: "asc" });
     expect(sanitizeViewDisplay({}, "due_date")).toEqual({
       viewMode: "list",
       grouping: "status",

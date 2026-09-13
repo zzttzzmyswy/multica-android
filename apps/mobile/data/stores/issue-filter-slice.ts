@@ -62,19 +62,20 @@ export interface IssueDateFilterValue {
 
 /**
  * Issue-workbench view mode. Mobile surface of web `ViewMode` — gantt added
- * in iter-118 (swimlane stays phone-deferred: its value is drag-to-reorder
- * across lanes, which has no cheap touch equivalent). Lives here so all
- * issue-list view stores share one wire default, but the field itself lives
- * on each store (like `scope`), NOT in the filter slice — clearing filters
- * must not reset the user's chosen view.
+ * in iter-118, swimlane in iter-122 (its lane model lives in
+ * `lib/swimlane.ts`). Lives here so all issue-list view stores share one
+ * wire default, but the field itself lives on each store (like `scope`),
+ * NOT in the filter slice — clearing filters must not reset the user's
+ * chosen view.
  */
-export type IssueViewMode = "list" | "board" | "table" | "gantt";
+export type IssueViewMode = "list" | "board" | "table" | "gantt" | "swimlane";
 
 export const ISSUE_VIEW_MODES: { value: IssueViewMode; labelKey: string }[] = [
   { value: "list", labelKey: "issues.viewList" },
   { value: "board", labelKey: "issues.viewBoard" },
   { value: "table", labelKey: "issues.viewTable" },
   { value: "gantt", labelKey: "issues.viewGantt" },
+  { value: "swimlane", labelKey: "issues.viewSwimlane" },
 ];
 
 export const ISSUE_SORT_OPTIONS: { value: IssueSortField; labelKey: string }[] =
