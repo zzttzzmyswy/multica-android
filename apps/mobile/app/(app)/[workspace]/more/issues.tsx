@@ -74,6 +74,7 @@ import {
 import {
   buildIssueWindow,
   defaultIssueFilterSlice,
+  hasActiveIssueFilters,
 } from "@/data/stores/issue-filter-slice";
 import { useRunningIssueIds } from "@/data/queries/agent-task-snapshot";
 import { useCreateIssueFromColumn } from "@/lib/use-create-issue-from-column";
@@ -383,21 +384,16 @@ export default function IssuesPage() {
     });
   }, [sorted, grouping]);
 
-  const hasActiveFilterChips = useMemo(() => {
-    const f = filterState;
-    return (
-      f.statusFilters.length > 0 ||
-      f.priorityFilters.length > 0 ||
-      f.assigneeFilters.length > 0 ||
-      f.includeNoAssignee ||
-      f.creatorFilters.length > 0 ||
-      f.projectFilters.length > 0 ||
-      f.includeNoProject ||
-      f.labelFilters.length > 0 ||
-      Object.keys(f.propertyFilters).length > 0 ||
-      f.dateFilter !== null
-    );
-  }, [filterState]);
+  // Whether the empty state should say "no matches under your filters"
+  // instead of "nothing here for this scope" — i.e. whether any dimension
+  // the user turned on is narrowing the list. Delegates to the shared
+  // selector so a newly added dimension (workingOnly, iteration-127) cannot
+  // leave this page claiming the scope is empty while a filter is silently
+  // on.
+  const hasActiveFilterChips = useMemo(
+    () => hasActiveIssueFilters(filterState),
+    [filterState],
+  );
 
   // The gantt view owns its own empty state (the scheduled projection can't
   // prove the window is empty — web never asserts surface-empty in gantt).

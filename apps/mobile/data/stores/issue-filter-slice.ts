@@ -388,8 +388,27 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
  *  for a second header chip (the toolbar already carries the scope pills,
  *  the five-button mode switch and the filter trigger) — so the filter
  *  sheet IS its surface, and an active-only-here dimension that left the
- *  trigger unlit would be invisible the moment the sheet closed. */
-export function hasActiveIssueFilters(state: IssueFilterSlice): boolean {
+ *  trigger unlit would be invisible the moment the sheet closed.
+ *
+ *  Takes the value shape rather than the whole slice so the issue-list
+ *  surfaces (which assemble a plain `IssueFilterState` from per-field store
+ *  subscriptions) can reuse it instead of re-deriving the predicate. */
+export function hasActiveIssueFilters(
+  state: Pick<
+    IssueFilterSlice,
+    | "statusFilters"
+    | "priorityFilters"
+    | "assigneeFilters"
+    | "includeNoAssignee"
+    | "creatorFilters"
+    | "projectFilters"
+    | "includeNoProject"
+    | "labelFilters"
+    | "propertyFilters"
+    | "dateFilter"
+    | "workingOnly"
+  >,
+): boolean {
   return (
     state.statusFilters.length > 0 ||
     state.priorityFilters.length > 0 ||
