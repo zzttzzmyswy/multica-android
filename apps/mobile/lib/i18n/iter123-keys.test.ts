@@ -30,6 +30,11 @@ describe("autopilot run history + thread resolution i18n (MYS-1043)", () => {
   });
 
   const ZH_SPOT: Record<string, string> = {
+    // Root-thread actions keep web's action phrasing: the old zh strings
+    // ("已解决" / "取消已解决") read as a state, not a command, next to the
+    // reply-mode labels added below.
+    "menu.resolveThread": "解决该讨论",
+    "menu.unresolveThread": "重新打开讨论",
     "autopilots.runSkippedGroup.label": "已跳过",
     "autopilots.runSkippedGroup.summary": "{{count}} 条跳过的运行",
     "autopilots.runViewLog": "查看执行日志",
