@@ -1889,6 +1889,7 @@
   "runtimes.kind.builtin": "内置",
   "runtimes.kind.custom": "自定义",
   "runtimes.loadError": "加载运行时失败：",
+  "runtimes.machine.actions": "机器操作",
   "runtimes.machine.busy_count_other": "{{count}} 个忙碌",
   "runtimes.machine.filters.all": "全部",
   "runtimes.machine.filters.issues": "异常",

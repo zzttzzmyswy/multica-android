@@ -306,7 +306,7 @@ export default function MachineDetailPage() {
             <View className="mt-4 rounded-lg border border-border">
               <View className="border-b border-border px-3 py-2">
                 <Text className="text-xs font-semibold text-foreground">
-                  {t("runtimes.machine.rename")}
+                  {t("runtimes.machine.actions")}
                 </Text>
               </View>
               <View className="p-3 gap-3">

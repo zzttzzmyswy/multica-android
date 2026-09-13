@@ -1892,6 +1892,7 @@
   "runtimes.kind.builtin": "Built-in",
   "runtimes.kind.custom": "Custom",
   "runtimes.loadError": "Failed to load runtimes: ",
+  "runtimes.machine.actions": "Machine actions",
   "runtimes.machine.busy_count_one": "{{count}} busy",
   "runtimes.machine.busy_count_other": "{{count}} busy",
   "runtimes.machine.filters.all": "All",

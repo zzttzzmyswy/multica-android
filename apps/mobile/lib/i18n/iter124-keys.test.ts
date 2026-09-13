@@ -37,6 +37,7 @@ describe("runtime machine detail i18n (iteration 124)", () => {
     "a11y.queueSend": "排队发送",
     // Autopilot runbook body — web `detail.field_prompt`.
     "autopilots.detail.fieldPrompt": "提示词",
+    "runtimes.machine.actions": "机器操作",
     "runtimes.machine.open": "打开机器 {{name}}",
     "runtimes.machine.runtime_count": "{{count}} 个运行时",
     "runtimes.machine.rename": "重命名机器",
