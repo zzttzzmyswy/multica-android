@@ -2959,6 +2959,6 @@
   "workspaceSettings.issuePrefixConfirmMessage": "所有问题将从 {{oldPrefix}}-N 重新编号为 {{newPrefix}}-N。任何使用 {{oldPrefix}}-N 的外部引用——PR 标题、分支名、文档与聊天中的链接——都会失效。",
   "workspaceSettings.issuePrefixChange": "修改",
   "myIssues.scopeAll": "全部",
-  "myIssues.emptyAll": "该工作区还没有问题。",
+  "myIssues.emptyAll": "还没有指派给您、由您创建，或涉及您的 agents 与 squads 的问题。",
   "mcp.agent.workspaceTitle": "工作区服务器"
 }

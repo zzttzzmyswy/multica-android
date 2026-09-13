@@ -68,9 +68,10 @@ describe("iteration 126 i18n", () => {
     "workspaceSettings.issuePrefixRequired": "前缀不能为空。",
     "workspaceSettings.issuePrefixConfirmTitle": "确认修改问题前缀？",
     "workspaceSettings.issuePrefixChange": "修改",
-    // My Issues "all" scope (web my-issues-header.tsx :89-94).
+    // My Issues "all" scope (web my-issues-header.tsx :89-94). The empty text
+    // names the union the scope actually selects, not "the whole workspace".
     "myIssues.scopeAll": "全部",
-    "myIssues.emptyAll": "该工作区还没有问题。",
+    "myIssues.emptyAll": "还没有指派给您、由您创建，或涉及您的 agents 与 squads 的问题。",
   };
 
   it("resolves every iteration-126 key in both locales", () => {

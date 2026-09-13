@@ -2963,6 +2963,6 @@
   "workspaceSettings.issuePrefixConfirmMessage": "All issues will be renumbered from {{oldPrefix}}-N to {{newPrefix}}-N. External references — pull request titles, branch names, links in docs and chat — that use {{oldPrefix}}-N will stop resolving.",
   "workspaceSettings.issuePrefixChange": "Change",
   "myIssues.scopeAll": "All",
-  "myIssues.emptyAll": "No issues in this workspace yet.",
+  "myIssues.emptyAll": "Nothing assigned to you, created by you, or involving your agents and squads yet.",
   "mcp.agent.workspaceTitle": "Workspace servers"
 }

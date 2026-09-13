@@ -46,6 +46,7 @@ import {
 } from "@/components/issue/issue-surface-chrome";
 import {
   buildMyIssuesFilter,
+  myIssuesAllOptions,
   myIssueListOptions,
 } from "@/data/queries/my-issues";
 import { ganttIssuesOptions } from "@/data/queries/issues";
@@ -292,9 +293,17 @@ export default function MyIssues() {
   // Paginated window — see the workspace Issues screen for the rationale
   // (`GET /api/issues` clamps limit to 100 server-side). The list view
   // infinite-scrolls; board / swimlane / table drain the window instead.
+  //
+  // `all` is the union of the three legs, which the list API cannot express
+  // in one request — it uses the scatter-gather options instead. Every other
+  // scope is a single relation param.
   const listQuery = useInfiniteQuery({
-    ...myIssueListOptions(wsId, scope, filter, window),
-    enabled: !!wsId && (scope === "all" || !!userId),
+    ...(scope === "all"
+      ? myIssuesAllOptions(wsId, userId, window)
+      : myIssueListOptions(wsId, scope, filter, window)),
+    // Every scope keys off the session user, `all` included — its three legs
+    // are all "…= me" predicates.
+    enabled: !!wsId && !!userId,
   });
   const {
     data: listData,
