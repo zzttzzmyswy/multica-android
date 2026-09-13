@@ -1692,6 +1692,18 @@ class ApiClient {
     );
   }
 
+  /** Revoke a GitHub App installation — mirrors web's
+   *  `api.deleteGitHubInstallation` (packages/core/api/client.ts:3723). */
+  async deleteGitHubInstallation(
+    workspaceId: string,
+    installationId: string,
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/workspaces/${workspaceId}/github/installations/${installationId}`,
+      { method: "DELETE" },
+    );
+  }
+
   // VCS integration (iteration-59) — self-hosted Git providers (Forgejo /
   // Gitea / GitLab). Mirrors packages/core/api/client.ts:3741-3770. Unlike
   // GitHub there is no App/installation model: each workspace stores a

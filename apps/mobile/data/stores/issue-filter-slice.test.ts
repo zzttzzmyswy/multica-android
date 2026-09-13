@@ -229,6 +229,67 @@ describe("hasActiveIssueFilters", () => {
     });
     expect(hasActiveIssueFilters(store.getState())).toBe(true);
   });
+
+  it("true when only the agents-working filter is on", () => {
+    expect(hasActiveIssueFilters(store.getState())).toBe(false);
+    store.getState().toggleWorkingOnly();
+    expect(hasActiveIssueFilters(store.getState())).toBe(true);
+  });
+});
+
+describe("workingOnly (iteration-127)", () => {
+  let store: ReturnType<typeof makeStore>;
+
+  beforeEach(() => {
+    store = makeStore();
+  });
+
+  it("defaults to off", () => {
+    expect(store.getState().workingOnly).toBe(false);
+  });
+
+  it("toggles both ways", () => {
+    store.getState().toggleWorkingOnly();
+    expect(store.getState().workingOnly).toBe(true);
+    store.getState().toggleWorkingOnly();
+    expect(store.getState().workingOnly).toBe(false);
+  });
+
+  it("is cleared by clearFilters", () => {
+    store.getState().toggleWorkingOnly();
+    store.getState().toggleStatusFilter("todo");
+    store.getState().clearFilters();
+    expect(store.getState().workingOnly).toBe(false);
+    expect(store.getState().statusFilters).toEqual([]);
+  });
+
+  it("survives a saved-view reset (views never carry it)", () => {
+    // `workingOnly` is deliberately absent from IssueFilterSnapshot — running
+    // state is second-to-second, so opening a saved view must not switch it
+    // either way. It just keeps whatever the user had.
+    store.getState().toggleWorkingOnly();
+    store.getState().resetFiltersTo({
+      statusFilters: ["todo"],
+      priorityFilters: [],
+      assigneeFilters: [],
+      includeNoAssignee: false,
+      creatorFilters: [],
+      projectFilters: [],
+      includeNoProject: false,
+      labelFilters: [],
+      propertyFilters: {},
+    });
+    expect(store.getState().workingOnly).toBe(true);
+    expect(store.getState().statusFilters).toEqual(["todo"]);
+  });
+
+  it("is never sent to the server window", () => {
+    // The predicate is client-only: `/api/issues` has no working-agents
+    // parameter, and inventing one would 400 or silently no-op. The window
+    // builder must ignore it.
+    store.getState().toggleWorkingOnly();
+    expect(buildIssueWindow(store.getState())).toEqual({});
+  });
 });
 describe("resetFiltersTo (iteration-65)", () => {
   let store: ReturnType<typeof makeStore>;

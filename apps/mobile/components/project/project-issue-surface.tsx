@@ -145,6 +145,13 @@ export function ProjectIssueSurface({
       labelFilters,
       propertyFilters,
       dateFilter,
+      // `workingOnly` is wired on the two workspace-wide surfaces only. Web's
+      // project surface renders the project IssuesSurface with no
+      // `agentRunningFilter` (use-issue-surface-data.ts:396 vs :345), and
+      // mobile's project store does not expose the toggle — so this literal
+      // carries the switch off rather than reading a store field that can
+      // never be set here.
+      workingOnly: false,
     }),
     [
       statusFilters,

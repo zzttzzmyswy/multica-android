@@ -71,7 +71,75 @@ const noFilters: IssueFilterState = {
   labelFilters: [],
   propertyFilters: {},
   dateFilter: null,
+  workingOnly: false,
 };
+
+describe("applyIssueFilters — workingOnly", () => {
+  const a = issue({ id: "a" });
+  const b = issue({ id: "b" });
+  const c = issue({ id: "c" });
+  const all = [a, b, c];
+
+  it("is a no-op when off, even with a running set present", () => {
+    expect(
+      applyIssueFilters(all, noFilters, {
+        runningIssueIds: new Set(["b"]),
+      }),
+    ).toEqual(all);
+  });
+
+  it("keeps only issues with a running task", () => {
+    expect(
+      applyIssueFilters(
+        all,
+        { ...noFilters, workingOnly: true },
+        { runningIssueIds: new Set(["a", "c"]) },
+      ).map((i) => i.id),
+    ).toEqual(["a", "c"]);
+  });
+
+  it("hides everything when the projection has not resolved", () => {
+    // Fail closed: the user asked for "only what is working", and nothing
+    // has been shown to be working yet. Showing the full list here would
+    // silently invert the filter on a slow network.
+    expect(
+      applyIssueFilters(all, { ...noFilters, workingOnly: true }),
+    ).toEqual([]);
+    expect(
+      applyIssueFilters(all, { ...noFilters, workingOnly: true }, {}),
+    ).toEqual([]);
+  });
+
+  it("treats an empty resolved set as a real (empty) answer", () => {
+    expect(
+      applyIssueFilters(
+        all,
+        { ...noFilters, workingOnly: true },
+        { runningIssueIds: new Set() },
+      ),
+    ).toEqual([]);
+  });
+
+  it("ANDs with the other dimensions", () => {
+    const running = issue({ id: "r", status: "in_progress" });
+    const idle = issue({ id: "i", status: "in_progress" });
+    expect(
+      applyIssueFilters(
+        [running, idle],
+        { ...noFilters, workingOnly: true, statusFilters: ["in_progress"] },
+        { runningIssueIds: new Set(["r"]) },
+      ).map((x) => x.id),
+    ).toEqual(["r"]);
+    // Same running set, a status the running issue is not in → nothing.
+    expect(
+      applyIssueFilters(
+        [running, idle],
+        { ...noFilters, workingOnly: true, statusFilters: ["done"] },
+        { runningIssueIds: new Set(["r"]) },
+      ),
+    ).toEqual([]);
+  });
+});
 
 describe("applyIssueFilters", () => {
   const a = issue({

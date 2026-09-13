@@ -107,6 +107,7 @@ export default function IssuesFilterRoute() {
   const labelFilters = s.labelFilters;
   const propertyFilters = s.propertyFilters;
   const dateFilter = s.dateFilter;
+  const workingOnly = s.workingOnly;
   const sortBy = s.sortBy;
   const sortDirection = s.sortDirection;
   const grouping = s.grouping;
@@ -170,6 +171,22 @@ export default function IssuesFilterRoute() {
         ) : null}
       </View>
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+        {/* ——— Agents working ———
+            Web's quick filter is a header chip
+            (`workspace-agent-working-chip.tsx`); mobile's toolbar has no
+            room for a second chip beside the scope pills, the five-button
+            mode switch and the filter trigger, so the sheet carries it as
+            the first row. It is a display predicate like any other — it
+            lights the trigger dot (`hasActiveIssueFilters`) and is cleared
+            by Reset. */}
+        <SectionLabel>{t("filter.quick")}</SectionLabel>
+        <BoolRow
+          label={t("filter.workingOnly")}
+          checked={workingOnly}
+          onToggle={() => act().toggleWorkingOnly()}
+          t={t}
+        />
+
         {/* ——— Status ——— */}
         <SectionLabel>{t("filter.status")}</SectionLabel>
         {statusOptions.groups.map((group) => (

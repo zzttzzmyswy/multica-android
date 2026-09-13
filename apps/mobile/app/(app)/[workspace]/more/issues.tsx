@@ -75,6 +75,8 @@ import {
   buildIssueWindow,
   defaultIssueFilterSlice,
 } from "@/data/stores/issue-filter-slice";
+import { useRunningIssueIds } from "@/data/queries/agent-task-snapshot";
+import { useCreateIssueFromColumn } from "@/lib/use-create-issue-from-column";
 import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-workspace-change";
 import { BOARD_STATUSES } from "@/lib/issue-status";
 import {
@@ -122,6 +124,11 @@ export default function IssuesPage() {
   const labelFilters = useIssuesViewStore((s) => s.labelFilters);
   const propertyFilters = useIssuesViewStore((s) => s.propertyFilters);
   const dateFilter = useIssuesViewStore((s) => s.dateFilter);
+  const workingOnly = useIssuesViewStore((s) => s.workingOnly);
+  // Running-agent projection for the working-only filter. `undefined` while
+  // the snapshot loads — the predicate fails closed on it, which is the
+  // intended "only what is provably working" read.
+  const runningIssueIds = useRunningIssueIds();
   // Stable dedup of the object that feeds applyIssueFilters (each field is
   // its own subscription above, so the assembled object only changes when a
   // dimension actually changes).
@@ -137,6 +144,7 @@ export default function IssuesPage() {
       labelFilters,
       propertyFilters,
       dateFilter,
+      workingOnly,
     }),
     [
       statusFilters,
@@ -149,6 +157,7 @@ export default function IssuesPage() {
       labelFilters,
       propertyFilters,
       dateFilter,
+      workingOnly,
     ],
   );
 
@@ -159,6 +168,8 @@ export default function IssuesPage() {
       params: { workspace: wsSlug, scope: "all" },
     });
   };
+
+  const createFromColumn = useCreateIssueFromColumn();
 
   useClearFiltersOnWorkspaceChange(
     useIssuesViewStore.getState().clearFilters,
@@ -344,8 +355,8 @@ export default function IssuesPage() {
   // Client predicate — the same filters the server window applied, re-run
   // so rows that drifted out of the window via WS patches drop at render.
   const filtered = useMemo(
-    () => applyIssueFilters(scopedIssues, filterState),
-    [scopedIssues, filterState],
+    () => applyIssueFilters(scopedIssues, filterState, { runningIssueIds }),
+    [scopedIssues, filterState, runningIssueIds],
   );
 
   const sorted = useMemo(
@@ -489,6 +500,7 @@ export default function IssuesPage() {
           onOpenIssue={(issue) => {
             if (wsSlug) router.push(`/${wsSlug}/issue/${issue.id}`);
           }}
+          onCreateIssue={createFromColumn}
           emptyLabel={
             hasActiveFilterChips
               ? t("issues.filterEmpty")

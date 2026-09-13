@@ -23,7 +23,7 @@
  * user keeps the "this thread is resolved" signal even while reading.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, View } from "react-native";
+import { Alert, Pressable, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -34,6 +34,8 @@ import Animated, {
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Reaction, TimelineEntry } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
+import { Button } from "@/components/ui/button";
+import { AutosizeTextArea } from "@/components/ui/autosize-textarea";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useTimeAgo } from "@/lib/time-ago";
@@ -44,6 +46,7 @@ import { CommentAttachmentList } from "@/components/issue/comment-attachment-lis
 import {
   discardFailedComment,
   useCreateComment,
+  useEditComment,
   useToggleCommentReaction,
 } from "@/data/mutations/issues";
 import { useAuthStore } from "@/data/auth-store";
@@ -547,6 +550,14 @@ function CommentBody({
   const toggle = useToggleCommentReaction(issueId);
   const qc = useQueryClient();
   const createComment = useCreateComment(issueId);
+  // Inline edit (iteration-127). Web opens a rich editor from the comment's
+  // "Edit" menu item when `canEditEntry` is true
+  // (packages/views/issues/components/comment-card.tsx:539); mobile's editor
+  // is text-only, so it preserves the existing attachments by omitting
+  // `attachment_ids` (api.updateComment drops the key when undefined) and
+  // the long-press entry hides for attachment-only comments.
+  const editComment = useEditComment(issueId);
+  const [editing, setEditing] = useState(false);
   // Failed-comment state for THIS entry — undefined when the entry is a
   // normal server-backed comment OR an in-flight optimistic. Only set when
   // the matching `useCreateComment` mutation errored and the entry was
@@ -622,7 +633,14 @@ function CommentBody({
   // + handles + Copy/Look Up callout. The outer bubble shell carries a
   // translucent primary-tint background as the mode cue (no Done pill).
   // Exit: scroll the timeline, leave the issue, or long-press another body.
-  const longPress = useCommentLongPress(entry, issueId, issueIdentifier);
+  const longPress = useCommentLongPress(
+    entry,
+    issueId,
+    issueIdentifier,
+    entry.actor_type === "member" && entry.actor_id === userId
+      ? () => setEditing(true)
+      : undefined,
+  );
 
   useEffect(() => {
     if (isSelecting) return;
@@ -653,7 +671,27 @@ function CommentBody({
           {edited ? ` · ${t("comment.edited")}` : ""}
         </Text>
       </View>
-      {entry.content ? (
+      {editing ? (
+        <CommentEditBox
+          initialContent={entry.content ?? ""}
+          saving={editComment.isPending}
+          onCancel={() => setEditing(false)}
+          onSave={async (next) => {
+            try {
+              await editComment.mutateAsync({
+                commentId: entry.id,
+                content: next,
+              });
+              setEditing(false);
+            } catch {
+              // Keep the editor open with the draft intact so the text is
+              // never lost; `useEditComment` already rolled the optimistic
+              // timeline patch back to the server value.
+              Alert.alert(t("comment.updateFailed"));
+            }
+          }}
+        />
+      ) : entry.content ? (
         <Markdown
           content={entry.content}
           attachments={attachments}
@@ -682,11 +720,66 @@ function CommentBody({
   );
 
   if (isSelecting) return body;
+  // The editor owns the gesture surface while it is open — wrapping it in
+  // the long-press view would keep re-opening the action sheet over the
+  // keyboard and swallow taps meant for Save / Cancel.
+  if (editing) return body;
 
   return (
     <LongPressView onLongPress={longPress.onLongPress} delayLongPress={500}>
       {body}
     </LongPressView>
+  );
+}
+
+/**
+ * Inline comment editor — replaces the rendered markdown in place while
+ * editing, so the user keeps the thread's position and context (web swaps
+ * the card body for its editor the same way). Save is disabled when the
+ * trimmed draft is unchanged, mirroring web's "nothing changed — close
+ * without a write" shortcut (comment-card.tsx:430-435).
+ */
+function CommentEditBox({
+  initialContent,
+  saving,
+  onCancel,
+  onSave,
+}: {
+  initialContent: string;
+  saving: boolean;
+  onCancel: () => void;
+  onSave: (content: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [draft, setDraft] = useState(initialContent);
+  const trimmed = draft.trim();
+  const unchanged = trimmed === initialContent.trim();
+
+  return (
+    <View className="gap-2">
+      <AutosizeTextArea
+        value={draft}
+        onChangeText={setDraft}
+        autoFocus
+        editable={!saving}
+        maxHeight={240}
+        placeholder={t("comment.placeholder")}
+        className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+        accessibilityLabel={t("comment.editComment")}
+      />
+      <View className="flex-row justify-end gap-2">
+        <Button variant="ghost" size="sm" disabled={saving} onPress={onCancel}>
+          <Text>{t("common.cancel")}</Text>
+        </Button>
+        <Button
+          size="sm"
+          disabled={saving || unchanged || trimmed.length === 0}
+          onPress={() => onSave(trimmed)}
+        >
+          <Text>{saving ? t("comment.saving") : t("common.save")}</Text>
+        </Button>
+      </View>
+    </View>
   );
 }
 

@@ -50,6 +50,8 @@ import {
   myIssueListOptions,
 } from "@/data/queries/my-issues";
 import { ganttIssuesOptions } from "@/data/queries/issues";
+import { useRunningIssueIds } from "@/data/queries/agent-task-snapshot";
+import { useCreateIssueFromColumn } from "@/lib/use-create-issue-from-column";
 import { readIssueRows } from "@/data/queries/issue-list-cache";
 import { hasMoreIssues, issueListTotal } from "@/lib/issue-pagination";
 import { useDrainIssuePages } from "@/lib/use-drain-issue-pages";
@@ -128,6 +130,11 @@ export default function MyIssues() {
   const labelFilters = useMyIssuesViewStore((s) => s.labelFilters);
   const propertyFilters = useMyIssuesViewStore((s) => s.propertyFilters);
   const dateFilter = useMyIssuesViewStore((s) => s.dateFilter);
+  const workingOnly = useMyIssuesViewStore((s) => s.workingOnly);
+  // Running-agent projection for the working-only filter. `undefined` while
+  // the snapshot loads — the predicate fails closed on it, which is the
+  // intended "only what is provably working" read.
+  const runningIssueIds = useRunningIssueIds();
   // Stable dedup feeding applyIssueFilters — each field is its own
   // subscription above.
   const filterState = useMemo<IssueFilterState>(
@@ -142,6 +149,7 @@ export default function MyIssues() {
       labelFilters,
       propertyFilters,
       dateFilter,
+      workingOnly,
     }),
     [
       statusFilters,
@@ -154,6 +162,7 @@ export default function MyIssues() {
       labelFilters,
       propertyFilters,
       dateFilter,
+      workingOnly,
     ],
   );
 
@@ -164,6 +173,8 @@ export default function MyIssues() {
       params: { workspace: wsSlug, scope: "my" },
     });
   };
+
+  const createFromColumn = useCreateIssueFromColumn();
 
   useClearFiltersOnWorkspaceChange(
     useMyIssuesViewStore.getState().clearFilters,
@@ -364,8 +375,8 @@ export default function MyIssues() {
   // Client predicate — same window re-applied so WS-patched rows that fell
   // out of it drop at render time (mirrors the workspace Issues page).
   const filtered = useMemo(
-    () => applyIssueFilters(surfaceData, filterState),
-    [surfaceData, filterState],
+    () => applyIssueFilters(surfaceData, filterState, { runningIssueIds }),
+    [surfaceData, filterState, runningIssueIds],
   );
 
   const sorted = useMemo(
@@ -518,6 +529,7 @@ export default function MyIssues() {
           grouping={grouping}
           statusOrder={BOARD_STATUSES}
           onOpenIssue={openIssue}
+          onCreateIssue={createFromColumn}
           emptyLabel={
             hasActiveFilterChips
               ? t("myIssues.filterEmpty")
