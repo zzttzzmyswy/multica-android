@@ -78,13 +78,17 @@ import {
 } from "@/lib/filter-issues";
 import { useTranslation } from "@/lib/i18n/react";
 
-// Mobile pill row has tight width on SE3 (375pt). Three pills + Filter icon
-// must fit in 343pt usable space, so the agents scope renders "Agents" — the
-// full "Agents and Squads" label (~135pt) blows past safe limits and breaks
-// under Dynamic Type. Semantics unchanged: same backend predicate
-// (`involves_user_id`, MUL-2397) covers owned agents + related squads; the
-// empty state copy still says "agents or squads".
+// Mobile pill row has tight width on SE3 (375pt). Four pills + the view
+// toggle + Filter icon no longer fit, so the row scrolls horizontally (see
+// `IssueSurfaceScopeToolbar`) and no label is abbreviated away. The agents
+// scope still renders "Agents" — the full "Agents and Squads" label (~135pt)
+// blows past safe limits and breaks under Dynamic Type. Semantics unchanged:
+// same backend predicate (`involves_user_id`, MUL-2397) covers owned agents +
+// related squads; the empty state copy still says "agents or squads".
+// `all` is web's first scope (my-issues-header.tsx:89-94) and carries no
+// relation filter — it is the plain workspace issue list.
 const SCOPES: { value: MyIssuesScope; labelKey: string }[] = [
+  { value: "all", labelKey: "myIssues.scopeAll" },
   { value: "assigned", labelKey: "myIssues.scopeAssigned" },
   { value: "created", labelKey: "myIssues.scopeCreated" },
   { value: "agents", labelKey: "myIssues.scopeAgents" },
@@ -173,18 +177,21 @@ export default function MyIssues() {
 
   // Saved views (iteration-65): the my-scope container holds this page's
   // views. My scopes map to the view-variant vocabulary (assigned/created/
-  // involved — mobile "agents" ≈ web "involved"); applying a view resets the
-  // slice + display defaults and lands on the scope axis the view captured.
+  // involved — mobile "agents" ≈ web "involved"; "all" ≈ web "any");
+  // applying a view resets the slice + display defaults and lands on the
+  // scope axis the view captured.
   const myScope = useMemo(() => ({ scope_type: "my" as const }), []);
   const scopeVariant = useMemo<CreateIssueViewRequest["scope_variant"]>(
     () =>
-      scope === "assigned"
-        ? "assigned"
-        : scope === "created"
-          ? "created"
-          : scope === "agents"
-            ? "involved"
-            : null,
+      scope === "all"
+        ? "any"
+        : scope === "assigned"
+          ? "assigned"
+          : scope === "created"
+            ? "created"
+            : scope === "agents"
+              ? "involved"
+              : null,
     [scope],
   );
   const containerKey = useMemo(
@@ -223,13 +230,16 @@ export default function MyIssues() {
       });
       // The scope axis a my-view captured is part of the VIEW — landing on
       // the right tab, while the user's own tab stays untouched once the
-      // view closes.
+      // view closes. An unknown/absent variant means "all" (core
+      // issues/surface/scope.ts:47).
       setScope(
         v.scope_variant === "created"
           ? "created"
           : v.scope_variant === "involved"
             ? "agents"
-            : "assigned",
+            : v.scope_variant === "assigned"
+              ? "assigned"
+              : "all",
       );
       useActiveIssueViewStore.getState().setActive(containerKey, v.id);
     },
@@ -244,8 +254,17 @@ export default function MyIssues() {
     useActiveIssueViewStore.getState().setActive(containerKey, null);
   }, [containerKey]);
 
+  // `all` is the workspace-wide list, so it needs no user id; every other
+  // scope keys off one. The empty-string assignee is the deliberate
+  // "nothing can match" placeholder while the session's user is still
+  // resolving — the query is disabled in that window anyway.
   const filter = useMemo(
-    () => (userId ? buildMyIssuesFilter(scope, userId) : { assignee_id: "" }),
+    () =>
+      scope === "all"
+        ? {}
+        : userId
+          ? buildMyIssuesFilter(scope, userId)
+          : { assignee_id: "" },
     [scope, userId],
   );
 
@@ -275,7 +294,7 @@ export default function MyIssues() {
   // infinite-scrolls; board / swimlane / table drain the window instead.
   const listQuery = useInfiniteQuery({
     ...myIssueListOptions(wsId, scope, filter, window),
-    enabled: !!wsId && !!userId,
+    enabled: !!wsId && (scope === "all" || !!userId),
   });
   const {
     data: listData,
@@ -308,7 +327,7 @@ export default function MyIssues() {
     refetch: refetchGantt,
     isRefetching: ganttRefetching,
   } = useQuery(
-    ganttIssuesOptions(wsId, ganttActive && !!userId, filter),
+    ganttIssuesOptions(wsId, ganttActive && (scope === "all" || !!userId), filter),
   );
 
   // Loading/error/refresh follow the ACTIVE source so a first gantt load
@@ -596,6 +615,8 @@ function emptyMessageForScope(
   t: (id: string, params?: Record<string, string | number>) => string,
 ): string {
   switch (scope) {
+    case "all":
+      return t("myIssues.emptyAll");
     case "assigned":
       return t("myIssues.emptyAssigned");
     case "created":

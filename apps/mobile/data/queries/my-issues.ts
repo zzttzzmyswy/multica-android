@@ -1,6 +1,10 @@
 /**
- * "My Issues" list, server-filtered by scope. Mirrors the three scopes web
- * exposes in `packages/views/my-issues/components/my-issues-page.tsx:48-65`:
+ * "My Issues" list, server-filtered by scope. Mirrors the scopes web exposes
+ * in `packages/views/my-issues/components/my-issues-header.tsx:89-94`:
+ *   - all:      every issue in the workspace (no relation param at all) —
+ *               web's `case "all"` in core's surface/query-plan.ts:52-55
+ *               returns an empty `queryFilter`, so the list is the plain
+ *               workspace list
  *   - assigned: issues where assignee_id = me
  *   - created:  issues where creator_id  = me
  *   - agents:   issues where the assignee is an *indirect* extension of me —
@@ -43,6 +47,9 @@ export function buildMyIssuesFilter(
   userId: string,
 ): MyIssuesFilter {
   switch (scope) {
+    case "all":
+      // No relation param — the server returns the whole workspace list.
+      return {};
     case "assigned":
       return { assignee_id: userId };
     case "created":

@@ -3,7 +3,10 @@
  * `packages/views/settings/components/workspace-tab.tsx` semantics:
  *   - editable name + description for owners/admins (dirty check + saving
  *     state + inline error, styled like the Profile subscreen);
- *   - read-only info rows (slug / issue prefix / created time) for everyone;
+ *   - an editable issue prefix for owners/admins (normalize on type, save on
+ *     blur behind a destructive confirm — renumbering breaks external
+ *     references), read-only for everyone else;
+ *   - read-only info rows (slug / created time) for everyone;
  *   - a Danger Zone for owners/admins: Leave (second-confirm via iOS Alert,
  *     sole-owner pre-flight mirrors web :152-153) and owner-only Delete
  *     (typed-confirmation modal mirroring delete-workspace-dialog.tsx —
@@ -26,7 +29,7 @@ import {
   View,
 } from "react-native";
 import { router } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
@@ -35,6 +38,7 @@ import { AutosizeTextArea } from "@/components/ui/autosize-textarea";
 import { Separator } from "@/components/ui/separator";
 import { memberListOptions } from "@/data/queries/members";
 import { workspaceListOptions } from "@/data/queries/workspaces";
+import { issueKeys } from "@/data/queries/issue-keys";
 import {
   useDeleteWorkspace,
   useLeaveWorkspace,
@@ -44,6 +48,10 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
 import { formatDateTime } from "@/lib/autopilot-format";
 import {
+  ISSUE_PREFIX_MAX_LENGTH,
+  issuePrefixInvalid,
+  normalizeIssuePrefix,
+  shouldSaveIssuePrefix,
   workspaceManagementGuards,
   workspaceNameValidationError,
 } from "@/lib/workspace-guards";
@@ -89,6 +97,13 @@ export default function WorkspaceSettingsScreen() {
     workspace?.description ?? "",
   );
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  // Issue prefix is its own field with its own blur-triggered save (web
+  // workspace-tab.tsx:133-135, 246-258) — it is NOT part of the General
+  // form's dirty/Save flow, because changing it renumbers every issue and
+  // therefore takes a confirmation.
+  const [issuePrefix, setIssuePrefix] = useState(workspace?.issue_prefix ?? "");
+  const [prefixStatus, setPrefixStatus] = useState<SaveStatus>("idle");
+  const queryClient = useQueryClient();
   const updateWorkspace = useUpdateWorkspace();
   const leaveWorkspace = useLeaveWorkspace();
   const deleteWorkspace = useDeleteWorkspace();
@@ -102,6 +117,8 @@ export default function WorkspaceSettingsScreen() {
     setName(workspace?.name ?? "");
     setDescription(workspace?.description ?? "");
     setSaveStatus("idle");
+    setIssuePrefix(workspace?.issue_prefix ?? "");
+    setPrefixStatus("idle");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on id only
   }, [workspace?.id]);
 
@@ -137,6 +154,64 @@ export default function WorkspaceSettingsScreen() {
         err instanceof Error ? err.message : t("common.unknownError"),
       );
     }
+  };
+
+  const performPrefixSave = async (nextPrefix: string) => {
+    if (!workspace || prefixStatus === "saving") return;
+    setPrefixStatus("saving");
+    try {
+      const updated = await updateWorkspace.mutateAsync({
+        workspaceId: workspace.id,
+        patch: { issue_prefix: nextPrefix },
+      });
+      setIssuePrefix(updated.issue_prefix ?? nextPrefix);
+      // Renumbering rewrites every issue's identifier, so any cached issue
+      // list/page is stale — web invalidates `issueKeys.all(updated.id)`
+      // (workspace-tab.tsx:231).
+      void queryClient.invalidateQueries({ queryKey: issueKeys.all(workspace.id) });
+      setPrefixStatus("saved");
+    } catch (err) {
+      // Roll the field back to the server's value: leaving the rejected
+      // prefix on screen would make the next blur look like a fresh edit
+      // and re-fire the same failing request.
+      setIssuePrefix(workspace.issue_prefix ?? "");
+      setPrefixStatus("error");
+      Alert.alert(
+        t("workspaceSettings.saveFailed"),
+        err instanceof Error ? err.message : t("common.unknownError"),
+      );
+    }
+  };
+
+  const handlePrefixBlur = () => {
+    if (!workspace || !canManage || prefixStatus === "saving") return;
+    const next = normalizeIssuePrefix(issuePrefix);
+    setIssuePrefix(next);
+    // Nothing to do when the prefix is blank or already matches the server.
+    if (!shouldSaveIssuePrefix(next, workspace.issue_prefix)) {
+      if (issuePrefixInvalid(next)) setPrefixStatus("idle");
+      return;
+    }
+    Alert.alert(
+      t("workspaceSettings.issuePrefixConfirmTitle"),
+      t("workspaceSettings.issuePrefixConfirmMessage", {
+        oldPrefix: workspace.issue_prefix ?? "",
+        newPrefix: next,
+      }),
+      [
+        {
+          text: t("common.cancel"),
+          style: "cancel",
+          onPress: () => setIssuePrefix(workspace.issue_prefix ?? ""),
+        },
+        {
+          text: t("workspaceSettings.issuePrefixChange"),
+          style: "destructive",
+          onPress: () => void performPrefixSave(next),
+        },
+      ],
+      { onDismiss: () => setIssuePrefix(workspace.issue_prefix ?? "") },
+    );
   };
 
   const handleLeave = () => {
@@ -338,11 +413,55 @@ export default function WorkspaceSettingsScreen() {
             </>
           ) : null}
           <Separator />
-          <InfoRow
-            label={t("workspaceSettings.issuePrefix")}
-            value={workspace.issue_prefix || "—"}
-            mono
-          />
+          {canManage ? (
+            <View className="px-4 py-3 gap-1.5">
+              <Text className="text-sm text-muted-foreground">
+                {t("workspaceSettings.issuePrefix")}
+              </Text>
+              <TextField
+                value={issuePrefix}
+                onChangeText={(v) => {
+                  setIssuePrefix(normalizeIssuePrefix(v));
+                  if (prefixStatus !== "saving") setPrefixStatus("idle");
+                }}
+                onBlur={handlePrefixBlur}
+                placeholder={workspace.issue_prefix}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                returnKeyType="done"
+                maxLength={ISSUE_PREFIX_MAX_LENGTH}
+                editable={prefixStatus !== "saving"}
+                invalid={issuePrefixInvalid(issuePrefix)}
+                className="font-mono uppercase"
+              />
+              <Text
+                className={cn(
+                  "text-xs",
+                  prefixStatus === "error"
+                    ? "text-destructive"
+                    : "text-muted-foreground",
+                )}
+              >
+                {issuePrefixInvalid(issuePrefix)
+                  ? t("workspaceSettings.issuePrefixRequired")
+                  : prefixStatus === "saving"
+                    ? t("workspaceSettings.saving")
+                    : prefixStatus === "saved"
+                      ? t("workspaceSettings.saved")
+                      : prefixStatus === "error"
+                        ? t("workspaceSettings.saveFailed")
+                        : t("workspaceSettings.issuePrefixHint", {
+                            example: `${issuePrefix || workspace.issue_prefix || "ABC"}-123`,
+                          })}
+              </Text>
+            </View>
+          ) : (
+            <InfoRow
+              label={t("workspaceSettings.issuePrefix")}
+              value={workspace.issue_prefix || "—"}
+              mono
+            />
+          )}
           <Separator />
           <InfoRow
             label={t("workspaceSettings.createdAt")}

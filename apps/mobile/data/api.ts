@@ -116,6 +116,8 @@ import type {
   RuntimeLocalSkillListRequest,
   RuntimeLocalSkillsResult,
   RuntimeLocalSkillSummary,
+  CreateRuntimeLocalSkillImportRequest,
+  RuntimeLocalSkillImportRequest,
   DisabledRuntimeSkill,
   Skill,
   SkillSummary,
@@ -1197,6 +1199,31 @@ class ApiClient {
   ): Promise<RuntimeLocalSkillListRequest> {
     return this.fetch<RuntimeLocalSkillListRequest>(
       `/api/runtimes/${runtimeId}/local-skills/${requestId}`,
+    );
+  }
+
+  // Runtime local-skill IMPORT (web core runtimes/local-skills.ts:56-93).
+  // Same POST-then-poll shape as discovery, but a much longer budget: old
+  // daemons pop one queued import per heartbeat (~15s), so a batch's tail can
+  // wait minutes before it is even claimed. The server-side invariant is that
+  // this budget must exceed runtimeLocalSkillPendingTimeout +
+  // runtimeLocalSkillRunningTimeout.
+  async initiateImportLocalSkill(
+    runtimeId: string,
+    data: CreateRuntimeLocalSkillImportRequest,
+  ): Promise<RuntimeLocalSkillImportRequest> {
+    return this.fetch<RuntimeLocalSkillImportRequest>(
+      `/api/runtimes/${runtimeId}/local-skills/import`,
+      { method: "POST", body: JSON.stringify(data) },
+    );
+  }
+
+  async getImportLocalSkillResult(
+    runtimeId: string,
+    requestId: string,
+  ): Promise<RuntimeLocalSkillImportRequest> {
+    return this.fetch<RuntimeLocalSkillImportRequest>(
+      `/api/runtimes/${runtimeId}/local-skills/import/${requestId}`,
     );
   }
 
@@ -3085,6 +3112,19 @@ class ApiClient {
     return this.fetch<Skill>("/api/skills", {
       method: "POST",
       body: JSON.stringify(body),
+    });
+  }
+
+  // Imports a published skill from a URL (ClawHub / Skills.sh / GitHub).
+  // The server does the fetching and the source detection; the client only
+  // supplies a non-empty URL (web api.importSkill).
+  async importSkill(data: { url: string }): Promise<Skill> {
+    const raw = await this.fetch<unknown>("/api/skills/import", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return parseWithFallback(raw, SkillSchema, EMPTY_SKILL, {
+      endpoint: "POST /api/skills/import",
     });
   }
 
