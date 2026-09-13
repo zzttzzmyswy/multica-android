@@ -62,19 +62,20 @@ export interface IssueDateFilterValue {
 
 /**
  * Issue-workbench view mode. Mobile surface of web `ViewMode` — gantt added
- * in iter-118 (swimlane stays phone-deferred: its value is drag-to-reorder
- * across lanes, which has no cheap touch equivalent). Lives here so all
- * issue-list view stores share one wire default, but the field itself lives
- * on each store (like `scope`), NOT in the filter slice — clearing filters
- * must not reset the user's chosen view.
+ * in iter-118, swimlane in iter-122 (its lane model lives in
+ * `lib/swimlane.ts`). Lives here so all issue-list view stores share one
+ * wire default, but the field itself lives on each store (like `scope`),
+ * NOT in the filter slice — clearing filters must not reset the user's
+ * chosen view.
  */
-export type IssueViewMode = "list" | "board" | "table" | "gantt";
+export type IssueViewMode = "list" | "board" | "table" | "gantt" | "swimlane";
 
 export const ISSUE_VIEW_MODES: { value: IssueViewMode; labelKey: string }[] = [
   { value: "list", labelKey: "issues.viewList" },
   { value: "board", labelKey: "issues.viewBoard" },
   { value: "table", labelKey: "issues.viewTable" },
   { value: "gantt", labelKey: "issues.viewGantt" },
+  { value: "swimlane", labelKey: "issues.viewSwimlane" },
 ];
 
 export const ISSUE_SORT_OPTIONS: { value: IssueSortField; labelKey: string }[] =
@@ -125,6 +126,14 @@ export interface IssueFilterSlice {
   labelFilters: string[];
   propertyFilters: PropertyFilterValue;
   dateFilter: IssueDateFilterValue | null;
+  /**
+   * Show only issues with a RUNNING agent task (web `agentRunningFilter` →
+   * `workingOnly`). Deliberately NOT persisted and NOT part of
+   * `IssueFilterSnapshot`: running state changes second-to-second, so a
+   * stored toggle would let the user return to an unexplained empty list.
+   * Web reaches the same conclusion at view-store.ts:525-531.
+   */
+  workingOnly: boolean;
   sortBy: IssueSortField;
   sortDirection: IssueSortDirection;
   grouping: IssueGrouping;
@@ -143,6 +152,8 @@ export interface IssueFilterSlice {
   /** Drop every selection of one custom-property definition. */
   clearPropertyFilter: (propertyId: string) => void;
   setDateFilter: (filter: IssueDateFilterValue | null) => void;
+  /** Flip the "only issues an agent is working on" quick filter. */
+  toggleWorkingOnly: () => void;
   setSortBy: (field: IssueSortField) => void;
   setSortDirection: (dir: IssueSortDirection) => void;
   setGrouping: (grouping: IssueGrouping) => void;
@@ -195,6 +206,7 @@ export const defaultIssueFilterSlice = (): Pick<
   | "labelFilters"
   | "propertyFilters"
   | "dateFilter"
+  | "workingOnly"
   | "sortBy"
   | "sortDirection"
   | "grouping"
@@ -209,6 +221,7 @@ export const defaultIssueFilterSlice = (): Pick<
   labelFilters: [],
   propertyFilters: {},
   dateFilter: null,
+  workingOnly: false,
   sortBy: "position",
   sortDirection: "asc",
   grouping: "status",
@@ -243,6 +256,7 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
   | "togglePropertyFilter"
   | "clearPropertyFilter"
   | "setDateFilter"
+  | "toggleWorkingOnly"
   | "clearFilters"
   | "resetFiltersTo"
   | "clearFilterDimension"
@@ -319,6 +333,8 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
         return { propertyFilters };
       }),
     setDateFilter: (dateFilter) => set({ dateFilter }),
+    toggleWorkingOnly: () =>
+      set((state) => ({ workingOnly: !state.workingOnly })),
     clearFilters: () =>
       set({
         statusFilters: [],
@@ -331,6 +347,7 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
         labelFilters: [],
         propertyFilters: {},
         dateFilter: null,
+        workingOnly: false,
       }),
     resetFiltersTo: (snapshot) => set({ ...snapshot }),
     clearFilterDimension: (dimension) =>
@@ -364,8 +381,34 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
   };
 }
 
-/** Convenience selector: does any filter dimension have an active value? */
-export function hasActiveIssueFilters(state: IssueFilterSlice): boolean {
+/** Convenience selector: does any filter dimension have an active value?
+ *
+ *  `workingOnly` counts. Web's header keeps its agents-working chip on a
+ *  separate code path from `getActiveFilterCount`, but mobile has no room
+ *  for a second header chip (the toolbar already carries the scope pills,
+ *  the five-button mode switch and the filter trigger) — so the filter
+ *  sheet IS its surface, and an active-only-here dimension that left the
+ *  trigger unlit would be invisible the moment the sheet closed.
+ *
+ *  Takes the value shape rather than the whole slice so the issue-list
+ *  surfaces (which assemble a plain `IssueFilterState` from per-field store
+ *  subscriptions) can reuse it instead of re-deriving the predicate. */
+export function hasActiveIssueFilters(
+  state: Pick<
+    IssueFilterSlice,
+    | "statusFilters"
+    | "priorityFilters"
+    | "assigneeFilters"
+    | "includeNoAssignee"
+    | "creatorFilters"
+    | "projectFilters"
+    | "includeNoProject"
+    | "labelFilters"
+    | "propertyFilters"
+    | "dateFilter"
+    | "workingOnly"
+  >,
+): boolean {
   return (
     state.statusFilters.length > 0 ||
     state.priorityFilters.length > 0 ||
@@ -376,7 +419,8 @@ export function hasActiveIssueFilters(state: IssueFilterSlice): boolean {
     state.includeNoProject ||
     state.labelFilters.length > 0 ||
     Object.keys(state.propertyFilters).length > 0 ||
-    state.dateFilter !== null
+    state.dateFilter !== null ||
+    state.workingOnly
   );
 }
 

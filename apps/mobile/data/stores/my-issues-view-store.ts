@@ -17,6 +17,7 @@
  */
 import { create } from "zustand";
 import type { MyIssuesScope } from "@/data/queries/issue-keys";
+import type { SwimlaneGrouping } from "@/lib/swimlane";
 import {
   createIssueFilterActions,
   defaultIssueFilterSlice,
@@ -36,17 +37,23 @@ export interface MyIssuesViewState
     TableColumnsSlice {
   scope: MyIssuesScope;
   view: IssueViewMode;
+  /** Active swimlane grouping dimension — only read in swimlane mode.
+   *  Default `assignee`, matching web `view-store.ts` defaults. */
+  swimlaneGrouping: SwimlaneGrouping;
   setScope: (scope: MyIssuesScope) => void;
   setView: (view: IssueViewMode) => void;
+  setSwimlaneGrouping: (grouping: SwimlaneGrouping) => void;
 }
 
 export const useMyIssuesViewStore = create<MyIssuesViewState>((set) => ({
   scope: "assigned",
   view: "list",
+  swimlaneGrouping: "assignee",
   tableColumns: defaultTableColumns(),
   ...defaultIssueFilterSlice(),
   setScope: (scope) => set({ scope }),
   setView: (view) => set({ view }),
+  setSwimlaneGrouping: (swimlaneGrouping) => set({ swimlaneGrouping }),
   ...createIssueFilterActions<MyIssuesViewState>(set),
   ...createTableColumnActions<MyIssuesViewState>(set),
 }));

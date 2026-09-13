@@ -99,6 +99,7 @@ import type {
   RuntimeProfile,
   RuntimeUsage,
   RuntimeUsageByAgent,
+  RuntimeModelListRequest,
   CreateRuntimeProfileRequest,
   UpdateRuntimeProfileRequest,
   DashboardAgentRunTime,
@@ -115,6 +116,8 @@ import type {
   RuntimeLocalSkillListRequest,
   RuntimeLocalSkillsResult,
   RuntimeLocalSkillSummary,
+  CreateRuntimeLocalSkillImportRequest,
+  RuntimeLocalSkillImportRequest,
   DisabledRuntimeSkill,
   Skill,
   SkillSummary,
@@ -213,6 +216,8 @@ import {
   WorkspaceSubscriptionPricesSchema,
   WorkspaceSubscriptionSeatReconcileResultSchema,
   WorkspaceSubscriptionSummarySchema,
+  RuntimeModelListRequestSchema,
+  MALFORMED_RUNTIME_MODEL_LIST_REQUEST,
   agentBuilderRuntimeSwitchFallback,
 } from "@multica/core/api/schemas";
 import type {
@@ -1197,6 +1202,31 @@ class ApiClient {
     );
   }
 
+  // Runtime local-skill IMPORT (web core runtimes/local-skills.ts:56-93).
+  // Same POST-then-poll shape as discovery, but a much longer budget: old
+  // daemons pop one queued import per heartbeat (~15s), so a batch's tail can
+  // wait minutes before it is even claimed. The server-side invariant is that
+  // this budget must exceed runtimeLocalSkillPendingTimeout +
+  // runtimeLocalSkillRunningTimeout.
+  async initiateImportLocalSkill(
+    runtimeId: string,
+    data: CreateRuntimeLocalSkillImportRequest,
+  ): Promise<RuntimeLocalSkillImportRequest> {
+    return this.fetch<RuntimeLocalSkillImportRequest>(
+      `/api/runtimes/${runtimeId}/local-skills/import`,
+      { method: "POST", body: JSON.stringify(data) },
+    );
+  }
+
+  async getImportLocalSkillResult(
+    runtimeId: string,
+    requestId: string,
+  ): Promise<RuntimeLocalSkillImportRequest> {
+    return this.fetch<RuntimeLocalSkillImportRequest>(
+      `/api/runtimes/${runtimeId}/local-skills/import/${requestId}`,
+    );
+  }
+
   // Agent-builders: creation conversations (web Creation Studio). Mirrors
   // packages/core/api/client.ts:1262-1339. The first POST creates the hidden
   // carrier session; GET lists the caller's unfinished ones (404 on an older
@@ -1271,6 +1301,46 @@ class ApiClient {
     return parseWithFallback(raw, RuntimeListSchema, EMPTY_RUNTIME_LIST, {
       endpoint: "listRuntimes",
     });
+  }
+
+  // Runtime model discovery (iteration-121 agent-create model picker).
+  // Mirrors packages/core/api/client.ts initiateListModels/getListModelsResult:
+  // POST kicks the daemon (heartbeat piggyback), GET /:requestId polls the
+  // record; the state machine itself lives in lib/runtime-models-poll.ts.
+  // A drift response degrades to the MALFORMED record (status "failed"),
+  // which the form surfaces as discovery-failure + manual entry instead of a
+  // fabricated empty catalog.
+  async initiateListModels(
+    runtimeId: string,
+  ): Promise<RuntimeModelListRequest> {
+    const raw = await this.fetch<unknown>(`/api/runtimes/${runtimeId}/models`, {
+      method: "POST",
+    });
+    return parseWithFallback<RuntimeModelListRequest>(
+      raw,
+      RuntimeModelListRequestSchema,
+      { ...MALFORMED_RUNTIME_MODEL_LIST_REQUEST, runtime_id: runtimeId },
+      { endpoint: "POST /api/runtimes/{id}/models" },
+    );
+  }
+
+  async getListModelsResult(
+    runtimeId: string,
+    requestId: string,
+  ): Promise<RuntimeModelListRequest> {
+    const raw = await this.fetch<unknown>(
+      `/api/runtimes/${runtimeId}/models/${requestId}`,
+    );
+    return parseWithFallback<RuntimeModelListRequest>(
+      raw,
+      RuntimeModelListRequestSchema,
+      {
+        ...MALFORMED_RUNTIME_MODEL_LIST_REQUEST,
+        id: requestId,
+        runtime_id: runtimeId,
+      },
+      { endpoint: "GET /api/runtimes/{id}/models/{requestId}" },
+    );
   }
 
   // Runtime-level usage rollups (iteration-93 runtime detail usage section).
@@ -1619,6 +1689,18 @@ class ApiClient {
       GitHubConnectResponseSchema,
       EMPTY_GITHUB_CONNECT_RESPONSE,
       { endpoint: "getGitHubConnectURL" },
+    );
+  }
+
+  /** Revoke a GitHub App installation — mirrors web's
+   *  `api.deleteGitHubInstallation` (packages/core/api/client.ts:3723). */
+  async deleteGitHubInstallation(
+    workspaceId: string,
+    installationId: string,
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/workspaces/${workspaceId}/github/installations/${installationId}`,
+      { method: "DELETE" },
     );
   }
 
@@ -3045,6 +3127,19 @@ class ApiClient {
     });
   }
 
+  // Imports a published skill from a URL (ClawHub / Skills.sh / GitHub).
+  // The server does the fetching and the source detection; the client only
+  // supplies a non-empty URL (web api.importSkill).
+  async importSkill(data: { url: string }): Promise<Skill> {
+    const raw = await this.fetch<unknown>("/api/skills/import", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return parseWithFallback(raw, SkillSchema, EMPTY_SKILL, {
+      endpoint: "POST /api/skills/import",
+    });
+  }
+
   async updateSkill(id: string, body: UpdateSkillRequest): Promise<Skill> {
     const raw = await this.fetch<unknown>(`/api/skills/${id}`, {
       method: "PUT",
@@ -3359,13 +3454,14 @@ class ApiClient {
     await this.fetch<void>(`/api/chat/sessions/${id}`, { method: "DELETE" });
   }
 
-  /** PATCH /api/chat/sessions/:id — rename a session (title only; the web
-   *  build also patches project_id, which mobile never edits). Mirrors
-   *  packages/core/api/client.ts updateChatSession, restored for MYS-409
-   *  after the v1 cut dropped it. */
+  /** PATCH /api/chat/sessions/:id — rename a session (title) or rebind its
+   *  durable project context (`project_id`, null clears it). Same union shape
+   *  as web's packages/core/api/client.ts updateChatSession; the project arm
+   *  backs the composer's clearable project chip. Restored for MYS-409 after
+   *  the v1 cut dropped the method. */
   async updateChatSession(
     id: string,
-    data: { title: string },
+    data: { title: string } | { project_id: string | null },
   ): Promise<ChatSession> {
     return this.fetch<ChatSession>(`/api/chat/sessions/${id}`, {
       method: "PATCH",

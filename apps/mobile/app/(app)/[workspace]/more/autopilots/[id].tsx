@@ -25,6 +25,7 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
+  RefreshControl,
   ScrollView,
   View,
 } from "react-native";
@@ -41,11 +42,13 @@ import { IconButton } from "@/components/ui/icon-button";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
 import { DeliveriesSection } from "@/components/autopilot/deliveries-section";
+import { RunTranscriptDialog } from "@/components/agent/run-transcript-dialog";
 import {
   TriggerPayloadPreview,
   TriggerPayloadSkeleton,
 } from "@/components/autopilot/trigger-payload-preview";
 import { ActionSheet } from "@/lib/action-sheet";
+import { Markdown } from "@/lib/markdown";
 import {
   autopilotDetailOptions,
   autopilotRunOptions,
@@ -67,6 +70,14 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { getApiBaseUrl } from "@/data/server-config";
 import { formatDateTime } from "@/lib/autopilot-format";
 import { formatElapsedMs } from "@/lib/format-elapsed";
+import {
+  AUTOPILOT_RUNS_MAX_LIMIT,
+  AUTOPILOT_RUNS_PAGE_SIZE,
+  canLoadMoreRuns,
+  runTaskStatus,
+  runTranscriptTaskId,
+  splitAutopilotRuns,
+} from "@/lib/autopilot-runs";
 import { runNowToastKind, runNowBlockedKey } from "@/lib/autopilot-run-toast";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -122,7 +133,12 @@ export default function AutopilotDetailPage() {
   const theme = THEME[colorScheme];
 
   const detail = useQuery(autopilotDetailOptions(wsId, id));
-  const runs = useQuery(autopilotRunsOptions(wsId, id, { limit: 20 }));
+  // The runs endpoint clamps `limit` to 100 and reports `total` as the PAGE
+  // size, so "load more" grows the window instead of accumulating offset
+  // pages — see `canLoadMoreRuns`.
+  const [runsLimit, setRunsLimit] = useState(AUTOPILOT_RUNS_PAGE_SIZE);
+  const runs = useQuery(autopilotRunsOptions(wsId, id, { limit: runsLimit }));
+  const [refreshing, setRefreshing] = useState(false);
   const { data: members = [] } = useQuery(memberListOptions(wsId));
   const { data: projects = [] } = useQuery(projectListOptions(wsId));
   const updateAutopilot = useUpdateAutopilot();
@@ -138,7 +154,23 @@ export default function AutopilotDetailPage() {
   const autopilot = detail.data?.autopilot;
   const triggers = detail.data?.triggers ?? [];
   const runList = runs.data ?? [];
+  const { visible: visibleRuns, skipped: skippedRuns } = useMemo(
+    () => splitAutopilotRuns(runList),
+    [runList],
+  );
   const hasWebhookTrigger = triggers.some((tr) => tr.kind === "webhook");
+
+  // Pull-to-refresh re-reads the config and the run window together — the
+  // page is the only surface for either, and a scheduled run landing while
+  // the screen is open is otherwise invisible until you navigate away.
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([detail.refetch(), runs.refetch()]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [detail, runs]);
 
   // `subscribers` only populates on the detail endpoint; older servers omit
   // it (undefined). Treat anything non-array as "no subscribers".
@@ -388,7 +420,13 @@ export default function AutopilotDetailPage() {
             : undefined,
         }}
       />
-      <ScrollView className="flex-1 bg-background" contentContainerClassName="pb-8">
+      <ScrollView
+        className="flex-1 bg-background"
+        contentContainerClassName="pb-8"
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
+      >
       {/* Status switch + run-now actions */}
       <View className="px-4 pt-3 flex-row items-center justify-between">
         <View className="flex-row items-center gap-2">
@@ -466,6 +504,21 @@ export default function AutopilotDetailPage() {
           </Text>
         </PropertyRow>
       </View>
+
+      {/* Prompt / runbook — web renders `autopilot.description` as rich content
+          in the properties grid (autopilot-detail-page.tsx:925-932). Without
+          it the phone could show what an automation is scheduled to do but
+          never what it actually instructs the agent to do. */}
+      {autopilot.description ? (
+        <>
+          <SectionTitle>{t("autopilots.detail.fieldPrompt")}</SectionTitle>
+          <View className="px-4">
+            <View className="rounded-lg border border-border bg-card p-3">
+              <Markdown content={autopilot.description} />
+            </View>
+          </View>
+        </>
+      ) : null}
 
       {/* Subscribers — auto-subscribed to issues this autopilot creates. */}
       <SectionTitle>{t("autopilots.detail.subscribers")}</SectionTitle>
@@ -612,17 +665,44 @@ export default function AutopilotDetailPage() {
             {t("autopilots.detail.noRuns")}
           </Text>
         ) : (
-          runList.map((run) => (
-            <RunRow
-              key={run.id}
-              run={run}
-              wsSlug={wsSlug}
-              theme={theme}
-              t={t}
-              wsId={wsId}
-              autopilotId={id}
-            />
-          ))
+          <>
+            {visibleRuns.map((run) => (
+              <RunRow
+                key={run.id}
+                run={run}
+                wsSlug={wsSlug}
+                theme={theme}
+                t={t}
+                wsId={wsId}
+                autopilotId={id}
+              />
+            ))}
+            {skippedRuns.length > 0 ? (
+              <SkippedRunsGroup
+                runs={skippedRuns}
+                wsSlug={wsSlug}
+                theme={theme}
+                t={t}
+                wsId={wsId}
+                autopilotId={id}
+              />
+            ) : null}
+            {canLoadMoreRuns(runList.length, runsLimit) ? (
+              <Pressable
+                onPress={() =>
+                  setRunsLimit((limit) =>
+                    Math.min(limit + AUTOPILOT_RUNS_PAGE_SIZE, AUTOPILOT_RUNS_MAX_LIMIT),
+                  )
+                }
+                className="items-center py-2 active:opacity-60"
+                accessibilityRole="button"
+              >
+                <Text className="text-xs text-primary">
+                  {t("autopilots.detail.loadMoreRuns")}
+                </Text>
+              </Pressable>
+            ) : null}
+          </>
         )}
       </View>
 
@@ -834,6 +914,11 @@ function RunRow({
       enabled: payloadOpen && isWebhookRun,
     }),
   );
+  // Web's `TranscriptButton` gate: run-only runs (a task id and no issue)
+  // are the only ones whose execution log is unreachable elsewhere — an
+  // issue-mode run links to the issue instead.
+  const transcriptTaskId = runTranscriptTaskId(run);
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
 
   const visual = runVisual(run.status);
   const statusLabel =
@@ -953,6 +1038,107 @@ function RunRow({
             </View>
           ) : null}
         </>
+      ) : null}
+      {transcriptTaskId ? (
+        <Pressable
+          onPress={() => setTranscriptOpen(true)}
+          accessibilityRole="button"
+          className="flex-row items-center gap-1.5 border-t border-border px-3 py-1.5 active:bg-secondary"
+        >
+          <Ionicons
+            name="document-text-outline"
+            size={12}
+            color={theme.mutedForeground}
+          />
+          <Text className="flex-1 text-xs text-muted-foreground">
+            {t("autopilots.runViewLog")}
+          </Text>
+          <Ionicons
+            name="chevron-forward"
+            size={12}
+            color={theme.mutedForeground}
+          />
+        </Pressable>
+      ) : null}
+      {transcriptOpen && transcriptTaskId ? (
+        <RunTranscriptDialog
+          taskId={transcriptTaskId}
+          taskStatus={runTaskStatus(run)}
+          onClose={() => setTranscriptOpen(false)}
+        />
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * Web `SkippedRunsGroup`: the skipped tail of the run window, folded behind
+ * one toggle row that carries the count and the most recent skip time.
+ * A schedule the admission check keeps refusing would otherwise fill the
+ * history with identical rows. Mirrors web's default-closed state.
+ */
+function SkippedRunsGroup({
+  runs,
+  wsSlug,
+  theme,
+  t,
+  wsId,
+  autopilotId,
+}: {
+  runs: AutopilotRun[];
+  wsSlug: string | null;
+  theme: (typeof THEME)["light"];
+  t: (id: string, params?: Record<string, string | number>) => string;
+  wsId: string | null;
+  autopilotId: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const latest = runs[0];
+  const latestAt = latest ? latest.triggered_at || latest.created_at : null;
+
+  return (
+    <View className="rounded-lg border border-border overflow-hidden">
+      <Pressable
+        onPress={() => setOpen((v) => !v)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        className="flex-row items-center gap-2 px-3 py-2 active:bg-secondary"
+      >
+        <Ionicons
+          name={open ? "chevron-down" : "chevron-forward"}
+          size={13}
+          color={theme.mutedForeground}
+        />
+        <Ionicons name="ban" size={13} color={theme.mutedForeground} />
+        <Text className="text-xs font-medium text-muted-foreground">
+          {t("autopilots.runSkippedGroup.label")}
+        </Text>
+        <Text
+          className="flex-1 min-w-0 text-xs text-muted-foreground"
+          numberOfLines={1}
+        >
+          {t("autopilots.runSkippedGroup.summary", { count: runs.length })}
+        </Text>
+        {latestAt ? (
+          <Text className="shrink-0 text-xs text-muted-foreground tabular-nums">
+            {formatDateTime(latestAt)}
+          </Text>
+        ) : null}
+      </Pressable>
+      {open ? (
+        <View className="border-t border-border">
+          {runs.map((run) => (
+            <RunRow
+              key={run.id}
+              run={run}
+              wsSlug={wsSlug}
+              theme={theme}
+              t={t}
+              wsId={wsId}
+              autopilotId={autopilotId}
+            />
+          ))}
+        </View>
       ) : null}
     </View>
   );

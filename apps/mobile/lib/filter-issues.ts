@@ -50,6 +50,26 @@ export interface IssueFilterState {
    * window), exactly like web: the client predicate has no date branch.
    */
   dateFilter: IssueDateFilterValue | null;
+  /**
+   * Keep only issues with at least one agent task in `running` status
+   * (web's `agentRunningFilter` → `workingOnly`). The set comes from the
+   * workspace agent-task snapshot, passed separately as
+   * `IssueFilterContext.runningIssueIds` so this module stays free of
+   * fetching — same split as web's `filter.ts`.
+   */
+  workingOnly: boolean;
+}
+
+/**
+ * Data the predicate needs that is not part of the filter state. Mirrors
+ * web `IssueFilterContext` (packages/views/issues/utils/filter.ts:49-52)
+ * minus `activityByIssueId`: mobile's surfaces have no per-issue activity
+ * map, so the snapshot projection is the single representation here.
+ */
+export interface IssueFilterContext {
+  /** Distinct issue ids with a RUNNING agent task. `undefined` = the
+   *  projection has not resolved yet. */
+  runningIssueIds?: ReadonlySet<string>;
 }
 
 /** Empty filter snapshot — "show all". */
@@ -64,6 +84,7 @@ export const EMPTY_ISSUE_FILTER: IssueFilterState = {
   labelFilters: [],
   propertyFilters: {},
   dateFilter: null,
+  workingOnly: false,
 };
 
 /**
@@ -100,13 +121,21 @@ export function issueMatchesPropertyFilters(
 /**
  * Apply every filter dimension. Mirrors web `applyIssueFilters` at
  * packages/views/issues/utils/filter.ts (status/priority/assignee+no-
- * assignee/creator/project+no-project/label/property). Date is intentionally
- * absent — its server window is the single source of truth (web does the
- * same). Working-only is not exposed on mobile.
+ * assignee/creator/project+no-project/label/property/working-only). Date is
+ * intentionally absent — its server window is the single source of truth
+ * (web does the same).
+ *
+ * `workingOnly` is fail-closed in the same way web's is: when the filter is
+ * on but `runningIssueIds` is missing (projection unresolved) it hides
+ * everything, because the user asked for "only what is working" and nothing
+ * has been shown to be working yet. An EMPTY set is a real answer — the
+ * projection resolved and nobody is running — so it also yields an empty
+ * list, not a bypass.
  */
 export function applyIssueFilters(
   issues: Issue[],
   filters: IssueFilterState,
+  context: IssueFilterContext = {},
 ): Issue[] {
   const {
     statusFilters,
@@ -118,14 +147,20 @@ export function applyIssueFilters(
     includeNoProject,
     labelFilters,
     propertyFilters,
+    workingOnly,
   } = filters;
 
   const hasAssigneeFilter =
     assigneeFilters.length > 0 || includeNoAssignee;
   const hasProjectFilter =
     projectFilters.length > 0 || includeNoProject;
+  const applyWorkingOnly = workingOnly === true;
 
   return issues.filter((issue) => {
+    if (applyWorkingOnly && !context.runningIssueIds?.has(issue.id)) {
+      return false;
+    }
+
     if (
       statusFilters.length > 0 &&
       !statusFilters.includes(issue.status)
@@ -332,6 +367,34 @@ export interface IssueGroupSection {
   assigneeType?: "member" | "agent" | "squad";
   assigneeId?: string;
   unassigned: boolean;
+}
+
+/**
+ * The new-issue defaults a board column seeds its "+" with — web's
+ * `BoardColumnGroup.createData` (board-column.tsx:75-88), built here from the
+ * group's own identity rather than carried as a parallel field.
+ *
+ * Status wins over assignee when a group somehow has both: the status lanes
+ * and the assignee lanes are separate groupings, so only one is ever set, and
+ * status is the one the board's edit affordances assume.
+ *
+ * Returns `null` for a column that implies nothing (the assignee grouping's
+ * "No assignee" lane) — the caller creates a plain issue rather than pinning
+ * a default the column cannot express. Web sends
+ * `{ assignee_type: null, assignee_id: null }` in that case, which the create
+ * API treats as "unassigned"; mobile's draft store models that as `null`
+ * instead of a `{type, id}` pair.
+ */
+export function columnCreateDefaults(
+  section: IssueGroupSection,
+): { status: IssueStatus } | { assignee: { type: "member" | "agent" | "squad"; id: string } } | null {
+  if (section.status) return { status: section.status };
+  if (section.assigneeType && section.assigneeId) {
+    return {
+      assignee: { type: section.assigneeType, id: section.assigneeId },
+    };
+  }
+  return null;
 }
 
 /**

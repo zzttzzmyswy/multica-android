@@ -21,22 +21,35 @@ import { useTranslation } from "@/lib/i18n/react";
 import { keyboardBehavior } from "@/lib/keyboard";
 
 export default function NewManualAgentPage() {
-  const { duplicate } = useLocalSearchParams<{ duplicate?: string }>();
+  const { duplicate, squad } = useLocalSearchParams<{
+    duplicate?: string;
+    squad?: string;
+  }>();
   const navigation = useNavigation();
   const { t } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const agents = useQuery(agentListOptions(wsId));
   const duplicateId = typeof duplicate === "string" && duplicate ? duplicate : null;
+  const squadId = typeof squad === "string" && squad ? squad : null;
   const duplicateSource = duplicateId
     ? (agents.data ?? []).find((a) => a.id === duplicateId) ?? null
     : null;
 
   useLayoutEffect(() => {
-    if (!duplicateSource) return;
-    navigation.setOptions({
-      title: t("agents.duplicate.title", { name: duplicateSource.name }),
-    });
-  }, [duplicateSource, t]);
+    if (duplicateSource) {
+      navigation.setOptions({
+        title: t("agents.duplicate.title", { name: duplicateSource.name }),
+      });
+      return;
+    }
+    // Squad context (?squad= — web manual-create-agent-page parity): the
+    // header switches to squad copy so the user knows who they are hiring.
+    if (squadId) {
+      navigation.setOptions({
+        title: t("agents.new.squadTitle"),
+      });
+    }
+  }, [duplicateSource, squadId, t]);
 
   return (
     <KeyboardAvoidingView
@@ -48,7 +61,7 @@ export default function NewManualAgentPage() {
         contentContainerClassName="pb-10"
         keyboardShouldPersistTaps="handled"
       >
-        <ManualAgentForm duplicateSource={duplicateSource} />
+        <ManualAgentForm duplicateSource={duplicateSource} squadId={squadId} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
