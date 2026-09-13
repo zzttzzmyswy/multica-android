@@ -185,35 +185,9 @@ export default function SkillDetailPage() {
     return members.find((m) => m.user_id === skill.created_by)?.name ?? null;
   }, [skill?.created_by, members]);
 
-  if (isLoading) {
-    return (
-      <View className="flex-1 items-center justify-center bg-background">
-        <ActivityIndicator />
-      </View>
-    );
-  }
-
-  if (error || !skill || !skill.id) {
-    return (
-      <View className="flex-1 items-center justify-center bg-background px-6 gap-3">
-        <Ionicons
-          name="extension-puzzle-outline"
-          size={32}
-          color={theme.mutedForeground}
-        />
-        <Text className="text-sm text-muted-foreground text-center mt-2">
-          {t("skills.notFound")}
-        </Text>
-        <Button variant="outline" onPress={() => refetch()}>
-          <Text>{t("workspace.retry")}</Text>
-        </Button>
-      </View>
-    );
-  }
-
-  const origin = readOrigin(skill);
-  const files = skill.files ?? [];
-  const refreshable = canEdit && isRefreshableOrigin(origin);
+  const origin = skill ? readOrigin(skill) : null;
+  const files = skill?.files ?? [];
+  const refreshable = !!skill && !!origin && canEdit && isRefreshableOrigin(origin);
 
   const addAgentGroups = useMemo(() => {
     const bound = new Set(usedByAgents.map((a) => a.id));
@@ -281,7 +255,7 @@ export default function SkillDetailPage() {
   };
 
   const handleRefresh = () => {
-    if (!skill || refreshSkill.isPending) return;
+    if (!skill || !origin || refreshSkill.isPending) return;
     const source = t(ORIGIN_LABEL_KEY[origin.type]);
     const body = t("skills.detail.refreshConfirmBody", {
       name: skill.name,
@@ -307,6 +281,39 @@ export default function SkillDetailPage() {
     ]);
   };
 
+  // Early returns live BELOW every hook on purpose: a return above
+  // `addAgentGroups` made the first render (loading, fewer hooks) and the
+  // loaded render (more hooks) disagree, which React reports as "Rendered
+  // more hooks than during the previous render" — a hard crash every time the
+  // skill detail was opened without a warm detail cache.
+  if (isLoading) {
+    return (
+      <View className="flex-1 items-center justify-center bg-background">
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
+  if (error || !skill || !skill.id) {
+    return (
+      <View className="flex-1 items-center justify-center bg-background px-6 gap-3">
+        <Ionicons
+          name="extension-puzzle-outline"
+          size={32}
+          color={theme.mutedForeground}
+        />
+        <Text className="text-sm text-muted-foreground text-center mt-2">
+          {t("skills.notFound")}
+        </Text>
+        <Button variant="outline" onPress={() => refetch()}>
+          <Text>{t("workspace.retry")}</Text>
+        </Button>
+      </View>
+    );
+  }
+
+  const originInfo = origin!;
+
   return (
     <>
       <ScrollView
@@ -326,7 +333,7 @@ export default function SkillDetailPage() {
                 </Text>
                 <View className="px-1.5 py-px rounded-full bg-secondary">
                   <Text className="text-[10px] text-muted-foreground font-medium">
-                    {t(ORIGIN_LABEL_KEY[origin.type])}
+                    {t(ORIGIN_LABEL_KEY[originInfo.type])}
                   </Text>
                 </View>
               </View>
@@ -374,7 +381,7 @@ export default function SkillDetailPage() {
               <MetaRow
                 icon="layers-outline"
                 label={t("skills.detail.origin")}
-                value={t(ORIGIN_LABEL_KEY[origin.type])}
+                value={t(ORIGIN_LABEL_KEY[originInfo.type])}
               />
             </View>
             <View className="px-3 py-1">

@@ -14,7 +14,7 @@
  *   - `IssueSectionHeader` — SectionList header for status / assignee lanes
  *   - `SurfaceEmptyState`  — centered muted message
  */
-import { Pressable, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Issue, IssuePriority, IssueStatus } from "@multica/core/types";
@@ -125,8 +125,16 @@ export function FilterTriggerButton({
 
 /**
  * Toolbar row mirroring web's IssuesHeader: left-aligned scope pill group +
- * right-side Filter icon (red dot when filters are active). Generic over the
- * scope value type so each surface passes its own `SCOPES` config.
+ * right-side mode switch and Filter icon (red dot when filters are active).
+ * Generic over the scope value type so each surface passes its own `SCOPES`
+ * config.
+ *
+ * The pill group scrolls horizontally instead of shrinking: scope pills are
+ * fixed-width, so a narrow phone with three scopes and the five-button mode
+ * switch (list / board / table / gantt / swimlane) leaves the row wider than
+ * the screen. Shrinking the group only clipped the pills under the mode
+ * switch — the buttons overflow their shrunken box. Scrolling keeps every
+ * scope reachable and the mode switch fixed.
  */
 export function IssueSurfaceScopeToolbar<S extends string>({
   scopes,
@@ -149,7 +157,12 @@ export function IssueSurfaceScopeToolbar<S extends string>({
 }) {
   return (
     <View className="flex-row items-center justify-between px-4 pt-2 pb-2">
-      <View className="flex-row items-center gap-1 flex-shrink min-w-0">
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        className="flex-1 min-w-0"
+        contentContainerStyle={{ gap: 4, alignItems: "center" }}
+      >
         {scopes.map((s) => {
           const active = scope === s.value;
           return (
@@ -170,8 +183,8 @@ export function IssueSurfaceScopeToolbar<S extends string>({
             </Button>
           );
         })}
-      </View>
-      <View className="flex-row items-center gap-1.5 ml-2">
+      </ScrollView>
+      <View className="flex-row items-center gap-1.5 ml-2 shrink-0">
         <ViewModeToggle view={view} onChange={onViewChange} />
         <FilterTriggerButton
           onPress={onOpenFilter}
