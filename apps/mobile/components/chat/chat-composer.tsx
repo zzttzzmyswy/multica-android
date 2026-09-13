@@ -57,6 +57,13 @@ interface Props {
   sending: boolean;
   /** Queued tasks remain busy, but do not expose Stop without draft restore. */
   allowStop?: boolean;
+  /** `pendingTask.supports_queue === true` — the running turn accepts
+   *  follow-ups, so the trailing slot becomes "Queue message" once the
+   *  composer holds content (web chat-input's `allowSubmitWhileRunning`).
+   *  Without it a follow-up could only ever be typed after the turn ended,
+   *  which left the queue UI unreachable — nothing on the phone could
+   *  enqueue. */
+  queueSendEnabled?: boolean;
   /** The active agent's embedded skills (`Agent.skills`). Drives the `/`
    *  skill picker (MYS-682): typing a trailing `/` lists them; picking one
    *  inserts `/{name} ` verbatim. Empty when the agent has no skills — the
@@ -78,6 +85,7 @@ export function ChatComposer({
   onStop,
   sending,
   allowStop = true,
+  queueSendEnabled = false,
   disabled = false,
   disabledReason,
   activeAgentSkills,
@@ -128,6 +136,7 @@ export function ChatComposer({
       disabled={disabled}
       disabledReason={disabledReason}
       isSending={sending}
+      allowSubmitWhileRunning={queueSendEnabled}
       slashSkills={activeAgentSkills}
       renderStop={allowStop ? () => <StopButton onPress={handleStop} /> : undefined}
       manageKeyboard={false}

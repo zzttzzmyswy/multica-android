@@ -651,6 +651,7 @@ export default function ChatTab() {
             onStop={handleStop}
             sending={sending}
             allowStop={pendingTask?.status !== "queued"}
+            queueSendEnabled={pendingTask?.supports_queue === true}
             disabled={disabled}
             disabledReason={disabledReason}
             // /\-menu catalog = the active agent's embedded skills (MYS-682);
