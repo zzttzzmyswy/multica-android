@@ -36,6 +36,7 @@ import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import type { ChatSkillInput } from "@/lib/slash-command";
 import { MessageComposer } from "@/components/composer/message-composer";
+import { ChatProjectContextRow } from "@/components/chat/chat-project-context-row";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
@@ -74,6 +75,18 @@ interface Props {
   disabled?: boolean;
   /** When `disabled`, replaces the pill label with the reason. */
   disabledReason?: string;
+  /** Active chat session id — the PATCH target for project-context edits.
+   *  Undefined for a brand-new chat (no session yet), which hides the row. */
+  sessionId?: string | null;
+  /** `ChatSession.project_id`. When set, a clearable project-context row
+   *  renders above the composer (web chat-input parity). */
+  projectId?: string | null;
+  /** `chatProjectContextUnsupported(runtime)` — renders the "runtime does not
+   *  support project context" warning in the same row. */
+  projectContextUnsupported?: boolean;
+  /** True while a turn is in flight — locks the project chip (web
+   *  `projectSelectionEnabled`). */
+  projectContextDisabled?: boolean;
 }
 
 const IS_IOS = process.env.EXPO_OS === "ios";
@@ -89,6 +102,10 @@ export function ChatComposer({
   disabled = false,
   disabledReason,
   activeAgentSkills,
+  sessionId,
+  projectId,
+  projectContextUnsupported = false,
+  projectContextDisabled = false,
 }: Props) {
   const { t } = useTranslation();
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
@@ -116,31 +133,46 @@ export function ChatComposer({
   }, [onStop]);
 
   return (
-    <MessageComposer
-      value={value}
-      onChangeText={onChangeText}
-      onSubmit={onSubmit}
-      mentionPickerPath={{
-        pathname: "/[workspace]/mention-picker",
-        params: { workspace: wsSlug ?? "", mode: "chat" },
-      }}
-      placeholder={sending ? t("chat.agentWorking") : t("chat.placeholder")}
-      pillLabel={
-        sending
-          ? t("chat.agentWorking")
-          : disabled
-            ? (disabledReason ?? t("chat.unavailable"))
-            : t("chat.placeholder")
-      }
-      pillIcon="chatbubble-ellipses-outline"
-      disabled={disabled}
-      disabledReason={disabledReason}
-      isSending={sending}
-      allowSubmitWhileRunning={queueSendEnabled}
-      slashSkills={activeAgentSkills}
-      renderStop={allowStop ? () => <StopButton onPress={handleStop} /> : undefined}
-      manageKeyboard={false}
-    />
+    <>
+      {/* Web renders the clearable project pill inside the composer surface;
+          on mobile the collapsed/expanded composer owns that chrome, so the
+          row sits just above it (parent wraps both in a KeyboardStickyView so
+          they lift as one). No session id yet → a brand-new chat, no binding
+          to show. */}
+      {sessionId ? (
+        <ChatProjectContextRow
+          sessionId={sessionId}
+          projectId={projectId}
+          projectContextUnsupported={projectContextUnsupported}
+          disabled={projectContextDisabled}
+        />
+      ) : null}
+      <MessageComposer
+        value={value}
+        onChangeText={onChangeText}
+        onSubmit={onSubmit}
+        mentionPickerPath={{
+          pathname: "/[workspace]/mention-picker",
+          params: { workspace: wsSlug ?? "", mode: "chat" },
+        }}
+        placeholder={sending ? t("chat.agentWorking") : t("chat.placeholder")}
+        pillLabel={
+          sending
+            ? t("chat.agentWorking")
+            : disabled
+              ? (disabledReason ?? t("chat.unavailable"))
+              : t("chat.placeholder")
+        }
+        pillIcon="chatbubble-ellipses-outline"
+        disabled={disabled}
+        disabledReason={disabledReason}
+        isSending={sending}
+        allowSubmitWhileRunning={queueSendEnabled}
+        slashSkills={activeAgentSkills}
+        renderStop={allowStop ? () => <StopButton onPress={handleStop} /> : undefined}
+        manageKeyboard={false}
+      />
+    </>
   );
 }
 

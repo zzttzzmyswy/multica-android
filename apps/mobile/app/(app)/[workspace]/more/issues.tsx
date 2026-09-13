@@ -23,7 +23,7 @@
  */
 import { useCallback, useMemo } from "react";
 import { SectionList, View } from "react-native";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import type { IssueView } from "@multica/core/api/schemas";
 import { Text } from "@/components/ui/text";
@@ -39,6 +39,7 @@ import { SwimlaneView } from "@/components/issue/swimlane-view";
 import { IssueViewBar } from "@/components/issue/issue-view-bar";
 import { IssueTableView } from "@/components/issue/table-view";
 import { IssuesLoading } from "@/components/issue/issues-loading";
+import { IssueListFooter } from "@/components/issue/issue-list-footer";
 import {
   ActiveFilterChips,
   IssueSection,
@@ -48,6 +49,12 @@ import {
   SurfaceEmptyState,
 } from "@/components/issue/issue-surface-chrome";
 import { ganttIssuesOptions, issueListOptions } from "@/data/queries/issues";
+import { readIssueRows } from "@/data/queries/issue-list-cache";
+import {
+  hasMoreIssues,
+  issueListTotal,
+} from "@/lib/issue-pagination";
+import { useDrainIssuePages } from "@/lib/use-drain-issue-pages";
 import { issueViewListOptions } from "@/data/queries/issue-views";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import {
@@ -256,9 +263,28 @@ export default function IssuesPage() {
     [filterState, sortBy, sortDirection],
   );
 
-  const { data, isLoading, error, refetch, isRefetching } = useQuery(
-    issueListOptions(wsId, window),
-  );
+  // Paginated window. `GET /api/issues` clamps limit to 100 server-side, so a
+  // one-shot fetch used to drop every issue past row 100 with no hint; the
+  // list view now scrolls the window and the aggregate views drain it (below).
+  const listQuery = useInfiniteQuery(issueListOptions(wsId, window));
+  const {
+    data: listData,
+    isLoading,
+    error,
+    refetch,
+    isRefetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+    isError,
+  } = listQuery;
+
+  // `error` stays populated on a failed *refetch* even though rows are on
+  // screen; only a load with no data at all should take over the surface.
+  const listLoadError = isError && !listData;
+  const listIssues = useMemo(() => readIssueRows(listData), [listData]);
+  const listTotal = issueListTotal(listData?.pages ?? []);
 
   // Gantt canvas data — paged scheduled-issue fetch. The regular list is
   // capped at 100 rows server-side (GET /api/issues), which would silently
@@ -279,13 +305,26 @@ export default function IssuesPage() {
   // Loading/error/refresh follow the ACTIVE source so a first gantt load
   // shows a spinner instead of a stale "no scheduled issues" empty state.
   const surfaceData = useMemo(
-    () => (ganttActive ? ganttIssues ?? [] : data ?? []),
-    [ganttActive, ganttIssues, data],
+    () => (ganttActive ? ganttIssues ?? [] : listIssues),
+    [ganttActive, ganttIssues, listIssues],
   );
   const surfaceLoading = ganttActive ? ganttLoading : isLoading;
-  const surfaceError = ganttActive ? ganttError : error;
+  const surfaceError = ganttActive ? ganttError : listLoadError ? error : null;
   const surfaceRefetch = ganttActive ? refetchGantt : refetch;
   const surfaceRefetching = ganttActive ? ganttRefetching : isRefetching;
+
+  // Board / swimlane / table group the window client-side, so a partially
+  // loaded window silently under-reports them — drain the remaining pages
+  // while one of those views is on screen. The linear list view does NOT
+  // drain: it has a real end-of-scroll sentinel instead.
+  useDrainIssuePages({
+    enabled: !ganttActive && view !== "list",
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+    loadedRows: listIssues.length,
+    fetchNextPage,
+  });
 
   // Scope pre-filter — mirrors web `issues-page.tsx:90-94`. Applied before
   // other filtering so chip filters operate on the visible slice.
@@ -529,6 +568,21 @@ export default function IssuesPage() {
               }}
             />
           )}
+          ListFooterComponent={
+            <IssueListFooter
+              hasMore={hasMoreIssues(listData?.pages ?? [])}
+              isLoadingMore={isFetchingNextPage}
+              total={listTotal}
+              isError={isFetchNextPageError}
+              onRetry={() => void fetchNextPage()}
+            />
+          }
+          onEndReachedThreshold={0.5}
+          onEndReached={() => {
+            if (hasNextPage && !isFetchingNextPage && !isFetchNextPageError) {
+              void fetchNextPage();
+            }
+          }}
           refreshing={surfaceRefetching}
           onRefresh={surfaceRefetch}
         />

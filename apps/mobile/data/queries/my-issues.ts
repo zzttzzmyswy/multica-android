@@ -23,8 +23,13 @@
  * future WS handler can invalidate `issueKeys.myAll(wsId)` and reach both
  * clients.
  */
-import { queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions } from "@tanstack/react-query";
 import { api } from "@/data/api";
+import {
+  ISSUE_PAGE_SIZE,
+  makeIssuePage,
+  nextIssuePageParam,
+} from "@/lib/issue-pagination";
 import {
   issueKeys,
   issueParamsKey,
@@ -80,12 +85,17 @@ export const myIssueListOptions = (
   // the historical key shape so mention-suggestion + realtime share it.
   const suffix = myWindowSuffix(window);
   if (suffix) key.push(suffix);
-  return queryOptions({
+  return infiniteQueryOptions({
     queryKey: key,
-    queryFn: async ({ signal }) => {
-      const res = await api.listIssues({ ...filter, ...window }, { signal });
-      return res.issues;
+    queryFn: async ({ pageParam, signal }) => {
+      const res = await api.listIssues(
+        { ...filter, ...window, limit: ISSUE_PAGE_SIZE, offset: pageParam },
+        { signal },
+      );
+      return makeIssuePage(res.issues, res.total);
     },
+    initialPageParam: 0,
+    getNextPageParam: (_lastPage, allPages) => nextIssuePageParam(allPages),
     enabled: !!wsId,
   });
 };

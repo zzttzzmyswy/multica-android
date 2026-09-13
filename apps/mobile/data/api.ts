@@ -3402,13 +3402,14 @@ class ApiClient {
     await this.fetch<void>(`/api/chat/sessions/${id}`, { method: "DELETE" });
   }
 
-  /** PATCH /api/chat/sessions/:id — rename a session (title only; the web
-   *  build also patches project_id, which mobile never edits). Mirrors
-   *  packages/core/api/client.ts updateChatSession, restored for MYS-409
-   *  after the v1 cut dropped it. */
+  /** PATCH /api/chat/sessions/:id — rename a session (title) or rebind its
+   *  durable project context (`project_id`, null clears it). Same union shape
+   *  as web's packages/core/api/client.ts updateChatSession; the project arm
+   *  backs the composer's clearable project chip. Restored for MYS-409 after
+   *  the v1 cut dropped the method. */
   async updateChatSession(
     id: string,
-    data: { title: string },
+    data: { title: string } | { project_id: string | null },
   ): Promise<ChatSession> {
     return this.fetch<ChatSession>(`/api/chat/sessions/${id}`, {
       method: "PATCH",

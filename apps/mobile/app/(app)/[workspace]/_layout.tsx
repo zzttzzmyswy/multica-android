@@ -367,6 +367,10 @@ export default function WorkspaceLayout() {
         <Stack.Screen name="issues-filter-date" options={SHEET_OPTIONS} />
         {/* Chat session-switch sheet. */}
         <Stack.Screen name="chat-sessions" options={SHEET_OPTIONS} />
+        {/* Chat composer project-context picker — same search-first project
+            sheet as the issue/new-issue pickers; rebinds the active session's
+            project_id. */}
+        <Stack.Screen name="chat-project-picker" options={SHEET_OPTIONS} />
         {/* Workspace switcher — reached from the More popover's collapsed
             WorkspaceCard. Two-step (pick → iOS Alert confirm → switch). */}
         <Stack.Screen name="switch-workspace" options={SHEET_OPTIONS} />
