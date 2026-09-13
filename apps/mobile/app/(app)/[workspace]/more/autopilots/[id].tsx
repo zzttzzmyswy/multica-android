@@ -48,6 +48,7 @@ import {
   TriggerPayloadSkeleton,
 } from "@/components/autopilot/trigger-payload-preview";
 import { ActionSheet } from "@/lib/action-sheet";
+import { Markdown } from "@/lib/markdown";
 import {
   autopilotDetailOptions,
   autopilotRunOptions,
@@ -503,6 +504,21 @@ export default function AutopilotDetailPage() {
           </Text>
         </PropertyRow>
       </View>
+
+      {/* Prompt / runbook — web renders `autopilot.description` as rich content
+          in the properties grid (autopilot-detail-page.tsx:925-932). Without
+          it the phone could show what an automation is scheduled to do but
+          never what it actually instructs the agent to do. */}
+      {autopilot.description ? (
+        <>
+          <SectionTitle>{t("autopilots.detail.fieldPrompt")}</SectionTitle>
+          <View className="px-4">
+            <View className="rounded-lg border border-border bg-card p-3">
+              <Markdown content={autopilot.description} />
+            </View>
+          </View>
+        </>
+      ) : null}
 
       {/* Subscribers — auto-subscribed to issues this autopilot creates. */}
       <SectionTitle>{t("autopilots.detail.subscribers")}</SectionTitle>
