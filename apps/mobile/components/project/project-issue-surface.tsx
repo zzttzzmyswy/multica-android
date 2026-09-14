@@ -45,6 +45,7 @@ import { IssuesLoading } from "@/components/issue/issues-loading";
 import { IssueListFooter } from "@/components/issue/issue-list-footer";
 import {
   ActiveFilterChips,
+  useFilterChipBaseline,
   IssueSection,
   IssueSectionHeader,
   IssueSelectionRow,
@@ -212,6 +213,12 @@ export function ProjectIssueSurface({
     () => savedViews.find((v) => v.id === activeViewId) ?? null,
     [savedViews, activeViewId],
   );
+
+  // The chips bar works against the open view's baseline: it shows only the
+  // user's additions and a chip's removal falls back to the view's own
+  // values (web filter-chips-bar semantics).
+  const { baseline: chipBaseline, resetDimension: resetChipDimension } =
+    useFilterChipBaseline(activeView?.query ?? null, useProjectIssuesViewStore);
   const snapshotSource = useMemo(
     () => ({ ...filterState, sortBy, sortDirection, grouping }),
     [filterState, sortBy, sortDirection, grouping],
@@ -388,14 +395,8 @@ export function ProjectIssueSurface({
       {hasActiveFilterChips ? (
         <ActiveFilterChips
           filterState={filterState}
-          statusFilters={filterState.statusFilters}
-          priorityFilters={filterState.priorityFilters}
-          assigneeFilters={filterState.assigneeFilters}
-          creatorFilters={filterState.creatorFilters}
-          projectFilters={filterState.projectFilters}
-          labelFilters={filterState.labelFilters}
-          propertyFilters={filterState.propertyFilters}
-          dateFilter={filterState.dateFilter}
+          baseline={chipBaseline}
+          onResetDimension={resetChipDimension}
           onClearStatus={(s) =>
             useProjectIssuesViewStore.getState().toggleStatusFilter(s)
           }

@@ -2483,6 +2483,8 @@
   "workspace.selectTitle": "Select a workspace",
   "workspace.signOut": "Sign out",
   "workspace.signedInAs": "Signed in as",
+  "workspaceSettings.context": "Context",
+  "workspaceSettings.contextPlaceholder": "Background information and context for AI agents working in this workspace",
   "workspaceSettings.createdAt": "Created",
   "workspaceSettings.dangerZone": "Danger Zone",
   "workspaceSettings.deleteButton": "Delete",

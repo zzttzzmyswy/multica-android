@@ -96,6 +96,7 @@ export default function WorkspaceSettingsScreen() {
   const [description, setDescription] = useState(
     workspace?.description ?? "",
   );
+  const [context, setContext] = useState(workspace?.context ?? "");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   // Issue prefix is its own field with its own blur-triggered save (web
   // workspace-tab.tsx:133-135, 246-258) — it is NOT part of the General
@@ -116,6 +117,7 @@ export default function WorkspaceSettingsScreen() {
   useEffect(() => {
     setName(workspace?.name ?? "");
     setDescription(workspace?.description ?? "");
+    setContext(workspace?.context ?? "");
     setSaveStatus("idle");
     setIssuePrefix(workspace?.issue_prefix ?? "");
     setPrefixStatus("idle");
@@ -123,10 +125,13 @@ export default function WorkspaceSettingsScreen() {
   }, [workspace?.id]);
 
   const nameError = workspaceNameValidationError(name);
+  // `context` is the workspace briefing agents read (web workspace-tab.tsx
+  // `context_label`) — part of the same dirty/Save flow as name/description.
   const dirty =
     !!workspace &&
     (name.trim() !== (workspace.name ?? "") ||
-      description !== (workspace.description ?? ""));
+      description !== (workspace.description ?? "") ||
+      context !== (workspace.context ?? ""));
 
   const handleSave = async () => {
     if (!workspace || !canManage || saveStatus === "saving") return;
@@ -140,12 +145,14 @@ export default function WorkspaceSettingsScreen() {
           ...(description !== (workspace.description ?? "")
             ? { description }
             : {}),
+          ...(context !== (workspace.context ?? "") ? { context } : {}),
         },
       });
       // The server response is the authoritative post-trim shape — sync the
       // form to it so the dirty check settles (e.g. trailing-space input).
       setName(updated.name);
       setDescription(updated.description ?? "");
+      setContext(updated.context ?? "");
       setSaveStatus("saved");
     } catch (err) {
       setSaveStatus("error");
@@ -338,6 +345,26 @@ export default function WorkspaceSettingsScreen() {
                 />
               </View>
             </View>
+            <View>
+              <Text className="text-xs text-muted-foreground mb-1.5">
+                {t("workspaceSettings.context")}
+              </Text>
+              <View className="rounded-md border border-border bg-background px-3 py-2">
+                <AutosizeTextArea
+                  value={context}
+                  onChangeText={(v) => {
+                    setContext(v);
+                    if (saveStatus === "saved" || saveStatus === "error") {
+                      setSaveStatus("idle");
+                    }
+                  }}
+                  placeholder={t("workspaceSettings.contextPlaceholder")}
+                  editable={saveStatus !== "saving"}
+                  minHeight={80}
+                  maxHeight={200}
+                />
+              </View>
+            </View>
             <View className="flex-row items-center justify-between gap-3">
               <Text
                 className={cn(
@@ -410,6 +437,19 @@ export default function WorkspaceSettingsScreen() {
                 label={t("workspaceSettings.description")}
                 value={workspace.description}
               />
+            </>
+          ) : null}
+          {!canManage && workspace.context ? (
+            <>
+              <Separator />
+              <View className="px-4 py-3 gap-1">
+                <Text className="text-sm text-muted-foreground">
+                  {t("workspaceSettings.context")}
+                </Text>
+                <Text className="text-sm text-foreground">
+                  {workspace.context}
+                </Text>
+              </View>
             </>
           ) : null}
           <Separator />

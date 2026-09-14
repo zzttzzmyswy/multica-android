@@ -2483,6 +2483,8 @@
   "workspace.selectTitle": "选择工作区",
   "workspace.signOut": "退出登录",
   "workspace.signedInAs": "已登录为",
+  "workspaceSettings.context": "上下文",
+  "workspaceSettings.contextPlaceholder": "供工作区中的智能体参考的背景信息和上下文",
   "workspaceSettings.createdAt": "创建时间",
   "workspaceSettings.dangerZone": "危险区",
   "workspaceSettings.deleteButton": "删除",
