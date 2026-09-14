@@ -31,6 +31,7 @@
  * filter input produces the same visible set on both clients.
  */
 import { create } from "zustand";
+import type { SwimlaneGrouping } from "@/lib/swimlane";
 import {
   createIssueFilterActions,
   defaultIssueFilterSlice,
@@ -56,17 +57,23 @@ export interface IssuesViewState
     TableColumnsSlice {
   scope: IssuesScope;
   view: IssueViewMode;
+  /** Active swimlane grouping dimension — only read in swimlane mode.
+   *  Default `assignee`, matching web `view-store.ts` defaults. */
+  swimlaneGrouping: SwimlaneGrouping;
   setScope: (scope: IssuesScope) => void;
   setView: (view: IssueViewMode) => void;
+  setSwimlaneGrouping: (grouping: SwimlaneGrouping) => void;
 }
 
 export const useIssuesViewStore = create<IssuesViewState>((set) => ({
   scope: "all",
   view: "list",
+  swimlaneGrouping: "assignee",
   tableColumns: defaultTableColumns(),
   ...defaultIssueFilterSlice(),
   setScope: (scope) => set({ scope }),
   setView: (view) => set({ view }),
+  setSwimlaneGrouping: (swimlaneGrouping) => set({ swimlaneGrouping }),
   ...createIssueFilterActions<IssuesViewState>(set),
   ...createTableColumnActions<IssuesViewState>(set),
 }));

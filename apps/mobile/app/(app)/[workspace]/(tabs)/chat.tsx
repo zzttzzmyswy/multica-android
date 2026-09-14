@@ -65,6 +65,7 @@ import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { agentListOptions } from "@/data/queries/agents";
 import { memberListOptions } from "@/data/queries/members";
+import { runtimeListOptions } from "@/data/queries/runtimes";
 import {
   chatKeys,
   chatMessagesOptions,
@@ -110,6 +111,7 @@ import { OfflineBanner } from "@/components/chat/offline-banner";
 import { RuntimeRequiredBanner } from "@/components/chat/runtime-required-banner";
 import { useChatSelectStore } from "@/data/chat-select-store";
 import { isAgentRuntimeBound } from "@/lib/is-agent-runtime-bound";
+import { chatProjectContextUnsupported } from "@/lib/chat-project-context";
 import { useTranslation } from "@/lib/i18n/react";
 
 export default function ChatTab() {
@@ -144,6 +146,7 @@ export default function ChatTab() {
   const { data: sessions = [] } = useQuery(chatSessionsOptions(wsId));
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
   const { data: members = [] } = useQuery(memberListOptions(wsId));
+  const { data: runtimes = [] } = useQuery(runtimeListOptions(wsId));
 
   // ── Auto-hydrate active session on first Chat tab entry ────────────────
   // Mobile-only deviation from web: web's chat-window opens to an empty
@@ -258,6 +261,20 @@ export default function ChatTab() {
   const runtimeBound =
     currentAgent !== null && isAgentRuntimeBound(currentAgent);
   const sending = !!pendingTask?.task_id;
+
+  // Soft capability gate behind the composer's project-context warning (web's
+  // useChatProjectContextSupport): resolve the active agent's runtime row from
+  // the warm cache. No agent / no bound runtime / row not cached → "cannot
+  // tell" → no warning (a spurious warning is worse than a dropped
+  // description).
+  const sessionRuntime = useMemo(
+    () =>
+      currentAgent?.runtime_id
+        ? (runtimes.find((r) => r.id === currentAgent.runtime_id) ?? null)
+        : null,
+    [runtimes, currentAgent?.runtime_id],
+  );
+  const projectContextUnsupported = chatProjectContextUnsupported(sessionRuntime);
 
   // ── Drafts ─────────────────────────────────────────────────────────────
   const draftKey = activeSessionId ?? DRAFT_NEW_SESSION;
@@ -651,8 +668,17 @@ export default function ChatTab() {
             onStop={handleStop}
             sending={sending}
             allowStop={pendingTask?.status !== "queued"}
+            queueSendEnabled={pendingTask?.supports_queue === true}
             disabled={disabled}
             disabledReason={disabledReason}
+            // Project-context chip: shown once a session exists and carries a
+            // project binding; the warning follows the runtime soft gate.
+            sessionId={activeSessionId}
+            projectId={activeSession?.project_id ?? null}
+            projectContextUnsupported={projectContextUnsupported}
+            // Web locks project selection while a turn is dispatching
+            // (`projectSelectionEnabled`); mirror it.
+            projectContextDisabled={sending}
             // /\-menu catalog = the active agent's embedded skills (MYS-682);
             // an agent with no skills simply never arms the menu.
             activeAgentSkills={currentAgent?.skills ?? []}

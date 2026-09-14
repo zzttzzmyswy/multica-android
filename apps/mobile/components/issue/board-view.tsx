@@ -16,7 +16,8 @@
  *     move mechanism this iteration.
  */
 import { memo, useCallback, useMemo } from "react";
-import { FlatList, ScrollView, View } from "react-native";
+import { FlatList, Pressable, ScrollView, View } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Issue, IssueStatus } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
@@ -24,6 +25,8 @@ import { StatusIcon } from "@/components/ui/status-icon";
 import { useStatusLabel, useStatusOptions } from "@/lib/status-options";
 import { translate } from "@/lib/i18n";
 import { useTranslation } from "@/lib/i18n/react";
+import { useColorScheme } from "@/lib/use-color-scheme";
+import { THEME } from "@/lib/theme";
 import { ActionSheet } from "@/lib/action-sheet";
 import { useUpdateIssue } from "@/data/mutations/issues";
 import { useWorkspaceStore } from "@/data/workspace-store";
@@ -35,8 +38,16 @@ import {
 } from "@/lib/filter-issues";
 import { BoardCard, BOARD_COLUMN_WIDTH } from "./board-card";
 
-function ColumnHeader({ column }: { column: IssueGroupSection }) {
+function ColumnHeader({
+  column,
+  onCreateIssue,
+}: {
+  column: IssueGroupSection;
+  onCreateIssue?: (section: IssueGroupSection) => void;
+}) {
+  const { t } = useTranslation();
   const { getName } = useActorLookup();
+  const { colorScheme } = useColorScheme();
   const statusLabel = useStatusLabel();
   let leading: React.ReactNode = null;
   let label = "";
@@ -64,6 +75,24 @@ function ColumnHeader({ column }: { column: IssueGroupSection }) {
       <Text className="ml-auto text-xs text-muted-foreground/60">
         {column.data.length}
       </Text>
+      {/* Column-header quick create (web board-column.tsx:226-246, whose
+          `+` sits opposite the lane title). The new issue is seeded with
+          the column's own status / assignee, so "add here" means here. */}
+      {onCreateIssue ? (
+        <Pressable
+          onPress={() => onCreateIssue(column)}
+          hitSlop={10}
+          className="active:opacity-60"
+          accessibilityRole="button"
+          accessibilityLabel={t("issues.boardAddIssue")}
+        >
+          <Ionicons
+            name="add"
+            size={15}
+            color={THEME[colorScheme].mutedForeground}
+          />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -71,9 +100,11 @@ function ColumnHeader({ column }: { column: IssueGroupSection }) {
 const BoardColumn = memo(function BoardColumn({
   column,
   onOpenIssue,
+  onCreateIssue,
 }: {
   column: IssueGroupSection;
   onOpenIssue: (issue: Issue) => void;
+  onCreateIssue?: (section: IssueGroupSection) => void;
 }) {
   const renderItem = useCallback(
     ({ item }: { item: Issue }) => (
@@ -90,7 +121,7 @@ const BoardColumn = memo(function BoardColumn({
       className="flex-col rounded-lg border border-border bg-background/60"
     >
       <View className="px-2 pt-2">
-        <ColumnHeader column={column} />
+        <ColumnHeader column={column} onCreateIssue={onCreateIssue} />
       </View>
       {column.data.length === 0 ? (
         <View className="flex-1 items-center justify-center px-4 pb-6">
@@ -167,12 +198,20 @@ export function BoardView({
   grouping,
   statusOrder,
   onOpenIssue,
+  onCreateIssue,
   emptyLabel,
 }: {
   issues: Issue[];
   grouping: IssueGrouping;
   statusOrder: readonly IssueStatus[];
   onOpenIssue: (issue: Issue) => void;
+  /**
+   * Column-header quick create. Receives the COLUMN, so the caller can seed
+   * the new-issue form with that lane's status / assignee (web
+   * `onCreateIssue(group.createData)` — board-column.tsx:226-246). Omitted
+   * on surfaces with no create flow, which hides the `+` entirely.
+   */
+  onCreateIssue?: (section: IssueGroupSection) => void;
   emptyLabel: string;
 }) {
   const columns = useMemo(
@@ -204,7 +243,12 @@ export function BoardView({
       }}
     >
       {columns.map((column) => (
-        <BoardColumn key={column.key} column={column} onOpenIssue={onOpenIssue} />
+        <BoardColumn
+          key={column.key}
+          column={column}
+          onOpenIssue={onOpenIssue}
+          onCreateIssue={onCreateIssue}
+        />
       ))}
     </ScrollView>
   );

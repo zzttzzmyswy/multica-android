@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  baselineFromViewQuery,
+  clearDimensionToBaseline,
+  issueFilterDelta,
   sanitizeViewDisplay,
   sanitizeViewQuery,
   viewDisplayFromState,
@@ -22,6 +25,7 @@ const SLICE: IssueFilterSlice = {
   labelFilters: ["label-1"],
   propertyFilters: { "prop-1": ["opt-1", "opt-2"] },
   dateFilter: null,
+  workingOnly: false,
   sortBy: "priority",
   sortDirection: "desc",
   grouping: "assignee",
@@ -36,6 +40,7 @@ const SLICE: IssueFilterSlice = {
   togglePropertyFilter: () => {},
   clearPropertyFilter: () => {},
   setDateFilter: () => {},
+  toggleWorkingOnly: () => {},
   setSortBy: () => {},
   setSortDirection: () => {},
   setGrouping: () => {},
@@ -134,12 +139,16 @@ describe("sanitizeViewDisplay", () => {
       sanitizeViewDisplay({ viewMode: "board", grouping: "assignee" }, "position"),
     ).toEqual({ viewMode: "board", grouping: "assignee", sortBy: "position", sortDirection: "asc" });
     expect(
-      sanitizeViewDisplay({ viewMode: "swimlane", grouping: "nope", sortBy: "weird", sortDirection: "sideways" }, "created_at"),
+      sanitizeViewDisplay({ viewMode: "calendar", grouping: "nope", sortBy: "weird", sortDirection: "sideways" }, "created_at"),
     ).toEqual({ viewMode: "list", grouping: "status", sortBy: "created_at", sortDirection: "asc" });
     // "gantt" is a valid mobile mode since iter-118 — passes through.
     expect(
       sanitizeViewDisplay({ viewMode: "gantt" }, "created_at"),
     ).toEqual({ viewMode: "gantt", grouping: "status", sortBy: "created_at", sortDirection: "asc" });
+    // "swimlane" is a valid mobile mode since iter-122 — passes through.
+    expect(
+      sanitizeViewDisplay({ viewMode: "swimlane" }, "created_at"),
+    ).toEqual({ viewMode: "swimlane", grouping: "status", sortBy: "created_at", sortDirection: "asc" });
     expect(sanitizeViewDisplay({}, "due_date")).toEqual({
       viewMode: "list",
       grouping: "status",
@@ -201,5 +210,142 @@ describe("viewMatchesSlice", () => {
       display: { viewMode: "board", grouping: "assignee", sortBy: "priority", sortDirection: "desc", showSubIssues: false },
     };
     expect(viewMatchesSlice(webView, SLICE, "board")).toBe(true);
+  });
+});
+
+const VIEW_QUERY = {
+  statusFilters: ["todo"],
+  priorityFilters: [],
+  assigneeFilters: [{ type: "agent", id: "ag-1" }],
+  includeNoAssignee: false,
+  creatorFilters: [],
+  projectFilters: ["prj-1"],
+  includeNoProject: false,
+  labelFilters: [],
+  propertyFilters: { "prop-1": ["opt-1"] },
+};
+
+describe("baselineFromViewQuery", () => {
+  it("builds has-sets from the sanitized snapshot (unknown members drop)", () => {
+    const baseline = baselineFromViewQuery({
+      ...VIEW_QUERY,
+      statusFilters: ["todo", "not-a-status"],
+      assigneeFilters: [{ type: "agent", id: "ag-1" }, { id: "nope" }],
+    });
+    expect([...baseline.status]).toEqual(["todo"]);
+    expect([...baseline.assignee]).toEqual(["agent:ag-1"]);
+    expect(baseline.project.has("prj-1")).toBe(true);
+    expect([...baseline.property.keys()]).toEqual(["prop-1"]);
+    expect(baseline.raw.statusFilters).toEqual(["todo"]);
+  });
+
+  it("treats a malformed blob as an empty baseline", () => {
+    const baseline = baselineFromViewQuery({ statusFilters: "todo" });
+    expect(baseline.raw).toEqual({
+      statusFilters: [],
+      priorityFilters: [],
+      assigneeFilters: [],
+      includeNoAssignee: false,
+      creatorFilters: [],
+      projectFilters: [],
+      includeNoProject: false,
+      labelFilters: [],
+      propertyFilters: {},
+    });
+    expect(baseline.status.size).toBe(0);
+  });
+});
+
+describe("issueFilterDelta", () => {
+  it("is the live slice verbatim without a baseline (no view open)", () => {
+    const delta = issueFilterDelta(SLICE, null);
+    expect(delta.statuses).toEqual(["todo", "in_progress"]);
+    expect(delta.includeNoAssignee).toBe(true);
+    expect(delta.property).toEqual({ "prop-1": ["opt-1", "opt-2"] });
+  });
+
+  it("subtracts the view's values, leaving only the user's additions", () => {
+    const baseline = baselineFromViewQuery(VIEW_QUERY);
+    const delta = issueFilterDelta(
+      {
+        ...SLICE,
+        statusFilters: ["todo", "done"],
+        projectFilters: ["prj-1", "prj-2"],
+        assigneeFilters: [
+          { type: "agent", id: "ag-1" },
+          { type: "member", id: "mb-1" },
+        ],
+      },
+      baseline,
+    );
+    expect(delta.statuses).toEqual(["done"]);
+    expect(delta.projects).toEqual(["prj-2"]);
+    expect(delta.assignees).toEqual([{ type: "member", id: "mb-1" }]);
+  });
+
+  it("keeps a property option the view does not fix", () => {
+    const baseline = baselineFromViewQuery(VIEW_QUERY);
+    const delta = issueFilterDelta(
+      { ...SLICE, propertyFilters: { "prop-1": ["opt-1", "opt-2"], "prop-2": ["x"] } },
+      baseline,
+    );
+    expect(delta.property).toEqual({ "prop-1": ["opt-2"], "prop-2": ["x"] });
+  });
+
+  it("hides a paired flag the view already sets", () => {
+    const baseline = baselineFromViewQuery({ ...VIEW_QUERY, includeNoAssignee: true });
+    expect(issueFilterDelta({ ...SLICE, includeNoAssignee: true }, baseline).includeNoAssignee).toBe(false);
+    // …but the user turning it OFF is a delta in the other direction: no
+    // chip, just the view's "modified" dot (same as web).
+    expect(issueFilterDelta({ ...SLICE, includeNoAssignee: false }, baseline).includeNoAssignee).toBe(false);
+  });
+});
+
+describe("clearDimensionToBaseline", () => {
+  const baseline = baselineFromViewQuery(VIEW_QUERY);
+
+  it("returns a dimension to the view's values, never to empty", () => {
+    const next = clearDimensionToBaseline(
+      { ...SLICE, statusFilters: ["todo", "done"] },
+      "status",
+      baseline,
+    );
+    expect(next.statusFilters).toEqual(["todo"]);
+    expect(next.priorityFilters).toEqual(["high"]);
+  });
+
+  it("carries the paired flag with its dimension", () => {
+    const withAssignee = baselineFromViewQuery({ ...VIEW_QUERY, includeNoAssignee: true });
+    const next = clearDimensionToBaseline(
+      { ...SLICE, assigneeFilters: [], includeNoAssignee: false },
+      "assignee",
+      withAssignee,
+    );
+    expect(next.assigneeFilters).toEqual([{ type: "agent", id: "ag-1" }]);
+    expect(next.includeNoAssignee).toBe(true);
+  });
+
+  it("restores a fixed property definition and drops one the view never fixed", () => {
+    const restored = clearDimensionToBaseline(
+      { ...SLICE, propertyFilters: { "prop-1": ["opt-1", "opt-2"], "prop-2": ["x"] } },
+      "property:prop-1",
+      baseline,
+    );
+    expect(restored.propertyFilters).toEqual({
+      "prop-1": ["opt-1"],
+      "prop-2": ["x"],
+    });
+
+    const dropped = clearDimensionToBaseline(
+      { ...SLICE, propertyFilters: { "prop-2": ["x"] } },
+      "property:prop-2",
+      baseline,
+    );
+    expect(dropped.propertyFilters).toEqual({});
+  });
+
+  it("leaves the date window alone (a user layer no view carries)", () => {
+    const next = clearDimensionToBaseline(SLICE, "label", baseline);
+    expect(next).not.toHaveProperty("dateFilter");
   });
 });
