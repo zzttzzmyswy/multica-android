@@ -28,6 +28,10 @@ import type {
 } from "@multica/core/types";
 import { api } from "@/data/api";
 import { issueKeys } from "@/data/queries/issues";
+import {
+  mapIssueRows,
+  type IssueListCache,
+} from "@/data/queries/issue-list-cache";
 import { inboxKeys } from "@/data/queries/inbox";
 import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
@@ -575,13 +579,13 @@ export function useBatchUpdateIssues() {
         qc.cancelQueries({ queryKey: listKey }),
         qc.cancelQueries({ queryKey: myAllKey }),
       ]);
-      const prevList = qc.getQueryData<Issue[]>(listKey);
-      const prevMy = qc.getQueriesData<Issue[]>({ queryKey: myAllKey });
-      qc.setQueryData<Issue[]>(listKey, (old) =>
-        old ? patchIssueBatch(old, ids, updates) : old,
+      const prevList = qc.getQueryData<IssueListCache>(listKey);
+      const prevMy = qc.getQueriesData<IssueListCache>({ queryKey: myAllKey });
+      qc.setQueryData<IssueListCache>(listKey, (old) =>
+        mapIssueRows(old, (rows) => patchIssueBatch(rows, ids, updates)),
       );
-      qc.setQueriesData<Issue[]>({ queryKey: myAllKey }, (old) =>
-        old ? patchIssueBatch(old, ids, updates) : old,
+      qc.setQueriesData<IssueListCache>({ queryKey: myAllKey }, (old) =>
+        mapIssueRows(old, (rows) => patchIssueBatch(rows, ids, updates)),
       );
       return { prevList, prevMy, listKey, myAllKey };
     },
@@ -619,14 +623,14 @@ export function useBatchDeleteIssues() {
         qc.cancelQueries({ queryKey: listKey }),
         qc.cancelQueries({ queryKey: myAllKey }),
       ]);
-      const prevList = qc.getQueryData<Issue[]>(listKey);
-      const prevMy = qc.getQueriesData<Issue[]>({ queryKey: myAllKey });
+      const prevList = qc.getQueryData<IssueListCache>(listKey);
+      const prevMy = qc.getQueriesData<IssueListCache>({ queryKey: myAllKey });
       const drop = new Set(ids);
-      qc.setQueryData<Issue[]>(listKey, (old) =>
-        old ? old.filter((i) => !drop.has(i.id)) : old,
+      qc.setQueryData<IssueListCache>(listKey, (old) =>
+        mapIssueRows(old, (rows) => rows.filter((i) => !drop.has(i.id))),
       );
-      qc.setQueriesData<Issue[]>({ queryKey: myAllKey }, (old) =>
-        old ? old.filter((i) => !drop.has(i.id)) : old,
+      qc.setQueriesData<IssueListCache>({ queryKey: myAllKey }, (old) =>
+        mapIssueRows(old, (rows) => rows.filter((i) => !drop.has(i.id))),
       );
       return { prevList, prevMy, listKey, myAllKey };
     },
@@ -837,14 +841,14 @@ export function useDeleteIssue() {
 
       // Snapshot every matching cache (flat list + each my-issues scope×filter)
       // so we can roll back per-key on error.
-      const prevList = qc.getQueryData<Issue[]>(listKey);
-      const prevMy = qc.getQueriesData<Issue[]>({ queryKey: myAllKey });
+      const prevList = qc.getQueryData<IssueListCache>(listKey);
+      const prevMy = qc.getQueriesData<IssueListCache>({ queryKey: myAllKey });
 
-      qc.setQueryData<Issue[]>(listKey, (old) =>
-        old ? old.filter((i) => i.id !== id) : old,
+      qc.setQueryData<IssueListCache>(listKey, (old) =>
+        mapIssueRows(old, (rows) => rows.filter((i) => i.id !== id)),
       );
-      qc.setQueriesData<Issue[]>({ queryKey: myAllKey }, (old) =>
-        old ? old.filter((i) => i.id !== id) : old,
+      qc.setQueriesData<IssueListCache>({ queryKey: myAllKey }, (old) =>
+        mapIssueRows(old, (rows) => rows.filter((i) => i.id !== id)),
       );
 
       return { prevList, prevMy, listKey, myAllKey };

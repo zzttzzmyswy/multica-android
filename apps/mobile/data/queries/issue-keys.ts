@@ -9,7 +9,7 @@
  */
 import type { ListIssuesParams } from "@multica/core/types";
 
-export type MyIssuesScope = "assigned" | "created" | "agents";
+export type MyIssuesScope = "all" | "assigned" | "created" | "agents";
 
 export type MyIssuesFilter = Pick<
   ListIssuesParams,

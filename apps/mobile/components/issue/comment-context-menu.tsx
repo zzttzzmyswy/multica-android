@@ -9,8 +9,8 @@
  *
  * Item set (conditional, mirrors web's comment context menu):
  *   Reply (stub) · React… (opens nested sheet) · Copy · Select Text ·
- *   Copy Link · Resolve/Unresolve Thread (root only) · Delete (own only) ·
- *   Cancel
+ *   Copy Link · Resolve/Unresolve Thread (root) · Resolve thread with
+ *   comment / Unresolve (reply) · Delete (own only) · Cancel
  *
  * The nested React… sheet (5 quick emojis + More reactions… + Cancel) is
  * fired from INSIDE the outer sheet's completion callback rather than
@@ -44,6 +44,7 @@ export function useCommentLongPress(
   entry: TimelineEntry,
   issueId: string,
   issueIdentifier: string | undefined,
+  onEdit?: () => void,
 ): { onLongPress: () => void; isPressed: boolean } {
   const [isPressed, setIsPressed] = useState(false);
   const { t } = useTranslation();
@@ -68,6 +69,7 @@ export function useCommentLongPress(
 
     type Action =
       | { kind: "reply" }
+      | { kind: "edit" }
       | { kind: "react" }
       | { kind: "copy" }
       | { kind: "select" }
@@ -84,6 +86,11 @@ export function useCommentLongPress(
     };
 
     push(t("menu.reply"), { kind: "reply" });
+    // Web gates the edit entry on `canEditEntry` (comment-card.tsx:539) and
+    // opens a rich editor. Mobile's editor is text-only, so an
+    // attachment-only comment (no content) has nothing to edit and stays
+    // out of the sheet rather than opening an empty editor.
+    if (isOwn && hasContent && onEdit) push(t("menu.edit"), { kind: "edit" });
     push(t("menu.react"), { kind: "react" });
     if (hasContent) {
       push(t("menu.copy"), { kind: "copy" });
@@ -93,6 +100,17 @@ export function useCommentLongPress(
     if (isRoot) {
       push(
         resolved ? t("menu.unresolveThread") : t("menu.resolveThread"),
+        { kind: "resolve" },
+      );
+    } else {
+      // Resolving a REPLY is "Resolve thread with comment" — that reply
+      // becomes the thread's resolution and the other replies fold around
+      // it (web's `resolve_with_comment_action`). The server accepts a
+      // resolve on any comment in the thread and clears the previous
+      // resolution (`ClearOtherThreadResolutions`), so there is no
+      // root-only restriction to honour here.
+      push(
+        resolved ? t("comment.unresolve") : t("comment.resolveWithComment"),
         { kind: "resolve" },
       );
     }
@@ -134,6 +152,9 @@ export function useCommentLongPress(
             });
             return;
           }
+          case "edit":
+            onEdit?.();
+            return;
           case "react":
             // Present the nested React sheet from inside this completion
             // callback — see file header for why.
@@ -206,6 +227,7 @@ export function useCommentLongPress(
     deleteComment,
     resolveComment,
     getName,
+    onEdit,
   ]);
 
   return { onLongPress, isPressed };

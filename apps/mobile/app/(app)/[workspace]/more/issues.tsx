@@ -23,7 +23,7 @@
  */
 import { useCallback, useMemo } from "react";
 import { SectionList, View } from "react-native";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import type { IssueView } from "@multica/core/api/schemas";
 import { Text } from "@/components/ui/text";
@@ -35,11 +35,14 @@ import { Button } from "@/components/ui/button";
 import { BatchActionBar } from "@/components/issue/batch-action-bar";
 import { BoardView } from "@/components/issue/board-view";
 import { GanttView } from "@/components/issue/gantt-view";
+import { SwimlaneView } from "@/components/issue/swimlane-view";
 import { IssueViewBar } from "@/components/issue/issue-view-bar";
 import { IssueTableView } from "@/components/issue/table-view";
 import { IssuesLoading } from "@/components/issue/issues-loading";
+import { IssueListFooter } from "@/components/issue/issue-list-footer";
 import {
   ActiveFilterChips,
+  useFilterChipBaseline,
   IssueSection,
   IssueSectionHeader,
   IssueSelectionRow,
@@ -47,6 +50,12 @@ import {
   SurfaceEmptyState,
 } from "@/components/issue/issue-surface-chrome";
 import { ganttIssuesOptions, issueListOptions } from "@/data/queries/issues";
+import { readIssueRows } from "@/data/queries/issue-list-cache";
+import {
+  hasMoreIssues,
+  issueListTotal,
+} from "@/lib/issue-pagination";
+import { useDrainIssuePages } from "@/lib/use-drain-issue-pages";
 import { issueViewListOptions } from "@/data/queries/issue-views";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import {
@@ -66,8 +75,12 @@ import {
 import {
   buildIssueWindow,
   defaultIssueFilterSlice,
+  hasActiveIssueFilters,
 } from "@/data/stores/issue-filter-slice";
+import { useRunningIssueIds } from "@/data/queries/agent-task-snapshot";
+import { useCreateIssueFromColumn } from "@/lib/use-create-issue-from-column";
 import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-workspace-change";
+import { useGroupingProperty } from "@/lib/use-grouping-property";
 import { BOARD_STATUSES } from "@/lib/issue-status";
 import {
   applyIssueFilters,
@@ -98,9 +111,11 @@ export default function IssuesPage() {
   const setScope = useIssuesViewStore((s) => s.setScope);
   const view = useIssuesViewStore((s) => s.view);
   const setView = useIssuesViewStore((s) => s.setView);
+  const swimlaneGrouping = useIssuesViewStore((s) => s.swimlaneGrouping);
   const tableColumns = useIssuesViewStore((s) => s.tableColumns);
   const toggleTableColumn = useIssuesViewStore((s) => s.toggleTableColumn);
   const grouping = useIssuesViewStore((s) => s.grouping);
+  const groupingProperty = useGroupingProperty(grouping);
   const sortBy = useIssuesViewStore((s) => s.sortBy);
   const sortDirection = useIssuesViewStore((s) => s.sortDirection);
   const statusFilters = useIssuesViewStore((s) => s.statusFilters);
@@ -113,6 +128,11 @@ export default function IssuesPage() {
   const labelFilters = useIssuesViewStore((s) => s.labelFilters);
   const propertyFilters = useIssuesViewStore((s) => s.propertyFilters);
   const dateFilter = useIssuesViewStore((s) => s.dateFilter);
+  const workingOnly = useIssuesViewStore((s) => s.workingOnly);
+  // Running-agent projection for the working-only filter. `undefined` while
+  // the snapshot loads — the predicate fails closed on it, which is the
+  // intended "only what is provably working" read.
+  const runningIssueIds = useRunningIssueIds();
   // Stable dedup of the object that feeds applyIssueFilters (each field is
   // its own subscription above, so the assembled object only changes when a
   // dimension actually changes).
@@ -128,6 +148,7 @@ export default function IssuesPage() {
       labelFilters,
       propertyFilters,
       dateFilter,
+      workingOnly,
     }),
     [
       statusFilters,
@@ -140,6 +161,7 @@ export default function IssuesPage() {
       labelFilters,
       propertyFilters,
       dateFilter,
+      workingOnly,
     ],
   );
 
@@ -150,6 +172,8 @@ export default function IssuesPage() {
       params: { workspace: wsSlug, scope: "all" },
     });
   };
+
+  const createFromColumn = useCreateIssueFromColumn();
 
   useClearFiltersOnWorkspaceChange(
     useIssuesViewStore.getState().clearFilters,
@@ -188,6 +212,12 @@ export default function IssuesPage() {
     () => savedViews.find((v) => v.id === activeViewId) ?? null,
     [savedViews, activeViewId],
   );
+
+  // The chips bar works against the open view's baseline: it shows only the
+  // user's additions and a chip's removal falls back to the view's own
+  // values (web filter-chips-bar semantics).
+  const { baseline: chipBaseline, resetDimension: resetChipDimension } =
+    useFilterChipBaseline(activeView?.query ?? null, useIssuesViewStore);
   // Union of the filter dims + display defaults the views save/compare.
   const snapshotSource = useMemo(
     () => ({ ...filterState, sortBy, sortDirection, grouping }),
@@ -254,9 +284,28 @@ export default function IssuesPage() {
     [filterState, sortBy, sortDirection],
   );
 
-  const { data, isLoading, error, refetch, isRefetching } = useQuery(
-    issueListOptions(wsId, window),
-  );
+  // Paginated window. `GET /api/issues` clamps limit to 100 server-side, so a
+  // one-shot fetch used to drop every issue past row 100 with no hint; the
+  // list view now scrolls the window and the aggregate views drain it (below).
+  const listQuery = useInfiniteQuery(issueListOptions(wsId, window));
+  const {
+    data: listData,
+    isLoading,
+    error,
+    refetch,
+    isRefetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+    isError,
+  } = listQuery;
+
+  // `error` stays populated on a failed *refetch* even though rows are on
+  // screen; only a load with no data at all should take over the surface.
+  const listLoadError = isError && !listData;
+  const listIssues = useMemo(() => readIssueRows(listData), [listData]);
+  const listTotal = issueListTotal(listData?.pages ?? []);
 
   // Gantt canvas data — paged scheduled-issue fetch. The regular list is
   // capped at 100 rows server-side (GET /api/issues), which would silently
@@ -277,13 +326,26 @@ export default function IssuesPage() {
   // Loading/error/refresh follow the ACTIVE source so a first gantt load
   // shows a spinner instead of a stale "no scheduled issues" empty state.
   const surfaceData = useMemo(
-    () => (ganttActive ? ganttIssues ?? [] : data ?? []),
-    [ganttActive, ganttIssues, data],
+    () => (ganttActive ? ganttIssues ?? [] : listIssues),
+    [ganttActive, ganttIssues, listIssues],
   );
   const surfaceLoading = ganttActive ? ganttLoading : isLoading;
-  const surfaceError = ganttActive ? ganttError : error;
+  const surfaceError = ganttActive ? ganttError : listLoadError ? error : null;
   const surfaceRefetch = ganttActive ? refetchGantt : refetch;
   const surfaceRefetching = ganttActive ? ganttRefetching : isRefetching;
+
+  // Board / swimlane / table group the window client-side, so a partially
+  // loaded window silently under-reports them — drain the remaining pages
+  // while one of those views is on screen. The linear list view does NOT
+  // drain: it has a real end-of-scroll sentinel instead.
+  useDrainIssuePages({
+    enabled: !ganttActive && view !== "list",
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+    loadedRows: listIssues.length,
+    fetchNextPage,
+  });
 
   // Scope pre-filter — mirrors web `issues-page.tsx:90-94`. Applied before
   // other filtering so chip filters operate on the visible slice.
@@ -303,8 +365,8 @@ export default function IssuesPage() {
   // Client predicate — the same filters the server window applied, re-run
   // so rows that drifted out of the window via WS patches drop at render.
   const filtered = useMemo(
-    () => applyIssueFilters(scopedIssues, filterState),
-    [scopedIssues, filterState],
+    () => applyIssueFilters(scopedIssues, filterState, { runningIssueIds }),
+    [scopedIssues, filterState, runningIssueIds],
   );
 
   const sorted = useMemo(
@@ -331,21 +393,16 @@ export default function IssuesPage() {
     });
   }, [sorted, grouping]);
 
-  const hasActiveFilterChips = useMemo(() => {
-    const f = filterState;
-    return (
-      f.statusFilters.length > 0 ||
-      f.priorityFilters.length > 0 ||
-      f.assigneeFilters.length > 0 ||
-      f.includeNoAssignee ||
-      f.creatorFilters.length > 0 ||
-      f.projectFilters.length > 0 ||
-      f.includeNoProject ||
-      f.labelFilters.length > 0 ||
-      Object.keys(f.propertyFilters).length > 0 ||
-      f.dateFilter !== null
-    );
-  }, [filterState]);
+  // Whether the empty state should say "no matches under your filters"
+  // instead of "nothing here for this scope" — i.e. whether any dimension
+  // the user turned on is narrowing the list. Delegates to the shared
+  // selector so a newly added dimension (workingOnly, iteration-127) cannot
+  // leave this page claiming the scope is empty while a filter is silently
+  // on.
+  const hasActiveFilterChips = useMemo(
+    () => hasActiveIssueFilters(filterState),
+    [filterState],
+  );
 
   // The gantt view owns its own empty state (the scheduled projection can't
   // prove the window is empty — web never asserts surface-empty in gantt).
@@ -378,14 +435,8 @@ export default function IssuesPage() {
       {hasActiveFilterChips ? (
         <ActiveFilterChips
           filterState={filterState}
-          statusFilters={filterState.statusFilters}
-          priorityFilters={filterState.priorityFilters}
-          assigneeFilters={filterState.assigneeFilters}
-          creatorFilters={filterState.creatorFilters}
-          projectFilters={filterState.projectFilters}
-          labelFilters={filterState.labelFilters}
-          propertyFilters={filterState.propertyFilters}
-          dateFilter={filterState.dateFilter}
+          baseline={chipBaseline}
+          onResetDimension={resetChipDimension}
           onClearStatus={(s) =>
             useIssuesViewStore.getState().toggleStatusFilter(s)
           }
@@ -444,10 +495,12 @@ export default function IssuesPage() {
         <BoardView
           issues={sorted}
           grouping={grouping}
+          groupingProperty={groupingProperty}
           statusOrder={BOARD_STATUSES}
           onOpenIssue={(issue) => {
             if (wsSlug) router.push(`/${wsSlug}/issue/${issue.id}`);
           }}
+          onCreateIssue={createFromColumn}
           emptyLabel={
             hasActiveFilterChips
               ? t("issues.filterEmpty")
@@ -488,6 +541,23 @@ export default function IssuesPage() {
               : t("issues.gantt.empty")
           }
         />
+      ) : view === "swimlane" ? (
+        <SwimlaneView
+          issues={sorted}
+          grouping={swimlaneGrouping}
+          onGroupingChange={(next) =>
+            useIssuesViewStore.getState().setSwimlaneGrouping(next)
+          }
+          statusOrder={BOARD_STATUSES}
+          onOpenIssue={(issue) => {
+            if (wsSlug) router.push(`/${wsSlug}/issue/${issue.id}`);
+          }}
+          emptyLabel={
+            hasActiveFilterChips
+              ? t("issues.filterEmpty")
+              : emptyMessageForScope(scope, t)
+          }
+        />
       ) : (
         <SectionList
           sections={sections}
@@ -510,6 +580,21 @@ export default function IssuesPage() {
               }}
             />
           )}
+          ListFooterComponent={
+            <IssueListFooter
+              hasMore={hasMoreIssues(listData?.pages ?? [])}
+              isLoadingMore={isFetchingNextPage}
+              total={listTotal}
+              isError={isFetchNextPageError}
+              onRetry={() => void fetchNextPage()}
+            />
+          }
+          onEndReachedThreshold={0.5}
+          onEndReached={() => {
+            if (hasNextPage && !isFetchingNextPage && !isFetchNextPageError) {
+              void fetchNextPage();
+            }
+          }}
           refreshing={surfaceRefetching}
           onRefresh={surfaceRefetch}
         />

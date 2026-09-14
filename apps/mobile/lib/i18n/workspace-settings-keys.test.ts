@@ -33,6 +33,8 @@ describe("workspace settings i18n", () => {
     "workspaceSettings.nameRequired": "名称不能为空",
     "workspaceSettings.description": "描述",
     "workspaceSettings.descriptionPlaceholder": "添加简短描述…",
+    "workspaceSettings.context": "上下文",
+    "workspaceSettings.contextPlaceholder": "供工作区中的智能体参考的背景信息和上下文",
     "workspaceSettings.save": "保存",
     "workspaceSettings.saving": "保存中…",
     "workspaceSettings.info": "工作区信息",

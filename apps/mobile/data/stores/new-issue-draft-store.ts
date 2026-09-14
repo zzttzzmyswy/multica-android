@@ -65,6 +65,18 @@ interface NewIssueDraftState {
   detachLabel: (labelId: string) => void;
   setProject: (next: Project | null) => void;
   setAgentActor: (next: AgentActorValue) => void;
+  /**
+   * Seed the draft from a board column's implied defaults before opening the
+   * modal (web `onCreateIssue(group.createData)` — board-column.tsx:226-246).
+   * Only the fields the column actually determines are touched, so a column
+   * with no defaults (the assignee grouping's "No assignee" lane) leaves the
+   * draft alone. Callers reset the store first; the modal's own mount reset
+   * runs on an already-seeded store, so the seed survives.
+   */
+  seedFromColumn: (defaults: {
+    status?: IssueStatus;
+    assignee?: AssigneeValue;
+  }) => void;
   reset: () => void;
 }
 
@@ -109,6 +121,14 @@ export const useNewIssueDraftStore = create<NewIssueDraftState>((set, get) => ({
   },
   setProject: (next) => set({ project: next }),
   setAgentActor: (next) => set({ agentActor: next }),
+  seedFromColumn: ({ status, assignee }) =>
+    set((state) => ({
+      status: status ?? state.status,
+      // `assignee` is nullable on purpose: an assignee lane passes a
+      // `{type, id}` pair, while a column with no implied assignee passes
+      // `undefined` and must NOT clear a previously picked one.
+      ...(assignee !== undefined ? { assignee } : {}),
+    })),
   reset: () => set({ ...INITIAL }),
 }));
 

@@ -1,6 +1,7 @@
 /**
- * Project properties section. Tappable rows for Status / Priority / Lead.
- * Each row opens a picker sheet via the corresponding `onPress*` callback.
+ * Project properties section. Tappable rows for Status / Priority / Lead /
+ * Start date / Due date. Each row opens a picker sheet via the corresponding
+ * `onPress*` callback.
  *
  * Layout mirrors iOS Settings rows: label on left, current value on right
  * with a disclosure chevron, full-width separator below each row. Tapping
@@ -8,9 +9,14 @@
  *
  * Lead supports both member and agent (Project.lead_type), resolved via
  * useActorLookup so it shares the same lookup with my-issues + issue detail.
+ *
+ * Start/due dates (web project-detail PropRow parity) reuse the issue-side
+ * calendar-day convention and DueDatePickerBody; a past due date paints red
+ * like web's `highlightOverdue` pill.
  */
 import { Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { formatDateOnly, isPastDateOnly } from "@multica/core/issues/date";
 import type { Project } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
@@ -30,6 +36,8 @@ interface Props {
   onPressStatus: () => void;
   onPressPriority: () => void;
   onPressLead: () => void;
+  onPressStartDate: () => void;
+  onPressDueDate: () => void;
 }
 
 export function ProjectPropertiesSection({
@@ -37,6 +45,8 @@ export function ProjectPropertiesSection({
   onPressStatus,
   onPressPriority,
   onPressLead,
+  onPressStartDate,
+  onPressDueDate,
 }: Props) {
   const { t } = useTranslation();
   const { getName } = useActorLookup();
@@ -96,7 +106,68 @@ export function ProjectPropertiesSection({
           </Text>
         }
       />
+      <Separator />
+      <DateRow
+        label={t("projects.detail.startDate")}
+        value={project.start_date}
+        emptyLabel={t("projects.detail.noStartDate")}
+        onPress={onPressStartDate}
+      />
+      <Separator />
+      <DateRow
+        label={t("projects.detail.dueDate")}
+        value={project.due_date}
+        emptyLabel={t("projects.detail.noDueDate")}
+        highlightOverdue
+        onPress={onPressDueDate}
+      />
     </View>
+  );
+}
+
+function DateRow({
+  label,
+  value,
+  emptyLabel,
+  highlightOverdue = false,
+  onPress,
+}: {
+  label: string;
+  value: string | null;
+  emptyLabel: string;
+  highlightOverdue?: boolean;
+  onPress: () => void;
+}) {
+  const { colorScheme } = useColorScheme();
+  const overdue = highlightOverdue && !!value && isPastDateOnly(value);
+  const display = value
+    ? formatDateOnly(value, { year: "numeric", month: "short", day: "numeric" })
+    : "";
+  return (
+    <Row
+      label={label}
+      onPress={onPress}
+      left={
+        <Ionicons
+          name="calendar-outline"
+          size={15}
+          color={THEME[colorScheme].mutedForeground}
+        />
+      }
+      right={
+        <Text
+          className={
+            !value
+              ? "text-sm text-muted-foreground"
+              : overdue
+                ? "text-sm text-destructive"
+                : "text-sm text-foreground"
+          }
+        >
+          {value ? display : emptyLabel}
+        </Text>
+      }
+    />
   );
 }
 
