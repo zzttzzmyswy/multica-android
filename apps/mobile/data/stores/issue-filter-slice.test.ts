@@ -18,6 +18,8 @@ import {
   createIssueFilterActions,
   defaultIssueFilterSlice,
   hasActiveIssueFilters,
+  propertyIdFromViewKey,
+  propertyViewKey,
   type IssueFilterSlice,
 } from "./issue-filter-slice";
 
@@ -347,5 +349,35 @@ describe("resetFiltersTo (iteration-65)", () => {
       propertyFilters: {},
     });
     expect(store.getState().dateFilter).not.toBeNull();
+  });
+});
+
+/**
+ * Custom-property sort + board grouping keys (iteration 129, MYS-1060).
+ * `property:<id>` is the shared view vocabulary web uses for all three of
+ * filter dimension / sort field / grouping (view-store.ts:20-36,136-143).
+ */
+describe("property view keys (iteration-129)", () => {
+  it("round-trips a definition id", () => {
+    expect(propertyViewKey("est")).toBe("property:est");
+    expect(propertyIdFromViewKey("property:est")).toBe("est");
+  });
+
+  it("returns null for static sort fields and groupings", () => {
+    expect(propertyIdFromViewKey("priority")).toBeNull();
+    expect(propertyIdFromViewKey("assignee")).toBeNull();
+  });
+
+  it("sends the property sort key on the wire but keeps position off it", () => {
+    const withProperty = buildIssueWindow({
+      ...defaultIssueFilterSlice(),
+      sortBy: "property:est",
+      sortDirection: "desc",
+    });
+    expect(withProperty.sort_by).toBe("property:est");
+    expect(withProperty.sort_direction).toBe("desc");
+
+    const manual = buildIssueWindow(defaultIssueFilterSlice());
+    expect(manual.sort_by).toBeUndefined();
   });
 });

@@ -5,7 +5,12 @@
  * input (MYS-408 issue workbench).
  */
 import { describe, expect, it } from "vitest";
-import type { Issue, IssueStatus, Label } from "@multica/core/types";
+import type {
+  Issue,
+  IssueProperty,
+  IssueStatus,
+  Label,
+} from "@multica/core/types";
 import {
   applyIssueFilters,
   groupIssues,
@@ -445,5 +450,113 @@ describe("applyIssueFilters with propertyFilters", () => {
       propertyFilters: { def: ["x"] },
     });
     expect(filtered.map((i) => i.id)).toEqual(["a"]);
+  });
+});
+
+/**
+ * Custom-property sort + board grouping (iteration 129, MYS-1060). Mirrors
+ * web's `sort.ts:20-34` (property sorts) and `board-view.tsx:88-106`
+ * (`buildGroups` select-property columns: definition order + trailing
+ * "No value").
+ */
+describe("sortIssues by a custom property", () => {
+  const mk = (id: string, value?: unknown) =>
+    issue({ id, properties: value === undefined ? undefined : { est: value } } as Partial<Issue>);
+
+  it("sorts number values numerically, missing values last in both directions", () => {
+    const list = [mk("c", 8), mk("a", 2), mk("b", 5), mk("d")];
+    expect(sortIssues(list, "property:est", "asc").map((i) => i.id)).toEqual([
+      "a",
+      "b",
+      "c",
+      "d",
+    ]);
+    expect(sortIssues(list, "property:est", "desc").map((i) => i.id)).toEqual([
+      "c",
+      "b",
+      "a",
+      "d",
+    ]);
+  });
+
+  it("sorts date values (date-only strings) lexically", () => {
+    const list = [mk("b", "2026-03-01"), mk("a", "2026-01-15"), mk("c", "2026-12-31")];
+    expect(sortIssues(list, "property:est", "asc").map((i) => i.id)).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+  });
+
+  it("treats array (multi_select) values as missing — they have no scalar order", () => {
+    const list = [mk("a", ["x"]), mk("b", 1)];
+    expect(sortIssues(list, "property:est", "asc").map((i) => i.id)).toEqual([
+      "b",
+      "a",
+    ]);
+  });
+});
+
+describe("groupIssues by a select property", () => {
+  const property = {
+    id: "stage",
+    workspace_id: "ws1",
+    name: "Stage",
+    type: "select",
+    config: {
+      options: [
+        { id: "o1", name: "Design", color: "#111111" },
+        { id: "o2", name: "Build", color: "#222222" },
+      ],
+    },
+    position: 0,
+    archived: false,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+  } as IssueProperty;
+
+  const a = issue({ id: "a", properties: { stage: "o2" } } as Partial<Issue>);
+  const b = issue({ id: "b", properties: { stage: "o1" } } as Partial<Issue>);
+  const c = issue({ id: "c" } as Partial<Issue>);
+  const stale = issue({ id: "d", properties: { stage: "gone" } } as Partial<Issue>);
+
+  it("columns follow definition order with a trailing no-value column", () => {
+    const groups = groupIssues(
+      [a, b, c, stale],
+      "property:stage",
+      BOARD_STATUSES,
+      true,
+      undefined,
+      property,
+    );
+    expect(groups.map((g) => g.key)).toEqual([
+      "property:stage:o1",
+      "property:stage:o2",
+      "property:stage:none",
+    ]);
+    expect(groups.map((g) => g.propertyOptionId)).toEqual(["o1", "o2", null]);
+    const asMap = new Map(groups.map((g) => [g.key, g.data.map((i) => i.id)]));
+    expect(asMap.get("property:stage:o1")).toEqual(["b"]);
+    expect(asMap.get("property:stage:o2")).toEqual(["a"]);
+    // Both "no value at all" and "value naming a removed option" land in the
+    // trailing column — web's knownOptionIds guard (drag-utils.ts:64-66).
+    expect(asMap.get("property:stage:none")).toEqual(["c", "d"]);
+  });
+
+  it("drops empty columns when includeEmpty is off (list mode)", () => {
+    const groups = groupIssues(
+      [b],
+      "property:stage",
+      BOARD_STATUSES,
+      false,
+      undefined,
+      property,
+    );
+    expect(groups.map((g) => g.key)).toEqual(["property:stage:o1"]);
+  });
+
+  it("falls back to status grouping when the definition is not resolvable", () => {
+    const groups = groupIssues([a, b], "property:stage", BOARD_STATUSES, true);
+    expect(groups.map((g) => g.status)).toEqual([...BOARD_STATUSES]);
   });
 });

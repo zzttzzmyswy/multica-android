@@ -25,9 +25,10 @@ export type ActorFilterValue = {
   id: string;
 };
 
-/** Static sort keys, mirroring web `SORT_OPTIONS` (property sorts excluded
- *  — mobile has no custom-property sort this iteration). */
-export type IssueSortField =
+/** Static sort keys, mirroring web `SORT_OPTIONS`. Custom-property keys are
+ *  the same union widened with the `property:<definitionId>` form
+ *  (view-store.ts:23-36) — see `propertyViewKey`. */
+export type StaticIssueSortField =
   | "position"
   | "status"
   | "priority"
@@ -37,10 +38,16 @@ export type IssueSortField =
   | "updated_at"
   | "title";
 
+export type IssueSortField = StaticIssueSortField | `property:${string}`;
+
 export type IssueSortDirection = "asc" | "desc";
 
-/** Grouping mirroring web `GROUPING_OPTIONS` (status / assignee). */
-export type IssueGrouping = "status" | "assignee";
+/** Grouping mirroring web `GROUPING_OPTIONS` (status / assignee), widened
+ *  with web's `property:<definitionId>` select-property form
+ *  (view-store.ts:20). */
+export type StaticIssueGrouping = "status" | "assignee";
+
+export type IssueGrouping = StaticIssueGrouping | `property:${string}`;
 
 /**
  * Custom-property filter snapshot mirroring web's
@@ -181,6 +188,21 @@ export type FilterDimension =
   | `property:${string}`;
 
 export const PROPERTY_FILTER_PREFIX = "property:";
+
+/** Build the sort/grouping view key for a custom-property definition. Web's
+ *  `property:${id}` (view-store.ts:138-140) — the same prefix the filter
+ *  dimension uses, since a saved view carries all three in one vocabulary. */
+export function propertyViewKey(propertyId: string): `property:${string}` {
+  return `${PROPERTY_FILTER_PREFIX}${propertyId}`;
+}
+
+/** Strip the `property:` prefix off a sort/grouping view key; null when the
+ *  key is a static field. */
+export function propertyIdFromViewKey(key: string): string | null {
+  return key.startsWith(PROPERTY_FILTER_PREFIX)
+    ? key.slice(PROPERTY_FILTER_PREFIX.length)
+    : null;
+}
 
 /** Strip the dimension prefix off a property chip key. */
 export function propertyIdFromDimension(

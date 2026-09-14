@@ -20,6 +20,7 @@ import type {
   AgentBuilderSession,
   AgentBuilderSessionSummary,
   AgentEnvResponse,
+  AgentRunCount,
   AgentTask,
   Attachment,
   Autopilot,
@@ -385,6 +386,8 @@ import {
   EMPTY_APP_CONFIG,
   AgentActivityBucketListSchema,
   EMPTY_AGENT_ACTIVITY_BUCKET_LIST,
+  AgentRunCountListSchema,
+  EMPTY_AGENT_RUN_COUNT_LIST,
   CreateFeedbackResponseSchema,
   EMPTY_FEEDBACK_RESPONSE,
   CommentTriggerPreviewSchema,
@@ -2151,6 +2154,23 @@ class ApiClient {
       AgentActivityBucketListSchema,
       EMPTY_AGENT_ACTIVITY_BUCKET_LIST,
       { endpoint: "getWorkspaceAgentActivity30d" },
+    );
+  }
+
+  // Workspace-wide 30-day run count per agent — the number the agents list
+  // sorts on when ordered by RUNS, and the one web's RUNS column shows
+  // (web parity: getWorkspaceAgentRunCounts, core/api/client.ts:2102).
+  async getWorkspaceAgentRunCounts(opts?: {
+    signal?: AbortSignal;
+  }): Promise<AgentRunCount[]> {
+    const raw = await this.fetch<unknown>("/api/agent-run-counts", {
+      signal: opts?.signal,
+    });
+    return parseWithFallback(
+      raw,
+      AgentRunCountListSchema,
+      EMPTY_AGENT_RUN_COUNT_LIST,
+      { endpoint: "getWorkspaceAgentRunCounts" },
     );
   }
 

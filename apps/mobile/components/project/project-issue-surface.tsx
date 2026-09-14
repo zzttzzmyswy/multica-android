@@ -71,6 +71,7 @@ import {
 } from "@/data/stores/issue-view-codec";
 import { defaultIssueFilterSlice } from "@/data/stores/issue-filter-slice";
 import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-workspace-change";
+import { useGroupingProperty } from "@/lib/use-grouping-property";
 import { BOARD_STATUSES } from "@/lib/issue-status";
 import {
   applyIssueFilters,
@@ -120,6 +121,7 @@ export function ProjectIssueSurface({
   const tableColumns = useProjectIssuesViewStore((s) => s.tableColumns);
   const toggleTableColumn = useProjectIssuesViewStore((s) => s.toggleTableColumn);
   const grouping = useProjectIssuesViewStore((s) => s.grouping);
+  const groupingProperty = useGroupingProperty(grouping);
   const sortBy = useProjectIssuesViewStore((s) => s.sortBy);
   const sortDirection = useProjectIssuesViewStore((s) => s.sortDirection);
   const statusFilters = useProjectIssuesViewStore((s) => s.statusFilters);
@@ -460,6 +462,7 @@ export function ProjectIssueSurface({
           <BoardView
             issues={sorted}
             grouping={grouping}
+            groupingProperty={groupingProperty}
             statusOrder={BOARD_STATUSES}
             onOpenIssue={(issue) => navigateToIssue(issue.id)}
             emptyLabel={emptyMessage}

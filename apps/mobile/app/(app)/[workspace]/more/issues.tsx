@@ -80,6 +80,7 @@ import {
 import { useRunningIssueIds } from "@/data/queries/agent-task-snapshot";
 import { useCreateIssueFromColumn } from "@/lib/use-create-issue-from-column";
 import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-workspace-change";
+import { useGroupingProperty } from "@/lib/use-grouping-property";
 import { BOARD_STATUSES } from "@/lib/issue-status";
 import {
   applyIssueFilters,
@@ -114,6 +115,7 @@ export default function IssuesPage() {
   const tableColumns = useIssuesViewStore((s) => s.tableColumns);
   const toggleTableColumn = useIssuesViewStore((s) => s.toggleTableColumn);
   const grouping = useIssuesViewStore((s) => s.grouping);
+  const groupingProperty = useGroupingProperty(grouping);
   const sortBy = useIssuesViewStore((s) => s.sortBy);
   const sortDirection = useIssuesViewStore((s) => s.sortDirection);
   const statusFilters = useIssuesViewStore((s) => s.statusFilters);
@@ -493,6 +495,7 @@ export default function IssuesPage() {
         <BoardView
           issues={sorted}
           grouping={grouping}
+          groupingProperty={groupingProperty}
           statusOrder={BOARD_STATUSES}
           onOpenIssue={(issue) => {
             if (wsSlug) router.push(`/${wsSlug}/issue/${issue.id}`);

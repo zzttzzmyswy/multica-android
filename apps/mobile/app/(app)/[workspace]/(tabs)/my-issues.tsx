@@ -77,6 +77,7 @@ import {
   hasActiveIssueFilters,
 } from "@/data/stores/issue-filter-slice";
 import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-workspace-change";
+import { useGroupingProperty } from "@/lib/use-grouping-property";
 import { BOARD_STATUSES } from "@/lib/issue-status";
 import {
   applyIssueFilters,
@@ -123,6 +124,7 @@ export default function MyIssues() {
   const tableColumns = useMyIssuesViewStore((s) => s.tableColumns);
   const toggleTableColumn = useMyIssuesViewStore((s) => s.toggleTableColumn);
   const grouping = useMyIssuesViewStore((s) => s.grouping);
+  const groupingProperty = useGroupingProperty(grouping);
   const sortBy = useMyIssuesViewStore((s) => s.sortBy);
   const sortDirection = useMyIssuesViewStore((s) => s.sortDirection);
   const statusFilters = useMyIssuesViewStore((s) => s.statusFilters);
@@ -527,6 +529,7 @@ export default function MyIssues() {
         <BoardView
           issues={sorted}
           grouping={grouping}
+          groupingProperty={groupingProperty}
           statusOrder={BOARD_STATUSES}
           onOpenIssue={openIssue}
           onCreateIssue={createFromColumn}

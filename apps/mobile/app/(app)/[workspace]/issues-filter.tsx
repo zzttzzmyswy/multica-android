@@ -42,9 +42,17 @@ import {
   ISSUE_GROUPING_OPTIONS,
   ISSUE_SORT_OPTIONS,
   hasActiveIssueFilters,
+  propertyViewKey,
   type IssueDateFilterValue,
   type IssueFilterSlice,
+  type IssueGrouping,
+  type IssueSortField,
+  type IssueViewMode,
 } from "@/data/stores/issue-filter-slice";
+import {
+  isGroupableProperty,
+  isSortableProperty,
+} from "@/lib/property-catalog";
 import { useStatusOptions } from "@/lib/status-options";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
@@ -94,8 +102,11 @@ export default function IssuesFilterRoute() {
 
   // Subscribe the matching store (one unconditional hook — the scope param
   // is fixed for a route instance). All three state shapes extend
-  // `IssueFilterSlice`, so `s.statusFilters` etc. stay narrow.
-  const s: IssueFilterSlice = issueFilterStoreForScope(resolvedScope)();
+  // `IssueFilterSlice`, so `s.statusFilters` etc. stay narrow; `view` is the
+  // per-store workbench mode, read here so property grouping can stay a
+  // board-only option like web's (issues-header.tsx:1838).
+  const s: IssueFilterSlice & { view: IssueViewMode } =
+    issueFilterStoreForScope(resolvedScope)();
 
   const statusFilters = s.statusFilters;
   const priorityFilters = s.priorityFilters;
@@ -131,6 +142,30 @@ export default function IssuesFilterRoute() {
   const filterableProperties = properties.filter(
     (p) => p.type === "select" || p.type === "multi_select" || p.type === "checkbox",
   );
+
+  // Custom-property sort / grouping options, appended to the static ones the
+  // same way web's Display popover does (issues-header.tsx:1957-1961 for
+  // sort, :1849-1852 for grouping). Grouping by a property is a board
+  // affordance: mobile's list renders status/assignee sections only, so the
+  // option is offered only while the board is the active mode — and the list
+  // falls back to status if the mode is switched afterwards.
+  const sortOptions: { value: IssueSortField; label: string }[] = [
+    ...ISSUE_SORT_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) })),
+    ...properties
+      .filter(isSortableProperty)
+      .map((p) => ({ value: propertyViewKey(p.id), label: p.name })),
+  ];
+  const groupingOptions: { value: IssueGrouping; label: string }[] = [
+    ...ISSUE_GROUPING_OPTIONS.map((o) => ({
+      value: o.value,
+      label: t(o.labelKey),
+    })),
+    ...(s.view === "board"
+      ? properties
+          .filter(isGroupableProperty)
+          .map((p) => ({ value: propertyViewKey(p.id), label: p.name }))
+      : []),
+  ];
 
   const openDim = (dim: FilterDim) => {
     if (!workspaceSlug) return;
@@ -441,7 +476,7 @@ export default function IssuesFilterRoute() {
 
         {/* ——— Sort ——— */}
         <SectionLabel>{t("filter.sort.title")}</SectionLabel>
-        {ISSUE_SORT_OPTIONS.map((opt) => {
+        {sortOptions.map((opt) => {
           const selected = sortBy === opt.value;
           return (
             <Pressable
@@ -457,8 +492,8 @@ export default function IssuesFilterRoute() {
                 size={18}
                 color={selected ? tint : THEME[colorScheme].mutedForeground}
               />
-              <Text className="flex-1 text-sm text-foreground">
-                {t(opt.labelKey)}
+              <Text numberOfLines={1} className="flex-1 text-sm text-foreground">
+                {opt.label}
               </Text>
             </Pressable>
           );
@@ -503,7 +538,7 @@ export default function IssuesFilterRoute() {
 
         {/* ——— Grouping ——— */}
         <SectionLabel>{t("filter.group.title")}</SectionLabel>
-        {ISSUE_GROUPING_OPTIONS.map((opt) => {
+        {groupingOptions.map((opt) => {
           const selected = grouping === opt.value;
           return (
             <Pressable
@@ -519,8 +554,8 @@ export default function IssuesFilterRoute() {
                 size={18}
                 color={selected ? tint : THEME[colorScheme].mutedForeground}
               />
-              <Text className="flex-1 text-sm text-foreground">
-                {t(opt.labelKey)}
+              <Text numberOfLines={1} className="flex-1 text-sm text-foreground">
+                {opt.label}
               </Text>
             </Pressable>
           );

@@ -18,7 +18,7 @@
 import { memo, useCallback, useMemo } from "react";
 import { FlatList, Pressable, ScrollView, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import type { Issue, IssueStatus } from "@multica/core/types";
+import type { Issue, IssueProperty, IssueStatus } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { StatusIcon } from "@/components/ui/status-icon";
@@ -54,6 +54,24 @@ function ColumnHeader({
   if (column.status) {
     label = statusLabel(column.status);
     leading = <StatusIcon status={column.status} size={14} />;
+  } else if (column.propertyId !== undefined) {
+    // Select-property lane: the option's own color is the only affordance
+    // that ties the lane to the value chips on the cards. The trailing
+    // no-value lane has neither color nor name (web board-view.tsx:101-105
+    // gives it the plain "No value" title).
+    label = column.propertyOptionName ?? t("filter.noPropertyValue");
+    leading = column.propertyOptionColor ? (
+      <View
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: 4,
+          backgroundColor: column.propertyOptionColor,
+        }}
+      />
+    ) : (
+      <View className="w-[18px]" />
+    );
   } else if (column.unassigned) {
     label = translate("filter.noAssignee");
     leading = <View className="w-[18px]" />;
@@ -197,6 +215,7 @@ export function BoardView({
   issues,
   grouping,
   statusOrder,
+  groupingProperty,
   onOpenIssue,
   onCreateIssue,
   emptyLabel,
@@ -204,6 +223,13 @@ export function BoardView({
   issues: Issue[];
   grouping: IssueGrouping;
   statusOrder: readonly IssueStatus[];
+  /**
+   * Resolved `select` definition when `grouping` is `property:<id>` — the
+   * caller owns the catalog lookup (web board-view.tsx:187-190 does the
+   * same). Absent/`null` means the grouping key is stale or the catalog has
+   * not loaded, and `groupIssues` falls back to status lanes.
+   */
+  groupingProperty?: IssueProperty | null;
   onOpenIssue: (issue: Issue) => void;
   /**
    * Column-header quick create. Receives the COLUMN, so the caller can seed
@@ -215,8 +241,8 @@ export function BoardView({
   emptyLabel: string;
 }) {
   const columns = useMemo(
-    () => groupIssues(issues, grouping, statusOrder, true),
-    [issues, grouping, statusOrder],
+    () => groupIssues(issues, grouping, statusOrder, true, undefined, groupingProperty),
+    [issues, grouping, statusOrder, groupingProperty],
   );
 
   if (issues.length === 0) {
