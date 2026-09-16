@@ -15,6 +15,7 @@ import type {
   AgentActivityBucket,
   AgentEnvResponse,
   AgentInvocationTarget,
+  AgentRunCount,
   AgentTask,
   Attachment,
   AutopilotCollaborator,
@@ -714,6 +715,19 @@ export const AgentActivityBucketListSchema = z
   .default([]);
 
 export const EMPTY_AGENT_ACTIVITY_BUCKET_LIST: AgentActivityBucket[] = [];
+
+// 30-day total run count per agent, feeding the agents-list RUNS sort.
+// Mirrors AgentRunCount in packages/core/types/agent.ts:202-205, fed by
+// GET /api/agent-run-counts. Lenient — a missing count reads as "no runs",
+// which sorts the agent to the bottom rather than dropping the row.
+export const AgentRunCountSchema: z.ZodType<AgentRunCount> = z.object({
+  agent_id: z.string().default(""),
+  run_count: z.number().default(0),
+}).loose();
+
+export const AgentRunCountListSchema = z.array(AgentRunCountSchema).default([]);
+
+export const EMPTY_AGENT_RUN_COUNT_LIST: AgentRunCount[] = [];
 
 export const ActiveTasksResponseSchema = z.object({
   tasks: z.array(AgentTaskSchema).default([]),

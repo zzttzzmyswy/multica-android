@@ -13,10 +13,15 @@
  * `issueKeys.list(wsId, { project_id })` and reuse the issues cache shape.
  * See `projectIssuesOptions` below for the binding helper.
  */
-import { queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { Project } from "@multica/core/types";
 import { api } from "@/data/api";
 import { issueKeys } from "@/data/queries/issue-keys";
+import {
+  ISSUE_PAGE_SIZE,
+  makeIssuePage,
+  nextIssuePageParam,
+} from "@/lib/issue-pagination";
 
 export const projectKeys = {
   all: (wsId: string | null) => ["projects", wsId] as const,
@@ -58,22 +63,25 @@ export const projectResourcesOptions = (wsId: string | null, id: string) =>
  * Issues filtered by `project_id`. Lives under the issues cache prefix
  * (not the projects one) so a WS `issue:*` event invalidating
  * `issueKeys.list(wsId)` also refreshes this list — single source of
- * truth for issue caches.
+ * truth for issue caches. Paginated like the workspace list
+ * (`InfiniteData<IssuePage>`); read it with `readIssueRows`.
  */
 export const projectIssuesOptions = (wsId: string | null, projectId: string) =>
-  queryOptions({
+  infiniteQueryOptions({
     queryKey: [
       ...issueKeys.list(wsId),
       "byProject",
       projectId,
     ] as const,
-    queryFn: async ({ signal }) => {
+    queryFn: async ({ pageParam, signal }) => {
       const res = await api.listIssues(
-        { project_id: projectId },
+        { project_id: projectId, limit: ISSUE_PAGE_SIZE, offset: pageParam },
         { signal },
       );
-      return res.issues;
+      return makeIssuePage(res.issues, res.total);
     },
+    initialPageParam: 0,
+    getNextPageParam: (_lastPage, allPages) => nextIssuePageParam(allPages),
     enabled: !!wsId && !!projectId,
   });
 

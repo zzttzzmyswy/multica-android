@@ -13,6 +13,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { MulticaLogo } from "@/components/brand/multica-logo";
+import { ServerUnreachableNotice } from "@/components/ui/server-unreachable-notice";
 import { useAuthStore } from "@/data/auth-store";
 import { api } from "@/data/api";
 import {
@@ -20,7 +21,7 @@ import {
   hasCustomApiBaseUrl,
   resetApiBaseUrl,
 } from "@/data/server-config";
-import { mapAuthError } from "@/lib/auth-error";
+import { isConnectionError, mapAuthError } from "@/lib/auth-error";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
 
@@ -36,6 +37,10 @@ export default function Login() {
   const [serverSaving, setServerSaving] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [serverSaved, setServerSaved] = useState(false);
+  // Server the last failed send-code request targeted, when that failure was
+  // a connectivity problem and a custom override was in play. Kept so the
+  // recovery notice can still name the host after a reset clears the override.
+  const [failedServer, setFailedServer] = useState<string | null>(null);
 
   const onSubmit = async () => {
     const trimmed = email.trim();
@@ -43,12 +48,16 @@ export default function Login() {
     void Haptics.selectionAsync();
     setSubmitting(true);
     setError(null);
+    setFailedServer(null);
     try {
       await sendCode(trimmed);
       router.push({ pathname: "/verify", params: { email: trimmed } });
     } catch (err) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setError(mapAuthError(err, t("login.sendCodeError"), t));
+      if (isConnectionError(err) && hasCustomApiBaseUrl()) {
+        setFailedServer(getDisplayBaseUrl());
+      }
     } finally {
       setSubmitting(false);
     }
@@ -61,6 +70,7 @@ export default function Login() {
     setServerSaving(true);
     setServerError(null);
     setServerSaved(false);
+    setFailedServer(null);
     try {
       await api.setBaseUrl(serverInput);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -125,6 +135,15 @@ export default function Login() {
             />
             {error ? (
               <Text className="text-sm text-destructive">{error}</Text>
+            ) : null}
+            {error && failedServer && hasCustomApiBaseUrl() ? (
+              <ServerUnreachableNotice
+                failedBaseUrl={failedServer}
+                onSwitched={() => {
+                  setError(null);
+                  setFailedServer(null);
+                }}
+              />
             ) : null}
           </View>
 
