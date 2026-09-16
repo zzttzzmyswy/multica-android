@@ -279,9 +279,10 @@ export default function AgentDetailPage() {
             </View>
           ) : null}
 
-          {/* MCP servers — archived agents render none (a retired agent can't
-              be assigned MCP servers). */}
-          {!archived ? <AgentMcpSection agent={agent} /> : null}
+          {/* MCP servers — agent-owned config, workspace assignments, and the
+              runtime's own inventory. Archived agents render none (a retired
+              agent can't run). */}
+          {!archived ? <AgentMcpSection agent={agent} runtime={runtime} /> : null}
 
           {/* Skills — assigned workspace skills + inherited runtime-local
               skills (web skills-tab parity). Archived agents render none. */}
