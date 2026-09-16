@@ -11,8 +11,9 @@
  *     column flips direction, arrow glyph shows the active sort).
  *   - A pinned first column (web columnPinning left): checkbox + title stay
  *     fixed while the remaining columns scroll horizontally as one unit
- *     (header + rows share one horizontal scroller, so alignment can't
- *     drift).
+ *     (header and rows are separate horizontal scrollers — the pinned column
+ *     has to sit outside both — kept in lockstep by the header/body sync
+ *     below, so alignment can't drift).
  *   - CSV export of the visible row set through the same serialization
  *     (`lib/issue-table-export.ts`), shared to the system share sheet.
  *
@@ -271,6 +272,35 @@ export function IssueTableView({
     [],
   );
 
+  // --- header/body horizontal sync ---------------------------------------
+  // The column header and the rows are two sibling horizontal scrollers (the
+  // pinned column has to sit outside both), so without this the header stays
+  // put while the columns slide away underneath it. Mirrors the vertical
+  // pairing above, including the feedback-loop guard.
+  const headerRef = useRef<ScrollView>(null);
+  const bodyRef = useRef<ScrollView>(null);
+  const headerX = useRef(0);
+  const bodyX = useRef(0);
+
+  const syncBodyToHeader = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const x = event.nativeEvent.contentOffset.x;
+      if (Math.abs(x - headerX.current) < 1) return;
+      headerX.current = x;
+      headerRef.current?.scrollTo({ x, animated: false });
+    },
+    [],
+  );
+  const syncHeaderToBody = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const x = event.nativeEvent.contentOffset.x;
+      if (Math.abs(x - bodyX.current) < 1) return;
+      bodyX.current = x;
+      bodyRef.current?.scrollTo({ x, animated: false });
+    },
+    [],
+  );
+
   // --- selection ---------------------------------------------------------
   // "Visible" means what is on screen right now — a row inside a collapsed
   // subtree is not selectable by the header checkbox.
@@ -468,9 +498,12 @@ export function IssueTableView({
             </Pressable>
           </View>
           <ScrollView
+            ref={headerRef}
             horizontal
             nestedScrollEnabled
             showsHorizontalScrollIndicator={false}
+            onScroll={syncHeaderToBody}
+            scrollEventThrottle={16}
             style={{ flex: 1 }}
           >
             <View className="flex-row">
@@ -536,9 +569,12 @@ export function IssueTableView({
             />
           </View>
           <ScrollView
+            ref={bodyRef}
             horizontal
             nestedScrollEnabled
             showsHorizontalScrollIndicator={false}
+            onScroll={syncBodyToHeader}
+            scrollEventThrottle={16}
             style={{ flex: 1 }}
           >
             <View
