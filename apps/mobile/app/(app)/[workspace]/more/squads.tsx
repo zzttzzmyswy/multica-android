@@ -5,13 +5,22 @@
  * count. Archived squads render dimmed and sort last. Pull-to-refresh +
  * friendly empty state. Tapping a row pushes the squad detail page.
  *
+ * Scope pills (iteration-127) mirror web's toolbar scope switcher: `mine` /
+ * `all`, keyed on `creator_id` (web's ownership lens — a squad's creator is
+ * not its leader and holds no management rights), badge counts computed over
+ * the unfiltered list so they don't move on switch. Defaults to `mine`, like
+ * web's `DEFAULTS.scope`. The scope is session-local (not persisted): a
+ * stored `mine` on a phone that later switches account would open an
+ * unexplained empty list, the same reasoning web applies to
+ * `agentRunningFilter`.
+ *
  * The header "+" (create) only shows for workspace owner/admin — matching
  * the iteration-27 scope; the server remains the real gate for who may
  * create (any member may create server-side, but mobile keeps the surface
  * admin-facing per MYS-304).
  */
-import { useCallback, useMemo } from "react";
-import { ActivityIndicator, FlatList, Pressable, View } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { ActivityIndicator, FlatList, Pressable, ScrollView, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -29,6 +38,13 @@ import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import {
+  SQUAD_SCOPES,
+  SQUAD_SCOPE_LABEL_KEYS,
+  filterSquadsByScope,
+  squadScopeCounts,
+  type SquadsScope,
+} from "@/lib/filter-squads";
 
 function isArchived(squad: Squad): boolean {
   return !!squad.archived_at;
@@ -51,17 +67,31 @@ export default function SquadsPage() {
   const isAdmin =
     currentMember?.role === "owner" || currentMember?.role === "admin";
 
+  const [scope, setScope] = useState<SquadsScope>("mine");
+
   const sorted = useMemo(() => {
-    const list = data ?? [];
+    const list = filterSquadsByScope(data ?? [], scope, user?.id ?? null);
     return [...list].sort((a, b) => {
       const aArchived = isArchived(a);
       const bArchived = isArchived(b);
       if (aArchived !== bArchived) return aArchived ? 1 : -1;
       return a.name.localeCompare(b.name);
     });
-  }, [data]);
+  }, [data, scope, user?.id]);
 
-  const showEmpty = !isLoading && !error && (data ?? []).length === 0;
+  // Counts run over the FULL list — switching scope must not move a badge.
+  const scopeCounts = useMemo(
+    () => squadScopeCounts(data ?? [], user?.id ?? null),
+    [data, user?.id],
+  );
+
+  const loaded = !isLoading && !error;
+  const totalCount = (data ?? []).length;
+  // Two distinct empty screens: nothing in the workspace at all, vs. nothing
+  // the user made. The second one names the scope that produced it and points
+  // at the way out, so an empty list is never unexplained.
+  const showEmpty = loaded && totalCount === 0;
+  const showScopeEmpty = loaded && totalCount > 0 && sorted.length === 0;
 
   const headerRight = useCallback(() => {
     if (!wsSlug || !isAdmin) return null;
@@ -113,26 +143,112 @@ export default function SquadsPage() {
             ) : null}
           </View>
         ) : (
-          <FlatList
-            data={sorted}
-            keyExtractor={(item) => item.id}
-            ItemSeparatorComponent={() => <View className="h-px bg-border ml-4" />}
-            contentContainerClassName="pb-6"
-            renderItem={({ item }) => (
-              <SquadRow
-                squad={item}
-                leaderName={getName("agent", item.leader_id)}
-                onPress={() => {
-                  if (wsSlug) router.push(`/${wsSlug}/more/squads/${item.id}`);
-                }}
+          <View className="flex-1">
+            <SquadScopeBar
+              scope={scope}
+              counts={scopeCounts}
+              onChange={setScope}
+            />
+            {showScopeEmpty ? (
+              <View className="flex-1 items-center justify-center px-6 gap-1">
+                <Ionicons name="people-circle-outline" size={32} color={muted} />
+                <Text className="text-sm text-muted-foreground text-center mt-2">
+                  {t("squads.scopeEmptyMine")}
+                </Text>
+                <Text className="text-xs text-muted-foreground/70 text-center">
+                  {scope === "mine"
+                    ? t("squads.scopeEmptyMineHint")
+                    : t("squads.emptyDescription")}
+                </Text>
+                {scope === "mine" ? (
+                  <Button
+                    variant="outline"
+                    className="mt-3"
+                    onPress={() => setScope("all")}
+                  >
+                    <Text>{t("squads.scope.all")}</Text>
+                  </Button>
+                ) : null}
+              </View>
+            ) : (
+              <FlatList
+                data={sorted}
+                keyExtractor={(item) => item.id}
+                ItemSeparatorComponent={() => <View className="h-px bg-border ml-4" />}
+                contentContainerClassName="pb-6"
+                renderItem={({ item }) => (
+                  <SquadRow
+                    squad={item}
+                    leaderName={getName("agent", item.leader_id)}
+                    onPress={() => {
+                      if (wsSlug) router.push(`/${wsSlug}/more/squads/${item.id}`);
+                    }}
+                  />
+                )}
+                refreshing={isRefetching}
+                onRefresh={refetch}
               />
             )}
-            refreshing={isRefetching}
-            onRefresh={refetch}
-          />
+          </View>
         )}
       </View>
     </>
+  );
+}
+
+/**
+ * Scope switcher, mirroring web's `SquadListToolbar` pill group (the
+ * desktop variant; web's phone-width dropdown has no mobile analogue since
+ * two pills fit at any phone width). Each pill carries its count over the
+ * full list.
+ */
+function SquadScopeBar({
+  scope,
+  counts,
+  onChange,
+}: {
+  scope: SquadsScope;
+  counts: Record<SquadsScope, number>;
+  onChange: (next: SquadsScope) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <View className="px-4 pt-3 pb-1">
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ gap: 6, alignItems: "center" }}
+      >
+        {SQUAD_SCOPES.map((value) => {
+          const active = value === scope;
+          return (
+            <Button
+              key={value}
+              variant="outline"
+              size="sm"
+              onPress={() => onChange(value)}
+              className={active ? "bg-accent" : ""}
+              accessibilityState={{ selected: active }}
+            >
+              <Text
+                numberOfLines={1}
+                className={active ? "text-accent-foreground" : "text-muted-foreground"}
+              >
+                {t(SQUAD_SCOPE_LABEL_KEYS[value])}
+              </Text>
+              <Text
+                className={cn(
+                  "text-xs tabular-nums",
+                  active ? "text-accent-foreground" : "text-muted-foreground",
+                )}
+              >
+                {counts[value]}
+              </Text>
+            </Button>
+          );
+        })}
+      </ScrollView>
+    </View>
   );
 }
 

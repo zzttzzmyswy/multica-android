@@ -87,6 +87,32 @@ export function useDeleteSkill() {
 }
 
 /**
+ * URL import — `POST /api/skills/import`. Same cache handling as
+ * `useCreateSkill`: the returned skill is a full Skill, so adopt it into both
+ * the list and the detail cache.
+ */
+export function useImportSkill() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const invalidate = useInvalidateSkills(wsId);
+  const patchList = usePatchSkillList(wsId);
+
+  return useMutation({
+    mutationFn: (url: string) => api.importSkill({ url }),
+    onSuccess: (skill) => {
+      if (!skill.id) return;
+      patchList((old) =>
+        old.some((s) => s.id === skill.id) ? old : [skill, ...old],
+      );
+      if (wsId) {
+        qc.setQueryData<Skill>(skillKeys.detail(wsId, skill.id), skill);
+      }
+    },
+    onSettled: invalidate,
+  });
+}
+
+/**
  * Remote refresh — `POST /api/skills/:id/refresh`. Adopts the refreshed skill
  * into the detail cache when the server echoes a valid skill (same id), so the
  * open detail page updates without a refetch; a malformed fallback instead
