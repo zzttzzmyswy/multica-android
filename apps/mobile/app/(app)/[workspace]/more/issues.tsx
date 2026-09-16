@@ -114,6 +114,8 @@ export default function IssuesPage() {
   const swimlaneGrouping = useIssuesViewStore((s) => s.swimlaneGrouping);
   const tableColumns = useIssuesViewStore((s) => s.tableColumns);
   const toggleTableColumn = useIssuesViewStore((s) => s.toggleTableColumn);
+  const tableGrouping = useIssuesViewStore((s) => s.tableGrouping);
+  const setTableGrouping = useIssuesViewStore((s) => s.setTableGrouping);
   const grouping = useIssuesViewStore((s) => s.grouping);
   const groupingProperty = useGroupingProperty(grouping);
   const sortBy = useIssuesViewStore((s) => s.sortBy);
@@ -516,6 +518,8 @@ export default function IssuesPage() {
           issues={sorted}
           columns={tableColumns}
           onToggleColumn={toggleTableColumn}
+          grouping={tableGrouping}
+          onGroupingChange={setTableGrouping}
           sortBy={sortBy}
           sortDirection={sortDirection}
           onSort={(field, direction) => {

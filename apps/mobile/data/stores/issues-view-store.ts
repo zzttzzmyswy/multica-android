@@ -49,12 +49,18 @@ import {
   type TableColumnKey,
   type TableColumnsSlice,
 } from "./issue-table-columns";
+import {
+  createTableGroupingActions,
+  defaultTableGrouping,
+  type TableGroupingSlice,
+} from "./issue-table-grouping";
 
 export type IssuesScope = "all" | "members" | "agents";
 
 export interface IssuesViewState
   extends IssueFilterSlice,
-    TableColumnsSlice {
+    TableColumnsSlice,
+    TableGroupingSlice {
   scope: IssuesScope;
   view: IssueViewMode;
   /** Active swimlane grouping dimension — only read in swimlane mode.
@@ -70,12 +76,14 @@ export const useIssuesViewStore = create<IssuesViewState>((set) => ({
   view: "list",
   swimlaneGrouping: "assignee",
   tableColumns: defaultTableColumns(),
+  tableGrouping: defaultTableGrouping(),
   ...defaultIssueFilterSlice(),
   setScope: (scope) => set({ scope }),
   setView: (view) => set({ view }),
   setSwimlaneGrouping: (swimlaneGrouping) => set({ swimlaneGrouping }),
   ...createIssueFilterActions<IssuesViewState>(set),
   ...createTableColumnActions<IssuesViewState>(set),
+  ...createTableGroupingActions<IssuesViewState>(set),
 }));
 
 /** Re-exported convenience: whether any filter dimension is active. */

@@ -36,11 +36,17 @@ import {
   type TableColumnKey,
   type TableColumnsSlice,
 } from "./issue-table-columns";
+import {
+  createTableGroupingActions,
+  defaultTableGrouping,
+  type TableGroupingSlice,
+} from "./issue-table-grouping";
 import type { IssuesScope } from "./issues-view-store";
 
 export interface ProjectIssuesViewState
   extends IssueFilterSlice,
-    TableColumnsSlice {
+    TableColumnsSlice,
+    TableGroupingSlice {
   /** Scope tab — all / members / agents, mirroring web's project-page
    *  issue tabs (`issues-scope-store` keyed `project:<id>`). */
   scope: IssuesScope;
@@ -59,12 +65,14 @@ export const useProjectIssuesViewStore = create<ProjectIssuesViewState>(
     view: "list",
     swimlaneGrouping: "assignee",
     tableColumns: defaultTableColumns(),
+    tableGrouping: defaultTableGrouping(),
     ...defaultIssueFilterSlice(),
     setScope: (scope) => set({ scope }),
     setView: (view) => set({ view }),
     setSwimlaneGrouping: (swimlaneGrouping) => set({ swimlaneGrouping }),
     ...createIssueFilterActions<ProjectIssuesViewState>(set),
     ...createTableColumnActions<ProjectIssuesViewState>(set),
+    ...createTableGroupingActions<ProjectIssuesViewState>(set),
   }),
 );
 

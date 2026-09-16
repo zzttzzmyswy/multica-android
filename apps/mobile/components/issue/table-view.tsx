@@ -16,6 +16,16 @@
  *     below, so alignment can't drift).
  *   - CSV export of the visible row set through the same serialization
  *     (`lib/issue-table-export.ts`), shared to the system share sheet.
+ *   - Table grouping by status / assignee / a select-or-checkbox property
+ *     (web's `tableGroupSpec`). Web asks the SERVER to group and paginates per
+ *     (groupKey, parentId) branch; mobile segments the loaded window itself
+ *     and rebuilds the hierarchy inside each segment
+ *     (`lib/issue-table-groups.ts`), so a sub-issue whose parent landed in a
+ *     different group reads as a root in its own group — the same thing the
+ *     branch fetch produces.
+ *
+ * Group collapse and parent collapse are two separate sets: folding a segment
+ * and folding a subtree are different gestures and must not share state.
  *
  * The pinned column's vertical movement is driven by the main list's scroll
  * events (scrollToOffset on a sibling FlatList with the same data + fixed
@@ -71,11 +81,16 @@ import { projectListOptions } from "@/data/queries/projects";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { useStatusLabel } from "@/lib/status-options";
 import { formatPropertyValue } from "@/lib/issue-properties";
+import { MAX_DEPTH, type IssueTableRow } from "@/lib/issue-table-hierarchy";
 import {
-  buildIssueTableRows,
-  MAX_DEPTH,
-  type IssueTableRow,
-} from "@/lib/issue-table-hierarchy";
+  buildIssueTableDisplayRows,
+  isGroupableProperty,
+  propertyIdFromGrouping,
+  type IssueTableDisplayRow,
+  type IssueTableGroupActor,
+  type IssueTableGrouping,
+  type IssueTableGroupValue,
+} from "@/lib/issue-table-groups";
 import {
   IssueCellEditor,
   isEditableTableColumn,
@@ -102,6 +117,10 @@ const PINNED_WIDTH = 176;
 const PROPERTY_COLUMN_WIDTH = 132;
 /** Header-row height (pinned cell + column headers share it). */
 const HEADER_HEIGHT = 34;
+/** Group segment header height. Matches the column header so a collapsed
+ *  table still reads as a grid, and stays uniform across the two synced
+ *  lists (the vertical scroll sync assumes identical row sequences). */
+const GROUP_HEADER_HEIGHT = HEADER_HEIGHT;
 /** Indent per parent hop in the pinned title cell. Web uses 18px on a wide
  *  desktop table; the phone's pinned column has to keep room for the title,
  *  so it indents less and widens itself by the same amount (see
@@ -169,6 +188,10 @@ interface Props {
   onOpenIssue: (issue: Issue) => void;
   /** Shown when there are no rows (parent surfaces usually pre-empt this). */
   emptyLabel: string;
+  /** Active grouping dimension (surface store's `tableGrouping`). */
+  grouping: IssueTableGrouping;
+  /** Passed straight through to the store's setTableGrouping. */
+  onGroupingChange: (grouping: IssueTableGrouping) => void;
 }
 
 export function IssueTableView({
@@ -180,11 +203,16 @@ export function IssueTableView({
   onSort,
   onOpenIssue,
   emptyLabel,
+  grouping,
+  onGroupingChange,
 }: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const statusLabel = useStatusLabel(wsId);
   const { activeStatuses } = useIssueStatuses(wsId);
-  const { data: properties = [] } = useQuery(propertyActiveOptions(wsId));
+  const {
+    data: properties = [],
+    isSuccess: propertiesSettled,
+  } = useQuery(propertyActiveOptions(wsId));
   const { data: projects = [] } = useQuery(projectListOptions(wsId));
   const { getName } = useActorLookup();
   const { t } = useTranslation();
@@ -197,11 +225,18 @@ export function IssueTableView({
   const toggleSelection = useIssueBatchSelectionStore((s) => s.toggle);
 
   const [columnMenuOpen, setColumnMenuOpen] = useState(false);
+  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   /** Collapsed parents — local to this table instance (web keeps the same
    *  per-surface expansion state in its table store). Not persisted: a
    *  collapsed subtree is a transient reading aid, not a saved preference. */
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  /** Collapsed GROUP segments — deliberately a second set, not a shared one:
+   *  folding a status segment and folding a parent's subtree are different
+   *  gestures, and collapsing one must never expand the other. */
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
   /** Open inline cell editor, keyed by row + column. */
@@ -212,10 +247,56 @@ export function IssueTableView({
   /** Row being renamed from the pinned title cell. */
   const [renaming, setRenaming] = useState<Issue | null>(null);
 
-  const rows = useMemo(
-    () => buildIssueTableRows(issues, collapsedIds),
-    [issues, collapsedIds],
+  const groupActorName = useCallback(
+    (actor: IssueTableGroupActor) => getName(actor.type, actor.id),
+    [getName],
   );
+
+  /** The flat sequence both synced lists render: group headers interleaved
+   *  with rows (no headers at all when grouping is off). Hierarchy is built
+   *  per segment inside, so a row's indent only ever reflects a parent it can
+   *  actually see. */
+  const displayRows = useMemo(
+    () =>
+      buildIssueTableDisplayRows(
+        issues,
+        grouping,
+        properties,
+        collapsedIds,
+        collapsedGroupIds,
+        { actorName: groupActorName },
+      ),
+    [
+      issues,
+      grouping,
+      properties,
+      collapsedIds,
+      collapsedGroupIds,
+      groupActorName,
+    ],
+  );
+
+  const rows = useMemo(
+    () =>
+      displayRows.flatMap((entry) => (entry.kind === "row" ? [entry.row] : [])),
+    [displayRows],
+  );
+
+  // A grouping whose definition vanished (deleted, archived, or changed to a
+  // non-groupable type) is reset rather than left rendering one opaque
+  // "value unavailable" bucket — web's `group_property_unavailable` path.
+  const groupingPropertyId = propertyIdFromGrouping(grouping);
+  useEffect(() => {
+    if (!groupingPropertyId || !propertiesSettled) return;
+    if (
+      properties.some(
+        (p) => p.id === groupingPropertyId && isGroupableProperty(p),
+      )
+    ) {
+      return;
+    }
+    onGroupingChange("none");
+  }, [groupingPropertyId, propertiesSettled, properties, onGroupingChange]);
 
   // Widen the pinned column exactly as far as the loaded tree needs to be
   // legible — a flat list keeps the original width, so nothing regresses
@@ -237,6 +318,49 @@ export function IssueTableView({
     });
   }, []);
 
+  const toggleGroupCollapse = useCallback((key: string) => {
+    setCollapsedGroupIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
+  /** Group header text — web `serverGroupLabel`: statuses through the status
+   *  catalog (a status this client doesn't know still renders its raw value),
+   *  assignees through the actor lookup with an explicit unassigned bucket,
+   *  and property buckets through the definition's options with the
+   *  no-value / value-unavailable states called out. */
+  const groupLabel = useCallback(
+    (value: IssueTableGroupValue): string => {
+      if (value.kind === "status") {
+        return value.status ? statusLabel(value.status) : "";
+      }
+      if (value.kind === "assignee") {
+        return value.actor
+          ? getName(value.actor.type, value.actor.id)
+          : t("picker.unassigned");
+      }
+      if (value.kind === "property") {
+        if (value.state === "unset") return t("table.noValue");
+        if (value.state === "unavailable") return t("table.valueUnavailable");
+        const property = properties.find((p) => p.id === value.propertyId);
+        if (property?.type === "checkbox") {
+          return value.raw === "true"
+            ? t("properties.value.true")
+            : t("properties.value.false");
+        }
+        return (
+          property?.config.options?.find((o) => o.id === value.raw)?.name ??
+          String(value.raw ?? "")
+        );
+      }
+      return "";
+    },
+    [statusLabel, getName, t, properties],
+  );
+
   // Re-derive from the live rows so the editor always shows the current
   // value (a label toggle keeps the sheet open across writes); a row that
   // leaves the filtered list closes the sheet.
@@ -247,8 +371,8 @@ export function IssueTableView({
   }, [editorKey, issues]);
 
   // --- dual-list vertical sync -------------------------------------------
-  const pinRef = useRef<FlatList<IssueTableRow>>(null);
-  const mainRef = useRef<FlatList<IssueTableRow>>(null);
+  const pinRef = useRef<FlatList<IssueTableDisplayRow>>(null);
+  const mainRef = useRef<FlatList<IssueTableDisplayRow>>(null);
   const pinOffset = useRef(0);
   const mainOffset = useRef(0);
 
@@ -451,6 +575,11 @@ export function IssueTableView({
           onPress={() => setColumnMenuOpen(true)}
         />
         <ToolbarButton
+          icon="albums-outline"
+          label={t("table.groupBy")}
+          onPress={() => setGroupMenuOpen(true)}
+        />
+        <ToolbarButton
           icon="download-outline"
           label={t("table.export")}
           onPress={openExportSheet}
@@ -540,32 +669,41 @@ export function IssueTableView({
           <View style={{ width: pinnedWidth }}>
             <FlatList
               ref={pinRef}
-              data={rows}
-              keyExtractor={(row) => row.issue.id}
+              data={displayRows}
+              keyExtractor={displayRowKey}
               onScroll={syncMain}
               scrollEventThrottle={16}
               initialNumToRender={12}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingBottom: bottomPadding }}
-              renderItem={({ item }) => (
-                <PinnedRow
-                  row={item}
-                  height={ROW_HEIGHT}
-                  selectionMode={selectionMode}
-                  selected={selectedIds.has(item.issue.id)}
-                  onPressCheckbox={() => {
-                    if (selectionMode) toggleSelection(item.issue.id);
-                    else enterSelection(item.issue.id);
-                  }}
-                  onPressRow={() => {
-                    if (selectionMode) toggleSelection(item.issue.id);
-                    else onOpenIssue(item.issue);
-                  }}
-                  onLongPress={() => enterSelection(item.issue.id)}
-                  onToggleCollapse={() => toggleCollapse(item.issue.id)}
-                  onRename={() => setRenaming(item.issue)}
-                />
-              )}
+              renderItem={({ item }) =>
+                item.kind === "group" ? (
+                  <PinnedGroupHeader
+                    group={item}
+                    label={groupLabel(item.value)}
+                    width={pinnedWidth}
+                    onToggle={() => toggleGroupCollapse(item.key)}
+                  />
+                ) : (
+                  <PinnedRow
+                    row={item.row}
+                    height={ROW_HEIGHT}
+                    selectionMode={selectionMode}
+                    selected={selectedIds.has(item.row.issue.id)}
+                    onPressCheckbox={() => {
+                      if (selectionMode) toggleSelection(item.row.issue.id);
+                      else enterSelection(item.row.issue.id);
+                    }}
+                    onPressRow={() => {
+                      if (selectionMode) toggleSelection(item.row.issue.id);
+                      else onOpenIssue(item.row.issue);
+                    }}
+                    onLongPress={() => enterSelection(item.row.issue.id)}
+                    onToggleCollapse={() => toggleCollapse(item.row.issue.id)}
+                    onRename={() => setRenaming(item.row.issue)}
+                  />
+                )
+              }
             />
           </View>
           <ScrollView
@@ -584,31 +722,46 @@ export function IssueTableView({
             >
               <FlatList
                 ref={mainRef}
-                data={rows}
-                keyExtractor={(row) => row.issue.id}
+                data={displayRows}
+                keyExtractor={displayRowKey}
                 onScroll={syncPinned}
                 scrollEventThrottle={16}
                 initialNumToRender={12}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: bottomPadding }}
-                renderItem={({ item }) => (
-                  <DataRow
-                    issue={item.issue}
-                    columns={bodyColumns}
-                    height={ROW_HEIGHT}
-                    properties={properties}
-                    projects={projects}
-                    getName={getName}
-                    selected={selectedIds.has(item.issue.id)}
-                    columnLabel={columnLabel}
-                    onPressCell={(column) => {
-                      if (selectionMode) toggleSelection(item.issue.id);
-                      else if (isEditableTableColumn(column)) {
-                        setEditorKey({ issueId: item.issue.id, column });
-                      }
-                    }}
-                  />
-                )}
+                renderItem={({ item }) =>
+                  item.kind === "group" ? (
+                    <DataGroupHeader
+                      group={item}
+                      label={groupLabel(item.value)}
+                      width={bodyColumns.reduce(
+                        (sum, c) => sum + columnWidth(c),
+                        0,
+                      )}
+                      onToggle={() => toggleGroupCollapse(item.key)}
+                    />
+                  ) : (
+                    <DataRow
+                      issue={item.row.issue}
+                      columns={bodyColumns}
+                      height={ROW_HEIGHT}
+                      properties={properties}
+                      projects={projects}
+                      getName={getName}
+                      selected={selectedIds.has(item.row.issue.id)}
+                      columnLabel={columnLabel}
+                      onPressCell={(column) => {
+                        if (selectionMode) toggleSelection(item.row.issue.id);
+                        else if (isEditableTableColumn(column)) {
+                          setEditorKey({
+                            issueId: item.row.issue.id,
+                            column,
+                          });
+                        }
+                      }}
+                    />
+                  )
+                }
               />
             </View>
           </ScrollView>
@@ -633,8 +786,29 @@ export function IssueTableView({
         properties={properties}
         onToggleColumn={onToggleColumn}
       />
+
+      <GroupMenu
+        visible={groupMenuOpen}
+        onClose={() => setGroupMenuOpen(false)}
+        properties={properties}
+        grouping={grouping}
+        onSelect={(next) => {
+          setGroupMenuOpen(false);
+          if (next === grouping) return;
+          // A new dimension means a new set of segment keys; carrying the old
+          // collapsed keys over would collapse arbitrary segments of the new
+          // grouping (the keys are opaque strings to this component).
+          setCollapsedGroupIds(new Set());
+          onGroupingChange(next);
+        }}
+      />
     </View>
   );
+}
+
+/** Stable identity for a display row — issue id, or the group key. */
+function displayRowKey(entry: IssueTableDisplayRow): string {
+  return entry.kind === "group" ? `group:${entry.key}` : entry.row.issue.id;
 }
 
 /** Build the CSV, write it to the cache dir, hand it to the system sheet.
@@ -685,6 +859,99 @@ function ToolbarButton({
       />
       <Text className="text-xs font-medium text-muted-foreground" numberOfLines={1}>
         {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+/**
+ * Group segment header in the pinned pane — chevron, label, count. Matches
+ * web's `IssueTableGroupRow` (a muted full-width band with the label pinned to
+ * the left) and matches `GROUP_HEADER_HEIGHT` so the two synced lists keep the
+ * same row sequence.
+ */
+function PinnedGroupHeader({
+  group,
+  label,
+  width,
+  onToggle,
+}: {
+  group: Extract<IssueTableDisplayRow, { kind: "group" }>;
+  label: string;
+  width: number;
+  onToggle: () => void;
+}) {
+  const { t } = useTranslation();
+  const { colorScheme } = useColorScheme();
+  const theme = THEME[colorScheme];
+  return (
+    <Pressable
+      onPress={onToggle}
+      style={{ width, height: GROUP_HEADER_HEIGHT }}
+      className="flex-row items-center gap-1.5 pl-3 pr-2 bg-secondary/60 active:bg-secondary"
+      accessibilityLabel={
+        group.collapsed
+          ? t("a11y.tableExpandGroup")
+          : t("a11y.tableCollapseGroup")
+      }
+    >
+      <Ionicons
+        name={group.collapsed ? "chevron-forward" : "chevron-down"}
+        size={12}
+        color={theme.mutedForeground}
+      />
+      <Text
+        className="text-[11px] font-semibold text-foreground flex-1"
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
+      <Text className="text-[11px] text-muted-foreground tabular-nums">
+        {group.count}
+      </Text>
+    </Pressable>
+  );
+}
+
+/** The same group header in the scrollable pane. Web keeps its label stuck to
+ *  the left edge of the full-width cell; the phone's equivalent is to let the
+ *  band span every visible column and right-align the count into the viewport
+ *  it can actually see. */
+function DataGroupHeader({
+  group,
+  label,
+  width,
+  onToggle,
+}: {
+  group: Extract<IssueTableDisplayRow, { kind: "group" }>;
+  label: string;
+  width: number;
+  onToggle: () => void;
+}) {
+  const { t } = useTranslation();
+  const { colorScheme } = useColorScheme();
+  const theme = THEME[colorScheme];
+  return (
+    <Pressable
+      onPress={onToggle}
+      style={{ width, height: GROUP_HEADER_HEIGHT }}
+      className="flex-row items-center gap-1.5 px-3 bg-secondary/60 active:bg-secondary"
+      accessibilityLabel={
+        group.collapsed
+          ? t("a11y.tableExpandGroup")
+          : t("a11y.tableCollapseGroup")
+      }
+    >
+      <Ionicons
+        name={group.collapsed ? "chevron-forward" : "chevron-down"}
+        size={12}
+        color={theme.mutedForeground}
+      />
+      <Text className="text-[11px] font-semibold text-foreground" numberOfLines={1}>
+        {label}
+      </Text>
+      <Text className="text-[11px] text-muted-foreground tabular-nums">
+        {group.count}
       </Text>
     </Pressable>
   );
@@ -1266,15 +1533,106 @@ function ColumnMenu({
   );
 }
 
+/**
+ * Grouping picker — web's `tableGroupSpec` dimensions (status / assignee /
+ * a select-or-checkbox custom property) plus "no grouping". Radio indicators,
+ * because exactly one dimension is active; a definition the user cannot group
+ * by is never listed, matching web's `groupablePropertyIds` filter.
+ */
+function GroupMenu({
+  visible,
+  onClose,
+  properties,
+  grouping,
+  onSelect,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  properties: IssueProperty[];
+  grouping: IssueTableGrouping;
+  onSelect: (grouping: IssueTableGrouping) => void;
+}) {
+  const { t } = useTranslation();
+  const groupable = properties.filter(isGroupableProperty);
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <Pressable className="flex-1 bg-black/40" onPress={onClose}>
+        <View className="flex-1 justify-end">
+          <Pressable
+            onPress={() => {}}
+            className="bg-popover rounded-t-2xl max-h-[75%]"
+          >
+            <View className="px-4 py-3 border-b border-border flex-row items-center justify-between">
+              <Text className="text-base font-semibold text-foreground">
+                {t("table.groupBy")}
+              </Text>
+              <Pressable onPress={onClose} hitSlop={8}>
+                <Ionicons name="close" size={20} color="currentColor" />
+              </Pressable>
+            </View>
+            <ScrollView className="max-h-[55vh]">
+              <MenuRow
+                label={t("table.groupNone")}
+                active={grouping === "none"}
+                indicator="radio"
+                onPress={() => onSelect("none")}
+              />
+              <MenuRow
+                label={t("table.column.status")}
+                active={grouping === "status"}
+                indicator="radio"
+                onPress={() => onSelect("status")}
+              />
+              <MenuRow
+                label={t("table.column.assignee")}
+                active={grouping === "assignee"}
+                indicator="radio"
+                onPress={() => onSelect("assignee")}
+              />
+              {groupable.length > 0 ? (
+                <>
+                  <Text className="px-4 pt-3 pb-1 text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                    {t("table.columnsProperties")}
+                  </Text>
+                  {groupable.map((property) => {
+                    const key: IssueTableGrouping = `property:${property.id}`;
+                    return (
+                      <MenuRow
+                        key={key}
+                        label={property.name}
+                        active={grouping === key}
+                        indicator="radio"
+                        onPress={() => onSelect(key)}
+                      />
+                    );
+                  })}
+                </>
+              ) : null}
+            </ScrollView>
+          </Pressable>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
 function MenuRow({
   label,
   active,
   disabled = false,
+  indicator = "check",
   onPress,
 }: {
   label: string;
   active: boolean;
   disabled?: boolean;
+  indicator?: "check" | "radio";
   onPress: () => void;
 }) {
   const { colorScheme } = useColorScheme();
@@ -1302,7 +1660,15 @@ function MenuRow({
         />
       ) : (
         <Ionicons
-          name={active ? "checkbox" : "square-outline"}
+          name={
+            indicator === "radio"
+              ? active
+                ? "radio-button-on"
+                : "radio-button-off"
+              : active
+                ? "checkbox"
+                : "square-outline"
+          }
           size={17}
           color={
             active

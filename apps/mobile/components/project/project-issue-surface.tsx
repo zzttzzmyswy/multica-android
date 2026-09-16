@@ -120,6 +120,8 @@ export function ProjectIssueSurface({
   const swimlaneGrouping = useProjectIssuesViewStore((s) => s.swimlaneGrouping);
   const tableColumns = useProjectIssuesViewStore((s) => s.tableColumns);
   const toggleTableColumn = useProjectIssuesViewStore((s) => s.toggleTableColumn);
+  const tableGrouping = useProjectIssuesViewStore((s) => s.tableGrouping);
+  const setTableGrouping = useProjectIssuesViewStore((s) => s.setTableGrouping);
   const grouping = useProjectIssuesViewStore((s) => s.grouping);
   const showSubIssues = useProjectIssuesViewStore((s) => s.showSubIssues);
   const groupingProperty = useGroupingProperty(grouping);
@@ -477,6 +479,8 @@ export function ProjectIssueSurface({
           issues={sorted}
           columns={tableColumns}
           onToggleColumn={toggleTableColumn}
+          grouping={tableGrouping}
+          onGroupingChange={setTableGrouping}
           sortBy={sortBy}
           sortDirection={sortDirection}
           onSort={(field, direction) => {

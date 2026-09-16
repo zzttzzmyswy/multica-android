@@ -31,10 +31,16 @@ import {
   type TableColumnKey,
   type TableColumnsSlice,
 } from "./issue-table-columns";
+import {
+  createTableGroupingActions,
+  defaultTableGrouping,
+  type TableGroupingSlice,
+} from "./issue-table-grouping";
 
 export interface MyIssuesViewState
   extends IssueFilterSlice,
-    TableColumnsSlice {
+    TableColumnsSlice,
+    TableGroupingSlice {
   scope: MyIssuesScope;
   view: IssueViewMode;
   /** Active swimlane grouping dimension — only read in swimlane mode.
@@ -50,12 +56,14 @@ export const useMyIssuesViewStore = create<MyIssuesViewState>((set) => ({
   view: "list",
   swimlaneGrouping: "assignee",
   tableColumns: defaultTableColumns(),
+  tableGrouping: defaultTableGrouping(),
   ...defaultIssueFilterSlice(),
   setScope: (scope) => set({ scope }),
   setView: (view) => set({ view }),
   setSwimlaneGrouping: (swimlaneGrouping) => set({ swimlaneGrouping }),
   ...createIssueFilterActions<MyIssuesViewState>(set),
   ...createTableColumnActions<MyIssuesViewState>(set),
+  ...createTableGroupingActions<MyIssuesViewState>(set),
 }));
 
 /** Convenience selector: whether any filter dimension is active. */
