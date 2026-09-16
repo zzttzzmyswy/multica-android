@@ -51,6 +51,7 @@ function issue(partial: Partial<Issue>): Issue {
     properties: partial.properties,
     start_date: partial.start_date,
     due_date: partial.due_date,
+    parent_issue_id: partial.parent_issue_id,
   } as Issue;
 }
 
@@ -77,6 +78,7 @@ const noFilters: IssueFilterState = {
   propertyFilters: {},
   dateFilter: null,
   workingOnly: false,
+  showSubIssues: true,
 };
 
 describe("applyIssueFilters — workingOnly", () => {
@@ -558,5 +560,53 @@ describe("groupIssues by a select property", () => {
   it("falls back to status grouping when the definition is not resolvable", () => {
     const groups = groupIssues([a, b], "property:stage", BOARD_STATUSES, true);
     expect(groups.map((g) => g.status)).toEqual([...BOARD_STATUSES]);
+  });
+});
+
+describe("applyIssueFilters — showSubIssues", () => {
+  const parent = issue({ id: "p1" });
+  const child = issue({ id: "c1", parent_issue_id: "p1" });
+  const child2 = issue({ id: "c2", parent_issue_id: "p1", status: "done" });
+  const all = [parent, child, child2];
+
+  it("hides sub-issues when showSubIssues is false", () => {
+    expect(
+      applyIssueFilters(all, { ...noFilters, showSubIssues: false }).map((i) => i.id),
+    ).toEqual(["p1"]);
+  });
+
+  it("keeps sub-issues when showSubIssues is true", () => {
+    expect(
+      applyIssueFilters(all, { ...noFilters, showSubIssues: true }).map((i) => i.id),
+    ).toEqual(["p1", "c1", "c2"]);
+  });
+
+  it("is an unconditional no-op when off (keeps sub-issues and their parents)", () => {
+    expect(applyIssueFilters(all, noFilters).map((i) => i.id)).toEqual([
+      "p1",
+      "c1",
+      "c2",
+    ]);
+  });
+
+  it("composes with other filters (AND semantics)", () => {
+    // Hide sub-issues AND keep only "todo": the parent survives, the two
+    // children are excluded by both dimensions independently.
+    expect(
+      applyIssueFilters(all, {
+        ...noFilters,
+        showSubIssues: false,
+        statusFilters: ["todo"],
+      }).map((i) => i.id),
+    ).toEqual(["p1"]);
+    // Same status filter with sub-issues visible proves the two dimensions
+    // are independent rather than one masking the other.
+    expect(
+      applyIssueFilters(all, {
+        ...noFilters,
+        showSubIssues: true,
+        statusFilters: ["todo"],
+      }).map((i) => i.id),
+    ).toEqual(["p1", "c1"]);
   });
 });

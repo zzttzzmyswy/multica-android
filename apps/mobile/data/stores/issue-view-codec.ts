@@ -146,21 +146,23 @@ export function viewQueryFromSnapshot(
 }
 
 /** Serialize the personal display defaults a view seeds on first open.
- *  Mobile subset of web's display payload — viewMode / grouping / sort
- *  only; web's extra keys (cardProperties, swimlaneGrouping, …) are absent
- *  because mobile has no such surface, and their absence reads back as
+ *  Mobile subset of web's display payload — viewMode / grouping / sort /
+ *  showSubIssues; web's extra keys (cardProperties, swimlaneGrouping, …) are
+ *  absent because mobile has no such surface, and their absence reads back as
  *  defaults. */
 export function viewDisplayFromState(state: {
   view: IssueViewMode;
   grouping: IssueGrouping;
   sortBy: IssueSortField;
   sortDirection: IssueSortDirection;
+  showSubIssues: boolean;
 }): Record<string, unknown> {
   return {
     viewMode: state.view,
     grouping: state.grouping,
     sortBy: state.sortBy,
     sortDirection: state.sortDirection,
+    showSubIssues: state.showSubIssues,
   };
 }
 
@@ -366,14 +368,15 @@ export function clearDimensionToBaseline(
   }
 }
 
-/** Sanitized display patch — viewMode/grouping/sort from a view blob. The
- *  caller supplies the surface's own current sortBy as the fallback so an
- *  unsaved view still lands on the list's active sort. */
+/** Sanitized display patch — viewMode/grouping/sort/showSubIssues from a
+ *  view blob. The caller supplies the surface's own current sortBy as the
+ *  fallback so an unsaved view still lands on the list's active sort. */
 export interface IssueViewDisplayPatch {
   viewMode: IssueViewMode;
   grouping: IssueGrouping;
   sortBy: IssueSortField;
   sortDirection: IssueSortDirection;
+  showSubIssues: boolean;
 }
 
 export function sanitizeViewDisplay(
@@ -385,6 +388,9 @@ export function sanitizeViewDisplay(
     grouping: firstEnum(display.grouping, GROUPINGS, "status"),
     sortBy: firstEnum(display.sortBy, SORT_FIELDS, defaultSortBy),
     sortDirection: firstEnum(display.sortDirection, SORT_DIRECTIONS, "asc"),
+    // Web's view-store default is `true`; a view that predates the key (or
+    // carries a non-boolean) keeps sub-issues visible.
+    showSubIssues: display.showSubIssues !== false,
   };
 }
 
@@ -417,6 +423,7 @@ export type IssueViewSnapshotSource = Pick<
   | "sortBy"
   | "sortDirection"
   | "grouping"
+  | "showSubIssues"
 >;
 
 /**
@@ -457,6 +464,7 @@ export function viewMatchesSlice(
     wantDisplay.viewMode === viewMode &&
     wantDisplay.grouping === slice.grouping &&
     wantDisplay.sortBy === slice.sortBy &&
-    wantDisplay.sortDirection === slice.sortDirection
+    wantDisplay.sortDirection === slice.sortDirection &&
+    wantDisplay.showSubIssues === slice.showSubIssues
   );
 }

@@ -29,6 +29,7 @@ const SLICE: IssueFilterSlice = {
   sortBy: "priority",
   sortDirection: "desc",
   grouping: "assignee",
+  showSubIssues: false,
   toggleStatusFilter: () => {},
   togglePriorityFilter: () => {},
   toggleAssigneeFilter: () => {},
@@ -41,6 +42,7 @@ const SLICE: IssueFilterSlice = {
   clearPropertyFilter: () => {},
   setDateFilter: () => {},
   toggleWorkingOnly: () => {},
+  toggleShowSubIssues: () => {},
   setSortBy: () => {},
   setSortDirection: () => {},
   setGrouping: () => {},
@@ -69,20 +71,34 @@ describe("viewQueryFromSnapshot", () => {
 });
 
 describe("viewDisplayFromState", () => {
-  it("serializes viewMode/grouping/sortBy/sortDirection only", () => {
+  it("serializes viewMode/grouping/sortBy/sortDirection/showSubIssues only", () => {
     expect(
       viewDisplayFromState({
         view: "board",
         grouping: "assignee",
         sortBy: "priority",
         sortDirection: "desc",
+        showSubIssues: false,
       }),
     ).toEqual({
       viewMode: "board",
       grouping: "assignee",
       sortBy: "priority",
       sortDirection: "desc",
+      showSubIssues: false,
     });
+  });
+
+  it("keeps sub-issues visible when the display preference is on", () => {
+    expect(
+      viewDisplayFromState({
+        view: "list",
+        grouping: "status",
+        sortBy: "position",
+        sortDirection: "asc",
+        showSubIssues: true,
+      }).showSubIssues,
+    ).toBe(true);
   });
 });
 
@@ -137,24 +153,34 @@ describe("sanitizeViewDisplay", () => {
   it("passes known values through and defaults garbage", () => {
     expect(
       sanitizeViewDisplay({ viewMode: "board", grouping: "assignee" }, "position"),
-    ).toEqual({ viewMode: "board", grouping: "assignee", sortBy: "position", sortDirection: "asc" });
+    ).toEqual({ viewMode: "board", grouping: "assignee", sortBy: "position", sortDirection: "asc", showSubIssues: true });
     expect(
       sanitizeViewDisplay({ viewMode: "calendar", grouping: "nope", sortBy: "weird", sortDirection: "sideways" }, "created_at"),
-    ).toEqual({ viewMode: "list", grouping: "status", sortBy: "created_at", sortDirection: "asc" });
+    ).toEqual({ viewMode: "list", grouping: "status", sortBy: "created_at", sortDirection: "asc", showSubIssues: true });
     // "gantt" is a valid mobile mode since iter-118 — passes through.
     expect(
       sanitizeViewDisplay({ viewMode: "gantt" }, "created_at"),
-    ).toEqual({ viewMode: "gantt", grouping: "status", sortBy: "created_at", sortDirection: "asc" });
+    ).toEqual({ viewMode: "gantt", grouping: "status", sortBy: "created_at", sortDirection: "asc", showSubIssues: true });
     // "swimlane" is a valid mobile mode since iter-122 — passes through.
     expect(
       sanitizeViewDisplay({ viewMode: "swimlane" }, "created_at"),
-    ).toEqual({ viewMode: "swimlane", grouping: "status", sortBy: "created_at", sortDirection: "asc" });
+    ).toEqual({ viewMode: "swimlane", grouping: "status", sortBy: "created_at", sortDirection: "asc", showSubIssues: true });
     expect(sanitizeViewDisplay({}, "due_date")).toEqual({
       viewMode: "list",
       grouping: "status",
       sortBy: "due_date",
       sortDirection: "asc",
+      showSubIssues: true,
     });
+  });
+
+  it("only an explicit false hides sub-issues (web default is true)", () => {
+    expect(sanitizeViewDisplay({ showSubIssues: false }, "position").showSubIssues).toBe(false);
+    expect(sanitizeViewDisplay({ showSubIssues: true }, "position").showSubIssues).toBe(true);
+    // A view saved before the key existed keeps sub-issues visible.
+    expect(sanitizeViewDisplay({}, "position").showSubIssues).toBe(true);
+    // Non-boolean garbage falls back to the default rather than hiding.
+    expect(sanitizeViewDisplay({ showSubIssues: "no" }, "position").showSubIssues).toBe(true);
   });
 });
 
@@ -166,6 +192,7 @@ describe("viewMatchesSlice", () => {
       grouping: "assignee",
       sortBy: "priority",
       sortDirection: "desc",
+      showSubIssues: false,
     }),
   };
 
@@ -192,6 +219,19 @@ describe("viewMatchesSlice", () => {
     expect(viewMatchesSlice(VIEW, SLICE, "list")).toBe(false);
     expect(viewMatchesSlice(VIEW, { ...SLICE, sortBy: "created_at" }, "board")).toBe(false);
     expect(viewMatchesSlice(VIEW, { ...SLICE, grouping: "status" }, "board")).toBe(false);
+  });
+
+  it("false when the show-sub-issues preference diverges", () => {
+    expect(viewMatchesSlice(VIEW, { ...SLICE, showSubIssues: true }, "board")).toBe(false);
+  });
+
+  it("treats a legacy view with no showSubIssues key as 'sub-issues visible'", () => {
+    const legacyView = {
+      query: VIEW.query,
+      display: { viewMode: "board", grouping: "assignee", sortBy: "priority", sortDirection: "desc" },
+    };
+    expect(viewMatchesSlice(legacyView, { ...SLICE, showSubIssues: true }, "board")).toBe(true);
+    expect(viewMatchesSlice(legacyView, { ...SLICE, showSubIssues: false }, "board")).toBe(false);
   });
 
   it("treats a view saved on web (verbatim query/display shape) as matching", () => {

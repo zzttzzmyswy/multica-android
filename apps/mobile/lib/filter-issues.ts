@@ -60,6 +60,13 @@ export interface IssueFilterState {
    * fetching — same split as web's `filter.ts`.
    */
   workingOnly: boolean;
+  /**
+   * Show issues that have a parent (sub-issues). Only an explicit `false`
+   * hides them — web's `filter.ts:114` reads `=== false`, so a missing /
+   * undefined value keeps the historical "show everything" behaviour.
+   * Applied first, alongside `workingOnly`, in `applyIssueFilters`.
+   */
+  showSubIssues: boolean;
 }
 
 /**
@@ -87,6 +94,7 @@ export const EMPTY_ISSUE_FILTER: IssueFilterState = {
   propertyFilters: {},
   dateFilter: null,
   workingOnly: false,
+  showSubIssues: true,
 };
 
 /**
@@ -150,6 +158,7 @@ export function applyIssueFilters(
     labelFilters,
     propertyFilters,
     workingOnly,
+    showSubIssues,
   } = filters;
 
   const hasAssigneeFilter =
@@ -157,11 +166,15 @@ export function applyIssueFilters(
   const hasProjectFilter =
     projectFilters.length > 0 || includeNoProject;
   const applyWorkingOnly = workingOnly === true;
+  // Only an explicit `false` hides sub-issues (web filter.ts:114).
+  const hideSubIssues = showSubIssues === false;
 
   return issues.filter((issue) => {
     if (applyWorkingOnly && !context.runningIssueIds?.has(issue.id)) {
       return false;
     }
+
+    if (hideSubIssues && issue.parent_issue_id) return false;
 
     if (
       statusFilters.length > 0 &&

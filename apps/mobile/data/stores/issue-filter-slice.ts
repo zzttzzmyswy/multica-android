@@ -144,6 +144,17 @@ export interface IssueFilterSlice {
   sortBy: IssueSortField;
   sortDirection: IssueSortDirection;
   grouping: IssueGrouping;
+  /**
+   * When false, issues that HAVE a parent (sub-issues) are hidden from every
+   * issue surface so the user can focus on top-level parents. Purely a
+   * display filter — the parent/child relationship is untouched. Mirrors web
+   * `view-store.ts:203-205` (default true, `toggleShowSubIssues`). Unlike
+   * `workingOnly` this IS a saved view's display default, so it travels in
+   * `IssueViewSnapshotSource` / the view codec's display payload rather than
+   * in `IssueFilterSnapshot` — and `clearFilters` leaves it alone, exactly
+   * like web's (view-store.ts:401-415).
+   */
+  showSubIssues: boolean;
   toggleStatusFilter: (status: IssueStatus) => void;
   togglePriorityFilter: (priority: IssuePriority) => void;
   toggleAssigneeFilter: (value: ActorFilterValue) => void;
@@ -161,6 +172,8 @@ export interface IssueFilterSlice {
   setDateFilter: (filter: IssueDateFilterValue | null) => void;
   /** Flip the "only issues an agent is working on" quick filter. */
   toggleWorkingOnly: () => void;
+  /** Flip the "show sub-issues" display filter (web `toggleShowSubIssues`). */
+  toggleShowSubIssues: () => void;
   setSortBy: (field: IssueSortField) => void;
   setSortDirection: (dir: IssueSortDirection) => void;
   setGrouping: (grouping: IssueGrouping) => void;
@@ -232,6 +245,7 @@ export const defaultIssueFilterSlice = (): Pick<
   | "sortBy"
   | "sortDirection"
   | "grouping"
+  | "showSubIssues"
 > => ({
   statusFilters: [],
   priorityFilters: [],
@@ -247,6 +261,7 @@ export const defaultIssueFilterSlice = (): Pick<
   sortBy: "position",
   sortDirection: "asc",
   grouping: "status",
+  showSubIssues: true,
 });
 
 /**
@@ -279,6 +294,7 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
   | "clearPropertyFilter"
   | "setDateFilter"
   | "toggleWorkingOnly"
+  | "toggleShowSubIssues"
   | "clearFilters"
   | "resetFiltersTo"
   | "clearFilterDimension"
@@ -357,6 +373,8 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
     setDateFilter: (dateFilter) => set({ dateFilter }),
     toggleWorkingOnly: () =>
       set((state) => ({ workingOnly: !state.workingOnly })),
+    toggleShowSubIssues: () =>
+      set((state) => ({ showSubIssues: !state.showSubIssues })),
     clearFilters: () =>
       set({
         statusFilters: [],

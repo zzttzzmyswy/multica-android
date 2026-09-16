@@ -121,6 +121,7 @@ export function ProjectIssueSurface({
   const tableColumns = useProjectIssuesViewStore((s) => s.tableColumns);
   const toggleTableColumn = useProjectIssuesViewStore((s) => s.toggleTableColumn);
   const grouping = useProjectIssuesViewStore((s) => s.grouping);
+  const showSubIssues = useProjectIssuesViewStore((s) => s.showSubIssues);
   const groupingProperty = useGroupingProperty(grouping);
   const sortBy = useProjectIssuesViewStore((s) => s.sortBy);
   const sortDirection = useProjectIssuesViewStore((s) => s.sortDirection);
@@ -155,6 +156,7 @@ export function ProjectIssueSurface({
       // carries the switch off rather than reading a store field that can
       // never be set here.
       workingOnly: false,
+      showSubIssues,
     }),
     [
       statusFilters,
@@ -167,6 +169,7 @@ export function ProjectIssueSurface({
       labelFilters,
       propertyFilters,
       dateFilter,
+      showSubIssues,
     ],
   );
 
@@ -222,8 +225,8 @@ export function ProjectIssueSurface({
   const { baseline: chipBaseline, resetDimension: resetChipDimension } =
     useFilterChipBaseline(activeView?.query ?? null, useProjectIssuesViewStore);
   const snapshotSource = useMemo(
-    () => ({ ...filterState, sortBy, sortDirection, grouping }),
-    [filterState, sortBy, sortDirection, grouping],
+    () => ({ ...filterState, sortBy, sortDirection, grouping, showSubIssues }),
+    [filterState, sortBy, sortDirection, grouping, showSubIssues],
   );
   const modifiedActive = useMemo(
     () =>
@@ -242,6 +245,7 @@ export function ProjectIssueSurface({
         sortBy: display.sortBy,
         sortDirection: display.sortDirection,
         grouping: display.grouping,
+        showSubIssues: display.showSubIssues,
         view: display.viewMode,
       });
       // The scope-axis a project view captured is part of the VIEW — land

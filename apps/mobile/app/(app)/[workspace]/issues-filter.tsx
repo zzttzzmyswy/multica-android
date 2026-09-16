@@ -122,6 +122,7 @@ export default function IssuesFilterRoute() {
   const sortBy = s.sortBy;
   const sortDirection = s.sortDirection;
   const grouping = s.grouping;
+  const showSubIssues = s.showSubIssues;
 
   // The date section's field radio is UI-local until a preset/custom commits
   // (web DateSubContent keeps the same split).
@@ -560,6 +561,15 @@ export default function IssuesFilterRoute() {
             </Pressable>
           );
         })}
+
+        {/* ——— Display ——— */}
+        <SectionLabel>{t("filter.display.title")}</SectionLabel>
+        <BoolRow
+          label={t("filter.display.showSubIssues")}
+          checked={showSubIssues}
+          onToggle={() => act().toggleShowSubIssues()}
+          t={t}
+        />
       </ScrollView>
     </View>
   );
