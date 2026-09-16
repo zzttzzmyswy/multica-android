@@ -560,7 +560,7 @@ class ApiClient {
       "Content-Type": "application/json",
       "X-Client-Platform": "mobile",
       "X-Client-OS": "ios",
-      "X-Client-Version": "0.1.0",
+      "X-Client-Version": "0.5.58",
       "X-Request-ID": rid,
       ...((init.headers as Record<string, string>) ?? {}),
     };
@@ -625,7 +625,19 @@ class ApiClient {
           undefined,
         );
       }
-      throw err;
+      // A caller-side abort is a deliberate cancellation, not a failure —
+      // propagate it untouched so query cancellation keeps its semantics.
+      if (callerSignal?.aborted) throw err;
+      // Everything else here is RN's fetch rejecting before any response
+      // existed (offline, DNS failure, TLS refusal, unreachable host).
+      // Normalise it to status 0 so callers get one shape for "the request
+      // never reached a server", matching the timeout above and letting
+      // lib/auth-error classify it as a connection failure.
+      console.warn(`[api] ← NETWORK FAIL ${path}`, {
+        rid,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw new ApiError("Network request failed", 0, undefined);
     }
     clearTimeout(timeoutId);
     callerSignal?.removeEventListener("abort", onCallerAbort);
@@ -4026,7 +4038,7 @@ class ApiClient {
       // No Content-Type — let fetch set the multipart boundary.
       "X-Client-Platform": "mobile",
       "X-Client-OS": "ios",
-      "X-Client-Version": "0.1.0",
+      "X-Client-Version": "0.5.58",
       "X-Request-ID": rid,
     };
     if (this.token) headers["Authorization"] = `Bearer ${this.token}`;
