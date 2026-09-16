@@ -733,7 +733,6 @@ export function IssueTableView({
                   item.kind === "group" ? (
                     <DataGroupHeader
                       group={item}
-                      label={groupLabel(item.value)}
                       width={bodyColumns.reduce(
                         (sum, c) => sum + columnWidth(c),
                         0,
@@ -901,7 +900,7 @@ function PinnedGroupHeader({
         color={theme.mutedForeground}
       />
       <Text
-        className="text-[11px] font-semibold text-foreground flex-1"
+        className="text-[11px] font-semibold text-foreground shrink"
         numberOfLines={1}
       >
         {label}
@@ -913,47 +912,34 @@ function PinnedGroupHeader({
   );
 }
 
-/** The same group header in the scrollable pane. Web keeps its label stuck to
- *  the left edge of the full-width cell; the phone's equivalent is to let the
- *  band span every visible column and right-align the count into the viewport
- *  it can actually see. */
+/**
+ * The same band in the scrollable pane. It carries NO label: the two panes are
+ * independent lists, so repeating the header here would print it twice side by
+ * side. Web keeps the label stuck to the left edge of a full-width cell, and
+ * the pinned pane IS that left edge — the band just supplies the stripe that
+ * spans the columns under it.
+ */
 function DataGroupHeader({
   group,
-  label,
   width,
   onToggle,
 }: {
   group: Extract<IssueTableDisplayRow, { kind: "group" }>;
-  label: string;
   width: number;
   onToggle: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
   return (
     <Pressable
       onPress={onToggle}
       style={{ width, height: GROUP_HEADER_HEIGHT }}
-      className="flex-row items-center gap-1.5 px-3 bg-secondary/60 active:bg-secondary"
+      className="bg-secondary/60 active:bg-secondary"
       accessibilityLabel={
         group.collapsed
           ? t("a11y.tableExpandGroup")
           : t("a11y.tableCollapseGroup")
       }
-    >
-      <Ionicons
-        name={group.collapsed ? "chevron-forward" : "chevron-down"}
-        size={12}
-        color={theme.mutedForeground}
-      />
-      <Text className="text-[11px] font-semibold text-foreground" numberOfLines={1}>
-        {label}
-      </Text>
-      <Text className="text-[11px] text-muted-foreground tabular-nums">
-        {group.count}
-      </Text>
-    </Pressable>
+    />
   );
 }
 

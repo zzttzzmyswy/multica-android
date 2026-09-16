@@ -210,9 +210,17 @@ export function SkillBatchBar({
   };
 
   const handleDelete = () => {
+    // One selected row reads as the single-skill confirmation (web's
+    // DeleteSkillsDialog branches on rows.length === 1 for exactly this
+    // reason: "Delete skill?" with the name beats "Delete 1 skills?").
+    const single = count === 1 ? selectedSkills[0] : null;
     Alert.alert(
-      t("skills.batch.deleteTitle", { count }),
-      t("skills.batch.deleteMessage", { count }),
+      single
+        ? t("skills.deleteTitle")
+        : t("skills.batch.deleteTitle", { count }),
+      single
+        ? t("skills.deleteMessage", { name: single.name })
+        : t("skills.batch.deleteMessage", { count }),
       [
         { text: t("common.cancel"), style: "cancel" },
         { text: t("batch.delete"), style: "destructive", onPress: runDelete },
