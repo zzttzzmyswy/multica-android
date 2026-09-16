@@ -452,34 +452,61 @@ export function useUpdateIssue(issueId: string) {
       // Patching that cache here is what makes the row flip on tap instead
       // of after the settle refetch.
       const childrenKey = [...issueKeys.all(wsId), "children"];
-      await qc.cancelQueries({ queryKey: childrenKey });
+      // …and as a row inside the list surfaces — the issue table's inline
+      // cell editing (iter-132) writes through this same mutation, and a
+      // cell has to flip on tap. Prefix-matched so every variant
+      // (byProject, filtered) is covered; only rows already present are
+      // touched, so no phantom rows appear.
+      const listKey = issueKeys.list(wsId);
+      const myAllKey = issueKeys.myAll(wsId);
+      await Promise.all([
+        qc.cancelQueries({ queryKey: childrenKey }),
+        qc.cancelQueries({ queryKey: listKey }),
+        qc.cancelQueries({ queryKey: myAllKey }),
+      ]);
       const childrenPrev = qc.getQueriesData<Issue[]>({
         queryKey: childrenKey,
       });
+      const listPrev = qc.getQueriesData<IssueListCache>({ queryKey: listKey });
+      const myPrev = qc.getQueriesData<IssueListCache>({ queryKey: myAllKey });
+      const {
+        description: _description,
+        description_base: _descriptionBase,
+        // attachment_ids are "register new" registrations, not a full
+        // replacement — never patch them into the optimistic Issue (web
+        // mutations.ts note). The server's response carries the final list.
+        attachment_ids: _attachmentIds,
+        ...optimisticPatch
+      } = patch;
       if (prev) {
-        const {
-          description: _description,
-          description_base: _descriptionBase,
-          // attachment_ids are "register new" registrations, not a full
-          // replacement — never patch them into the optimistic Issue (web
-          // mutations.ts note). The server's response carries the final list.
-          attachment_ids: _attachmentIds,
-          ...optimisticPatch
-        } = patch;
         qc.setQueryData<Issue>(key, { ...prev, ...optimisticPatch });
-        qc.setQueriesData<Issue[]>({ queryKey: childrenKey }, (list) =>
-          list?.map((i) =>
-            i.id === issueId ? { ...i, ...optimisticPatch } : i,
-          ),
-        );
       }
-      return { prev, key, childrenPrev };
+      // Applied even with a cold detail cache: a list surface can be on
+      // screen without the issue ever having been opened.
+      const patchRow = (issue: Issue) =>
+        issue.id === issueId ? { ...issue, ...optimisticPatch } : issue;
+      qc.setQueriesData<Issue[]>({ queryKey: childrenKey }, (list) =>
+        list?.map(patchRow),
+      );
+      qc.setQueriesData<IssueListCache>({ queryKey: listKey }, (old) =>
+        mapIssueRows(old, (rows) => rows.map(patchRow)),
+      );
+      qc.setQueriesData<IssueListCache>({ queryKey: myAllKey }, (old) =>
+        mapIssueRows(old, (rows) => rows.map(patchRow)),
+      );
+      return { prev, key, childrenPrev, listPrev, myPrev, listKey, myAllKey };
     },
     onError: (_err, _vars, ctx) => {
       if (ctx?.prev !== undefined && ctx.key) {
         qc.setQueryData(ctx.key, ctx.prev);
       }
       for (const [k, data] of ctx?.childrenPrev ?? []) {
+        qc.setQueryData(k, data);
+      }
+      for (const [k, data] of ctx?.listPrev ?? []) {
+        qc.setQueryData(k, data);
+      }
+      for (const [k, data] of ctx?.myPrev ?? []) {
         qc.setQueryData(k, data);
       }
     },

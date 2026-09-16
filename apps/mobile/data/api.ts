@@ -560,7 +560,7 @@ class ApiClient {
       "Content-Type": "application/json",
       "X-Client-Platform": "mobile",
       "X-Client-OS": "ios",
-      "X-Client-Version": "0.5.58",
+      "X-Client-Version": "0.5.59",
       "X-Request-ID": rid,
       ...((init.headers as Record<string, string>) ?? {}),
     };
@@ -4038,7 +4038,7 @@ class ApiClient {
       // No Content-Type — let fetch set the multipart boundary.
       "X-Client-Platform": "mobile",
       "X-Client-OS": "ios",
-      "X-Client-Version": "0.5.58",
+      "X-Client-Version": "0.5.59",
       "X-Request-ID": rid,
     };
     if (this.token) headers["Authorization"] = `Bearer ${this.token}`;

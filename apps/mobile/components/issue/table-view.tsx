@@ -23,6 +23,7 @@
  */
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -32,6 +33,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  TextInput,
   View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -43,6 +45,7 @@ import * as Sharing from "expo-sharing";
 import type { Issue, IssueProperty, IssueStatusEntry } from "@multica/core/types";
 import { formatDateOnly } from "@multica/core/issues/date";
 import { Text } from "@/components/ui/text";
+import { Button } from "@/components/ui/button";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { ProjectIcon } from "@/components/ui/project-icon";
 import { PriorityIcon } from "@/components/ui/priority-icon";
@@ -67,6 +70,17 @@ import { projectListOptions } from "@/data/queries/projects";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { useStatusLabel } from "@/lib/status-options";
 import { formatPropertyValue } from "@/lib/issue-properties";
+import {
+  buildIssueTableRows,
+  MAX_DEPTH,
+  type IssueTableRow,
+} from "@/lib/issue-table-hierarchy";
+import {
+  IssueCellEditor,
+  isEditableTableColumn,
+  type CellEditorTarget,
+} from "@/components/issue/table-cell-editor";
+import { useUpdateIssue } from "@/data/mutations/issues";
 import { ActionSheet } from "@/lib/action-sheet";
 import {
   buildIssuesCsv,
@@ -81,12 +95,20 @@ import { useTranslation } from "@/lib/i18n/react";
 
 /** Fixed row height — the dual-list scroll sync assumes uniform rows. */
 const ROW_HEIGHT = 48;
-/** Pinned left column width (checkbox + title). */
+/** Pinned left column width (checkbox + title) at depth 0. */
 const PINNED_WIDTH = 176;
 /** Width for property (non-system) columns. */
 const PROPERTY_COLUMN_WIDTH = 132;
 /** Header-row height (pinned cell + column headers share it). */
 const HEADER_HEIGHT = 34;
+/** Indent per parent hop in the pinned title cell. Web uses 18px on a wide
+ *  desktop table; the phone's pinned column has to keep room for the title,
+ *  so it indents less and widens itself by the same amount (see
+ *  `pinnedWidth` in the component). */
+const INDENT_PER_LEVEL = 14;
+/** Two taps closer together than this on the pinned title rename the issue
+ *  (web's double-click on InlineTitle). */
+const DOUBLE_TAP_MS = 280;
 
 /** Per-system-column widths; unknown keys fall back to the property width. */
 const COLUMN_WIDTHS: Partial<Record<TableSystemColumn, number>> = {
@@ -175,10 +197,57 @@ export function IssueTableView({
 
   const [columnMenuOpen, setColumnMenuOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  /** Collapsed parents — local to this table instance (web keeps the same
+   *  per-surface expansion state in its table store). Not persisted: a
+   *  collapsed subtree is a transient reading aid, not a saved preference. */
+  const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  /** Open inline cell editor, keyed by row + column. */
+  const [editorKey, setEditorKey] = useState<{
+    issueId: string;
+    column: TableColumnKey;
+  } | null>(null);
+  /** Row being renamed from the pinned title cell. */
+  const [renaming, setRenaming] = useState<Issue | null>(null);
+
+  const rows = useMemo(
+    () => buildIssueTableRows(issues, collapsedIds),
+    [issues, collapsedIds],
+  );
+
+  // Widen the pinned column exactly as far as the loaded tree needs to be
+  // legible — a flat list keeps the original width, so nothing regresses
+  // when there is no nesting to show.
+  const pinnedWidth =
+    PINNED_WIDTH +
+    Math.min(
+      rows.reduce((max, row) => Math.max(max, row.depth), 0),
+      MAX_DEPTH,
+    ) *
+      INDENT_PER_LEVEL;
+
+  const toggleCollapse = useCallback((issueId: string) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(issueId)) next.delete(issueId);
+      else next.add(issueId);
+      return next;
+    });
+  }, []);
+
+  // Re-derive from the live rows so the editor always shows the current
+  // value (a label toggle keeps the sheet open across writes); a row that
+  // leaves the filtered list closes the sheet.
+  const editorTarget: CellEditorTarget | null = useMemo(() => {
+    if (!editorKey) return null;
+    const issue = issues.find((i) => i.id === editorKey.issueId);
+    return issue ? { issue, column: editorKey.column } : null;
+  }, [editorKey, issues]);
 
   // --- dual-list vertical sync -------------------------------------------
-  const pinRef = useRef<FlatList<Issue>>(null);
-  const mainRef = useRef<FlatList<Issue>>(null);
+  const pinRef = useRef<FlatList<IssueTableRow>>(null);
+  const mainRef = useRef<FlatList<IssueTableRow>>(null);
   const pinOffset = useRef(0);
   const mainOffset = useRef(0);
 
@@ -203,7 +272,12 @@ export function IssueTableView({
   );
 
   // --- selection ---------------------------------------------------------
-  const visibleIds = useMemo(() => issues.map((i) => i.id), [issues]);
+  // "Visible" means what is on screen right now — a row inside a collapsed
+  // subtree is not selectable by the header checkbox.
+  const visibleIds = useMemo(
+    () => rows.map((row) => row.issue.id),
+    [rows],
+  );
   const allVisibleSelected =
     visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
   const anyVisibleSelected = visibleIds.some((id) => selectedIds.has(id));
@@ -358,7 +432,7 @@ export function IssueTableView({
         {/* Header row: pinned title header + scrollable column headers */}
         <View className="flex-row border-b border-border bg-secondary/30">
           <View
-            style={{ width: PINNED_WIDTH, height: HEADER_HEIGHT }}
+            style={{ width: pinnedWidth, height: HEADER_HEIGHT }}
             className="flex-row items-center gap-1.5 pl-3 pr-1"
           >
             <Pressable
@@ -430,11 +504,11 @@ export function IssueTableView({
         {/* Body: pinned column + scrollable columns share one vertical
             scroll (dual-list sync). */}
         <View className="flex-1 flex-row">
-          <View style={{ width: PINNED_WIDTH }}>
+          <View style={{ width: pinnedWidth }}>
             <FlatList
               ref={pinRef}
-              data={issues}
-              keyExtractor={(item) => item.id}
+              data={rows}
+              keyExtractor={(row) => row.issue.id}
               onScroll={syncMain}
               scrollEventThrottle={16}
               initialNumToRender={12}
@@ -442,19 +516,21 @@ export function IssueTableView({
               contentContainerStyle={{ paddingBottom: bottomPadding }}
               renderItem={({ item }) => (
                 <PinnedRow
-                  issue={item}
+                  row={item}
                   height={ROW_HEIGHT}
                   selectionMode={selectionMode}
-                  selected={selectedIds.has(item.id)}
+                  selected={selectedIds.has(item.issue.id)}
                   onPressCheckbox={() => {
-                    if (selectionMode) toggleSelection(item.id);
-                    else enterSelection(item.id);
+                    if (selectionMode) toggleSelection(item.issue.id);
+                    else enterSelection(item.issue.id);
                   }}
                   onPressRow={() => {
-                    if (selectionMode) toggleSelection(item.id);
-                    else onOpenIssue(item);
+                    if (selectionMode) toggleSelection(item.issue.id);
+                    else onOpenIssue(item.issue);
                   }}
-                  onLongPress={() => enterSelection(item.id)}
+                  onLongPress={() => enterSelection(item.issue.id)}
+                  onToggleCollapse={() => toggleCollapse(item.issue.id)}
+                  onRename={() => setRenaming(item.issue)}
                 />
               )}
             />
@@ -472,8 +548,8 @@ export function IssueTableView({
             >
               <FlatList
                 ref={mainRef}
-                data={issues}
-                keyExtractor={(item) => item.id}
+                data={rows}
+                keyExtractor={(row) => row.issue.id}
                 onScroll={syncPinned}
                 scrollEventThrottle={16}
                 initialNumToRender={12}
@@ -481,13 +557,20 @@ export function IssueTableView({
                 contentContainerStyle={{ paddingBottom: bottomPadding }}
                 renderItem={({ item }) => (
                   <DataRow
-                    issue={item}
+                    issue={item.issue}
                     columns={bodyColumns}
                     height={ROW_HEIGHT}
                     properties={properties}
                     projects={projects}
                     getName={getName}
-                    selected={selectedIds.has(item.id)}
+                    selected={selectedIds.has(item.issue.id)}
+                    columnLabel={columnLabel}
+                    onPressCell={(column) => {
+                      if (selectionMode) toggleSelection(item.issue.id);
+                      else if (isEditableTableColumn(column)) {
+                        setEditorKey({ issueId: item.issue.id, column });
+                      }
+                    }}
                   />
                 )}
               />
@@ -495,6 +578,17 @@ export function IssueTableView({
           </ScrollView>
         </View>
       </View>
+
+      <IssueCellEditor
+        target={editorTarget}
+        onClose={() => setEditorKey(null)}
+        title={editorTarget ? columnLabel(editorTarget.column) : ""}
+      />
+
+      <RenameIssueDialog
+        issue={renaming}
+        onClose={() => setRenaming(null)}
+      />
 
       <ColumnMenu
         visible={columnMenuOpen}
@@ -560,36 +654,78 @@ function ToolbarButton({
   );
 }
 
-/** Pinned (left) row: selection checkbox + title, fixed height for sync. */
+/** Pinned (left) row: collapse chevron + selection checkbox + title, fixed
+ *  height for sync. `depth` indents the title (web: `paddingLeft: depth*18`). */
 function PinnedRow({
-  issue,
+  row,
   height,
   selectionMode,
   selected,
   onPressCheckbox,
   onPressRow,
   onLongPress,
+  onToggleCollapse,
+  onRename,
 }: {
-  issue: Issue;
+  row: IssueTableRow;
   height: number;
   selectionMode: boolean;
   selected: boolean;
   onPressCheckbox: () => void;
   onPressRow: () => void;
   onLongPress: () => void;
+  onToggleCollapse: () => void;
+  onRename: () => void;
 }) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const checkColor = THEME[colorScheme].primary;
+  const issue = row.issue;
+  const lastTap = useRef(0);
+
+  // Single tap opens the issue (unchanged); a double tap renames it, the
+  // phone's equivalent of web's double-click on InlineTitle. Selection mode
+  // owns taps outright, so renaming is suppressed while selecting.
+  const handleTitlePress = () => {
+    if (selectionMode) {
+      onPressRow();
+      return;
+    }
+    const now = Date.now();
+    if (now - lastTap.current < DOUBLE_TAP_MS) {
+      lastTap.current = 0;
+      onRename();
+      return;
+    }
+    lastTap.current = now;
+    onPressRow();
+  };
+
   return (
-    <Pressable
-      onPress={onPressRow}
-      onLongPress={onLongPress}
-      style={{ height }}
-      className={`flex-row items-center gap-1.5 pl-3 pr-2 border-b border-border/60 ${
+    <View
+      style={{ height, paddingLeft: 12 + row.depth * INDENT_PER_LEVEL }}
+      className={`flex-row items-center gap-1.5 pr-2 border-b border-border/60 ${
         selected && selectionMode ? "bg-primary/5" : ""
       }`}
     >
+      {row.hasChildren ? (
+        <Pressable
+          onPress={onToggleCollapse}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel={
+            row.collapsed ? t("a11y.tableExpandRow") : t("a11y.tableCollapseRow")
+          }
+        >
+          <Ionicons
+            name={row.collapsed ? "chevron-forward" : "chevron-down"}
+            size={13}
+            color={THEME[colorScheme].mutedForeground}
+          />
+        </Pressable>
+      ) : (
+        <View style={{ width: 13 }} />
+      )}
       <Pressable
         onPress={onPressCheckbox}
         hitSlop={6}
@@ -606,14 +742,26 @@ function PinnedRow({
           color={selected ? checkColor : THEME[colorScheme].mutedForeground}
         />
       </Pressable>
-      <Text className="flex-1 text-[13px] text-foreground" numberOfLines={1}>
-        {issue.title}
-      </Text>
-    </Pressable>
+      <Pressable
+        onPress={handleTitlePress}
+        onLongPress={onLongPress}
+        className="flex-1"
+        accessibilityRole="button"
+        accessibilityLabel={t("a11y.tableOpenRow")}
+        accessibilityHint={t("a11y.tableRenameHint")}
+      >
+        <Text className="text-[13px] text-foreground" numberOfLines={1}>
+          {issue.title}
+        </Text>
+      </Pressable>
+    </View>
   );
 }
 
-/** One scrollable data row: fixed-width cells aligned with the header. */
+/** One scrollable data row: fixed-width cells aligned with the header.
+ *  Editable cells are pressable (web mounts an editor on the same cells);
+ *  the rest stay inert so a tap on them does nothing rather than opening an
+ *  editor that cannot write. */
 function DataRow({
   issue,
   columns,
@@ -622,6 +770,8 @@ function DataRow({
   projects,
   getName,
   selected,
+  columnLabel,
+  onPressCell,
 }: {
   issue: Issue;
   columns: TableColumnKey[];
@@ -633,6 +783,8 @@ function DataRow({
     id: string | null | undefined,
   ) => string;
   selected: boolean;
+  columnLabel: (column: TableColumnKey) => string;
+  onPressCell: (column: TableColumnKey) => void;
 }) {
   const { t } = useTranslation();
   const statusLabel = useStatusLabel();
@@ -642,24 +794,37 @@ function DataRow({
       style={{ height }}
       className={`flex-row border-b border-border/60 ${selected ? "bg-primary/5" : ""}`}
     >
-      {columns.map((column) => (
-        <View
-          key={column}
-          style={{ width: columnWidth(column) }}
-          className="justify-center px-2"
-        >
-          <DataCell
-            issue={issue}
-            column={column}
-            properties={properties}
-            projects={projects}
-            getName={getName}
-            t={t}
-            statusLabel={statusLabel}
-            statusEntry={statusEntry}
-          />
-        </View>
-      ))}
+      {columns.map((column) => {
+        const editable = isEditableTableColumn(column);
+        return (
+          <Pressable
+            key={column}
+            onPress={editable ? () => onPressCell(column) : undefined}
+            disabled={!editable}
+            style={{ width: columnWidth(column), height }}
+            className={`justify-center px-2 ${
+              editable ? "active:bg-secondary/60" : ""
+            }`}
+            accessibilityRole={editable ? "button" : undefined}
+            accessibilityLabel={
+              editable
+                ? t("a11y.tableEditCell", { column: columnLabel(column) })
+                : undefined
+            }
+          >
+            <DataCell
+              issue={issue}
+              column={column}
+              properties={properties}
+              projects={projects}
+              getName={getName}
+              t={t}
+              statusLabel={statusLabel}
+              statusEntry={statusEntry}
+            />
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -911,6 +1076,82 @@ function PropertyCell({
         </Text>
       );
   }
+}
+
+/**
+ * Title rename dialog for the pinned cell (MYS-1149, web InlineTitle's
+ * double-click editor). The draft lives here rather than in the row so a
+ * re-render caused by an unrelated cache patch cannot reset what the user is
+ * typing; commit only fires when the text actually changed, mirroring web's
+ * `commit()`.
+ */
+function RenameIssueDialog({
+  issue,
+  onClose,
+}: {
+  issue: Issue | null;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const { colorScheme } = useColorScheme();
+  const updateIssue = useUpdateIssue(issue?.id ?? "");
+  const [draft, setDraft] = useState("");
+
+  // Seed the field once per open. `issue` is the snapshot captured on the
+  // tap that opened the dialog, so this cannot fire mid-typing — the row it
+  // came from re-rendering does not change this object's identity.
+  useEffect(() => {
+    if (issue) setDraft(issue.title);
+  }, [issue]);
+
+  const commit = () => {
+    const title = draft.trim();
+    const target = issue;
+    onClose();
+    if (!target || !title || title === target.title) return;
+    updateIssue.mutate({ title });
+  };
+
+  if (!issue) return null;
+
+  return (
+    <Modal
+      visible
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <Pressable className="flex-1 bg-black/40" onPress={commit}>
+        <View className="flex-1 justify-center px-6">
+          <Pressable onPress={() => {}} className="bg-popover rounded-2xl p-4 gap-3">
+            <Text className="text-base font-semibold text-foreground">
+              {t("table.renameTitle")}
+            </Text>
+            <TextInput
+              value={draft}
+              onChangeText={setDraft}
+              autoFocus
+              selectTextOnFocus
+              returnKeyType="done"
+              onSubmitEditing={commit}
+              placeholder={t("table.renamePlaceholder")}
+              placeholderTextColor={THEME[colorScheme].mutedForeground}
+              className="border border-border rounded-lg px-3 py-2.5 text-sm text-foreground"
+              style={{ includeFontPadding: false }}
+            />
+            <View className="flex-row justify-end gap-2">
+              <Button variant="outline" size="sm" onPress={onClose}>
+                <Text>{t("common.cancel")}</Text>
+              </Button>
+              <Button size="sm" onPress={commit} disabled={!draft.trim()}>
+                <Text>{t("common.save")}</Text>
+              </Button>
+            </View>
+          </Pressable>
+        </View>
+      </Pressable>
+    </Modal>
+  );
 }
 
 /** Column-visibility menu — checkbox list of system + property columns. */
