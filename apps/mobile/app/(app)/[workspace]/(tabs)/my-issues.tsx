@@ -138,6 +138,7 @@ export default function MyIssues() {
   const propertyFilters = useMyIssuesViewStore((s) => s.propertyFilters);
   const dateFilter = useMyIssuesViewStore((s) => s.dateFilter);
   const workingOnly = useMyIssuesViewStore((s) => s.workingOnly);
+  const showSubIssues = useMyIssuesViewStore((s) => s.showSubIssues);
   // Running-agent projection for the working-only filter. `undefined` while
   // the snapshot loads — the predicate fails closed on it, which is the
   // intended "only what is provably working" read.
@@ -157,6 +158,7 @@ export default function MyIssues() {
       propertyFilters,
       dateFilter,
       workingOnly,
+      showSubIssues,
     }),
     [
       statusFilters,
@@ -170,6 +172,7 @@ export default function MyIssues() {
       propertyFilters,
       dateFilter,
       workingOnly,
+      showSubIssues,
     ],
   );
 
@@ -234,8 +237,8 @@ export default function MyIssues() {
   const { baseline: chipBaseline, resetDimension: resetChipDimension } =
     useFilterChipBaseline(activeView?.query ?? null, useMyIssuesViewStore);
   const snapshotSource = useMemo(
-    () => ({ ...filterState, sortBy, sortDirection, grouping }),
-    [filterState, sortBy, sortDirection, grouping],
+    () => ({ ...filterState, sortBy, sortDirection, grouping, showSubIssues }),
+    [filterState, sortBy, sortDirection, grouping, showSubIssues],
   );
   const modifiedActive = useMemo(
     () => (activeView ? !viewMatchesSlice(activeView, snapshotSource, view) : false),
@@ -251,6 +254,7 @@ export default function MyIssues() {
         sortBy: display.sortBy,
         sortDirection: display.sortDirection,
         grouping: display.grouping,
+        showSubIssues: display.showSubIssues,
         view: display.viewMode,
       });
       // The scope axis a my-view captured is part of the VIEW — landing on

@@ -129,6 +129,7 @@ export default function IssuesPage() {
   const propertyFilters = useIssuesViewStore((s) => s.propertyFilters);
   const dateFilter = useIssuesViewStore((s) => s.dateFilter);
   const workingOnly = useIssuesViewStore((s) => s.workingOnly);
+  const showSubIssues = useIssuesViewStore((s) => s.showSubIssues);
   // Running-agent projection for the working-only filter. `undefined` while
   // the snapshot loads — the predicate fails closed on it, which is the
   // intended "only what is provably working" read.
@@ -149,6 +150,7 @@ export default function IssuesPage() {
       propertyFilters,
       dateFilter,
       workingOnly,
+      showSubIssues,
     }),
     [
       statusFilters,
@@ -162,6 +164,7 @@ export default function IssuesPage() {
       propertyFilters,
       dateFilter,
       workingOnly,
+      showSubIssues,
     ],
   );
 
@@ -220,8 +223,8 @@ export default function IssuesPage() {
     useFilterChipBaseline(activeView?.query ?? null, useIssuesViewStore);
   // Union of the filter dims + display defaults the views save/compare.
   const snapshotSource = useMemo(
-    () => ({ ...filterState, sortBy, sortDirection, grouping }),
-    [filterState, sortBy, sortDirection, grouping],
+    () => ({ ...filterState, sortBy, sortDirection, grouping, showSubIssues }),
+    [filterState, sortBy, sortDirection, grouping, showSubIssues],
   );
   const modifiedActive = useMemo(
     () => (activeView ? !viewMatchesSlice(activeView, snapshotSource, view) : false),
@@ -237,6 +240,7 @@ export default function IssuesPage() {
         sortBy: display.sortBy,
         sortDirection: display.sortDirection,
         grouping: display.grouping,
+        showSubIssues: display.showSubIssues,
         view: display.viewMode,
       });
       // The scope axis a workspace view captured is part of the VIEW (web

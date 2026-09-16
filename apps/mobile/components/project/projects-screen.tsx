@@ -7,12 +7,18 @@
  * never double-draw a title bar.
  *
  * Search / filter / sort / multi-select (web projects-page parity,
- * MYS-1020): a search field, status + priority filter chips, a sort picker
- * (5 fields × direction), and a batch toolbar (pin/unpin any member, delete
- * workspace admin) that appears in long-press selection mode. Sort + filter
- * state lives in a session store; search and selection stay session-local
- * like web. Leads filtering stays web-only — the phone width has no room
- * for a lead picker and the lead column isn't rendered here.
+ * MYS-1020): a search field, status + priority + lead filter chips, a sort
+ * picker (5 fields × direction), and a batch toolbar (pin/unpin any member,
+ * delete workspace admin) that appears in long-press selection mode. Sort +
+ * filter state lives in a session store; search and selection stay
+ * session-local like web.
+ *
+ * Lead chips (iter-130) mirror web's `leads` dimension
+ * (projects-page.tsx:855-865,1076-1098): the option set is derived from the
+ * loaded projects themselves — composite `type:id` refs with an occurrence
+ * count — so a project with no lead contributes no option (web has no
+ * "unassigned" row either), and the chips stay empty until a project
+ * actually carries a lead.
  *
  * WS `project:*` events keep the cache fresh via the listing-level
  * realtime hook (`useProjectsRealtime` in `_layout.tsx`), so
@@ -46,6 +52,7 @@ import { pinListOptions } from "@/data/queries/pins";
 import { memberListOptions } from "@/data/queries/members";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
+import { useActorLookup } from "@/data/use-actor-name";
 import {
   useBatchDeleteProjects,
   useBatchPinToggle,
@@ -67,6 +74,7 @@ import {
   PROJECT_SORT_DEFAULT_DIRECTION,
   PROJECT_SORT_FIELDS,
   PROJECT_STATUSES,
+  leadFilterValue,
   sortProjects,
   toggleInList,
   type ProjectListFilters,
@@ -82,7 +90,7 @@ interface ProjectMobileViewState {
   sortDirection: "asc" | "desc";
   filters: ProjectListFilters;
   setSort: (field: ProjectSortField, direction: "asc" | "desc") => void;
-  toggleFilter: (key: "statuses" | "priorities", value: string) => void;
+  toggleFilter: (key: "statuses" | "priorities" | "leads", value: string) => void;
   clearFilters: () => void;
 }
 
@@ -124,6 +132,7 @@ export function ProjectsScreen({
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
+  const { getName } = useActorLookup();
 
   const { data = [], isLoading, error, refetch, isRefetching } = useQuery(
     projectListOptions(wsId),
@@ -170,6 +179,40 @@ export function ProjectsScreen({
       ),
     [data, search, filters, sortField, sortDirection],
   );
+
+  // Lead filter options derive from the FULL project set (not `visible`) so
+  // toggling another dimension never makes a lead chip disappear — same rule
+  // as web's `leadOptions` useMemo. A project without a lead contributes
+  // nothing, which is why there is no "unassigned" chip: web's loop
+  // `continue`s on the same condition.
+  //
+  // `getName` is a per-render closure from `useActorLookup`, so this memo
+  // recomputes on every render of the list — cheap at project-list scale
+  // (one pass over `data`) and the alternative is an unstable-dependency
+  // lint escape hatch.
+  const leadOptions = useMemo(() => {
+    const byValue = new Map<
+      string,
+      { type: "member" | "agent"; id: string; count: number }
+    >();
+    for (const p of data) {
+      const v = leadFilterValue(p);
+      if (!v || !p.lead_type || !p.lead_id) continue;
+      const entry = byValue.get(v);
+      if (entry) entry.count += 1;
+      else byValue.set(v, { type: p.lead_type, id: p.lead_id, count: 1 });
+    }
+    return [...byValue.entries()]
+      .map(([value, { type, id, count }]) => ({
+        value,
+        // Named through the shared resolver, which falls back to the same
+        // "Unknown Agent" / "Unknown" copy web's useActorName uses — a lead
+        // held by an archived agent must not render as a raw UUID.
+        label: getName(type, id),
+        count,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [data, getName]);
 
   const activeFilterCount = countActiveProjectFilters(filters);
 
@@ -316,6 +359,18 @@ export function ProjectsScreen({
               onToggle={(v) => toggleFilter("priorities", v)}
               labelFor={(v) => projectPriorityLabel(v as ProjectPriority)}
             />
+            {leadOptions.length > 0 ? (
+              <FilterRow
+                label={t("projects.filterLead")}
+                options={leadOptions.map((o) => o.value)}
+                selected={filters.leads}
+                onToggle={(v) => toggleFilter("leads", v)}
+                labelFor={(v) => {
+                  const opt = leadOptions.find((o) => o.value === v);
+                  return opt ? `${opt.label} (${opt.count})` : v;
+                }}
+              />
+            ) : null}
             {activeFilterCount > 0 ? (
               <Pressable
                 onPress={clearFilters}
