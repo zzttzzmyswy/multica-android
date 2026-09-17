@@ -7,8 +7,13 @@ import { Text } from "@/components/ui/text";
 import { OtpInput, type OtpInputRef } from "@/components/ui/otp-input";
 import { Button } from "@/components/ui/button";
 import { MulticaLogo } from "@/components/brand/multica-logo";
+import { ServerUnreachableNotice } from "@/components/ui/server-unreachable-notice";
 import { useAuthStore } from "@/data/auth-store";
-import { mapAuthError } from "@/lib/auth-error";
+import {
+  getDisplayBaseUrl,
+  hasCustomApiBaseUrl,
+} from "@/data/server-config";
+import { isConnectionError, mapAuthError } from "@/lib/auth-error";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
 
@@ -26,6 +31,17 @@ export default function Verify() {
   const [cooldown, setCooldown] = useState(RESEND_COOLDOWN_SECONDS);
   const [resending, setResending] = useState(false);
   const otpRef = useRef<OtpInputRef>(null);
+  // Set when a request failed on an unreachable custom server — see the
+  // login screen, which carries the same recovery affordance.
+  const [failedServer, setFailedServer] = useState<string | null>(null);
+
+  /** Record the unreachable-override case so the recovery notice can render
+   *  next to whatever error the caller just set. */
+  const noteConnectionFailure = (err: unknown) => {
+    if (isConnectionError(err) && hasCustomApiBaseUrl()) {
+      setFailedServer(getDisplayBaseUrl());
+    }
+  };
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -40,6 +56,7 @@ export default function Verify() {
     void Haptics.selectionAsync();
     setSubmitting(true);
     setError(null);
+    setFailedServer(null);
     try {
       await verifyCode(email, value);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -47,6 +64,7 @@ export default function Verify() {
     } catch (err) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setError(mapAuthError(err, t("verify.codeError"), t));
+      noteConnectionFailure(err);
       setSubmitting(false);
       otpRef.current?.clear();
       setCode("");
@@ -58,6 +76,7 @@ export default function Verify() {
     void Haptics.selectionAsync();
     setResending(true);
     setError(null);
+    setFailedServer(null);
     try {
       await sendCode(email);
       setCooldown(RESEND_COOLDOWN_SECONDS);
@@ -66,6 +85,7 @@ export default function Verify() {
     } catch (err) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setError(mapAuthError(err, t("verify.resendError"), t));
+      noteConnectionFailure(err);
     } finally {
       setResending(false);
     }
@@ -102,6 +122,15 @@ export default function Verify() {
             />
             {error ? (
               <Text className="text-sm text-destructive">{error}</Text>
+            ) : null}
+            {error && failedServer && hasCustomApiBaseUrl() ? (
+              <ServerUnreachableNotice
+                failedBaseUrl={failedServer}
+                onSwitched={() => {
+                  setError(null);
+                  setFailedServer(null);
+                }}
+              />
             ) : null}
           </View>
 
