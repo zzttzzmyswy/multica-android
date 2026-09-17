@@ -415,3 +415,104 @@ describe("zh glossary: punctuation follows the Chinese voice guide", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/**
+ * Guard for the three leftover Latin families the 140 round's full-bundle scan
+ * turned up (131 unclassified tokens), minus the `billing.*` pocket above.
+ *
+ * All three are ordinary English common nouns sitting in the middle of Chinese
+ * sentences — not product names and not standard notation — and all three have
+ * a settled Chinese word:
+ *
+ *   `Body`  → 请求体 / 响应体   (the delivery record's HTTP payloads; the
+ *                                sibling `headers` already reads 请求头, which
+ *                                is what fixes the register)
+ *   `clone` → 克隆              (what the GitHub Chinese docs use)
+ *   `review`→ 审查              (the bundle's own word: `enum.status.in_review`
+ *                                is 审查中 and the quick-action placeholders
+ *                                say 代码审查 — 评审 appears once, as an
+ *                                example, and would have split the vocabulary)
+ *
+ * `Key` rode along in `dedupeKey`: 去重 Key sat next to 去重来源, so the pair
+ * disagreed about whether the noun was translated. It is 去重键 now.
+ *
+ * Two families below get a closed allow-list that is *pinned as an equality*,
+ * not a subset: a new English token fails the suite, and so does an allow-list
+ * entry that no longer occurs. That is the property the 140 round's scan
+ * lacked — it produced a list, and nothing made anyone re-derive it.
+ *
+ * `demo.*` is deliberately not covered this way. It is fixture prose — names,
+ * brands, module names and a raw status enum (`demo.inbox.row1.detail` renders
+ * `in_review` as "In Review", which is the status-enum contract's business,
+ * not this one) — so a token list there would be noise, not a decision. The
+ * keys this round actually changed are pinned individually instead.
+ */
+const REPOSITORIES_ALLOWED_LATIN = [
+  "Git", // the VCS, and its CLI
+  "git",
+  "GitHub", // brand
+  "Go", // language name, in an example description
+  "Next.js", // framework name, same example
+  "URL", // abbreviation
+  "https", // example URL scheme
+  "git.example.com",
+  "git.example.com/org/repo.git",
+  "org/repo.git",
+  "GITHUB_APP_ID", // env var names
+  "GITHUB_APP_PRIVATE_KEY",
+];
+
+const DELIVERIES_ALLOWED_LATIN = [
+  "Content-Type", // HTTP header name
+  "POST", // HTTP method
+  "URL", // abbreviation
+  "Webhook", // loanword the whole family already uses
+];
+
+describe("zh glossary: the leftover Latin families are closed", () => {
+  const tokensIn = (predicate: (key: string) => boolean) => {
+    const found = new Set<string>();
+    for (const key of keys) {
+      if (!predicate(key)) continue;
+      for (const token of latinTokens(prose(zh[key]))) found.add(token);
+    }
+    return [...found].sort();
+  };
+
+  it("classifies every Latin token in the repositories family", () => {
+    expect(tokensIn((key) => key.startsWith("repositories."))).toEqual(
+      [...REPOSITORIES_ALLOWED_LATIN].sort(),
+    );
+  });
+
+  it("classifies every Latin token in the autopilot deliveries family", () => {
+    expect(tokensIn((key) => key.startsWith("autopilots.deliveries."))).toEqual(
+      [...DELIVERIES_ALLOWED_LATIN].sort(),
+    );
+  });
+
+  it("never restores the four words this round translated", () => {
+    const translated: Record<string, RegExp> = {
+      "autopilots.deliveries.rawBody": /请求体/,
+      "autopilots.deliveries.responseBody": /响应体/,
+      "autopilots.deliveries.dedupeKey": /键/,
+      "repositories.description": /克隆/,
+      "repositories.deleteDescription": /克隆/,
+      "repositories.empty": /克隆/,
+      "demo.issue.comment": /审查/,
+      "demo.section.agents.lede": /审查/,
+      "resource.modeWorktreeDescription": /审查/,
+    };
+    const offenders = Object.entries(translated)
+      .filter(([key, pattern]) => !pattern.test(zh[key]))
+      .map(([key]) => mismatch(key, "the Chinese word this round settled on"));
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps the worktree branch prefix literal while translating around it", () => {
+    // `agent/…` is a git branch prefix and must survive verbatim — the same
+    // string is the one place a translated `review` and an untranslated branch
+    // prefix sit side by side, so it is the one most likely to be "tidied".
+    expect(zh["resource.modeWorktreeDescription"]).toContain("agent/…");
+  });
+});

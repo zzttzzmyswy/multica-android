@@ -60,7 +60,7 @@ describe("autopilot create/trigger i18n", () => {
     "autopilots.deliveries.row.replayBadge": "重放",
     "autopilots.deliveries.row.attempts": "{{count}} 次尝试",
     "autopilots.deliveries.availableAt": "下次分发时间",
-    "autopilots.deliveries.dedupeKey": "去重 Key",
+    "autopilots.deliveries.dedupeKey": "去重键",
     "autopilots.deliveries.dedupeSource": "去重来源",
     "autopilots.deliveries.contentType": "Content-Type",
     "autopilots.deliveries.replayedFrom": "重放自",

@@ -56,7 +56,7 @@ describe("iteration 135 i18n", () => {
     "resource.modeInPlaceTitle": "直接修改这个文件夹",
     "resource.modeInPlaceDescription": "一次只跑一条 task。智能体的改动会直接出现在你的工作区里，你可以接着改。",
     "resource.modeWorktreeTitle": "并行隔离运行",
-    "resource.modeWorktreeDescription": "task 可以同时跑，互不干扰，也不碰你的工作区。每条 task 的结果是这个仓库里的一个 agent/… 分支，由你 review 后合并。",
+    "resource.modeWorktreeDescription": "task 可以同时跑，互不干扰，也不碰你的工作区。每条 task 的结果是这个仓库里的一个 agent/… 分支，由你审查后合并。",
     "resource.modeBadgeWorktree": "并行",
     "resource.modeBadgeInPlace": "原地",
     "resource.modeEdit": "修改执行方式",
