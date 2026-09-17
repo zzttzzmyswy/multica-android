@@ -51,7 +51,7 @@
     "no_response": "에이전트가 텍스트 답변 없이 이 턴을 마쳤습니다.",
     "failure": {
       "agent_error": "에이전트에 오류가 발생하여 답변을 완료하지 못했습니다. 다시 시도해 주세요.",
-      "timeout": "시간이 너무 오래 걸려 완료 전에 중단되었습니다. 다시 시도하거나 요청을 더 작게 나눠 보세요.",
+      "timeout": "에이전트가 시간이 너무 오래 걸려 완료 전에 중단되었습니다. 다시 시도하거나 요청을 더 작게 나눠 보세요.",
       "codex_semantic_inactivity": "에이전트가 응답하지 않아 완료 전에 중단되었습니다. 다시 시도해 주세요.",
       "runtime_offline": "에이전트가 현재 오프라인 상태여서 답변할 수 없습니다. 다시 온라인이 되면 시도해 주세요.",
       "runtime_recovery": "완료 전에 에이전트가 다시 시작되었습니다. 다시 시도해 주세요.",
@@ -172,7 +172,7 @@
   "archived_agent_banner": "{{name}}은(는) 보관되었습니다. 이 대화는 읽기 전용입니다.",
   "runtime_required_banner": {
     "fallback_name": "이 에이전트",
-    "message": "{{name}} 에이전트가 응답하려면 런타임을 연결해야 합니다.",
+    "message": "{{name}} 에이전트가 답변하려면 런타임을 연결해야 합니다.",
     "action": "런타임 연결"
   },
   "offline_banner": {
@@ -206,11 +206,11 @@
     "you_prefix": "나: ",
     "no_messages": "아직 메시지가 없습니다",
     "no_response_preview": "텍스트 답변 없음",
-    "quick_agents": "자주 쓰는 Agent",
+    "quick_agents": "자주 쓰는 에이전트",
     "add": "추가",
-    "add_agent": "자주 쓰는 Agent 추가",
+    "add_agent": "자주 쓰는 에이전트 추가",
     "unpin_agent": "자주 쓰기에서 제거",
-    "waiting": "답장 대기 중",
+    "waiting": "답변 대기 중",
     "pin": "고정",
     "unpin": "고정 해제",
     "pinned": "고정됨",
@@ -220,7 +220,7 @@
     "row_actions_aria": "채팅 작업"
   },
   "header": {
-    "view_profile": "Agent 프로필 보기",
+    "view_profile": "에이전트 프로필 보기",
     "rename": "이름 변경",
     "delete": "채팅 삭제",
     "archive": "채팅 보관",
