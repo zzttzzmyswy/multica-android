@@ -17,7 +17,7 @@ import type {
   IssuePriority,
   IssueStatus,
 } from "@multica/core/types";
-import { formatDateOnly } from "@multica/core/issues/date";
+import { ISSUE_DATE_SHORT, formatIssueDate } from "@/lib/format-date";
 import { Text } from "@/components/ui/text";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { PriorityIcon } from "@/components/ui/priority-icon";
@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 import { issuePriorityLabel } from "@/lib/issue-status";
 import { useStatusLabel } from "@/lib/status-options";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
-import { useTranslation } from "@/lib/i18n/react";
+import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 
 export function typeLabel(
   t: (id: string) => string,
@@ -35,9 +35,10 @@ export function typeLabel(
   return t(`inbox.type.${type}`);
 }
 
-// due_date is a calendar day — format timezone-safely (no offset day shift).
-function shortDate(dateStr: string): string {
-  return formatDateOnly(dateStr, { month: "short", day: "numeric" }, "en-US");
+// due_date is a calendar day — format timezone-safely (no offset day shift)
+// and in the active app locale.
+function shortDate(dateStr: string, locale: string): string {
+  return formatIssueDate(dateStr, ISSUE_DATE_SHORT, locale);
 }
 
 function singleLine(value: string | null | undefined): string {
@@ -53,6 +54,7 @@ export function InboxDetailLabel({
 }) {
   const { getName } = useActorLookup();
   const { t } = useTranslation();
+  const intlLocale = useIntlLocale();
   const statusLabel = useStatusLabel();
   const statusCatalog = useIssueStatuses();
   const details = item.details ?? {};
@@ -107,7 +109,7 @@ export function InboxDetailLabel({
         return t("inbox.removedAssignee");
       case "due_date_changed":
         return details.to
-          ? t("inbox.setDueDate", { date: shortDate(details.to) })
+          ? t("inbox.setDueDate", { date: shortDate(details.to, intlLocale) })
           : t("inbox.removedDueDate");
       case "new_comment":
         return singleLine(item.body) || typeLabel(t, item.type);
