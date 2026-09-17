@@ -32,7 +32,7 @@ describe("about i18n", () => {
     "about.subtitle": "安卓客户端",
     "about.versionLabel": "版本",
     "about.buildLabel": "构建号",
-    "about.intro": "随时随地查看你的工作区、issue 与 agents。",
+    "about.intro": "随时随地查看你的工作区、任务与智能体。",
     "about.sourceCode": "源代码",
     "about.checkForUpdates": "检查更新",
     "about.checking": "正在检查…",

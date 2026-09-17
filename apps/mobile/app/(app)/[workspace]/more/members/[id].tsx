@@ -7,9 +7,9 @@
  *
  * Management guards mirror web's members-tab (packages/views/settings/
  * components/members-tab.tsx:100-103):
- *   - canEditRole / canRemove = canManage && !isSelf && role !== "owner"
- *     (mobile deliberately only supports admin ↔ member changes — owner
- *     promotion/demotion stays a web/web-console action)
+ *   - canEditRole / canRemove = canManage && !isSelf && (role !== "owner"
+ *     || the actor is an owner)
+ *   - the workspace's last owner cannot be demoted
  *   - the server remains the authoritative permission gate: PATCH/DELETE
  *     reject unauthorized calls regardless of what the UI shows.
  *
@@ -44,7 +44,7 @@ import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { formatDateTime } from "@/lib/autopilot-format";
 import { ActionSheet } from "@/lib/action-sheet";
-import { memberManageGuards } from "@/lib/member-guards";
+import { memberManageGuards, roleChangeOptions } from "@/lib/member-guards";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
@@ -79,27 +79,40 @@ export default function MemberDetailPage() {
   // === Management guards (web members-tab parity) ===
   // Extracted pure function (lib/member-guards.ts) so the self-protection
   // / owner-protection rules are unit-tested — see member-guards.test.ts.
-  const { canEditRole, canRemove } = memberManageGuards({
-    currentRole: currentMember?.role,
-    currentUserId: user?.id,
-    target: member,
-  });
+  // ownerCount feeds the last-owner demotion guard, exactly as web counts
+  // `members.filter((m) => m.role === "owner")` (members-tab.tsx:255).
+  const ownerCount = members?.filter((m) => m.role === "owner").length ?? 0;
+  const { canEditRole, canRemove, canManageOwners, wouldDemoteLastOwner } =
+    memberManageGuards({
+      currentRole: currentMember?.role,
+      currentUserId: user?.id,
+      target: member,
+      ownerCount,
+    });
 
   const onChangeRolePress = useCallback(() => {
     if (!member) return;
+    const roles = roleChangeOptions({ canManageOwners });
     ActionSheet.showActionSheetWithOptions(
       {
         title: t("members.detail.changeRole"),
-        options: [
-          t("members.role.admin"),
-          t("members.role.member"),
-          t("common.cancel"),
-        ],
-        cancelButtonIndex: 2,
+        options: [...roles.map((r) => t(`members.role.${r}`)), t("common.cancel")],
+        cancelButtonIndex: roles.length,
       },
       (index) => {
-        const nextRole = index === 0 ? "admin" : index === 1 ? "member" : null;
+        const nextRole = roles[index] ?? null;
         if (nextRole == null || nextRole === member.role || !wsId) return;
+        // Web disables the demote entry for the last owner with an
+        // explanatory hint (members-tab.tsx:133-155). The action sheet has no
+        // per-option disabled state, so the tap is intercepted instead —
+        // same outcome, and the server would reject the write anyway.
+        if (nextRole !== "owner" && wouldDemoteLastOwner) {
+          Alert.alert(
+            t("members.detail.changeRole"),
+            t("members.detail.cannotDemoteLastOwner"),
+          );
+          return;
+        }
         updateRole.mutate(
           { memberId: member.id, role: nextRole },
           {
@@ -113,7 +126,7 @@ export default function MemberDetailPage() {
         );
       },
     );
-  }, [member, updateRole, wsId, t]);
+  }, [member, updateRole, wsId, t, canManageOwners, wouldDemoteLastOwner]);
 
   const onRemovePress = useCallback(() => {
     if (!member || !wsSlug || !workspace) return;

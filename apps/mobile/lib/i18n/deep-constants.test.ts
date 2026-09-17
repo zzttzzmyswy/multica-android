@@ -126,7 +126,7 @@ describe("deep-constant i18n", () => {
     expect(mod.translate("a11y.send")).toBe("发送");
     expect(mod.translate("a11y.attachFile")).toBe("附加文件");
     expect(mod.translate("a11y.codeBlock")).toBe("代码块");
-    expect(mod.translate("a11y.mentionSomeone")).toBe("提及某个人或某个问题");
+    expect(mod.translate("a11y.mentionSomeone")).toBe("提及某个人或某个任务");
   });
 
   it("en/zh dictionaries are mirror images for the deep-constant keys", () => {

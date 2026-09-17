@@ -30,7 +30,7 @@
  */
 import { useCallback, useMemo } from "react";
 import { ScrollView, SectionList, View } from "react-native";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import type { CreateIssueViewRequest, IssueView } from "@multica/core/api/schemas";
 import { Text } from "@/components/ui/text";
@@ -38,11 +38,14 @@ import { Button } from "@/components/ui/button";
 import { BatchActionBar } from "@/components/issue/batch-action-bar";
 import { BoardView } from "@/components/issue/board-view";
 import { GanttView } from "@/components/issue/gantt-view";
+import { SwimlaneView } from "@/components/issue/swimlane-view";
 import { IssueViewBar } from "@/components/issue/issue-view-bar";
 import { IssueTableView } from "@/components/issue/table-view";
 import { IssuesLoading } from "@/components/issue/issues-loading";
+import { IssueListFooter } from "@/components/issue/issue-list-footer";
 import {
   ActiveFilterChips,
+  useFilterChipBaseline,
   IssueSection,
   IssueSectionHeader,
   IssueSelectionRow,
@@ -50,9 +53,13 @@ import {
   SurfaceEmptyState,
 } from "@/components/issue/issue-surface-chrome";
 import { projectIssuesOptions } from "@/data/queries/projects";
+import { readIssueRows } from "@/data/queries/issue-list-cache";
+import { hasMoreIssues, issueListTotal } from "@/lib/issue-pagination";
+import { useDrainIssuePages } from "@/lib/use-drain-issue-pages";
 import { issueViewListOptions } from "@/data/queries/issue-views";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useProjectIssuesViewStore } from "@/data/stores/project-issues-view-store";
+import { useCreateSubIssue } from "@/lib/use-create-sub-issue";
 import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection-store";
 import {
   issueViewContainerKey,
@@ -63,8 +70,13 @@ import {
   sanitizeViewQuery,
   viewMatchesSlice,
 } from "@/data/stores/issue-view-codec";
-import { defaultIssueFilterSlice } from "@/data/stores/issue-filter-slice";
+import {
+  buildIssueWindow,
+  defaultIssueFilterSlice,
+} from "@/data/stores/issue-filter-slice";
+import { assigneeTypesForScopeTab } from "@/lib/issue-table-group-counts";
 import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-workspace-change";
+import { useGroupingProperty } from "@/lib/use-grouping-property";
 import { BOARD_STATUSES } from "@/lib/issue-status";
 import {
   applyIssueFilters,
@@ -110,9 +122,19 @@ export function ProjectIssueSurface({
   const setScope = useProjectIssuesViewStore((s) => s.setScope);
   const view = useProjectIssuesViewStore((s) => s.view);
   const setView = useProjectIssuesViewStore((s) => s.setView);
+  const swimlaneGrouping = useProjectIssuesViewStore((s) => s.swimlaneGrouping);
   const tableColumns = useProjectIssuesViewStore((s) => s.tableColumns);
   const toggleTableColumn = useProjectIssuesViewStore((s) => s.toggleTableColumn);
+  const tableColumnWidths = useProjectIssuesViewStore((s) => s.tableColumnWidths);
+  const setTableColumnWidth = useProjectIssuesViewStore((s) => s.setTableColumnWidth);
+  const reorderTableColumn = useProjectIssuesViewStore((s) => s.reorderTableColumn);
+  const resetTableColumns = useProjectIssuesViewStore((s) => s.resetTableColumns);
+  const createSubIssue = useCreateSubIssue();
+  const tableGrouping = useProjectIssuesViewStore((s) => s.tableGrouping);
+  const setTableGrouping = useProjectIssuesViewStore((s) => s.setTableGrouping);
   const grouping = useProjectIssuesViewStore((s) => s.grouping);
+  const showSubIssues = useProjectIssuesViewStore((s) => s.showSubIssues);
+  const groupingProperty = useGroupingProperty(grouping);
   const sortBy = useProjectIssuesViewStore((s) => s.sortBy);
   const sortDirection = useProjectIssuesViewStore((s) => s.sortDirection);
   const statusFilters = useProjectIssuesViewStore((s) => s.statusFilters);
@@ -139,6 +161,14 @@ export function ProjectIssueSurface({
       labelFilters,
       propertyFilters,
       dateFilter,
+      // `workingOnly` is wired on the two workspace-wide surfaces only. Web's
+      // project surface renders the project IssuesSurface with no
+      // `agentRunningFilter` (use-issue-surface-data.ts:396 vs :345), and
+      // mobile's project store does not expose the toggle — so this literal
+      // carries the switch off rather than reading a store field that can
+      // never be set here.
+      workingOnly: false,
+      showSubIssues,
     }),
     [
       statusFilters,
@@ -151,8 +181,54 @@ export function ProjectIssueSurface({
       labelFilters,
       propertyFilters,
       dateFilter,
+      showSubIssues,
     ],
   );
+
+  // Group headers count the complete result set (server group descriptors),
+  // not just the loaded window. This surface's list query is unfiltered
+  // server-side, so the spec carries the window the client applies itself.
+  const groupCountQuery = useMemo(() => {
+    const assigneeTypes = assigneeTypesForScopeTab(scope);
+    return {
+      scope: {
+        kind: "project" as const,
+        project_id: projectId,
+        ...(assigneeTypes ? { assignee_types: assigneeTypes } : {}),
+      },
+      window: buildIssueWindow({
+        statusFilters,
+        priorityFilters,
+        assigneeFilters,
+        includeNoAssignee,
+        creatorFilters,
+        projectFilters,
+        includeNoProject,
+        labelFilters,
+        propertyFilters,
+        dateFilter,
+        sortBy,
+        sortDirection,
+      }),
+      includeSubIssues: showSubIssues,
+    };
+  }, [
+    projectId,
+    scope,
+    statusFilters,
+    priorityFilters,
+    assigneeFilters,
+    includeNoAssignee,
+    creatorFilters,
+    projectFilters,
+    includeNoProject,
+    labelFilters,
+    propertyFilters,
+    dateFilter,
+    sortBy,
+    sortDirection,
+    showSubIssues,
+  ]);
 
   const openFilter = () => {
     if (!wsSlug) return;
@@ -199,9 +275,15 @@ export function ProjectIssueSurface({
     () => savedViews.find((v) => v.id === activeViewId) ?? null,
     [savedViews, activeViewId],
   );
+
+  // The chips bar works against the open view's baseline: it shows only the
+  // user's additions and a chip's removal falls back to the view's own
+  // values (web filter-chips-bar semantics).
+  const { baseline: chipBaseline, resetDimension: resetChipDimension } =
+    useFilterChipBaseline(activeView?.query ?? null, useProjectIssuesViewStore);
   const snapshotSource = useMemo(
-    () => ({ ...filterState, sortBy, sortDirection, grouping }),
-    [filterState, sortBy, sortDirection, grouping],
+    () => ({ ...filterState, sortBy, sortDirection, grouping, showSubIssues }),
+    [filterState, sortBy, sortDirection, grouping, showSubIssues],
   );
   const modifiedActive = useMemo(
     () =>
@@ -220,6 +302,7 @@ export function ProjectIssueSurface({
         sortBy: display.sortBy,
         sortDirection: display.sortDirection,
         grouping: display.grouping,
+        showSubIssues: display.showSubIssues,
         view: display.viewMode,
       });
       // The scope-axis a project view captured is part of the VIEW — land
@@ -245,14 +328,27 @@ export function ProjectIssueSurface({
     useActiveIssueViewStore.getState().setActive(containerKey, null);
   }, [containerKey]);
 
-  const { data, isLoading, error, refetch, isRefetching } = useQuery(
-    projectIssuesOptions(wsId, projectId),
-  );
+  const listQuery = useInfiniteQuery(projectIssuesOptions(wsId, projectId));
+  const {
+    data: listData,
+    isLoading,
+    error,
+    refetch,
+    isRefetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+    isError,
+  } = listQuery;
+  const listLoadError = isError && !listData;
+  const listIssues = useMemo(() => readIssueRows(listData), [listData]);
+  const listTotal = issueListTotal(listData?.pages ?? []);
 
   // Scope pre-filter — mirrors web issues-page.tsx:90-94. Applied before
   // the other filters so chip filters operate on the visible slice.
   const scopedIssues = useMemo(() => {
-    const allIssues = data ?? [];
+    const allIssues = listIssues;
     if (scope === "members") {
       return allIssues.filter((i) => i.assignee_type === "member");
     }
@@ -262,7 +358,18 @@ export function ProjectIssueSurface({
       );
     }
     return allIssues;
-  }, [data, scope]);
+  }, [listIssues, scope]);
+
+  // Board / swimlane / table group the window client-side, so a partially
+  // loaded window under-reports them — drain the rest while one is on screen.
+  useDrainIssuePages({
+    enabled: view !== "list",
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+    loadedRows: listIssues.length,
+    fetchNextPage,
+  });
 
   // Client predicate — the same window the workspace/my surfaces apply,
   // re-run so WS-patched rows outside it drop at render time.
@@ -310,7 +417,7 @@ export function ProjectIssueSurface({
     );
   }, [filterState]);
 
-  const showEmptyState = !isLoading && !error && sorted.length === 0;
+  const showEmptyState = !isLoading && !listLoadError && sorted.length === 0;
 
   const onRefresh = useCallback(async () => {
     await Promise.all([refetch(), onRefreshMeta?.()]);
@@ -351,14 +458,8 @@ export function ProjectIssueSurface({
       {hasActiveFilterChips ? (
         <ActiveFilterChips
           filterState={filterState}
-          statusFilters={filterState.statusFilters}
-          priorityFilters={filterState.priorityFilters}
-          assigneeFilters={filterState.assigneeFilters}
-          creatorFilters={filterState.creatorFilters}
-          projectFilters={filterState.projectFilters}
-          labelFilters={filterState.labelFilters}
-          propertyFilters={filterState.propertyFilters}
-          dateFilter={filterState.dateFilter}
+          baseline={chipBaseline}
+          onResetDimension={resetChipDimension}
           onClearStatus={(s) =>
             useProjectIssuesViewStore.getState().toggleStatusFilter(s)
           }
@@ -393,7 +494,7 @@ export function ProjectIssueSurface({
       ) : null}
       {isLoading ? (
         <IssuesLoading />
-      ) : error ? (
+      ) : listLoadError ? (
         <View className="px-4 gap-3 pt-4">
           <Text className="text-sm text-destructive">
             {t("issues.loadError")}
@@ -422,6 +523,7 @@ export function ProjectIssueSurface({
           <BoardView
             issues={sorted}
             grouping={grouping}
+            groupingProperty={groupingProperty}
             statusOrder={BOARD_STATUSES}
             onOpenIssue={(issue) => navigateToIssue(issue.id)}
             emptyLabel={emptyMessage}
@@ -432,6 +534,14 @@ export function ProjectIssueSurface({
           issues={sorted}
           columns={tableColumns}
           onToggleColumn={toggleTableColumn}
+          columnWidths={tableColumnWidths}
+          onResizeColumn={setTableColumnWidth}
+          onReorderColumn={reorderTableColumn}
+          onResetColumns={resetTableColumns}
+          onCreateSubIssue={createSubIssue}
+          grouping={tableGrouping}
+          onGroupingChange={setTableGrouping}
+          groupCountQuery={groupCountQuery}
           sortBy={sortBy}
           sortDirection={sortDirection}
           onSort={(field, direction) => {
@@ -446,6 +556,17 @@ export function ProjectIssueSurface({
           issues={sorted}
           sortBy={sortBy}
           sortDirection={sortDirection}
+          onOpenIssue={(issue) => navigateToIssue(issue.id)}
+          emptyLabel={emptyMessage}
+        />
+      ) : view === "swimlane" ? (
+        <SwimlaneView
+          issues={sorted}
+          grouping={swimlaneGrouping}
+          onGroupingChange={(next) =>
+            useProjectIssuesViewStore.getState().setSwimlaneGrouping(next)
+          }
+          statusOrder={BOARD_STATUSES}
           onOpenIssue={(issue) => navigateToIssue(issue.id)}
           emptyLabel={emptyMessage}
         />
@@ -470,6 +591,21 @@ export function ProjectIssueSurface({
               onOpen={() => navigateToIssue(item.id)}
             />
           )}
+          ListFooterComponent={
+            <IssueListFooter
+              hasMore={hasMoreIssues(listData?.pages ?? [])}
+              isLoadingMore={isFetchingNextPage}
+              total={listTotal}
+              isError={isFetchNextPageError}
+              onRetry={() => void fetchNextPage()}
+            />
+          }
+          onEndReachedThreshold={0.5}
+          onEndReached={() => {
+            if (hasNextPage && !isFetchingNextPage && !isFetchNextPageError) {
+              void fetchNextPage();
+            }
+          }}
           refreshing={refreshing}
           onRefresh={onRefresh}
         />
