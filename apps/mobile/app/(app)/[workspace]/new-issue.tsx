@@ -34,6 +34,8 @@ import {
   View,
 } from "react-native";
 import { Stack, router, useLocalSearchParams } from "expo-router";
+import { useQuery } from "@tanstack/react-query";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { SubmitIssueButton } from "@/components/issue/submit-issue-button";
 import { CreateFormAttributeRow } from "@/components/issue/create-form-attribute-row";
 import { MentionSuggestionBar } from "@/components/issue/mention-suggestion-bar";
@@ -42,9 +44,12 @@ import { QuickCreatePanel } from "@/components/issue/quick-create-panel";
 import { Text } from "@/components/ui/text";
 import { MOBILE_PLACEHOLDER_COLOR } from "@/components/ui/input-tokens";
 import { useCreateIssue, useQuickCreateIssue } from "@/data/mutations/issues";
+import { projectDetailOptions } from "@/data/queries/projects";
 import { useNewIssueDraftStore } from "@/data/stores/new-issue-draft-store";
+import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useMentionInput } from "@/lib/use-mention-input";
+import type { SubIssueRouteParams } from "@/lib/sub-issue-route";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
@@ -61,12 +66,24 @@ export default function NewIssueModal() {
   // Quick-create recovery seed (inbox detail → "Edit as advanced form"): the
   // original prompt + agent hint ride the URL and reseed the manual form so
   // the user can finish the issue in the full editor instead of retyping.
-  const { seedDescription, seedAssigneeId } = useLocalSearchParams<{
+  const {
+    seedDescription,
+    seedAssigneeId,
+    parentIssueId,
+    parentIssueIdentifier,
+    parentProjectId,
+  } = useLocalSearchParams<{
     seedDescription?: string;
     seedAssigneeId?: string;
-  }>();
+    /** Parent preset by the issue table's row-level "+" (web createSubIssue). */
+  } & Partial<SubIssueRouteParams>>();
   const [mode, setMode] = useState<CreateMode>("manual");
   const [title, setTitle] = useState("");
+  // A sub-issue preset can be dropped before submitting — the chip is the
+  // only way back out, and web offers the same escape (the parent is just a
+  // prefilled field there, not a lock).
+  const [parentCleared, setParentCleared] = useState(false);
+  const parent = parentCleared ? undefined : parentIssueId;
   // Agent-mode natural-language prompt. Lives here (not in the panel) so a
   // manual ↔ agent switch preserves it — same reasoning as title.
   const [prompt, setPrompt] = useState("");
@@ -107,6 +124,23 @@ export default function NewIssueModal() {
     if (seedAssigneeId) setAssignee({ type: "agent", id: String(seedAssigneeId) });
   }, [seedDescription, seedAssigneeId, descriptionTextSetter, setAssignee]);
 
+  // A sub-issue inherits its parent's project (web `createSubIssue` passes
+  // `project_id: issue.project_id`). One detail fetch for the one id the
+  // preset names — not a workspace-wide project list, which the form would
+  // otherwise page in on every open — and the effect is keyed on the id and
+  // the fetched project only, so a later refetch can never re-apply the
+  // parent's project over a project the user has since picked.
+  const projectSetter = useNewIssueDraftStore((s) => s.setProject);
+  const parentProjectIdValue = parentProjectId ? String(parentProjectId) : null;
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const { data: parentProject } = useQuery(
+    projectDetailOptions(wsId, parentProjectIdValue ?? ""),
+  );
+  useEffect(() => {
+    if (!parentProjectIdValue || !parentProject) return;
+    projectSetter(parentProject);
+  }, [parentProjectIdValue, parentProject, projectSetter]);
+
   const createIssue = useCreateIssue();
   const quickCreate = useQuickCreateIssue();
   // Loading state follows the ACTIVE mode — the header button must show a
@@ -144,6 +178,7 @@ export default function NewIssueModal() {
         ...(priority !== "none" ? { priority } : {}),
         ...(dueDate ? { due_date: dueDate } : {}),
         ...(project ? { project_id: project.id } : {}),
+        ...(parent ? { parent_issue_id: parent } : {}),
       });
       Alert.alert(
         t("newIssue.agentSentTitle"),
@@ -160,7 +195,7 @@ export default function NewIssueModal() {
       );
       return false;
     }
-  }, [prompt, agentActor, priority, dueDate, project, quickCreate, getName, t]);
+  }, [prompt, agentActor, priority, dueDate, project, parent, quickCreate, getName, t]);
 
   const submitManualMode = useCallback(async () => {
     const trimmedTitle = title.trim();
@@ -179,6 +214,7 @@ export default function NewIssueModal() {
         ...(startDate ? { start_date: startDate } : {}),
         ...(labels.length > 0 ? { label_ids: labels.map((l) => l.id) } : {}),
         ...(project ? { project_id: project.id } : {}),
+        ...(parent ? { parent_issue_id: parent } : {}),
         ...(uploadedAttachmentIds.length > 0
           ? { attachment_ids: uploadedAttachmentIds }
           : {}),
@@ -200,6 +236,7 @@ export default function NewIssueModal() {
     startDate,
     labels,
     project,
+    parent,
     uploadedAttachmentIds,
     createIssue,
     t,
@@ -261,6 +298,39 @@ export default function NewIssueModal() {
               );
             })}
           </View>
+
+          {/* Sub-issue preset (issue table's row-level "+"). Web renders the
+              same chip in its agent panel (`agent-sub-issue-chip`); mobile
+              shows it once, above the mode-specific body, because the parent
+              applies to whichever mode submits. */}
+          {parent ? (
+            <View className="flex-row items-center gap-1.5 self-start rounded-full bg-secondary/60 px-2.5 py-1">
+              <Ionicons
+                name="git-branch-outline"
+                size={13}
+                color={MOBILE_PLACEHOLDER_COLOR}
+              />
+              <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+                {t("newIssue.parentChip", {
+                  identifier: parentIssueIdentifier
+                    ? String(parentIssueIdentifier)
+                    : "",
+                })}
+              </Text>
+              <Pressable
+                onPress={() => setParentCleared(true)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={t("newIssue.parentChipClear")}
+              >
+                <Ionicons
+                  name="close"
+                  size={13}
+                  color={MOBILE_PLACEHOLDER_COLOR}
+                />
+              </Pressable>
+            </View>
+          ) : null}
 
           {mode === "manual" ? (
             <>

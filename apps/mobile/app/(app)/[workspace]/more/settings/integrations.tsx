@@ -13,16 +13,18 @@
  * browser-based — so each row's action opens the workspace settings page
  * (`{webBase}/{slug}/settings`) in the system browser.
  */
-import { useState } from "react";
-import { Alert, Linking, Pressable, ScrollView, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Alert, AppState, Linking, Pressable, ScrollView, View } from "react-native";
 import { Stack } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { githubInstallationsOptions } from "@/data/queries/github";
+import { githubInstallationsOptions, githubKeys } from "@/data/queries/github";
+import { useDisconnectGitHubInstallation } from "@/data/mutations/github";
+import { api } from "@/data/api";
 import { workspaceListOptions } from "@/data/queries/workspaces";
 import { useUpdateWorkspace } from "@/data/mutations/workspaces";
 import {
@@ -36,7 +38,6 @@ import { getWebBaseUrl } from "@/data/server-config";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
-import { cn } from "@/lib/utils";
 
 type ChannelKey = "lark" | "slack" | "dingtalk" | "wecom";
 
@@ -107,9 +108,72 @@ export default function IntegrationsPage() {
     });
   };
 
+  // Connect and Disconnect mirror web github-tab.tsx:96-125 / :206-236. The
+  // OAuth handshake runs in the system browser, so the only client-side step
+  // is minting the install URL; the installation list refreshes when the user
+  // comes back to the app (web gets this for free from the new tab's focus).
+  const [connecting, setConnecting] = useState(false);
+  const disconnect = useDisconnectGitHubInstallation();
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        void qc.invalidateQueries({ queryKey: githubKeys.all(wsId) });
+      }
+    });
+    return () => sub.remove();
+  }, [qc, wsId]);
+
+  const handleConnect = async () => {
+    if (connecting) return;
+    setConnecting(true);
+    try {
+      const resp = await api.getGitHubConnectURL(wsId ?? "");
+      if (!resp.configured || !resp.url) {
+        Alert.alert(t("integrations.gh.notConfiguredToast"));
+        return;
+      }
+      Linking.openURL(resp.url);
+    } catch (e) {
+      Alert.alert(
+        t("integrations.gh.connectFailed", {
+          message: e instanceof Error ? e.message : t("integrations.vcsUnknownError"),
+        }),
+      );
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const confirmDisconnect = (installationId: string, label: string) => {
+    Alert.alert(
+      t("integrations.gh.disconnectTitle"),
+      t("integrations.gh.disconnectDesc", { label }),
+      [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("integrations.gh.disconnectConfirm"),
+          style: "destructive",
+          onPress: () =>
+            disconnect.mutate(installationId, {
+              onError: (e) =>
+                Alert.alert(
+                  t("integrations.gh.disconnectFailed", {
+                    message: e instanceof Error ? e.message : t("integrations.vcsUnknownError"),
+                  }),
+                ),
+            }),
+        },
+      ],
+    );
+  };
+
   const connectedLabel = connected
     ? t("integrations.connectedTo", { names: connectedNames })
     : t("integrations.notConnected");
+  const configured = githubData?.configured === true;
+  const primaryInstallation = installations[0] ?? null;
 
   return (
     <>
@@ -121,13 +185,16 @@ export default function IntegrationsPage() {
           </Text>
         </View>
         <View className="gap-5 px-4 py-4">
-          {/* GitHub connection card */}
+          {/* GitHub connection card — mirrors web github-tab.tsx
+              "section_connection": status copy branches on
+              connected / canManage / configured, and the Connect / Disconnect
+              action sits opposite the status line. */}
           <View className="gap-2">
             <Text className="text-xs uppercase tracking-wider text-muted-foreground px-1">
-              {t("integrations.githubTitle")}
+              {t("integrations.gh.connectionSection")}
             </Text>
             <View className="rounded-md border border-border bg-card overflow-hidden">
-              <View className="flex-row items-center gap-3 px-4 py-3.5">
+              <View className="flex-row items-start gap-3 px-4 py-3.5">
                 <View className="size-9 rounded-md bg-secondary items-center justify-center">
                   <Ionicons name="logo-github" size={18} color={muted} />
                 </View>
@@ -139,24 +206,96 @@ export default function IntegrationsPage() {
                     <Text className="text-xs text-muted-foreground">
                       {t("quickActions.loading")}
                     </Text>
+                  ) : connected ? (
+                    <>
+                      <Text
+                        className="text-xs text-emerald-600 dark:text-emerald-400"
+                        numberOfLines={1}
+                      >
+                        {connectedLabel}
+                      </Text>
+                      {primaryInstallation?.connected_by ? (
+                        <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+                          {t("integrations.gh.connectedBy", {
+                            name: primaryInstallation.connected_by,
+                          })}
+                        </Text>
+                      ) : null}
+                    </>
+                  ) : canManage ? (
+                    <Text className="text-xs text-muted-foreground leading-4">
+                      {t("integrations.gh.connectDescPrefix")}{" "}
+                      <Text className="font-mono text-foreground">
+                        {t("integrations.gh.connectDescExample")}
+                      </Text>{" "}
+                      {t("integrations.gh.connectDescSuffix")}{" "}
+                      <Text className="font-medium text-foreground">
+                        {t("integrations.gh.connectDescDone")}
+                      </Text>
+                    </Text>
                   ) : (
-                    <Text
-                      className={cn(
-                        "text-xs",
-                        connected ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground",
-                      )}
-                      numberOfLines={1}
-                    >
-                      {connectedLabel}
+                    <Text className="text-xs text-muted-foreground leading-4">
+                      {t("integrations.gh.contactAdmin")}
                     </Text>
                   )}
                 </View>
-                <Ionicons
-                  name={connected ? "checkmark-circle" : "ellipse-outline"}
-                  size={18}
-                  color={connected ? theme.success : muted}
-                />
+                {canManage ? (
+                  connected && primaryInstallation ? (
+                    // Disconnect stays reachable even with the master switch
+                    // off — revoking the App grant is a separate intent from
+                    // hiding the feature (web github-tab.tsx:206).
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={disconnect.isPending}
+                      onPress={() =>
+                        confirmDisconnect(
+                          primaryInstallation.id,
+                          primaryInstallation.account_login,
+                        )
+                      }
+                    >
+                      <Text>
+                        {disconnect.isPending
+                          ? t("integrations.gh.disconnecting")
+                          : t("integrations.gh.disconnect")}
+                      </Text>
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      disabled={connecting || !configured}
+                      onPress={handleConnect}
+                    >
+                      <Text>
+                        {connecting
+                          ? t("integrations.gh.connectOpening")
+                          : t("integrations.gh.connectGithub")}
+                      </Text>
+                    </Button>
+                  )
+                ) : (
+                  <Ionicons
+                    name={connected ? "checkmark-circle" : "ellipse-outline"}
+                    size={18}
+                    color={connected ? theme.success : muted}
+                  />
+                )}
               </View>
+              {canManage && !configured ? (
+                <View className="border-t border-border px-4 py-2.5">
+                  <Text className="text-xs text-muted-foreground leading-4">
+                    {t("integrations.gh.notConfigured")}
+                  </Text>
+                </View>
+              ) : null}
+              {!canManage && connected ? (
+                <View className="border-t border-border px-4 py-2.5">
+                  <Text className="text-xs text-muted-foreground leading-4">
+                    {t("integrations.gh.readOnlyConnection")}
+                  </Text>
+                </View>
+              ) : null}
             </View>
           </View>
 

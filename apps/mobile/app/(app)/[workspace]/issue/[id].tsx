@@ -25,6 +25,7 @@ import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { TimelineList } from "@/components/issue/timeline-list";
+import { BatchActionBar } from "@/components/issue/batch-action-bar";
 import { AgentHeaderBadge } from "@/components/issue/agent-header-badge";
 import { InlineCommentComposer } from "@/components/issue/inline-comment-composer";
 import {
@@ -292,6 +293,13 @@ export default function IssueDetail() {
             subIssues={children.data}
             wsSlug={wsSlug}
           />
+          {/* Multi-select on the sub-issue rows (long-press) raises the
+              shared batch bar here, where it can span the screen — the
+              children section lives inside the timeline's scroll content and
+              an absolutely-positioned bar would scroll away with it. The bar
+              intersects its `issues` with the live selection, so it stays
+              hidden while a selection made on a list screen is carried in. */}
+          <BatchActionBar issues={children.data ?? []} />
           <InlineCommentComposer issueId={id} />
         </View>
       )}

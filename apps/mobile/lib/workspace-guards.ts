@@ -45,3 +45,41 @@ export function workspaceManagementGuards({
 export function workspaceNameValidationError(name: string): string | null {
   return name.trim().length === 0 ? "required" : null;
 }
+
+/** Longest issue prefix the server accepts (web's Input `maxLength`). */
+export const ISSUE_PREFIX_MAX_LENGTH = 10;
+
+/**
+ * Issue-prefix normalisation (web `normalizePrefix`,
+ * packages/views/settings/components/workspace-tab.tsx:168-170): uppercase and
+ * strip everything outside A-Z0-9, then cap at 10. Applied on every keystroke
+ * so the field can never hold a character the server would reject.
+ */
+export function normalizeIssuePrefix(raw: string): string {
+  return raw
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, ISSUE_PREFIX_MAX_LENGTH);
+}
+
+/**
+ * Whether a normalised prefix blocks saving. An empty prefix is the only
+ * invalid state — the server rejects a blank one, and there is no other
+ * constraint once A-Z0-9 + length are enforced by `normalizeIssuePrefix`.
+ */
+export function issuePrefixInvalid(prefix: string): boolean {
+  return prefix.length === 0;
+}
+
+/**
+ * Whether a blur should fire a save at all: nothing to do when the workspace
+ * is missing, the prefix is invalid, or the normalised value already matches
+ * what the server has (web `handlePrefixBlur`'s guard).
+ */
+export function shouldSaveIssuePrefix(
+  current: string,
+  saved: string | null | undefined,
+): boolean {
+  const normalized = normalizeIssuePrefix(current);
+  return !issuePrefixInvalid(normalized) && normalized !== (saved ?? "");
+}

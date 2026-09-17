@@ -1,15 +1,18 @@
 /**
- * List / Board / Table / Gantt view-mode toggle for the issue workbench —
- * mobile surface of web's `ViewBar` mode switch
- * (`packages/views/issues/components/view-bar.tsx`); iter-118 adds gantt
- * (swimlane stays phone-deferred: drag-to-reorder across lanes).
+ * List / Board / Table / Gantt / Swimlane view-mode toggle for the issue
+ * workbench — mobile surface of web's `ViewBar` mode switch
+ * (`packages/views/issues/components/view-bar.tsx`). All five of web's
+ * `ViewMode` values are now reachable: iter-118 added gantt, iter-122 the
+ * swimlane (its cross-lane move is a long-press menu rather than web's
+ * drag-and-drop; see `swimlane-view.tsx`).
  *
  * Sits right of the scope pills on all issue-list surfaces, next to the
  * filter trigger. Reads/writes the `view` field on the screen's view store;
  * switching never clears filters or sort (same store, same query window).
  *
  * Glyphs: Ionicons `list` / `grid` for list / board, MaterialCommunityIcons
- * `table` / `chart-gantt` for the table / gantt modes (Ionicons has neither).
+ * `table` / `chart-gantt` / `view-column-outline` for table / gantt /
+ * swimlane (Ionicons has none of those three).
  */
 import { Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -27,6 +30,7 @@ const OPTIONS: {
   { value: "board", a11yKey: "a11y.viewBoard" },
   { value: "table", a11yKey: "a11y.viewTable" },
   { value: "gantt", a11yKey: "a11y.viewGantt" },
+  { value: "swimlane", a11yKey: "a11y.viewSwimlane" },
 ];
 
 function ModeGlyph({ value, color }: { value: IssueViewMode; color: string }) {
@@ -37,6 +41,14 @@ function ModeGlyph({ value, color }: { value: IssueViewMode; color: string }) {
       return <MaterialCommunityIcons name="table" size={16} color={color} />;
     case "gantt":
       return <MaterialCommunityIcons name="chart-gantt" size={16} color={color} />;
+    case "swimlane":
+      return (
+        <MaterialCommunityIcons
+          name="view-column-outline"
+          size={16}
+          color={color}
+        />
+      );
     case "list":
     default:
       return <Ionicons name="list" size={15} color={color} />;
