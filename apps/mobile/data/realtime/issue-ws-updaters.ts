@@ -18,12 +18,20 @@
  *   - Issue detail:    Issue                                  (keyed by detail(wsId, id))
  *   - Issue timeline:  TimelineEntry[]                        (keyed by timeline(wsId, id))
  *                      ASC oldest-first; new entries inserted at sorted position.
- *   - My Issues list:  Issue[]                                (keyed by myList(wsId, scope, filter))
+ *   - My Issues list:  InfiniteData<IssuePage>                (keyed by myList(wsId, scope, filter))
  *                      Multiple list caches per wsId (one per scope/filter combo).
  *                      Patch ALL of them via setQueriesData on myAll(wsId).
- *   - Workspace list:  Issue[]                                (keyed by list(wsId))
+ *   - Workspace list:  InfiniteData<IssuePage>                (keyed by list(wsId))
  *                      Single cache per wsId (no scope/filter in the key —
  *                      filtering happens client-side off the same list).
+ *   - Actor lists:     Issue[]                                (keyed by actorAll(wsId))
+ *   - Gantt canvas:    Issue[]                                (keyed by list(wsId)/gantt)
+ *
+ * The three paginated surfaces hold `InfiniteData<IssuePage>` since iteration
+ * 125, the rest are still flat `Issue[]`. Patchers therefore go through
+ * `mapIssueRows` (data/queries/issue-list-cache) so one implementation covers
+ * both shapes — a bare `old.filter(...)` would hit the `{pages, pageParams}`
+ * envelope and throw.
  */
 import type { QueryClient } from "@tanstack/react-query";
 import type {
@@ -35,6 +43,11 @@ import type {
   TimelineEntry,
 } from "@multica/core/types";
 import { issueKeys } from "@/data/queries/issue-keys";
+import {
+  mapIssueRows,
+  upsertIssueRow,
+  type IssueListCache,
+} from "@/data/queries/issue-list-cache";
 
 type TimelinePredicate = (entry: TimelineEntry) => boolean;
 type TimelineMutate = (entry: TimelineEntry) => TimelineEntry;
@@ -191,8 +204,10 @@ export function patchMyIssuesList(
   // myList is keyed by (wsId, scope, filter); we don't know which entries
   // the issue belongs to, so update every cached one. Any not-yet-loaded
   // list will fetch fresh on mount.
-  qc.setQueriesData<Issue[]>({ queryKey: issueKeys.myAll(wsId) }, (old) =>
-    old ? old.map((i) => (i.id === partial.id ? { ...i, ...partial } : i)) : old,
+  qc.setQueriesData<IssueListCache>({ queryKey: issueKeys.myAll(wsId) }, (old) =>
+    mapIssueRows(old, (rows) =>
+      rows.map((i) => (i.id === partial.id ? { ...i, ...partial } : i)),
+    ),
   );
 }
 
@@ -201,8 +216,8 @@ export function removeFromMyIssuesList(
   wsId: string,
   issueId: string,
 ) {
-  qc.setQueriesData<Issue[]>({ queryKey: issueKeys.myAll(wsId) }, (old) =>
-    old ? old.filter((i) => i.id !== issueId) : old,
+  qc.setQueriesData<IssueListCache>({ queryKey: issueKeys.myAll(wsId) }, (old) =>
+    mapIssueRows(old, (rows) => rows.filter((i) => i.id !== issueId)),
   );
 }
 
@@ -219,8 +234,10 @@ export function patchIssuesList(
   // (listFiltered), so a prefix match reaches every cached window. Client
   // predicates re-run at render time (`applyIssueFilters` + `sortIssues`),
   // so a patched row drifting outside the active window is dropped there.
-  qc.setQueriesData<Issue[]>({ queryKey: issueKeys.list(wsId) }, (old) =>
-    old ? old.map((i) => (i.id === partial.id ? { ...i, ...partial } : i)) : old,
+  qc.setQueriesData<IssueListCache>({ queryKey: issueKeys.list(wsId) }, (old) =>
+    mapIssueRows(old, (rows) =>
+      rows.map((i) => (i.id === partial.id ? { ...i, ...partial } : i)),
+    ),
   );
 }
 
@@ -244,16 +261,15 @@ export function prependToIssuesList(
   // window has no client-side re-filter for server-decided membership, so
   // skip those caches and invalidate them instead — the refetch decides
   // whether the new issue belongs on the canvas.
-  qc.setQueriesData<Issue[]>(
+  qc.setQueriesData<IssueListCache>(
     {
       queryKey: issueKeys.list(wsId),
       predicate: (query) => !isGanttQueryKey(query.queryKey),
     },
-    (old) => {
-      if (!old) return old;
-      if (old.some((i) => i.id === issue.id)) return old;
-      return [issue, ...old];
-    },
+    // `upsertIssueRow`, not a `mapIssueRows` insert: the latter runs per page,
+    // so "not present" would hold for every page and the row would be added to
+    // each of them.
+    (old) => upsertIssueRow(old, issue, "prepend"),
   );
   qc.invalidateQueries({ queryKey: [...issueKeys.list(wsId), "gantt"] });
 }
@@ -263,8 +279,8 @@ export function removeFromIssuesList(
   wsId: string,
   issueId: string,
 ) {
-  qc.setQueriesData<Issue[]>({ queryKey: issueKeys.list(wsId) }, (old) =>
-    old ? old.filter((i) => i.id !== issueId) : old,
+  qc.setQueriesData<IssueListCache>({ queryKey: issueKeys.list(wsId) }, (old) =>
+    mapIssueRows(old, (rows) => rows.filter((i) => i.id !== issueId)),
   );
 }
 
@@ -282,8 +298,10 @@ export function patchActorIssuesList(
   wsId: string,
   partial: Partial<Issue> & { id: string },
 ) {
-  qc.setQueriesData<Issue[]>({ queryKey: issueKeys.actorAll(wsId) }, (old) =>
-    old ? old.map((i) => (i.id === partial.id ? { ...i, ...partial } : i)) : old,
+  qc.setQueriesData<IssueListCache>({ queryKey: issueKeys.actorAll(wsId) }, (old) =>
+    mapIssueRows(old, (rows) =>
+      rows.map((i) => (i.id === partial.id ? { ...i, ...partial } : i)),
+    ),
   );
 }
 
@@ -292,8 +310,8 @@ export function removeFromActorIssuesList(
   wsId: string,
   issueId: string,
 ) {
-  qc.setQueriesData<Issue[]>({ queryKey: issueKeys.actorAll(wsId) }, (old) =>
-    old ? old.filter((i) => i.id !== issueId) : old,
+  qc.setQueriesData<IssueListCache>({ queryKey: issueKeys.actorAll(wsId) }, (old) =>
+    mapIssueRows(old, (rows) => rows.filter((i) => i.id !== issueId)),
   );
 }
 
@@ -391,15 +409,15 @@ export function patchIssueLabels(
   qc.setQueryData<Issue>(issueKeys.detail(wsId, issueId), (old) =>
     old ? { ...old, labels } : old,
   );
-  qc.setQueriesData<Issue[]>({ queryKey: issueKeys.myAll(wsId) }, (old) =>
-    old
-      ? old.map((i) => (i.id === issueId ? { ...i, labels } : i))
-      : old,
+  qc.setQueriesData<IssueListCache>({ queryKey: issueKeys.myAll(wsId) }, (old) =>
+    mapIssueRows(old, (rows) =>
+      rows.map((i) => (i.id === issueId ? { ...i, labels } : i)),
+    ),
   );
-  qc.setQueriesData<Issue[]>({ queryKey: issueKeys.list(wsId) }, (old) =>
-    old
-      ? old.map((i) => (i.id === issueId ? { ...i, labels } : i))
-      : old,
+  qc.setQueriesData<IssueListCache>({ queryKey: issueKeys.list(wsId) }, (old) =>
+    mapIssueRows(old, (rows) =>
+      rows.map((i) => (i.id === issueId ? { ...i, labels } : i)),
+    ),
   );
 }
 

@@ -24,19 +24,37 @@ import { ActivityIndicator, Alert, FlatList, Pressable, ScrollView, View } from 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { create } from "zustand";
 import type { Agent } from "@multica/core/types";
 import { isAgentRuntimeBound, type AgentPresenceDetail } from "@multica/core/agents";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
+import { TextField } from "@/components/ui/text-field";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PresenceDot } from "@/components/ui/presence-dot";
-import { agentListAllOptions } from "@/data/queries/agents";
+import {
+  agentListAllOptions,
+  agentRunCounts30dOptions,
+} from "@/data/queries/agents";
+import { agentActivity30dOptions } from "@/data/queries/agent-activity";
+import { buildActivityMap, type AgentActivity } from "@/lib/agent-activity";
+import {
+  AGENT_SORT_DEFAULT_DIRECTION,
+  AGENT_SORT_FIELDS,
+  lastActiveDaysAgo,
+  matchesAgentSearch,
+  sortAgentRows,
+  type AgentSortDirection,
+  type AgentSortField,
+} from "@/lib/filter-agents";
 import { memberListOptions } from "@/data/queries/members";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useWorkspacePresenceMap } from "@/lib/use-agent-presence";
 import { useAuthStore } from "@/data/auth-store";
 import { api } from "@/data/api";
+import { ActionSheet } from "@/lib/action-sheet";
+import { AgentRowMenu } from "@/components/agent/agent-row-menu";
 import {
   AgentAccessBatchSheet,
   type AccessChangePick,
@@ -96,6 +114,24 @@ const SCOPE_BADGE_KEY: Record<AccessScope, string> = {
 
 const scopeBadge = accessScopeOfAgent;
 
+/**
+ * Session-scoped sort choice for the agents list. Deliberately not persisted:
+ * web keeps this in a per-workspace view store, but the phone's other list
+ * (projects) scopes the same choice to the session, and a sort the user
+ * cannot see (no header row on a phone) must not silently survive a restart.
+ */
+interface AgentMobileViewState {
+  sortField: AgentSortField;
+  sortDirection: AgentSortDirection;
+  setSort: (field: AgentSortField, direction: AgentSortDirection) => void;
+}
+
+export const useAgentMobileViewStore = create<AgentMobileViewState>()((set) => ({
+  sortField: "lastActive",
+  sortDirection: AGENT_SORT_DEFAULT_DIRECTION.lastActive,
+  setSort: (sortField, sortDirection) => set({ sortField, sortDirection }),
+}));
+
 export default function AgentsPage() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
@@ -112,19 +148,44 @@ export default function AgentsPage() {
   const presence = useWorkspacePresenceMap(wsId);
   const currentMember = members.find((m) => m.user_id === currentUserId);
 
+  // ---- Search + sort (iteration 129, MYS-1060) ----
+  const [search, setSearch] = useState("");
+  const sortField = useAgentMobileViewStore((s) => s.sortField);
+  const sortDirection = useAgentMobileViewStore((s) => s.sortDirection);
+  const setSort = useAgentMobileViewStore((s) => s.setSort);
+
+  // Both extra datasets are gated on the sort that reads them: the RUNS metric
+  // is the workspace 30-day run count and "last active" is derived from the
+  // same 30-day buckets, so a list sorted by name or creation date fetches
+  // neither. `lastActive` also uses the run count as its tiebreak (web
+  // parity), which is why one sort needs both.
+  const needsRunCounts = sortField === "runs" || sortField === "lastActive";
+  const { data: runCounts = [] } = useQuery(
+    agentRunCounts30dOptions(wsId, needsRunCounts),
+  );
+  const runCountById = useMemo(
+    () => new Map(runCounts.map((r) => [r.agent_id, r.run_count])),
+    [runCounts],
+  );
+  const { data: activityBuckets } = useQuery({
+    ...agentActivity30dOptions(wsId),
+    enabled: !!wsId && sortField === "lastActive",
+  });
+  const activityByAgent = useMemo(() => {
+    const agents = data ?? [];
+    if (!activityBuckets) return new Map<string, AgentActivity>();
+    return buildActivityMap(agents, activityBuckets, Date.now());
+  }, [data, activityBuckets]);
+
   const sorted = useMemo(() => {
-    const list = data ?? [];
-    const byAgent = presence.byAgent;
-    return [...list].sort((a, b) => {
-      const aArchived = isArchived(a);
-      const bArchived = isArchived(b);
-      if (aArchived !== bArchived) return aArchived ? 1 : -1;
-      const aCount = byAgent.get(a.id)?.runningCount ?? 0;
-      const bCount = byAgent.get(b.id)?.runningCount ?? 0;
-      if (bCount !== aCount) return bCount - aCount;
-      return a.name.localeCompare(b.name);
-    });
-  }, [data, presence.byAgent]);
+    const rows = (data ?? []).map((agent) => ({
+      agent,
+      archived: isArchived(agent),
+      runCount: runCountById.get(agent.id) ?? 0,
+      lastActiveDays: lastActiveDaysAgo(activityByAgent.get(agent.id) ?? null),
+    }));
+    return sortAgentRows(rows, sortField, sortDirection).map((r) => r.agent);
+  }, [data, runCountById, activityByAgent, sortField, sortDirection]);
 
   // ---- Selection / batch state (iteration-84 A8, MUL-4302 parity) ----
   const [selectionMode, setSelectionMode] = useState(false);
@@ -149,11 +210,17 @@ export default function AgentsPage() {
   const ownedAccessed = batch.ownedIds.length > 0;
 
   const filtered = useMemo(() => {
-    if (scopeFilter === "all") return sorted;
-    return sorted.filter((a) =>
-      matchesAccessFilter(a, new Set<AccessScope>([scopeFilter])),
-    );
-  }, [sorted, scopeFilter]);
+    const scoped =
+      scopeFilter === "all"
+        ? sorted
+        : sorted.filter((a) =>
+            matchesAccessFilter(a, new Set<AccessScope>([scopeFilter])),
+          );
+    const query = search.trim();
+    // Local search, like web's (`rowMatchesFilters` runs after the scope
+    // rows): names and descriptions, Latin or pinyin.
+    return query ? scoped.filter((a) => matchesAgentSearch(a, query)) : scoped;
+  }, [sorted, scopeFilter, search]);
 
   const invalidateAgents = () =>
     void qc.invalidateQueries({
@@ -245,6 +312,17 @@ export default function AgentsPage() {
 
   const showEmpty = !isLoading && !error && (data ?? []).length === 0;
 
+  // Row-menu gate, web's `canManage: isWorkspaceAdmin || isOwner`
+  // (agents-page.tsx:890): managing ANY agent needs workspace admin/owner,
+  // managing your OWN needs nothing.
+  const isWorkspaceManager =
+    currentMember?.role === "owner" || currentMember?.role === "admin";
+  const canManageRow = useCallback(
+    (agent: Agent) =>
+      isWorkspaceManager || (!!currentUserId && agent.owner_id === currentUserId),
+    [isWorkspaceManager, currentUserId],
+  );
+
   // "New" header action — opens the create-method chooser (mirrors the
   // skills/autopilots "+" header action). Selection mode swaps the compose
   // actions for a Done control that exits the mode.
@@ -327,16 +405,46 @@ export default function AgentsPage() {
         ) : (
           <>
             {!selectionMode ? (
-              <ScopeFilterChips
-                value={scopeFilter}
-                onChange={setScopeFilter}
-              />
+              <>
+                <ScopeFilterChips
+                  value={scopeFilter}
+                  onChange={setScopeFilter}
+                />
+                {/* Search + sort toolbar — same shape as the projects list's
+                    (search field, then a sort chip opening an ActionSheet
+                    that pairs each field with its direction). Hidden in
+                    selection mode, like the scope chips, to leave room for
+                    the batch bar. */}
+                <View className="flex-row items-center gap-2 px-3 pb-2">
+                  <View className="flex-1">
+                    <TextField
+                      value={search}
+                      onChangeText={setSearch}
+                      placeholder={t("agents.searchPlaceholder")}
+                      autoCorrect={false}
+                      autoCapitalize="none"
+                      returnKeyType="search"
+                      className="h-9"
+                    />
+                  </View>
+                  <AgentSortPicker
+                    sortField={sortField}
+                    sortDirection={sortDirection}
+                    onChange={setSort}
+                  />
+                </View>
+              </>
             ) : null}
             <FlatList
               data={filtered}
               keyExtractor={(item) => item.id}
               ItemSeparatorComponent={() => <View className="h-px bg-border ml-4" />}
               contentContainerClassName="pb-24"
+              ListEmptyComponent={
+                <Text className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  {t("agents.noMatches")}
+                </Text>
+              }
               renderItem={({ item }) =>
                 selectionMode ? (
                   <SelectableAgentRow
@@ -349,6 +457,7 @@ export default function AgentsPage() {
                   <AgentRow
                     agent={item}
                     presenceDetail={presence.byAgent.get(item.id)}
+                    canManage={canManageRow(item)}
                     onPress={() => {
                       if (wsSlug) router.push(`/${wsSlug}/more/agents/${item.id}`);
                     }}
@@ -389,6 +498,98 @@ export default function AgentsPage() {
         onClose={() => setBatchAccess(false)}
       />
     </>
+  );
+}
+
+const AGENT_SORT_LABEL_KEY: Record<AgentSortField, string> = {
+  lastActive: "agents.sortLastActive",
+  name: "agents.sortName",
+  runs: "agents.sortRuns",
+  created: "agents.sortCreated",
+};
+
+/**
+ * Sort chip + ActionSheet, the same interaction as the projects list's
+ * `SortPicker`: every field is offered once with its natural direction, and
+ * the ACTIVE field is offered a second time with the opposite direction, so
+ * flipping direction is one tap rather than a separate toggle.
+ */
+function AgentSortPicker({
+  sortField,
+  sortDirection,
+  onChange,
+}: {
+  sortField: AgentSortField;
+  sortDirection: AgentSortDirection;
+  onChange: (field: AgentSortField, direction: AgentSortDirection) => void;
+}) {
+  const { t } = useTranslation();
+  const { colorScheme } = useColorScheme();
+  const muted = THEME[colorScheme].mutedForeground;
+
+  const options: {
+    field: AgentSortField;
+    direction: AgentSortDirection;
+    label: string;
+  }[] = [];
+  for (const field of AGENT_SORT_FIELDS) {
+    const defaultDir = AGENT_SORT_DEFAULT_DIRECTION[field];
+    options.push({
+      field,
+      direction: defaultDir,
+      label: t(AGENT_SORT_LABEL_KEY[field]),
+    });
+    if (sortField === field) {
+      options.push({
+        field,
+        direction: defaultDir === "asc" ? "desc" : "asc",
+        label: `${t(AGENT_SORT_LABEL_KEY[field])} (${
+          defaultDir === "asc"
+            ? t("agents.sortDescending")
+            : t("agents.sortAscending")
+        })`,
+      });
+    }
+  }
+
+  const openSortPicker = () => {
+    const labels = options.map((o) => o.label);
+    ActionSheet.showActionSheetWithOptions(
+      {
+        title: t("agents.sort"),
+        options: [...labels, t("common.cancel")],
+        cancelButtonIndex: labels.length,
+      },
+      (index) => {
+        if (index === undefined || index < 0 || index >= options.length) return;
+        const option = options[index]!;
+        onChange(option.field, option.direction);
+      },
+    );
+  };
+
+  const defaultDir = AGENT_SORT_DEFAULT_DIRECTION[sortField];
+  const activeLabel =
+    sortDirection === defaultDir
+      ? t(AGENT_SORT_LABEL_KEY[sortField])
+      : `${t(AGENT_SORT_LABEL_KEY[sortField])} (${
+          sortDirection === "asc"
+            ? t("agents.sortAscending")
+            : t("agents.sortDescending")
+        })`;
+
+  return (
+    <Pressable
+      onPress={openSortPicker}
+      accessibilityRole="button"
+      accessibilityLabel={t("agents.sort")}
+      className="flex-row items-center gap-1 rounded-md border border-border bg-secondary/50 px-2 py-1.5 active:opacity-70"
+    >
+      <Ionicons name="swap-vertical" size={14} color={muted} />
+      <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+        {activeLabel}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -512,10 +713,12 @@ function BatchBar({
 function AgentRow({
   agent,
   presenceDetail,
+  canManage,
   onPress,
 }: {
   agent: Agent;
   presenceDetail: AgentPresenceDetail | undefined;
+  canManage: boolean;
   onPress: () => void;
 }) {
   const { t } = useTranslation();
@@ -594,6 +797,14 @@ function AgentRow({
         {!archived ? (
           <Ionicons name="chevron-forward" size={14} color={muted} />
         ) : null}
+        {/* Row actions (iteration 129). The trigger claims the touch
+            responder, so opening the sheet never falls through to the row's
+            own onPress — tapping elsewhere on the row still navigates. */}
+        <AgentRowMenu
+          agent={agent}
+          presence={presenceDetail}
+          canManage={canManage}
+        />
       </View>
     </Pressable>
   );

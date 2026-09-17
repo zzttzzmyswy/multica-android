@@ -156,6 +156,24 @@ describe("loadApiBaseUrl", () => {
   });
 });
 
+describe("getDefaultApiBaseUrl", () => {
+  it("reports the build-time default even while an override is active", async () => {
+    // The recovery notice tells the user which server a reset lands on — it
+    // must not echo back the override that just failed.
+    secureStoreMap.set("multica_server_base_url", "https://dead.example.com");
+
+    const mod = await loadFreshServerConfig("https://default.example.com");
+    await mod.loadApiBaseUrl();
+    expect(mod.getDisplayBaseUrl()).toBe("https://dead.example.com");
+    expect(mod.getDefaultApiBaseUrl()).toBe("https://default.example.com");
+  });
+
+  it("is empty in a build with no baked default", async () => {
+    const mod = await loadFreshServerConfig();
+    expect(mod.getDefaultApiBaseUrl()).toBe("");
+  });
+});
+
 describe("resetApiBaseUrl", () => {
   it("clears the override and deletes it from SecureStore", async () => {
     const mod = await loadFreshServerConfig("https://default.example.com");

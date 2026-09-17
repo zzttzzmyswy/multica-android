@@ -35,16 +35,16 @@ describe("batch action i18n", () => {
     "batch.delete": "删除",
     "batch.pickAssignee": "选择负责人…",
     "batch.clearAssignee": "清除负责人",
-    "batch.pickAssigneeTitle": "将选中的问题指派给…",
-    "batch.deleteTitle": "删除 {{count}} 个问题？",
-    "batch.deleteMessage": "将永久删除选中的问题，且无法撤销。",
+    "batch.pickAssigneeTitle": "将选中的任务指派给…",
+    "batch.deleteTitle": "删除 {{count}} 个任务？",
+    "batch.deleteMessage": "将永久删除选中的任务，且无法撤销。",
     "batch.updateFailedTitle": "更新失败",
-    "batch.updateFailedBody": "无法更新选中的问题，请重试。",
+    "batch.updateFailedBody": "无法更新选中的任务，请重试。",
     "batch.deleteFailedTitle": "删除失败",
-    "batch.deleteFailedBody": "无法删除选中的问题，请重试。",
+    "batch.deleteFailedBody": "无法删除选中的任务，请重试。",
     // Iteration-66 additions: success copy + run-confirm for agent/squad assign.
-    "batch.updateSuccess": "已更新 {{count}} 项",
-    "batch.deleteSuccess": "已删除 {{count}} 项",
+    "batch.updateSuccess": "已更新 {{count}} 个任务",
+    "batch.deleteSuccess": "已删除 {{count}} 个任务",
     "batch.selectAll": "全选",
     "batch.clearSelection": "清空",
     "batch.confirmAssignTitle": "确认指派？",
@@ -55,7 +55,7 @@ describe("batch action i18n", () => {
     "batch.confirmAssign": "确认指派",
     "batch.dontStart": "暂不开始",
     "batch.assignFailedTitle": "指派失败",
-    "batch.assignFailedBody": "无法指派选中的问题，请重试。",
+    "batch.assignFailedBody": "无法指派选中的任务，请重试。",
   };
 
   it("resolves every batch key in both locales with a real zh translation", () => {

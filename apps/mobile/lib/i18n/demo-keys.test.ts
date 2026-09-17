@@ -40,7 +40,7 @@ describe("demo page i18n", () => {
     "demo.section.run.title": "实时围观每一次执行",
     "demo.run.header": "智能体运行中",
     "demo.run.toolCalls": "次工具调用",
-    "demo.run.taskHeader": "子任务执行历史",
+    "demo.run.taskHeader": "task 执行历史",
     "demo.footer.title": "用自己的数据体验一下",
     "demo.footer.cta": "登录 Multica",
     "demo.footer.hint": "登录只要一分钟——输入邮箱和验证码即可。",

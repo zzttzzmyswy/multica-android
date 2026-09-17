@@ -37,7 +37,7 @@ describe("actor issues panel i18n", () => {
     "actorIssues.empty.created.description": "由这里创建的任务会显示在此视图中。",
     "members.detail.issues": "任务",
     "agents.detail.workIssues": "关联任务",
-    "issues.loadError": "问题加载失败：",
+    "issues.loadError": "任务加载失败：",
     "common.retry": "重试",
   };
 
