@@ -50,7 +50,6 @@ import {
 import {
   FlatList,
   Modal,
-  PanResponder,
   Pressable,
   ScrollView,
   TextInput,
@@ -74,8 +73,6 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection-store";
 import {
-  COLUMN_WIDTH_MAX,
-  COLUMN_WIDTH_MIN,
   columnMoveAvailability,
   columnWidthOf,
   nextColumnWidth,
@@ -87,6 +84,7 @@ import {
   type TableColumnWidths,
   type TableSystemColumn,
 } from "@/data/stores/issue-table-columns";
+import { ColumnResizeHandle } from "@/components/ui/column-resize-handle";
 import type {
   IssueSortDirection,
   IssueSortField,
@@ -923,109 +921,14 @@ function HeaderCell({
         </Text>
         {sortArrow}
       </Pressable>
-      <ResizeHandle
+      <ColumnResizeHandle
         label={t("a11y.tableResizeColumn", { column: label })}
         startWidth={width}
+        height={HEADER_HEIGHT}
+        width={RESIZE_HANDLE_WIDTH}
         onStart={() => onResizeStart({ column, width })}
         onMove={(startWidth, dx) => onResizeMove(column, startWidth, dx)}
         onCommit={(startWidth, dx) => onResizeCommit(column, startWidth, dx)}
-      />
-    </View>
-  );
-}
-
-/**
- * The drag target that resizes one column. Owns its own PanResponder: the
- * gesture starts from whatever the column's width was when the finger landed
- * (captured in a ref, so a re-render mid-drag cannot shift the origin) and
- * reports the running delta outward.
- *
- * Responder negotiation matters here — the handle sits inside the header's
- * horizontal ScrollView, and a plain Pressable would lose the drag to the
- * scroller. Claiming the responder on touch-down (before any movement, which
- * is when a ScrollView normally takes over) keeps the horizontal drag for the
- * resize; `onMoveShouldSetPanResponderCapture` is the belt-and-braces path for
- * a drag that begins before the responder grant lands.
- */
-function ResizeHandle({
-  label,
-  startWidth,
-  onStart,
-  onMove,
-  onCommit,
-}: {
-  label: string;
-  startWidth: number;
-  onStart: () => void;
-  onMove: (startWidth: number, dx: number) => void;
-  onCommit: (startWidth: number, dx: number) => void;
-}) {
-  const { t } = useTranslation();
-  const [active, setActive] = useState(false);
-  // The width the CURRENT drag started from. Assigned on every render, not
-  // only in the grant handler: the responder below is built once (its deps are
-  // empty so a mid-drag rebuild cannot drop the gesture), so anything it reads
-  // must come from a ref that is refreshed outside it — a `startWidth` read
-  // from the closure would be the column's width at MOUNT, and the second drag
-  // on a column would snap it back to that.
-  const startRef = useRef(startWidth);
-  startRef.current = startWidth;
-  // Latest callbacks, kept fresh for the same reason.
-  const handlers = useRef({ onStart, onMove, onCommit });
-  handlers.current = { onStart, onMove, onCommit };
-
-  const responder = useMemo(
-    () =>
-      PanResponder.create({
-        // Claim the touch on the way down and keep it: the header sits in a
-        // horizontal ScrollView, and a handle that only asks for the
-        // responder once the finger has already moved loses that race — the
-        // scroller starts panning first. Asking on touch-down also means the
-        // gesture never has to be re-negotiated mid-drag.
-        //
-        // Deliberately NOT using the `*Capture` variants: those run on the
-        // way down from the root and returning true there blocks the other
-        // responder candidates without granting the responder to this view,
-        // which leaves the gesture owned by nobody and the handle dead.
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: () => {
-          setActive(true);
-          handlers.current.onStart();
-        },
-        onPanResponderMove: (_e, g) => {
-          handlers.current.onMove(startRef.current, g.dx);
-        },
-        onPanResponderRelease: (_e, g) => {
-          setActive(false);
-          handlers.current.onCommit(startRef.current, g.dx);
-        },
-        onPanResponderTerminate: (_e, g) => {
-          setActive(false);
-          handlers.current.onCommit(startRef.current, g.dx);
-        },
-      }),
-    [],
-  );
-
-  return (
-    <View
-      {...responder.panHandlers}
-      style={{ width: RESIZE_HANDLE_WIDTH, height: HEADER_HEIGHT }}
-      className="items-center justify-center"
-      accessibilityRole="adjustable"
-      accessibilityLabel={label}
-      accessibilityValue={{
-        min: COLUMN_WIDTH_MIN,
-        max: COLUMN_WIDTH_MAX,
-        now: Math.round(startWidth),
-      }}
-    >
-      <View
-        style={{ width: active ? 3 : 2 }}
-        className={`h-4 rounded-full ${
-          active ? "bg-primary" : "bg-border"
-        }`}
       />
     </View>
   );

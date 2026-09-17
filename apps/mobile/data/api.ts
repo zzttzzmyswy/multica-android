@@ -145,6 +145,7 @@ import type {
   UpdateLabelRequest,
   UpdateMeRequest,
   UpdateProjectRequest,
+  UpdateProjectResourceRequest,
   UpdatePropertyRequest,
   UpdateIssueStatusRequest,
   IssueStatusCategory,
@@ -560,7 +561,7 @@ class ApiClient {
       "Content-Type": "application/json",
       "X-Client-Platform": "mobile",
       "X-Client-OS": "ios",
-      "X-Client-Version": "0.5.62",
+      "X-Client-Version": "0.5.63",
       "X-Request-ID": rid,
       ...((init.headers as Record<string, string>) ?? {}),
     };
@@ -3438,6 +3439,25 @@ class ApiClient {
     );
   }
 
+  /**
+   * Edit a mounted resource. Only the fields present in `data` change — the
+   * server replaces a supplied `resource_ref` wholesale rather than
+   * deep-merging it (server/internal/handler/project_resource.go:60), so a
+   * caller editing one ref field must spread the rest of the ref in.
+   *
+   * Mirrors packages/core/api/client.ts:3062 updateProjectResource.
+   */
+  async updateProjectResource(
+    projectId: string,
+    resourceId: string,
+    data: UpdateProjectResourceRequest,
+  ): Promise<ProjectResource> {
+    return this.fetch<ProjectResource>(
+      `/api/projects/${projectId}/resources/${resourceId}`,
+      { method: "PUT", body: JSON.stringify(data) },
+    );
+  }
+
   // --- Chat ---
   // Mirrors the surface area of packages/core/api/client.ts chat methods.
   // v1 omits getChatSession + updateChatSession (rename) — see the v1 cut
@@ -4038,7 +4058,7 @@ class ApiClient {
       // No Content-Type — let fetch set the multipart boundary.
       "X-Client-Platform": "mobile",
       "X-Client-OS": "ios",
-      "X-Client-Version": "0.5.62",
+      "X-Client-Version": "0.5.63",
       "X-Request-ID": rid,
     };
     if (this.token) headers["Authorization"] = `Bearer ${this.token}`;

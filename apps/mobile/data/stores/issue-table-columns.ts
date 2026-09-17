@@ -78,7 +78,9 @@ export const DEFAULT_COLUMN_WIDTHS: Record<
 /** Width for a property (non-system) column and for any unknown key. */
 export const PROPERTY_COLUMN_WIDTH = 132;
 
-function clampColumnWidth(width: number): number {
+/** Shared with the projects compact table (`project-table-columns.ts`), which
+ *  reuses the same floor / ceiling rather than inventing its own. */
+export function clampColumnWidth(width: number): number {
   return Math.min(COLUMN_WIDTH_MAX, Math.max(COLUMN_WIDTH_MIN, Math.round(width)));
 }
 
