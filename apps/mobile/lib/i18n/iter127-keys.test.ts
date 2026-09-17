@@ -58,7 +58,7 @@ describe("iteration 127 i18n", () => {
     "squads.scope.all": "全部",
     "squads.scopeEmptyMine": "您还没有创建过小队。",
     "squads.scopeEmptyMineHint":
-      "切换到「全部」可以浏览该工作区中的所有小队。",
+      "切换到\"全部\"可以浏览该工作区中的所有小队。",
     // Issues-list working-only quick filter.
     "filter.quick": "快捷筛选",
     "filter.workingOnly": "有智能体正在工作",

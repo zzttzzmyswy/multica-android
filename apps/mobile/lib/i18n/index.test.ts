@@ -107,7 +107,7 @@ describe("i18n translate", () => {
     );
     mod.setLocale("zh");
     expect(mod.translate("switchWorkspace.message", { name: "Acme" })).toBe(
-      "切换到「Acme」？",
+      "切换到\"Acme\"？",
     );
   });
 });

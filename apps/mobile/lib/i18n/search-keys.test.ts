@@ -34,7 +34,7 @@ describe("search i18n", () => {
     "search.cancelled": "已取消",
     "search.members": "成员",
     "search.placeholder": "搜索任务和项目",
-    "search.noResults": "未找到「{{query}}」的结果",
+    "search.noResults": "未找到\"{{query}}\"的结果",
     "search.empty": "输入以搜索任务和项目。",
   };
 

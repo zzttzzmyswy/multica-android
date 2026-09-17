@@ -43,7 +43,7 @@ describe("workspace settings i18n", () => {
     "workspaceSettings.createdAt": "创建时间",
     "workspaceSettings.dangerZone": "危险区",
     "workspaceSettings.leaveTitle": "退出工作区",
-    "workspaceSettings.leaveConfirmTitle": "退出「{{name}}」？",
+    "workspaceSettings.leaveConfirmTitle": "退出\"{{name}}\"？",
     "workspaceSettings.leaveButton": "退出",
     "workspaceSettings.leaving": "退出中…",
     "workspaceSettings.leaveFailed": "退出工作区失败",
@@ -71,7 +71,7 @@ describe("workspace settings i18n", () => {
     mod.setLocale("zh");
     expect(
       mod.translate("workspaceSettings.leaveConfirmTitle", { name: "Acme" }),
-    ).toBe("退出「Acme」？");
+    ).toBe("退出\"Acme\"？");
     mod.setLocale("en");
     expect(
       mod.translate("workspaceSettings.leaveConfirmTitle", { name: "Acme" }),

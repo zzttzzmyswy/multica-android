@@ -215,6 +215,16 @@ const PLACEHOLDER = /\{\{[^}]*\}\}/g;
 const prose = (value: string | undefined) => (value ?? "").replace(PLACEHOLDER, "");
 
 /**
+ * Latin runs left in a zh string — `Stripe`, `Cloud Billing`, `agent/…`-style
+ * references. Placeholders are stripped first: `{{count}}` is a binding, not
+ * prose, and never a translation decision.
+ */
+const LATIN_RUN = /[A-Za-z][A-Za-z0-9]*(?:[./_-][A-Za-z0-9]+)*/g;
+const latinTokens = (value: string) => value.match(LATIN_RUN) ?? [];
+const CJK = /[一-鿿]/;
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
  * English that survives on purpose because it names code, a CLI command or a
  * product surface — never the concept in prose.
  */
@@ -276,6 +286,132 @@ describe("zh glossary: concepts are never left in English", () => {
         .filter((key) => !zh[key].includes(word))
         .map((key) => `${label}: ${mismatch(key, `a ${word} string`)}`),
     );
+    expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * Guard for the `billing.*` family — the pocket the 139 round's bare
+ * Latin-character scan called the one scalable stretch of untranslated prose
+ * left (23 tokens across 15 keys). Classifying each token overturns that: they
+ * are the Stripe and Google Cloud *surfaces the user is handed off to*, plus
+ * two standard tokens. `checkout`, `portal`, `entitlement` and `quantity`
+ * survive verbatim in the ja and ko bundles under packages/views/locales/ —
+ * locales with no shared script and no habit of borrowing English — which is
+ * what separates a product name from a leak. Renaming the destination page in
+ * zh would make the copy stop naming the page it points at.
+ *
+ * `entitlement` and `quantity` are the exception: internal server vocabulary,
+ * not product names, both with a settled Chinese word. This round translated
+ * them (权益 / 数量) and the last case below pins that, so no later sweep
+ * restores them.
+ *
+ * The allow-list is deliberately closed. A new English word in billing copy
+ * fails this suite until someone classifies it here, which is the whole point:
+ * the scan that produced this list was a heuristic, and heuristics rot.
+ */
+const BILLING_ALLOWED_LATIN = new Set([
+  "Stripe", // brand
+  "Cloud", // "Cloud Billing" — Google Cloud surface
+  "Billing", // "Billing Portal" / "Cloud Billing" — product surface
+  "Portal", // "Billing Portal" — product surface
+  "Checkout", // "Checkout" / "Stripe Checkout" — product surface
+  "UTC", // standard token, not prose
+  "Free", // plan tier names — same rule that keeps `skill` English
+  "Pro",
+  "task", // one agent run, lowercase English per the glossary
+  "owner", // role enums stay lowercase English
+  "admin",
+]);
+
+/** Product surfaces, and the exact spelling the destination page uses. */
+const BILLING_SURFACES: { en: RegExp; literal: string }[] = [
+  { en: /Stripe Checkout/, literal: "Stripe Checkout" },
+  { en: /Stripe Billing Portal/, literal: "Stripe Billing Portal" },
+  { en: /Billing Portal/, literal: "Billing Portal" },
+  { en: /Cloud Billing/i, literal: "Cloud Billing" },
+  { en: /\bCheckout\b/, literal: "Checkout" },
+];
+
+describe("zh glossary: billing copy keeps the Stripe surfaces literal", () => {
+  const billingKeys = keys.filter((key) => key.startsWith("billing."));
+
+  it("classifies every Latin token in the family, so no new prose slips in", () => {
+    const offenders = billingKeys.flatMap((key) =>
+      latinTokens(prose(zh[key]))
+        .filter((token) => !BILLING_ALLOWED_LATIN.has(token))
+        .map((token) => `${key}: unclassified ${JSON.stringify(token)}`),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it("names each product surface the way the destination page does", () => {
+    const offenders = BILLING_SURFACES.flatMap(({ en: pattern, literal }) =>
+      billingKeys
+        .filter((key) => pattern.test(prose(en[key])))
+        .filter((key) => !zh[key].includes(literal))
+        .map((key) => mismatch(key, `the literal ${JSON.stringify(literal)}`)),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps one space between every surviving English token and the Chinese", () => {
+    const offenders = billingKeys.flatMap((key) => {
+      const value = zh[key];
+      return latinTokens(value).flatMap((token) =>
+        [...value.matchAll(new RegExp(escapeRegex(token), "g"))].flatMap(({ index }) => {
+          const before = value[index - 1];
+          const after = value[index + token.length];
+          const where: string[] = [];
+          if (before && CJK.test(before)) where.push(`no space before ${JSON.stringify(token)}`);
+          if (after && CJK.test(after)) where.push(`no space after ${JSON.stringify(token)}`);
+          return where.map((reason) => `${key}: ${reason}`);
+        }),
+      );
+    });
+    expect(offenders).toEqual([]);
+  });
+
+  it("never restores the two internal words this round translated", () => {
+    const offenders = billingKeys
+      .filter((key) => /\b(entitlement|quantity)\b/i.test(zh[key]))
+      .map((key) => mismatch(key, "权益 / 数量"));
+    expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * Guard for the punctuation half of the Chinese voice guide
+ * (apps/docs/content/docs/developers/conventions.mdx, section 3).
+ *
+ * The 140 round's search-page track scan surfaced this. The two earlier scans
+ * both keyed on Latin characters, and `「」` / `“”` are not Latin — so 23
+ * strings kept the exact characters the guide forbids ("Quotes: straight
+ * double quotes ... Do not use `「」` or curly quotes") and no test noticed.
+ *
+ * Not guarded here: the guide's ellipsis clause ("three dots `...` not the
+ * single character `…`") contradicts its own "match the English source"
+ * clause, because the en bundle itself uses `…` in 95 strings and `...` in 11.
+ * Pinning either reading rewrites a hundred strings, so the contradiction is
+ * reported for the docs owner instead of silently resolved here.
+ */
+const BANNED_QUOTES = ["「", "」", "“", "”", "‘", "’"] as const;
+
+describe("zh glossary: punctuation follows the Chinese voice guide", () => {
+  it("uses no corner brackets and no curly quotes", () => {
+    const offenders = keys.flatMap((key) =>
+      BANNED_QUOTES.filter((char) => zh[key].includes(char)).map(
+        (char) => `${key}: banned ${JSON.stringify(char)} in ${JSON.stringify(zh[key])}`,
+      ),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it("uses straight double quotes wherever the English source quotes a value", () => {
+    const offenders = keys
+      .filter((key) => en[key]?.includes('"'))
+      .filter((key) => !zh[key].includes('"'))
+      .map((key) => mismatch(key, "straight double quotes"));
     expect(offenders).toEqual([]);
   });
 });
