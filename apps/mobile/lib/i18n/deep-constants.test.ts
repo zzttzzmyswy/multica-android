@@ -96,7 +96,7 @@ describe("deep-constant i18n", () => {
     );
     mod.setLocale("zh");
     expect(mod.translate("chat.repliedIn", { elapsed: "39s" })).toBe(
-      "在 39s 内回复",
+      "39s 内回复",
     );
     expect(mod.translate("chat.finishedWithoutReply")).toBe(
       "本轮已结束，智能体没有返回文字回复。",

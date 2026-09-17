@@ -27,7 +27,7 @@ describe("settings timezone i18n", () => {
 
   const ZH_SPOT: Record<string, string> = {
     "settings.timezoneTitle": "查看时区",
-    "settings.timezoneHint": "用于仪表盘、图表和向您展示的任何日期。个人偏好，在你的所有工作区中通用。",
+    "settings.timezoneHint": "用于仪表盘、图表和向你展示的任何日期。个人偏好，在你的所有工作区中通用。",
     "settings.timezoneSearchPlaceholder": "搜索时区",
     "settings.timezoneEmpty": "没有匹配的时区",
     "settings.timezoneSyncFailed": "保存时区偏好失败。",

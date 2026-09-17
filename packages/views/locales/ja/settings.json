@@ -126,10 +126,10 @@
       "goProjects": { "label": "プロジェクトへ移動", "description": "プロジェクト一覧を開きます。" },
       "goAutopilots": { "label": "自動化へ移動", "description": "ワークスペースの自動化を開きます。" },
       "goAgents": { "label": "エージェントへ移動", "description": "エージェント一覧を開きます。" },
-      "goSquads": { "label": "Squadsへ移動", "description": "Squad一覧を開きます。" },
+      "goSquads": { "label": "スクワッドへ移動", "description": "スクワッド一覧を開きます。" },
       "goUsage": { "label": "使用量へ移動", "description": "使用量分析を開きます。" },
       "goRuntimes": { "label": "ランタイムへ移動", "description": "ランタイム設定を開きます。" },
-      "goSkills": { "label": "Skillsへ移動", "description": "Skillライブラリを開きます。" },
+      "goSkills": { "label": "スキルへ移動", "description": "スキルライブラリを開きます。" },
       "goSettings": { "label": "設定へ移動", "description": "ワークスペース設定を開きます。" }
     },
     "fixed": {
@@ -342,10 +342,10 @@
   },
   "labels": {
     "title": "ラベル",
-    "description": "このワークスペースのタスク、Skill 用ラベルを個別に管理します。",
+    "description": "このワークスペースのタスク、スキル用ラベルを個別に管理します。",
     "scopes": {
       "issue": "タスク",
-      "skill": "Skill"
+      "skill": "スキル"
     },
     "search_placeholder": "名前または説明で絞り込み...",
     "new_label": "新しいラベル",
