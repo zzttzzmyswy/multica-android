@@ -155,7 +155,7 @@ describe("initI18n device-language resolution", () => {
     mod.setLocale("zh");
     expect(mod.translate("comment.placeholder")).toBe("添加评论…");
     expect(mod.translate("chat.placeholder")).toBe("输入消息…");
-    expect(mod.translate("chat.agentWorking")).toBe("Agent 正在执行…");
+    expect(mod.translate("chat.agentWorking")).toBe("智能体正在执行…");
     expect(mod.translate("settings.namePlaceholder")).toBe("您的名称");
   });
 });

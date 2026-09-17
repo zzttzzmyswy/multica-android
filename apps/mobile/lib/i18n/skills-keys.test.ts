@@ -31,7 +31,7 @@ describe("skills management i18n", () => {
     "nav.skills": "技能",
     "skills.loadError": "加载技能失败：",
     "skills.emptyTitle": "还没有技能",
-    "skills.emptyDescription": "技能是可复用的指令包，agent 会在需要时加载。",
+    "skills.emptyDescription": "技能是可复用的指令包，智能体会在需要时加载。",
     "skills.createButton": "新建技能",
     "skills.new.title": "新建技能",
     "skills.form.name": "名称",

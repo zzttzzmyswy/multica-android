@@ -27,7 +27,7 @@ describe("agents list/detail i18n", () => {
   });
 
   const ZH_SPOT: Record<string, string> = {
-    "agents.loadError": "加载 agents 失败：",
+    "agents.loadError": "加载智能体失败：",
     "agents.emptyTitle": "还没有智能体",
     "agents.emptyDescription": "在 Web 端创建的工作区智能体会显示在这里，可查看状态并在手机上接手 task。",
     "agents.goChat": "去聊天页发起会话",
@@ -62,9 +62,9 @@ describe("agents list/detail i18n", () => {
     "agents.activity.subtitleNoRecent": "暂无完成记录",
     "agents.activity.subtitleRecentProgress": "已显示 {{shown}} / {{total}} 条",
     "agents.activity.subtitleRecentLatest": "最新 {{count}} 条",
-    "agents.activity.emptyNow": "该 agent 当前没有进行中的 task。",
+    "agents.activity.emptyNow": "这个智能体当前没有在跑任何 task。",
     "agents.activity.empty30d": "最近 30 天没有完成 task。",
-    "agents.activity.emptyRecent": "该 agent 还没有完成过任何 task。",
+    "agents.activity.emptyRecent": "这个智能体还没有完成过任何 task。",
     "agents.activity.showMore": "显示更多",
     "agents.activity.runs": "次运行",
     "agents.activity.successPct": "成功率 {{percent}}%",

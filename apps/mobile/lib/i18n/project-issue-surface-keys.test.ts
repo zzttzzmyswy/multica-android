@@ -30,7 +30,7 @@ describe("project issue-surface i18n", () => {
     "project.emptyIssues": "该项目暂无任务。",
     "issues.scopeAll": "全部",
     "issues.scopeMembers": "成员",
-    "issues.scopeAgents": "Agents",
+    "issues.scopeAgents": "智能体",
     "issues.viewList": "列表",
     "issues.viewBoard": "看板",
     "issues.filterEmpty": "没有符合当前筛选的任务。",

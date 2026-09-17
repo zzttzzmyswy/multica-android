@@ -99,7 +99,7 @@ describe("deep-constant i18n", () => {
       "在 39s 内回复",
     );
     expect(mod.translate("chat.finishedWithoutReply")).toBe(
-      "agent 已结束本轮，但未返回文字回复。",
+      "本轮已结束，智能体没有返回文字回复。",
     );
   });
 
@@ -176,7 +176,7 @@ describe("deep-constant i18n", () => {
     expect(mod.translate("timeline.jumpToNew", { count: 2, messages: "条消息" })).toBe(
       "跳至 2 条新内容",
     );
-    expect(mod.translate("chat.noAgentsEmpty")).toBe("暂无可用 agent。");
+    expect(mod.translate("chat.noAgentsEmpty")).toBe("暂无可用智能体。");
     expect(mod.translate("a11y.removeMention", { name: "Alice" })).toBe(
       "移除提及 Alice",
     );

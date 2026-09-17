@@ -31,7 +31,7 @@ describe("squads list/detail i18n", () => {
     "nav.squads": "小队",
     "squads.loadError": "加载小队失败：",
     "squads.emptyTitle": "还没有小队",
-    "squads.emptyDescription": "小队是平台上的多 agent 协作单元，由队长带队完成任务。",
+    "squads.emptyDescription": "小队是平台上的多智能体协作单元，由队长带队完成任务。",
     "squads.createButton": "新建小队",
     "squads.archived": "已归档",
     "squads.memberCount": "{{count}} 名成员",

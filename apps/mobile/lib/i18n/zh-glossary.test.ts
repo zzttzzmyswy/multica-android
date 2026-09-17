@@ -188,3 +188,94 @@ describe("zh glossary: agent run is lowercase task", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/**
+ * Guard for the rest of the "Translate fully — concepts" column
+ * (apps/docs/content/docs/developers/conventions.mdx, section 2), plus `squad`,
+ * which this bundle already renders as 小队 in every `squads.*` string.
+ *
+ * `task` is deliberately absent: one agent execution run keeps the lowercase
+ * English word (pinned above). These concepts, by contrast, are prose and must
+ * never survive as English words in a zh string — that is how the 139 round
+ * found ~120 `agent(s)` / `daemon` / `runtime` / `squad` leaks that the
+ * packages/views locales had already fixed.
+ */
+const CONCEPT_TERMS: { label: string; zh: string; pattern: RegExp }[] = [
+  { label: "智能体", zh: "智能体", pattern: /\bagents?\b/i },
+  { label: "守护进程", zh: "守护进程", pattern: /\bdaemons?\b/i },
+  { label: "Runtime", zh: "运行时", pattern: /\bruntimes?\b/i },
+  { label: "小队", zh: "小队", pattern: /\bsquads?\b/i },
+];
+
+/**
+ * `{{name}}`-style placeholders are code identifiers, not prose: `{{agent}}`,
+ * `{{runtime}}`, `{{squad}}` and `{{label}}` must not trip a concept rule.
+ */
+const PLACEHOLDER = /\{\{[^}]*\}\}/g;
+const prose = (value: string | undefined) => (value ?? "").replace(PLACEHOLDER, "");
+
+/**
+ * English that survives on purpose because it names code, a CLI command or a
+ * product surface — never the concept in prose.
+ */
+const CONCEPT_CODE_REFERENCES = [
+  "agents.new.ai.description", // "Agent Builder" — product surface name
+  "notif.groupMentionsDesc", // "@squad" — mention token
+  "onboarding.runtime.step2", // "multica daemon" — the CLI subcommand
+  "resource.modeWorktreeDescription", // "agent/…" — git branch prefix
+  "runtimes.profiles.form.commandPlaceholder", // "agent --model …" — CLI example
+];
+
+/**
+ * EN names the concept but the zh line elides the noun, because the screen or
+ * the surrounding sentence already scopes it (a screen title, a target list,
+ * one half of a prefix/suffix pair). The concept is dropped, never rendered
+ * with a competing word — 运行环境 for Runtime is exactly what this stops.
+ */
+const CONCEPT_ELIDED_KEYS = [
+  "agents.new.failedTitle",
+  "agents.new.runtimeRequired",
+  "comment.trigger_blocked_runtime_unusable",
+  "comment.trigger_none_will_trigger",
+  "integrations.gh.coAuthorSuffix",
+  "runtimes.detail.renameFailed",
+  "squads.detail.archiveMessage",
+];
+
+describe("zh glossary: concepts are never left in English", () => {
+  it("keeps every surviving English token on the code-reference list", () => {
+    const offenders = CONCEPT_TERMS.flatMap(({ label, pattern }) =>
+      keys
+        .filter((key) => !CONCEPT_CODE_REFERENCES.includes(key))
+        .filter((key) => pattern.test(prose(zh[key])))
+        .map((key) => `${label}: ${mismatch(key, "a Chinese rendering")}`),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps each code reference literal, so nobody 'fixes' it by accident", () => {
+    const expected: Record<string, string> = {
+      "agents.new.ai.description": "Agent Builder",
+      "notif.groupMentionsDesc": "@squad",
+      "onboarding.runtime.step2": "multica daemon",
+      "resource.modeWorktreeDescription": "agent/…",
+      "runtimes.profiles.form.commandPlaceholder": "agent --model",
+    };
+    const offenders = Object.entries(expected)
+      .filter(([key, token]) => !zh[key]?.includes(token))
+      .map(([key, token]) => mismatch(key, `the literal ${JSON.stringify(token)}`));
+    expect(offenders).toEqual([]);
+  });
+
+  it("renders the concept in Chinese wherever the English names it", () => {
+    const exempt = new Set([...CONCEPT_CODE_REFERENCES, ...CONCEPT_ELIDED_KEYS]);
+    const offenders = CONCEPT_TERMS.flatMap(({ label, zh: word, pattern }) =>
+      keys
+        .filter((key) => pattern.test(prose(en[key])))
+        .filter((key) => !exempt.has(key))
+        .filter((key) => !zh[key].includes(word))
+        .map((key) => `${label}: ${mismatch(key, `a ${word} string`)}`),
+    );
+    expect(offenders).toEqual([]);
+  });
+});

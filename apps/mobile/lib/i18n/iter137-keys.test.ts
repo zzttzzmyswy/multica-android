@@ -38,7 +38,7 @@ describe("iteration 137 i18n", () => {
     "issue.workdirPathCopied": "已复制本地 workdir 路径",
     "issue.workdirPathCopyFailed": "复制本地 workdir 路径失败",
     "issue.workdirPathUnavailable":
-      "暂无本地 workdir — 这个任务还没被本地 agent 运行过",
+      "暂无本地 workdir — 这个任务还没被本地智能体运行过",
     // Relations entry web has and the phone menu did not.
     "issueRelation.createChildTitle": "创建子任务",
   };

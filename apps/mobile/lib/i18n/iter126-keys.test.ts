@@ -52,9 +52,9 @@ describe("iteration 126 i18n", () => {
     "skills.runtimeImport.problems": "需要处理",
     "skills.runtimeImport.done": "完成",
     // Agent-owned MCP config + runtime discovery (web mcp-config-tab).
-    "mcp.agent.managedTitle": "Agent 自身配置",
+    "mcp.agent.managedTitle": "智能体配置",
     "mcp.agent.managedAdd": "添加服务器",
-    "mcp.agent.managedEmpty": "没有 agent 专属服务器。添加后该 agent 会拥有其他 agent 没有的服务器。",
+    "mcp.agent.managedEmpty": "没有智能体专属服务器。添加后该智能体会拥有其他智能体没有的服务器。",
     "mcp.agent.managedDeleteTitle": "删除服务器？",
     "mcp.agent.managedSaved": "服务器已保存",
     "mcp.agent.redactedTitle": "配置已隐藏",
@@ -71,7 +71,7 @@ describe("iteration 126 i18n", () => {
     // My Issues "all" scope (web my-issues-header.tsx :89-94). The empty text
     // names the union the scope actually selects, not "the whole workspace".
     "myIssues.scopeAll": "全部",
-    "myIssues.emptyAll": "还没有指派给您、由您创建，或涉及您的 agents 与 squads 的任务。",
+    "myIssues.emptyAll": "还没有指派给您、由您创建，或涉及您的智能体与小队的任务。",
   };
 
   it("resolves every iteration-126 key in both locales", () => {

@@ -49,7 +49,7 @@ describe("downloads i18n", () => {
     "downloads.deleteConfirmTitle": "删除这条下载记录？",
     "downloads.deleteConfirmMessage": "设备上对应的文件也会被删除。",
     "downloads.error.interrupted": "下载因应用重启而中断，可重试。",
-    "chat.agentUnknown": "未知 agent",
+    "chat.agentUnknown": "未知智能体",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {
