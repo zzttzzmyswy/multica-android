@@ -32,7 +32,7 @@ describe("about i18n", () => {
     "about.subtitle": "安卓客户端",
     "about.versionLabel": "版本",
     "about.buildLabel": "构建号",
-    "about.intro": "随时随地查看你的工作区、issue 与 agents。",
+    "about.intro": "随时随地查看你的工作区、任务与智能体。",
     "about.sourceCode": "源代码",
     "about.checkForUpdates": "检查更新",
     "about.checking": "正在检查…",
@@ -44,12 +44,12 @@ describe("about i18n", () => {
     "about.downloading": "正在下载…",
     "about.downloadingWithPct": "正在下载… {{pct}}%",
     "update.hasNew": "有新版本",
-    "update.installUnknownSourcesHint": "若安装被系统阻止，请允许此应用“安装未知应用”。",
+    "update.installUnknownSourcesHint": "若安装被系统阻止，请允许此应用\"安装未知应用\"。",
     "update.openSettings": "打开设置",
     "update.error.network": "无法连接更新服务器，请稍后重试。",
     "update.error.noAsset": "当前设备架构暂未发布安装包。",
     "update.error.downloadFailed": "下载失败：{{message}}",
-    "update.error.installFailed": "安装失败，请检查“安装未知应用”权限后重试。",
+    "update.error.installFailed": "安装失败，请检查\"安装未知应用\"权限后重试。",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {

@@ -18,6 +18,27 @@ export function propertyHasOptions(property: IssueProperty): boolean {
   return property.type === "select" || property.type === "multi_select";
 }
 
+/**
+ * Definitions whose values have a total order, and can therefore back a sort
+ * field (web `sortableProperties`, issues-header.tsx:1605-1608). Number and
+ * date are the two web offers; a text/url property would sort
+ * lexically-meaninglessly, and a select's option order is a grouping
+ * concern, not an ordering one.
+ */
+export function isSortableProperty(property: IssueProperty): boolean {
+  return property.type === "number" || property.type === "date";
+}
+
+/**
+ * Definitions a board can turn into lanes (web `groupableProperties`,
+ * issues-header.tsx:1609-1612). Only `select` — it is the single-valued type
+ * whose value maps 1:1 onto a column; multi_select would need an issue in
+ * several lanes at once.
+ */
+export function isGroupableProperty(property: IssueProperty): boolean {
+  return property.type === "select";
+}
+
 export interface PropertyCatalogFilter {
   query: string;
   showArchived: boolean;

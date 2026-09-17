@@ -129,7 +129,7 @@
       "goSquads": { "label": "스쿼드로 이동", "description": "스쿼드 목록을 엽니다." },
       "goUsage": { "label": "사용량으로 이동", "description": "사용량 분석을 엽니다." },
       "goRuntimes": { "label": "런타임으로 이동", "description": "런타임 설정을 엽니다." },
-      "goSkills": { "label": "Skills로 이동", "description": "Skill 라이브러리를 엽니다." },
+      "goSkills": { "label": "스킬로 이동", "description": "스킬 라이브러리를 엽니다." },
       "goSettings": { "label": "설정으로 이동", "description": "워크스페이스 설정을 엽니다." }
     },
     "fixed": {

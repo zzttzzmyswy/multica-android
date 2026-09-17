@@ -43,6 +43,14 @@ export function getEnvBaseUrl(): string {
   return ENV_BASE_URL;
 }
 
+/** The base a reset falls back to: the build-time default, which is the only
+ *  value that survives clearing the override. Empty in a build with no baked
+ *  `EXPO_PUBLIC_API_URL`. Distinct from `getDisplayBaseUrl()` on purpose —
+ *  that one reports what is in effect *now*, which may be the override. */
+export function getDefaultApiBaseUrl(): string {
+  return ENV_BASE_URL;
+}
+
 /** Current effective base: the SecureStore override if present, else the
  *  build-time env default. Throws only if neither exists — this is the
  *  same hard failure ApiClient historically surfaced at module load. */

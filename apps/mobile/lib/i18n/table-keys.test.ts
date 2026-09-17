@@ -29,7 +29,7 @@ describe("issue table view i18n", () => {
   const ZH_SPOT: Record<string, string> = {
     "issues.viewTable": "表格",
     "a11y.viewTable": "表格视图",
-    "a11y.tableSelectAll": "全选可见问题",
+    "a11y.tableSelectAll": "全选可见任务",
     "a11y.tableSortColumn": "按此列排序",
     "a11y.tableSortTitle": "按标题排序",
     "a11y.tableRowSelect": "选择",

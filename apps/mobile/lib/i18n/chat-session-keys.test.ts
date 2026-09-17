@@ -38,7 +38,7 @@ describe("chat session management i18n", () => {
     "chat.typing": "正在输入…",
     "chat.failedToSend": "发送失败",
     "chat.noMessagesYet": "暂无消息",
-    "chat.noTextReply": "无文本回复",
+    "chat.noTextReply": "无文字回复",
   };
 
   it("resolves every chat-session key in both locales with a real zh translation", () => {

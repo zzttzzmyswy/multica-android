@@ -521,7 +521,7 @@
       "runtime_toggle_aria": "継承した {{name}} の有効・無効を切り替え",
       "runtime_toggle_failed_toast": "継承スキルの状態を変更できませんでした",
       "runtime_missing": "継承スキルを検出するには、ローカルランタイムを割り当ててください。",
-      "runtime_offline": "ローカルランタイムはオフラインです。再接続すると更新できます。",
+      "runtime_offline": "ローカルランタイムはオフラインです。再接続すると継承スキルを更新できます。",
       "runtime_discovering": "ローカルランタイムからスキルを検出中…",
       "runtime_failed": "ランタイムのスキルを検出できませんでした。",
       "runtime_forbidden": "このランタイムのスキルを表示する権限がありません。",

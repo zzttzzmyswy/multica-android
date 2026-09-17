@@ -1,5 +1,9 @@
-import { queryOptions } from "@tanstack/react-query";
+import { queryOptions, type UseQueryOptions } from "@tanstack/react-query";
+import type { InboxItem } from "@multica/core/types";
 import { api } from "@/data/api";
+
+/** The two inbox lists a single notification can live in. */
+export type InboxBucket = "inbox" | "archived";
 
 /**
  * Inbox cache key factory.
@@ -37,3 +41,33 @@ export const archivedInboxListOptions = (wsId: string | null) =>
     queryFn: ({ signal }) => api.listArchivedInbox({ signal }),
     enabled: !!wsId,
   });
+
+/**
+ * The same two lists behind one signature, for callers that pick the bucket at
+ * runtime — the inbox-item detail screen, which reads whichever list the deep
+ * link's `view` names. The cache keys are unchanged (`list` / `archived`), so
+ * the tab, this screen and the archive mutations keep sharing one cache entry
+ * per list.
+ *
+ * The return type is spelled out because the two `queryOptions` above carry
+ * different literal query keys: a caller that branches between them would get a
+ * union TypeScript cannot pass to `useQuery`, since `QueryFunction` is
+ * contravariant in the key.
+ */
+export function inboxBucketOptions(
+  bucket: InboxBucket,
+  wsId: string | null,
+): UseQueryOptions<
+  InboxItem[],
+  Error,
+  InboxItem[],
+  readonly ["inbox", string | null, "list" | "archived"]
+> {
+  const archived = bucket === "archived";
+  return {
+    queryKey: archived ? inboxKeys.archived(wsId) : inboxKeys.list(wsId),
+    queryFn: ({ signal }) =>
+      archived ? api.listArchivedInbox({ signal }) : api.listInbox({ signal }),
+    enabled: !!wsId,
+  };
+}
