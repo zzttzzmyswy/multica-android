@@ -56,6 +56,23 @@ describe("formatChatTime", () => {
     expect(out).not.toMatch(/\d{1,2}:\d{2}/);
     expect(out.length).toBeGreaterThan(6);
   });
+
+  // The app language is independent of the device language, so the formatter
+  // must take an explicit Intl tag rather than let Intl default to the device.
+  it("renders the same-year branch in the app locale", () => {
+    expect(
+      formatChatTime("2026-07-03T08:30:00Z", now, "en-US"),
+    ).toBe("7/3");
+    expect(
+      formatChatTime("2026-07-03T08:30:00Z", now, "zh-CN"),
+    ).toBe("7/3");
+  });
+
+  it("renders a Chinese full date for a previous-year timestamp", () => {
+    expect(formatChatTime("2025-11-20T08:30:00Z", now, "zh-CN")).toBe(
+      "2025/11/20",
+    );
+  });
 });
 
 describe("unreadBadgeText", () => {
