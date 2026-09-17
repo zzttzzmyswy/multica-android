@@ -26,7 +26,7 @@
  *     multi-select mode the card list uses, so the existing batch toolbar
  *     works unchanged in either view.
  */
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   Modal,
@@ -230,6 +230,19 @@ export function ProjectTableView({
     },
     [],
   );
+
+  // See the issue table's twin effect (components/issue/table-view.tsx): a
+  // column appearing, disappearing or moving resizes the strip both scrollers
+  // move over, and the two panes then clamp at different maxima and stop
+  // lining up. Snap back to the leading edge. Widths stay out of the key so a
+  // resize drag is not interrupted.
+  const columnSetKey = columns.join("|");
+  useEffect(() => {
+    headerX.current = 0;
+    bodyX.current = 0;
+    headerRef.current?.scrollTo({ x: 0, animated: false });
+    bodyRef.current?.scrollTo({ x: 0, animated: false });
+  }, [columnSetKey]);
 
   // --- header sort --------------------------------------------------------
   const headerSort = (column: ProjectTableColumnKey) => {

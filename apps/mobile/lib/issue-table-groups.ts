@@ -179,17 +179,28 @@ function groupOf(
         },
       };
     }
-    // A value the catalog no longer offers (an option that was deleted).
-    const stale = typeof raw === "string" ? raw : "";
-    return {
-      key: `${prefix}:unavailable:${stale}`,
-      value: {
-        kind: "property",
-        propertyId: property.id,
-        state: "unavailable",
-        raw: stale,
-      },
-    };
+    // A value the catalog no longer offers (an option that was deleted). The
+    // stale id rides in the key so two dead options stay distinct; a
+    // non-string value has none, matching the server's `unavailable:` bucket
+    // (issue_table_group.go:205) so server counts map onto these keys.
+    return typeof raw === "string"
+      ? {
+          key: `${prefix}:unavailable:${raw}`,
+          value: {
+            kind: "property",
+            propertyId: property.id,
+            state: "unavailable",
+            raw,
+          },
+        }
+      : {
+          key: `${prefix}:unavailable`,
+          value: {
+            kind: "property",
+            propertyId: property.id,
+            state: "unavailable",
+          },
+        };
   }
   if (property.type === "checkbox" && typeof raw === "boolean") {
     return {

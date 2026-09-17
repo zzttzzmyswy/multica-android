@@ -61,6 +61,8 @@ import type {
   IssueProperty,
   IssuePropertyValue,
   IssueSubscriber,
+  IssueTableGroupsRequest,
+  IssueTableGroupsResponse,
   Label,
   LabelResourceType,
   IssueReaction,
@@ -189,6 +191,7 @@ import {
   EMPTY_LIST_AUTOPILOTS_RESPONSE,
   EMPTY_LIST_GITHUB_INSTALLATIONS_RESPONSE,
   EMPTY_LIST_GITHUB_REPOSITORIES_RESPONSE,
+  EMPTY_ISSUE_TABLE_GROUPS_RESPONSE,
   EMPTY_LIST_ISSUES_RESPONSE,
   EMPTY_LIST_PROPERTIES_RESPONSE,
   EMPTY_LIST_QUICK_ACTIONS_RESPONSE,
@@ -202,6 +205,7 @@ import {
   IssuePropertiesResponseSchema,
   IssuePropertySchema,
   IssueSchema,
+  IssueTableGroupsResponseSchema,
   IssueViewListSchema,
   IssueViewPreferenceSchema,
   IssueViewSchema,
@@ -561,7 +565,7 @@ class ApiClient {
       "Content-Type": "application/json",
       "X-Client-Platform": "mobile",
       "X-Client-OS": "ios",
-      "X-Client-Version": "0.5.63",
+      "X-Client-Version": "0.5.64",
       "X-Request-ID": rid,
       ...((init.headers as Record<string, string>) ?? {}),
     };
@@ -2375,6 +2379,25 @@ class ApiClient {
     });
   }
 
+  /**
+   * Server-side grouping for the issue Table: one descriptor per group with
+   * the count over the COMPLETE result set, not just the window the client
+   * has paged in (see `lib/issue-table-group-counts.ts`). Same contract as
+   * web's `client.listIssueTableGroups`.
+   */
+  async listIssueTableGroups(
+    request: IssueTableGroupsRequest,
+    opts?: { signal?: AbortSignal },
+  ): Promise<IssueTableGroupsResponse> {
+    return this.fetchValidatedWith(
+      "/api/issues/table/groups",
+      IssueTableGroupsResponseSchema,
+      EMPTY_ISSUE_TABLE_GROUPS_RESPONSE,
+      { method: "POST", body: JSON.stringify(request) },
+      { ...opts, endpoint: "POST /api/issues/table/groups" },
+    );
+  }
+
   /** Workspace-wide issue search. Backend `GET /api/issues/search` with
    *  workspace resolved by the `X-Workspace-Slug` middleware (same as
    *  `listIssues`). Caller passes its own `AbortController.signal` so the
@@ -4058,7 +4081,7 @@ class ApiClient {
       // No Content-Type — let fetch set the multipart boundary.
       "X-Client-Platform": "mobile",
       "X-Client-OS": "ios",
-      "X-Client-Version": "0.5.63",
+      "X-Client-Version": "0.5.64",
       "X-Request-ID": rid,
     };
     if (this.token) headers["Authorization"] = `Bearer ${this.token}`;

@@ -40,8 +40,9 @@ function stableKeyValue(v: unknown): unknown {
 
 /** Stable string form of a params bag for query-key inclusion — the cache
  *  must refetch when a filter/sort changes, so the key carries the full
- *  bag. See `stableKeyValue`. */
-export function issueParamsKey(params: ListIssuesParams): string {
+ *  bag. See `stableKeyValue`. Takes any object so callers can key on shapes
+ *  other than `ListIssuesParams` (e.g. the Table query spec's filter bag). */
+export function issueParamsKey(params: object): string {
   const entries = Object.entries(params)
     .map(([k, v]) => [k, stableKeyValue(v)] as const)
     .sort((a, b) => a[0].localeCompare(b[0]));

@@ -92,6 +92,10 @@ import type {
 import { propertyActiveOptions } from "@/data/queries/properties";
 import { projectListOptions } from "@/data/queries/projects";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
+import {
+  useIssueTableGroupCounts,
+  type IssueTableGroupCountQuery,
+} from "@/data/queries/issue-table-groups";
 import { useStatusLabel } from "@/lib/status-options";
 import { formatPropertyValue } from "@/lib/issue-properties";
 import { MAX_DEPTH, type IssueTableRow } from "@/lib/issue-table-hierarchy";
@@ -197,6 +201,11 @@ interface Props {
   grouping: IssueTableGrouping;
   /** Passed straight through to the store's setTableGrouping. */
   onGroupingChange: (grouping: IssueTableGrouping) => void;
+  /** The scope + filter window this surface is showing. Supplying it turns
+   *  the group headers' counts server-authoritative (they then count the
+   *  complete result set, not just the loaded window). Surfaces that omit it
+   *  keep the local count. */
+  groupCountQuery?: IssueTableGroupCountQuery | null;
 }
 
 export function IssueTableView({
@@ -215,6 +224,7 @@ export function IssueTableView({
   emptyLabel,
   grouping,
   onGroupingChange,
+  groupCountQuery,
 }: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const statusLabel = useStatusLabel(wsId);
@@ -269,29 +279,43 @@ export function IssueTableView({
     [getName],
   );
 
+  /** Counts over the complete result set, keyed by the group keys built
+   *  below. Undefined until the first response — headers then report the
+   *  loaded window's own count, which is what they did before this existed. */
+  const serverGroupCounts = useIssueTableGroupCounts(
+    wsId,
+    groupCountQuery,
+    grouping,
+  );
+
   /** The flat sequence both synced lists render: group headers interleaved
    *  with rows (no headers at all when grouping is off). Hierarchy is built
    *  per segment inside, so a row's indent only ever reflects a parent it can
    *  actually see. */
-  const displayRows = useMemo(
-    () =>
-      buildIssueTableDisplayRows(
-        issues,
-        grouping,
-        properties,
-        collapsedIds,
-        collapsedGroupIds,
-        { actorName: groupActorName },
-      ),
-    [
+  const displayRows = useMemo(() => {
+    const built = buildIssueTableDisplayRows(
       issues,
       grouping,
       properties,
       collapsedIds,
       collapsedGroupIds,
-      groupActorName,
-    ],
-  );
+      { actorName: groupActorName },
+    );
+    if (!serverGroupCounts || serverGroupCounts.size === 0) return built;
+    return built.map((entry) =>
+      entry.kind === "group"
+        ? { ...entry, count: serverGroupCounts.get(entry.key) ?? entry.count }
+        : entry,
+    );
+  }, [
+    issues,
+    grouping,
+    properties,
+    collapsedIds,
+    collapsedGroupIds,
+    groupActorName,
+    serverGroupCounts,
+  ]);
 
   const rows = useMemo(
     () =>
@@ -441,6 +465,21 @@ export function IssueTableView({
     },
     [],
   );
+
+  // Showing or hiding a column (or reordering one) resizes the strip both
+  // scrollers move over. Left alone, the pair wedges: each clamps at its own
+  // new maximum, and the "don't push the twin when it is already there" guard
+  // above then holds the two panes at different offsets, so the header stops
+  // lining up with the rows. Return to the leading edge, which is where the
+  // column menu leaves the reader anyway. Widths are deliberately not in the
+  // key — a resize drag must not yank the strip out from under the finger.
+  const columnSetKey = columns.join("|");
+  useEffect(() => {
+    headerX.current = 0;
+    bodyX.current = 0;
+    headerRef.current?.scrollTo({ x: 0, animated: false });
+    bodyRef.current?.scrollTo({ x: 0, animated: false });
+  }, [columnSetKey]);
 
   // --- selection ---------------------------------------------------------
   // "Visible" means what is on screen right now — a row inside a collapsed

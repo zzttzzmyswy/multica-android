@@ -79,6 +79,7 @@ import {
   hasActiveIssueFilters,
 } from "@/data/stores/issue-filter-slice";
 import { useRunningIssueIds } from "@/data/queries/agent-task-snapshot";
+import { workspaceIssueTableScope } from "@/lib/issue-table-group-counts";
 import { useCreateIssueFromColumn } from "@/lib/use-create-issue-from-column";
 import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-workspace-change";
 import { useGroupingProperty } from "@/lib/use-grouping-property";
@@ -294,6 +295,18 @@ export default function IssuesPage() {
         sortDirection,
       }),
     [filterState, sortBy, sortDirection],
+  );
+
+  // Group headers count the complete result set (server group descriptors),
+  // not just the loaded window. Scope travels as `assignee_types` so the
+  // members/agents tabs count what they render.
+  const groupCountQuery = useMemo(
+    () => ({
+      scope: workspaceIssueTableScope(scope),
+      window,
+      includeSubIssues: showSubIssues,
+    }),
+    [scope, window, showSubIssues],
   );
 
   // Paginated window. `GET /api/issues` clamps limit to 100 server-side, so a
@@ -531,6 +544,7 @@ export default function IssuesPage() {
           onCreateSubIssue={createSubIssue}
           grouping={tableGrouping}
           onGroupingChange={setTableGrouping}
+          groupCountQuery={groupCountQuery}
           sortBy={sortBy}
           sortDirection={sortDirection}
           onSort={(field, direction) => {

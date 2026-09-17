@@ -70,7 +70,11 @@ import {
   sanitizeViewQuery,
   viewMatchesSlice,
 } from "@/data/stores/issue-view-codec";
-import { defaultIssueFilterSlice } from "@/data/stores/issue-filter-slice";
+import {
+  buildIssueWindow,
+  defaultIssueFilterSlice,
+} from "@/data/stores/issue-filter-slice";
+import { assigneeTypesForScopeTab } from "@/lib/issue-table-group-counts";
 import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-workspace-change";
 import { useGroupingProperty } from "@/lib/use-grouping-property";
 import { BOARD_STATUSES } from "@/lib/issue-status";
@@ -180,6 +184,51 @@ export function ProjectIssueSurface({
       showSubIssues,
     ],
   );
+
+  // Group headers count the complete result set (server group descriptors),
+  // not just the loaded window. This surface's list query is unfiltered
+  // server-side, so the spec carries the window the client applies itself.
+  const groupCountQuery = useMemo(() => {
+    const assigneeTypes = assigneeTypesForScopeTab(scope);
+    return {
+      scope: {
+        kind: "project" as const,
+        project_id: projectId,
+        ...(assigneeTypes ? { assignee_types: assigneeTypes } : {}),
+      },
+      window: buildIssueWindow({
+        statusFilters,
+        priorityFilters,
+        assigneeFilters,
+        includeNoAssignee,
+        creatorFilters,
+        projectFilters,
+        includeNoProject,
+        labelFilters,
+        propertyFilters,
+        dateFilter,
+        sortBy,
+        sortDirection,
+      }),
+      includeSubIssues: showSubIssues,
+    };
+  }, [
+    projectId,
+    scope,
+    statusFilters,
+    priorityFilters,
+    assigneeFilters,
+    includeNoAssignee,
+    creatorFilters,
+    projectFilters,
+    includeNoProject,
+    labelFilters,
+    propertyFilters,
+    dateFilter,
+    sortBy,
+    sortDirection,
+    showSubIssues,
+  ]);
 
   const openFilter = () => {
     if (!wsSlug) return;
@@ -492,6 +541,7 @@ export function ProjectIssueSurface({
           onCreateSubIssue={createSubIssue}
           grouping={tableGrouping}
           onGroupingChange={setTableGrouping}
+          groupCountQuery={groupCountQuery}
           sortBy={sortBy}
           sortDirection={sortDirection}
           onSort={(field, direction) => {

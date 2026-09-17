@@ -78,6 +78,7 @@ import {
   hasActiveIssueFilters,
 } from "@/data/stores/issue-filter-slice";
 import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-workspace-change";
+import { myIssueTableScope } from "@/lib/issue-table-group-counts";
 import { useGroupingProperty } from "@/lib/use-grouping-property";
 import { BOARD_STATUSES } from "@/lib/issue-status";
 import {
@@ -326,6 +327,18 @@ export default function MyIssues() {
     [filterState, sortBy, sortDirection],
   );
 
+  // Group headers count the complete result set (server group descriptors),
+  // not just the loaded window. The `all` tab is one union query server-side,
+  // unlike the list API's scatter-gather.
+  const groupCountQuery = useMemo(
+    () => ({
+      scope: myIssueTableScope(scope),
+      window,
+      includeSubIssues: showSubIssues,
+    }),
+    [scope, window, showSubIssues],
+  );
+
   // Paginated window — see the workspace Issues screen for the rationale
   // (`GET /api/issues` clamps limit to 100 server-side). The list view
   // infinite-scrolls; board / swimlane / table drain the window instead.
@@ -563,6 +576,7 @@ export default function MyIssues() {
           onCreateSubIssue={createSubIssue}
           grouping={tableGrouping}
           onGroupingChange={setTableGrouping}
+          groupCountQuery={groupCountQuery}
           sortBy={sortBy}
           sortDirection={sortDirection}
           onSort={(field, direction) => {

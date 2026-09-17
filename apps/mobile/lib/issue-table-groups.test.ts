@@ -204,6 +204,13 @@ describe("buildIssueTableGroups — select property", () => {
       "property:p1:unavailable(2):a@0,b@0",
     ]);
   });
+
+  it("drops the stale suffix for a non-string value, matching the server's bucket", () => {
+    const issues = [issue({ id: "odd", properties: { p1: 7 as never } })];
+    expect(shape(issues, "property:p1", [prop])).toEqual([
+      "property:p1:unavailable(1):odd@0",
+    ]);
+  });
 });
 
 describe("buildIssueTableGroups — checkbox property", () => {
