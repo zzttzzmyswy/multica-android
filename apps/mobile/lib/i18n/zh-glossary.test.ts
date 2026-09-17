@@ -516,3 +516,102 @@ describe("zh glossary: the leftover Latin families are closed", () => {
     expect(zh["resource.modeWorktreeDescription"]).toContain("agent/…");
   });
 });
+
+/**
+ * Guard for the same four ordinary English nouns the 141 round left in the
+ * views bundle — `Server`, `toolkit`, `provider`, `handler` — on the mobile
+ * side. The mobile bundle was already clean on three of them (it renders the
+ * MCP concept as 服务器 throughout `mcp.*`, `common.server` and `login.server`,
+ * and it is the bundle that settled that word), so what is left to classify is
+ * narrow, and the classification is the same one views uses.
+ *
+ *   `handler` → 处理器 in the `demo.*` fixture prose. The two `demo.run.tasks`
+ *               titles name a code module ("Migrate issue handler") and stay
+ *               literal — which is why `demo.run.tasks.two.title` is already in
+ *               CODE_REFERENCE_KEYS above for the `issue` half of its wording.
+ *   `server`  → only `mcp.form.namePlaceholder` keeps it, inside `my-server`:
+ *               an example value the user types into the name field, so it is
+ *               a value, not a noun. Translating it would make the example
+ *               wrong.
+ *
+ * Pinned as an equality in both directions, like the views table: a new token
+ * fails, and so does an entry whose token has since been translated away.
+ */
+const LATIN_FAMILY = /\b(servers?|toolkits?|providers?|handlers?)\b/gi;
+
+const LATIN_FAMILY_ALLOWED: { key: string; token: string; why: string }[] = [
+  {
+    key: "demo.run.tasks.two.title",
+    token: "handler",
+    why: "names a code module — the migration target, not prose",
+  },
+  {
+    key: "demo.run.tasks.three.title",
+    token: "handler",
+    why: "names a code module — the migration target, not prose",
+  },
+  {
+    key: "mcp.form.namePlaceholder",
+    token: "server",
+    why: "an example value inside `my-server`, which the user types verbatim",
+  },
+];
+
+const latinFamilyTokens = (key: string) => [
+  ...new Set(
+    (prose(zh[key]).match(LATIN_FAMILY) ?? []).map((token) => token.toLowerCase()),
+  ),
+];
+
+describe("zh glossary: the Server / toolkit / provider / handler family", () => {
+  it("classifies every surviving Latin token, so a new one cannot slip in", () => {
+    const allowed = new Set(
+      LATIN_FAMILY_ALLOWED.map(({ key, token }) => `${key}:${token}`),
+    );
+    const offenders = keys.flatMap((key) =>
+      latinFamilyTokens(key)
+        .filter((token) => !allowed.has(`${key}:${token}`))
+        .map(
+          (token) =>
+            `${key}: ${token} survived in ${JSON.stringify(zh[key])} (en: ${JSON.stringify(en[key])})`,
+        ),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps every exception real, so a translated string cannot hide behind one", () => {
+    const offenders = LATIN_FAMILY_ALLOWED.filter(
+      ({ key, token }) => !latinFamilyTokens(key).includes(token),
+    ).map(
+      ({ key, token }) => `${key}: ${token} is gone — drop it from LATIN_FAMILY_ALLOWED`,
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it("renders the demo prose handler as 处理器, and only the module names stay literal", () => {
+    const settled = [
+      "demo.chat.reply",
+      "demo.issue.body",
+      "demo.issue.comment",
+    ];
+    const offenders = settled
+      .filter((key) => !/处理器/.test(zh[key]))
+      .map((key) => mismatch(key, "处理器 for the prose sense of handler"));
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps the MCP server word the mobile bundle settled, so views can follow it", () => {
+    // The views bundle now renders this concept the same way. If mobile drifts
+    // back to English there is no longer a settled word for views to match.
+    const settled: Record<string, RegExp> = {
+      "common.server": /^服务器$/,
+      "login.server": /^服务器$/,
+      "mcp.agent.title": /MCP 服务器/,
+      "mcp.deleted": /服务器/,
+    };
+    const offenders = Object.entries(settled)
+      .filter(([key, pattern]) => !pattern.test(zh[key] ?? ""))
+      .map(([key]) => mismatch(key, "the settled word for an MCP server"));
+    expect(offenders).toEqual([]);
+  });
+});

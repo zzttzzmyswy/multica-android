@@ -4,6 +4,7 @@ import { Redirect, Stack, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { workspaceListOptions } from "@/data/queries/workspaces";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { resolveWorkspaceGate } from "@/lib/workspace-gate";
 import { RealtimeProvider } from "@/data/realtime/realtime-provider";
 import { UpdateProvider } from "@/components/update/update-provider";
 import { useInboxRealtime } from "@/data/realtime/use-inbox-realtime";
@@ -105,6 +106,7 @@ export default function WorkspaceLayout() {
   const { workspace: slug } = useLocalSearchParams<{ workspace: string }>();
   const { data: workspaces, isLoading } = useQuery(workspaceListOptions());
   const setCurrentWorkspace = useWorkspaceStore((s) => s.setCurrentWorkspace);
+  const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
 
   const matched = workspaces?.find((w) => w.slug === slug);
@@ -123,10 +125,19 @@ export default function WorkspaceLayout() {
   useChatSessionPickerResetOnWorkspaceChange(matched?.id ?? null);
 
   // Wait for the workspaces list before deciding membership — otherwise a
-  // valid deep link would briefly redirect away on cold start.
-  if (isLoading) return null;
+  // valid deep link would briefly redirect away on cold start — and wait for
+  // the store to carry the matched id, which the effect above writes one
+  // commit later. Rendering children in that commit hands them a null
+  // workspace id, and every screen gating only on its query's `isLoading`
+  // paints its not-found branch (see lib/workspace-gate.ts).
+  const gate = resolveWorkspaceGate({
+    isLoading,
+    matchedId: matched?.id ?? null,
+    currentWorkspaceId,
+  });
+  if (gate === "loading") return null;
 
-  if (!matched) return <Redirect href="/select-workspace" />;
+  if (gate === "redirect") return <Redirect href="/select-workspace" />;
 
   // Tabs hide their own header; pushed screens (issue/[id]) get a native
   // iOS Stack header with the standard back button + swipe-to-dismiss.
