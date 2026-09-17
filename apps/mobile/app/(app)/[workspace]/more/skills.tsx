@@ -9,8 +9,14 @@
  * Default order is web's view-store default: `updated` descending. Pull-to-
  * refresh + friendly empty/loading/error states matching the squads/labels
  * pages. The "+" header action opens the create form.
+ *
+ * Multi-select (MYS-1156): the header's checkbox icon enters selection mode,
+ * a long-press on any row enters it with that row already selected (the same
+ * gesture the issue lists use), and `SkillBatchBar` floats the batch actions
+ * while anything is selected. Selection is session-local — web keeps it in
+ * component state too, deliberately outside the persisted view store.
  */
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
@@ -19,10 +25,12 @@ import type { SkillSummary } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
+import { SkillBatchBar } from "@/components/skill/skill-batch-bar";
 import { skillListOptions } from "@/data/queries/skills";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
 import { canEditSkill, ORIGIN_LABEL_KEY, readOrigin } from "@/lib/skill-guards";
+import { toggleId, toggleSelectAllVisible } from "@/lib/skill-batch";
 import { useSkillRole } from "@/lib/use-skill-role";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useTranslation } from "@/lib/i18n/react";
@@ -44,6 +52,11 @@ export default function SkillsPage() {
 
   const showEmpty = !isLoading && !error && (data ?? []).length === 0;
 
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+
   const sorted = useMemo(() => {
     const list = data ?? [];
     // Web's view-store default: updated → desc. Preserve stable order for
@@ -53,16 +66,56 @@ export default function SkillsPage() {
     );
   }, [data]);
 
+  const visibleIds = useMemo(() => sorted.map((s) => s.id), [sorted]);
+  // Selected rows are intersected with the visible set, so a row that left
+  // the list (refetch, delete) can never ride along into a batch write.
+  const selectedSkills = useMemo(
+    () => sorted.filter((s) => selectedIds.has(s.id)),
+    [sorted, selectedIds],
+  );
+
+  const enterSelection = useCallback((id: string) => {
+    setSelectionMode(true);
+    setSelectedIds(new Set([id]));
+  }, []);
+
+  const exitSelection = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const toggleRow = useCallback((id: string) => {
+    setSelectedIds((prev) => toggleId(prev, id));
+  }, []);
+
+  const selectAll = useCallback(() => {
+    setSelectedIds((prev) => toggleSelectAllVisible(visibleIds, prev));
+  }, [visibleIds]);
+
   const headerRight = useCallback(() => {
     if (!wsSlug) return null;
     return (
-      <IconButton
-        name="add"
-        onPress={() => router.push(`/${wsSlug}/more/skills/new`)}
-        accessibilityLabel={t("skills.createButton")}
-      />
+      <View className="flex-row items-center">
+        <IconButton
+          name={selectionMode ? "close" : "checkbox-outline"}
+          onPress={() => {
+            if (selectionMode) exitSelection();
+            else setSelectionMode(true);
+          }}
+          accessibilityLabel={
+            selectionMode
+              ? t("skills.batch.exitSelection")
+              : t("skills.batch.enterSelection")
+          }
+        />
+        <IconButton
+          name="add"
+          onPress={() => router.push(`/${wsSlug}/more/skills/new`)}
+          accessibilityLabel={t("skills.createButton")}
+        />
+      </View>
     );
-  }, [wsSlug, t]);
+  }, [wsSlug, t, selectionMode, exitSelection]);
 
   return (
     <>
@@ -107,20 +160,44 @@ export default function SkillsPage() {
             data={sorted}
             keyExtractor={(item) => item.id}
             ItemSeparatorComponent={() => <View className="h-px bg-border ml-4" />}
-            contentContainerClassName="pb-6"
+            contentContainerStyle={{
+              // Room for the floating batch bar so the last row stays tappable.
+              paddingBottom:
+                selectionMode && selectedSkills.length > 0 ? 132 : 24,
+            }}
             renderItem={({ item }) => (
               <SkillRow
                 skill={item}
                 canEdit={canEditSkill(item, { userId, role })}
-                onPress={() => {
-                  if (wsSlug) router.push(`/${wsSlug}/more/skills/${item.id}`);
+                selectionMode={selectionMode}
+                selected={selectedIds.has(item.id)}
+                onPressCheckbox={() => {
+                  if (selectionMode) toggleRow(item.id);
+                  else enterSelection(item.id);
                 }}
+                onPress={() => {
+                  if (selectionMode) {
+                    toggleRow(item.id);
+                  } else if (wsSlug) {
+                    router.push(`/${wsSlug}/more/skills/${item.id}`);
+                  }
+                }}
+                onLongPress={() => enterSelection(item.id)}
               />
             )}
             refreshing={isRefetching}
             onRefresh={refetch}
           />
         )}
+        {selectionMode ? (
+          <SkillBatchBar
+            selectedSkills={selectedSkills}
+            visibleIds={visibleIds}
+            onToggleSelectAll={selectAll}
+            onExit={exitSelection}
+            onClear={() => setSelectedIds(new Set())}
+          />
+        ) : null}
       </View>
     </>
   );
@@ -129,24 +206,54 @@ export default function SkillsPage() {
 function SkillRow({
   skill,
   canEdit,
+  selectionMode,
+  selected,
+  onPressCheckbox,
   onPress,
+  onLongPress,
 }: {
   skill: SkillSummary;
   canEdit: boolean;
+  selectionMode: boolean;
+  selected: boolean;
+  onPressCheckbox: () => void;
   onPress: () => void;
+  onLongPress: () => void;
 }) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const muted = THEME[colorScheme].mutedForeground;
+  const theme = THEME[colorScheme];
   const timeAgo = useTimeAgo();
   const origin = ORIGIN_LABEL_KEY[readOrigin(skill).type];
 
   return (
-    <Pressable onPress={onPress} className="px-4 py-3 active:bg-secondary">
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={300}
+      className={selected ? "px-4 py-3 bg-secondary/60" : "px-4 py-3 active:bg-secondary"}
+    >
       <View className="flex-row items-center gap-3">
-        <View className="size-8 rounded-lg bg-secondary items-center justify-center">
-          <Ionicons name="extension-puzzle" size={16} color={muted} />
-        </View>
+        {selectionMode ? (
+          <Pressable
+            onPress={onPressCheckbox}
+            hitSlop={8}
+            accessibilityLabel={t("skills.batch.selectOne", { name: skill.name })}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: selected }}
+          >
+            <Ionicons
+              name={selected ? "checkbox" : "square-outline"}
+              size={20}
+              color={selected ? theme.primary : muted}
+            />
+          </Pressable>
+        ) : (
+          <View className="size-8 rounded-lg bg-secondary items-center justify-center">
+            <Ionicons name="extension-puzzle" size={16} color={muted} />
+          </View>
+        )}
         <View className="flex-1 min-w-0 gap-0.5">
           <View className="flex-row items-center gap-1.5">
             <Text className="text-sm font-medium text-foreground" numberOfLines={1}>
@@ -175,7 +282,9 @@ function SkillRow({
             </Text>
           ) : null}
         </View>
-        <Ionicons name="chevron-forward" size={14} color={muted} />
+        {selectionMode ? null : (
+          <Ionicons name="chevron-forward" size={14} color={muted} />
+        )}
       </View>
     </Pressable>
   );

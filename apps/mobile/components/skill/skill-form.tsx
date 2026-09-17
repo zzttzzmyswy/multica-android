@@ -6,10 +6,16 @@
  *     canEdit result so a non-admin owner of someone else's skill never
  *     sees the destructive row).
  *
- * Fields follow web `packages/views/skills/components/create-skill-dialog.tsx`
- * manual-form semantics: name (required), description (optional, multi-line).
- * The server owns the authoritative validation; the form gates submission on
- * a non-empty trimmed name.
+ * Create mode is a three-path flow mirroring web's `CreateSkillDialog`
+ * (`chooser | manual | url | runtime`): the route opens on the method chooser
+ * and swaps its body to the chosen form, with an in-body Back affordance —
+ * the Stack header's back button pops the route, not the method. Edit mode
+ * has no chooser: a skill that already exists can only be edited by hand.
+ *
+ * Fields of the manual form follow web `create-skill-dialog.tsx` semantics:
+ * name (required), description (optional, multi-line). The server owns the
+ * authoritative validation; the form gates submission on a non-empty trimmed
+ * name.
  *
  * Submit behaviour diverges from LabelForm (which posts from a header-right
  * button): this form renders its own primary button at the bottom — the
@@ -25,6 +31,9 @@ import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { AutosizeTextArea } from "@/components/ui/autosize-textarea";
 import { TextField } from "@/components/ui/text-field";
+import { SkillMethodChooser } from "@/components/skill/skill-method-chooser";
+import { SkillUrlImportForm } from "@/components/skill/skill-url-import-form";
+import { RuntimeSkillImportPanel } from "@/components/skill/runtime-skill-import-panel";
 import {
   useCreateSkill,
   useDeleteSkill,
@@ -34,9 +43,36 @@ import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
+import type { SkillCreateMethod } from "@/lib/skill-import";
 
 function FieldError({ text }: { text: string }) {
   return <Text className="text-xs text-destructive">{text}</Text>;
+}
+
+/**
+ * In-body "back to the method chooser" affordance. The Stack header's back
+ * button pops the whole route, so a user who picked the wrong create path
+ * needs this to get back without losing the screen.
+ */
+function BackToMethods({ onPress }: { onPress: () => void }) {
+  const { t } = useTranslation();
+  const { colorScheme } = useColorScheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      className="flex-row items-center gap-1 px-4 pt-3 pb-1 self-start"
+    >
+      <Ionicons
+        name="chevron-back"
+        size={16}
+        color={THEME[colorScheme].mutedForeground}
+      />
+      <Text className="text-xs text-muted-foreground">
+        {t("skills.create.back")}
+      </Text>
+    </Pressable>
+  );
 }
 
 export function SkillForm({
@@ -61,6 +97,8 @@ export function SkillForm({
   const [name, setName] = useState(skill?.name ?? "");
   const [description, setDescription] = useState(skill?.description ?? "");
   const [showErrors, setShowErrors] = useState(false);
+  // Create-mode path. Edit mode ignores it entirely (no chooser there).
+  const [method, setMethod] = useState<SkillCreateMethod>("chooser");
 
   const create = useCreateSkill();
   const update = useUpdateSkill();
@@ -131,12 +169,36 @@ export function SkillForm({
     ]);
   }, [skill, remove, onDone, t]);
 
+  // Create mode lands on the method chooser; edit mode goes straight to the
+  // manual form. Both import paths pop the route on success — the list
+  // refreshes off the mutation's invalidate.
+  if (!editing && method === "chooser") {
+    return <SkillMethodChooser onChoose={setMethod} />;
+  }
+  if (!editing && method === "url") {
+    return (
+      <View className="flex-1">
+        <BackToMethods onPress={() => setMethod("chooser")} />
+        <SkillUrlImportForm onImported={() => router.back()} />
+      </View>
+    );
+  }
+  if (!editing && method === "runtime") {
+    return (
+      <View className="flex-1">
+        <BackToMethods onPress={() => setMethod("chooser")} />
+        <RuntimeSkillImportPanel onImported={() => router.back()} />
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       className="flex-1"
       behavior={keyboardBehavior}
       keyboardVerticalOffset={keyboardBehavior === "padding" ? 24 : 0}
     >
+      {!editing ? <BackToMethods onPress={() => setMethod("chooser")} /> : null}
       <View className="px-4 pt-4 gap-5">
         {/* Name */}
         <View className="gap-1.5">

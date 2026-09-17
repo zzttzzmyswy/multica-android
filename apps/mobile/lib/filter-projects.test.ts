@@ -4,6 +4,7 @@ import {
   countActiveProjectFilters,
   EMPTY_PROJECT_FILTERS,
   filterProjects,
+  nextProjectSort,
   PROJECT_PRIORITY_SORT_ORDER,
   PROJECT_SORT_DEFAULT_DIRECTION,
   PROJECT_STATUS_SORT_ORDER,
@@ -187,5 +188,43 @@ describe("sort fields", () => {
     expect(() =>
       sortProjects(list, field, PROJECT_SORT_DEFAULT_DIRECTION[field]),
     ).not.toThrow();
+  });
+});
+
+// The compact table's header tap (iteration 135). Same contract as the issue
+// table's `nextTableSort`: a NEW column applies its default direction, the
+// ACTIVE column flips. Two directions are the only targets either way; the
+// tap-to-cycle is the touch adaptation of web's two explicit menu options.
+describe("nextProjectSort", () => {
+  it("applies the field's default direction when the column is new", () => {
+    expect(nextProjectSort("created", "desc", "priority")).toEqual({
+      field: "priority",
+      direction: "desc",
+    });
+    expect(nextProjectSort("priority", "desc", "name")).toEqual({
+      field: "name",
+      direction: "asc",
+    });
+  });
+
+  it("flips the direction when the column is already active", () => {
+    expect(nextProjectSort("progress", "desc", "progress")).toEqual({
+      field: "progress",
+      direction: "asc",
+    });
+    expect(nextProjectSort("progress", "asc", "progress")).toEqual({
+      field: "progress",
+      direction: "desc",
+    });
+  });
+
+  it("flips relative to the CURRENT direction, not the field's default", () => {
+    // `created` defaults to desc; having been flipped to asc, the next tap
+    // must return to desc rather than re-applying the default (which would
+    // leave the header inert on every other tap).
+    const first = nextProjectSort("created", "desc", "created");
+    expect(first.direction).toBe("asc");
+    const second = nextProjectSort("created", first.direction, "created");
+    expect(second.direction).toBe("desc");
   });
 });
