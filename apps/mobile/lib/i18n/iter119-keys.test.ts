@@ -28,32 +28,32 @@ describe("agent skills + projects list i18n (MYS-1020)", () => {
   });
 
   const ZH_SPOT: Record<string, string> = {
-    "agents.skills.assignedTitle": "技能",
-    "agents.skills.assignedHint": "分配给该智能体的工作区技能。可临时关闭而不必移除。",
+    "agents.skills.assignedTitle": "Skills",
+    "agents.skills.assignedHint": "分配给该智能体的工作区 skill。可临时关闭而不必移除。",
     "agents.skills.addAction": "添加",
-    "agents.skills.emptyTitle": "尚未分配技能。",
-    "agents.skills.emptyWorkspace": "工作区还没有技能——请先在「更多 → 技能」中创建。",
+    "agents.skills.emptyTitle": "尚未分配 skill。",
+    "agents.skills.emptyWorkspace": "工作区还没有 skill——请先在\"更多 → Skills\"中创建。",
     "agents.skills.noDescription": "暂无描述",
     "agents.skills.toggleAria": "切换 {{name}}",
     "agents.skills.toggleFailed": "切换失败",
     "agents.skills.removeAria": "移除 {{name}}",
-    "agents.skills.removeConfirmTitle": "移除技能？",
-    "agents.skills.removeConfirmMessage": "移除「{{name}}」？该智能体将不再使用此技能。",
+    "agents.skills.removeConfirmTitle": "移除 skill？",
+    "agents.skills.removeConfirmMessage": "移除\"{{name}}\"？该智能体将不再使用此 skill。",
     "agents.skills.removeAction": "移除",
-    "agents.skills.removeFailed": "移除技能失败",
-    "agents.skills.addDialogTitle": "添加技能",
-    "agents.skills.addDialogEmpty": "工作区技能库为空——请先在「更多 → 技能」中创建。",
-    "agents.skills.addDialogEmptyPartial": "工作区的所有技能都已分配给该智能体。",
-    "agents.skills.addFailed": "添加技能失败",
-    "agents.skills.runtimeTitle": "Runtime 技能",
-    "agents.skills.runtimeHint": "从「{{runtime}}」本地技能目录继承的技能。",
-    "agents.skills.runtimeMissing": "该智能体未绑定 runtime，没有可继承的本地技能。",
-    "agents.skills.runtimeOffline": "绑定的 runtime 离线——连接后才能发现其本地技能。",
-    "agents.skills.runtimeDiscovering": "正在发现本地技能…",
-    "agents.skills.runtimeForbidden": "你没有查看该 runtime 技能清单的权限。",
-    "agents.skills.runtimeFailed": "发现本地技能失败。点「刷新」重试。",
-    "agents.skills.runtimeUnsupported": "该 runtime 不支持本地技能发现。",
-    "agents.skills.runtimeEmpty": "该 runtime 上没有发现本地技能。",
+    "agents.skills.removeFailed": "移除 skill 失败",
+    "agents.skills.addDialogTitle": "添加 skill",
+    "agents.skills.addDialogEmpty": "工作区 skill 库为空——请先在\"更多 → Skills\"中创建。",
+    "agents.skills.addDialogEmptyPartial": "工作区的所有 skill 都已分配给该智能体。",
+    "agents.skills.addFailed": "添加 skill 失败",
+    "agents.skills.runtimeTitle": "运行时 skill",
+    "agents.skills.runtimeHint": "从\"{{runtime}}\"本地 skill 目录继承的 skill。",
+    "agents.skills.runtimeMissing": "该智能体未绑定运行时，没有可继承的本地 skill。",
+    "agents.skills.runtimeOffline": "绑定的运行时离线——连接后才能发现其本地 skill。",
+    "agents.skills.runtimeDiscovering": "正在发现本地 skill…",
+    "agents.skills.runtimeForbidden": "你没有查看该运行时 skill 清单的权限。",
+    "agents.skills.runtimeFailed": "发现本地 skill 失败。点\"刷新\"重试。",
+    "agents.skills.runtimeUnsupported": "该运行时不支持本地 skill 发现。",
+    "agents.skills.runtimeEmpty": "该运行时上没有发现本地 skill。",
     "agents.skills.refreshAction": "刷新",
     "agents.skills.runtimeToggleAria": "切换 {{name}}",
     "agents.skills.runtimeToggleFailed": "切换失败",
@@ -106,7 +106,7 @@ describe("agent skills + projects list i18n (MYS-1020)", () => {
     mod.setLocale("zh");
     expect(
       mod.translate("agents.skills.removeConfirmMessage", { name: "docs" }),
-    ).toBe("移除「docs」？该智能体将不再使用此技能。");
+    ).toBe("移除\"docs\"？该智能体将不再使用此 skill。");
   });
 
   it("interpolates the batch delete count in both locales", () => {

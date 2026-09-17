@@ -23,6 +23,7 @@ import type { Agent } from "@multica/core/types";
 import type { AgentPresenceDetail } from "@multica/core/agents";
 import { IconButton } from "@/components/ui/icon-button";
 import { ActionSheet } from "@/lib/action-sheet";
+import { describeCancelImpact } from "@/lib/agent-row-actions";
 import {
   useArchiveAgent,
   useCancelAgentTasks,
@@ -201,32 +202,4 @@ export function AgentDetailActions({
       onPress={openMenu}
     />
   );
-}
-
-type T = ReturnType<typeof useTranslation>["t"];
-
-// Web-parity impact copy (agent-row-actions describeCancelImpact): "This will
-// cancel 2 running + 1 queued tasks." — running note only when tasks are
-// running (queued-only cancels are instant).
-function describeCancelImpact(
-  running: number,
-  queued: number,
-  t: T,
-): string {
-  if (running === 0 && queued === 0) return t("agents.detail.cancelNoTasks");
-  const parts: string[] = [];
-  if (running > 0) {
-    parts.push(t("agents.detail.cancelRunningCount", { count: running }));
-  }
-  if (queued > 0) {
-    parts.push(t("agents.detail.cancelQueuedCount", { count: queued }));
-  }
-  const summary = parts.join(" + ");
-  const total = running + queued;
-  const impact =
-    total === 1
-      ? t("agents.detail.cancelImpactOne", { summary })
-      : t("agents.detail.cancelImpactOther", { summary });
-  const note = running > 0 ? t("agents.detail.cancelRunningNote") : "";
-  return [impact, note, t("agents.detail.cancelIrreversible")].join("\n\n");
 }

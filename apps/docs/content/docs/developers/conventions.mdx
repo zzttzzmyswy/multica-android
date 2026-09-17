@@ -293,6 +293,7 @@ See `auth.json` for the canonical example (the `web` section contains `prefer_de
 - Full-width punctuation in Chinese: `，。：；！？`
 - Quotes: straight double quotes `"..."` to match the English source. Do not use `「」` or curly quotes.
 - Ellipsis: three dots `...` not the single character `…`. Match the English source.
+  - **This bullet contradicts itself, and the bundles have already drifted apart because of it.** The English source uses both (`…` 96 / `...` 16 in the mobile bundle, `…` 129 / `...` 106 in views), so "three dots" and "match the English source" cannot both hold. The two zh bundles have each picked a different reading: mobile zh follows the source (6 keys differ), while views zh follows the first clause (52 keys use `...` where EN uses `…`). No guard pins either, and no round has been authorised to choose. Decide this clause before translating against it.
 - Mixed Chinese-English: a single space on each side of the English word (see Word combination rules).
 
 ### Style principles
