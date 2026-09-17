@@ -30,18 +30,23 @@
  *  - No autoFocus on the name field (the user landed to make one small change,
  *    not to type).
  *
- * Deliberate mobile divergences (each documented at its site):
- *  - Model / thinking / speed are plain optional text fields. Web loads a
- *    live model catalog from the runtime daemon (model-dropdown.tsx +
- *    packages/core/runtimes/models.ts); mobile v1 keeps the same wire fields
- *    but accepts a typed value, so the runtime's default applies when empty.
+ * Deliberate mobile divergences from web (each documented at its site):
+ *  - Model / thinking / speed load the runtime's live model catalog
+ *    (iteration 121, MYS-1032): the model field opens a picker sheet over
+ *    `runtimeModelsOptions` (POST /api/runtimes/:id/models + poll, mobile
+ *    mirror of web model-dropdown.tsx), and the thinking / speed pickers list
+ *    exactly what the selected model's catalog advertises
+ *    (lib/runtime-models.ts). When the runtime is offline, the catalog fails,
+ *    or a custom model is needed, the picker's creatable search row and the
+ *    text-input fallback keep manual entry alive — the same wire fields as
+ *    before, so behavior is never worse than the v1 typed-value form.
  *  - Avatar is emoji-only (same `emoji:` avatar_url format web persists; no
  *    image upload).
  *  - Feedback is a native Alert (no toast infra on mobile — same choice as
  *    more/autopilots/new.tsx).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Pressable, View } from "react-native";
+import { Alert, ActivityIndicator, Pressable, View } from "react-native";
 import { router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Agent } from "@multica/core/types";
@@ -56,6 +61,7 @@ import {
   type AgentDraft,
 } from "@multica/core/agents";
 import { runtimeDisplayLabel } from "@multica/core/runtimes";
+import type { RuntimeModelServiceTier, RuntimeModelThinkingLevel } from "@multica/core/types";
 import { useQuery } from "@tanstack/react-query";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
@@ -65,9 +71,18 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { AgentEmojiPickerSheet } from "@/components/agent/agent-emoji-picker-sheet";
 import { RuntimePickerSheet } from "@/components/agent/runtime-picker-sheet";
+import { ModelPickerSheet } from "@/components/agent/model-picker-sheet";
 import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
 import { agentCreateGate, classifyAgentCreateError, resolveDuplicateSeed, usableRuntimes } from "@/lib/agent-create";
 import { agentEditGate } from "@/lib/agent-edit";
+import { agentSquadJoin } from "@/lib/agent-squad-join";
+import { useAddSquadMember } from "@/data/mutations/squads";
+import {
+  canUseCatalogPicker,
+  findModelEntry,
+  modelOverrideOptions,
+  shouldShowOverrides,
+} from "@/lib/runtime-models";
 import { formatAvatarEmoji, parseAvatarEmoji } from "@/lib/agent-avatar";
 import {
   useCreateAgent,
@@ -75,7 +90,7 @@ import {
   useUpdateAgent,
 } from "@/data/mutations/agents";
 import { memberListOptions } from "@/data/queries/members";
-import { runtimeListOptions } from "@/data/queries/runtimes";
+import { runtimeListOptions, runtimeModelsOptions } from "@/data/queries/runtimes";
 import { skillListOptions } from "@/data/queries/skills";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
@@ -99,6 +114,7 @@ const PERMISSION_SCOPES: {
 export function ManualAgentForm({
   agent,
   duplicateSource,
+  squadId,
 }: {
   agent?: Agent | null;
   /** When set, the form starts in duplicate mode: the create draft is seeded
@@ -106,6 +122,11 @@ export function ManualAgentForm({
    *  a blank create — a stale parameter that resolves to no agent silently
    *  falls back to that, matching web's `duplicateAgent`-null handling. */
   duplicateSource?: Agent | null;
+  /** Squad context (`?squad=<id>`, web manual-create-agent-page parity): the
+   *  header title switches to squad copy and a successful create joins the
+   *  new agent to the squad (best-effort — a failed join never fails the
+   *  create; lib/agent-squad-join.ts). */
+  squadId?: string | null;
 }) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
@@ -144,6 +165,7 @@ export function ManualAgentForm({
   const [formError, setFormError] = useState<string | null>(null);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [runtimePickerOpen, setRuntimePickerOpen] = useState(false);
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [skillPickerOpen, setSkillPickerOpen] = useState(false);
   const [memberPickerOpen, setMemberPickerOpen] = useState(false);
 
@@ -170,6 +192,51 @@ export function ManualAgentForm({
   const selectedRuntime =
     runtimes.find((r) => r.id === draft.runtimeId) ??
     (isEdit ? pickerRuntimes.find((r) => r.id === draft.runtimeId) ?? null : null);
+
+  // Live model catalog of the selected runtime (iteration 121, MYS-1032).
+  // Only an online runtime is queried — web gates the same way
+  // (model-dropdown.tsx passes runtimeOnline ? runtimeId : null).
+  const runtimeOnline = selectedRuntime?.status === "online";
+  const modelsQuery = useQuery({
+    ...runtimeModelsOptions(selectedRuntime?.id ?? null),
+    enabled: Boolean(selectedRuntime?.id) && runtimeOnline,
+  });
+  const catalogModels = modelsQuery.data?.models ?? [];
+  const catalogSupported = modelsQuery.data?.supported ?? true;
+  // Capability options advertised by the exact selected model; the thinking /
+  // speed pickers list exactly these (fail-closed — a model that does not
+  // advertise the capability keeps its field a free-text input, same as web).
+  const overrideOptions = useMemo(
+    () =>
+      modelOverrideOptions(
+        catalogModels,
+        draft.model,
+        selectedRuntime?.provider ?? "",
+      ),
+    [catalogModels, draft.model, selectedRuntime?.provider],
+  );
+  const showOverrides = shouldShowOverrides(
+    overrideOptions,
+    draft.thinkingLevel,
+    draft.serviceTier,
+  );
+  const modelPickerUsable = canUseCatalogPicker({
+    runtimeOnline,
+    runtimeId: selectedRuntime?.id ?? null,
+    loading: modelsQuery.isPending,
+    error: modelsQuery.isError,
+  });
+  // Sub-label under the model trigger: the catalog's label for the chosen id
+  // when it differs from the raw id, so a picked model reads as "known to
+  // this runtime".
+  const catalogEntryLabel = useMemo(() => {
+    const entry = findModelEntry(
+      catalogModels,
+      draft.model,
+      selectedRuntime?.provider ?? "",
+    );
+    return entry?.label && entry.label !== entry.id ? entry.label : null;
+  }, [catalogModels, draft.model, selectedRuntime?.provider]);
 
   // Duplicate seed: compute the create draft from the source agent, but only
   // once the runtime query has answered — seeding against a pending `[]`
@@ -211,6 +278,7 @@ export function ManualAgentForm({
   const createAgent = useCreateAgent();
   const updateAgent = useUpdateAgent(agent?.id ?? "");
   const setSkills = useSetAgentSkills(agent?.id ?? "");
+  const addSquadMember = useAddSquadMember(squadId ?? "");
   const gate = isEdit
     ? agentEditGate(draft)
     : agentCreateGate(draft, selectedRuntime, currentUserId);
@@ -296,8 +364,33 @@ export function ManualAgentForm({
             duplicateSource: duplicateSource ?? null,
           }),
         );
-        if (wsSlug) router.replace(`/${wsSlug}/more/agents/${created.id}`);
-        else router.back();
+        // Squad context (?squad= — web manual-create-agent-page parity): the
+        // created agent joins the squad. Best-effort — a failed join must not
+        // fail the create (the agent exists); the user is told and can add it
+        // manually from the squad page.
+        if (squadId && created.id) {
+          const join = agentSquadJoin(squadId, created.id, created.name || draft.name.trim());
+          if (join.payload) {
+            try {
+              await addSquadMember.mutateAsync(join.payload);
+            } catch (joinErr) {
+              Alert.alert(
+                t("agents.new.squadJoinFailedTitle"),
+                t("agents.new.squadJoinFailedMessage", {
+                  name: join.agentNameForError,
+                  error: joinErr instanceof Error ? joinErr.message : t("common.unknownError"),
+                }),
+              );
+            }
+          }
+        }
+        if (squadId && wsSlug) {
+          router.replace(`/${wsSlug}/more/squads/${squadId}`);
+        } else if (wsSlug) {
+          router.replace(`/${wsSlug}/more/agents/${created.id}`);
+        } else {
+          router.back();
+        }
       }
     } catch (err) {
       const next = classifyAgentCreateError(
@@ -318,9 +411,11 @@ export function ManualAgentForm({
     canEditAccess,
     skillsChanged,
     wsSlug,
+    squadId,
     createAgent,
     updateAgent,
     setSkills,
+    addSquadMember,
     t,
   ]);
 
@@ -536,50 +631,179 @@ export function ManualAgentForm({
         />
       </View>
 
-      {/* Model + per-model overrides. Web enumerates the runtime's catalog
-          (model-dropdown.tsx); mobile accepts a typed value and clears the
-          per-model overrides on change (applyDraftModelChange). */}
+      {/* Model + per-model overrides (iteration 121, MYS-1032). Web
+          enumerates the runtime's catalog (model-dropdown.tsx); mobile opens a
+          picker sheet over the same catalog (runtimeModelsOptions + poll) with
+          a creatable search row for custom models, and the thinking / speed
+          pickers list exactly what the selected model advertises. An offline
+          runtime or a failed discovery keeps manual entry: the trigger row
+          falls back to a plain text field, so the wire fields and behavior are
+          never worse than the v1 typed-value form. */}
       <View className="gap-1.5">
         <FieldLabel text={t("agents.new.modelLabel")} />
-        <TextField
-          value={draft.model}
-          onChangeText={handleModelChange}
-          placeholder={t("agents.new.modelPlaceholder")}
-          autoCapitalize="none"
-          autoCorrect={false}
-          editable={!isSubmitting}
-        />
-        <Text className="text-xs text-muted-foreground/70">
-          {t("agents.new.modelHint")}
-        </Text>
+        {catalogSupported && modelPickerUsable ? (
+          <>
+            <Pressable
+              onPress={() => setModelPickerOpen(true)}
+              disabled={isSubmitting}
+              accessibilityLabel={t("agents.new.modelLabel")}
+              className="flex-row items-center gap-2.5 rounded-md border border-border bg-secondary/50 px-3 py-2.5"
+            >
+              <Ionicons name="cube-outline" size={16} color={theme.mutedForeground} />
+              <View className="flex-1 min-w-0">
+                <Text
+                  className={cn(
+                    "text-sm",
+                    draft.model.trim() ? "text-foreground" : "text-muted-foreground",
+                  )}
+                  numberOfLines={1}
+                >
+                  {draft.model.trim()
+                    ? draft.model
+                    : t("agents.new.modelPlaceholder")}
+                </Text>
+                {catalogEntryLabel ? (
+                  <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+                    {catalogEntryLabel}
+                  </Text>
+                ) : null}
+              </View>
+              {modelsQuery.isFetching ? (
+                <ActivityIndicator size="small" />
+              ) : (
+                <Ionicons name="chevron-down" size={16} color={theme.mutedForeground} />
+              )}
+            </Pressable>
+            {modelsQuery.isError ? (
+              <Text className="text-xs text-muted-foreground/70">
+                {t("agents.modelPicker.discoveryFailed")}
+              </Text>
+            ) : (
+              <Text className="text-xs text-muted-foreground/70">
+                {t("agents.new.modelHint")}
+              </Text>
+            )}
+          </>
+        ) : (
+          <>
+            <TextField
+              value={draft.model}
+              onChangeText={handleModelChange}
+              placeholder={t("agents.new.modelPlaceholder")}
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!isSubmitting}
+            />
+            <Text className="text-xs text-muted-foreground/70">
+              {catalogSupported && !runtimeOnline
+                ? t("agents.modelPicker.runtimeOfflineManual")
+                : t("agents.new.modelHint")}
+            </Text>
+          </>
+        )}
       </View>
 
-      {draft.model.trim() ? (
+      {showOverrides ? (
         <View className="gap-3">
           <View className="gap-1.5">
             <FieldLabel text={t("agents.new.thinkingLabel")} />
-            <TextField
-              value={draft.thinkingLevel}
-              onChangeText={(text) => set("thinkingLevel", text)}
-              placeholder={t("agents.new.thinkingPlaceholder")}
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!isSubmitting}
-            />
+            {overrideOptions.thinkingLevels.length > 0 ? (
+              <View className="flex-row flex-wrap gap-1.5">
+                {overrideOptions.thinkingLevels.map((level) => {
+                  const active = draft.thinkingLevel === level.value;
+                  return (
+                    <Pressable
+                      key={level.value}
+                      onPress={() =>
+                        set("thinkingLevel", active ? "" : level.value)
+                      }
+                      disabled={isSubmitting}
+                      accessibilityLabel={`${t("agents.new.thinkingLabel")}: ${level.label}`}
+                      className={cn(
+                        "rounded-full border px-3 py-1.5",
+                        active
+                          ? "border-primary bg-primary/10"
+                          : "border-border bg-secondary/50",
+                      )}
+                    >
+                      <Text
+                        className={cn(
+                          "text-xs",
+                          active ? "text-foreground font-medium" : "text-muted-foreground",
+                        )}
+                      >
+                        {level.label || level.value}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : (
+              <TextField
+                value={draft.thinkingLevel}
+                onChangeText={(text) => set("thinkingLevel", text)}
+                placeholder={t("agents.new.thinkingPlaceholder")}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!isSubmitting}
+              />
+            )}
           </View>
           <View className="gap-1.5">
             <FieldLabel text={t("agents.new.speedLabel")} />
-            <TextField
-              value={draft.serviceTier}
-              onChangeText={(text) => set("serviceTier", text)}
-              placeholder={t("agents.new.speedPlaceholder")}
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!isSubmitting}
-            />
+            {overrideOptions.serviceTiers.length > 0 ? (
+              <View className="flex-row flex-wrap gap-1.5">
+                {overrideOptions.serviceTiers.map((tier) => {
+                  const active = draft.serviceTier === tier.id;
+                  return (
+                    <Pressable
+                      key={tier.id}
+                      onPress={() => set("serviceTier", active ? "" : tier.id)}
+                      disabled={isSubmitting}
+                      accessibilityLabel={`${t("agents.new.speedLabel")}: ${tier.name}`}
+                      className={cn(
+                        "rounded-full border px-3 py-1.5",
+                        active
+                          ? "border-primary bg-primary/10"
+                          : "border-border bg-secondary/50",
+                      )}
+                    >
+                      <Text
+                        className={cn(
+                          "text-xs",
+                          active ? "text-foreground font-medium" : "text-muted-foreground",
+                        )}
+                      >
+                        {tier.name || tier.id}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : (
+              <TextField
+                value={draft.serviceTier}
+                onChangeText={(text) => set("serviceTier", text)}
+                placeholder={t("agents.new.speedPlaceholder")}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!isSubmitting}
+              />
+            )}
           </View>
         </View>
       ) : null}
+
+      <ModelPickerSheet
+        visible={modelPickerOpen}
+        models={catalogModels}
+        loading={modelsQuery.isPending}
+        failed={modelsQuery.isError}
+        value={draft.model}
+        onPick={handleModelChange}
+        onClear={() => handleModelChange("")}
+        onClose={() => setModelPickerOpen(false)}
+      />
 
       {/* ---- Access ---- */}
       <SectionLabel

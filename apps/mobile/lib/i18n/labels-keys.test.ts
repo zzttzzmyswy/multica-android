@@ -31,7 +31,7 @@ describe("labels management i18n", () => {
     "nav.labels": "标签",
     "labels.loadError": "加载标签失败：",
     "labels.emptyTitle": "还没有标签",
-    "labels.emptyDescription": "标签用于给问题做标记，如 bug、功能、性能等。",
+    "labels.emptyDescription": "标签用于给任务做标记，如 bug、功能、性能等。",
     "labels.createButton": "新建标签",
     "labels.usageCount": "已使用 {{count}} 次",
     "labels.new.title": "新建标签",

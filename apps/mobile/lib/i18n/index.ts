@@ -61,7 +61,11 @@ export function initI18n(): Promise<AppLocale> {
       return locale;
     })();
   }
-  return ready;
+  // Resolve with the LIVE locale, never `ready`'s payload: `ready` is memoized
+  // from first launch, so its value goes stale as soon as the user switches
+  // language and any consumer that awaits it later (a formSheet route mounting
+  // after the switch) would pin itself to the old language.
+  return ready.then(() => currentLocale);
 }
 
 /** Resolution entry: an (id, locale) lookup that returns the localized string.
@@ -84,6 +88,18 @@ let savedLocale: AppLocale | null = null;
 /** Fetch the currently effective locale (device default until set). */
 export function getCurrentLocale(): AppLocale {
   return currentLocale;
+}
+
+/**
+ * BCP-47 tag for the active app locale, for `Intl` formatters.
+ *
+ * Always pass this to `toLocaleDateString` / `toLocaleTimeString` /
+ * `Intl.NumberFormat`: with no argument they fall back to the DEVICE locale,
+ * so a Chinese UI on an English phone renders English dates. This is the single
+ * mapping — don't re-derive the ternary at call sites.
+ */
+export function getIntlLocale(locale: AppLocale = currentLocale): string {
+  return locale === "zh" ? "zh-CN" : "en-US";
 }
 
 /** The persisted locale override, or null when following the device. */

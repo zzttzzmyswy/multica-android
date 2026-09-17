@@ -28,6 +28,7 @@ import { sanitizeViewDisplay } from "./issue-view-codec";
 function makeStore() {
   return createStore<TableColumnsSlice>((set) => ({
     tableColumns: defaultTableColumns(),
+    tableColumnWidths: {},
     ...createTableColumnActions(set),
   }));
 }
@@ -171,12 +172,16 @@ describe("surface stores own isolated tableColumns", () => {
     expect(useIssuesViewStore.getState().view).toBe("list");
   });
 
-  it("a saved web view with table mode rehydrates as table (sans gantt/swimlane)", () => {
+  it("a saved web view with table mode rehydrates as table (unknown modes fall back)", () => {
     expect(sanitizeViewDisplay({ viewMode: "table" }, "position").viewMode).toBe(
       "table",
     );
-    // web's other modes stay unsupported → fall back to list.
+    // Every mode web and mobile share is supported since iter-122 (list /
+    // board / table / gantt / swimlane) — an unknown mode falls back to list.
     expect(sanitizeViewDisplay({ viewMode: "swimlane" }, "position").viewMode).toBe(
+      "swimlane",
+    );
+    expect(sanitizeViewDisplay({ viewMode: "calendar" }, "position").viewMode).toBe(
       "list",
     );
   });
