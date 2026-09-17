@@ -31,18 +31,18 @@ describe("iteration 133 i18n", () => {
 
   const ZH_SPOT: Record<string, string> = {
     // Skills multi-select batch bar (web SkillBatchToolbar / its two dialogs).
-    "skills.batch.enterSelection": "多选技能",
+    "skills.batch.enterSelection": "多选 skill",
     "skills.batch.exitSelection": "退出多选",
     "skills.batch.selectOne": "选择 {{name}}",
     "skills.batch.partial": "已添加 {{owned}}/{{total}}",
-    "skills.batch.deleteTitle": "删除 {{count}} 个技能？",
-    "skills.batch.deleteMessage": "将永久删除选中的技能，且无法撤销。",
-    "skills.batch.deleteNoPermission": "只能删除自己创建的技能。",
-    "skills.batch.deleteSuccess": "已删除 {{count}} 个技能",
-    "skills.batch.deleteFailed": "无法删除选中的技能，请重试。",
+    "skills.batch.deleteTitle": "删除 {{count}} 个 skill？",
+    "skills.batch.deleteMessage": "将永久删除选中的 skill，且无法撤销。",
+    "skills.batch.deleteNoPermission": "只能删除自己创建的 skill。",
+    "skills.batch.deleteSuccess": "已删除 {{count}} 个 skill",
+    "skills.batch.deleteFailed": "无法删除选中的 skill，请重试。",
     "skills.batch.deletePartial": "已删除 {{done}} 个，{{failed}} 个失败：{{message}}",
-    "skills.batch.addedOne": "已把技能加入 1 个智能体",
-    "skills.batch.addedCount": "已把技能加入 {{count}} 个智能体",
+    "skills.batch.addedOne": "已把 skill 加入 1 个智能体",
+    "skills.batch.addedCount": "已把 skill 加入 {{count}} 个智能体",
     "skills.batch.addPartial": "已加入 {{done}} 个智能体，{{failed}} 个失败：{{message}}",
     // Issue table grouping (web tableGroupSpec dimensions).
     "table.groupBy": "分组方式",

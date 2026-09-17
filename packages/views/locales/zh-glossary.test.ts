@@ -411,9 +411,10 @@ describe("zh-Hans glossary: the Server / toolkit / provider / handler family", (
  * the role in Latin.
  *
  * The same sentence also kept `prompt`, so it is pinned too. The bundle's split
- * for that word is prose → 提示词 (`settings.quick_actions.field_prompt`) versus
- * a Latin label naming a code field (`System Prompt`, `Prompt` as a field
- * name), and "the leader agent's prompt" is prose.
+ * for that word is prose → 提示词 versus a Latin label naming a code field, and
+ * "the leader agent's prompt" is prose. The 144 round then derived the field
+ * half of that split properly — it is the compound `System Prompt` that stays
+ * Latin, not the bare word `Prompt`; see the `field_prompt` guard below.
  */
 describe("zh-Hans glossary: the squad leader", () => {
   it("never spells the squad role in Latin", () => {
@@ -432,5 +433,108 @@ describe("zh-Hans glossary: the squad leader", () => {
       .filter(([key, pattern]) => !pattern.test(zh[key] ?? ""))
       .map(([key]) => `${key}: lost the word this round settled on`);
     expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * Guard for the `field_prompt` divergence the 143 round recorded and left open:
+ * the same English source string, `Prompt`, labelled a textarea on the
+ * autopilot detail panel as `Prompt` and on the quick-actions form as 提示词.
+ *
+ * The rule is derived from the source bundle rather than from a key list. Every
+ * key whose EN string is exactly `Prompt` is the same thing — a field label
+ * sitting above a prompt textarea — so it takes the same Chinese word, and this
+ * bundle had already settled that word in three of the four cells that existed
+ * across the two bundles (`settings.quick_actions.field_prompt` here, both
+ * mobile keys there). The rest of the evidence agrees: the sibling `field_*`
+ * labels on the very same autopilot panel are all translated (智能体 / 创建者 /
+ * 输出模式 / 关联项目 / 订阅者), and ja and ko translate both cells. The autopilot
+ * label was the lone holdout.
+ *
+ * The compound `System prompt` is a different source string — the name of the
+ * agent's config field — and stays Latin, so the rule is two-sided rather than
+ * "translate every string containing Prompt".
+ */
+describe("zh-Hans glossary: a field labelled Prompt", () => {
+  const BARE_PROMPT = "Prompt";
+  const barePromptKeys = Object.entries(en)
+    .filter(([, source]) => source === BARE_PROMPT)
+    .map(([key]) => key)
+    .sort();
+
+  it("renders the bare source word `Prompt` as 提示词", () => {
+    const offenders = barePromptKeys
+      .filter((key) => (zh[key] ?? "") !== "提示词")
+      .map(
+        (key) =>
+          `${key}: a field label for a prompt input is 提示词 — ${JSON.stringify(zh[key])}`,
+      );
+    expect(offenders).toEqual([]);
+  });
+
+  it("still finds that label on more than one surface", () => {
+    // The rule is only worth deriving while the source word labels several
+    // screens. If a refactor collapses them to one key, a green run here would
+    // stop meaning anything, so pin the set the derivation rests on.
+    expect(barePromptKeys).toEqual([
+      "autopilots.detail.field_prompt",
+      "settings.quick_actions.field_prompt",
+    ]);
+  });
+
+  it("leaves the compound `System prompt` in Latin", () => {
+    // The other side of the rule. This label stays literal because its source
+    // string is the compound term, not the bare word — which is also why the
+    // rule above cannot reach it: `System prompt` !== `Prompt`.
+    const key = "agents.tab_body.instructions.system_prompt_label";
+    expect(en[key]).toBe("System prompt");
+    expect(zh[key]).toBe("System Prompt");
+  });
+});
+
+/**
+ * Guard for the `skill` concept, which the 144 round's skill-detail track scan
+ * found the two bundles spelling two ways. This bundle was nearly clean — it
+ * keeps the lowercase English word the voice guide mandates — but eight keys
+ * spelled it 技能: the skill detail page's own overview hints and aria labels,
+ * and the editor's slash-command empty states. The mobile bundle had the same
+ * drift on 62 keys, so both sides were settled in that round.
+ *
+ * The guide is explicit rather than a judgement call: "`skill` keeps lowercase
+ * English in Chinese text — a Multica-specific concept with no established
+ * Chinese term; titles may capitalize as `Skills`". The Chinese docs back it
+ * (475 `skill` to 1 技能), and this bundle already follows the same rule for
+ * `task`, the other Multica-specific term.
+ *
+ * Derived from the source bundle: if the English names a skill, the Chinese
+ * keeps the Latin token. This bundle elides the noun nowhere, so unlike the
+ * mobile guard the rule carries no exception list.
+ */
+describe("zh-Hans glossary: the skill concept stays lowercase English", () => {
+  it("keeps the Latin token wherever the English source names a skill", () => {
+    const offenders = keys
+      .filter((key) => /\bskills?\b/i.test(en[key] ?? ""))
+      .filter((key) => !/\bskills?\b/i.test(zh[key] ?? ""))
+      .map((key) => `${key}: the Latin token skill/Skills — ${JSON.stringify(zh[key])}`);
+    expect(offenders).toEqual([]);
+  });
+
+  it("never renders the concept with a Chinese word", () => {
+    // The other side of the rule: a key could keep the Latin token *and* spell
+    // the concept in Chinese, which the test above would not notice. 技能 is the
+    // word this bundle used before the 144 round.
+    const offenders = keys
+      .filter((key) => (zh[key] ?? "").includes("技能"))
+      .map((key) => `${key}: the Latin token skill/Skills, never a Chinese word`);
+    expect(offenders).toEqual([]);
+  });
+
+  it("still covers the detail page the scan walked", () => {
+    // The rule is only worth deriving while it reaches the surfaces the scan
+    // found the leak on; a green run that no longer covers them proves nothing.
+    const covered = keys.filter((key) => /\bskills?\b/i.test(en[key] ?? ""));
+    expect(covered).toContain("skills.detail.overview.description_hint");
+    expect(covered).toContain("skills.detail.files.list_aria");
+    expect(covered).toContain("editor.slash_command.no_results");
   });
 });

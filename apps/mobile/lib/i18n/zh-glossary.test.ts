@@ -628,9 +628,10 @@ describe("zh glossary: the Server / toolkit / provider / handler family", () => 
  * bundle: nothing here spells the role in Latin.
  *
  * The same sentence also kept `prompt`, so it is pinned too. The bundle's split
- * for that word is prose → 提示词 (`autopilots.detail.fieldPrompt`,
- * `quickActions.*`) versus a Latin label naming a code field, and "the leader
- * agent's prompt" is prose.
+ * for that word is prose → 提示词 versus a Latin label naming a code field, and
+ * "the leader agent's prompt" is prose. The 144 round then derived the field
+ * half of that split properly — it is the compound `System Prompt` that stays
+ * Latin, not the bare word `Prompt`; see the `field_prompt` guard below.
  */
 describe("zh glossary: the squad leader", () => {
   it("never spells the squad role in Latin", () => {
@@ -645,5 +646,91 @@ describe("zh glossary: the squad leader", () => {
     const value = zh[key] ?? "";
     expect(value).toContain("队长智能体");
     expect(value).toContain("提示词");
+  });
+});
+
+/**
+ * Guard for the word the views bundle now follows for a field labelled with the
+ * bare source word `Prompt`. The 143 round recorded that views rendered the
+ * autopilot panel's label in Latin while this bundle already had 提示词; the 144
+ * round settled views onto 提示词 and derived the rule there.
+ *
+ * This side is pinned so the settled word keeps an owner: the views guard reads
+ * the rule as "every key whose EN source is exactly `Prompt` renders 提示词", and
+ * if this bundle drifts back to Latin there is no longer a settled word for it
+ * to match. The classification is derived from the source bundle, not listed —
+ * a bare `Prompt` is a field label, whereas the compound `System prompt` names
+ * the agent's config field and stays Latin (this bundle has no such key yet).
+ */
+describe("zh glossary: a field labelled Prompt", () => {
+  it("renders every key sourced from the bare word `Prompt` as 提示词", () => {
+    const offenders = keys
+      .filter((key) => en[key] === "Prompt")
+      .filter((key) => zh[key] !== "提示词")
+      .map((key) => mismatch(key, "提示词 for a field labelled Prompt"));
+    expect(offenders).toEqual([]);
+  });
+
+  it("leaves no Latin `Prompt` anywhere in the bundle", () => {
+    // The source word is bare, so nothing here may keep it. The compound
+    // `System Prompt` would be the one legitimate survivor, and it has no key
+    // in this bundle — the day one appears, this test asks for the rule.
+    const offenders = withValue((value) => /\bPrompt\b/.test(prose(value))).map((key) =>
+      mismatch(key, "提示词 — only the compound `System Prompt` may stay Latin"),
+    );
+    expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * Guard for the `skill` concept, which the 144 round's skill-detail track scan
+ * found the two bundles spelling two ways: this one had 技能 on 62 keys — every
+ * `skills.*` surface plus the agent skills tab it is reached from — while
+ * packages/views kept the lowercase English word the voice guide mandates.
+ *
+ * The guide settles the direction rather than leaving it to taste: "`skill`
+ * keeps lowercase English in Chinese text — a Multica-specific concept with no
+ * established Chinese term; titles may capitalize as `Skills`". The Chinese docs
+ * back it (475 `skill` to 1 技能), and this bundle already follows the same rule
+ * for `task`, the other Multica-specific term.
+ *
+ * Derived from the source bundle: if the English names a skill, the Chinese
+ * keeps the Latin token. Two keys elide the noun because the screen or the toast
+ * already scopes it — the same "dropped, never swapped" pattern the concept
+ * guard above uses.
+ */
+const SKILL_ELIDED_KEYS = [
+  "skills.detail.refreshFailed", // "Failed to update skill" — toast on the skill page
+  "skills.editor.saved", // "Skill file saved" — toast inside the skill editor
+];
+
+describe("zh glossary: the skill concept stays lowercase English", () => {
+  it("keeps the Latin token wherever the English source names a skill", () => {
+    const offenders = keys
+      .filter((key) => /\bskills?\b/i.test(en[key] ?? ""))
+      .filter((key) => !SKILL_ELIDED_KEYS.includes(key))
+      .filter((key) => !/\bskills?\b/i.test(zh[key] ?? ""))
+      .map((key) => mismatch(key, "the Latin token skill/Skills"));
+    expect(offenders).toEqual([]);
+  });
+
+  it("never renders the concept with a Chinese word", () => {
+    // The other side of the rule: a key could keep the Latin token *and* spell
+    // the concept in Chinese, which the test above would not notice. 技能 is the
+    // word this bundle used before the 144 round.
+    const offenders = withValue((value) => value.includes("技能")).map((key) =>
+      mismatch(key, "the Latin token skill/Skills, never a Chinese word"),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it("still covers the surfaces the scan walked", () => {
+    // The rule is only worth deriving while it spans the detail page the scan
+    // found the leak on and the agent tab it is reached from.
+    const covered = keys.filter((key) => /\bskills?\b/i.test(en[key] ?? ""));
+    expect(covered.length).toBeGreaterThan(70);
+    expect(covered).toContain("screen.skillDetail");
+    expect(covered).toContain("agents.skills.assignedTitle");
+    expect(covered).toContain("skills.detail.refreshConfirmWarning");
   });
 });

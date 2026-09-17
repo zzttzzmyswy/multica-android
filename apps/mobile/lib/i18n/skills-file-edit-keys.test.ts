@@ -123,7 +123,7 @@ describe("skill file editor + refresh i18n", () => {
     expect(zhBody).toContain("my-skill");
     expect(zhBody).toContain("GitHub");
     expect(mod.translate("skills.detail.refreshSuccess", { source: "GitHub" })).toBe(
-      "已从 GitHub 更新技能",
+      "已从 GitHub 更新 skill",
     );
   });
 });
