@@ -34,7 +34,7 @@ describe("downloads i18n", () => {
     "downloads.emptyActive": "暂无进行中的下载",
     "downloads.emptyFinished": "暂无下载记录",
     "downloads.source.chat": "聊天",
-    "downloads.source.issue": "问题",
+    "downloads.source.issue": "任务",
     "downloads.source.update": "应用更新",
     "downloads.source.other": "其他",
     "downloads.cancel": "取消",
@@ -49,7 +49,7 @@ describe("downloads i18n", () => {
     "downloads.deleteConfirmTitle": "删除这条下载记录？",
     "downloads.deleteConfirmMessage": "设备上对应的文件也会被删除。",
     "downloads.error.interrupted": "下载因应用重启而中断，可重试。",
-    "chat.agentUnknown": "未知 agent",
+    "chat.agentUnknown": "未知智能体",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {
@@ -66,7 +66,7 @@ describe("downloads i18n", () => {
   it("source label keys feed the download-manager source renderer", () => {
     mod.setLocale("zh");
     expect(mod.translate("downloads.source.chat")).toBe("聊天");
-    expect(mod.translate("downloads.source.issue")).toBe("问题");
+    expect(mod.translate("downloads.source.issue")).toBe("任务");
     expect(mod.translate("downloads.source.update")).toBe("应用更新");
     expect(mod.translate("downloads.source.other")).toBe("其他");
   });

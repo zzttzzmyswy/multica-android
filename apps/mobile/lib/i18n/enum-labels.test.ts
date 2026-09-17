@@ -118,6 +118,6 @@ describe("formatActivity i18n", () => {
     i18n.setLocale("zh");
     expect(
       fmt.formatActivity({ action: "created" } as never, () => "nobody"),
-    ).toBe("创建了问题");
+    ).toBe("创建了任务");
   });
 });
