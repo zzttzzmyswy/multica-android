@@ -615,3 +615,35 @@ describe("zh glossary: the Server / toolkit / provider / handler family", () => 
     expect(offenders).toEqual([]);
   });
 });
+
+/**
+ * Guard for the squad surfaces the 143 round scanned (squad detail, create-squad
+ * modal) — both rendered the squad role in Latin.
+ *
+ * `leader` is not one of the role enums the voice guide leaves untranslated;
+ * that rule names `owner` / `admin` / `member`. It is the squad role, and this
+ * bundle had already settled it as 队长 in every other string that mentions it,
+ * including the label on the very chip the leak sat above (`squads.new.leader`:
+ * 'Leader' → 队长). The holdout was prose, so the rule is derived from the
+ * bundle: nothing here spells the role in Latin.
+ *
+ * The same sentence also kept `prompt`, so it is pinned too. The bundle's split
+ * for that word is prose → 提示词 (`autopilots.detail.fieldPrompt`,
+ * `quickActions.*`) versus a Latin label naming a code field, and "the leader
+ * agent's prompt" is prose.
+ */
+describe("zh glossary: the squad leader", () => {
+  it("never spells the squad role in Latin", () => {
+    const offenders = withValue((value) => /\bleaders?\b/i.test(prose(value))).map(
+      (key) => mismatch(key, "队长 for the squad role"),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps the squad instructions blurb on the settled words", () => {
+    const key = "squads.instructions.description";
+    const value = zh[key] ?? "";
+    expect(value).toContain("队长智能体");
+    expect(value).toContain("提示词");
+  });
+});

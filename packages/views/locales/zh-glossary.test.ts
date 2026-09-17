@@ -64,6 +64,12 @@ const en = load(SOURCE_LOCALE);
 const zh = load(TARGET_LOCALE);
 const keys = Object.keys(zh).sort();
 
+// The reads below spell out `?? ""` because `noUncheckedIndexedAccess` cannot
+// see that a `Record<string, string>` lookup is total here: every key comes
+// from `keys`, which is `Object.keys(zh)` itself, and `parity.test.ts` pins zh
+// against en — i18next's `_one`/`_other` normalization included — so a key
+// drawn from `keys` is present in both bundles and the fallback never fires.
+
 const CONCEPTS: { label: string; word: string; pattern: RegExp }[] = [
   { label: "Agent", word: "智能体", pattern: /\bagents?\b/i },
   { label: "Daemon", word: "守护进程", pattern: /\bdaemons?\b/i },
@@ -139,7 +145,7 @@ const CONCEPT_ELIDED: { key: string; why: string }[] = [
 describe("zh-Hans glossary: concepts are never left in English", () => {
   it("keeps every surviving concept token on the code-reference list", () => {
     const offenders = offendersFor((key) => {
-      const masked = mask(zh[key]);
+      const masked = mask(zh[key] ?? "");
       const leaked = CONCEPTS.filter(({ pattern }) => pattern.test(masked)).map(
         ({ label }) => label,
       );
@@ -157,7 +163,7 @@ describe("zh-Hans glossary: concepts are never left in English", () => {
       const maskedEn = mask(en[key] ?? "");
       const named = CONCEPTS.filter(({ pattern }) => pattern.test(maskedEn));
       if (!named.length) return null;
-      const missing = named.filter(({ word }) => !zh[key].includes(word));
+      const missing = named.filter(({ word }) => !(zh[key] ?? "").includes(word));
       return missing.length
         ? `${key}: expected ${missing.map(({ word }) => word).join("/")} in ${JSON.stringify(zh[key])} (en: ${JSON.stringify(en[key])})`
         : null;
@@ -166,7 +172,7 @@ describe("zh-Hans glossary: concepts are never left in English", () => {
   });
 
   it("keeps each code reference literal, so nobody translates it by accident", () => {
-    const joined = keys.map((key) => zh[key]).join("\n");
+    const joined = keys.map((key) => zh[key] ?? "").join("\n");
     const offenders = CODE_LITERALS.filter(({ literal }) => !joined.includes(literal)).map(
       ({ literal, why }) => `${JSON.stringify(literal)} is gone — it is ${why}`,
     );
@@ -180,7 +186,7 @@ describe("zh-Hans glossary: concepts are never left in English", () => {
     // it in zh.
     const offenders = keys.flatMap((key) =>
       CODE_LITERALS.filter(
-        ({ literal }) => (en[key] ?? "").includes(literal) && !zh[key].includes(literal),
+        ({ literal }) => (en[key] ?? "").includes(literal) && !(zh[key] ?? "").includes(literal),
       ).map(({ literal }) => `${key}: ${JSON.stringify(literal)} dropped from ${JSON.stringify(zh[key])}`),
     );
     expect(offenders).toEqual([]);
@@ -192,7 +198,7 @@ describe("zh-Hans glossary: concepts are never left in English", () => {
     // concept rules see nothing wrong; only matching the English source does.
     const offenders = keys.flatMap((key) =>
       [...new Set((en[key] ?? "").match(/`[^`]*`/g) ?? [])]
-        .filter((span) => !zh[key].includes(span))
+        .filter((span) => !(zh[key] ?? "").includes(span))
         .map((span) => `${key}: ${span} dropped from ${JSON.stringify(zh[key])}`),
     );
     expect(offenders).toEqual([]);
@@ -203,7 +209,7 @@ describe("zh-Hans glossary: concepts are never left in English", () => {
     // later regression through unnoticed.
     const offenders = CONCEPT_ELIDED.filter(({ key }) => {
       const named = CONCEPTS.filter(({ pattern }) => pattern.test(mask(en[key] ?? "")));
-      return named.every(({ word }) => zh[key].includes(word));
+      return named.every(({ word }) => (zh[key] ?? "").includes(word));
     }).map(({ key }) => `${key}: no longer elides a concept — drop it from CONCEPT_ELIDED`);
     expect(offenders).toEqual([]);
   });
@@ -237,7 +243,7 @@ describe("zh-Hans glossary: the settled concept vocabulary", () => {
     ];
     const offenders = keys.flatMap((key) =>
       banned
-        .filter(({ pattern }) => pattern.test(zh[key]))
+        .filter(({ pattern }) => pattern.test(zh[key] ?? ""))
         .map(
           ({ concept, word }) =>
             `${key}: ${concept} should be ${word}, got ${JSON.stringify(zh[key])}`,
@@ -384,6 +390,43 @@ describe("zh-Hans glossary: the Server / toolkit / provider / handler family", (
       "settings.mcp.edit_server": /编辑服务器/,
       "settings.mcp.remove_server": /移除服务器/,
       "settings.mcp.servers_title": /共享服务器/,
+    };
+    const offenders = Object.entries(settled)
+      .filter(([key, pattern]) => !pattern.test(zh[key] ?? ""))
+      .map(([key]) => `${key}: lost the word this round settled on`);
+    expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * Guard for the squad surfaces the 143 round scanned (squad detail, create-squad
+ * modal). Both rendered the squad role in Latin.
+ *
+ * `leader` is not one of the role enums the voice guide leaves untranslated —
+ * that rule names `owner` / `admin` / `member`. It is the squad role, and the
+ * bundle had already settled it as 队长 in ten of the eleven strings that
+ * mention it, including the label on the very chip the leak sat above
+ * (`squads.new.leader`: 'Leader' → 队长). Both holdouts were prose, so the rule
+ * is derived from the bundle rather than from the glossary: nothing here spells
+ * the role in Latin.
+ *
+ * The same sentence also kept `prompt`, so it is pinned too. The bundle's split
+ * for that word is prose → 提示词 (`settings.quick_actions.field_prompt`) versus
+ * a Latin label naming a code field (`System Prompt`, `Prompt` as a field
+ * name), and "the leader agent's prompt" is prose.
+ */
+describe("zh-Hans glossary: the squad leader", () => {
+  it("never spells the squad role in Latin", () => {
+    const offenders = keys
+      .filter((key) => /\bleaders?\b/i.test(mask(zh[key] ?? "")))
+      .map((key) => `${key}: 队长 for the squad role — ${JSON.stringify(zh[key])}`);
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps the two squad strings this round settled", () => {
+    const settled: Record<string, RegExp> = {
+      "squads.instructions_tab.description": /队长智能体.*提示词/,
+      "modals.create_squad.members_hint": /^队长可以委派/,
     };
     const offenders = Object.entries(settled)
       .filter(([key, pattern]) => !pattern.test(zh[key] ?? ""))
