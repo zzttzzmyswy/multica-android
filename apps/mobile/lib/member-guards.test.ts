@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { memberManageGuards } from "./member-guards";
+import { memberManageGuards, roleChangeOptions } from "./member-guards";
 
 describe("memberManageGuards", () => {
   const currentUserId = "u-current";
@@ -10,7 +10,8 @@ describe("memberManageGuards", () => {
       currentUserId,
       target: { user_id: "u-other", role: "member" },
     });
-    expect(g).toEqual({ canEditRole: true, canRemove: true });
+    expect(g.canEditRole).toBe(true);
+    expect(g.canRemove).toBe(true);
   });
 
   it("admin can manage a normal member (not self)", () => {
@@ -19,7 +20,8 @@ describe("memberManageGuards", () => {
       currentUserId,
       target: { user_id: "u-other", role: "member" },
     });
-    expect(g).toEqual({ canEditRole: true, canRemove: true });
+    expect(g.canEditRole).toBe(true);
+    expect(g.canRemove).toBe(true);
   });
 
   it("self is untouchable even when the current user would otherwise manage", () => {
@@ -29,17 +31,9 @@ describe("memberManageGuards", () => {
         currentUserId,
         target: { user_id: currentUserId, role: "admin" },
       });
-      expect(g).toEqual({ canEditRole: false, canRemove: false });
+      expect(g.canEditRole).toBe(false);
+      expect(g.canRemove).toBe(false);
     }
-  });
-
-  it("owner target is untouchable even for an owner actor", () => {
-    const g = memberManageGuards({
-      currentRole: "owner",
-      currentUserId,
-      target: { user_id: "u-owner", role: "owner" },
-    });
-    expect(g).toEqual({ canEditRole: false, canRemove: false });
   });
 
   it("plain member sees no management at all", () => {
@@ -48,7 +42,8 @@ describe("memberManageGuards", () => {
       currentUserId,
       target: { user_id: "u-other", role: "member" },
     });
-    expect(g).toEqual({ canEditRole: false, canRemove: false });
+    expect(g.canEditRole).toBe(false);
+    expect(g.canRemove).toBe(false);
   });
 
   it("guards are conservative while role/self are unknown (list not loaded)", () => {
@@ -57,7 +52,8 @@ describe("memberManageGuards", () => {
       currentUserId,
       target: { user_id: "u-other", role: "member" },
     });
-    expect(g).toEqual({ canEditRole: false, canRemove: false });
+    expect(g.canEditRole).toBe(false);
+    expect(g.canRemove).toBe(false);
   });
 
   it("missing target (member not found) never offers management", () => {
@@ -66,6 +62,108 @@ describe("memberManageGuards", () => {
       currentUserId,
       target: null,
     });
-    expect(g).toEqual({ canEditRole: false, canRemove: false });
+    expect(g.canEditRole).toBe(false);
+    expect(g.canRemove).toBe(false);
+  });
+});
+
+// Iteration 129 (MYS-1060): mobile used to freeze every owner target. That
+// exclusion (MYS-303) is lifted — the sheet now carries the owner option and
+// mirrors web's two extra rules (members-tab.tsx:100-103,152-155), which in
+// turn mirror the server (server/internal/handler/workspace.go:660-680).
+describe("memberManageGuards — owner targets", () => {
+  const currentUserId = "u-current";
+
+  it("only an owner may manage an owner", () => {
+    const g = memberManageGuards({
+      currentRole: "owner",
+      currentUserId,
+      target: { user_id: "u-owner", role: "owner" },
+    });
+    expect(g.canManageOwners).toBe(true);
+    expect(g.canEditRole).toBe(true);
+    expect(g.canRemove).toBe(true);
+  });
+
+  it("an admin cannot touch an owner (server: 403)", () => {
+    const g = memberManageGuards({
+      currentRole: "admin",
+      currentUserId,
+      target: { user_id: "u-owner", role: "owner" },
+    });
+    expect(g.canManageOwners).toBe(false);
+    expect(g.canEditRole).toBe(false);
+    expect(g.canRemove).toBe(false);
+  });
+
+  it("self-owner is still untouchable", () => {
+    const g = memberManageGuards({
+      currentRole: "owner",
+      currentUserId,
+      target: { user_id: currentUserId, role: "owner" },
+    });
+    expect(g.canEditRole).toBe(false);
+    expect(g.canRemove).toBe(false);
+  });
+
+  it("canManageOwners is owner-only, and never true for unknown/self role", () => {
+    for (const [currentRole, expected] of [
+      ["owner", true],
+      ["admin", false],
+      ["member", false],
+      [null, false],
+    ] as const) {
+      const g = memberManageGuards({
+        currentRole,
+        currentUserId,
+        target: { user_id: "u-other", role: "member" },
+      });
+      expect(g.canManageOwners).toBe(expected);
+    }
+  });
+
+  it("last owner cannot be demoted, but a non-last owner can", () => {
+    const lastOwner = memberManageGuards({
+      currentRole: "owner",
+      currentUserId,
+      target: { user_id: "u-owner", role: "owner" },
+      ownerCount: 1,
+    });
+    expect(lastOwner.wouldDemoteLastOwner).toBe(true);
+
+    const notLastOwner = memberManageGuards({
+      currentRole: "owner",
+      currentUserId,
+      target: { user_id: "u-owner", role: "owner" },
+      ownerCount: 2,
+    });
+    expect(notLastOwner.wouldDemoteLastOwner).toBe(false);
+  });
+
+  it("demoting a non-owner is never a last-owner demotion", () => {
+    const g = memberManageGuards({
+      currentRole: "owner",
+      currentUserId,
+      target: { user_id: "u-admin", role: "admin" },
+      ownerCount: 1,
+    });
+    expect(g.wouldDemoteLastOwner).toBe(false);
+  });
+});
+
+describe("roleChangeOptions", () => {
+  it("an owner sees all three roles in owner/admin/member order", () => {
+    expect(roleChangeOptions({ canManageOwners: true })).toEqual([
+      "owner",
+      "admin",
+      "member",
+    ]);
+  });
+
+  it("an admin does not see the owner option (server would 403)", () => {
+    expect(roleChangeOptions({ canManageOwners: false })).toEqual([
+      "admin",
+      "member",
+    ]);
   });
 });

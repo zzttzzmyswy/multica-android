@@ -48,6 +48,14 @@ import {
   useDetachResourceLabel,
 } from "@/data/mutations/labels";
 import { useRefreshSkill } from "@/data/mutations/skills";
+import { agentListOptions, agentKeys } from "@/data/queries/agents";
+import { api } from "@/data/api";
+import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
+import {
+  agentsForSkill,
+  partitionAgentsForSkill,
+} from "@/lib/skill-used-by";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
 import {
@@ -151,11 +159,24 @@ export default function SkillDetailPage() {
   const [editingFile, setEditingFile] = useState<string | null>(null);
   const [showLabels, setShowLabels] = useState(false);
   const [labelsQuery, setLabelsQuery] = useState("");
+  const [addAgentsOpen, setAddAgentsOpen] = useState(false);
+  const [agentSelection, setAgentSelection] = useState<Set<string>>(new Set());
   const qc = useQueryClient();
   const attachLabel = useAttachResourceLabel("skill", id);
   const detachLabel = useDetachResourceLabel("skill", id);
   const createLabel = useCreateLabel();
   const refreshSkill = useRefreshSkill();
+
+  const { data: agents = [] } = useQuery(agentListOptions(wsId));
+  const isAdmin = role === "owner" || role === "admin";
+  const usedByAgents = useMemo(
+    () => agentsForSkill(agents, id),
+    [agents, id],
+  );
+  const { mine: myAgents, others: otherAgents } = useMemo(
+    () => partitionAgentsForSkill(agents, userId ?? null, isAdmin),
+    [agents, userId, isAdmin],
+  );
 
   const skill = data;
   const canEdit = canEditSkill(skill, { userId, role });
@@ -164,6 +185,107 @@ export default function SkillDetailPage() {
     return members.find((m) => m.user_id === skill.created_by)?.name ?? null;
   }, [skill?.created_by, members]);
 
+  const origin = skill ? readOrigin(skill) : null;
+  const files = skill?.files ?? [];
+  const refreshable = !!skill && !!origin && canEdit && isRefreshableOrigin(origin);
+
+  const addAgentGroups = useMemo(() => {
+    const bound = new Set(usedByAgents.map((a) => a.id));
+    const toRow = (a: (typeof agents)[number]) => ({
+      key: a.id,
+      title: a.name,
+      subtitle: a.description || undefined,
+    });
+    return [
+      {
+        label: t("skills.usedBy.mine"),
+        rows: myAgents.filter((a) => !bound.has(a.id)).map(toRow),
+      },
+      {
+        label: t("skills.usedBy.others"),
+        rows: otherAgents.filter((a) => !bound.has(a.id)).map(toRow),
+      },
+    ];
+  }, [myAgents, otherAgents, usedByAgents, t]);
+
+  /** Common open entry: SKILL.md opens straight in the editor (its read view
+   *  is the SKILL.md card above), other files open the preview sheet, whose
+   *  edit affordance hands them to the same editor. */
+  const openFile = (path: string) => {
+    if (path === "SKILL.md") {
+      setEditingFile("SKILL.md");
+    } else {
+      setPreviewFile(files.find((f) => f.path === path) ?? null);
+    }
+  };
+
+  const confirmAddAgents = async () => {
+    const targets = [...myAgents, ...otherAgents].filter((a) =>
+      agentSelection.has(a.id),
+    );
+    setAddAgentsOpen(false);
+    setAgentSelection(new Set());
+    // Incremental attach per target (web AddToAgentDialog.handleConfirm):
+    // skip agents that already have the skill — the endpoint upserts with
+    // ON CONFLICT DO NOTHING so repeats are harmless, but skipping avoids
+    // pointless writes.
+    const pending = targets.filter((a) => !a.skills.some((s) => s.id === id));
+    let lastError: Error | null = null;
+    for (const agent of pending) {
+      try {
+        await api.addAgentSkills(agent.id, { skill_ids: [id] });
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+      }
+    }
+    if (pending.length > 0 && !lastError) {
+      Alert.alert(
+        pending.length === 1 && pending[0]
+          ? t("skills.usedBy.addedOne", { name: pending[0].name })
+          : t("skills.usedBy.addedMulti", { count: pending.length }),
+      );
+    } else if (lastError) {
+      Alert.alert(
+        t("skills.usedBy.addFailed"),
+        lastError.message || t("common.unknownError"),
+      );
+    }
+    void qc.invalidateQueries({ queryKey: agentKeys.list(wsId) });
+    void qc.invalidateQueries({ queryKey: agentKeys.listAll(wsId) });
+  };
+
+  const handleRefresh = () => {
+    if (!skill || !origin || refreshSkill.isPending) return;
+    const source = t(ORIGIN_LABEL_KEY[origin.type]);
+    const body = t("skills.detail.refreshConfirmBody", {
+      name: skill.name,
+      source,
+    });
+    Alert.alert(t("skills.detail.refreshConfirmTitle"), `${body}\n\n${t("skills.detail.refreshConfirmWarning")}`, [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: t("skills.detail.refresh"),
+        onPress: () => {
+          refreshSkill.mutate(skill.id, {
+            onSuccess: () => {
+              Alert.alert(t("skills.detail.refreshSuccess", { source }));
+            },
+            onError: (err) =>
+              Alert.alert(
+                t("skills.detail.refreshFailed"),
+                err instanceof Error ? err.message : t("common.unknownError"),
+              ),
+          });
+        },
+      },
+    ]);
+  };
+
+  // Early returns live BELOW every hook on purpose: a return above
+  // `addAgentGroups` made the first render (loading, fewer hooks) and the
+  // loaded render (more hooks) disagree, which React reports as "Rendered
+  // more hooks than during the previous render" — a hard crash every time the
+  // skill detail was opened without a warm detail cache.
   if (isLoading) {
     return (
       <View className="flex-1 items-center justify-center bg-background">
@@ -190,47 +312,7 @@ export default function SkillDetailPage() {
     );
   }
 
-  const origin = readOrigin(skill);
-  const files = skill.files ?? [];
-  const refreshable = canEdit && isRefreshableOrigin(origin);
-
-  /** Common open entry: SKILL.md opens straight in the editor (its read view
-   *  is the SKILL.md card above), other files open the preview sheet, whose
-   *  edit affordance hands them to the same editor. */
-  const openFile = (path: string) => {
-    if (path === "SKILL.md") {
-      setEditingFile("SKILL.md");
-    } else {
-      setPreviewFile(files.find((f) => f.path === path) ?? null);
-    }
-  };
-
-  const handleRefresh = () => {
-    if (!skill || refreshSkill.isPending) return;
-    const source = t(ORIGIN_LABEL_KEY[origin.type]);
-    const body = t("skills.detail.refreshConfirmBody", {
-      name: skill.name,
-      source,
-    });
-    Alert.alert(t("skills.detail.refreshConfirmTitle"), `${body}\n\n${t("skills.detail.refreshConfirmWarning")}`, [
-      { text: t("common.cancel"), style: "cancel" },
-      {
-        text: t("skills.detail.refresh"),
-        onPress: () => {
-          refreshSkill.mutate(skill.id, {
-            onSuccess: () => {
-              Alert.alert(t("skills.detail.refreshSuccess", { source }));
-            },
-            onError: (err) =>
-              Alert.alert(
-                t("skills.detail.refreshFailed"),
-                err instanceof Error ? err.message : t("common.unknownError"),
-              ),
-          });
-        },
-      },
-    ]);
-  };
+  const originInfo = origin!;
 
   return (
     <>
@@ -251,7 +333,7 @@ export default function SkillDetailPage() {
                 </Text>
                 <View className="px-1.5 py-px rounded-full bg-secondary">
                   <Text className="text-[10px] text-muted-foreground font-medium">
-                    {t(ORIGIN_LABEL_KEY[origin.type])}
+                    {t(ORIGIN_LABEL_KEY[originInfo.type])}
                   </Text>
                 </View>
               </View>
@@ -260,6 +342,36 @@ export default function SkillDetailPage() {
                   {skill.description}
                 </Text>
               ) : null}
+              {/* Header counts — web's identity strip (`detail.header.files`
+                  + `detail.header.used_by`, skill-detail-page.tsx). What the
+                  skill is made of and who has it, without scrolling to the
+                  Files / Used-by sections. */}
+              <View className="flex-row flex-wrap items-center gap-3 pt-0.5">
+                <View className="flex-row items-center gap-1">
+                  <Ionicons
+                    name="document-text-outline"
+                    size={13}
+                    color={theme.mutedForeground}
+                  />
+                  <Text className="text-xs text-muted-foreground">
+                    {t("skills.detail.fileCount", { count: files.length + 1 })}
+                  </Text>
+                </View>
+                <View className="flex-row items-center gap-1">
+                  <Ionicons
+                    name="people-outline"
+                    size={13}
+                    color={theme.mutedForeground}
+                  />
+                  <Text className="text-xs text-muted-foreground">
+                    {usedByAgents.length === 1
+                      ? t("skills.usedBy.title", { count: 1 })
+                      : t("skills.usedBy.titleOther", {
+                          count: usedByAgents.length,
+                        })}
+                  </Text>
+                </View>
+              </View>
             </View>
           </View>
 
@@ -269,7 +381,7 @@ export default function SkillDetailPage() {
               <MetaRow
                 icon="layers-outline"
                 label={t("skills.detail.origin")}
-                value={t(ORIGIN_LABEL_KEY[origin.type])}
+                value={t(ORIGIN_LABEL_KEY[originInfo.type])}
               />
             </View>
             <View className="px-3 py-1">
@@ -371,6 +483,61 @@ export default function SkillDetailPage() {
               ) : null}
             </View>
           ) : null}
+        </View>
+
+        {/* Used by — agents with this skill bound (web skill-detail-page
+            Overview "Used by" section). Header count + "Add to agent"
+            affordance; rows show avatar, name, description. */}
+        <View className="mt-6 px-4 gap-2">
+          <View className="flex-row items-center justify-between gap-3">
+            <SectionTitle
+              icon="people-outline"
+              title={
+                usedByAgents.length === 1
+                  ? t("skills.usedBy.title", { count: 1 })
+                  : t("skills.usedBy.titleOther", { count: usedByAgents.length })
+              }
+            />
+            <Pressable
+              onPress={() => setAddAgentsOpen(true)}
+              className="flex-row items-center gap-1 rounded-md border border-border px-2 py-1 active:bg-secondary"
+              accessibilityLabel={t("skills.usedBy.add")}
+            >
+              <Ionicons
+                name="person-add-outline"
+                size={13}
+                color={theme.mutedForeground}
+              />
+              <Text className="text-xs font-medium text-muted-foreground">
+                {t("skills.usedBy.add")}
+              </Text>
+            </Pressable>
+          </View>
+          {usedByAgents.length === 0 ? (
+            <View className="rounded-lg border border-dashed border-border px-3 py-6 items-center">
+              <Text className="text-xs text-muted-foreground/70 italic text-center">
+                {t("skills.usedBy.empty")}
+              </Text>
+            </View>
+          ) : (
+            <View className="rounded-lg border border-border divide-y divide-border bg-card">
+              {usedByAgents.map((agent) => (
+                <View key={agent.id} className="flex-row items-center gap-2.5 px-3 py-2.5">
+                  <ActorAvatar type="agent" id={agent.id} size={28} />
+                  <View className="flex-1 min-w-0">
+                    <Text className="text-sm font-medium text-foreground" numberOfLines={1}>
+                      {agent.name}
+                    </Text>
+                    {agent.description ? (
+                      <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+                        {agent.description}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* SKILL.md */}
@@ -586,6 +753,29 @@ export default function SkillDetailPage() {
           />
         </View>
       </Modal>
+
+      {/* Add-to-agent multi-select sheet (web AddToAgentDialog parity):
+          my agents first, then other agents (admin only), search across
+          both groups; already-bound agents are filtered out. */}
+      <MultiSelectSheet
+        visible={addAgentsOpen}
+        title={t("skills.usedBy.addTitle")}
+        groups={addAgentGroups}
+        searchPlaceholder={t("skills.usedBy.searchPlaceholder")}
+        selectedKeys={agentSelection}
+        emptyText={t("skills.usedBy.noAgents")}
+        noMatchText={t("skills.usedBy.noMatch")}
+        leading={(row) => <ActorAvatar type="agent" id={row.key} size={28} />}
+        onToggle={(key) => {
+          const next = new Set(agentSelection);
+          if (next.has(key)) next.delete(key);
+          else next.add(key);
+          setAgentSelection(next);
+        }}
+        onClose={() => {
+          void confirmAddAgents();
+        }}
+      />
     </>
   );
 }

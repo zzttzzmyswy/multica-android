@@ -27,14 +27,14 @@ describe("project issue-surface i18n", () => {
   });
 
   const ZH_SPOT: Record<string, string> = {
-    "project.emptyIssues": "该项目暂无问题。",
+    "project.emptyIssues": "该项目暂无任务。",
     "issues.scopeAll": "全部",
     "issues.scopeMembers": "成员",
-    "issues.scopeAgents": "Agents",
+    "issues.scopeAgents": "智能体",
     "issues.viewList": "列表",
     "issues.viewBoard": "看板",
-    "issues.filterEmpty": "没有符合当前筛选的问题。",
-    "issues.boardEmptyColumn": "无问题",
+    "issues.filterEmpty": "没有符合当前筛选的任务。",
+    "issues.boardEmptyColumn": "无任务",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {

@@ -18,18 +18,27 @@
  * parent / existing direct children) computed inside that route. When the
  * issue has NO children yet, the actions menu on the detail page is the
  * entry point (this section is hidden, same as web).
+ *
+ * Iter-130 adds web's inline editing (issue-detail.tsx:634-833): the status
+ * icon, the due-date chip and the assignee avatar are each their own press
+ * target that opens the matching formSheet picker against the CHILD issue,
+ * and long-pressing a row enters multi-select, which raises the shared
+ * `BatchActionBar` at the bottom of the detail screen.
  */
+import { useMemo } from "react";
 import { Pressable, View } from "react-native";
 import { router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Issue } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { IssueRow } from "./issue-row";
 import { useTranslation } from "@/lib/i18n/react";
 import { groupSubIssuesByStage } from "@/lib/sub-issue-grouping";
+import { openIssuePicker } from "@/lib/issue-picker-route";
 import { issueChildProgressOptions } from "@/data/queries/issues";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection-store";
 
 interface Props {
   /** The parent issue's id — target of the "add sub-issue" sheet. */
@@ -41,6 +50,11 @@ interface Props {
 export function IssueChildrenSection({ issueId, subIssues, wsSlug }: Props) {
   const { t } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const queryClient = useQueryClient();
+  const selectionMode = useIssueBatchSelectionStore((s) => s.selectionMode);
+  const selectedIds = useIssueBatchSelectionStore((s) => s.selectedIds);
+  const enterSelection = useIssueBatchSelectionStore((s) => s.enterSelection);
+  const toggleSelection = useIssueBatchSelectionStore((s) => s.toggle);
 
   // Workspace-wide parent→(done/total) map — lets each sub-issue row show
   // its OWN nested progress ring without opening it. Deduped by TanStack
@@ -49,7 +63,18 @@ export function IssueChildrenSection({ issueId, subIssues, wsSlug }: Props) {
   // section renders rows.
   const { data: childProgress } = useQuery(issueChildProgressOptions(wsId));
 
-  // No sub-issues (empty / loading / error) → hide the section entirely
+  // The batch-selection store is a shared singleton (the issue LISTS also
+  // select into it), so only surface checkboxes when the live selection
+  // actually lands inside this section. A selection carried in from a list
+  // screen would otherwise paint checkmarks on unrelated sub-issue rows.
+  const sectionSelectionMode = useMemo(
+    () =>
+      selectionMode &&
+      !!subIssues?.some((child) => selectedIds.has(child.id)),
+    [selectionMode, subIssues, selectedIds],
+  );
+
+  // No sub-issues (empty / loading/error) → hide the section entirely
   // (matches web, which only mounts the SubIssues region on >0 data).
   if (!subIssues || subIssues.length === 0) return null;
 
@@ -93,9 +118,26 @@ export function IssueChildrenSection({ issueId, subIssues, wsSlug }: Props) {
               issue={child}
               showStatus
               childProgress={childProgress?.[child.id]}
+              selectionMode={sectionSelectionMode}
+              selected={selectedIds.has(child.id)}
               onPress={() => {
+                if (sectionSelectionMode) {
+                  toggleSelection(child.id);
+                  return;
+                }
                 if (wsSlug) router.push(`/${wsSlug}/issue/${child.id}`);
               }}
+              onLongPress={() => enterSelection(child.id)}
+              onPressStatus={() =>
+                openIssuePicker("status", child, wsSlug, wsId, queryClient)
+              }
+              onPressAssignee={() =>
+                openIssuePicker("assignee", child, wsSlug, wsId, queryClient)
+              }
+              onPressDueDate={() =>
+                openIssuePicker("due-date", child, wsSlug, wsId, queryClient)
+              }
+              dueDate={child.due_date}
             />
           ))}
         </View>
