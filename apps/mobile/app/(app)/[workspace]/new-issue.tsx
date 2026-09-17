@@ -44,11 +44,12 @@ import { QuickCreatePanel } from "@/components/issue/quick-create-panel";
 import { Text } from "@/components/ui/text";
 import { MOBILE_PLACEHOLDER_COLOR } from "@/components/ui/input-tokens";
 import { useCreateIssue, useQuickCreateIssue } from "@/data/mutations/issues";
-import { projectListOptions } from "@/data/queries/projects";
+import { projectDetailOptions } from "@/data/queries/projects";
 import { useNewIssueDraftStore } from "@/data/stores/new-issue-draft-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useMentionInput } from "@/lib/use-mention-input";
+import type { SubIssueRouteParams } from "@/lib/sub-issue-route";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
@@ -75,10 +76,7 @@ export default function NewIssueModal() {
     seedDescription?: string;
     seedAssigneeId?: string;
     /** Parent preset by the issue table's row-level "+" (web createSubIssue). */
-    parentIssueId?: string;
-    parentIssueIdentifier?: string;
-    parentProjectId?: string;
-  }>();
+  } & Partial<SubIssueRouteParams>>();
   const [mode, setMode] = useState<CreateMode>("manual");
   const [title, setTitle] = useState("");
   // A sub-issue preset can be dropped before submitting — the chip is the
@@ -127,18 +125,21 @@ export default function NewIssueModal() {
   }, [seedDescription, seedAssigneeId, descriptionTextSetter, setAssignee]);
 
   // A sub-issue inherits its parent's project (web `createSubIssue` passes
-  // `project_id: issue.project_id`). Seeded after the mount reset, and only
-  // once the project list resolves — the param carries an id, the form holds
-  // a whole Project.
+  // `project_id: issue.project_id`). One detail fetch for the one id the
+  // preset names — not a workspace-wide project list, which the form would
+  // otherwise page in on every open — and the effect is keyed on the id and
+  // the fetched project only, so a later refetch can never re-apply the
+  // parent's project over a project the user has since picked.
   const projectSetter = useNewIssueDraftStore((s) => s.setProject);
   const parentProjectIdValue = parentProjectId ? String(parentProjectId) : null;
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
-  const { data: allProjects } = useQuery(projectListOptions(wsId));
+  const { data: parentProject } = useQuery(
+    projectDetailOptions(wsId, parentProjectIdValue ?? ""),
+  );
   useEffect(() => {
-    if (!parentProjectIdValue) return;
-    const match = allProjects?.find((p) => p.id === parentProjectIdValue);
-    if (match) projectSetter(match);
-  }, [parentProjectIdValue, allProjects, projectSetter]);
+    if (!parentProjectIdValue || !parentProject) return;
+    projectSetter(parentProject);
+  }, [parentProjectIdValue, parentProject, projectSetter]);
 
   const createIssue = useCreateIssue();
   const quickCreate = useQuickCreateIssue();

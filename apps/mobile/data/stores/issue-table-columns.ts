@@ -84,8 +84,12 @@ function clampColumnWidth(width: number): number {
 
 /** The default width a column starts at (before any user override). */
 export function defaultColumnWidth(column: TableColumnKey): number {
-  if (column.startsWith(PROPERTY_COLUMN_PREFIX)) return PROPERTY_COLUMN_WIDTH;
-  if (column === "title") return PROPERTY_COLUMN_WIDTH;
+  // `title` is pinned rather than scrolled, so it never reaches the sizing
+  // path; it shares the property-column default because there is no other
+  // sensible number for it.
+  if (column === "title" || column.startsWith(PROPERTY_COLUMN_PREFIX)) {
+    return PROPERTY_COLUMN_WIDTH;
+  }
   return DEFAULT_COLUMN_WIDTHS[column as Exclude<TableSystemColumn, "title">];
 }
 
@@ -107,6 +111,23 @@ export function columnWidthOf(
  *  travelled, clamped so the live preview equals what a release will commit. */
 export function nextColumnWidth(startWidth: number, dx: number): number {
   return clampColumnWidth(startWidth + dx);
+}
+
+/**
+ * Which way a column can move, given its slot in the display order and how
+ * many columns there are. Mirrors `reorderTableColumn`'s guards exactly, so a
+ * menu built from this can never offer a control the store would refuse:
+ * slot 0 is the pinned `title` (not movable at all), and the leftmost slot a
+ * scrolled column can reach is 1.
+ */
+export function columnMoveAvailability(
+  position: number,
+  count: number,
+): { left: boolean; right: boolean } {
+  return {
+    left: position > 1,
+    right: position >= 1 && position < count - 1,
+  };
 }
 
 export const PROPERTY_COLUMN_PREFIX = "property:";

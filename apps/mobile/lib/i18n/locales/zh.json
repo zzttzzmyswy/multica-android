@@ -3048,14 +3048,11 @@
   "myIssues.scopeAll": "全部",
   "myIssues.emptyAll": "还没有指派给您、由您创建，或涉及您的 agents 与 squads 的问题。",
   "mcp.agent.workspaceTitle": "工作区服务器",
-  "table.resizeColumn": "调整列宽",
-  "table.moveColumnUp": "左移一列",
-  "table.moveColumnDown": "右移一列",
   "table.resetColumns": "恢复默认列",
   "a11y.tableResizeColumn": "调整{{column}}列宽",
   "a11y.tableMoveColumnUp": "把{{column}}列左移",
   "a11y.tableMoveColumnDown": "把{{column}}列右移",
-  "a11y.tableCreateSubIssue": "为{{title}}新建子问题",
-  "newIssue.parentChip": "{{identifier}} 的子问题",
-  "newIssue.parentChipClear": "取消父问题"
+  "a11y.tableCreateSubIssue": "为{{title}}新建子任务",
+  "newIssue.parentChip": "{{identifier}} 的子任务",
+  "newIssue.parentChipClear": "移除父任务"
 }

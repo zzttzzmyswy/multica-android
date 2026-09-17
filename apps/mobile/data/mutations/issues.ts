@@ -805,6 +805,10 @@ export function useDetachLabel(issueId: string) {
  *  - issueKeys.myAll(wsId)        my-issues list (all three scopes)
  *  - inboxKeys.all(wsId)          inbox (assignment notification if any) —
  *                                 prefix-matches the inbox list key
+ *  - the parent's children + the workspace child-progress map, when the new
+ *    issue has a parent: otherwise a parent opened before the create keeps
+ *    showing an empty sub-issue section and a stale x/y ring. Web's
+ *    create mutation does exactly these two (packages/core/issues/mutations.ts).
  */
 export function useCreateIssue() {
   const qc = useQueryClient();
@@ -812,9 +816,14 @@ export function useCreateIssue() {
 
   return useMutation({
     mutationFn: (body: CreateIssueRequest) => api.createIssue(body),
-    onSuccess: () => {
+    onSuccess: (newIssue, body) => {
       qc.invalidateQueries({ queryKey: issueKeys.myAll(wsId) });
       qc.invalidateQueries({ queryKey: inboxKeys.all(wsId) });
+      const parentId = newIssue?.parent_issue_id ?? body.parent_issue_id;
+      if (parentId) {
+        qc.invalidateQueries({ queryKey: issueKeys.children(wsId, parentId) });
+        qc.invalidateQueries({ queryKey: issueKeys.childProgress(wsId) });
+      }
     },
   });
 }

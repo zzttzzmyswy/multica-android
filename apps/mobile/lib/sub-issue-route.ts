@@ -15,6 +15,19 @@
 import type { Issue } from "@multica/core/types";
 
 /**
+ * Route params for the new-issue form seeded from a parent issue. A named
+ * shape rather than a string bag, so the producer (the issue table's `+`) and
+ * the consumer (`new-issue.tsx`'s `useLocalSearchParams`) share one
+ * definition — a typo in a key would otherwise compile on both sides and
+ * silently drop the parent.
+ */
+export interface SubIssueRouteParams {
+  parentIssueId: string;
+  parentIssueIdentifier?: string;
+  parentProjectId?: string;
+}
+
+/**
  * Params for the new-issue form seeded from a parent issue.
  *
  * `parentProjectId` is copied only when the parent has a project, exactly as
@@ -24,7 +37,7 @@ import type { Issue } from "@multica/core/types";
  */
 export function subIssueRouteParams(
   parent: Pick<Issue, "id" | "identifier" | "project_id">,
-): Record<string, string> {
+): SubIssueRouteParams {
   return {
     parentIssueId: parent.id,
     ...(parent.identifier ? { parentIssueIdentifier: parent.identifier } : {}),

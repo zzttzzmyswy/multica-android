@@ -76,6 +76,7 @@ import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection
 import {
   COLUMN_WIDTH_MAX,
   COLUMN_WIDTH_MIN,
+  columnMoveAvailability,
   columnWidthOf,
   nextColumnWidth,
   nextTableSort,
@@ -601,8 +602,12 @@ export function IssueTableView({
           : { column, width },
       );
       // The header is the pane the gesture drives, so it does not emit scroll
-      // events while the columns move under it — push the body to match.
-      bodyRef.current?.scrollTo({ x: headerX.current, animated: false });
+      // events while the columns move under it — push the body to match. Only
+      // when the body's offset actually differs: an unconditional dispatch
+      // every frame re-enters the sync loop for no movement.
+      if (Math.abs(headerX.current - bodyX.current) >= 1) {
+        bodyRef.current?.scrollTo({ x: headerX.current, animated: false });
+      }
     },
     [],
   );
@@ -616,6 +621,20 @@ export function IssueTableView({
       }
     },
     [columnWidths, onResizeColumn],
+  );
+
+  // A cell tap: select in selection mode, else open the editor for an
+  // editable column. Stable identity (issue id + column in, nothing out) so
+  // the memoised rows can actually skip a re-render — an inline arrow per row
+  // per render made the comparison meaningless.
+  const handlePressCell = useCallback(
+    (issueId: string, column: TableColumnKey) => {
+      if (selectionMode) toggleSelection(issueId);
+      else if (isEditableTableColumn(column)) {
+        setEditorKey({ issueId, column });
+      }
+    },
+    [selectionMode, toggleSelection],
   );
 
   if (issues.length === 0) {
@@ -803,15 +822,7 @@ export function IssueTableView({
                       getName={getName}
                       selected={selectedIds.has(item.row.issue.id)}
                       columnLabel={columnLabel}
-                      onPressCell={(column) => {
-                        if (selectionMode) toggleSelection(item.row.issue.id);
-                        else if (isEditableTableColumn(column)) {
-                          setEditorKey({
-                            issueId: item.row.issue.id,
-                            column,
-                          });
-                        }
-                      }}
+                      onPressCell={handlePressCell}
                     />
                   )
                 }
@@ -951,10 +962,15 @@ function ResizeHandle({
 }) {
   const { t } = useTranslation();
   const [active, setActive] = useState(false);
+  // The width the CURRENT drag started from. Assigned on every render, not
+  // only in the grant handler: the responder below is built once (its deps are
+  // empty so a mid-drag rebuild cannot drop the gesture), so anything it reads
+  // must come from a ref that is refreshed outside it — a `startWidth` read
+  // from the closure would be the column's width at MOUNT, and the second drag
+  // on a column would snap it back to that.
   const startRef = useRef(startWidth);
-  // Latest callbacks without rebuilding the responder: PanResponder captures
-  // its handlers once, so a stale closure here would resize against an old
-  // column list.
+  startRef.current = startWidth;
+  // Latest callbacks, kept fresh for the same reason.
   const handlers = useRef({ onStart, onMove, onCommit });
   handlers.current = { onStart, onMove, onCommit };
 
@@ -974,7 +990,6 @@ function ResizeHandle({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
         onPanResponderGrant: () => {
-          startRef.current = startWidth;
           setActive(true);
           handlers.current.onStart();
         },
@@ -990,9 +1005,6 @@ function ResizeHandle({
           handlers.current.onCommit(startRef.current, g.dx);
         },
       }),
-    // `startWidth` is read through a ref on grant; rebuilding on every width
-    // change would drop the responder mid-drag.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
@@ -1258,11 +1270,15 @@ function PinnedRow({
         * button); hover does not exist on a phone, so it is a permanent
         * target. Hidden while selecting: the row's taps already mean
         * "toggle selection" then, and a create action in the middle of a
-        * range-select is a mis-tap waiting to happen. */}
+        * range-select is a mis-tap waiting to happen.
+        *
+        * The hit area is NOT enlarged: the pinned cell is 176px wide and this
+        * sits immediately after the `flex-1` title, so an 8px `hitSlop` would
+        * claim the right end of the title — taps meant to open the issue (or
+        * the second tap of double-tap-to-rename) would create a sub-issue. */}
       {selectionMode ? null : (
         <Pressable
           onPress={onCreateSubIssue}
-          hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel={t("a11y.tableCreateSubIssue", {
             title: issue.title,
@@ -1314,7 +1330,7 @@ const DataRow = memo(
   ) => string;
   selected: boolean;
   columnLabel: (column: TableColumnKey) => string;
-  onPressCell: (column: TableColumnKey) => void;
+  onPressCell: (issueId: string, column: TableColumnKey) => void;
 }) {
   const { t } = useTranslation();
   const statusLabel = useStatusLabel();
@@ -1329,7 +1345,7 @@ const DataRow = memo(
         return (
           <Pressable
             key={column}
-            onPress={editable ? () => onPressCell(column) : undefined}
+            onPress={editable ? () => onPressCell(issue.id, column) : undefined}
             disabled={!editable}
             style={{ width: widths[index], height }}
             className={`justify-center px-2 ${
@@ -1747,6 +1763,27 @@ function ColumnMenu({
   /** Position of a visible column in the display order, or -1. */
   const positionOf = (column: TableColumnKey) => columns.indexOf(column);
 
+  /**
+   * The move affordance for one column, or `undefined` when there is nothing
+   * to move: a hidden column (position -1 — nothing to place) or the pinned
+   * title column. Both cases are decided here, once, so the menu can never
+   * render a control the store would refuse.
+   */
+  const movableOrder = (
+    column: TableColumnKey,
+    label: string,
+  ): MenuRowOrder | undefined => {
+    if (column === "title") return undefined;
+    const position = positionOf(column);
+    if (position < 0) return undefined;
+    return {
+      position,
+      count: columns.length,
+      onMove: (delta) => onReorderColumn(column, delta),
+      label,
+    };
+  };
+
   return (
     <Modal
       visible={visible}
@@ -1799,15 +1836,7 @@ function ColumnMenu({
                   active={columns.includes(def.key)}
                   disabled={def.key === "title"}
                   onPress={() => onToggleColumn(def.key)}
-                  order={{
-                    // The title column is pinned first and has no move
-                    // buttons (web pins it the same way); index 0 is the
-                    // leftmost movable slot.
-                    position: positionOf(def.key),
-                    count: columns.length,
-                    onMove: (delta) => onReorderColumn(def.key, delta),
-                    label: t(def.labelKey),
-                  }}
+                  order={movableOrder(def.key, t(def.labelKey))}
                 />
               ))}
               {properties.length > 0 ? (
@@ -1823,12 +1852,7 @@ function ColumnMenu({
                         label={property.name}
                         active={columns.includes(key)}
                         onPress={() => onToggleColumn(key)}
-                        order={{
-                          position: positionOf(key),
-                          count: columns.length,
-                          onMove: (delta) => onReorderColumn(key, delta),
-                          label: property.name,
-                        }}
+                        order={movableOrder(key, property.name)}
                       />
                     );
                   })}
@@ -1867,8 +1891,11 @@ function MenuRowMove({
   label,
 }: MenuRowOrder) {
   const { t } = useTranslation();
-  const canMoveLeft = position > 0;
-  const canMoveRight = position >= 0 && position < count - 1;
+  // Same rule the store enforces, so no offered control can silently no-op.
+  const { left: canMoveLeft, right: canMoveRight } = columnMoveAvailability(
+    position,
+    count,
+  );
   return (
     <>
       <MoveRow

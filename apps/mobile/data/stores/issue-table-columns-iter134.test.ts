@@ -17,6 +17,7 @@ import { createStore } from "zustand/vanilla";
 import {
   COLUMN_WIDTH_MAX,
   COLUMN_WIDTH_MIN,
+  columnMoveAvailability,
   columnWidthOf,
   createTableColumnActions,
   DEFAULT_COLUMN_WIDTHS,
@@ -177,5 +178,74 @@ describe("nextColumnWidth (drag maths)", () => {
   it("clamps during the drag so the preview matches the committed value", () => {
     expect(nextColumnWidth(120, -500)).toBe(COLUMN_WIDTH_MIN);
     expect(nextColumnWidth(120, 500)).toBe(COLUMN_WIDTH_MAX);
+  });
+
+  it("takes the width the gesture actually started from, not a mount-time one", () => {
+    // Regression guard for the resize handle reading its origin from a
+    // frozen closure: the second drag on a column must continue from where
+    // the first left it (120 -> 200 -> 220), not snap back to the default.
+    const first = nextColumnWidth(120, 80);
+    const second = nextColumnWidth(first, 20);
+    expect(first).toBe(200);
+    expect(second).toBe(220);
+  });
+});
+
+describe("columnMoveAvailability", () => {
+  // Slot 0 is the pinned title; slot 1 is the leftmost a scrolled column can
+  // reach. These bounds have to agree with `reorderTableColumn`'s guards, or
+  // the menu offers a chevron the store refuses to act on.
+  const COUNT = 6;
+
+  it("refuses both directions in the pinned slot", () => {
+    // The menu does not even render a move affordance for `title` (it is not
+    // movable at all), so both false is the honest answer here.
+    expect(columnMoveAvailability(0, COUNT)).toEqual({
+      left: false,
+      right: false,
+    });
+  });
+
+  it("refuses left from the leftmost scrolled slot", () => {
+    expect(columnMoveAvailability(1, COUNT).left).toBe(false);
+    expect(columnMoveAvailability(1, COUNT).right).toBe(true);
+  });
+
+  it("allows both in the middle", () => {
+    expect(columnMoveAvailability(3, COUNT)).toEqual({
+      left: true,
+      right: true,
+    });
+  });
+
+  it("refuses right from the last slot", () => {
+    expect(columnMoveAvailability(COUNT - 1, COUNT)).toEqual({
+      left: true,
+      right: false,
+    });
+  });
+
+  it("refuses both for a column that is not visible", () => {
+    expect(columnMoveAvailability(-1, COUNT)).toEqual({
+      left: false,
+      right: false,
+    });
+  });
+
+  it("agrees with the store on every slot", () => {
+    const columns = makeStore().getState().tableColumns;
+    for (let i = 1; i < columns.length; i += 1) {
+      const available = columnMoveAvailability(i, columns.length);
+      const store = makeStore();
+      store.getState().reorderTableColumn(columns[i], -1);
+      const before = [...columns];
+      const expected = [...before];
+      expected[i] = expected[i - 1];
+      expected[i - 1] = columns[i];
+      // left is available for every slot past the leftmost scrolled one.
+      expect(store.getState().tableColumns, `slot ${i} left`).toEqual(
+        available.left ? expected : before,
+      );
+    }
   });
 });
