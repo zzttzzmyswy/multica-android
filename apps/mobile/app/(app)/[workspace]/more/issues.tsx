@@ -62,6 +62,7 @@ import {
   useIssuesViewStore,
   type IssuesScope,
 } from "@/data/stores/issues-view-store";
+import { useCreateSubIssue } from "@/lib/use-create-sub-issue";
 import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection-store";
 import {
   issueViewContainerKey,
@@ -114,6 +115,11 @@ export default function IssuesPage() {
   const swimlaneGrouping = useIssuesViewStore((s) => s.swimlaneGrouping);
   const tableColumns = useIssuesViewStore((s) => s.tableColumns);
   const toggleTableColumn = useIssuesViewStore((s) => s.toggleTableColumn);
+  const tableColumnWidths = useIssuesViewStore((s) => s.tableColumnWidths);
+  const setTableColumnWidth = useIssuesViewStore((s) => s.setTableColumnWidth);
+  const reorderTableColumn = useIssuesViewStore((s) => s.reorderTableColumn);
+  const resetTableColumns = useIssuesViewStore((s) => s.resetTableColumns);
+  const createSubIssue = useCreateSubIssue();
   const tableGrouping = useIssuesViewStore((s) => s.tableGrouping);
   const setTableGrouping = useIssuesViewStore((s) => s.setTableGrouping);
   const grouping = useIssuesViewStore((s) => s.grouping);
@@ -518,6 +524,11 @@ export default function IssuesPage() {
           issues={sorted}
           columns={tableColumns}
           onToggleColumn={toggleTableColumn}
+          columnWidths={tableColumnWidths}
+          onResizeColumn={setTableColumnWidth}
+          onReorderColumn={reorderTableColumn}
+          onResetColumns={resetTableColumns}
+          onCreateSubIssue={createSubIssue}
           grouping={tableGrouping}
           onGroupingChange={setTableGrouping}
           sortBy={sortBy}

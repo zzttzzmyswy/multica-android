@@ -31,8 +31,16 @@
  * events (scrollToOffset on a sibling FlatList with the same data + fixed
  * row heights) — the classic dual-list table pattern; both lists feed each
  * other so a gesture starting on either pane scrolls the whole grid.
+ *
+ * Iteration 134 adds the two column-configuration gestures the web table gets
+ * from TanStack Table + dnd-kit: a resize handle on each header's trailing
+ * edge (PanResponder — there is no dnd-kit on the phone, and a phone header
+ * has no hover to reveal one), and per-column move rows in the column menu
+ * (`reorderTableColumn`). Both write to the surface view store, so the
+ * column set, order and widths travel together.
  */
 import {
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -42,6 +50,7 @@ import {
 import {
   FlatList,
   Modal,
+  PanResponder,
   Pressable,
   ScrollView,
   TextInput,
@@ -65,11 +74,16 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection-store";
 import {
+  COLUMN_WIDTH_MAX,
+  COLUMN_WIDTH_MIN,
+  columnWidthOf,
+  nextColumnWidth,
   nextTableSort,
   propertyIdFromTableColumn,
   TABLE_SYSTEM_COLUMNS,
   type TableColumnDefinition,
   type TableColumnKey,
+  type TableColumnWidths,
   type TableSystemColumn,
 } from "@/data/stores/issue-table-columns";
 import type {
@@ -113,10 +127,11 @@ import { useTranslation } from "@/lib/i18n/react";
 const ROW_HEIGHT = 48;
 /** Pinned left column width (checkbox + title) at depth 0. */
 const PINNED_WIDTH = 176;
-/** Width for property (non-system) columns. */
-const PROPERTY_COLUMN_WIDTH = 132;
 /** Header-row height (pinned cell + column headers share it). */
 const HEADER_HEIGHT = 34;
+/** Touch target for the column-resize handle on a header cell's right edge.
+ *  Wide enough for a thumb (the visible rule inside is 2px). */
+const RESIZE_HANDLE_WIDTH = 20;
 /** Group segment header height. Matches the column header so a collapsed
  *  table still reads as a grid, and stays uniform across the two synced
  *  lists (the vertical scroll sync assumes identical row sequences). */
@@ -129,26 +144,6 @@ const INDENT_PER_LEVEL = 14;
 /** Two taps closer together than this on the pinned title rename the issue
  *  (web's double-click on InlineTitle). */
 const DOUBLE_TAP_MS = 280;
-
-/** Per-system-column widths; unknown keys fall back to the property width. */
-const COLUMN_WIDTHS: Partial<Record<TableSystemColumn, number>> = {
-  identifier: 84,
-  status: 104,
-  priority: 88,
-  assignee: 132,
-  labels: 140,
-  project: 132,
-  start_date: 100,
-  due_date: 88,
-  created_at: 104,
-  updated_at: 104,
-  creator: 132,
-};
-
-function columnWidth(column: TableColumnKey): number {
-  if (column.startsWith("property:")) return PROPERTY_COLUMN_WIDTH;
-  return COLUMN_WIDTHS[column as TableSystemColumn] ?? PROPERTY_COLUMN_WIDTH;
-}
 
 function columnDefinition(
   column: TableSystemColumn,
@@ -181,11 +176,22 @@ interface Props {
   columns: TableColumnKey[];
   /** Passed straight through to the store's toggleTableColumn. */
   onToggleColumn: (column: TableColumnKey) => void;
+  /** Per-column width overrides (surface store's `tableColumnWidths`). */
+  columnWidths: TableColumnWidths;
+  /** Passed straight through to the store's setTableColumnWidth. */
+  onResizeColumn: (column: TableColumnKey, width: number) => void;
+  /** Passed straight through to the store's reorderTableColumn. */
+  onReorderColumn: (column: TableColumnKey, delta: -1 | 1) => void;
+  /** Passed straight through to the store's resetTableColumns. */
+  onResetColumns: () => void;
   sortBy: IssueSortField;
   sortDirection: IssueSortDirection;
   /** Header-tap sort: field + explicit direction (surface store setters). */
   onSort: (field: IssueSortField, direction: IssueSortDirection) => void;
   onOpenIssue: (issue: Issue) => void;
+  /** Row-level "new sub-issue" entry (web's InlineTitle `+` button): opens
+   *  the new-issue form with this issue preset as the parent. */
+  onCreateSubIssue: (issue: Issue) => void;
   /** Shown when there are no rows (parent surfaces usually pre-empt this). */
   emptyLabel: string;
   /** Active grouping dimension (surface store's `tableGrouping`). */
@@ -198,10 +204,15 @@ export function IssueTableView({
   issues,
   columns,
   onToggleColumn,
+  columnWidths,
+  onResizeColumn,
+  onReorderColumn,
+  onResetColumns,
   sortBy,
   sortDirection,
   onSort,
   onOpenIssue,
+  onCreateSubIssue,
   emptyLabel,
   grouping,
   onGroupingChange,
@@ -246,6 +257,13 @@ export function IssueTableView({
   } | null>(null);
   /** Row being renamed from the pinned title cell. */
   const [renaming, setRenaming] = useState<Issue | null>(null);
+  /** In-flight column-resize drag: which column, and its provisional width.
+   *  Held here rather than written straight to the store so the store sees one
+   *  write per gesture instead of one per frame. */
+  const [resizing, setResizing] = useState<{
+    column: TableColumnKey;
+    width: number;
+  } | null>(null);
 
   const groupActorName = useCallback(
     (actor: IssueTableGroupActor) => getName(actor.type, actor.id),
@@ -555,6 +573,51 @@ export function IssueTableView({
     [columns],
   );
 
+  // --- column widths ------------------------------------------------------
+  // A live drag keeps its width in `resizing` and only commits on release, so
+  // an abandoned drag never reaches the store. `displayWidths` is the one
+  // array the header and the body both lay out from, which is what keeps the
+  // two panes aligned mid-drag.
+  const displayWidths = useMemo(
+    () =>
+      bodyColumns.map((column) =>
+        resizing?.column === column
+          ? resizing.width
+          : columnWidthOf(column, columnWidths),
+      ),
+    [bodyColumns, columnWidths, resizing],
+  );
+  const bodyContentWidth = useMemo(
+    () => displayWidths.reduce((sum, w) => sum + w, 0),
+    [displayWidths],
+  );
+
+  const handleResizeMove = useCallback(
+    (column: TableColumnKey, startWidth: number, dx: number) => {
+      const width = nextColumnWidth(startWidth, dx);
+      setResizing((prev) =>
+        prev && prev.column === column && prev.width === width
+          ? prev
+          : { column, width },
+      );
+      // The header is the pane the gesture drives, so it does not emit scroll
+      // events while the columns move under it — push the body to match.
+      bodyRef.current?.scrollTo({ x: headerX.current, animated: false });
+    },
+    [],
+  );
+
+  const handleResizeCommit = useCallback(
+    (column: TableColumnKey, startWidth: number, dx: number) => {
+      setResizing(null);
+      const width = nextColumnWidth(startWidth, dx);
+      if (width !== columnWidthOf(column, columnWidths)) {
+        onResizeColumn(column, width);
+      }
+    },
+    [columnWidths, onResizeColumn],
+  );
+
   if (issues.length === 0) {
     return (
       <View className="flex-1 items-center justify-center px-6">
@@ -636,26 +699,22 @@ export function IssueTableView({
             style={{ flex: 1 }}
           >
             <View className="flex-row">
-              {bodyColumns.map((column) => {
+              {bodyColumns.map((column, index) => {
                 const def = columnDefinition(column as TableSystemColumn);
-                const sortable = !!def?.sortField;
-                const field = sortable ? (def.sortField as IssueSortField) : null;
+                const field = def?.sortField ?? null;
                 return (
-                  <Pressable
+                  <HeaderCell
                     key={column}
-                    onPress={() => sortable && headerSort(def)}
-                    disabled={!sortable}
-                    style={{ width: columnWidth(column), height: HEADER_HEIGHT }}
-                    className="flex-row items-center gap-1 px-2"
-                    accessibilityLabel={
-                      sortable ? t("a11y.tableSortColumn") : undefined
-                    }
-                  >
-                    <Text className="text-xs font-semibold text-foreground" numberOfLines={1}>
-                      {columnLabel(column)}
-                    </Text>
-                    {field ? arrowForField(field) : null}
-                  </Pressable>
+                    column={column}
+                    label={columnLabel(column)}
+                    width={displayWidths[index]}
+                    sortable={!!field}
+                    sortArrow={field ? arrowForField(field) : null}
+                    onPressSort={() => headerSort(def)}
+                    onResizeStart={setResizing}
+                    onResizeMove={handleResizeMove}
+                    onResizeCommit={handleResizeCommit}
+                  />
                 );
               })}
               <View style={{ width: 8 }} />
@@ -701,6 +760,7 @@ export function IssueTableView({
                     onLongPress={() => enterSelection(item.row.issue.id)}
                     onToggleCollapse={() => toggleCollapse(item.row.issue.id)}
                     onRename={() => setRenaming(item.row.issue)}
+                    onCreateSubIssue={() => onCreateSubIssue(item.row.issue)}
                   />
                 )
               }
@@ -715,11 +775,7 @@ export function IssueTableView({
             scrollEventThrottle={16}
             style={{ flex: 1 }}
           >
-            <View
-              style={{
-                width: bodyColumns.reduce((sum, c) => sum + columnWidth(c), 0),
-              }}
-            >
+            <View style={{ width: bodyContentWidth }}>
               <FlatList
                 ref={mainRef}
                 data={displayRows}
@@ -733,16 +789,14 @@ export function IssueTableView({
                   item.kind === "group" ? (
                     <DataGroupHeader
                       group={item}
-                      width={bodyColumns.reduce(
-                        (sum, c) => sum + columnWidth(c),
-                        0,
-                      )}
+                      width={bodyContentWidth}
                       onToggle={() => toggleGroupCollapse(item.key)}
                     />
                   ) : (
                     <DataRow
                       issue={item.row.issue}
                       columns={bodyColumns}
+                      widths={displayWidths}
                       height={ROW_HEIGHT}
                       properties={properties}
                       projects={projects}
@@ -783,7 +837,10 @@ export function IssueTableView({
         onClose={() => setColumnMenuOpen(false)}
         columns={columns}
         properties={properties}
+        columnLabel={columnLabel}
         onToggleColumn={onToggleColumn}
+        onReorderColumn={onReorderColumn}
+        onResetColumns={onResetColumns}
       />
 
       <GroupMenu
@@ -808,6 +865,158 @@ export function IssueTableView({
 /** Stable identity for a display row — issue id, or the group key. */
 function displayRowKey(entry: IssueTableDisplayRow): string {
   return entry.kind === "group" ? `group:${entry.key}` : entry.row.issue.id;
+}
+
+/**
+ * One scrollable column header: the sort target plus the resize handle on its
+ * trailing edge.
+ *
+ * Web gets column resizing free from TanStack Table's column-sizing feature
+ * (a drag on the header's resize affordance); on the phone the handle is an
+ * explicit touch target, because a header tap already means "sort" and a
+ * 34px-tall header has no spare gesture. The handle is a SIBLING of the sort
+ * Pressable, not a child, so the two never compete for the same touch.
+ */
+function HeaderCell({
+  column,
+  label,
+  width,
+  sortable,
+  sortArrow,
+  onPressSort,
+  onResizeStart,
+  onResizeMove,
+  onResizeCommit,
+}: {
+  column: TableColumnKey;
+  label: string;
+  width: number;
+  sortable: boolean;
+  sortArrow: React.ReactNode;
+  onPressSort: () => void;
+  onResizeStart: (resizing: { column: TableColumnKey; width: number }) => void;
+  onResizeMove: (column: TableColumnKey, startWidth: number, dx: number) => void;
+  onResizeCommit: (column: TableColumnKey, startWidth: number, dx: number) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <View style={{ width, height: HEADER_HEIGHT }} className="flex-row">
+      <Pressable
+        onPress={onPressSort}
+        disabled={!sortable}
+        className="flex-1 flex-row items-center gap-1 pl-2"
+        accessibilityLabel={sortable ? t("a11y.tableSortColumn") : undefined}
+      >
+        <Text className="text-xs font-semibold text-foreground" numberOfLines={1}>
+          {label}
+        </Text>
+        {sortArrow}
+      </Pressable>
+      <ResizeHandle
+        label={t("a11y.tableResizeColumn", { column: label })}
+        startWidth={width}
+        onStart={() => onResizeStart({ column, width })}
+        onMove={(startWidth, dx) => onResizeMove(column, startWidth, dx)}
+        onCommit={(startWidth, dx) => onResizeCommit(column, startWidth, dx)}
+      />
+    </View>
+  );
+}
+
+/**
+ * The drag target that resizes one column. Owns its own PanResponder: the
+ * gesture starts from whatever the column's width was when the finger landed
+ * (captured in a ref, so a re-render mid-drag cannot shift the origin) and
+ * reports the running delta outward.
+ *
+ * Responder negotiation matters here — the handle sits inside the header's
+ * horizontal ScrollView, and a plain Pressable would lose the drag to the
+ * scroller. Claiming the responder on touch-down (before any movement, which
+ * is when a ScrollView normally takes over) keeps the horizontal drag for the
+ * resize; `onMoveShouldSetPanResponderCapture` is the belt-and-braces path for
+ * a drag that begins before the responder grant lands.
+ */
+function ResizeHandle({
+  label,
+  startWidth,
+  onStart,
+  onMove,
+  onCommit,
+}: {
+  label: string;
+  startWidth: number;
+  onStart: () => void;
+  onMove: (startWidth: number, dx: number) => void;
+  onCommit: (startWidth: number, dx: number) => void;
+}) {
+  const { t } = useTranslation();
+  const [active, setActive] = useState(false);
+  const startRef = useRef(startWidth);
+  // Latest callbacks without rebuilding the responder: PanResponder captures
+  // its handlers once, so a stale closure here would resize against an old
+  // column list.
+  const handlers = useRef({ onStart, onMove, onCommit });
+  handlers.current = { onStart, onMove, onCommit };
+
+  const responder = useMemo(
+    () =>
+      PanResponder.create({
+        // Claim the touch on the way down and keep it: the header sits in a
+        // horizontal ScrollView, and a handle that only asks for the
+        // responder once the finger has already moved loses that race — the
+        // scroller starts panning first. Asking on touch-down also means the
+        // gesture never has to be re-negotiated mid-drag.
+        //
+        // Deliberately NOT using the `*Capture` variants: those run on the
+        // way down from the root and returning true there blocks the other
+        // responder candidates without granting the responder to this view,
+        // which leaves the gesture owned by nobody and the handle dead.
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          startRef.current = startWidth;
+          setActive(true);
+          handlers.current.onStart();
+        },
+        onPanResponderMove: (_e, g) => {
+          handlers.current.onMove(startRef.current, g.dx);
+        },
+        onPanResponderRelease: (_e, g) => {
+          setActive(false);
+          handlers.current.onCommit(startRef.current, g.dx);
+        },
+        onPanResponderTerminate: (_e, g) => {
+          setActive(false);
+          handlers.current.onCommit(startRef.current, g.dx);
+        },
+      }),
+    // `startWidth` is read through a ref on grant; rebuilding on every width
+    // change would drop the responder mid-drag.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  return (
+    <View
+      {...responder.panHandlers}
+      style={{ width: RESIZE_HANDLE_WIDTH, height: HEADER_HEIGHT }}
+      className="items-center justify-center"
+      accessibilityRole="adjustable"
+      accessibilityLabel={label}
+      accessibilityValue={{
+        min: COLUMN_WIDTH_MIN,
+        max: COLUMN_WIDTH_MAX,
+        now: Math.round(startWidth),
+      }}
+    >
+      <View
+        style={{ width: active ? 3 : 2 }}
+        className={`h-4 rounded-full ${
+          active ? "bg-primary" : "bg-border"
+        }`}
+      />
+    </View>
+  );
 }
 
 /** Build the CSV, write it to the cache dir, hand it to the system sheet.
@@ -955,6 +1164,7 @@ function PinnedRow({
   onLongPress,
   onToggleCollapse,
   onRename,
+  onCreateSubIssue,
 }: {
   row: IssueTableRow;
   height: number;
@@ -965,6 +1175,7 @@ function PinnedRow({
   onLongPress: () => void;
   onToggleCollapse: () => void;
   onRename: () => void;
+  onCreateSubIssue: () => void;
 }) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
@@ -1043,6 +1254,27 @@ function PinnedRow({
           {issue.title}
         </Text>
       </Pressable>
+      {/* New sub-issue — web reveals this on title hover (`InlineTitle`'s "+"
+        * button); hover does not exist on a phone, so it is a permanent
+        * target. Hidden while selecting: the row's taps already mean
+        * "toggle selection" then, and a create action in the middle of a
+        * range-select is a mis-tap waiting to happen. */}
+      {selectionMode ? null : (
+        <Pressable
+          onPress={onCreateSubIssue}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t("a11y.tableCreateSubIssue", {
+            title: issue.title,
+          })}
+        >
+          <Ionicons
+            name="add"
+            size={16}
+            color={THEME[colorScheme].mutedForeground}
+          />
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -1050,10 +1282,18 @@ function PinnedRow({
 /** One scrollable data row: fixed-width cells aligned with the header.
  *  Editable cells are pressable (web mounts an editor on the same cells);
  *  the rest stay inert so a tap on them does nothing rather than opening an
- *  editor that cannot write. */
-function DataRow({
+ *  editor that cannot write.
+ *
+ *  Memoised because a column-resize drag re-renders the table once per frame;
+ *  without this every visible row would re-render for a width change that
+ *  usually touches one column. The comparator is element-wise on `widths`
+ *  rather than reference equality — a drag rebuilds that array every frame,
+ *  so a shallow `Object.is` would still re-render every row. */
+const DataRow = memo(
+  function DataRow({
   issue,
   columns,
+  widths,
   height,
   properties,
   projects,
@@ -1064,6 +1304,7 @@ function DataRow({
 }: {
   issue: Issue;
   columns: TableColumnKey[];
+  widths: number[];
   height: number;
   properties: IssueProperty[];
   projects: { id: string; title: string; icon?: string | null }[];
@@ -1083,14 +1324,14 @@ function DataRow({
       style={{ height }}
       className={`flex-row border-b border-border/60 ${selected ? "bg-primary/5" : ""}`}
     >
-      {columns.map((column) => {
+      {columns.map((column, index) => {
         const editable = isEditableTableColumn(column);
         return (
           <Pressable
             key={column}
             onPress={editable ? () => onPressCell(column) : undefined}
             disabled={!editable}
-            style={{ width: columnWidth(column), height }}
+            style={{ width: widths[index], height }}
             className={`justify-center px-2 ${
               editable ? "active:bg-secondary/60" : ""
             }`}
@@ -1116,6 +1357,29 @@ function DataRow({
       })}
     </View>
   );
+  },
+  (prev, next) =>
+    prev.issue === next.issue &&
+    prev.columns === next.columns &&
+    prev.height === next.height &&
+    prev.properties === next.properties &&
+    prev.projects === next.projects &&
+    prev.getName === next.getName &&
+    prev.selected === next.selected &&
+    prev.columnLabel === next.columnLabel &&
+    prev.onPressCell === next.onPressCell &&
+    sameWidths(prev.widths, next.widths),
+);
+
+/** Element-wise width comparison — a resize drag rebuilds the array each
+ *  frame, so rows must be judged by the numbers, not the array identity. */
+function sameWidths(a: readonly number[], b: readonly number[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
 }
 
 function DataCell({
@@ -1443,21 +1707,45 @@ function RenameIssueDialog({
   );
 }
 
-/** Column-visibility menu — checkbox list of system + property columns. */
+/**
+ * Column-visibility menu — checkbox list of system + property columns, plus
+ * the two other column-configuration actions this iteration adds.
+ *
+ * Order is edited with explicit move-left / move-right buttons rather than a
+ * drag: the header is a horizontally scrolling pane paired with a second
+ * scroller for the rows, so a horizontal drag-to-reorder in the menu would
+ * have to fight the sheet's own scroll for the axis, and the payoff (one slot
+ * at a time) is the same. Web's dnd-kit `handleDragEnd` lands on the same
+ * `reorderTableColumn` mutation.
+ *
+ * Move buttons are shown only on VISIBLE columns — order is a property of the
+ * displayed list, and reordering a hidden column would be a no-op the user
+ * could not see.
+ */
 function ColumnMenu({
   visible,
   onClose,
   columns,
   properties,
+  columnLabel,
   onToggleColumn,
+  onReorderColumn,
+  onResetColumns,
 }: {
   visible: boolean;
   onClose: () => void;
   columns: TableColumnKey[];
   properties: IssueProperty[];
+  /** Resolves a column key to its display name (property columns included). */
+  columnLabel: (column: TableColumnKey) => string;
   onToggleColumn: (column: TableColumnKey) => void;
+  onReorderColumn: (column: TableColumnKey, delta: -1 | 1) => void;
+  onResetColumns: () => void;
 }) {
   const { t } = useTranslation();
+
+  /** Position of a visible column in the display order, or -1. */
+  const positionOf = (column: TableColumnKey) => columns.indexOf(column);
 
   return (
     <Modal
@@ -1476,11 +1764,31 @@ function ColumnMenu({
               <Text className="text-base font-semibold text-foreground">
                 {t("table.columnsTitle")}
               </Text>
-              <Pressable onPress={onClose} hitSlop={8}>
-                <Ionicons name="close" size={20} color="currentColor" />
-              </Pressable>
+              <View className="flex-row items-center gap-3">
+                <Pressable
+                  onPress={onResetColumns}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                >
+                  <Text className="text-xs text-muted-foreground">
+                    {t("table.resetColumns")}
+                  </Text>
+                </Pressable>
+                <Pressable onPress={onClose} hitSlop={8}>
+                  <Ionicons name="close" size={20} color="currentColor" />
+                </Pressable>
+              </View>
             </View>
             <ScrollView className="max-h-[55vh]">
+              {/* Current display order, so a move is visible without closing
+                  the sheet — the move rows themselves only say what they will
+                  do, not what the list looks like now. */}
+              <Text
+                className="px-4 pt-3 text-[11px] text-muted-foreground"
+                numberOfLines={1}
+              >
+                {columns.map((c) => columnLabel(c)).join(" › ")}
+              </Text>
               <Text className="px-4 pt-3 pb-1 text-xs uppercase tracking-wider text-muted-foreground font-medium">
                 {t("table.columnsSystem")}
               </Text>
@@ -1491,6 +1799,15 @@ function ColumnMenu({
                   active={columns.includes(def.key)}
                   disabled={def.key === "title"}
                   onPress={() => onToggleColumn(def.key)}
+                  order={{
+                    // The title column is pinned first and has no move
+                    // buttons (web pins it the same way); index 0 is the
+                    // leftmost movable slot.
+                    position: positionOf(def.key),
+                    count: columns.length,
+                    onMove: (delta) => onReorderColumn(def.key, delta),
+                    label: t(def.labelKey),
+                  }}
                 />
               ))}
               {properties.length > 0 ? (
@@ -1506,6 +1823,12 @@ function ColumnMenu({
                         label={property.name}
                         active={columns.includes(key)}
                         onPress={() => onToggleColumn(key)}
+                        order={{
+                          position: positionOf(key),
+                          count: columns.length,
+                          onMove: (delta) => onReorderColumn(key, delta),
+                          label: property.name,
+                        }}
                       />
                     );
                   })}
@@ -1516,6 +1839,153 @@ function ColumnMenu({
         </View>
       </Pressable>
     </Modal>
+  );
+}
+
+/**
+ * Move-left / move-right affordance for one menu row. Absent for a hidden
+ * column (nothing to place) and for the pinned title column.
+ *
+ * Each chevron is its OWN full-width menu row rather than a small pressable
+ * parked beside the visibility row. Two reasons: a full-width row is the
+ * shape this sheet's touches are known to reach (the visibility rows and the
+ * grouping rows are all built that way), and a 44px icon-sized target at the
+ * sheet's left edge is a poor thumb target on a phone anyway. The chevron
+ * sits at the left, where the row's own icon column is.
+ */
+interface MenuRowOrder {
+  position: number;
+  count: number;
+  onMove: (delta: -1 | 1) => void;
+  label: string;
+}
+
+function MenuRowMove({
+  position,
+  count,
+  onMove,
+  label,
+}: MenuRowOrder) {
+  const { t } = useTranslation();
+  const canMoveLeft = position > 0;
+  const canMoveRight = position >= 0 && position < count - 1;
+  return (
+    <>
+      <MoveRow
+        direction="left"
+        disabled={!canMoveLeft}
+        label={t("a11y.tableMoveColumnUp", { column: label })}
+        onPress={() => onMove(-1)}
+      />
+      <MoveRow
+        direction="right"
+        disabled={!canMoveRight}
+        label={t("a11y.tableMoveColumnDown", { column: label })}
+        onPress={() => onMove(1)}
+      />
+    </>
+  );
+}
+
+/** One full-width "move this column one slot" row. Same shape as the
+ *  visibility row beside it (a wrapping View + a Pressable), because that is
+ *  the structure this sheet's touch delivery is proven against. */
+function MoveRow({
+  direction,
+  disabled,
+  label,
+  onPress,
+}: {
+  direction: "left" | "right";
+  disabled: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  const { colorScheme } = useColorScheme();
+  return (
+    <View>
+      <Pressable
+        onPress={disabled ? undefined : onPress}
+        disabled={disabled}
+        className={`flex-row items-center gap-2 py-2.5 pl-5 ${
+          disabled ? "opacity-50" : "active:bg-secondary/60"
+        }`}
+        accessibilityRole="button"
+        accessibilityState={{ disabled }}
+        accessibilityLabel={label}
+      >
+        <Ionicons
+          name={direction === "left" ? "arrow-back" : "arrow-forward"}
+          size={15}
+          color={THEME[colorScheme].mutedForeground}
+        />
+      </Pressable>
+    </View>
+  );
+}
+
+function MenuRow({
+  label,
+  active,
+  disabled = false,
+  indicator = "check",
+  order,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  disabled?: boolean;
+  indicator?: "check" | "radio";
+  /** Present when the row's column can be repositioned (visibility menu). */
+  order?: MenuRowOrder;
+  onPress: () => void;
+}) {
+  const { colorScheme } = useColorScheme();
+  return (
+    <View>
+      {order ? <MenuRowMove {...order} /> : null}
+      <Pressable
+        onPress={disabled ? undefined : onPress}
+        disabled={disabled}
+        className={`flex-row items-center justify-between py-2 px-4 ${
+          disabled ? "opacity-50" : "active:bg-secondary/60"
+        }`}
+      >
+        <Text
+          className={`text-sm ${
+            disabled ? "text-muted-foreground" : "text-foreground"
+          }`}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+        {disabled ? (
+          <Ionicons
+            name="lock-closed-outline"
+            size={14}
+            color={THEME[colorScheme].mutedForeground}
+          />
+        ) : (
+          <Ionicons
+            name={
+              indicator === "radio"
+                ? active
+                  ? "radio-button-on"
+                  : "radio-button-off"
+                : active
+                  ? "checkbox"
+                  : "square-outline"
+            }
+            size={17}
+            color={
+              active
+                ? THEME[colorScheme].primary
+                : THEME[colorScheme].mutedForeground
+            }
+          />
+        )}
+      </Pressable>
+    </View>
   );
 }
 
@@ -1605,64 +2075,5 @@ function GroupMenu({
         </View>
       </Pressable>
     </Modal>
-  );
-}
-
-function MenuRow({
-  label,
-  active,
-  disabled = false,
-  indicator = "check",
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  disabled?: boolean;
-  indicator?: "check" | "radio";
-  onPress: () => void;
-}) {
-  const { colorScheme } = useColorScheme();
-  return (
-    <Pressable
-      onPress={disabled ? undefined : onPress}
-      disabled={disabled}
-      className={`flex-row items-center justify-between py-2 px-4 ${
-        disabled ? "opacity-50" : "active:bg-secondary/60"
-      }`}
-    >
-      <Text
-        className={`text-sm ${
-          disabled ? "text-muted-foreground" : "text-foreground"
-        }`}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
-      {disabled ? (
-        <Ionicons
-          name="lock-closed-outline"
-          size={14}
-          color={THEME[colorScheme].mutedForeground}
-        />
-      ) : (
-        <Ionicons
-          name={
-            indicator === "radio"
-              ? active
-                ? "radio-button-on"
-                : "radio-button-off"
-              : active
-                ? "checkbox"
-                : "square-outline"
-          }
-          size={17}
-          color={
-            active
-              ? THEME[colorScheme].primary
-              : THEME[colorScheme].mutedForeground
-          }
-        />
-      )}
-    </Pressable>
   );
 }

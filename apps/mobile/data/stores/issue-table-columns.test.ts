@@ -28,6 +28,7 @@ import { sanitizeViewDisplay } from "./issue-view-codec";
 function makeStore() {
   return createStore<TableColumnsSlice>((set) => ({
     tableColumns: defaultTableColumns(),
+    tableColumnWidths: {},
     ...createTableColumnActions(set),
   }));
 }

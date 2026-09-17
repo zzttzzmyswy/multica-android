@@ -59,6 +59,7 @@ import { useDrainIssuePages } from "@/lib/use-drain-issue-pages";
 import { issueViewListOptions } from "@/data/queries/issue-views";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useProjectIssuesViewStore } from "@/data/stores/project-issues-view-store";
+import { useCreateSubIssue } from "@/lib/use-create-sub-issue";
 import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection-store";
 import {
   issueViewContainerKey,
@@ -120,6 +121,11 @@ export function ProjectIssueSurface({
   const swimlaneGrouping = useProjectIssuesViewStore((s) => s.swimlaneGrouping);
   const tableColumns = useProjectIssuesViewStore((s) => s.tableColumns);
   const toggleTableColumn = useProjectIssuesViewStore((s) => s.toggleTableColumn);
+  const tableColumnWidths = useProjectIssuesViewStore((s) => s.tableColumnWidths);
+  const setTableColumnWidth = useProjectIssuesViewStore((s) => s.setTableColumnWidth);
+  const reorderTableColumn = useProjectIssuesViewStore((s) => s.reorderTableColumn);
+  const resetTableColumns = useProjectIssuesViewStore((s) => s.resetTableColumns);
+  const createSubIssue = useCreateSubIssue();
   const tableGrouping = useProjectIssuesViewStore((s) => s.tableGrouping);
   const setTableGrouping = useProjectIssuesViewStore((s) => s.setTableGrouping);
   const grouping = useProjectIssuesViewStore((s) => s.grouping);
@@ -479,6 +485,11 @@ export function ProjectIssueSurface({
           issues={sorted}
           columns={tableColumns}
           onToggleColumn={toggleTableColumn}
+          columnWidths={tableColumnWidths}
+          onResizeColumn={setTableColumnWidth}
+          onReorderColumn={reorderTableColumn}
+          onResetColumns={resetTableColumns}
+          onCreateSubIssue={createSubIssue}
           grouping={tableGrouping}
           onGroupingChange={setTableGrouping}
           sortBy={sortBy}

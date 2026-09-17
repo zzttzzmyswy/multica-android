@@ -33,6 +33,7 @@ import {
 import {
   createTableColumnActions,
   defaultTableColumns,
+  defaultTableColumnWidths,
   type TableColumnKey,
   type TableColumnsSlice,
 } from "./issue-table-columns";
@@ -65,6 +66,7 @@ export const useProjectIssuesViewStore = create<ProjectIssuesViewState>(
     view: "list",
     swimlaneGrouping: "assignee",
     tableColumns: defaultTableColumns(),
+    tableColumnWidths: defaultTableColumnWidths(),
     tableGrouping: defaultTableGrouping(),
     ...defaultIssueFilterSlice(),
     setScope: (scope) => set({ scope }),

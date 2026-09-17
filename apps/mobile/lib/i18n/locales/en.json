@@ -3047,5 +3047,15 @@
   "workspaceSettings.issuePrefixChange": "Change",
   "myIssues.scopeAll": "All",
   "myIssues.emptyAll": "Nothing assigned to you, created by you, or involving your agents and squads yet.",
-  "mcp.agent.workspaceTitle": "Workspace servers"
+  "mcp.agent.workspaceTitle": "Workspace servers",
+  "table.resizeColumn": "Resize column",
+  "table.moveColumnUp": "Move column left",
+  "table.moveColumnDown": "Move column right",
+  "table.resetColumns": "Reset columns",
+  "a11y.tableResizeColumn": "Resize the {{column}} column",
+  "a11y.tableMoveColumnUp": "Move the {{column}} column left",
+  "a11y.tableMoveColumnDown": "Move the {{column}} column right",
+  "a11y.tableCreateSubIssue": "New sub-issue under {{title}}",
+  "newIssue.parentChip": "Sub-issue of {{identifier}}",
+  "newIssue.parentChipClear": "Remove parent"
 }

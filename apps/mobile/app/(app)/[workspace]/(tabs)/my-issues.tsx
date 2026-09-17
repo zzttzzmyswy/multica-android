@@ -62,6 +62,7 @@ import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection
 import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useMyIssuesViewStore } from "@/data/stores/my-issues-view-store";
+import { useCreateSubIssue } from "@/lib/use-create-sub-issue";
 import {
   issueViewContainerKey,
   useActiveIssueViewStore,
@@ -123,6 +124,11 @@ export default function MyIssues() {
   const swimlaneGrouping = useMyIssuesViewStore((s) => s.swimlaneGrouping);
   const tableColumns = useMyIssuesViewStore((s) => s.tableColumns);
   const toggleTableColumn = useMyIssuesViewStore((s) => s.toggleTableColumn);
+  const tableColumnWidths = useMyIssuesViewStore((s) => s.tableColumnWidths);
+  const setTableColumnWidth = useMyIssuesViewStore((s) => s.setTableColumnWidth);
+  const reorderTableColumn = useMyIssuesViewStore((s) => s.reorderTableColumn);
+  const resetTableColumns = useMyIssuesViewStore((s) => s.resetTableColumns);
+  const createSubIssue = useCreateSubIssue();
   const tableGrouping = useMyIssuesViewStore((s) => s.tableGrouping);
   const setTableGrouping = useMyIssuesViewStore((s) => s.setTableGrouping);
   const grouping = useMyIssuesViewStore((s) => s.grouping);
@@ -550,6 +556,11 @@ export default function MyIssues() {
           issues={sorted}
           columns={tableColumns}
           onToggleColumn={toggleTableColumn}
+          columnWidths={tableColumnWidths}
+          onResizeColumn={setTableColumnWidth}
+          onReorderColumn={reorderTableColumn}
+          onResetColumns={resetTableColumns}
+          onCreateSubIssue={createSubIssue}
           grouping={tableGrouping}
           onGroupingChange={setTableGrouping}
           sortBy={sortBy}
