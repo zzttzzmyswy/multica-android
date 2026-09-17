@@ -64,14 +64,14 @@ describe("iteration 126 i18n", () => {
     "mcp.agent.runtimeUnsupported": "该运行时不上报 MCP 服务器。",
     "mcp.agent.runtimeOverridden": "已被覆盖",
     // Workspace issue-prefix editing (web workspace-tab.tsx :429-457).
-    "workspaceSettings.issuePrefixHint": "用于问题编号，例如 {{example}}。",
+    "workspaceSettings.issuePrefixHint": "用于任务编号，例如 {{example}}。",
     "workspaceSettings.issuePrefixRequired": "前缀不能为空。",
-    "workspaceSettings.issuePrefixConfirmTitle": "确认修改问题前缀？",
+    "workspaceSettings.issuePrefixConfirmTitle": "确认修改任务前缀？",
     "workspaceSettings.issuePrefixChange": "修改",
     // My Issues "all" scope (web my-issues-header.tsx :89-94). The empty text
     // names the union the scope actually selects, not "the whole workspace".
     "myIssues.scopeAll": "全部",
-    "myIssues.emptyAll": "还没有指派给您、由您创建，或涉及您的 agents 与 squads 的问题。",
+    "myIssues.emptyAll": "还没有指派给您、由您创建，或涉及您的 agents 与 squads 的任务。",
   };
 
   it("resolves every iteration-126 key in both locales", () => {

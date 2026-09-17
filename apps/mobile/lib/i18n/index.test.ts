@@ -63,7 +63,7 @@ describe("i18n translate", () => {
 
     mod.setLocale("zh");
     expect(mod.translate("nav.inbox")).toBe("收件箱");
-    expect(mod.translate("nav.myIssues")).toBe("我的问题");
+    expect(mod.translate("nav.myIssues")).toBe("我的任务");
     expect(mod.translate("nav.chat")).toBe("聊天");
     expect(mod.translate("nav.more")).toBe("更多");
   });
@@ -96,9 +96,9 @@ describe("i18n translate", () => {
     expect(mod.translate("workspace.signOut")).toBe("退出登录");
     expect(mod.translate("settings.signOutTitle")).toBe("退出登录");
     expect(mod.translate("myIssues.emptyAssigned")).toBe(
-      "没有指派给您的问题。",
+      "没有指派给您的任务。",
     );
-    expect(mod.translate("issues.emptyAll")).toBe("此工作区没有问题。");
+    expect(mod.translate("issues.emptyAll")).toBe("此工作区没有任务。");
   });
 
   it("interpolates the switch-workspace confirm message", () => {

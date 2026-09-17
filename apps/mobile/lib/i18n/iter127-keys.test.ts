@@ -47,7 +47,7 @@ describe("iteration 127 i18n", () => {
     "integrations.gh.readOnlyConnection":
       "只读视图。只有管理员和所有者可以连接或断开 GitHub。",
     // Board column quick create.
-    "issues.boardAddIssue": "在该列新建问题",
+    "issues.boardAddIssue": "在该列新建任务",
     // Comment editor.
     "menu.edit": "编辑",
     "comment.editComment": "编辑评论",

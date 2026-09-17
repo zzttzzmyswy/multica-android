@@ -34,10 +34,10 @@ import { Text } from "@/components/ui/text";
 import {
   toDateOnly,
   dateOnlyToLocalDate,
-  formatDateOnly,
 } from "@multica/core/issues/date";
+import { formatIssueDate } from "@/lib/format-date";
 import { THEME } from "@/lib/theme";
-import { useTranslation } from "@/lib/i18n/react";
+import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 
 interface Props {
   value: string | null;
@@ -100,6 +100,7 @@ function AndroidDateRow({
   onChange: (d: Date) => void;
 }) {
   const { t } = useTranslation();
+  const intlLocale = useIntlLocale();
   const theme = THEME[useColorScheme().colorScheme ?? "light"];
   const iso = toDateOnly(draft);
 
@@ -120,7 +121,11 @@ function AndroidDateRow({
         className="flex-row items-center justify-between rounded-lg border border-border px-4 py-3 active:bg-secondary"
       >
         <Text className="text-base text-foreground">
-          {formatDateOnly(iso, { year: "numeric", month: "long", day: "numeric" })}
+          {formatIssueDate(
+            iso,
+            { year: "numeric", month: "long", day: "numeric" },
+            intlLocale,
+          )}
         </Text>
         <Ionicons name="calendar-outline" size={18} color={theme.mutedForeground} />
       </Pressable>

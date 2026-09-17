@@ -31,15 +31,15 @@ describe("iteration 132 i18n", () => {
 
   const ZH_SPOT: Record<string, string> = {
     // Table hierarchy (collapse chevron + indented titles).
-    "a11y.tableCollapseRow": "收起子问题",
-    "a11y.tableExpandRow": "展开子问题",
+    "a11y.tableCollapseRow": "收起子任务",
+    "a11y.tableExpandRow": "展开子任务",
     // Table inline editing — the cell's a11y label and the title rename
     // dialog web calls InlineTitle.
     "a11y.tableEditCell": "编辑{{column}}",
-    "a11y.tableOpenRow": "打开问题",
+    "a11y.tableOpenRow": "打开任务",
     "a11y.tableRenameHint": "双击重命名",
-    "table.renameTitle": "重命名问题",
-    "table.renamePlaceholder": "问题标题",
+    "table.renameTitle": "重命名任务",
+    "table.renamePlaceholder": "任务标题",
     // Add-resource repository list (web project-resources-section popover).
     "resource.fromRepositories": "工作区仓库",
     "resource.searchRepositories": "搜索仓库",

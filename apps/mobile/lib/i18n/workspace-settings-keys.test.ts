@@ -39,7 +39,7 @@ describe("workspace settings i18n", () => {
     "workspaceSettings.saving": "保存中…",
     "workspaceSettings.info": "工作区信息",
     "workspaceSettings.slug": "标识",
-    "workspaceSettings.issuePrefix": "问题前缀",
+    "workspaceSettings.issuePrefix": "任务前缀",
     "workspaceSettings.createdAt": "创建时间",
     "workspaceSettings.dangerZone": "危险区",
     "workspaceSettings.leaveTitle": "退出工作区",

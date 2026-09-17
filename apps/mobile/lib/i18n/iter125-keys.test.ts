@@ -32,7 +32,7 @@ describe("iteration 125 i18n", () => {
     // Pagination footer — web `ListLoadMoreFooter`'s three visible states.
     "issues.loadMoreFailed": "加载失败，点击重试",
     "issues.loadingMore": "加载中…",
-    "issues.noMore": "没有更多了",
+    "issues.noMore": "没有更多任务了",
     // Chat composer project-context row (web `chat-input.tsx` pill).
     "chat.project.add": "添加项目",
     "chat.project.change": "更换项目",

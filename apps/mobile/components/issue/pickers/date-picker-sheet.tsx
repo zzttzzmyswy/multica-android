@@ -26,10 +26,10 @@ import {
 } from "@/components/issue/pickers/due-date-picker-body";
 import {
   addDaysDateOnly,
-  formatDateOnly,
   todayDateOnly,
 } from "@multica/core/issues/date";
-import { useTranslation } from "@/lib/i18n/react";
+import { formatIssueDate } from "@/lib/format-date";
+import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 
 interface Props {
   title: string;
@@ -42,6 +42,7 @@ interface Props {
 
 export function DatePickerSheet({ title, value, onCommit, onClear }: Props) {
   const { t } = useTranslation();
+  const intlLocale = useIntlLocale();
   const ref = useRef<DueDatePickerBodyHandle>(null);
 
   const quickPicks = [
@@ -89,11 +90,11 @@ export function DatePickerSheet({ title, value, onCommit, onClear }: Props) {
               accessibilityRole="button"
               accessibilityLabel={t("a11y.dateQuickPick", {
                 label: pick.label,
-                date: formatDateOnly(pick.iso, {
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                }),
+                date: formatIssueDate(
+                  pick.iso,
+                  { year: "numeric", month: "long", day: "numeric" },
+                  intlLocale,
+                ),
               })}
               className={`px-3 py-1.5 rounded-full border border-border active:bg-secondary ${
                 active ? "bg-secondary" : ""

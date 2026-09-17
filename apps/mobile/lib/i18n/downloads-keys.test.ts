@@ -34,7 +34,7 @@ describe("downloads i18n", () => {
     "downloads.emptyActive": "暂无进行中的下载",
     "downloads.emptyFinished": "暂无下载记录",
     "downloads.source.chat": "聊天",
-    "downloads.source.issue": "问题",
+    "downloads.source.issue": "任务",
     "downloads.source.update": "应用更新",
     "downloads.source.other": "其他",
     "downloads.cancel": "取消",
@@ -66,7 +66,7 @@ describe("downloads i18n", () => {
   it("source label keys feed the download-manager source renderer", () => {
     mod.setLocale("zh");
     expect(mod.translate("downloads.source.chat")).toBe("聊天");
-    expect(mod.translate("downloads.source.issue")).toBe("问题");
+    expect(mod.translate("downloads.source.issue")).toBe("任务");
     expect(mod.translate("downloads.source.update")).toBe("应用更新");
     expect(mod.translate("downloads.source.other")).toBe("其他");
   });

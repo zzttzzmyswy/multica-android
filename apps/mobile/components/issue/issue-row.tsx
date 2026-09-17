@@ -27,7 +27,7 @@
 import { Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Issue } from "@multica/core/types";
-import { formatDateOnly } from "@multica/core/issues/date";
+import { ISSUE_DATE_SHORT, formatIssueDate } from "@/lib/format-date";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PriorityIcon } from "@/components/ui/priority-icon";
@@ -35,6 +35,7 @@ import { StatusIcon } from "@/components/ui/status-icon";
 import { ProgressRing } from "@/components/ui/progress-ring";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { useColorScheme } from "@/lib/use-color-scheme";
+import { useIntlLocale } from "@/lib/i18n/react";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { CustomStatusChip } from "./custom-status-chip";
@@ -95,10 +96,12 @@ export function IssueRow({
   dueDate,
 }: Props) {
   const { colorScheme } = useColorScheme();
+  // Subscribes, so a language switch re-renders the due-date chip below.
+  const intlLocale = useIntlLocale();
   const statusEntry = useIssueStatuses().entryOf(issue.status);
   const checkColor = THEME[colorScheme].primary;
   const showChildProgress = childProgress && childProgress.total > 0;
-  const dueLabel = formatDateOnly(dueDate ?? null, { month: "short", day: "numeric" }, "en-US");
+  const dueLabel = formatIssueDate(dueDate ?? null, ISSUE_DATE_SHORT, intlLocale);
   return (
     <Pressable
       onPress={onPress}

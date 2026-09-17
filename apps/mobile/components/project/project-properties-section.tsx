@@ -16,7 +16,8 @@
  */
 import { Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { formatDateOnly, isPastDateOnly } from "@multica/core/issues/date";
+import { isPastDateOnly } from "@multica/core/issues/date";
+import { formatIssueDate } from "@/lib/format-date";
 import type { Project } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
@@ -28,7 +29,7 @@ import {
 } from "@/lib/project-status";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useColorScheme } from "@/lib/use-color-scheme";
-import { useTranslation } from "@/lib/i18n/react";
+import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 import { THEME } from "@/lib/theme";
 
 interface Props {
@@ -49,6 +50,7 @@ export function ProjectPropertiesSection({
   onPressDueDate,
 }: Props) {
   const { t } = useTranslation();
+  const intlLocale = useIntlLocale();
   const { getName } = useActorLookup();
   const leadName =
     project.lead_type && project.lead_id
@@ -139,9 +141,14 @@ function DateRow({
   onPress: () => void;
 }) {
   const { colorScheme } = useColorScheme();
+  const intlLocale = useIntlLocale();
   const overdue = highlightOverdue && !!value && isPastDateOnly(value);
   const display = value
-    ? formatDateOnly(value, { year: "numeric", month: "short", day: "numeric" })
+    ? formatIssueDate(
+        value,
+        { year: "numeric", month: "short", day: "numeric" },
+        intlLocale,
+      )
     : "";
   return (
     <Row

@@ -62,7 +62,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import type { Issue, IssueProperty, IssueStatusEntry } from "@multica/core/types";
-import { formatDateOnly } from "@multica/core/issues/date";
+import { ISSUE_DATE_SHORT, formatIssueDate } from "@/lib/format-date";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
@@ -124,7 +124,7 @@ import {
 } from "@/lib/issue-table-export";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
-import { useTranslation } from "@/lib/i18n/react";
+import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 
 /** Fixed row height — the dual-list scroll sync assumes uniform rows. */
 const ROW_HEIGHT = 48;
@@ -1474,9 +1474,9 @@ function DataCell({
 /** Calendar-day cell ("YYYY-MM-DD" → short day, blank when unset). */
 function DateCell({ value }: { value: string | null }) {
   const { colorScheme } = useColorScheme();
+  const intlLocale = useIntlLocale();
   if (!value) return <Text className="text-xs text-muted-foreground/60">—</Text>;
-  const text =
-    formatDateOnly(value, { month: "short", day: "numeric" }, "en-US") || value;
+  const text = formatIssueDate(value, ISSUE_DATE_SHORT, intlLocale) || value;
   return (
     <View className="flex-row items-center gap-1">
       <Ionicons
@@ -1493,9 +1493,9 @@ function DateCell({ value }: { value: string | null }) {
 
 /** Instant cell ("ISO" → short local day). */
 function InstantCell({ value }: { value: string }) {
+  const intlLocale = useIntlLocale();
   const day = value.slice(0, 10);
-  const text =
-    formatDateOnly(day, { month: "short", day: "numeric" }, "en-US") || day;
+  const text = formatIssueDate(day, ISSUE_DATE_SHORT, intlLocale) || day;
   return (
     <Text className="text-xs text-muted-foreground" numberOfLines={1}>
       {text}
