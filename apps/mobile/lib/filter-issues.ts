@@ -19,6 +19,7 @@
 import type {
   Issue,
   IssuePriority,
+  IssueProperty,
   IssueStatus,
   IssueStatusCategory,
 } from "@multica/core/types";
@@ -29,6 +30,7 @@ import type {
   IssueSortDirection,
   IssueSortField,
 } from "@/data/stores/issue-filter-slice";
+import { propertyIdFromViewKey } from "@/data/stores/issue-filter-slice";
 import { issueStatusCategoryOfIssue } from "./issue-status-catalog";
 
 export interface IssueFilterState {
@@ -50,6 +52,33 @@ export interface IssueFilterState {
    * window), exactly like web: the client predicate has no date branch.
    */
   dateFilter: IssueDateFilterValue | null;
+  /**
+   * Keep only issues with at least one agent task in `running` status
+   * (web's `agentRunningFilter` → `workingOnly`). The set comes from the
+   * workspace agent-task snapshot, passed separately as
+   * `IssueFilterContext.runningIssueIds` so this module stays free of
+   * fetching — same split as web's `filter.ts`.
+   */
+  workingOnly: boolean;
+  /**
+   * Show issues that have a parent (sub-issues). Only an explicit `false`
+   * hides them — web's `filter.ts:114` reads `=== false`, so a missing /
+   * undefined value keeps the historical "show everything" behaviour.
+   * Applied first, alongside `workingOnly`, in `applyIssueFilters`.
+   */
+  showSubIssues: boolean;
+}
+
+/**
+ * Data the predicate needs that is not part of the filter state. Mirrors
+ * web `IssueFilterContext` (packages/views/issues/utils/filter.ts:49-52)
+ * minus `activityByIssueId`: mobile's surfaces have no per-issue activity
+ * map, so the snapshot projection is the single representation here.
+ */
+export interface IssueFilterContext {
+  /** Distinct issue ids with a RUNNING agent task. `undefined` = the
+   *  projection has not resolved yet. */
+  runningIssueIds?: ReadonlySet<string>;
 }
 
 /** Empty filter snapshot — "show all". */
@@ -64,6 +93,8 @@ export const EMPTY_ISSUE_FILTER: IssueFilterState = {
   labelFilters: [],
   propertyFilters: {},
   dateFilter: null,
+  workingOnly: false,
+  showSubIssues: true,
 };
 
 /**
@@ -100,13 +131,21 @@ export function issueMatchesPropertyFilters(
 /**
  * Apply every filter dimension. Mirrors web `applyIssueFilters` at
  * packages/views/issues/utils/filter.ts (status/priority/assignee+no-
- * assignee/creator/project+no-project/label/property). Date is intentionally
- * absent — its server window is the single source of truth (web does the
- * same). Working-only is not exposed on mobile.
+ * assignee/creator/project+no-project/label/property/working-only). Date is
+ * intentionally absent — its server window is the single source of truth
+ * (web does the same).
+ *
+ * `workingOnly` is fail-closed in the same way web's is: when the filter is
+ * on but `runningIssueIds` is missing (projection unresolved) it hides
+ * everything, because the user asked for "only what is working" and nothing
+ * has been shown to be working yet. An EMPTY set is a real answer — the
+ * projection resolved and nobody is running — so it also yields an empty
+ * list, not a bypass.
  */
 export function applyIssueFilters(
   issues: Issue[],
   filters: IssueFilterState,
+  context: IssueFilterContext = {},
 ): Issue[] {
   const {
     statusFilters,
@@ -118,14 +157,25 @@ export function applyIssueFilters(
     includeNoProject,
     labelFilters,
     propertyFilters,
+    workingOnly,
+    showSubIssues,
   } = filters;
 
   const hasAssigneeFilter =
     assigneeFilters.length > 0 || includeNoAssignee;
   const hasProjectFilter =
     projectFilters.length > 0 || includeNoProject;
+  const applyWorkingOnly = workingOnly === true;
+  // Only an explicit `false` hides sub-issues (web filter.ts:114).
+  const hideSubIssues = showSubIssues === false;
 
   return issues.filter((issue) => {
+    if (applyWorkingOnly && !context.runningIssueIds?.has(issue.id)) {
+      return false;
+    }
+
+    if (hideSubIssues && issue.parent_issue_id) return false;
+
     if (
       statusFilters.length > 0 &&
       !statusFilters.includes(issue.status)
@@ -242,6 +292,28 @@ export function sortIssues(
   direction: IssueSortDirection,
 ): Issue[] {
   const dir = direction === "desc" ? -1 : 1;
+  // `property:<id>` sorts by the custom-property value (web sort.ts:15-34).
+  // Number values sort numerically, date values are date-only "YYYY-MM-DD"
+  // strings that sort correctly lexically. Direction applies to the VALUE
+  // comparison only — issues without a value sort last in BOTH directions,
+  // so they never jump to the top on desc.
+  const propertyId = propertyIdFromViewKey(field);
+  if (propertyId) {
+    return [...issues].sort((a, b) => {
+      const av = a.properties?.[propertyId];
+      const bv = b.properties?.[propertyId];
+      // Arrays (multi_select) and objects have no scalar order → missing.
+      const aMissing = av === undefined || Array.isArray(av);
+      const bMissing = bv === undefined || Array.isArray(bv);
+      if (aMissing && bMissing) return 0;
+      if (aMissing) return 1;
+      if (bMissing) return -1;
+      if (typeof av === "number" && typeof bv === "number") {
+        return dir * (av - bv);
+      }
+      return dir * String(av).localeCompare(String(bv));
+    });
+  }
   // Copy-then-sort (no Array.prototype.toSorted — Hermes on Android may not
   // ship the ES2023 methods). Web's sort.ts uses toSorted on modern runtime.
   const sorted = [...issues].sort((a, b) => {
@@ -332,18 +404,57 @@ export interface IssueGroupSection {
   assigneeType?: "member" | "agent" | "squad";
   assigneeId?: string;
   unassigned: boolean;
+  /** Select-property grouping: the definition this lane belongs to, its
+   *  option (`null` = the trailing "No value" lane) and the option's label /
+   *  color for the column header. */
+  propertyId?: string;
+  propertyOptionId?: string | null;
+  propertyOptionName?: string;
+  propertyOptionColor?: string;
+}
+
+/**
+ * The new-issue defaults a board column seeds its "+" with — web's
+ * `BoardColumnGroup.createData` (board-column.tsx:75-88), built here from the
+ * group's own identity rather than carried as a parallel field.
+ *
+ * Status wins over assignee when a group somehow has both: the status lanes
+ * and the assignee lanes are separate groupings, so only one is ever set, and
+ * status is the one the board's edit affordances assume.
+ *
+ * Returns `null` for a column that implies nothing (the assignee grouping's
+ * "No assignee" lane) — the caller creates a plain issue rather than pinning
+ * a default the column cannot express. Web sends
+ * `{ assignee_type: null, assignee_id: null }` in that case, which the create
+ * API treats as "unassigned"; mobile's draft store models that as `null`
+ * instead of a `{type, id}` pair.
+ */
+export function columnCreateDefaults(
+  section: IssueGroupSection,
+): { status: IssueStatus } | { assignee: { type: "member" | "agent" | "squad"; id: string } } | null {
+  if (section.status) return { status: section.status };
+  if (section.assigneeType && section.assigneeId) {
+    return {
+      assignee: { type: section.assigneeType, id: section.assigneeId },
+    };
+  }
+  return null;
 }
 
 /**
  * Build SectionList sections / board columns for the given grouping.
  * `status` uses BOARD_STATUSES order (web issues-page.tsx); `assignee`
- * uses the role lane order. Consumed by both issue list screens.
+ * uses the role lane order; `property:<id>` uses the definition's option
+ * order plus a trailing "No value" lane. Consumed by both issue list
+ * screens and the board.
  *
  * `includeEmpty` keeps empty status columns (board mode needs every status
  * as a visible column, like web's `buildGroups` at
  * packages/views/issues/components/board-view.tsx — the list keeps dropping
  * empty sections). Assignee lanes are data-driven, so the flag has no
- * effect on that grouping.
+ * effect on that grouping; property lanes are catalog-driven, so they honour
+ * it exactly like status lanes (empty option columns stay as drop targets on
+ * the board, and drop out of the list).
  *
  * Status grouping folds by CATEGORY (MUL-6243): each issue bucketed via
  * `statusCategoryOf` — server-backfilled `status_category` first, built-in
@@ -352,6 +463,10 @@ export interface IssueGroupSection {
  * cannot categorize (custom key before the catalog loaded) stays out of the
  * fixed columns, same as unknown keys always have been. With no custom
  * statuses the result is byte-identical to key grouping.
+ *
+ * `groupingProperty` is the resolved definition for a `property:<id>`
+ * grouping; when it is absent the grouping falls back to status (see the
+ * branch comment below).
  */
 export function groupIssues(
   issues: Issue[],
@@ -361,7 +476,53 @@ export function groupIssues(
   statusCategoryOf: (
     issue: Issue,
   ) => IssueStatusCategory | null = issueStatusCategoryOfIssue,
+  groupingProperty: IssueProperty | null = null,
 ): IssueGroupSection[] {
+  // Select-property grouping (web board-view.tsx:88-106): one lane per
+  // option in definition order, plus a trailing "No value" lane that is the
+  // drop target for issues the property does not cover. Only reachable when
+  // the caller resolved the definition — the LACK of one means the grouping
+  // key is stale (archived/deleted definition, or a persisted board grouping
+  // opened on a list surface that never asked for the catalog), and status
+  // grouping is the safe, self-explanatory fallback.
+  const groupingPropertyId = propertyIdFromViewKey(grouping);
+  if (groupingPropertyId && groupingProperty) {
+    const known = new Set(
+      (groupingProperty.config.options ?? []).map((o) => o.id),
+    );
+    const columns: IssueGroupSection[] = (
+      groupingProperty.config.options ?? []
+    ).map((option) => ({
+      key: `property:${groupingProperty.id}:${option.id}`,
+      propertyId: groupingProperty.id,
+      propertyOptionId: option.id,
+      propertyOptionName: option.name,
+      propertyOptionColor: option.color,
+      unassigned: false,
+      data: [],
+    }));
+    columns.push({
+      key: `property:${groupingProperty.id}:none`,
+      propertyId: groupingProperty.id,
+      propertyOptionId: null,
+      unassigned: false,
+      data: [],
+    });
+    const byKey = new Map(columns.map((c) => [c.key, c]));
+    for (const issue of issues) {
+      const value = issue.properties?.[groupingProperty.id];
+      // A value naming an option the definition no longer carries buckets
+      // into "No value" — an unmatched lane id would silently drop the
+      // issue from the board (web drag-utils.ts:60-67).
+      const optionId =
+        typeof value === "string" && known.has(value) ? value : null;
+      byKey.get(`property:${groupingProperty.id}:${optionId ?? "none"}`)?.data.push(
+        issue,
+      );
+    }
+    return includeEmpty ? columns : columns.filter((c) => c.data.length > 0);
+  }
+
   if (grouping === "assignee") {
     const byKey = new Map<
       string,

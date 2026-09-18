@@ -284,6 +284,187 @@ Examples:
 
 See `auth.json` for the canonical example (the `web` section contains `prefer_desktop` / `desktop_handoff.*`).
 
+### ja / ko: derive the convention from the bundle, don't guess
+
+The tables above are the **zh** glossary. ja and ko are not bound by them — they
+render the same concepts with their own words (`Agent` is エージェント / 에이전트,
+not 智能体), so a zh entry settles nothing for them.
+
+For ja and ko the convention is **derived from the bundle**, and a term is only
+settled when the bundle answers the question itself:
+
+1. **A clear majority settles it.** If the bundle renders a term with one native
+   word almost everywhere, the stragglers are debt — converge them and pin the
+   majority in a guard. `instance` (10/11 ja, 8/11 ko → インスタンス / 인스턴스) and
+   `provider` (20/23 ja, 19/23 ko → プロバイダー / 제공자) were settled this way.
+2. **A clean partition by surface settles it.** ko renders a reply to an issue
+   comment as 답글 and the agent's reply in chat as 답변, with zero crossover; that
+   partition *is* the rule, so it is asserted rather than collapsed.
+3. **No majority and no partition means undecided.** Report it and stop. Picking
+   a winner there is a guess dressed up as a convention, and it is worse than
+   leaving the split visible.
+
+Terms outside these tables are held to the same rule, in
+`packages/views/locales/ja-ko-unlisted-terms.test.ts`; the section-2 concepts are
+in `ja-ko-concepts.test.ts`. Both carry the tally each derivation came from, so a
+later reader can tell a deliberate reversal from a fresh outlier. The 148 round
+added the unlisted-terms guard for `instance`, `desktop`, `provider`, `batch`,
+`heartbeat`, `tier` and the `Pull request` casing. The 151 round re-ran that
+guard's Latin-kept scan and found one of its two exclusions was a measurement
+error: `Fleet` had been excluded because "ko also writes 플릿", but every hit is
+`템플릿`, the word for *template*, which contains `플릿` as a substring. Both
+bundles write the term in Latin zero-of-four times natively, so `Fleet` is a keep
+and is now pinned. The `native` field is a RegExp rather than a string for the
+same reason — the 150 round lost a measurement to a native pattern that contained
+the Latin form it was meant to exclude, and this round lost one to a native form
+that is a substring of an unrelated word. A substring check can express neither
+distinction, and both mistakes returned a confident wrong answer rather than an
+error.
+
+Typographic conventions that are not terms live in
+`packages/views/locales/ja-ko-typography.test.ts`. The 149 round measured the two
+that 147 had recorded without measuring:
+
+- **Parentheses.** 147 said ja uses full-width `（）` and ko half-width `()`.
+  ko holds with zero exceptions (129 half-width pairs, 0 full-width). ja did not:
+  66 full-width pairs against 19 half-width ones over 19 keys, with no partition
+  behind them — the same key shape appeared both ways inside one namespace, and
+  the content was native text 11 times and Latin 8 times, so neither content kind
+  nor surface separated the forms. Those 19 were stragglers of a settled rule, so
+  they were converged (85 full-width, 0 half-width) and both sides are pinned.
+- **Figure and counter.** ko writes `45초`, `5분`, `30일`, `12건` and never
+  `45 초` — 37 tight occurrences against 0 spaced on a literal figure, and 179
+  tight against 0 spaced on a placeholder, so it is pinned on both halves. ja is
+  *not* settled; see the table below.
+- **The state form.** A value that is nothing but a state label is terminal in
+  both locales: ja ends it in `〜済み` (51 keys, 0 in `〜された`) and ko in `〜됨`
+  (62 keys, 0 in `〜된`). Neither state form is ever used as a passive predicate
+  (`済み`+`可能性`, `済み`+`ます`, `됨`+`습니다`, `됨`+`하여`: 0 hits each). The 150
+  round reached this from the ja suffix-composition scan; both claims hold at zero
+  exceptions, so they are settled and pinned in
+  `packages/views/locales/ja-ko-state-form.test.ts`. What is *not* claimed:
+  everything inside a sentence does not take the other form. ja uses `〜済み` as a
+  pre-nominal modifier (`削除済みエージェント`) and `〜された` as one
+  (`保存されたビュー`), so the modifier position takes both and is not a partition.
+  Only the terminal-label position is clean, and only that is asserted. Note the
+  false straggler the guard also pins: `runtimes.machine.not_found_hint` writes
+  `削除済み` where four siblings write `削除された`, but the English sources differ
+  in construction (a participle in a list of states vs a passive clause) and the
+  bundle honours the distinction. Do not converge it.
+- **Notation inside a native word.** The 151 round asked the question underneath
+  all of the above: once the bundle has chosen the native word, is it spelled the
+  same way every time? A word can be settled and still written two ways, and a
+  Latin-residue scan sees neither spelling. The axis is the long-vowel mark
+  (`ブラウザ` / `ブラウザー`, `コンピュータ` / `コンピューター`) and the vowel itself
+  (`デフォルト` / `ディフォルト`). Measured over the whole ja bundle, **each word is
+  internally consistent except two**, so thirteen words are pinned at zero
+  exceptions in `packages/views/locales/ja-ko-notation.test.ts`: サーバー (57
+  occurrences), ユーザー (24), コンピュータ (33), ヘッダー (6), フッター (1),
+  オーナー (15), マネージャー (1), エディタ (1), パラメータ (1), デフォルト (16),
+  メンバー (95), ワークスペース (247), デスクトップ (19); ko adds 데스크톱 (19).
+  The two exceptions were classified differently and both classifications are
+  pinned:
+  - **`フォルダ` — converged.** 8 `フォルダ` against 1 `フォルダー`, and the lone
+    straggler sat on a *different surface* (`skills.detail.add_file.errors.is_directory`)
+    from all seven majority keys (every one under `projects.resources.*`). No
+    same-kind pair took both forms, so this is the first rule above — a clear
+    majority with debt behind it — and the straggler was converged.
+  - **`ブラウザ` — open, in the table below.** 11 against 2, and unlike `フォルダ`
+    the minority is *inside the majority's own namespace*: `settings.shortcuts.reserved_error`
+    writes `ブラウザ` while its two siblings
+    `settings.shortcuts.actions.goBack.description` and `goForward.description`
+    write `ブラウザー`. Same surface, same kind, two forms — so neither the
+    majority rule nor a partition argument is available, and picking one would be
+    a guess.
+
+**Currently undecided — needs a locale owner's call, do not pick one:**
+
+Each row is verified by `packages/views/locales/unsettled-ledger.test.ts`, which
+records the competing forms, the same-kind keys that take different ones, the
+**count caliber** each number is measured in, and who has to answer and at what
+cost. It fails if a later round makes a split disappear without settling the term,
+if a `why` stops stating its caliber, or if a row loses its `Ask` routing.
+
+The 150 round added the `Ask` column because ten rounds of "still undecided" went
+by with the table unable to say what anyone was being asked. It also re-measured
+every number and found one wrong: the `Server` row's native count is 14, not 15 —
+15 was `settings.mcp.*`'s number, borrowed into a sentence about a different
+surface.
+
+The 151 round turned every number in the table into a claim the guard re-measures.
+The `collision` anchors catch "an anchor was rewritten" and the caliber prefix
+catches "the sentence stopped saying what it counts"; neither catches "the family
+grew a key" or "the number was measured over the wrong surface" — and both had
+happened. `Server` repeated the 150 defect one entry over: "native in all 15 of the
+20 keys that name a server" reads as 20 keys naming a server, where 20 is the size
+of the `settings.mcp.*` surface and 15 is the number of keys in it that name one.
+`Agent counter (ja)` was worse: "4 件 vs 2 個 ... ko is unanimous on 개 for all six"
+came from a pattern that only saw the counter-after-placeholder position, which is
+6 of the 18 ja keys that count an agent. The other 12 take 件 or 個 in the
+placeholder-first position, or a third counter, `体`. Every entry now carries a
+`facts` list — each number the `why` states, with the scope it was taken over — and
+`unsettled-ledger.test.ts` re-derives all of them from the bundle. A round that
+adds a key to any of these families now goes red instead of leaving a stale number
+to be trusted.
+
+| Term | Where | Why the bundle cannot settle it | Ask |
+| --- | --- | --- | --- |
+| `Server` | `agents.tab_body.mcp_config.*` | by key: 23 Latin vs 14 サーバー / 14 서버 inside that one surface (79 keys), alternating key by key, while `settings.mcp.*` names a server in 15 of its 20 keys and is native in all 15. ja and ko split identically, key for key | locale owner — word choice, 37 ja + 37 ko keys |
+| `review` | ko | by key: 검토 9 vs 리뷰 8, and the status control (`issues.status.in_review`) disagrees with the prose that enumerates the same statuses | locale owner — word choice, 17 ko keys, visible in the status chip |
+| `label` | ko | by key: 라벨 26 vs 레이블 25, no partition — the same modal takes both (`modals.create_issue.set_labels` is 레이블, its sibling toast is 라벨) | locale owner — word choice, 51 ko keys, no majority to lean on |
+| `Roles in ja/ko prose` | ja / ko | by key: ja keeps lowercase Latin roles in permission prose (22 keys) but renders the role labels natively (130, overlapping in 5); ko splits inside one surface (`settings.mcp.admin_only_note` is Latin, `settings.workspace.manage_hint` is native) with Latin in 8 keys against 141 native. The section above does not say which applies | locale owner — rule scope, up to 152 ja + 141 ko keys |
+| `Register (polite level)` | ko | by key: 856 values carry 습니다 and 398 an 해요체 ending (895 and 439 by occurrence), with no clean partition — `common.lark_bind.error_expired` and `common.slack_bind.error_expired` are the same string in two registers. See the note below | locale owner — whole-bundle register, 1254 ko keys |
+| `Private` | ja | by key: 7 プライベート vs 9 非公開, split by neither surface nor label-vs-prose: `settings.plugins.private` and `settings.repositories.github_private` are both a bare `Private` label under settings and take different words | locale owner — word choice, 16 ja keys |
+| `Figure and counter spacing` | ja | by occurrence: 42 spaced vs 14 tight on a literal figure, 155 vs 40 on a placeholder (both over every placeholder name), and the same English source renders both ways: `autopilots.relative_date.one_day_ago` is `1 日前` / `projects.relative_date.one_day_ago` is `1日前`, and `{{count}}mo ago` gives `{{count}} か月前` vs `{{count}}か月前` | typography owner — spacing, not a word choice, 211 occurrences |
+| `Agent counter (ja)` | ja | by key: 9 件 vs 5 個 vs 4 体 over the 18 ja keys that count an agent, and the split is not source-side — the identical English source `{{count}} agents` takes 件 in two keys and 個 in two others, a 2:2 tie on one source — while ko is unanimous on 개 for all 18, so the split is ja-only | locale owner — counter choice, 18 ja keys |
+| `Tool counter (ja)` | ja | by key: 1 件 vs 1 個 with no majority at all, the same English source (`{{count}} tools`) on both, ko unanimous on 개 — and the tight-spacing member is also a figure-spacing outlier above | locale owner — counter choice, 2 ja keys |
+| `ブラウザ` | ja | by key: 11 ブラウザ vs 2 ブラウザー, and unlike the other katakana splits the 151 round measured, the minority sits inside the majority's own namespace — `settings.shortcuts.reserved_error` writes ブラウザ while its two siblings `settings.shortcuts.actions.goBack.description` and `goForward.description` write ブラウザー | locale owner — word notation, 13 ja keys |
+| `Particle spacing (ko)` | ko | by occurrence: a Korean particle attaches directly to a Latin token 316 times against 3 that are spaced, but the minority sits inside the majority's own surface — `settings.*` holds 109 attached and all 3 spaced — and the partition a reader reaches for is refuted: a Latin literal the user types takes the particle attached ten times (`SKILL.md는`, `Skills.sh에서`, `GITHUB_APP_ID와`, `Shift+Enter로`, `features/의`) and spaced three (`multica login --token 으로`, `/issue 를` twice) | typography owner — spacing, not a word choice, 3 ko keys |
+| `list (ko)` | ko | by key: 목록 20 vs 리스트 4, and the split is not by sense — the same English source `List` is 목록 in `editor.bubble_menu.list` and 리스트 in `issues.view.list`, both a bare one-word label | locale owner — word choice, 24 ko keys |
+| `Ellipsis` | both zh bundles | the §3 bullet contradicts itself — see the note there | locale owner — punctuation clause, 6 mobile + 52 views zh keys |
+| `Dash (zh)` | both zh bundles | by key: the doubled `——` in 95 views / 39 mobile keys against the English ` — ` in 3 / 8, and the split is by neither surface nor sentence shape — `issues.gantt.empty` and `issues.execution_log.retry_blocked` are both an `issues.*` sentence that states a condition and then a hint, and they take different dashes. The 152 round found this by classifying the punctuation 151 had measured but not classified | typography owner — punctuation, 98 views + 47 mobile zh keys |
+
+**Figure and counter spacing — the external-standard route is closed.** The 149
+round flagged this as a candidate for settling from an external standard rather
+than from the locale owner. Round 150 walked that route and it is empty. The two
+sources that could plausibly speak to it were read:
+
+1. 文化庁「新しい「公用文作成の要領」に向けて（報告）」(2021), Ⅰ-4「数字の使い方」 —
+   the operative Japanese government writing standard. **The word 助数詞 does not
+   appear anywhere in the report.** Its numeral section governs 算用数字 vs 漢数字,
+   全角 vs 半角 (explicitly 「特に定めはない」 — no rule, only "be consistent"), the
+   three-digit comma, 兆・億・万 in kanji, and counter *spelling* (「○か所」「○か月」
+   in hiragana, explicitly rejecting 「３ヶ所」「７カ月」). It states no spacing rule.
+   Its own model examples (「３か所」「７か月」) use a full-width digit, which is the
+   report's own convention for single digits, so there is no Japanese/Latin
+   boundary inside them and the question does not arise.
+2. W3C JLReq (Requirements for Japanese Text Layout, the public form of the
+   JIS X 4051 line of work). **助数詞 does not appear**; 算用数字 appears once, in
+   the glossary. Its spacing rules — 二分アキ, 四分アキ, ベタ組 — are defined **only
+   for punctuation classes** (始め括弧類, 終わり括弧類, 読点類, 句点類, 中点類).
+   Nothing defines a figure-to-counter gap.
+
+Both are **silent**, not in conflict. A standard that does not address the question
+can neither confirm the 42-vs-14 majority nor override it, and citing it as if it
+did would be inventing a rule and attributing it to the standard. The entry stays
+open and stays routed to the typography owner. Do not re-walk this route without a
+new source; the negative result is pinned in `unsettled-ledger.test.ts`.
+
+What the round *did* settle from source 1 is adjacent: the counter spelling the
+bundle already uses is the one that standard prescribes — `か月`, not `ヶ月`
+(2 keys, 0 exceptions), so no change was needed there.
+
+**ko register.** The 148 round measured this by sentence ending. The 149 round
+re-measured it per key and got the same answer: 856 values carry 습니다 and 398 an
+해요체 ending. It is not drift that a majority can fix: the split cuts through
+every kind of key
+(`error` / `required` leaves are 36 해요체 vs 34 습니다체, `common.*_bind.*` is 18 vs
+5, and `settings.lark.install_error*` is the only family that is clean at 8 vs
+0), and no namespace separates them (`common` is 78% 해요체, `chat` 8%). Two
+readings are both defensible — 습니다체 as the house style with 139 stragglers, or
+해요체 for friendly guidance and inline errors by design — and the bundle cannot
+tell them apart. ja is *not* affected: it is 131 です・ます and 0 だ・である.
+
 ---
 
 ## 3. Chinese voice and style
@@ -292,8 +473,37 @@ See `auth.json` for the canonical example (the `web` section contains `prefer_de
 
 - Full-width punctuation in Chinese: `，。：；！？`
 - Quotes: straight double quotes `"..."` to match the English source. Do not use `「」` or curly quotes.
+- Brackets: full-width `（）`, in both bundles. **This rule is derived, not quoted** — the bullet above does not name brackets, and the first reading of the bundle was wrong. The tempting hypothesis is a partition by content kind (half-width wraps Latin, full-width wraps Chinese); it is false, because full-width brackets wrap a non-Chinese token — a `{{binding}}`, an acronym, a product name — 27 times in views and 12 in mobile (`（{{count}}）`, `（Lark）`, `（Go + Postgres）`, `（xoxb-）`). What the bundle actually does is use full-width brackets everywhere — 74 pairs in views, 37 in mobile — against 4 and 1 half-width stragglers, two of which wrapped Chinese and three a placeholder or acronym. A clear majority with no partition behind the minority, so the stragglers were converged and the rule is pinned in `packages/views/locales/zh-typography.test.ts`. **The 27/12 pair is a correction**: the 151 round wrote "25 times in views and 11 in mobile", which is what the bundle held *before* the same round converged the stragglers, so the sentence was stale the moment it was written. Both numbers are re-derived by the guard now.
 - Ellipsis: three dots `...` not the single character `…`. Match the English source.
+  - **This bullet contradicts itself, and the bundles have already drifted apart because of it.** The English source uses both (`…` 96 / `...` 16 in the mobile bundle, `…` 129 / `...` 106 in views), so "three dots" and "match the English source" cannot both hold. The two zh bundles have each picked a different reading: mobile zh follows the source (6 keys differ), while views zh follows the first clause (52 keys use `...` where EN uses `…`). No guard pins either, and no round has been authorised to choose. Decide this clause before translating against it.
 - Mixed Chinese-English: a single space on each side of the English word (see Word combination rules).
+- **The terminal mark mirrors the English source.** A full-width `！` or `？` appears exactly where the English source has a `!` or a `?` — 3 + 61 keys in views zh-Hans, 2 + 69 in mobile zh, zero exceptions in the `zh → en` direction. The reverse does not hold and is not claimed: one mobile key (`mcp.agent.removeConfirmMessage`) recasts an English question as a Chinese statement, which is a translation choice, not a punctuation one. Marks are never doubled or stacked.
+- **The middle dot `·` is a spaced separator** — always ` · `, or `· ` when it opens the string (the `runtimes.detail.*_chip_other` prefixes). 73 occurrences in views zh-Hans and 28 in mobile zh, zero exceptions. Provenance differs by bundle and the difference is recorded rather than asserted: views carries the English `·` one for one (68 of 68 keys), while mobile uses it as a general separator on 3 keys whose English has `by` or a space.
+- **The en dash `–` only appears in a range**, and always where the English source has one — 3 views keys (`{{min}}–{{max}}`, `10–30 秒`) and 1 mobile key, zero exceptions. It is not a prose dash.
+- **The prose dash is not settled.** Chinese writes `——`; the English source writes ` — `, and both forms are in use in both bundles. This is the `Dash (zh)` row in the table below, not a rule.
+
+The 151 round is the first to scan zh punctuation at all. Rounds 142–150 walked
+ja and ko almost exclusively — the rules they settled (ja full-width parentheses,
+ko half-width, ko figure-to-counter spacing) are ja/ko rules that say nothing
+about zh — so the two bullets above had been in this contract with nothing
+asserting them. The drift they forbid was 15 keys deep: 11 `「」` pairs, 3 curly
+pairs, three half-width `,` and one half-width `;` in prose, and 5 half-width
+bracket pairs. All were converged, and both the settled half and the derived
+bracket rule are now pinned in `packages/views/locales/zh-typography.test.ts`. The
+same round also found the first zh-side concept residue since round 144 — 18 keys
+in views zh-Hans still rendering `Autopilot`, `Members` or the entity `issues` in
+Latin — and added those three to the concept list in
+`packages/views/locales/zh-glossary.test.ts`.
+
+The 152 round classified the three surfaces 151 had measured but left
+unclassified, and drew the same line between them: two are settled and one is
+not. `！？` and `·` and `–` are pinned at zero exceptions (above). The em dash is
+not — 11 keys keep the English ` — ` against 134 that write `——`, and the
+minority is not separated by surface or by sentence shape, so it went to the
+`Dash (zh)` row of the table below instead of being converged. That is the
+distinction the round drew: a majority with no partition behind it is debt and
+gets converged (the brackets, one round earlier); a majority *with* a same-kind
+pair taking both forms is a decision, and it needs an owner.
 
 ### Style principles
 

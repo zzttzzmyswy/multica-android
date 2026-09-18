@@ -5,7 +5,12 @@
  * input (MYS-408 issue workbench).
  */
 import { describe, expect, it } from "vitest";
-import type { Issue, IssueStatus, Label } from "@multica/core/types";
+import type {
+  Issue,
+  IssueProperty,
+  IssueStatus,
+  Label,
+} from "@multica/core/types";
 import {
   applyIssueFilters,
   groupIssues,
@@ -13,17 +18,7 @@ import {
   sortIssues,
   type IssueFilterState,
 } from "./filter-issues";
-
-// Inlined copy of lib/issue-status BOARD_STATUSES (that module pulls i18n →
-// expo, which is out of scope for this pure-helper suite).
-const BOARD_STATUSES: IssueStatus[] = [
-  "backlog",
-  "todo",
-  "in_progress",
-  "in_review",
-  "done",
-  "blocked",
-];
+import { BOARD_STATUSES } from "./issue-status-core";
 
 function issue(partial: Partial<Issue>): Issue {
   const { id = "x" } = partial;
@@ -46,6 +41,7 @@ function issue(partial: Partial<Issue>): Issue {
     properties: partial.properties,
     start_date: partial.start_date,
     due_date: partial.due_date,
+    parent_issue_id: partial.parent_issue_id,
   } as Issue;
 }
 
@@ -71,7 +67,76 @@ const noFilters: IssueFilterState = {
   labelFilters: [],
   propertyFilters: {},
   dateFilter: null,
+  workingOnly: false,
+  showSubIssues: true,
 };
+
+describe("applyIssueFilters — workingOnly", () => {
+  const a = issue({ id: "a" });
+  const b = issue({ id: "b" });
+  const c = issue({ id: "c" });
+  const all = [a, b, c];
+
+  it("is a no-op when off, even with a running set present", () => {
+    expect(
+      applyIssueFilters(all, noFilters, {
+        runningIssueIds: new Set(["b"]),
+      }),
+    ).toEqual(all);
+  });
+
+  it("keeps only issues with a running task", () => {
+    expect(
+      applyIssueFilters(
+        all,
+        { ...noFilters, workingOnly: true },
+        { runningIssueIds: new Set(["a", "c"]) },
+      ).map((i) => i.id),
+    ).toEqual(["a", "c"]);
+  });
+
+  it("hides everything when the projection has not resolved", () => {
+    // Fail closed: the user asked for "only what is working", and nothing
+    // has been shown to be working yet. Showing the full list here would
+    // silently invert the filter on a slow network.
+    expect(
+      applyIssueFilters(all, { ...noFilters, workingOnly: true }),
+    ).toEqual([]);
+    expect(
+      applyIssueFilters(all, { ...noFilters, workingOnly: true }, {}),
+    ).toEqual([]);
+  });
+
+  it("treats an empty resolved set as a real (empty) answer", () => {
+    expect(
+      applyIssueFilters(
+        all,
+        { ...noFilters, workingOnly: true },
+        { runningIssueIds: new Set() },
+      ),
+    ).toEqual([]);
+  });
+
+  it("ANDs with the other dimensions", () => {
+    const running = issue({ id: "r", status: "in_progress" });
+    const idle = issue({ id: "i", status: "in_progress" });
+    expect(
+      applyIssueFilters(
+        [running, idle],
+        { ...noFilters, workingOnly: true, statusFilters: ["in_progress"] },
+        { runningIssueIds: new Set(["r"]) },
+      ).map((x) => x.id),
+    ).toEqual(["r"]);
+    // Same running set, a status the running issue is not in → nothing.
+    expect(
+      applyIssueFilters(
+        [running, idle],
+        { ...noFilters, workingOnly: true, statusFilters: ["done"] },
+        { runningIssueIds: new Set(["r"]) },
+      ),
+    ).toEqual([]);
+  });
+});
 
 describe("applyIssueFilters", () => {
   const a = issue({
@@ -276,14 +341,7 @@ describe("groupIssues", () => {
   it("status grouping keeps empty columns in BOARD_STATUSES order when includeEmpty is set", () => {
     const groups = groupIssues([c, a, b], "status", BOARD_STATUSES, true);
     const statuses = groups.map((g) => g.status);
-    expect(statuses).toEqual([
-      "backlog",
-      "todo",
-      "in_progress",
-      "in_review",
-      "done",
-      "blocked",
-    ]);
+    expect(statuses).toEqual([...BOARD_STATUSES]);
     const asMap = new Map(groups.map((g) => [g.status, g.data]));
     expect(asMap.get("done")?.map((i) => i.id)).toEqual(["c"]);
     expect(asMap.get("backlog")).toEqual([]);
@@ -377,5 +435,161 @@ describe("applyIssueFilters with propertyFilters", () => {
       propertyFilters: { def: ["x"] },
     });
     expect(filtered.map((i) => i.id)).toEqual(["a"]);
+  });
+});
+
+/**
+ * Custom-property sort + board grouping (iteration 129, MYS-1060). Mirrors
+ * web's `sort.ts:20-34` (property sorts) and `board-view.tsx:88-106`
+ * (`buildGroups` select-property columns: definition order + trailing
+ * "No value").
+ */
+describe("sortIssues by a custom property", () => {
+  const mk = (id: string, value?: unknown) =>
+    issue({ id, properties: value === undefined ? undefined : { est: value } } as Partial<Issue>);
+
+  it("sorts number values numerically, missing values last in both directions", () => {
+    const list = [mk("c", 8), mk("a", 2), mk("b", 5), mk("d")];
+    expect(sortIssues(list, "property:est", "asc").map((i) => i.id)).toEqual([
+      "a",
+      "b",
+      "c",
+      "d",
+    ]);
+    expect(sortIssues(list, "property:est", "desc").map((i) => i.id)).toEqual([
+      "c",
+      "b",
+      "a",
+      "d",
+    ]);
+  });
+
+  it("sorts date values (date-only strings) lexically", () => {
+    const list = [mk("b", "2026-03-01"), mk("a", "2026-01-15"), mk("c", "2026-12-31")];
+    expect(sortIssues(list, "property:est", "asc").map((i) => i.id)).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+  });
+
+  it("treats array (multi_select) values as missing — they have no scalar order", () => {
+    const list = [mk("a", ["x"]), mk("b", 1)];
+    expect(sortIssues(list, "property:est", "asc").map((i) => i.id)).toEqual([
+      "b",
+      "a",
+    ]);
+  });
+});
+
+describe("groupIssues by a select property", () => {
+  const property = {
+    id: "stage",
+    workspace_id: "ws1",
+    name: "Stage",
+    type: "select",
+    config: {
+      options: [
+        { id: "o1", name: "Design", color: "#111111" },
+        { id: "o2", name: "Build", color: "#222222" },
+      ],
+    },
+    position: 0,
+    archived: false,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+  } as IssueProperty;
+
+  const a = issue({ id: "a", properties: { stage: "o2" } } as Partial<Issue>);
+  const b = issue({ id: "b", properties: { stage: "o1" } } as Partial<Issue>);
+  const c = issue({ id: "c" } as Partial<Issue>);
+  const stale = issue({ id: "d", properties: { stage: "gone" } } as Partial<Issue>);
+
+  it("columns follow definition order with a trailing no-value column", () => {
+    const groups = groupIssues(
+      [a, b, c, stale],
+      "property:stage",
+      BOARD_STATUSES,
+      true,
+      undefined,
+      property,
+    );
+    expect(groups.map((g) => g.key)).toEqual([
+      "property:stage:o1",
+      "property:stage:o2",
+      "property:stage:none",
+    ]);
+    expect(groups.map((g) => g.propertyOptionId)).toEqual(["o1", "o2", null]);
+    const asMap = new Map(groups.map((g) => [g.key, g.data.map((i) => i.id)]));
+    expect(asMap.get("property:stage:o1")).toEqual(["b"]);
+    expect(asMap.get("property:stage:o2")).toEqual(["a"]);
+    // Both "no value at all" and "value naming a removed option" land in the
+    // trailing column — web's knownOptionIds guard (drag-utils.ts:64-66).
+    expect(asMap.get("property:stage:none")).toEqual(["c", "d"]);
+  });
+
+  it("drops empty columns when includeEmpty is off (list mode)", () => {
+    const groups = groupIssues(
+      [b],
+      "property:stage",
+      BOARD_STATUSES,
+      false,
+      undefined,
+      property,
+    );
+    expect(groups.map((g) => g.key)).toEqual(["property:stage:o1"]);
+  });
+
+  it("falls back to status grouping when the definition is not resolvable", () => {
+    const groups = groupIssues([a, b], "property:stage", BOARD_STATUSES, true);
+    expect(groups.map((g) => g.status)).toEqual([...BOARD_STATUSES]);
+  });
+});
+
+describe("applyIssueFilters — showSubIssues", () => {
+  const parent = issue({ id: "p1" });
+  const child = issue({ id: "c1", parent_issue_id: "p1" });
+  const child2 = issue({ id: "c2", parent_issue_id: "p1", status: "done" });
+  const all = [parent, child, child2];
+
+  it("hides sub-issues when showSubIssues is false", () => {
+    expect(
+      applyIssueFilters(all, { ...noFilters, showSubIssues: false }).map((i) => i.id),
+    ).toEqual(["p1"]);
+  });
+
+  it("keeps sub-issues when showSubIssues is true", () => {
+    expect(
+      applyIssueFilters(all, { ...noFilters, showSubIssues: true }).map((i) => i.id),
+    ).toEqual(["p1", "c1", "c2"]);
+  });
+
+  it("is an unconditional no-op when off (keeps sub-issues and their parents)", () => {
+    expect(applyIssueFilters(all, noFilters).map((i) => i.id)).toEqual([
+      "p1",
+      "c1",
+      "c2",
+    ]);
+  });
+
+  it("composes with other filters (AND semantics)", () => {
+    // Hide sub-issues AND keep only "todo": the parent survives, the two
+    // children are excluded by both dimensions independently.
+    expect(
+      applyIssueFilters(all, {
+        ...noFilters,
+        showSubIssues: false,
+        statusFilters: ["todo"],
+      }).map((i) => i.id),
+    ).toEqual(["p1"]);
+    // Same status filter with sub-issues visible proves the two dimensions
+    // are independent rather than one masking the other.
+    expect(
+      applyIssueFilters(all, {
+        ...noFilters,
+        showSubIssues: true,
+        statusFilters: ["todo"],
+      }).map((i) => i.id),
+    ).toEqual(["p1", "c1"]);
   });
 });

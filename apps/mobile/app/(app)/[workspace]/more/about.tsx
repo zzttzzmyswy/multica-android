@@ -38,6 +38,7 @@ import {
   resolveDeviceAbi,
 } from "@/lib/install-update";
 import { useDownloadsStore } from "@/data/downloads-store";
+import { resolveAppVersion, resolveBuildNumber } from "@/lib/app-identity";
 import { cn } from "@/lib/utils";
 
 type CheckPhase =
@@ -55,9 +56,8 @@ export default function AboutPage() {
   const theme = THEME[colorScheme];
   const muted = theme.mutedForeground;
 
-  const appVersion =
-    (Constants.expoConfig?.version as string | undefined) ?? "0.0.0";
-  const buildNumber = Constants.platform?.android?.versionCode;
+  const appVersion = resolveAppVersion(Constants);
+  const buildNumber = resolveBuildNumber(Constants);
 
   const query = useLatestRelease(true);
   const [phase, setPhase] = useState<CheckPhase>("idle");
@@ -150,10 +150,7 @@ export default function AboutPage() {
           value={`v${appVersion}`}
         />
         <Separator className="my-3" />
-        <InfoRow
-          label={t("about.buildLabel")}
-          value={buildNumber != null ? `${buildNumber}` : "—"}
-        />
+        <InfoRow label={t("about.buildLabel")} value={buildNumber} />
         <Separator className="my-3" />
         <InfoRow label={t("about.intro")} value="" last />
       </View>
