@@ -284,6 +284,76 @@ Examples:
 
 See `auth.json` for the canonical example (the `web` section contains `prefer_desktop` / `desktop_handoff.*`).
 
+### ja / ko: derive the convention from the bundle, don't guess
+
+The tables above are the **zh** glossary. ja and ko are not bound by them — they
+render the same concepts with their own words (`Agent` is エージェント / 에이전트,
+not 智能体), so a zh entry settles nothing for them.
+
+For ja and ko the convention is **derived from the bundle**, and a term is only
+settled when the bundle answers the question itself:
+
+1. **A clear majority settles it.** If the bundle renders a term with one native
+   word almost everywhere, the stragglers are debt — converge them and pin the
+   majority in a guard. `instance` (10/11 ja, 8/11 ko → インスタンス / 인스턴스) and
+   `provider` (20/23 ja, 19/23 ko → プロバイダー / 제공자) were settled this way.
+2. **A clean partition by surface settles it.** ko renders a reply to an issue
+   comment as 답글 and the agent's reply in chat as 답변, with zero crossover; that
+   partition *is* the rule, so it is asserted rather than collapsed.
+3. **No majority and no partition means undecided.** Report it and stop. Picking
+   a winner there is a guess dressed up as a convention, and it is worse than
+   leaving the split visible.
+
+Terms outside these tables are held to the same rule, in
+`packages/views/locales/ja-ko-unlisted-terms.test.ts`; the section-2 concepts are
+in `ja-ko-concepts.test.ts`. Both carry the tally each derivation came from, so a
+later reader can tell a deliberate reversal from a fresh outlier. The 148 round
+added the unlisted-terms guard for `instance`, `desktop`, `provider`, `batch`,
+`heartbeat`, `tier` and the `Pull request` casing.
+
+Typographic conventions that are not terms live in
+`packages/views/locales/ja-ko-typography.test.ts`. The 149 round measured the two
+that 147 had recorded without measuring:
+
+- **Parentheses.** 147 said ja uses full-width `（）` and ko half-width `()`.
+  ko holds with zero exceptions (129 half-width pairs, 0 full-width). ja did not:
+  66 full-width pairs against 19 half-width ones over 19 keys, with no partition
+  behind them — the same key shape appeared both ways inside one namespace, and
+  the content was native text 11 times and Latin 8 times, so neither content kind
+  nor surface separated the forms. Those 19 were stragglers of a settled rule, so
+  they were converged (85 full-width, 0 half-width) and both sides are pinned.
+- **Figure and counter.** ko writes `45초`, `5분`, `30일`, `12건` and never
+  `45 초` — 37 tight occurrences against 0 spaced, so it is pinned. ja is *not*
+  settled; see the table below.
+
+**Currently undecided — needs a locale owner's call, do not pick one:**
+
+Each row is verified by `packages/views/locales/unsettled-ledger.test.ts`, which
+records the competing forms, the two same-kind keys that take different ones, and
+fails if a later round makes the split disappear without settling the term.
+
+| Term | Where | Why the bundle cannot settle it |
+| --- | --- | --- |
+| `Server` | `agents.tab_body.mcp_config.*` | 23 Latin vs 15 サーバー / 서버 inside that one surface, alternating key by key, while `settings.mcp.*` is native in all 15 of its strings |
+| `review` | ko | 검토 9 vs 리뷰 8, and the status control (`issues.status.in_review`) disagrees with the prose that enumerates the same statuses |
+| `label` | ko | 라벨 26 vs 레이블 25, no partition — the same modal takes both (`modals.create_issue.set_labels` is 레이블, its sibling toast is 라벨) |
+| `Roles in ja/ko prose` | ja / ko | ja keeps lowercase Latin roles in permission prose but renders the role labels natively; ko splits inside one surface (`settings.mcp.admin_only_note` is Latin, `settings.workspace.manage_hint` is native). The section above does not say which applies |
+| `Register (polite level)` | ko | 856 values carry 습니다 and 398 an 해요체 ending, with no clean partition — `common.lark_bind.error_expired` and `common.slack_bind.error_expired` are the same string in two registers. See the note below |
+| `Private` | ja | 7 プライベート vs 9 非公開, split by neither surface nor label-vs-prose: `settings.plugins.private` and `settings.repositories.github_private` are both a bare `Private` label under settings and take different words |
+| `Figure and counter spacing` | ja | 42 spaced occurrences vs 14 tight on a literal figure (155 vs 40 on an interpolation), and the same English source renders both ways: `autopilots.relative_date.one_day_ago` is `1 日前`, `projects.relative_date.one_day_ago` is `1日前` |
+| `Ellipsis` | both zh bundles | the §3 bullet contradicts itself — see the note there |
+
+**ko register.** The 148 round measured this by sentence ending. The 149 round
+re-measured it per key and got the same answer: 856 values carry 습니다 and 398 an
+해요체 ending. It is not drift that a majority can fix: the split cuts through
+every kind of key
+(`error` / `required` leaves are 36 해요체 vs 34 습니다체, `common.*_bind.*` is 18 vs
+5, and `settings.lark.install_error*` is the only family that is clean at 8 vs
+0), and no namespace separates them (`common` is 78% 해요체, `chat` 8%). Two
+readings are both defensible — 습니다체 as the house style with 139 stragglers, or
+해요체 for friendly guidance and inline errors by design — and the bundle cannot
+tell them apart. ja is *not* affected: it is 131 です・ます and 0 だ・である.
+
 ---
 
 ## 3. Chinese voice and style
@@ -293,6 +363,7 @@ See `auth.json` for the canonical example (the `web` section contains `prefer_de
 - Full-width punctuation in Chinese: `，。：；！？`
 - Quotes: straight double quotes `"..."` to match the English source. Do not use `「」` or curly quotes.
 - Ellipsis: three dots `...` not the single character `…`. Match the English source.
+  - **This bullet contradicts itself, and the bundles have already drifted apart because of it.** The English source uses both (`…` 96 / `...` 16 in the mobile bundle, `…` 129 / `...` 106 in views), so "three dots" and "match the English source" cannot both hold. The two zh bundles have each picked a different reading: mobile zh follows the source (6 keys differ), while views zh follows the first clause (52 keys use `...` where EN uses `…`). No guard pins either, and no round has been authorised to choose. Decide this clause before translating against it.
 - Mixed Chinese-English: a single space on each side of the English word (see Word combination rules).
 
 ### Style principles

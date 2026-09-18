@@ -142,17 +142,17 @@
     "skip": {
       "loading": "워크스페이스 설정 중...",
       "title": "Multica에 오신 것을 환영합니다!",
-      "subtitle": "런타임 연결을 돕는 태스크 하나를 추가했습니다. 준비되면 Runtimes에서 Mika와 시작하세요.",
+      "subtitle": "런타임 연결을 돕는 태스크 하나를 추가했습니다. 준비되면 런타임에서 Mika와 시작하세요.",
       "got_it": "알겠습니다",
       "status_in_progress": "진행 중",
       "error_title": "준비하지 못했습니다",
-      "error_body": "런타임 안내 태스크를 만들지 못했습니다. 다시 시도하거나, 준비되면 Runtimes에서 런타임을 연결하세요.",
+      "error_body": "런타임 안내 태스크를 만들지 못했습니다. 다시 시도하거나, 준비되면 런타임 페이지에서 연결하세요.",
       "retry": "다시 시도",
       "dismiss": "나중에",
       "cards": {
         "install_runtime": {
           "title": "런타임 연결",
-          "subtitle": "Codex 또는 Kimi를 설치한 뒤 Runtimes에서 Mika 안내 채팅을 시작하세요."
+          "subtitle": "Codex 또는 Kimi를 설치한 뒤 런타임에서 Mika 안내 채팅을 시작하세요."
         }
       }
     }
@@ -192,11 +192,11 @@
     "create_failed_toast": "워크스페이스를 만들지 못했습니다",
     "creation_disabled_eyebrow": "워크스페이스 생성이 비활성화되었습니다",
     "creation_disabled_headline": "관리자에게 초대를 요청하세요.",
-    "creation_disabled_lede": "이 Multica instance에서는 새 워크스페이스를 만들 수 없습니다. 관리자가 기존 워크스페이스로 초대하면 초대를 수락한 뒤 새로고침해 계속하세요.",
+    "creation_disabled_lede": "이 Multica 인스턴스에서는 새 워크스페이스를 만들 수 없습니다. 관리자가 기존 워크스페이스로 초대하면 초대를 수락한 뒤 새로고침해 계속하세요.",
     "creation_disabled_logout": "로그아웃",
     "creation_disabled_eyebrow_resume": "내 워크스페이스",
     "creation_disabled_headline_resume": "{{name}}에서 계속하세요.",
-    "creation_disabled_lede_resume": "이 instance에서는 워크스페이스 생성이 비활성화되어 있으므로 기존 워크스페이스로 계속 이동합니다."
+    "creation_disabled_lede_resume": "이 인스턴스에서는 워크스페이스 생성이 비활성화되어 있으므로 기존 워크스페이스로 계속 이동합니다."
   },
   "step_runtime": {
     "scanning_headline": "이 컴퓨터 연결 중...",
