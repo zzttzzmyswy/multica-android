@@ -45,3 +45,22 @@ export function dropInboxItemsByIssue(
   qc.setQueryData<InboxItem[]>(inboxKeys.list(wsId), drop);
   qc.setQueryData<InboxItem[]>(inboxKeys.archived(wsId), drop);
 }
+
+/**
+ * Refresh the cross-workspace unread summary (workspace-switcher dot).
+ *
+ * Separate from the workspace-scoped list invalidation above because the
+ * summary spans EVERY workspace, so it is invalidated on any inbox event
+ * regardless of which workspace the event came from — including read/archive
+ * events, which the list invalidation alone would leave the dot stale for.
+ * Mirrors web's `onInboxSummaryInvalidate`
+ * (packages/core/inbox/ws-updaters.ts:71).
+ *
+ * Note the socket is bound to the ACTIVE workspace, so events raised in
+ * another workspace never reach this hook. That gap is covered by the query's
+ * own freshness (mobile's 60s staleTime + refetchOnWindowFocus), which is why
+ * no extra polling is needed here.
+ */
+export function invalidateInboxSummary(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: inboxKeys.unreadSummary() });
+}

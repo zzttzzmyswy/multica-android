@@ -21,6 +21,7 @@ import type {
   Project,
   ProjectResource,
   UpdateProjectRequest,
+  UpdateProjectResourceRequest,
 } from "@multica/core/types";
 import { api } from "@/data/api";
 import { projectKeys } from "@/data/queries/projects";
@@ -198,6 +199,40 @@ export function useDeleteProjectResource(projectId: string) {
         old
           ? old.map((p) => (p.id === projectId ? dropCount(p) : p))
           : old,
+      );
+    },
+  });
+}
+
+/**
+ * Edit a mounted resource (iteration 135). Only used for a local_directory's
+ * `execution_mode` today — the server exposes no path/daemon change, and a
+ * repo url is not editable either (you detach and re-attach). The cache write
+ * replaces the row in place, so the list keeps its position instead of
+ * jumping to the end the way a refetch-then-sort could.
+ *
+ * The ref is passed through whole by the caller: the server REPLACES a
+ * supplied `resource_ref` rather than deep-merging it
+ * (server/internal/handler/project_resource.go:60), so sending only
+ * `{execution_mode}` would drop `local_path` and `daemon_id`.
+ */
+export function useUpdateProjectResource(projectId: string) {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationKey: ["updateProjectResource", projectId] as const,
+    mutationFn: (vars: {
+      resourceId: string;
+      data: UpdateProjectResourceRequest;
+    }) => api.updateProjectResource(projectId, vars.resourceId, vars.data),
+    onSuccess: (resource) => {
+      qc.setQueryData<ProjectResource[]>(
+        projectKeys.resources(wsId, projectId),
+        (old) =>
+          old
+            ? old.map((r) => (r.id === resource.id ? resource : r))
+            : [resource],
       );
     },
   });

@@ -220,6 +220,20 @@ export default function ProjectDetail() {
                         params: { workspace: wsSlug, id },
                       });
                   }}
+                  onPressStartDate={() => {
+                    if (wsSlug)
+                      router.push({
+                        pathname: "/[workspace]/project/[id]/picker/start-date",
+                        params: { workspace: wsSlug, id },
+                      });
+                  }}
+                  onPressDueDate={() => {
+                    if (wsSlug)
+                      router.push({
+                        pathname: "/[workspace]/project/[id]/picker/due-date",
+                        params: { workspace: wsSlug, id },
+                      });
+                  }}
                 />
                 <ProjectResourcesSection
                   projectId={id}

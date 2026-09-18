@@ -6,6 +6,7 @@
  * `ChatTimeline` shows only process steps (the chat parent renders the final text).
  */
 import type { TaskMessagePayload } from "@multica/core/types";
+import { prepareTaskMessages } from "@multica/core/task-transcript";
 
 export interface TaskLogPartition {
   /** Non-text steps in original order — drive the `ChatTimeline` fold. */
@@ -30,6 +31,19 @@ export function partitionTaskLog(
     }
   }
   return { processSteps, textFragments };
+}
+
+/**
+ * `partitionTaskLog` over a stream that has been merged and masked the way
+ * web's `buildTimeline` prepares it. Raw payloads reach the UI only through
+ * this: the daemon splits one `thinking` / `text` block across several
+ * flush-timed messages, so an unprepared stream renders one row per flush and
+ * shows secrets web would have masked.
+ */
+export function prepareTaskLog(
+  messages: TaskMessagePayload[],
+): TaskLogPartition {
+  return partitionTaskLog(prepareTaskMessages(messages));
 }
 
 /**

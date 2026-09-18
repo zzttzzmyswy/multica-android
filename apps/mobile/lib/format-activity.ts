@@ -10,7 +10,7 @@
  * crash).
  */
 import type { TimelineEntry } from "@multica/core/types";
-import { formatDateOnly } from "@multica/core/issues/date";
+import { formatIssueDate } from "./format-date";
 import { translate } from "./i18n";
 import { issuePriorityLabel, issueStatusLabel } from "./issue-status";
 
@@ -28,10 +28,11 @@ function priorityName(p: string | undefined): string {
 }
 
 // start_date / due_date are calendar days — format timezone-safely (no offset
-// day shift). Mirrors web's formatActivity in issue-detail.tsx.
+// day shift) and in the active app locale. Mirrors web's formatActivity in
+// issue-detail.tsx.
 function shortDate(date: string | undefined): string {
   if (!date) return "?";
-  return formatDateOnly(date, { month: "short", day: "numeric" }, "en-US");
+  return formatIssueDate(date);
 }
 
 export function formatActivity(

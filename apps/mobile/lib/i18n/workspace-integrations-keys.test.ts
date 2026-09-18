@@ -43,7 +43,7 @@ describe("workspace integration i18n", () => {
     "quickActions.fieldVisibility": "谁可以使用",
     "quickActions.fieldTarget": "执行者",
     "quickActions.fieldPrompt": "提示词",
-    "quickActions.templateNotSupported": "暂不支持变量，请删除 {{token}}。Agent 本来就能读到这个 issue。",
+    "quickActions.templateNotSupported": "暂不支持变量，请删除 {{token}}。智能体本来就能读到这个任务。",
     "quickActions.deleteTitle": "删除这条快捷操作？",
     "repositories.title": "代码仓库",
     "repositories.add": "添加仓库",

@@ -142,6 +142,32 @@ export function filterProjects(
   });
 }
 
+/**
+ * Header-tap sort transition for the projects compact table (iteration 135),
+ * mirroring the issue table's `nextTableSort`: tapping a NEW column applies
+ * that field's default direction (`PROJECT_SORT_DEFAULT_DIRECTION`), tapping
+ * the ALREADY active column flips. Web exposes the two directions as explicit
+ * menu items on the header; the tap-to-cycle is the touch adaptation of the
+ * same two targets.
+ *
+ * Note the flip reads `currentDirection`, not the field's default: a column
+ * whose default is `desc` and which the user flipped to `asc` must return to
+ * `desc` on the next tap, or every other tap would be inert.
+ */
+export function nextProjectSort(
+  currentField: ProjectSortField,
+  currentDirection: ProjectSortDirection,
+  targetField: ProjectSortField,
+): { field: ProjectSortField; direction: ProjectSortDirection } {
+  if (currentField === targetField) {
+    return {
+      field: targetField,
+      direction: currentDirection === "asc" ? "desc" : "asc",
+    };
+  }
+  return { field: targetField, direction: PROJECT_SORT_DEFAULT_DIRECTION[targetField] };
+}
+
 export function sortProjects(
   projects: Project[],
   field: ProjectSortField,
