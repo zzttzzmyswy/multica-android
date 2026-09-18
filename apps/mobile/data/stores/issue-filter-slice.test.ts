@@ -18,6 +18,8 @@ import {
   createIssueFilterActions,
   defaultIssueFilterSlice,
   hasActiveIssueFilters,
+  propertyIdFromViewKey,
+  propertyViewKey,
   type IssueFilterSlice,
 } from "./issue-filter-slice";
 
@@ -229,6 +231,67 @@ describe("hasActiveIssueFilters", () => {
     });
     expect(hasActiveIssueFilters(store.getState())).toBe(true);
   });
+
+  it("true when only the agents-working filter is on", () => {
+    expect(hasActiveIssueFilters(store.getState())).toBe(false);
+    store.getState().toggleWorkingOnly();
+    expect(hasActiveIssueFilters(store.getState())).toBe(true);
+  });
+});
+
+describe("workingOnly (iteration-127)", () => {
+  let store: ReturnType<typeof makeStore>;
+
+  beforeEach(() => {
+    store = makeStore();
+  });
+
+  it("defaults to off", () => {
+    expect(store.getState().workingOnly).toBe(false);
+  });
+
+  it("toggles both ways", () => {
+    store.getState().toggleWorkingOnly();
+    expect(store.getState().workingOnly).toBe(true);
+    store.getState().toggleWorkingOnly();
+    expect(store.getState().workingOnly).toBe(false);
+  });
+
+  it("is cleared by clearFilters", () => {
+    store.getState().toggleWorkingOnly();
+    store.getState().toggleStatusFilter("todo");
+    store.getState().clearFilters();
+    expect(store.getState().workingOnly).toBe(false);
+    expect(store.getState().statusFilters).toEqual([]);
+  });
+
+  it("survives a saved-view reset (views never carry it)", () => {
+    // `workingOnly` is deliberately absent from IssueFilterSnapshot — running
+    // state is second-to-second, so opening a saved view must not switch it
+    // either way. It just keeps whatever the user had.
+    store.getState().toggleWorkingOnly();
+    store.getState().resetFiltersTo({
+      statusFilters: ["todo"],
+      priorityFilters: [],
+      assigneeFilters: [],
+      includeNoAssignee: false,
+      creatorFilters: [],
+      projectFilters: [],
+      includeNoProject: false,
+      labelFilters: [],
+      propertyFilters: {},
+    });
+    expect(store.getState().workingOnly).toBe(true);
+    expect(store.getState().statusFilters).toEqual(["todo"]);
+  });
+
+  it("is never sent to the server window", () => {
+    // The predicate is client-only: `/api/issues` has no working-agents
+    // parameter, and inventing one would 400 or silently no-op. The window
+    // builder must ignore it.
+    store.getState().toggleWorkingOnly();
+    expect(buildIssueWindow(store.getState())).toEqual({});
+  });
 });
 describe("resetFiltersTo (iteration-65)", () => {
   let store: ReturnType<typeof makeStore>;
@@ -286,5 +349,35 @@ describe("resetFiltersTo (iteration-65)", () => {
       propertyFilters: {},
     });
     expect(store.getState().dateFilter).not.toBeNull();
+  });
+});
+
+/**
+ * Custom-property sort + board grouping keys (iteration 129, MYS-1060).
+ * `property:<id>` is the shared view vocabulary web uses for all three of
+ * filter dimension / sort field / grouping (view-store.ts:20-36,136-143).
+ */
+describe("property view keys (iteration-129)", () => {
+  it("round-trips a definition id", () => {
+    expect(propertyViewKey("est")).toBe("property:est");
+    expect(propertyIdFromViewKey("property:est")).toBe("est");
+  });
+
+  it("returns null for static sort fields and groupings", () => {
+    expect(propertyIdFromViewKey("priority")).toBeNull();
+    expect(propertyIdFromViewKey("assignee")).toBeNull();
+  });
+
+  it("sends the property sort key on the wire but keeps position off it", () => {
+    const withProperty = buildIssueWindow({
+      ...defaultIssueFilterSlice(),
+      sortBy: "property:est",
+      sortDirection: "desc",
+    });
+    expect(withProperty.sort_by).toBe("property:est");
+    expect(withProperty.sort_direction).toBe("desc");
+
+    const manual = buildIssueWindow(defaultIssueFilterSlice());
+    expect(manual.sort_by).toBeUndefined();
   });
 });

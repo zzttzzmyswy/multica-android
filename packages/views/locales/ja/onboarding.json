@@ -121,7 +121,7 @@
   },
   "cli_install": {
     "copy_aria": "コピー",
-    "intro": "エージェントを実行するには、このコンピュータにエージェントランタイム(Claude Code、Codex、Cursor など)が必要です。サーバーやリモート開発環境でも動作します。",
+    "intro": "エージェントを実行するには、このコンピュータにエージェントランタイム（Claude Code、Codex、Cursor など）が必要です。サーバーやリモート開発環境でも動作します。",
     "step1_label": "Multica CLI をインストール",
     "step2_label": "デーモンを起動"
   },
@@ -142,17 +142,17 @@
     "skip": {
       "loading": "ワークスペースを準備中…",
       "title": "Multica へようこそ!",
-      "subtitle": "ランタイム接続を案内するタスクを 1 つ追加しました。準備できたら Runtimes から Mika と始められます。",
+      "subtitle": "ランタイム接続を案内するタスクを 1 つ追加しました。準備できたらランタイムから Mika と始められます。",
       "got_it": "了解",
       "status_in_progress": "進行中",
       "error_title": "準備できませんでした",
-      "error_body": "ランタイム案内のタスクを作成できませんでした。再試行するか、準備ができたら Runtimes からランタイムを接続してください。",
+      "error_body": "ランタイム案内のタスクを作成できませんでした。再試行するか、準備ができたらランタイムページから接続してください。",
       "retry": "再試行",
       "dismiss": "後で",
       "cards": {
         "install_runtime": {
           "title": "ランタイムを接続",
-          "subtitle": "Codex または Kimi をインストールし、Runtimes から Mika の案内チャットを始めてください。"
+          "subtitle": "Codex または Kimi をインストールし、ランタイムから Mika の案内チャットを始めてください。"
         }
       }
     }
@@ -249,7 +249,7 @@
     "runtimes_connected_other": "コンピュータ {{count}} 台を接続済み",
     "live_listening": "ライブ · あなたのコンピュータを待っています",
     "stage_normal_prefix": "上のコマンドを実行してください。 ",
-    "stage_normal_suffix": " のブラウザでのサインインが終わると、コンピュータが自動でここに表示されます(通常 10〜30 秒)。",
+    "stage_normal_suffix": " のブラウザでのサインインが終わると、コンピュータが自動でここに表示されます（通常 10〜30 秒）。",
     "stage_midway_prefix": "まだ待っています。 ",
     "stage_midway_suffix": " が開いたブラウザタブを完了したか確認してください — コンピュータが接続される前にサインインの承認が必要です。",
     "stage_slow_prefix": "いつもより時間がかかっています。 ",

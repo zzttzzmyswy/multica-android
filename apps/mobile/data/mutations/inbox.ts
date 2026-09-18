@@ -29,6 +29,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { InboxItem } from "@multica/core/types";
 import { api } from "@/data/api";
 import { inboxKeys } from "@/data/queries/inbox";
+import { invalidateInboxSummary } from "@/data/realtime/inbox-ws-updaters";
 import { useWorkspaceStore } from "@/data/workspace-store";
 
 export function useMarkInboxRead() {
@@ -89,6 +90,10 @@ export function useMarkInboxUnread() {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: inboxKeys.list(wsId) });
+      // The switcher dot must light again when this workspace goes back to
+      // having unread items — that count lives on the server. Mirrors web's
+      // useMarkInboxUnread (packages/core/inbox/mutations.ts:71).
+      invalidateInboxSummary(qc);
     },
   });
 }
@@ -172,6 +177,10 @@ export function useUnarchiveInbox() {
       // inbox, and the unread tab badge rises again when it was archived
       // unread (that badge derives from the main list cache).
       qc.invalidateQueries({ queryKey: inboxKeys.all(wsId) });
+      // …and so does the cross-workspace switcher dot, which is a server-side
+      // count. Mirrors web's useUnarchiveInbox
+      // (packages/core/inbox/mutations.ts:145).
+      invalidateInboxSummary(qc);
     },
   });
 }
