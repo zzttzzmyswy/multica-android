@@ -53,6 +53,7 @@ import type {
   GitHubInstallation,
   GitHubRepository,
   InboxItem,
+  InboxWorkspaceUnread,
   Invitation,
   Issue,
   IssueLabelsResponse,
@@ -225,6 +226,11 @@ import {
   RuntimeModelListRequestSchema,
   MALFORMED_RUNTIME_MODEL_LIST_REQUEST,
   agentBuilderRuntimeSwitchFallback,
+  // Cross-workspace unread summary. Taken from core rather than mirrored into
+  // data/schemas.ts: core already owns this endpoint's schema for web, and a
+  // second copy is exactly the drift the shared-module rule exists to prevent.
+  InboxUnreadSummarySchema,
+  EMPTY_INBOX_UNREAD_SUMMARY,
 } from "@multica/core/api/schemas";
 import type {
   CreateIssueViewRequest,
@@ -565,7 +571,7 @@ class ApiClient {
       "Content-Type": "application/json",
       "X-Client-Platform": "mobile",
       "X-Client-OS": "ios",
-      "X-Client-Version": "0.5.86",
+      "X-Client-Version": "0.5.87",
       "X-Request-ID": rid,
       ...((init.headers as Record<string, string>) ?? {}),
     };
@@ -903,6 +909,26 @@ class ApiClient {
 
   async markInboxUnread(id: string): Promise<InboxItem> {
     return this.fetch<InboxItem>(`/api/inbox/${id}/unread`, { method: "POST" });
+  }
+
+  // Cross-workspace unread summary — account-level, not workspace-scoped:
+  // one entry per workspace the user belongs to that has unread items. Backs
+  // the workspace-switcher dot for workspaces OTHER than the active one.
+  // Mirrors web's api.getInboxUnreadSummary (packages/core/api/client.ts:2177).
+  // Schema-guarded like listInbox: a contract drift hides the dot instead of
+  // taking down every screen that renders the workspace shell.
+  async getInboxUnreadSummary(opts?: {
+    signal?: AbortSignal;
+  }): Promise<InboxWorkspaceUnread[]> {
+    const raw = await this.fetch<unknown>("/api/inbox/unread-summary", {
+      signal: opts?.signal,
+    });
+    return parseWithFallback(
+      raw,
+      InboxUnreadSummarySchema,
+      EMPTY_INBOX_UNREAD_SUMMARY,
+      { endpoint: "getInboxUnreadSummary" },
+    );
   }
 
   // Archived notifications, backing the inbox's "Archived" sub-view. Capped
@@ -4081,7 +4107,7 @@ class ApiClient {
       // No Content-Type — let fetch set the multipart boundary.
       "X-Client-Platform": "mobile",
       "X-Client-OS": "ios",
-      "X-Client-Version": "0.5.86",
+      "X-Client-Version": "0.5.87",
       "X-Request-ID": rid,
     };
     if (this.token) headers["Authorization"] = `Bearer ${this.token}`;
