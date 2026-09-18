@@ -15,7 +15,7 @@
   },
   "buy": {
     "title": "クレジット購入 / 請求の管理",
-    "no_tiers": "設定された価格 tier がありません。Cloud に Stripe key が設定されていない可能性があり、checkout は 503 を返します。",
+    "no_tiers": "設定された価格ティアがありません。Cloud に Stripe key が設定されていない可能性があり、checkout は 503 を返します。",
     "tier_money_to_credits": "{{money}} → {{credits}} credits",
     "tier_bonus": " + ボーナス {{credits}}",
     "tier_bonus_with_expiry": " + ボーナス {{credits}}（{{expiry}}）",
@@ -36,7 +36,7 @@
     "polling_status": "ステータスを確認中… 現在: {{status}}",
     "status_unknown": "unknown",
     "label_order": "注文",
-    "label_tier": "Tier",
+    "label_tier": "ティア",
     "label_charged": "請求済み",
     "charged_value": "{{money}} · {{credits}} credits",
     "charged_with_bonus": "{{money}} · {{credits}} credits + ボーナス {{bonus}}",
@@ -50,8 +50,8 @@
     "ref_empty": "—"
   },
   "batches": {
-    "title": "クレジット batch",
-    "empty": "batch はまだありません。",
+    "title": "クレジットバッチ",
+    "empty": "バッチはまだありません。",
     "remaining_over_total": "{{remaining}} / {{total}} credits",
     "id_suffix": "{{id}}…",
     "consumed": "使用済み: {{value}} credits",

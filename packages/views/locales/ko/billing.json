@@ -15,7 +15,7 @@
   },
   "buy": {
     "title": "크레딧 구매 / 결제 관리",
-    "no_tiers": "설정된 가격 tier가 없습니다. Cloud에 Stripe key가 설정되지 않았을 수 있으며 checkout은 503을 반환합니다.",
+    "no_tiers": "설정된 가격 티어가 없습니다. Cloud에 Stripe key가 설정되지 않았을 수 있으며 checkout은 503을 반환합니다.",
     "tier_money_to_credits": "{{money}} → {{credits}} credits",
     "tier_bonus": " + 보너스 {{credits}}",
     "tier_bonus_with_expiry": " + 보너스 {{credits}}({{expiry}})",
@@ -36,7 +36,7 @@
     "polling_status": "상태 확인 중… 현재: {{status}}",
     "status_unknown": "unknown",
     "label_order": "주문",
-    "label_tier": "Tier",
+    "label_tier": "티어",
     "label_charged": "결제됨",
     "charged_value": "{{money}} · {{credits}} credits",
     "charged_with_bonus": "{{money}} · {{credits}} credits + 보너스 {{bonus}}",
@@ -50,8 +50,8 @@
     "ref_empty": "—"
   },
   "batches": {
-    "title": "크레딧 batch",
-    "empty": "아직 batch가 없습니다.",
+    "title": "크레딧 배치",
+    "empty": "아직 배치가 없습니다.",
     "remaining_over_total": "{{remaining}} / {{total}} credits",
     "id_suffix": "{{id}}…",
     "consumed": "사용됨: {{value}} credits",

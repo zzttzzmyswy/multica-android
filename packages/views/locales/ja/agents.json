@@ -454,7 +454,7 @@
       "dialog_headers_label": "HTTP ヘッダー",
       "dialog_add_header": "ヘッダーを追加",
       "dialog_remove_header": "ヘッダーを削除",
-      "dialog_native_json_hint": "過去の Provider ネイティブ形式です。形式を変更せず JSON で編集できます。",
+      "dialog_native_json_hint": "過去のプロバイダーネイティブ形式です。形式を変更せず JSON で編集できます。",
       "dialog_json_label": "単一 Server 設定",
       "dialog_json_aria": "MCP Server JSON 設定",
       "dialog_json_object": "Server 設定は JSON オブジェクトである必要があります。",
@@ -483,7 +483,7 @@
       "save_failed_toast": "保存できませんでした。もう一度お試しください",
       "redacted_title": "設定済み — あなたには非表示",
       "redacted_hint": "このエージェントが使用できるアプリを閲覧・変更できるのは作成者のみです。",
-      "shared_warning": "このエージェントは共有されています。このエージェントを実行できる人は、ここで有効化した Composio アプリを利用できます。これらのアプリが機微なデータを扱う場合は、Private にするかアクセス範囲を絞ってください。",
+      "shared_warning": "このエージェントは共有されています。このエージェントを実行できる人は、ここで有効化した Composio アプリを利用できます。これらのアプリが機微なデータを扱う場合は、プライベートにするかアクセス範囲を絞ってください。",
       "workspace_warning": "ワークスペースに公開：ワークスペースの全メンバーがこのエージェントを通じてこれらの Composio アプリを利用できます。"
     },
     "runtime_config": {
@@ -842,7 +842,7 @@
       "runtime_offline": "ランタイムはオフライン",
       "empty_title": "このエージェントに何をさせますか？",
       "empty_description": "役割、ワークフロー、出力、制約を説明してください。右側に最初の下書きが表示されます。",
-      "prompt_review": "フロントエンドの Pull Request をレビュー",
+      "prompt_review": "フロントエンドの Pull request をレビュー",
       "prompt_research": "競合を調査して結果を要約",
       "prompt_assistant": "チームのプロジェクト計画と文章作成を支援",
       "thinking": "下書きを更新中…",

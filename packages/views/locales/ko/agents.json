@@ -462,7 +462,7 @@
       "dialog_headers_label": "HTTP 헤더",
       "dialog_add_header": "헤더 추가",
       "dialog_remove_header": "헤더 제거",
-      "dialog_native_json_hint": "기존 Provider 네이티브 형식입니다. 형식을 변경하지 않고 JSON으로 편집할 수 있습니다.",
+      "dialog_native_json_hint": "기존 제공자 네이티브 형식입니다. 형식을 변경하지 않고 JSON으로 편집할 수 있습니다.",
       "dialog_json_label": "단일 Server 설정",
       "dialog_json_aria": "MCP Server JSON 설정",
       "dialog_json_object": "Server 설정은 JSON 객체여야 합니다.",
@@ -491,7 +491,7 @@
       "save_failed_toast": "저장하지 못했습니다. 다시 시도하세요",
       "redacted_title": "설정됨 — 보기에서 숨김",
       "redacted_hint": "이 에이전트가 사용할 수 있는 앱은 생성자만 보거나 변경할 수 있습니다.",
-      "shared_warning": "이 에이전트는 공유되어 있습니다. 이 에이전트를 실행할 수 있는 사람은 여기서 활성화한 Composio 앱을 사용할 수 있습니다. 이러한 앱이 민감한 데이터를 노출한다면 Private로 설정하거나 접근 범위를 좁히세요.",
+      "shared_warning": "이 에이전트는 공유되어 있습니다. 이 에이전트를 실행할 수 있는 사람은 여기서 활성화한 Composio 앱을 사용할 수 있습니다. 이러한 앱이 민감한 데이터를 노출한다면 비공개로 설정하거나 접근 범위를 좁히세요.",
       "workspace_warning": "워크스페이스에 공개: 워크스페이스의 모든 멤버가 이 에이전트를 통해 이러한 Composio 앱을 사용할 수 있습니다."
     },
     "runtime_config": {
@@ -842,7 +842,7 @@
       "runtime_offline": "런타임 오프라인",
       "empty_title": "이 에이전트는 무엇을 해야 하나요?",
       "empty_description": "역할, 작업 흐름, 출력 또는 제약 사항을 설명하세요. 오른쪽에 첫 초안이 표시됩니다.",
-      "prompt_review": "프런트엔드 Pull Request 검토",
+      "prompt_review": "프런트엔드 Pull request 검토",
       "prompt_research": "경쟁사를 조사하고 결과 요약",
       "prompt_assistant": "팀의 프로젝트 계획과 작성 지원",
       "thinking": "초안 업데이트 중…",
