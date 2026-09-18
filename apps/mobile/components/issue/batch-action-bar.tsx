@@ -43,6 +43,7 @@ import {
 } from "@/components/issue/pickers/assignee-picker-body";
 import { StatusPickerBody } from "@/components/issue/pickers/status-picker-body";
 import { PriorityPickerBody } from "@/components/issue/pickers/priority-picker-body";
+import { PickerSheet } from "@/components/issue/pickers/picker-sheet";
 import { useBatchUpdateIssues, useBatchDeleteIssues } from "@/data/mutations/issues";
 import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection-store";
 import { commonIssueFields, needRunConfirm } from "@/lib/batch-issues";
@@ -355,6 +356,9 @@ export function BatchActionBar({ issues }: Props) {
         title={t("batch.pickAssigneeTitle")}
         visible={assigneeOpen}
         onClose={() => setAssigneeOpen(false)}
+        // AssigneePickerBody's root is a `flex-1` FlatList, which needs a
+        // definite height from the sheet (see picker-sheet.tsx).
+        fill
       >
         <AssigneePickerBody
           value={
@@ -432,47 +436,6 @@ function BarButton({
         {label}
       </Text>
     </Button>
-  );
-}
-
-/** Bottom-sheet host for the shared picker bodies. */
-function PickerSheet({
-  title,
-  visible,
-  onClose,
-  children,
-}: {
-  title: string;
-  visible: boolean;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <Pressable className="flex-1 bg-black/40" onPress={onClose}>
-        <View className="flex-1 justify-end">
-          <Pressable onPress={() => {}} className="bg-popover rounded-t-2xl max-h-[70%]">
-            <View className="px-4 py-3 border-b border-border flex-row items-center justify-between">
-              <Text className="text-base font-semibold text-foreground">
-                {title}
-              </Text>
-              <Pressable onPress={onClose} hitSlop={8}>
-                <Ionicons name="close" size={20} color="currentColor" />
-              </Pressable>
-            </View>
-            {/* Picker bodies render their own scrolling container
-                (Status/Priority: ScrollView, Assignee: FlatList) — no
-                nested scroll here. */}
-            <View className="max-h-[60%]">{children}</View>
-          </Pressable>
-        </View>
-      </Pressable>
-    </Modal>
   );
 }
 

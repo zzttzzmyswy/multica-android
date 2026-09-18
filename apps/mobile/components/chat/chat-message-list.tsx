@@ -58,6 +58,7 @@ import type {
   TaskMessagePayload,
 } from "@multica/core/types";
 import type { AgentAvailability } from "@multica/core/agents";
+import { prepareTaskMessages } from "@multica/core/task-transcript";
 import { taskMessagesOptions } from "@/data/queries/chat";
 import { Text } from "@/components/ui/text";
 import { Markdown } from "@/lib/markdown";
@@ -205,6 +206,16 @@ export const ChatMessageList = memo(function ChatMessageList({
     listRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, []);
 
+  // The live trace, merged and masked the way web's `buildTimeline` prepares
+  // it: the daemon splits one `thinking` block across several flush-timed
+  // messages, so the raw stream would count one step per flush and show
+  // secrets web masks. StatusPill keeps the raw stream — it reads the last
+  // message's type, not a step count.
+  const liveTimeline = useMemo(
+    () => prepareTaskMessages(liveTaskMessages ?? []),
+    [liveTaskMessages],
+  );
+
   // Stable renderItem identity so memoized cell components actually skip
   // re-renders when a sibling bubble updates. `sessionTitle` changes only
   // across sessions (string), `onQuickAction` is already a stable ref from
@@ -298,7 +309,7 @@ export const ChatMessageList = memo(function ChatMessageList({
         showLiveSection ? (
           <View style={{ paddingTop: 12 }} className="gap-2">
             {showLiveTimeline ? (
-              <ChatTimeline items={liveTaskMessages ?? []} isStreaming />
+              <ChatTimeline items={liveTimeline} isStreaming />
             ) : null}
             <StatusPill
               pendingTask={pendingTask}
@@ -480,6 +491,12 @@ function AssistantRow({
   const { data: timeline = [] } = useQuery(
     taskMessagesOptions(message.task_id),
   );
+  // Same preparation as the live trace: one row per logical step, secrets
+  // masked (web's `buildTimeline` step in chat-message-list.tsx).
+  const timelineItems = useMemo(
+    () => prepareTaskMessages(timeline),
+    [timeline],
+  );
   // no_response (MUL-4351, mirrors packages/views AssistantMessage): the agent
   // completed this turn without text. Keep the tool timeline and show a notice
   // instead of an empty Markdown block; caption reads "Finished in" not
@@ -487,8 +504,8 @@ function AssistantRow({
   const isNoResponse = message.message_kind === "no_response";
   const body = (
     <View className="gap-1.5">
-      {timeline.length > 0 ? (
-        <ChatTimeline items={timeline} />
+      {timelineItems.length > 0 ? (
+        <ChatTimeline items={timelineItems} />
       ) : null}
       {isNoResponse ? (
         <Text className="text-sm italic text-muted-foreground">

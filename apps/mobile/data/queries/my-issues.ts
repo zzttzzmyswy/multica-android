@@ -1,6 +1,10 @@
 /**
- * "My Issues" list, server-filtered by scope. Mirrors the three scopes web
- * exposes in `packages/views/my-issues/components/my-issues-page.tsx:48-65`:
+ * "My Issues" list, server-filtered by scope. Mirrors the scopes web exposes
+ * in `packages/views/my-issues/components/my-issues-header.tsx:89-94`:
+ *   - all:      every issue in the workspace (no relation param at all) —
+ *               web's `case "all"` in core's surface/query-plan.ts:52-55
+ *               returns an empty `queryFilter`, so the list is the plain
+ *               workspace list
  *   - assigned: issues where assignee_id = me
  *   - created:  issues where creator_id  = me
  *   - agents:   issues where the assignee is an *indirect* extension of me —
@@ -23,8 +27,14 @@
  * future WS handler can invalidate `issueKeys.myAll(wsId)` and reach both
  * clients.
  */
-import { queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions } from "@tanstack/react-query";
+import type { Issue } from "@multica/core/types";
 import { api } from "@/data/api";
+import {
+  ISSUE_PAGE_SIZE,
+  makeIssuePage,
+  nextIssuePageParam,
+} from "@/lib/issue-pagination";
 import {
   issueKeys,
   issueParamsKey,
@@ -38,6 +48,13 @@ export function buildMyIssuesFilter(
   userId: string,
 ): MyIssuesFilter {
   switch (scope) {
+    case "all":
+      // The list surface does NOT use this — see `myIssuesAllOptions`, which
+      // scatter-gathers the three legs because the API ANDs its params. This
+      // empty filter is what the GANTT projection asks for, mirroring web's
+      // `case "all": return { queryFilter: {} }`
+      // (packages/core/issues/surface/query-plan.ts:52-55).
+      return {};
     case "assigned":
       return { assignee_id: userId };
     case "created":
@@ -80,12 +97,100 @@ export const myIssueListOptions = (
   // the historical key shape so mention-suggestion + realtime share it.
   const suffix = myWindowSuffix(window);
   if (suffix) key.push(suffix);
-  return queryOptions({
+  return infiniteQueryOptions({
     queryKey: key,
-    queryFn: async ({ signal }) => {
-      const res = await api.listIssues({ ...filter, ...window }, { signal });
-      return res.issues;
+    queryFn: async ({ pageParam, signal }) => {
+      const res = await api.listIssues(
+        { ...filter, ...window, limit: ISSUE_PAGE_SIZE, offset: pageParam },
+        { signal },
+      );
+      return makeIssuePage(res.issues, res.total);
     },
+    initialPageParam: 0,
+    getNextPageParam: (_lastPage, allPages) => nextIssuePageParam(allPages),
     enabled: !!wsId,
+  });
+};
+
+/**
+ * The `all` scope — the UNION of assigned / created / involved, per web's
+ * `all_description` ("Assigned to me, created by me, or involving my agents
+ * and squads", my-issues-header.tsx:90) and core's `my:all` membership rule
+ * (packages/core/issues/surface/membership.ts:59-63).
+ *
+ * The legacy list API ANDs its params, so a three-way union is not one
+ * request. Web gets away with `queryFilter: {}` only because its list rows
+ * come from the server-owned Table channel; mobile's entire list surface IS
+ * this API, and `{}` here means "the whole workspace" (measured: 1020 rows
+ * against 3 assigned / 12 created / 942 involved) — not "mine".
+ *
+ * So: one page from each leg in parallel, merged and deduped by id (an issue
+ * the user created can also be assigned to them). `fetched` deliberately sums
+ * the legs' SERVER row counts, not the deduped length, because the next
+ * offset indexes each leg's own window — see `IssuePage.fetched`. That also
+ * keeps `nextIssuePageParam`'s `fetched < total` test correct: each leg's
+ * fetched reaches its own total exactly when it runs dry, so the sum does
+ * too. `total` is the summed (possibly overlap-inflated) bound; the footer's
+ * "no more" decision rides on `fetched`, not on it.
+ */
+export const myIssuesAllOptions = (
+  wsId: string | null,
+  userId: string | null,
+  window: IssueListWindowParams = {},
+) => {
+  const key = [...issueKeys.myList(wsId, "all", {})];
+  const suffix = myWindowSuffix(window);
+  if (suffix) key.push(suffix);
+  return infiniteQueryOptions({
+    queryKey: key,
+    queryFn: async ({ pageParam, signal }) => {
+      const legs = await Promise.all([
+        api.listIssues(
+          {
+            assignee_id: userId as string,
+            ...window,
+            limit: ISSUE_PAGE_SIZE,
+            offset: pageParam,
+          },
+          { signal },
+        ),
+        api.listIssues(
+          {
+            creator_id: userId as string,
+            ...window,
+            limit: ISSUE_PAGE_SIZE,
+            offset: pageParam,
+          },
+          { signal },
+        ),
+        api.listIssues(
+          {
+            involves_user_id: userId as string,
+            ...window,
+            limit: ISSUE_PAGE_SIZE,
+            offset: pageParam,
+          },
+          { signal },
+        ),
+      ]);
+
+      const seen = new Set<string>();
+      const merged: Issue[] = [];
+      for (const leg of legs) {
+        for (const issue of leg.issues) {
+          if (seen.has(issue.id)) continue;
+          seen.add(issue.id);
+          merged.push(issue);
+        }
+      }
+      return {
+        issues: merged,
+        total: legs.reduce((n, leg) => n + leg.total, 0),
+        fetched: legs.reduce((n, leg) => n + leg.issues.length, 0),
+      };
+    },
+    initialPageParam: 0,
+    getNextPageParam: (_lastPage, allPages) => nextIssuePageParam(allPages),
+    enabled: !!wsId && !!userId,
   });
 };

@@ -1,35 +1,15 @@
 /**
- * Mirror of the BOARD_STATUSES order + status labels from
- * packages/core/issues/config/status.ts.
+ * Localized status / priority labels for mobile.
  *
- * Mirrored, not imported: the source file co-exports `STATUS_CONFIG` with
- * web colour tokens (Tailwind v4 syntax) that mobile must not pull in.
- * Keeping this list owned by mobile keeps the import boundary clean.
- *
- * If web ever reorders BOARD_STATUSES or adds/removes a status, this file
- * must be updated to keep the "Counts and visibility must agree" rule
- * (apps/mobile/CLAUDE.md) intact.
+ * The board column order that used to live here now lives in
+ * `./issue-status-core` — a module with no i18n/expo import, so the vitest
+ * lane can compare the real constant against
+ * `packages/core/issues/config/status`'s `STATUS_ORDER` instead of inlining a
+ * copy that drifts. Consumers import it from there directly, so there is no
+ * re-export here to fall out of step with it.
  */
-import type { IssuePriority, IssueStatus, IssueStatusCategory } from "@multica/core/types";
+import type { IssuePriority, IssueStatus } from "@multica/core/types";
 import { translate } from "./i18n";
-
-/**
- * Statuses surfaced in list/board views (matches web — `cancelled` excluded).
- *
- * Board columns / list sections are CATEGORIES, not status keys (MUL-6243):
- * a workspace may define any number of custom statuses, but every one folds
- * into one of these columns via its category. `groupIssues` mirrors this by
- * bucketing through the catalog's category resolver before mapping onto this
- * order.
- */
-export const BOARD_STATUSES: IssueStatusCategory[] = [
-  "backlog",
-  "todo",
-  "in_progress",
-  "in_review",
-  "done",
-  "blocked",
-];
 
 export const STATUS_LABEL: Record<IssueStatus, string> = {
   backlog: "Backlog",
