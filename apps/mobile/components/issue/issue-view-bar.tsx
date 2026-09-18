@@ -205,6 +205,7 @@ export function IssueViewBar({
           grouping: slice.grouping,
           sortBy: slice.sortBy,
           sortDirection,
+          showSubIssues: slice.showSubIssues,
         }),
       },
       {

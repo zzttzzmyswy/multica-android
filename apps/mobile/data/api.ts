@@ -20,6 +20,7 @@ import type {
   AgentBuilderSession,
   AgentBuilderSessionSummary,
   AgentEnvResponse,
+  AgentRunCount,
   AgentTask,
   Attachment,
   Autopilot,
@@ -60,6 +61,8 @@ import type {
   IssueProperty,
   IssuePropertyValue,
   IssueSubscriber,
+  IssueTableGroupsRequest,
+  IssueTableGroupsResponse,
   Label,
   LabelResourceType,
   IssueReaction,
@@ -99,6 +102,7 @@ import type {
   RuntimeProfile,
   RuntimeUsage,
   RuntimeUsageByAgent,
+  RuntimeModelListRequest,
   CreateRuntimeProfileRequest,
   UpdateRuntimeProfileRequest,
   DashboardAgentRunTime,
@@ -115,6 +119,8 @@ import type {
   RuntimeLocalSkillListRequest,
   RuntimeLocalSkillsResult,
   RuntimeLocalSkillSummary,
+  CreateRuntimeLocalSkillImportRequest,
+  RuntimeLocalSkillImportRequest,
   DisabledRuntimeSkill,
   Skill,
   SkillSummary,
@@ -141,6 +147,7 @@ import type {
   UpdateLabelRequest,
   UpdateMeRequest,
   UpdateProjectRequest,
+  UpdateProjectResourceRequest,
   UpdatePropertyRequest,
   UpdateIssueStatusRequest,
   IssueStatusCategory,
@@ -184,6 +191,7 @@ import {
   EMPTY_LIST_AUTOPILOTS_RESPONSE,
   EMPTY_LIST_GITHUB_INSTALLATIONS_RESPONSE,
   EMPTY_LIST_GITHUB_REPOSITORIES_RESPONSE,
+  EMPTY_ISSUE_TABLE_GROUPS_RESPONSE,
   EMPTY_LIST_ISSUES_RESPONSE,
   EMPTY_LIST_PROPERTIES_RESPONSE,
   EMPTY_LIST_QUICK_ACTIONS_RESPONSE,
@@ -197,6 +205,7 @@ import {
   IssuePropertiesResponseSchema,
   IssuePropertySchema,
   IssueSchema,
+  IssueTableGroupsResponseSchema,
   IssueViewListSchema,
   IssueViewPreferenceSchema,
   IssueViewSchema,
@@ -213,6 +222,8 @@ import {
   WorkspaceSubscriptionPricesSchema,
   WorkspaceSubscriptionSeatReconcileResultSchema,
   WorkspaceSubscriptionSummarySchema,
+  RuntimeModelListRequestSchema,
+  MALFORMED_RUNTIME_MODEL_LIST_REQUEST,
   agentBuilderRuntimeSwitchFallback,
 } from "@multica/core/api/schemas";
 import type {
@@ -380,6 +391,8 @@ import {
   EMPTY_APP_CONFIG,
   AgentActivityBucketListSchema,
   EMPTY_AGENT_ACTIVITY_BUCKET_LIST,
+  AgentRunCountListSchema,
+  EMPTY_AGENT_RUN_COUNT_LIST,
   CreateFeedbackResponseSchema,
   EMPTY_FEEDBACK_RESPONSE,
   CommentTriggerPreviewSchema,
@@ -552,7 +565,7 @@ class ApiClient {
       "Content-Type": "application/json",
       "X-Client-Platform": "mobile",
       "X-Client-OS": "ios",
-      "X-Client-Version": "0.1.0",
+      "X-Client-Version": "0.5.83",
       "X-Request-ID": rid,
       ...((init.headers as Record<string, string>) ?? {}),
     };
@@ -617,7 +630,19 @@ class ApiClient {
           undefined,
         );
       }
-      throw err;
+      // A caller-side abort is a deliberate cancellation, not a failure —
+      // propagate it untouched so query cancellation keeps its semantics.
+      if (callerSignal?.aborted) throw err;
+      // Everything else here is RN's fetch rejecting before any response
+      // existed (offline, DNS failure, TLS refusal, unreachable host).
+      // Normalise it to status 0 so callers get one shape for "the request
+      // never reached a server", matching the timeout above and letting
+      // lib/auth-error classify it as a connection failure.
+      console.warn(`[api] ← NETWORK FAIL ${path}`, {
+        rid,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw new ApiError("Network request failed", 0, undefined);
     }
     clearTimeout(timeoutId);
     callerSignal?.removeEventListener("abort", onCallerAbort);
@@ -1197,6 +1222,31 @@ class ApiClient {
     );
   }
 
+  // Runtime local-skill IMPORT (web core runtimes/local-skills.ts:56-93).
+  // Same POST-then-poll shape as discovery, but a much longer budget: old
+  // daemons pop one queued import per heartbeat (~15s), so a batch's tail can
+  // wait minutes before it is even claimed. The server-side invariant is that
+  // this budget must exceed runtimeLocalSkillPendingTimeout +
+  // runtimeLocalSkillRunningTimeout.
+  async initiateImportLocalSkill(
+    runtimeId: string,
+    data: CreateRuntimeLocalSkillImportRequest,
+  ): Promise<RuntimeLocalSkillImportRequest> {
+    return this.fetch<RuntimeLocalSkillImportRequest>(
+      `/api/runtimes/${runtimeId}/local-skills/import`,
+      { method: "POST", body: JSON.stringify(data) },
+    );
+  }
+
+  async getImportLocalSkillResult(
+    runtimeId: string,
+    requestId: string,
+  ): Promise<RuntimeLocalSkillImportRequest> {
+    return this.fetch<RuntimeLocalSkillImportRequest>(
+      `/api/runtimes/${runtimeId}/local-skills/import/${requestId}`,
+    );
+  }
+
   // Agent-builders: creation conversations (web Creation Studio). Mirrors
   // packages/core/api/client.ts:1262-1339. The first POST creates the hidden
   // carrier session; GET lists the caller's unfinished ones (404 on an older
@@ -1271,6 +1321,46 @@ class ApiClient {
     return parseWithFallback(raw, RuntimeListSchema, EMPTY_RUNTIME_LIST, {
       endpoint: "listRuntimes",
     });
+  }
+
+  // Runtime model discovery (iteration-121 agent-create model picker).
+  // Mirrors packages/core/api/client.ts initiateListModels/getListModelsResult:
+  // POST kicks the daemon (heartbeat piggyback), GET /:requestId polls the
+  // record; the state machine itself lives in lib/runtime-models-poll.ts.
+  // A drift response degrades to the MALFORMED record (status "failed"),
+  // which the form surfaces as discovery-failure + manual entry instead of a
+  // fabricated empty catalog.
+  async initiateListModels(
+    runtimeId: string,
+  ): Promise<RuntimeModelListRequest> {
+    const raw = await this.fetch<unknown>(`/api/runtimes/${runtimeId}/models`, {
+      method: "POST",
+    });
+    return parseWithFallback<RuntimeModelListRequest>(
+      raw,
+      RuntimeModelListRequestSchema,
+      { ...MALFORMED_RUNTIME_MODEL_LIST_REQUEST, runtime_id: runtimeId },
+      { endpoint: "POST /api/runtimes/{id}/models" },
+    );
+  }
+
+  async getListModelsResult(
+    runtimeId: string,
+    requestId: string,
+  ): Promise<RuntimeModelListRequest> {
+    const raw = await this.fetch<unknown>(
+      `/api/runtimes/${runtimeId}/models/${requestId}`,
+    );
+    return parseWithFallback<RuntimeModelListRequest>(
+      raw,
+      RuntimeModelListRequestSchema,
+      {
+        ...MALFORMED_RUNTIME_MODEL_LIST_REQUEST,
+        id: requestId,
+        runtime_id: runtimeId,
+      },
+      { endpoint: "GET /api/runtimes/{id}/models/{requestId}" },
+    );
   }
 
   // Runtime-level usage rollups (iteration-93 runtime detail usage section).
@@ -1619,6 +1709,18 @@ class ApiClient {
       GitHubConnectResponseSchema,
       EMPTY_GITHUB_CONNECT_RESPONSE,
       { endpoint: "getGitHubConnectURL" },
+    );
+  }
+
+  /** Revoke a GitHub App installation — mirrors web's
+   *  `api.deleteGitHubInstallation` (packages/core/api/client.ts:3723). */
+  async deleteGitHubInstallation(
+    workspaceId: string,
+    installationId: string,
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/workspaces/${workspaceId}/github/installations/${installationId}`,
+      { method: "DELETE" },
     );
   }
 
@@ -2072,6 +2174,23 @@ class ApiClient {
     );
   }
 
+  // Workspace-wide 30-day run count per agent — the number the agents list
+  // sorts on when ordered by RUNS, and the one web's RUNS column shows
+  // (web parity: getWorkspaceAgentRunCounts, core/api/client.ts:2102).
+  async getWorkspaceAgentRunCounts(opts?: {
+    signal?: AbortSignal;
+  }): Promise<AgentRunCount[]> {
+    const raw = await this.fetch<unknown>("/api/agent-run-counts", {
+      signal: opts?.signal,
+    });
+    return parseWithFallback(
+      raw,
+      AgentRunCountListSchema,
+      EMPTY_AGENT_RUN_COUNT_LIST,
+      { endpoint: "getWorkspaceAgentRunCounts" },
+    );
+  }
+
   /** Full task history for one agent (GET /api/agents/:id/tasks) — the
    *  web Agent-activity "Recent work" list source. Mirrors web
    *  `api.listAgentTasks` (packages/core/api/client.ts). Backend route at
@@ -2258,6 +2377,25 @@ class ApiClient {
     return parseWithFallback(raw, ListIssuesResponseSchema, EMPTY_LIST_ISSUES_RESPONSE, {
       endpoint: "GET /api/issues",
     });
+  }
+
+  /**
+   * Server-side grouping for the issue Table: one descriptor per group with
+   * the count over the COMPLETE result set, not just the window the client
+   * has paged in (see `lib/issue-table-group-counts.ts`). Same contract as
+   * web's `client.listIssueTableGroups`.
+   */
+  async listIssueTableGroups(
+    request: IssueTableGroupsRequest,
+    opts?: { signal?: AbortSignal },
+  ): Promise<IssueTableGroupsResponse> {
+    return this.fetchValidatedWith(
+      "/api/issues/table/groups",
+      IssueTableGroupsResponseSchema,
+      EMPTY_ISSUE_TABLE_GROUPS_RESPONSE,
+      { method: "POST", body: JSON.stringify(request) },
+      { ...opts, endpoint: "POST /api/issues/table/groups" },
+    );
   }
 
   /** Workspace-wide issue search. Backend `GET /api/issues/search` with
@@ -3045,6 +3183,19 @@ class ApiClient {
     });
   }
 
+  // Imports a published skill from a URL (ClawHub / Skills.sh / GitHub).
+  // The server does the fetching and the source detection; the client only
+  // supplies a non-empty URL (web api.importSkill).
+  async importSkill(data: { url: string }): Promise<Skill> {
+    const raw = await this.fetch<unknown>("/api/skills/import", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return parseWithFallback(raw, SkillSchema, EMPTY_SKILL, {
+      endpoint: "POST /api/skills/import",
+    });
+  }
+
   async updateSkill(id: string, body: UpdateSkillRequest): Promise<Skill> {
     const raw = await this.fetch<unknown>(`/api/skills/${id}`, {
       method: "PUT",
@@ -3311,6 +3462,25 @@ class ApiClient {
     );
   }
 
+  /**
+   * Edit a mounted resource. Only the fields present in `data` change — the
+   * server replaces a supplied `resource_ref` wholesale rather than
+   * deep-merging it (server/internal/handler/project_resource.go:60), so a
+   * caller editing one ref field must spread the rest of the ref in.
+   *
+   * Mirrors packages/core/api/client.ts:3062 updateProjectResource.
+   */
+  async updateProjectResource(
+    projectId: string,
+    resourceId: string,
+    data: UpdateProjectResourceRequest,
+  ): Promise<ProjectResource> {
+    return this.fetch<ProjectResource>(
+      `/api/projects/${projectId}/resources/${resourceId}`,
+      { method: "PUT", body: JSON.stringify(data) },
+    );
+  }
+
   // --- Chat ---
   // Mirrors the surface area of packages/core/api/client.ts chat methods.
   // v1 omits getChatSession + updateChatSession (rename) — see the v1 cut
@@ -3359,13 +3529,14 @@ class ApiClient {
     await this.fetch<void>(`/api/chat/sessions/${id}`, { method: "DELETE" });
   }
 
-  /** PATCH /api/chat/sessions/:id — rename a session (title only; the web
-   *  build also patches project_id, which mobile never edits). Mirrors
-   *  packages/core/api/client.ts updateChatSession, restored for MYS-409
-   *  after the v1 cut dropped it. */
+  /** PATCH /api/chat/sessions/:id — rename a session (title) or rebind its
+   *  durable project context (`project_id`, null clears it). Same union shape
+   *  as web's packages/core/api/client.ts updateChatSession; the project arm
+   *  backs the composer's clearable project chip. Restored for MYS-409 after
+   *  the v1 cut dropped the method. */
   async updateChatSession(
     id: string,
-    data: { title: string },
+    data: { title: string } | { project_id: string | null },
   ): Promise<ChatSession> {
     return this.fetch<ChatSession>(`/api/chat/sessions/${id}`, {
       method: "PATCH",
@@ -3910,7 +4081,7 @@ class ApiClient {
       // No Content-Type — let fetch set the multipart boundary.
       "X-Client-Platform": "mobile",
       "X-Client-OS": "ios",
-      "X-Client-Version": "0.1.0",
+      "X-Client-Version": "0.5.83",
       "X-Request-ID": rid,
     };
     if (this.token) headers["Authorization"] = `Bearer ${this.token}`;

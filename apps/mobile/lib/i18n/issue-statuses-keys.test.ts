@@ -27,10 +27,10 @@ describe("issue statuses management i18n", () => {
   });
 
   const ZH_SPOT: Record<string, string> = {
-    "settings.issueStatusesTitle": "自定义状态",
-    "settings.issueStatusesSubtitle": "管理工作区自定义 issue 状态",
-    "settings.statuses.description": "状态决定 issue 生命周期在面板上的呈现。7 个内置状态不可修改；管理员可以添加自定义状态，每个自定义状态完整继承其所属类别的平台行为。",
-    "settings.statuses.flagOff": "此服务器未开启自定义状态功能。",
+    "settings.issueStatusesTitle": "任务状态",
+    "settings.issueStatusesSubtitle": "管理工作区自定义任务状态",
+    "settings.statuses.description": "状态决定任务生命周期在面板上的呈现。7 个内置状态不可修改；管理员可以添加自定义状态，每个自定义状态完整继承其所属类别的平台行为。",
+    "settings.statuses.flagOff": "此服务器未开启自定义任务状态功能。",
     "settings.statuses.add": "新建状态",
     "settings.statuses.builtInLocked": "内置状态",
     "settings.statuses.archivedBadge": "已归档",
@@ -39,7 +39,7 @@ describe("issue statuses management i18n", () => {
     "settings.statuses.actions.moveUp": "上移",
     "settings.statuses.actions.moveDown": "下移",
     "settings.statuses.archiveTitle": "归档此状态？",
-    "settings.statuses.archiveMessage": "已分配到此状态的问题会保留该状态并继续按所属类别行为；新的分配会被拒绝。",
+    "settings.statuses.archiveMessage": "已分配到此状态的任务会保留该状态并继续按所属类别行为；新的分配会被拒绝。",
     "settings.statuses.editor.titleCreate": "新建自定义状态",
     "settings.statuses.editor.titleEdit": "编辑状态",
     "settings.statuses.editor.name": "名称",
