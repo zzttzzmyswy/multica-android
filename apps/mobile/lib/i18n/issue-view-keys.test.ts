@@ -29,7 +29,7 @@ describe("issue list/board view i18n", () => {
   const ZH_SPOT: Record<string, string> = {
     "issues.viewList": "列表",
     "issues.viewBoard": "看板",
-    "issues.boardEmptyColumn": "无问题",
+    "issues.boardEmptyColumn": "无任务",
     "issues.cardDue": "截止",
     "issues.cardStart": "开始",
     "a11y.viewList": "列表视图",

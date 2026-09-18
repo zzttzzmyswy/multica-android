@@ -68,6 +68,7 @@ import {
   type SlashCommandItem,
 } from "@/lib/slash-command";
 import { useColorScheme } from "@/lib/use-color-scheme";
+import { composerCanSubmit, composerSubmitMode } from "@/lib/composer-submit";
 import { stripMarkdown } from "@/lib/strip-markdown";
 import { THEME } from "@/lib/theme";
 import { Text } from "@/components/ui/text";
@@ -132,6 +133,14 @@ interface Props {
    *  this to show a Stop affordance while the agent is running. */
   isSending?: boolean;
   renderStop?: () => ReactNode;
+
+  /** Mirror of web `chat-input.tsx`'s `allowSubmitWhileRunning`
+   *  (`pendingTask.supports_queue === true`). When the in-flight run accepts
+   *  follow-ups, the one trailing slot swaps Stop → "Queue message" as soon
+   *  as the composer holds content, so a follow-up can be enqueued without
+   *  cancelling the current turn. Empty composer / in-flight upload keep
+   *  Stop, and so does any run that does not declare queue support. */
+  allowSubmitWhileRunning?: boolean;
 
   /** Hard-disable. Used when chat has no usable agent. The pill shows
    *  `disabledReason` instead of `pillLabel`, and the pill is
@@ -221,6 +230,7 @@ export function MessageComposer({
   expandTrigger,
   isSending = false,
   renderStop,
+  allowSubmitWhileRunning = false,
   disabled = false,
   disabledReason,
   manageKeyboard = true,
@@ -405,12 +415,22 @@ export function MessageComposer({
   }
 
   const hasInFlightUpload = attachments.some((a) => a.status === "uploading");
-  const canSend =
-    !disabled &&
-    !isSending &&
-    !submitting &&
-    !hasInFlightUpload &&
-    (text.trim().length > 0 || mentions.length > 0);
+  const hasContent = text.trim().length > 0 || mentions.length > 0;
+  // One trailing slot, three possible actions — web chat-input.tsx's rule.
+  const submitMode = composerSubmitMode({
+    isRunning: isSending && !!renderStop,
+    queueSendEnabled: allowSubmitWhileRunning,
+    hasContent,
+    uploading: hasInFlightUpload,
+  });
+  const canSend = composerCanSubmit({
+    disabled,
+    submitting,
+    uploading: hasInFlightUpload,
+    hasContent,
+    isRunning: isSending,
+    queueSendEnabled: allowSubmitWhileRunning,
+  });
 
   const expand = useCallback(() => {
     if (disabled) return;
@@ -824,7 +844,7 @@ export function MessageComposer({
             className="h-8 w-8"
           />
           <View className="flex-1" />
-          {isSending && renderStop ? (
+          {submitMode === "stop" && renderStop ? (
             renderStop()
           ) : (
             <IconButton
@@ -836,7 +856,11 @@ export function MessageComposer({
               disabled={!canSend}
               hitSlop={12}
               className="h-8 w-8 rounded-full"
-              accessibilityLabel={t("a11y.send")}
+              accessibilityLabel={
+                submitMode === "queue-send"
+                  ? t("a11y.queueSend")
+                  : t("a11y.send")
+              }
               accessibilityState={{ disabled: !canSend }}
             />
           )}

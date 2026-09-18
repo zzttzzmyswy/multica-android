@@ -43,6 +43,95 @@ export type TableSystemColumn =
 /** A visible column key — a system column or a custom-property column. */
 export type TableColumnKey = TableSystemColumn | `property:${string}`;
 
+/** Per-column width overrides, keyed by column key. Sparse on purpose: an
+ *  absent key means "still at the default", so a system default can change
+ *  without stranding every column the user never touched. */
+export type TableColumnWidths = Partial<Record<TableColumnKey, number>>;
+
+/** Floor / ceiling for a dragged column. The floor keeps a header legible
+ *  (and its resize handle reachable); the ceiling stops one column from
+ *  pushing every other column out of the horizontal scroller. */
+export const COLUMN_WIDTH_MIN = 64;
+export const COLUMN_WIDTH_MAX = 360;
+
+/** Default widths for the system columns the phone renders. Mirrors the
+ *  `COLUMN_WIDTHS` table the table view carried before iteration 134 — the
+ *  values moved here so the slice, the table and its tests share one source.
+ *  `title` is absent: the title column is pinned, not part of the scroller. */
+export const DEFAULT_COLUMN_WIDTHS: Record<
+  Exclude<TableSystemColumn, "title">,
+  number
+> = {
+  identifier: 84,
+  status: 104,
+  priority: 88,
+  assignee: 132,
+  labels: 140,
+  project: 132,
+  start_date: 100,
+  due_date: 88,
+  created_at: 104,
+  updated_at: 104,
+  creator: 132,
+};
+
+/** Width for a property (non-system) column and for any unknown key. */
+export const PROPERTY_COLUMN_WIDTH = 132;
+
+/** Shared with the projects compact table (`project-table-columns.ts`), which
+ *  reuses the same floor / ceiling rather than inventing its own. */
+export function clampColumnWidth(width: number): number {
+  return Math.min(COLUMN_WIDTH_MAX, Math.max(COLUMN_WIDTH_MIN, Math.round(width)));
+}
+
+/** The default width a column starts at (before any user override). */
+export function defaultColumnWidth(column: TableColumnKey): number {
+  // `title` is pinned rather than scrolled, so it never reaches the sizing
+  // path; it shares the property-column default because there is no other
+  // sensible number for it.
+  if (column === "title" || column.startsWith(PROPERTY_COLUMN_PREFIX)) {
+    return PROPERTY_COLUMN_WIDTH;
+  }
+  return DEFAULT_COLUMN_WIDTHS[column as Exclude<TableSystemColumn, "title">];
+}
+
+/**
+ * The width to lay a column out at: the user's override when there is one,
+ * otherwise the default — clamped either way, so a value persisted by an older
+ * build (or a future default change) can never produce an unusable column.
+ */
+export function columnWidthOf(
+  column: TableColumnKey,
+  widths: TableColumnWidths,
+): number {
+  const override = widths[column];
+  if (override == null) return defaultColumnWidth(column);
+  return clampColumnWidth(override);
+}
+
+/** Width during a drag: the width the gesture started from plus the distance
+ *  travelled, clamped so the live preview equals what a release will commit. */
+export function nextColumnWidth(startWidth: number, dx: number): number {
+  return clampColumnWidth(startWidth + dx);
+}
+
+/**
+ * Which way a column can move, given its slot in the display order and how
+ * many columns there are. Mirrors `reorderTableColumn`'s guards exactly, so a
+ * menu built from this can never offer a control the store would refuse:
+ * slot 0 is the pinned `title` (not movable at all), and the leftmost slot a
+ * scrolled column can reach is 1.
+ */
+export function columnMoveAvailability(
+  position: number,
+  count: number,
+): { left: boolean; right: boolean } {
+  return {
+    left: position > 1,
+    right: position >= 1 && position < count - 1,
+  };
+}
+
 export const PROPERTY_COLUMN_PREFIX = "property:";
 
 /** Strip the `property:` prefix off a property column key. */
@@ -112,6 +201,11 @@ export function defaultTableColumns(): TableColumnKey[] {
   return [...DEFAULT_TABLE_COLUMNS];
 }
 
+/** Fresh (empty) width-override bag — every column still at its default. */
+export function defaultTableColumnWidths(): TableColumnWidths {
+  return {};
+}
+
 /** Sort field bound to a header-tappable system column, if any. */
 export function sortFieldForTableColumn(
   column: TableColumnDefinition | undefined,
@@ -143,9 +237,20 @@ export function nextTableSort(
 export interface TableColumnsSlice {
   /** Ordered visible columns; `[0]` is always "title". */
   tableColumns: TableColumnKey[];
+  /** Width overrides for the columns the user resized (iteration 134). */
+  tableColumnWidths: TableColumnWidths;
   /** Toggle one column's visibility. `title` is permanent — toggling it is
    *  a no-op (web `toggleTableColumn`). */
   toggleTableColumn: (column: TableColumnKey) => void;
+  /** Pin a column's width after a resize drag (web `setTableColumnWidth`).
+   *  Setting it back to the default clears the override. */
+  setTableColumnWidth: (column: TableColumnKey, width: number) => void;
+  /** Move a visible column one slot towards the front (-1) or the back (+1)
+   *  (web `reorderTableColumn`). No-op on `title`, on a hidden column, and
+   *  past either end of the array. */
+  reorderTableColumn: (column: TableColumnKey, delta: -1 | 1) => void;
+  /** Restore the default column set, order and widths. */
+  resetTableColumns: () => void;
 }
 
 /**
@@ -161,7 +266,13 @@ export function createTableColumnActions<T extends TableColumnsSlice>(
       | Partial<TableColumnsSlice>
       | ((state: TableColumnsSlice) => Partial<TableColumnsSlice>),
   ) => void,
-): Pick<TableColumnsSlice, "toggleTableColumn"> {
+): Pick<
+  TableColumnsSlice,
+  | "toggleTableColumn"
+  | "setTableColumnWidth"
+  | "reorderTableColumn"
+  | "resetTableColumns"
+> {
   return {
     toggleTableColumn: (column) =>
       set((state) => {
@@ -174,5 +285,38 @@ export function createTableColumnActions<T extends TableColumnsSlice>(
         // Appended so the display order equals the order the user built it.
         return { tableColumns: [...current, column] };
       }),
+
+    setTableColumnWidth: (column, width) =>
+      set((state) => {
+        const widths = { ...state.tableColumnWidths };
+        const next = clampColumnWidth(width);
+        // Back at the default: forget the override rather than pinning the
+        // current default forever (a later default change should reach it).
+        if (next === defaultColumnWidth(column)) delete widths[column];
+        else widths[column] = next;
+        return { tableColumnWidths: widths };
+      }),
+
+    reorderTableColumn: (column, delta) =>
+      set((state) => {
+        const current = state.tableColumns;
+        // title stays first — it is pinned, and swapping it with its
+        // neighbour would push the pinned column out of the scroller it is
+        // not part of (web pins it the same way).
+        if (column === "title") return state;
+        const from = current.indexOf(column);
+        const to = from + delta;
+        if (from < 0 || to < 1 || to >= current.length) return state;
+        const next = [...current];
+        next[from] = next[to];
+        next[to] = column;
+        return { tableColumns: next };
+      }),
+
+    resetTableColumns: () =>
+      set(() => ({
+        tableColumns: defaultTableColumns(),
+        tableColumnWidths: defaultTableColumnWidths(),
+      })),
   };
 }
