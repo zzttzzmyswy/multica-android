@@ -15,6 +15,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import type { TaskMessagePayload } from "@multica/core/types";
+import { redactSecrets } from "@multica/core/task-transcript";
 import { Text } from "@/components/ui/text";
 import { Markdown } from "@/lib/markdown";
 import { CodeBlock } from "@/lib/markdown/code-block";
@@ -71,7 +72,9 @@ export function TranscriptEntryRow({ entry }: { entry: TaskMessagePayload }) {
 
   const onCopy = async () => {
     try {
-      await Clipboard.setStringAsync(transcriptEntryCopyText(entry));
+      // Web masks the copy body too (`agent-transcript-dialog.tsx`); without
+      // this the clipboard would carry the raw secret the screen masks.
+      await Clipboard.setStringAsync(redactSecrets(transcriptEntryCopyText(entry)));
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setCopied(true);
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -182,14 +185,14 @@ function DetailBody({
             {diffDetail.path}
           </Text>
           <CodeBlock
-            code={diffDetail.text}
+            code={redactSecrets(diffDetail.text)}
             lang={languageForPath(diffDetail.path)}
             selectable={false}
           />
         </View>
       );
     }
-    return <PlainBlock text={JSON.stringify(entry.input, null, 2)} />;
+    return <PlainBlock text={redactSecrets(JSON.stringify(entry.input, null, 2))} />;
   }
   if (entry.type === "tool_result") {
     return <PlainBlock text={unwrapToolOutput(entry.output ?? "")} />;
@@ -235,6 +238,17 @@ function TranscriptDiffBlock({ path, lines }: { path: string; lines: TranscriptD
   const language = languageForPath(path);
   const [sides, setSides] = useState<Record<DiffSide, HighlightedLine[] | null> | null>(null);
 
+  // Masked before the highlight pass rather than at render: the highlighted
+  // rows are rebuilt from the same strings, so masking the source keeps both
+  // the plain and the tokenised path clean (web masks only its plain branch).
+  const safeLines = useMemo(
+    () =>
+      lines.map((line) =>
+        line.kind === "gap" ? line : { ...line, text: redactSecrets(line.text) },
+      ),
+    [lines],
+  );
+
   useEffect(() => {
     if (!language) {
       setSides(null);
@@ -244,7 +258,7 @@ function TranscriptDiffBlock({ path, lines }: { path: string; lines: TranscriptD
     const kinds: DiffSide[] = ["add", "remove", "context"];
     void Promise.all(
       kinds.map(async (kind): Promise<readonly [DiffSide, HighlightedLine[] | null]> => {
-        const text = lines
+        const text = safeLines
           .filter((line) => line.kind === kind)
           .map((line) => line.text)
           .join("\n");
@@ -264,7 +278,7 @@ function TranscriptDiffBlock({ path, lines }: { path: string; lines: TranscriptD
     return () => {
       cancelled = true;
     };
-  }, [lines, language, theme]);
+  }, [safeLines, language, theme]);
 
   const cursors: Record<DiffSide, number> = { add: 0, remove: 0, context: 0 };
 
@@ -273,7 +287,7 @@ function TranscriptDiffBlock({ path, lines }: { path: string; lines: TranscriptD
       <Text className="mb-1 text-[10px] font-mono text-muted-foreground" numberOfLines={1}>
         {path}
       </Text>
-      {lines.map((line, index) => {
+      {safeLines.map((line, index) => {
         if (line.kind === "gap") {
           return (
             <Text key={index} className="text-[11px] font-mono text-muted-foreground">

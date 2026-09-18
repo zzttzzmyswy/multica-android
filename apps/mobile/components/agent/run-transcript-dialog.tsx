@@ -17,6 +17,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { AgentTask } from "@multica/core/types";
+import { prepareTaskMessages } from "@multica/core/task-transcript";
 import { Text } from "@/components/ui/text";
 import { TranscriptEntryRow } from "@/components/agent/transcript-entry";
 import { taskMessagesOptions } from "@/data/queries/chat";
@@ -56,9 +57,15 @@ export function RunTranscriptDialog({
     refetchInterval: liveLogPollMs(live),
   });
 
+  // Web's transcript reads `buildTimeline(msgs)`; the payload-shaped
+  // equivalent merges the daemon's flush-split `thinking` / `text` fragments
+  // and masks secrets, so a run shows the same entry count and the same
+  // masked text as web.
+  const entries = useMemo(() => prepareTaskMessages(data), [data]);
+
   // Chips come from the entries present, so a run never offers a facet it has
   // no events for (web derives `filterOptions` the same way).
-  const filterOptions = useMemo(() => deriveTranscriptFilterOptions(data), [data]);
+  const filterOptions = useMemo(() => deriveTranscriptFilterOptions(entries), [entries]);
   // A selected key the current transcript lacks is a no-op, not an empty list
   // (web resolves its persisted selection against the derived options).
   const activeKeys = useMemo(
@@ -66,8 +73,8 @@ export function RunTranscriptDialog({
     [selectedKeys, filterOptions],
   );
   const filteredEntries = useMemo(
-    () => filterTranscriptEntries(data, activeKeys),
-    [data, activeKeys],
+    () => filterTranscriptEntries(entries, activeKeys),
+    [entries, activeKeys],
   );
   const displayEntries = useMemo(
     () => sortTranscriptEntries(filteredEntries, sortDirection),
@@ -140,7 +147,7 @@ export function RunTranscriptDialog({
                 />
               ))}
             </ScrollView>
-            {data.length > 1 ? (
+            {entries.length > 1 ? (
               <Pressable
                 onPress={() =>
                   setSortDirection((prev) =>
@@ -166,7 +173,7 @@ export function RunTranscriptDialog({
           <View className="py-6 items-center">
             <ActivityIndicator />
           </View>
-        ) : isError && data.length === 0 ? (
+        ) : isError && entries.length === 0 ? (
           <View className="px-4 py-3 items-start gap-2">
             <Text className="text-xs text-destructive">{t("runs.logLoadError")}</Text>
             <Pressable
@@ -177,7 +184,7 @@ export function RunTranscriptDialog({
               <Text className="text-xs font-medium text-foreground">{t("issue.retry")}</Text>
             </Pressable>
           </View>
-        ) : data.length === 0 ? (
+        ) : entries.length === 0 ? (
           <View className="px-4 py-3">
             <Text className="text-xs text-muted-foreground">{t("runs.noLogsYet")}</Text>
           </View>
