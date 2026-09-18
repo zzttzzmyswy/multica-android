@@ -217,7 +217,8 @@ const LATIN_CASING: {
  * the native alternative appears zero times in either bundle. Terms where a
  * native rendering does exist are not here — `Fleet` (ko also writes 플릿) and
  * `Local` (64 ローカル against 2 `Local`, the runtime-config mode name only) are
- * splits, not settled keeps.
+ * splits, not settled keeps. The 150 round re-checked both exclusions (still
+ * hold) and added `Webhook` from the same angle.
  */
 const LATIN_KEPT: {
   label: string;
@@ -242,6 +243,20 @@ const LATIN_KEPT: {
     pattern: /(?<![A-Za-z])payloads?(?![A-Za-z])/i,
     native: { ja: "ペイロード", ko: "페이로드" },
     tally: { ja: "2 keys Latin, 0 native", ko: "2 keys Latin, 0 native" },
+  },
+  /**
+   * The 150 round's addition, from the same scan angle that produced the three
+   * above. It was nearly missed: a first pass counted ja as "31 Latin vs 31
+   * native" because the native pattern included a lowercase `webhook`, which
+   * matched the Latin occurrences themselves. Measured properly, both bundles are
+   * unanimous — 31 keys each, zero ウェブフック / 웹훅 — and the Latin is spread
+   * over `autopilots` (22) and `settings` (9), so it is not one surface's habit.
+   */
+  {
+    label: "Webhook",
+    pattern: /(?<![A-Za-z])[Ww]ebhooks?(?![A-Za-z])/,
+    native: { ja: "ウェブフック", ko: "웹훅" },
+    tally: { ja: "31 keys Latin, 0 native", ko: "31 keys Latin, 0 native" },
   },
 ];
 

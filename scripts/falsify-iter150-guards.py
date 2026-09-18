@@ -29,6 +29,11 @@ Rules covered:
    half of the two-way property: a doc row routing to the wrong owner.
 9. `has a ledger entry for every term the doc lists` — the term half, re-checked
    against the two rows this round added.
+10. `keeps Webhook in Latin wherever the English names it, in <locale>` — the
+    LATIN_KEPT entry this
+    round added, which was nearly missed: a first measurement counted ja as
+    "31 Latin vs 31 native" because the native pattern included a lowercase
+    `webhook`, matching the Latin occurrences themselves. Both sides are 31 / 0.
 
 Green cases (must stay green — these are the rule's boundaries, not its targets):
 
@@ -59,8 +64,10 @@ CONVENTIONS = ROOT / "apps/docs/content/docs/developers/conventions.mdx"
 STATE_FORM = "locales/ja-ko-state-form.test.ts"
 TYPOGRAPHY = "locales/ja-ko-typography.test.ts"
 LEDGER = "locales/unsettled-ledger.test.ts"
+UNLISTED = "locales/ja-ko-unlisted-terms.test.ts"
 
 JA_AGENTS = LOCALES / "ja/agents.json"
+JA_AUTOPILOTS = LOCALES / "ja/autopilots.json"
 JA_ISSUES = LOCALES / "ja/issues.json"
 JA_RUNTIMES = LOCALES / "ja/runtimes.json"
 JA_SETTINGS = LOCALES / "ja/settings.json"
@@ -113,6 +120,20 @@ CASES = [
         '"member_count_other": "멤버 {{count}}명"',
         '"member_count_other": "멤버 {{count}} 명"',
         "never puts a space between a placeholder and its counter",
+    ),
+    (
+        "ja: a native ウェブフック creeping in trips the Webhook LATIN_KEPT entry",
+        JA_AUTOPILOTS, UNLISTED,
+        '"webhook_url_label": "Webhook URL"',
+        '"webhook_url_label": "ウェブフック URL"',
+        "keeps Webhook in Latin wherever the English names it, in ja",
+    ),
+    (
+        "ko: the same regression on the ko side is caught too",
+        KO_SETTINGS, UNLISTED,
+        '"webhook_secret_label": "Webhook Secret"',
+        '"webhook_secret_label": "웹훅 Secret"',
+        "keeps Webhook in Latin wherever the English names it, in ko",
     ),
 ]
 
@@ -246,7 +267,7 @@ for label, path, old, new, must_stay_green in GREEN_CASES:
     print(f"{'OK  ' if green else 'FAIL'} {label}")
 
 print("\n-- restored state --")
-for suite in (STATE_FORM, TYPOGRAPHY, LEDGER):
+for suite in (STATE_FORM, TYPOGRAPHY, LEDGER, UNLISTED):
     out = vitest(suite)
     ok = "failed" not in out.split("Test Files")[-1].split("\n")[0]
     print(f"{'OK  ' if ok else 'FAIL'} {suite}")
