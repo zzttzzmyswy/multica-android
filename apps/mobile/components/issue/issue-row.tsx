@@ -39,6 +39,7 @@ import { useIntlLocale } from "@/lib/i18n/react";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { CustomStatusChip } from "./custom-status-chip";
+import { IssueAgentActivityIndicator } from "./issue-agent-activity-indicator";
 import type { ChildProgress } from "@/data/queries/issues";
 
 interface Props {
@@ -141,6 +142,7 @@ export function IssueRow({
         >
           {issue.identifier}
         </Text>
+        <IssueAgentActivityIndicator issueId={issue.id} />
         <Text className="flex-1 text-sm text-foreground" numberOfLines={1}>
           {issue.title}
         </Text>
