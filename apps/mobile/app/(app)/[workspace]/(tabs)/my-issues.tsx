@@ -80,7 +80,7 @@ import {
 import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-workspace-change";
 import { myIssueTableScope } from "@/lib/issue-table-group-counts";
 import { useGroupingProperty } from "@/lib/use-grouping-property";
-import { BOARD_STATUSES } from "@/lib/issue-status";
+import { BOARD_STATUSES } from "@/lib/issue-status-core";
 import {
   applyIssueFilters,
   groupIssues,

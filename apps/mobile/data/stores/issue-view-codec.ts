@@ -23,6 +23,7 @@
  */
 import type { IssueView } from "@multica/core/api/schemas";
 import type { IssuePriority, IssueStatus } from "@multica/core/types";
+import { BOARD_STATUSES } from "@/lib/issue-status-core";
 import {
   propertyIdFromDimension,
   type ActorFilterValue,
@@ -38,20 +39,11 @@ import {
 
 /**
  * Enum lists for sanitization (mirror web baseline: unknown members drop).
- * Kept local instead of importing `@/lib/issue-status`: this module is pure
- * data and must stay importable from the Node vitest lane — issue-status
- * pulls in the i18n runtime, which drags react-native in. The lists mirror
- * BOARD_STATUSES + "cancelled" and the core priority order exactly.
+ * Statuses come straight from `@/lib/issue-status-core` — a pure module, so
+ * it is importable from the Node vitest lane and cannot drift from the column
+ * order the list actually renders. Priorities are the core order.
  */
-const ALL_STATUSES: readonly IssueStatus[] = [
-  "backlog",
-  "todo",
-  "in_progress",
-  "in_review",
-  "done",
-  "blocked",
-  "cancelled",
-];
+const ALL_STATUSES: readonly IssueStatus[] = BOARD_STATUSES;
 const ALL_PRIORITIES = ["urgent", "high", "medium", "low", "none"];
 const SORT_FIELDS: readonly IssueSortField[] = [
   "position",

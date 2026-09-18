@@ -18,17 +18,7 @@ import {
   sortIssues,
   type IssueFilterState,
 } from "./filter-issues";
-
-// Inlined copy of lib/issue-status BOARD_STATUSES (that module pulls i18n →
-// expo, which is out of scope for this pure-helper suite).
-const BOARD_STATUSES: IssueStatus[] = [
-  "backlog",
-  "todo",
-  "in_progress",
-  "in_review",
-  "done",
-  "blocked",
-];
+import { BOARD_STATUSES } from "./issue-status-core";
 
 function issue(partial: Partial<Issue>): Issue {
   const { id = "x" } = partial;
@@ -351,14 +341,7 @@ describe("groupIssues", () => {
   it("status grouping keeps empty columns in BOARD_STATUSES order when includeEmpty is set", () => {
     const groups = groupIssues([c, a, b], "status", BOARD_STATUSES, true);
     const statuses = groups.map((g) => g.status);
-    expect(statuses).toEqual([
-      "backlog",
-      "todo",
-      "in_progress",
-      "in_review",
-      "done",
-      "blocked",
-    ]);
+    expect(statuses).toEqual([...BOARD_STATUSES]);
     const asMap = new Map(groups.map((g) => [g.status, g.data]));
     expect(asMap.get("done")?.map((i) => i.id)).toEqual(["c"]);
     expect(asMap.get("backlog")).toEqual([]);

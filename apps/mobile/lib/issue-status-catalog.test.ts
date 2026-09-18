@@ -24,15 +24,7 @@ import {
   type IssueStatusCatalog,
 } from "./issue-status-catalog";
 import { groupIssues } from "./filter-issues";
-
-const BOARD_STATUSES: IssueStatus[] = [
-  "backlog",
-  "todo",
-  "in_progress",
-  "in_review",
-  "done",
-  "blocked",
-];
+import { BOARD_STATUSES } from "./issue-status-core";
 
 function entry(
   key: string,
@@ -268,9 +260,16 @@ describe("groupIssues category folding", () => {
     expect(board.some((s) => s.key === "qa_custom")).toBe(false);
   });
 
-  it("excludes cancelled from board status order (unchanged column contract)", () => {
-    const cancelled = issue({ id: "c", status: "cancelled", status_category: "cancelled" });
-    const sections = groupIssues([cancelled], "status", BOARD_STATUSES);
-    expect(sections).toEqual([]);
+  it("gives cancelled its own column, last, like web (MUL-4290)", () => {
+    const c = issue({ id: "c", status: "cancelled", status_category: "cancelled" });
+    const sections = groupIssues([c], "status", BOARD_STATUSES);
+    expect(sections.map((s) => s.key)).toEqual(["cancelled"]);
+    expect(sections[0]!.data.map((i) => i.id)).toEqual(["c"]);
+
+    // Board mode: cancelled is the trailing column, not one wedged into the
+    // middle of the lifecycle.
+    const board = groupIssues([], "status", BOARD_STATUSES, true);
+    expect(board.map((s) => s.key)).toEqual([...BOARD_STATUSES]);
+    expect(board[board.length - 1]!.key).toBe("cancelled");
   });
 });

@@ -113,6 +113,11 @@ describe("sanitizeViewQuery", () => {
     });
   });
 
+  it("keeps a cancelled status filter (a first-class status, not an unknown)", () => {
+    const want = sanitizeViewQuery({ statusFilters: ["cancelled", "todo"] });
+    expect(want.statusFilters).toEqual(["cancelled", "todo"]);
+  });
+
   it("drops unknown enum members (newer server / hand-edited blob)", () => {
     const want = sanitizeViewQuery({
       statusFilters: ["todo", "shipped", "done"],

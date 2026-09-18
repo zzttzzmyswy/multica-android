@@ -83,7 +83,7 @@ import { workspaceIssueTableScope } from "@/lib/issue-table-group-counts";
 import { useCreateIssueFromColumn } from "@/lib/use-create-issue-from-column";
 import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-workspace-change";
 import { useGroupingProperty } from "@/lib/use-grouping-property";
-import { BOARD_STATUSES } from "@/lib/issue-status";
+import { BOARD_STATUSES } from "@/lib/issue-status-core";
 import {
   applyIssueFilters,
   groupIssues,

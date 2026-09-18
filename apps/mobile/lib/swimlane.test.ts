@@ -13,17 +13,7 @@ import {
   SWIMLANE_ORPHAN_ID,
   type SwimlaneLane,
 } from "./swimlane";
-
-// Inlined copy of lib/issue-status BOARD_STATUSES (that module pulls i18n →
-// expo, which is out of scope for this pure-helper suite).
-const BOARD_STATUSES: IssueStatus[] = [
-  "backlog",
-  "todo",
-  "in_progress",
-  "in_review",
-  "done",
-  "blocked",
-];
+import { BOARD_STATUSES } from "./issue-status-core";
 
 function issue(partial: Partial<Issue>): Issue {
   const { id = "x" } = partial;
