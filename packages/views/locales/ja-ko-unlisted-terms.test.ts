@@ -205,11 +205,51 @@ const LATIN_CASING: {
   },
 ];
 
-const exemptKeys = new Set(EXEMPT.map(({ key }) => key));
+/**
+ * Terms both locales deliberately keep in Latin. This is the opposite shape from
+ * `MAJORITY_TERMS`: there the native word is the convention and Latin is debt;
+ * here Latin is the convention and the native word is the debt.
+ *
+ * The 147 round scanned a group of terms and recorded "checked, no action" for
+ * them in prose only, which left them free to regress silently. The 149 round
+ * re-checked each against both bundles and promoted the ones the bundle actually
+ * answers: every English-named key renders the term in Latin in ja *and* ko, and
+ * the native alternative appears zero times in either bundle. Terms where a
+ * native rendering does exist are not here — `Fleet` (ko also writes 플릿) and
+ * `Local` (64 ローカル against 2 `Local`, the runtime-config mode name only) are
+ * splits, not settled keeps.
+ */
+const LATIN_KEPT: {
+  label: string;
+  pattern: RegExp;
+  native: Record<Locale, string>;
+  tally: Record<Locale, string>;
+}[] = [
+  {
+    label: "Gateway",
+    pattern: /(?<![A-Za-z])Gateways?(?![A-Za-z])/,
+    native: { ja: "ゲートウェイ", ko: "게이트웨이" },
+    tally: { ja: "4 keys Latin, 0 native", ko: "4 keys Latin, 0 native" },
+  },
+  {
+    label: "Severity",
+    pattern: /(?<![A-Za-z])Severit(y|ies)(?![A-Za-z])/,
+    native: { ja: "重大度", ko: "심각도" },
+    tally: { ja: "2 keys Latin, 0 native", ko: "2 keys Latin, 0 native" },
+  },
+  {
+    label: "payload",
+    pattern: /(?<![A-Za-z])payloads?(?![A-Za-z])/i,
+    native: { ja: "ペイロード", ko: "페이로드" },
+    tally: { ja: "2 keys Latin, 0 native", ko: "2 keys Latin, 0 native" },
+  },
+];
 
 /** Keys the English source names the term in. */
 const termKeys = (pattern: RegExp) =>
   Object.keys(en).filter((key) => namesTerm(en[key], pattern));
+
+const exemptKeys = new Set(EXEMPT.map(({ key }) => key));
 
 const ALL_TERMS = [...MAJORITY_TERMS, ...UNPRECEDENTED_TERMS];
 
@@ -281,6 +321,61 @@ describe("ja / ko keep the Latin terms the English source ships", () => {
     expect(en[key]).toContain("GITHUB_APP_PRIVATE_KEY");
     expect(mask(en[key])).not.toMatch(/private/i);
   });
+
+  /**
+   * The complement of the test above, and the 148 round's open worry: the
+   * SCREAMING_SNAKE pattern requires an underscore group, so a standalone
+   * all-caps token is *not* masked. That matters because `API`, `CLI` and `URL`
+   * are real prose in both bundles — a mask that swallowed them would hide the
+   * Latin the term rules exist to find. Measured: the pattern matches only
+   * `API_KEY`, `BASE_URL`, `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY` across
+   * both bundles, and `CLI` (30 ja / 23 ko), `URL` (51 / 19) and `API` (9 / 9)
+   * are all left alone.
+   */
+  it("leaves a standalone all-caps token unmasked, so it can still be judged", () => {
+    expect(mask("Run the CLI to get a URL")).toBe("Run the CLI to get a URL");
+    expect(mask("API_KEY is set")).toBe("… is set");
+    expect(mask("set GITHUB_APP_PRIVATE_KEY")).toBe("set …");
+  });
+});
+
+/**
+ * Terms both locales keep in Latin, where the native word is the debt. The
+ * inverse rule from the majority terms, so it is asserted in its own block.
+ */
+describe("ja / ko keep the Latin terms the bundle already settled on", () => {
+  for (const { label, pattern, native } of LATIN_KEPT) {
+    for (const locale of LOCALES) {
+      it(`keeps ${label} in Latin wherever the English names it, in ${locale}`, () => {
+        const offenders = termKeys(pattern)
+          .filter((key) => !PLURAL_ONE.test(key))
+          .filter((key) => !pattern.test(mask(TARGETS[locale][key])))
+          .map(
+            (key) =>
+              `${key}: expected Latin ${label}, got ${JSON.stringify(TARGETS[locale][key] ?? null)} ` +
+              `(en: ${JSON.stringify(en[key])})`,
+          );
+        expect(offenders).toEqual([]);
+      });
+
+      it(`never transliterates ${label} in the ${locale} bundle`, () => {
+        const offenders = Object.keys(TARGETS[locale])
+          .filter((key) => (TARGETS[locale][key] ?? "").includes(native[locale]))
+          .map((key) => `${key}: ${JSON.stringify(TARGETS[locale][key])}`);
+        expect(offenders).toEqual([]);
+      });
+    }
+  }
+
+  it("records the tally each Latin-kept term was derived from", () => {
+    for (const { label, tally } of LATIN_KEPT) {
+      for (const locale of LOCALES) {
+        expect(tally[locale], `${locale} ${label} needs a tally`).toMatch(
+          /\d+ keys Latin, \d+ native/,
+        );
+      }
+    }
+  });
 });
 
 /**
@@ -333,9 +428,11 @@ describe("the exemption list stays honest", () => {
   it("keeps every exemption load-bearing, so a fixed key does not stay exempt forever", () => {
     const stale: string[] = [];
     for (const { key, why } of EXEMPT) {
-      // Every locale, not just one: the exemption is shared across locales, so a
-      // single locale translating the key would otherwise keep it alive.
-      const wouldStillTrip = LOCALES.every((locale) =>
+      // `some`, not `every`: the exemption set is shared across locales, so a key
+      // is still load-bearing as long as *one* locale would trip without it.
+      // Requiring both would demand the removal of an exemption that the other
+      // locale still needs — a false red that no edit could clear.
+      const wouldStillTrip = LOCALES.some((locale) =>
         ALL_TERMS.some(
           ({ native, pattern }) =>
             namesTerm(TARGETS[locale][key], pattern) ||
