@@ -206,11 +206,13 @@ export default function RuntimesPage() {
               <MachineHeader
                 machine={section.machine}
                 onPress={() => {
-                  if (wsSlug && section.machine.runtimes.length === 1) {
-                    router.push(
-                      `/${wsSlug}/more/runtimes/${section.machine.runtimes[0]!.id}`,
-                    );
-                  }
+                  if (!wsSlug) return;
+                  // Machine ids can carry a colon (`local:<daemonId>`,
+                  // `cloud:device:<name>`), so encode before it enters the
+                  // path segment. Web routes the same id at /runtimes/[id].
+                  router.push(
+                    `/${wsSlug}/more/runtimes/machine/${encodeURIComponent(section.machine.id)}`,
+                  );
                 }}
               />
             )}
@@ -238,7 +240,9 @@ export default function RuntimesPage() {
  * Machine header — the consolidation unit web's machine-grouped list renders.
  * Carries the machine title, section badge (Local / Remote / Cloud), health
  * dot + label, online count, running/queued workload and the principal CLI
- * version of the machine's daemon.
+ * version of the machine's daemon. Tapping it opens the machine detail page
+ * (web's `/runtimes/[machineId]`); the rows underneath stay the per-provider
+ * runtime shortcuts.
  */
 function MachineHeader({
   machine,
@@ -275,7 +279,12 @@ function MachineHeader({
 
   return (
     <View className="px-4 pt-4 pb-1.5">
-      <Pressable onPress={onPress} disabled={machine.runtimes.length !== 1}>
+      <Pressable
+        onPress={onPress}
+        className="active:opacity-70"
+        accessibilityRole="button"
+        accessibilityLabel={t("runtimes.machine.open", { name: machine.title })}
+      >
         <View className="flex-row items-center gap-3">
           <View className="size-8 rounded-lg bg-secondary items-center justify-center">
             <Ionicons
@@ -318,6 +327,7 @@ function MachineHeader({
               </Text>
             </View>
           ) : null}
+          <Ionicons name="chevron-forward" size={14} color={muted} />
         </View>
       </Pressable>
     </View>

@@ -38,7 +38,7 @@ import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PriorityIcon } from "@/components/ui/priority-icon";
 import { ProjectIcon } from "@/components/ui/project-icon";
 import { StatusIcon } from "@/components/ui/status-icon";
-import { formatDateOnly } from "@multica/core/issues/date";
+import { ISSUE_DATE_SHORT, formatIssueDate } from "@/lib/format-date";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { useStatusLabel } from "@/lib/status-options";
@@ -49,7 +49,7 @@ import {
   MANUAL_CREATE_FIELDS,
   QUICK_CREATE_FIELDS,
 } from "@/data/issue-create-settings-store";
-import { useTranslation } from "@/lib/i18n/react";
+import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { ActionSheet } from "@/lib/action-sheet";
@@ -115,6 +115,7 @@ export function CreateFormAttributeRow({ fields = ALL_FIELDS, mode }: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const settings = useIssueCreateSettings(mode ? wsId : null);
   const { t } = useTranslation();
+  const intlLocale = useIntlLocale();
   const { colorScheme } = useColorScheme();
   const muted = THEME[colorScheme].mutedForeground;
   const statusLabel = useStatusLabel(wsId);
@@ -297,7 +298,7 @@ export function CreateFormAttributeRow({ fields = ALL_FIELDS, mode }: Props) {
                 color={dueDate ? undefined : "#a1a1aa"}
               />
             }
-            label={dueDate ? formatDueDate(dueDate, t) : t("attr.dueDate")}
+            label={dueDate ? formatDueDate(dueDate, t, intlLocale) : t("attr.dueDate")}
             variant={dueDate ? "filled" : "dimmed"}
             onPress={() => open("due-date")}
           />
@@ -313,7 +314,7 @@ export function CreateFormAttributeRow({ fields = ALL_FIELDS, mode }: Props) {
               />
             }
             label={
-              startDate ? formatDueDate(startDate, t) : t("attr.startDate")
+              startDate ? formatDueDate(startDate, t, intlLocale) : t("attr.startDate")
             }
             variant={startDate ? "filled" : "dimmed"}
             onPress={() => open("start-date")}
@@ -380,12 +381,14 @@ export function CreateFormAttributeRow({ fields = ALL_FIELDS, mode }: Props) {
   );
 }
 
-// due_date is a calendar day — format timezone-safely (no offset day shift).
-function formatDueDate(iso: string, t: (id: string) => string): string {
-  return (
-    formatDateOnly(iso, { month: "short", day: "numeric" }) ||
-    t("attr.dueDate")
-  );
+// due_date is a calendar day — format timezone-safely (no offset day shift)
+// and in the active app locale.
+function formatDueDate(
+  iso: string,
+  t: (id: string) => string,
+  locale: string,
+): string {
+  return formatIssueDate(iso, ISSUE_DATE_SHORT, locale) || t("attr.dueDate");
 }
 
 /** Compact multi-select summary for the labels chip: single label shows its

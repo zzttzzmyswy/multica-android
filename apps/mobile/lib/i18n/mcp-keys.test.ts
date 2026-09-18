@@ -30,13 +30,13 @@ describe("mcp i18n", () => {
     "mcp.addServer": "添加服务器",
     "mcp.emptyTitle": "还没有 MCP 服务器",
     "mcp.adminOnlyNote": "仅工作区 owner/admin 可以管理 MCP 服务器。",
-    "mcp.deleteMessage": "删除「{{name}}」会同时将其从所有使用它的 agent 中移除。此操作不可撤销。",
+    "mcp.deleteMessage": "删除\"{{name}}\"会同时将其从所有使用它的智能体中移除。此操作不可撤销。",
     "mcp.form.createTitle": "新建 MCP 服务器",
     "mcp.form.editTitle": "编辑 MCP 服务器",
     "mcp.form.argsHint": "多个参数用空格分隔。",
-    "mcp.agent.hint": "分配给该 agent 的工作区 MCP 服务器。每个分配拥有独立的启用开关。",
-    "mcp.agent.removeConfirmMessage": "移除「{{name}}」后，该 agent 将不再使用此服务器。",
-    "mcp.agent.libraryEmpty": "工作区库为空——请让 owner/admin 在「更多 → MCP 服务器」中添加。",
+    "mcp.agent.hint": "分配给该智能体的工作区 MCP 服务器。每个分配拥有独立的启用开关。",
+    "mcp.agent.removeConfirmMessage": "移除\"{{name}}\"后，该智能体将不再使用此服务器。",
+    "mcp.agent.libraryEmpty": "工作区库为空——请让 owner/admin 在\"更多 → MCP 服务器\"中添加。",
   };
 
   it("resolves every mcp key in both locales with a real zh translation", () => {
@@ -53,7 +53,7 @@ describe("mcp i18n", () => {
   it("interpolates the delete confirm placeholder in both locales", () => {
     mod.setLocale("zh");
     expect(mod.translate("mcp.deleteMessage", { name: "docs" })).toBe(
-      "删除「docs」会同时将其从所有使用它的 agent 中移除。此操作不可撤销。",
+      "删除\"docs\"会同时将其从所有使用它的智能体中移除。此操作不可撤销。",
     );
     mod.setLocale("en");
     expect(mod.translate("mcp.agent.removeConfirmMessage", { name: "docs" })).toBe(

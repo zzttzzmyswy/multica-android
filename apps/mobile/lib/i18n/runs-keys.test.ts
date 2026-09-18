@@ -27,7 +27,7 @@ describe("runs usage i18n", () => {
   });
 
   const ZH_SPOT: Record<string, string> = {
-    "runs.agentRuns": "Agent 运行记录",
+    "runs.agentRuns": "智能体运行记录",
     "runs.usageTotal": "此任务的 token 用量",
   };
 
