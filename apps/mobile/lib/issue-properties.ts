@@ -16,7 +16,7 @@ import type {
   IssuePropertyValue,
 } from "@multica/core/types";
 import { ISSUE_PROPERTY_TYPES } from "@multica/core/types";
-import { formatDateOnly } from "@multica/core/issues/date";
+import { formatIssueDate } from "./format-date";
 
 export const PROPERTY_TYPE_ICONS = {
   text: "text",
@@ -120,7 +120,7 @@ export function formatPropertyValue(
       return { kind: "checkbox", value: value === true };
     case "date": {
       if (typeof value !== "string") return null;
-      const text = formatDateOnly(value, { month: "short", day: "numeric" }, "en-US");
+      const text = formatIssueDate(value);
       return text ? { kind: "date", text } : null;
     }
     default:
