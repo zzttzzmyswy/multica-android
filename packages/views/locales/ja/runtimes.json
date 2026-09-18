@@ -18,7 +18,7 @@
     "no_matches": {
       "title": "一致する結果なし",
       "with_query": "「{{query}}」に一致するランタイムがありません{{filterSuffix}}。",
-      "with_query_filter_suffix": "(このフィルター内)",
+      "with_query_filter_suffix": "（このフィルター内）",
       "no_query": "このフィルターに一致するランタイムがありません。",
       "try_widening": " 範囲を広げるか、フィルターをクリアしてみてください。"
     },
@@ -408,8 +408,8 @@
     "when_tab_heatmap": "ヒートマップ",
     "daily_metric_cost": "コスト",
     "daily_metric_tokens": "トークン",
-    "weekly_partial_label": "{{range}}(一部 · 7 日中 {{covered}} 日)",
-    "heatmap_caption": "直近 26 週 · 日別の $ 強度(ここでは期間セレクターは無視されます)",
+    "weekly_partial_label": "{{range}}（一部 · 7 日中 {{covered}} 日）",
+    "heatmap_caption": "直近 26 週 · 日別の $ 強度（ここでは期間セレクターは無視されます）",
     "legend_input": "入力",
     "legend_output": "出力",
     "legend_cache_read": "キャッシュ読み取り",

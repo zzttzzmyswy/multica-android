@@ -43,7 +43,7 @@
     "title_time": "週別実行時間",
     "title_tasks": "週別作業",
     "title_errors": "週別エラー",
-    "partial_label": "{{range}} (一部 · 7日中 {{covered}}日)"
+    "partial_label": "{{range}}（一部 · 7日中 {{covered}}日）"
   },
   "errors": {
     "kpi_failed_label": "失敗した作業 · {{days}}日",

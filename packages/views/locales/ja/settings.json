@@ -70,7 +70,7 @@
     },
     "timezone": {
       "title": "表示タイムゾーン",
-      "browser_suffix": " (ブラウザ)",
+      "browser_suffix": "（ブラウザ）",
       "hint": "ダッシュボード、チャート、表示される「今日」ラベルに使用されます。すべてのワークスペースに適用される個人設定です。",
       "sync_failed": "タイムゾーン設定を保存できませんでした。"
     },
@@ -630,7 +630,7 @@
   },
   "lark": {
     "section_title": "Lark",
-    "page_description": "各 Multica エージェントを Lark (飞书) PersonalAgent ボットに接続します。メンバーはボットに DM したり、グループで @ メンションしたり、/issue と入力して新しい Multica タスクを起こすことができます。",
+    "page_description": "各 Multica エージェントを Lark（飞书）PersonalAgent ボットに接続します。メンバーはボットに DM したり、グループで @ メンションしたり、/issue と入力して新しい Multica タスクを起こすことができます。",
     "not_enabled_title": "Lark 連携が有効化されていません",
     "not_enabled_description_prefix": "Lark ボットの設置を有効化するにはサーバーに",
     "not_enabled_description_suffix": "を設定してください。",
@@ -831,7 +831,7 @@
   },
   "wecom": {
     "section_title": "WeCom",
-    "page_description": "各 Multica エージェントを専用の WeCom (企业微信) スマートボットに接続します。メンバーはボットに DM を送り、グループで @ メンションし、/issue と入力して Multica タスクを作成できます。WebSocket ロングコネクションで返信するため、公開コールバック URL は不要です。",
+    "page_description": "各 Multica エージェントを専用の WeCom（企业微信）スマートボットに接続します。メンバーはボットに DM を送り、グループで @ メンションし、/issue と入力して Multica タスクを作成できます。WebSocket ロングコネクションで返信するため、公開コールバック URL は不要です。",
     "not_enabled_title": "WeCom 連携が有効化されていません",
     "not_enabled_description_prefix": "サーバー側で",
     "not_enabled_description_suffix": "を設定すると WeCom スマートボットのインストールが有効になります。",
