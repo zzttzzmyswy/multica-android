@@ -1,8 +1,5 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { measure, verify, type Claim, type Fact, type MeasureContext } from "./tally";
+import { measure, verify, load, type Claim, type Fact, type MeasureContext } from "./tally";
 
 /**
  * Guard for the ja and ko bundles rendering a *concept* with one word.
@@ -34,34 +31,6 @@ import { measure, verify, type Claim, type Fact, type MeasureContext } from "./t
  * English word fails this suite until someone classifies it.
  */
 
-const LOCALES_DIR = dirname(fileURLToPath(import.meta.url));
-
-type Bundle = Record<string, string>;
-
-function namespaces(locale: string): string[] {
-  return readdirSync(resolve(LOCALES_DIR, locale))
-    .filter((name) => name.endsWith(".json"))
-    .map((name) => name.replace(/\.json$/, ""))
-    .sort();
-}
-
-function flatten(value: unknown, prefix = ""): Bundle {
-  if (value === null || typeof value !== "object") return { [prefix]: String(value) };
-  return Object.entries(value as Record<string, unknown>).reduce<Bundle>(
-    (acc, [key, child]) => Object.assign(acc, flatten(child, prefix ? `${prefix}.${key}` : key)),
-    {},
-  );
-}
-
-function load(locale: string): Bundle {
-  return namespaces(locale).reduce<Bundle>((acc, ns) => {
-    const raw = readFileSync(resolve(LOCALES_DIR, locale, `${ns}.json`), "utf8");
-    for (const [key, value] of Object.entries(flatten(JSON.parse(raw)))) {
-      acc[`${ns}.${key}`] = value;
-    }
-    return acc;
-  }, {});
-}
 
 const en = load("en");
 const ja = load("ja");
@@ -324,34 +293,64 @@ const isSettled = (label: string, locale: Locale) =>
  * assertions above instead, which is the part that matters for the rule — what
  * is lost is only the before-count, and inventing one would be worse than not
  * having it.
+ *
+ * Each entry pins `scopeSize`, the number of English keys the scope holds. The
+ * scope is a *derived* set — the keys whose English names the concept — read
+ * from the current bundle, while the before-counts are historical. Adding one
+ * English string that names the concept would grow the scope and move the
+ * primary count with nothing folding, which the arithmetic reports as a partial
+ * convergence; the pin makes it report the scope instead. See `./tally.ts`.
  */
 const CONVERGED: {
   label: string;
   locale: Locale;
   native: number;
+  /** The English keys the concept's scope holds — see `scopeSize` in `./tally.ts`. */
+  scopeSize: number;
   rivals: { pattern: RegExp; expected: number }[];
 }[] = [
   {
     label: "daemon",
     locale: "ja",
     native: 28,
+    scopeSize: 33,
     rivals: [{ pattern: /(?<![A-Za-z])daemons?(?![A-Za-z])/i, expected: 5 }],
   },
   {
     label: "daemon",
     locale: "ko",
     native: 28,
+    scopeSize: 33,
     rivals: [{ pattern: /(?<![A-Za-z])daemons?(?![A-Za-z])/i, expected: 5 }],
   },
-  { label: "inbox", locale: "ja", native: 13, rivals: [{ pattern: /受信トレイ/, expected: 2 }] },
-  { label: "member", locale: "ko", native: 80, rivals: [{ pattern: /구성원/, expected: 8 }] },
-  { label: "reply", locale: "ja", native: 17, rivals: [{ pattern: /回答|応答/, expected: 2 }] },
+  {
+    label: "inbox",
+    locale: "ja",
+    native: 13,
+    scopeSize: 15,
+    rivals: [{ pattern: /受信トレイ/, expected: 2 }],
+  },
+  {
+    label: "member",
+    locale: "ko",
+    native: 80,
+    scopeSize: 90,
+    rivals: [{ pattern: /구성원/, expected: 8 }],
+  },
+  {
+    label: "reply",
+    locale: "ja",
+    native: 17,
+    scopeSize: 19,
+    rivals: [{ pattern: /回答|応答/, expected: 2 }],
+  },
 ];
 
 const convergedClaim = ({
   label,
   locale,
   native,
+  scopeSize,
   rivals,
 }: (typeof CONVERGED)[number]): Claim => {
   const concept = CONCEPTS.find((entry) => entry.label === label);
@@ -361,8 +360,18 @@ const convergedClaim = ({
   return {
     label: `${label} (${locale}): ${native} native vs ${rivals.map((r) => r.expected).join(" + ")} rival`,
     when: "converged",
-    primary: { keysFrom: scope, pattern: new RegExp(concept.native[locale]), expected: native },
-    rivals: rivals.map((rival) => ({ keysFrom: scope, pattern: rival.pattern, expected: rival.expected })),
+    primary: {
+      keysFrom: scope,
+      pattern: new RegExp(concept.native[locale]),
+      expected: native,
+      scopeSize,
+    },
+    rivals: rivals.map((rival) => ({
+      keysFrom: scope,
+      pattern: rival.pattern,
+      expected: rival.expected,
+      scopeSize,
+    })),
   };
 };
 

@@ -158,6 +158,24 @@ export type Measure = {
    * the English names it in prose, not inside a `{{binding}}`.
    */
   keysFrom?: { locale: string; pattern: RegExp; masked?: boolean; exclude?: RegExp };
+  /**
+   * The number of keys this measure was taken over, when that number is part of
+   * the claim. A `converged` claim asserts arithmetic between a count taken
+   * today and a count taken in an earlier round, and that means something only
+   * if both were taken over the same key set. `keysFrom` derives its key set
+   * from the *current* bundle, so a key added to the source since the
+   * convergence moves the primary count without anything folding — the same
+   * shape the arithmetic reports for a partial convergence, and reported as one
+   * unless the size is pinned.
+   *
+   * Only a scope that is a *rule about the claim's own subject* is worth
+   * pinning — the keys whose English names the concept, say. The whole bundle
+   * and a broad key prefix grow for reasons that have nothing to do with the
+   * claim, so pinning their size would turn every unrelated string into a
+   * failure. Read by a `converged` claim only: a `current` count describes the
+   * bundle as it is, which is what its `expected` is for.
+   */
+  scopeSize?: number;
   /** Overrides the claim's unit for this one number. */
   unit?: Unit;
   /** Overrides the claim's locale. */
@@ -189,7 +207,24 @@ export type MeasureContext = {
   mask: (value: string | undefined) => string;
 };
 
+/**
+ * The three fields that narrow a measure to a key set. They select *different*
+ * sets — an exact list, a set derived from another bundle, a key prefix — so a
+ * measure naming two of them has no single reading: the count would silently be
+ * taken over whichever the branches below happen to test first. That is the
+ * `g`-flag trap in another guise (a plausible number, no error), so it is
+ * rejected rather than resolved by precedence.
+ */
+const NARROWINGS = ["keys", "keysFrom", "scope"] as const;
+
 function scoped(measure: Measure, ctx: MeasureContext): Bundle {
+  const named = NARROWINGS.filter((field) => measure[field] !== undefined);
+  if (named.length > 1) {
+    throw new Error(
+      `a measure narrows to one key set, but this one names ${named.join(" and ")} — they ` +
+        `select different keys, and the count would silently be taken over only one of them`,
+    );
+  }
   const target = ctx.bundles[measure.locale ?? ctx.locale];
   if (target === undefined) {
     throw new Error(`no bundle loaded for locale ${measure.locale ?? ctx.locale}`);
@@ -233,6 +268,34 @@ export function measure(measure: Measure, ctx: MeasureContext): number {
     : countOccurrences(bundle, measure.pattern);
 }
 
+/** How many keys a measure is taken over, before `pattern` narrows the values. */
+export function scopeSize(measure: Measure, ctx: MeasureContext): number {
+  return Object.keys(scoped(measure, ctx)).length;
+}
+
+/**
+ * A convergence whose key set has changed since it was measured. Returned
+ * *instead of* the arithmetic rather than alongside it: when the scope moved,
+ * the sum is a consequence of that and not independent evidence, so reporting it
+ * too would put the misleading explanation back in the output.
+ */
+function changedScopes(claim: Claim, rivals: Measure[], ctx: MeasureContext): string[] {
+  const messages = [claim.primary, ...rivals]
+    .filter((measure) => measure.scopeSize !== undefined)
+    .map((measure) => {
+      const size = scopeSize(measure, ctx);
+      if (size === measure.scopeSize) return null;
+      return (
+        `${claim.label}: the scope holds ${size} keys where the before-counts were measured ` +
+        `over ${measure.scopeSize} — a key added to it since then moves the count without ` +
+        `folding anything, so the pre-convergence tally cannot be re-derived from the current ` +
+        `bundle`
+      );
+    })
+    .filter((message): message is string => message !== null);
+  return [...new Set(messages)];
+}
+
 /**
  * Reject a `converged` claim whose arithmetic could not mean anything, before
  * measuring it. These are authoring mistakes, not facts about the bundle, so
@@ -274,7 +337,11 @@ export function verify(claim: Claim, ctx: MeasureContext): string[] {
   const when = claim.when ?? "current";
   const rivals = claim.rivals ?? [];
   const problems: string[] = [];
-  if (when === "converged") checkConvergence(claim, rivals, ctx);
+  if (when === "converged") {
+    checkConvergence(claim, rivals, ctx);
+    const changed = changedScopes(claim, rivals, ctx);
+    if (changed.length > 0) return changed;
+  }
   const measuredPrimary = measure(claim.primary, ctx);
   const measuredRivals = rivals.map((rival) => measure(rival, ctx));
 

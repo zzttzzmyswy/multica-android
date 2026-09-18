@@ -26,9 +26,12 @@ Two measurement traps this script exists to avoid, both of them 151's:
     at all.
   - **A native form can be a substring of an unrelated word.** `표` ("table")
     matches `표시` ("display") 105 times, which is the `템플릿`/`플릿` false
-    positive one file over. Every candidate is anchored so it cannot sit inside
-    a longer Hangul word, and `체크리스트` ("checklist") is excluded from
-    `리스트`.
+    positive one file over. Every rival form is anchored so it cannot sit inside
+    a longer Hangul word — a predicate, not a list of the offenders. The 153
+    round wrote `리스트`'s anchor as `(?<!체크)`, which excluded the one literal
+    it had thought of and let `애널리스트` ("analyst") through, reading 5 where
+    the bundle holds 4; that is the 153 round's own fourth trap, a whitelist
+    where a predicate is needed.
 
 Usage: python3 scripts/probe-iter153-ko-notation.py
 """
@@ -48,7 +51,7 @@ MASKED = [re.compile(r"\{\{[^}]*\}\}"), re.compile(r"`[^`]*`")]
 TOKEN = re.compile(rf"[A-Za-z][A-Za-z0-9.+#/_-]*|[{HANGUL}]+|[0-9]+|\s+|.")
 
 SINO_NATIVE = [
-    ("list", r"목록", r"(?<!체크)리스트"),
+    ("list", r"목록", rf"(?<![{HANGUL}])리스트"),
     ("table", r"테이블", rf"(?<![{HANGUL}])표(?![{HANGUL}])"),
     ("user", r"사용자", rf"(?<![{HANGUL}])유저(?![{HANGUL}])"),
     ("error", r"오류", r"에러"),

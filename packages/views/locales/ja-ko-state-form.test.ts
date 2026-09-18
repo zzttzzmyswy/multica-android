@@ -1,7 +1,5 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { load, type Bundle } from "./tally";
 
 /**
  * The state / resultative form in ja and ko — settled by the bundle, pinned here.
@@ -52,34 +50,6 @@ import { describe, expect, it } from "vitest";
  * false straggler rather than a false disagreement.
  */
 
-const LOCALES_DIR = dirname(fileURLToPath(import.meta.url));
-
-type Bundle = Record<string, string>;
-
-function namespaces(locale: string): string[] {
-  return readdirSync(resolve(LOCALES_DIR, locale))
-    .filter((name) => name.endsWith(".json"))
-    .map((name) => name.replace(/\.json$/, ""))
-    .sort();
-}
-
-function flatten(value: unknown, prefix = ""): Bundle {
-  if (value === null || typeof value !== "object") return { [prefix]: String(value) };
-  return Object.entries(value as Record<string, unknown>).reduce<Bundle>(
-    (acc, [key, child]) => Object.assign(acc, flatten(child, prefix ? `${prefix}.${key}` : key)),
-    {},
-  );
-}
-
-function load(locale: string): Bundle {
-  return namespaces(locale).reduce<Bundle>((acc, ns) => {
-    const raw = readFileSync(resolve(LOCALES_DIR, locale, `${ns}.json`), "utf8");
-    for (const [key, value] of Object.entries(flatten(JSON.parse(raw)))) {
-      acc[`${ns}.${key}`] = value;
-    }
-    return acc;
-  }, {});
-}
 
 const en = load("en");
 const ja = load("ja");

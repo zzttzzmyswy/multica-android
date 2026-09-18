@@ -1,7 +1,8 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { load, namespaces } from "./tally";
+
+const SOURCE_LOCALE = "en";
+const TARGET_LOCALE = "zh-Hans";
 
 /**
  * Guard for the "Translate fully — concepts" column of the Chinese voice guide
@@ -29,36 +30,6 @@ import { describe, expect, it } from "vitest";
  * English too.
  */
 
-const LOCALES_DIR = dirname(fileURLToPath(import.meta.url));
-const SOURCE_LOCALE = "en";
-const TARGET_LOCALE = "zh-Hans";
-
-type Bundle = Record<string, string>;
-
-function namespaces(locale: string): string[] {
-  return readdirSync(resolve(LOCALES_DIR, locale))
-    .filter((name) => name.endsWith(".json"))
-    .map((name) => name.replace(/\.json$/, ""))
-    .sort();
-}
-
-function flatten(value: unknown, prefix = ""): Bundle {
-  if (value === null || typeof value !== "object") return { [prefix]: String(value) };
-  return Object.entries(value as Record<string, unknown>).reduce<Bundle>(
-    (acc, [key, child]) => Object.assign(acc, flatten(child, prefix ? `${prefix}.${key}` : key)),
-    {},
-  );
-}
-
-/** `namespace.key.path` -> string, for every namespace in the bundle. */
-function load(locale: string): Bundle {
-  return namespaces(locale).reduce<Bundle>((acc, ns) => {
-    const raw = readFileSync(resolve(LOCALES_DIR, locale, `${ns}.json`), "utf8");
-    const flat = flatten(JSON.parse(raw));
-    for (const [key, value] of Object.entries(flat)) acc[`${ns}.${key}`] = value;
-    return acc;
-  }, {});
-}
 
 const en = load(SOURCE_LOCALE);
 const zh = load(TARGET_LOCALE);
