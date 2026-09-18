@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   accessScopeOfAgent,
   buildAgentBatchSelection,
+  isRestrictedAgent,
   matchesAccessFilter,
 } from "./agent-list-access";
 
@@ -101,6 +102,52 @@ describe("matchesAccessFilter", () => {
       ),
     ).toBe(true);
     expect(matchesAccessFilter(agent("c"), selected)).toBe(false);
+  });
+});
+
+describe("isRestrictedAgent", () => {
+  // Web's assignee picker locks every agent that is not workspace-wide
+  // (packages/views/issues/components/pickers/assignee-picker.tsx). Both
+  // non-workspace scopes must read as restricted — a member-only grant is
+  // just as unavailable to everyone else as an owner-only one.
+  it("marks owner-only agents restricted", () => {
+    expect(isRestrictedAgent(agent("a"))).toBe(true);
+    expect(
+      isRestrictedAgent(agent("a", { permission_mode: "public_to" })),
+    ).toBe(true);
+  });
+
+  it("marks member-scoped agents restricted", () => {
+    expect(
+      isRestrictedAgent(
+        agent("a", { permission_mode: "public_to", member_targets: ["u-1"] }),
+      ),
+    ).toBe(true);
+  });
+
+  it("leaves workspace-wide agents unrestricted", () => {
+    expect(
+      isRestrictedAgent(
+        agent("a", { permission_mode: "public_to", workspace_target: true }),
+      ),
+    ).toBe(false);
+  });
+
+  it("ignores the legacy visibility field", () => {
+    // The lock is a claim about who may RUN the agent, so it must follow the
+    // authoritative scope. A stale `visibility: "workspace"` on a private
+    // agent must not unlock it, and vice versa.
+    const staleWorkspace = {
+      ...agent("a", { permission_mode: "private" }),
+      visibility: "workspace",
+    } as unknown as Agent;
+    expect(isRestrictedAgent(staleWorkspace)).toBe(true);
+
+    const stalePrivate = {
+      ...agent("a", { permission_mode: "public_to", workspace_target: true }),
+      visibility: "private",
+    } as unknown as Agent;
+    expect(isRestrictedAgent(stalePrivate)).toBe(false);
   });
 });
 
