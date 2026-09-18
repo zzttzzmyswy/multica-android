@@ -187,8 +187,13 @@ describe("zh bundles agree on the chat surface", () => {
     // there is nothing to compare. The count of shared source strings is what
     // this guard actually reaches; pinning it means a wholesale rename on one
     // side cannot quietly empty the suites above into a green no-op.
+    //
+    // 37 = 35 at the original scan + the archived-agent pair added in
+    // iteration 161 (`chat.agentArchived` / `chat.archivedAgentBanner`, both
+    // verbatim from views' `input.placeholder_archived_agent` and
+    // `archived_agent_banner`), which the suite above now holds to agreement.
     const shared = [...mobileBySource.keys()].filter((source) => viewsBySource.has(source));
-    expect(shared.length).toBe(35);
+    expect(shared.length).toBe(37);
   });
 });
 

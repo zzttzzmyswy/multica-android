@@ -29,7 +29,7 @@ import {
   pendingChatTasksOptions,
   splitChatSessions,
 } from "@/data/queries/chat";
-import { agentListOptions } from "@/data/queries/agents";
+import { agentListAllOptions } from "@/data/queries/agents";
 import { useChatSessionPickerStore } from "@/data/stores/chat-session-picker-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useChatSessionActions } from "@/components/chat/session-actions";
@@ -51,7 +51,9 @@ export default function ChatSessionsRoute() {
   const { showActions, renameDialog } = useChatSessionActions();
   // agent_id → display name: unknown ids fall back to a placeholder
   // (MYS-335), and an empty session title falls back to the agent name.
-  const { data: agents = [] } = useQuery(agentListOptions(wsId));
+  // Archived-inclusive, so a session whose agent was retired keeps its name
+  // instead of degrading to the placeholder.
+  const { data: agents = [] } = useQuery(agentListAllOptions(wsId));
   const agentNameById = new Map(agents.map((a) => [a.id, a.name]));
   const activeSessionId = useChatSessionPickerStore((s) => s.activeSessionId);
   const requestSelect = useChatSessionPickerStore((s) => s.requestSelect);

@@ -2,7 +2,7 @@ import { useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { memberListOptions } from "@/data/queries/members";
-import { agentListOptions } from "@/data/queries/agents";
+import { agentListAllOptions } from "@/data/queries/agents";
 import { squadListOptions } from "@/data/queries/squads";
 
 /**
@@ -12,11 +12,18 @@ import { squadListOptions } from "@/data/queries/squads";
  * Returns synchronous lookup helpers — they read whatever is in the TQ
  * cache. If the lists haven't loaded yet, lookups return null/initials
  * fallback; the row will re-render once data arrives.
+ *
+ * The agent list is the **archived-inclusive** one. Core's `agentListOptions`
+ * — which `useActorName` reads — already passes `include_archived: true`, and
+ * a retired agent still has to render its own name and avatar wherever it
+ * appears in history (chat session rows, old comments, activity rows).
+ * Resolving from the archived-free list degraded every one of those to an
+ * initials chip.
  */
 export function useActorLookup() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { data: members = [] } = useQuery(memberListOptions(wsId));
-  const { data: agents = [] } = useQuery(agentListOptions(wsId));
+  const { data: agents = [] } = useQuery(agentListAllOptions(wsId));
   const { data: squads = [] } = useQuery(squadListOptions(wsId));
 
   // Index the three lists once per data change. Avatar rows (inbox, issue

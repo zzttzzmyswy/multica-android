@@ -26,8 +26,11 @@ export const agentListOptions = (wsId: string | null) =>
   });
 
 // Agent list INCLUDING archived, for the agents screen + agent detail/edit/env
-// routes. Archives never enter the picker / chat / mention paths, which keep
-// `agentListOptions` above.
+// routes, and for resolving the identity of an agent that history still
+// references (chat session rows, the chat screen's session agent, the shared
+// actor lookup). Archives never enter the *picker* paths, which keep
+// `agentListOptions` above — a retired agent must not be selectable, but it
+// must still render as itself wherever it already appears.
 export const agentListAllOptions = (wsId: string | null) =>
   queryOptions({
     queryKey: agentKeys.listAll(wsId),
