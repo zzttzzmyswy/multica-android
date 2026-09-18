@@ -126,11 +126,27 @@ const keyPattern = (pattern: RegExp) =>
 const occurrencePattern = (pattern: RegExp) =>
   pattern.global ? pattern : new RegExp(pattern.source, `${pattern.flags}g`);
 
-export const countMatching = (bundle: Bundle, pattern: RegExp, also?: RegExp) =>
-  Object.values(bundle).filter(
-    (value) =>
-      keyPattern(pattern).test(value) && (also === undefined || keyPattern(also).test(value)),
+/**
+ * A predicate for one value, normalised once instead of per value. `countMatching`
+ * is this over a bundle; a guard that builds an offender *list* — key plus value,
+ * for the failure message — needs the same normalisation, and hand-writing
+ * `.test()` there is how the `g`-flag trap gets back in. `ja-ko-notation.test.ts`
+ * did exactly that: its rival patterns carry `g` because they sit beside the
+ * counted ones, and a global pattern's `test` advances `lastIndex`, so the guard
+ * that reports offenders skips every other value that has one.
+ */
+export const valueMatcher = (pattern: RegExp) => {
+  const safe = keyPattern(pattern);
+  return (value: string) => safe.test(value);
+};
+
+export const countMatching = (bundle: Bundle, pattern: RegExp, also?: RegExp) => {
+  const matches = valueMatcher(pattern);
+  const overlaps = also === undefined ? undefined : valueMatcher(also);
+  return Object.values(bundle).filter(
+    (value) => matches(value) && (overlaps === undefined || overlaps(value)),
   ).length;
+};
 
 export const countOccurrences = (bundle: Bundle, pattern: RegExp) =>
   Object.values(bundle).reduce(
@@ -174,6 +190,10 @@ export type Measure = {
    * claim, so pinning their size would turn every unrelated string into a
    * failure. Read by a `converged` claim only: a `current` count describes the
    * bundle as it is, which is what its `expected` is for.
+   *
+   * A measure narrowed by an explicit `keys` list cannot carry one: that scope
+   * is the list, so its size is the list's length and no bundle edit moves it.
+   * `verify` rejects the pair rather than accepting a pin that cannot fail.
    */
   scopeSize?: number;
   /** Overrides the claim's unit for this one number. */
@@ -330,6 +350,31 @@ function checkConvergence(claim: Claim, rivals: Measure[], ctx: MeasureContext):
 }
 
 /**
+ * A `scopeSize` pin on a measure narrowed by an explicit `keys` list asserts
+ * nothing. The scope *is* the list, so its size is `keys.length` — a literal in
+ * the guard, not a measurement of any bundle — and no edit to a locale can move
+ * it. A pin that cannot fail reads like the evidence the rest of this module
+ * exists to produce, which is the failure mode it was built to remove, so the
+ * pair is rejected the way `scoped` rejects two narrowings.
+ *
+ * The whole-bundle case is deliberately **not** rejected. A pin there can fail;
+ * it fails for reasons unrelated to the claim, which is why `scopeSize`'s own
+ * note says not to write one. Whether the bundle in hand is "everything about
+ * this claim" or "everything in the locale" depends on how the guard built its
+ * context — a guard may load one namespace — and that is the author's call, not
+ * something this function can check.
+ */
+function checkScopePins(claim: Claim, rivals: Measure[]): void {
+  for (const measure of [claim.primary, ...rivals]) {
+    if (measure.scopeSize === undefined || measure.keys === undefined) continue;
+    throw new Error(
+      `${claim.label}: a scope pin on a measure narrowed by \`keys\` asserts nothing — the ` +
+        `scope is the list, so its size is the list's length and no bundle edit can move it`,
+    );
+  }
+}
+
+/**
  * Re-derive a claim's numbers and return one message per number that does not
  * hold. An empty array means the claim is true.
  */
@@ -339,6 +384,7 @@ export function verify(claim: Claim, ctx: MeasureContext): string[] {
   const problems: string[] = [];
   if (when === "converged") {
     checkConvergence(claim, rivals, ctx);
+    checkScopePins(claim, rivals);
     const changed = changedScopes(claim, rivals, ctx);
     if (changed.length > 0) return changed;
   }

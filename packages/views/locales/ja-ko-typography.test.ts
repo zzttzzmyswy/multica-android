@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { verify, load, type Claim, type MeasureContext } from "./tally";
+import { verify, load, countOccurrences, type Claim, type MeasureContext } from "./tally";
 
 /**
  * Guard for the two ja / ko typography conventions that live outside the term
@@ -246,11 +246,7 @@ describe("ko attaches a counter to a placeholder too", () => {
   });
 
   it("still writes the tight form, so the rule above is not vacuous", () => {
-    const occurrences = Object.keys(ko).reduce(
-      (total, key) => total + (ko[key]?.match(new RegExp(TIGHT, "g"))?.length ?? 0),
-      0,
-    );
-    expect(occurrences).toBeGreaterThan(100);
+    expect(countOccurrences(ko, TIGHT)).toBeGreaterThan(100);
   });
 
   /**

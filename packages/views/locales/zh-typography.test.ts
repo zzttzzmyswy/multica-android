@@ -82,6 +82,17 @@ const bracketCtx: MeasureContext = {
   mask: (value) => (value ?? "").replace(CODE_SPAN, " "),
 };
 
+/** Either bracket form — the union a claim's scope is derived from. */
+const ANY_PAIR = /（[^（）]*）|\([^()]*\)/;
+
+/**
+ * The keys whose value carries a bracket pair at all, in either form, masked the
+ * way the measurements are. A key carrying no pair contributes zero to either
+ * pattern, so this is the narrowest set a bracket claim is still true over — and
+ * the only one that is *about the claim* rather than about the locale.
+ */
+const bracketKeys = (locale: string) => ({ locale, pattern: ANY_PAIR, masked: true });
+
 /**
  * The convergence the 151 round performed on the brackets, as a claim. The
  * before-counts have been in the suite's prose since that round and nothing
@@ -90,19 +101,49 @@ const bracketCtx: MeasureContext = {
  * 74 is a *post*-convergence count over views alone and 5 a pre-convergence one
  * over both bundles. See `./tally.ts` for what the claim does and does not
  * prove.
+ *
+ * Each claim pins the size of that scope. The 154 round left these two
+ * whole-bundle for the reason `scopeSize` gives — the locale grows for reasons
+ * that have nothing to do with brackets — which kept the defect the round had
+ * just fixed for the derived scopes: a new zh string carrying a pair moves the
+ * count with nothing folding, and the claim reports it as *"either the
+ * convergence was partial or the tally was wrong"*. Narrowing to the keys that
+ * carry a pair costs nothing (74 and 37 keys, the same counts the whole bundles
+ * give) and turns that case into the scope message it is.
  */
 const BRACKET_CLAIMS: Claim[] = [
   {
     label: "brackets (views zh-Hans): 70 full-width vs 4 half-width",
     when: "converged",
-    primary: { pattern: /（[^（）]*）/g, expected: 70 },
-    rivals: [{ pattern: /\([^()]*\)/g, expected: 4 }],
+    primary: {
+      keysFrom: bracketKeys("zh-Hans"),
+      pattern: /（[^（）]*）/g,
+      expected: 70,
+      scopeSize: 74,
+    },
+    rivals: [
+      { keysFrom: bracketKeys("zh-Hans"), pattern: /\([^()]*\)/g, expected: 4, scopeSize: 74 },
+    ],
   },
   {
     label: "brackets (mobile zh): 36 full-width vs 1 half-width",
     when: "converged",
-    primary: { pattern: /（[^（）]*）/g, expected: 36, locale: "zh" },
-    rivals: [{ pattern: /\([^()]*\)/g, expected: 1, locale: "zh" }],
+    primary: {
+      keysFrom: bracketKeys("zh"),
+      pattern: /（[^（）]*）/g,
+      expected: 36,
+      locale: "zh",
+      scopeSize: 37,
+    },
+    rivals: [
+      {
+        keysFrom: bracketKeys("zh"),
+        pattern: /\([^()]*\)/g,
+        expected: 1,
+        locale: "zh",
+        scopeSize: 37,
+      },
+    ],
   },
 ];
 

@@ -2,7 +2,16 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { verify, load, LOCALES_DIR, type Claim, type MeasureContext, type Bundle } from "./tally";
+import {
+  verify,
+  load,
+  countOccurrences,
+  valueMatcher,
+  LOCALES_DIR,
+  type Claim,
+  type MeasureContext,
+  type Bundle,
+} from "./tally";
 
 /**
  * Guard for ja / ko **notation inside a native word** — the 151 round's fourth
@@ -41,18 +50,30 @@ import { verify, load, LOCALES_DIR, type Claim, type MeasureContext, type Bundle
 const ja = load("ja");
 const ko = load("ko");
 
-const occurrences = (bundle: Bundle, pattern: RegExp) =>
-  Object.values(bundle).reduce((total, value) => total + (value.match(pattern) ?? []).length, 0);
+/**
+ * The keys whose value carries the spelling at all, either form of it. `pattern`
+ * is the union of the two forms a claim is about, so the set is the closest
+ * thing to a scope a notation claim has — see `FOLDER_CLAIMS`.
+ */
+const folderKeys = { locale: "ja", pattern: /フォルダ/ };
 
-const keysMatching = (bundle: Bundle, pattern: RegExp) =>
-  Object.entries(bundle)
-    .filter(([, value]) => pattern.test(value))
+const keysMatching = (bundle: Bundle, pattern: RegExp) => {
+  const matches = valueMatcher(pattern);
+  return Object.entries(bundle)
+    .filter(([, value]) => matches(value))
     .map(([key]) => key);
+};
 
 /**
- * No English string names a katakana spelling, so a notation claim is measured
- * over the whole target bundle rather than over the keys whose source names the
- * term. The mask is the identity: this suite reads raw values, and masking the
+ * No English string names a katakana spelling, so a notation claim is not
+ * measured over the keys whose *source* names the term the way a concept claim
+ * is — there is no English word to derive a set from. It is measured over
+ * `folderKeys` instead: the keys whose value carries the spelling at all, in
+ * either form. A key carrying neither form contributes zero to either pattern,
+ * so narrowing to that set moves no count, and it is the only scope a notation
+ * claim has that is *about the claim* rather than about the locale.
+ *
+ * The mask is the identity: this suite reads raw values, and masking the
  * `{{...}}` a loanword might sit beside would only hide occurrences.
  */
 const notationCtx: MeasureContext = {
@@ -68,13 +89,25 @@ const notationCtx: MeasureContext = {
  * the converged total at 9, but the 8 and the 1 are a measurement of a bundle
  * that no longer exists; the claim is what keeps them from being free text. See
  * `./tally.ts`.
+ *
+ * The 154 round pinned the size of a derived scope on every claim that had one
+ * and left this one whole-bundle, because the whole bundle grows for reasons
+ * that have nothing to do with `フォルダ` and pinning it would turn an unrelated
+ * new string into a failure. That left the same defect it had just fixed: a key
+ * added to ja carrying `フォルダ` grows the count with nothing folding, and the
+ * claim reports it as *"either the convergence was partial or the tally was
+ * wrong"* — a message that names the one cause it is not. The scope is now the
+ * eight keys that carry the spelling (either form), so that key grows the scope
+ * instead, and the failure says so. Measured, not assumed: with a probe key
+ * injected the message is `the scope holds 9 keys where the before-counts were
+ * measured over 8`.
  */
 const FOLDER_CLAIMS: Claim[] = [
   {
     label: "フォルダ (ja): 8 native vs 1 フォルダー",
     when: "converged",
-    primary: { pattern: /フォルダ(?!ー)/g, expected: 8 },
-    rivals: [{ pattern: /フォルダー/g, expected: 1 }],
+    primary: { keysFrom: folderKeys, pattern: /フォルダ(?!ー)/g, expected: 8, scopeSize: 8 },
+    rivals: [{ keysFrom: folderKeys, pattern: /フォルダー/g, expected: 1, scopeSize: 8 }],
   },
 ];
 
@@ -137,7 +170,7 @@ describe("ja notation: each loanword keeps the one spelling the bundle chose", (
       // Pinning the tally is what makes the rule non-vacuous in the other
       // direction: converging the rival to zero by deleting the word would
       // otherwise read as success.
-      expect(occurrences(ja, primary)).toBe(tally);
+      expect(countOccurrences(ja, primary)).toBe(tally);
     });
   }
 });
@@ -154,7 +187,7 @@ describe("ko notation: each loanword keeps the one spelling the bundle chose", (
     }
 
     it(`still writes ${form} as often as the derivation measured`, () => {
-      expect(occurrences(ko, primary)).toBe(tally);
+      expect(countOccurrences(ko, primary)).toBe(tally);
     });
   }
 });
@@ -318,8 +351,8 @@ describe("ja notation: the ko side of the fold is recorded as having no analog",
     // The reason that fold is not usable: it is blind to the split the repo
     // already settled. If a round ever removes this pin, the note above stops
     // being true.
-    expect(occurrences(ko, /데스크톱/g)).toBe(19);
-    expect(occurrences(ko, /데스크탑/g)).toBe(0);
+    expect(countOccurrences(ko, /데스크톱/g)).toBe(19);
+    expect(countOccurrences(ko, /데스크탑/g)).toBe(0);
   });
 });
 
@@ -351,7 +384,7 @@ describe("ja notation: the two splits the round drew a line between", () => {
     );
     expect(offenders).toEqual([]);
     // 9 = the 8 majority occurrences plus the one straggler, now converged.
-    expect(occurrences(ja, /フォルダ(?!ー)/g)).toBe(9);
+    expect(countOccurrences(ja, /フォルダ(?!ー)/g)).toBe(9);
   });
 
   it("re-derives the pre-convergence counts the フォルダ line was drawn on", () => {
@@ -367,8 +400,8 @@ describe("ja notation: the two splits the round drew a line between", () => {
     // If a round converges this, the ledger entry has to go at the same time —
     // `unsettled-ledger.test.ts` fails on a converged entry, so the two guards
     // agree by construction. This test is the pointer, not the authority.
-    expect(occurrences(ja, /ブラウザ(?!ー)/g)).toBe(12);
-    expect(occurrences(ja, /ブラウザー/g)).toBe(2);
+    expect(countOccurrences(ja, /ブラウザ(?!ー)/g)).toBe(12);
+    expect(countOccurrences(ja, /ブラウザー/g)).toBe(2);
   });
 
   it("keeps the collision that blocks a clean partition for ブラウザ", () => {

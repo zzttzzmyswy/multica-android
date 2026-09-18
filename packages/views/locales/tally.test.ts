@@ -288,6 +288,27 @@ describe("measure: the narrowing fields in combination", () => {
   });
 
   /**
+   * `also` and `keysFrom` are separate knobs — one intersects within the scope,
+   * the other derives the scope — and the mask reaches the value once, so
+   * `unmasked` moves `pattern` and `also` together inside a derived scope too.
+   * The ledger's two `also` facts are intersections of two named sets ("keys
+   * carrying both"), and neither combines it with a derived scope, so the
+   * combination is asserted here rather than left to branch order.
+   */
+  it("intersects `also` inside a derived scope, over the same masked value", () => {
+    const derivedBoth = {
+      keysFrom: { locale: "en", pattern: /(?<![A-Za-z])daemons?(?![A-Za-z])/i, masked: false },
+      pattern: /バインディング/,
+      also: /\{\{daemon\}\}/,
+    };
+    // The scope is the four English keys naming the concept, `b.binding` among
+    // them; the target read is masked, so its `{{daemon}}` is gone and `also`
+    // cannot find it.
+    expect(measure({ ...derivedBoth, unmasked: true, expected: 0 }, ctx)).toBe(1);
+    expect(measure({ ...derivedBoth, expected: 0 }, ctx)).toBe(0);
+  });
+
+  /**
    * `keysFrom.masked` reads the *source*, `unmasked` reads the *target*: two
    * knobs on two bundles, and setting one must not move the other. The derived
    * set here is the four English keys that name the concept raw, `b.binding`
@@ -605,5 +626,70 @@ describe("verify: a converged claim that is not one", () => {
         ctx,
       ),
     ).toThrow("the primary is read from ja and a rival from en");
+  });
+
+  /**
+   * A `keys` scope is the list, so its size is `keys.length` — a literal, not a
+   * measurement — and no bundle edit can move it. A pin there would read as
+   * evidence and be incapable of failing, which is the defect the pin exists to
+   * catch, so the pair is refused rather than silently accepted.
+   */
+  it("refuses a scope pin on a measure narrowed by `keys`", () => {
+    expect(() =>
+      verify(
+        {
+          label: "daemon",
+          when: "converged",
+          primary: { keys: ["a.plain", "a._one"], pattern: /デーモン/, expected: 2, scopeSize: 2 },
+          rivals: [
+            { keys: ["a.plain", "a._one"], pattern: /daemon/, expected: 1, scopeSize: 2 },
+          ],
+        },
+        ctx,
+      ),
+    ).toThrow(
+      "daemon: a scope pin on a measure narrowed by `keys` asserts nothing — the scope is the " +
+        "list, so its size is the list's length and no bundle edit can move it",
+    );
+  });
+
+  /**
+   * The pin is still refused when it is the *rival* that carries it: the two
+   * narrowings are checked independently, not just the primary's.
+   */
+  it("refuses a `keys` scope pin on a rival too", () => {
+    expect(() =>
+      verify(
+        {
+          label: "daemon",
+          when: "converged",
+          primary: { pattern: /デーモン/, expected: 2 },
+          rivals: [{ keys: ["a.plain"], pattern: /daemon/, expected: 1, scopeSize: 1 }],
+        },
+        ctx,
+      ),
+    ).toThrow("a scope pin on a measure narrowed by `keys` asserts nothing");
+  });
+
+  /**
+   * The boundary: a `scope` prefix is not `keys`. It is read off the bundle, so
+   * its size can move, and whether pinning it is meaningful is the author's call
+   * — `verify` only refuses the pin that provably cannot fail.
+   *
+   * The numbers are the `b.` keys: 3 of them, one holding `デーモン` where the
+   * tally says the convergence left none, and a rival that folded one.
+   */
+  it("still accepts a scope pin on a prefix-narrowed measure", () => {
+    expect(
+      verify(
+        {
+          label: "daemon",
+          when: "converged",
+          primary: { scope: "b.", pattern: /デーモン/, expected: 0, scopeSize: 3 },
+          rivals: [{ scope: "b.", pattern: /ダエモン/, expected: 1, scopeSize: 3 }],
+        },
+        ctx,
+      ),
+    ).toEqual([]);
   });
 });
