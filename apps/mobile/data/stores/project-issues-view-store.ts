@@ -22,6 +22,7 @@
  * store, so there is nothing project-id-shaped to persist here.
  */
 import { create } from "zustand";
+import type { SwimlaneGrouping } from "@/lib/swimlane";
 import {
   createIssueFilterActions,
   defaultIssueFilterSlice,
@@ -32,32 +33,48 @@ import {
 import {
   createTableColumnActions,
   defaultTableColumns,
+  defaultTableColumnWidths,
   type TableColumnKey,
   type TableColumnsSlice,
 } from "./issue-table-columns";
+import {
+  createTableGroupingActions,
+  defaultTableGrouping,
+  type TableGroupingSlice,
+} from "./issue-table-grouping";
 import type { IssuesScope } from "./issues-view-store";
 
 export interface ProjectIssuesViewState
   extends IssueFilterSlice,
-    TableColumnsSlice {
+    TableColumnsSlice,
+    TableGroupingSlice {
   /** Scope tab — all / members / agents, mirroring web's project-page
    *  issue tabs (`issues-scope-store` keyed `project:<id>`). */
   scope: IssuesScope;
   view: IssueViewMode;
+  /** Active swimlane grouping dimension — only read in swimlane mode.
+   *  Default `assignee`, matching web `view-store.ts` defaults. */
+  swimlaneGrouping: SwimlaneGrouping;
   setScope: (scope: IssuesScope) => void;
   setView: (view: IssueViewMode) => void;
+  setSwimlaneGrouping: (grouping: SwimlaneGrouping) => void;
 }
 
 export const useProjectIssuesViewStore = create<ProjectIssuesViewState>(
   (set) => ({
     scope: "all",
     view: "list",
+    swimlaneGrouping: "assignee",
     tableColumns: defaultTableColumns(),
+    tableColumnWidths: defaultTableColumnWidths(),
+    tableGrouping: defaultTableGrouping(),
     ...defaultIssueFilterSlice(),
     setScope: (scope) => set({ scope }),
     setView: (view) => set({ view }),
+    setSwimlaneGrouping: (swimlaneGrouping) => set({ swimlaneGrouping }),
     ...createIssueFilterActions<ProjectIssuesViewState>(set),
     ...createTableColumnActions<ProjectIssuesViewState>(set),
+    ...createTableGroupingActions<ProjectIssuesViewState>(set),
   }),
 );
 
