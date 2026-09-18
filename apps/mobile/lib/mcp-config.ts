@@ -160,3 +160,147 @@ export function formFromTransport(transport: string): McpFormState {
     transport: transport === "stdio" ? "stdio" : "http",
   };
 }
+
+// ---------------------------------------------------------------------------
+// Agent-owned `mcp_config` document model
+// ---------------------------------------------------------------------------
+//
+// Unlike the workspace library (write-only), an agent's own MCP config IS
+// readable — `Agent.mcp_config` is the raw JSON document the daemon consumes.
+// Web parses it with packages/views/agents/components/tabs/mcp-config-model.ts;
+// this is the mobile port, kept verbatim so both clients write the same shape.
+//
+// The document may carry its servers under either `mcpServers` (the common
+// shape) or `mcp` (older/newer backends). Both are read; a NEW entry always
+// lands in `mcpServers` (web's `upsertManagedMcpServer` default) and an edit
+// keeps whichever container the entry already lived in, so a save never
+// silently migrates a document.
+
+export type McpConfigContainer = "mcpServers" | "mcp";
+
+export interface ManagedMcpServer {
+  name: string;
+  config: Record<string, unknown>;
+  container: McpConfigContainer;
+  transport: string;
+  enabled: boolean;
+}
+
+const MCP_CONTAINERS: readonly McpConfigContainer[] = ["mcpServers", "mcp"];
+
+/**
+ * Display classifier for a raw config — NOT the authoritative `config.type`.
+ * stdio wins on a `command` (or an explicit local/stdio type); then sse; then
+ * anything url-shaped; everything else is unknown (web `mcpTransport`).
+ */
+export function mcpTransport(config: Record<string, unknown>): string {
+  const type = typeof config.type === "string" ? config.type.toLowerCase() : "";
+  if (config.command || type === "local" || type === "stdio") return "stdio";
+  if (type === "sse") return "sse";
+  if (
+    config.url ||
+    type === "remote" ||
+    type === "http" ||
+    type === "streamable-http"
+  ) {
+    return "http";
+  }
+  return "unknown";
+}
+
+/**
+ * Every server in an `mcp_config` document, sorted by name. `mcpServers` wins
+ * a name collision with `mcp` — same precedence the daemon applies.
+ */
+export function listManagedMcpServers(value: unknown): ManagedMcpServer[] {
+  if (!isRecord(value)) return [];
+
+  const out: ManagedMcpServer[] = [];
+  const seen = new Set<string>();
+  for (const container of MCP_CONTAINERS) {
+    const raw = value[container];
+    if (!isRecord(raw)) continue;
+    for (const [name, entry] of Object.entries(raw)) {
+      if (seen.has(name) || !isRecord(entry)) continue;
+      seen.add(name);
+      out.push({
+        name,
+        config: entry,
+        container,
+        transport: mcpTransport(entry),
+        enabled: entry.enabled !== false && entry.disabled !== true,
+      });
+    }
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Insert or replace one server, returning a NEW document. Editing keeps the
+ * entry's existing container and drops the previous name, so a rename moves
+ * the entry instead of leaving the old one behind.
+ */
+export function upsertManagedMcpServer(
+  value: unknown,
+  previous: ManagedMcpServer | null,
+  name: string,
+  config: Record<string, unknown>,
+): Record<string, unknown> {
+  const document = isRecord(value) ? { ...value } : {};
+  const container: McpConfigContainer = previous?.container ?? "mcpServers";
+
+  if (previous) {
+    const previousMap = isRecord(document[previous.container])
+      ? { ...(document[previous.container] as Record<string, unknown>) }
+      : {};
+    delete previousMap[previous.name];
+    document[previous.container] = previousMap;
+  }
+
+  const target = isRecord(document[container])
+    ? { ...(document[container] as Record<string, unknown>) }
+    : {};
+  target[name] = config;
+  document[container] = target;
+  return document;
+}
+
+/**
+ * Drop one server. Returns `null` when the document is left empty — that is
+ * the "clear the column" sentinel the API's tri-state `mcp_config` expects,
+ * so an agent whose last server is deleted goes back to "no config at all"
+ * rather than keeping an empty `{ mcpServers: {} }` shell.
+ */
+export function removeManagedMcpServer(
+  value: unknown,
+  server: ManagedMcpServer,
+): Record<string, unknown> | null {
+  if (!isRecord(value)) return null;
+  const document = { ...value };
+  const container = isRecord(document[server.container])
+    ? { ...(document[server.container] as Record<string, unknown>) }
+    : {};
+  delete container[server.name];
+
+  if (Object.keys(container).length > 0) document[server.container] = container;
+  else delete document[server.container];
+
+  return Object.keys(document).length > 0 ? document : null;
+}
+
+/**
+ * Names the agent's effective MCP set already covers. The daemon merges
+ * runtime < (workspace assignments + the agent's own), so a runtime server
+ * with one of these names is shadowed. A DISABLED assignment shadows
+ * nothing — mirrors web's `effectiveNames`.
+ */
+export function managedMcpEffectiveNames(
+  managed: readonly ManagedMcpServer[],
+  assigned: readonly { name: string; enabled?: boolean }[],
+): Set<string> {
+  const names = new Set(managed.map((server) => server.name));
+  for (const server of assigned) {
+    if (server.enabled !== false) names.add(server.name);
+  }
+  return names;
+}

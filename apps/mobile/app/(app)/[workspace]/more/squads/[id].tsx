@@ -79,6 +79,7 @@ const STATUS_DOT: Record<string, string> = {
 export default function SquadDetailPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const user = useAuthStore((s) => s.user);
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
@@ -487,10 +488,29 @@ export default function SquadDetailPage() {
               )}
 
               {canManage ? (
-                <Button variant="outline" onPress={() => setPickerOpen(true)}>
-                  <Ionicons name="add" size={15} color={theme.mutedForeground} />
-                  <Text>{t("squads.detail.addMember")}</Text>
-                </Button>
+                <>
+                  {/* Create-agent entry (web parity: squad-detail-page
+                      createAgentHref → /agents/new?squad=<id>): opens the
+                      manual create form in squad context, which joins the
+                      new agent to this squad on submit. */}
+                  {wsSlug ? (
+                    <Button
+                      variant="outline"
+                      onPress={() =>
+                        router.push(
+                          `/${wsSlug}/more/agents/new/manual?squad=${encodeURIComponent(id)}`,
+                        )
+                      }
+                    >
+                      <Ionicons name="add" size={15} color={theme.mutedForeground} />
+                      <Text>{t("squads.detail.createAgent")}</Text>
+                    </Button>
+                  ) : null}
+                  <Button variant="outline" onPress={() => setPickerOpen(true)}>
+                    <Ionicons name="add" size={15} color={theme.mutedForeground} />
+                    <Text>{t("squads.detail.addMember")}</Text>
+                  </Button>
+                </>
               ) : null}
             </View>
 

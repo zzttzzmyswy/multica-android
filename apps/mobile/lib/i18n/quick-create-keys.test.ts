@@ -29,7 +29,7 @@ describe("quick-create i18n", () => {
   const ZH_SPOT: Record<string, string> = {
     "newIssue.modeManual": "手动填写",
     "newIssue.modeAgent": "通过智能体创建",
-    "newIssue.agentPlaceholder": "用自然语言描述任务，agent 会帮你创建…",
+    "newIssue.agentPlaceholder": "用自然语言描述任务，智能体会帮你创建…",
     "newIssue.agentSelectAgent": "选择智能体",
     "newIssue.agentSentTitle": "任务已发送",
     "newIssue.agentSentBody": "任务已创建并交给 {{name}} 处理",

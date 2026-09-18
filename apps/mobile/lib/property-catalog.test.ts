@@ -3,6 +3,8 @@ import type { IssueProperty } from "@multica/core/types";
 import {
   MAX_ACTIVE_PROPERTIES,
   filterPropertyCatalog,
+  isGroupableProperty,
+  isSortableProperty,
   propertyHasOptions,
   propertyOptionChips,
 } from "./property-catalog";
@@ -90,5 +92,25 @@ describe("propertyOptionChips", () => {
 describe("MAX_ACTIVE_PROPERTIES", () => {
   it("matches web cap of 20", () => {
     expect(MAX_ACTIVE_PROPERTIES).toBe(20);
+  });
+});
+/**
+ * Sortable / groupable catalogs (iteration 129, MYS-1060) — the two
+ * directories web's issues-header derives for the Display popover
+ * (issues-header.tsx:1605-1612): number|date sort, select groups.
+ */
+describe("isSortableProperty / isGroupableProperty", () => {
+  it("only number and date back a sort field", () => {
+    expect(isSortableProperty(p({ type: "number" }))).toBe(true);
+    expect(isSortableProperty(p({ type: "date" }))).toBe(true);
+    expect(isSortableProperty(p({ type: TYPE_SELECT }))).toBe(false);
+    expect(isSortableProperty(p({ type: "checkbox" }))).toBe(false);
+    expect(isSortableProperty(p({ type: TYPE_TEXT }))).toBe(false);
+  });
+
+  it("only select backs a board lane", () => {
+    expect(isGroupableProperty(p({ type: TYPE_SELECT }))).toBe(true);
+    expect(isGroupableProperty(p({ type: "multi_select" }))).toBe(false);
+    expect(isGroupableProperty(p({ type: "number" }))).toBe(false);
   });
 });

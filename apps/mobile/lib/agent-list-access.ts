@@ -31,6 +31,17 @@ export function matchesAccessFilter(
   return selectedScopes.has(accessScopeOfAgent(agent));
 }
 
+/**
+ * Whether the agent is restricted to fewer than the whole workspace — the
+ * signal behind the lock in the issue assignee picker (web
+ * `packages/views/issues/components/pickers/assignee-picker.tsx` marks every
+ * non-workspace agent). Member-scoped grants count as restricted: they are
+ * just as unavailable to everyone else as an owner-only one.
+ */
+export function isRestrictedAgent(agent: AccessFlagAgent): boolean {
+  return accessScopeOfAgent(agent) !== "workspace";
+}
+
 export interface AgentBatchSelection {
   /** Selected rows expanded with the flags the toolbar actions need. */
   selection: {

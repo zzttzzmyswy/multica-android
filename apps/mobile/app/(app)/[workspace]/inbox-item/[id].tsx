@@ -11,18 +11,21 @@
  * "Edit as advanced form" recovery link that reseeds the new-issue form with
  * the original prompt (and agent hint).
  *
- * The item itself is read from the inbox query cache (the tab holds both lists
- * warm); an empty cache means the notification is gone — show the missing
- * state instead of a crash.
+ * The screen is reachable by deep link, so it can mount with a cold query
+ * cache — nothing has listed this notification in this process. It therefore
+ * reads the list through `useQuery` rather than off the cache: a miss fetches
+ * instead of being mistaken for a deleted notification, and "not found yet" is
+ * rendered as loading rather than as the missing state. Which list to read and
+ * which state to render is `lib/inbox-item-source.ts`.
  */
-import { View, ScrollView } from "react-native";
+import { View, ScrollView, ActivityIndicator } from "react-native";
 import { Stack, router, useLocalSearchParams } from "expo-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { InboxItem } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { typeLabel } from "@/components/inbox/detail-label";
-import { inboxKeys } from "@/data/queries/inbox";
+import { inboxBucketOptions } from "@/data/queries/inbox";
 import { useArchiveInbox, useUnarchiveInbox } from "@/data/mutations/inbox";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import {
@@ -30,6 +33,11 @@ import {
   getInboxDisplayTitle,
   getQuickCreateEditSeed,
 } from "@/lib/inbox-display";
+import {
+  inboxItemBuckets,
+  inboxItemPhase,
+  shouldFetchFallback,
+} from "@/lib/inbox-item-source";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useTranslation } from "@/lib/i18n/react";
 
@@ -43,12 +51,31 @@ export default function InboxItemDetail() {
     view?: string;
   }>();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
-  const qc = useQueryClient();
-  const readFrom = view === "archived" ? "archived" : "inbox";
+  const [primary, fallback] = inboxItemBuckets(view);
+  const readFrom = primary;
   const archiveMode = getInboxArchiveMode(readFrom);
 
-  const activeItem =
-    lookupCached(id, qc, wsId, readFrom) ?? lookupCached(id, qc, wsId, readFrom === "archived" ? "inbox" : "archived");
+  const primaryQuery = useQuery(inboxBucketOptions(primary, wsId));
+  const primaryItem = findRow(primaryQuery.data, id);
+
+  // The other list is only worth a request once the primary has answered
+  // without the row: an archived notification opened from a deep link carries
+  // no `view` param, so only the archive holds it. A cache hit never fetches.
+  const fallbackQuery = useQuery({
+    ...inboxBucketOptions(fallback, wsId),
+    enabled: shouldFetchFallback({
+      workspaceReady: !!wsId,
+      primarySettled: primaryQuery.isFetched,
+      hasPrimaryItem: !!primaryItem,
+    }),
+  });
+
+  const activeItem = primaryItem ?? findRow(fallbackQuery.data, id);
+  const phase = inboxItemPhase({
+    hasItem: !!activeItem,
+    workspaceReady: !!wsId,
+    fetching: primaryQuery.isFetching || fallbackQuery.isFetching,
+  });
 
   const archive = useArchiveInbox();
   const unarchive = useUnarchiveInbox();
@@ -73,6 +100,14 @@ export default function InboxItemDetail() {
       },
     });
   };
+
+  if (phase === "loading") {
+    return (
+      <View className="flex-1 items-center justify-center bg-background">
+        <ActivityIndicator />
+      </View>
+    );
+  }
 
   if (!activeItem) {
     return (
@@ -141,16 +176,7 @@ export default function InboxItemDetail() {
   );
 }
 
-/** Read a single inbox item out of either query cache (list or archived),
- *  falling back through both. Both lists are kept warm by the inbox tab, so
- *  a tap-then-push always finds its row. */
-function lookupCached(
-  id: string,
-  qc: ReturnType<typeof useQueryClient>,
-  wsId: string | null,
-  bucket: "inbox" | "archived",
-): InboxItem | undefined {
-  const key =
-    bucket === "archived" ? inboxKeys.archived(wsId) : inboxKeys.list(wsId);
-  return qc.getQueryData<InboxItem[]>(key)?.find((row) => row.id === id);
+/** The row with this id in a fetched (or cached) inbox list, if it is there. */
+function findRow(rows: InboxItem[] | undefined, id: string): InboxItem | undefined {
+  return rows?.find((row) => row.id === id);
 }
