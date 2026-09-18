@@ -63,7 +63,7 @@ describe("i18n translate", () => {
 
     mod.setLocale("zh");
     expect(mod.translate("nav.inbox")).toBe("收件箱");
-    expect(mod.translate("nav.myIssues")).toBe("我的问题");
+    expect(mod.translate("nav.myIssues")).toBe("我的任务");
     expect(mod.translate("nav.chat")).toBe("聊天");
     expect(mod.translate("nav.more")).toBe("更多");
   });
@@ -96,9 +96,9 @@ describe("i18n translate", () => {
     expect(mod.translate("workspace.signOut")).toBe("退出登录");
     expect(mod.translate("settings.signOutTitle")).toBe("退出登录");
     expect(mod.translate("myIssues.emptyAssigned")).toBe(
-      "没有指派给您的问题。",
+      "没有指派给您的任务。",
     );
-    expect(mod.translate("issues.emptyAll")).toBe("此工作区没有问题。");
+    expect(mod.translate("issues.emptyAll")).toBe("此工作区没有任务。");
   });
 
   it("interpolates the switch-workspace confirm message", () => {
@@ -107,7 +107,7 @@ describe("i18n translate", () => {
     );
     mod.setLocale("zh");
     expect(mod.translate("switchWorkspace.message", { name: "Acme" })).toBe(
-      "切换到「Acme」？",
+      "切换到\"Acme\"？",
     );
   });
 });
@@ -155,7 +155,7 @@ describe("initI18n device-language resolution", () => {
     mod.setLocale("zh");
     expect(mod.translate("comment.placeholder")).toBe("添加评论…");
     expect(mod.translate("chat.placeholder")).toBe("输入消息…");
-    expect(mod.translate("chat.agentWorking")).toBe("Agent 正在执行…");
+    expect(mod.translate("chat.agentWorking")).toBe("智能体正在执行…");
     expect(mod.translate("settings.namePlaceholder")).toBe("您的名称");
   });
 });
