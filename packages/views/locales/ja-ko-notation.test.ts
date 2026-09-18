@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { verify, type Claim, type MeasureContext } from "./tally";
 
 /**
  * Guard for ja / ko **notation inside a native word** — the 151 round's fourth
@@ -75,6 +76,35 @@ const keysMatching = (bundle: Bundle, pattern: RegExp) =>
   Object.entries(bundle)
     .filter(([, value]) => pattern.test(value))
     .map(([key]) => key);
+
+/**
+ * No English string names a katakana spelling, so a notation claim is measured
+ * over the whole target bundle rather than over the keys whose source names the
+ * term. The mask is the identity: this suite reads raw values, and masking the
+ * `{{...}}` a loanword might sit beside would only hide occurrences.
+ */
+const notationCtx: MeasureContext = {
+  locale: "ja",
+  unit: "by occurrence",
+  bundles: { ja, ko },
+  mask: (value) => value ?? "",
+};
+
+/**
+ * The `フォルダ` straggler the 151 round converged, as a claim. The suite states
+ * the split as "8 occurrences of `フォルダ` against 1 of `フォルダー`" and pins
+ * the converged total at 9, but the 8 and the 1 are a measurement of a bundle
+ * that no longer exists; the claim is what keeps them from being free text. See
+ * `./tally.ts`.
+ */
+const FOLDER_CLAIMS: Claim[] = [
+  {
+    label: "フォルダ (ja): 8 native vs 1 フォルダー",
+    when: "converged",
+    primary: { pattern: /フォルダ(?!ー)/g, expected: 8 },
+    rivals: [{ pattern: /フォルダー/g, expected: 1 }],
+  },
+];
 
 type Pinned = {
   /** The spelling the bundle uses, as a human-readable label. */
@@ -350,6 +380,15 @@ describe("ja notation: the two splits the round drew a line between", () => {
     expect(offenders).toEqual([]);
     // 9 = the 8 majority occurrences plus the one straggler, now converged.
     expect(occurrences(ja, /フォルダ(?!ー)/g)).toBe(9);
+  });
+
+  it("re-derives the pre-convergence counts the フォルダ line was drawn on", () => {
+    // The 8 against 1 above is a number the bundle can no longer be measured
+    // for — the straggler is gone. A `converged` claim is the only shape that
+    // keeps it checkable: 8 + 1 has to equal what the bundle holds now.
+    for (const claim of FOLDER_CLAIMS) {
+      expect(verify(claim, notationCtx), claim.label).toEqual([]);
+    }
   });
 
   it("left ブラウザ open, with both spellings still in use", () => {

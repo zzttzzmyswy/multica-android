@@ -35,9 +35,23 @@ import { fileURLToPath } from "node:url";
  *     directly, but they are not free text either: the convergence is exactly
  *     the claim that every rival occurrence became a primary occurrence, so the
  *     guard asserts `current(primary) === before(primary) + Σ before(rivals)`
- *     and `current(rival) === 0` for each. That is a stronger check than either
- *     number alone — it proves the convergence moved the rivals and nothing
- *     else, which is what a partial convergence would break.
+ *     and `current(rival) === 0` for each.
+ *
+ *     What that proves is narrower than "the convergence happened", and the
+ *     difference is worth stating because the assertion is easy to overread: it
+ *     proves the *current counts* are the ones a total convergence would leave,
+ *     which is what a partial convergence breaks. A rival deleted outright and
+ *     a primary added elsewhere — the same total, no folding — satisfies it too,
+ *     and no count can tell those apart. The claim is necessary, not sufficient;
+ *     the falsification run covers the failure it does catch.
+ *
+ *     Because the assertion is arithmetic, a claim that is not a convergence
+ *     cannot be allowed to look like one. Three shapes would compute a number
+ *     that means nothing, and each is rejected rather than measured: a claim
+ *     with no rival expected to fold (its `before` is just the primary, so it is
+ *     a `current` claim wearing a convergence's name), and a rival read from a
+ *     different locale or with a different unit than the primary (the sum would
+ *     add a count of keys to a count of occurrences).
  */
 
 export type Bundle = Record<string, string>;
@@ -220,6 +234,39 @@ export function measure(measure: Measure, ctx: MeasureContext): number {
 }
 
 /**
+ * Reject a `converged` claim whose arithmetic could not mean anything, before
+ * measuring it. These are authoring mistakes, not facts about the bundle, so
+ * they throw the way `scoped` does for a key that is not in the bundle.
+ */
+function checkConvergence(claim: Claim, rivals: Measure[], ctx: MeasureContext): void {
+  if (!rivals.some((rival) => rival.expected > 0)) {
+    throw new Error(
+      `${claim.label}: a converged claim has to fold at least one rival occurrence, but ` +
+        `${rivals.length === 0 ? "it names no rivals" : "every rival is expected 0"} — its ` +
+        `pre-convergence tally would just be the primary, so the convergence is not asserted`,
+    );
+  }
+  const locale = claim.primary.locale ?? ctx.locale;
+  const unit = claim.primary.unit ?? ctx.unit;
+  rivals.forEach((rival) => {
+    const rivalLocale = rival.locale ?? ctx.locale;
+    if (rivalLocale !== locale) {
+      throw new Error(
+        `${claim.label}: the primary is read from ${locale} and a rival from ${rivalLocale} — ` +
+          `a convergence folds one bundle's rivals into that bundle's primary`,
+      );
+    }
+    const rivalUnit = rival.unit ?? ctx.unit;
+    if (rivalUnit !== unit) {
+      throw new Error(
+        `${claim.label}: the primary is counted ${unit} and a rival ${rivalUnit} — the ` +
+          `pre-convergence sum would add two different quantities`,
+      );
+    }
+  });
+}
+
+/**
  * Re-derive a claim's numbers and return one message per number that does not
  * hold. An empty array means the claim is true.
  */
@@ -227,6 +274,7 @@ export function verify(claim: Claim, ctx: MeasureContext): string[] {
   const when = claim.when ?? "current";
   const rivals = claim.rivals ?? [];
   const problems: string[] = [];
+  if (when === "converged") checkConvergence(claim, rivals, ctx);
   const measuredPrimary = measure(claim.primary, ctx);
   const measuredRivals = rivals.map((rival) => measure(rival, ctx));
 

@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { measure, type Fact, type MeasureContext } from "./tally";
+import { measure, verify, type Claim, type Fact, type MeasureContext } from "./tally";
 
 /**
  * Guard for the ja and ko bundles rendering a *concept* with one word.
@@ -300,6 +300,72 @@ const splitFor = (label: string, locale: Locale) =>
 const isSettled = (label: string, locale: Locale) =>
   !UNSETTLED.some((entry) => entry.label === label && entry.locale === locale);
 
+/**
+ * The 146 round's convergences, as claims. That round folded each of these onto
+ * the word the bundle already used everywhere else and recorded what it measured
+ * first — in the commit message and in this suite's prose, where nothing could
+ * re-derive it. The 148 round recorded the same kind of number as a `converged`
+ * claim instead; these are the ones it left behind, found by the 153 round's
+ * sweep of every convergence between 142 and 152.
+ *
+ * The scope is the suite's own rule — the keys whose *English* source names the
+ * concept — so the claim is measured over exactly the strings the assertions
+ * above are about. `PLURAL_ONE` is excluded because those keys are absent rather
+ * than untranslated; the `EXEMPT` list is not, and does not need to be: every
+ * exempt key that the English names the concept in already carried the native
+ * word before the convergence, so it sits on both sides of the sum.
+ *
+ * Five of the 146 round's convergences are **not** here, and the reason is the
+ * same for all five: the rival never reached zero, so the arithmetic a
+ * convergence asserts does not hold. `runtime` left one rival behind and `agent`
+ * left seven, in both locales; ko `inbox` and ja `autopilot` gained the native
+ * word on two keys that had neither form before, so the primary grew by more
+ * than the rivals could account for. Those four are pinned by the zero-exception
+ * assertions above instead, which is the part that matters for the rule — what
+ * is lost is only the before-count, and inventing one would be worse than not
+ * having it.
+ */
+const CONVERGED: {
+  label: string;
+  locale: Locale;
+  native: number;
+  rivals: { pattern: RegExp; expected: number }[];
+}[] = [
+  {
+    label: "daemon",
+    locale: "ja",
+    native: 28,
+    rivals: [{ pattern: /(?<![A-Za-z])daemons?(?![A-Za-z])/i, expected: 5 }],
+  },
+  {
+    label: "daemon",
+    locale: "ko",
+    native: 28,
+    rivals: [{ pattern: /(?<![A-Za-z])daemons?(?![A-Za-z])/i, expected: 5 }],
+  },
+  { label: "inbox", locale: "ja", native: 13, rivals: [{ pattern: /受信トレイ/, expected: 2 }] },
+  { label: "member", locale: "ko", native: 80, rivals: [{ pattern: /구성원/, expected: 8 }] },
+  { label: "reply", locale: "ja", native: 17, rivals: [{ pattern: /回答|応答/, expected: 2 }] },
+];
+
+const convergedClaim = ({
+  label,
+  locale,
+  native,
+  rivals,
+}: (typeof CONVERGED)[number]): Claim => {
+  const concept = CONCEPTS.find((entry) => entry.label === label);
+  if (concept === undefined) throw new Error(`no concept named ${label}`);
+  if (concept.native[locale] === null) throw new Error(`${label} has no ${locale} word to claim`);
+  const scope = { locale: "en", pattern: concept.pattern, masked: true, exclude: PLURAL_ONE };
+  return {
+    label: `${label} (${locale}): ${native} native vs ${rivals.map((r) => r.expected).join(" + ")} rival`,
+    when: "converged",
+    primary: { keysFrom: scope, pattern: new RegExp(concept.native[locale]), expected: native },
+    rivals: rivals.map((rival) => ({ keysFrom: scope, pattern: rival.pattern, expected: rival.expected })),
+  };
+};
+
 /** Keys the English source names the concept in. */
 const conceptKeys = (pattern: RegExp) =>
   Object.keys(en).filter((key) => namesConcept(en[key], pattern));
@@ -378,6 +444,17 @@ describe("ja / ko render each concept with one native word", () => {
         `${locale} ${label}'s reason states a number but carries no claim for it`,
       ).toBeDefined();
       expect(problems(locale, entryClaims!), `${locale} ${label}`).toEqual([]);
+    }
+  });
+
+  it("re-derives the before-counts of the 146 round's convergences", () => {
+    // Same rule, the other direction: a convergence's before-count is a number
+    // nothing can re-measure, so it has to be one the current bundle still adds
+    // up to. See `CONVERGED` for the five the round performed that this cannot
+    // state, and why.
+    for (const entry of CONVERGED) {
+      const claim = convergedClaim(entry);
+      expect(verify(claim, claimCtx(entry.locale)), claim.label).toEqual([]);
     }
   });
 

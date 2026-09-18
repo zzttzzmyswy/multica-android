@@ -1,7 +1,18 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { load, loadMobile, countOccurrences, REPO_ROOT, type Bundle } from "./tally";
+import {
+  load,
+  loadMobile,
+  countOccurrences,
+  measure,
+  verify,
+  REPO_ROOT,
+  type Bundle,
+  type Claim,
+  type Fact,
+  type MeasureContext,
+} from "./tally";
 
 /**
  * Guard for section 3 of the Chinese voice guide (Punctuation), across **both**
@@ -55,6 +66,65 @@ const mobileEn = loadMobile("en");
 const BUNDLES: { name: string; bundle: Bundle; en: Bundle }[] = [
   { name: "views zh-Hans", bundle: viewsZh, en: viewsEn },
   { name: "mobile zh", bundle: mobileZh, en: mobileEn },
+];
+
+/**
+ * A bracket inside inline code is a literal the user copies, not prose, so the
+ * mask every bracket measurement runs under is the code-span stripper. It is the
+ * same mask the bracket suite's own helpers apply inline.
+ */
+const CODE_SPAN = /`[^`]*`/g;
+
+const bracketCtx: MeasureContext = {
+  locale: "zh-Hans",
+  unit: "by occurrence",
+  bundles: { "zh-Hans": viewsZh, zh: mobileZh },
+  mask: (value) => (value ?? "").replace(CODE_SPAN, " "),
+};
+
+/**
+ * The convergence the 151 round performed on the brackets, as a claim. The
+ * before-counts have been in the suite's prose since that round and nothing
+ * could re-derive them — and the same round's commit message shows how easily
+ * they go wrong, stating "5 half-width pairs against 74 full-width ones" where
+ * 74 is a *post*-convergence count over views alone and 5 a pre-convergence one
+ * over both bundles. See `./tally.ts` for what the claim does and does not
+ * prove.
+ */
+const BRACKET_CLAIMS: Claim[] = [
+  {
+    label: "brackets (views zh-Hans): 70 full-width vs 4 half-width",
+    when: "converged",
+    primary: { pattern: /（[^（）]*）/g, expected: 70 },
+    rivals: [{ pattern: /\([^()]*\)/g, expected: 4 }],
+  },
+  {
+    label: "brackets (mobile zh): 36 full-width vs 1 half-width",
+    when: "converged",
+    primary: { pattern: /（[^（）]*）/g, expected: 36, locale: "zh" },
+    rivals: [{ pattern: /\([^()]*\)/g, expected: 1, locale: "zh" }],
+  },
+];
+
+/**
+ * The evidence that a partition by content kind is false, measured rather than
+ * asserted: full-width pairs whose content holds no Han character, which is what
+ * the 151 round read as "25 in views, 11 in mobile" against the pre-convergence
+ * bundle. The convergence moved both numbers, so the sentence has been wrong
+ * since the round that wrote it.
+ */
+const NON_CHINESE_BRACKETS: Fact[] = [
+  {
+    label: "full-width pairs wrapping a non-Chinese token (views zh-Hans)",
+    pattern: /（[^（）\p{Script=Han}]*）/gu,
+    expected: 27,
+  },
+  {
+    label: "full-width pairs wrapping a non-Chinese token (mobile zh)",
+    pattern: /（[^（）\p{Script=Han}]*）/gu,
+    expected: 12,
+    locale: "zh",
+  },
 ];
 
 /**
@@ -140,19 +210,24 @@ describe("zh punctuation: the settled half of section 3", () => {
  *
  * The tempting hypothesis is a partition by content kind: half-width brackets
  * wrap Latin, full-width wrap Chinese. It is false. Full-width brackets wrap a
- * `{{binding}}` 25 times in views and 11 in mobile (`（{{count}}）`, `（Lark）`,
- * `（Go + Postgres）`, `（xoxb-）`), so content kind separates nothing. What the
- * bundle actually does is use **full-width brackets everywhere** — 70 pairs in
- * views, 36 in mobile — with 4 and 1 half-width stragglers against them, two of
- * which wrapped Chinese and three a placeholder or acronym.
+ * non-Chinese token — a `{{binding}}`, an acronym, a product name — 27 times in
+ * views and 12 in mobile (`（{{count}}）`, `（Lark）`, `（Go + Postgres）`,
+ * `（xoxb-）`), so content kind separates nothing. The 151 round wrote that
+ * sentence as "25 times in views and 11 in mobile", which is what the bundle
+ * held *before* the same round converged the half-width stragglers — the
+ * sentence was stale the moment the round finished, and nothing could say so.
+ * Both numbers are measurements now: the pairs as a claim, the non-Chinese ones
+ * as a fact.
  *
- * That is the shape section 2 settles a term with: a clear majority and no
- * partition behind the minority, so the stragglers are debt. They were
- * converged, and the rule is pinned at zero exceptions.
+ * What the bundle actually does is use **full-width brackets everywhere** — 74
+ * pairs in views, 37 in mobile — with 4 and 1 half-width stragglers against
+ * them, two of which wrapped Chinese and three a placeholder or acronym. That is
+ * the shape section 2 settles a term with: a clear majority and no partition
+ * behind the minority, so the stragglers are debt. They were converged, and the
+ * rule is pinned at zero exceptions.
  */
 describe("zh punctuation: full-width brackets, the rule the bundle settles", () => {
   const PAIRS = /（([^（）]*)）|\(([^()]*)\)/g;
-  const CODE_SPAN = /`[^`]*`/g;
 
   /** Half-width pairs left after masking code spans, which are never prose. */
   function halfWidthPairs(bundle: Bundle): { key: string; content: string }[] {
@@ -193,6 +268,21 @@ describe("zh punctuation: full-width brackets, the rule the bundle settles", () 
     expect(full).toBeGreaterThan(90);
     expect(fullWidthPairs(viewsZh)).toBe(74);
     expect(fullWidthPairs(mobileZh)).toBe(37);
+  });
+
+  it("re-derives the pre-convergence counts the rule was derived from", () => {
+    // 70 + 4 and 36 + 1: the stragglers the 151 round folded into the majority,
+    // stated in the suite's prose since then and re-derivable from here on. See
+    // `./tally.ts` for what a `converged` claim does and does not prove.
+    for (const claim of BRACKET_CLAIMS) {
+      expect(verify(claim, bracketCtx), claim.label).toEqual([]);
+    }
+  });
+
+  it("re-derives the evidence that content kind separates nothing", () => {
+    for (const fact of NON_CHINESE_BRACKETS) {
+      expect(measure(fact, bracketCtx), fact.label).toBe(fact.expected);
+    }
   });
 });
 

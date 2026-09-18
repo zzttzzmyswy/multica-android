@@ -181,6 +181,35 @@ const jaAgentCounter = (counter: string) =>
 const LATIN_ROLE = /(?<![A-Za-z])(owner|admin|member)s?(?![A-Za-z])/;
 
 /**
+ * Korean particles, copulas and verb endings, as a whole Hangul run. Matched
+ * against the entire run rather than a prefix of it: `run.startsWith(particle)`
+ * reads `AI 에이전트를` as the particle `에` on a noun `이전트를`, which is the
+ * `표`/`표시` false positive in a different guise.
+ *
+ * The list is a closed class, and the 153 round measured the surface with it
+ * rather than deriving a rule from it — see the `Particle spacing (ko)` entry.
+ */
+const KO_PARTICLES =
+  "이|가|을|를|은|는|에|의|와|과|도|만|로|나|고|라|야|여|며|뿐|에서|으로|에게|부터|까지|" +
+  "처럼|보다|마다|이나|이며|이고|이라|라는|이란|이든|에는|에도|에만|하면|입니다|뿐입니다|" +
+  "뿐이며|으로는|에게는|에서도|으로도|에게도|이라고|이라는|으로써|으로서|에게서|부터는|" +
+  "까지는|와는|과는|에서는";
+
+/**
+ * A token that contains at least one Latin letter. A bare figure is excluded on
+ * purpose: `45초` and `7일` are the figure-to-counter surface the 150 round
+ * pinned as tight, and a first version of this pattern counted them as Latin
+ * words run into Korean ones.
+ */
+const KO_LATIN_TOKEN = "(?=[A-Za-z0-9.+#/_-]*[A-Za-z])[A-Za-z0-9][A-Za-z0-9.+#/_-]*";
+
+/** A particle attached to the Latin token before it. */
+const KO_ATTACHED = new RegExp(`${KO_LATIN_TOKEN}(?:${KO_PARTICLES})(?![가-힣])`, "g");
+
+/** The same particle, spaced off the Latin token. */
+const KO_SPACED = new RegExp(`${KO_LATIN_TOKEN} (?:${KO_PARTICLES})(?![가-힣])`, "g");
+
+/**
  * Who can close an entry. `ask` opens with one of these, and the doc row has to
  * route to the same one — that two-way check is what keeps the contract readable
  * on its own.
@@ -754,6 +783,74 @@ const UNSETTLED: Entry[] = [
     facts: [
       { label: "—— keys", pattern: /——/, expected: 39 },
       { label: "` — ` keys", pattern: / — /, expected: 8 },
+    ],
+  },
+  {
+    docTerm: "Particle spacing (ko)",
+    label: "particle spacing after Latin (ko)",
+    locale: "ko",
+    forms: [
+      { label: "attached", pattern: KO_ATTACHED },
+      { label: "spaced", pattern: KO_SPACED },
+    ],
+    collision: [
+      [
+        { key: "skills.detail.add_file.errors.reserved", contains: "SKILL.md는" },
+        { key: "settings.lark.page_description", contains: "/issue 를" },
+      ],
+    ],
+    unit: "by occurrence",
+    why:
+      "by occurrence: a Korean particle attaches directly to a Latin token 316 times against 3 " +
+      "that are spaced, but the minority sits inside the majority's own surface — settings.* " +
+      "holds 109 attached and all 3 spaced — and the partition a reader reaches for is refuted: " +
+      "a Latin literal the user types takes the particle attached ten times (SKILL.md는, " +
+      "Skills.sh에서, GITHUB_APP_ID와, Shift+Enter로, features/의) and spaced three (multica " +
+      "login --token 으로, /issue 를 twice), so neither word-against-literal nor surface " +
+      "separates the two forms",
+    ask:
+      "Typography owner: does a Korean particle attach to a Latin token, or is it spaced after " +
+      "one? 315 occurrences attach and 3 are spaced, all three inside settings.*, so neither a " +
+      "majority argument nor a partition argument is available, and 3 ko keys move either way.",
+    facts: [
+      { label: "attached occurrences", pattern: KO_ATTACHED, expected: 316 },
+      { label: "spaced occurrences", pattern: KO_SPACED, expected: 3 },
+      { label: "attached keys", pattern: KO_ATTACHED, unit: "by key", expected: 260 },
+      { label: "spaced keys", pattern: KO_SPACED, unit: "by key", expected: 3 },
+      {
+        label: "attached occurrences inside settings.*",
+        pattern: KO_ATTACHED,
+        scope: "settings.",
+        expected: 109,
+      },
+    ],
+  },
+  {
+    docTerm: "list (ko)",
+    label: "list (ko)",
+    locale: "ko",
+    forms: [
+      { label: "목록", pattern: /목록/ },
+      { label: "리스트", pattern: /(?<![가-힣])리스트/ },
+    ],
+    collision: [
+      [
+        { key: "editor.bubble_menu.list", contains: "목록" },
+        { key: "issues.view.list", contains: "리스트" },
+      ],
+    ],
+    unit: "by key",
+    why:
+      "by key: 목록 20 vs 리스트 4, and the split is not by sense — the same English source " +
+      "`List` is 목록 in editor.bubble_menu.list and 리스트 in issues.view.list, both a bare " +
+      "one-word label",
+    ask:
+      "Locale owner: is a list 목록 or 리스트? 20 vs 4 keys, with the minority naming the issue " +
+      "and my-issues list views while the majority is the common noun — that surface argument is " +
+      "available but unverified, so 24 ko keys move either way.",
+    facts: [
+      { label: "목록 keys", pattern: /목록/, expected: 20 },
+      { label: "리스트 keys", pattern: /(?<![가-힣])리스트/, expected: 4 },
     ],
   },
 ];
