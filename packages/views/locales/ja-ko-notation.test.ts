@@ -158,8 +158,170 @@ describe("ko notation: each loanword keeps the one spelling the bundle chose", (
 });
 
 /**
- * The two words the measurement did **not** settle, and what happened to each.
+ * The 152 round's addition: the two katakana axes the 151 round did not reach.
  *
+ * 151 settled the long-vowel mark (`ブラウザ` / `ブラウザー`) and the vowel
+ * (`デフォルト` / `ディフォルト`) by listing the words. Both neighbours are
+ * measured here instead, because a word list is exactly what a *new* word walks
+ * past:
+ *
+ *   - **sokuon `ッ`** — `セッション` / `セション`, `コミット` / `コミト`. A word
+ *     written both ways is the same defect shape as the `フォルダ` split.
+ *   - **yoon `ャュョ`** — `キャンセル` / `キヤンセル`. Unlike sokuon this axis has
+ *     an absolute rule rather than a majority one: after an i-column kana
+ *     (キ シ チ ニ ヒ ミ リ ギ ジ ビ ピ) a glide kana is always small in modern
+ *     Japanese, so the large spelling is not a variant, it is wrong.
+ *
+ * The detector is **normalisation**, not a word list: every katakana run in the
+ * bundle is folded once — ッ removed, or small kana enlarged — and the runs are
+ * grouped by their folded form. A group with more than one member is one word
+ * spelled two ways, and it is found without knowing in advance which words are
+ * in the bundle. That is what makes it catch the word nobody thought to list.
+ *
+ * Measured over the whole ja bundle: 494 distinct katakana runs, 91 of them
+ * carrying a ッ, and **zero** groups that fold together on either axis. The
+ * large-glide rule is also zero — no `[i-column][ヤユヨ]` anywhere.
+ *
+ * The small-kana histogram (ッ 98, ィ 46, ェ 30, ョ 30, ュ 28, ャ 17, ォ 9, ァ 8)
+ * was measured and is **not** pinned: it guards no rule, and pinning it would
+ * turn every new loanword in a future translation round into a red that says
+ * nothing. The two counts below are pinned instead, because they are what keeps
+ * the folds non-vacuous — a bundle with no katakana would pass both.
+ */
+const KATAKANA_RUN = /[ァ-ヺー]{2,}/g;
+const SMALL_KANA = "ァィゥェォッャュョヮ";
+const LARGE_OF: Record<string, string> = {
+  ァ: "ア", ィ: "イ", ゥ: "ウ", ェ: "エ", ォ: "オ",
+  ッ: "ツ", ャ: "ヤ", ュ: "ユ", ョ: "ヨ", ヮ: "ワ",
+};
+
+/** Every distinct katakana run in a bundle, with the keys it came from. */
+function katakanaRuns(bundle: Bundle): Map<string, string[]> {
+  const found = new Map<string, string[]>();
+  for (const [key, value] of Object.entries(bundle)) {
+    for (const run of value.match(KATAKANA_RUN) ?? []) {
+      found.set(run, [...(found.get(run) ?? []), key]);
+    }
+  }
+  return found;
+}
+
+/** Runs that fold to the same form but are not the same run — one word, two spellings. */
+function foldSplits(runs: Map<string, string[]>, fold: (run: string) => string) {
+  const groups = new Map<string, string[]>();
+  for (const run of runs.keys()) {
+    const folded = fold(run);
+    groups.set(folded, [...(groups.get(folded) ?? []), run]);
+  }
+  return [...groups.entries()]
+    .filter(([, members]) => members.length > 1)
+    .map(([folded, members]) => `${folded}: ${members.sort().join(" / ")}`);
+}
+
+describe("ja notation: no katakana word is spelled two ways", () => {
+  const runs = katakanaRuns(ja);
+
+  it("folds no two runs together when the sokuon is removed", () => {
+    // セッション / セション, コミット / コミト, カット / カト.
+    expect(foldSplits(runs, (run) => run.replace(/ッ/g, ""))).toEqual([]);
+  });
+
+  it("folds no two runs together when the small kana are enlarged", () => {
+    // キャンセル / キヤンセル, シェア / シエア, チェック / チエック, ウィンドウ / ウインドウ.
+    expect(foldSplits(runs, (run) => [...run].map((ch) => LARGE_OF[ch] ?? ch).join(""))).toEqual(
+      [],
+    );
+  });
+
+  it("never puts a large glide kana after an i-column kana", () => {
+    // The absolute half of the yoon axis: キヤ, シユ, チヨ and the like are not
+    // variants, they are mis-sized. Only the glide kana — シアター and ジオメトリ
+    // are ordinary i+vowel sequences and are not evidence of anything.
+    const offenders = Object.entries(ja)
+      .flatMap(([key, value]) =>
+        [...value.matchAll(/[キシチニヒミリギジビピ][ヤユヨ]/g)].map(
+          (match) => `${key}: ${JSON.stringify(value)} — ${match[0]}`,
+        ),
+      );
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps enough katakana for the folds to mean something", () => {
+    // "No two runs fold together" is green on a bundle with no katakana at all.
+    // Both numbers are the 152 measurement; a round that translates a namespace
+    // away should re-measure rather than let the folds go quiet.
+    expect(runs.size).toBe(494);
+    expect([...runs.keys()].filter((run) => run.includes("ッ")).length).toBe(91);
+  });
+
+  it("records what the small kana histogram was, without pinning it", () => {
+    // Pinned only to the extent that every small kana the bundle uses is
+    // actually in use — the histogram itself is in the note above. A count that
+    // changes with every new loanword would be churn, not a guard. ゥ is absent
+    // from the histogram entirely; the bundle writes ュ, never ゥ.
+    const used = new Set(
+      [...runs.keys()].flatMap((run) => [...run].filter((ch) => SMALL_KANA.includes(ch))),
+    );
+    expect([...used].sort().join("")).toBe("ァィェォッャュョ");
+  });
+});
+
+/**
+ * NOTATION_NOTE — round 152, the ko half of the katakana measurement.
+ *
+ * The ja folds above work because a katakana run is a *word*: it carries no
+ * inflection, so two runs that normalise to the same form are the same word
+ * spelled two ways. The question this round had to answer for ko is whether the
+ * same detector transfers. It does not, and the negative result is recorded here
+ * rather than re-walked:
+ *
+ *   - **Fold on the tense consonants** (ㄲ→ㄱ, ㄸ→ㄷ, ㅃ→ㅂ, ㅆ→ㅅ, ㅉ→ㅈ), the
+ *     closest Korean analog of the sokuon: **0 splits**. That looks like a clean
+ *     result and is not — it is green because it cannot see the one ko split the
+ *     repo already knows about. `데스크톱` / `데스크탑` differ in the vowel, not
+ *     the consonant, so this fold would have reported "no split" for a term the
+ *     151 round pinned as a split. A detector that misses the known case is not
+ *     evidence about the unknown ones.
+ *   - **Fold on the final consonant** (받침 removed): **113 splits**, none of
+ *     them spelling variance. Korean tokens carry inflection — `거부됨` /
+ *     `거부된`, `계정을` / `계정은`, `가져올` / `가져옴` — so the fold merges
+ *     grammatical forms and distinct words (`개발` / `개별`, `기반` / `기본`).
+ *   - **Fold on the last vowel** (neutralised to ㅏ), the axis `데스크톱` /
+ *     `데스크탑` actually varies on: **115 splits**, again all inflection
+ *     (`그룹에` / `그룹이` / `그룹의`) or distinct words (`문자` / `문제`).
+ *
+ * So the katakana fold has no Hangul analog that is both noise-free and able to
+ * see the splits that exist. The ko side's spelling-variant question is already
+ * covered where it can be: `데스크톱` is pinned in `KO_PINNED` above, and the two
+ * open ko splits (`리뷰` / `검토`, `라벨` / `레이블`) are ledger entries. This is
+ * the same shape of result as the 150 round's external-standard note — a route
+ * that was walked and is empty, recorded so it is not walked again.
+ */
+describe("ja notation: the ko side of the fold is recorded as having no analog", () => {
+  const source = readFileSync(fileURLToPath(import.meta.url), "utf8");
+  const note = source.split("NOTATION_NOTE")[1] ?? "";
+
+  it("names the folds that were tried", () => {
+    expect(note).toContain("tense consonants");
+    expect(note).toContain("final consonant");
+    expect(note).toContain("last vowel");
+  });
+
+  it("records the counts each fold produced", () => {
+    expect(note).toContain("113 splits");
+    expect(note).toContain("115 splits");
+  });
+
+  it("keeps the ko split the consonant fold cannot see where it is guarded", () => {
+    // The reason that fold is not usable: it is blind to the split the repo
+    // already settled. If a round ever removes this pin, the note above stops
+    // being true.
+    expect(occurrences(ko, /데스크톱/g)).toBe(19);
+    expect(occurrences(ko, /데스크탑/g)).toBe(0);
+  });
+});
+
+/**
  * This is the suite that stops a later round from reading the pins above as
  * "every katakana word is settled". It also records the distinction the round
  * drew, because the two splits look alike and are not:

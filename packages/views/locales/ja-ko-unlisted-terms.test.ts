@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { verify, type Claim, type MeasureContext } from "./tally";
 
 /**
  * Guard for the terms ja and ko render with one word that conventions.mdx does
@@ -20,8 +21,9 @@ import { describe, expect, it } from "vitest";
  *
  * - `MAJORITY_TERMS` — the bundle already renders the term with one native word
  *   nearly everywhere. The outliers are debt, not a choice, so they were
- *   converged and the majority is now pinned. `tally` records what the 148
- *   round measured before the convergence.
+ *   converged and the majority is now pinned. The claim records what the 148
+ *   round measured before the convergence, and the guard re-derives it from the
+ *   converged bundle (see `./tally.ts`).
  * - `UNPRECEDENTED_TERMS` — neither bundle had any precedent and zh had already
  *   translated the term. The native word is the standard rendering, not a
  *   derivation, and the reason says so.
@@ -89,6 +91,21 @@ const MASKED_LITERALS = [
 const mask = (value: string | undefined) =>
   MASKED_LITERALS.reduce((acc, pattern) => acc.replace(pattern, "…"), value ?? "");
 
+/**
+ * The tallies below are `Claim`s — numbers with the scope and pattern they were
+ * measured over — so the guard re-derives each one instead of trusting the
+ * sentence. The 152 round made them claims; see `./tally.ts` for the two
+ * free-text tallies that were already wrong when this mechanism arrived.
+ */
+const CLAIM_CTX: MeasureContext = {
+  locale: "ja",
+  unit: "by key",
+  bundles: { en, ja, ko },
+  mask,
+};
+const claims = (locale: Locale, list: Claim[]) =>
+  list.flatMap((claim) => verify(claim, { ...CLAIM_CTX, locale }));
+
 /** True when the string talks about the term in prose. */
 const namesTerm = (value: string | undefined, pattern: RegExp) => pattern.test(mask(value ?? ""));
 
@@ -123,32 +140,88 @@ const EXEMPT: { key: string; why: string }[] = [
 
 /**
  * Terms the bundle already renders with one native word nearly everywhere.
- * `tally` is the count the 148 round measured *before* the outliers were
- * converged, so a later reader can see how lopsided the derivation was.
+ * The claim is the 148 round's count *before* the outliers were converged —
+ * which is why it is a `converged` claim rather than a value: the guard
+ * asserts that the converged occurrences are now native ones and that no rival
+ * survived, so the old number stays re-derivable from the current bundle.
  */
 const MAJORITY_TERMS: {
   label: string;
   native: Record<Locale, string>;
   pattern: RegExp;
-  tally: Record<Locale, string>;
+  claims: Record<Locale, Claim[]>;
 }[] = [
   {
     label: "instance",
     native: { ja: "インスタンス", ko: "인스턴스" },
     pattern: /(?<![A-Za-z])instances?(?![A-Za-z])/i,
-    tally: { ja: "10 native vs 1 Latin", ko: "8 native vs 3 Latin" },
+    claims: {
+      ja: [
+        {
+          label: "instance (ja): 10 native vs 1 Latin",
+          when: "converged",
+          primary: { pattern: /インスタンス/, expected: 10 },
+          rivals: [{ pattern: /(?<![A-Za-z])instances?(?![A-Za-z])/i, expected: 1 }],
+        },
+      ],
+      ko: [
+        {
+          label: "instance (ko): 8 native vs 3 Latin",
+          when: "converged",
+          primary: { pattern: /인스턴스/, expected: 8 },
+          rivals: [{ pattern: /(?<![A-Za-z])instances?(?![A-Za-z])/i, expected: 3 }],
+        },
+      ],
+    },
   },
   {
     label: "desktop",
     native: { ja: "デスクトップ", ko: "데스크톱" },
     pattern: /(?<![A-Za-z])desktop(?![A-Za-z])/i,
-    tally: { ja: "16 native vs 2 Latin", ko: "16 native vs 2 Latin" },
+    claims: {
+      ja: [
+        {
+          label: "desktop (ja): 16 native vs 2 Latin",
+          when: "converged",
+          primary: { pattern: /デスクトップ/, expected: 16 },
+          rivals: [{ pattern: /(?<![A-Za-z])desktop(?![A-Za-z])/i, expected: 2 }],
+        },
+      ],
+      ko: [
+        {
+          label: "desktop (ko): 16 native vs 2 Latin",
+          when: "converged",
+          primary: { pattern: /데스크톱/, expected: 16 },
+          rivals: [{ pattern: /(?<![A-Za-z])desktop(?![A-Za-z])/i, expected: 2 }],
+        },
+      ],
+    },
   },
   {
     label: "provider",
     native: { ja: "プロバイダー", ko: "제공자" },
     pattern: /(?<![A-Za-z])providers?(?![A-Za-z])/i,
-    tally: { ja: "20 native vs 1 Latin", ko: "19 native vs 1 Latin + 1 프로바이더" },
+    claims: {
+      ja: [
+        {
+          label: "provider (ja): 20 native vs 1 Latin",
+          when: "converged",
+          primary: { pattern: /プロバイダー/, expected: 20 },
+          rivals: [{ pattern: /(?<![A-Za-z])providers?(?![A-Za-z])/i, expected: 1 }],
+        },
+      ],
+      ko: [
+        {
+          label: "provider (ko): 19 native vs 1 Latin + 1 프로바이더",
+          when: "converged",
+          primary: { pattern: /제공자/, expected: 19 },
+          rivals: [
+            { pattern: /(?<![A-Za-z])providers?(?![A-Za-z])/i, expected: 1 },
+            { pattern: /프로바이더/, expected: 1 },
+          ],
+        },
+      ],
+    },
   },
 ];
 
@@ -206,6 +279,47 @@ const LATIN_CASING: {
 ];
 
 /**
+ * A `LATIN_KEPT` term's tally, in the two halves the sentence states: how many
+ * keys the Latin reaches, and how many the native form reaches.
+ *
+ * The two halves are measured over *different* surfaces on purpose, and that is
+ * the distinction a free-text tally hid. "N keys Latin" is a claim about the
+ * family — the keys whose English source names the term — because that is the
+ * set the rule is asserted over. "0 native" is a claim about the whole bundle,
+ * because that is what `never transliterates` checks: a native spelling
+ * anywhere, in a key the English never mentions, would still be a violation.
+ */
+const latinKeptClaims = (
+  jaNative: RegExp,
+  koNative: RegExp,
+  latin: RegExp,
+  keys: number,
+): Record<Locale, Claim[]> => ({
+  ja: [
+    {
+      label: `Gateway-style keep (ja): ${keys} keys Latin, 0 native`,
+      primary: {
+        keysFrom: { locale: "en", pattern: latin, masked: true, exclude: /_one$/ },
+        pattern: latin,
+        expected: keys,
+      },
+      rivals: [{ pattern: jaNative, expected: 0 }],
+    },
+  ],
+  ko: [
+    {
+      label: `Gateway-style keep (ko): ${keys} keys Latin, 0 native`,
+      primary: {
+        keysFrom: { locale: "en", pattern: latin, masked: true, exclude: /_one$/ },
+        pattern: latin,
+        expected: keys,
+      },
+      rivals: [{ pattern: koNative, expected: 0 }],
+    },
+  ],
+});
+
+/**
  * Terms both locales deliberately keep in Latin. This is the opposite shape from
  * `MAJORITY_TERMS`: there the native word is the convention and Latin is debt;
  * here Latin is the convention and the native word is the debt.
@@ -238,25 +352,37 @@ const LATIN_KEPT: {
   label: string;
   pattern: RegExp;
   native: Record<Locale, RegExp>;
-  tally: Record<Locale, string>;
+  claims: Record<Locale, Claim[]>;
 }[] = [
   {
     label: "Gateway",
     pattern: /(?<![A-Za-z])Gateways?(?![A-Za-z])/,
     native: { ja: /ゲートウェイ/, ko: /게이트웨이/ },
-    tally: { ja: "4 keys Latin, 0 native", ko: "4 keys Latin, 0 native" },
+    claims: latinKeptClaims(/ゲートウェイ/, /게이트웨이/, /(?<![A-Za-z])Gateways?(?![A-Za-z])/, 4),
   },
   {
     label: "Severity",
     pattern: /(?<![A-Za-z])Severit(y|ies)(?![A-Za-z])/,
     native: { ja: /重大度/, ko: /심각도/ },
-    tally: { ja: "2 keys Latin, 0 native", ko: "2 keys Latin, 0 native" },
+    claims: latinKeptClaims(
+      /重大度/,
+      /심각도/,
+      /(?<![A-Za-z])Severit(y|ies)(?![A-Za-z])/,
+      2,
+    ),
   },
   {
     label: "payload",
     pattern: /(?<![A-Za-z])payloads?(?![A-Za-z])/i,
     native: { ja: /ペイロード/, ko: /페이로드/ },
-    tally: { ja: "2 keys Latin, 0 native", ko: "2 keys Latin, 0 native" },
+    /**
+     * The 152 round corrected this from 2 to 3. The family has three keys —
+     * `autopilots.webhook_payload.{payload,copied,truncated_marker}` — and had
+     * three on the day the tally was written, so the free-text "2 keys Latin"
+     * was never true and no guard could fail on it. It is a `Claim` now, and
+     * the number is re-derived.
+     */
+    claims: latinKeptClaims(/ペイロード/, /페이로드/, /(?<![A-Za-z])payloads?(?![A-Za-z])/i, 3),
   },
   /**
    * The 150 round's addition, from the same scan angle that produced the three
@@ -270,7 +396,7 @@ const LATIN_KEPT: {
     label: "Webhook",
     pattern: /(?<![A-Za-z])[Ww]ebhooks?(?![A-Za-z])/,
     native: { ja: /ウェブフック/, ko: /웹훅/ },
-    tally: { ja: "31 keys Latin, 0 native", ko: "31 keys Latin, 0 native" },
+    claims: latinKeptClaims(/ウェブフック/, /웹훅/, /(?<![A-Za-z])[Ww]ebhooks?(?![A-Za-z])/, 31),
   },
   /**
    * The 151 round's addition, and the correction of a wrong exclusion — see the
@@ -282,7 +408,12 @@ const LATIN_KEPT: {
     label: "Fleet",
     pattern: /(?<![A-Za-z])Fleets?(?![A-Za-z])/,
     native: { ja: /フリート/, ko: /(?<!템)플릿/ },
-    tally: { ja: "4 keys Latin, 0 native", ko: "4 keys Latin, 0 native" },
+    claims: latinKeptClaims(
+      /フリート/,
+      /(?<!템)플릿/,
+      /(?<![A-Za-z])Fleets?(?![A-Za-z])/,
+      4,
+    ),
   },
 ];
 
@@ -320,10 +451,10 @@ describe("ja / ko render each unlisted term with one native word", () => {
     }
   }
 
-  it("records the tally each majority term was derived from", () => {
-    for (const { label, tally } of MAJORITY_TERMS) {
+  it("re-derives the tally each majority term was derived from", () => {
+    for (const { label, claims: termClaims } of MAJORITY_TERMS) {
       for (const locale of LOCALES) {
-        expect(tally[locale], `${locale} ${label} needs a tally`).toMatch(/\d+ native vs \d+/);
+        expect(claims(locale, termClaims[locale]), `${locale} ${label}`).toEqual([]);
       }
     }
     for (const { label, why } of UNPRECEDENTED_TERMS) {
@@ -408,12 +539,10 @@ describe("ja / ko keep the Latin terms the bundle already settled on", () => {
     }
   }
 
-  it("records the tally each Latin-kept term was derived from", () => {
-    for (const { label, tally } of LATIN_KEPT) {
+  it("re-derives the tally each Latin-kept term was derived from", () => {
+    for (const { label, claims: termClaims } of LATIN_KEPT) {
       for (const locale of LOCALES) {
-        expect(tally[locale], `${locale} ${label} needs a tally`).toMatch(
-          /\d+ keys Latin, \d+ native/,
-        );
+        expect(claims(locale, termClaims[locale]), `${locale} ${label}`).toEqual([]);
       }
     }
   });

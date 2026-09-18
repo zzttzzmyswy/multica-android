@@ -1,7 +1,7 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { load, loadMobile, countOccurrences, REPO_ROOT, type Bundle } from "./tally";
 
 /**
  * Guard for section 3 of the Chinese voice guide (Punctuation), across **both**
@@ -36,43 +36,25 @@ import { describe, expect, it } from "vitest";
  * wraps Chinese. That partition holds at zero crossover, so it is asserted the
  * way section 2's ja/ko derivations are (a clean partition *is* the rule), and
  * the two pairs that broke it were converged rather than the rule widened.
+ *
+ * The 152 round classified the three surfaces 151 had measured but not
+ * classified — `！？`, `·`, `—`/`–` — and split them the same way. `！？`, the
+ * middle dot and the en dash are pinned at zero exceptions below; the em dash is
+ * **not**, because both forms are in use on the same kind of string, so it is a
+ * ledger entry instead. The distinction is the one the brackets turned on: a
+ * majority with no partition behind it is debt and gets converged, a majority
+ * with a same-kind pair taking both forms is a decision and needs an owner.
  */
 
-const LOCALES_DIR = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = resolve(LOCALES_DIR, "../../..");
+const viewsZh = load("zh-Hans");
+const mobileZh = loadMobile("zh");
 
-type Bundle = Record<string, string>;
+const viewsEn = load("en");
+const mobileEn = loadMobile("en");
 
-function flatten(value: unknown, prefix = ""): Bundle {
-  if (value === null || typeof value !== "object") return { [prefix]: String(value) };
-  return Object.entries(value as Record<string, unknown>).reduce<Bundle>(
-    (acc, [key, child]) => Object.assign(acc, flatten(child, prefix ? `${prefix}.${key}` : key)),
-    {},
-  );
-}
-
-/** `namespace.key.path` -> string, for every namespace in the views bundle. */
-function loadViewsZh(): Bundle {
-  const dir = resolve(LOCALES_DIR, "zh-Hans");
-  const namespaces = readdirSync(dir)
-    .filter((name) => name.endsWith(".json"))
-    .map((name) => name.replace(/\.json$/, ""))
-    .sort();
-  return namespaces.reduce<Bundle>((acc, ns) => {
-    const flat = flatten(JSON.parse(readFileSync(resolve(dir, `${ns}.json`), "utf8")));
-    for (const [key, value] of Object.entries(flat)) acc[`${ns}.${key}`] = value;
-    return acc;
-  }, {});
-}
-
-const MOBILE_ZH = resolve(REPO_ROOT, "apps/mobile/lib/i18n/locales/zh.json");
-
-const viewsZh = loadViewsZh();
-const mobileZh = JSON.parse(readFileSync(MOBILE_ZH, "utf8")) as Bundle;
-
-const BUNDLES: { name: string; bundle: Bundle }[] = [
-  { name: "views zh-Hans", bundle: viewsZh },
-  { name: "mobile zh", bundle: mobileZh },
+const BUNDLES: { name: string; bundle: Bundle; en: Bundle }[] = [
+  { name: "views zh-Hans", bundle: viewsZh, en: viewsEn },
+  { name: "mobile zh", bundle: mobileZh, en: mobileEn },
 ];
 
 /**
@@ -215,14 +197,172 @@ describe("zh punctuation: full-width brackets, the rule the bundle settles", () 
 });
 
 /**
- * The ellipsis clause is deliberately absent above. Pin that it is still open,
- * so a later round cannot read this file's silence as "settled" — the ledger is
- * where the split is recorded, and this test is the pointer to it.
+ * The 152 round classified the three surfaces the 151 round measured but did not
+ * classify. Two of them are settled at zero exceptions and are pinned here; the
+ * third — the em dash — is not, and the last suite in this file says so and
+ * points at the ledger.
+ *
+ * The `！？` rule is stated in **one direction only**, and the direction matters.
+ * Every `！` and `？` in a zh bundle appears where the English has `!` or `?`,
+ * which holds at zero exceptions (3 + 61 views keys, 2 + 69 mobile). The
+ * converse does not hold: `mcp.agent.removeConfirmMessage` renders the English
+ * question `Remove "{{name}}"?` as the Chinese statement `移除"{{name}}"后，…。`,
+ * and the three `_one` plural keys exist only in English. Claiming the converse
+ * would mean either converging a legitimate translation choice or carving out an
+ * exception list, and an exception list is what the 151 round's bracket
+ * falsification already showed to be the wrong shape. The 151 round's `Fleet`
+ * correction is the same lesson from the other side: state the direction the
+ * bundle actually answers.
+ */
+describe("zh punctuation: the full-width terminal mark mirrors the English source", () => {
+  for (const [mark, latin] of [
+    ["！", "!"],
+    ["？", "?"],
+  ] as const) {
+    it(`writes ${mark} only where the English source has ${latin}`, () => {
+      const offenders = BUNDLES.flatMap(({ name, bundle, en }) =>
+        Object.entries(bundle)
+          .filter(([, value]) => value.includes(mark))
+          .filter(([key]) => !(en[key] ?? "").includes(latin))
+          .map(
+            ([key, value]) =>
+              `${name} ${key}: ${JSON.stringify(value)} — en ${JSON.stringify(en[key] ?? null)}`,
+          ),
+      );
+      expect(offenders).toEqual([]);
+    });
+  }
+
+  it("never doubles or stacks a terminal mark", () => {
+    const offenders = BUNDLES.flatMap(({ name, bundle }) =>
+      Object.entries(bundle)
+        .filter(([, value]) => /[！？]{2,}/.test(value))
+        .map(([key, value]) => `${name} ${key}: ${JSON.stringify(value)}`),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  /**
+   * Non-vacuity, the 151 bracket rule's second half: "no mark where the English
+   * has none" is green on a bundle with no full-width marks at all, so the
+   * positive evidence is pinned too.
+   */
+  it("keeps both marks in use, so the rule above cannot pass vacuously", () => {
+    const counted = (bundle: Bundle, mark: string) =>
+      Object.values(bundle).filter((value) => value.includes(mark)).length;
+    expect(counted(viewsZh, "！")).toBe(3);
+    expect(counted(viewsZh, "？")).toBe(61);
+    expect(counted(mobileZh, "！")).toBe(2);
+    expect(counted(mobileZh, "？")).toBe(69);
+  });
+});
+
+/**
+ * The middle dot is a **spaced** separator in both bundles: 73 occurrences in
+ * views zh-Hans and 28 in mobile, and not one of them is run into a word — every
+ * dot is followed by a space, and preceded by one unless it opens the value,
+ * which is the two `runtimes.detail.*_chip_other` prefixes. The rule is stated
+ * as "attached to no word on either side" rather than "space after" so that the
+ * two boundaries the bundle actually has — a dot that opens the string, and a
+ * dot that ends it — are not false reds. A tight `我的任务·全部` is the defect it
+ * forbids.
+ *
+ * Provenance is *not* asserted, and the difference is recorded instead. Views
+ * carries the English `·` one for one — all 68 keys that have one have it in the
+ * English too. Mobile uses it as a general separator on 3 keys whose English
+ * writes `by` or a space (`comment.foldBar`, `comment.resolvedBar`,
+ * `agents.new.ai.sessionTitle`), which is a translation choice the bundle made
+ * consistently, not a violation of anything.
+ */
+describe("zh punctuation: the middle dot is a spaced separator", () => {
+  it("never runs · into the word on either side", () => {
+    const offenders: string[] = [];
+    for (const { name, bundle } of BUNDLES) {
+      for (const [key, value] of Object.entries(bundle)) {
+        for (const match of value.matchAll(/·/g)) {
+          const before = match.index === 0 ? "" : value[match.index - 1];
+          const after = value[match.index + 1] ?? "";
+          if (after !== "" && after !== " ") {
+            offenders.push(`${name} ${key}: ${JSON.stringify(value)} — no space after ·`);
+          }
+          if (before !== "" && before !== " ") {
+            offenders.push(`${name} ${key}: ${JSON.stringify(value)} — no space before ·`);
+          }
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps the dot in use, so the rule above cannot pass vacuously", () => {
+    expect(countOccurrences(viewsZh, /·/g)).toBe(73);
+    expect(countOccurrences(mobileZh, /·/g)).toBe(28);
+  });
+
+  it("records how each bundle came by its dots, without asserting it", () => {
+    // The measurement the provenance note above states. Pinned because it is the
+    // reason the rule stops at spacing: a future round that finds the English
+    // provenance drifting should see the number it drifted from.
+    const carriedFromEnglish = (bundle: Bundle, en: Bundle) =>
+      Object.entries(bundle)
+        .filter(([, value]) => value.includes("·"))
+        .filter(([key]) => (en[key] ?? "").includes("·")).length;
+    expect(carriedFromEnglish(viewsZh, viewsEn)).toBe(68);
+    expect(carriedFromEnglish(mobileZh, mobileEn)).toBe(23);
+  });
+});
+
+/**
+ * The en dash is a range marker, and it is the English source's, not the
+ * translation's: `{{min}}–{{max}}`, `{{from}}–{{to}}`, `10–30 秒`. Four keys
+ * across the two bundles, zero exceptions. It is not a prose dash, which is why
+ * it is not covered by the em-dash entry in the ledger.
+ */
+describe("zh punctuation: the en dash only appears where the English has one", () => {
+  it("never introduces an en dash the English source does not have", () => {
+    const offenders = BUNDLES.flatMap(({ name, bundle, en }) =>
+      Object.entries(bundle)
+        .filter(([, value]) => value.includes("–"))
+        .filter(([key]) => !(en[key] ?? "").includes("–"))
+        .map(([key, value]) => `${name} ${key}: ${JSON.stringify(value)}`),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps the en dash in use, so the rule above cannot pass vacuously", () => {
+    expect(countOccurrences(viewsZh, /–/g)).toBe(3);
+    expect(countOccurrences(mobileZh, /–/g)).toBe(1);
+  });
+});
+
+/**
+ * The em dash is the one surface the round did **not** settle, and this suite is
+ * the pointer to that decision rather than a second copy of it. Both forms are
+ * live in both bundles — 95 views / 39 mobile keys write the doubled `——`, 3 and
+ * 8 keep the English ` — ` — and the minority is not separated by surface or by
+ * sentence shape: `issues.gantt.empty` and `issues.execution_log.retry_blocked`
+ * are both an `issues.*` sentence that states a condition and then a hint.
+ *
+ * The distinction against the brackets one suite up is the whole point: the
+ * brackets were converged because the majority had no partition behind it, and
+ * this one has a same-kind pair taking both forms, which makes it a decision an
+ * owner has to make. Converging it here would be the round picking a winner.
  */
 describe("zh punctuation: what this guard does not claim", () => {
   it("does not settle the ellipsis, which is still in the ledger", () => {
-    const ledger = readFileSync(resolve(LOCALES_DIR, "unsettled-ledger.test.ts"), "utf8");
+    const ledger = readFileSync(resolve(REPO_ROOT, "packages/views/locales/unsettled-ledger.test.ts"), "utf8");
     expect(ledger).toContain("Ellipsis");
     expect(ledger).toContain("the ellipsis clause stays unresolved in both zh bundles");
+  });
+
+  it("does not settle the prose dash, which the 152 round measured and left open", () => {
+    const ledger = readFileSync(resolve(REPO_ROOT, "packages/views/locales/unsettled-ledger.test.ts"), "utf8");
+    expect(ledger).toContain('docTerm: "Dash (zh)"');
+    // Both bundles still take both forms; if a round converges one, the ledger
+    // entry fails first and this pointer has to move with it.
+    expect(countOccurrences(viewsZh, /——/g)).toBeGreaterThan(0);
+    expect(countOccurrences(viewsZh, / — /g)).toBe(3);
+    expect(countOccurrences(mobileZh, /——/g)).toBeGreaterThan(0);
+    expect(countOccurrences(mobileZh, / — /g)).toBe(8);
   });
 });

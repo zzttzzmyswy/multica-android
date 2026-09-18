@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { verify, type Claim, type MeasureContext } from "./tally";
 
 /**
  * Guard for the two ja / ko typography conventions that live outside the term
@@ -99,16 +100,31 @@ const FULL_PAIR = /（[^（）]*）/;
 
 /**
  * The counts each rule was derived from, measured by
- * `scripts/probe-iter149-ja-ko-forms.py` on the pre-convergence bundle. Pinning
- * them means a later reader can tell a deliberate reversal from a fresh outlier,
- * and a future round that re-measures gets a number to compare against.
+ * `scripts/probe-iter149-ja-ko-forms.py`. The 152 round turned them from
+ * sentences into claims the guard re-derives — see `./tally.ts`.
+ *
+ * ja is a `converged` claim: the 149 round measured 66 full-width against 19
+ * half-width and folded the 19 into the full-width form. Re-deriving it asserts
+ * that the 19 are now full-width *and* that nothing else moved, which a
+ * sentence could not.
  */
-const PAREN_TALLY = {
-  ja: "66 full-width vs 19 half-width, over 19 keys, no partition",
-  ko: "129 half-width vs 0 full-width",
-} as const;
-
-const KO_UNIT_TALLY = "37 tight occurrences vs 0 spaced, on a literal figure";
+const PAREN_CLAIMS: Record<(typeof LOCALES)[number], Claim[]> = {
+  ja: [
+    {
+      label: "parentheses (ja): 66 full-width vs 19 half-width, over 19 keys, no partition",
+      when: "converged",
+      primary: { pattern: /（[^（）]*）/g, expected: 66, unit: "by occurrence" },
+      rivals: [{ pattern: /\([^()]*\)/g, expected: 19, unit: "by occurrence" }],
+    },
+  ],
+  ko: [
+    {
+      label: "parentheses (ko): 129 half-width vs 0 full-width",
+      primary: { pattern: /\([^()]*\)/g, expected: 129, unit: "by occurrence" },
+      rivals: [{ pattern: /（[^（）]*）/g, expected: 0, unit: "by occurrence" }],
+    },
+  ],
+};
 
 /**
  * Korean counters. The literal rule is asserted on a **literal figure**; the
@@ -127,7 +143,47 @@ const KO_COUNTERS = "초|분|시간|일|주|개월|년|건|개|명|번|가지|�
 const KO_COUNT_LIKE =
   "count|total|shown|passed|failed|running|queued|deleted|days|hours|minutes|seconds|value|limit|remaining|used|size|index|online|owned";
 
-const KO_PLACEHOLDER_TALLY = "179 tight occurrences vs 0 spaced, on a placeholder";
+/** The 149 round's literal-figure tally; the 150 round re-measured it unchanged. */
+const KO_UNIT_CLAIM: Claim = {
+  label: "ko figure spacing: 37 tight occurrences vs 0 spaced, on a literal figure",
+  primary: { pattern: new RegExp(`\\d(?:${KO_COUNTERS})`, "g"), expected: 37, unit: "by occurrence" },
+  rivals: [
+    {
+      pattern: new RegExp(`\\d\\s+(?:${KO_COUNTERS})`, "g"),
+      expected: 0,
+      unit: "by occurrence",
+    },
+  ],
+};
+
+/** The 150 round's full placeholder-side tally. Reads the raw value — see above. */
+const KO_PLACEHOLDER_CLAIM: Claim = {
+  label: "ko placeholder spacing: 179 tight occurrences vs 0 spaced, on a placeholder",
+  primary: {
+    pattern: new RegExp(`\\{\\{(?:${KO_COUNT_LIKE})\\}\\}(?:${KO_COUNTERS})`, "g"),
+    expected: 179,
+    unit: "by occurrence",
+    unmasked: true,
+  },
+  rivals: [
+    {
+      pattern: new RegExp(`\\{\\{(?:${KO_COUNT_LIKE})\\}\\}\\s+(?:${KO_COUNTERS})`, "g"),
+      expected: 0,
+      unit: "by occurrence",
+      unmasked: true,
+    },
+  ],
+};
+
+const claimCtx = (locale: string): MeasureContext => ({
+  locale,
+  unit: "by occurrence",
+  bundles: { en, ja, ko },
+  mask,
+});
+
+const problems = (locale: string, claims: Claim[]) =>
+  claims.flatMap((claim) => verify(claim, claimCtx(locale)));
 
 describe("ja / ko punctuation is settled by the bundle, not by the 147 note alone", () => {
   it("leaves no half-width () in the ja bundle", () => {
@@ -157,9 +213,9 @@ describe("ja / ko punctuation is settled by the bundle, not by the 147 note alon
     expect(ko[key]).toBe("AppKey(client id)");
   });
 
-  it("records the tally the parentheses convention was derived from", () => {
+  it("re-derives the tally the parentheses convention was derived from", () => {
     for (const locale of LOCALES) {
-      expect(PAREN_TALLY[locale], `${locale} needs a tally`).toMatch(/\d+ .*vs \d+/);
+      expect(problems(locale, PAREN_CLAIMS[locale]), `${locale} parentheses`).toEqual([]);
     }
   });
 });
@@ -194,8 +250,8 @@ describe("ko attaches a counter to its figure", () => {
     }
   });
 
-  it("records the tally the convention was derived from", () => {
-    expect(KO_UNIT_TALLY).toMatch(/\d+ tight occurrences vs \d+ spaced/);
+  it("re-derives the tally the convention was derived from", () => {
+    expect(problems("ko", [KO_UNIT_CLAIM])).toEqual([]);
   });
 });
 
@@ -252,7 +308,7 @@ describe("ko attaches a counter to a placeholder too", () => {
     }
   });
 
-  it("records the tally the placeholder rule was derived from", () => {
-    expect(KO_PLACEHOLDER_TALLY).toMatch(/\d+ tight occurrences vs \d+ spaced/);
+  it("re-derives the tally the placeholder rule was derived from", () => {
+    expect(problems("ko", [KO_PLACEHOLDER_CLAIM])).toEqual([]);
   });
 });

@@ -1,7 +1,17 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import {
+  countMatching,
+  load,
+  loadMobile,
+  measure,
+  REPO_ROOT,
+  type Bundle,
+  type Fact,
+  type Unit,
+} from "./tally";
 
 /**
  * The ledger of decisions the bundles cannot settle.
@@ -45,51 +55,39 @@ import { describe, expect, it } from "vitest";
  * close it.
  */
 
-const LOCALES_DIR = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = resolve(LOCALES_DIR, "../../..");
 const CONVENTIONS = resolve(REPO_ROOT, "apps/docs/content/docs/developers/conventions.mdx");
 
-type Bundle = Record<string, string>;
+/**
+ * The bundles a claim can be measured against. ja and ko come from the views
+ * bundle like every other entry; the two zh bundles are here because the 152
+ * round added a zh-side entry — the mobile app ships a flat zh/en pair outside
+ * this directory, so it needs its own name rather than a directory.
+ */
+const BUNDLES = {
+  en: load("en"),
+  ja: load("ja"),
+  ko: load("ko"),
+  "zh-Hans": load("zh-Hans"),
+  "zh-mobile": loadMobile("zh"),
+  "en-mobile": loadMobile("en"),
+};
 
-function namespaces(locale: string): string[] {
-  return readdirSync(resolve(LOCALES_DIR, locale))
-    .filter((name) => name.endsWith(".json"))
-    .map((name) => name.replace(/\.json$/, ""))
-    .sort();
-}
+const en = BUNDLES.en;
+type Locale = "ja" | "ko" | "zh-Hans" | "zh-mobile";
+const TARGETS: Record<Locale, Bundle> = {
+  ja: BUNDLES.ja,
+  ko: BUNDLES.ko,
+  "zh-Hans": BUNDLES["zh-Hans"],
+  "zh-mobile": BUNDLES["zh-mobile"],
+};
 
-function flatten(value: unknown, prefix = ""): Bundle {
-  if (value === null || typeof value !== "object") return { [prefix]: String(value) };
-  return Object.entries(value as Record<string, unknown>).reduce<Bundle>(
-    (acc, [key, child]) => Object.assign(acc, flatten(child, prefix ? `${prefix}.${key}` : key)),
-    {},
-  );
-}
-
-function load(locale: string): Bundle {
-  return namespaces(locale).reduce<Bundle>((acc, ns) => {
-    const raw = readFileSync(resolve(LOCALES_DIR, locale, `${ns}.json`), "utf8");
-    for (const [key, value] of Object.entries(flatten(JSON.parse(raw)))) {
-      acc[`${ns}.${key}`] = value;
-    }
-    return acc;
-  }, {});
-}
-
-const en = load("en");
-const TARGETS = { ja: load("ja"), ko: load("ko") } as const;
-type Locale = keyof typeof TARGETS;
-
-const countMatching = (bundle: Bundle, pattern: RegExp, also?: RegExp) =>
-  Object.values(bundle).filter(
-    (value) => pattern.test(value) && (also === undefined || also.test(value)),
-  ).length;
-
-const countOccurrences = (bundle: Bundle, pattern: RegExp) =>
-  Object.values(bundle).reduce((total, value) => total + (value.match(pattern) ?? []).length, 0);
-
-type Anchor = { key: string; contains: string };
-type Unit = "by key" | "by occurrence";
+/**
+ * The English source an entry's `collision` anchors are checked against. The
+ * mobile bundle is a different file with different keys, so an entry about it
+ * cannot be checked against the views English.
+ */
+const enFor = (locale: Locale): Bundle =>
+  locale === "zh-mobile" ? BUNDLES["en-mobile"] : BUNDLES.en;
 
 /**
  * One number the `why` sentence states, written so the test below can re-derive
@@ -117,39 +115,39 @@ type Unit = "by key" | "by occurrence";
  * the entry's, and is overridden only where the sentence deliberately quotes a
  * second caliber.
  */
-type Fact = {
-  /** How the sentence names this number, for the failure message. */
-  label: string;
-  /** Key prefix the count is taken over; the whole bundle when omitted. */
-  scope?: string;
-  /** What is counted. */
-  pattern: RegExp;
-  /** When present, only keys matching this too are counted (an overlap). */
-  also?: RegExp;
-  /**
-   * When present, only these exact keys are counted. Used for a claim about a
-   * named set the `why` spells out — a set with no shared key prefix, where a
-   * `scope` would either over- or under-count.
-   */
-  keys?: string[];
-  /**
-   * When present, the key set is *derived*: every key of `locale` whose value
-   * matches `pattern`. This is how a cross-locale claim is written — "ko is
-   * unanimous on 개 **for the same keys**" — so the two halves of the sentence
-   * cannot drift apart as the family grows.
-   */
-  keysFrom?: { locale: Locale; pattern: RegExp };
-  /** Overrides the entry's unit for this one number. */
-  unit?: Unit;
-  /**
-   * Overrides the entry's locale, for the cross-locale claims a `why` makes
-   * ("ko is unanimous on 개"). Without it those claims are the only ones in the
-   * sentence nothing re-measures.
-   */
-  locale?: Locale;
-  expected: number;
-};
+type Anchor = { key: string; contains: string };
 
+/**
+ * One number the `why` sentence states, written so the test below can re-derive
+ * it from the bundle.
+ *
+ * The 151 round added this because the `collision` anchors and the unit prefix
+ * between them still left the *numbers* unverified. They catch "an anchor was
+ * rewritten" and "the sentence stopped saying what it counts"; they cannot catch
+ * "the family grew a key" or "the sentence was measured over the wrong
+ * surface". Both had happened:
+ *
+ *   - The `Server` rows read "native in all 15 of the 20 keys that name a
+ *     server". 20 is the size of the `settings.mcp.*` surface, not the number of
+ *     keys in it that name a server — that is 15, so the sentence claimed 20
+ *     keys doing what 15 do. Same class of defect the 150 round fixed one entry
+ *     over (a number borrowed from the wrong surface), found again.
+ *   - The `Agent counter (ja)` row read "4 件 vs 2 個" and "ko is unanimous on
+ *     개 for all six". Both numbers came from a position-scoped pattern
+ *     (`エージェント {{n}} 件`), which sees 6 of the 18 keys that count an agent
+ *     in ja. The other 12 take 件, 個 or a third counter, 体, in the
+ *     placeholder-first position — so the entry understated its own surface
+ *     threefold and missed a form entirely.
+ *
+ * A number in a `why` is a claim the guard re-measures. `unit` defaults to the
+ * entry's, and is overridden only where the sentence deliberately quotes a
+ * second caliber.
+ *
+ * The 152 round lifted the mechanism into `./tally.ts` so the guards that pin
+ * conventions can state their tallies the same way — see that file for the two
+ * free-text numbers it found already wrong. `Fact` is the shared `Measure` plus
+ * the sentence's label; nothing about this file's claims changed.
+ */
 type Entry = {
   /** How conventions.mdx names this term in its undecided table. */
   docTerm: string;
@@ -701,6 +699,63 @@ const UNSETTLED: Entry[] = [
       },
     ],
   },
+  {
+    docTerm: "Dash (zh)",
+    label: "dash (views zh-Hans)",
+    locale: "zh-Hans",
+    forms: [
+      { label: "—— doubled", pattern: /——/ },
+      { label: " — spaced single", pattern: / — / },
+    ],
+    collision: [
+      [
+        { key: "issues.gantt.empty", contains: " — " },
+        { key: "issues.execution_log.retry_blocked", contains: "——" },
+      ],
+    ],
+    unit: "by key",
+    why:
+      "by key: 95 keys write the doubled —— and 3 keep the English ` — `, and the split is " +
+      "not by surface or by sentence shape — issues.gantt.empty and " +
+      "issues.execution_log.retry_blocked are both an issues sentence that states a condition " +
+      "and then a hint, and they take different dashes",
+    ask:
+      "Typography owner: is a Chinese prose dash —— or the English ` — `? 95 keys against 3, " +
+      "with both forms inside the same namespace, so no majority-with-debt argument and no " +
+      "partition argument is available. 98 views zh-Hans keys move.",
+    facts: [
+      { label: "—— keys", pattern: /——/, expected: 95 },
+      { label: "` — ` keys", pattern: / — /, expected: 3 },
+    ],
+  },
+  {
+    docTerm: "Dash (zh)",
+    label: "dash (mobile zh)",
+    locale: "zh-mobile",
+    forms: [
+      { label: "—— doubled", pattern: /——/ },
+      { label: " — spaced single", pattern: / — / },
+    ],
+    collision: [
+      [
+        { key: "issues.gantt.empty", contains: " — " },
+        { key: "issueViews.noViews", contains: "——" },
+      ],
+    ],
+    unit: "by key",
+    why:
+      "by key: the same question in the mobile bundle, where the split is wider — 39 keys " +
+      "write —— and 8 keep ` — ` — and the two empty states of the issues surface disagree: " +
+      "issues.gantt.empty keeps the English dash while issueViews.noViews takes the doubled one",
+    ask:
+      "Typography owner: the same call for the mobile bundle, where the minority is 8 of 47 " +
+      "keys rather than 3 of 98, and two empty states on one surface disagree. Answer both " +
+      "bundles together and 145 zh keys move.",
+    facts: [
+      { label: "—— keys", pattern: /——/, expected: 39 },
+      { label: "` — ` keys", pattern: / — /, expected: 8 },
+    ],
+  },
 ];
 
 describe("the unsettled ledger stays honest", () => {
@@ -719,9 +774,10 @@ describe("the unsettled ledger stays honest", () => {
     });
 
     it(`keeps the collision that blocks a clean partition for ${entry.label}`, () => {
+      const english = enFor(entry.locale);
       for (const [a, b] of entry.collision) {
         for (const anchor of [a, b]) {
-          expect(en[anchor.key], `${anchor.key} must be real product copy`).toBeDefined();
+          expect(english[anchor.key], `${anchor.key} must be real product copy`).toBeDefined();
           expect(
             bundle[anchor.key],
             `${anchor.key} should render ${JSON.stringify(anchor.contains)}, got ` +
@@ -794,35 +850,12 @@ describe("the unsettled ledger stays honest", () => {
         `${entry.label} states numbers but records no facts to re-derive them`,
       ).toBeGreaterThan(0);
       for (const fact of entry.facts) {
-        const target = TARGETS[fact.locale ?? entry.locale];
-        const fromKeys = (keys: string[]) =>
-          Object.fromEntries(
-            keys.map((key) => {
-              const value = target[key];
-              if (value === undefined) {
-                throw new Error(`${entry.label} / ${fact.label}: ${key} is not in the bundle`);
-              }
-              return [key, value];
-            }),
-          );
-        const scoped = fact.keys
-          ? fromKeys(fact.keys)
-          : fact.keysFrom
-            ? fromKeys(
-                Object.entries(TARGETS[fact.keysFrom.locale])
-                  .filter(([, value]) => fact.keysFrom!.pattern.test(value))
-                  .map(([key]) => key),
-              )
-            : fact.scope
-              ? Object.fromEntries(
-                  Object.entries(target).filter(([key]) => key.startsWith(fact.scope as string)),
-                )
-              : target;
-        const unit = fact.unit ?? entry.unit;
-        const measured =
-          unit === "by key"
-            ? countMatching(scoped, fact.pattern, fact.also)
-            : countOccurrences(scoped, fact.pattern);
+        const measured = measure(fact, {
+          locale: fact.locale ?? entry.locale,
+          unit: fact.unit ?? entry.unit,
+          bundles: BUNDLES,
+          mask: (value) => value ?? "",
+        });
         expect(
           measured,
           `${entry.label} / ${fact.label}: the why states ${fact.expected}, the bundle has ` +
@@ -840,16 +873,12 @@ describe("the unsettled ledger stays honest", () => {
  * than through the per-locale entry shape above.
  */
 describe("the ellipsis clause stays unresolved in both zh bundles", () => {
-  const mobileZh = JSON.parse(
-    readFileSync(resolve(REPO_ROOT, "apps/mobile/lib/i18n/locales/zh.json"), "utf8"),
-  ) as Record<string, string>;
-  const mobileEn = JSON.parse(
-    readFileSync(resolve(REPO_ROOT, "apps/mobile/lib/i18n/locales/en.json"), "utf8"),
-  ) as Record<string, string>;
+  const mobileZh = loadMobile("zh");
+  const mobileEn = loadMobile("en");
 
   it("keeps both readings in use, in both bundles", () => {
     for (const [name, bundle] of [
-      ["views zh-Hans", load("zh-Hans")],
+      ["views zh-Hans", BUNDLES["zh-Hans"]],
       ["mobile zh", mobileZh],
     ] as const) {
       expect(countMatching(bundle, /\.\.\./), `${name} no longer uses ...`).toBeGreaterThan(0);

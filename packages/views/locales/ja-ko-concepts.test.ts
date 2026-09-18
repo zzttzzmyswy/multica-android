@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { measure, type Fact, type MeasureContext } from "./tally";
 
 /**
  * Guard for the ja and ko bundles rendering a *concept* with one word.
@@ -20,7 +21,7 @@ import { describe, expect, it } from "vitest";
  *
  * Two concepts resist a single word, and both are encoded rather than guessed:
  *
- * - ko `label` is split 26 `라벨` / 24 `레이블` with no majority and no clean
+ * - ko `label` is split 26 `라벨` / 25 `레이블` with no majority and no clean
  *   scope partition (`settings.*` mostly takes `레이블`, `issues.*` mostly
  *   `라벨`, and `modals.create_issue` takes both). The bundle cannot settle it,
  *   so `native.ko` is null: the Latin test still runs, the single-word test
@@ -122,15 +123,25 @@ const SURFACE_SPLITS: {
  * Concepts the bundle cannot settle. The Latin test still applies; the
  * single-word test does not, because choosing a winner here would be a guess
  * rather than a derivation. Both were reported upstream instead.
+ *
+ * A `why` that states a number carries a `claim` for it, and the guard
+ * re-derives it. The 152 round added that after finding the `label` entry
+ * reading "26 `라벨` vs 24 `레이블`" — the bundle holds 25, and the ledger one
+ * file over has said 25 since the 149 round. Two files disagreed about the same
+ * split and only the one with a re-derivable number was right; see `./tally.ts`.
  */
-const UNSETTLED: { label: string; locale: Locale; why: string }[] = [
+const UNSETTLED: { label: string; locale: Locale; why: string; claims?: Fact[] }[] = [
   {
     label: "label",
     locale: "ko",
     why:
-      "26 `라벨` vs 24 `레이블` with no majority and no scope partition: `settings.*` mostly " +
+      "26 `라벨` vs 25 `레이블` with no majority and no scope partition: `settings.*` mostly " +
       "takes `레이블` and `issues.*` mostly `라벨`, but `modals.create_issue` takes both and " +
       "`labels.remove_label` disagrees with its own namespace. Needs a locale owner's call.",
+    claims: [
+      { label: "라벨 keys", pattern: /라벨/, expected: 26 },
+      { label: "레이블 keys", pattern: /레이블/, expected: 25 },
+    ],
   },
   {
     label: "onboarding",
@@ -171,6 +182,21 @@ const MASKED_LITERALS = [
 
 const mask = (value: string | undefined) =>
   MASKED_LITERALS.reduce((acc, pattern) => acc.replace(pattern, "…"), value ?? "");
+
+const claimCtx = (locale: Locale): MeasureContext => ({
+  locale,
+  unit: "by key",
+  bundles: { en, ja, ko },
+  mask,
+});
+
+const problems = (locale: Locale, facts: Fact[]) =>
+  facts.flatMap((fact) => {
+    const measured = measure(fact, claimCtx(locale));
+    return measured === fact.expected
+      ? []
+      : [`${locale} / ${fact.label}: states ${fact.expected}, the bundle has ${measured}`];
+  });
 
 /** True when the string talks about the concept in prose. */
 const namesConcept = (value: string | undefined, pattern: RegExp) => pattern.test(mask(value ?? ""));
@@ -337,6 +363,21 @@ describe("ja / ko render each concept with one native word", () => {
       expect(isSettled(label, locale), `${locale} ${label} must have a null native word`).toBe(
         concept!.native[locale] !== null,
       );
+    }
+  });
+
+  it("re-derives every number the unsettled reasons state", () => {
+    // The `label` entry carried "26 라벨 vs 24 레이블" for as long as it existed,
+    // and the bundle holds 25 — a free-text number nothing could contradict. The
+    // rule is now structural: a reason that states a count has to carry the
+    // claim that re-derives it.
+    for (const { label, locale, why, claims: entryClaims } of UNSETTLED) {
+      if (!/\d/.test(why)) continue;
+      expect(
+        entryClaims,
+        `${locale} ${label}'s reason states a number but carries no claim for it`,
+      ).toBeDefined();
+      expect(problems(locale, entryClaims!), `${locale} ${label}`).toEqual([]);
     }
   });
 
