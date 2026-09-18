@@ -45,7 +45,7 @@ describe("issue quick-actions section i18n", () => {
     "issue.qa.sectionTitle": "快捷操作",
     "issue.qa.showMore": "显示其余 {{count}} 条",
     "issue.qa.runsAs": "由 {{name}} 执行",
-    "issue.qa.targetFallback": "该 Agent",
+    "issue.qa.targetFallback": "该智能体",
     "issue.qa.queued": "{{name}} 已开始处理",
     "issue.qa.coalesced": "已加入 {{name}} 当前的 task",
     "issue.qa.deferred": "{{name}} 当前离线，上线后开始",

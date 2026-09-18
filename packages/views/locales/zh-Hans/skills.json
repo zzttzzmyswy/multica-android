@@ -187,7 +187,7 @@
       "updated_by": "{{name}} 于{{when}}更新"
     },
     "tabs": {
-      "aria": "技能分区",
+      "aria": "skill 分区",
       "overview": "概览",
       "files_other": "文件 {{count}}"
     },
@@ -196,16 +196,16 @@
       "properties_hint": "这些字段与 SKILL.md 的 frontmatter 保持同步。",
       "name": "名称",
       "description": "描述",
-      "description_hint": "{{count}} 个字符。智能体根据这段文字判断是否加载该技能。",
+      "description_hint": "{{count}} 个字符。智能体根据这段文字判断是否加载该 skill。",
       "labels": "标签",
       "used_by_other": "被 {{count}} 个智能体使用",
       "used_by_empty": "还未分配给任何智能体。打开某个智能体的 Skills 标签页进行分配。",
-      "permissions_owner": "你可以编辑和删除该技能。改动将在智能体下次运行时生效。",
-      "permissions_locked_creator": "只有创建者（{{name}}）或工作区管理员可以编辑该技能。",
-      "permissions_locked": "只有创建者或工作区管理员可以编辑该技能。"
+      "permissions_owner": "你可以编辑和删除该 skill。改动将在智能体下次运行时生效。",
+      "permissions_locked_creator": "只有创建者（{{name}}）或工作区管理员可以编辑该 skill。",
+      "permissions_locked": "只有创建者或工作区管理员可以编辑该 skill。"
     },
     "files": {
-      "list_aria": "技能文件",
+      "list_aria": "skill 文件",
       "main": "主文件",
       "supporting_other": "附属文件 {{count}}",
       "supporting_empty": "暂无附属文件。",
@@ -281,8 +281,8 @@
     "no_local_runtimes_hint": "连接一个本地运行时，才能浏览并导入其本地 skill。",
     "choose_runtime": "请选择一个运行时继续",
     "must_be_online": "运行时必须在线才能浏览本地 skill。",
-    "load_failed": "加载本地 skill 失败",
-    "not_supported": "这个 provider 暂不支持本地 skill 列表。",
+    "load_failed": "加载运行时本地 skill 失败",
+    "not_supported": "这个运行时暂不支持本地 skill 列表。",
     "no_skills_title": "未找到本地 skill",
     "no_skills_hint": "这个运行时上还没有可发现的本地 skill。",
     "search_placeholder": "搜索本地 skill",
