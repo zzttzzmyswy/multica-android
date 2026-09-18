@@ -21,7 +21,7 @@ import { View } from "react-native";
 import { router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import type { Issue } from "@multica/core/types";
-import { formatDateOnly } from "@multica/core/issues/date";
+import { ISSUE_DATE_SHORT, formatIssueDate } from "@/lib/format-date";
 import { Text } from "@/components/ui/text";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { PriorityIcon } from "@/components/ui/priority-icon";
@@ -33,38 +33,19 @@ import { findProject, projectListOptions } from "@/data/queries/projects";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { useStatusLabel } from "@/lib/status-options";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import { useTranslation } from "@/lib/i18n/react";
+import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
+import {
+  ISSUE_PICKER_PATHNAMES,
+  type IssuePickerField,
+} from "@/lib/issue-picker-route";
 
-/**
- * The picker fields the issue-detail attribute row can open. Bound to a
- * map of typed Expo Router pathnames so typos become compile errors
- * (previously the call site used `as never` on a template string, which
- * silently accepted anything).
- */
-type IssuePickerField =
-  | "status"
-  | "priority"
-  | "assignee"
-  | "label"
-  | "project"
-  | "due-date"
-  | "start-date";
-
-const ISSUE_PICKER_PATHNAMES = {
-  status: "/[workspace]/issue/[id]/picker/status",
-  priority: "/[workspace]/issue/[id]/picker/priority",
-  assignee: "/[workspace]/issue/[id]/picker/assignee",
-  label: "/[workspace]/issue/[id]/picker/label",
-  project: "/[workspace]/issue/[id]/picker/project",
-  "due-date": "/[workspace]/issue/[id]/picker/due-date",
-  "start-date": "/[workspace]/issue/[id]/picker/start-date",
-} as const satisfies Record<IssuePickerField, string>;
 
 // due_date is a calendar day — format timezone-safely so the day never shifts
-// with the viewer's offset. Mirrors web's formatDate in list-row/board-card.
-function formatDueDate(iso: string | null): string | null {
+// with the viewer's offset, and in the active app locale. Mirrors web's
+// formatDate in list-row/board-card.
+function formatDueDate(iso: string | null, locale: string): string | null {
   if (!iso) return null;
-  return formatDateOnly(iso, { month: "short", day: "numeric" }, "en-US") || null;
+  return formatIssueDate(iso, ISSUE_DATE_SHORT, locale) || null;
 }
 
 export function AttributeRow({ issue }: { issue: Issue }) {
@@ -72,6 +53,7 @@ export function AttributeRow({ issue }: { issue: Issue }) {
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { getName } = useActorLookup();
   const { t } = useTranslation();
+  const intlLocale = useIntlLocale();
   const statusLabel = useStatusLabel(wsId);
   const statusEntry = useIssueStatuses(wsId).entryOf(issue.status);
 
@@ -93,8 +75,8 @@ export function AttributeRow({ issue }: { issue: Issue }) {
   const assigneeName = assigneeValue
     ? getName(assigneeValue.type, assigneeValue.id)
     : null;
-  const dueLabel = formatDueDate(issue.due_date);
-  const startLabel = formatDueDate(issue.start_date);
+  const dueLabel = formatDueDate(issue.due_date, intlLocale);
+  const startLabel = formatDueDate(issue.start_date, intlLocale);
 
   const openPicker = (field: IssuePickerField) => {
     if (!wsSlug) return;

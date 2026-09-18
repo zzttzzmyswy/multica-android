@@ -1,0 +1,1886 @@
+commit 3c0271cde7c97cb7e93308af218606f6fab7b7b0
+Author: zetao.zhang <zetao.zhang@sophgo.com>
+Date:   Thu Sep 17 08:21:36 2026 +0800
+
+    feat(mobile): issue table column resize + reorder, row-level new sub-issue (MYS-1161)
+    
+    Web gets column resizing from TanStack Table's column sizing and column
+    ordering from dnd-kit; the phone has neither, and its header has no hover.
+    
+    - Column widths: `tableColumnWidths` on the view store's table-columns slice
+      (sparse overrides, clamped 64..360, cleared when set back to the default),
+      driven by a PanResponder resize handle on each header's trailing edge. The
+      drag keeps its provisional width locally and commits once on release; the
+      header and the body lay out from one shared width array so the two synced
+      panes cannot drift mid-drag. Data rows are memoised with an element-wise
+      width comparison so a drag re-renders the header, not every row.
+    - Column order: `reorderTableColumn` + per-column move rows in the column
+      menu (a horizontal drag-to-reorder would fight the header scroller for the
+      axis). `title` stays pinned first — a forward step is refused as well as a
+      backward one, or the pinned column would swap into the scroller.
+    - The column menu also shows the current display order and a reset.
+    - Row-level "new sub-issue": the `+` web reveals on title hover is a
+      permanent target on the phone's pinned title cell, hidden while selecting.
+      It opens the new-issue form with the parent preset as route params (the
+      same call web's `createSubIssue` makes), which the form shows as a
+      removable chip and writes as `parent_issue_id`; the parent's project rides
+      along.
+    
+    2385 tests green (baseline 2360).
+    
+    Co-authored-by: multica-agent <github@multica.ai>
+
+diff --git a/apps/mobile/app.config.ts b/apps/mobile/app.config.ts
+index 4e651ead6..47944bf76 100644
+--- a/apps/mobile/app.config.ts
++++ b/apps/mobile/app.config.ts
+@@ -22,7 +22,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
+         ? "Multica (Staging)"
+         : "Multica (Dev)",
+     slug: "multica-mobile",
+-    version: "0.5.60",
++    version: "0.5.61",
+     orientation: "portrait",
+     userInterfaceStyle: "automatic",
+     scheme: "multica",
+@@ -39,7 +39,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
+       // Convention: minor*100 + patch — keep it monotonic with every
+       // `version` bump so self-hosted APK updates always upgrade. Shown as the
+       // About-page "build" number (Constants.platform.android.versionCode).
+-      versionCode: 560,
++      versionCode: 561,
+       // Adaptive icon: separate full-bleed background + centered foreground so
+       // Android launchers can mask them into circles / squiggles cleanly.
+       adaptiveIcon: {
+diff --git a/apps/mobile/app/(app)/[workspace]/(tabs)/my-issues.tsx b/apps/mobile/app/(app)/[workspace]/(tabs)/my-issues.tsx
+index ecdb37e4c..0197f9620 100644
+--- a/apps/mobile/app/(app)/[workspace]/(tabs)/my-issues.tsx
++++ b/apps/mobile/app/(app)/[workspace]/(tabs)/my-issues.tsx
+@@ -62,6 +62,7 @@ import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection
+ import { useAuthStore } from "@/data/auth-store";
+ import { useWorkspaceStore } from "@/data/workspace-store";
+ import { useMyIssuesViewStore } from "@/data/stores/my-issues-view-store";
++import { useCreateSubIssue } from "@/lib/use-create-sub-issue";
+ import {
+   issueViewContainerKey,
+   useActiveIssueViewStore,
+@@ -123,6 +124,11 @@ export default function MyIssues() {
+   const swimlaneGrouping = useMyIssuesViewStore((s) => s.swimlaneGrouping);
+   const tableColumns = useMyIssuesViewStore((s) => s.tableColumns);
+   const toggleTableColumn = useMyIssuesViewStore((s) => s.toggleTableColumn);
++  const tableColumnWidths = useMyIssuesViewStore((s) => s.tableColumnWidths);
++  const setTableColumnWidth = useMyIssuesViewStore((s) => s.setTableColumnWidth);
++  const reorderTableColumn = useMyIssuesViewStore((s) => s.reorderTableColumn);
++  const resetTableColumns = useMyIssuesViewStore((s) => s.resetTableColumns);
++  const createSubIssue = useCreateSubIssue();
+   const tableGrouping = useMyIssuesViewStore((s) => s.tableGrouping);
+   const setTableGrouping = useMyIssuesViewStore((s) => s.setTableGrouping);
+   const grouping = useMyIssuesViewStore((s) => s.grouping);
+@@ -550,6 +556,11 @@ export default function MyIssues() {
+           issues={sorted}
+           columns={tableColumns}
+           onToggleColumn={toggleTableColumn}
++          columnWidths={tableColumnWidths}
++          onResizeColumn={setTableColumnWidth}
++          onReorderColumn={reorderTableColumn}
++          onResetColumns={resetTableColumns}
++          onCreateSubIssue={createSubIssue}
+           grouping={tableGrouping}
+           onGroupingChange={setTableGrouping}
+           sortBy={sortBy}
+diff --git a/apps/mobile/app/(app)/[workspace]/more/issues.tsx b/apps/mobile/app/(app)/[workspace]/more/issues.tsx
+index 1fa44f7ff..855637086 100644
+--- a/apps/mobile/app/(app)/[workspace]/more/issues.tsx
++++ b/apps/mobile/app/(app)/[workspace]/more/issues.tsx
+@@ -62,6 +62,7 @@ import {
+   useIssuesViewStore,
+   type IssuesScope,
+ } from "@/data/stores/issues-view-store";
++import { useCreateSubIssue } from "@/lib/use-create-sub-issue";
+ import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection-store";
+ import {
+   issueViewContainerKey,
+@@ -114,6 +115,11 @@ export default function IssuesPage() {
+   const swimlaneGrouping = useIssuesViewStore((s) => s.swimlaneGrouping);
+   const tableColumns = useIssuesViewStore((s) => s.tableColumns);
+   const toggleTableColumn = useIssuesViewStore((s) => s.toggleTableColumn);
++  const tableColumnWidths = useIssuesViewStore((s) => s.tableColumnWidths);
++  const setTableColumnWidth = useIssuesViewStore((s) => s.setTableColumnWidth);
++  const reorderTableColumn = useIssuesViewStore((s) => s.reorderTableColumn);
++  const resetTableColumns = useIssuesViewStore((s) => s.resetTableColumns);
++  const createSubIssue = useCreateSubIssue();
+   const tableGrouping = useIssuesViewStore((s) => s.tableGrouping);
+   const setTableGrouping = useIssuesViewStore((s) => s.setTableGrouping);
+   const grouping = useIssuesViewStore((s) => s.grouping);
+@@ -518,6 +524,11 @@ export default function IssuesPage() {
+           issues={sorted}
+           columns={tableColumns}
+           onToggleColumn={toggleTableColumn}
++          columnWidths={tableColumnWidths}
++          onResizeColumn={setTableColumnWidth}
++          onReorderColumn={reorderTableColumn}
++          onResetColumns={resetTableColumns}
++          onCreateSubIssue={createSubIssue}
+           grouping={tableGrouping}
+           onGroupingChange={setTableGrouping}
+           sortBy={sortBy}
+diff --git a/apps/mobile/app/(app)/[workspace]/new-issue.tsx b/apps/mobile/app/(app)/[workspace]/new-issue.tsx
+index 6782293aa..e12628ae9 100644
+--- a/apps/mobile/app/(app)/[workspace]/new-issue.tsx
++++ b/apps/mobile/app/(app)/[workspace]/new-issue.tsx
+@@ -34,6 +34,8 @@ import {
+   View,
+ } from "react-native";
+ import { Stack, router, useLocalSearchParams } from "expo-router";
++import { useQuery } from "@tanstack/react-query";
++import Ionicons from "@expo/vector-icons/Ionicons";
+ import { SubmitIssueButton } from "@/components/issue/submit-issue-button";
+ import { CreateFormAttributeRow } from "@/components/issue/create-form-attribute-row";
+ import { MentionSuggestionBar } from "@/components/issue/mention-suggestion-bar";
+@@ -42,7 +44,9 @@ import { QuickCreatePanel } from "@/components/issue/quick-create-panel";
+ import { Text } from "@/components/ui/text";
+ import { MOBILE_PLACEHOLDER_COLOR } from "@/components/ui/input-tokens";
+ import { useCreateIssue, useQuickCreateIssue } from "@/data/mutations/issues";
++import { projectListOptions } from "@/data/queries/projects";
+ import { useNewIssueDraftStore } from "@/data/stores/new-issue-draft-store";
++import { useWorkspaceStore } from "@/data/workspace-store";
+ import { useActorLookup } from "@/data/use-actor-name";
+ import { useMentionInput } from "@/lib/use-mention-input";
+ import { keyboardBehavior } from "@/lib/keyboard";
+@@ -61,12 +65,27 @@ export default function NewIssueModal() {
+   // Quick-create recovery seed (inbox detail → "Edit as advanced form"): the
+   // original prompt + agent hint ride the URL and reseed the manual form so
+   // the user can finish the issue in the full editor instead of retyping.
+-  const { seedDescription, seedAssigneeId } = useLocalSearchParams<{
++  const {
++    seedDescription,
++    seedAssigneeId,
++    parentIssueId,
++    parentIssueIdentifier,
++    parentProjectId,
++  } = useLocalSearchParams<{
+     seedDescription?: string;
+     seedAssigneeId?: string;
++    /** Parent preset by the issue table's row-level "+" (web createSubIssue). */
++    parentIssueId?: string;
++    parentIssueIdentifier?: string;
++    parentProjectId?: string;
+   }>();
+   const [mode, setMode] = useState<CreateMode>("manual");
+   const [title, setTitle] = useState("");
++  // A sub-issue preset can be dropped before submitting — the chip is the
++  // only way back out, and web offers the same escape (the parent is just a
++  // prefilled field there, not a lock).
++  const [parentCleared, setParentCleared] = useState(false);
++  const parent = parentCleared ? undefined : parentIssueId;
+   // Agent-mode natural-language prompt. Lives here (not in the panel) so a
+   // manual ↔ agent switch preserves it — same reasoning as title.
+   const [prompt, setPrompt] = useState("");
+@@ -107,6 +126,20 @@ export default function NewIssueModal() {
+     if (seedAssigneeId) setAssignee({ type: "agent", id: String(seedAssigneeId) });
+   }, [seedDescription, seedAssigneeId, descriptionTextSetter, setAssignee]);
+ 
++  // A sub-issue inherits its parent's project (web `createSubIssue` passes
++  // `project_id: issue.project_id`). Seeded after the mount reset, and only
++  // once the project list resolves — the param carries an id, the form holds
++  // a whole Project.
++  const projectSetter = useNewIssueDraftStore((s) => s.setProject);
++  const parentProjectIdValue = parentProjectId ? String(parentProjectId) : null;
++  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
++  const { data: allProjects } = useQuery(projectListOptions(wsId));
++  useEffect(() => {
++    if (!parentProjectIdValue) return;
++    const match = allProjects?.find((p) => p.id === parentProjectIdValue);
++    if (match) projectSetter(match);
++  }, [parentProjectIdValue, allProjects, projectSetter]);
++
+   const createIssue = useCreateIssue();
+   const quickCreate = useQuickCreateIssue();
+   // Loading state follows the ACTIVE mode — the header button must show a
+@@ -144,6 +177,7 @@ export default function NewIssueModal() {
+         ...(priority !== "none" ? { priority } : {}),
+         ...(dueDate ? { due_date: dueDate } : {}),
+         ...(project ? { project_id: project.id } : {}),
++        ...(parent ? { parent_issue_id: parent } : {}),
+       });
+       Alert.alert(
+         t("newIssue.agentSentTitle"),
+@@ -160,7 +194,7 @@ export default function NewIssueModal() {
+       );
+       return false;
+     }
+-  }, [prompt, agentActor, priority, dueDate, project, quickCreate, getName, t]);
++  }, [prompt, agentActor, priority, dueDate, project, parent, quickCreate, getName, t]);
+ 
+   const submitManualMode = useCallback(async () => {
+     const trimmedTitle = title.trim();
+@@ -179,6 +213,7 @@ export default function NewIssueModal() {
+         ...(startDate ? { start_date: startDate } : {}),
+         ...(labels.length > 0 ? { label_ids: labels.map((l) => l.id) } : {}),
+         ...(project ? { project_id: project.id } : {}),
++        ...(parent ? { parent_issue_id: parent } : {}),
+         ...(uploadedAttachmentIds.length > 0
+           ? { attachment_ids: uploadedAttachmentIds }
+           : {}),
+@@ -200,6 +235,7 @@ export default function NewIssueModal() {
+     startDate,
+     labels,
+     project,
++    parent,
+     uploadedAttachmentIds,
+     createIssue,
+     t,
+@@ -262,6 +298,39 @@ export default function NewIssueModal() {
+             })}
+           </View>
+ 
++          {/* Sub-issue preset (issue table's row-level "+"). Web renders the
++              same chip in its agent panel (`agent-sub-issue-chip`); mobile
++              shows it once, above the mode-specific body, because the parent
++              applies to whichever mode submits. */}
++          {parent ? (
++            <View className="flex-row items-center gap-1.5 self-start rounded-full bg-secondary/60 px-2.5 py-1">
++              <Ionicons
++                name="git-branch-outline"
++                size={13}
++                color={MOBILE_PLACEHOLDER_COLOR}
++              />
++              <Text className="text-xs text-muted-foreground" numberOfLines={1}>
++                {t("newIssue.parentChip", {
++                  identifier: parentIssueIdentifier
++                    ? String(parentIssueIdentifier)
++                    : "",
++                })}
++              </Text>
++              <Pressable
++                onPress={() => setParentCleared(true)}
++                hitSlop={8}
++                accessibilityRole="button"
++                accessibilityLabel={t("newIssue.parentChipClear")}
++              >
++                <Ionicons
++                  name="close"
++                  size={13}
++                  color={MOBILE_PLACEHOLDER_COLOR}
++                />
++              </Pressable>
++            </View>
++          ) : null}
++
+           {mode === "manual" ? (
+             <>
+               <TextInput
+diff --git a/apps/mobile/components/issue/table-view.tsx b/apps/mobile/components/issue/table-view.tsx
+index 90e1530e9..29dba15c1 100644
+--- a/apps/mobile/components/issue/table-view.tsx
++++ b/apps/mobile/components/issue/table-view.tsx
+@@ -31,8 +31,16 @@
+  * events (scrollToOffset on a sibling FlatList with the same data + fixed
+  * row heights) — the classic dual-list table pattern; both lists feed each
+  * other so a gesture starting on either pane scrolls the whole grid.
++ *
++ * Iteration 134 adds the two column-configuration gestures the web table gets
++ * from TanStack Table + dnd-kit: a resize handle on each header's trailing
++ * edge (PanResponder — there is no dnd-kit on the phone, and a phone header
++ * has no hover to reveal one), and per-column move rows in the column menu
++ * (`reorderTableColumn`). Both write to the surface view store, so the
++ * column set, order and widths travel together.
+  */
+ import {
++  memo,
+   useCallback,
+   useEffect,
+   useMemo,
+@@ -42,6 +50,7 @@ import {
+ import {
+   FlatList,
+   Modal,
++  PanResponder,
+   Pressable,
+   ScrollView,
+   TextInput,
+@@ -65,11 +74,16 @@ import { useWorkspaceStore } from "@/data/workspace-store";
+ import { useActorLookup } from "@/data/use-actor-name";
+ import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection-store";
+ import {
++  COLUMN_WIDTH_MAX,
++  COLUMN_WIDTH_MIN,
++  columnWidthOf,
++  nextColumnWidth,
+   nextTableSort,
+   propertyIdFromTableColumn,
+   TABLE_SYSTEM_COLUMNS,
+   type TableColumnDefinition,
+   type TableColumnKey,
++  type TableColumnWidths,
+   type TableSystemColumn,
+ } from "@/data/stores/issue-table-columns";
+ import type {
+@@ -113,10 +127,11 @@ import { useTranslation } from "@/lib/i18n/react";
+ const ROW_HEIGHT = 48;
+ /** Pinned left column width (checkbox + title) at depth 0. */
+ const PINNED_WIDTH = 176;
+-/** Width for property (non-system) columns. */
+-const PROPERTY_COLUMN_WIDTH = 132;
+ /** Header-row height (pinned cell + column headers share it). */
+ const HEADER_HEIGHT = 34;
++/** Touch target for the column-resize handle on a header cell's right edge.
++ *  Wide enough for a thumb (the visible rule inside is 2px). */
++const RESIZE_HANDLE_WIDTH = 20;
+ /** Group segment header height. Matches the column header so a collapsed
+  *  table still reads as a grid, and stays uniform across the two synced
+  *  lists (the vertical scroll sync assumes identical row sequences). */
+@@ -130,26 +145,6 @@ const INDENT_PER_LEVEL = 14;
+  *  (web's double-click on InlineTitle). */
+ const DOUBLE_TAP_MS = 280;
+ 
+-/** Per-system-column widths; unknown keys fall back to the property width. */
+-const COLUMN_WIDTHS: Partial<Record<TableSystemColumn, number>> = {
+-  identifier: 84,
+-  status: 104,
+-  priority: 88,
+-  assignee: 132,
+-  labels: 140,
+-  project: 132,
+-  start_date: 100,
+-  due_date: 88,
+-  created_at: 104,
+-  updated_at: 104,
+-  creator: 132,
+-};
+-
+-function columnWidth(column: TableColumnKey): number {
+-  if (column.startsWith("property:")) return PROPERTY_COLUMN_WIDTH;
+-  return COLUMN_WIDTHS[column as TableSystemColumn] ?? PROPERTY_COLUMN_WIDTH;
+-}
+-
+ function columnDefinition(
+   column: TableSystemColumn,
+ ): TableColumnDefinition | undefined {
+@@ -181,11 +176,22 @@ interface Props {
+   columns: TableColumnKey[];
+   /** Passed straight through to the store's toggleTableColumn. */
+   onToggleColumn: (column: TableColumnKey) => void;
++  /** Per-column width overrides (surface store's `tableColumnWidths`). */
++  columnWidths: TableColumnWidths;
++  /** Passed straight through to the store's setTableColumnWidth. */
++  onResizeColumn: (column: TableColumnKey, width: number) => void;
++  /** Passed straight through to the store's reorderTableColumn. */
++  onReorderColumn: (column: TableColumnKey, delta: -1 | 1) => void;
++  /** Passed straight through to the store's resetTableColumns. */
++  onResetColumns: () => void;
+   sortBy: IssueSortField;
+   sortDirection: IssueSortDirection;
+   /** Header-tap sort: field + explicit direction (surface store setters). */
+   onSort: (field: IssueSortField, direction: IssueSortDirection) => void;
+   onOpenIssue: (issue: Issue) => void;
++  /** Row-level "new sub-issue" entry (web's InlineTitle `+` button): opens
++   *  the new-issue form with this issue preset as the parent. */
++  onCreateSubIssue: (issue: Issue) => void;
+   /** Shown when there are no rows (parent surfaces usually pre-empt this). */
+   emptyLabel: string;
+   /** Active grouping dimension (surface store's `tableGrouping`). */
+@@ -198,10 +204,15 @@ export function IssueTableView({
+   issues,
+   columns,
+   onToggleColumn,
++  columnWidths,
++  onResizeColumn,
++  onReorderColumn,
++  onResetColumns,
+   sortBy,
+   sortDirection,
+   onSort,
+   onOpenIssue,
++  onCreateSubIssue,
+   emptyLabel,
+   grouping,
+   onGroupingChange,
+@@ -246,6 +257,13 @@ export function IssueTableView({
+   } | null>(null);
+   /** Row being renamed from the pinned title cell. */
+   const [renaming, setRenaming] = useState<Issue | null>(null);
++  /** In-flight column-resize drag: which column, and its provisional width.
++   *  Held here rather than written straight to the store so the store sees one
++   *  write per gesture instead of one per frame. */
++  const [resizing, setResizing] = useState<{
++    column: TableColumnKey;
++    width: number;
++  } | null>(null);
+ 
+   const groupActorName = useCallback(
+     (actor: IssueTableGroupActor) => getName(actor.type, actor.id),
+@@ -555,6 +573,51 @@ export function IssueTableView({
+     [columns],
+   );
+ 
++  // --- column widths ------------------------------------------------------
++  // A live drag keeps its width in `resizing` and only commits on release, so
++  // an abandoned drag never reaches the store. `displayWidths` is the one
++  // array the header and the body both lay out from, which is what keeps the
++  // two panes aligned mid-drag.
++  const displayWidths = useMemo(
++    () =>
++      bodyColumns.map((column) =>
++        resizing?.column === column
++          ? resizing.width
++          : columnWidthOf(column, columnWidths),
++      ),
++    [bodyColumns, columnWidths, resizing],
++  );
++  const bodyContentWidth = useMemo(
++    () => displayWidths.reduce((sum, w) => sum + w, 0),
++    [displayWidths],
++  );
++
++  const handleResizeMove = useCallback(
++    (column: TableColumnKey, startWidth: number, dx: number) => {
++      const width = nextColumnWidth(startWidth, dx);
++      setResizing((prev) =>
++        prev && prev.column === column && prev.width === width
++          ? prev
++          : { column, width },
++      );
++      // The header is the pane the gesture drives, so it does not emit scroll
++      // events while the columns move under it — push the body to match.
++      bodyRef.current?.scrollTo({ x: headerX.current, animated: false });
++    },
++    [],
++  );
++
++  const handleResizeCommit = useCallback(
++    (column: TableColumnKey, startWidth: number, dx: number) => {
++      setResizing(null);
++      const width = nextColumnWidth(startWidth, dx);
++      if (width !== columnWidthOf(column, columnWidths)) {
++        onResizeColumn(column, width);
++      }
++    },
++    [columnWidths, onResizeColumn],
++  );
++
+   if (issues.length === 0) {
+     return (
+       <View className="flex-1 items-center justify-center px-6">
+@@ -636,26 +699,22 @@ export function IssueTableView({
+             style={{ flex: 1 }}
+           >
+             <View className="flex-row">
+-              {bodyColumns.map((column) => {
++              {bodyColumns.map((column, index) => {
+                 const def = columnDefinition(column as TableSystemColumn);
+-                const sortable = !!def?.sortField;
+-                const field = sortable ? (def.sortField as IssueSortField) : null;
++                const field = def?.sortField ?? null;
+                 return (
+-                  <Pressable
++                  <HeaderCell
+                     key={column}
+-                    onPress={() => sortable && headerSort(def)}
+-                    disabled={!sortable}
+-                    style={{ width: columnWidth(column), height: HEADER_HEIGHT }}
+-                    className="flex-row items-center gap-1 px-2"
+-                    accessibilityLabel={
+-                      sortable ? t("a11y.tableSortColumn") : undefined
+-                    }
+-                  >
+-                    <Text className="text-xs font-semibold text-foreground" numberOfLines={1}>
+-                      {columnLabel(column)}
+-                    </Text>
+-                    {field ? arrowForField(field) : null}
+-                  </Pressable>
++                    column={column}
++                    label={columnLabel(column)}
++                    width={displayWidths[index]}
++                    sortable={!!field}
++                    sortArrow={field ? arrowForField(field) : null}
++                    onPressSort={() => headerSort(def)}
++                    onResizeStart={setResizing}
++                    onResizeMove={handleResizeMove}
++                    onResizeCommit={handleResizeCommit}
++                  />
+                 );
+               })}
+               <View style={{ width: 8 }} />
+@@ -701,6 +760,7 @@ export function IssueTableView({
+                     onLongPress={() => enterSelection(item.row.issue.id)}
+                     onToggleCollapse={() => toggleCollapse(item.row.issue.id)}
+                     onRename={() => setRenaming(item.row.issue)}
++                    onCreateSubIssue={() => onCreateSubIssue(item.row.issue)}
+                   />
+                 )
+               }
+@@ -715,11 +775,7 @@ export function IssueTableView({
+             scrollEventThrottle={16}
+             style={{ flex: 1 }}
+           >
+-            <View
+-              style={{
+-                width: bodyColumns.reduce((sum, c) => sum + columnWidth(c), 0),
+-              }}
+-            >
++            <View style={{ width: bodyContentWidth }}>
+               <FlatList
+                 ref={mainRef}
+                 data={displayRows}
+@@ -733,16 +789,14 @@ export function IssueTableView({
+                   item.kind === "group" ? (
+                     <DataGroupHeader
+                       group={item}
+-                      width={bodyColumns.reduce(
+-                        (sum, c) => sum + columnWidth(c),
+-                        0,
+-                      )}
++                      width={bodyContentWidth}
+                       onToggle={() => toggleGroupCollapse(item.key)}
+                     />
+                   ) : (
+                     <DataRow
+                       issue={item.row.issue}
+                       columns={bodyColumns}
++                      widths={displayWidths}
+                       height={ROW_HEIGHT}
+                       properties={properties}
+                       projects={projects}
+@@ -783,7 +837,10 @@ export function IssueTableView({
+         onClose={() => setColumnMenuOpen(false)}
+         columns={columns}
+         properties={properties}
++        columnLabel={columnLabel}
+         onToggleColumn={onToggleColumn}
++        onReorderColumn={onReorderColumn}
++        onResetColumns={onResetColumns}
+       />
+ 
+       <GroupMenu
+@@ -810,6 +867,158 @@ function displayRowKey(entry: IssueTableDisplayRow): string {
+   return entry.kind === "group" ? `group:${entry.key}` : entry.row.issue.id;
+ }
+ 
++/**
++ * One scrollable column header: the sort target plus the resize handle on its
++ * trailing edge.
++ *
++ * Web gets column resizing free from TanStack Table's column-sizing feature
++ * (a drag on the header's resize affordance); on the phone the handle is an
++ * explicit touch target, because a header tap already means "sort" and a
++ * 34px-tall header has no spare gesture. The handle is a SIBLING of the sort
++ * Pressable, not a child, so the two never compete for the same touch.
++ */
++function HeaderCell({
++  column,
++  label,
++  width,
++  sortable,
++  sortArrow,
++  onPressSort,
++  onResizeStart,
++  onResizeMove,
++  onResizeCommit,
++}: {
++  column: TableColumnKey;
++  label: string;
++  width: number;
++  sortable: boolean;
++  sortArrow: React.ReactNode;
++  onPressSort: () => void;
++  onResizeStart: (resizing: { column: TableColumnKey; width: number }) => void;
++  onResizeMove: (column: TableColumnKey, startWidth: number, dx: number) => void;
++  onResizeCommit: (column: TableColumnKey, startWidth: number, dx: number) => void;
++}) {
++  const { t } = useTranslation();
++  return (
++    <View style={{ width, height: HEADER_HEIGHT }} className="flex-row">
++      <Pressable
++        onPress={onPressSort}
++        disabled={!sortable}
++        className="flex-1 flex-row items-center gap-1 pl-2"
++        accessibilityLabel={sortable ? t("a11y.tableSortColumn") : undefined}
++      >
++        <Text className="text-xs font-semibold text-foreground" numberOfLines={1}>
++          {label}
++        </Text>
++        {sortArrow}
++      </Pressable>
++      <ResizeHandle
++        label={t("a11y.tableResizeColumn", { column: label })}
++        startWidth={width}
++        onStart={() => onResizeStart({ column, width })}
++        onMove={(startWidth, dx) => onResizeMove(column, startWidth, dx)}
++        onCommit={(startWidth, dx) => onResizeCommit(column, startWidth, dx)}
++      />
++    </View>
++  );
++}
++
++/**
++ * The drag target that resizes one column. Owns its own PanResponder: the
++ * gesture starts from whatever the column's width was when the finger landed
++ * (captured in a ref, so a re-render mid-drag cannot shift the origin) and
++ * reports the running delta outward.
++ *
++ * Responder negotiation matters here — the handle sits inside the header's
++ * horizontal ScrollView, and a plain Pressable would lose the drag to the
++ * scroller. Claiming the responder on touch-down (before any movement, which
++ * is when a ScrollView normally takes over) keeps the horizontal drag for the
++ * resize; `onMoveShouldSetPanResponderCapture` is the belt-and-braces path for
++ * a drag that begins before the responder grant lands.
++ */
++function ResizeHandle({
++  label,
++  startWidth,
++  onStart,
++  onMove,
++  onCommit,
++}: {
++  label: string;
++  startWidth: number;
++  onStart: () => void;
++  onMove: (startWidth: number, dx: number) => void;
++  onCommit: (startWidth: number, dx: number) => void;
++}) {
++  const { t } = useTranslation();
++  const [active, setActive] = useState(false);
++  const startRef = useRef(startWidth);
++  // Latest callbacks without rebuilding the responder: PanResponder captures
++  // its handlers once, so a stale closure here would resize against an old
++  // column list.
++  const handlers = useRef({ onStart, onMove, onCommit });
++  handlers.current = { onStart, onMove, onCommit };
++
++  const responder = useMemo(
++    () =>
++      PanResponder.create({
++        // Claim the touch on the way down and keep it: the header sits in a
++        // horizontal ScrollView, and a handle that only asks for the
++        // responder once the finger has already moved loses that race — the
++        // scroller starts panning first. Asking on touch-down also means the
++        // gesture never has to be re-negotiated mid-drag.
++        //
++        // Deliberately NOT using the `*Capture` variants: those run on the
++        // way down from the root and returning true there blocks the other
++        // responder candidates without granting the responder to this view,
++        // which leaves the gesture owned by nobody and the handle dead.
++        onStartShouldSetPanResponder: () => true,
++        onMoveShouldSetPanResponder: () => true,
++        onPanResponderGrant: () => {
++          startRef.current = startWidth;
++          setActive(true);
++          handlers.current.onStart();
++        },
++        onPanResponderMove: (_e, g) => {
++          handlers.current.onMove(startRef.current, g.dx);
++        },
++        onPanResponderRelease: (_e, g) => {
++          setActive(false);
++          handlers.current.onCommit(startRef.current, g.dx);
++        },
++        onPanResponderTerminate: (_e, g) => {
++          setActive(false);
++          handlers.current.onCommit(startRef.current, g.dx);
++        },
++      }),
++    // `startWidth` is read through a ref on grant; rebuilding on every width
++    // change would drop the responder mid-drag.
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++    [],
++  );
++
++  return (
++    <View
++      {...responder.panHandlers}
++      style={{ width: RESIZE_HANDLE_WIDTH, height: HEADER_HEIGHT }}
++      className="items-center justify-center"
++      accessibilityRole="adjustable"
++      accessibilityLabel={label}
++      accessibilityValue={{
++        min: COLUMN_WIDTH_MIN,
++        max: COLUMN_WIDTH_MAX,
++        now: Math.round(startWidth),
++      }}
++    >
++      <View
++        style={{ width: active ? 3 : 2 }}
++        className={`h-4 rounded-full ${
++          active ? "bg-primary" : "bg-border"
++        }`}
++      />
++    </View>
++  );
++}
++
+ /** Build the CSV, write it to the cache dir, hand it to the system sheet.
+  *  Failures surface only via the sheet (nothing to recover from). */
+ async function writeAndShareCsv(
+@@ -955,6 +1164,7 @@ function PinnedRow({
+   onLongPress,
+   onToggleCollapse,
+   onRename,
++  onCreateSubIssue,
+ }: {
+   row: IssueTableRow;
+   height: number;
+@@ -965,6 +1175,7 @@ function PinnedRow({
+   onLongPress: () => void;
+   onToggleCollapse: () => void;
+   onRename: () => void;
++  onCreateSubIssue: () => void;
+ }) {
+   const { t } = useTranslation();
+   const { colorScheme } = useColorScheme();
+@@ -1043,6 +1254,27 @@ function PinnedRow({
+           {issue.title}
+         </Text>
+       </Pressable>
++      {/* New sub-issue — web reveals this on title hover (`InlineTitle`'s "+"
++        * button); hover does not exist on a phone, so it is a permanent
++        * target. Hidden while selecting: the row's taps already mean
++        * "toggle selection" then, and a create action in the middle of a
++        * range-select is a mis-tap waiting to happen. */}
++      {selectionMode ? null : (
++        <Pressable
++          onPress={onCreateSubIssue}
++          hitSlop={8}
++          accessibilityRole="button"
++          accessibilityLabel={t("a11y.tableCreateSubIssue", {
++            title: issue.title,
++          })}
++        >
++          <Ionicons
++            name="add"
++            size={16}
++            color={THEME[colorScheme].mutedForeground}
++          />
++        </Pressable>
++      )}
+     </View>
+   );
+ }
+@@ -1050,10 +1282,18 @@ function PinnedRow({
+ /** One scrollable data row: fixed-width cells aligned with the header.
+  *  Editable cells are pressable (web mounts an editor on the same cells);
+  *  the rest stay inert so a tap on them does nothing rather than opening an
+- *  editor that cannot write. */
+-function DataRow({
++ *  editor that cannot write.
++ *
++ *  Memoised because a column-resize drag re-renders the table once per frame;
++ *  without this every visible row would re-render for a width change that
++ *  usually touches one column. The comparator is element-wise on `widths`
++ *  rather than reference equality — a drag rebuilds that array every frame,
++ *  so a shallow `Object.is` would still re-render every row. */
++const DataRow = memo(
++  function DataRow({
+   issue,
+   columns,
++  widths,
+   height,
+   properties,
+   projects,
+@@ -1064,6 +1304,7 @@ function DataRow({
+ }: {
+   issue: Issue;
+   columns: TableColumnKey[];
++  widths: number[];
+   height: number;
+   properties: IssueProperty[];
+   projects: { id: string; title: string; icon?: string | null }[];
+@@ -1083,14 +1324,14 @@ function DataRow({
+       style={{ height }}
+       className={`flex-row border-b border-border/60 ${selected ? "bg-primary/5" : ""}`}
+     >
+-      {columns.map((column) => {
++      {columns.map((column, index) => {
+         const editable = isEditableTableColumn(column);
+         return (
+           <Pressable
+             key={column}
+             onPress={editable ? () => onPressCell(column) : undefined}
+             disabled={!editable}
+-            style={{ width: columnWidth(column), height }}
++            style={{ width: widths[index], height }}
+             className={`justify-center px-2 ${
+               editable ? "active:bg-secondary/60" : ""
+             }`}
+@@ -1116,6 +1357,29 @@ function DataRow({
+       })}
+     </View>
+   );
++  },
++  (prev, next) =>
++    prev.issue === next.issue &&
++    prev.columns === next.columns &&
++    prev.height === next.height &&
++    prev.properties === next.properties &&
++    prev.projects === next.projects &&
++    prev.getName === next.getName &&
++    prev.selected === next.selected &&
++    prev.columnLabel === next.columnLabel &&
++    prev.onPressCell === next.onPressCell &&
++    sameWidths(prev.widths, next.widths),
++);
++
++/** Element-wise width comparison — a resize drag rebuilds the array each
++ *  frame, so rows must be judged by the numbers, not the array identity. */
++function sameWidths(a: readonly number[], b: readonly number[]): boolean {
++  if (a === b) return true;
++  if (a.length !== b.length) return false;
++  for (let i = 0; i < a.length; i += 1) {
++    if (a[i] !== b[i]) return false;
++  }
++  return true;
+ }
+ 
+ function DataCell({
+@@ -1443,22 +1707,46 @@ function RenameIssueDialog({
+   );
+ }
+ 
+-/** Column-visibility menu — checkbox list of system + property columns. */
++/**
++ * Column-visibility menu — checkbox list of system + property columns, plus
++ * the two other column-configuration actions this iteration adds.
++ *
++ * Order is edited with explicit move-left / move-right buttons rather than a
++ * drag: the header is a horizontally scrolling pane paired with a second
++ * scroller for the rows, so a horizontal drag-to-reorder in the menu would
++ * have to fight the sheet's own scroll for the axis, and the payoff (one slot
++ * at a time) is the same. Web's dnd-kit `handleDragEnd` lands on the same
++ * `reorderTableColumn` mutation.
++ *
++ * Move buttons are shown only on VISIBLE columns — order is a property of the
++ * displayed list, and reordering a hidden column would be a no-op the user
++ * could not see.
++ */
+ function ColumnMenu({
+   visible,
+   onClose,
+   columns,
+   properties,
++  columnLabel,
+   onToggleColumn,
++  onReorderColumn,
++  onResetColumns,
+ }: {
+   visible: boolean;
+   onClose: () => void;
+   columns: TableColumnKey[];
+   properties: IssueProperty[];
++  /** Resolves a column key to its display name (property columns included). */
++  columnLabel: (column: TableColumnKey) => string;
+   onToggleColumn: (column: TableColumnKey) => void;
++  onReorderColumn: (column: TableColumnKey, delta: -1 | 1) => void;
++  onResetColumns: () => void;
+ }) {
+   const { t } = useTranslation();
+ 
++  /** Position of a visible column in the display order, or -1. */
++  const positionOf = (column: TableColumnKey) => columns.indexOf(column);
++
+   return (
+     <Modal
+       visible={visible}
+@@ -1476,11 +1764,31 @@ function ColumnMenu({
+               <Text className="text-base font-semibold text-foreground">
+                 {t("table.columnsTitle")}
+               </Text>
+-              <Pressable onPress={onClose} hitSlop={8}>
+-                <Ionicons name="close" size={20} color="currentColor" />
+-              </Pressable>
++              <View className="flex-row items-center gap-3">
++                <Pressable
++                  onPress={onResetColumns}
++                  hitSlop={8}
++                  accessibilityRole="button"
++                >
++                  <Text className="text-xs text-muted-foreground">
++                    {t("table.resetColumns")}
++                  </Text>
++                </Pressable>
++                <Pressable onPress={onClose} hitSlop={8}>
++                  <Ionicons name="close" size={20} color="currentColor" />
++                </Pressable>
++              </View>
+             </View>
+             <ScrollView className="max-h-[55vh]">
++              {/* Current display order, so a move is visible without closing
++                  the sheet — the move rows themselves only say what they will
++                  do, not what the list looks like now. */}
++              <Text
++                className="px-4 pt-3 text-[11px] text-muted-foreground"
++                numberOfLines={1}
++              >
++                {columns.map((c) => columnLabel(c)).join(" › ")}
++              </Text>
+               <Text className="px-4 pt-3 pb-1 text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                 {t("table.columnsSystem")}
+               </Text>
+@@ -1491,6 +1799,15 @@ function ColumnMenu({
+                   active={columns.includes(def.key)}
+                   disabled={def.key === "title"}
+                   onPress={() => onToggleColumn(def.key)}
++                  order={{
++                    // The title column is pinned first and has no move
++                    // buttons (web pins it the same way); index 0 is the
++                    // leftmost movable slot.
++                    position: positionOf(def.key),
++                    count: columns.length,
++                    onMove: (delta) => onReorderColumn(def.key, delta),
++                    label: t(def.labelKey),
++                  }}
+                 />
+               ))}
+               {properties.length > 0 ? (
+@@ -1506,6 +1823,12 @@ function ColumnMenu({
+                         label={property.name}
+                         active={columns.includes(key)}
+                         onPress={() => onToggleColumn(key)}
++                        order={{
++                          position: positionOf(key),
++                          count: columns.length,
++                          onMove: (delta) => onReorderColumn(key, delta),
++                          label: property.name,
++                        }}
+                       />
+                     );
+                   })}
+@@ -1519,6 +1842,153 @@ function ColumnMenu({
+   );
+ }
+ 
++/**
++ * Move-left / move-right affordance for one menu row. Absent for a hidden
++ * column (nothing to place) and for the pinned title column.
++ *
++ * Each chevron is its OWN full-width menu row rather than a small pressable
++ * parked beside the visibility row. Two reasons: a full-width row is the
++ * shape this sheet's touches are known to reach (the visibility rows and the
++ * grouping rows are all built that way), and a 44px icon-sized target at the
++ * sheet's left edge is a poor thumb target on a phone anyway. The chevron
++ * sits at the left, where the row's own icon column is.
++ */
++interface MenuRowOrder {
++  position: number;
++  count: number;
++  onMove: (delta: -1 | 1) => void;
++  label: string;
++}
++
++function MenuRowMove({
++  position,
++  count,
++  onMove,
++  label,
++}: MenuRowOrder) {
++  const { t } = useTranslation();
++  const canMoveLeft = position > 0;
++  const canMoveRight = position >= 0 && position < count - 1;
++  return (
++    <>
++      <MoveRow
++        direction="left"
++        disabled={!canMoveLeft}
++        label={t("a11y.tableMoveColumnUp", { column: label })}
++        onPress={() => onMove(-1)}
++      />
++      <MoveRow
++        direction="right"
++        disabled={!canMoveRight}
++        label={t("a11y.tableMoveColumnDown", { column: label })}
++        onPress={() => onMove(1)}
++      />
++    </>
++  );
++}
++
++/** One full-width "move this column one slot" row. Same shape as the
++ *  visibility row beside it (a wrapping View + a Pressable), because that is
++ *  the structure this sheet's touch delivery is proven against. */
++function MoveRow({
++  direction,
++  disabled,
++  label,
++  onPress,
++}: {
++  direction: "left" | "right";
++  disabled: boolean;
++  label: string;
++  onPress: () => void;
++}) {
++  const { colorScheme } = useColorScheme();
++  return (
++    <View>
++      <Pressable
++        onPress={disabled ? undefined : onPress}
++        disabled={disabled}
++        className={`flex-row items-center gap-2 py-2.5 pl-5 ${
++          disabled ? "opacity-50" : "active:bg-secondary/60"
++        }`}
++        accessibilityRole="button"
++        accessibilityState={{ disabled }}
++        accessibilityLabel={label}
++      >
++        <Ionicons
++          name={direction === "left" ? "arrow-back" : "arrow-forward"}
++          size={15}
++          color={THEME[colorScheme].mutedForeground}
++        />
++      </Pressable>
++    </View>
++  );
++}
++
++function MenuRow({
++  label,
++  active,
++  disabled = false,
++  indicator = "check",
++  order,
++  onPress,
++}: {
++  label: string;
++  active: boolean;
++  disabled?: boolean;
++  indicator?: "check" | "radio";
++  /** Present when the row's column can be repositioned (visibility menu). */
++  order?: MenuRowOrder;
++  onPress: () => void;
++}) {
++  const { colorScheme } = useColorScheme();
++  return (
++    <View>
++      {order ? <MenuRowMove {...order} /> : null}
++      <Pressable
++        onPress={disabled ? undefined : onPress}
++        disabled={disabled}
++        className={`flex-row items-center justify-between py-2 px-4 ${
++          disabled ? "opacity-50" : "active:bg-secondary/60"
++        }`}
++      >
++        <Text
++          className={`text-sm ${
++            disabled ? "text-muted-foreground" : "text-foreground"
++          }`}
++          numberOfLines={1}
++        >
++          {label}
++        </Text>
++        {disabled ? (
++          <Ionicons
++            name="lock-closed-outline"
++            size={14}
++            color={THEME[colorScheme].mutedForeground}
++          />
++        ) : (
++          <Ionicons
++            name={
++              indicator === "radio"
++                ? active
++                  ? "radio-button-on"
++                  : "radio-button-off"
++                : active
++                  ? "checkbox"
++                  : "square-outline"
++            }
++            size={17}
++            color={
++              active
++                ? THEME[colorScheme].primary
++                : THEME[colorScheme].mutedForeground
++            }
++          />
++        )}
++      </Pressable>
++    </View>
++  );
++}
++
+ /**
+  * Grouping picker — web's `tableGroupSpec` dimensions (status / assignee /
+  * a select-or-checkbox custom property) plus "no grouping". Radio indicators,
+@@ -1607,62 +2077,3 @@ function GroupMenu({
+     </Modal>
+   );
+ }
+-
+-function MenuRow({
+-  label,
+-  active,
+-  disabled = false,
+-  indicator = "check",
+-  onPress,
+-}: {
+-  label: string;
+-  active: boolean;
+-  disabled?: boolean;
+-  indicator?: "check" | "radio";
+-  onPress: () => void;
+-}) {
+-  const { colorScheme } = useColorScheme();
+-  return (
+-    <Pressable
+-      onPress={disabled ? undefined : onPress}
+-      disabled={disabled}
+-      className={`flex-row items-center justify-between py-2 px-4 ${
+-        disabled ? "opacity-50" : "active:bg-secondary/60"
+-      }`}
+-    >
+-      <Text
+-        className={`text-sm ${
+-          disabled ? "text-muted-foreground" : "text-foreground"
+-        }`}
+-        numberOfLines={1}
+-      >
+-        {label}
+-      </Text>
+-      {disabled ? (
+-        <Ionicons
+-          name="lock-closed-outline"
+-          size={14}
+-          color={THEME[colorScheme].mutedForeground}
+-        />
+-      ) : (
+-        <Ionicons
+-          name={
+-            indicator === "radio"
+-              ? active
+-                ? "radio-button-on"
+-                : "radio-button-off"
+-              : active
+-                ? "checkbox"
+-                : "square-outline"
+-          }
+-          size={17}
+-          color={
+-            active
+-              ? THEME[colorScheme].primary
+-              : THEME[colorScheme].mutedForeground
+-          }
+-        />
+-      )}
+-    </Pressable>
+-  );
+-}
+\ No newline at end of file
+diff --git a/apps/mobile/components/project/project-issue-surface.tsx b/apps/mobile/components/project/project-issue-surface.tsx
+index 2caae4b70..a89f70f2b 100644
+--- a/apps/mobile/components/project/project-issue-surface.tsx
++++ b/apps/mobile/components/project/project-issue-surface.tsx
+@@ -59,6 +59,7 @@ import { useDrainIssuePages } from "@/lib/use-drain-issue-pages";
+ import { issueViewListOptions } from "@/data/queries/issue-views";
+ import { useWorkspaceStore } from "@/data/workspace-store";
+ import { useProjectIssuesViewStore } from "@/data/stores/project-issues-view-store";
++import { useCreateSubIssue } from "@/lib/use-create-sub-issue";
+ import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection-store";
+ import {
+   issueViewContainerKey,
+@@ -120,6 +121,11 @@ export function ProjectIssueSurface({
+   const swimlaneGrouping = useProjectIssuesViewStore((s) => s.swimlaneGrouping);
+   const tableColumns = useProjectIssuesViewStore((s) => s.tableColumns);
+   const toggleTableColumn = useProjectIssuesViewStore((s) => s.toggleTableColumn);
++  const tableColumnWidths = useProjectIssuesViewStore((s) => s.tableColumnWidths);
++  const setTableColumnWidth = useProjectIssuesViewStore((s) => s.setTableColumnWidth);
++  const reorderTableColumn = useProjectIssuesViewStore((s) => s.reorderTableColumn);
++  const resetTableColumns = useProjectIssuesViewStore((s) => s.resetTableColumns);
++  const createSubIssue = useCreateSubIssue();
+   const tableGrouping = useProjectIssuesViewStore((s) => s.tableGrouping);
+   const setTableGrouping = useProjectIssuesViewStore((s) => s.setTableGrouping);
+   const grouping = useProjectIssuesViewStore((s) => s.grouping);
+@@ -479,6 +485,11 @@ export function ProjectIssueSurface({
+           issues={sorted}
+           columns={tableColumns}
+           onToggleColumn={toggleTableColumn}
++          columnWidths={tableColumnWidths}
++          onResizeColumn={setTableColumnWidth}
++          onReorderColumn={reorderTableColumn}
++          onResetColumns={resetTableColumns}
++          onCreateSubIssue={createSubIssue}
+           grouping={tableGrouping}
+           onGroupingChange={setTableGrouping}
+           sortBy={sortBy}
+diff --git a/apps/mobile/data/api.ts b/apps/mobile/data/api.ts
+index 2277ca9f2..039373c9b 100644
+--- a/apps/mobile/data/api.ts
++++ b/apps/mobile/data/api.ts
+@@ -560,7 +560,7 @@ class ApiClient {
+       "Content-Type": "application/json",
+       "X-Client-Platform": "mobile",
+       "X-Client-OS": "ios",
+-      "X-Client-Version": "0.5.60",
++      "X-Client-Version": "0.5.61",
+       "X-Request-ID": rid,
+       ...((init.headers as Record<string, string>) ?? {}),
+     };
+@@ -4038,7 +4038,7 @@ class ApiClient {
+       // No Content-Type — let fetch set the multipart boundary.
+       "X-Client-Platform": "mobile",
+       "X-Client-OS": "ios",
+-      "X-Client-Version": "0.5.60",
++      "X-Client-Version": "0.5.61",
+       "X-Request-ID": rid,
+     };
+     if (this.token) headers["Authorization"] = `Bearer ${this.token}`;
+diff --git a/apps/mobile/data/stores/issue-table-columns-iter134.test.ts b/apps/mobile/data/stores/issue-table-columns-iter134.test.ts
+new file mode 100644
+index 000000000..155eceb71
+--- /dev/null
++++ b/apps/mobile/data/stores/issue-table-columns-iter134.test.ts
+@@ -0,0 +1,181 @@
++/**
++ * Iteration-134 additions to the table-columns slice: per-column widths and
++ * user-controlled column order.
++ *
++ * Web (packages/core/issues/stores/view-store.ts) keeps both on the view
++ * store: `tableColumnWidths` (TanStack column sizing) and `reorderTableColumn`
++ * (dnd-kit drag end). Mobile has no dnd-kit and a phone-width table, so the
++ * order gesture is an explicit move-up / move-down pair — the same array
++ * mutation, expressed for touch.
++ *
++ * Invariants carried over from the visibility slice: `title` is permanent and
++ * always first, and every mutation returns the state unchanged when it would
++ * break that.
++ */
++import { describe, expect, it, beforeEach } from "vitest";
++import { createStore } from "zustand/vanilla";
++import {
++  COLUMN_WIDTH_MAX,
++  COLUMN_WIDTH_MIN,
++  columnWidthOf,
++  createTableColumnActions,
++  DEFAULT_COLUMN_WIDTHS,
++  defaultTableColumns,
++  defaultTableColumnWidths,
++  nextColumnWidth,
++  PROPERTY_COLUMN_WIDTH,
++  type TableColumnKey,
++  type TableColumnsSlice,
++} from "./issue-table-columns";
++
++function makeStore() {
++  return createStore<TableColumnsSlice>((set) => ({
++    tableColumns: defaultTableColumns(),
++    tableColumnWidths: defaultTableColumnWidths(),
++    ...createTableColumnActions(set),
++  }));
++}
++
++describe("columnWidthOf", () => {
++  it("falls back to the system default for an un-resized column", () => {
++    expect(columnWidthOf("status", {})).toBe(DEFAULT_COLUMN_WIDTHS.status);
++    expect(columnWidthOf("identifier", {})).toBe(DEFAULT_COLUMN_WIDTHS.identifier);
++  });
++
++  it("uses the property width for property columns and unknown keys", () => {
++    expect(columnWidthOf("property:def-1" as TableColumnKey, {})).toBe(
++      PROPERTY_COLUMN_WIDTH,
++    );
++  });
++
++  it("prefers a stored override", () => {
++    expect(columnWidthOf("status", { status: 210 })).toBe(210);
++  });
++
++  it("clamps a stored override into the allowed range", () => {
++    expect(columnWidthOf("status", { status: 10 })).toBe(COLUMN_WIDTH_MIN);
++    expect(columnWidthOf("status", { status: 9999 })).toBe(COLUMN_WIDTH_MAX);
++  });
++});
++
++describe("setTableColumnWidth", () => {
++  let store: ReturnType<typeof makeStore>;
++
++  beforeEach(() => {
++    store = makeStore();
++  });
++
++  it("stores a rounded, clamped width under the column key", () => {
++    store.getState().setTableColumnWidth("status", 180.4);
++    expect(store.getState().tableColumnWidths).toEqual({ status: 180 });
++  });
++
++  it("clamps to the floor and the ceiling", () => {
++    store.getState().setTableColumnWidth("status", 5);
++    expect(store.getState().tableColumnWidths.status).toBe(COLUMN_WIDTH_MIN);
++    store.getState().setTableColumnWidth("status", 5000);
++    expect(store.getState().tableColumnWidths.status).toBe(COLUMN_WIDTH_MAX);
++  });
++
++  it("drops the override when the width equals the system default", () => {
++    store.getState().setTableColumnWidth("status", 177);
++    store.getState().setTableColumnWidth("status", DEFAULT_COLUMN_WIDTHS.status);
++    expect(store.getState().tableColumnWidths.status).toBeUndefined();
++  });
++
++  it("touches only the target column", () => {
++    store.getState().setTableColumnWidth("status", 200);
++    expect(store.getState().tableColumnWidths).toEqual({ status: 200 });
++  });
++});
++
++describe("reorderTableColumn", () => {
++  let store: ReturnType<typeof makeStore>;
++
++  beforeEach(() => {
++    store = makeStore();
++    // A property column so the property branch is covered too.
++    store.getState().toggleTableColumn("property:def-1" as TableColumnKey);
++  });
++
++  it("moves a column one slot towards the front", () => {
++    store.getState().reorderTableColumn("priority", -1);
++    expect(store.getState().tableColumns.slice(0, 5)).toEqual([
++      "title",
++      "identifier",
++      "priority",
++      "status",
++      "assignee",
++    ]);
++  });
++
++  it("moves a column one slot towards the back", () => {
++    store.getState().reorderTableColumn("identifier", 1);
++    expect(store.getState().tableColumns.slice(0, 4)).toEqual([
++      "title",
++      "status",
++      "identifier",
++      "priority",
++    ]);
++  });
++
++  it("moves a property column like any other", () => {
++    const last = store.getState().tableColumns.length - 1;
++    expect(store.getState().tableColumns[last]).toBe("property:def-1");
++    store.getState().reorderTableColumn("property:def-1" as TableColumnKey, -1);
++    expect(store.getState().tableColumns[last - 1]).toBe("property:def-1");
++  });
++
++  it("never moves title off the front", () => {
++    store.getState().reorderTableColumn("title", 1);
++    expect(store.getState().tableColumns[0]).toBe("title");
++  });
++
++  it("never moves title off the front by stepping it forward either", () => {
++    // The pinned column has no place in the scroller, so a forward step has
++    // to be refused as well — it would otherwise swap title with its
++    // neighbour and leave a movable column in the pinned slot.
++    const before = store.getState().tableColumns;
++    store.getState().reorderTableColumn("title", -1);
++    store.getState().reorderTableColumn("title", 1);
++    expect(store.getState().tableColumns).toEqual(before);
++    expect(store.getState().tableColumns[0]).toBe("title");
++  });
++
++  it("is a no-op past either end", () => {
++    const before = store.getState().tableColumns;
++    store.getState().reorderTableColumn("identifier", -1);
++    expect(store.getState().tableColumns).toEqual(before);
++    store.getState().reorderTableColumn(store.getState().tableColumns.at(-1)!, 1);
++    expect(store.getState().tableColumns).toEqual(before);
++  });
++
++  it("is a no-op for a hidden column", () => {
++    const before = store.getState().tableColumns;
++    store.getState().reorderTableColumn("labels", -1);
++    expect(store.getState().tableColumns).toEqual(before);
++  });
++});
++
++describe("resetTableColumns", () => {
++  it("restores both the default order and the default widths", () => {
++    const store = makeStore();
++    store.getState().toggleTableColumn("labels");
++    store.getState().setTableColumnWidth("status", 250);
++    store.getState().resetTableColumns();
++    expect(store.getState().tableColumns).toEqual(defaultTableColumns());
++    expect(store.getState().tableColumnWidths).toEqual({});
++  });
++});
++
++describe("nextColumnWidth (drag maths)", () => {
++  it("adds the gesture delta to the width the drag started from", () => {
++    expect(nextColumnWidth(120, 40)).toBe(160);
++    expect(nextColumnWidth(120, -40)).toBe(80);
++  });
++
++  it("clamps during the drag so the preview matches the committed value", () => {
++    expect(nextColumnWidth(120, -500)).toBe(COLUMN_WIDTH_MIN);
++    expect(nextColumnWidth(120, 500)).toBe(COLUMN_WIDTH_MAX);
++  });
++});
+diff --git a/apps/mobile/data/stores/issue-table-columns.test.ts b/apps/mobile/data/stores/issue-table-columns.test.ts
+index 07282515f..6b93773a4 100644
+--- a/apps/mobile/data/stores/issue-table-columns.test.ts
++++ b/apps/mobile/data/stores/issue-table-columns.test.ts
+@@ -28,6 +28,7 @@ import { sanitizeViewDisplay } from "./issue-view-codec";
+ function makeStore() {
+   return createStore<TableColumnsSlice>((set) => ({
+     tableColumns: defaultTableColumns(),
++    tableColumnWidths: {},
+     ...createTableColumnActions(set),
+   }));
+ }
+diff --git a/apps/mobile/data/stores/issue-table-columns.ts b/apps/mobile/data/stores/issue-table-columns.ts
+index 53eef2262..27054d32f 100644
+--- a/apps/mobile/data/stores/issue-table-columns.ts
++++ b/apps/mobile/data/stores/issue-table-columns.ts
+@@ -43,6 +43,72 @@ export type TableSystemColumn =
+ /** A visible column key — a system column or a custom-property column. */
+ export type TableColumnKey = TableSystemColumn | `property:${string}`;
+ 
++/** Per-column width overrides, keyed by column key. Sparse on purpose: an
++ *  absent key means "still at the default", so a system default can change
++ *  without stranding every column the user never touched. */
++export type TableColumnWidths = Partial<Record<TableColumnKey, number>>;
++
++/** Floor / ceiling for a dragged column. The floor keeps a header legible
++ *  (and its resize handle reachable); the ceiling stops one column from
++ *  pushing every other column out of the horizontal scroller. */
++export const COLUMN_WIDTH_MIN = 64;
++export const COLUMN_WIDTH_MAX = 360;
++
++/** Default widths for the system columns the phone renders. Mirrors the
++ *  `COLUMN_WIDTHS` table the table view carried before iteration 134 — the
++ *  values moved here so the slice, the table and its tests share one source.
++ *  `title` is absent: the title column is pinned, not part of the scroller. */
++export const DEFAULT_COLUMN_WIDTHS: Record<
++  Exclude<TableSystemColumn, "title">,
++  number
++> = {
++  identifier: 84,
++  status: 104,
++  priority: 88,
++  assignee: 132,
++  labels: 140,
++  project: 132,
++  start_date: 100,
++  due_date: 88,
++  created_at: 104,
++  updated_at: 104,
++  creator: 132,
++};
++
++/** Width for a property (non-system) column and for any unknown key. */
++export const PROPERTY_COLUMN_WIDTH = 132;
++
++function clampColumnWidth(width: number): number {
++  return Math.min(COLUMN_WIDTH_MAX, Math.max(COLUMN_WIDTH_MIN, Math.round(width)));
++}
++
++/** The default width a column starts at (before any user override). */
++export function defaultColumnWidth(column: TableColumnKey): number {
++  if (column.startsWith(PROPERTY_COLUMN_PREFIX)) return PROPERTY_COLUMN_WIDTH;
++  if (column === "title") return PROPERTY_COLUMN_WIDTH;
++  return DEFAULT_COLUMN_WIDTHS[column as Exclude<TableSystemColumn, "title">];
++}
++
++/**
++ * The width to lay a column out at: the user's override when there is one,
++ * otherwise the default — clamped either way, so a value persisted by an older
++ * build (or a future default change) can never produce an unusable column.
++ */
++export function columnWidthOf(
++  column: TableColumnKey,
++  widths: TableColumnWidths,
++): number {
++  const override = widths[column];
++  if (override == null) return defaultColumnWidth(column);
++  return clampColumnWidth(override);
++}
++
++/** Width during a drag: the width the gesture started from plus the distance
++ *  travelled, clamped so the live preview equals what a release will commit. */
++export function nextColumnWidth(startWidth: number, dx: number): number {
++  return clampColumnWidth(startWidth + dx);
++}
++
+ export const PROPERTY_COLUMN_PREFIX = "property:";
+ 
+ /** Strip the `property:` prefix off a property column key. */
+@@ -112,6 +178,11 @@ export function defaultTableColumns(): TableColumnKey[] {
+   return [...DEFAULT_TABLE_COLUMNS];
+ }
+ 
++/** Fresh (empty) width-override bag — every column still at its default. */
++export function defaultTableColumnWidths(): TableColumnWidths {
++  return {};
++}
++
+ /** Sort field bound to a header-tappable system column, if any. */
+ export function sortFieldForTableColumn(
+   column: TableColumnDefinition | undefined,
+@@ -143,9 +214,20 @@ export function nextTableSort(
+ export interface TableColumnsSlice {
+   /** Ordered visible columns; `[0]` is always "title". */
+   tableColumns: TableColumnKey[];
++  /** Width overrides for the columns the user resized (iteration 134). */
++  tableColumnWidths: TableColumnWidths;
+   /** Toggle one column's visibility. `title` is permanent — toggling it is
+    *  a no-op (web `toggleTableColumn`). */
+   toggleTableColumn: (column: TableColumnKey) => void;
++  /** Pin a column's width after a resize drag (web `setTableColumnWidth`).
++   *  Setting it back to the default clears the override. */
++  setTableColumnWidth: (column: TableColumnKey, width: number) => void;
++  /** Move a visible column one slot towards the front (-1) or the back (+1)
++   *  (web `reorderTableColumn`). No-op on `title`, on a hidden column, and
++   *  past either end of the array. */
++  reorderTableColumn: (column: TableColumnKey, delta: -1 | 1) => void;
++  /** Restore the default column set, order and widths. */
++  resetTableColumns: () => void;
+ }
+ 
+ /**
+@@ -161,7 +243,13 @@ export function createTableColumnActions<T extends TableColumnsSlice>(
+       | Partial<TableColumnsSlice>
+       | ((state: TableColumnsSlice) => Partial<TableColumnsSlice>),
+   ) => void,
+-): Pick<TableColumnsSlice, "toggleTableColumn"> {
++): Pick<
++  TableColumnsSlice,
++  | "toggleTableColumn"
++  | "setTableColumnWidth"
++  | "reorderTableColumn"
++  | "resetTableColumns"
++> {
+   return {
+     toggleTableColumn: (column) =>
+       set((state) => {
+@@ -174,5 +262,38 @@ export function createTableColumnActions<T extends TableColumnsSlice>(
+         // Appended so the display order equals the order the user built it.
+         return { tableColumns: [...current, column] };
+       }),
++
++    setTableColumnWidth: (column, width) =>
++      set((state) => {
++        const widths = { ...state.tableColumnWidths };
++        const next = clampColumnWidth(width);
++        // Back at the default: forget the override rather than pinning the
++        // current default forever (a later default change should reach it).
++        if (next === defaultColumnWidth(column)) delete widths[column];
++        else widths[column] = next;
++        return { tableColumnWidths: widths };
++      }),
++
++    reorderTableColumn: (column, delta) =>
++      set((state) => {
++        const current = state.tableColumns;
++        // title stays first — it is pinned, and swapping it with its
++        // neighbour would push the pinned column out of the scroller it is
++        // not part of (web pins it the same way).
++        if (column === "title") return state;
++        const from = current.indexOf(column);
++        const to = from + delta;
++        if (from < 0 || to < 1 || to >= current.length) return state;
++        const next = [...current];
++        next[from] = next[to];
++        next[to] = column;
++        return { tableColumns: next };
++      }),
++
++    resetTableColumns: () =>
++      set(() => ({
++        tableColumns: defaultTableColumns(),
++        tableColumnWidths: defaultTableColumnWidths(),
++      })),
+   };
+ }
+\ No newline at end of file
+diff --git a/apps/mobile/data/stores/issues-view-store.ts b/apps/mobile/data/stores/issues-view-store.ts
+index c21b7d875..987ff2666 100644
+--- a/apps/mobile/data/stores/issues-view-store.ts
++++ b/apps/mobile/data/stores/issues-view-store.ts
+@@ -46,6 +46,7 @@ import {
+ import {
+   createTableColumnActions,
+   defaultTableColumns,
++  defaultTableColumnWidths,
+   type TableColumnKey,
+   type TableColumnsSlice,
+ } from "./issue-table-columns";
+@@ -76,6 +77,7 @@ export const useIssuesViewStore = create<IssuesViewState>((set) => ({
+   view: "list",
+   swimlaneGrouping: "assignee",
+   tableColumns: defaultTableColumns(),
++  tableColumnWidths: defaultTableColumnWidths(),
+   tableGrouping: defaultTableGrouping(),
+   ...defaultIssueFilterSlice(),
+   setScope: (scope) => set({ scope }),
+diff --git a/apps/mobile/data/stores/my-issues-view-store.ts b/apps/mobile/data/stores/my-issues-view-store.ts
+index c6a34f90b..97b7766d0 100644
+--- a/apps/mobile/data/stores/my-issues-view-store.ts
++++ b/apps/mobile/data/stores/my-issues-view-store.ts
+@@ -28,6 +28,7 @@ import {
+ import {
+   createTableColumnActions,
+   defaultTableColumns,
++  defaultTableColumnWidths,
+   type TableColumnKey,
+   type TableColumnsSlice,
+ } from "./issue-table-columns";
+@@ -56,6 +57,7 @@ export const useMyIssuesViewStore = create<MyIssuesViewState>((set) => ({
+   view: "list",
+   swimlaneGrouping: "assignee",
+   tableColumns: defaultTableColumns(),
++  tableColumnWidths: defaultTableColumnWidths(),
+   tableGrouping: defaultTableGrouping(),
+   ...defaultIssueFilterSlice(),
+   setScope: (scope) => set({ scope }),
+diff --git a/apps/mobile/data/stores/project-issues-view-store.ts b/apps/mobile/data/stores/project-issues-view-store.ts
+index b5a11cadd..20cfd69c1 100644
+--- a/apps/mobile/data/stores/project-issues-view-store.ts
++++ b/apps/mobile/data/stores/project-issues-view-store.ts
+@@ -33,6 +33,7 @@ import {
+ import {
+   createTableColumnActions,
+   defaultTableColumns,
++  defaultTableColumnWidths,
+   type TableColumnKey,
+   type TableColumnsSlice,
+ } from "./issue-table-columns";
+@@ -65,6 +66,7 @@ export const useProjectIssuesViewStore = create<ProjectIssuesViewState>(
+     view: "list",
+     swimlaneGrouping: "assignee",
+     tableColumns: defaultTableColumns(),
++    tableColumnWidths: defaultTableColumnWidths(),
+     tableGrouping: defaultTableGrouping(),
+     ...defaultIssueFilterSlice(),
+     setScope: (scope) => set({ scope }),
+diff --git a/apps/mobile/lib/i18n/iter134-keys.test.ts b/apps/mobile/lib/i18n/iter134-keys.test.ts
+new file mode 100644
+index 000000000..e487088a4
+--- /dev/null
++++ b/apps/mobile/lib/i18n/iter134-keys.test.ts
+@@ -0,0 +1,71 @@
++import { describe, expect, it, vi, beforeEach } from "vitest";
++
++vi.mock("expo-secure-store", () => ({
++  getItemAsync: vi.fn(),
++  setItemAsync: vi.fn(),
++  deleteItemAsync: vi.fn(),
++}));
++vi.mock("expo-localization", () => ({
++  getLocales: vi.fn(),
++}));
++
++// i18n spot-checks for iteration 134 — the issue table's column resizing /
++// column order menu, and the sub-issue preset chip on the new-issue form.
++// Same contract as iter119/…/iter133-keys.test.ts: every key resolves in BOTH
++// locales and the zh value is a real translation, not the raw-id fallback.
++// (`lib/i18n/locale-completeness.test.ts` covers the "defined at all" half
++// mechanically; this pins the wording that carries meaning the id cannot.)
++describe("iteration 134 i18n", () => {
++  let mod: Awaited<ReturnType<typeof loadI18n>>;
++
++  async function loadI18n() {
++    return await import("./index");
++  }
++
++  beforeEach(async () => {
++    vi.clearAllMocks();
++    mod = await loadI18n();
++    mod.resetI18nForTests();
++    mod.setLocale("en");
++  });
++
++  const ZH_SPOT: Record<string, string> = {
++    // Column resize + order (column menu).
++    "table.resizeColumn": "调整列宽",
++    "table.moveColumnUp": "左移一列",
++    "table.moveColumnDown": "右移一列",
++    "table.resetColumns": "恢复默认列",
++    "a11y.tableResizeColumn": "调整{{column}}列宽",
++    "a11y.tableMoveColumnUp": "把{{column}}列左移",
++    "a11y.tableMoveColumnDown": "把{{column}}列右移",
++    // Row-level "new sub-issue" entry + the preset chip it seeds.
++    "a11y.tableCreateSubIssue": "为{{title}}新建子问题",
++    "newIssue.parentChip": "{{identifier}} 的子问题",
++    "newIssue.parentChipClear": "取消父问题",
++  };
++
++  it("resolves every new key in both locales, with a real zh translation", () => {
++    for (const [key, zh] of Object.entries(ZH_SPOT)) {
++      const en = mod.translate(key);
++      expect(en, key).not.toBe(key);
++      expect(en.length, key).toBeGreaterThan(0);
++      mod.setLocale("zh");
++      expect(mod.translate(key), key).toBe(zh);
++      mod.setLocale("en");
++    }
++  });
++
++  it("interpolates the column and issue names the new labels carry", () => {
++    const resize = mod.translate("a11y.tableResizeColumn", { column: "状态" });
++    expect(resize).toContain("状态");
++    expect(resize).not.toContain("{{");
++    const create = mod.translate("a11y.tableCreateSubIssue", {
++      title: "修复登录",
++    });
++    expect(create).toContain("修复登录");
++    expect(create).not.toContain("{{");
++    const chip = mod.translate("newIssue.parentChip", { identifier: "MYS-1" });
++    expect(chip).toContain("MYS-1");
++    expect(chip).not.toContain("{{");
++  });
++});
+diff --git a/apps/mobile/lib/i18n/locales/en.json b/apps/mobile/lib/i18n/locales/en.json
+index 6d387e2c3..25c026316 100644
+--- a/apps/mobile/lib/i18n/locales/en.json
++++ b/apps/mobile/lib/i18n/locales/en.json
+@@ -3047,5 +3047,15 @@
+   "workspaceSettings.issuePrefixChange": "Change",
+   "myIssues.scopeAll": "All",
+   "myIssues.emptyAll": "Nothing assigned to you, created by you, or involving your agents and squads yet.",
+-  "mcp.agent.workspaceTitle": "Workspace servers"
++  "mcp.agent.workspaceTitle": "Workspace servers",
++  "table.resizeColumn": "Resize column",
++  "table.moveColumnUp": "Move column left",
++  "table.moveColumnDown": "Move column right",
++  "table.resetColumns": "Reset columns",
++  "a11y.tableResizeColumn": "Resize the {{column}} column",
++  "a11y.tableMoveColumnUp": "Move the {{column}} column left",
++  "a11y.tableMoveColumnDown": "Move the {{column}} column right",
++  "a11y.tableCreateSubIssue": "New sub-issue under {{title}}",
++  "newIssue.parentChip": "Sub-issue of {{identifier}}",
++  "newIssue.parentChipClear": "Remove parent"
+ }
+diff --git a/apps/mobile/lib/i18n/locales/zh.json b/apps/mobile/lib/i18n/locales/zh.json
+index b396bc8cb..cd9bdb666 100644
+--- a/apps/mobile/lib/i18n/locales/zh.json
++++ b/apps/mobile/lib/i18n/locales/zh.json
+@@ -3047,5 +3047,15 @@
+   "workspaceSettings.issuePrefixChange": "修改",
+   "myIssues.scopeAll": "全部",
+   "myIssues.emptyAll": "还没有指派给您、由您创建，或涉及您的 agents 与 squads 的问题。",
+-  "mcp.agent.workspaceTitle": "工作区服务器"
++  "mcp.agent.workspaceTitle": "工作区服务器",
++  "table.resizeColumn": "调整列宽",
++  "table.moveColumnUp": "左移一列",
++  "table.moveColumnDown": "右移一列",
++  "table.resetColumns": "恢复默认列",
++  "a11y.tableResizeColumn": "调整{{column}}列宽",
++  "a11y.tableMoveColumnUp": "把{{column}}列左移",
++  "a11y.tableMoveColumnDown": "把{{column}}列右移",
++  "a11y.tableCreateSubIssue": "为{{title}}新建子问题",
++  "newIssue.parentChip": "{{identifier}} 的子问题",
++  "newIssue.parentChipClear": "取消父问题"
+ }
+diff --git a/apps/mobile/lib/sub-issue-route.test.ts b/apps/mobile/lib/sub-issue-route.test.ts
+new file mode 100644
+index 000000000..f47b48f5d
+--- /dev/null
++++ b/apps/mobile/lib/sub-issue-route.test.ts
+@@ -0,0 +1,39 @@
++/**
++ * Route-param construction for the issue table's row-level "new sub-issue"
++ * entry (iteration 134). The hook around it only does the navigation; the
++ * rule about which fields ride along is here, where it can be checked
++ * without a router or a rendered table.
++ */
++import { describe, expect, it } from "vitest";
++import { subIssueRouteParams } from "./sub-issue-route";
++
++const PARENT = {
++  id: "issue-1",
++  identifier: "MYS-42",
++  project_id: "project-1",
++};
++
++describe("subIssueRouteParams", () => {
++  it("always carries the parent id — the only field the server needs", () => {
++    expect(subIssueRouteParams(PARENT).parentIssueId).toBe("issue-1");
++  });
++
++  it("carries the identifier for the chip label", () => {
++    expect(subIssueRouteParams(PARENT).parentIssueIdentifier).toBe("MYS-42");
++  });
++
++  it("inherits the parent's project", () => {
++    expect(subIssueRouteParams(PARENT).parentProjectId).toBe("project-1");
++  });
++
++  it("omits project_id when the parent has none", () => {
++    const params = subIssueRouteParams({ ...PARENT, project_id: null });
++    expect(params).not.toHaveProperty("parentProjectId");
++    expect(params.parentIssueId).toBe("issue-1");
++  });
++
++  it("omits the identifier when the parent has none", () => {
++    const params = subIssueRouteParams({ ...PARENT, identifier: "" });
++    expect(params).not.toHaveProperty("parentIssueIdentifier");
++  });
++});
+diff --git a/apps/mobile/lib/sub-issue-route.ts b/apps/mobile/lib/sub-issue-route.ts
+new file mode 100644
+index 000000000..5763d6628
+--- /dev/null
++++ b/apps/mobile/lib/sub-issue-route.ts
+@@ -0,0 +1,33 @@
++/**
++ * Route-param construction for "new sub-issue under this one" — the phone's
++ * equivalent of web's `meta.createSubIssue(issue)` in the issue table's
++ * `InlineTitle` (packages/views/issues/components/table-view.tsx:2103):
++ *
++ *   onCreateIssue({
++ *     parent_issue_id: issue.id,
++ *     parent_issue_identifier: issue.identifier,
++ *     ...(issue.project_id ? { project_id: issue.project_id } : {}),
++ *   })
++ *
++ * Kept in its own module (no expo-router import) so the rule about which
++ * fields ride along is testable in the node-only vitest lane.
++ */
++import type { Issue } from "@multica/core/types";
++
++/**
++ * Params for the new-issue form seeded from a parent issue.
++ *
++ * `parentProjectId` is copied only when the parent has a project, exactly as
++ * web's spread does — passing an empty/null project through would look like a
++ * real id to the server rather than "no project", and the identifier is only
++ * carried for the chip label (the server needs the id alone).
++ */
++export function subIssueRouteParams(
++  parent: Pick<Issue, "id" | "identifier" | "project_id">,
++): Record<string, string> {
++  return {
++    parentIssueId: parent.id,
++    ...(parent.identifier ? { parentIssueIdentifier: parent.identifier } : {}),
++    ...(parent.project_id ? { parentProjectId: parent.project_id } : {}),
++  };
++}
+diff --git a/apps/mobile/lib/use-create-sub-issue.ts b/apps/mobile/lib/use-create-sub-issue.ts
+new file mode 100644
+index 000000000..80fb18d20
+--- /dev/null
++++ b/apps/mobile/lib/use-create-sub-issue.ts
+@@ -0,0 +1,31 @@
++/**
++ * "New sub-issue under this one" — the phone's equivalent of web's
++ * `meta.createSubIssue(issue)` in the issue table's `InlineTitle`
++ * (packages/views/issues/components/table-view.tsx:2103).
++ *
++ * Carried as route params rather than through `useNewIssueDraftStore`: the
++ * parent is a property of the *navigation*, not a chip the user edits on the
++ * form, and `new-issue.tsx` can read params without racing the draft store's
++ * mount-time reset (the exact hazard `use-create-issue-from-column.ts` has to
++ * work around).
++ */
++import { useCallback } from "react";
++import { router } from "expo-router";
++import type { Issue } from "@multica/core/types";
++import { useWorkspaceStore } from "@/data/workspace-store";
++import { subIssueRouteParams } from "@/lib/sub-issue-route";
++
++export function useCreateSubIssue(): (parent: Issue) => void {
++  const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
++
++  return useCallback(
++    (parent: Issue) => {
++      if (!wsSlug) return;
++      router.push({
++        pathname: "/[workspace]/new-issue",
++        params: { workspace: wsSlug, ...subIssueRouteParams(parent) },
++      });
++    },
++    [wsSlug],
++  );
++}

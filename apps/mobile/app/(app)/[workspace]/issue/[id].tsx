@@ -25,6 +25,7 @@ import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { TimelineList } from "@/components/issue/timeline-list";
+import { BatchActionBar } from "@/components/issue/batch-action-bar";
 import { AgentHeaderBadge } from "@/components/issue/agent-header-badge";
 import { InlineCommentComposer } from "@/components/issue/inline-comment-composer";
 import {
@@ -43,6 +44,9 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { githubKeys } from "@/data/queries/github";
 import { getInboxArchiveMode } from "@/lib/inbox-display";
 import { getWebBaseUrl } from "@/data/server-config";
+import { pickLatestWorkDir } from "@/lib/workdir-path";
+import { useCreateSubIssue } from "@/lib/use-create-sub-issue";
+import { api } from "@/data/api";
 import { ActionSheet } from "@/lib/action-sheet";
 import { useViewedIssuesStore } from "@/data/viewed-issues-store";
 import { useCommentSelectStore } from "@/data/comment-select-store";
@@ -140,12 +144,41 @@ export default function IssueDetail() {
     !!pins?.some((p) => p.item_type === "issue" && p.item_id === issue.id);
   const createPin = useCreatePin();
   const deletePin = useDeletePin();
+  const createSubIssue = useCreateSubIssue();
 
-  // Three-dot menu: Pin/Unpin / Copy link / Open on web (if web URL set) /
-  // Delete. Mirrors apps/mobile/app/(app)/[workspace]/project/[id].tsx — same
-  // ActionSheetIOS + Alert.alert confirm pattern. Property edits (status,
-  // priority, assignee, due_date) live on the IssueHeaderCard chips inside
-  // the timeline list, not in this menu — one entry per action.
+  // "Copy local workdir path" — web parity
+  // (packages/views/issues/actions/issue-actions-menu-items.tsx:137). Web
+  // fetches the issue's task list while the menu is open and reads the answer
+  // from cache, because a browser only grants clipboard access inside the
+  // click's transient activation. React Native has no such constraint, so
+  // here the list is fetched on demand — the issue screen pays nothing until
+  // the action is actually used.
+  const copyWorkdirPath = useCallback(async () => {
+    if (!issue) return;
+    let workDir: string | undefined;
+    try {
+      workDir = pickLatestWorkDir(await api.listTasksByIssue(issue.id));
+    } catch {
+      // A failed lookup and "never run by a local agent" are the same thing
+      // for this action: there is no path to copy. Web collapses them too.
+      workDir = undefined;
+    }
+    if (!workDir) {
+      Alert.alert(t("issue.workdirPathUnavailable"));
+      return;
+    }
+    const copied = await Clipboard.setStringAsync(workDir);
+    Alert.alert(
+      t(copied ? "issue.workdirPathCopied" : "issue.workdirPathCopyFailed"),
+    );
+  }, [issue, t]);
+
+  // Three-dot menu: Pin/Unpin / Copy link / Copy local workdir path / Open on
+  // web (if web URL set) / Delete. Mirrors apps/mobile/app/(app)/[workspace]/
+  // project/[id].tsx — same ActionSheetIOS + Alert.alert confirm pattern.
+  // Property edits (status, priority, assignee, due_date) live on the
+  // IssueHeaderCard chips inside the timeline list, not in this menu — one
+  // entry per action.
   const onPressMore = useCallback(() => {
     if (!issue || !wsSlug) return;
     const webUrl = getWebBaseUrl();
@@ -158,9 +191,12 @@ export default function IssueDetail() {
       { kind: isPinned ? "unpin" : "pin", label: isPinned ? t("issue.unpin") : t("issue.pin") },
       { kind: "edit", label: t("issue.editDetails") },
       // Issue-tree relations (MYS-493) — web's "Relations" submenu flattened
-      // into the mobile ActionSheet (one entry per action). Add sub-issue /
-      // set parent open searchable pickers; remove parent applies directly
-      // (reversible via set parent), mirroring web actions.removeParent().
+      // into the mobile ActionSheet (one entry per action). Create sub-issue
+      // opens the new-issue form with this issue preset as the parent, add
+      // sub-issue / set parent open searchable pickers, remove parent applies
+      // directly (reversible via set parent). Entry order follows web's
+      // submenu (issue-actions-menu-items.tsx:290-310).
+      { kind: "createChild", label: t("issueRelation.createChildTitle") },
       { kind: "addChild", label: t("issueRelation.addChildTitle") },
       { kind: "setParent", label: t("issueRelation.setParentTitle") },
     ];
@@ -171,6 +207,7 @@ export default function IssueDetail() {
       });
     }
     if (issueLink) actions.push({ kind: "copy", label: t("issue.copyLink") });
+    actions.push({ kind: "copyWorkdir", label: t("issue.copyWorkdirPath") });
     if (issueLink) actions.push({ kind: "openWeb", label: t("issue.openWeb") });
     actions.push({ kind: "delete", label: t("issue.deleteIssue") });
     const destructiveIndex = actions.length - 1;
@@ -189,6 +226,8 @@ export default function IssueDetail() {
           deletePin.mutate({ itemType: "issue", itemId: issue.id });
         } else if (kind === "edit") {
           if (wsSlug) router.push(`/${wsSlug}/issue/${issue.id}/edit`);
+        } else if (kind === "createChild") {
+          createSubIssue(issue);
         } else if (kind === "addChild") {
           if (wsSlug)
             router.push(`/${wsSlug}/issue/${issue.id}/picker/child`);
@@ -208,6 +247,8 @@ export default function IssueDetail() {
           );
         } else if (kind === "copy" && issueLink) {
           Clipboard.setStringAsync(issueLink);
+        } else if (kind === "copyWorkdir") {
+          void copyWorkdirPath();
         } else if (kind === "openWeb" && issueLink) {
           Linking.openURL(issueLink);
         } else if (kind === "delete") {
@@ -219,7 +260,18 @@ export default function IssueDetail() {
         }
       },
     );
-  }, [issue, wsSlug, deleteIssue, isPinned, createPin, deletePin, updateRelations, t]);
+  }, [
+    issue,
+    wsSlug,
+    deleteIssue,
+    isPinned,
+    createPin,
+    deletePin,
+    updateRelations,
+    createSubIssue,
+    copyWorkdirPath,
+    t,
+  ]);
 
   return (
     <View className="flex-1 bg-background">
@@ -292,6 +344,13 @@ export default function IssueDetail() {
             subIssues={children.data}
             wsSlug={wsSlug}
           />
+          {/* Multi-select on the sub-issue rows (long-press) raises the
+              shared batch bar here, where it can span the screen — the
+              children section lives inside the timeline's scroll content and
+              an absolutely-positioned bar would scroll away with it. The bar
+              intersects its `issues` with the live selection, so it stays
+              hidden while a selection made on a list screen is carried in. */}
+          <BatchActionBar issues={children.data ?? []} />
           <InlineCommentComposer issueId={id} />
         </View>
       )}
