@@ -80,11 +80,75 @@ const en = load("en");
 const TARGETS = { ja: load("ja"), ko: load("ko") } as const;
 type Locale = keyof typeof TARGETS;
 
-const countMatching = (bundle: Bundle, pattern: RegExp) =>
-  Object.values(bundle).filter((value) => pattern.test(value)).length;
+const countMatching = (bundle: Bundle, pattern: RegExp, also?: RegExp) =>
+  Object.values(bundle).filter(
+    (value) => pattern.test(value) && (also === undefined || also.test(value)),
+  ).length;
+
+const countOccurrences = (bundle: Bundle, pattern: RegExp) =>
+  Object.values(bundle).reduce((total, value) => total + (value.match(pattern) ?? []).length, 0);
 
 type Anchor = { key: string; contains: string };
 type Unit = "by key" | "by occurrence";
+
+/**
+ * One number the `why` sentence states, written so the test below can re-derive
+ * it from the bundle.
+ *
+ * The 151 round added this because the `collision` anchors and the unit prefix
+ * between them still left the *numbers* unverified. They catch "an anchor was
+ * rewritten" and "the sentence stopped saying what it counts"; they cannot catch
+ * "the family grew a key" or "the sentence was measured over the wrong
+ * surface". Both had happened:
+ *
+ *   - The `Server` rows read "native in all 15 of the 20 keys that name a
+ *     server". 20 is the size of the `settings.mcp.*` surface, not the number of
+ *     keys in it that name a server — that is 15, so the sentence claimed 20
+ *     keys doing what 15 do. Same class of defect the 150 round fixed one entry
+ *     over (a number borrowed from the wrong surface), found again.
+ *   - The `Agent counter (ja)` row read "4 件 vs 2 個" and "ko is unanimous on
+ *     개 for all six". Both numbers came from a position-scoped pattern
+ *     (`エージェント {{n}} 件`), which sees 6 of the 18 keys that count an agent
+ *     in ja. The other 12 take 件, 個 or a third counter, 体, in the
+ *     placeholder-first position — so the entry understated its own surface
+ *     threefold and missed a form entirely.
+ *
+ * A number in a `why` is now a claim the guard re-measures. `unit` defaults to
+ * the entry's, and is overridden only where the sentence deliberately quotes a
+ * second caliber.
+ */
+type Fact = {
+  /** How the sentence names this number, for the failure message. */
+  label: string;
+  /** Key prefix the count is taken over; the whole bundle when omitted. */
+  scope?: string;
+  /** What is counted. */
+  pattern: RegExp;
+  /** When present, only keys matching this too are counted (an overlap). */
+  also?: RegExp;
+  /**
+   * When present, only these exact keys are counted. Used for a claim about a
+   * named set the `why` spells out — a set with no shared key prefix, where a
+   * `scope` would either over- or under-count.
+   */
+  keys?: string[];
+  /**
+   * When present, the key set is *derived*: every key of `locale` whose value
+   * matches `pattern`. This is how a cross-locale claim is written — "ko is
+   * unanimous on 개 **for the same keys**" — so the two halves of the sentence
+   * cannot drift apart as the family grows.
+   */
+  keysFrom?: { locale: Locale; pattern: RegExp };
+  /** Overrides the entry's unit for this one number. */
+  unit?: Unit;
+  /**
+   * Overrides the entry's locale, for the cross-locale claims a `why` makes
+   * ("ko is unanimous on 개"). Without it those claims are the only ones in the
+   * sentence nothing re-measures.
+   */
+  locale?: Locale;
+  expected: number;
+};
 
 type Entry = {
   /** How conventions.mdx names this term in its undecided table. */
@@ -97,9 +161,25 @@ type Entry = {
   unit: Unit;
   why: string;
   ask: string;
+  /** Every number `why` states, re-derived by the guard. */
+  facts: Fact[];
 };
 
 const JA_COUNTERS = "秒|分|時間|日間|日中|日目|日|週間|週|か月|ヶ月|年|件|個|名|回|つ|人|本|枚|台|度|行|文字|ページ|階|時|泊|杯|冊";
+
+/**
+ * A counted agent in ja. The counter either follows the placeholder
+ * (`エージェント {{count}} 件`) or precedes the noun (`{{count}} 件のエージェント`),
+ * and both positions are the same question — the 150 round's pattern covered
+ * only the first, which is how its tally came to read "4 件 vs 2 個 ... ko is
+ * unanimous on 개 for all six" for a family that has 18 keys.
+ */
+const jaAgentCounter = (counter: string) =>
+  new RegExp(
+    `エージェント\\s*\\{\\{[^}]*\\}\\}\\s*(?:${counter})` +
+      `|\\{\\{[^}]*\\}\\}\\s*(?:${counter})\\s*の\\s*エージェント`,
+  );
+
 const LATIN_ROLE = /(?<![A-Za-z])(owner|admin|member)s?(?![A-Za-z])/;
 
 /**
@@ -129,11 +209,49 @@ const UNSETTLED: Entry[] = [
     why:
       "by key: 23 Latin vs 14 サーバー inside agents.tab_body.mcp_config.* alone (79 keys), " +
       "alternating key by key (dialog_name_required is Latin, dialog_name_locked is native), " +
-      "while settings.mcp.* is native in all 15 of the 20 keys that name a server",
+      "while settings.mcp.* names a server in 15 of its 20 keys and is native in all 15",
     ask:
       "Locale owner: is an MCP server called `Server` or サーバー in ja? 23 Latin and 14 " +
       "native keys split the same surface, and the neighbouring settings.mcp.* surface is " +
       "native throughout, so whichever wins rewrites 37 ja keys.",
+    facts: [
+      {
+        label: "keys in the mcp_config surface",
+        scope: "agents.tab_body.mcp_config.",
+        pattern: /[\s\S]/,
+        expected: 79,
+      },
+      {
+        label: "Latin Server in the mcp_config surface",
+        scope: "agents.tab_body.mcp_config.",
+        pattern: /(?<![A-Za-z])Servers?(?![A-Za-z])/,
+        expected: 23,
+      },
+      {
+        label: "サーバー in the mcp_config surface",
+        scope: "agents.tab_body.mcp_config.",
+        pattern: /サーバー/,
+        expected: 14,
+      },
+      {
+        label: "settings.mcp.* keys in total",
+        scope: "settings.mcp.",
+        pattern: /[\s\S]/,
+        expected: 20,
+      },
+      {
+        label: "settings.mcp.* keys that name a server",
+        scope: "settings.mcp.",
+        pattern: /(?<![A-Za-z])Servers?(?![A-Za-z])|サーバー/,
+        expected: 15,
+      },
+      {
+        label: "settings.mcp.* keys native",
+        scope: "settings.mcp.",
+        pattern: /サーバー/,
+        expected: 15,
+      },
+    ],
   },
   {
     docTerm: "Server",
@@ -153,11 +271,49 @@ const UNSETTLED: Entry[] = [
     why:
       "by key: identical to the ja side key for key — 23 Latin vs 14 서버 in " +
       "agents.tab_body.mcp_config.*, with the same two dialog_name_* keys disagreeing — and " +
-      "settings.mcp.* native in all 15 of the 20 keys that name a server",
+      "settings.mcp.* names a server in 15 of its 20 keys, native in all 15",
     ask:
       "Locale owner: the same call for ko, where the split is identical (23 Latin vs 14 서버, " +
       "the same two dialog_name_* keys). Answer ja and ko in one decision and 74 keys move " +
       "together; answer ko alone and 37 ko keys move.",
+    facts: [
+      {
+        label: "keys in the mcp_config surface",
+        scope: "agents.tab_body.mcp_config.",
+        pattern: /[\s\S]/,
+        expected: 79,
+      },
+      {
+        label: "Latin Server in the mcp_config surface",
+        scope: "agents.tab_body.mcp_config.",
+        pattern: /(?<![A-Za-z])Servers?(?![A-Za-z])/,
+        expected: 23,
+      },
+      {
+        label: "서버 in the mcp_config surface",
+        scope: "agents.tab_body.mcp_config.",
+        pattern: /서버/,
+        expected: 14,
+      },
+      {
+        label: "settings.mcp.* keys in total",
+        scope: "settings.mcp.",
+        pattern: /[\s\S]/,
+        expected: 20,
+      },
+      {
+        label: "settings.mcp.* keys that name a server",
+        scope: "settings.mcp.",
+        pattern: /(?<![A-Za-z])Servers?(?![A-Za-z])|서버/,
+        expected: 15,
+      },
+      {
+        label: "settings.mcp.* keys native",
+        scope: "settings.mcp.",
+        pattern: /서버/,
+        expected: 15,
+      },
+    ],
   },
   {
     docTerm: "review",
@@ -181,6 +337,10 @@ const UNSETTLED: Entry[] = [
       "Locale owner: does the in-review state read 리뷰 or 검토? 9 검토 vs 8 리뷰 keys, and " +
       "because the status chip (issues.status.in_review) is one of the 리뷰 keys, the answer " +
       "is visible in the UI — 17 ko keys move.",
+    facts: [
+      { label: "검토 keys", pattern: /검토/, expected: 9 },
+      { label: "리뷰 keys", pattern: /리뷰/, expected: 8 },
+    ],
   },
   {
     docTerm: "label",
@@ -203,6 +363,10 @@ const UNSETTLED: Entry[] = [
     ask:
       "Locale owner: 라벨 or 레이블 for a label? 26 vs 25 keys with no partition at all — one " +
       "modal takes both — so no majority argument is available. 51 ko keys move.",
+    facts: [
+      { label: "라벨 keys", pattern: /라벨/, expected: 26 },
+      { label: "레이블 keys", pattern: /레이블/, expected: 25 },
+    ],
   },
   {
     docTerm: "Roles in ja/ko prose",
@@ -228,6 +392,16 @@ const UNSETTLED: Entry[] = [
       "Latin in 22 permission-prose keys but renders role labels natively in 130 (5 keys " +
       "carry both), so the call is a rule-scope decision, not a per-string one — up to 152 ja " +
       "keys move.",
+    facts: [
+      { label: "Latin role keys", pattern: LATIN_ROLE, expected: 22 },
+      { label: "native role keys", pattern: /(メンバー|オーナー|管理者)/, expected: 130 },
+      {
+        label: "keys carrying both",
+        pattern: LATIN_ROLE,
+        also: /(メンバー|オーナー|管理者)/,
+        expected: 5,
+      },
+    ],
   },
   {
     docTerm: "Roles in ja/ko prose",
@@ -252,6 +426,16 @@ const UNSETTLED: Entry[] = [
       "Locale owner: the same rule-scope call for ko, where the numbers are lopsided — Latin " +
       "in 8 keys against 141 native. A native-only answer touches 8 ko keys; a Latin-only " +
       "answer touches 141.",
+    facts: [
+      { label: "Latin role keys", pattern: LATIN_ROLE, expected: 8 },
+      { label: "native role keys", pattern: /(멤버|소유자|관리자)/, expected: 141 },
+      {
+        label: "keys carrying both",
+        pattern: LATIN_ROLE,
+        also: /(멤버|소유자|관리자)/,
+        expected: 1,
+      },
+    ],
   },
   {
     docTerm: "Register (polite level)",
@@ -276,6 +460,17 @@ const UNSETTLED: Entry[] = [
       "Locale owner: 습니다체 or 해요체 as the house register? 856 vs 398 keys, and the split " +
       "runs through every key family, so this is a whole-bundle decision covering 1254 ko " +
       "keys — the largest single answer on this list.",
+    facts: [
+      { label: "습니다 keys", pattern: /습니다/, expected: 856 },
+      { label: "해요체 keys", pattern: /(어요|아요|세요|예요|이에요|해요)/, expected: 398 },
+      { label: "습니다 occurrences", pattern: /습니다/g, unit: "by occurrence", expected: 895 },
+      {
+        label: "해요체 occurrences",
+        pattern: /(어요|아요|세요|예요|이에요|해요)/g,
+        unit: "by occurrence",
+        expected: 439,
+      },
+    ],
   },
   {
     docTerm: "Private",
@@ -300,6 +495,10 @@ const UNSETTLED: Entry[] = [
       "Locale owner: プライベート or 非公開 for a bare `Private` label? 7 vs 9 keys, split by " +
       "neither surface nor label-vs-prose, so no partition argument is available. 16 ja keys " +
       "move.",
+    facts: [
+      { label: "プライベート keys", pattern: /プライベート/, expected: 7 },
+      { label: "非公開 keys", pattern: /非公開/, expected: 9 },
+    ],
   },
   {
     docTerm: "Figure and counter spacing",
@@ -330,30 +529,101 @@ const UNSETTLED: Entry[] = [
       "occurrences and 155 vs 40 on placeholders, so 211 occurrences move. This is a spacing " +
       "call rather than a word choice, which is why it does not route to a locale owner — and " +
       "the round-150 note below records that the external standards checked do not answer it.",
+    facts: [
+      {
+        label: "spaced literal occurrences",
+        pattern: new RegExp(`\\d\\s+(?:${JA_COUNTERS})`, "g"),
+        expected: 42,
+      },
+      {
+        label: "tight literal occurrences",
+        pattern: new RegExp(`\\d(?:${JA_COUNTERS})`, "g"),
+        expected: 14,
+      },
+      {
+        label: "spaced placeholder occurrences",
+        pattern: new RegExp(`\\}\\}\\s+(?:${JA_COUNTERS})`, "g"),
+        expected: 155,
+      },
+      {
+        label: "tight placeholder occurrences",
+        pattern: new RegExp(`\\}\\}(?:${JA_COUNTERS})`, "g"),
+        expected: 40,
+      },
+    ],
   },
   {
     docTerm: "Agent counter (ja)",
     label: "agent counter (ja)",
     locale: "ja",
     forms: [
-      { label: "件", pattern: new RegExp(`エージェント\\s*\\{\\{[^}]*\\}\\}\\s*件`) },
-      { label: "個", pattern: new RegExp(`エージェント\\s*\\{\\{[^}]*\\}\\}\\s*個`) },
+      { label: "件", pattern: jaAgentCounter("件") },
+      { label: "個", pattern: jaAgentCounter("個") },
+      { label: "体", pattern: jaAgentCounter("体") },
     ],
     collision: [
       [
         { key: "agents.runtime_filter.agent_count_other", contains: "件" },
         { key: "runtimes.detail.serving_count_other", contains: "個" },
       ],
+      [
+        { key: "usage.leaderboard.caption", contains: "件" },
+        { key: "skills.detail.header.used_by_other", contains: "個" },
+      ],
     ],
     unit: "by key",
     why:
-      "by key: 4 件 vs 2 個, and the two anchors carry the *same* English source " +
-      "(`{{count}} agents`), so there is no source-side difference to explain the split — " +
-      "while ko is unanimous on 개 for all six, so this is a ja-only disagreement",
+      "by key: 9 件 vs 5 個 vs 4 体 over the 18 ja keys that count an agent, and the split is " +
+      "not source-side — the identical English source `{{count}} agents` takes 件 in two keys " +
+      "(agents.runtime_filter.agent_count_other, usage.leaderboard.caption) and 個 in two " +
+      "others (runtimes.detail.serving_count_other, skills.detail.header.used_by_other), a " +
+      "2:2 tie on one source — while ko is unanimous on 개 for all 18, so this is ja-only",
     ask:
-      "Locale owner: is a counted agent 件 or 個? 4 vs 2 keys with the identical English " +
-      "source on both sides, and ko unanimous (개), so the answer is ja-only and 6 ja keys " +
-      "move.",
+      "Locale owner: is a counted agent 件, 個 or 体? 9 vs 5 vs 4 keys with no majority at " +
+      "all, the identical English source `{{count}} agents` splitting 2:2 between 件 and 個, " +
+      "and a third counter (体) confined to the unbind and trigger sentences — ko is " +
+      "unanimous (개) on all 18, so the answer is ja-only and 18 ja keys move.",
+    facts: [
+      { label: "件 keys", pattern: jaAgentCounter("件"), expected: 9 },
+      { label: "個 keys", pattern: jaAgentCounter("個"), expected: 5 },
+      { label: "体 keys", pattern: jaAgentCounter("体"), expected: 4 },
+      {
+        label: "keys whose source is exactly `{{count}} agents`",
+        keys: [
+          "agents.runtime_filter.agent_count_other",
+          "runtimes.detail.serving_count_other",
+          "skills.detail.header.used_by_other",
+          "usage.leaderboard.caption",
+        ],
+        pattern: jaAgentCounter("件|個|体"),
+        expected: 4,
+      },
+      {
+        label: "of those, the 件 half of the 2:2 tie",
+        keys: [
+          "agents.runtime_filter.agent_count_other",
+          "runtimes.detail.serving_count_other",
+          "skills.detail.header.used_by_other",
+          "usage.leaderboard.caption",
+        ],
+        pattern: jaAgentCounter("件"),
+        expected: 2,
+      },
+      {
+        label: "ko keys taking 개 for the same 18-key family",
+        keysFrom: { locale: "ja", pattern: jaAgentCounter("件|個|体") },
+        pattern: /개/,
+        locale: "ko",
+        expected: 18,
+      },
+      {
+        label: "ko keys taking a rival counter",
+        keysFrom: { locale: "ja", pattern: jaAgentCounter("件|個|体") },
+        pattern: /(건|가지|명)/,
+        locale: "ko",
+        expected: 0,
+      },
+    ],
   },
   {
     docTerm: "Tool counter (ja)",
@@ -378,6 +648,58 @@ const UNSETTLED: Entry[] = [
       "Locale owner: is a counted tool 件 or 個? 1 vs 1 key, so there is not even a majority " +
       "to lean on, and one of the two is the tight-spacing outlier in the figure-spacing " +
       "entry above — 2 ja keys move.",
+    facts: [
+      { label: "ツール 件 keys", pattern: new RegExp(`ツール\\s*\\{\\{[^}]*\\}\\}\\s*件`), expected: 1 },
+      { label: "ツール 個 keys", pattern: new RegExp(`ツール\\s*\\{\\{[^}]*\\}\\}\\s*個`), expected: 1 },
+      {
+        label: "ko 도구 개 keys",
+        pattern: new RegExp(`도구\\s*\\{\\{[^}]*\\}\\}\\s*개`),
+        locale: "ko",
+        expected: 2,
+      },
+    ],
+  },
+  {
+    docTerm: "ブラウザ",
+    label: "browser notation (ja)",
+    locale: "ja",
+    forms: [
+      { label: "ブラウザ", pattern: /ブラウザ(?!ー)/ },
+      { label: "ブラウザー", pattern: /ブラウザー/ },
+    ],
+    collision: [
+      [
+        { key: "settings.shortcuts.reserved_error", contains: "ブラウザ" },
+        { key: "settings.shortcuts.actions.goBack.description", contains: "ブラウザー" },
+      ],
+    ],
+    unit: "by key",
+    why:
+      "by key: 11 ブラウザ vs 2 ブラウザー, and unlike the other katakana splits this round " +
+      "measured, the minority sits inside the majority's own namespace — " +
+      "settings.shortcuts.reserved_error writes ブラウザ while its two siblings " +
+      "settings.shortcuts.actions.goBack.description and goForward.description write " +
+      "ブラウザー, so the same surface and the same kind of string take both forms",
+    ask:
+      "Locale owner: is a browser ブラウザ or ブラウザー? 11 vs 2 keys, with the two long-form " +
+      "keys sitting beside a short-form sibling in settings.shortcuts.* — so no majority " +
+      "argument and no partition argument is available, and 13 ja keys move either way.",
+    facts: [
+      { label: "ブラウザ keys", pattern: /ブラウザ(?!ー)/, expected: 11 },
+      { label: "ブラウザー keys", pattern: /ブラウザー/, expected: 2 },
+      {
+        label: "ブラウザ occurrences",
+        pattern: /ブラウザ(?!ー)/g,
+        unit: "by occurrence",
+        expected: 12,
+      },
+      {
+        label: "ブラウザー occurrences",
+        pattern: /ブラウザー/g,
+        unit: "by occurrence",
+        expected: 2,
+      },
+    ],
   },
 ];
 
@@ -434,7 +756,7 @@ describe("the unsettled ledger stays honest", () => {
     });
 
     /**
-     * The other 150 addition: an entry has to say who can close it and what
+     * The 150 addition: an entry has to say who can close it and what
      * answering costs. Ten rounds recorded "still undecided" without the table
      * ever being answerable on its own.
      */
@@ -452,6 +774,61 @@ describe("the unsettled ledger stays honest", () => {
         /\d/.test(entry.ask),
         `${entry.label}'s ask must carry the blast radius as a number`,
       ).toBe(true);
+    });
+
+    /**
+     * The 151 addition. The `collision` anchors catch "an anchor was rewritten"
+     * and the unit prefix catches "the sentence stopped saying what it counts";
+     * neither catches "the family grew a key" or "the number was measured over
+     * the wrong surface". Both had happened — see the `Fact` doc comment above
+     * for the two entries it was found in.
+     *
+     * Re-deriving every number from the bundle makes the `why` a claim instead
+     * of a note, and it is what turns the ledger from a record into a detector:
+     * a round that adds a key to any of these families goes red here and has to
+     * re-measure and re-ask, rather than leaving a stale number to be trusted.
+     */
+    it(`keeps every number in ${entry.label}'s why re-derivable`, () => {
+      expect(
+        entry.facts.length,
+        `${entry.label} states numbers but records no facts to re-derive them`,
+      ).toBeGreaterThan(0);
+      for (const fact of entry.facts) {
+        const target = TARGETS[fact.locale ?? entry.locale];
+        const fromKeys = (keys: string[]) =>
+          Object.fromEntries(
+            keys.map((key) => {
+              const value = target[key];
+              if (value === undefined) {
+                throw new Error(`${entry.label} / ${fact.label}: ${key} is not in the bundle`);
+              }
+              return [key, value];
+            }),
+          );
+        const scoped = fact.keys
+          ? fromKeys(fact.keys)
+          : fact.keysFrom
+            ? fromKeys(
+                Object.entries(TARGETS[fact.keysFrom.locale])
+                  .filter(([, value]) => fact.keysFrom!.pattern.test(value))
+                  .map(([key]) => key),
+              )
+            : fact.scope
+              ? Object.fromEntries(
+                  Object.entries(target).filter(([key]) => key.startsWith(fact.scope as string)),
+                )
+              : target;
+        const unit = fact.unit ?? entry.unit;
+        const measured =
+          unit === "by key"
+            ? countMatching(scoped, fact.pattern, fact.also)
+            : countOccurrences(scoped, fact.pattern);
+        expect(
+          measured,
+          `${entry.label} / ${fact.label}: the why states ${fact.expected}, the bundle has ` +
+            `${measured} — re-measure and update the sentence (and the doc row) together`,
+        ).toBe(fact.expected);
+      }
     });
   }
 });
