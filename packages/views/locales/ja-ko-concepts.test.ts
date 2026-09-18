@@ -253,14 +253,6 @@ const EXEMPT: { key: string; why: string }[] = [
 ];
 
 /**
- * Surfaces left in English in ja and ko, kept as a ledger rather than skipped
- * silently. Both are whole settings sections that were never translated — a
- * backlog, not concept drift — and the concept tests below skip them so the
- * residue test keeps meaning what it says.
- */
-const UNTRANSLATED_NAMESPACES = ["settings.composio", "settings.vcs"];
-
-/**
  * Developer-facing strings that are identical in en, zh, ja and ko: raw API
  * output and identifiers, not prose anyone translates.
  */
@@ -277,23 +269,21 @@ const RAW_STRINGS = [
 ];
 
 const exemptKeys = new Set(EXEMPT.map(({ key }) => key));
-const isUntranslated = (key: string) =>
-  UNTRANSLATED_NAMESPACES.some((ns) => key.startsWith(`${ns}.`));
 const splitFor = (label: string, locale: Locale) =>
   SURFACE_SPLITS.find((split) => split.label === label && split.locale === locale);
 const isSettled = (label: string, locale: Locale) =>
   !UNSETTLED.some((entry) => entry.label === label && entry.locale === locale);
 
-/** Keys the English source names the concept in, skipping the untranslated surfaces. */
+/** Keys the English source names the concept in. */
 const conceptKeys = (pattern: RegExp) =>
-  Object.keys(en).filter((key) => !isUntranslated(key) && namesConcept(en[key], pattern));
+  Object.keys(en).filter((key) => namesConcept(en[key], pattern));
 
 describe("ja / ko render each concept with one native word", () => {
   for (const { label, native, pattern } of CONCEPTS) {
     for (const locale of LOCALES) {
       it(`leaves no Latin ${label} in the ${locale} bundle`, () => {
         const offenders = Object.keys(TARGETS[locale])
-          .filter((key) => !isUntranslated(key) && !exemptKeys.has(key))
+          .filter((key) => !exemptKeys.has(key))
           .filter((key) => namesConcept(TARGETS[locale][key], pattern))
           .map((key) => `${key}: ${JSON.stringify(TARGETS[locale][key])}`);
         expect(offenders).toEqual([]);
@@ -383,15 +373,15 @@ describe("ja and ko agree with each other on the concepts", () => {
   });
 });
 
-describe("the untranslated surfaces stay a ledger, not a blind spot", () => {
+describe("ja and ko translate every prose string the English bundle ships", () => {
   const prose = (value: string | undefined) =>
     (value ?? "").replace(/\{\{[^}]*\}\}/g, "X").trim().split(/\s+/).filter(Boolean).length >= 4;
 
   for (const locale of LOCALES) {
-    it(`translates every prose string outside ${UNTRANSLATED_NAMESPACES.join(" and ")} in ${locale}`, () => {
+    it(`translates every prose string in ${locale}`, () => {
       const offenders = Object.keys(en)
         .filter((key) => TARGETS[locale][key] === en[key] && prose(en[key]))
-        .filter((key) => !isUntranslated(key) && !RAW_STRINGS.includes(key))
+        .filter((key) => !RAW_STRINGS.includes(key))
         .map((key) => `${key}: ${JSON.stringify(en[key])}`);
       expect(offenders).toEqual([]);
     });
