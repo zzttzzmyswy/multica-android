@@ -26,6 +26,17 @@ import { describe, expect, it } from "vitest";
  * (`autopilots.relative_date.one_day_ago` is `1 日前`, `projects.relative_date.
  * one_day_ago` is `1日前`), so it has no majority strong enough to call and no
  * partition. It is recorded in `unsettled-ledger.test.ts` instead.
+ *
+ * The 149 round asserted the ko rule on literal figures only and covered the
+ * placeholder half with three hand-picked anchors, on the reasoning that a
+ * placeholder-side rule would fire on Korean prose because a counter doubles as
+ * a word-initial (`{{index}} 편집`, `{{when}} 시작됨`). The 150 round re-checked
+ * that reasoning and it does not hold: a detector that requires the token after
+ * the placeholder to be a member of the counter set cannot fire on those, because
+ * 편집 and 시작됨 are not counters. Narrowing the placeholder to count-like names
+ * is a second, redundant guard. The full placeholder side is therefore asserted
+ * below — **170 keys / 179 occurrences tight, 0 spaced** — with the three anchors
+ * kept as named examples.
  */
 
 const LOCALES_DIR = dirname(fileURLToPath(import.meta.url));
@@ -100,15 +111,23 @@ const PAREN_TALLY = {
 const KO_UNIT_TALLY = "37 tight occurrences vs 0 spaced, on a literal figure";
 
 /**
- * Korean counters. The rule is asserted on a **literal figure** only, not on an
- * interpolation: Korean counter words double as word-initials (`{{index}} 편집`,
- * `{{when}} 시작됨` are both spelled `}} <counter-letter> …`), so a rule that
- * scanned placeholders would fire on prose that is already correct. The
- * placeholder form was measured too — 196 tight against those 2 spaced
- * collisions — and is deliberately left unasserted rather than pinned with an
- * exemption list that would have to grow with every new sentence.
+ * Korean counters. The literal rule is asserted on a **literal figure**; the
+ * placeholder rule (below) needs its own detector because the shared `mask()`
+ * erases `{{...}}` — the very token that rule keys on — so that half reads the
+ * raw value.
  */
 const KO_COUNTERS = "초|분|시간|일|주|개월|년|건|개|명|번|가지|회|달";
+
+/**
+ * A placeholder whose name is a count. A figure can only sit next to a counter
+ * through one of these, which is what keeps the placeholder detector from firing
+ * on prose: `{{index}} 편집` and `{{when}} 시작됨` are not counters, so the
+ * counter-set membership test rejects them before this list is consulted.
+ */
+const KO_COUNT_LIKE =
+  "count|total|shown|passed|failed|running|queued|deleted|days|hours|minutes|seconds|value|limit|remaining|used|size|index|online|owned";
+
+const KO_PLACEHOLDER_TALLY = "179 tight occurrences vs 0 spaced, on a placeholder";
 
 describe("ja / ko punctuation is settled by the bundle, not by the 147 note alone", () => {
   it("leaves no half-width () in the ja bundle", () => {
@@ -158,10 +177,6 @@ describe("ko attaches a counter to its figure", () => {
   /**
    * The rule has to be able to see the convention it pins, not just the absence
    * of the wrong form: a bundle with no figures at all would pass the test above.
-   *
-   * The anchors cover the half the rule above deliberately does not scan. It only
-   * looks at a literal figure, so a placeholder counter could drift to the spaced
-   * form without it noticing; these three keys pin that side too.
    */
   it("still writes the tight form, so the rule above is not vacuous", () => {
     const TIGHT = new RegExp(`\\d(?:${KO_COUNTERS})`);
@@ -181,5 +196,63 @@ describe("ko attaches a counter to its figure", () => {
 
   it("records the tally the convention was derived from", () => {
     expect(KO_UNIT_TALLY).toMatch(/\d+ tight occurrences vs \d+ spaced/);
+  });
+});
+
+/**
+ * The placeholder half of the same rule, asserted in full from the 150 round on.
+ * 149 covered it with three anchors because it expected a placeholder-side rule to
+ * fire on Korean prose; that expectation did not survive re-measurement (see the
+ * file note), and an anchor list is a weaker pin than the rule itself — a new
+ * sentence with a spaced counter would slip past it.
+ *
+ * These read the **raw** value: the shared `mask()` replaces `{{...}}` with `…`,
+ * which is exactly the token being matched.
+ */
+describe("ko attaches a counter to a placeholder too", () => {
+  const SPACED = new RegExp(`\\{\\{(?:${KO_COUNT_LIKE})\\}\\}\\s+(?:${KO_COUNTERS})`);
+  const TIGHT = new RegExp(`\\{\\{(?:${KO_COUNT_LIKE})\\}\\}(?:${KO_COUNTERS})`);
+
+  it("never puts a space between a placeholder and its counter", () => {
+    const offenders = Object.keys(ko)
+      .filter((key) => SPACED.test(ko[key] ?? ""))
+      .map((key) => `${key}: ${JSON.stringify(ko[key])}`);
+    expect(offenders).toEqual([]);
+  });
+
+  it("still writes the tight form, so the rule above is not vacuous", () => {
+    const occurrences = Object.keys(ko).reduce(
+      (total, key) => total + (ko[key]?.match(new RegExp(TIGHT, "g"))?.length ?? 0),
+      0,
+    );
+    expect(occurrences).toBeGreaterThan(100);
+  });
+
+  /**
+   * The counter-set membership test is what makes the rule safe, so it is pinned
+   * directly: the shapes 149 expected to be false positives must not match.
+   */
+  it("does not fire on a placeholder followed by a non-counter word", () => {
+    const FALSE_POSITIVES = [
+      "인자 {{index}} 편집",
+      "인자 {{index}} 제거",
+      "+{{count}} 대기 중",
+      "{{online}}/{{total}} 온라인",
+      "{{owned}}/{{total}} 보유",
+      "{{page}} / {{totalPages}} 페이지",
+    ];
+    for (const value of FALSE_POSITIVES) {
+      expect(
+        TIGHT.test(value),
+        `${JSON.stringify(value)} must not read as a figure+counter pair`,
+      ).toBe(false);
+      expect(SPACED.test(value), `${JSON.stringify(value)} must not read as a spaced pair`).toBe(
+        false,
+      );
+    }
+  });
+
+  it("records the tally the placeholder rule was derived from", () => {
+    expect(KO_PLACEHOLDER_TALLY).toMatch(/\d+ tight occurrences vs \d+ spaced/);
   });
 });
