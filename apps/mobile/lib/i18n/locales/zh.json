@@ -1125,7 +1125,7 @@
   "integrations.vcsRotateDesc": "将为 {{label}} 签发新的 webhook 密钥。请用新值更新服务端 webhook 配置。",
   "integrations.vcsRotateFailed": "重新生成 webhook 失败：{{message}}",
   "integrations.vcsRotateTitle": "重新生成 webhook？",
-  "integrations.vcsTitle": "Git 托管 (VCS)",
+  "integrations.vcsTitle": "Git 托管（VCS）",
   "integrations.vcsToken": "访问令牌",
   "integrations.vcsTokenHint": "用于读取你的仓库并接收 webhook 调用，加密存储。",
   "integrations.vcsTokenPlaceholder": "粘贴你的访问令牌",

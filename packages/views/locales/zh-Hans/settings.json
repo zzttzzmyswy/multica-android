@@ -334,7 +334,7 @@
     },
     "archive_dialog": {
       "title": "归档属性？",
-      "description": "“{{name}}”将从选择器和筛选中隐藏，任务上已有的值会保留。之后可以恢复。",
+      "description": "\"{{name}}\"将从选择器和筛选中隐藏，任务上已有的值会保留。之后可以恢复。",
       "cancel": "取消",
       "confirm": "归档属性",
       "failed": "归档属性失败"

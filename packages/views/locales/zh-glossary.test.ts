@@ -75,6 +75,46 @@ const CONCEPTS: { label: string; word: string; pattern: RegExp }[] = [
   { label: "Daemon", word: "守护进程", pattern: /\bdaemons?\b/i },
   { label: "Runtime", word: "运行时", pattern: /\bruntimes?\b/i },
   { label: "Squad", word: "小队", pattern: /\bsquads?\b/i },
+  // The 151 round's addition. These three are in the voice guide's own
+  // "Translate fully — concepts" table (Autopilot → 自动化, Member → 成员) and
+  // in its "`issue` is the product's task" rule (→ 任务), but the concept list
+  // here had never scanned for them: it only ever covered the four words the
+  // 139/140 rounds were chasing. Three rounds of zh-side scanning (145, and the
+  // 151 round's item 3) walked ja/ko instead, so the leak sat behind a green
+  // suite. It held 18 keys.
+  { label: "Autopilot", word: "自动化", pattern: /\bautopilots?\b/i },
+  { label: "Member", word: "成员", pattern: /\bmembers?\b/i },
+  { label: "Issue", word: "任务", pattern: /\bissues?\b/i },
+];
+
+/**
+ * The one carve-out the guide makes for `issue` itself, spelled out rather than
+ * hidden in an elision: on a machine-health card the English word is a plain
+ * noun for a *problem*, not the filed unit of work, and the guide says so —
+ * "`{{count}} issues` on a machine card is `{{count}} 个异常`, not `任务`"
+ * (section 2, "`issue` is the product's task"). These keys render 异常 and must
+ * keep doing it; the concept scan would otherwise read them as untranslated.
+ *
+ * A carve-out is pinned in both directions, like every other exception table in
+ * this file: the key has to still be here, and it has to still render the
+ * problem sense. An entry whose surface got renamed away is dead weight.
+ */
+const CONCEPT_CARVE_OUT: { key: string; word: string; why: string }[] = [
+  {
+    key: "runtimes.machine.filters.issues",
+    word: "异常",
+    why: "machine-health filter — a problem, not a filed task",
+  },
+  {
+    key: "runtimes.machine.metrics.health_clear",
+    word: "异常",
+    why: "machine-health metric — 'No issues' is 无异常",
+  },
+  {
+    key: "runtimes.machine.metrics.health_issues_other",
+    word: "异常",
+    why: "machine-health metric — the guide's own worked example",
+  },
 ];
 
 /**
@@ -91,6 +131,10 @@ const CODE_LITERALS: { literal: string; why: string }[] = [
   { literal: "agent/…", why: "git branch prefix handed back by a worktree run" },
   { literal: "@squad", why: "mention token, typed by the user" },
   { literal: "agent --model", why: "CLI example in a command-name placeholder" },
+  {
+    literal: "/issue",
+    why: "the Slack / Lark slash command — the guide keeps literal commands English",
+  },
 ];
 
 const PLACEHOLDER = /\{\{[^}]*\}\}/g;
@@ -140,6 +184,13 @@ const CONCEPT_ELIDED: { key: string; why: string }[] = [
     key: "settings.github.feature_co_author_description_suffix",
     why: "suffix; the prefix names the concept",
   },
+  // "Auto-subscribed to every issue this autopilot creates" — the sentence is
+  // about the runs the autopilot produces, so it names 任务 and never needs to
+  // repeat the feature's name. Added by the 151 round with the Autopilot rule.
+  {
+    key: "autopilots.dialog.subscribers_hint",
+    why: "the sentence names what the autopilot produces, not the feature",
+  },
 ];
 
 describe("zh-Hans glossary: concepts are never left in English", () => {
@@ -158,8 +209,9 @@ describe("zh-Hans glossary: concepts are never left in English", () => {
 
   it("renders the concept in Chinese wherever the English names it", () => {
     const elided = new Set(CONCEPT_ELIDED.map(({ key }) => key));
+    const carvedOut = new Set(CONCEPT_CARVE_OUT.map(({ key }) => key));
     const offenders = offendersFor((key) => {
-      if (elided.has(key)) return null;
+      if (elided.has(key) || carvedOut.has(key)) return null;
       const maskedEn = mask(en[key] ?? "");
       const named = CONCEPTS.filter(({ pattern }) => pattern.test(maskedEn));
       if (!named.length) return null;
@@ -168,6 +220,20 @@ describe("zh-Hans glossary: concepts are never left in English", () => {
         ? `${key}: expected ${missing.map(({ word }) => word).join("/")} in ${JSON.stringify(zh[key])} (en: ${JSON.stringify(en[key])})`
         : null;
     });
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps every carve-out rendering the sense the guide carved out", () => {
+    // The guide's machine-health exception is the only reason these keys may
+    // skip the concept word, so they have to still be machine-health copy
+    // saying 异常. A carve-out that outlived its surface would silently exempt
+    // whatever took the key over.
+    const offenders = CONCEPT_CARVE_OUT.filter(
+      ({ key, word }) => !(zh[key] ?? "").includes(word),
+    ).map(
+      ({ key, word }) =>
+        `${key}: carve-outs must render ${word}, got ${JSON.stringify(zh[key] ?? null)} — drop the carve-out if the surface is gone`,
+    );
     expect(offenders).toEqual([]);
   });
 

@@ -26,7 +26,7 @@
     "new_issue": "新建任务",
     "new_project": "新建项目",
     "copy_issue_link": "复制任务链接",
-    "copy_identifier": "复制标识符 ({{identifier}})",
+    "copy_identifier": "复制标识符（{{identifier}}）",
     "fold_all_comments": "收起全部评论",
     "unfold_all_comments": "展开全部评论",
     "switch_to_light": "切换到浅色主题",
