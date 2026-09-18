@@ -144,7 +144,10 @@ export default function RuntimeDetailPage() {
   // workspace admin).
   const isAdminViewer =
     !!user?.id &&
-    members.some((m) => m.user_id === user.id && m.role === "admin");
+    members.some(
+      (m) =>
+        m.user_id === user.id && (m.role === "owner" || m.role === "admin"),
+    );
   const machines = useMemo(
     () =>
       user?.id
@@ -715,22 +718,6 @@ export default function RuntimeDetailPage() {
                 )}
               </View>
             ) : null}
-
-            {/* Add custom runtime profile — web's RuntimeProfilesDialog
-                detail-page entry (intent=create). */}
-            <View className="border-t border-border pt-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 justify-start gap-2 px-0"
-                onPress={() => setShowProfiles(true)}
-              >
-                <Ionicons name="add-circle-outline" size={14} color={theme.mutedForeground} />
-                <Text className="text-xs text-foreground">
-                  {t("runtimes.profiles.addCustom")}
-                </Text>
-              </Button>
-            </View>
 
             {/* Delete */}
             {access.canDelete ? (

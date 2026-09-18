@@ -30,12 +30,12 @@ describe("search i18n", () => {
   const ZH_SPOT: Record<string, string> = {
     "search.recent": "最近",
     "search.projects": "项目",
-    "search.issues": "问题",
+    "search.issues": "任务",
     "search.cancelled": "已取消",
     "search.members": "成员",
-    "search.placeholder": "搜索问题和项目",
-    "search.noResults": "未找到「{{query}}」的结果",
-    "search.empty": "输入以搜索问题和项目。",
+    "search.placeholder": "搜索任务和项目",
+    "search.noResults": "未找到\"{{query}}\"的结果",
+    "search.empty": "输入以搜索任务和项目。",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {

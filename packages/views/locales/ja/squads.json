@@ -5,14 +5,14 @@
     "empty_no_squads": "スクワッドはまだありません。作成して始めましょう。",
     "empty_no_match": "フィルターに一致するスクワッドはありません。",
     "table": {
-      "name": "スカッド",
+      "name": "スクワッド",
       "leader": "リーダー",
       "members": "メンバー",
       "creator": "作成者",
       "created": "作成日時"
     },
-    "no_matches": "該当するスカッドはありません",
-    "row_menu": "スカッドの操作",
+    "no_matches": "該当するスクワッドはありません",
+    "row_menu": "スクワッドの操作",
     "archive_action": "アーカイブ"
   },
   "inspector": {
@@ -25,7 +25,7 @@
     "cancel": "キャンセル",
     "confirm": "アーカイブ",
     "archiving": "アーカイブ中…",
-    "success": "スカッドをアーカイブしました"
+    "success": "スクワッドをアーカイブしました"
   },
   "name_editor": {
     "cancel": "キャンセル"
@@ -91,7 +91,7 @@
     "direction_asc": "昇順",
     "direction_desc": "降順",
     "section_columns": "列",
-    "result_count_title": "該当スカッド / すべてのスカッド",
+    "result_count_title": "該当スクワッド / すべてのスクワッド",
     "filter_label": "フィルター",
     "filter_active_count_other": "{{count}} 件のフィルター",
     "clear_filters": "フィルターをクリア"

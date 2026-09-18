@@ -142,17 +142,17 @@
     "skip": {
       "loading": "ワークスペースを準備中…",
       "title": "Multica へようこそ!",
-      "subtitle": "ランタイム接続を案内するタスクを 1 つ追加しました。準備できたら Runtimes から Mika と始められます。",
+      "subtitle": "ランタイム接続を案内するタスクを 1 つ追加しました。準備できたらランタイムから Mika と始められます。",
       "got_it": "了解",
       "status_in_progress": "進行中",
       "error_title": "準備できませんでした",
-      "error_body": "ランタイム案内のタスクを作成できませんでした。再試行するか、準備ができたら Runtimes からランタイムを接続してください。",
+      "error_body": "ランタイム案内のタスクを作成できませんでした。再試行するか、準備ができたらランタイムページから接続してください。",
       "retry": "再試行",
       "dismiss": "後で",
       "cards": {
         "install_runtime": {
           "title": "ランタイムを接続",
-          "subtitle": "Codex または Kimi をインストールし、Runtimes から Mika の案内チャットを始めてください。"
+          "subtitle": "Codex または Kimi をインストールし、ランタイムから Mika の案内チャットを始めてください。"
         }
       }
     }

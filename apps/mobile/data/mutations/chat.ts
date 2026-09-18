@@ -117,6 +117,40 @@ export function useRenameChatSession() {
   });
 }
 
+/** Rebind (or clear) the session's durable project context. Mirrors web's
+ *  `onProjectChange` path in chat-input.tsx — the server keeps the binding for
+ *  every subsequent turn in the session. Optimistic so the composer chip
+ *  updates on tap; the settle refetch reconciles the server row. */
+export function useSetChatSessionProject() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      projectId,
+    }: {
+      id: string;
+      projectId: string | null;
+    }) => api.updateChatSession(id, { project_id: projectId }),
+    onMutate: async ({ id, projectId }) => {
+      const key = chatKeys.sessions(wsId);
+      await qc.cancelQueries({ queryKey: key });
+      const prev = qc.getQueryData<ChatSession[]>(key);
+      qc.setQueryData<ChatSession[]>(key, (old) =>
+        old?.map((s) => (s.id === id ? { ...s, project_id: projectId } : s)),
+      );
+      return { prev, key };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(ctx.key, ctx.prev);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: chatKeys.sessions(wsId) });
+    },
+  });
+}
+
 export function useSetChatSessionPinned() {
   const qc = useQueryClient();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);

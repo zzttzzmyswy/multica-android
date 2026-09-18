@@ -1,4 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// `formatPropertyValue` renders date properties through the app-locale
+// formatter, which pulls in the i18n store — same shims as the other
+// locale-touching suites so the native modules never load.
+vi.mock("expo-secure-store", () => ({
+  getItemAsync: vi.fn(),
+  setItemAsync: vi.fn(),
+  deleteItemAsync: vi.fn(),
+}));
+vi.mock("expo-localization", () => ({
+  getLocales: vi.fn(),
+}));
+
 import type { IssueProperty } from "@multica/core/types";
 import {
   DEFAULT_PROPERTY_OPTION_COLOR,

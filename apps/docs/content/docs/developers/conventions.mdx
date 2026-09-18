@@ -284,6 +284,53 @@ Examples:
 
 See `auth.json` for the canonical example (the `web` section contains `prefer_desktop` / `desktop_handoff.*`).
 
+### ja / ko: derive the convention from the bundle, don't guess
+
+The tables above are the **zh** glossary. ja and ko are not bound by them — they
+render the same concepts with their own words (`Agent` is エージェント / 에이전트,
+not 智能体), so a zh entry settles nothing for them.
+
+For ja and ko the convention is **derived from the bundle**, and a term is only
+settled when the bundle answers the question itself:
+
+1. **A clear majority settles it.** If the bundle renders a term with one native
+   word almost everywhere, the stragglers are debt — converge them and pin the
+   majority in a guard. `instance` (10/11 ja, 8/11 ko → インスタンス / 인스턴스) and
+   `provider` (20/23 ja, 19/23 ko → プロバイダー / 제공자) were settled this way.
+2. **A clean partition by surface settles it.** ko renders a reply to an issue
+   comment as 답글 and the agent's reply in chat as 답변, with zero crossover; that
+   partition *is* the rule, so it is asserted rather than collapsed.
+3. **No majority and no partition means undecided.** Report it and stop. Picking
+   a winner there is a guess dressed up as a convention, and it is worse than
+   leaving the split visible.
+
+Terms outside these tables are held to the same rule, in
+`packages/views/locales/ja-ko-unlisted-terms.test.ts`; the section-2 concepts are
+in `ja-ko-concepts.test.ts`. Both carry the tally each derivation came from, so a
+later reader can tell a deliberate reversal from a fresh outlier. The 148 round
+added the unlisted-terms guard for `instance`, `desktop`, `provider`, `batch`,
+`heartbeat`, `tier` and the `Pull request` casing.
+
+**Currently undecided — needs a locale owner's call, do not pick one:**
+
+| Term | Where | Why the bundle cannot settle it |
+| --- | --- | --- |
+| `Server` | `agents.tab_body.mcp_config.*` | 23 Latin vs 14 サーバー / 서버 in one surface, no partition (`settings.mcp.*` is all native) |
+| `review` | ko | 검토 9 vs 리뷰 8, and two keys in the same "needs review" state disagree |
+| `label` | ko | 라벨 26 vs 레이블 24, no partition (`modals.create_issue` takes both) |
+| Roles in ja/ko prose | ja / ko | ja keeps lowercase Latin roles in prose (`member として`), ko translates them; the section above does not say which applies |
+| Register (polite level) | ko | 461 습니다체 vs 139 해요체 with no clean partition — see the note below |
+| Ellipsis | both zh bundles | the §3 bullet contradicts itself — see the note there |
+
+**ko register.** The 148 round measured this by sentence ending. It is not
+drift that a majority can fix: the split cuts through every kind of key
+(`error` / `required` leaves are 36 해요체 vs 34 습니다체, `common.*_bind.*` is 18 vs
+5, and `settings.lark.install_error*` is the only family that is clean at 8 vs
+0), and no namespace separates them (`common` is 78% 해요체, `chat` 8%). Two
+readings are both defensible — 습니다체 as the house style with 139 stragglers, or
+해요체 for friendly guidance and inline errors by design — and the bundle cannot
+tell them apart. ja is *not* affected: it is 131 です・ます and 0 だ・である.
+
 ---
 
 ## 3. Chinese voice and style
@@ -293,6 +340,7 @@ See `auth.json` for the canonical example (the `web` section contains `prefer_de
 - Full-width punctuation in Chinese: `，。：；！？`
 - Quotes: straight double quotes `"..."` to match the English source. Do not use `「」` or curly quotes.
 - Ellipsis: three dots `...` not the single character `…`. Match the English source.
+  - **This bullet contradicts itself, and the bundles have already drifted apart because of it.** The English source uses both (`…` 96 / `...` 16 in the mobile bundle, `…` 129 / `...` 106 in views), so "three dots" and "match the English source" cannot both hold. The two zh bundles have each picked a different reading: mobile zh follows the source (6 keys differ), while views zh follows the first clause (52 keys use `...` where EN uses `…`). No guard pins either, and no round has been authorised to choose. Decide this clause before translating against it.
 - Mixed Chinese-English: a single space on each side of the English word (see Word combination rules).
 
 ### Style principles
