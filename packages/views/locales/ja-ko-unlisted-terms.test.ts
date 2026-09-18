@@ -215,33 +215,47 @@ const LATIN_CASING: {
  * re-checked each against both bundles and promoted the ones the bundle actually
  * answers: every English-named key renders the term in Latin in ja *and* ko, and
  * the native alternative appears zero times in either bundle. Terms where a
- * native rendering does exist are not here — `Fleet` (ko also writes 플릿) and
- * `Local` (64 ローカル against 2 `Local`, the runtime-config mode name only) are
- * splits, not settled keeps. The 150 round re-checked both exclusions (still
- * hold) and added `Webhook` from the same angle.
+ * native rendering does exist are not here — `Local` (62 ローカル / 로컬 against
+ * 2 `Local`, the runtime-config mode name only, whose sibling `Gateway` is a keep
+ * above) is a split, not a settled keep. The 150 round re-checked that exclusion
+ * and added `Webhook` from the same angle.
+ *
+ * The 151 round re-ran the same scan and found **one of the two exclusions was
+ * wrong**. `Fleet` was excluded because "ko also writes 플릿" — but every one of
+ * those hits is `템플릿`, the word for *template*, which contains `플릿` as a
+ * substring. Measured properly, ko writes 플릿 zero times and ja writes フリート
+ * zero times, so `Fleet` is a keep, not a split, and it is now in the table
+ * below. `Local`'s exclusion survived the re-check.
+ *
+ * That is why `native` is a **RegExp** rather than a string. The 150 round lost a
+ * measurement to the mirror-image mistake (a native pattern containing the Latin
+ * form, so it matched the Latin it was meant to exclude); this round lost one to
+ * a native form that is a substring of an unrelated word. A substring check
+ * cannot express either distinction, and both mistakes produced a confident wrong
+ * answer rather than a crash.
  */
 const LATIN_KEPT: {
   label: string;
   pattern: RegExp;
-  native: Record<Locale, string>;
+  native: Record<Locale, RegExp>;
   tally: Record<Locale, string>;
 }[] = [
   {
     label: "Gateway",
     pattern: /(?<![A-Za-z])Gateways?(?![A-Za-z])/,
-    native: { ja: "ゲートウェイ", ko: "게이트웨이" },
+    native: { ja: /ゲートウェイ/, ko: /게이트웨이/ },
     tally: { ja: "4 keys Latin, 0 native", ko: "4 keys Latin, 0 native" },
   },
   {
     label: "Severity",
     pattern: /(?<![A-Za-z])Severit(y|ies)(?![A-Za-z])/,
-    native: { ja: "重大度", ko: "심각도" },
+    native: { ja: /重大度/, ko: /심각도/ },
     tally: { ja: "2 keys Latin, 0 native", ko: "2 keys Latin, 0 native" },
   },
   {
     label: "payload",
     pattern: /(?<![A-Za-z])payloads?(?![A-Za-z])/i,
-    native: { ja: "ペイロード", ko: "페이로드" },
+    native: { ja: /ペイロード/, ko: /페이로드/ },
     tally: { ja: "2 keys Latin, 0 native", ko: "2 keys Latin, 0 native" },
   },
   /**
@@ -255,8 +269,20 @@ const LATIN_KEPT: {
   {
     label: "Webhook",
     pattern: /(?<![A-Za-z])[Ww]ebhooks?(?![A-Za-z])/,
-    native: { ja: "ウェブフック", ko: "웹훅" },
+    native: { ja: /ウェブフック/, ko: /웹훅/ },
     tally: { ja: "31 keys Latin, 0 native", ko: "31 keys Latin, 0 native" },
+  },
+  /**
+   * The 151 round's addition, and the correction of a wrong exclusion — see the
+   * block comment above. Four keys, all under `runtimes.cloud_runtime.*`, Latin in
+   * both locales. The ko pattern is guarded against `템플릿` (template), which is
+   * what made the 149/150 rounds read this term as a split.
+   */
+  {
+    label: "Fleet",
+    pattern: /(?<![A-Za-z])Fleets?(?![A-Za-z])/,
+    native: { ja: /フリート/, ko: /(?<!템)플릿/ },
+    tally: { ja: "4 keys Latin, 0 native", ko: "4 keys Latin, 0 native" },
   },
 ];
 
@@ -375,7 +401,7 @@ describe("ja / ko keep the Latin terms the bundle already settled on", () => {
 
       it(`never transliterates ${label} in the ${locale} bundle`, () => {
         const offenders = Object.keys(TARGETS[locale])
-          .filter((key) => (TARGETS[locale][key] ?? "").includes(native[locale]))
+          .filter((key) => native[locale].test(TARGETS[locale][key] ?? ""))
           .map((key) => `${key}: ${JSON.stringify(TARGETS[locale][key])}`);
         expect(offenders).toEqual([]);
       });
