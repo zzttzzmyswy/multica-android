@@ -20,6 +20,7 @@ import { PriorityIcon } from "@/components/ui/priority-icon";
 import { useStatusLabel } from "@/lib/status-options";
 import { translate } from "@/lib/i18n";
 import { CustomStatusChip } from "./custom-status-chip";
+import { IssueAgentActivityIndicator } from "./issue-agent-activity-indicator";
 
 /** Column width in pt — ~1.6 lanes visible on a 375pt phone. */
 export const BOARD_COLUMN_WIDTH = 272;
@@ -105,13 +106,16 @@ export function BoardCard({
         ) : (
           <View />
         )}
-        {issue.assignee_type && issue.assignee_id ? (
-          <ActorAvatar
-            type={issue.assignee_type}
-            id={issue.assignee_id}
-            size={20}
-          />
-        ) : null}
+        <View className="flex-row items-center gap-1.5">
+          <IssueAgentActivityIndicator issueId={issue.id} ringClassName="bg-card" />
+          {issue.assignee_type && issue.assignee_id ? (
+            <ActorAvatar
+              type={issue.assignee_type}
+              id={issue.assignee_id}
+              size={20}
+            />
+          ) : null}
+        </View>
       </View>
     </Pressable>
   );
