@@ -9,11 +9,16 @@
  *   1. No manage permission for the channel → members-only note.
  *   2. `configured` false → "ask an admin to enable" placeholder.
  *   3. `install_supported` false AND no active install → "coming soon".
- *   4. Active install → connected card (status badge + connection info).
- *   5. Otherwise → "Bind in browser" CTA that opens the web agent detail page
- *      (`{webBase}/{slug}/agents/{id}?tab=integrations`) in the system
- *      browser — the QR/device-flow bind itself can't run inside the app the
- *      way settings integrations already deep-link to web (iteration-52).
+ *   4. Active install → connected card (status badge + connection info +
+ *      Disconnect).
+ *   5. Otherwise → bind in the app.
+ *
+ * Iteration 170 replaced branch 5's "Bind in browser" hand-off with the real
+ * bind paths: Lark runs web's device flow (pick cloud → open link → poll),
+ * and Slack / DingTalk / WeCom open web's bring-your-own-app form. The
+ * browser link survives as a secondary action on every branch-5 card — a
+ * deployment whose channel is half-configured, or a BYO attempt the server
+ * refuses, still has the web page as a way through.
  *
  * Permissions mirror web: Lark bind/manage is for the agent owner OR a
  * workspace owner/admin; Slack / DingTalk / WeCom installs are owner/admin
@@ -21,12 +26,21 @@
  * gets a read-only page with the intro + hint.
  */
 import { useState } from "react";
-import { ActivityIndicator, Linking, ScrollView, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
+import { LarkInstallDialog, type LarkRegion } from "@/components/agent/lark-install-dialog";
+import { ChannelByoDialog } from "@/components/agent/channel-byo-dialog";
+import { ActionSheet } from "@/lib/action-sheet";
+import {
+  useDisconnectDingTalkInstallation,
+  useDisconnectLarkInstallation,
+  useDisconnectSlackInstallation,
+  useDisconnectWecomInstallation,
+} from "@/data/mutations/channels";
 import { agentListAllOptions } from "@/data/queries/agents";
 import {
   larkInstallationsOptions,
@@ -53,6 +67,8 @@ type ChannelKey = "lark" | "slack" | "dingtalk" | "wecom";
 /** Structural union of the four installation shapes — the connected card only
  *  reads the fields each channel actually carries. */
 interface BoundInstall {
+  id: string;
+  agent_id: string;
   status: string;
   installed_at?: string;
   installer_user_id?: string;
@@ -91,6 +107,16 @@ const CHANNEL_NAME_KEY: Record<ChannelKey, string> = {
   wecom: "agents.integrations.wecomName",
 };
 
+/** The bind CTA per channel. One key each rather than a "{channel}" template,
+ *  because the channel names mix Latin ("Slack") and CJK ("钉钉") and a single
+ *  template cannot space both correctly. */
+const BIND_CTA_KEY: Record<ChannelKey, string> = {
+  lark: "agents.integrations.larkBind",
+  slack: "agents.integrations.slackBind",
+  dingtalk: "agents.integrations.dingtalkBind",
+  wecom: "agents.integrations.wecomBind",
+};
+
 export default function AgentIntegrationsPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useTranslation();
@@ -98,6 +124,10 @@ export default function AgentIntegrationsPage() {
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { getName } = useActorLookup();
   const [openError, setOpenError] = useState(false);
+  // Which bind flow is open, if any. Lark needs a region chosen first, so it
+  // is held separately from the BYO channels.
+  const [larkRegion, setLarkRegion] = useState<LarkRegion | null>(null);
+  const [byoChannel, setByoChannel] = useState<"slack" | "dingtalk" | "wecom" | null>(null);
 
   const agents = useQuery(agentListAllOptions(wsId));
   const lark = useQuery(larkInstallationsOptions(wsId));
@@ -106,6 +136,20 @@ export default function AgentIntegrationsPage() {
   const wecom = useQuery(wecomInstallationsOptions(wsId));
   const { data: members = [] } = useQuery(memberListOptions(wsId));
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
+
+  const disconnectLark = useDisconnectLarkInstallation();
+  const disconnectSlack = useDisconnectSlackInstallation();
+  const disconnectDingtalk = useDisconnectDingTalkInstallation();
+  const disconnectWecom = useDisconnectWecomInstallation();
+  const disconnectMutations: Record<
+    ChannelKey,
+    { mutate: (id: string, opts: { onError: (e: unknown) => void }) => void }
+  > = {
+    lark: disconnectLark,
+    slack: disconnectSlack,
+    dingtalk: disconnectDingtalk,
+    wecom: disconnectWecom,
+  };
 
   const agent = agents.data?.find((a) => a.id === id) ?? null;
 
@@ -139,6 +183,51 @@ export default function AgentIntegrationsPage() {
     if (!base || !wsSlug) return;
     Linking.openURL(`${base}/${wsSlug}/agents/${agent.id}?tab=integrations`).catch(
       () => setOpenError(true),
+    );
+  };
+
+  // The cloud has to be chosen before `begin`, because the backend opens the
+  // device flow against accounts.feishu.cn or accounts.larksuite.com
+  // accordingly — a wrong pick hands the user a QR for the wrong cloud.
+  const startLarkBind = () => {
+    const options = [
+      t("agents.integrations.larkRegionFeishu"),
+      t("agents.integrations.larkRegionLark"),
+    ];
+    ActionSheet.showActionSheetWithOptions(
+      {
+        title: t("agents.integrations.larkChooseRegion"),
+        options: [...options, t("common.cancel")],
+        cancelButtonIndex: options.length,
+      },
+      (index) => {
+        if (index === 0) setLarkRegion("feishu");
+        else if (index === 1) setLarkRegion("lark");
+      },
+    );
+  };
+
+  const confirmDisconnect = (channelKey: ChannelKey, install: BoundInstall) => {
+    const channelName = t(CHANNEL_NAME_KEY[channelKey]);
+    Alert.alert(
+      t("agents.integrations.disconnectTitle", { channel: channelName }),
+      t("agents.integrations.disconnectDesc"),
+      [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("agents.integrations.disconnectConfirm"),
+          style: "destructive",
+          onPress: () =>
+            disconnectMutations[channelKey].mutate(install.id, {
+              onError: (e: unknown) =>
+                Alert.alert(
+                  t("agents.integrations.disconnectFailed", {
+                    message: e instanceof Error ? e.message : String(e),
+                  }),
+                ),
+            }),
+        },
+      ],
     );
   };
 
@@ -186,7 +275,11 @@ export default function AgentIntegrationsPage() {
               channel={channel}
               canManage={canManage[channel.key]}
               state={state[channel.key]}
-              onBind={openBindInBrowser}
+              onBind={() =>
+                channel.key === "lark" ? startLarkBind() : setByoChannel(channel.key)
+              }
+              onBindInBrowser={openBindInBrowser}
+              onDisconnect={(install) => confirmDisconnect(channel.key, install)}
               getName={getName}
             />
           ))
@@ -198,6 +291,23 @@ export default function AgentIntegrationsPage() {
           </Text>
         ) : null}
       </View>
+
+      {larkRegion && wsId ? (
+        <LarkInstallDialog
+          wsId={wsId}
+          agentId={agent.id}
+          region={larkRegion}
+          onClose={() => setLarkRegion(null)}
+        />
+      ) : null}
+
+      {byoChannel && wsId ? (
+        <ChannelByoDialog
+          channel={byoChannel}
+          agentId={agent.id}
+          onClose={() => setByoChannel(null)}
+        />
+      ) : null}
     </ScrollView>
   );
 }
@@ -207,12 +317,16 @@ function ChannelSection({
   canManage,
   state,
   onBind,
+  onBindInBrowser,
+  onDisconnect,
   getName,
 }: {
   channel: ChannelConfig;
   canManage: boolean;
   state: ChannelStateView;
   onBind: () => void;
+  onBindInBrowser: () => void;
+  onDisconnect: (install: BoundInstall) => void;
   getName: (
     type: "member" | "agent" | "squad" | null | undefined,
     id: string | null | undefined,
@@ -236,19 +350,25 @@ function ChannelSection({
         install={state.activeInstall}
         channelKey={channel.key}
         getName={getName}
+        onDisconnect={() => onDisconnect(state.activeInstall as BoundInstall)}
       />
     );
   } else {
     body = (
-      <Button
-        variant="outline"
-        size="sm"
-        onPress={onBind}
-        className="self-start"
-      >
-        <Ionicons name="open-outline" size={14} color={theme.primary} />
-        <Text>{t("agents.integrations.bindInBrowser")}</Text>
-      </Button>
+      <View className="gap-2">
+        <Button variant="outline" size="sm" onPress={onBind} className="self-start">
+          <Ionicons name="add-circle-outline" size={14} color={theme.primary} />
+          <Text>{t(BIND_CTA_KEY[channel.key])}</Text>
+        </Button>
+        {/* Kept as the fallback for a channel the app cannot finish binding:
+            a half-configured deployment, or a BYO attempt the server refuses.
+            Web's agent page can always run the flow. */}
+        <Pressable onPress={onBindInBrowser} hitSlop={6} className="self-start">
+          <Text className="text-xs text-muted-foreground underline">
+            {t("agents.integrations.bindInBrowser")}
+          </Text>
+        </Pressable>
+      </View>
     );
   }
 
@@ -274,12 +394,16 @@ function ConnectedCard({
   install,
   channelKey,
   getName,
+  onDisconnect,
 }: {
   install: BoundInstall;
   channelKey: ChannelKey;
   getName: (type: "member" | "agent" | "squad" | null | undefined, id: string | null | undefined) => string;
+  onDisconnect: () => void;
 }) {
   const { t } = useTranslation();
+  const { colorScheme } = useColorScheme();
+  const theme = THEME[colorScheme];
   const active = install.status === "active";
   const larkRegion =
     channelKey === "lark"
@@ -322,6 +446,19 @@ function ConnectedCard({
           label={t("agents.integrations.installedAtLabel")}
           value={formatDateTime(install.installed_at)}
         />
+      ) : null}
+      {active ? (
+        <Button
+          variant="outline"
+          size="sm"
+          onPress={onDisconnect}
+          className="self-start mt-1"
+        >
+          <Ionicons name="unlink-outline" size={14} color={theme.destructive} />
+          <Text className="text-destructive">
+            {t("agents.integrations.disconnect")}
+          </Text>
+        </Button>
       ) : null}
     </View>
   );

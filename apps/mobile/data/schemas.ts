@@ -76,7 +76,9 @@ import type {
   VCSConnection,
   ListVCSConnectionsResponse,
   ConnectVCSResponse,
+  BeginLarkInstallResponse,
   LarkInstallation,
+  LarkInstallStatusResponse,
   ListLarkInstallationsResponse,
   SlackInstallation,
   ListSlackInstallationsResponse,
@@ -2056,6 +2058,50 @@ export const EMPTY_LARK_INSTALLATION: LarkInstallation = {
 export const EMPTY_LIST_LARK_INSTALLATIONS_RESPONSE: ListLarkInstallationsResponse = {
   installations: [],
   configured: false,
+};
+
+// Lark device-flow install (iteration 170) — the two halves of the
+// scan-to-bind handshake, mirroring `packages/core/types/lark.ts:48-83`.
+// `begin` hands back the session + QR URL and the cadence to poll at;
+// the status read is discriminated by `status`, with `error_reason` the
+// stable code the UI switches on (never `error_message`, which is a
+// diagnostic tail). Both parse leniently: a missing cadence falls back to
+// the 5s default and an unknown status renders as "pending" rather than
+// killing the poll loop, so a server that grows a new lifecycle value
+// degrades instead of stranding the user on a stale QR.
+const BeginLarkInstallResponseObjectSchema = z
+  .object({
+    session_id: z.string().default(""),
+    qr_code_url: z.string().default(""),
+    expires_in_seconds: z.number().default(0),
+    poll_interval_seconds: z.number().default(5),
+  })
+  .loose();
+
+export const BeginLarkInstallResponseSchema: z.ZodType<BeginLarkInstallResponse> =
+  BeginLarkInstallResponseObjectSchema as unknown as z.ZodType<BeginLarkInstallResponse>;
+
+export const EMPTY_BEGIN_LARK_INSTALL_RESPONSE: BeginLarkInstallResponse = {
+  session_id: "",
+  qr_code_url: "",
+  expires_in_seconds: 0,
+  poll_interval_seconds: 5,
+};
+
+const LarkInstallStatusResponseObjectSchema = z
+  .object({
+    status: z.string().default("pending"),
+    installation_id: z.string().optional(),
+    error_reason: z.string().optional(),
+    error_message: z.string().optional(),
+  })
+  .loose();
+
+export const LarkInstallStatusResponseSchema: z.ZodType<LarkInstallStatusResponse> =
+  LarkInstallStatusResponseObjectSchema as unknown as z.ZodType<LarkInstallStatusResponse>;
+
+export const EMPTY_LARK_INSTALL_STATUS_RESPONSE: LarkInstallStatusResponse = {
+  status: "pending",
 };
 
 const SlackInstallationObjectSchema = z

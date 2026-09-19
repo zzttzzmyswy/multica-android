@@ -74,10 +74,18 @@ import type {
   ListVCSConnectionsResponse,
   ConnectVCSRequest,
   ConnectVCSResponse,
+  BeginLarkInstallResponse,
+  LarkInstallStatusResponse,
   ListLarkInstallationsResponse,
   ListSlackInstallationsResponse,
   ListDingTalkInstallationsResponse,
   ListWecomInstallationsResponse,
+  RegisterSlackBYORequest,
+  RegisterDingTalkBYORequest,
+  RegisterWecomBYORequest,
+  SlackInstallation,
+  DingTalkInstallation,
+  WecomInstallation,
   ListIssuesParams,
   ListIssuesResponse,
   ListLabelsResponse,
@@ -373,6 +381,16 @@ import {
   EMPTY_LIST_DINGTALK_INSTALLATIONS_RESPONSE,
   ListWecomInstallationsResponseSchema,
   EMPTY_LIST_WECOM_INSTALLATIONS_RESPONSE,
+  BeginLarkInstallResponseSchema,
+  EMPTY_BEGIN_LARK_INSTALL_RESPONSE,
+  LarkInstallStatusResponseSchema,
+  EMPTY_LARK_INSTALL_STATUS_RESPONSE,
+  SlackInstallationSchema,
+  EMPTY_SLACK_INSTALLATION,
+  DingTalkInstallationSchema,
+  EMPTY_DINGTALK_INSTALLATION,
+  WecomInstallationSchema,
+  EMPTY_WECOM_INSTALLATION,
   ResourceLabelsResponseSchema,
   EMPTY_RESOURCE_LABELS_RESPONSE,
   IssueStatusEntrySchema,
@@ -582,7 +600,7 @@ class ApiClient {
       "Content-Type": "application/json",
       "X-Client-Platform": "mobile",
       "X-Client-OS": "ios",
-      "X-Client-Version": "0.5.97",
+      "X-Client-Version": "0.5.98",
       "X-Request-ID": rid,
       ...((init.headers as Record<string, string>) ?? {}),
     };
@@ -679,10 +697,20 @@ class ApiClient {
       } catch {
         body = undefined;
       }
+      // The server's error envelope is `{"error": "..."}` (writeError /
+      // writeErrorCode in server/internal/handler/handler.go:467-477).
+      // Reading only `message` left every failure rendering as a bare status
+      // — "400 " with an empty statusText over HTTP/2 — so the handler's
+      // actual sentence never reached the user. `message` is still checked
+      // first for any endpoint that returns that shape instead.
+      const bodyRecord =
+        body && typeof body === "object" ? (body as Record<string, unknown>) : null;
       const message =
-        (body && typeof body === "object" && "message" in body
-          ? String((body as { message: unknown }).message)
-          : null) ?? `${res.status} ${res.statusText}`;
+        (bodyRecord && typeof bodyRecord.message === "string"
+          ? bodyRecord.message
+          : null) ??
+        (bodyRecord && typeof bodyRecord.error === "string" ? bodyRecord.error : null) ??
+        (res.statusText ? `${res.status} ${res.statusText}` : `HTTP ${res.status}`);
 
       const level = res.status === 404 ? "warn" : "error";
       console[level](`[api] ← ${res.status} ${path}`, {
@@ -1878,6 +1906,140 @@ class ApiClient {
       ListWecomInstallationsResponseSchema,
       EMPTY_LIST_WECOM_INSTALLATIONS_RESPONSE,
       { endpoint: "listWecomInstallations" },
+    );
+  }
+
+  // Write half of the per-agent channel bindings (iteration 170): the four
+  // bind paths + their disconnects. Mirrors packages/core/api/client.ts
+  // 3775-3998 one-for-one, so a call that works from web works from here.
+  //
+  // Lark binds through a device flow (begin → poll → success) rather than a
+  // token paste, so its two reads are separate calls; the other three are
+  // bring-your-own-app, where the admin pastes credentials they created in
+  // the vendor console and the server validates + persists them.
+
+  /** Open a Lark device-flow session against the chosen cloud. `region` is
+   *  required rather than defaulted because the backend POSTs `begin` to
+   *  accounts.feishu.cn or accounts.larksuite.com accordingly — defaulting
+   *  would silently hand a Lark user a Feishu QR (client.ts:3780-3788). */
+  async beginLarkInstall(
+    workspaceId: string,
+    agentId: string,
+    region: "feishu" | "lark",
+  ): Promise<BeginLarkInstallResponse> {
+    const search = new URLSearchParams({ agent_id: agentId, region });
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/lark/install/begin?${search.toString()}`,
+      { method: "POST" },
+    );
+    return parseWithFallback(
+      raw,
+      BeginLarkInstallResponseSchema,
+      EMPTY_BEGIN_LARK_INSTALL_RESPONSE,
+      { endpoint: "beginLarkInstall" },
+    );
+  }
+
+  async getLarkInstallStatus(
+    workspaceId: string,
+    sessionId: string,
+  ): Promise<LarkInstallStatusResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/lark/install/${sessionId}/status`,
+    );
+    return parseWithFallback(
+      raw,
+      LarkInstallStatusResponseSchema,
+      EMPTY_LARK_INSTALL_STATUS_RESPONSE,
+      { endpoint: "getLarkInstallStatus" },
+    );
+  }
+
+  async deleteLarkInstallation(
+    workspaceId: string,
+    installationId: string,
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/workspaces/${workspaceId}/lark/installations/${installationId}`,
+      { method: "DELETE" },
+    );
+  }
+
+  async registerSlackBYO(
+    workspaceId: string,
+    agentId: string,
+    body: RegisterSlackBYORequest,
+  ): Promise<SlackInstallation> {
+    const search = new URLSearchParams({ agent_id: agentId });
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/slack/install/byo?${search.toString()}`,
+      { method: "POST", body: JSON.stringify(body) },
+    );
+    return parseWithFallback(raw, SlackInstallationSchema, EMPTY_SLACK_INSTALLATION, {
+      endpoint: "registerSlackBYO",
+    });
+  }
+
+  async deleteSlackInstallation(
+    workspaceId: string,
+    installationId: string,
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/workspaces/${workspaceId}/slack/installations/${installationId}`,
+      { method: "DELETE" },
+    );
+  }
+
+  async registerDingTalkBYO(
+    workspaceId: string,
+    agentId: string,
+    body: RegisterDingTalkBYORequest,
+  ): Promise<DingTalkInstallation> {
+    const search = new URLSearchParams({ agent_id: agentId });
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/dingtalk/install/byo?${search.toString()}`,
+      { method: "POST", body: JSON.stringify(body) },
+    );
+    return parseWithFallback(
+      raw,
+      DingTalkInstallationSchema,
+      EMPTY_DINGTALK_INSTALLATION,
+      { endpoint: "registerDingTalkBYO" },
+    );
+  }
+
+  async deleteDingTalkInstallation(
+    workspaceId: string,
+    installationId: string,
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/workspaces/${workspaceId}/dingtalk/installations/${installationId}`,
+      { method: "DELETE" },
+    );
+  }
+
+  async registerWecomBYO(
+    workspaceId: string,
+    agentId: string,
+    body: RegisterWecomBYORequest,
+  ): Promise<WecomInstallation> {
+    const search = new URLSearchParams({ agent_id: agentId });
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/wecom/install/byo?${search.toString()}`,
+      { method: "POST", body: JSON.stringify(body) },
+    );
+    return parseWithFallback(raw, WecomInstallationSchema, EMPTY_WECOM_INSTALLATION, {
+      endpoint: "registerWecomBYO",
+    });
+  }
+
+  async deleteWecomInstallation(
+    workspaceId: string,
+    installationId: string,
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/workspaces/${workspaceId}/wecom/installations/${installationId}`,
+      { method: "DELETE" },
     );
   }
 
@@ -4126,7 +4288,7 @@ class ApiClient {
       // No Content-Type — let fetch set the multipart boundary.
       "X-Client-Platform": "mobile",
       "X-Client-OS": "ios",
-      "X-Client-Version": "0.5.97",
+      "X-Client-Version": "0.5.98",
       "X-Request-ID": rid,
     };
     if (this.token) headers["Authorization"] = `Bearer ${this.token}`;
@@ -4296,10 +4458,20 @@ class ApiClient {
       } catch {
         body = undefined;
       }
+      // The server's error envelope is `{"error": "..."}` (writeError /
+      // writeErrorCode in server/internal/handler/handler.go:467-477).
+      // Reading only `message` left every failure rendering as a bare status
+      // — "400 " with an empty statusText over HTTP/2 — so the handler's
+      // actual sentence never reached the user. `message` is still checked
+      // first for any endpoint that returns that shape instead.
+      const bodyRecord =
+        body && typeof body === "object" ? (body as Record<string, unknown>) : null;
       const message =
-        (body && typeof body === "object" && "message" in body
-          ? String((body as { message: unknown }).message)
-          : null) ?? `${res.status} ${res.statusText}`;
+        (bodyRecord && typeof bodyRecord.message === "string"
+          ? bodyRecord.message
+          : null) ??
+        (bodyRecord && typeof bodyRecord.error === "string" ? bodyRecord.error : null) ??
+        (res.statusText ? `${res.status} ${res.statusText}` : `HTTP ${res.status}`);
       console.warn(`[api] ← ${res.status} ${path}`, { rid, error: message });
       if (res.status === 413) throw new PreviewTooLargeError();
       if (res.status === 415) throw new PreviewUnsupportedError();
