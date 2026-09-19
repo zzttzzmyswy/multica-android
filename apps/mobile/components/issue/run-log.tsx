@@ -19,13 +19,14 @@
  * decide *whether* to expand.
  */
 import { ActivityIndicator, Pressable, View } from "react-native";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Text } from "@/components/ui/text";
 import { ChatTimeline } from "@/components/chat/chat-timeline";
 import { Markdown } from "@/lib/markdown";
 import { taskMessagesOptions } from "@/data/queries/chat";
 import { liveLogPollMs } from "@/lib/task-log-live";
-import { partitionTaskLog } from "@/lib/task-log";
+import { prepareTaskLog } from "@/lib/task-log";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
 
@@ -43,6 +44,11 @@ export function RunLog({
     ...taskMessagesOptions(taskId),
     refetchInterval: liveLogPollMs(live),
   });
+
+  // Above the early returns so the memo is unconditional. `prepareTaskLog`
+  // merges the daemon's flush-split fragments and masks secrets, matching the
+  // web client's `buildTimeline` step.
+  const { processSteps, textFragments } = useMemo(() => prepareTaskLog(data), [data]);
 
   if (isLoading) {
     return (
@@ -67,7 +73,6 @@ export function RunLog({
     );
   }
 
-  const { processSteps, textFragments } = partitionTaskLog(data);
   const hasContent = processSteps.length > 0 || textFragments.length > 0;
   if (!hasContent) {
     return (

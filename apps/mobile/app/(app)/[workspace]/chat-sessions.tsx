@@ -29,7 +29,7 @@ import {
   pendingChatTasksOptions,
   splitChatSessions,
 } from "@/data/queries/chat";
-import { agentListOptions } from "@/data/queries/agents";
+import { agentListAllOptions } from "@/data/queries/agents";
 import { useChatSessionPickerStore } from "@/data/stores/chat-session-picker-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useChatSessionActions } from "@/components/chat/session-actions";
@@ -40,16 +40,20 @@ import {
   unreadBadgeText,
 } from "@/lib/chat-thread-display";
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/lib/i18n/react";
+import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 
 export default function ChatSessionsRoute() {
   const { t } = useTranslation();
+  // Subscribes, so a language switch re-renders the row timestamps below.
+  const intlLocale = useIntlLocale();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { data: sessions = [] } = useQuery(chatSessionsOptions(wsId));
   const { showActions, renameDialog } = useChatSessionActions();
   // agent_id → display name: unknown ids fall back to a placeholder
   // (MYS-335), and an empty session title falls back to the agent name.
-  const { data: agents = [] } = useQuery(agentListOptions(wsId));
+  // Archived-inclusive, so a session whose agent was retired keeps its name
+  // instead of degrading to the placeholder.
+  const { data: agents = [] } = useQuery(agentListAllOptions(wsId));
   const agentNameById = new Map(agents.map((a) => [a.id, a.name]));
   const activeSessionId = useChatSessionPickerStore((s) => s.activeSessionId);
   const requestSelect = useChatSessionPickerStore((s) => s.requestSelect);
@@ -97,8 +101,8 @@ export default function ChatSessionsRoute() {
     const isRunning = pendingBySessionId.has(session.id);
     const last = session.last_message ?? null;
     const timeText = last
-      ? formatChatTime(last.created_at)
-      : formatChatTime(session.updated_at);
+      ? formatChatTime(last.created_at, new Date(), intlLocale)
+      : formatChatTime(session.updated_at, new Date(), intlLocale);
     const titleText =
       session.title?.trim() ||
       (session.agent_id ? (agentNameById.get(session.agent_id) ?? "") : "") ||

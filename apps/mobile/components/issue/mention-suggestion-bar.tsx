@@ -24,7 +24,7 @@
  */
 import { useMemo } from "react";
 import { FlatList, Pressable, View } from "react-native";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueries, useQuery } from "@tanstack/react-query";
 import type { Agent, Issue, MemberWithUser, Squad } from "@multica/core/types";
 import { canAssignAgentToIssue } from "@multica/core/permissions";
 import { Text } from "@/components/ui/text";
@@ -38,6 +38,7 @@ import { squadListOptions } from "@/data/queries/squads";
 import { useTranslation } from "@/lib/i18n/react";
 import { issueDetailOptions } from "@/data/queries/issues";
 import { myIssueListOptions } from "@/data/queries/my-issues";
+import { readIssueRows } from "@/data/queries/issue-list-cache";
 import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import {
@@ -121,10 +122,17 @@ export function MentionSuggestionBar({
     () => (userId ? { assignee_id: userId } : { assignee_id: "" }),
     [userId],
   );
-  const { data: myIssuesAll = [] } = useQuery({
+  // Suggestions only ever show the first `MY_ISSUES_LIMIT` rows, so this reads
+  // page one of the paginated list and never asks for another page — a
+  // suggestion popover must not trigger background paging.
+  const { data: myIssuesData } = useInfiniteQuery({
     ...myIssueListOptions(wsId, "assigned", myFilter),
     enabled: isChat && !!wsId && !!userId,
   });
+  const myIssuesAll = useMemo(
+    () => readIssueRows(myIssuesData),
+    [myIssuesData],
+  );
 
   const rows = useMemo<Row[]>(() => {
     const q = query.trim().toLowerCase();

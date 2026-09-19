@@ -9,6 +9,7 @@ import {
   summarizeActivityWindow,
   sortActiveAgentTasks,
   sortRecentAgentTasks,
+  agentTaskSourceLabelKey,
   ACTIVE_TASK_STATUSES,
   CANCELLABLE_TASK_STATUSES,
 } from "./agent-activity";
@@ -254,6 +255,49 @@ describe("recent-task selection (Recent work)", () => {
       "a1",
     );
     expect(out.map((t) => t.id)).toEqual(["f", "x", "c1"]);
+  });
+});
+
+describe("row title source fallback (no trigger summary)", () => {
+  const label = (over: Partial<AgentTask>) =>
+    agentTaskSourceLabelKey(mkTask(over));
+
+  it("names a quick-create run by its terminality", () => {
+    expect(label({ kind: "quick_create", status: "completed" })).toBe(
+      "agents.activity.sourceQuickCreate",
+    );
+    expect(label({ kind: "quick_create", status: "running" })).toBe(
+      "agents.activity.sourceCreatingIssue",
+    );
+  });
+
+  it("keeps every other origin on its own label", () => {
+    expect(label({ kind: "autopilot", autopilot_run_id: "run-1" })).toBe(
+      "agents.activity.sourceAutopilot",
+    );
+    expect(label({ kind: "chat", chat_session_id: "s-1" })).toBe(
+      "agents.activity.sourceChat",
+    );
+    expect(label({ kind: "comment" })).toBe("agents.activity.sourceUntracked");
+    expect(label({ kind: "direct" })).toBe("agents.activity.sourceUntracked");
+  });
+
+  it("prefers the issue label whenever the task carries an issue", () => {
+    expect(
+      label({ issue_id: "11111111-2222-3333-4444-555555555555", kind: "quick_create" }),
+    ).toBe("agents.activity.issueShort");
+  });
+
+  it("treats quick_create as the source only when no issue is attached", () => {
+    // A quick-create task that already produced its issue is an issue row,
+    // not a "creating issue" row — web orders the two checks the same way.
+    expect(
+      label({
+        issue_id: "11111111-2222-3333-4444-555555555555",
+        kind: "quick_create",
+        status: "running",
+      }),
+    ).toBe("agents.activity.issueShort");
   });
 });
 

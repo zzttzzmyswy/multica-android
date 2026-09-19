@@ -63,8 +63,9 @@ import {
 import { api } from "@/data/api";
 import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import { agentListOptions } from "@/data/queries/agents";
+import { agentListAllOptions } from "@/data/queries/agents";
 import { memberListOptions } from "@/data/queries/members";
+import { runtimeListOptions } from "@/data/queries/runtimes";
 import {
   chatKeys,
   chatMessagesOptions,
@@ -106,10 +107,16 @@ import { ChatComposer } from "@/components/chat/chat-composer";
 import { ChatQueue } from "@/components/chat/chat-queue";
 import { AgentPickerSheet } from "@/components/chat/agent-picker-sheet";
 import { NoAgentBanner } from "@/components/chat/no-agent-banner";
+import { ArchivedAgentBanner } from "@/components/chat/archived-agent-banner";
 import { OfflineBanner } from "@/components/chat/offline-banner";
 import { RuntimeRequiredBanner } from "@/components/chat/runtime-required-banner";
 import { useChatSelectStore } from "@/data/chat-select-store";
 import { isAgentRuntimeBound } from "@/lib/is-agent-runtime-bound";
+import {
+  isAgentArchived,
+  resolveSessionAgent,
+} from "@/lib/chat-session-agent";
+import { chatProjectContextUnsupported } from "@/lib/chat-project-context";
 import { useTranslation } from "@/lib/i18n/react";
 
 export default function ChatTab() {
@@ -142,8 +149,9 @@ export default function ChatTab() {
 
   // ── Server state ───────────────────────────────────────────────────────
   const { data: sessions = [] } = useQuery(chatSessionsOptions(wsId));
-  const { data: agents = [] } = useQuery(agentListOptions(wsId));
+  const { data: agents = [] } = useQuery(agentListAllOptions(wsId));
   const { data: members = [] } = useQuery(memberListOptions(wsId));
+  const { data: runtimes = [] } = useQuery(runtimeListOptions(wsId));
 
   // ── Auto-hydrate active session on first Chat tab entry ────────────────
   // Mobile-only deviation from web: web's chat-window opens to an empty
@@ -239,16 +247,22 @@ export default function ChatTab() {
   );
 
   // Active agent: explicit selection wins; otherwise inherit from the
-  // active session; otherwise pick the first available agent.
+  // active session; otherwise pick the first available agent. The session
+  // branch resolves from the archived-inclusive list (`agents`) — an archived
+  // agent is filtered out of `availableAgents`, and inheriting from there
+  // would silently drop the session's identity.
   const currentAgent: Agent | null = useMemo(() => {
     if (selectedAgentId) {
       return availableAgents.find((a) => a.id === selectedAgentId) ?? null;
     }
     if (activeSession) {
-      return agents.find((a) => a.id === activeSession.agent_id) ?? null;
+      return resolveSessionAgent(agents, activeSession.agent_id);
     }
     return availableAgents[0] ?? null;
   }, [selectedAgentId, availableAgents, activeSession, agents]);
+
+  // Retired agent: the conversation is read-only history.
+  const sessionAgentArchived = isAgentArchived(currentAgent);
 
   const availability = useWorkspaceAgentAvailability();
   const presenceDetail = useAgentPresence(wsId, currentAgent?.id);
@@ -258,6 +272,20 @@ export default function ChatTab() {
   const runtimeBound =
     currentAgent !== null && isAgentRuntimeBound(currentAgent);
   const sending = !!pendingTask?.task_id;
+
+  // Soft capability gate behind the composer's project-context warning (web's
+  // useChatProjectContextSupport): resolve the active agent's runtime row from
+  // the warm cache. No agent / no bound runtime / row not cached → "cannot
+  // tell" → no warning (a spurious warning is worse than a dropped
+  // description).
+  const sessionRuntime = useMemo(
+    () =>
+      currentAgent?.runtime_id
+        ? (runtimes.find((r) => r.id === currentAgent.runtime_id) ?? null)
+        : null,
+    [runtimes, currentAgent?.runtime_id],
+  );
+  const projectContextUnsupported = chatProjectContextUnsupported(sessionRuntime);
 
   // ── Drafts ─────────────────────────────────────────────────────────────
   const draftKey = activeSessionId ?? DRAFT_NEW_SESSION;
@@ -325,6 +353,11 @@ export default function ChatTab() {
       options: { clearDraft?: boolean } = {},
     ) => {
       if (!currentAgent) return;
+      // Read-only conversation: a retired agent can no longer pick up work, so
+      // refuse to enqueue a task that would sit orphaned forever. The composer
+      // is disabled in this state; this is the belt-and-braces guard web keeps
+      // in `chat-window.tsx` for the same reason.
+      if (sessionAgentArchived) return;
       if (!runtimeBound) {
         Alert.alert(
           t("chat.runtimeRequired"),
@@ -418,6 +451,7 @@ export default function ChatTab() {
       activeSessionId,
       currentAgent,
       runtimeBound,
+      sessionAgentArchived,
       ensureSession,
       qc,
       promoteNewDraft,
@@ -578,6 +612,7 @@ export default function ChatTab() {
     !currentAgent ||
     availability === "none" ||
     isArchived === true ||
+    sessionAgentArchived ||
     !runtimeBound;
   const disabledReason = !currentAgent
     ? t("chat.noAgentSelected")
@@ -585,8 +620,10 @@ export default function ChatTab() {
       ? t("chat.noAgentsInWorkspace")
       : isArchived
         ? t("chat.chatArchived")
-        : !runtimeBound
-          ? t("chat.agentNeedsRuntime")
+        : sessionAgentArchived
+          ? t("chat.agentArchived")
+          : !runtimeBound
+            ? t("chat.agentNeedsRuntime")
         : undefined;
 
   return (
@@ -628,7 +665,15 @@ export default function ChatTab() {
           liveTaskMessages={liveTaskMessages}
           availability={presenceAvailability}
         />
-        {runtimeBound ? (
+        {/* Banner slot — web's precedence (`chat-window.tsx`): no-agent >
+            archived agent > runtime required > offline. `NoAgentBanner` is
+            rendered above the list rather than here, so the no-agent case
+            leaves this slot empty instead of stacking a second banner. A
+            retired agent is read-only rather than offline, so it outranks
+            presence. */}
+        {availability === "none" ? null : sessionAgentArchived ? (
+          <ArchivedAgentBanner agentName={currentAgent?.name} />
+        ) : runtimeBound ? (
           <OfflineBanner
             agentName={currentAgent?.name}
             availability={presenceAvailability}
@@ -651,8 +696,17 @@ export default function ChatTab() {
             onStop={handleStop}
             sending={sending}
             allowStop={pendingTask?.status !== "queued"}
+            queueSendEnabled={pendingTask?.supports_queue === true}
             disabled={disabled}
             disabledReason={disabledReason}
+            // Project-context chip: shown once a session exists and carries a
+            // project binding; the warning follows the runtime soft gate.
+            sessionId={activeSessionId}
+            projectId={activeSession?.project_id ?? null}
+            projectContextUnsupported={projectContextUnsupported}
+            // Web locks project selection while a turn is dispatching
+            // (`projectSelectionEnabled`); mirror it.
+            projectContextDisabled={sending}
             // /\-menu catalog = the active agent's embedded skills (MYS-682);
             // an agent with no skills simply never arms the menu.
             activeAgentSkills={currentAgent?.skills ?? []}

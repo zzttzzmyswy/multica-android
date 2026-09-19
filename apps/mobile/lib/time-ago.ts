@@ -1,4 +1,4 @@
-import { getCurrentLocale } from "./i18n";
+import { getIntlLocale } from "./i18n";
 import { useTranslation } from "./i18n/react";
 
 /** Hook returning a localized relative-time formatter.
@@ -23,9 +23,10 @@ export function useTimeAgo() {
     const weeks = Math.floor(days / 7);
     if (weeks < 5) return t("time.weeksAgo", { count: weeks });
     // Older than ~5 weeks: show an absolute date in the active locale.
-    return new Date(dateStr).toLocaleDateString(
-      getCurrentLocale() === "zh" ? "zh-CN" : "en-US",
-      { year: "numeric", month: "short", day: "numeric" },
-    );
+    return new Date(dateStr).toLocaleDateString(getIntlLocale(), {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
   };
 }

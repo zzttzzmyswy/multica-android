@@ -21,6 +21,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Pressable,
   ScrollView,
   View,
 } from "react-native";
@@ -34,6 +35,8 @@ import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { Switch } from "@/components/ui/switch";
+import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { PresenceDot } from "@/components/ui/presence-dot";
 import { RuntimeProfilesDialog } from "@/components/runtimes/runtime-profiles-dialog";
 import { UpdateSection } from "@/components/runtimes/update-section";
 import { RuntimeUsageSection } from "@/components/runtimes/runtime-usage-section";
@@ -42,12 +45,17 @@ import { memberListOptions } from "@/data/queries/members";
 import { agentListOptions } from "@/data/queries/agents";
 import { buildRuntimeMachines, machineUpdateRuntime, readRuntimeMetadata } from "@/lib/runtime-machines";
 import {
+  buildServingAgents,
+  type ServingAgentRow,
+} from "@/lib/runtime-serving";
+import {
   useUpdateRuntime,
   useDeleteRuntime,
   useUnbindAgentsAndDeleteRuntime,
 } from "@/data/mutations/runtimes";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
+import { useWorkspacePresenceMap } from "@/lib/use-agent-presence";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -78,6 +86,33 @@ const HEALTH_TONE: Record<RuntimeHealth, string> = {
   about_to_gc: "text-destructive",
 };
 
+// Availability enum → i18n key. Mirrors `agents.tsx` AVAILABILITY_KEY so the
+// same state never reads two different ways across the app.
+const AVAILABILITY_KEY: Record<string, string> = {
+  online: "agents.availability.online",
+  unstable: "agents.availability.unstable",
+  offline: "agents.availability.offline",
+  archived: "agents.availability.archived",
+};
+
+// Workload chip vocabulary — web `workloadConfig` (packages/views/agents/presence.ts):
+// working → brand, queued → warning. Idle never renders a chip (see
+// ServingAgentRow.showWorkload).
+const WORKLOAD_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
+  working: "sync-outline",
+  queued: "time-outline",
+};
+
+const WORKLOAD_TONE: Record<string, string> = {
+  working: "text-brand",
+  queued: "text-warning",
+};
+
+const WORKLOAD_KEY: Record<string, string> = {
+  working: "agents.workload.working",
+  queued: "agents.workload.queued",
+};
+
 function MetaRow({
   icon,
   label,
@@ -100,9 +135,123 @@ function MetaRow({
   );
 }
 
+/**
+ * Which agents this runtime serves — web's `ServingAgentsCard`
+ * (packages/views/runtimes/components/runtime-detail.tsx). The list itself is
+ * what matters: a runtime's whole purpose is the agents bound to it, and
+ * before this card the phone could only show that through the delete-cascade
+ * warning.
+ *
+ * Each row carries the availability dot + label and, when the agent is not
+ * idle, the workload chip with its running/queued breakdown — the same
+ * vocabulary the agents list uses, so a stuck agent (offline + queued) reads
+ * the same way in both places.
+ */
+function ServingAgentsCard({
+  agents,
+  wsSlug,
+}: {
+  agents: ServingAgentRow[];
+  wsSlug: string | null;
+}) {
+  const { t } = useTranslation();
+  const { colorScheme } = useColorScheme();
+  const muted = THEME[colorScheme].mutedForeground;
+
+  return (
+    <View className="mt-4 rounded-lg border border-border">
+      <View className="flex-row items-center justify-between border-b border-border px-3 py-2">
+        <Text className="text-xs font-semibold text-foreground">
+          {t("runtimes.detail.servingTitle")}
+        </Text>
+        <Text className="text-xs text-muted-foreground">
+          {t("runtimes.detail.servingCount", { count: agents.length })}
+        </Text>
+      </View>
+      {agents.length === 0 ? (
+        <View className="items-center px-4 py-6 gap-2">
+          <Ionicons name="hardware-chip-outline" size={20} color={muted} />
+          <Text className="text-xs text-muted-foreground text-center">
+            {t("runtimes.detail.noAgents")}
+          </Text>
+        </View>
+      ) : (
+        <View className="divide-y divide-border">
+          {agents.map((agent) => (
+            <Pressable
+              key={agent.id}
+              className="flex-row items-center gap-2 px-3 py-2 active:bg-secondary"
+              accessibilityRole="button"
+              accessibilityLabel={agent.name}
+              onPress={() => {
+                if (wsSlug) router.push(`/${wsSlug}/more/agents/${agent.id}`);
+              }}
+            >
+              <ActorAvatar type="agent" id={agent.id} size={28} />
+              <View className="flex-1 min-w-0 gap-0.5">
+                <Text
+                  className="text-xs font-medium text-foreground"
+                  numberOfLines={1}
+                >
+                  {agent.name}
+                </Text>
+                <View className="flex-row items-center gap-1.5 flex-wrap">
+                  <PresenceDot availability={agent.availability} size={7} />
+                  <Text className="text-xs text-muted-foreground">
+                    {AVAILABILITY_KEY[agent.availability]
+                      ? t(AVAILABILITY_KEY[agent.availability])
+                      : agent.availability}
+                  </Text>
+                  {agent.showWorkload ? (
+                    <View className="flex-row items-center gap-1">
+                      <Text className="text-xs text-muted-foreground">·</Text>
+                      <Ionicons
+                        name={WORKLOAD_ICON[agent.workload] ?? "ellipse-outline"}
+                        size={11}
+                        color={muted}
+                      />
+                      <Text
+                        className={cn(
+                          "text-xs",
+                          WORKLOAD_TONE[agent.workload] ??
+                            "text-muted-foreground",
+                        )}
+                      >
+                        {WORKLOAD_KEY[agent.workload]
+                          ? t(WORKLOAD_KEY[agent.workload])
+                          : agent.workload}
+                      </Text>
+                      {agent.runningCount > 0 ? (
+                        <Text className="text-xs text-muted-foreground">
+                          {t("runtimes.detail.runningChip", {
+                            count: agent.runningCount,
+                          })}
+                        </Text>
+                      ) : null}
+                      {agent.queuedCount > 0 ? (
+                        <Text className="text-xs text-muted-foreground">
+                          {t("runtimes.detail.queuedChip", {
+                            count: agent.queuedCount,
+                          })}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={14} color={muted} />
+            </Pressable>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
 export default function RuntimeDetailPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const user = useAuthStore((s) => s.user);
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
@@ -122,6 +271,9 @@ export default function RuntimeDetailPage() {
     data: agents = [],
     refetch: refetchAgents,
   } = useQuery(agentListOptions(wsId));
+  // Workspace-wide presence map — one subscription set for the whole serving
+  // list, instead of ActorAvatar's `showPresence` (three queries per row).
+  const { byAgent: presenceByAgent } = useWorkspacePresenceMap(wsId);
 
   const updateRuntime = useUpdateRuntime();
   const deleteRuntime = useDeleteRuntime();
@@ -144,7 +296,10 @@ export default function RuntimeDetailPage() {
   // workspace admin).
   const isAdminViewer =
     !!user?.id &&
-    members.some((m) => m.user_id === user.id && m.role === "admin");
+    members.some(
+      (m) =>
+        m.user_id === user.id && (m.role === "owner" || m.role === "admin"),
+    );
   const machines = useMemo(
     () =>
       user?.id
@@ -178,6 +333,18 @@ export default function RuntimeDetailPage() {
       ),
     [agents, runtime?.id],
   );
+
+  // Same filter as `activeAgents`, joined with presence for rendering. The
+  // delete cascade keeps using `activeAgents` — it needs the raw agents to
+  // build its plan, not the render rows.
+  const servingAgents = useMemo(
+    () => buildServingAgents(agents, runtime?.id, presenceByAgent),
+    [agents, runtime?.id, presenceByAgent],
+  );
+
+  const ownerMember = runtime?.owner_id
+    ? members.find((m) => m.user_id === runtime.owner_id) ?? null
+    : null;
 
   if (isLoading) {
     return (
@@ -472,6 +639,13 @@ export default function RuntimeDetailPage() {
               />
             </View>
           ) : null}
+          <View className="px-3 py-1">
+            <MetaRow
+              icon="person-outline"
+              label={t("runtimes.detail.owner")}
+              value={ownerMember?.name ?? t("runtimes.detail.ownerUnknown")}
+            />
+          </View>
           {runtime.daemon_id ? (
             <View className="px-3 py-1">
               <MetaRow
@@ -516,6 +690,11 @@ export default function RuntimeDetailPage() {
             </View>
           ) : null}
         </View>
+
+        {/* Serving agents — web keeps this in the right rail next to
+            Diagnostics; on a phone the single column puts it directly under
+            the facts, where "who runs on this?" is the first question. */}
+        <ServingAgentsCard agents={servingAgents} wsSlug={wsSlug} />
 
         {/* Usage section (iteration-93) — web usage-section parity: per-runtime
             cost / tokens / cache-savings KPIs + daily cost bars. */}
@@ -715,22 +894,6 @@ export default function RuntimeDetailPage() {
                 )}
               </View>
             ) : null}
-
-            {/* Add custom runtime profile — web's RuntimeProfilesDialog
-                detail-page entry (intent=create). */}
-            <View className="border-t border-border pt-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 justify-start gap-2 px-0"
-                onPress={() => setShowProfiles(true)}
-              >
-                <Ionicons name="add-circle-outline" size={14} color={theme.mutedForeground} />
-                <Text className="text-xs text-foreground">
-                  {t("runtimes.profiles.addCustom")}
-                </Text>
-              </Button>
-            </View>
 
             {/* Delete */}
             {access.canDelete ? (
