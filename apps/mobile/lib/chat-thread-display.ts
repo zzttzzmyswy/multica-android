@@ -13,16 +13,22 @@
  */
 
 // IM-style timestamp: today → clock, this year → M/D, else full date.
-// `now` is injectable so tests can pin the three branches.
-export function formatChatTime(dateStr: string, now: Date = new Date()): string {
+// `now` is injectable so tests can pin the three branches; `locale` is a
+// BCP-47 tag (pass `getIntlLocale()`) because an empty/undefined locale makes
+// Intl fall back to the DEVICE locale, not the app language.
+export function formatChatTime(
+  dateStr: string,
+  now: Date = new Date(),
+  locale?: string,
+): string {
   const d = new Date(dateStr);
   if (!isNaN(d.getTime()) && d.toDateString() === now.toDateString()) {
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
   }
   if (d.getFullYear() === now.getFullYear()) {
-    return d.toLocaleDateString([], { month: "numeric", day: "numeric" });
+    return d.toLocaleDateString(locale, { month: "numeric", day: "numeric" });
   }
-  return d.toLocaleDateString();
+  return d.toLocaleDateString(locale);
 }
 
 // Collapse a (possibly markdown / multi-line) message into a one-line preview.

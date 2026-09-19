@@ -26,6 +26,12 @@
 import { useQueryClient } from "@tanstack/react-query";
 import type { Issue } from "@multica/core/types";
 import { issueKeys } from "@/data/queries/issue-keys";
+import {
+  mapIssueRows,
+  readIssueRows,
+  upsertIssueRow,
+  type IssueListCache,
+} from "@/data/queries/issue-list-cache";
 import { projectKeys } from "@/data/queries/projects";
 import { useWSSubscriptions } from "@/lib/use-ws-subscriptions";
 import {
@@ -79,20 +85,23 @@ export function useProjectRealtime(
           //  - if it was in this project and still is: replace in place
           //  - if it just moved INTO this project: append (server is authority on order)
           //  - if it just moved OUT: remove from this list
-          const wasInList = (
-            qc.getQueryData<Issue[]>(issueListKey) ?? []
+          const wasInList = readIssueRows(
+            qc.getQueryData<IssueListCache>(issueListKey),
           ).some((i) => i.id === issue.id);
           const nowInProject = issue.project_id === projectId;
           if (!wasInList && !nowInProject) return;
-          qc.setQueryData<Issue[]>(issueListKey, (old) => {
-            if (!old) return old;
-            if (nowInProject) {
-              return old.some((i) => i.id === issue.id)
-                ? old.map((i) => (i.id === issue.id ? issue : i))
-                : [...old, issue];
-            }
-            return old.filter((i) => i.id !== issue.id);
-          });
+          if (nowInProject) {
+            // Replace-in-place or append once — see `upsertIssueRow`.
+            qc.setQueryData<IssueListCache>(issueListKey, (old) =>
+              upsertIssueRow(old, issue, "append"),
+            );
+          } else {
+            qc.setQueryData<IssueListCache>(issueListKey, (old) =>
+              mapIssueRows(old, (rows) =>
+                rows.filter((i) => i.id !== issue.id),
+              ),
+            );
+          }
         }),
         ws.on("issue:created", (payload) => {
           if (payload.issue.project_id !== projectId) return;
@@ -101,8 +110,10 @@ export function useProjectRealtime(
           qc.invalidateQueries({ queryKey: issueListKey });
         }),
         ws.on("issue:deleted", (payload) => {
-          qc.setQueryData<Issue[]>(issueListKey, (old) =>
-            old ? old.filter((i) => i.id !== payload.issue_id) : old,
+          qc.setQueryData<IssueListCache>(issueListKey, (old) =>
+            mapIssueRows(old, (rows) =>
+              rows.filter((i) => i.id !== payload.issue_id),
+            ),
           );
         }),
 

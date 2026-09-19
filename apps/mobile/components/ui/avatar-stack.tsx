@@ -23,9 +23,21 @@ interface Props {
   max?: number;
   /** Avatar diameter in pt. Default 24 (tight enough for a header row). */
   size?: number;
+  /**
+   * Surface colour painted in the gap between overlapping avatars, so the
+   * stack reads as a stack rather than a smear. Defaults to `bg-background`;
+   * pass the host surface (`bg-card` on a board card) when the stack does not
+   * sit on the page background.
+   */
+  ringClassName?: string;
 }
 
-export function AvatarStack({ actors, max = 3, size = 24 }: Props) {
+export function AvatarStack({
+  actors,
+  max = 3,
+  size = 24,
+  ringClassName = "bg-background",
+}: Props) {
   const deduped = dedupe(actors);
   const visible = deduped.slice(0, max);
   const overflow = deduped.length - visible.length;
@@ -37,12 +49,13 @@ export function AvatarStack({ actors, max = 3, size = 24 }: Props) {
           key={`${actor.type}:${actor.id}:${i}`}
           size={size}
           offset={i === 0 ? 0 : -size / 3}
+          ringClassName={ringClassName}
         >
           <ActorAvatar type={actor.type} id={actor.id} size={size} />
         </Ring>
       ))}
       {overflow > 0 ? (
-        <Ring size={size} offset={-size / 3}>
+        <Ring size={size} offset={-size / 3} ringClassName={ringClassName}>
           <View
             style={{ width: size, height: size, borderRadius: size / 2 }}
             className="items-center justify-center bg-muted"
@@ -63,10 +76,12 @@ export function AvatarStack({ actors, max = 3, size = 24 }: Props) {
 function Ring({
   size,
   offset,
+  ringClassName,
   children,
 }: {
   size: number;
   offset: number;
+  ringClassName: string;
   children: React.ReactNode;
 }) {
   return (
@@ -77,7 +92,7 @@ function Ring({
         height: size + 4,
         borderRadius: (size + 4) / 2,
       }}
-      className="bg-background items-center justify-center"
+      className={`${ringClassName} items-center justify-center`}
     >
       {children}
     </View>

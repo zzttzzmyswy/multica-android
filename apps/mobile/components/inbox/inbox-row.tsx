@@ -16,6 +16,7 @@ import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { InboxDetailLabel } from "@/components/inbox/detail-label";
+import { IssueAgentActivityIndicator } from "@/components/issue/issue-agent-activity-indicator";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { getInboxDisplayTitle } from "@/lib/inbox-display";
 import { useTimeAgo } from "@/lib/time-ago";
@@ -84,10 +85,10 @@ export function InboxRow({ item, onPress, onLongPress, archived }: Props) {
               />
             ) : null}
           </View>
-          {/* Bottom row: [type-aware detail label] (left) | [time] (right).
-              Detail label mirrors web InboxDetailLabel — same per-type
-              wording (Mentioned / Set status to ... / Assigned to ... / etc),
-              not the raw markdown body. */}
+          {/* Bottom row: [type-aware detail label] (left) |
+              [agent activity] [time] (right). Detail label mirrors web
+              InboxDetailLabel — same per-type wording (Mentioned / Set status
+              to ... / Assigned to ... / etc), not the raw markdown body. */}
           <View className="flex-row items-center gap-2 mt-0.5">
             <View className="flex-1 min-w-0">
               <InboxDetailLabel
@@ -99,16 +100,28 @@ export function InboxRow({ item, onPress, onLongPress, archived }: Props) {
                 }
               />
             </View>
-            <Text
-              className={cn(
-                "text-xs shrink-0",
-                isUnread
-                  ? "text-muted-foreground"
-                  : "text-muted-foreground/60",
-              )}
-            >
-              {timeAgo(item.created_at)}
-            </Text>
+            <View className="flex-row items-center gap-1.5 shrink-0">
+              {/* Badge only, no drill-down — mirrors web's
+                  `hoverCard={false}` inbox variant. "An agent is on this" is
+                  worth knowing while triaging; the row already navigates to
+                  the issue, where the detail page owns the task list.
+                  Guarded on `issue_id` because a notification row may carry
+                  none, and an empty id would collect every chat- and
+                  autopilot-spawned task in the workspace. */}
+              {item.issue_id ? (
+                <IssueAgentActivityIndicator issueId={item.issue_id} />
+              ) : null}
+              <Text
+                className={cn(
+                  "text-xs shrink-0",
+                  isUnread
+                    ? "text-muted-foreground"
+                    : "text-muted-foreground/60",
+                )}
+              >
+                {timeAgo(item.created_at)}
+              </Text>
+            </View>
           </View>
         </View>
       </View>
