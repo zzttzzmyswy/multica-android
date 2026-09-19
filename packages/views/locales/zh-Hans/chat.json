@@ -47,8 +47,8 @@
     "show_details": "查看详情",
     "replied_in": "{{elapsed}} 内回复",
     "failed_after": "{{elapsed}} 后失败",
-    "finished_in": "{{elapsed}} 内结束",
-    "no_response": "本轮已结束，Agent 没有返回文字回复。",
+    "finished_in": "{{elapsed}} 内完成",
+    "no_response": "本轮已结束，智能体没有返回文字回复。",
     "failure": {
       "agent_error": "智能体运行时出错，没能完成回复。请重试。",
       "timeout": "智能体处理超时，未能完成。可以重试，或把需求拆得更小一些。",
@@ -63,7 +63,7 @@
       "provider_capacity_or_rate_limit": "模型服务繁忙或触发了限流。稍后再试。",
       "context_overflow": "这次对话超出了模型的上下文长度。开一个新会话，或把需求拆得更小一些。",
       "runtime_missing_executable": "无法在这台设备上运行智能体的 CLI。确认已正确安装并且在 PATH 中，然后重试。",
-      "runtime_version_unsupported": "智能体的 CLI 版本过低。升级后重试。",
+      "runtime_version_unsupported": "智能体的 CLI 对这个运行时来说版本过低，升级后重试。",
       "fallback": "出了点问题，智能体未能完成回复。请重试。"
     },
     "tools_other": "{{count}} 个工具",
@@ -206,9 +206,9 @@
     "you_prefix": "你：",
     "no_messages": "还没有消息",
     "no_response_preview": "无文字回复",
-    "quick_agents": "常用 Agent",
+    "quick_agents": "常用智能体",
     "add": "添加",
-    "add_agent": "添加常用 Agent",
+    "add_agent": "添加常用智能体",
     "unpin_agent": "移出常用",
     "waiting": "等待回复",
     "pin": "置顶",
@@ -220,7 +220,7 @@
     "row_actions_aria": "聊天操作"
   },
   "header": {
-    "view_profile": "查看 Agent 资料",
+    "view_profile": "查看智能体资料",
     "rename": "重命名会话",
     "delete": "删除会话",
     "archive": "归档会话",

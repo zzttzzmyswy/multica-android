@@ -14,12 +14,14 @@
  */
 import { Pressable, View } from "react-native";
 import type { Issue } from "@multica/core/types";
+import { isPastDateOnly } from "@multica/core/issues/date";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PriorityIcon } from "@/components/ui/priority-icon";
 import { useStatusLabel } from "@/lib/status-options";
 import { translate } from "@/lib/i18n";
 import { CustomStatusChip } from "./custom-status-chip";
+import { IssueAgentActivityIndicator } from "./issue-agent-activity-indicator";
 
 /** Column width in pt — ~1.6 lanes visible on a 375pt phone. */
 export const BOARD_COLUMN_WIDTH = 272;
@@ -48,6 +50,9 @@ export function BoardCard({
     : hasStart
       ? "issues.cardStart"
       : null;
+  // Web paints a past due date in `text-destructive` on its board card; the
+  // start date never turns (web's `isPastDateOnly` guard is due-date only).
+  const overdue = hasDue && isPastDateOnly(issue.due_date);
 
   return (
     <Pressable
@@ -98,20 +103,27 @@ export function BoardCard({
 
       <View className="mt-2 flex-row items-center justify-between">
         {dateKey ? (
-          <Text className="text-[11px] text-muted-foreground">
+          <Text
+            className={`text-[11px] ${
+              overdue ? "text-destructive" : "text-muted-foreground"
+            }`}
+          >
             {translate(dateKey)}{" "}
             {formatDayOnly(hasDue ? issue.due_date! : issue.start_date!)}
           </Text>
         ) : (
           <View />
         )}
-        {issue.assignee_type && issue.assignee_id ? (
-          <ActorAvatar
-            type={issue.assignee_type}
-            id={issue.assignee_id}
-            size={20}
-          />
-        ) : null}
+        <View className="flex-row items-center gap-1.5">
+          <IssueAgentActivityIndicator issueId={issue.id} ringClassName="bg-card" />
+          {issue.assignee_type && issue.assignee_id ? (
+            <ActorAvatar
+              type={issue.assignee_type}
+              id={issue.assignee_id}
+              size={20}
+            />
+          ) : null}
+        </View>
       </View>
     </Pressable>
   );

@@ -3,9 +3,12 @@
  *
  * Reached from the More popover's WorkspaceCard (collapsed single-row entry).
  * Lists every workspace the user belongs to, current one disabled with a
- * checkmark. Tapping a non-current row triggers an iOS-native `Alert.alert`
- * confirm — only after the user confirms do we dismiss the sheet and
- * `router.replace` to the target slug.
+ * checkmark. A workspace OTHER than the current one that has unread inbox
+ * items carries a brand dot in the same right-edge slot — web's sidebar
+ * switcher does the same, so a pending notification in a workspace you are
+ * not looking at is visible from here. Tapping a non-current row triggers an
+ * iOS-native `Alert.alert` confirm — only after the user confirms do we
+ * dismiss the sheet and `router.replace` to the target slug.
  *
  * Why a confirm step:
  *   The previous flow ("popover → tap row → instant switch") had no friction
@@ -31,11 +34,13 @@ import { useQuery } from "@tanstack/react-query";
 import type { Workspace } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { WorkspaceAvatar } from "@/components/workspace/workspace-avatar";
+import { inboxUnreadSummaryOptions } from "@/data/queries/inbox";
 import { workspaceListOptions } from "@/data/queries/workspaces";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
+import { workspaceUnreadBadge } from "@/lib/workspace-unread-badge";
 import { cn } from "@/lib/utils";
 
 export default function SwitchWorkspaceRoute() {
@@ -44,6 +49,17 @@ export default function SwitchWorkspaceRoute() {
   const t = THEME[colorScheme];
   const tr = useTranslation();
   const { data, isLoading } = useQuery(workspaceListOptions());
+
+  // Which OTHER workspaces have unread inbox items. Account-level query: one
+  // cache entry shared with the More popover's WorkspaceCard, not refetched
+  // per workspace. Gated on the active slug because the endpoint resolves
+  // through the workspace-member middleware (same gate as web's sidebar).
+  const activeId = (data ?? []).find((w) => w.slug === activeSlug)?.id ?? null;
+  const { data: unreadSummary = [] } = useQuery({
+    ...inboxUnreadSummaryOptions(),
+    enabled: !!activeSlug,
+  });
+  const badge = workspaceUnreadBadge(unreadSummary, activeId);
 
   const onSelect = (ws: Workspace) => {
     if (ws.slug === activeSlug) return;
@@ -81,8 +97,10 @@ export default function SwitchWorkspaceRoute() {
               key={ws.id}
               workspace={ws}
               active={ws.slug === activeSlug}
+              hasUnread={badge.unreadIds.has(ws.id)}
               onPress={() => onSelect(ws)}
               iconTint={t.foreground}
+              dotTint={t.brand}
             />
           ))}
           {/* Create-new entry — pushes the onboarding create step
@@ -113,13 +131,17 @@ export default function SwitchWorkspaceRoute() {
 function WorkspaceRow({
   workspace,
   active,
+  hasUnread,
   onPress,
   iconTint,
+  dotTint,
 }: {
   workspace: Workspace;
   active: boolean;
+  hasUnread: boolean;
   onPress: () => void;
   iconTint: string;
+  dotTint: string;
 }) {
   const tr = useTranslation();
   return (
@@ -129,7 +151,9 @@ function WorkspaceRow({
       accessibilityLabel={
         active
           ? tr.t("a11y.currentWorkspace", { name: workspace.name })
-          : tr.t("a11y.switchTo", { name: workspace.name })
+          : hasUnread
+            ? tr.t("a11y.switchToUnread", { name: workspace.name })
+            : tr.t("a11y.switchTo", { name: workspace.name })
       }
       className={cn(
         "flex-row items-center gap-3 px-4 py-3 active:bg-secondary",
@@ -150,6 +174,18 @@ function WorkspaceRow({
       >
         {workspace.name}
       </Text>
+      {/* Points at the workspace holding unread inbox items. Sits in the same
+          right-edge slot as the active-workspace check; the active workspace
+          is excluded upstream (lib/workspace-unread-badge.ts), so dot and
+          check never collide on one row. Mirrors web's switcher row
+          (packages/views/layout/app-sidebar.tsx:658). */}
+      {hasUnread ? (
+        <View
+          className="size-2 rounded-full"
+          style={{ backgroundColor: dotTint }}
+          testID="workspace-unread-dot"
+        />
+      ) : null}
       {active ? (
         <Ionicons name="checkmark" color={iconTint} size={16} />
       ) : null}

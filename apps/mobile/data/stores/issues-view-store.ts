@@ -31,6 +31,7 @@
  * filter input produces the same visible set on both clients.
  */
 import { create } from "zustand";
+import type { SwimlaneGrouping } from "@/lib/swimlane";
 import {
   createIssueFilterActions,
   defaultIssueFilterSlice,
@@ -45,30 +46,46 @@ import {
 import {
   createTableColumnActions,
   defaultTableColumns,
+  defaultTableColumnWidths,
   type TableColumnKey,
   type TableColumnsSlice,
 } from "./issue-table-columns";
+import {
+  createTableGroupingActions,
+  defaultTableGrouping,
+  type TableGroupingSlice,
+} from "./issue-table-grouping";
 
 export type IssuesScope = "all" | "members" | "agents";
 
 export interface IssuesViewState
   extends IssueFilterSlice,
-    TableColumnsSlice {
+    TableColumnsSlice,
+    TableGroupingSlice {
   scope: IssuesScope;
   view: IssueViewMode;
+  /** Active swimlane grouping dimension — only read in swimlane mode.
+   *  Default `assignee`, matching web `view-store.ts` defaults. */
+  swimlaneGrouping: SwimlaneGrouping;
   setScope: (scope: IssuesScope) => void;
   setView: (view: IssueViewMode) => void;
+  setSwimlaneGrouping: (grouping: SwimlaneGrouping) => void;
 }
 
 export const useIssuesViewStore = create<IssuesViewState>((set) => ({
   scope: "all",
   view: "list",
+  swimlaneGrouping: "assignee",
   tableColumns: defaultTableColumns(),
+  tableColumnWidths: defaultTableColumnWidths(),
+  tableGrouping: defaultTableGrouping(),
   ...defaultIssueFilterSlice(),
   setScope: (scope) => set({ scope }),
   setView: (view) => set({ view }),
+  setSwimlaneGrouping: (swimlaneGrouping) => set({ swimlaneGrouping }),
   ...createIssueFilterActions<IssuesViewState>(set),
   ...createTableColumnActions<IssuesViewState>(set),
+  ...createTableGroupingActions<IssuesViewState>(set),
 }));
 
 /** Re-exported convenience: whether any filter dimension is active. */

@@ -27,19 +27,19 @@ describe("issue subscription i18n", () => {
   const ZH_SPOT: Record<string, string> = {
     "subscription.subscribe": "订阅",
     "subscription.unsubscribe": "取消订阅",
-    "subscription.unsubscribeThis": "取消订阅本问题",
-    "subscription.unsubscribeSubtree": "取消订阅本问题及子任务",
-    "subscription.delegatedBadge": "由 agent 代为关注",
+    "subscription.unsubscribeThis": "取消订阅本任务",
+    "subscription.unsubscribeSubtree": "取消订阅本任务及子任务",
+    "subscription.delegatedBadge": "由智能体代你关注",
     "subscription.delegatedHintTitle": "为什么你在关注",
     "subscription.updateFailedTitle": "订阅更新失败",
     "subscription.updateFailed": "无法更新订阅状态，请重试。",
     "subscription.unsubscribeSubtreeFailedTitle": "退订失败",
-    "subscription.unsubscribeSubtreeFailed": "无法退订本问题及其子任务，请重试。",
+    "subscription.unsubscribeSubtreeFailed": "无法退订本任务及其子任务，请重试。",
     "runs.retry": "重试",
     "runs.retryTitle": "重试执行",
     "runs.retryRunning": "重试中…",
-    "runs.retryFailed": "重试失败，可能任务已启动或 agent 不可用。",
-    "runs.retryBlocked": "你没有权限触发该 agent。",
+    "runs.retryFailed": "重试失败，可能 task 已启动或智能体不可用。",
+    "runs.retryBlocked": "你没有权限触发该智能体。",
   };
 
   it("resolves every subscription key in both locales with a real zh translation", () => {
