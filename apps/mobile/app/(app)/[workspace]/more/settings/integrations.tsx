@@ -28,6 +28,18 @@ import { api } from "@/data/api";
 import { workspaceListOptions } from "@/data/queries/workspaces";
 import { useUpdateWorkspace } from "@/data/mutations/workspaces";
 import {
+  dingtalkInstallationsOptions,
+  larkInstallationsOptions,
+  slackInstallationsOptions,
+  wecomInstallationsOptions,
+} from "@/data/queries/integrations";
+import {
+  channelRowState,
+  type ChannelInstall,
+  type ChannelListingLike,
+  type ChannelRowState,
+} from "@/lib/integration-channel";
+import {
   deriveGitHubSettings,
   mergeGitHubSetting,
   type GitHubSettingsKey,
@@ -38,6 +50,7 @@ import { getWebBaseUrl } from "@/data/server-config";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
+import { cn } from "@/lib/utils";
 
 type ChannelKey = "lark" | "slack" | "dingtalk" | "wecom";
 
@@ -75,6 +88,23 @@ export default function IntegrationsPage() {
   const { data: workspaces } = useQuery(workspaceListOptions());
   const workspace = workspaces?.find((w) => w.id === wsId);
   const flags = deriveGitHubSettings(workspace);
+
+  // Real channel state (iteration 169). The four IM rows used to render a
+  // hardcoded "not connected", which was a false statement on a deployment
+  // that has no credentials for them at all — see lib/integration-channel.
+  // Each query is the same one the per-agent integrations screen reads, so
+  // both surfaces agree and share a cache entry.
+  const lark = useQuery(larkInstallationsOptions(wsId));
+  const slack = useQuery(slackInstallationsOptions(wsId));
+  const dingtalk = useQuery(dingtalkInstallationsOptions(wsId));
+  const wecom = useQuery(wecomInstallationsOptions(wsId));
+  // The four listings have different installation shapes; the row only reads
+  // status and the bot identifier, which all four carry (DingTalk carries
+  // none, and contributes no identifier).
+  const channelQueries: Record<
+    ChannelKey,
+    { data?: ChannelListingLike<ChannelInstall>; isPending: boolean }
+  > = { lark, slack, dingtalk, wecom };
 
   const updateWorkspace = useUpdateWorkspace();
   const [savingKey, setSavingKey] = useState<GitHubSettingsKey | null>(null);
@@ -374,39 +404,27 @@ export default function IntegrationsPage() {
             </View>
           ) : null}
 
-          {/* Other channel rows */}
+          {/* Other channel rows. The status line is the channel's real state
+              (lib/integration-channel); only the action stays an outbound
+              link, because the OAuth handshake has to run in a browser. */}
           <View className="gap-2">
             <Text className="text-xs uppercase tracking-wider text-muted-foreground px-1">
               {t("integrations.title")}
             </Text>
             <View className="rounded-md border border-border bg-card overflow-hidden">
-              {CHANNELS.map((channel, idx) => (
-                <View key={channel.key}>
-                  {idx > 0 ? <View className="h-px bg-border ml-4" /> : null}
-                  <View className="flex-row items-center gap-3 px-4 py-3.5">
-                    <View className="size-8 rounded-md bg-secondary items-center justify-center">
-                      <Ionicons name={channel.icon} size={16} color={muted} />
-                    </View>
-                    <View className="flex-1 min-w-0 gap-0.5">
-                      <Text className="text-sm font-medium text-foreground">
-                        {t(`integrations.channel.${channel.key}`)}
-                      </Text>
-                      <Text className="text-xs text-muted-foreground/70">
-                        {t("integrations.notConnected")}
-                      </Text>
-                    </View>
-                    <Pressable
-                      onPress={openWebSettings}
-                      hitSlop={6}
-                      className="flex-row items-center gap-1"
-                    >
-                      <Text className="text-xs font-medium text-primary">
-                        {t("integrations.openInBrowser")}
-                      </Text>
-                      <Ionicons name="open-outline" size={13} color={theme.primary} />
-                    </Pressable>
-                  </View>
-                </View>
+              {CHANNELS.map((channel) => (
+                <ChannelRow
+                  key={channel.key}
+                  channel={channel}
+                  state={channelRowState(
+                    channelQueries[channel.key].data,
+                    channelQueries[channel.key].isPending,
+                  )}
+                  mutedColor={muted}
+                  primaryColor={theme.primary}
+                  successColor={theme.success}
+                  onOpen={openWebSettings}
+                />
               ))}
             </View>
           </View>
@@ -433,6 +451,94 @@ export default function IntegrationsPage() {
         </View>
       </ScrollView>
     </>
+  );
+}
+
+/**
+ * One IM channel row: name, real status, and the outbound link to the web app
+ * where the binding is actually made. Mirrors web's per-channel status branch
+ * (slack-tab.tsx:94-116): an unconfigured deployment, a channel that is not
+ * accepting installs yet, a live binding (with its bot identifiers and a
+ * count), and the plain not-connected case are four different statements, and
+ * the row says which one is true.
+ */
+function ChannelRow({
+  channel,
+  state,
+  mutedColor,
+  primaryColor,
+  successColor,
+  onOpen,
+}: {
+  channel: { key: ChannelKey; icon: React.ComponentProps<typeof Ionicons>["name"] };
+  state: ChannelRowState;
+  mutedColor: string;
+  primaryColor: string;
+  successColor: string;
+  onOpen: () => void;
+}) {
+  const { t } = useTranslation();
+
+  const status =
+    state.kind === "loading"
+      ? t("quickActions.loading")
+      : state.kind === "unconfigured"
+        ? t("integrations.channelNotConfigured")
+        : state.kind === "comingSoon"
+          ? t("integrations.channelComingSoon")
+          : state.kind === "connected"
+            ? t("integrations.channelConnected", { count: state.total })
+            : t("integrations.notConnected");
+
+  const connected = state.kind === "connected";
+
+  return (
+    <View className="border-b border-border/60 last:border-b-0">
+      <View className="flex-row items-center gap-3 px-4 py-3.5">
+        <View className="size-8 rounded-md bg-secondary items-center justify-center">
+          <Ionicons name={channel.icon} size={16} color={mutedColor} />
+        </View>
+        <View className="flex-1 min-w-0 gap-0.5">
+          <Text className="text-sm font-medium text-foreground">
+            {t(`integrations.channel.${channel.key}`)}
+          </Text>
+          <View className="flex-row items-center gap-1.5">
+            <Text
+              className={cn(
+                "text-xs",
+                connected ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/70",
+              )}
+              numberOfLines={1}
+            >
+              {status}
+            </Text>
+            {/* Bindings kept for audit but no longer live — without this the
+                row would count a revoked bot as a working connection. */}
+            {state.revoked > 0 ? (
+              <View className="rounded-full border border-border bg-muted px-1.5 py-0.5">
+                <Text className="text-[10px] text-muted-foreground">
+                  {t("integrations.channelRevokedBadge", { count: state.revoked })}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+          {state.botLabels.length > 0 ? (
+            <Text className="text-[11px] font-mono text-muted-foreground" numberOfLines={1}>
+              {state.botLabels.join(", ")}
+            </Text>
+          ) : null}
+        </View>
+        {connected ? (
+          <Ionicons name="checkmark-circle" size={16} color={successColor} />
+        ) : null}
+        <Pressable onPress={onOpen} hitSlop={6} className="flex-row items-center gap-1">
+          <Text className="text-xs font-medium text-primary">
+            {t("integrations.openInBrowser")}
+          </Text>
+          <Ionicons name="open-outline" size={13} color={primaryColor} />
+        </Pressable>
+      </View>
+    </View>
   );
 }
 

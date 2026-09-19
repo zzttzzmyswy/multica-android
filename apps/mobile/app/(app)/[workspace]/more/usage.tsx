@@ -61,6 +61,8 @@ import {
   aggregateByAgent,
   aggregateDailyCost,
   aggregateDailyTokens,
+  aggregateWeeklyCost,
+  aggregateWeeklyTokens,
   computeDailyTotals,
   DELETED_AGENTS_ROW_ID,
   formatTokens,
@@ -73,6 +75,8 @@ import { formatUsd } from "@/lib/runtime-usage";
 import {
   aggregateDailyTasks,
   aggregateDailyTime,
+  aggregateWeeklyTasks,
+  aggregateWeeklyTime,
   bucketAgentDashboardRows,
   formatDuration,
   mergeAgentDashboardRows,
@@ -81,10 +85,20 @@ import {
   type DailyTimeRow,
 } from "@/lib/usage-time";
 import {
+  chartFetchDays,
+  dailyCutoffIso,
+  dimsForDays,
+  effectiveDim,
+  trimToWindow,
+  weekCountForDays,
+  type Dim,
+} from "@/lib/usage-dim";
+import {
   aggregateAgentFailures,
   aggregateDailyErrors,
   aggregateFailureClasses,
   aggregateFailureReasons,
+  aggregateWeeklyErrors,
   computeFailureTotals,
   failureClassColors,
   formatRate,
@@ -99,8 +113,11 @@ import {
   type FailureReasonRow,
   type FailureTotals,
   type OffenderSort,
+  type WeeklyErrorsRow,
 } from "@/lib/usage-errors";
 import { FAILURE_CLASSES, type FailureClass } from "@/lib/failure-class";
+import { resolveViewingTimezone } from "@/lib/timezone";
+import { useAuthStore } from "@/data/auth-store";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
@@ -130,12 +147,33 @@ export default function UsagePage() {
   const [range, setRange] = useState<Range>(30);
   const [mode, setMode] = useState<ViewMode>("trend");
   const [metric, setMetric] = useState<UsageMetric>("tokens");
+  // Card-scoped grains (iteration 169). Each card owns its own so the trend
+  // chart and the errors trend can be read at different grains without one
+  // reaching up and rewriting a page-scoped control (web MUL-5759). Both are
+  // derived through `effectiveDim` rather than reset when the range narrows,
+  // so 30d → 1d → 30d restores the reader's choice.
+  const [trendDim, setTrendDim] = useState<Dim>("daily");
+  const [errorsDim, setErrorsDim] = useState<Dim>("daily");
   // Iteration 87 page-scoped project filter: null = whole workspace, mirroring
   // web's ALL_PROJECTS->null derivation (dashboard-page.tsx). A project id
   // that no longer resolves counts as no filter — same reading web applies.
   const [projectValue, setProjectValue] = useState<string | null>(null);
   const [rangeModalOpen, setRangeModalOpen] = useState(false);
   const [projectModalOpen, setProjectModalOpen] = useState(false);
+
+  // The viewing timezone every rollup is sliced on (iteration 169). Same
+  // source as the settings page's picker: the stored preference, else the
+  // device zone. Server-side day buckets are cut on this value, so it is part
+  // of every dashboard query key — changing the preference re-answers the
+  // question rather than re-rendering the same numbers.
+  const user = useAuthStore((s) => s.user);
+  const viewTZ = useMemo(() => resolveViewingTimezone(user), [user]);
+
+  const weekCount = weekCountForDays(range);
+  // Per-date rollups over-fetch to whole weeks so a weekly bar is not
+  // truncated at the window's left edge; per-agent rollups carry no date to
+  // trim, so their window stays exactly `range` server-side (web MUL-5551).
+  const chartDays = chartFetchDays(range);
 
   // Project list feeds the page-level project filter (iteration 87). Same
   // query as web's projectListOptions for the dashboard ProjectFilter.
@@ -154,20 +192,24 @@ export default function UsagePage() {
   const selectedProject =
     projects.find((p) => p.id === effectiveProjectId) ?? null;
 
-  const daily = useQuery(dashboardUsageDailyOptions(wsId, range, effectiveProjectId));
-  const byAgent = useQuery(dashboardUsageByAgentOptions(wsId, range, effectiveProjectId));
+  const daily = useQuery(
+    dashboardUsageDailyOptions(wsId, chartDays, effectiveProjectId, viewTZ),
+  );
+  const byAgent = useQuery(
+    dashboardUsageByAgentOptions(wsId, range, effectiveProjectId, viewTZ),
+  );
   // Run-time / task-count rollups power the Time/Tasks metric toggle, the
   // Run time / Tasks KPI tiles and the leaderboard's run-time column
   // (iteration 45). Fetched up front like the token rollups — smaller than
   // the failure payloads, and the KPI row always shows them.
   const runTime = useQuery({
-    ...dashboardAgentRunTimeOptions(wsId, range, effectiveProjectId),
+    ...dashboardAgentRunTimeOptions(wsId, range, effectiveProjectId, viewTZ),
     // These power the KPI row and the Time/Tasks trend; the Errors tab
     // shows neither, so skip the per-second refetch while it is open.
     enabled: !!wsId && mode !== "errors",
   });
   const runTimeDaily = useQuery({
-    ...dashboardRunTimeDailyOptions(wsId, range, effectiveProjectId),
+    ...dashboardRunTimeDailyOptions(wsId, chartDays, effectiveProjectId, viewTZ),
     enabled: !!wsId && mode !== "errors",
   });
   // include_archived so a retired agent keeps its name on the leaderboard
@@ -181,11 +223,11 @@ export default function UsagePage() {
   // Failures rollups only fetched while the Errors tab is visible; switching
   // tabs back to it after a range change refetches via the days key.
   const failuresDaily = useQuery({
-    ...dashboardFailuresDailyOptions(wsId, range, effectiveProjectId),
+    ...dashboardFailuresDailyOptions(wsId, chartDays, effectiveProjectId, viewTZ),
     enabled: !!wsId && mode === "errors",
   });
   const failuresByAgent = useQuery({
-    ...dashboardFailuresByAgentOptions(wsId, range, effectiveProjectId),
+    ...dashboardFailuresByAgentOptions(wsId, range, effectiveProjectId, viewTZ),
     enabled: !!wsId && mode === "errors",
   });
 
@@ -206,26 +248,64 @@ export default function UsagePage() {
     agents.error ??
     (mode === "errors" ? errorsError : null);
 
+  // Per-date rows are fetched over whole weeks; the daily surfaces trim back
+  // to exactly `range` days on the viewer's timezone, so the extra rows the
+  // weekly grain needs change nothing the daily grain shows. The weekly folds
+  // below read the UNTRIMMED rows on purpose — trimming first would cut the
+  // days off the leftmost week that the over-fetch exists to include.
+  const cutoff = useMemo(() => dailyCutoffIso(range, viewTZ), [range, viewTZ]);
+  const dailyInWindow = useMemo(
+    () => trimToWindow(daily.data ?? [], cutoff),
+    [daily.data, cutoff],
+  );
+  const runTimeDailyInWindow = useMemo(
+    () => trimToWindow(runTimeDaily.data ?? [], cutoff),
+    [runTimeDaily.data, cutoff],
+  );
+  const failuresDailyInWindow = useMemo(
+    () => trimToWindow(failuresDaily.data ?? [], cutoff),
+    [failuresDaily.data, cutoff],
+  );
+
   const dailyRows = useMemo(
-    () => aggregateDailyTokens(daily.data ?? []),
-    [daily.data],
+    () => aggregateDailyTokens(dailyInWindow),
+    [dailyInWindow],
   );
   const dailyCost = useMemo(
-    () => aggregateDailyCost(daily.data ?? []),
-    [daily.data],
+    () => aggregateDailyCost(dailyInWindow),
+    [dailyInWindow],
   );
   const totals = useMemo(
-    () => computeDailyTotals(daily.data ?? []),
-    [daily.data],
+    () => computeDailyTotals(dailyInWindow),
+    [dailyInWindow],
   );
 
   const dailyTime = useMemo(
-    () => aggregateDailyTime(runTimeDaily.data ?? []),
-    [runTimeDaily.data],
+    () => aggregateDailyTime(runTimeDailyInWindow),
+    [runTimeDailyInWindow],
   );
   const dailyTasks = useMemo(
-    () => aggregateDailyTasks(runTimeDaily.data ?? []),
-    [runTimeDaily.data],
+    () => aggregateDailyTasks(runTimeDailyInWindow),
+    [runTimeDailyInWindow],
+  );
+
+  // Weekly counterparts, in the same row shapes as the daily ones so the
+  // chart and its breakdown rows render either grain without branching.
+  const weeklyTokens = useMemo(
+    () => aggregateWeeklyTokens(daily.data ?? [], viewTZ, weekCount),
+    [daily.data, viewTZ, weekCount],
+  );
+  const weeklyCost = useMemo(
+    () => aggregateWeeklyCost(daily.data ?? [], viewTZ, weekCount),
+    [daily.data, viewTZ, weekCount],
+  );
+  const weeklyTime = useMemo(
+    () => aggregateWeeklyTime(runTimeDaily.data ?? [], viewTZ, weekCount),
+    [runTimeDaily.data, viewTZ, weekCount],
+  );
+  const weeklyTasks = useMemo(
+    () => aggregateWeeklyTasks(runTimeDaily.data ?? [], viewTZ, weekCount),
+    [runTimeDaily.data, viewTZ, weekCount],
   );
   // Whole-window run-time / task totals for the KPI tiles, summed from the
   // per-agent run-time rollup (web parity: that rollup is the source of the
@@ -264,46 +344,33 @@ export default function UsagePage() {
   }, [agents.data, t]);
 
   const errorTotals = useMemo(
-    () => computeFailureTotals(failuresDaily.data ?? []),
-    [failuresDaily.data],
+    () => computeFailureTotals(failuresDailyInWindow),
+    [failuresDailyInWindow],
   );
   const dailyErrors = useMemo(
-    () => aggregateDailyErrors(failuresDaily.data ?? []),
-    [failuresDaily.data],
+    () => aggregateDailyErrors(failuresDailyInWindow),
+    [failuresDailyInWindow],
+  );
+  const weeklyErrors = useMemo(
+    () => aggregateWeeklyErrors(failuresDaily.data ?? [], viewTZ, weekCount),
+    [failuresDaily.data, viewTZ, weekCount],
   );
   const classRows = useMemo(
-    () => aggregateFailureClasses(failuresDaily.data ?? []),
-    [failuresDaily.data],
+    () => aggregateFailureClasses(failuresDailyInWindow),
+    [failuresDailyInWindow],
   );
   const reasonRows = useMemo(
-    () => aggregateFailureReasons(failuresDaily.data ?? []),
-    [failuresDaily.data],
+    () => aggregateFailureReasons(failuresDailyInWindow),
+    [failuresDailyInWindow],
   );
   const offenderRows = useMemo(
     () => aggregateAgentFailures(failuresByAgent.data ?? [], agents.data),
     [failuresByAgent.data, agents.data],
   );
 
-  const maxDaily = useMemo(
-    () => dailyRows.reduce((m, d) => Math.max(m, d.total), 0),
-    [dailyRows],
-  );
-  const maxCost = useMemo(
-    () => dailyCost.reduce((m, d) => Math.max(m, d.total), 0),
-    [dailyCost],
-  );
-  const maxTime = useMemo(
-    () => dailyTime.reduce((m, d) => Math.max(m, d.totalSeconds), 0),
-    [dailyTime],
-  );
-  const maxTasks = useMemo(
-    () =>
-      dailyTasks.reduce(
-        (m, d) => Math.max(m, d.completed + d.failed + d.cancelled),
-        0,
-      ),
-    [dailyTasks],
-  );
+  // The chart's bar scale follows whichever grain is on screen, so it is
+  // derived inside TrendSection from the rows it actually draws rather than
+  // here from the daily rows.
 
   const showEmpty =
     !isLoading &&
@@ -488,14 +555,17 @@ export default function UsagePage() {
               <TrendSection
                 metric={metric}
                 onMetricChange={setMetric}
+                allowedDims={dimsForDays(range)}
+                dim={effectiveDim(dimsForDays(range), trendDim)}
+                onDimChange={setTrendDim}
                 dailyTokens={dailyRows}
                 dailyCost={dailyCost}
                 dailyTime={dailyTime}
                 dailyTasks={dailyTasks}
-                maxTokens={maxDaily}
-                maxCost={maxCost}
-                maxTime={maxTime}
-                maxTasks={maxTasks}
+                weeklyTokens={weeklyTokens}
+                weeklyCost={weeklyCost}
+                weeklyTime={weeklyTime}
+                weeklyTasks={weeklyTasks}
                 colorScheme={colorScheme}
               />
             ) : mode === "leaderboard" ? (
@@ -509,6 +579,10 @@ export default function UsagePage() {
                 days={range}
                 totals={errorTotals}
                 dailyErrors={dailyErrors}
+                weeklyErrors={weeklyErrors}
+                allowedDims={dimsForDays(range)}
+                dim={effectiveDim(dimsForDays(range), errorsDim)}
+                onDimChange={setErrorsDim}
                 classRows={classRows}
                 reasonRows={reasonRows}
                 offenderRows={offenderRows}
@@ -777,30 +851,41 @@ const METRIC_LABEL: Record<UsageMetric, string> = {
  * mentally overlay them (web UsageTrendCard parity). Cost prices tokens via
  * the same client-side rate table the runtime detail page uses. Pure RN
  * Views, no chart dependency.
+ *
+ * The Daily / Weekly grain is card-scoped (iteration 169): it changes only
+ * what this card draws, never the page's range. The weekly rows arrive in the
+ * same shapes as the daily ones, so the chart, the breakdown rows and the bar
+ * scale all read from one selected set instead of branching on the grain.
  */
 function TrendSection({
   metric,
   onMetricChange,
+  allowedDims,
+  dim,
+  onDimChange,
   dailyTokens,
   dailyCost,
   dailyTime,
   dailyTasks,
-  maxTokens,
-  maxCost,
-  maxTime,
-  maxTasks,
+  weeklyTokens,
+  weeklyCost,
+  weeklyTime,
+  weeklyTasks,
   colorScheme,
 }: {
   metric: UsageMetric;
   onMetricChange: (m: UsageMetric) => void;
+  allowedDims: readonly Dim[];
+  dim: Dim;
+  onDimChange: (d: Dim) => void;
   dailyTokens: UsageDailyAggregate[];
   dailyCost: DailyCostRow[];
   dailyTime: DailyTimeRow[];
   dailyTasks: DailyTasksRow[];
-  maxTokens: number;
-  maxCost: number;
-  maxTime: number;
-  maxTasks: number;
+  weeklyTokens: UsageDailyAggregate[];
+  weeklyCost: DailyCostRow[];
+  weeklyTime: DailyTimeRow[];
+  weeklyTasks: DailyTasksRow[];
   colorScheme: "light" | "dark";
 }) {
   const { t } = useTranslation();
@@ -808,8 +893,29 @@ function TrendSection({
   const muted = theme.mutedForeground;
   const brand = theme.brand;
 
-  const title =
-    metric === "tokens"
+  const weekly = dim === "weekly";
+  const tokenRows = weekly ? weeklyTokens : dailyTokens;
+  const costRows = weekly ? weeklyCost : dailyCost;
+  const timeRows = weekly ? weeklyTime : dailyTime;
+  const taskRows = weekly ? weeklyTasks : dailyTasks;
+
+  const maxTokens = tokenRows.reduce((m, d) => Math.max(m, d.total), 0);
+  const maxCost = costRows.reduce((m, d) => Math.max(m, d.total), 0);
+  const maxTime = timeRows.reduce((m, d) => Math.max(m, d.totalSeconds), 0);
+  const maxTasks = taskRows.reduce(
+    (m, d) => Math.max(m, d.completed + d.failed + d.cancelled),
+    0,
+  );
+
+  const title = weekly
+    ? metric === "tokens"
+      ? t("usage.weekTrendTitle")
+      : metric === "cost"
+        ? t("usage.weekTrendCostTitle")
+        : metric === "time"
+          ? t("usage.weekTrendTimeTitle")
+          : t("usage.weekTrendTasksTitle")
+    : metric === "tokens"
       ? t("usage.dayTrendTitle")
       : metric === "cost"
         ? t("usage.dayTrendCostTitle")
@@ -833,37 +939,43 @@ function TrendSection({
             ))}
           </View>
         </View>
+        <DimPill
+          allowedDims={allowedDims}
+          value={dim}
+          onChange={onDimChange}
+          className="mb-3"
+        />
 
         {metric === "tokens" ? (
           <TrendBars
-            rows={dailyTokens.map((d) => ({ date: d.date, label: d.label, value: d.total }))}
+            rows={tokenRows.map((d) => ({ date: d.date, label: d.label, value: d.total }))}
             max={maxTokens}
             color={brand}
             noDataLabel={t("usage.noData")}
           />
         ) : metric === "cost" ? (
           <TrendBars
-            rows={dailyCost.map((d) => ({ date: d.date, label: d.label, value: d.total }))}
+            rows={costRows.map((d) => ({ date: d.date, label: d.label, value: d.total }))}
             max={maxCost}
             color={brand}
             noDataLabel={t("usage.noData")}
           />
         ) : metric === "time" ? (
           <TrendBars
-            rows={dailyTime.map((d) => ({ date: d.date, label: d.label, value: d.totalSeconds }))}
+            rows={timeRows.map((d) => ({ date: d.date, label: d.label, value: d.totalSeconds }))}
             max={maxTime}
             color={brand}
             noDataLabel={t("usage.noData")}
           />
         ) : (
-          <TasksStack rows={dailyTasks} max={maxTasks} theme={theme} noDataLabel={t("usage.noData")} />
+          <TasksStack rows={taskRows} max={maxTasks} theme={theme} noDataLabel={t("usage.noData")} />
         )}
       </View>
 
-      {/* Per-day detail rows for the active metric */}
+      {/* Detail rows for the active metric, at the grain on screen */}
       <View className="rounded-xl border border-border bg-card px-3">
         {metric === "tokens"
-          ? dailyTokens.map((d, idx) => (
+          ? tokenRows.map((d, idx) => (
               <View
                 key={d.date}
                 className={cn(
@@ -885,7 +997,7 @@ function TrendSection({
               </View>
             ))
           : metric === "cost"
-            ? dailyCost.map((d, idx) => (
+            ? costRows.map((d, idx) => (
                 <View
                   key={d.date}
                   className={cn(
@@ -903,8 +1015,8 @@ function TrendSection({
                 </View>
               ))
             : metric === "time"
-              ? dailyTime.map((d, idx) => {
-                const tasksRow = dailyTasks.find((x) => x.date === d.date);
+              ? timeRows.map((d, idx) => {
+                const tasksRow = taskRows.find((x) => x.date === d.date);
                 const taskCount = tasksRow
                   ? tasksRow.completed + tasksRow.failed + tasksRow.cancelled
                   : 0;
@@ -928,7 +1040,7 @@ function TrendSection({
                   </View>
                 );
               })
-            : dailyTasks.map((d, idx) => (
+            : taskRows.map((d, idx) => (
                 <View
                   key={d.date}
                   className={cn(
@@ -943,6 +1055,39 @@ function TrendSection({
                 </View>
               ))}
       </View>
+    </View>
+  );
+}
+
+/**
+ * Daily / Weekly, scoped to the card it sits in. Renders only the dimensions
+ * the page's current range allows, and renders nothing at all when only one
+ * is allowed: a one-option toggle cannot be operated, and the card title
+ * already says which grain is on screen (web DimSegmented).
+ */
+function DimPill({
+  allowedDims,
+  value,
+  onChange,
+  className,
+}: {
+  allowedDims: readonly Dim[];
+  value: Dim;
+  onChange: (d: Dim) => void;
+  className?: string;
+}) {
+  const { t } = useTranslation();
+  if (allowedDims.length < 2) return null;
+  return (
+    <View className={cn("flex-row items-center gap-1", className)}>
+      {allowedDims.map((d) => (
+        <MetricPill
+          key={d}
+          active={value === d}
+          label={t(d === "weekly" ? "usage.dimWeekly" : "usage.dimDaily")}
+          onPress={() => onChange(d)}
+        />
+      ))}
     </View>
   );
 }
@@ -1335,6 +1480,10 @@ function ErrorsSection({
   days,
   totals,
   dailyErrors,
+  weeklyErrors,
+  allowedDims,
+  dim,
+  onDimChange,
   classRows,
   reasonRows,
   offenderRows,
@@ -1344,6 +1493,10 @@ function ErrorsSection({
   days: number;
   totals: FailureTotals;
   dailyErrors: DailyErrorsRow[];
+  weeklyErrors: WeeklyErrorsRow[];
+  allowedDims: readonly Dim[];
+  dim: Dim;
+  onDimChange: (d: Dim) => void;
   classRows: FailureClassRow[];
   reasonRows: FailureReasonRow[];
   offenderRows: AgentFailureRow[];
@@ -1403,7 +1556,14 @@ function ErrorsSection({
         </View>
       ) : (
         <>
-          <ErrorTrendSection rows={dailyErrors} colorScheme={colorScheme} />
+          <ErrorTrendSection
+            dailyRows={dailyErrors}
+            weeklyRows={weeklyErrors}
+            allowedDims={allowedDims}
+            dim={dim}
+            onDimChange={onDimChange}
+            colorScheme={colorScheme}
+          />
           <ErrorMixCard
             totals={totals}
             classRows={classRows}
@@ -1417,24 +1577,41 @@ function ErrorsSection({
   );
 }
 
-/** Failures over time, on the same per-day bar style as the Trend tab. */
+/** Failures over time, on the same bar style as the Trend tab. The grain is
+ *  card-scoped like the trend card's, and both grains carry the same
+ *  `{ date, label, failed }` reading so one bar renderer serves either. */
 function ErrorTrendSection({
-  rows,
+  dailyRows,
+  weeklyRows,
+  allowedDims,
+  dim,
+  onDimChange,
   colorScheme,
 }: {
-  rows: DailyErrorsRow[];
+  dailyRows: DailyErrorsRow[];
+  weeklyRows: WeeklyErrorsRow[];
+  allowedDims: readonly Dim[];
+  dim: Dim;
+  onDimChange: (d: Dim) => void;
   colorScheme: "light" | "dark";
 }) {
   const { t } = useTranslation();
   const destructive = THEME[colorScheme].destructive;
+  const weekly = dim === "weekly";
+  const rows: { date: string; label: string; failed: number }[] = weekly
+    ? weeklyRows.map((r) => ({ date: r.weekStart, label: r.label, failed: r.failed }))
+    : dailyRows.map((r) => ({ date: r.date, label: r.label, failed: r.failed }));
   const max = rows.reduce((m, r) => Math.max(m, r.failed), 0);
   const labelEvery = rows.length > 8 ? 2 : 1;
 
   return (
     <View className="rounded-xl border border-border bg-card p-3">
-      <Text className="mb-3 text-xs font-medium text-foreground">
-        {t("usage.errors.trendTitle")}
-      </Text>
+      <View className="mb-3 flex-row flex-wrap items-center justify-between gap-2">
+        <Text className="text-xs font-medium text-foreground">
+          {t(weekly ? "usage.errors.weekTrendTitle" : "usage.errors.trendTitle")}
+        </Text>
+        <DimPill allowedDims={allowedDims} value={dim} onChange={onDimChange} />
+      </View>
       {rows.length === 0 ? (
         <Text className="text-xs text-muted-foreground">{t("usage.noData")}</Text>
       ) : (

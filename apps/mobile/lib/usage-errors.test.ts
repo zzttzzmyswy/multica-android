@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DashboardFailureByAgent, DashboardFailureDaily } from "@multica/core/types";
 import { FAILURE_CLASSES } from "./failure-class";
 import {
@@ -71,7 +71,20 @@ describe("aggregateDailyErrors", () => {
   });
 });
 
+// Iteration 169: the weekly fold is shell-based like web's, so the page's
+// whole-week over-fetch can be trimmed back to exactly `weekCount` weeks.
+// FROZEN_DAY = Tue 2026-08-25 → the current week starts Mon 2026-08-24.
+const FROZEN_DAY = "2026-08-25T12:00:00Z";
+
 describe("aggregateWeeklyErrors", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(FROZEN_DAY));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("buckets rows into Mon–Sun weeks, ascending", () => {
     // 2026-08-17 is a Monday.
     const rows = aggregateWeeklyErrors(
@@ -81,10 +94,52 @@ describe("aggregateWeeklyErrors", () => {
         ["2026-08-10", "runtime_offline", 1], // previous Monday
         ["2026-08-24", "agent_error.unknown", 4], // next Monday
       ]),
+      "UTC",
+      3,
     );
     expect(rows.map((r) => r.weekStart)).toEqual(["2026-08-10", "2026-08-17", "2026-08-24"]);
     expect(rows[1]).toMatchObject({ failed: 2, total: 7 });
     expect(rows[1]!.runtime).toBe(0);
+  });
+
+  it("pre-seeds a zero row for a week with no failures", () => {
+    const rows = aggregateWeeklyErrors(
+      daily([["2026-08-24", "timeout", 4]]),
+      "UTC",
+      3,
+    );
+    expect(rows.map((r) => r.weekStart)).toEqual([
+      "2026-08-10",
+      "2026-08-17",
+      "2026-08-24",
+    ]);
+    // The empty middle week draws as a zero bar rather than disappearing.
+    expect(rows[1]).toMatchObject({ failed: 0, total: 0 });
+    expect(FAILURE_CLASSES.every((c) => rows[1]![c] === 0)).toBe(true);
+  });
+
+  it("drops rows from the partial week before the window", () => {
+    // A 1-week window covers only the week of 2026-08-24; the page over-fetches
+    // whole weeks, so 2026-08-17 must not reappear as a bar.
+    const rows = aggregateWeeklyErrors(
+      daily([
+        ["2026-08-18", "timeout", 9],
+        ["2026-08-25", "timeout", 2],
+      ]),
+      "UTC",
+      1,
+    );
+    expect(rows.map((r) => r.weekStart)).toEqual(["2026-08-24"]);
+    expect(rows[0]).toMatchObject({ failed: 2, total: 2 });
+  });
+
+  it("anchors the shells on the viewer's timezone, not the host's", () => {
+    // 2026-08-25T12:00Z is already Wed 2026-08-26 in Kiritimati (UTC+14), so
+    // the current week is the same Monday — but a Sunday-evening-UTC instant
+    // would land in the next week. Pin the boundary case.
+    vi.setSystemTime(new Date("2026-08-23T11:00:00Z")); // Sun 23rd UTC = Mon 24th +14
+    const rows = aggregateWeeklyErrors([], "Pacific/Kiritimati", 2);
+    expect(rows.map((r) => r.weekStart)).toEqual(["2026-08-17", "2026-08-24"]);
   });
 });
 

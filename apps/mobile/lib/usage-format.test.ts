@@ -1,9 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   activeAgentCount,
   aggregateByAgent,
   aggregateDailyCost,
   aggregateDailyTokens,
+  aggregateWeeklyCost,
+  aggregateWeeklyTokens,
   computeDailyTotals,
   DELETED_AGENTS_ROW_ID,
   formatTokens,
@@ -221,5 +223,92 @@ describe("activeAgentCount", () => {
     ];
     expect(activeAgentCount(rows)).toBe(1);
     expect(activeAgentCount([])).toBe(0);
+  });
+});
+
+// FROZEN_DAY = Tue 2026-08-25 12:00Z → the current week starts Mon 2026-08-24.
+const FROZEN_DAY = "2026-08-25T12:00:00Z";
+
+// The weekly grain is what the page's whole-week over-fetch exists for: the
+// rows it returns are trimmed back to `days` for the daily surfaces but folded
+// whole for the weekly ones, so a weekly bar is never a truncated week.
+describe("aggregateWeeklyTokens / aggregateWeeklyCost", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(FROZEN_DAY));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const usage = (rows: [string, number, number, number, number][]) =>
+    rows.map(([date, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens]) => ({
+      date,
+      provider: "p",
+      model: "m",
+      input_tokens,
+      output_tokens,
+      cache_read_tokens,
+      cache_write_tokens,
+      task_count: 1,
+    })) as unknown as Parameters<typeof aggregateWeeklyTokens>[0];
+
+  it("pre-seeds trailing weeks and folds each row into its Mon-start week", () => {
+    const rows = usage([
+      ["2026-08-12", 10, 1, 0, 0], // week of 2026-08-10
+      ["2026-08-20", 20, 2, 0, 0], // week of 2026-08-17
+      ["2026-08-24", 30, 3, 0, 0], // week of 2026-08-24
+    ]);
+    const weekly = aggregateWeeklyTokens(rows, "UTC", 3);
+    expect(weekly.map((w) => w.date)).toEqual([
+      "2026-08-10",
+      "2026-08-17",
+      "2026-08-24",
+    ]);
+    expect(weekly.map((w) => w.total)).toEqual([11, 22, 33]);
+    // Same row shape as the daily fold, so the chart renders either grain.
+    expect(weekly[0]).toMatchObject({ label: "8/10", input: 10, output: 1 });
+  });
+
+  it("draws a week with no usage as a zero row instead of dropping it", () => {
+    const weekly = aggregateWeeklyTokens(
+      usage([["2026-08-24", 5, 0, 0, 0]]),
+      "UTC",
+      3,
+    );
+    expect(weekly.map((w) => w.total)).toEqual([0, 0, 5]);
+  });
+
+  it("drops rows from the partial week before the window", () => {
+    // A 2-week window covers 08-17 and 08-24 only; the over-fetched 08-10 week
+    // must not reappear as a bar.
+    const weekly = aggregateWeeklyTokens(
+      usage([
+        ["2026-08-11", 99, 0, 0, 0],
+        ["2026-08-18", 1, 0, 0, 0],
+      ]),
+      "UTC",
+      2,
+    );
+    expect(weekly.map((w) => w.date)).toEqual(["2026-08-17", "2026-08-24"]);
+    expect(weekly.map((w) => w.total)).toEqual([1, 0]);
+  });
+
+  it("sums cost segments into a total that matches its own breakdown", () => {
+    const weekly = aggregateWeeklyCost(
+      usage([["2026-08-24", 1_000_000, 1_000_000, 0, 0]]),
+      "UTC",
+      1,
+    );
+    expect(weekly).toHaveLength(1);
+    const w = weekly[0]!;
+    expect(w.total).toBeCloseTo(w.input + w.output + w.cacheWrite, 2);
+  });
+
+  it("anchors the current week on the viewer's zone", () => {
+    // Sun 2026-08-23 11:00Z is already Mon the 24th in Kiritimati (UTC+14).
+    vi.setSystemTime(new Date("2026-08-23T11:00:00Z"));
+    expect(aggregateWeeklyTokens([], "UTC", 1)[0]!.date).toBe("2026-08-17");
+    expect(aggregateWeeklyTokens([], "Pacific/Kiritimati", 1)[0]!.date).toBe("2026-08-24");
   });
 });

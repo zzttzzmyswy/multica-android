@@ -128,6 +128,7 @@ const RUN_SENSE_KEYS = [
   "usage.tasksShort",
   "usage.totalRunTimeHint",
   "usage.totalTasks",
+  "usage.weekTrendTasksTitle",
 ];
 
 const withValue = (predicate: (value: string) => boolean) => keys.filter((key) => predicate(zh[key]));

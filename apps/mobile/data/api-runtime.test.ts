@@ -41,7 +41,7 @@ beforeEach(() => {
 });
 
 describe("dashboard run-time api methods", () => {
-  it("getDashboardAgentRunTime GETs /api/dashboard/agent-runtime?days=7", async () => {
+  it("getDashboardAgentRunTime GETs /api/dashboard/agent-runtime?days=7&tz=UTC", async () => {
     const spy = fetchSpy().mockResolvedValue([
       {
         agent_id: "agent-1",
@@ -51,9 +51,9 @@ describe("dashboard run-time api methods", () => {
         cancelled_count: 0,
       },
     ]);
-    const res = await api.getDashboardAgentRunTime(7);
+    const res = await api.getDashboardAgentRunTime(7, null, "UTC");
     expect(spy).toHaveBeenCalledWith(
-      "/api/dashboard/agent-runtime?days=7",
+      "/api/dashboard/agent-runtime?days=7&tz=UTC",
       expect.objectContaining({ signal: undefined }),
     );
     expect(res).toHaveLength(1);
@@ -66,29 +66,29 @@ describe("dashboard run-time api methods", () => {
 
   it("getDashboardAgentRunTime honours the abort signal", async () => {
     const spy = fetchSpy().mockResolvedValue([]);
-    await api.getDashboardAgentRunTime(30, undefined, { signal: undefined });
+    await api.getDashboardAgentRunTime(30, null, "UTC", { signal: undefined });
     expect(spy).toHaveBeenCalledWith(
-      "/api/dashboard/agent-runtime?days=30",
+      "/api/dashboard/agent-runtime?days=30&tz=UTC",
       expect.objectContaining({ signal: undefined }),
     );
   });
 
   it("getDashboardAgentRunTime appends project_id when a project is selected", async () => {
     const spy = fetchSpy().mockResolvedValue([]);
-    await api.getDashboardAgentRunTime(7, "project-1");
+    await api.getDashboardAgentRunTime(7, "project-1", "UTC");
     expect(spy).toHaveBeenCalledWith(
-      "/api/dashboard/agent-runtime?days=7&project_id=project-1",
+      "/api/dashboard/agent-runtime?days=7&project_id=project-1&tz=UTC",
       expect.objectContaining({ signal: undefined }),
     );
   });
 
   it("getDashboardAgentRunTime degrades a drift response to []", async () => {
     fetchSpy().mockResolvedValue({ not: "a list" });
-    const res = await api.getDashboardAgentRunTime(7);
+    const res = await api.getDashboardAgentRunTime(7, null, "UTC");
     expect(res).toEqual([]);
   });
 
-  it("getDashboardRunTimeDaily GETs /api/dashboard/runtime/daily?days=30", async () => {
+  it("getDashboardRunTimeDaily GETs /api/dashboard/runtime/daily?days=30&tz=UTC", async () => {
     const spy = fetchSpy().mockResolvedValue([
       {
         date: "2026-08-15",
@@ -98,9 +98,9 @@ describe("dashboard run-time api methods", () => {
         cancelled_count: 1,
       },
     ]);
-    const res = await api.getDashboardRunTimeDaily(30);
+    const res = await api.getDashboardRunTimeDaily(30, null, "UTC");
     expect(spy).toHaveBeenCalledWith(
-      "/api/dashboard/runtime/daily?days=30",
+      "/api/dashboard/runtime/daily?days=30&tz=UTC",
       expect.objectContaining({ signal: undefined }),
     );
     expect(res).toHaveLength(1);
@@ -111,21 +111,21 @@ describe("dashboard run-time api methods", () => {
     fetchSpy().mockResolvedValue([
       { date: "2026-08-15", total_seconds: 60, task_count: 1, failed_count: 0 },
     ]);
-    const res = await api.getDashboardRunTimeDaily(7);
+    const res = await api.getDashboardRunTimeDaily(7, null, "UTC");
     expect(res[0]?.cancelled_count).toBe(0);
   });
 
   it("getDashboardRunTimeDaily degrades a drift response to []", async () => {
     fetchSpy().mockResolvedValue(null);
-    const res = await api.getDashboardRunTimeDaily(7);
+    const res = await api.getDashboardRunTimeDaily(7, null, "UTC");
     expect(res).toEqual([]);
   });
 
   it("getDashboardRunTimeDaily appends project_id when a project is selected", async () => {
     const spy = fetchSpy().mockResolvedValue([]);
-    await api.getDashboardRunTimeDaily(30, "project-2");
+    await api.getDashboardRunTimeDaily(30, "project-2", "UTC");
     expect(spy).toHaveBeenCalledWith(
-      "/api/dashboard/runtime/daily?days=30&project_id=project-2",
+      "/api/dashboard/runtime/daily?days=30&project_id=project-2&tz=UTC",
       expect.objectContaining({ signal: undefined }),
     );
   });

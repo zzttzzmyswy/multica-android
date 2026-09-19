@@ -103,6 +103,13 @@ describe("usage i18n", () => {
     "usage.failedLabel": "失败",
     "usage.cancelledLabel": "取消",
     "usage.lessThanMinute": "<1分钟",
+    "usage.dimDaily": "按天",
+    "usage.dimWeekly": "按周",
+    "usage.weekTrendTitle": "每周 Token",
+    "usage.weekTrendCostTitle": "每周费用",
+    "usage.weekTrendTimeTitle": "每周运行时长",
+    "usage.weekTrendTasksTitle": "每周 task 数",
+    "usage.errors.weekTrendTitle": "每周失败",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {

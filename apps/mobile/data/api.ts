@@ -520,15 +520,26 @@ export class DownloadCancelledError extends Error {
 }
 
 /** Build the query string for a dashboard rollup: ?days= plus an optional
- *  ?project_id= (iteration-87 page-scoped project filter). A null/undefined
- *  projectId keeps the URL byte-identical to the whole-workspace shape. */
+ *  ?project_id= (iteration-87 page-scoped project filter) and the viewer's
+ *  ?tz= (iteration 169).
+ *
+ *  `tz` is what the server slices every day bucket on, so a rollup fetched
+ *  without one comes back bucketed in UTC — a different answer from the one
+ *  web shows for the same account, and the reason it is a required argument
+ *  rather than an optional one. Mirrors packages/core/dashboard/queries.ts,
+ *  where `tz` is threaded into every rollup and into every query key. A
+ *  null/undefined projectId keeps the URL byte-identical to the
+ *  whole-workspace shape. */
 function dashboardRollupUrl(
   path: string,
   days: number,
-  projectId?: string | null,
+  projectId: string | null | undefined,
+  tz: string,
 ): string {
-  if (!projectId) return `${path}?days=${days}`;
-  return `${path}?days=${days}&project_id=${projectId}`;
+  const base = `${path}?days=${days}`;
+  const scoped = projectId ? `${base}&project_id=${projectId}` : base;
+  if (!tz) return scoped;
+  return `${scoped}&tz=${encodeURIComponent(tz)}`;
 }
 
 export interface ApiClientOptions {
@@ -571,7 +582,7 @@ class ApiClient {
       "Content-Type": "application/json",
       "X-Client-Platform": "mobile",
       "X-Client-OS": "ios",
-      "X-Client-Version": "0.5.96",
+      "X-Client-Version": "0.5.97",
       "X-Request-ID": rid,
       ...((init.headers as Record<string, string>) ?? {}),
     };
@@ -2044,14 +2055,17 @@ class ApiClient {
   // Workspace usage rollups — mirror packages/core/dashboard queries. Workspace
   // is resolved by the X-Workspace-Slug header (fetch adds it); the 30s
   // in-flight cap applies like every other route. Parsing degrades a drift
-  // response to [] so a changed backend never crashes the page.
+  // response to [] so a changed backend never crashes the page. `tz` is the
+  // viewer's zone (iteration 169) — the server slices each day bucket on it,
+  // so omitting it silently answers a different question than web's page.
   async getDashboardUsageDaily(
     days: number,
-    projectId?: string | null,
+    projectId: string | null,
+    tz: string,
     opts?: { signal?: AbortSignal },
   ): Promise<DashboardUsageDaily[]> {
     const raw = await this.fetch<unknown>(
-      dashboardRollupUrl("/api/dashboard/usage/daily", days, projectId),
+      dashboardRollupUrl("/api/dashboard/usage/daily", days, projectId, tz),
       {
         signal: opts?.signal,
       },
@@ -2066,11 +2080,12 @@ class ApiClient {
 
   async getDashboardUsageByAgent(
     days: number,
-    projectId?: string | null,
+    projectId: string | null,
+    tz: string,
     opts?: { signal?: AbortSignal },
   ): Promise<DashboardUsageByAgent[]> {
     const raw = await this.fetch<unknown>(
-      dashboardRollupUrl("/api/dashboard/usage/by-agent", days, projectId),
+      dashboardRollupUrl("/api/dashboard/usage/by-agent", days, projectId, tz),
       {
         signal: opts?.signal,
       },
@@ -2089,11 +2104,12 @@ class ApiClient {
   // degrades to [] so the Errors view renders its no-data state.
   async getDashboardFailuresDaily(
     days: number,
-    projectId?: string | null,
+    projectId: string | null,
+    tz: string,
     opts?: { signal?: AbortSignal },
   ): Promise<DashboardFailureDaily[]> {
     const raw = await this.fetch<unknown>(
-      dashboardRollupUrl("/api/dashboard/failures/daily", days, projectId),
+      dashboardRollupUrl("/api/dashboard/failures/daily", days, projectId, tz),
       {
         signal: opts?.signal,
       },
@@ -2108,11 +2124,12 @@ class ApiClient {
 
   async getDashboardFailuresByAgent(
     days: number,
-    projectId?: string | null,
+    projectId: string | null,
+    tz: string,
     opts?: { signal?: AbortSignal },
   ): Promise<DashboardFailureByAgent[]> {
     const raw = await this.fetch<unknown>(
-      dashboardRollupUrl("/api/dashboard/failures/by-agent", days, projectId),
+      dashboardRollupUrl("/api/dashboard/failures/by-agent", days, projectId, tz),
       {
         signal: opts?.signal,
       },
@@ -2131,11 +2148,12 @@ class ApiClient {
   // cancelled segment — exactly what that backend measured.
   async getDashboardAgentRunTime(
     days: number,
-    projectId?: string | null,
+    projectId: string | null,
+    tz: string,
     opts?: { signal?: AbortSignal },
   ): Promise<DashboardAgentRunTime[]> {
     const raw = await this.fetch<unknown>(
-      dashboardRollupUrl("/api/dashboard/agent-runtime", days, projectId),
+      dashboardRollupUrl("/api/dashboard/agent-runtime", days, projectId, tz),
       {
         signal: opts?.signal,
       },
@@ -2150,11 +2168,12 @@ class ApiClient {
 
   async getDashboardRunTimeDaily(
     days: number,
-    projectId?: string | null,
+    projectId: string | null,
+    tz: string,
     opts?: { signal?: AbortSignal },
   ): Promise<DashboardRunTimeDaily[]> {
     const raw = await this.fetch<unknown>(
-      dashboardRollupUrl("/api/dashboard/runtime/daily", days, projectId),
+      dashboardRollupUrl("/api/dashboard/runtime/daily", days, projectId, tz),
       {
         signal: opts?.signal,
       },
@@ -4107,7 +4126,7 @@ class ApiClient {
       // No Content-Type — let fetch set the multipart boundary.
       "X-Client-Platform": "mobile",
       "X-Client-OS": "ios",
-      "X-Client-Version": "0.5.96",
+      "X-Client-Version": "0.5.97",
       "X-Request-ID": rid,
     };
     if (this.token) headers["Authorization"] = `Bearer ${this.token}`;
