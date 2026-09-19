@@ -50,6 +50,9 @@ interface Props {
   noMatchText?: string;
   /** Rendered before the title on each row. */
   leading?: (row: MultiSelectRow) => ReactNode;
+  /** Pinned below the list — for a control that acts on the whole selection
+   *  (e.g. the skills filter's "clear filters"). */
+  footer?: ReactNode;
   onToggle: (key: string) => void;
   onClose: () => void;
 }
@@ -65,6 +68,7 @@ export function MultiSelectSheet({
   emptyText,
   noMatchText,
   leading,
+  footer,
   onToggle,
   onClose,
 }: Props) {
@@ -219,6 +223,9 @@ export function MultiSelectSheet({
                   (flatRows ?? []).map(renderRow)
                 )}
               </ScrollView>
+              {footer ? (
+                <View className="border-t border-border">{footer}</View>
+              ) : null}
             </View>
           </Pressable>
         </View>
