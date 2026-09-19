@@ -159,6 +159,8 @@
   "agents.activity.sourceIssue": "Issue",
   "agents.activity.sourceChat": "Chat",
   "agents.activity.sourceAutopilot": "Autopilot",
+  "agents.activity.sourceQuickCreate": "Quick create",
+  "agents.activity.sourceCreatingIssue": "Creating issue",
   "agents.activity.sourceUntracked": "Untracked",
   "agents.activity.issueShort": "Issue {{prefix}}…",
   "agents.activity.cancelTask": "Cancel",

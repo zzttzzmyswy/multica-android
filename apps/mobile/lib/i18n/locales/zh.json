@@ -159,6 +159,8 @@
   "agents.activity.sourceIssue": "任务",
   "agents.activity.sourceChat": "聊天",
   "agents.activity.sourceAutopilot": "自动化",
+  "agents.activity.sourceQuickCreate": "快速创建",
+  "agents.activity.sourceCreatingIssue": "正在创建任务",
   "agents.activity.sourceUntracked": "未跟踪",
   "agents.activity.issueShort": "任务 {{prefix}}…",
   "agents.activity.cancelTask": "取消",
