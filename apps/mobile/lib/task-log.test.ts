@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   partitionTaskLog,
+  prepareTaskLog,
   getToolSummary,
 } from "./task-log";
 import type { TaskMessagePayload } from "@multica/core/types";
+import { buildTimeline } from "@multica/core/task-transcript";
 
 function msg(partial: Partial<TaskMessagePayload> & { type: TaskMessagePayload["type"] }): TaskMessagePayload {
   return {
@@ -46,6 +48,58 @@ describe("partitionTaskLog", () => {
       processSteps: [],
       textFragments: [],
     });
+  });
+});
+
+describe("prepareTaskLog", () => {
+  it("counts one process step per logical step, not per flush", () => {
+    const messages = [
+      msg({ seq: 1, type: "thinking", content: "weighing " }),
+      msg({ seq: 2, type: "thinking", content: "the options" }),
+      msg({ seq: 3, type: "tool_use", tool: "Bash", input: { command: "ls" } }),
+      msg({ seq: 4, type: "thinking", content: "hmm" }),
+    ];
+
+    // The raw stream is what the fold used to receive: four rows for three
+    // logical steps.
+    expect(partitionTaskLog(messages).processSteps).toHaveLength(4);
+    expect(prepareTaskLog(messages).processSteps).toHaveLength(3);
+  });
+
+  it("reports the same step count as web's buildTimeline", () => {
+    const messages = [
+      msg({ seq: 1, type: "thinking", content: "a" }),
+      msg({ seq: 2, type: "thinking", content: "b" }),
+      msg({ seq: 3, type: "tool_use", tool: "Read" }),
+      msg({ seq: 4, type: "text", content: "narration" }),
+    ];
+
+    expect(prepareTaskLog(messages).processSteps).toHaveLength(
+      buildTimeline(messages).filter((item) => item.type !== "text").length,
+    );
+  });
+
+  it("masks secrets in narration and tool output", () => {
+    const messages = [
+      msg({ seq: 1, type: "text", content: "key AKIAIOSFODNN7EXAMPLE here" }),
+      msg({ seq: 2, type: "tool_result", tool: "Bash", output: "AKIAIOSFODNN7EXAMPLE" }),
+    ];
+
+    const { textFragments, processSteps } = prepareTaskLog(messages);
+    expect(textFragments).toEqual(["key [REDACTED AWS KEY] here"]);
+    expect(processSteps[0]?.output).toBe("[REDACTED AWS KEY]");
+  });
+
+  it("masks a secret reassembled from two flushes", () => {
+    const messages = [
+      msg({ seq: 1, type: "thinking", content: "token sk-abcdefghijklmnopqrstuvwxyz" }),
+      msg({ seq: 2, type: "thinking", content: "0123456789 tail" }),
+    ];
+
+    const { processSteps } = prepareTaskLog(messages);
+    expect(processSteps).toHaveLength(1);
+    expect(processSteps[0]?.content).not.toContain("sk-abcdefghijklmnopqrstuvwxyz0123456789");
+    expect(processSteps[0]?.content).toContain("[REDACTED API KEY]");
   });
 });
 

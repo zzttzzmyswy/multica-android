@@ -14,7 +14,8 @@
  *   - `IssueSectionHeader` — SectionList header for status / assignee lanes
  *   - `SurfaceEmptyState`  — centered muted message
  */
-import { Pressable, View } from "react-native";
+import { useCallback, useMemo } from "react";
+import { Pressable, ScrollView, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Issue, IssuePriority, IssueStatus } from "@multica/core/types";
@@ -34,7 +35,17 @@ import { useStatusLabel } from "@/lib/status-options";
 import {
   type IssueFilterState,
 } from "@/lib/filter-issues";
-import type { IssueViewMode } from "@/data/stores/issue-filter-slice";
+import {
+  baselineFromViewQuery,
+  clearDimensionToBaseline,
+  issueFilterDelta,
+  type IssueViewBaseline,
+} from "@/data/stores/issue-view-codec";
+import type {
+  FilterDimension,
+  IssueFilterSlice,
+  IssueViewMode,
+} from "@/data/stores/issue-filter-slice";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
@@ -125,8 +136,16 @@ export function FilterTriggerButton({
 
 /**
  * Toolbar row mirroring web's IssuesHeader: left-aligned scope pill group +
- * right-side Filter icon (red dot when filters are active). Generic over the
- * scope value type so each surface passes its own `SCOPES` config.
+ * right-side mode switch and Filter icon (red dot when filters are active).
+ * Generic over the scope value type so each surface passes its own `SCOPES`
+ * config.
+ *
+ * The pill group scrolls horizontally instead of shrinking: scope pills are
+ * fixed-width, so a narrow phone with three scopes and the five-button mode
+ * switch (list / board / table / gantt / swimlane) leaves the row wider than
+ * the screen. Shrinking the group only clipped the pills under the mode
+ * switch — the buttons overflow their shrunken box. Scrolling keeps every
+ * scope reachable and the mode switch fixed.
  */
 export function IssueSurfaceScopeToolbar<S extends string>({
   scopes,
@@ -149,7 +168,12 @@ export function IssueSurfaceScopeToolbar<S extends string>({
 }) {
   return (
     <View className="flex-row items-center justify-between px-4 pt-2 pb-2">
-      <View className="flex-row items-center gap-1 flex-shrink min-w-0">
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        className="flex-1 min-w-0"
+        contentContainerStyle={{ gap: 4, alignItems: "center" }}
+      >
         {scopes.map((s) => {
           const active = scope === s.value;
           return (
@@ -170,8 +194,8 @@ export function IssueSurfaceScopeToolbar<S extends string>({
             </Button>
           );
         })}
-      </View>
-      <View className="flex-row items-center gap-1.5 ml-2">
+      </ScrollView>
+      <View className="flex-row items-center gap-1.5 ml-2 shrink-0">
         <ViewModeToggle view={view} onChange={onViewChange} />
         <FilterTriggerButton
           onPress={onOpenFilter}
@@ -183,20 +207,20 @@ export function IssueSurfaceScopeToolbar<S extends string>({
 }
 
 /**
- * Chips bar — one chip per selected value, each clears only that value
- * (web filter-chips-bar semantics). Project/label chips resolve names from
- * the workspace catalogs; actor chips reuse `useActorLookup`.
+ * Chips bar — one chip per value the USER added on top of the open saved
+ * view (web filter-chips-bar.tsx baseline semantics). Values the view itself
+ * fixes never appear: the view name carries them, and removing a chip
+ * returns its dimension to the view's values rather than emptying it. With
+ * no view open every value is the user's own and removal is a plain clear.
+ *
+ * Project/label chips resolve names from the workspace catalogs; actor chips
+ * reuse `useActorLookup`. The date window is a user layer no view carries,
+ * so its chip always clears outright.
  */
 export function ActiveFilterChips({
   filterState,
-  statusFilters,
-  priorityFilters,
-  assigneeFilters,
-  creatorFilters,
-  projectFilters,
-  labelFilters,
-  propertyFilters,
-  dateFilter,
+  baseline,
+  onResetDimension,
   onClearStatus,
   onClearPriority,
   onClearAssignee,
@@ -209,14 +233,10 @@ export function ActiveFilterChips({
   onClearDate,
 }: {
   filterState: IssueFilterState;
-  statusFilters: IssueStatus[];
-  priorityFilters: IssuePriority[];
-  assigneeFilters: { type: "member" | "agent" | "squad"; id: string }[];
-  creatorFilters: { type: "member" | "agent" | "squad"; id: string }[];
-  projectFilters: string[];
-  labelFilters: string[];
-  propertyFilters: Record<string, string[]>;
-  dateFilter: IssueFilterState["dateFilter"];
+  /** The open saved view's own conditions; null when no view is open. */
+  baseline: IssueViewBaseline | null;
+  /** Return one dimension to the open view's values. */
+  onResetDimension: (dimension: FilterDimension) => void;
   onClearStatus: (s: IssueStatus) => void;
   onClearPriority: (p: IssuePriority) => void;
   onClearAssignee: (v: { type: "member" | "agent" | "squad"; id: string }) => void;
@@ -255,83 +275,148 @@ export function ActiveFilterChips({
         optionId
       );
     };
-    return {
-      label: `${definition.name}: ${selected.map(optionName).join(", ")}`,
-      onClear: () => onClearProperty(propertyId),
-    };
+    return `${definition.name}: ${selected.map(optionName).join(", ")}`;
   };
   const dateShort = (dateOnly: string) => {
     const [, m, d] = dateOnly.split("-");
     return `${Number(m)}/${Number(d)}`;
   };
 
+  const delta = issueFilterDelta(filterState, baseline);
+  /** Inside a view a chip's removal falls back to the view's values; outside
+   *  one it is the per-value toggle the chip's label promises. */
+  const remove = (dimension: FilterDimension, clearValue: () => void) =>
+    baseline ? () => onResetDimension(dimension) : clearValue;
+
+  const chips: { key: string; label: string; onClear: () => void }[] = [];
+  for (const s of delta.statuses) {
+    chips.push({
+      key: `s-${s}`,
+      label: statusLabel(s),
+      onClear: remove("status", () => onClearStatus(s)),
+    });
+  }
+  for (const p of delta.priorities) {
+    chips.push({
+      key: `p-${p}`,
+      label: translate(`enum.priority.${p}`),
+      onClear: remove("priority", () => onClearPriority(p)),
+    });
+  }
+  for (const a of delta.assignees) {
+    chips.push({
+      key: `a-${a.type}:${a.id}`,
+      label: getName(a.type, a.id),
+      onClear: remove("assignee", () => onClearAssignee(a)),
+    });
+  }
+  if (delta.includeNoAssignee) {
+    chips.push({
+      key: "no-assignee",
+      label: translate("filter.noAssignee"),
+      onClear: remove("assignee", onClearNoAssignee),
+    });
+  }
+  for (const c of delta.creators) {
+    chips.push({
+      key: `c-${c.type}:${c.id}`,
+      label: getName(c.type, c.id),
+      onClear: remove("creator", () => onClearCreator(c)),
+    });
+  }
+  for (const id of delta.projects) {
+    chips.push({
+      key: `pr-${id}`,
+      label: projectName(id),
+      onClear: remove("project", () => onClearProject(id)),
+    });
+  }
+  if (delta.includeNoProject) {
+    chips.push({
+      key: "no-project",
+      label: translate("filter.noProject"),
+      onClear: remove("project", onClearNoProject),
+    });
+  }
+  for (const id of delta.labels) {
+    chips.push({
+      key: `l-${id}`,
+      label: labelName(id),
+      onClear: remove("label", () => onClearLabel(id)),
+    });
+  }
+  for (const [propertyId, selected] of Object.entries(delta.property)) {
+    const label = propertyChip(propertyId, selected);
+    if (!label) continue;
+    chips.push({
+      key: `prop-${propertyId}`,
+      label,
+      onClear: remove(`property:${propertyId}`, () =>
+        onClearProperty(propertyId),
+      ),
+    });
+  }
+  const { dateFilter } = filterState;
+  if (dateFilter) {
+    chips.push({
+      key: "date",
+      label: `${translate(
+        dateFilter.field === "created_at"
+          ? "filter.dateCreated"
+          : "filter.dateUpdated",
+      )}: ${
+        dateFilter.from === dateFilter.to
+          ? dateShort(dateFilter.from)
+          : `${dateShort(dateFilter.from)} - ${dateShort(dateFilter.to)}`
+      }`,
+      onClear: onClearDate,
+    });
+  }
+
+  // A view whose conditions are all still intact contributes no chips — the
+  // bar must collapse rather than leave an empty row behind.
+  if (chips.length === 0) return null;
+
   return (
     <View className="flex-row flex-wrap gap-1.5 px-4 pb-2">
-      {statusFilters.map((s) => (
-        <Chip key={`s-${s}`} label={statusLabel(s)} onClear={() => onClearStatus(s)} />
+      {chips.map((chip) => (
+        <Chip key={chip.key} label={chip.label} onClear={chip.onClear} />
       ))}
-      {priorityFilters.map((p) => (
-        <Chip key={`p-${p}`} label={translate(`enum.priority.${p}`)} onClear={() => onClearPriority(p)} />
-      ))}
-      {assigneeFilters.map((a) => (
-        <Chip
-          key={`a-${a.type}:${a.id}`}
-          label={getName(a.type, a.id)}
-          onClear={() => onClearAssignee(a)}
-        />
-      ))}
-      {filterState.includeNoAssignee ? (
-        <Chip
-          key="no-assignee"
-          label={translate("filter.noAssignee")}
-          onClear={onClearNoAssignee}
-        />
-      ) : null}
-      {creatorFilters.map((c) => (
-        <Chip
-          key={`c-${c.type}:${c.id}`}
-          label={getName(c.type, c.id)}
-          onClear={() => onClearCreator(c)}
-        />
-      ))}
-      {projectFilters.map((id) => (
-        <Chip key={`pr-${id}`} label={projectName(id)} onClear={() => onClearProject(id)} />
-      ))}
-      {filterState.includeNoProject ? (
-        <Chip
-          key="no-project"
-          label={translate("filter.noProject")}
-          onClear={onClearNoProject}
-        />
-      ) : null}
-      {labelFilters.map((id) => (
-        <Chip key={`l-${id}`} label={labelName(id)} onClear={() => onClearLabel(id)} />
-      ))}
-      {Object.entries(propertyFilters).map(([propertyId, selected]) => {
-        if (selected.length === 0) return null;
-        const chip = propertyChip(propertyId, selected);
-        if (!chip) return null;
-        return (
-          <Chip key={`prop-${propertyId}`} label={chip.label} onClear={chip.onClear} />
-        );
-      })}
-      {dateFilter ? (
-        <Chip
-          key="date"
-          label={`${translate(
-            dateFilter.field === "created_at"
-              ? "filter.dateCreated"
-              : "filter.dateUpdated",
-          )}: ${
-            dateFilter.from === dateFilter.to
-              ? dateShort(dateFilter.from)
-              : `${dateShort(dateFilter.from)} - ${dateShort(dateFilter.to)}`
-          }`}
-          onClear={onClearDate}
-        />
-      ) : null}
     </View>
   );
+}
+
+/**
+ * Chips wiring shared by the three issue surfaces: the open view's baseline
+ * (null when no view is open) plus the one-dimension reset that falls back
+ * to it. All three surfaces own a zustand store of the same filter-slice
+ * shape, so the store is passed in and the reset lives here once.
+ *
+ * `viewQuery` is the ACTIVE saved view's query blob — an opaque server
+ * round-trip of the nine filter dims.
+ */
+export function useFilterChipBaseline(
+  viewQuery: Record<string, unknown> | null,
+  store: { getState: () => IssueFilterSlice },
+): {
+  baseline: IssueViewBaseline | null;
+  resetDimension: (dimension: FilterDimension) => void;
+} {
+  const baseline = useMemo(
+    () => (viewQuery ? baselineFromViewQuery(viewQuery) : null),
+    [viewQuery],
+  );
+  const resetDimension = useCallback(
+    (dimension: FilterDimension) => {
+      if (!baseline) return;
+      const state = store.getState();
+      state.resetFiltersTo(
+        clearDimensionToBaseline(state, dimension, baseline),
+      );
+    },
+    [baseline, store],
+  );
+  return { baseline, resetDimension };
 }
 
 function Chip({ label, onClear }: { label: string; onClear: () => void }) {

@@ -14,7 +14,11 @@ import { cn } from "@multica/ui/lib/utils";
 import type { AvatarSize } from "@multica/ui/lib/avatar-size";
 import { AgentAvatarStack } from "../../agents/components/agent-avatar-stack";
 import { AgentActivityHoverContent } from "../../agents/components/agent-activity-hover-content";
-import { selectIssueTasks, type IssueTaskGroups } from "../surface/activity";
+import {
+  selectIssueTasks,
+  summarizeIssueActivity,
+  type IssueTaskGroups,
+} from "../surface/activity";
 import { useT } from "../../i18n";
 
 const EMPTY_GROUPS: IssueTaskGroups = { running: [], queued: [] };
@@ -102,20 +106,17 @@ export const IssueAgentActivityIndicator = memo(function IssueAgentActivityIndic
     select,
   });
 
-  const { agentIds, opacity } = useMemo(() => {
-    // Stack heads: prefer running. If 0 running, fall back to queued.
-    // Each case is visually distinct (running gets shimmer, queued gets
-    // muted text) so the indicator always offers a face to hover.
-    const primary = groups.running.length > 0 ? groups.running : groups.queued;
-    const uniqueAgents = [...new Set(primary.map((t) => t.agent_id))];
-    return {
-      agentIds: uniqueAgents,
-      opacity: (groups.running.length > 0 ? "full" : "half") as "full" | "half",
-    };
-  }, [groups]);
+  // Stack heads: prefer running. If 0 running, fall back to queued.
+  // Each case is visually distinct (running gets shimmer, queued gets
+  // muted text) so the indicator always offers a face to hover.
+  const { agentIds, state } = useMemo(
+    () => summarizeIssueActivity(groups),
+    [groups],
+  );
 
   if (agentIds.length === 0) return null;
-  const isRunning = opacity === "full";
+  const isRunning = state === "running";
+  const opacity = isRunning ? "full" : "half";
 
   const badge = (
     <>

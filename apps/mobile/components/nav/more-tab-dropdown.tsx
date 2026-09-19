@@ -52,6 +52,7 @@ import {
 import { Text } from "@/components/ui/text";
 import { WorkspaceAvatar } from "@/components/workspace/workspace-avatar";
 import { workspaceListOptions } from "@/data/queries/workspaces";
+import { inboxUnreadSummaryOptions } from "@/data/queries/inbox";
 import { useAuthStore } from "@/data/auth-store";
 import { useUpdateStore } from "@/data/update-store";
 import { useActiveDownloadCount, useDownloadsStore } from "@/data/downloads-store";
@@ -59,6 +60,7 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
+import { workspaceUnreadBadge } from "@/lib/workspace-unread-badge";
 import { cn } from "@/lib/utils";
 
 // iOS bottom tab bar default height (above safe-area). React Navigation
@@ -126,6 +128,19 @@ export function MoreTabDropdownAnchor({
   const t2 = THEME[colorScheme];
   const { t } = useTranslation();
   const currentWorkspace = useCurrentWorkspace(slug);
+  // Cross-workspace unread: does any workspace OTHER than this one have unread
+  // inbox items? Account-level query — one cache entry shared with the
+  // switch-workspace sheet, not refetched per workspace. Gated on the active
+  // workspace because the endpoint resolves through the workspace-member
+  // middleware (same gate as web's sidebar). Backs the aggregate dot on the
+  // collapsed WorkspaceCard, mirroring web's sidebar avatar dot
+  // (packages/views/layout/app-sidebar.tsx:606).
+  const { data: unreadSummary = [] } = useQuery({
+    ...inboxUnreadSummaryOptions(),
+    enabled: !!wsId,
+  });
+  const otherWorkspaceUnread = workspaceUnreadBadge(unreadSummary, wsId)
+    .showAggregateDot;
   // True while a newer APK exists — paints the dot on the About row.
   const hasUpdate = useUpdateStore((s) => s.hasUpdate);
   // In-flight downloads — the Downloads row carries a count badge while > 0.
@@ -187,6 +202,8 @@ export function MoreTabDropdownAnchor({
           <WorkspaceCard
             currentWorkspaceName={currentWorkspace?.name}
             currentWorkspaceAvatarUrl={currentWorkspace?.avatar_url}
+            showUnreadDot={otherWorkspaceUnread}
+            dotTint={t2.brand}
             onPress={() =>
               slug && router.push(`/${slug}/switch-workspace`)
             }
@@ -309,11 +326,15 @@ function UserCard({
 function WorkspaceCard({
   currentWorkspaceName,
   currentWorkspaceAvatarUrl,
+  showUnreadDot,
+  dotTint,
   onPress,
   chevronTint,
 }: {
   currentWorkspaceName: string | undefined;
   currentWorkspaceAvatarUrl: string | null | undefined;
+  showUnreadDot: boolean;
+  dotTint: string;
   onPress: () => void;
   chevronTint: string;
 }) {
@@ -327,14 +348,30 @@ function WorkspaceCard({
       disabled={!canSwitch}
       className="h-12 gap-3"
       accessibilityLabel={
-        canSwitch ? t("settings.switchWorkspace") : currentWorkspaceName ?? t("settings.workspace")
+        canSwitch
+          ? showUnreadDot
+            ? t("a11y.workspaceHasUnread")
+            : t("settings.switchWorkspace")
+          : currentWorkspaceName ?? t("settings.workspace")
       }
     >
-      <WorkspaceAvatar
-        name={currentWorkspaceName ?? "Workspace"}
-        avatarUrl={currentWorkspaceAvatarUrl}
-        size={32}
-      />
+      <View>
+        <WorkspaceAvatar
+          name={currentWorkspaceName ?? "Workspace"}
+          avatarUrl={currentWorkspaceAvatarUrl}
+          size={32}
+        />
+        {/* Aggregate signal: "somewhere else has unread". The sheet's per-row
+            dot says WHICH workspace; this only says that one does. Placed on
+            the avatar the way web's sidebar does it. */}
+        {showUnreadDot ? (
+          <View
+            className="absolute -top-0.5 -right-0.5 size-2 rounded-full border border-background"
+            style={{ backgroundColor: dotTint }}
+            testID="workspace-unread-dot-aggregate"
+          />
+        ) : null}
+      </View>
       <View className="flex-1 min-w-0">
         <Text
           className="text-sm font-medium text-foreground"

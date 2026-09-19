@@ -33,6 +33,7 @@ import { useScrollToTopOnChange } from "@/lib/use-scroll-to-top-on-change";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { isAgentRuntimeBound } from "@/lib/is-agent-runtime-bound";
+import { isRestrictedAgent } from "@/lib/agent-list-access";
 import { useTranslation } from "@/lib/i18n/react";
 
 const AVATAR_SIZE = 36;
@@ -117,6 +118,10 @@ export function AssigneePickerBody({
   // selection accessories.
   const checkColor =
     colorScheme === "dark" ? THEME.dark.primary : THEME.light.primary;
+  const mutedColor =
+    colorScheme === "dark"
+      ? THEME.dark.mutedForeground
+      : THEME.light.mutedForeground;
 
   const rows = useMemo<Row[]>(() => {
     const q = query.trim().toLowerCase();
@@ -231,6 +236,20 @@ export function AssigneePickerBody({
                   ? item.agent.name
                   : item.squad.name}
           </Text>
+          {/* Restricted agents carry web's lock (assignee-picker.tsx). It sits
+              beside the type tag rather than hugging the name so the right-hand
+              group keeps the value-cell rhythm the rest of the row uses.
+              Decorative: the row's accessible name is the agent name, and an
+              icon-font glyph would be read out as gibberish. */}
+          {item.kind === "agent" && isRestrictedAgent(item.agent) ? (
+            <Ionicons
+              name="lock-closed-outline"
+              size={14}
+              color={mutedColor}
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+            />
+          ) : null}
           {/* Right-aligned secondary label. Mirrors Apple's
               UITableViewCellStyleValue1 / UIListContentConfiguration.valueCell
               pattern used throughout iOS Settings — type tag in lighter font on

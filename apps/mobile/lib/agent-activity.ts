@@ -235,6 +235,28 @@ export function isWorkflowTask(task: AgentTask): boolean {
   return !task.chat_session_id;
 }
 
+/**
+ * i18n key for a row's title when the task carries no trigger summary. Ported
+ * from web `activity-tab.tsx` sourceFallback: an issue row wins outright, then
+ * quick-create is split by terminality (a finished run created its issue, a
+ * live one is still creating it), then the remaining origins.
+ *
+ * The chat branch is unreachable in practice — `isWorkflowTask` drops chat
+ * tasks before they reach a row — but it is kept so this stays a total
+ * function over the task shape.
+ */
+export function agentTaskSourceLabelKey(task: AgentTask): string {
+  if (task.issue_id) return "agents.activity.issueShort";
+  if (task.kind === "quick_create") {
+    return TERMINAL_TASK_STATUSES.has(task.status)
+      ? "agents.activity.sourceQuickCreate"
+      : "agents.activity.sourceCreatingIssue";
+  }
+  if (task.chat_session_id) return "agents.activity.sourceChat";
+  if (task.autopilot_run_id) return "agents.activity.sourceAutopilot";
+  return "agents.activity.sourceUntracked";
+}
+
 /** Filter the workspace task snapshot to one agent's in-flight work and
  *  order it the activity-tab way: status rank, then created_at asc. */
 export function sortActiveAgentTasks(
