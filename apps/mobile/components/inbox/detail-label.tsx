@@ -107,6 +107,10 @@ export function InboxDetailLabel({
         return typeLabel(t, item.type);
       case "unassigned":
         return t("inbox.removedAssignee");
+      case "start_date_changed":
+        return details.to
+          ? t("inbox.setStartDate", { date: shortDate(details.to, intlLocale) })
+          : t("inbox.removedStartDate");
       case "due_date_changed":
         return details.to
           ? t("inbox.setDueDate", { date: shortDate(details.to, intlLocale) })
