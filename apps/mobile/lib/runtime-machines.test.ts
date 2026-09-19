@@ -514,7 +514,32 @@ describe("buildWorkloadIndex", () => {
 
   it("sums running/queued per runtime, skipping archived agents", () => {
     const index = buildWorkloadIndex(agents, tasks);
-    expect(index.get("r1")).toEqual({ runningCount: 1, queuedCount: 2 });
+    expect(index.get("r1")).toEqual({
+      agentIds: ["a1", "a2"],
+      runningCount: 1,
+      queuedCount: 2,
+    });
     expect(index.has("r9")).toBe(false);
+  });
+
+  it("lists the agents serving each runtime in server order", () => {
+    // Iteration 167: the machine-detail row renders web's avatar stack, which
+    // is driven by `workload.agentIds` — same shape web's buildWorkloadIndex
+    // returns, so both surfaces count the same agents. Archived agents keep
+    // their runtime_id but are retired and must not pad the stack.
+    const index = buildWorkloadIndex(agents, []);
+    expect(index.get("r1")?.agentIds).toEqual(["a1", "a2"]);
+    expect(index.get("r9")).toBeUndefined();
+  });
+
+  it("keeps a runtime with bound agents but no tasks in the index", () => {
+    // The avatar stack is the whole point of the entry — a runtime whose
+    // agents are all idle still needs one.
+    const index = buildWorkloadIndex(agents, []);
+    expect(index.get("r1")).toEqual({
+      agentIds: ["a1", "a2"],
+      runningCount: 0,
+      queuedCount: 0,
+    });
   });
 });

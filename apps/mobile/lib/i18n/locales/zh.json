@@ -3117,5 +3117,10 @@
   "resource.modeUpdated": "已更新执行方式",
   "resource.modeUpdateFailed": "无法更新执行方式",
   "resource.modeUpgradeRequired": "这台机器上的 Multica 是 {{current}}，并行运行需要 {{min}} 或更新的版本。在那台机器上升级后即可开启。",
-  "resource.modeVersionUnknown": "较旧的版本"
+  "resource.modeVersionUnknown": "较旧的版本",
+  "runtimes.row.actions": "行操作",
+  "runtimes.row.delete": "删除",
+  "runtimes.row.deleteProfile": "从工作区删除",
+  "runtimes.row.taskCount": "{{count}} 个 task",
+  "runtimes.row.costFlat": "持平"
 }

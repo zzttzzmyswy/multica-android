@@ -50,9 +50,8 @@ import {
 } from "@/lib/runtime-serving";
 import {
   useUpdateRuntime,
-  useDeleteRuntime,
-  useUnbindAgentsAndDeleteRuntime,
 } from "@/data/mutations/runtimes";
+import { useRuntimeDeleteFlow } from "@/components/runtimes/use-runtime-delete-flow";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
 import { useWorkspacePresenceMap } from "@/lib/use-agent-presence";
@@ -61,11 +60,7 @@ import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
-import {
-  deriveRuntimePermissions,
-  isSelfHealingRuntime,
-  parseActiveAgentsConflict,
-} from "@/lib/runtime-management";
+import { deriveRuntimePermissions } from "@/lib/runtime-management";
 
 const MODE_ICON: Record<AgentRuntime["runtime_mode"], keyof typeof Ionicons.glyphMap> = {
   local: "hardware-chip",
@@ -276,8 +271,6 @@ export default function RuntimeDetailPage() {
   const { byAgent: presenceByAgent } = useWorkspacePresenceMap(wsId);
 
   const updateRuntime = useUpdateRuntime();
-  const deleteRuntime = useDeleteRuntime();
-  const unbindDelete = useUnbindAgentsAndDeleteRuntime();
 
   // "Add custom runtime" (web detail-page entry, intent=create) — opens the
   // runtime-profiles dialog at the create form.
@@ -346,6 +339,20 @@ export default function RuntimeDetailPage() {
     ? members.find((m) => m.user_id === runtime.owner_id) ?? null
     : null;
 
+  // Delete — the same flow the machine-detail row menu runs, so the cascade
+  // confirmation and its two conflict retries exist once (iteration 167).
+  // Called before the loading/not-found returns because hooks may not be
+  // conditional; a null runtime makes `requestDelete` a no-op.
+  const { requestDelete: handleDeletePress, isPending: deletePending } =
+    useRuntimeDeleteFlow({
+      runtime: runtime ?? null,
+      displayName: runtime ? runtimeDisplayLabel(runtime) : "",
+      activeAgents,
+      refetchAgents,
+      onDeleted: () => router.back(),
+      confirmLabel: t("runtimes.detail.deleteButton"),
+    });
+
   if (isLoading) {
     return (
       <View className="flex-1 items-center justify-center bg-background">
@@ -373,7 +380,6 @@ export default function RuntimeDetailPage() {
   const lastSeen = runtime.last_seen_at
     ? timeAgo(runtime.last_seen_at)
     : t("runtimes.detail.never");
-  const selfHeal = isSelfHealingRuntime(runtime);
   const access = deriveRuntimePermissions({
     members: members.map((m) => ({ role: m.role, user_id: m.user_id })),
     currentUserId: user?.id ?? null,
@@ -422,127 +428,6 @@ export default function RuntimeDetailPage() {
           ),
       },
     );
-  };
-
-  const buildLightMessage = () => {
-    const parts = [t("runtimes.detail.deleteConfirmMessage", { name: displayName })];
-    if (selfHeal) parts.push(t("runtimes.detail.selfHealHint"));
-    return parts.join("\n\n");
-  };
-
-  const buildCascadeMessage = (plan: { id: string; name: string }[]) => {
-    const count = plan.length;
-    const names = plan.slice(0, 8).map((a) => a.name).join("、");
-    const parts = [
-      t("runtimes.detail.deleteWithAgentsMessage", {
-        count,
-        name: displayName,
-      }),
-      t("runtimes.detail.deleteBanner"),
-      names,
-    ];
-    if (selfHeal) parts.push(t("runtimes.detail.selfHealHint"));
-    return parts.join("\n\n");
-  };
-
-  const runUnbindDelete = (agentIds: string[]) => {
-    unbindDelete.mutate(
-      { runtimeId: runtime.id, expectedActiveAgentIds: agentIds },
-      {
-        onSuccess: () => router.back(),
-        onError: (err) => {
-          const conflict = parseActiveAgentsConflict(err);
-          if (conflict?.code === "runtime_delete_plan_changed") {
-            // Plan moved under us — refresh the agent list and force a
-            // re-confirm against the server's authoritative snapshot.
-            void refetchAgents();
-            Alert.alert(
-              t("runtimes.detail.deleteWithAgentsTitle"),
-              `${t("runtimes.detail.planChangedRetry")}\n\n${buildCascadeMessage(conflict.activeAgents)}`,
-              [
-                { text: t("runtimes.detail.renameCancel"), style: "cancel" },
-                {
-                  text: t("runtimes.detail.deleteButton"),
-                  style: "destructive",
-                  onPress: () =>
-                    runUnbindDelete(conflict.activeAgents.map((a) => a.id)),
-                },
-              ],
-            );
-            return;
-          }
-          Alert.alert(
-            t("runtimes.detail.deleteFailed"),
-            err instanceof Error ? err.message : t("runtimes.detail.unknown"),
-          );
-        },
-      },
-    );
-  };
-
-  const confirmLightDelete = () => {
-    deleteRuntime.mutate(runtime.id, {
-      onSuccess: () => router.back(),
-      onError: (err) => {
-        const conflict = parseActiveAgentsConflict(err);
-        if (conflict?.code === "runtime_has_active_agents") {
-          // Agents were bound between dialog-open and confirm — pivot to
-          // the cascade flow with the server's authoritative list.
-          Alert.alert(
-            t("runtimes.detail.deleteWithAgentsTitle"),
-            buildCascadeMessage(conflict.activeAgents),
-            [
-              { text: t("runtimes.detail.renameCancel"), style: "cancel" },
-              {
-                text: t("runtimes.detail.deleteButton"),
-                style: "destructive",
-                onPress: () =>
-                  runUnbindDelete(conflict.activeAgents.map((a) => a.id)),
-              },
-            ],
-          );
-          return;
-        }
-        Alert.alert(
-          t("runtimes.detail.deleteFailed"),
-          err instanceof Error ? err.message : t("runtimes.detail.unknown"),
-        );
-      },
-    });
-  };
-
-  const confirmCascadeDelete = () => {
-    runUnbindDelete(activeAgents.map((a) => a.id));
-  };
-
-  const handleDeletePress = () => {
-    if (activeAgents.length > 0) {
-      Alert.alert(
-        t("runtimes.detail.deleteWithAgentsTitle"),
-        buildCascadeMessage(activeAgents),
-        [
-          { text: t("runtimes.detail.renameCancel"), style: "cancel" },
-          {
-            text: t("runtimes.detail.deleteButton"),
-            style: "destructive",
-            onPress: confirmCascadeDelete,
-          },
-        ],
-      );
-    } else {
-      Alert.alert(
-        t("runtimes.detail.deleteConfirmTitle"),
-        buildLightMessage(),
-        [
-          { text: t("runtimes.detail.renameCancel"), style: "cancel" },
-          {
-            text: t("runtimes.detail.deleteButton"),
-            style: "destructive",
-            onPress: confirmLightDelete,
-          },
-        ],
-      );
-    }
   };
 
   return (
@@ -903,7 +788,7 @@ export default function RuntimeDetailPage() {
                   size="sm"
                   className="h-8 justify-start gap-2 px-0"
                   onPress={handleDeletePress}
-                  disabled={deleteRuntime.isPending || unbindDelete.isPending}
+                  disabled={deletePending}
                 >
                   <Ionicons name="trash-outline" size={14} color={theme.destructive} />
                   <Text className="text-xs text-destructive">

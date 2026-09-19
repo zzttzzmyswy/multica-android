@@ -3117,5 +3117,10 @@
   "resource.modeUpdated": "Execution mode updated",
   "resource.modeUpdateFailed": "Could not update the execution mode",
   "resource.modeUpgradeRequired": "Multica on that machine is {{current}}; parallel mode needs {{min}} or newer. Upgrade it there to enable this.",
-  "resource.modeVersionUnknown": "older version"
+  "resource.modeVersionUnknown": "older version",
+  "runtimes.row.actions": "Row actions",
+  "runtimes.row.delete": "Delete",
+  "runtimes.row.deleteProfile": "Delete from workspace",
+  "runtimes.row.taskCount": "{{count}} tasks",
+  "runtimes.row.costFlat": "flat"
 }

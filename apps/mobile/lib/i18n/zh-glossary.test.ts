@@ -118,6 +118,7 @@ const RUN_SENSE_KEYS = [
   "runs.kind.task",
   "runs.retryFailed",
   "runtimes.connect.successDescription",
+  "runtimes.row.taskCount",
   "squads.detail.activeTask",
   "squads.instructions.description",
   "usage.dayTrendTasksTitle",

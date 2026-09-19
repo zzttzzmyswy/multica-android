@@ -18,6 +18,9 @@ export type RuntimeMachineSection = "local" | "remote" | "cloud";
 export type RuntimeMachineFilter = "all" | "online" | "issues";
 
 export interface RuntimeWorkloadSummary {
+  /** Agents serving this runtime, in the server's list order. Drives the
+   *  machine-detail row's avatar stack; `.length` doubles as the agent count. */
+  agentIds: string[];
   runningCount: number;
   queuedCount: number;
 }
@@ -592,7 +595,12 @@ export function buildWorkloadIndex(
   for (const a of agents) {
     if (!a.runtime_id || a.archived_at) continue;
     agentToRuntime.set(a.id, a.runtime_id);
-    const entry = result.get(a.runtime_id) ?? { runningCount: 0, queuedCount: 0 };
+    const entry = result.get(a.runtime_id) ?? {
+      agentIds: [],
+      runningCount: 0,
+      queuedCount: 0,
+    };
+    entry.agentIds.push(a.id);
     result.set(a.runtime_id, entry);
   }
   for (const t of tasks) {

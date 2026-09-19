@@ -29,9 +29,11 @@ import type { AgentRuntime } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
+import { AvatarStack } from "@/components/ui/avatar-stack";
 import { RuntimeProfilesDialog } from "@/components/runtimes/runtime-profiles-dialog";
+import { RuntimeRowMenu } from "@/components/runtimes/runtime-row-menu";
 import { UpdateSection } from "@/components/runtimes/update-section";
-import { runtimeListOptions } from "@/data/queries/runtimes";
+import { runtimeListOptions, runtimeUsageOptions } from "@/data/queries/runtimes";
 import { memberListOptions } from "@/data/queries/members";
 import { agentListOptions } from "@/data/queries/agents";
 import { agentTaskSnapshotOptions } from "@/data/queries/agent-task-snapshot";
@@ -44,7 +46,22 @@ import {
   machineUpdateRuntime,
   runtimeRowLabel,
   type RuntimeMachine,
+  type RuntimeWorkloadSummary,
 } from "@/lib/runtime-machines";
+import {
+  RUNTIME_COST_FETCH_DAYS,
+  runtimeActiveTaskCount,
+  runtimeCliVersion,
+  runtimeCostCell,
+  runtimeOwnerName,
+  showRuntimeLoadSuffix,
+  showRuntimeOwnerColumn,
+  type RuntimeCostTone,
+} from "@/lib/runtime-row-facts";
+import {
+  deriveRuntimePermissions,
+  type RuntimePermissionDerivation,
+} from "@/lib/runtime-management";
 import { useUpdateRuntime } from "@/data/mutations/runtimes";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
@@ -74,6 +91,14 @@ const HEALTH_TONE: Record<RuntimeHealth, string> = {
   about_to_gc: "text-destructive",
 };
 
+// Cost delta tone — web's CostCell colours a rise warning and a fall success;
+// "flat" and "no baseline" both stay muted.
+const COST_TONE: Record<RuntimeCostTone, string> = {
+  muted: "text-muted-foreground",
+  warning: "text-warning",
+  success: "text-success",
+};
+
 export default function MachineDetailPage() {
   const { machineId } = useLocalSearchParams<{ machineId: string }>();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
@@ -93,7 +118,10 @@ export default function MachineDetailPage() {
 
   const { data = [], isLoading, error, refetch } = useQuery(runtimeListOptions(wsId));
   const { data: members = [] } = useQuery(memberListOptions(wsId));
-  const { data: agents = [] } = useQuery(agentListOptions(wsId));
+  const {
+    data: agents = [],
+    refetch: refetchAgents,
+  } = useQuery(agentListOptions(wsId));
   const { data: taskSnapshot = [] } = useQuery(agentTaskSnapshotOptions(wsId));
   const updateRuntime = useUpdateRuntime();
 
@@ -101,14 +129,26 @@ export default function MachineDetailPage() {
   const [renameOpen, setRenameOpen] = useState(false);
   const [nameInput, setNameInput] = useState("");
 
+  // Per-row facts (iteration 167) come off caches the page already holds —
+  // the avatar stack and the delete cascade's agent plan are the same agents
+  // the workspace-wide list carries, so only the cost cell adds a request.
+  const workloadIndex = useMemo(
+    () => buildWorkloadIndex(agents, taskSnapshot),
+    [agents, taskSnapshot],
+  );
+  const tz = useMemo(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+    [],
+  );
+
   const machines = useMemo(() => {
     if (data.length === 0) return [];
     return buildRuntimeMachines(data, {
       now,
       currentUserId: user?.id,
-      workloadByRuntimeId: buildWorkloadIndex(agents, taskSnapshot),
+      workloadByRuntimeId: workloadIndex,
     });
-  }, [data, now, user?.id, agents, taskSnapshot]);
+  }, [data, now, user?.id, workloadIndex]);
 
   const machine = useMemo(
     () => (machineId ? findMachine(machines, machineId) : null),
@@ -153,6 +193,10 @@ export default function MachineDetailPage() {
   }
 
   const busyCount = machine.runningCount + machine.queuedCount;
+  // Web hides the Owner column unless the rows have more than one owner — a
+  // machine's runtimes usually belong to one member, so this is off by default
+  // and turns on exactly when the owner tells two rows apart.
+  const showOwner = showRuntimeOwnerColumn(machine.runtimes);
   const renameTarget = machineRenameTarget(machine, user?.id ?? null, isAdmin);
   const canAddRuntime = canAddMachineRuntime(machine, isAdmin);
   const updateChannel = machineUpdateRuntime(machine, user?.id, isAdmin);
@@ -407,6 +451,19 @@ export default function MachineDetailPage() {
                     runtime={runtime}
                     machineTitle={machine.title}
                     now={now}
+                    tz={tz}
+                    workload={workloadIndex.get(runtime.id)}
+                    ownerName={runtimeOwnerName(runtime, members)}
+                    showOwner={showOwner}
+                    access={deriveRuntimePermissions({
+                      members,
+                      currentUserId: user?.id ?? null,
+                      runtime,
+                    })}
+                    activeAgents={agents
+                      .filter((a) => a.runtime_id === runtime.id && !a.archived_at)
+                      .map((a) => ({ id: a.id, name: a.name }))}
+                    refetchAgents={refetchAgents}
                     onPress={() => {
                       if (wsSlug) router.push(`/${wsSlug}/more/runtimes/${runtime.id}`);
                     }}
@@ -436,16 +493,36 @@ export default function MachineDetailPage() {
  * (shared by every runtime on the daemon) so the row doesn't repeat its
  * machine, and keeps a one-off per-runtime rename visible — web
  * runtimeRowLabel / RuntimeList's Runtime cell.
+ *
+ * Iteration 167 ported the rest of web's row onto it: the health line carries
+ * the load suffix, and a facts line adds the agents bound to the runtime, the
+ * agent CLI version, the owner (only when the machine has more than one) and
+ * the row's 7d cost — the four things web's table columns say and the phone
+ * said nowhere except behind a tap.
  */
 function MachineRuntimeRow({
   runtime,
   machineTitle,
   now,
+  tz,
+  workload,
+  ownerName,
+  showOwner,
+  access,
+  activeAgents,
+  refetchAgents,
   onPress,
 }: {
   runtime: AgentRuntime;
   machineTitle: string;
   now: number;
+  tz: string;
+  workload: RuntimeWorkloadSummary | undefined;
+  ownerName: string | null;
+  showOwner: boolean;
+  access: RuntimePermissionDerivation;
+  activeAgents: readonly { id: string; name: string }[];
+  refetchAgents: () => void;
   onPress: () => void;
 }) {
   const { t } = useTranslation();
@@ -454,11 +531,27 @@ function MachineRuntimeRow({
   const timeAgo = useTimeAgo();
   const health = deriveRuntimeHealth(runtime, now);
   const displayName = runtimeRowLabel(runtime, machineTitle);
+  const activeCount = runtimeActiveTaskCount(workload);
+  const cliVersion = runtimeCliVersion(runtime);
+  const agentIds = workload?.agentIds ?? [];
+
+  const healthLine = [
+    t(`runtimes.health.${health}`),
+    runtime.provider || null,
+    health !== "online" && runtime.last_seen_at
+      ? timeAgo(runtime.last_seen_at)
+      : null,
+    showRuntimeLoadSuffix(health, activeCount)
+      ? t("runtimes.row.taskCount", { count: activeCount })
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <Pressable onPress={onPress} className="px-4 py-3 active:bg-secondary">
-      <View className="flex-row items-center gap-3">
-        <View className="flex-1 min-w-0 gap-0.5">
+      <View className="flex-row items-start gap-2">
+        <View className="flex-1 min-w-0 gap-1">
           <View className="flex-row items-center gap-1.5 flex-wrap">
             <Text className="text-sm font-medium text-foreground" numberOfLines={1}>
               {displayName}
@@ -471,19 +564,88 @@ function MachineRuntimeRow({
               </Text>
             </View>
           </View>
+
           <View className="flex-row items-center gap-1.5">
             <View className={cn("size-1.5 rounded-full", HEALTH_DOT[health])} />
-            <Text className="text-xs text-muted-foreground">
-              {t(`runtimes.health.${health}`)}
-              {runtime.provider ? ` · ${runtime.provider}` : ""}
-              {health !== "online" && runtime.last_seen_at
-                ? ` · ${timeAgo(runtime.last_seen_at)}`
-                : ""}
+            <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+              {healthLine}
             </Text>
           </View>
+
+          {/* Facts line — agents / CLI / owner. Web splits these across three
+              table columns; a phone row stacks them under the name, and the
+              line disappears entirely on a bare built-in runtime. */}
+          {agentIds.length > 0 || cliVersion || showOwner ? (
+            <View className="flex-row items-center gap-2 flex-wrap">
+              {agentIds.length > 0 ? (
+                <AvatarStack
+                  actors={agentIds.map((id) => ({ type: "agent" as const, id }))}
+                  max={3}
+                  size={18}
+                />
+              ) : null}
+              {cliVersion ? (
+                <Text className="text-[11px] font-mono text-muted-foreground">
+                  {cliVersion}
+                </Text>
+              ) : null}
+              {showOwner ? (
+                <Text className="text-[11px] text-muted-foreground" numberOfLines={1}>
+                  {ownerName ?? t("runtimes.detail.ownerUnknown")}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
         </View>
-        <Ionicons name="chevron-forward" size={14} color={muted} />
+
+        <View className="items-end gap-1">
+          <MachineRuntimeCost runtimeId={runtime.id} tz={tz} />
+          <View className="flex-row items-center gap-0.5">
+            <RuntimeRowMenu
+              runtime={runtime}
+              displayName={displayName}
+              canDelete={access.canDelete}
+              activeAgents={activeAgents}
+              refetchAgents={refetchAgents}
+            />
+            <Ionicons name="chevron-forward" size={14} color={muted} />
+          </View>
+        </View>
       </View>
     </Pressable>
+  );
+}
+
+/**
+ * The row's "Cost · 7d" value — web's CostCell, one `runtimeUsageOptions`
+ * request per row for RUNTIME_COST_FETCH_DAYS days (enough for the total and
+ * its delta in one round trip). Renders the em-dash placeholder while the
+ * request is in flight as well as when the runtime has no usage at all, so the
+ * row never reflows as costs land.
+ */
+function MachineRuntimeCost({ runtimeId, tz }: { runtimeId: string; tz: string }) {
+  const { t } = useTranslation();
+  const { data: usage = [] } = useQuery(
+    runtimeUsageOptions(runtimeId, RUNTIME_COST_FETCH_DAYS, tz),
+  );
+  const cell = runtimeCostCell(usage, tz);
+
+  if (cell.kind === "none") {
+    return <Text className="text-xs text-muted-foreground/60">—</Text>;
+  }
+
+  return (
+    <View className="items-end">
+      <Text className="text-xs font-medium text-foreground tabular-nums">
+        {cell.label}
+      </Text>
+      {cell.delta != null ? (
+        <Text className={cn("text-[10px] tabular-nums", COST_TONE[cell.tone])}>
+          {cell.delta === 0
+            ? t("runtimes.row.costFlat")
+            : `${cell.delta > 0 ? "↑" : "↓"}${Math.abs(cell.delta)}%`}
+        </Text>
+      ) : null}
+    </View>
   );
 }

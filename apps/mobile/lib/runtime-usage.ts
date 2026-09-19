@@ -483,6 +483,32 @@ export function pctChange(current: number, previous: number): number | null {
   return Math.round(((current - previous) / previous) * 100);
 }
 
+/**
+ * Total cost over the trailing `daysBack` window, end-exclusive of today in
+ * `tz` — web `utils.ts:computeCostInWindow`, which drives the runtime-list cost
+ * cell and its ↑/↓ delta (`offsetDays` shifts back to the prior period).
+ *
+ * Note this is NOT `sliceWindow`: that one keeps today (the detail page's
+ * charts want the partial current day), while a 7d-vs-prior-7d comparison
+ * needs both windows to be whole days or the delta is measured against a
+ * shorter baseline.
+ */
+export function computeCostInWindow(
+  rows: readonly RuntimeUsage[],
+  daysBack: number,
+  tz: string,
+  offsetDays: number = 0,
+): number {
+  const today = todayIso(tz);
+  const isoEnd = addDaysIso(today, -offsetDays);
+  const isoStart = addDaysIso(today, -offsetDays - daysBack);
+  let total = 0;
+  for (const row of rows) {
+    if (row.date >= isoStart && row.date < isoEnd) total += estimateCost(row);
+  }
+  return total;
+}
+
 // --- daily / weekly stacked series (web aggregateByDate / aggregateByWeek) --
 
 export interface DailyTokenData {
