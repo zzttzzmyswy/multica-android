@@ -119,3 +119,66 @@ describe("usage dashboard query options forward projectId and tz to the api", ()
     expect(a).not.toEqual(b);
   });
 });
+// Iteration 171: the page re-polls on the server's own rollup cadence, and a
+// range change keeps the previous result mounted instead of falling back to a
+// skeleton. Both are web parity (packages/core/dashboard/queries.ts:45-65).
+describe("usage dashboard polling and range transitions", () => {
+  const ALL = [
+    { name: "dashboardUsageDailyOptions", options: (days: number, ws = "ws1") => mod.dashboardUsageDailyOptions(ws, days, null, "UTC") },
+    { name: "dashboardUsageByAgentOptions", options: (days: number, ws = "ws1") => mod.dashboardUsageByAgentOptions(ws, days, null, "UTC") },
+    { name: "dashboardFailuresDailyOptions", options: (days: number, ws = "ws1") => mod.dashboardFailuresDailyOptions(ws, days, null, "UTC") },
+    { name: "dashboardFailuresByAgentOptions", options: (days: number, ws = "ws1") => mod.dashboardFailuresByAgentOptions(ws, days, null, "UTC") },
+    { name: "dashboardAgentRunTimeOptions", options: (days: number, ws = "ws1") => mod.dashboardAgentRunTimeOptions(ws, days, null, "UTC") },
+    { name: "dashboardRunTimeDailyOptions", options: (days: number, ws = "ws1") => mod.dashboardRunTimeDailyOptions(ws, days, null, "UTC") },
+  ];
+
+  /** `placeholderData` is typed as value-or-function; the implementation is
+   *  always the function, and that is the part under test. */
+  const placeholders = (options: { placeholderData?: unknown }) =>
+    options.placeholderData as (
+      previous: unknown,
+      previousQuery: { queryKey: readonly unknown[] } | undefined,
+    ) => unknown;
+
+  for (const c of ALL) {
+    it(`${c.name} re-polls on the server's 5-minute rollup cadence`, () => {
+      expect(c.options(7).refetchInterval).toBe(5 * 60 * 1000);
+    });
+  }
+
+  for (const c of ALL) {
+    it(`${c.name} keeps the previous result across a range change`, () => {
+      const next = c.options(7);
+      const previousQuery = { queryKey: c.options(30).queryKey };
+      // keepPreviousData is the identity function, so the previous rows must
+      // come straight back; anything else (undefined) means the guard rejected
+      // the transition and the caller falls back to a skeleton.
+      const previous = [{ date: "2026-08-25" }];
+      expect(placeholders(next)(previous, previousQuery)).toBe(previous);
+    });
+  }
+
+  for (const c of ALL) {
+    it(`${c.name} drops the previous result across a workspace change`, () => {
+      const next = c.options(7, "ws2");
+      const previousQuery = { queryKey: c.options(7, "ws1").queryKey };
+      expect(placeholders(next)([{ date: "x" }], previousQuery)).toBeUndefined();
+    });
+  }
+
+  for (const c of ALL) {
+    it(`${c.name} drops the previous result across a timezone change`, () => {
+      const next = c.options(7);
+      const other = c.options(7);
+      const otherTzQuery = {
+        queryKey: [...other.queryKey.slice(0, 5), "Pacific/Kiritimati"],
+      };
+      expect(placeholders(next)([{ date: "x" }], otherTzQuery)).toBeUndefined();
+    });
+  }
+
+  it("drops the previous result when there is no previous query", () => {
+    const next = mod.dashboardUsageDailyOptions("ws1", 7, null, "UTC");
+    expect(placeholders(next)([{ date: "x" }], undefined)).toBeUndefined();
+  });
+});

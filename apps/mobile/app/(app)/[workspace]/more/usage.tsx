@@ -39,7 +39,7 @@ import {
   View,
 } from "react-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Link, Stack } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Project } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
@@ -78,6 +78,7 @@ import {
   aggregateWeeklyTasks,
   aggregateWeeklyTime,
   bucketAgentDashboardRows,
+  deletedAgentCount,
   formatDuration,
   mergeAgentDashboardRows,
   type AgentDashboardRow,
@@ -116,6 +117,17 @@ import {
   type WeeklyErrorsRow,
 } from "@/lib/usage-errors";
 import { FAILURE_CLASSES, type FailureClass } from "@/lib/failure-class";
+import { LEADERBOARD_LIMIT, leaderboardView } from "@/lib/usage-leaderboard";
+import {
+  trendLegendSegments,
+  trendStackSegments,
+  type StackSegment,
+} from "@/lib/usage-chart-stack";
+import {
+  formatTzLabel,
+  formatUpdatedAt,
+  latestUpdatedAt,
+} from "@/lib/usage-freshness";
 import { resolveViewingTimezone } from "@/lib/timezone";
 import { useAuthStore } from "@/data/auth-store";
 import { useTranslation } from "@/lib/i18n/react";
@@ -326,13 +338,27 @@ export default function UsagePage() {
   // taskCount is the accurate distinct count and run time rides along.
   // Unknown agents fold into the deleted bucket (spend kept, time/tasks
   // dashed out — deleted agents never contributed to the run-time rollup).
-  const agentRows = useMemo(() => {
-    const known = agents.data ? new Set(agents.data.map((a) => a.id)) : null;
-    return bucketAgentDashboardRows(
+  //
+  // The caption's deleted count is read off `merged` — the unbucketed rows —
+  // because once folded the individuals are gone and the bucket's single row
+  // can no longer say how many agents it stands for.
+  const mergedAgentRows = useMemo(
+    () =>
       mergeAgentDashboardRows(aggregateByAgent(byAgent.data ?? []), runTime.data ?? []),
-      known,
-    );
-  }, [byAgent.data, runTime.data, agents.data]);
+    [byAgent.data, runTime.data],
+  );
+  const knownAgentIds = useMemo(
+    () => (agents.data ? new Set(agents.data.map((a) => a.id)) : null),
+    [agents.data],
+  );
+  const agentRows = useMemo(
+    () => bucketAgentDashboardRows(mergedAgentRows, knownAgentIds),
+    [mergedAgentRows, knownAgentIds],
+  );
+  const deletedAgents = useMemo(
+    () => deletedAgentCount(mergedAgentRows, knownAgentIds),
+    [mergedAgentRows, knownAgentIds],
+  );
 
   const agentName = useMemo(() => {
     const byId = new Map((agents.data ?? []).map((a) => [a.id, a.name]));
@@ -371,6 +397,37 @@ export default function UsagePage() {
   // The chart's bar scale follows whichever grain is on screen, so it is
   // derived inside TrendSection from the rows it actually draws rather than
   // here from the daily rows.
+
+  // Header freshness: which zone these buckets were cut on, and when the
+  // figures were last fetched. `viewTZ` is stored user input, so both formatters
+  // degrade to null on a zone `Intl` rejects rather than taking the page down.
+  const freshness = useMemo(() => {
+    const updated = formatUpdatedAt(
+      latestUpdatedAt([
+        daily.dataUpdatedAt,
+        byAgent.dataUpdatedAt,
+        runTime.dataUpdatedAt,
+        runTimeDaily.dataUpdatedAt,
+        failuresDaily.dataUpdatedAt,
+        failuresByAgent.dataUpdatedAt,
+      ]),
+      viewTZ,
+    );
+    const tz = formatTzLabel(viewTZ);
+    if (!tz) return null;
+    return updated
+      ? t("usage.headerTimezoneUpdated", { tz, time: updated })
+      : tz;
+  }, [
+    daily.dataUpdatedAt,
+    byAgent.dataUpdatedAt,
+    runTime.dataUpdatedAt,
+    runTimeDaily.dataUpdatedAt,
+    failuresDaily.dataUpdatedAt,
+    failuresByAgent.dataUpdatedAt,
+    viewTZ,
+    t,
+  ]);
 
   const showEmpty =
     !isLoading &&
@@ -502,25 +559,47 @@ export default function UsagePage() {
               </Pressable>
             </View>
 
+            {/* Which timezone the buckets were cut on, and when the figures
+                were last fetched. Every number below is sliced on `viewTZ`, so
+                without this the same chart under a different zone reads as a
+                different answer with nothing on screen admitting it (web
+                dashboard-page header). Dropped entirely when the stored zone
+                is one Intl can't name. */}
+            {freshness ? (
+              <Text className="px-4 pb-1 text-[10px] text-muted-foreground/70">
+                {freshness}
+              </Text>
+            ) : null}
+
             {/* KPI tiles — usage metrics; the Errors tab brings its own.
                 Four tiles matching web's KPI row: Cost / Tokens / Run time /
                 Tasks. Cost comes from estimateCost via computeDailyTotals
-                (authoritative ticks + rate-table estimate). */}
+                (authoritative ticks + rate-table estimate).
+
+                Iteration 171: every label carries the `· {{days}}D` window
+                suffix web puts on them, and the Tokens tile carries web's
+                Input/Output hint — the tile's total sums four token classes, so
+                without the hint there is no way to tell an input-heavy window
+                from a cache-heavy one. */}
             {mode !== "errors" ? (
               <View className="flex-row gap-3 px-4 py-3">
                 <KpiCard
                   icon="cash-outline"
-                  label={t("usage.totalCost")}
+                  label={t("usage.totalCostLabel", { days: range })}
                   value={formatUsd(totals.cost)}
                 />
                 <KpiCard
                   icon="flash"
-                  label={t("usage.totalTokens")}
+                  label={t("usage.totalTokensLabel", { days: range })}
                   value={formatTokens(totals.total)}
+                  hint={t("usage.totalTokensHint", {
+                    input: formatTokens(totals.input),
+                    output: formatTokens(totals.output),
+                  })}
                 />
                 <KpiCard
                   icon="time-outline"
-                  label={t("usage.totalRunTime")}
+                  label={t("usage.totalRunTimeLabel", { days: range })}
                   value={formatDuration(
                     runTimeTotals.totalSeconds,
                     t("usage.lessThanMinute"),
@@ -529,7 +608,7 @@ export default function UsagePage() {
                 />
                 <KpiCard
                   icon="checkmark-circle-outline"
-                  label={t("usage.totalTasks")}
+                  label={t("usage.totalTasksLabel", { days: range })}
                   value={String(runTimeTotals.taskCount)}
                   hint={t("usage.totalTasksHint", { failed: runTimeTotals.failedCount })}
                 />
@@ -571,6 +650,7 @@ export default function UsagePage() {
             ) : mode === "leaderboard" ? (
               <LeaderboardSection
                 rows={agentRows}
+                deletedAgents={deletedAgents}
                 agentName={agentName}
                 colorScheme={colorScheme}
               />
@@ -926,7 +1006,7 @@ function TrendSection({
   return (
     <View className="mt-3 px-4 gap-3">
       <View className="rounded-xl border border-border bg-card p-3">
-        <View className="mb-3 flex-row flex-wrap items-center justify-between gap-2">
+        <View className="mb-2 flex-row flex-wrap items-center justify-between gap-2">
           <Text className="text-xs font-medium text-foreground">{title}</Text>
           <View className="flex-row items-center gap-1">
             {METRIC_ORDER.map((m) => (
@@ -939,6 +1019,17 @@ function TrendSection({
             ))}
           </View>
         </View>
+        {/* Which colour is which series. The stack is only readable if the
+            reader can tell input from cache read, and the cost chart's legend
+            is deliberately one entry shorter than the token chart's — the
+            chart itself drops that series (web ChartLegend). */}
+        {trendLegendSegments(metric).length > 0 ? (
+          <View className="mb-2 flex-row flex-wrap items-center gap-2.5">
+            {trendLegendSegments(metric).map((seg) => (
+              <ChartLegendDot key={seg.key} segment={seg} colorScheme={colorScheme} />
+            ))}
+          </View>
+        ) : null}
         <DimPill
           allowedDims={allowedDims}
           value={dim}
@@ -947,17 +1038,19 @@ function TrendSection({
         />
 
         {metric === "tokens" ? (
-          <TrendBars
-            rows={tokenRows.map((d) => ({ date: d.date, label: d.label, value: d.total }))}
+          <StackedTrendBars
+            rows={tokenRows}
             max={maxTokens}
-            color={brand}
+            metric="tokens"
+            colorScheme={colorScheme}
             noDataLabel={t("usage.noData")}
           />
         ) : metric === "cost" ? (
-          <TrendBars
-            rows={costRows.map((d) => ({ date: d.date, label: d.label, value: d.total }))}
+          <StackedTrendBars
+            rows={costRows}
             max={maxCost}
-            color={brand}
+            metric="cost"
+            colorScheme={colorScheme}
             noDataLabel={t("usage.noData")}
           />
         ) : metric === "time" ? (
@@ -1115,6 +1208,125 @@ function MetricPill({
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+/** Colour token → i18n label for the stacked trend legend. */
+const LEGEND_LABEL: Record<StackSegment["key"], string> = {
+  input: "usage.legendInput",
+  output: "usage.legendOutput",
+  cacheRead: "usage.legendCacheRead",
+  cacheWrite: "usage.legendCacheWrite",
+};
+
+/** One legend entry: colour pip + series name, in stack order. */
+function ChartLegendDot({
+  segment,
+  colorScheme,
+}: {
+  segment: StackSegment;
+  colorScheme: "light" | "dark";
+}) {
+  const { t } = useTranslation();
+  const theme = THEME[colorScheme];
+  const color = theme[`chart${segment.chartToken}` as keyof typeof theme] as string;
+  return (
+    <View className="flex-row items-center gap-1">
+      <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: color }} />
+      <Text className="text-[10px] text-muted-foreground">{t(LEGEND_LABEL[segment.key])}</Text>
+    </View>
+  );
+}
+
+/**
+ * Multi-segment stacked bar row for the token and cost trends (iteration 171).
+ *
+ * Web draws these as recharts stacks rather than single bars, because a day's
+ * total says nothing about what it was made of: cache reads can dominate a raw
+ * token count, and a cost total hides whether it came from input or output.
+ * Segment order and colours come from `trendStackSegments`, so the two charts
+ * stay in lockstep with web — including cost's deliberate omission of cache
+ * read, whose dollar contribution is two orders of magnitude too small to see.
+ *
+ * The bar's total height is scaled against the window's largest total, so the
+ * segments keep their proportion to each other and to the other days.
+ */
+function StackedTrendBars({
+  rows,
+  max,
+  metric,
+  colorScheme,
+  noDataLabel,
+}: {
+  /** A daily or weekly bucket carrying its token classes; which of them the
+   *  chart reads is decided by `trendStackSegments(metric)`, not here. */
+  rows: ({ date: string; label: string } & Partial<Record<StackSegment["key"], number>>)[];
+  max: number;
+  metric: string;
+  colorScheme: "light" | "dark";
+  noDataLabel: string;
+}) {
+  const theme = THEME[colorScheme];
+  if (rows.length === 0) {
+    return <Text className="text-xs text-muted-foreground">{noDataLabel}</Text>;
+  }
+  const segments = trendStackSegments(metric);
+  const labelEvery = rows.length > 8 ? 2 : 1;
+  return (
+    <View className="flex-row items-end gap-1.5" style={{ height: CHART_HEIGHT + 22 }}>
+      {rows.map((d, i) => {
+        const parts = segments.map((seg) => ({ seg, value: d[seg.key] ?? 0 }));
+        const total = parts.reduce((sum, p) => sum + p.value, 0);
+        const h = max > 0 ? Math.max((total / max) * CHART_HEIGHT, 2) : 2;
+        // Within the bar, each segment takes its share of the total; a present
+        // but tiny series keeps a 1px sliver so it does not vanish entirely.
+        const heights = parts.map((p) =>
+          total > 0 ? Math.max(Math.round((p.value / total) * h), p.value > 0 ? 1 : 0) : 0,
+        );
+        return (
+          <View key={d.date} className="flex-1 items-center gap-1">
+            <View
+              style={{
+                height: h,
+                width: "100%",
+                maxWidth: 26,
+                borderRadius: 4,
+                overflow: "hidden",
+                backgroundColor: theme.muted,
+                opacity: total > 0 ? 0.9 : 0.15,
+                justifyContent: "flex-end",
+              }}
+            >
+              {/* Reversed: the last segment in stack order sits on top, so the
+                  first (input) renders at the bottom. */}
+              {parts
+                .map((p, idx) => ({ p, idx }))
+                .reverse()
+                .map(({ p, idx }) => (
+                  <View
+                    key={p.seg.key}
+                    style={{
+                      height: heights[idx],
+                      backgroundColor: theme[
+                        `chart${p.seg.chartToken}` as keyof typeof theme
+                      ] as string,
+                    }}
+                  />
+                ))}
+            </View>
+            {i % labelEvery === 0 ? (
+              <Text className="text-[9px] text-muted-foreground" numberOfLines={1}>
+                {d.label}
+              </Text>
+            ) : (
+              <Text className="text-[9px] text-transparent" numberOfLines={1}>
+                ·
+              </Text>
+            )}
+          </View>
+        );
+      })}
+    </View>
   );
 }
 
@@ -1317,10 +1529,13 @@ const LEADERBOARD_SORT_LABEL: Record<LeaderboardMetric, string> = {
 
 function LeaderboardSection({
   rows,
+  deletedAgents,
   agentName,
   colorScheme,
 }: {
   rows: AgentDashboardRow[];
+  /** Distinct agents folded into the deleted bucket — drives the caption. */
+  deletedAgents: number;
   agentName: (agentId: string) => string;
   colorScheme: "light" | "dark";
 }) {
@@ -1330,6 +1545,7 @@ function LeaderboardSection({
   const muted = theme.mutedForeground;
   const less = t("usage.lessThanMinute");
   const [sortBy, setSortBy] = useState<LeaderboardMetric>("tokens");
+  const [showAll, setShowAll] = useState(false);
 
   // Re-rank when the sort metric changes (web parity).
   const sorted = useMemo(() => {
@@ -1338,11 +1554,18 @@ function LeaderboardSection({
   }, [rows, sortBy]);
 
   // Measured across every row so a bar means the same thing in any ranking —
-  // the leader always fills the track (web parity).
+  // the leader always fills the track, and a bar keeps its width when the tail
+  // is expanded rather than re-scaling under the reader (web parity).
   const maxValue = useMemo(() => {
     const metric = LEADERBOARD_METRIC[sortBy];
     return sorted.reduce((m, r) => Math.max(m, metric(r)), 0);
   }, [sorted, sortBy]);
+
+  // Window the ranked tail behind a toggle, and count what the caption names.
+  const view = useMemo(
+    () => leaderboardView(sorted, showAll, deletedAgents),
+    [sorted, showAll, deletedAgents],
+  );
 
   if (rows.length === 0) {
     return (
@@ -1357,20 +1580,43 @@ function LeaderboardSection({
       <View className="rounded-xl border border-border bg-card">
         <View className="flex-row flex-wrap items-center justify-between gap-2 border-b border-border/60 px-3 pt-3 pb-2">
           <Text className="text-xs font-medium text-foreground">
-            {t("usage.leaderboardTab")}
+            {t("usage.leaderboardTitle")}
           </Text>
-          <View className="flex-row items-center gap-1">
-            {(Object.keys(LEADERBOARD_METRIC) as LeaderboardMetric[]).map((m) => (
-              <SortPill
-                key={m}
-                active={sortBy === m}
-                label={t(LEADERBOARD_SORT_LABEL[m])}
-                onPress={() => setSortBy(m)}
-              />
-            ))}
+          <View className="flex-row items-center gap-2">
+            <Text className="text-[10px] text-muted-foreground">
+              {view.deletedCount > 0
+                ? t("usage.leaderboardCaptionDeleted", {
+                    count: view.namedCount,
+                    deleted: view.deletedCount,
+                  })
+                : t("usage.leaderboardCaption", { count: view.namedCount })}
+            </Text>
+            {/* The caption already states how many agents the window covers,
+                so the toggle carries a count only while collapsing — spelling
+                the total out twice reads as two different numbers once the
+                deleted bucket splits the caption (web parity). */}
+            {view.collapsible ? (
+              <Pressable onPress={() => setShowAll((v) => !v)} hitSlop={8}>
+                <Text className="text-[10px] text-muted-foreground underline">
+                  {showAll
+                    ? t("usage.leaderboardShowLess", { count: LEADERBOARD_LIMIT })
+                    : t("usage.leaderboardShowAll")}
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
-        {sorted.map((r, idx) => {
+        <View className="flex-row flex-wrap items-center gap-1 border-b border-border/60 px-3 py-2">
+          {(Object.keys(LEADERBOARD_METRIC) as LeaderboardMetric[]).map((m) => (
+            <SortPill
+              key={m}
+              active={sortBy === m}
+              label={t(LEADERBOARD_SORT_LABEL[m])}
+              onPress={() => setSortBy(m)}
+            />
+          ))}
+        </View>
+        {view.rows.map((r, idx) => {
           const synthetic = isSyntheticAgentRow(r.agentId);
           const deleted = r.agentId === DELETED_AGENTS_ROW_ID;
           const value = LEADERBOARD_METRIC[sortBy](r);
@@ -1918,6 +2164,7 @@ function OffenderRow({
   colorScheme: "light" | "dark";
 }) {
   const { t } = useTranslation();
+  const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const colors = failureClassColors(THEME[colorScheme].destructive, THEME[colorScheme].card);
   const unresolved = row.agentId === UNRESOLVED_AGENTS_ROW_ID;
 
@@ -1940,15 +2187,35 @@ function OffenderRow({
           )}
         </View>
         <View className="flex-1">
-          <Text
-            className={cn(
-              "text-xs",
-              unresolved ? "italic text-muted-foreground" : "font-medium text-foreground",
-            )}
-            numberOfLines={1}
-          >
-            {name}
-          </Text>
+          {/* A named agent links into its detail page — the drill-down from
+              "this agent is the problem" to the failed runs themselves. An
+              unresolved row has no page to open (the agent is hard-deleted or
+              private to someone else) and no name to show, so it stays inert:
+              rendering the id would leak a bare UUID and, for a private agent,
+              its existence and failure profile to a member who cannot see it
+              (web errors-tab.tsx:530-546). */}
+          {unresolved || !wsSlug ? (
+            <Text
+              className={cn(
+                "text-xs",
+                unresolved ? "italic text-muted-foreground" : "font-medium text-foreground",
+              )}
+              numberOfLines={1}
+            >
+              {name}
+            </Text>
+          ) : (
+            <Link
+              href={`/${wsSlug}/more/agents/${row.agentId}?view=overview`}
+              asChild
+            >
+              <Pressable accessibilityRole="link">
+                <Text className="text-xs font-medium text-foreground" numberOfLines={1}>
+                  {name}
+                </Text>
+              </Pressable>
+            </Link>
+          )}
           <View className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted">
             <View
               style={{

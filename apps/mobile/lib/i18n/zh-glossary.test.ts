@@ -128,6 +128,7 @@ const RUN_SENSE_KEYS = [
   "usage.tasksShort",
   "usage.totalRunTimeHint",
   "usage.totalTasks",
+  "usage.totalTasksLabel",
   "usage.weekTrendTasksTitle",
 ];
 

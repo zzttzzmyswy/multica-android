@@ -16,6 +16,7 @@ import {
   formatDuration,
   mergeAgentDashboardRows,
   bucketAgentDashboardRows,
+  deletedAgentCount,
 } from "./usage-time";
 
 const daily = (rows: [string, number, number, number, number][]): DashboardRunTimeDaily[] =>
@@ -257,6 +258,51 @@ describe("bucketAgentDashboardRows", () => {
     expect(out.some((r) => r.agentId === DELETED_AGENTS_ROW_ID)).toBe(false);
     const restricted = out.find((r) => r.agentId === RESTRICTED_AGENTS_ROW_ID);
     expect(restricted?.seconds).toBe(120);
+  });
+});
+
+// The caption's "· N deleted" suffix. The bucket is one row standing for N
+// agents, so this reads the unbucketed list rather than the bucket's length.
+describe("deletedAgentCount", () => {
+  it("counts every agent the bucket will fold", () => {
+    const rows = mergeAgentDashboardRows(
+      token([
+        ["a", 100, 1],
+        ["gone-1", 50, 1],
+        ["gone-2", 20, 1],
+      ]),
+      runTime([]),
+    );
+    expect(deletedAgentCount(rows, new Set(["a"]))).toBe(2);
+  });
+
+  it("counts nothing while the agent list is still loading", () => {
+    const rows = mergeAgentDashboardRows(token([["a", 1, 1]]), runTime([]));
+    expect(deletedAgentCount(rows, null)).toBe(0);
+  });
+
+  // The server's restricted bucket is unknown to the agent list too, but its
+  // agents are alive — calling them deleted is the MUL-5409 mislabel.
+  it("does not count the restricted bucket as deleted", () => {
+    const rows = mergeAgentDashboardRows(
+      token([
+        [RESTRICTED_AGENTS_ROW_ID, 7, 1],
+        ["gone", 3, 1],
+      ]),
+      runTime([]),
+    );
+    expect(deletedAgentCount(rows, new Set<string>())).toBe(1);
+  });
+
+  it("is zero when every row names a known agent", () => {
+    const rows = mergeAgentDashboardRows(
+      token([
+        ["a", 1, 1],
+        ["b", 1, 1],
+      ]),
+      runTime([]),
+    );
+    expect(deletedAgentCount(rows, new Set(["a", "b"]))).toBe(0);
   });
 });
 

@@ -27,6 +27,7 @@ import {
   DELETED_AGENTS_ROW_ID,
   RESTRICTED_AGENTS_ROW_ID,
   formatDateLabel,
+  isSyntheticAgentRow,
   type AgentUsageRow,
 } from "@/lib/usage-format";
 import { buildWeekShells } from "@/lib/usage-dim";
@@ -265,4 +266,26 @@ export function bucketAgentDashboardRows(
     bucket.cost += r.cost;
   }
   return hasDeleted ? [...knownRows, bucket] : knownRows;
+}
+
+/**
+ * How many distinct hard-deleted agents `bucketAgentDashboardRows` folded into
+ * the deleted bucket — the bucket is a single row, so its own length can't say.
+ * Drives the leaderboard caption's "· N deleted" suffix (web dashboard-page
+ * `deletedAgentCount`).
+ *
+ * Read off the *unbucketed* rows: once folded, the individuals are gone. The
+ * server's restricted bucket is not a known agent either, but it is not a
+ * deletion — counting it would mislabel live-but-invisible agents as deleted
+ * (web MUL-5409). `knownAgentIds` null (agent list still loading) counts
+ * nothing, matching the bucketing pass that is itself a no-op in that window.
+ */
+export function deletedAgentCount(
+  rows: readonly AgentDashboardRow[],
+  knownAgentIds: ReadonlySet<string> | null,
+): number {
+  if (!knownAgentIds) return 0;
+  return rows.filter(
+    (r) => !knownAgentIds.has(r.agentId) && !isSyntheticAgentRow(r.agentId),
+  ).length;
 }
