@@ -4,9 +4,10 @@
  *
  * One action sheet per session, mirroring web's `chat-session-header.tsx`
  * (rename / delete) + `chat-thread-list.tsx` (pin / unpin / archive /
- * unarchive): Rename · (Un)pin · (Un)archive · Delete. Rename needs text
- * entry, which iOS's ActionSheetIOS can't do — the hook pairs the sheet with
- * the `RenameChatDialog` sibling and returns the element the caller mounts.
+ * unarchive / stop): Rename · (Un)pin · (Stop | (Un)archive) · Delete.
+ * Rename needs text entry, which iOS's ActionSheetIOS can't do — the hook
+ * pairs the sheet with the `RenameChatDialog` sibling and returns the element
+ * the caller mounts.
  *
  * `session_updated` WS events patch the sessions cache in place (pin re-sorts
  * the list), so these mutations only need optimistic local flips + settle
@@ -22,6 +23,7 @@ import {
   useRenameChatSession,
   useSetChatSessionArchived,
   useSetChatSessionPinned,
+  useStopChatTask,
 } from "@/data/mutations/chat";
 import { RenameChatDialog } from "@/components/chat/rename-chat-dialog";
 import { useTranslation } from "@/lib/i18n/react";
@@ -34,6 +36,13 @@ interface ShowOptions {
    *  Restricted menu matching web's `chat-thread-list.tsx` archived view:
    *  Unarchive · Delete — no rename / pin (and no delete anywhere else). */
   archivedView?: boolean;
+  /** The session's in-flight task, when one is running. Present ⇒ the menu
+   *  offers "stop" IN PLACE OF "archive", the way web's thread list does
+   *  (`chat-thread-list.tsx:301-311`): archiving a session mid-turn is a
+   *  different intent from wanting the run to end, and offering both invites
+   *  picking the wrong one. Callers read this from the same
+   *  `pendingChatTasksOptions` aggregate that drives the "typing…" row. */
+  runningTask?: { task_id: string } | null;
 }
 
 export function useChatSessionActions() {
@@ -42,6 +51,7 @@ export function useChatSessionActions() {
   const setPinned = useSetChatSessionPinned();
   const setArchived = useSetChatSessionArchived();
   const deleteSession = useDeleteChatSession();
+  const stopTask = useStopChatTask();
   const [renameTarget, setRenameTarget] = useState<ChatSession | null>(null);
 
   const showActions = useCallback(
@@ -52,6 +62,7 @@ export function useChatSessionActions() {
         | { kind: "rename" }
         | { kind: "pin" }
         | { kind: "archive" }
+        | { kind: "stop" }
         | { kind: "delete" }
         | { kind: "cancel" };
 
@@ -62,6 +73,7 @@ export function useChatSessionActions() {
         actions.push(action);
       };
 
+      const runningTask = opts?.runningTask ?? null;
       if (opts?.archivedView) {
         // Web chat-thread-list archived view: unarchive · delete (red).
         push(t("chat.unarchive"), { kind: "archive" });
@@ -74,21 +86,27 @@ export function useChatSessionActions() {
         push(t("chat.unarchive"), { kind: "archive" });
         push(t("chat.deleteChat"), { kind: "delete" });
       } else {
-        // Active session: rename · pin · archive — no hard delete. Web offers
-        // delete only once a chat is archived (chat-session-header.tsx:172
-        // "Hard delete is offered only once a chat is archived." / thread
-        // list history view: pin + archive only).
+        // Active session: rename · pin · (stop | archive) — no hard delete.
+        // Web offers delete only once a chat is archived
+        // (chat-session-header.tsx:172 / thread list history view).
         push(t("chat.rename"), { kind: "rename" });
         push(session.pinned ? t("chat.unpin") : t("chat.pin"), { kind: "pin" });
-        push(t("common.archive"), { kind: "archive" });
+        if (runningTask) {
+          push(t("chat.stop"), { kind: "stop" });
+        } else {
+          push(t("common.archive"), { kind: "archive" });
+        }
       }
       push(t("menu.cancel"), { kind: "cancel" });
 
       const cancelButtonIndex = options.length - 1;
-      // Red "delete" only when the menu actually offers it (active sessions
-      // never reach the destructive slot).
+      // Red slot: "delete" when offered, otherwise "stop" — both are
+      // destructive-ish. Web paints stop `danger` too.
+      const destructiveKind = actions[actions.length - 2]?.kind;
       const destructiveButtonIndex =
-        actions[actions.length - 2]?.kind === "delete" ? cancelButtonIndex - 1 : undefined;
+        destructiveKind === "delete" || destructiveKind === "stop"
+          ? cancelButtonIndex - 1
+          : undefined;
 
       ActionSheet.showActionSheetWithOptions(
         { options, cancelButtonIndex, destructiveButtonIndex },
@@ -110,6 +128,26 @@ export function useChatSessionActions() {
                 id: session.id,
                 archived: session.status !== "archived",
               });
+              break;
+            case "stop":
+              if (!runningTask) break;
+              Alert.alert(
+                t("chat.stopDialogTitle"),
+                session.title || t("chat.untitled"),
+                [
+                  { text: t("chat.stopDialogCancel"), style: "cancel" },
+                  {
+                    text: t("chat.stopDialogConfirm"),
+                    style: "destructive",
+                    onPress: () =>
+                      stopTask.mutate({
+                        taskId: runningTask.task_id,
+                        sessionId: session.id,
+                      }),
+                  },
+                ],
+                { cancelable: true },
+              );
               break;
             case "delete":
               Alert.alert(
@@ -135,7 +173,7 @@ export function useChatSessionActions() {
         },
       );
     },
-    [t, setPinned, setArchived, deleteSession],
+    [t, setPinned, setArchived, deleteSession, stopTask],
   );
 
   // The rename dialog is a controlled sibling of the action sheet — render

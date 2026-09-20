@@ -70,6 +70,7 @@ import {
   chatKeys,
   chatMessagesOptions,
   chatSessionsOptions,
+  loadOlderChatMessages,
   pendingChatTaskOptions,
   sortChatSessions,
   sessionActivityTime,
@@ -82,7 +83,11 @@ import {
 import {
   useCreateChatSession,
   useMarkChatSessionRead,
+  useRegenerateChatQuickActions,
 } from "@/data/mutations/chat";
+import { EMPTY_CHAT_MESSAGES_PAGE_STATE } from "@/lib/chat-message-page";
+import type { ChatQuickActionsPendingState } from "@/lib/chat-quick-actions";
+import { useQuickActionsPendingTimeout } from "@/lib/use-quick-actions-pending-timeout";
 import {
   DRAFT_NEW_SESSION,
   useChatDraftsStore,
@@ -190,6 +195,54 @@ export default function ChatTab() {
   );
   const { data: pendingTask } = useQuery(
     pendingChatTaskOptions(activeSessionId),
+  );
+
+  // ── Windowed history (C1) ──────────────────────────────────────────────
+  // The list opens on the newest page; the cursor state tells it whether
+  // anything older exists and what to ask for next.
+  const { data: messagesPageState } = useQuery({
+    queryKey: chatKeys.messagesPage(activeSessionId ?? ""),
+    // Client-only cache: written by `chatMessagesOptions`' queryFn and by
+    // `loadOlderChatMessages`. Nothing to fetch on its own.
+    queryFn: () => EMPTY_CHAT_MESSAGES_PAGE_STATE,
+    enabled: false,
+    staleTime: Infinity,
+  });
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [olderLoadFailed, setOlderLoadFailed] = useState(false);
+  const handleLoadOlder = useCallback(async () => {
+    if (!activeSessionId) return;
+    setLoadingOlder(true);
+    setOlderLoadFailed(false);
+    try {
+      await loadOlderChatMessages(qc, activeSessionId);
+    } catch {
+      // The header row offers a retry; without this the scrollback would just
+      // stop at the window edge with no explanation.
+      setOlderLoadFailed(true);
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [activeSessionId, qc]);
+
+  // ── Follow-up suggestions (C3) ─────────────────────────────────────────
+  const { data: quickActionsPending = null } = useQuery({
+    queryKey: chatKeys.quickActionsPending(activeSessionId ?? ""),
+    queryFn: (): ChatQuickActionsPendingState | null => null,
+    enabled: false,
+    staleTime: Infinity,
+  });
+  useQuickActionsPendingTimeout(activeSessionId, quickActionsPending);
+  const regenerateQuickActions = useRegenerateChatQuickActions();
+  const handleRegenerateQuickActions = useCallback(
+    (message: ChatMessage) => {
+      if (!activeSessionId) return;
+      return regenerateQuickActions.mutateAsync({
+        sessionId: activeSessionId,
+        messageId: message.id,
+      });
+    },
+    [activeSessionId, regenerateQuickActions],
   );
   // Stable ref — draft typing must not rebuild `visibleMessages` (a fresh
   // array reference would defeat ChatMessageList's memo and re-render every
@@ -603,9 +656,12 @@ export default function ChatTab() {
   const handleSessionMenu = useCallback(() => {
     if (!activeSession) return;
     showSessionActions(activeSession, {
+      // The open session's own pending task, so the menu swaps archive for
+      // stop exactly while this chat is running.
+      runningTask: pendingTask?.task_id ? { task_id: pendingTask.task_id } : null,
       onDeleted: () => setActiveSessionId(null),
     });
-  }, [activeSession, showSessionActions]);
+  }, [activeSession, showSessionActions, pendingTask]);
 
   // ── Composer disabled-state ────────────────────────────────────────────
   const disabled =
@@ -664,6 +720,12 @@ export default function ChatTab() {
           pendingTask={pendingTask}
           liveTaskMessages={liveTaskMessages}
           availability={presenceAvailability}
+          hasOlderMessages={messagesPageState?.hasMore ?? false}
+          loadingOlder={loadingOlder}
+          olderLoadFailed={olderLoadFailed}
+          onLoadOlder={() => void handleLoadOlder()}
+          onRegenerateQuickActions={handleRegenerateQuickActions}
+          quickActionsPendingMessageId={quickActionsPending?.message_id ?? null}
         />
         {/* Banner slot — web's precedence (`chat-window.tsx`): no-agent >
             archived agent > runtime required > offline. `NoAgentBanner` is

@@ -511,6 +511,45 @@ export const ChatMessageListSchema = z.array(ChatMessageSchema).default([]);
 
 export const EMPTY_CHAT_MESSAGE_LIST: ChatMessage[] = [];
 
+/**
+ * Cursor into a session's message history — the server's
+ * `ChatMessagesCursorResponse` (`server/internal/handler/chat.go:977-980`).
+ * `before_created_at` + `before_id` are the composite key, not just the
+ * timestamp: two messages can share a created_at at second granularity, and
+ * the id breaks the tie.
+ */
+export const ChatMessagesCursorSchema = z
+  .object({
+    created_at: z.string(),
+    id: z.string(),
+  })
+  .loose();
+
+export type ChatMessagesCursor = z.infer<typeof ChatMessagesCursorSchema>;
+
+/**
+ * One window of a session's history. `has_more` + `next_cursor` are the whole
+ * point: they let the list open on the newest 50 messages and walk backwards
+ * on demand instead of pulling the entire transcript on every session open.
+ */
+export const ChatMessagesPageSchema = z
+  .object({
+    messages: ChatMessageListSchema,
+    limit: z.number().default(50),
+    has_more: z.boolean().default(false),
+    next_cursor: ChatMessagesCursorSchema.nullable().default(null),
+  })
+  .loose();
+
+export type ChatMessagesPage = z.infer<typeof ChatMessagesPageSchema>;
+
+export const EMPTY_CHAT_MESSAGES_PAGE: ChatMessagesPage = {
+  messages: [],
+  limit: 50,
+  has_more: false,
+  next_cursor: null,
+};
+
 const ChatQueuedTaskSchema = z.object({
   task_id: z.string(),
   status: z.string().default("queued"),

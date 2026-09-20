@@ -17,18 +17,40 @@
  * are scoped to each owning hook (see use-chat-sessions-realtime.ts and
  * use-chat-session-realtime.ts).
  */
-import { queryOptions } from "@tanstack/react-query";
-import type { ChatSession } from "@multica/core/types";
+import { queryOptions, type QueryClient } from "@tanstack/react-query";
+import type { ChatMessage, ChatSession } from "@multica/core/types";
 import { api } from "@/data/api";
 import { pendingTaskPollMs } from "@/lib/chat-task-polling";
+import {
+  EMPTY_CHAT_MESSAGES_PAGE_STATE,
+  mergeNewestMessages,
+  mergeOlderMessages,
+  pageStateFrom,
+  type ChatMessagesPageState,
+} from "@/lib/chat-message-page";
 
 export const chatKeys = {
   all: (wsId: string | null) => ["chat", wsId] as const,
   sessions: (wsId: string | null) =>
     [...chatKeys.all(wsId), "sessions"] as const,
   messages: (sessionId: string) => ["chat", "messages", sessionId] as const,
+  /** Cursor bookkeeping for "load older" — `{hasMore, cursor}`. Kept OUT of
+   *  the messages cache on purpose: that cache stays a flat ascending
+   *  `ChatMessage[]` because WS appends, optimistic sends and
+   *  `hideQueuedChatMessages` all read it as one array. Web can use an
+   *  infinite query (`chatKeys.messagesPage`) because its page cache is
+   *  separate from the realtime one; mobile's realtime path writes the flat
+   *  cache directly, so the cursor needs its own slot. */
+  messagesPage: (sessionId: string) =>
+    ["chat", "messages-page", sessionId] as const,
   pendingTask: (sessionId: string) =>
     ["chat", "pending-task", sessionId] as const,
+  /** Client-only marker (never fetched): this session's latest assistant turn
+   *  is awaiting a refreshed quick-actions supplement. Drives the refresh
+   *  spinner and the skeleton between the refresh tap and the
+   *  `chat:quick_actions` event. Mirrors web's `quickActionsPending`. */
+  quickActionsPending: (sessionId: string) =>
+    ["chat", "quick-actions-pending", sessionId] as const,
   /** Per-task live execution timeline (thinking / tool_use / tool_result /
    *  text / error rows). Cache is workspace-agnostic — keyed only on
    *  `taskId` — matching web's `chatKeys.taskMessages` shape so future
@@ -115,10 +137,77 @@ export const chatSessionsOptions = (wsId: string | null) =>
 export const chatMessagesOptions = (sessionId: string | null) =>
   queryOptions({
     queryKey: chatKeys.messages(sessionId ?? ""),
-    queryFn: ({ signal }) => api.listChatMessages(sessionId!, { signal }),
+    queryFn: async ({ signal, client }) => {
+      const page = await api.listChatMessagesPage(sessionId!, { signal });
+      // Seed the cursor from the FIRST page only. This queryFn runs once per
+      // session (`staleTime: Infinity`, and every later mutation patches the
+      // flat cache rather than refetching), so the window can never be
+      // re-truncated underneath a user who has already loaded older history.
+      client.setQueryData<ChatMessagesPageState>(
+        chatKeys.messagesPage(sessionId!),
+        pageStateFrom(page),
+      );
+      // Merge rather than replace: the chat screen re-fetches this query when
+      // a turn finishes, and a reader may be deep in scrollback by then. A
+      // replace would drop every page they had loaded.
+      const prev =
+        client.getQueryData<ChatMessage[]>(chatKeys.messages(sessionId!)) ?? [];
+      return mergeNewestMessages(prev, page.messages);
+    },
     enabled: !!sessionId,
     staleTime: Infinity,
   });
+
+/**
+ * Sessions with an older-page request in flight. The list's `onStartReached`
+ * fires on every scroll frame near the top, and the network on cellular is
+ * slow enough that a user can easily trigger a dozen before the first lands —
+ * each would fetch the same cursor and prepend the same rows.
+ */
+const olderPageInFlight = new Set<string>();
+
+/**
+ * Fetch the page before the current window and prepend it to the flat
+ * messages cache. Returns true when the window grew.
+ *
+ * Mirrors `fetchNextPage` on web's `chatMessagesPageOptions`
+ * (packages/core/chat/queries.ts:144-155), with the difference that the
+ * prepend target is the flat realtime cache rather than `InfiniteData.pages`.
+ */
+export async function loadOlderChatMessages(
+  qc: QueryClient,
+  sessionId: string,
+): Promise<boolean> {
+  const pageState =
+    qc.getQueryData<ChatMessagesPageState>(chatKeys.messagesPage(sessionId)) ??
+    EMPTY_CHAT_MESSAGES_PAGE_STATE;
+  if (!pageState.hasMore || !pageState.cursor) return false;
+  if (olderPageInFlight.has(sessionId)) return false;
+
+  olderPageInFlight.add(sessionId);
+  try {
+    const page = await api.listChatMessagesPage(sessionId, {
+      before: pageState.cursor,
+    });
+    const prev =
+      qc.getQueryData<ChatMessage[]>(chatKeys.messages(sessionId)) ?? [];
+    const merged = mergeOlderMessages(prev, page.messages);
+    if (merged !== prev) {
+      qc.setQueryData(chatKeys.messages(sessionId), merged);
+    }
+    // Advance the cursor even when the merge was a no-op. A page whose rows
+    // were all already present (a message landed between request and response,
+    // shifting the window) must still move the anchor forward, or the next
+    // scroll would re-request the exact same page forever.
+    qc.setQueryData<ChatMessagesPageState>(
+      chatKeys.messagesPage(sessionId),
+      pageStateFrom(page),
+    );
+    return merged !== prev;
+  } finally {
+    olderPageInFlight.delete(sessionId);
+  }
+}
 
 export const pendingChatTaskOptions = (sessionId: string | null) =>
   queryOptions({

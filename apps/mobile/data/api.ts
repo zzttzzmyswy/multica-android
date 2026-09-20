@@ -262,6 +262,7 @@ import {
   AttachmentListSchema,
   AttachmentSchema,
   ChatMessageListSchema,
+  ChatMessagesPageSchema,
   CommentSchema,
   ChatPendingTaskSchema,
   ChatSessionListSchema,
@@ -293,6 +294,7 @@ import {
   EMPTY_AUTOPILOT_TRIGGER,
   EMPTY_ATTACHMENT_LIST,
   EMPTY_CHAT_MESSAGE_LIST,
+  EMPTY_CHAT_MESSAGES_PAGE,
   EMPTY_CHAT_PENDING_TASK,
   EMPTY_CHAT_SESSION_LIST,
   EMPTY_CHILD_ISSUES_RESPONSE,
@@ -425,6 +427,8 @@ import {
 import type { ZodType } from "zod";
 import type { AppConfigResponse, CancelAgentTasksResponse } from "./schemas";
 import type {
+  ChatMessagesCursor,
+  ChatMessagesPage,
   CreateFeedbackInput,
   CreateFeedbackResponse,
 } from "./schemas";
@@ -495,6 +499,13 @@ const MAX_FILE_SIZE = 100 * 1024 * 1024;
  *  pull-to-refresh spinner never going away). 30s is generous for any
  *  reasonable Multica payload size on cellular. */
 const FETCH_TIMEOUT_MS = 30_000;
+
+/** Messages per page when walking a chat session's history backwards.
+ *  Mirrors web's `chatMessagesPageOptions` default (`packages/core/chat/
+ *  queries.ts:144`, `limit = 50`) and the server's own default
+ *  (`server/internal/handler/chat.go:990`) — the three must agree or the
+ *  first paint and every follow-up page would show different window sizes. */
+const CHAT_MESSAGES_PAGE_LIMIT = 50;
 
 export class ApiError extends Error {
   readonly status: number;
@@ -600,7 +611,7 @@ class ApiClient {
       "Content-Type": "application/json",
       "X-Client-Platform": "mobile",
       "X-Client-OS": "ios",
-      "X-Client-Version": "0.5.99",
+      "X-Client-Version": "0.6.0",
       "X-Request-ID": rid,
       ...((init.headers as Record<string, string>) ?? {}),
     };
@@ -3794,6 +3805,53 @@ class ApiClient {
     );
   }
 
+  /**
+   * One window of a session's history, newest-first cursor pagination.
+   *
+   * Mirrors `listChatMessagesPage` in packages/core/api/client.ts:2764-2798,
+   * including the deployment-order fallback: a backend deployed before this
+   * route existed 404s, and only the *initial* (cursorless) page may fall
+   * back to the legacy full-list endpoint — the legacy endpoint returns every
+   * message at once, so that page reports `has_more: false` and there is no
+   * follow-up request to translate. A 404 on a cursor request is an
+   * unexpected state and propagates rather than re-serving the whole list.
+   */
+  async listChatMessagesPage(
+    sessionId: string,
+    opts?: {
+      before?: ChatMessagesCursor | null;
+      limit?: number;
+      signal?: AbortSignal;
+    },
+  ): Promise<ChatMessagesPage> {
+    const limit = opts?.limit ?? CHAT_MESSAGES_PAGE_LIMIT;
+    const query = new URLSearchParams({ limit: String(limit) });
+    if (opts?.before) {
+      query.set("before_created_at", opts.before.created_at);
+      query.set("before_id", opts.before.id);
+    }
+    try {
+      const raw = await this.fetch<unknown>(
+        `/api/chat/sessions/${sessionId}/messages/page?${query.toString()}`,
+        { signal: opts?.signal },
+      );
+      return parseWithFallback(
+        raw,
+        ChatMessagesPageSchema,
+        EMPTY_CHAT_MESSAGES_PAGE,
+        { endpoint: "GET /api/chat/sessions/:id/messages/page" },
+      );
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404 && !opts?.before) {
+        const messages = await this.listChatMessages(sessionId, {
+          signal: opts?.signal,
+        });
+        return { messages, limit, has_more: false, next_cursor: null };
+      }
+      throw err;
+    }
+  }
+
   async sendChatMessage(
     sessionId: string,
     content: string,
@@ -3847,6 +3905,33 @@ class ApiClient {
     await this.fetch<void>(
       `/api/chat/sessions/${sessionId}/read`,
       { method: "POST" },
+    );
+  }
+
+  /**
+   * Explicit "refresh" of a turn's follow-up suggestions — re-runs the
+   * daemon's suggestion pass for the latest assistant reply
+   * (`server/cmd/server/router.go:1755` → `chat.go:1040`).
+   *
+   * The server answers 202 and delivers the refreshed pills later over
+   * `chat:quick_actions`; there is nothing to return. It refuses with 409
+   * when the named turn is no longer the latest (a newer reply arrived) or
+   * when a turn is still running, and 503 when the deployment has no
+   * suggestion layer — the caller rolls its optimistic marker back on any of
+   * them rather than pretending the refresh happened.
+   *
+   * Mirrors `regenerateChatQuickActions` in packages/core/api/client.ts:2707.
+   */
+  async regenerateChatQuickActions(
+    sessionId: string,
+    messageId: string,
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/chat/sessions/${sessionId}/quick-actions/regenerate`,
+      {
+        method: "POST",
+        body: JSON.stringify({ message_id: messageId }),
+      },
     );
   }
 
@@ -4288,7 +4373,7 @@ class ApiClient {
       // No Content-Type — let fetch set the multipart boundary.
       "X-Client-Platform": "mobile",
       "X-Client-OS": "ios",
-      "X-Client-Version": "0.5.99",
+      "X-Client-Version": "0.6.0",
       "X-Request-ID": rid,
     };
     if (this.token) headers["Authorization"] = `Bearer ${this.token}`;

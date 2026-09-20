@@ -43,6 +43,7 @@
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   View,
   type NativeScrollEvent,
@@ -64,6 +65,7 @@ import { Text } from "@/components/ui/text";
 import { Markdown } from "@/lib/markdown";
 import { ImageSequenceProvider } from "@/lib/markdown/image-sequence";
 import { failureReasonLabel } from "@/lib/failure-reason-label";
+import { stripChatQuickActionsProtocol } from "@/lib/chat-quick-actions";
 import { formatElapsedMs } from "@/lib/format-elapsed";
 import { cn } from "@/lib/utils";
 import { useChatSelectStore } from "@/data/chat-select-store";
@@ -117,6 +119,24 @@ interface Props {
   /** Resolved availability — drives the StatusPill's "Offline" /
    *  "Reconnecting" stages. Pass `undefined` while loading. */
   availability?: AgentAvailability;
+  /** Is there older history above the window? Drives the list header row.
+   *  False once the oldest page has been reached (and on a deployment whose
+   *  backend predates the paged endpoint, where the first fetch is the whole
+   *  transcript). */
+  hasOlderMessages?: boolean;
+  /** An older-page request is in flight. */
+  loadingOlder?: boolean;
+  /** The last older-page request failed — the header offers a retry instead
+   *  of spinning, so a cellular blip can't silently end the scrollback. */
+  olderLoadFailed?: boolean;
+  /** Fired by `onStartReached` when the reader scrolls to the top. */
+  onLoadOlder?: () => void;
+  /** Refresh the latest assistant turn's follow-up suggestions. Present only
+   *  for the session's newest assistant message (web parity — regeneration
+   *  resumes the newest provider state). */
+  onRegenerateQuickActions?: (message: ChatMessage) => void | Promise<unknown>;
+  /** The message id whose suggestions are being regenerated, if any. */
+  quickActionsPendingMessageId?: string | null;
 }
 
 export const ChatMessageList = memo(function ChatMessageList({
@@ -131,6 +151,12 @@ export const ChatMessageList = memo(function ChatMessageList({
   pendingTask,
   liveTaskMessages,
   availability,
+  hasOlderMessages = false,
+  loadingOlder = false,
+  olderLoadFailed = false,
+  onLoadOlder,
+  onRegenerateQuickActions,
+  quickActionsPendingMessageId = null,
 }: Props) {
   // Top-level selection subscription gates the outer "tap-outside-to-dismiss"
   // Pressable below. When null, the Pressable stays disabled and every tap
@@ -212,9 +238,26 @@ export const ChatMessageList = memo(function ChatMessageList({
   // secrets web masks. StatusPill keeps the raw stream — it reads the last
   // message's type, not a step count.
   const liveTimeline = useMemo(
-    () => prepareTaskMessages(liveTaskMessages ?? []),
+    () =>
+      prepareTaskMessages(liveTaskMessages ?? []).map((item) =>
+        item.type === "text" && item.content
+          ? { ...item, content: stripChatQuickActionsProtocol(item.content) }
+          : item,
+      ),
     [liveTaskMessages],
   );
+
+  // The session's newest assistant turn — the only one whose follow-up chips
+  // can be regenerated, because regeneration resumes the newest provider
+  // state. Read off the persisted window (not the live row) so the affordance
+  // tracks the real tail. Mirrors web's `latestAssistantMessageId`.
+  const latestAssistantMessageId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m && m.role === "assistant" && m.task_id) return m.id;
+    }
+    return null;
+  }, [messages]);
 
   // Stable renderItem identity so memoized cell components actually skip
   // re-renders when a sibling bubble updates. `sessionTitle` changes only
@@ -227,9 +270,19 @@ export const ChatMessageList = memo(function ChatMessageList({
         sessionTitle={sessionTitle}
         onQuickAction={onQuickAction}
         quickActionsDisabled={quickActionsDisabled}
+        onRegenerateQuickActions={onRegenerateQuickActions}
+        canRegenerateQuickActions={item.id === latestAssistantMessageId}
+        quickActionsPending={quickActionsPendingMessageId === item.id}
       />
     ),
-    [sessionTitle, onQuickAction, quickActionsDisabled],
+    [
+      sessionTitle,
+      onQuickAction,
+      quickActionsDisabled,
+      onRegenerateQuickActions,
+      latestAssistantMessageId,
+      quickActionsPendingMessageId,
+    ],
   );
 
   if (loading && messages.length === 0) {
@@ -305,6 +358,22 @@ export const ChatMessageList = memo(function ChatMessageList({
       getItemType={(item) => item.role}
       ItemSeparatorComponent={MessageSeparator}
       onScroll={handleChatScroll}
+      // FlashList fires this when the reader reaches the top of the window —
+      // the trigger for pulling the previous page. Not `onEndReached`: chat
+      // grows at the BOTTOM, so history is what sits above the first item.
+      // The parent owns the in-flight guard, so a burst of these while the
+      // request is pending collapses to one fetch.
+      onStartReached={hasOlderMessages ? onLoadOlder : undefined}
+      onStartReachedThreshold={0.5}
+      ListHeaderComponent={
+        hasOlderMessages ? (
+          <OlderMessagesHeader
+            loading={loadingOlder}
+            failed={olderLoadFailed}
+            onRetry={onLoadOlder}
+          />
+        ) : null
+      }
       ListFooterComponent={
         showLiveSection ? (
           <View style={{ paddingTop: 12 }} className="gap-2">
@@ -367,16 +436,70 @@ function MessageSeparator() {
   return <View style={{ height: 12 }} />;
 }
 
+/**
+ * Top-of-list row for windowed history. Three states, mirroring web's
+ * `loading_older` row (`packages/views/chat/components/chat-message-list.tsx`):
+ * a spinner while a page is in flight, a tap-to-retry line after a failure,
+ * and nothing at all otherwise — the row is only mounted while `hasMore`, so
+ * the idle case never occupies space above the first message.
+ *
+ * The failure state matters more on a phone than on web: cellular drops are
+ * routine, and without it a single failed request would look like "you have
+ * reached the beginning of the conversation".
+ */
+function OlderMessagesHeader({
+  loading,
+  failed,
+  onRetry,
+}: {
+  loading: boolean;
+  failed: boolean;
+  onRetry?: () => void;
+}) {
+  const { t } = useTranslation();
+  if (failed && !loading) {
+    return (
+      <Pressable
+        onPress={onRetry}
+        accessibilityRole="button"
+        className="flex-row items-center justify-center gap-1.5 py-3 active:opacity-70"
+      >
+        <Ionicons name="refresh" size={14} className="text-muted-foreground" />
+        <Text className="text-xs text-muted-foreground">
+          {t("chat.olderLoadFailed")}
+        </Text>
+        <Text className="text-xs font-medium text-primary">
+          {t("common.retry")}
+        </Text>
+      </Pressable>
+    );
+  }
+  return (
+    <View className="flex-row items-center justify-center gap-2 py-3">
+      <ActivityIndicator size="small" />
+      <Text className="text-xs text-muted-foreground">
+        {t("chat.loadingOlder")}
+      </Text>
+    </View>
+  );
+}
+
 const MessageRow = memo(function MessageRow({
   message,
   sessionTitle,
   onQuickAction,
   quickActionsDisabled,
+  onRegenerateQuickActions,
+  canRegenerateQuickActions,
+  quickActionsPending,
 }: {
   message: ChatMessage;
   sessionTitle?: string;
   onQuickAction?: (action: ChatQuickAction) => void | Promise<unknown>;
   quickActionsDisabled: boolean;
+  onRegenerateQuickActions?: (message: ChatMessage) => void | Promise<unknown>;
+  canRegenerateQuickActions: boolean;
+  quickActionsPending: boolean;
 }) {
   const { t } = useTranslation();
   const chatSource = { kind: "chat", name: sessionTitle } as const;
@@ -448,6 +571,9 @@ const MessageRow = memo(function MessageRow({
       longPress={longPress}
       onQuickAction={onQuickAction}
       quickActionsDisabled={quickActionsDisabled}
+      onRegenerateQuickActions={onRegenerateQuickActions}
+      canRegenerateQuickActions={canRegenerateQuickActions}
+      quickActionsPending={quickActionsPending}
     />
   );
 });
@@ -473,6 +599,9 @@ function AssistantRow({
   longPress,
   onQuickAction,
   quickActionsDisabled,
+  onRegenerateQuickActions,
+  canRegenerateQuickActions,
+  quickActionsPending,
 }: {
   message: ChatMessage;
   sessionTitle?: string;
@@ -480,6 +609,9 @@ function AssistantRow({
   longPress: ReturnType<typeof useChatMessageLongPress>;
   onQuickAction?: (action: ChatQuickAction) => void | Promise<unknown>;
   quickActionsDisabled: boolean;
+  onRegenerateQuickActions?: (message: ChatMessage) => void | Promise<unknown>;
+  canRegenerateQuickActions: boolean;
+  quickActionsPending: boolean;
 }) {
   const { t } = useTranslation();
   const chatSource = { kind: "chat", name: sessionTitle } as const;
@@ -492,9 +624,18 @@ function AssistantRow({
     taskMessagesOptions(message.task_id),
   );
   // Same preparation as the live trace: one row per logical step, secrets
-  // masked (web's `buildTimeline` step in chat-message-list.tsx).
+  // masked (web's `buildTimeline` step in chat-message-list.tsx), then the
+  // reserved quick-actions footer stripped. A completed task's transcript can
+  // still carry the raw footer (the daemon writes it into the trace before the
+  // final answer is split off), and it must not render as a JSON blob inside
+  // the process-steps fold.
   const timelineItems = useMemo(
-    () => prepareTaskMessages(timeline),
+    () =>
+      prepareTaskMessages(timeline).map((item) =>
+        item.type === "text" && item.content
+          ? { ...item, content: stripChatQuickActionsProtocol(item.content) }
+          : item,
+      ),
     [timeline],
   );
   // no_response (MUL-4351, mirrors packages/views AssistantMessage): the agent
@@ -541,17 +682,58 @@ function AssistantRow({
       {body}
     </LongPressView>
   );
-  if (!onQuickAction || (message.quick_actions?.length ?? 0) === 0) {
-    return messageBody;
-  }
+  const actions = message.quick_actions ?? [];
+  if (!onQuickAction) return messageBody;
+  // Chips > skeleton > nothing. Web shows the skeleton INSTEAD of the chips
+  // while a supplement is pending (`chat-message-list.tsx:616-620`), but that
+  // assumes a refresh usually returns different suggestions. On a phone the
+  // reflow of pills vanishing and reappearing is the more jarring outcome, so
+  // existing chips stay put (inert) and the skeleton is reserved for the case
+  // web cannot have: a turn awaiting a supplement with no chips yet to show.
+  // Same end state, steadier intermediate.
+  if (actions.length === 0 && !quickActionsPending) return messageBody;
   return (
     <View className="gap-2">
       {messageBody}
-      <QuickActions
-        actions={message.quick_actions ?? []}
-        disabled={quickActionsDisabled}
-        onSelect={onQuickAction}
-      />
+      {actions.length > 0 ? (
+        <QuickActions
+          actions={actions}
+          disabled={quickActionsDisabled}
+          onSelect={onQuickAction}
+          onRegenerate={
+            onRegenerateQuickActions && canRegenerateQuickActions
+              ? () => onRegenerateQuickActions(message)
+              : undefined
+          }
+          pending={quickActionsPending}
+        />
+      ) : (
+        <QuickActionsSkeleton />
+      )}
+    </View>
+  );
+}
+
+/**
+ * Pill-shaped placeholders for the gap between a refresh tap and the
+ * `chat:quick_actions` event. Widths are staggered so the row reads as
+ * "buttons coming" rather than a progress bar. Nothing here is actionable,
+ * so it is hidden from assistive tech.
+ */
+function QuickActionsSkeleton() {
+  const { t } = useTranslation();
+  return (
+    <View
+      className="flex-row flex-wrap items-center gap-2 pt-0.5"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      <Text className="shrink-0 text-xs text-muted-foreground">
+        {t("chat.quickActionsHeading")}
+      </Text>
+      <View className="h-10 w-24 rounded-full bg-muted" />
+      <View className="h-10 w-32 rounded-full bg-muted" />
+      <View className="h-10 w-28 rounded-full bg-muted" />
     </View>
   );
 }
@@ -560,14 +742,26 @@ function QuickActions({
   actions,
   disabled,
   onSelect,
+  onRegenerate,
+  pending = false,
 }: {
   actions: ChatQuickAction[];
   disabled: boolean;
   onSelect: (action: ChatQuickAction) => void | Promise<unknown>;
+  /** Present only on the session's latest turn — re-runs the suggestion pass. */
+  onRegenerate?: () => void | Promise<unknown>;
+  /** The turn awaits a supplement: old chips stay visible but inert, and the
+   *  refresh icon spins until `chat:quick_actions` lands (or the pending
+   *  marker's own deadline expires). */
+  pending?: boolean;
 }) {
   const { t } = useTranslation();
   const [submitting, setSubmitting] = useState(false);
-  const blocked = disabled || submitting;
+  const [regenerating, setRegenerating] = useState(false);
+  // The pending marker is the single source of truth for the spinner: the WS
+  // event clears it on success and the timeout hook clears it from the cache
+  // if no event ever arrives, so nothing here needs its own expiry timer.
+  const blocked = disabled || submitting || regenerating || pending;
 
   const handleSelect = async (action: ChatQuickAction) => {
     if (blocked) return;
@@ -582,11 +776,30 @@ function QuickActions({
     }
   };
 
+  const handleRegenerate = async () => {
+    if (blocked || !onRegenerate) return;
+    setRegenerating(true);
+    try {
+      await onRegenerate();
+    } catch {
+      // The mutation rolls the pending marker back; surface a notice so the
+      // silent re-enable isn't mistaken for "no suggestions this time".
+      Alert.alert(t("chat.regenerateQuickActionsFailed"));
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  const spinning = pending || regenerating;
+
   return (
     <View
-      className="flex-row flex-wrap gap-2 pt-0.5"
+      className="flex-row flex-wrap items-center gap-2 pt-0.5"
       accessibilityLabel={t("a11y.suggestedFollowUps")}
     >
+      <Text className="shrink-0 text-xs text-muted-foreground">
+        {t("chat.quickActionsHeading")}
+      </Text>
       {actions.slice(0, 3).map((action, index) => (
         <Pressable
           key={`${action.label}-${index}`}
@@ -616,6 +829,29 @@ function QuickActions({
           ) : null}
         </Pressable>
       ))}
+      {onRegenerate ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("chat.regenerateQuickActions")}
+          accessibilityState={{ disabled: blocked }}
+          disabled={blocked}
+          onPress={() => void handleRegenerate()}
+          hitSlop={8}
+          className={cn(
+            "h-10 w-10 items-center justify-center rounded-full active:opacity-70",
+            blocked && "opacity-50",
+          )}
+        >
+          {/* Ionicons has no animated spin, so the pending state swaps to the
+              ActivityIndicator rather than rotating the glyph — same visual
+              contract as web's `animate-spin`, with no animation dependency. */}
+          {spinning ? (
+            <ActivityIndicator size="small" />
+          ) : (
+            <Ionicons name="refresh" size={16} className="text-muted-foreground" />
+          )}
+        </Pressable>
+      ) : null}
     </View>
   );
 }

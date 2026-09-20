@@ -85,6 +85,9 @@ export default function ChatSessionsRoute() {
   const openActions = (session: ChatSession) =>
     showActions(session, {
       archivedView: view === "archived",
+      // Same aggregate the row's "typing…" indicator reads — the menu's
+      // stop-instead-of-archive swap must never disagree with the preview.
+      runningTask: pendingBySessionId.get(session.id) ?? null,
       onDeleted: (dead) => {
         // If we just deleted the active one, the chat tab clears its
         // local activeSessionId via the picker-store request.

@@ -192,8 +192,15 @@ describe("zh bundles agree on the chat surface", () => {
     // iteration 161 (`chat.agentArchived` / `chat.archivedAgentBanner`, both
     // verbatim from views' `input.placeholder_archived_agent` and
     // `archived_agent_banner`), which the suite above now holds to agreement.
+    //
+    // +9 in iteration 172: the chat-window parity batch — `loadingOlder`,
+    // `olderLoadFailed`, `quickActionsHeading`, `regenerateQuickActions`,
+    // `regenerateQuickActionsFailed`, `stop`, `stopDialogTitle`,
+    // `stopDialogCancel` and `stopDialogConfirm` — all copied from views'
+    // `message_list.*` / `session_history.*`, so they join the comparison set
+    // and the suite above now pins their zh wording against web's.
     const shared = [...mobileBySource.keys()].filter((source) => viewsBySource.has(source));
-    expect(shared.length).toBe(37);
+    expect(shared.length).toBe(46);
   });
 });
 
