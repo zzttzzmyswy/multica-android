@@ -9,6 +9,12 @@
  * (optional). The color palette is copied verbatim from web's
  * COLOR_PICKER_PRESETS so both clients offer the same catalog.
  *
+ * `resourceType` is the catalog the label belongs to. On create it comes from
+ * the scope the list was showing and goes out as `resource_type`; on edit the
+ * label's own scope wins (and is only used for cache routing — the server does
+ * not accept `resource_type` as an update field). Web surfaces the same fact
+ * as a scope hint under the dialog title.
+ *
  * Delete uses a native Alert.confirm before calling useDeleteLabel — the
  * server already treats deletion as destructive (drops every issue/agent/
  * skill assignment atomically), so the confirm copy says so.
@@ -38,6 +44,7 @@ import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { labelScopeOf, type LabelScope } from "@/lib/labels-display";
 
 // Mirrors web `COLOR_PICKER_PRESETS` (packages/views/common/color-picker.tsx)
 // so mobile reuses the same catalog. Default for new labels is index 6 —
@@ -85,10 +92,19 @@ function FieldError({ text }: { text: string }) {
   return <Text className="text-xs text-destructive">{text}</Text>;
 }
 
-export function LabelForm({ label }: { label?: Label | null }) {
+export function LabelForm({
+  label,
+  resourceType = "issue",
+}: {
+  label?: Label | null;
+  resourceType?: LabelScope;
+}) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const editing = !!label;
+  // Edit mode follows the label's own catalog — a skill label opened from the
+  // skill scope must not be re-filed as an issue label.
+  const scope: LabelScope = label ? labelScopeOf(label) : resourceType;
   const [name, setName] = useState(label?.name ?? "");
   const [description, setDescription] = useState(label?.description ?? "");
   const [color, setColor] = useState(label?.color ?? DEFAULT_LABEL_COLOR);
@@ -118,9 +134,13 @@ export function LabelForm({ label }: { label?: Label | null }) {
     };
     try {
       if (editing && label) {
-        await update.mutateAsync({ id: label.id, ...body });
+        await update.mutateAsync({
+          id: label.id,
+          resource_type: scope,
+          ...body,
+        });
       } else {
-        await create.mutateAsync(body);
+        await create.mutateAsync({ resource_type: scope, ...body });
       }
       router.back();
     } catch (err) {
@@ -134,6 +154,7 @@ export function LabelForm({ label }: { label?: Label | null }) {
     nameMissing,
     editing,
     label,
+    scope,
     name,
     description,
     color,
@@ -153,18 +174,21 @@ export function LabelForm({ label }: { label?: Label | null }) {
         text: t("labels.delete"),
         style: "destructive",
         onPress: () => {
-          remove.mutate(label.id, {
-            onSuccess: () => router.back(),
-            onError: (err) =>
-              Alert.alert(
-                t("labels.deleteFailed"),
-                err instanceof Error ? err.message : t("common.unknownError"),
-              ),
-          });
+          remove.mutate(
+            { id: label.id, resource_type: scope },
+            {
+              onSuccess: () => router.back(),
+              onError: (err) =>
+                Alert.alert(
+                  t("labels.deleteFailed"),
+                  err instanceof Error ? err.message : t("common.unknownError"),
+                ),
+            },
+          );
         },
       },
     ]);
-  }, [label, remove, t]);
+  }, [label, remove, scope, t]);
 
   const headerRight = useCallback(
     () => (
@@ -193,6 +217,14 @@ export function LabelForm({ label }: { label?: Label | null }) {
           contentContainerClassName="px-4 pt-4 pb-10 gap-5"
           keyboardShouldPersistTaps="handled"
         >
+          {/* Scope hint — mirrors web's `labels.editor.scope_hint` under the
+              dialog title. The scope is fixed once the label exists. */}
+          <View className="rounded-md border border-border bg-secondary/40 px-3 py-2">
+            <Text className="text-xs text-muted-foreground">
+              {t("labels.form.scopeHint", { scope: t(`labels.scope.${scope}`) })}
+            </Text>
+          </View>
+
           {/* Name */}
           <View className="gap-1.5">
             <FieldLabel icon="pricetag-outline" text={t("labels.form.name")} />

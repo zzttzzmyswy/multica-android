@@ -106,6 +106,7 @@ const RUN_SENSE_KEYS = [
   "issue.qa.coalesced",
   "notif.groupAgentActivityDesc",
   "plugins.disabled",
+  "profile.aboutHint",
   "resource.localRuntimeHint",
   "resource.modeDescription",
   "resource.modeInPlaceDescription",

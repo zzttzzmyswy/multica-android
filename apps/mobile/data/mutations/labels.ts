@@ -25,12 +25,19 @@ function useInvalidateLabels(wsId: string | null) {
 
 function usePatchLabelList(wsId: string | null) {
   const qc = useQueryClient();
-  return (updater: (old: Label[]) => Label[]) => {
-    // labelListOptions stores a flat Label[] (unwrapped from the API
-    // response envelope) at `labelKeys.all(wsId)` — patch that shape.
-    qc.setQueryData<Label[]>(labelKeys.all(wsId), (old) =>
-      old ? updater(old) : old,
-    );
+  return (
+    resourceType: LabelResourceType | undefined,
+    updater: (old: Label[]) => Label[],
+  ) => {
+    // Issue labels live in the legacy unscoped cache — the same flat Label[]
+    // the issue pickers and the new-issue draft read. Skill labels have their
+    // own catalog key. Patching the wrong one would inject a skill label into
+    // the issue picker (and vice versa), so route by the label's own scope.
+    const key =
+      resourceType === "skill"
+        ? labelKeys.catalog(wsId, "skill")
+        : labelKeys.all(wsId);
+    qc.setQueryData<Label[]>(key, (old) => (old ? updater(old) : old));
   };
 }
 
@@ -42,9 +49,9 @@ export function useCreateLabel() {
   return useMutation({
     mutationFn: (body: CreateLabelRequest) => api.createLabel(body),
     onSuccess: (label) => {
-      // Append to the workspace label list cache so the picker sees the
-      // new label without waiting for a refetch.
-      patchList((old) =>
+      // Append to that scope's cache so the list (and the matching picker)
+      // sees the new label without waiting for a refetch.
+      patchList(label.resource_type, (old) =>
         old.some((l) => l.id === label.id) ? old : [...old, label],
       );
     },
@@ -58,15 +65,22 @@ export function useUpdateLabel() {
   const patchList = usePatchLabelList(wsId);
 
   return useMutation({
-    mutationFn: ({ id, ...body }: { id: string } & UpdateLabelRequest) =>
+    // `resource_type` scopes the cache patch only — the server rejects it as
+    // an update field (mirrors core's useUpdateLabel destructure).
+    mutationFn: ({
+      id,
+      resource_type: _resourceType,
+      ...body
+    }: { id: string; resource_type?: LabelResourceType } & UpdateLabelRequest) =>
       api.updateLabel(id, body),
-    onSuccess: (label) => {
+    onSuccess: (label, variables) => {
       // Replace in place with the authoritative server response so the
       // list (and the issue-detail picker) reflects the new name/color
       // without waiting for a refetch. Guard on a real id so a
       // drift-fallback EMPTY_LABEL can never wipe a row.
       if (!label.id) return;
-      patchList((old) => old.map((l) => (l.id === label.id ? label : l)));
+      const scope = label.resource_type ?? variables.resource_type;
+      patchList(scope, (old) => old.map((l) => (l.id === label.id ? label : l)));
     },
     onSettled: invalidate,
   });
@@ -78,9 +92,14 @@ export function useDeleteLabel() {
   const patchList = usePatchLabelList(wsId);
 
   return useMutation({
-    mutationFn: (id: string) => api.deleteLabel(id),
-    onSuccess: (_void, id) => {
-      patchList((old) => old.filter((l) => l.id !== id));
+    // Accepts the bare id (issue scope, the legacy call shape) or an explicit
+    // `{ id, resource_type }` so a skill label is dropped from its own cache.
+    mutationFn: (input: string | { id: string; resource_type: LabelResourceType }) =>
+      api.deleteLabel(typeof input === "string" ? input : input.id),
+    onSuccess: (_void, input) => {
+      const id = typeof input === "string" ? input : input.id;
+      const scope = typeof input === "string" ? undefined : input.resource_type;
+      patchList(scope, (old) => old.filter((l) => l.id !== id));
     },
     onSettled: invalidate,
   });
