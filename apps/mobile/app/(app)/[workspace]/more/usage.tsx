@@ -888,7 +888,9 @@ function KpiCard({
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
   return (
-    <View className="flex-1 rounded-xl border border-border bg-card px-3 py-2.5">
+    // min-h keeps the four tiles the same height whether their hint wraps to
+    // one line or two, so the row below never shifts between tabs.
+    <View className="flex-1 min-h-[92px] rounded-xl border border-border bg-card px-3 py-2.5">
       <View className="flex-row items-center gap-1.5">
         <Ionicons name={icon} size={13} color={theme.mutedForeground} />
         <Text
@@ -909,7 +911,11 @@ function KpiCard({
         {value}
       </Text>
       {hint ? (
-        <Text className="mt-0.5 text-[10px] text-muted-foreground/70" numberOfLines={1}>
+        // The hint wraps rather than truncating: the Tokens tile's "Input · ·
+        // Output" pair is the only place those two numbers appear, and a
+        // quarter-width tile clips it to "Input 2.4B · …" — which is the half
+        // of the pair a reader can already guess. Two lines is the cap.
+        <Text className="mt-0.5 text-[10px] leading-tight text-muted-foreground/70" numberOfLines={2}>
           {hint}
         </Text>
       ) : null}
