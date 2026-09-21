@@ -14,6 +14,12 @@
  *   - Tap a card → open the issue (detail route owns edits). Drag-and-drop
  *     between lanes is deferred; the detail page's status picker is the
  *     move mechanism this iteration.
+ *   - Status columns can be hidden (web `board-column.tsx:215`). Hiding
+ *     writes `statusFilters` in the shared filter slice, so the hidden lanes
+ *     disappear from the board AND from the server window at once — see
+ *     `hideStatus` in issue-filter-slice.ts. Web parks the restore list in a
+ *     fixed side rail; a phone has no room for one, so the hidden statuses
+ *     render as a trailing lane at the end of the board.
  */
 import { memo, useCallback, useMemo } from "react";
 import { FlatList, Pressable, ScrollView, View } from "react-native";
@@ -41,9 +47,17 @@ import { BoardCard, BOARD_COLUMN_WIDTH } from "./board-card";
 function ColumnHeader({
   column,
   onCreateIssue,
+  onHideStatus,
+  statusFixedByView = false,
 }: {
   column: IssueGroupSection;
   onCreateIssue?: (section: IssueGroupSection) => void;
+  /** Present only for status lanes on a board that can hide them. */
+  onHideStatus?: (status: IssueStatus) => void;
+  /** A status the open saved view pins cannot be hidden — that would strip
+   *  one of the view's own conditions while its chip still reads as active
+   *  (web board-column.tsx:119-122). */
+  statusFixedByView?: boolean;
 }) {
   const { t } = useTranslation();
   const { getName } = useActorLookup();
@@ -111,6 +125,86 @@ function ColumnHeader({
           />
         </Pressable>
       ) : null}
+      {/* Hide-column entry, status lanes only (a property / assignee lane has
+          no status to filter on). */}
+      {onHideStatus && column.status ? (
+        <Pressable
+          onPress={() =>
+            !statusFixedByView && onHideStatus(column.status as IssueStatus)
+          }
+          disabled={statusFixedByView}
+          hitSlop={10}
+          className={statusFixedByView ? "opacity-30" : "active:opacity-60"}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: statusFixedByView }}
+          accessibilityLabel={t("issues.boardHideColumn")}
+        >
+          <Ionicons
+            name="eye-off-outline"
+            size={15}
+            color={THEME[colorScheme].mutedForeground}
+          />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * The restore lane: every status currently hidden, one tap to bring back.
+ *
+ * web renders this as a fixed rail beside the board
+ * (`BoardHiddenColumnsPanel` → `HiddenColumnsPanel`). A phone's board is
+ * already wider than the screen, so the rail becomes the LAST lane instead —
+ * it is reachable by the same horizontal scroll that reached the columns
+ * before it, and it disappears entirely when nothing is hidden.
+ */
+function HiddenColumnsLane({
+  statuses,
+  onShowStatus,
+}: {
+  statuses: IssueStatus[];
+  onShowStatus: (status: IssueStatus) => void;
+}) {
+  const { t } = useTranslation();
+  const { colorScheme } = useColorScheme();
+  const statusLabel = useStatusLabel();
+  const dim = THEME[colorScheme].mutedForeground;
+
+  return (
+    <View
+      style={{ width: BOARD_COLUMN_WIDTH * 0.85, alignSelf: "stretch" }}
+      className="flex-col rounded-lg border border-dashed border-border bg-background/40"
+      accessibilityLabel={t("issues.boardHiddenColumns")}
+    >
+      <View className="px-3 pt-3 pb-2 flex-row items-center gap-2">
+        <Ionicons name="eye-off-outline" size={14} color={dim} />
+        <Text className="text-xs uppercase tracking-wider font-medium text-muted-foreground">
+          {t("issues.boardHiddenColumns")}
+        </Text>
+      </View>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 8 }}
+      >
+        {statuses.map((status) => (
+          <Pressable
+            key={status}
+            onPress={() => onShowStatus(status)}
+            className="mx-2 mb-1 flex-row items-center gap-2 rounded-lg bg-secondary/30 px-2.5 py-2.5 active:bg-secondary"
+            accessibilityRole="button"
+            accessibilityLabel={t("issues.boardShowColumn", {
+              name: statusLabel(status),
+            })}
+          >
+            <StatusIcon status={status} size={14} />
+            <Text numberOfLines={1} className="flex-1 text-sm text-foreground">
+              {statusLabel(status)}
+            </Text>
+            <Ionicons name="eye-outline" size={15} color={dim} />
+          </Pressable>
+        ))}
+      </ScrollView>
     </View>
   );
 }
@@ -119,10 +213,14 @@ const BoardColumn = memo(function BoardColumn({
   column,
   onOpenIssue,
   onCreateIssue,
+  onHideStatus,
+  isStatusFixed,
 }: {
   column: IssueGroupSection;
   onOpenIssue: (issue: Issue) => void;
   onCreateIssue?: (section: IssueGroupSection) => void;
+  onHideStatus?: (status: IssueStatus) => void;
+  isStatusFixed?: (status: IssueStatus) => boolean;
 }) {
   const renderItem = useCallback(
     ({ item }: { item: Issue }) => (
@@ -139,7 +237,14 @@ const BoardColumn = memo(function BoardColumn({
       className="flex-col rounded-lg border border-border bg-background/60"
     >
       <View className="px-2 pt-2">
-        <ColumnHeader column={column} onCreateIssue={onCreateIssue} />
+        <ColumnHeader
+          column={column}
+          onCreateIssue={onCreateIssue}
+          onHideStatus={onHideStatus}
+          statusFixedByView={
+            !!column.status && !!isStatusFixed?.(column.status)
+          }
+        />
       </View>
       {column.data.length === 0 ? (
         <View className="flex-1 items-center justify-center px-4 pb-6">
@@ -219,6 +324,11 @@ export function BoardView({
   onOpenIssue,
   onCreateIssue,
   emptyLabel,
+  hiddenStatuses,
+  onHideStatus,
+  onShowStatus,
+  isStatusFixed,
+  allStatusesHidden = false,
 }: {
   issues: Issue[];
   grouping: IssueGrouping;
@@ -239,11 +349,52 @@ export function BoardView({
    */
   onCreateIssue?: (section: IssueGroupSection) => void;
   emptyLabel: string;
+  /**
+   * Status columns the surface has hidden, in board order. Derived by the
+   * caller from the shared filter slice (`hiddenStatuses(statusFilters)`), so
+   * the board and the server window can never disagree about which lanes are
+   * gone. Supplying `onHideStatus` turns on the per-column hide entry.
+   */
+  hiddenStatuses?: IssueStatus[];
+  onHideStatus?: (status: IssueStatus) => void;
+  onShowStatus?: (status: IssueStatus) => void;
+  /** Statuses pinned by the open saved view — not hideable (web
+   *  board-column.tsx:119-122). */
+  isStatusFixed?: (status: IssueStatus) => boolean;
+  /** Every status column is hidden. The surface owns this because only it can
+   *  tell "hidden everything" from "the filter matched nothing". */
+  allStatusesHidden?: boolean;
 }) {
+  const { t } = useTranslation();
+  const visibleHidden =
+    grouping === "status" ? (hiddenStatuses ?? []) : [];
   const columns = useMemo(
     () => groupIssues(issues, grouping, statusOrder, true, undefined, groupingProperty),
     [issues, grouping, statusOrder, groupingProperty],
   );
+
+  // A board whose every lane is hidden has no columns at all. This is
+  // distinguishable from "no issues match" only by the STATUS FILTER being
+  // what emptied it, so the surface passes `allStatusesHidden` rather than the
+  // board guessing from an empty `issues` (an ordinary empty filter result
+  // must keep its own message).
+  if (allStatusesHidden) {
+    return (
+      <View className="flex-1">
+        <View className="flex-1 items-center justify-center px-6">
+          <Text className="text-sm text-muted-foreground text-center">
+            {t("issues.boardAllHidden")}
+          </Text>
+        </View>
+        {visibleHidden.length > 0 ? (
+          <HiddenColumnsLane
+            statuses={visibleHidden}
+            onShowStatus={(s) => onShowStatus?.(s)}
+          />
+        ) : null}
+      </View>
+    );
+  }
 
   if (issues.length === 0) {
     return (
@@ -274,8 +425,16 @@ export function BoardView({
           column={column}
           onOpenIssue={onOpenIssue}
           onCreateIssue={onCreateIssue}
+          onHideStatus={onHideStatus}
+          isStatusFixed={isStatusFixed}
         />
       ))}
+      {visibleHidden.length > 0 ? (
+        <HiddenColumnsLane
+          statuses={visibleHidden}
+          onShowStatus={(s) => onShowStatus?.(s)}
+        />
+      ) : null}
     </ScrollView>
   );
 }

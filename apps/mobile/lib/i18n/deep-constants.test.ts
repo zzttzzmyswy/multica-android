@@ -157,8 +157,10 @@ describe("deep-constant i18n", () => {
     expect(mod.translate("picker.agents")).toBe("Agents");
     expect(mod.translate("common.uploadFailed")).toBe("Upload failed");
     expect(mod.translate("project.progress")).toBe("Progress");
+    // Iteration 173: tapping an unavailable pin now asks before deleting it,
+    // so the label no longer promises an immediate unpin.
     expect(mod.translate("pins.unavailable", { itemType: "issue" })).toBe(
-      "Unavailable issue — tap to unpin",
+      "Unavailable issue",
     );
     mod.setLocale("zh");
     expect(mod.translate("mention.recent")).toBe("最近");

@@ -28,7 +28,7 @@
  * everything-in-one-scroll UX), in board mode it stays pinned above the
  * board. Pull-to-refresh refreshes issues and meta together.
  */
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { ScrollView, SectionList, View } from "react-native";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
@@ -60,16 +60,21 @@ import { issueViewListOptions } from "@/data/queries/issue-views";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useProjectIssuesViewStore } from "@/data/stores/project-issues-view-store";
 import { useCreateSubIssue } from "@/lib/use-create-sub-issue";
+import { useBoardHiddenColumns } from "@/lib/use-board-hidden-columns";
+import { useDebouncedTableSearch } from "@/lib/use-debounced-table-search";
 import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection-store";
 import {
   issueViewContainerKey,
   useActiveIssueViewStore,
 } from "@/data/stores/active-issue-view-store";
 import {
-  sanitizeViewDisplay,
-  sanitizeViewQuery,
   viewMatchesSlice,
 } from "@/data/stores/issue-view-codec";
+import {
+  actorKindForViewVariant,
+  applySavedView,
+  useApplyExternallyActivatedView,
+} from "@/lib/saved-view-apply";
 import {
   buildIssueWindow,
   defaultIssueFilterSlice,
@@ -188,6 +193,10 @@ export function ProjectIssueSurface({
   // Group headers count the complete result set (server group descriptors),
   // not just the loaded window. This surface's list query is unfiltered
   // server-side, so the spec carries the window the client applies itself.
+  // Table quick search — same contract as the workspace/my-issues surfaces.
+  const [tableSearch, setTableSearch] = useState("");
+  const debouncedTableSearch = useDebouncedTableSearch(tableSearch);
+
   const groupCountQuery = useMemo(() => {
     const assigneeTypes = assigneeTypesForScopeTab(scope);
     return {
@@ -209,12 +218,14 @@ export function ProjectIssueSurface({
         dateFilter,
         sortBy,
         sortDirection,
+        tableSearch: debouncedTableSearch,
       }),
       includeSubIssues: showSubIssues,
     };
   }, [
     projectId,
     scope,
+    debouncedTableSearch,
     statusFilters,
     priorityFilters,
     assigneeFilters,
@@ -292,33 +303,39 @@ export function ProjectIssueSurface({
         : false,
     [activeView, snapshotSource, view],
   );
+  // Which view this surface last wrote to the store. A pinned view row marks a
+  // view active without going through `applyView`, so the surface has to apply
+  // it on arrival (see `useApplyExternallyActivatedView`).
+  const appliedViewIdRef = useRef<string | null>(null);
   const applyView = useCallback(
     (v: IssueView) => {
-      const snapshot = sanitizeViewQuery(v.query);
-      const display = sanitizeViewDisplay(v.display, sortBy);
-      useProjectIssuesViewStore.setState({
-        ...snapshot,
-        dateFilter: null,
-        sortBy: display.sortBy,
-        sortDirection: display.sortDirection,
-        grouping: display.grouping,
-        showSubIssues: display.showSubIssues,
-        view: display.viewMode,
+      appliedViewIdRef.current = v.id;
+      applySavedView({
+        view: v,
+        store: useProjectIssuesViewStore,
+        containerKey,
+        sortBy,
       });
       // The scope-axis a project view captured is part of the VIEW — land
       // on the right tab, while the user's own tab is untouched once the
       // view closes (same semantics as the workspace surface).
-      setScope(
-        v.scope_variant === "members"
-          ? "members"
-          : v.scope_variant === "agents"
-            ? "agents"
-            : "all",
-      );
-      useActiveIssueViewStore.getState().setActive(containerKey, v.id);
+      setScope(actorKindForViewVariant(v.scope_variant));
     },
     [containerKey, setScope, sortBy],
   );
+  useApplyExternallyActivatedView({
+    activeViewId,
+    activeView,
+    appliedViewIdRef,
+    onApply: applyView,
+  });
+  // Board/swimlane hidden status columns — see the workspace Issues surface.
+  const boardHiddenColumns = useBoardHiddenColumns({
+    store: useProjectIssuesViewStore,
+    statusFilters,
+    baseline: chipBaseline,
+  });
+
   const exitView = useCallback(() => {
     useProjectIssuesViewStore.setState({
       ...defaultIssueFilterSlice(),
@@ -326,6 +343,7 @@ export function ProjectIssueSurface({
       view: "list",
     });
     useActiveIssueViewStore.getState().setActive(containerKey, null);
+    appliedViewIdRef.current = null;
   }, [containerKey]);
 
   const listQuery = useInfiniteQuery(projectIssuesOptions(wsId, projectId));
@@ -417,7 +435,10 @@ export function ProjectIssueSurface({
     );
   }, [filterState]);
 
-  const showEmptyState = !isLoading && !listLoadError && sorted.length === 0;
+  // The table owns its own empty state, which carries the search box — see the
+  // workspace Issues surface for why that gate has to exclude `table`.
+  const showEmptyState =
+    !isLoading && !listLoadError && view !== "table" && sorted.length === 0;
 
   const onRefresh = useCallback(async () => {
     await Promise.all([refetch(), onRefreshMeta?.()]);
@@ -527,6 +548,11 @@ export function ProjectIssueSurface({
             statusOrder={BOARD_STATUSES}
             onOpenIssue={(issue) => navigateToIssue(issue.id)}
             emptyLabel={emptyMessage}
+            hiddenStatuses={boardHiddenColumns.hiddenStatuses}
+            onHideStatus={boardHiddenColumns.hideStatus}
+            onShowStatus={boardHiddenColumns.showStatus}
+            isStatusFixed={boardHiddenColumns.isStatusFixed}
+            allStatusesHidden={boardHiddenColumns.allStatusesHidden}
           />
         </View>
       ) : view === "table" ? (
@@ -544,6 +570,8 @@ export function ProjectIssueSurface({
           groupCountQuery={groupCountQuery}
           sortBy={sortBy}
           sortDirection={sortDirection}
+          search={tableSearch}
+          onSearchChange={setTableSearch}
           onSort={(field, direction) => {
             useProjectIssuesViewStore.getState().setSortBy(field);
             useProjectIssuesViewStore.getState().setSortDirection(direction);
@@ -569,6 +597,8 @@ export function ProjectIssueSurface({
           statusOrder={BOARD_STATUSES}
           onOpenIssue={(issue) => navigateToIssue(issue.id)}
           emptyLabel={emptyMessage}
+          hiddenStatuses={boardHiddenColumns.hiddenStatuses}
+          onShowStatus={boardHiddenColumns.showStatus}
         />
       ) : (
         <SectionList

@@ -22,6 +22,10 @@
  * hyperlinks — same tap behavior, just no 📎 prefix. Acceptable degradation.
  */
 import { preprocessMentionShortcodes } from "@multica/core/markdown";
+import {
+  isIssueIdentifier,
+  parseUnfurlableEntityLink,
+} from "@/lib/entity-link";
 
 // File-card line matcher, kept in sync with web's parser in
 // `packages/ui/markdown/file-cards.ts` (NEW_FILE_CARD_RE + FILE_CARD_URL_PATTERN):
@@ -124,9 +128,126 @@ export function stripHtml(input: string): string {
     .replace(/<\/?[a-z][^>]*>/gi, "");
 }
 
-export function preprocessMobileMarkdown(input: string): string {
+/**
+ * Rewrite a bare link to an issue/project ON THIS DEPLOYMENT into the
+ * `mention://` transport, so the existing mention handling routes it in-app
+ * instead of handing it to the system browser (iteration 173, R1).
+ *
+ * Mirrors web's `unfurlableEntityLink` gate (`rich-content.tsx:193`): only a
+ * link whose LABEL is the href itself is unfurled — `[see this issue](url)`
+ * is prose the author wrote and keeps its label — and only for the current
+ * workspace, because a chip resolves its title against the workspace the
+ * viewer is in.
+ *
+ * The id form is restricted to UUIDs. `mention://issue/MUL-123` would route
+ * to the issue detail page, which resolves a UUID only, so an identifier link
+ * is left as an ordinary link rather than turned into a dead in-app jump.
+ * (Web resolves identifiers against the workspace first; mobile has no such
+ * lookup in the render path.)
+ */
+const MD_LINK_RE = /(?<!!)\[([^\]]*)\]\((https?:\/\/[^)\s]+|\/[^)\s]+)\)/g;
+
+/**
+ * A BARE url in prose — no `[label](url)` around it.
+ *
+ * This is the shape that actually reaches us: "Copy link" puts a URL on the
+ * clipboard and people paste it as-is, so the markdown has no link syntax at
+ * all and the renderer autolinks it afterwards. Matching only the `[label]`
+ * form (as the first cut of this pass did) left the common case opening the
+ * system browser — verified on-device before this branch was added.
+ *
+ * Deliberately does NOT try to find the end of a URL the way a linkifier does.
+ * The candidate must be followed by whitespace or end-of-line, and the trailing
+ * run of sentence punctuation is trimmed; anything more ambitious is a
+ * re-implementation of the linkifier, and `parseWorkspaceEntityLink` already
+ * rejects whatever does not address exactly one entity.
+ */
+const BARE_URL_RE = /https?:\/\/[^\s<>()\[\]"']+/g;
+
+/** Punctuation that ends a sentence rather than a URL. */
+const TRAILING_PUNCT_RE = /[.,;:!?、。，；：！？）】》”’]+$/;
+
+/**
+ * True when the URL starting at `index` is already part of a markdown link or
+ * image — `](url)`, `[label](url)`, `![alt](url)`.
+ *
+ * The bare pass runs over the WHOLE document, including the constructs the
+ * markdown pass just rewrote, so without this it would wrap the href of an
+ * already-rewritten link in a second link. That produced literal
+ * `[[url](mention://…)](mention://…)` nesting — caught by the tests below.
+ */
+function insideMarkdownLink(input: string, index: number): boolean {
+  const before = input[index - 1];
+  if (before === "[" || before === "!") return true;
+  if (before === "(" && input[index - 2] === "]") return true;
+  return false;
+}
+
+function preprocessEntityLinks(
+  input: string,
+  appOrigin: string | null,
+  currentSlug: string | null,
+): string {
+  if (!appOrigin) return input;
+
+  const opts = { appOrigin, currentSlug };
+  // Markdown-link form first: `[label](url)`.
+  const withLinks = input.replace(
+    MD_LINK_RE,
+    (match, label: string, href: string) => {
+      const entity = parseUnfurlableEntityLink({ href, label, ...opts });
+      if (!entity || isIssueIdentifier(entity.id)) return match;
+      return `[${label}](mention://${entity.kind}/${entity.id})`;
+    },
+  );
+
+  // Then the bare form, skipping anything the pass above (or the author)
+  // already put inside a link. Rebuilt by hand rather than with a replacement
+  // function because the decision needs the match's POSITION.
+  let out = "";
+  let last = 0;
+  BARE_URL_RE.lastIndex = 0;
+  for (const m of withLinks.matchAll(BARE_URL_RE)) {
+    const start = m.index ?? 0;
+    if (insideMarkdownLink(withLinks, start)) continue;
+
+    const raw = m[0];
+    const trailing = raw.match(TRAILING_PUNCT_RE)?.[0] ?? "";
+    const href = trailing ? raw.slice(0, -trailing.length) : raw;
+    const entity = parseUnfurlableEntityLink({
+      href,
+      // A bare URL's visible text IS the URL — the same gate web applies, and
+      // the reason a bare URL qualifies where `[the bug](url)` does not.
+      label: href,
+      ...opts,
+    });
+    if (!entity || isIssueIdentifier(entity.id)) continue;
+
+    out += withLinks.slice(last, start);
+    out += `[${href}](mention://${entity.kind}/${entity.id})${trailing}`;
+    last = start + raw.length;
+  }
+  return out + withLinks.slice(last);
+}
+
+export function preprocessMobileMarkdown(
+  input: string,
+  options?: {
+    /** This deployment's app origin — links to it become in-app chips.
+     *  Omitted (or empty) leaves every link untouched. */
+    appOrigin?: string | null;
+    /** The workspace the reader is in, for the cross-workspace guard. */
+    currentSlug?: string | null;
+  },
+): string {
   if (!input) return "";
   return preprocessTaskListStrikethrough(
-    preprocessFileCards(preprocessMentionShortcodes(input)),
+    preprocessFileCards(
+      preprocessEntityLinks(
+        preprocessMentionShortcodes(input),
+        options?.appOrigin ?? null,
+        options?.currentSlug ?? null,
+      ),
+    ),
   );
 }

@@ -206,6 +206,12 @@ interface Props {
    *  complete result set, not just the loaded window). Surfaces that omit it
    *  keep the local count. */
   groupCountQuery?: IssueTableGroupCountQuery | null;
+  /** The Table's quick search box. Owned by the SURFACE, not this component:
+   *  the query travels to the server as `q` (see `buildIssueWindow`), so the
+   *  surface is where the fetch window is assembled. Omit both props on a
+   *  surface with no search — the toolbar entry then hides entirely. */
+  search?: string;
+  onSearchChange?: (query: string) => void;
 }
 
 export function IssueTableView({
@@ -225,6 +231,8 @@ export function IssueTableView({
   grouping,
   onGroupingChange,
   groupCountQuery,
+  search,
+  onSearchChange,
 }: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const statusLabel = useStatusLabel(wsId);
@@ -674,19 +682,69 @@ export function IssueTableView({
     [selectionMode, toggleSelection],
   );
 
+  // The search box renders in BOTH the empty and the populated state. A
+  // search that matches nothing must still show the box it was typed into —
+  // otherwise the only way out of "no results" is to leave the screen, and
+  // the query is still in the server window.
+  const searchBar = onSearchChange ? (
+    <View className="px-3 pt-1.5">
+      <View className="flex-row items-center gap-2 rounded-lg border border-border bg-secondary/30 px-2.5 h-9">
+        <Ionicons
+          name="search"
+          size={14}
+          color={THEME[colorScheme].mutedForeground}
+        />
+        <TextInput
+          value={search ?? ""}
+          onChangeText={onSearchChange}
+          placeholder={t("table.searchPlaceholder")}
+          placeholderTextColor={THEME[colorScheme].mutedForeground}
+          returnKeyType="search"
+          autoCorrect={false}
+          autoCapitalize="none"
+          accessibilityLabel={t("table.searchPlaceholder")}
+          className="flex-1 text-sm text-foreground py-0"
+        />
+        {search ? (
+          <Pressable
+            onPress={() => onSearchChange("")}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t("table.searchClear")}
+            className="active:opacity-60"
+          >
+            <Ionicons
+              name="close-circle"
+              size={16}
+              color={THEME[colorScheme].mutedForeground}
+            />
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  ) : null;
+
   if (issues.length === 0) {
     return (
-      <View className="flex-1 items-center justify-center px-6">
-        <Text className="text-sm text-muted-foreground text-center">
-          {emptyLabel}
-        </Text>
+      <View className="flex-1">
+        {searchBar}
+        <View className="flex-1 items-center justify-center px-6">
+          <Text className="text-sm text-muted-foreground text-center">
+            {/* A search that matched nothing gets web's search-specific copy
+                (`table.no_results`) instead of the surface's generic empty
+                state — "no issues in this filter" is the wrong thing to say
+                when the filter is fine and the query is what excluded them. */}
+            {search?.trim() ? t("table.noResults") : emptyLabel}
+          </Text>
+        </View>
       </View>
     );
   }
 
   return (
     <View className="flex-1">
-      {/* Toolbar: column visibility + CSV export */}
+      {searchBar}
+      {/* Toolbar: column visibility + grouping + CSV export */}
       <View className="flex-row items-center justify-between px-4 py-1.5 border-b border-border bg-background">
         <ToolbarButton
           icon="options-outline"

@@ -57,6 +57,9 @@ const CODE_REFERENCE_KEYS = [
  * (a parent/child reference, a demo line, an agent-composed issue placeholder).
  */
 const ISSUE_SENSE_NO_TOKEN_KEYS = [
+  // "Get a board up in minutes" — 任务看板 is the issue board; the English
+  // source carries no `issue` token, so the pattern test above cannot see it.
+  "chat.onboardingCards.board.title",
   "demo.issue.activity",
   "issues.swimlane.groupNoParent",
   "issues.swimlane.groupOtherParents",

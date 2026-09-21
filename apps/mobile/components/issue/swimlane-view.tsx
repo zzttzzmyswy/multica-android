@@ -117,6 +117,8 @@ export function SwimlaneView({
   statusOrder,
   onOpenIssue,
   emptyLabel,
+  hiddenStatuses = [],
+  onShowStatus,
 }: {
   issues: Issue[];
   grouping: SwimlaneGrouping;
@@ -124,9 +126,15 @@ export function SwimlaneView({
   statusOrder: readonly IssueStatus[];
   onOpenIssue: (issue: Issue) => void;
   emptyLabel: string;
+  /** Statuses hidden from the board/swimlane. Same list the board takes — the
+   *  cells disappear because the shared filter slice already excludes them,
+   *  so this is only the RESTORE entry (web's side rail). */
+  hiddenStatuses?: IssueStatus[];
+  onShowStatus?: (status: IssueStatus) => void;
 }) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
+  const statusLabel = useStatusLabel();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { getName } = useActorLookup();
@@ -354,6 +362,42 @@ export function SwimlaneView({
             color={THEME[colorScheme].mutedForeground}
           />
         </Pressable>
+        {/* Restore entry for hidden status cells. The board carries the same
+            list as a trailing lane; a swimlane has no trailing position, so
+            it lives in the header bar — same data, one tap, no scrolling
+            past every lane to find it. */}
+        {hiddenStatuses.length > 0 ? (
+          <Pressable
+            onPress={() =>
+              ActionSheet.showActionSheetWithOptions(
+                {
+                  title: t("issues.boardHiddenColumns"),
+                  options: [
+                    ...hiddenStatuses.map((s) => statusLabel(s)),
+                    t("common.cancel"),
+                  ],
+                  cancelButtonIndex: hiddenStatuses.length,
+                },
+                (index) => {
+                  if (index == null || index >= hiddenStatuses.length) return;
+                  onShowStatus?.(hiddenStatuses[index]);
+                },
+              )
+            }
+            className="ml-auto flex-row items-center gap-1 rounded-lg border border-dashed border-border px-2 py-1"
+            accessibilityRole="button"
+            accessibilityLabel={t("issues.boardHiddenColumns")}
+          >
+            <Ionicons
+              name="eye-off-outline"
+              size={13}
+              color={THEME[colorScheme].mutedForeground}
+            />
+            <Text className="text-xs font-medium text-muted-foreground">
+              {hiddenStatuses.length}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
       {parentLoading ? (
         <IssuesLoading />

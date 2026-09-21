@@ -611,7 +611,7 @@ class ApiClient {
       "Content-Type": "application/json",
       "X-Client-Platform": "mobile",
       "X-Client-OS": "ios",
-      "X-Client-Version": "0.6.1",
+      "X-Client-Version": "0.6.2",
       "X-Request-ID": rid,
       ...((init.headers as Record<string, string>) ?? {}),
     };
@@ -4297,8 +4297,15 @@ class ApiClient {
   // Endpoints mirror packages/core/api/client.ts:1551-1572.
 
   async listPins(opts?: { signal?: AbortSignal }): Promise<PinnedItem[]> {
+    // `include=view` is the server's capability opt-in (pin.go:69-76): view
+    // pins are WITHHELD from clients that do not declare they understand the
+    // type, because a client that mis-classifies one as an issue fetches its
+    // detail, 404s, and permanently unpins it. Mobile now parses and renders
+    // `view` pins, so it must ask for them — without this the pin exists on
+    // the server but is invisible in the app, which is how the pinned list
+    // silently lost every view pin. Mirrors web client.ts:3417.
     return this.fetchValidated(
-      "/api/pins",
+      "/api/pins?include=view",
       PinListSchema,
       EMPTY_PIN_LIST,
       { ...opts, endpoint: "listPins" },
@@ -4373,7 +4380,7 @@ class ApiClient {
       // No Content-Type — let fetch set the multipart boundary.
       "X-Client-Platform": "mobile",
       "X-Client-OS": "ios",
-      "X-Client-Version": "0.6.1",
+      "X-Client-Version": "0.6.2",
       "X-Request-ID": rid,
     };
     if (this.token) headers["Authorization"] = `Bearer ${this.token}`;

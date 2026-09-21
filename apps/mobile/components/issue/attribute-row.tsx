@@ -15,10 +15,12 @@
  *   project   →  issue/[id]/picker/project
  *   due_date  →  issue/[id]/picker/due-date
  *   start_date → issue/[id]/picker/start-date  (MYS-493)
+ *   stage     →  issue/[id]/picker/stage       (sub-issues only, iteration 173)
  */
 import { useMemo } from "react";
 import { View } from "react-native";
 import { router } from "expo-router";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { useQuery } from "@tanstack/react-query";
 import type { Issue } from "@multica/core/types";
 import { ISSUE_DATE_SHORT, formatIssueDate } from "@/lib/format-date";
@@ -199,6 +201,23 @@ export function AttributeRow({ issue }: { issue: Issue }) {
         variant={dueLabel ? "filled" : "dimmed"}
         onPress={() => openPicker("due-date")}
       />
+
+      {/* Stage — sub-issues only. A stage orders an issue against its
+          SIBLINGS, so on a root issue the value has nothing to order against
+          and the row is omitted entirely (web gates it on
+          `issue.parent_issue_id` at issue-detail.tsx:2110). */}
+      {issue.parent_issue_id ? (
+        <AttributeChip
+          icon={<Text className="text-xs text-muted-foreground/80">🚩</Text>}
+          label={
+            issue.stage == null
+              ? t("attr.stage")
+              : t("stage.value", { n: issue.stage })
+          }
+          variant={issue.stage == null ? "dimmed" : "filled"}
+          onPress={() => openPicker("stage")}
+        />
+      ) : null}
     </View>
   );
 }

@@ -78,6 +78,11 @@ export const issueListOptions = (
  *  as a window — it round-trips the same rows as an empty bag. */
 function hasWindow(window: IssueListWindowParams): boolean {
   if (
+    // Table quick search. Without this the search would still be SENT (the
+    // window object carries it into `listIssues`), but the query key would be
+    // the unfiltered one — so every search would overwrite the plain list's
+    // cache entry and clearing it would show the previous search's rows.
+    window.q ||
     window.statuses?.length ||
     window.priorities?.length ||
     window.assignee_filters?.length ||

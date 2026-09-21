@@ -18,7 +18,13 @@
 import type { StateCreator } from "zustand";
 import type { IssuePriority, IssueStatus } from "@multica/core/types";
 import { dateOnlyToLocalDate } from "@multica/core/issues/date";
+import { BOARD_STATUSES } from "@/lib/issue-status-core";
 import type { IssueListWindowParams } from "@/data/queries/issue-keys";
+
+/** The full status order, used as the complement base when hiding a column.
+ *  Same list web's `ALL_STATUSES` is; `issue-status-core.test.ts` holds the
+ *  two equal. */
+const ALL_STATUSES: readonly IssueStatus[] = BOARD_STATUSES;
 
 export type ActorFilterValue = {
   type: "member" | "agent" | "squad";
@@ -156,6 +162,24 @@ export interface IssueFilterSlice {
    */
   showSubIssues: boolean;
   toggleStatusFilter: (status: IssueStatus) => void;
+  /**
+   * Hide one status column from the kanban surfaces (board / swimlane).
+   *
+   * This writes `statusFilters` rather than a separate `hiddenStatuses` list,
+   * which is exactly what web does (`view-store.ts:385-400`): the two are the
+   * same fact stated two ways, and keeping one source means the server window
+   * (`buildIssueWindow` → `statuses`) narrows with it. A parallel hidden list
+   * would need its own wiring into the window and would drift the moment a
+   * status filter chip is added or removed.
+   *
+   * An EMPTY filter list means "everything shows" (not "nothing"), so the
+   * first hide has to materialise the complement — see `hiddenStatuses`.
+   */
+  hideStatus: (status: IssueStatus) => void;
+  /** Restore one status column hidden by `hideStatus`. No-op when nothing is
+   *  hidden, so a "show" on an already-visible column cannot narrow the
+   *  window. */
+  showStatus: (status: IssueStatus) => void;
   togglePriorityFilter: (priority: IssuePriority) => void;
   toggleAssigneeFilter: (value: ActorFilterValue) => void;
   toggleNoAssignee: () => void;
@@ -280,6 +304,8 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
 ): Pick<
   IssueFilterSlice,
   | "toggleStatusFilter"
+  | "hideStatus"
+  | "showStatus"
   | "togglePriorityFilter"
   | "toggleAssigneeFilter"
   | "toggleNoAssignee"
@@ -303,9 +329,21 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
     list.includes(item) ? list.filter((x) => x !== item) : [...list, item];
 
   return {
-    toggleStatusFilter: (status) =>
+    toggleStatusFilter: (status: IssueStatus) =>
       set((state) => ({
         statusFilters: toggleInList(state.statusFilters, status),
+      })),
+    hideStatus: (status: IssueStatus) =>
+      set((state) => ({
+        statusFilters: hideOneStatus(
+          state.statusFilters,
+          status,
+          BOARD_STATUSES,
+        ),
+      })),
+    showStatus: (status: IssueStatus) =>
+      set((state) => ({
+        statusFilters: showOneStatus(state.statusFilters, status),
       })),
     togglePriorityFilter: (priority) =>
       set((state) => ({
@@ -421,6 +459,58 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
   };
 }
 
+/**
+ * The status columns the kanban surfaces are NOT showing.
+ *
+ * Derived from `statusFilters` rather than stored separately — see the
+ * `hideStatus` doc. `statusFilters` empty means "no status restriction", i.e.
+ * nothing is hidden; a NON-empty list is the visible set, so the hidden set is
+ * its complement over the full status order.
+ */
+export function hiddenStatuses(
+  statusFilters: readonly IssueStatus[],
+): IssueStatus[] {
+  if (statusFilters.length === 0) return [];
+  const visible = new Set(statusFilters);
+  return ALL_STATUSES.filter((s) => !visible.has(s));
+}
+
+/** Whether one status column is currently hidden (web `hiddenStatuses.includes`). */
+export function isStatusHidden(
+  statusFilters: readonly IssueStatus[],
+  status: IssueStatus,
+): boolean {
+  return statusFilters.length > 0 && !statusFilters.includes(status);
+}
+
+/**
+ * `hideStatus` as a pure transform: drop `status` from the visible set,
+ * materialising the full complement first when nothing is filtered yet.
+ * Without that materialisation an empty filter list (which means "show
+ * everything") would be indistinguishable from "hide everything".
+ */
+export function hideOneStatus(
+  statusFilters: readonly IssueStatus[],
+  status: IssueStatus,
+  allStatuses: readonly IssueStatus[],
+): IssueStatus[] {
+  const visible =
+    statusFilters.length === 0 ? [...allStatuses] : [...statusFilters];
+  return visible.filter((s) => s !== status);
+}
+
+/** `showStatus` as a pure transform. Adding to an empty list would mean "show
+ *  ONLY this one" — the opposite of the user's intent — so it stays a no-op
+ *  until something is actually hidden. */
+export function showOneStatus(
+  statusFilters: readonly IssueStatus[],
+  status: IssueStatus,
+): IssueStatus[] {
+  if (statusFilters.length === 0) return [...statusFilters];
+  if (statusFilters.includes(status)) return [...statusFilters];
+  return [...statusFilters, status];
+}
+
 /** Convenience selector: does any filter dimension have an active value?
  *
  *  `workingOnly` counts. Web's header keeps its agents-working chip on a
@@ -492,7 +582,13 @@ export function dateFilterToWindowParams(
  *  `GET /api/issues` understands. This is the "wire wiring" half of the
  *  iteration: the query key carries the serialized bag, so changing any
  *  dimension refetches with the new window (like web's table window), and
- *  the client predicate re-runs on top as a belt-and-suspenders pass. */
+ *  the client predicate re-runs on top as a belt-and-suspenders pass.
+ *
+ *  `q` is the Table's quick search, and it belongs in the WINDOW rather than
+ *  in a client-side filter for the same reason web sends it: the server
+ *  matches title words AND the immutable issue number, so a number search
+ *  finds rows the loaded pages do not contain, and the CSV export (which
+ *  serializes exactly the rows the table shows) exports what was searched. */
 export function buildIssueWindow(
   state: Pick<
     IssueFilterSlice,
@@ -508,9 +604,16 @@ export function buildIssueWindow(
     | "dateFilter"
     | "sortBy"
     | "sortDirection"
-  >,
+  > & {
+    /** Table quick search. Empty/whitespace means "no search" — the server
+     *  treats a blank `q` as absent, and an empty string here would still
+     *  change the query key and refetch for nothing. */
+    tableSearch?: string;
+  },
 ): IssueListWindowParams {
   const window: IssueListWindowParams = {};
+  const q = state.tableSearch?.trim();
+  if (q) window.q = q;
   if (state.statusFilters.length > 0) window.statuses = state.statusFilters;
   if (state.priorityFilters.length > 0)
     window.priorities = state.priorityFilters;

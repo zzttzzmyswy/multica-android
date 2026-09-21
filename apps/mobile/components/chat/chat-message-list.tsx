@@ -72,6 +72,7 @@ import { useChatSelectStore } from "@/data/chat-select-store";
 import { useChatMessageLongPress } from "./message-long-press";
 import { LongPressView } from "@/components/ui/long-press-view";
 import { ChatEmptyState } from "./chat-empty-state";
+import { OnboardingStarterCards } from "./onboarding-starter-cards";
 import { ChatTimeline } from "./chat-timeline";
 // Reuse the comment thread's standalone attachment list — same design web
 // reuses in chat (AttachmentList). Renders any bound attachment not already
@@ -259,6 +260,18 @@ export const ChatMessageList = memo(function ChatMessageList({
     return null;
   }, [messages]);
 
+  // Mika's onboarding opening self-describes (`message_kind` is stamped by the
+  // completion path; the hidden kickoff row never reaches clients) and carries
+  // the product's starter cards INSTEAD of that turn's quick-action chips
+  // (web chat-message-list.tsx:213-221, MUL-5765).
+  const starterCardsMessageId = useMemo(
+    () =>
+      messages.find(
+        (m) => m.role === "assistant" && m.message_kind === "onboarding_opening",
+      )?.id ?? null,
+    [messages],
+  );
+
   // Stable renderItem identity so memoized cell components actually skip
   // re-renders when a sibling bubble updates. `sessionTitle` changes only
   // across sessions (string), `onQuickAction` is already a stable ref from
@@ -273,6 +286,7 @@ export const ChatMessageList = memo(function ChatMessageList({
         onRegenerateQuickActions={onRegenerateQuickActions}
         canRegenerateQuickActions={item.id === latestAssistantMessageId}
         quickActionsPending={quickActionsPendingMessageId === item.id}
+        showStarterCards={item.id === starterCardsMessageId}
       />
     ),
     [
@@ -282,6 +296,7 @@ export const ChatMessageList = memo(function ChatMessageList({
       onRegenerateQuickActions,
       latestAssistantMessageId,
       quickActionsPendingMessageId,
+      starterCardsMessageId,
     ],
   );
 
@@ -492,6 +507,7 @@ const MessageRow = memo(function MessageRow({
   onRegenerateQuickActions,
   canRegenerateQuickActions,
   quickActionsPending,
+  showStarterCards,
 }: {
   message: ChatMessage;
   sessionTitle?: string;
@@ -500,6 +516,9 @@ const MessageRow = memo(function MessageRow({
   onRegenerateQuickActions?: (message: ChatMessage) => void | Promise<unknown>;
   canRegenerateQuickActions: boolean;
   quickActionsPending: boolean;
+  /** Onboarding opening: render the product's starter cards in place of this
+   *  turn's chips (web chat-message-list.tsx:606, MUL-5765). */
+  showStarterCards: boolean;
 }) {
   const { t } = useTranslation();
   const chatSource = { kind: "chat", name: sessionTitle } as const;
@@ -574,6 +593,7 @@ const MessageRow = memo(function MessageRow({
       onRegenerateQuickActions={onRegenerateQuickActions}
       canRegenerateQuickActions={canRegenerateQuickActions}
       quickActionsPending={quickActionsPending}
+      showStarterCards={showStarterCards}
     />
   );
 });
@@ -602,6 +622,7 @@ function AssistantRow({
   onRegenerateQuickActions,
   canRegenerateQuickActions,
   quickActionsPending,
+  showStarterCards,
 }: {
   message: ChatMessage;
   sessionTitle?: string;
@@ -612,6 +633,9 @@ function AssistantRow({
   onRegenerateQuickActions?: (message: ChatMessage) => void | Promise<unknown>;
   canRegenerateQuickActions: boolean;
   quickActionsPending: boolean;
+  /** Onboarding opening: render the product's starter cards in place of this
+   *  turn's chips (web chat-message-list.tsx:606, MUL-5765). */
+  showStarterCards: boolean;
 }) {
   const { t } = useTranslation();
   const chatSource = { kind: "chat", name: sessionTitle } as const;
@@ -684,6 +708,25 @@ function AssistantRow({
   );
   const actions = message.quick_actions ?? [];
   if (!onQuickAction) return messageBody;
+
+  // The onboarding opening owns this turn's suggestion strip: its cards are
+  // product-fixed, and the server skips chip generation for it (MUL-5765).
+  // This branch must come BEFORE the "no actions → render nothing" exit below,
+  // because that exit is exactly the blank first screen the cards exist to
+  // prevent — on a deployment with no LLM configured, `quick_actions` is empty
+  // for every turn, so the opening had nothing at all to tap.
+  if (showStarterCards) {
+    return (
+      <View className="gap-2">
+        {messageBody}
+        <OnboardingStarterCards
+          onPick={onQuickAction}
+          disabled={quickActionsDisabled}
+        />
+      </View>
+    );
+  }
+
   // Chips > skeleton > nothing. Web shows the skeleton INSTEAD of the chips
   // while a supplement is pending (`chat-message-list.tsx:616-620`), but that
   // assumes a refresh usually returns different suggestions. On a phone the

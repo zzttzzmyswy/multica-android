@@ -199,8 +199,13 @@ describe("zh bundles agree on the chat surface", () => {
     // `stopDialogCancel` and `stopDialogConfirm` — all copied from views'
     // `message_list.*` / `session_history.*`, so they join the comparison set
     // and the suite above now pins their zh wording against web's.
+    //
+    // +12 in iteration 173: the onboarding starter cards — `ariaLabel`, `cta`,
+    // the three `{title, desc, prompt}` triples and `digestBadge` — copied
+    // verbatim from views' `onboarding_cards.*` so a new member reads the same
+    // three ways to start on either client.
     const shared = [...mobileBySource.keys()].filter((source) => viewsBySource.has(source));
-    expect(shared.length).toBe(46);
+    expect(shared.length).toBe(58);
   });
 });
 

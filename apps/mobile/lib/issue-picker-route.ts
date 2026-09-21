@@ -25,7 +25,8 @@ export type IssuePickerField =
   | "label"
   | "project"
   | "due-date"
-  | "start-date";
+  | "start-date"
+  | "stage";
 
 export const ISSUE_PICKER_PATHNAMES = {
   status: "/[workspace]/issue/[id]/picker/status",
@@ -35,6 +36,7 @@ export const ISSUE_PICKER_PATHNAMES = {
   project: "/[workspace]/issue/[id]/picker/project",
   "due-date": "/[workspace]/issue/[id]/picker/due-date",
   "start-date": "/[workspace]/issue/[id]/picker/start-date",
+  stage: "/[workspace]/issue/[id]/picker/stage",
 } as const satisfies Record<IssuePickerField, string>;
 
 /**

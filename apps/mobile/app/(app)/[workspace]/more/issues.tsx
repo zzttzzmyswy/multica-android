@@ -21,7 +21,7 @@
  * web GROUPING_OPTIONS. Assignee grouping resolves actor names through
  * `useActorLookup`, same source as the assignee filter picker.
  */
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { SectionList, View } from "react-native";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
@@ -69,10 +69,13 @@ import {
   useActiveIssueViewStore,
 } from "@/data/stores/active-issue-view-store";
 import {
-  sanitizeViewDisplay,
-  sanitizeViewQuery,
   viewMatchesSlice,
 } from "@/data/stores/issue-view-codec";
+import {
+  actorKindForViewVariant,
+  applySavedView,
+  useApplyExternallyActivatedView,
+} from "@/lib/saved-view-apply";
 import {
   buildIssueWindow,
   defaultIssueFilterSlice,
@@ -82,6 +85,8 @@ import { useRunningIssueIds } from "@/data/queries/agent-task-snapshot";
 import { workspaceIssueTableScope } from "@/lib/issue-table-group-counts";
 import { useCreateIssueFromColumn } from "@/lib/use-create-issue-from-column";
 import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-workspace-change";
+import { useDebouncedTableSearch } from "@/lib/use-debounced-table-search";
+import { useBoardHiddenColumns } from "@/lib/use-board-hidden-columns";
 import { useGroupingProperty } from "@/lib/use-grouping-property";
 import { BOARD_STATUSES } from "@/lib/issue-status-core";
 import {
@@ -239,33 +244,33 @@ export default function IssuesPage() {
     () => (activeView ? !viewMatchesSlice(activeView, snapshotSource, view) : false),
     [activeView, snapshotSource, view],
   );
+  // Which view this surface last wrote to the store. A pinned view row marks a
+  // view active without going through `applyView`, so the surface has to apply
+  // it on arrival — the ref is what tells the two cases apart (see
+  // `useApplyExternallyActivatedView`).
+  const appliedViewIdRef = useRef<string | null>(null);
   const applyView = useCallback(
     (v: IssueView) => {
-      const snapshot = sanitizeViewQuery(v.query);
-      const display = sanitizeViewDisplay(v.display, sortBy);
-      useIssuesViewStore.setState({
-        ...snapshot,
-        dateFilter: null,
-        sortBy: display.sortBy,
-        sortDirection: display.sortDirection,
-        grouping: display.grouping,
-        showSubIssues: display.showSubIssues,
-        view: display.viewMode,
+      appliedViewIdRef.current = v.id;
+      applySavedView({
+        view: v,
+        store: useIssuesViewStore,
+        containerKey,
+        sortBy,
       });
       // The scope axis a workspace view captured is part of the VIEW (web
       // semantics) — switching to it lands on the right tab, but the
       // user's own tab is exactly where they left it once the view closes.
-      setScope(
-        v.scope_variant === "members"
-          ? "members"
-          : v.scope_variant === "agents"
-            ? "agents"
-            : "all",
-      );
-      useActiveIssueViewStore.getState().setActive(containerKey, v.id);
+      setScope(actorKindForViewVariant(v.scope_variant));
     },
     [containerKey, setScope, sortBy],
   );
+  useApplyExternallyActivatedView({
+    activeViewId,
+    activeView,
+    appliedViewIdRef,
+    onApply: applyView,
+  });
   const exitView = useCallback(() => {
     useIssuesViewStore.setState({
       ...defaultIssueFilterSlice(),
@@ -273,7 +278,24 @@ export default function IssuesPage() {
       view: "list",
     });
     useActiveIssueViewStore.getState().setActive(containerKey, null);
+    appliedViewIdRef.current = null;
   }, [containerKey]);
+
+  // Board/swimlane hidden status columns (web `hideStatus`). Derived from the
+  // same `statusFilters` the server window uses, so hiding a lane narrows the
+  // fetch too — see `useBoardHiddenColumns`.
+  const boardHiddenColumns = useBoardHiddenColumns({
+    store: useIssuesViewStore,
+    statusFilters,
+    baseline: chipBaseline,
+  });
+
+  // Table quick search (web `controller.tableSearch`). Kept OUT of the view
+  // store: it is a property of the table being looked at, not of the view
+  // definition, so it must not be captured into a saved view or compared by
+  // `viewMatchesSlice`.
+  const [tableSearch, setTableSearch] = useState("");
+  const debouncedTableSearch = useDebouncedTableSearch(tableSearch);
 
   // The active window travels as server params → filter/sort changes refetch
   // and the cache is keyed per window (issueKeys.listFiltered). Identity is
@@ -293,8 +315,9 @@ export default function IssuesPage() {
         dateFilter: filterState.dateFilter,
         sortBy,
         sortDirection,
+        tableSearch: debouncedTableSearch,
       }),
-    [filterState, sortBy, sortDirection],
+    [filterState, sortBy, sortDirection, debouncedTableSearch],
   );
 
   // Group headers count the complete result set (server group descriptors),
@@ -431,8 +454,16 @@ export default function IssuesPage() {
 
   // The gantt view owns its own empty state (the scheduled projection can't
   // prove the window is empty — web never asserts surface-empty in gantt).
+  // The table owns its own empty state, and that state carries the SEARCH BOX
+  // — it has to, or a search matching nothing would leave the query in the
+  // window with no visible way to clear it (verified on-device: the surface
+  // empty state swallowed the toolbar and the screen became a dead end).
   const showEmptyState =
-    !surfaceLoading && !surfaceError && !ganttActive && sorted.length === 0;
+    !surfaceLoading &&
+    !surfaceError &&
+    !ganttActive &&
+    view !== "table" &&
+    sorted.length === 0;
 
   return (
     <View className="flex-1 bg-background">
@@ -531,6 +562,11 @@ export default function IssuesPage() {
               ? t("issues.filterEmpty")
               : emptyMessageForScope(scope, t)
           }
+          hiddenStatuses={boardHiddenColumns.hiddenStatuses}
+          onHideStatus={boardHiddenColumns.hideStatus}
+          onShowStatus={boardHiddenColumns.showStatus}
+          isStatusFixed={boardHiddenColumns.isStatusFixed}
+          allStatusesHidden={boardHiddenColumns.allStatusesHidden}
         />
       ) : view === "table" ? (
         <IssueTableView
@@ -559,6 +595,8 @@ export default function IssuesPage() {
               ? t("issues.filterEmpty")
               : emptyMessageForScope(scope, t)
           }
+          search={tableSearch}
+          onSearchChange={setTableSearch}
         />
       ) : view === "gantt" ? (
         <GanttView
@@ -590,6 +628,8 @@ export default function IssuesPage() {
               ? t("issues.filterEmpty")
               : emptyMessageForScope(scope, t)
           }
+          hiddenStatuses={boardHiddenColumns.hiddenStatuses}
+          onShowStatus={boardHiddenColumns.showStatus}
         />
       ) : (
         <SectionList

@@ -261,6 +261,13 @@ export default function WorkspaceLayout() {
           name="issue/[id]/picker/start-date"
           options={SHEET_OPTIONS}
         />
+        {/* Sub-issue stage (iteration 173): orders a child against its
+            siblings, so the row only offers it when the issue has a parent.
+            Same sheet config as every other attribute picker. */}
+        <Stack.Screen
+          name="issue/[id]/picker/stage"
+          options={SHEET_OPTIONS}
+        />
         {/* Workspace custom-property pickers (MYS-334): single-property value
             editor + add-property list. Both share the standard sheet config. */}
         <Stack.Screen

@@ -31,6 +31,8 @@ const SLICE: IssueFilterSlice = {
   grouping: "assignee",
   showSubIssues: false,
   toggleStatusFilter: () => {},
+  hideStatus: () => {},
+  showStatus: () => {},
   togglePriorityFilter: () => {},
   toggleAssigneeFilter: () => {},
   toggleNoAssignee: () => {},

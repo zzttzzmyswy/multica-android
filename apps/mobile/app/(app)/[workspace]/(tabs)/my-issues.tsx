@@ -17,7 +17,7 @@
  * client re-runs `applyIssueFilters` + `sortIssues` as a belt-and-suspenders
  * pass (same as the workspace Issues page).
  */
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { SectionList, View } from "react-native";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useIsFocused } from "@react-navigation/native";
@@ -68,16 +68,21 @@ import {
   useActiveIssueViewStore,
 } from "@/data/stores/active-issue-view-store";
 import {
-  sanitizeViewDisplay,
-  sanitizeViewQuery,
   viewMatchesSlice,
 } from "@/data/stores/issue-view-codec";
+import {
+  applySavedView,
+  myScopeForViewVariant,
+  useApplyExternallyActivatedView,
+} from "@/lib/saved-view-apply";
 import {
   buildIssueWindow,
   defaultIssueFilterSlice,
   hasActiveIssueFilters,
 } from "@/data/stores/issue-filter-slice";
 import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-workspace-change";
+import { useDebouncedTableSearch } from "@/lib/use-debounced-table-search";
+import { useBoardHiddenColumns } from "@/lib/use-board-hidden-columns";
 import { myIssueTableScope } from "@/lib/issue-table-group-counts";
 import { useGroupingProperty } from "@/lib/use-grouping-property";
 import { BOARD_STATUSES } from "@/lib/issue-status-core";
@@ -253,36 +258,33 @@ export default function MyIssues() {
     () => (activeView ? !viewMatchesSlice(activeView, snapshotSource, view) : false),
     [activeView, snapshotSource, view],
   );
+  // Which view this surface last wrote to the store. A pinned view row marks a
+  // view active without going through `applyView`, so the surface has to apply
+  // it on arrival (see `useApplyExternallyActivatedView`).
+  const appliedViewIdRef = useRef<string | null>(null);
   const applyView = useCallback(
     (v: IssueView) => {
-      const snapshot = sanitizeViewQuery(v.query);
-      const display = sanitizeViewDisplay(v.display, sortBy);
-      useMyIssuesViewStore.setState({
-        ...snapshot,
-        dateFilter: null,
-        sortBy: display.sortBy,
-        sortDirection: display.sortDirection,
-        grouping: display.grouping,
-        showSubIssues: display.showSubIssues,
-        view: display.viewMode,
+      appliedViewIdRef.current = v.id;
+      applySavedView({
+        view: v,
+        store: useMyIssuesViewStore,
+        containerKey,
+        sortBy,
       });
       // The scope axis a my-view captured is part of the VIEW — landing on
       // the right tab, while the user's own tab stays untouched once the
       // view closes. An unknown/absent variant means "all" (core
       // issues/surface/scope.ts:47).
-      setScope(
-        v.scope_variant === "created"
-          ? "created"
-          : v.scope_variant === "involved"
-            ? "agents"
-            : v.scope_variant === "assigned"
-              ? "assigned"
-              : "all",
-      );
-      useActiveIssueViewStore.getState().setActive(containerKey, v.id);
+      setScope(myScopeForViewVariant(v.scope_variant));
     },
     [containerKey, setScope, sortBy],
   );
+  useApplyExternallyActivatedView({
+    activeViewId,
+    activeView,
+    appliedViewIdRef,
+    onApply: applyView,
+  });
   const exitView = useCallback(() => {
     useMyIssuesViewStore.setState({
       ...defaultIssueFilterSlice(),
@@ -290,6 +292,7 @@ export default function MyIssues() {
       view: "list",
     });
     useActiveIssueViewStore.getState().setActive(containerKey, null);
+    appliedViewIdRef.current = null;
   }, [containerKey]);
 
   // `all` is the workspace-wide list, so it needs no user id; every other
@@ -305,6 +308,18 @@ export default function MyIssues() {
           : { assignee_id: "" },
     [scope, userId],
   );
+
+  // Board/swimlane hidden status columns — see the workspace surface.
+  const boardHiddenColumns = useBoardHiddenColumns({
+    store: useMyIssuesViewStore,
+    statusFilters,
+    baseline: chipBaseline,
+  });
+
+  // Table quick search — see the workspace surface for why it stays out of
+  // the view store.
+  const [tableSearch, setTableSearch] = useState("");
+  const debouncedTableSearch = useDebouncedTableSearch(tableSearch);
 
   // Server window (scope filter from `filter`, grid dimensions from the
   // shared slice mapped through buildIssueWindow).
@@ -323,8 +338,9 @@ export default function MyIssues() {
         dateFilter: filterState.dateFilter,
         sortBy,
         sortDirection,
+        tableSearch: debouncedTableSearch,
       }),
-    [filterState, sortBy, sortDirection],
+    [filterState, sortBy, sortDirection, debouncedTableSearch],
   );
 
   // Group headers count the complete result set (server group descriptors),
@@ -453,8 +469,16 @@ export default function MyIssues() {
 
   // The gantt view owns its own empty state (the scheduled projection can't
   // prove the window is empty — web never asserts surface-empty in gantt).
+  // The table owns its own empty state, and that state carries the SEARCH BOX
+  // — it has to, or a search matching nothing would leave the query in the
+  // window with no visible way to clear it (verified on-device: the surface
+  // empty state swallowed the toolbar and the screen became a dead end).
   const showEmptyState =
-    !surfaceLoading && !surfaceError && !ganttActive && sorted.length === 0;
+    !surfaceLoading &&
+    !surfaceError &&
+    !ganttActive &&
+    view !== "table" &&
+    sorted.length === 0;
 
   // Stable nav callback shared by every issue container (board / table /
   // list rows). BoardColumn + cells are memoized, so an inline arrow here
@@ -563,6 +587,11 @@ export default function MyIssues() {
               ? t("myIssues.filterEmpty")
               : emptyMessageForScope(scope, t)
           }
+          hiddenStatuses={boardHiddenColumns.hiddenStatuses}
+          onHideStatus={boardHiddenColumns.hideStatus}
+          onShowStatus={boardHiddenColumns.showStatus}
+          isStatusFixed={boardHiddenColumns.isStatusFixed}
+          allStatusesHidden={boardHiddenColumns.allStatusesHidden}
         />
       ) : view === "table" ? (
         <IssueTableView
@@ -589,6 +618,8 @@ export default function MyIssues() {
               ? t("myIssues.filterEmpty")
               : emptyMessageForScope(scope, t)
           }
+          search={tableSearch}
+          onSearchChange={setTableSearch}
         />
       ) : view === "gantt" ? (
         <GanttView
@@ -616,6 +647,8 @@ export default function MyIssues() {
               ? t("myIssues.filterEmpty")
               : emptyMessageForScope(scope, t)
           }
+          hiddenStatuses={boardHiddenColumns.hiddenStatuses}
+          onShowStatus={boardHiddenColumns.showStatus}
         />
       ) : (
         <SectionList

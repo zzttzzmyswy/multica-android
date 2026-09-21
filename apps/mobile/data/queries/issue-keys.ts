@@ -53,6 +53,7 @@ export function issueParamsKey(params: object): string {
  *  `GET /api/issues` — every filter/sort dimension the view stores expose. */
 export type IssueListWindowParams = Pick<
   ListIssuesParams,
+  | "q"
   | "statuses"
   | "priorities"
   | "assignee_filters"

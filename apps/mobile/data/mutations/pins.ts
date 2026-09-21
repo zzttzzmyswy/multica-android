@@ -110,3 +110,48 @@ export function useDeletePin() {
     },
   });
 }
+
+/**
+ * Persist a new pin order. Mirrors web `packages/core/pins/mutations.ts:50`
+ * exactly: the list is written to the cache BEFORE the request (a drop has to
+ * stick visually or the row springs back under the finger), the server is told
+ * through 1-based positions derived from the array order, and a failure
+ * restores the snapshot.
+ *
+ * No `invalidateQueries` on settle — unlike create/delete, the caller already
+ * holds the authoritative order it just wrote, and a refetch mid-animation
+ * would repaint the list a second time. Web omits it for the same reason.
+ *
+ * The returned promise REJECTS on failure (mutateAsync); the drag UI fires it
+ * without awaiting, and React Query surfaces the error through `isError`.
+ */
+export function useReorderPins() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const userId = useAuthStore((s) => s.user?.id ?? null);
+
+  return useMutation({
+    mutationFn: (reorderedPins: PinnedItem[]) =>
+      api.reorderPins({
+        items: reorderedPins.map((p, i) => ({ id: p.id, position: i + 1 })),
+      }),
+    onMutate: async (reorderedPins) => {
+      if (!wsId || !userId) return;
+      const key = pinKeys.list(wsId, userId);
+      await qc.cancelQueries({ queryKey: key });
+      const prev = qc.getQueryData<PinnedItem[]>(key);
+      // Write the positions too, not just the order: `PinnedScreen` sorts by
+      // `position` on read, so an array in the new order carrying the old
+      // positions would render unchanged.
+      qc.setQueryData<PinnedItem[]>(key, () =>
+        reorderedPins.map((p, i) => ({ ...p, position: i + 1 })),
+      );
+      return { prev, key };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.key && ctx.prev !== undefined) {
+        qc.setQueryData(ctx.key, ctx.prev);
+      }
+    },
+  });
+}

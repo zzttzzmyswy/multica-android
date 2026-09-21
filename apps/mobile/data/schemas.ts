@@ -920,12 +920,24 @@ export const EMPTY_WORKSPACE_LIST: Workspace[] = [];
 
 /** Pin metadata only — display fields (title / status / icon) are NOT here,
  *  consumers derive them from `issueDetailOptions` / `projectDetailOptions`.
- *  Matches the design in packages/core/types/pin.ts. */
+ *  Matches the design in packages/core/types/pin.ts.
+ *
+ *  `item_type` covers all three types web can pin (`PinnedItemType`): the
+ *  previous `enum(["issue","project"]).catch("issue")` rewrote a pinned `view`
+ *  into an `issue`, so the row queried the VIEW id as an ISSUE id, 404'd, and
+ *  rendered as a dead pin the user was told to delete.
+ *
+ *  The `.catch("issue")` stays, per "Enum drift downgrades, not crashes": a
+ *  type this build has never heard of must not fail the whole array parse (the
+ *  fetch would fall back to an EMPTY list and every pin would vanish). The
+ *  downgrade is only safe because the row is no longer allowed to delete on a
+ *  failed lookup — see `pinned-screen.tsx`, where only a resolved
+ *  issue/project/view may be unpinned directly. */
 export const PinnedItemSchema: z.ZodType<PinnedItem> = z.object({
   id: z.string(),
   workspace_id: z.string().default(""),
   user_id: z.string().default(""),
-  item_type: z.enum(["issue", "project"]).catch("issue"),
+  item_type: z.enum(["issue", "project", "view"]).catch("issue"),
   item_id: z.string(),
   position: z.number().default(0),
   created_at: z.string().default(""),
