@@ -99,6 +99,7 @@ import type {
   PluginReleaseRequest,
 } from "@multica/core/types";
 import type { CloudRuntimeNode } from "@multica/core/runtimes";
+import type { ChatMessageKind } from "@multica/core/types/chat";
 import {
   AutopilotRunSchema,
   IssueSchema,
@@ -438,6 +439,24 @@ export const EMPTY_LIST_PROJECT_RESOURCES_RESPONSE: ListProjectResourcesResponse
 // agent/creator ids). `.loose()` so server-added fields pass through. The two
 // fields mobile keys behaviour on — `id` and `chat_session_id` — are required.
 
+/**
+ * Every `message_kind` the server can expose (`normalizeMessageKind`,
+ * server/internal/handler/chat.go). Declared once and shared by the session
+ * preview and the message row so the two can never drift — they did: the
+ * preview knew `onboarding_opening` while the row's enum did not, and its
+ * `.catch("message")` silently rewrote the opening into an ordinary reply,
+ * leaving the starter-cards branch unreachable on a real device.
+ *
+ * Typed against core's `ChatMessageKind` so adding a kind there fails the
+ * build here instead of degrading silently at runtime.
+ */
+const CHAT_MESSAGE_KINDS = [
+  "message",
+  "no_response",
+  "onboarding_kickoff",
+  "onboarding_opening",
+] as const satisfies readonly ChatMessageKind[];
+
 /** Preview of a session's most recent message — drives the IM-style row's
  *  subtitle (web chat-thread-list.tsx). Optional so older / non-list payloads
  *  stay valid; `message_kind` and `failure_reason` follow the core types. */
@@ -446,9 +465,7 @@ export const ChatLastMessageSchema: z.ZodType<ChatLastMessage> = z.object({
   role: z.enum(["user", "assistant"]).catch("assistant"),
   created_at: z.string().default(""),
   failure_reason: z.string().nullable().optional(),
-  message_kind: z
-    .enum(["message", "no_response", "onboarding_kickoff", "onboarding_opening"])
-    .optional(),
+  message_kind: z.enum(CHAT_MESSAGE_KINDS).optional(),
 }).loose();
 
 export const ChatSessionSchema: z.ZodType<ChatSession> = z.object({
@@ -496,7 +513,7 @@ export const ChatMessageSchema: z.ZodType<ChatMessage> = z.object({
   attachments: z.array(AttachmentSchema).optional(),
   failure_reason: z.string().nullable().optional(),
   elapsed_ms: z.number().nullable().optional(),
-  message_kind: z.enum(["message", "no_response"]).catch("message").optional(),
+  message_kind: z.enum(CHAT_MESSAGE_KINDS).catch("message").optional(),
   // One malformed optional suggestion must not erase an otherwise valid
   // conversation. The server validates these too; this is mixed-version and
   // corrupted-cache defense at the mobile boundary.

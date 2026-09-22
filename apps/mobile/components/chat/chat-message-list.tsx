@@ -66,6 +66,7 @@ import { Markdown } from "@/lib/markdown";
 import { ImageSequenceProvider } from "@/lib/markdown/image-sequence";
 import { failureReasonLabel } from "@/lib/failure-reason-label";
 import { stripChatQuickActionsProtocol } from "@/lib/chat-quick-actions";
+import { onboardingOpeningMessageId } from "@/lib/chat-onboarding";
 import { formatElapsedMs } from "@/lib/format-elapsed";
 import { cn } from "@/lib/utils";
 import { useChatSelectStore } from "@/data/chat-select-store";
@@ -265,10 +266,7 @@ export const ChatMessageList = memo(function ChatMessageList({
   // the product's starter cards INSTEAD of that turn's quick-action chips
   // (web chat-message-list.tsx:213-221, MUL-5765).
   const starterCardsMessageId = useMemo(
-    () =>
-      messages.find(
-        (m) => m.role === "assistant" && m.message_kind === "onboarding_opening",
-      )?.id ?? null,
+    () => onboardingOpeningMessageId(messages),
     [messages],
   );
 
