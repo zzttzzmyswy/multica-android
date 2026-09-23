@@ -24,6 +24,10 @@ export interface SegmentedOption<T extends string> {
    *  `label` when omitted. */
   a11yLabel?: string;
   icon?: React.ComponentProps<typeof Ionicons>["name"];
+  /** Renders inert. Used where a target exists but cannot be chosen for the
+   *  current item (the MCP dialog's form tab on an entry the guided form
+   *  cannot represent). */
+  disabled?: boolean;
 }
 
 export function SegmentedControl<T extends string>({
@@ -49,15 +53,18 @@ export function SegmentedControl<T extends string>({
     >
       {options.map((option) => {
         const active = option.value === value;
+        const disabled = !!option.disabled;
         return (
           <Pressable
             key={option.value}
             onPress={() => onChange(option.value)}
+            disabled={disabled}
             accessibilityRole="tab"
-            accessibilityState={{ selected: active }}
+            accessibilityState={{ selected: active, disabled }}
             accessibilityLabel={option.a11yLabel ?? option.label}
             className={cn(
-              "flex-1 flex-row items-center justify-center gap-1 rounded px-2.5 py-1 active:opacity-70",
+              "flex-1 flex-row items-center justify-center gap-1 rounded px-2.5 py-1",
+              disabled ? "opacity-40" : "active:opacity-70",
               active ? "bg-background" : "bg-transparent",
             )}
           >
@@ -65,13 +72,15 @@ export function SegmentedControl<T extends string>({
               <Ionicons
                 name={option.icon}
                 size={13}
-                color={active ? theme.brand : theme.mutedForeground}
+                color={active && !disabled ? theme.brand : theme.mutedForeground}
               />
             ) : null}
             <Text
               className={cn(
                 "text-xs",
-                active ? "text-foreground font-medium" : "text-muted-foreground",
+                active && !disabled
+                  ? "text-foreground font-medium"
+                  : "text-muted-foreground",
               )}
               numberOfLines={1}
             >

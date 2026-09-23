@@ -1,15 +1,24 @@
 import { describe, expect, it } from "vitest";
 import {
   configFromForm,
+  editorModeForServer,
   emptyMcpForm,
+  formCanExpressConfig,
   formCanExpressTransport,
   formFromConfig,
   formFromTransport,
+  formSupportsServer,
   listManagedMcpServers,
   managedMcpEffectiveNames,
+  mcpEditorConfig,
+  mcpEditorSeed,
+  mcpFormError,
+  mcpNameError,
   mcpTransport,
+  parseServerJson,
   removeManagedMcpServer,
   splitArgsText,
+  switchMcpEditorMode,
   transportLabel,
   upsertManagedMcpServer,
   type McpFormState,
@@ -352,5 +361,265 @@ describe("managedMcpEffectiveNames", () => {
       ],
     );
     expect([...names].sort()).toEqual(["assigned", "defaulted", "own"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Form vs JSON editor (web `EditorMode` parity)
+// ---------------------------------------------------------------------------
+
+describe("parseServerJson", () => {
+  it("accepts an object carrying a command or a url", () => {
+    expect(parseServerJson('{"command":"npx"}')).toEqual({
+      ok: true,
+      value: { command: "npx" },
+    });
+    expect(parseServerJson('{"url":"https://x"}')).toEqual({
+      ok: true,
+      value: { url: "https://x" },
+    });
+  });
+
+  it("reports a syntax error with the parser's own message", () => {
+    const result = parseServerJson("{ nope");
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).not.toBe("not_object");
+      expect(result.error).not.toBe("missing_target");
+      expect(result.error.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("distinguishes a non-object top level from a missing target", () => {
+    expect(parseServerJson("[1,2]")).toEqual({ ok: false, error: "not_object" });
+    expect(parseServerJson('"npx"')).toEqual({ ok: false, error: "not_object" });
+    expect(parseServerJson("null")).toEqual({ ok: false, error: "not_object" });
+    expect(parseServerJson("{}")).toEqual({
+      ok: false,
+      error: "missing_target",
+    });
+    expect(parseServerJson('{"type":"sse"}')).toEqual({
+      ok: false,
+      error: "missing_target",
+    });
+  });
+});
+
+describe("formCanExpressConfig", () => {
+  it("accepts the types configFromForm writes back unchanged", () => {
+    for (const type of ["local", "stdio", "remote", "http", "streamable-http"]) {
+      expect(formCanExpressConfig({ type, url: "https://x" })).toBe(true);
+    }
+    expect(formCanExpressConfig({ type: "HTTP", url: "https://x" })).toBe(true);
+  });
+
+  it("refuses a type the form would rewrite — a url does not make it http", () => {
+    expect(formCanExpressConfig({ type: "websocket", url: "wss://x" })).toBe(
+      false,
+    );
+    expect(formCanExpressConfig({ type: "sse", url: "https://x" })).toBe(false);
+  });
+
+  it("infers from the fields when no explicit type is present", () => {
+    expect(formCanExpressConfig({ command: "npx" })).toBe(true);
+    expect(formCanExpressConfig({ url: "https://x" })).toBe(true);
+    expect(formCanExpressConfig({})).toBe(false);
+    expect(formCanExpressConfig({ note: "nothing to express" })).toBe(false);
+  });
+});
+
+describe("formSupportsServer / editorModeForServer", () => {
+  it("never routes the legacy native container through the form", () => {
+    const server = {
+      name: "legacy",
+      transport: "stdio",
+      container: "mcp" as const,
+      config: { command: "npx" },
+    };
+    expect(formSupportsServer(server)).toBe(false);
+    expect(editorModeForServer(server)).toBe("json");
+  });
+
+  it("judges a readable config by the config, not the summary transport", () => {
+    // The summary says stdio; the entry itself says otherwise.
+    expect(
+      formSupportsServer({
+        transport: "stdio",
+        container: "mcpServers",
+        config: { type: "websocket", url: "wss://x" },
+      }),
+    ).toBe(false);
+  });
+
+  it("falls back to the summary transport when the config is unreadable", () => {
+    expect(formSupportsServer({ transport: "stdio" })).toBe(true);
+    expect(formSupportsServer({ transport: "http" })).toBe(true);
+    expect(formSupportsServer({ transport: "sse" })).toBe(false);
+    expect(formSupportsServer({ transport: "unknown" })).toBe(false);
+  });
+
+  it("opens a new entry on the form", () => {
+    expect(editorModeForServer(null)).toBe("form");
+  });
+});
+
+describe("mcpEditorSeed", () => {
+  it("seeds a blank form for a new entry", () => {
+    const seed = mcpEditorSeed(null);
+    expect(seed).toEqual({
+      name: "",
+      form: emptyMcpForm(),
+      jsonText: "{}",
+      mode: "form",
+    });
+  });
+
+  it("seeds an unreadable entry from the summary transport, JSON buffer empty", () => {
+    const seed = mcpEditorSeed({ name: "srv", transport: "stdio" });
+    expect(seed.form.transport).toBe("stdio");
+    expect(seed.jsonText).toBe("{}");
+    expect(seed.mode).toBe("form");
+  });
+
+  it("seeds a readable entry from its config and opens JSON when the form cannot", () => {
+    const seed = mcpEditorSeed({
+      name: "sse-srv",
+      transport: "sse",
+      container: "mcpServers",
+      config: { type: "sse", url: "https://x" },
+    });
+    expect(seed.mode).toBe("json");
+    expect(JSON.parse(seed.jsonText)).toEqual({
+      type: "sse",
+      url: "https://x",
+    });
+  });
+});
+
+describe("switchMcpEditorMode", () => {
+  const form: McpFormState = {
+    ...emptyMcpForm(),
+    transport: "http",
+    url: "https://mcp.example.com/mcp",
+  };
+  const jsonText = '{"type":"http","url":"https://mcp.example.com/mcp"}';
+
+  it("renders the form into the JSON buffer on the way out", () => {
+    const next = switchMcpEditorMode({
+      to: "json",
+      mode: "form",
+      form,
+      jsonText: "{}",
+      jsonResult: { ok: true, value: {} },
+    });
+    expect(next.mode).toBe("json");
+    expect(JSON.parse(next.jsonText)).toEqual({
+      type: "http",
+      url: "https://mcp.example.com/mcp",
+    });
+  });
+
+  it("parses the JSON buffer back into the form", () => {
+    const next = switchMcpEditorMode({
+      to: "form",
+      mode: "json",
+      form: emptyMcpForm(),
+      jsonText,
+      jsonResult: { ok: true, value: JSON.parse(jsonText) },
+    });
+    expect(next.mode).toBe("form");
+    expect(next.form.url).toBe("https://mcp.example.com/mcp");
+    expect(next.form.transport).toBe("http");
+  });
+
+  it("leaves the form alone when the JSON buffer does not parse", () => {
+    const next = switchMcpEditorMode({
+      to: "form",
+      mode: "json",
+      form,
+      jsonText: "{ nope",
+      jsonResult: { ok: false, error: "Unexpected token" },
+    });
+    expect(next.mode).toBe("form");
+    expect(next.form).toBe(form);
+  });
+});
+
+describe("mcpEditorConfig", () => {
+  it("reads the active editor only", () => {
+    const form: McpFormState = {
+      ...emptyMcpForm(),
+      transport: "stdio",
+      command: "npx",
+    };
+    expect(mcpEditorConfig("form", form, { ok: false, error: "x" })).toEqual({
+      command: "npx",
+    });
+    expect(
+      mcpEditorConfig("json", form, { ok: true, value: { url: "https://x" } }),
+    ).toEqual({ url: "https://x" });
+  });
+
+  it("returns null when the JSON editor holds nothing valid", () => {
+    expect(
+      mcpEditorConfig("json", emptyMcpForm(), { ok: false, error: "x" }),
+    ).toBeNull();
+  });
+});
+
+describe("mcpNameError", () => {
+  it("applies web's precedence: required, then format, then duplicate", () => {
+    expect(mcpNameError("", [])).toBe("required");
+    expect(mcpNameError("   ", [])).toBe("required");
+    expect(mcpNameError("has space", [])).toBe("format");
+    expect(mcpNameError("ok-1", ["ok-1"])).toBe("duplicate");
+    expect(mcpNameError("ok-1", [])).toBeNull();
+  });
+
+  it("never treats the entry being edited as its own duplicate", () => {
+    expect(mcpNameError("srv", ["srv"], "srv")).toBeNull();
+    expect(mcpNameError("srv", ["srv", "other"], "other")).toBe("duplicate");
+  });
+});
+
+describe("mcpFormError", () => {
+  it("requires the field the chosen transport needs", () => {
+    expect(mcpFormError(emptyMcpForm())).toBe("command");
+    expect(mcpFormError({ ...emptyMcpForm(), command: " npx " })).toBeNull();
+    expect(mcpFormError({ ...emptyMcpForm(), transport: "http" })).toBe("url");
+    expect(
+      mcpFormError({ ...emptyMcpForm(), transport: "http", url: "https://x" }),
+    ).toBeNull();
+  });
+});
+
+describe("extras round-trip", () => {
+  it("carries keys the form has no field for through a form save", () => {
+    const saved = {
+      command: "npx",
+      disabled: true,
+      timeoutMs: 5000,
+      nested: { a: 1 },
+    };
+    expect(configFromForm(formFromConfig(saved))).toEqual(saved);
+  });
+
+  it("re-emits the modelled keys in form shape, as web does", () => {
+    // A stdio entry loses an explicit `type` — the daemon infers stdio from
+    // `command`, and web's configFromForm writes the same shape. An http-family
+    // type is normalised to `http`. This is the documented asymmetry, not a
+    // dropped field: `formCanExpressConfig` is what keeps an entry the form
+    // would rewrite OUT of the form in the first place.
+    expect(
+      configFromForm(formFromConfig({ type: "stdio", command: "npx" })),
+    ).toEqual({ command: "npx" });
+    expect(
+      configFromForm(formFromConfig({ type: "remote", url: "https://x" })),
+    ).toEqual({ type: "http", url: "https://x" });
+  });
+
+  it("keeps extras empty for a form that was never seeded from a config", () => {
+    expect(emptyMcpForm().extras).toEqual({});
+    expect(formFromTransport("http").extras).toEqual({});
   });
 });

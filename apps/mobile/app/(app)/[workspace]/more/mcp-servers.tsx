@@ -7,9 +7,9 @@
  *  - Stored configs are WRITE-ONLY: rows show name + transport only; edits
  *    re-supply the configuration.
  *  - Write affordances (add / edit / remove) appear only for workspace
- *    owner/admin — everyone else gets a read-only list + a note. Unknown
- *    transports (sse/…) are not form-editable (mobile has no JSON editor), so
- *    those rows show transport only, with removal still available.
+ *    owner/admin — everyone else gets a read-only list + a note. Every entry
+ *    is editable: one whose transport the guided form cannot express
+ *    (sse/unknown) opens in the JSON editor instead of being locked out.
  *  - Deleting removes the entry AND every agent assignment (server-side);
  *    confirm copy says so.
  */
@@ -33,7 +33,7 @@ import { memberListOptions } from "@/data/queries/members";
 import { useDeleteWorkspaceMcpServer } from "@/data/mutations/mcp";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
-import { formCanExpressTransport, transportLabel } from "@/lib/mcp-config";
+import { transportLabel } from "@/lib/mcp-config";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
@@ -177,9 +177,9 @@ function McpServerRow({
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const muted = THEME[colorScheme].mutedForeground;
-  const editable = formCanExpressTransport(server.transport);
   // HTTP-style summary maps to "http" (transportLabel renders it "HTTP");
-  // anything unknown (sse/…) shows raw transport and is not form-editable.
+  // anything unknown (sse/…) shows its raw transport and opens in the JSON
+  // editor — see the editor's own mode seeding.
   const badge = transportLabel(server.transport);
 
   return (
@@ -197,25 +197,18 @@ function McpServerRow({
               {badge}
             </Text>
           </View>
-          {!editable ? (
-            <Text className="text-[11px] text-muted-foreground/70">
-              {t("mcp.notEditable")}
-            </Text>
-          ) : null}
         </View>
       </View>
       {canManage ? (
         <View className="flex-row items-center gap-1">
-          {editable ? (
-            <Pressable
-              onPress={onEdit}
-              accessibilityRole="button"
-              accessibilityLabel={t("mcp.editServer")}
-              className="p-2"
-            >
-              <Ionicons name="pencil" size={17} color={muted} />
-            </Pressable>
-          ) : null}
+          <Pressable
+            onPress={onEdit}
+            accessibilityRole="button"
+            accessibilityLabel={t("mcp.editServer")}
+            className="p-2"
+          >
+            <Ionicons name="pencil" size={17} color={muted} />
+          </Pressable>
           <Pressable
             onPress={onDelete}
             accessibilityRole="button"

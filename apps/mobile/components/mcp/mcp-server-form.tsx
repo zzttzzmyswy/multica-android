@@ -1,6 +1,6 @@
 /**
  * Shared MCP server create/edit form (mobile mirror of web's
- * mcp-server-dialog.tsx guided form).
+ * mcp-server-dialog.tsx).
  *
  * Workspace library entries are WRITE-ONLY: the API returns name + transport
  * but never the stored config, so editing re-supplies the configuration. In
@@ -8,12 +8,14 @@
  * summary transport; every field starts empty — the banner says so instead
  * of pretending the empty form is the saved state.
  *
- * The guided form expresses exactly two transports (stdio / http). Saving
- * from it REWRITES the entry, so a library entry whose summary transport is
- * anything else (sse/unknown) is never routed here — the list page hides the
- * edit affordance for it (mobile has no JSON editor like web).
+ * Two editors, as on web. The guided form expresses exactly two transports
+ * (stdio / http) and saving from it REWRITES the entry, so an entry whose
+ * summary transport is anything else (sse/unknown) opens straight in the JSON
+ * editor with the form tab disabled — routing it through the form would
+ * silently change its protocol. Every entry is editable: the JSON path is what
+ * makes that safe.
  */
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Alert, Pressable, View } from "react-native";
 import { router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -21,12 +23,21 @@ import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import {
-  emptyMcpForm,
-  configFromForm,
-  formFromTransport,
+  McpEditorTabs,
+  McpJsonField,
+  mcpEditorErrorMessage,
+} from "@/components/mcp/mcp-editor";
+import {
+  formSupportsServer,
+  mcpEditorConfig,
+  mcpEditorSeed,
+  mcpFormError,
+  mcpNameError,
+  parseServerJson,
+  switchMcpEditorMode,
+  type McpEditorMode,
   type McpFormState,
   type McpKeyValue,
-  type McpFormTransport,
 } from "@/lib/mcp-config";
 import {
   useCreateWorkspaceMcpServer,
@@ -42,8 +53,6 @@ export interface McpServerFormServer {
   name: string;
   transport: string;
 }
-
-const NAME_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 function FieldError({ text }: { text: string }) {
   return <Text className="text-xs text-destructive">{text}</Text>;
@@ -67,57 +76,73 @@ export function McpServerForm({
   const theme = THEME[colorScheme];
   const editing = !!server;
 
-  const [name, setName] = useState(server?.name ?? "");
-  const [transport, setTransport] = useState<McpFormTransport>(
-    server ? formFromTransport(server.transport).transport : "stdio",
+  // The library cannot read a saved config back, so the seed carries only the
+  // summary transport (see `mcpEditorSeed`).
+  const seed = useMemo(
+    () => mcpEditorSeed(server ? { name: server.name, transport: server.transport } : null),
+    [server],
   );
-  const [command, setCommand] = useState("");
-  const [argsText, setArgsText] = useState("");
-  const [env, setEnv] = useState<McpKeyValue[]>([]);
-  const [url, setUrl] = useState("");
-  const [headers, setHeaders] = useState<McpKeyValue[]>([]);
+  const [name, setName] = useState(seed.name);
+  const [mode, setMode] = useState<McpEditorMode>(seed.mode);
+  const [form, setForm] = useState<McpFormState>(seed.form);
+  const [jsonText, setJsonText] = useState(seed.jsonText);
   const [showErrors, setShowErrors] = useState(false);
 
   const create = useCreateWorkspaceMcpServer();
   const update = useUpdateWorkspaceMcpServer();
   const isSubmitting = create.isPending || update.isPending;
 
+  // The form is unavailable — not merely unselected — for an entry it cannot
+  // represent, so switching to it cannot rewrite that entry either.
+  const formAvailable = !server || formSupportsServer({ ...server });
+
+  const jsonResult = useMemo(() => parseServerJson(jsonText), [jsonText]);
   const trimmedName = name.trim();
-  const nameMissing = trimmedName === "";
-  const nameFormatInvalid = !NAME_PATTERN.test(trimmedName);
-  const nameDuplicate = existingNames.some(
-    (existing) => existing === trimmedName && existing !== server?.name,
-  );
-  const commandMissing = transport === "stdio" && command.trim() === "";
-  const urlMissing = transport === "http" && url.trim() === "";
+  const nameError = mcpNameError(name, existingNames, server?.name);
+  const formError = mcpFormError(form);
 
   const canSave =
     !isSubmitting &&
-    !nameMissing &&
-    !nameFormatInvalid &&
-    !nameDuplicate &&
-    !commandMissing &&
-    !urlMissing;
+    nameError === null &&
+    (mode === "form" ? formError === null : jsonResult.ok);
+
+  const errorText = mcpEditorErrorMessage(t, {
+    nameError,
+    formError,
+    mode,
+    jsonResult,
+  });
+
+  const handleModeChange = useCallback(
+    (next: McpEditorMode) => {
+      if (next === "form" && !formAvailable) return;
+      const carried = switchMcpEditorMode({
+        to: next,
+        mode,
+        form,
+        jsonText,
+        jsonResult,
+      });
+      setMode(carried.mode);
+      setForm(carried.form);
+      setJsonText(carried.jsonText);
+    },
+    [mode, form, jsonText, jsonResult, formAvailable],
+  );
 
   const handleSave = useCallback(async () => {
     if (isSubmitting) return;
-    if (!canSave) {
+    const config = mcpEditorConfig(mode, form, jsonResult);
+    if (!canSave || !config) {
       setShowErrors(true);
       return;
     }
-    const form: McpFormState = {
-      ...emptyMcpForm(),
-      transport,
-      command,
-      argsText,
-      env,
-      url,
-      headers,
-    };
-    const config = configFromForm(form);
     try {
       if (editing && server) {
-        await update.mutateAsync({ serverId: server.id, update: { name: trimmedName, config } });
+        await update.mutateAsync({
+          serverId: server.id,
+          update: { name: trimmedName, config },
+        });
       } else {
         await create.mutateAsync({ name: trimmedName, config });
       }
@@ -125,18 +150,15 @@ export function McpServerForm({
       else router.back();
     } catch (err) {
       Alert.alert(
-        editing ? t("mcp.saveFailed") : t("mcp.saveFailed"),
+        t("mcp.saveFailed"),
         err instanceof Error ? err.message : t("common.unknownError"),
       );
     }
   }, [
     canSave,
-    transport,
-    command,
-    argsText,
-    env,
-    url,
-    headers,
+    mode,
+    form,
+    jsonResult,
     editing,
     server,
     trimmedName,
@@ -148,9 +170,15 @@ export function McpServerForm({
   ]);
 
   const setEnvAt = (index: number, patch: Partial<McpKeyValue>) =>
-    setEnv((rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+    setForm((f) => ({
+      ...f,
+      env: f.env.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    }));
   const setHeadersAt = (index: number, patch: Partial<McpKeyValue>) =>
-    setHeaders((rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+    setForm((f) => ({
+      ...f,
+      headers: f.headers.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    }));
 
   return (
     <View className="px-4 pt-4 gap-5">
@@ -171,155 +199,199 @@ export function McpServerForm({
           value={name}
           onChangeText={setName}
           placeholder={t("mcp.form.namePlaceholder")}
-          invalid={showErrors && (nameMissing || nameFormatInvalid || nameDuplicate)}
+          invalid={showErrors && nameError !== null}
           editable={!isSubmitting}
           autoCapitalize="none"
           autoCorrect={false}
           autoFocus={!editing}
           maxLength={120}
         />
-        {showErrors && nameMissing ? (
+        {showErrors && nameError === "required" ? (
           <FieldError text={t("mcp.form.nameRequired")} />
         ) : null}
-        {showErrors && !nameMissing && nameFormatInvalid ? (
+        {showErrors && nameError === "format" ? (
           <FieldError text={t("mcp.form.nameInvalid")} />
         ) : null}
-        {showErrors && !nameMissing && !nameFormatInvalid && nameDuplicate ? (
+        {showErrors && nameError === "duplicate" ? (
           <FieldError text={t("mcp.form.nameDuplicate")} />
         ) : null}
       </View>
 
-      {/* Transport */}
-      <View className="gap-2">
-        <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          {t("mcp.form.transport")}
+      <McpEditorTabs
+        mode={mode}
+        formAvailable={formAvailable}
+        onChange={handleModeChange}
+      />
+
+      {!formAvailable ? (
+        <Text className="text-xs text-muted-foreground leading-5">
+          {t("mcp.form.formUnavailable")}
         </Text>
-        <View className="flex-row gap-2">
-          {(["stdio", "http"] as const).map((option) => (
-            <Pressable
-              key={option}
-              accessibilityRole="button"
-              accessibilityState={{ selected: transport === option }}
-              onPress={() => setTransport(option)}
-              disabled={isSubmitting}
-              className={cn(
-                "flex-1 items-center rounded-md border px-3 py-2.5",
-                transport === option
-                  ? "border-brand bg-brand/10"
-                  : "border-border bg-secondary/50",
-              )}
-            >
-              <Text
-                className={cn(
-                  "text-sm font-medium",
-                  transport === option ? "text-brand" : "text-foreground",
-                )}
-              >
-                {option === "stdio"
-                  ? t("mcp.form.typeStdio")
-                  : t("mcp.form.typeHttp")}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
+      ) : null}
 
-      {transport === "stdio" ? (
-        <>
-          {/* Command */}
-          <View className="gap-1.5">
-            <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              {t("mcp.form.command")}
-            </Text>
-            <TextField
-              value={command}
-              onChangeText={setCommand}
-              placeholder={t("mcp.form.commandPlaceholder")}
-              invalid={showErrors && commandMissing}
-              editable={!isSubmitting}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {showErrors && commandMissing ? (
-              <FieldError text={t("mcp.form.commandRequired")} />
-            ) : null}
-          </View>
-
-          {/* Args */}
-          <View className="gap-1.5">
-            <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              {t("mcp.form.args")}
-            </Text>
-            <TextField
-              value={argsText}
-              onChangeText={setArgsText}
-              placeholder={t("mcp.form.argsPlaceholder")}
-              editable={!isSubmitting}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <Text className="text-[11px] text-muted-foreground/70">
-              {t("mcp.form.argsHint")}
-            </Text>
-          </View>
-
-          {/* Env */}
-          <KeyValueRows
-            label={t("mcp.form.env")}
-            rows={env}
-            keyPlaceholder={t("mcp.form.key")}
-            valuePlaceholder={t("mcp.form.value")}
-            addLabel={t("mcp.form.addRow")}
-            removeAria={t("mcp.form.removeRow")}
-            theme={theme}
-            disabled={isSubmitting}
-            onAdd={() => setEnv((rows) => [...rows, { key: "", value: "" }])}
-            onChangeAt={setEnvAt}
-            onRemoveAt={(index) =>
-              setEnv((rows) => rows.filter((_, i) => i !== index))
-            }
-          />
-        </>
+      {mode === "json" ? (
+        <McpJsonField
+          value={jsonText}
+          onChange={setJsonText}
+          invalid={jsonResult.ok === false}
+          editable={!isSubmitting}
+        />
       ) : (
         <>
-          {/* URL */}
-          <View className="gap-1.5">
+          {/* Transport */}
+          <View className="gap-2">
             <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              {t("mcp.form.url")}
+              {t("mcp.form.transport")}
             </Text>
-            <TextField
-              value={url}
-              onChangeText={setUrl}
-              placeholder={t("mcp.form.urlPlaceholder")}
-              invalid={showErrors && urlMissing}
-              editable={!isSubmitting}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-            />
-            {showErrors && urlMissing ? (
-              <FieldError text={t("mcp.form.urlRequired")} />
-            ) : null}
+            <View className="flex-row gap-2">
+              {(["stdio", "http"] as const).map((option) => (
+                <Pressable
+                  key={option}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: form.transport === option }}
+                  onPress={() =>
+                    setForm((f) => ({ ...f, transport: option }))
+                  }
+                  disabled={isSubmitting}
+                  className={cn(
+                    "flex-1 items-center rounded-md border px-3 py-2.5",
+                    form.transport === option
+                      ? "border-brand bg-brand/10"
+                      : "border-border bg-secondary/50",
+                  )}
+                >
+                  <Text
+                    className={cn(
+                      "text-sm font-medium",
+                      form.transport === option
+                        ? "text-brand"
+                        : "text-foreground",
+                    )}
+                  >
+                    {option === "stdio"
+                      ? t("mcp.form.typeStdio")
+                      : t("mcp.form.typeHttp")}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
 
-          {/* Headers */}
-          <KeyValueRows
-            label={t("mcp.form.headers")}
-            rows={headers}
-            keyPlaceholder={t("mcp.form.key")}
-            valuePlaceholder={t("mcp.form.value")}
-            addLabel={t("mcp.form.addRow")}
-            removeAria={t("mcp.form.removeRow")}
-            theme={theme}
-            disabled={isSubmitting}
-            onAdd={() => setHeaders((rows) => [...rows, { key: "", value: "" }])}
-            onChangeAt={setHeadersAt}
-            onRemoveAt={(index) =>
-              setHeaders((rows) => rows.filter((_, i) => i !== index))
-            }
-          />
+          {form.transport === "stdio" ? (
+            <>
+              {/* Command */}
+              <View className="gap-1.5">
+                <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  {t("mcp.form.command")}
+                </Text>
+                <TextField
+                  value={form.command}
+                  onChangeText={(v) => setForm((f) => ({ ...f, command: v }))}
+                  placeholder={t("mcp.form.commandPlaceholder")}
+                  invalid={showErrors && formError === "command"}
+                  editable={!isSubmitting}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                {showErrors && formError === "command" ? (
+                  <FieldError text={t("mcp.form.commandRequired")} />
+                ) : null}
+              </View>
+
+              {/* Args */}
+              <View className="gap-1.5">
+                <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  {t("mcp.form.args")}
+                </Text>
+                <TextField
+                  value={form.argsText}
+                  onChangeText={(v) => setForm((f) => ({ ...f, argsText: v }))}
+                  placeholder={t("mcp.form.argsPlaceholder")}
+                  editable={!isSubmitting}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <Text className="text-[11px] text-muted-foreground/70">
+                  {t("mcp.form.argsHint")}
+                </Text>
+              </View>
+
+              {/* Env */}
+              <KeyValueRows
+                label={t("mcp.form.env")}
+                rows={form.env}
+                keyPlaceholder={t("mcp.form.key")}
+                valuePlaceholder={t("mcp.form.value")}
+                addLabel={t("mcp.form.addRow")}
+                removeAria={t("mcp.form.removeRow")}
+                theme={theme}
+                disabled={isSubmitting}
+                onAdd={() =>
+                  setForm((f) => ({ ...f, env: [...f.env, { key: "", value: "" }] }))
+                }
+                onChangeAt={setEnvAt}
+                onRemoveAt={(index) =>
+                  setForm((f) => ({
+                    ...f,
+                    env: f.env.filter((_, i) => i !== index),
+                  }))
+                }
+              />
+            </>
+          ) : (
+            <>
+              {/* URL */}
+              <View className="gap-1.5">
+                <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  {t("mcp.form.url")}
+                </Text>
+                <TextField
+                  value={form.url}
+                  onChangeText={(v) => setForm((f) => ({ ...f, url: v }))}
+                  placeholder={t("mcp.form.urlPlaceholder")}
+                  invalid={showErrors && formError === "url"}
+                  editable={!isSubmitting}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
+                {showErrors && formError === "url" ? (
+                  <FieldError text={t("mcp.form.urlRequired")} />
+                ) : null}
+              </View>
+
+              {/* Headers */}
+              <KeyValueRows
+                label={t("mcp.form.headers")}
+                rows={form.headers}
+                keyPlaceholder={t("mcp.form.key")}
+                valuePlaceholder={t("mcp.form.value")}
+                addLabel={t("mcp.form.addRow")}
+                removeAria={t("mcp.form.removeRow")}
+                theme={theme}
+                disabled={isSubmitting}
+                onAdd={() =>
+                  setForm((f) => ({
+                    ...f,
+                    headers: [...f.headers, { key: "", value: "" }],
+                  }))
+                }
+                onChangeAt={setHeadersAt}
+                onRemoveAt={(index) =>
+                  setForm((f) => ({
+                    ...f,
+                    headers: f.headers.filter((_, i) => i !== index),
+                  }))
+                }
+              />
+            </>
+          )}
         </>
       )}
+
+      {showErrors && errorText ? (
+        <Text className="text-xs text-destructive">{errorText}</Text>
+      ) : null}
 
       {/* Actions */}
       <Button onPress={() => void handleSave()} disabled={!canSave}>

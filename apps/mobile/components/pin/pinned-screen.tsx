@@ -31,7 +31,7 @@
  * auto-unpins on a 404 for issues/projects; on a phone a modal question is
  * cheaper than a silent deletion the user cannot undo.
  */
-import { useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -45,6 +45,7 @@ import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
+import { create } from "zustand";
 import type { Issue, PinnedItem, Project } from "@multica/core/types";
 import type { IssueView } from "@multica/core/api/schemas";
 import { Text } from "@/components/ui/text";
@@ -66,6 +67,61 @@ import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { dragTargetIndex, reorderByMove } from "@/lib/pin-reorder";
 import { useTranslation } from "@/lib/i18n/react";
+
+/**
+ * Whether a drag handle currently owns the gesture.
+ *
+ * Deliberately NOT `PinnedScreen` state. The flag has to reach the native
+ * refresh control (`SwipeRefreshLayout.setEnabled(false)`) before the finger
+ * crosses Android's touch slop — about 8dp. Holding it in the screen's state
+ * re-renders the whole row list on the way, and on a Pixel 5 that delay is
+ * long enough that a fast drag is still cancelled by the refresh layout
+ * (measured: a gesture reaching slop in ~92ms loses, ~167ms wins). With a
+ * store subscription only `PinnedRefreshControl` re-renders, so the disable
+ * lands within the window.
+ */
+const usePinDragStore = create<{
+  dragging: boolean;
+  setDragging: (dragging: boolean) => void;
+}>((set) => ({
+  dragging: false,
+  setDragging: (dragging) => set({ dragging }),
+}));
+
+/**
+ * The list's pull-to-refresh control, disabled while a drag is in flight.
+ *
+ * `enabled` (Android: `SwipeRefreshLayout.setEnabled`) is what keeps
+ * pull-to-refresh from eating the drag. While the list sits at the top,
+ * `canChildScrollUp()` is false and the native layout claims the vertical drag
+ * at touch slop, sending the handle's responder an ACTION_CANCEL — long before
+ * the first row is crossed, so `onDragTo` never fires and the drop commits
+ * nothing (MYS-1456).
+ *
+ * `children` must be forwarded: `ScrollView` clones whatever it is given as
+ * `refreshControl` and injects its own content as that element's children, so
+ * a wrapper that drops them renders an empty list.
+ */
+const PinnedRefreshControl = memo(function PinnedRefreshControl({
+  refreshing,
+  onRefresh,
+  children,
+}: {
+  refreshing: boolean;
+  onRefresh: () => void;
+  children?: React.ReactNode;
+}) {
+  const dragging = usePinDragStore((s) => s.dragging);
+  return (
+    <RefreshControl
+      enabled={!dragging}
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+    >
+      {children}
+    </RefreshControl>
+  );
+});
 
 export function PinnedScreen() {
   const { t } = useTranslation();
@@ -91,9 +147,27 @@ export function PinnedScreen() {
   // soon as the server order catches up.
   const [dragOrder, setDragOrder] = useState<PinnedItem[] | null>(null);
   const pins = dragOrder ?? serverPins;
+  // Read imperatively so a drag does not re-render this screen — see
+  // `usePinDragStore`. The setter's identity is stable, so subscribing to it
+  // costs nothing.
+  const setDragging = usePinDragStore((s) => s.setDragging);
   // Measured heights, keyed by pin id: a drag's drop target is the row the
   // finger is over, and the rows have no common height.
   const heightsRef = useRef<Record<string, number>>({});
+
+  // Stable across a drag: `PinnedRefreshControl` owns the `dragging`
+  // subscription, so this element is only rebuilt when the refresh state
+  // itself changes. Built before the early returns below — a hook after them
+  // would change the hook count between the loading and loaded renders.
+  const refreshControl = useMemo(
+    () => (
+      <PinnedRefreshControl
+        refreshing={isRefetching}
+        onRefresh={() => refetch()}
+      />
+    ),
+    [isRefetching, refetch],
+  );
 
   const commitOrder = useCallback(
     (next: PinnedItem[]) => {
@@ -139,12 +213,7 @@ export function PinnedScreen() {
     <ScrollView
       className="flex-1 bg-background"
       contentContainerClassName="pb-6"
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefetching}
-          onRefresh={() => refetch()}
-        />
-      }
+      refreshControl={refreshControl}
       showsVerticalScrollIndicator={false}
     >
       {pins.map((pin, idx) => (
@@ -162,6 +231,7 @@ export function PinnedScreen() {
             heights={heightsRef}
             wsId={wsId}
             wsSlug={wsSlug}
+            onDragStart={() => setDragging(true)}
             onDragTo={(to) => {
               // Rebuilt from the row's ORIGINAL index, never its current one:
               // after the first move the row already sits at `to`, and
@@ -169,6 +239,11 @@ export function PinnedScreen() {
               setDragOrder(reorderByMove(pins, idx, to));
             }}
             onDrop={() => {
+              // Both the release and the terminate path land here, so the
+              // refresh control is re-enabled even when the gesture was taken
+              // away from us — a disabled control that never came back would
+              // silently kill pull-to-refresh for the rest of the session.
+              setDragging(false);
               if (!dragOrder) return;
               commitOrder(dragOrder);
             }}
@@ -197,6 +272,7 @@ function DraggablePinRow({
   heights,
   wsId,
   wsSlug,
+  onDragStart,
   onDragTo,
   onDrop,
 }: {
@@ -206,6 +282,8 @@ function DraggablePinRow({
   heights: { current: Record<string, number> };
   wsId: string | null;
   wsSlug: string | null;
+  /** The handle has taken the gesture — the list disables pull-to-refresh. */
+  onDragStart: () => void;
   onDragTo: (to: number) => void;
   onDrop: () => void;
 }) {
@@ -250,6 +328,7 @@ function DraggablePinRow({
         onPanResponderGrant: () => {
           orderAtStartRef.current = pinsRef.current;
           targetRef.current = indexRef.current;
+          onDragStart();
           Haptics.selectionAsync().catch(() => {});
         },
         onPanResponderMove: (_e, g) => {
@@ -273,7 +352,7 @@ function DraggablePinRow({
           onDrop();
         },
       }),
-    [onDragTo, onDrop],
+    [onDragStart, onDragTo, onDrop],
   );
 
   return (

@@ -44,7 +44,6 @@ import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { ActionSheet } from "@/lib/action-sheet";
 import {
-  formCanExpressTransport,
   listManagedMcpServers,
   managedMcpEffectiveNames,
   removeManagedMcpServer,
@@ -309,26 +308,20 @@ export function AgentMcpSection({
                     {transportLabel(server.transport)}
                   </Text>
                 </View>
-                {formCanExpressTransport(server.transport) ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t("mcp.agent.managedEditAria", {
-                      name: server.name,
-                    })}
-                    disabled={updateAgent.isPending}
-                    onPress={() => {
-                      setEditing(server);
-                      setFormVisible(true);
-                    }}
-                    className="p-1"
-                  >
-                    <Ionicons name="pencil-outline" size={16} color={muted} />
-                  </Pressable>
-                ) : (
-                  <Text className="text-[11px] text-muted-foreground">
-                    {t("mcp.notEditable")}
-                  </Text>
-                )}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t("mcp.agent.managedEditAria", {
+                    name: server.name,
+                  })}
+                  disabled={updateAgent.isPending}
+                  onPress={() => {
+                    setEditing(server);
+                    setFormVisible(true);
+                  }}
+                  className="p-1"
+                >
+                  <Ionicons name="pencil-outline" size={16} color={muted} />
+                </Pressable>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={t("mcp.agent.managedDeleteAria", {
