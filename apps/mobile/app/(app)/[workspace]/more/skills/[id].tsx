@@ -10,7 +10,19 @@
  *                      renderer (empty → muted placeholder)
  *   attached files   — list of non-SKILL.md files (web names it "Files"):
  *                      tapping opens a read-only preview sheet (markdown →
- *                      Markdown renderer, everything else → monospace text)
+ *                      Markdown renderer, everything else → monospace text).
+ *                      Editable skills also get a "New file" entry and a "⋯"
+ *                      on every attached row (rename / delete), matching web's
+ *                      AddFileInline + FileTree row menu.
+ *
+ * File-set edits are a DRAFT, committed as one write. The server has no
+ * per-file endpoint — web adds, renames and deletes in local state and PUTs the
+ * whole skill when Save is pressed, and `skill.go UpdateSkill` replaces the file
+ * set wholesale (`files != nil` ⇒ delete + upsert all). So the same shape holds
+ * here: `fileDraft` holds the pending set, the save bar (or a save from the file
+ * editor, which sends the draft too) commits it, and Discard drops it. Without
+ * the draft an added row would vanish on the next re-render, since `files` is
+ * read straight off the server object.
  *
  * Management gate mirrors `canEditSkill` (lib/skill-guards.ts + web
  * use-can-edit-skill): workspace owner/admin manage every skill; a regular
@@ -19,10 +31,11 @@
  * delete double-confirmed). Otherwise the edit affordance is hidden entirely
  * — the server remains the authoritative gate.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   Modal,
   Pressable,
   ScrollView,
@@ -32,12 +45,13 @@ import {
 import { useLocalSearchParams } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import type { Label, SkillFile } from "@multica/core/types";
+import type { Label } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { SkillForm } from "@/components/skill/skill-form";
 import { SkillFileEditor } from "@/components/skill/skill-file-editor";
 import { SkillFileTree } from "@/components/skill/skill-file-tree";
+import { TextField } from "@/components/ui/text-field";
 import { LabelPickerBody } from "@/components/issue/pickers/label-picker-body";
 import { skillDetailOptions } from "@/data/queries/skills";
 import { memberListOptions } from "@/data/queries/members";
@@ -47,7 +61,7 @@ import {
   useCreateLabel,
   useDetachResourceLabel,
 } from "@/data/mutations/labels";
-import { useRefreshSkill } from "@/data/mutations/skills";
+import { useRefreshSkill, useUpdateSkill } from "@/data/mutations/skills";
 import { agentListOptions, agentKeys } from "@/data/queries/agents";
 import { api } from "@/data/api";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
@@ -64,6 +78,13 @@ import {
   ORIGIN_LABEL_KEY,
   readOrigin,
 } from "@/lib/skill-guards";
+import {
+  SKILL_MD,
+  skillPathSet,
+  validateSkillFilePath,
+  type SkillFileDraft,
+  type SkillFilePathError,
+} from "@/lib/skill-file-paths";
 import { useSkillRole } from "@/lib/use-skill-role";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useTranslation } from "@/lib/i18n/react";
@@ -74,6 +95,81 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 function isMarkdownPath(path: string): boolean {
   return path.endsWith(".md") || path.endsWith(".mdx");
+}
+
+/** i18n for the seven path rejections the validator returns. */
+const PATH_ERROR_KEY: Record<SkillFilePathError, string> = {
+  empty: "skills.detail.add_file.errors.empty",
+  absolute: "skills.detail.add_file.errors.absolute",
+  double_dot: "skills.detail.add_file.errors.double_dot",
+  reserved: "skills.detail.add_file.errors.reserved",
+  exists: "skills.detail.add_file.errors.exists",
+  is_directory: "skills.detail.add_file.errors.is_directory",
+  under_file: "skills.detail.add_file.errors.under_file",
+};
+
+/** Same paths, same contents, same order — i.e. nothing to commit. */
+function sameFiles(a: SkillFileDraft[], b: SkillFileDraft[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((f, i) => f.path === b[i]!.path && f.content === b[i]!.content);
+}
+
+/**
+ * Inline "new file" row (web `AddFileInline`,
+ * skill-detail-page.tsx:213-255). Validation runs on submit and the message
+ * stays put until the path changes, so a rejected path is not silently eaten.
+ */
+function AddFileInline({
+  existingPaths,
+  onAdd,
+  onCancel,
+}: {
+  existingPaths: string[];
+  onAdd: (path: string) => void;
+  onCancel: () => void;
+}) {
+  const { t } = useTranslation();
+  const [path, setPath] = useState("");
+  const [error, setError] = useState<SkillFilePathError | null>(null);
+
+  const submit = () => {
+    const err = validateSkillFilePath(path, existingPaths);
+    if (err) {
+      setError(err);
+      return;
+    }
+    onAdd(path.trim());
+  };
+
+  return (
+    <View className="rounded-lg border border-border bg-card px-3 py-2.5 gap-2">
+      <TextField
+        autoFocus
+        value={path}
+        onChangeText={(next) => {
+          setPath(next);
+          setError(null);
+        }}
+        placeholder={t("skills.detail.add_file.placeholder")}
+        autoCapitalize="none"
+        autoCorrect={false}
+        returnKeyType="done"
+        invalid={!!error}
+        onSubmitEditing={submit}
+      />
+      {error ? (
+        <Text className="text-xs text-destructive">{t(PATH_ERROR_KEY[error])}</Text>
+      ) : null}
+      <View className="flex-row items-center gap-2">
+        <Button size="sm" onPress={submit} className="flex-1">
+          <Text>{t("skills.detail.add_file.add")}</Text>
+        </Button>
+        <Button variant="outline" size="sm" onPress={onCancel} className="flex-1">
+          <Text>{t("skills.detail.add_file.cancel")}</Text>
+        </Button>
+      </View>
+    </View>
+  );
 }
 
 function SectionTitle({
@@ -152,7 +248,27 @@ export default function SkillDetailPage() {
     resourceLabelsOptions(wsId, "skill", id),
   );
   const [editing, setEditing] = useState(false);
-  const [previewFile, setPreviewFile] = useState<SkillFile | null>(null);
+  // Path of the attached file open in the preview sheet; null = closed. The
+  // content is looked up from the live file set rather than copied, so a
+  // rename or a draft edit is reflected in the open sheet.
+  const [previewPath, setPreviewPath] = useState<string | null>(null);
+  // Path highlighted in the rail. Kept explicitly (rather than derived from
+  // whichever sheet is open) so a rename can follow the file to its new path
+  // and a delete can fall back to SKILL.md, exactly as web's `selectedPath`
+  // does.
+  const [selectedPath, setSelectedPath] = useState<string>(SKILL_MD);
+  // Pending attached-file set. null = no local edits, mirror the server.
+  const [fileDraft, setFileDraft] = useState<SkillFileDraft[] | null>(null);
+  const [addingFile, setAddingFile] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renameError, setRenameError] = useState<SkillFilePathError | null>(null);
+  const [filesSaving, setFilesSaving] = useState(false);
+  // The rename sheet's buttons sit at the bottom of a Modal, which Android
+  // draws in its own window — KeyboardAvoidingView does not lift it, so the
+  // sheet pads itself (same manual lift as SkillFileEditor's footer).
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
   // Path of the file currently open in the full-screen editor (SKILL.md or an
   // attached file); null = closed. The editor modal is conditionally mounted
   // with key={editingFile} so each open re-seeds from the latest server skill.
@@ -166,6 +282,35 @@ export default function SkillDetailPage() {
   const detachLabel = useDetachResourceLabel("skill", id);
   const createLabel = useCreateLabel();
   const refreshSkill = useRefreshSkill();
+  const updateSkill = useUpdateSkill();
+
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", (e) =>
+      setKeyboardHeight(e.endCoordinates.height),
+    );
+    const hide = Keyboard.addListener("keyboardDidHide", () =>
+      setKeyboardHeight(0),
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  // Opening the add row focuses it, which raises the IME — and Android runs
+  // edge-to-edge, so the window never resizes and nothing scrolls the row out
+  // from under the keyboard on its own. KeyboardAvoidingView only shrinks the
+  // viewport; the offset has to be moved explicitly. The Files section is the
+  // last block in this ScrollView, so scrolling to the end is exactly the
+  // add row; the delay lets the IME finish animating first.
+  useEffect(() => {
+    if (!addingFile) return;
+    const timer = setTimeout(
+      () => scrollRef.current?.scrollToEnd({ animated: true }),
+      300,
+    );
+    return () => clearTimeout(timer);
+  }, [addingFile]);
 
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
   const isAdmin = role === "owner" || role === "admin";
@@ -186,7 +331,23 @@ export default function SkillDetailPage() {
   }, [skill?.created_by, members]);
 
   const origin = skill ? readOrigin(skill) : null;
-  const files = skill?.files ?? [];
+  // The server's file rows carry id/skill_id/timestamps this screen never
+  // sends; project them onto the draft shape once per skill object so the
+  // array identity stays stable across renders.
+  const serverFiles = useMemo<SkillFileDraft[]>(
+    () => (skill?.files ?? []).map(({ path, content }) => ({ path, content })),
+    [skill?.files],
+  );
+  const files = fileDraft ?? serverFiles;
+  // Non-null draft that differs from the server ⇒ something to commit.
+  const filesDirty = fileDraft !== null && !sameFiles(fileDraft, serverFiles);
+  // Every path the tree renders, main file included: the validator needs the
+  // full set, since SKILL.md participates in the nesting rules like any file.
+  const filePaths = useMemo(() => skillPathSet(files), [files]);
+  const previewFile = useMemo(
+    () => (previewPath ? (files.find((f) => f.path === previewPath) ?? null) : null),
+    [files, previewPath],
+  );
   const refreshable = !!skill && !!origin && canEdit && isRefreshableOrigin(origin);
 
   const addAgentGroups = useMemo(() => {
@@ -212,11 +373,91 @@ export default function SkillDetailPage() {
    *  is the SKILL.md card above), other files open the preview sheet, whose
    *  edit affordance hands them to the same editor. */
   const openFile = (path: string) => {
-    if (path === "SKILL.md") {
-      setEditingFile("SKILL.md");
+    setSelectedPath(path);
+    if (path === SKILL_MD) {
+      setEditingFile(SKILL_MD);
     } else {
-      setPreviewFile(files.find((f) => f.path === path) ?? null);
+      setPreviewPath(path);
     }
+  };
+
+  /** Commit the whole skill with `next` as its file set. */
+  const commitFiles = async (next: SkillFileDraft[]) => {
+    if (!skill) return;
+    setFilesSaving(true);
+    try {
+      await updateSkill.mutateAsync({
+        id: skill.id,
+        name: skill.name,
+        description: skill.description,
+        content: skill.content,
+        files: next,
+      });
+      // Hand the source of truth back to the server: `useUpdateSkill`
+      // invalidates the detail query, so the refetch is authoritative and a
+      // kept draft would only mask it.
+      setFileDraft(null);
+      Alert.alert(t("skills.detail.saveBar.saved"));
+    } catch (err) {
+      Alert.alert(
+        t("skills.detail.saveBar.saveFailed"),
+        err instanceof Error ? err.message : t("common.unknownError"),
+      );
+    } finally {
+      setFilesSaving(false);
+    }
+  };
+
+  const handleAddFile = (path: string) => {
+    setFileDraft([...files, { path, content: "" }]);
+    setAddingFile(false);
+    setSelectedPath(path);
+  };
+
+  const handleRenameFile = (from: string, to: string) => {
+    if (from === SKILL_MD) return;
+    setFileDraft(files.map((f) => (f.path === from ? { ...f, path: to } : f)));
+    // Follow the file: the rail, the preview and the editor are all keyed by
+    // path, so leaving any of them on the old one points at a row that is gone.
+    if (selectedPath === from) setSelectedPath(to);
+    if (previewPath === from) setPreviewPath(to);
+    if (editingFile === from) setEditingFile(to);
+  };
+
+  const handleDeleteFile = (path: string) => {
+    if (path === SKILL_MD) return;
+    setFileDraft(files.filter((f) => f.path !== path));
+    // Fall back to the main file (web `handleDeleteFile`): the rail must not
+    // keep pointing at a deleted row.
+    if (selectedPath === path) setSelectedPath(SKILL_MD);
+    if (previewPath === path) setPreviewPath(null);
+    if (editingFile === path) setEditingFile(null);
+  };
+
+  const startRename = (path: string) => {
+    setRenameTarget(path);
+    setRenameValue(path);
+    setRenameError(null);
+  };
+
+  const submitRename = () => {
+    if (!renameTarget) return;
+    const next = renameValue.trim();
+    if (next === renameTarget) {
+      setRenameTarget(null);
+      return;
+    }
+    // The row's own path is not "taken" — it is the one being replaced.
+    const err = validateSkillFilePath(
+      next,
+      filePaths.filter((path) => path !== renameTarget),
+    );
+    if (err) {
+      setRenameError(err);
+      return;
+    }
+    handleRenameFile(renameTarget, next);
+    setRenameTarget(null);
   };
 
   const confirmAddAgents = async () => {
@@ -316,9 +557,19 @@ export default function SkillDetailPage() {
 
   return (
     <>
+      {/* Android runs edge-to-edge: the window never resizes for the IME, so
+          the ScrollView keeps its full height and its content still "fits" —
+          nothing to scroll, and the inline add-file row's Add/Cancel buttons
+          end up under the keyboard. KeyboardAvoidingView does not help here
+          (measured: the viewport stays full-height), so the content is padded
+          by the IME height instead. That makes the row reachable by hand and
+          lets the scroll-to-end below actually land on it. */}
       <ScrollView
+        ref={scrollRef}
         className="flex-1 bg-background"
         contentContainerClassName="pb-10"
+        contentContainerStyle={{ paddingBottom: keyboardHeight + 40 }}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Identity card */}
         <View className="px-4 pt-4 gap-1">
@@ -572,7 +823,22 @@ export default function SkillDetailPage() {
 
         {/* Attached files */}
         <View className="mt-6 px-4 gap-2">
-          <SectionTitle icon="folder-open-outline" title={t("skills.detail.files")} />
+          <View className="flex-row items-center justify-between gap-3">
+            <SectionTitle icon="folder-open-outline" title={t("skills.detail.files")} />
+            {canEdit && !addingFile ? (
+              <Pressable
+                onPress={() => setAddingFile(true)}
+                className="flex-row items-center gap-1 rounded-md border border-border px-2 py-1 active:bg-secondary"
+                accessibilityLabel={t("skills.detail.add_file.newFile")}
+              >
+                <Ionicons name="add" size={13} color={theme.mutedForeground} />
+                <Text className="text-xs font-medium text-muted-foreground">
+                  {t("skills.detail.add_file.newFile")}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+
           {files.length === 0 ? (
             <View className="rounded-lg border border-dashed border-border px-3 py-6 items-center">
               <Text className="text-xs text-muted-foreground/70 italic">
@@ -581,11 +847,62 @@ export default function SkillDetailPage() {
             </View>
           ) : (
             <SkillFileTree
-              paths={["SKILL.md", ...files.map((f) => f.path)]}
-              selectedPath={editingFile ?? previewFile?.path ?? ""}
+              paths={filePaths}
+              selectedPath={selectedPath}
               onSelect={openFile}
+              actions={
+                canEdit
+                  ? { onRename: startRename, onDelete: handleDeleteFile }
+                  : undefined
+              }
             />
           )}
+
+          {/* Below the rail rather than above it (web puts AddFileInline on
+              top): the sheet has to be the last thing in the ScrollView for the
+              scroll-to-end above to land on it instead of overshooting past a
+              long file list. */}
+          {addingFile ? (
+            <AddFileInline
+              existingPaths={filePaths}
+              onAdd={handleAddFile}
+              onCancel={() => setAddingFile(false)}
+            />
+          ) : null}
+
+          {/* Commit point for the draft. Delete is undoable only through
+              Discard, which is why this bar appears the moment the set
+              diverges from the server rather than only on a save attempt. */}
+          {filesDirty ? (
+            <View className="rounded-lg border border-border bg-card px-3 py-2.5 gap-2">
+              <Text className="text-xs text-muted-foreground">
+                {t("skills.detail.saveBar.changed")}
+              </Text>
+              <View className="flex-row items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={filesSaving}
+                  onPress={() => setFileDraft(null)}
+                  className="flex-1"
+                >
+                  <Text>{t("skills.detail.saveBar.discard")}</Text>
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={filesSaving}
+                  onPress={() => void commitFiles(files)}
+                  className="flex-1"
+                >
+                  {filesSaving ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text>{t("skills.detail.saveBar.save")}</Text>
+                  )}
+                </Button>
+              </View>
+            </View>
+          ) : null}
         </View>
       </ScrollView>
 
@@ -625,9 +942,9 @@ export default function SkillDetailPage() {
         visible={previewFile !== null}
         transparent
         animationType="slide"
-        onRequestClose={() => setPreviewFile(null)}
+        onRequestClose={() => setPreviewPath(null)}
       >
-        <Pressable className="flex-1 bg-black/40" onPress={() => setPreviewFile(null)} />
+        <Pressable className="flex-1 bg-black/40" onPress={() => setPreviewPath(null)} />
         <View
           className="h-[75%] bg-background rounded-t-2xl overflow-hidden"
           // Bottom sheet draws under the status bar on Android; the header
@@ -643,7 +960,7 @@ export default function SkillDetailPage() {
               <Pressable
                 onPress={() => {
                   const path = previewFile.path;
-                  setPreviewFile(null);
+                  setPreviewPath(null);
                   setEditingFile(path);
                 }}
                 className="flex-row items-center gap-1 rounded-md border border-border px-2 py-1 active:bg-secondary"
@@ -655,7 +972,7 @@ export default function SkillDetailPage() {
                 </Text>
               </Pressable>
             ) : null}
-            <Pressable onPress={() => setPreviewFile(null)} accessibilityLabel={t("a11y.close")}>
+            <Pressable onPress={() => setPreviewPath(null)} accessibilityLabel={t("a11y.close")}>
               <Ionicons name="close" size={20} color={theme.mutedForeground} />
             </Pressable>
           </View>
@@ -671,6 +988,67 @@ export default function SkillDetailPage() {
         </View>
       </Modal>
 
+      {/* Rename sheet. A phone row cannot hold an editable path beside the
+          tree, so the rename happens in a sheet instead of web's inline
+          RenameRow; the validation is the same pure function either way, and
+          it runs against every path except the one being replaced. */}
+      <Modal
+        visible={renameTarget !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setRenameTarget(null)}
+      >
+        <Pressable className="flex-1 bg-black/40" onPress={() => setRenameTarget(null)} />
+        <View className="bg-background rounded-t-2xl overflow-hidden">
+          <View className="flex-row items-center justify-between px-4 py-3 border-b border-border">
+            <Text className="text-sm font-semibold text-foreground">
+              {t("skills.detail.fileActions.rename")}
+            </Text>
+            <Pressable
+              onPress={() => setRenameTarget(null)}
+              accessibilityLabel={t("a11y.close")}
+            >
+              <Ionicons name="close" size={20} color={theme.mutedForeground} />
+            </Pressable>
+          </View>
+          <View
+            className="px-4 py-3 gap-2"
+            style={{ paddingBottom: keyboardHeight + insets.bottom + 12 }}
+          >
+            <TextField
+              autoFocus
+              value={renameValue}
+              onChangeText={(next) => {
+                setRenameValue(next);
+                setRenameError(null);
+              }}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="done"
+              invalid={!!renameError}
+              onSubmitEditing={submitRename}
+            />
+            {renameError ? (
+              <Text className="text-xs text-destructive">
+                {t(PATH_ERROR_KEY[renameError])}
+              </Text>
+            ) : null}
+            <View className="flex-row items-center gap-2">
+              <Button
+                variant="outline"
+                onPress={() => setRenameTarget(null)}
+                className="flex-1"
+              >
+                <Text>{t("skills.detail.add_file.cancel")}</Text>
+              </Button>
+              <Button onPress={submitRename} className="flex-1">
+                <Text>{t("skills.detail.fileActions.rename")}</Text>
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Full-screen file editor (SKILL.md or an attached file). Mounted per
           open with key={editingFile} so baseline re-seeds on each path. */}
       {editingFile !== null ? (
@@ -678,6 +1056,7 @@ export default function SkillDetailPage() {
           key={editingFile}
           path={editingFile}
           skill={skill}
+          files={files}
           onClose={() => setEditingFile(null)}
         />
       ) : null}

@@ -37,6 +37,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { TextField } from "@/components/ui/text-field";
 import { AutosizeTextArea } from "@/components/ui/autosize-textarea";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { AvatarUploadControl } from "@/components/ui/avatar-upload-control";
 import { Markdown } from "@/lib/markdown";
 import { SquadMemberPicker } from "@/components/squad/squad-member-picker";
 import { squadDetailOptions, squadMemberListOptions, squadMemberStatusOptions } from "@/data/queries/squads";
@@ -344,6 +345,25 @@ export default function SquadDetailPage() {
     setInstructionsOpen(true);
   }, [squad]);
 
+  // Avatar uploads persist on their own, like the workspace logo — the squad
+  // detail header shows the result as soon as `useUpdateSquad` invalidates.
+  // `mutateAsync` (not `mutate`) so the control stays busy until the write
+  // lands; the rejection is reported here, which is why the control swallows it.
+  const onUploadAvatar = useCallback(
+    async (url: string) => {
+      try {
+        await updateSquad.mutateAsync({ avatar_url: url });
+        Alert.alert(t("squads.detail.avatarUpdated"));
+      } catch (err) {
+        Alert.alert(
+          t("squads.detail.updateFailed"),
+          err instanceof Error ? err.message : t("common.unknownError"),
+        );
+      }
+    },
+    [updateSquad, t],
+  );
+
   const onSaveInstructions = useCallback(() => {
     if (!squad) return;
     updateSquad.mutate(
@@ -428,7 +448,18 @@ export default function SquadDetailPage() {
           <>
             {/* Header */}
             <View className="px-4 pt-4 flex-row items-center gap-3">
-              <ActorAvatar type="squad" id={squad.id} size={56} />
+              {canManage ? (
+                <AvatarUploadControl
+                  variant="squad"
+                  value={squad.avatar_url ?? null}
+                  name={squad.name}
+                  size={56}
+                  accessibilityLabel={t("squads.detail.changeAvatar")}
+                  onUploaded={onUploadAvatar}
+                />
+              ) : (
+                <ActorAvatar type="squad" id={squad.id} size={56} />
+              )}
               <View className="flex-1 min-w-0 gap-0.5">
                 <View className="flex-row items-center gap-2">
                   <Text

@@ -35,6 +35,7 @@ import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { AutosizeTextArea } from "@/components/ui/autosize-textarea";
+import { AvatarUploadControl } from "@/components/ui/avatar-upload-control";
 import { Separator } from "@/components/ui/separator";
 import { memberListOptions } from "@/data/queries/members";
 import { workspaceListOptions } from "@/data/queries/workspaces";
@@ -158,6 +159,27 @@ export default function WorkspaceSettingsScreen() {
       setSaveStatus("error");
       Alert.alert(
         t("workspaceSettings.saveFailed"),
+        err instanceof Error ? err.message : t("common.unknownError"),
+      );
+    }
+  };
+
+  // Logo uploads persist on their own (web workspace-tab.tsx:339-357 auto-saves
+  // the logo rather than folding it into the form's Save). An empty URL clears
+  // it — the same field, the same endpoint. `useUpdateWorkspace` invalidates the
+  // workspace list on settle, which is where every screen reads the name/slug
+  // from, so the new logo reaches the tab header without a local patch.
+  const handleLogoChange = async (url: string) => {
+    if (!workspace || !canManage) return;
+    try {
+      await updateWorkspace.mutateAsync({
+        workspaceId: workspace.id,
+        patch: { avatar_url: url },
+      });
+      Alert.alert(t("workspaceSettings.logoUpdated"));
+    } catch (err) {
+      Alert.alert(
+        t("workspaceSettings.logoUploadFailed"),
         err instanceof Error ? err.message : t("common.unknownError"),
       );
     }
@@ -300,6 +322,30 @@ export default function WorkspaceSettingsScreen() {
       {canManage && membersReady ? (
         <SectionGroup title={t("workspaceSettings.general")}>
           <View className="gap-4 p-4">
+            {/* Workspace logo — web's `workspace.logo_label` row
+                (workspace-tab.tsx:329-357). The field is `avatar_url`, the
+                same name the user and squad avatars use. Saved on upload
+                rather than through the General form's Save: the logo is its
+                own write, exactly as web auto-saves it. */}
+            <View className="flex-row items-center justify-between gap-3">
+              <View className="flex-1">
+                <Text className="text-xs text-muted-foreground mb-1">
+                  {t("workspaceSettings.logo")}
+                </Text>
+                <Text className="text-xs text-muted-foreground/70">
+                  {t("workspaceSettings.logoHint")}
+                </Text>
+              </View>
+              <AvatarUploadControl
+                variant="workspace"
+                value={workspace.avatar_url ?? null}
+                name={workspace.name}
+                size={56}
+                accessibilityLabel={t("workspaceSettings.changeLogo")}
+                onUploaded={handleLogoChange}
+                onRemove={() => handleLogoChange("")}
+              />
+            </View>
             <View>
               <Text className="text-xs text-muted-foreground mb-1.5">
                 {t("workspaceSettings.name")}

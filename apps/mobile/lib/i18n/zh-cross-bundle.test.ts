@@ -204,8 +204,12 @@ describe("zh bundles agree on the chat surface", () => {
     // the three `{title, desc, prompt}` triples and `digestBadge` — copied
     // verbatim from views' `onboarding_cards.*` so a new member reads the same
     // three ways to start on either client.
+    //
+    // +1 in iteration 175: `chat.list.waiting`, the queued-task state for an
+    // offline agent, taken verbatim from views' `list.waiting` — the same
+    // sentence the web thread list shows for the same condition.
     const shared = [...mobileBySource.keys()].filter((source) => viewsBySource.has(source));
-    expect(shared.length).toBe(58);
+    expect(shared.length).toBe(59);
   });
 });
 
