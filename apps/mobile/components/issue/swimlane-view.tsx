@@ -24,6 +24,22 @@
  * existing `issue/[id]/picker/*` routes for the grouping field — so each
  * field keeps ONE optimistic-update path instead of a swimlane-only copy.
  *
+ * Lane order and lane folding are the OTHER half of the workbench, and both
+ * are per-device: web keeps them in localStorage (`swimlaneOrders` /
+ * `collapsedSwimlanes` in `packages/core/issues/stores/view-store.ts`) and
+ * deliberately leaves them out of a saved view's payload, so there is no API
+ * for either. Mobile mirrors that through
+ * `data/stores/issue-workbench-layout-store.ts` (one JSON file per
+ * workspace).
+ *
+ * The lane drag uses a dedicated handle rather than the whole header row:
+ * the header's tap must keep folding the lane, and the handle's PanResponder
+ * takes the gesture in the CAPTURE phase so the outer FlatList never sees a
+ * swipe that began on it (the same wiring the pinned list uses — see
+ * `components/pin/pinned-screen.tsx`). The drag rewrites only the rendered
+ * preview order; the persisted order is written once, on release, through
+ * `mergeLaneOrder` so lanes hidden by the current filter are not dropped.
+ *
  * Degenerate cases, defined rather than incidental:
  *   - No issues at all → `emptyLabel`, exactly like the board.
  *   - An empty lane exists only when it is pinned: the "no X" lane always
@@ -33,10 +49,14 @@
  *   - Cells cap at `SWIMLANE_CELL_LIMIT` cards with a "+N" footer. Cells
  *     hold no virtualized list of their own, so this cap is what keeps a
  *     500-card lane from painting 500 rows.
+ *   - Pinned lanes (the "no X" lane, and parent grouping's "Other parents")
+ *     carry no drag handle: they are pinned to the top by construction.
  */
 import { memo, useCallback, useMemo, useRef, useState } from "react";
-import { FlatList, Pressable, ScrollView, View } from "react-native";
+import { FlatList, PanResponder, Pressable, ScrollView, View } from "react-native";
+import type { LayoutChangeEvent } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import * as Haptics from "expo-haptics";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import type {
@@ -55,6 +75,14 @@ import { useTranslation } from "@/lib/i18n/react";
 import { ActionSheet } from "@/lib/action-sheet";
 import { THEME } from "@/lib/theme";
 import { useColorScheme } from "@/lib/use-color-scheme";
+import { dragTargetIndex, reorderByMove } from "@/lib/pin-reorder";
+import {
+  swimlaneBucket,
+  useCollapsedKeys,
+  useLaneOrder,
+  useSetLaneOrder,
+  useToggleCollapsed,
+} from "@/data/stores/issue-workbench-layout-store";
 import { useUpdateIssue } from "@/data/mutations/issues";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
@@ -63,6 +91,7 @@ import { projectListOptions } from "@/data/queries/projects";
 import {
   buildSwimlaneLanes,
   laneMovePatch,
+  mergeLaneOrder,
   SWIMLANE_GROUPINGS,
   type SwimlaneGrouping,
   type SwimlaneLane,
@@ -139,7 +168,21 @@ export function SwimlaneView({
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { getName } = useActorLookup();
   const { data: projects = [] } = useQuery(projectListOptions(wsId));
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  // Lane folds and lane order are per device, per workspace — see the module
+  // doc. Both live in one store so a workspace switch cannot mix them.
+  const collapsed = useCollapsedKeys(wsId, swimlaneBucket(grouping));
+  const toggleLane = useToggleCollapsed(wsId, swimlaneBucket(grouping));
+  const storedOrder = useLaneOrder(wsId, grouping);
+  const setStoredOrder = useSetLaneOrder(wsId, grouping);
+
+  // The order rendered while a lane drag is in flight. Rewriting `storedOrder`
+  // on every slot the drag crosses would re-render (and re-mount) the moving
+  // lane, dropping the gesture; the store is written once, on release.
+  const [dragOrder, setDragOrder] = useState<SwimlaneLane[] | null>(null);
+  // The order the drag started from — `from` is resolved against THIS, so a
+  // mid-drag preview rewrite cannot shift it.
+  const lanesAtStartRef = useRef<SwimlaneLane[]>([]);
+  const laneHeightsRef = useRef<Record<string, number>>({});
 
   // `getName` is rebuilt on every render by `useActorLookup`; read it through
   // a ref so the lane memo doesn't invalidate on every parent render.
@@ -183,7 +226,7 @@ export function SwimlaneView({
     // whatever is loaded, which is cheap and always current.
   }, [parentQueries]);
 
-  const lanes = useMemo(
+  const builtLanes = useMemo(
     () =>
       buildSwimlaneLanes({
         issues,
@@ -192,9 +235,110 @@ export function SwimlaneView({
         actorName,
         projectTitle,
         knownParentIds: new Set(parentById.keys()),
+        storedOrder,
       }),
-    [issues, grouping, statusOrder, actorName, projectTitle, parentById],
+    [
+      issues,
+      grouping,
+      statusOrder,
+      actorName,
+      projectTitle,
+      parentById,
+      storedOrder,
+    ],
   );
+
+  // The drag's preview order, or the built order when no drag is in flight.
+  const lanes = dragOrder ?? builtLanes;
+
+  /** Draggable lanes in render order — the pinned lanes have no move value
+   *  and no handle, so they never take part in a lane drag (web disables
+   *  `useSortable` for them). Ids are RAW lane ids: that is what the
+   *  persisted order holds (web's `swimlaneOrders`).
+   *
+   *  The builder always emits the pinned lanes as a prefix, so their count is
+   *  also the offset between a full-array index and a movable-only index. */
+  const pinnedCount = useMemo(
+    () => builtLanes.filter((lane) => lane.pinned).length,
+    [builtLanes],
+  );
+  const movableRawIds = useMemo(
+    () => builtLanes.slice(pinnedCount).map((lane) => lane.rawId),
+    [builtLanes, pinnedCount],
+  );
+
+  // Gesture-time state lives in refs: the responders below are built once and
+  // must not close over a stale order. Indices are into the FULL lane array
+  // (what `dragTargetIndex` walks); `pinnedCount` is subtracted only when the
+  // drop is folded into the persisted movable-only order.
+  const dragFromRef = useRef(0);
+  const dragTargetRef = useRef(0);
+  const laneIdsRef = useRef<string[]>([]);
+  const builtLanesRef = useRef(builtLanes);
+  builtLanesRef.current = builtLanes;
+  const pinnedCountRef = useRef(pinnedCount);
+  pinnedCountRef.current = pinnedCount;
+  const movableRawIdsRef = useRef(movableRawIds);
+  movableRawIdsRef.current = movableRawIds;
+  // `useSetLaneOrder` hands back a fresh closure every render and the stored
+  // order changes on commit, so reading either directly in `onLaneDrop` would
+  // give it a new identity each render. That identity feeds the handle's
+  // `useMemo`, and a `PanResponder` swapped mid-gesture resets its
+  // `gestureState` — the preview then snaps back to the original slot and the
+  // drop commits nothing (measured on-device: `dy` went -113 → -29 across one
+  // render, `to` 1 → 2, `from === to` on release). Both are read through refs
+  // so the responder is built once.
+  const storedOrderRef = useRef(storedOrder);
+  storedOrderRef.current = storedOrder;
+  const setStoredOrderRef = useRef(setStoredOrder);
+  setStoredOrderRef.current = setStoredOrder;
+
+  const onLaneLayout = useCallback((key: string, e: LayoutChangeEvent) => {
+    const { height } = e.nativeEvent.layout;
+    if (height > 0) laneHeightsRef.current[key] = height;
+  }, []);
+
+  const onLaneDragStart = useCallback((index: number) => {
+    dragFromRef.current = index;
+    dragTargetRef.current = index;
+    laneIdsRef.current = builtLanesRef.current.map((lane) => lane.key);
+    lanesAtStartRef.current = builtLanesRef.current;
+    setDragOrder(builtLanesRef.current);
+  }, []);
+
+  const onLaneDragTo = useCallback((delta: number) => {
+    // A lane is only crossed once the finger passes its midpoint, and the
+    // pinned lanes at the top are not a slot a movable lane may land on.
+    const raw = dragTargetIndex({
+      ids: laneIdsRef.current,
+      heights: laneHeightsRef.current,
+      startIndex: dragFromRef.current,
+      delta,
+    });
+    const to = Math.max(raw, pinnedCountRef.current);
+    if (to === dragTargetRef.current) return;
+    dragTargetRef.current = to;
+    Haptics.selectionAsync().catch(() => {});
+    setDragOrder(reorderByMove(lanesAtStartRef.current, dragFromRef.current, to));
+  }, []);
+
+  const onLaneDrop = useCallback(() => {
+    setDragOrder(null);
+    const from = dragFromRef.current;
+    const to = dragTargetRef.current;
+    if (from === to) return;
+    // Fold the visible reorder into the persisted order so lanes the current
+    // filter hides keep their slots — see `mergeLaneOrder`.
+    const pinned = pinnedCountRef.current;
+    setStoredOrderRef.current(
+      mergeLaneOrder({
+        stored: storedOrderRef.current,
+        visible: movableRawIdsRef.current,
+        from: from - pinned,
+        to: to - pinned,
+      }),
+    );
+  }, []);
 
   const laneLabel = useCallback(
     (lane: SwimlaneLane): string => {
@@ -247,46 +391,50 @@ export function SwimlaneView({
     [lanes, laneLabel, t, wsSlug, grouping],
   );
 
-  const toggleLane = useCallback((key: string) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }, []);
-
   const parentLoading =
     grouping === "parent" && parentQueries.some((query) => query.isLoading);
 
   const renderLane = useCallback(
-    ({ item: lane }: { item: SwimlaneLane }) => {
+    ({ item: lane, index }: { item: SwimlaneLane; index: number }) => {
       const isCollapsed = collapsed.has(lane.key);
       return (
-        <View className="pb-3">
-          <Pressable
-            onPress={() => toggleLane(lane.key)}
-            className="flex-row items-center gap-2 px-3 py-2"
-            accessibilityRole="button"
-            accessibilityState={{ expanded: !isCollapsed }}
-            accessibilityLabel={laneLabel(lane)}
-          >
-            <Ionicons
-              name={isCollapsed ? "chevron-forward" : "chevron-down"}
-              size={13}
-              color={THEME[colorScheme].mutedForeground}
-            />
-            <LaneGlyph lane={lane} />
-            <Text
-              numberOfLines={1}
-              className="flex-shrink text-sm font-medium text-foreground"
+        <View
+          className="pb-3"
+          onLayout={(e) => onLaneLayout(lane.key, e)}
+        >
+          <View className="flex-row items-center gap-1 px-3">
+            <Pressable
+              onPress={() => toggleLane(lane.key)}
+              className="flex-1 flex-row items-center gap-2 py-2"
+              accessibilityRole="button"
+              accessibilityState={{ expanded: !isCollapsed }}
+              accessibilityLabel={laneLabel(lane)}
             >
-              {laneLabel(lane)}
-            </Text>
-            <Text className="ml-auto text-xs text-muted-foreground/60">
+              <Ionicons
+                name={isCollapsed ? "chevron-forward" : "chevron-down"}
+                size={13}
+                color={THEME[colorScheme].mutedForeground}
+              />
+              <LaneGlyph lane={lane} />
+              <Text
+                numberOfLines={1}
+                className="flex-shrink text-sm font-medium text-foreground"
+              >
+                {laneLabel(lane)}
+              </Text>
+            </Pressable>
+            <Text className="text-xs text-muted-foreground/60">
               {lane.total}
             </Text>
-          </Pressable>
+            {lane.pinned ? null : (
+              <LaneDragHandle
+                index={index}
+                onDragStart={onLaneDragStart}
+                onDragTo={onLaneDragTo}
+                onDrop={onLaneDrop}
+              />
+            )}
+          </View>
           {isCollapsed ? null : (
             <ScrollView
               horizontal
@@ -312,7 +460,18 @@ export function SwimlaneView({
         </View>
       );
     },
-    [collapsed, toggleLane, laneLabel, colorScheme, onOpenIssue, openLaneSheet],
+    [
+      collapsed,
+      toggleLane,
+      laneLabel,
+      colorScheme,
+      onOpenIssue,
+      openLaneSheet,
+      onLaneLayout,
+      onLaneDragStart,
+      onLaneDragTo,
+      onLaneDrop,
+    ],
   );
 
   if (issues.length === 0) {
@@ -418,6 +577,78 @@ export function SwimlaneView({
           contentContainerStyle={{ paddingBottom: 12 }}
         />
       )}
+    </View>
+  );
+}
+
+/**
+ * The lane header's drag handle. A dedicated handle rather than the whole
+ * header row for two reasons: the header's tap must keep folding the lane
+ * (web solves the same conflict with a 5px activation distance on its
+ * pointer sensor), and a PanResponder that owns its own gesture can take the
+ * responder in the CAPTURE phase — the handle sits inside the lane
+ * FlatList's row, and with bubble-phase handlers alone the FlatList claims
+ * the vertical drag before the child ever sees it (measured on-device for
+ * the pinned list: grant/move counts stayed 0 across a swipe that scrolled
+ * the list).
+ *
+ * The handle reports the finger's travel, not a slot: `onDragTo` resolves
+ * the slot from measured lane heights, which is the only mapping that stays
+ * right when lanes have different heights (a collapsed lane is one header,
+ * an expanded one is a header plus a card row).
+ */
+function LaneDragHandle({
+  index,
+  onDragStart,
+  onDragTo,
+  onDrop,
+}: {
+  index: number;
+  onDragStart: (index: number) => void;
+  onDragTo: (delta: number) => void;
+  onDrop: () => void;
+}) {
+  const { t } = useTranslation();
+  const { colorScheme } = useColorScheme();
+  const indexRef = useRef(index);
+  indexRef.current = index;
+
+  const responder = useMemo(
+    () =>
+      PanResponder.create({
+        // CAPTURE, not bubble — see the doc comment above.
+        onStartShouldSetPanResponderCapture: () => true,
+        onMoveShouldSetPanResponderCapture: (_e, g) => Math.abs(g.dy) > 2,
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dy) > 2,
+        onPanResponderGrant: () => {
+          onDragStart(indexRef.current);
+          Haptics.selectionAsync().catch(() => {});
+        },
+        onPanResponderMove: (_e, g) => onDragTo(g.dy),
+        // Release and terminate both commit: a gesture the system takes away
+        // (a notification shade pull, an incoming call) still has to clear
+        // the preview order, or the board would stay frozen in drag state.
+        onPanResponderRelease: () => onDrop(),
+        onPanResponderTerminate: () => onDrop(),
+      }),
+    [onDragStart, onDragTo, onDrop],
+  );
+
+  return (
+    <View
+      {...responder.panHandlers}
+      className="px-1 py-2"
+      hitSlop={8}
+      accessibilityRole="adjustable"
+      accessibilityLabel={t("issues.swimlane.reorderLane")}
+      accessibilityHint={t("issues.swimlane.reorderLaneHint")}
+    >
+      <Ionicons
+        name="reorder-two"
+        size={15}
+        color={THEME[colorScheme].mutedForeground}
+      />
     </View>
   );
 }

@@ -3358,5 +3358,8 @@
   "skills.detail.saveBar.saving": "Saving…",
   "skills.detail.saveBar.saved": "Skill files saved",
   "skills.detail.saveBar.saveFailed": "Failed to save files",
-  "chat.list.waiting": "Waiting for reply"
+  "chat.list.waiting": "Waiting for reply",
+  "issues.swimlane.reorderLane": "Reorder lane",
+  "issues.swimlane.reorderLaneHint": "Drag up or down to reorder",
+  "repositories.editTitle": "Edit repository"
 }

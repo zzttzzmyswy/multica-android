@@ -85,6 +85,7 @@ import { useDebouncedTableSearch } from "@/lib/use-debounced-table-search";
 import { useBoardHiddenColumns } from "@/lib/use-board-hidden-columns";
 import { myIssueTableScope } from "@/lib/issue-table-group-counts";
 import { useGroupingProperty } from "@/lib/use-grouping-property";
+import { useListSectionFolding } from "@/data/stores/issue-workbench-layout-store";
 import { BOARD_STATUSES } from "@/lib/issue-status-core";
 import {
   applyIssueFilters,
@@ -456,6 +457,11 @@ export default function MyIssues() {
     });
   }, [sorted, grouping]);
 
+  // Fold state is per device, per workspace, keyed by section key — see
+  // `data/stores/issue-workbench-layout-store.ts`.
+  const { sections: visibleSections, collapsed, toggle } =
+    useListSectionFolding(wsId, sections);
+
   // Whether the empty state should say "no matches under your filters"
   // instead of "nothing here for this scope" — i.e. whether any dimension
   // the user turned on is narrowing the list. Delegates to the shared
@@ -654,7 +660,7 @@ export default function MyIssues() {
         />
       ) : (
         <SectionList
-          sections={sections}
+          sections={visibleSections}
           keyExtractor={(item) => item.id}
           stickySectionHeadersEnabled={false}
           ItemSeparatorComponent={IssueSeparator}
@@ -663,7 +669,11 @@ export default function MyIssues() {
           maxToRenderPerBatch={10}
           updateCellsBatchingPeriod={40}
           renderSectionHeader={({ section }) => (
-            <IssueSectionHeader section={section} />
+            <IssueSectionHeader
+              section={section}
+              collapsed={collapsed.has(section.key)}
+              onToggle={() => toggle(section.key)}
+            />
           )}
           contentContainerClassName={
             batchSelectionMode ? "pb-48" : "pb-6"

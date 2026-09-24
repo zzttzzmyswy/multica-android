@@ -18,16 +18,16 @@
  *     nothing so it never double-renders an issue.
  *   - Non-pinned lanes are ordered by the caller's resolved label (project
  *     title / actor name; assignee lanes also by actor type), falling back
- *     to first appearance in the (already sorted) issue array — web's
- *     `storedOrder`-then-insertion fallback without the drag-order store.
+ *     to first appearance in the (already sorted) issue array. A persisted
+ *     `storedOrder` (the lane drag) outranks both — see `orderLanes`.
  *   - Every lane carries ONE CELL PER STATUS in `statusOrder`, empty cells
- *     included: a cell with no cards is a valid move target, exactly like
+ *     included: a cell with no issues is a valid move target, exactly like
  *     an empty board column.
  *
  * Deliberately NOT here (phone-level simplifications, see the component):
- * `storedOrder` lane drag-reordering, the "hidden status" set, and web's
- * `mergedIssues` parent-header merge. The builder is pure and takes no
- * i18n or React dependency so it runs in the Node vitest lane.
+ * the "hidden status" set and web's `mergedIssues` parent-header merge. The
+ * builder is pure and takes no i18n or React dependency so it runs in the
+ * Node vitest lane.
  */
 import type { Issue, IssueAssigneeType, IssueStatus } from "@multica/core/types";
 
@@ -88,6 +88,13 @@ export interface BuildSwimlaneLanesInput {
    * mirroring web's `buildParentLanes`.
    */
   knownParentIds?: ReadonlySet<string>;
+  /**
+   * Raw lane ids in the order the user dragged them into (web's
+   * `swimlaneOrders[grouping]`). Pinned lanes are never in it — they are
+   * pinned by the builder regardless. A lane the list does not mention keeps
+   * the label/insertion order below.
+   */
+  storedOrder?: readonly string[];
 }
 
 const ACTOR_TYPE_ORDER: Record<string, number> = {
@@ -195,7 +202,8 @@ function orderLanes(
   {
     actorName,
     projectTitle,
-  }: Pick<BuildSwimlaneLanesInput, "actorName" | "projectTitle">,
+    storedOrder,
+  }: Pick<BuildSwimlaneLanesInput, "actorName" | "projectTitle" | "storedOrder">,
 ): SwimlaneLane[] {
   const labelOf = (lane: SwimlaneLane): string | null => {
     if (lane.assigneeType && lane.assigneeId && actorName) {
@@ -207,7 +215,7 @@ function orderLanes(
 
   // `sort` on a copy is stable, so lanes without a resolved label keep the
   // input's first-appearance order (web's insertion-order fallback).
-  return [...lanes].sort((a, b) => {
+  const byFallback = [...lanes].sort((a, b) => {
     if (a.assigneeType && b.assigneeType) {
       const at = ACTOR_TYPE_ORDER[a.assigneeType] ?? 99;
       const bt = ACTOR_TYPE_ORDER[b.assigneeType] ?? 99;
@@ -217,6 +225,26 @@ function orderLanes(
     const bl = labelOf(b);
     if (al === null || bl === null) return 0;
     return al.localeCompare(bl);
+  });
+
+  if (!storedOrder || storedOrder.length === 0) return byFallback;
+
+  // Web's comparator (`swimlane-view.tsx:585-598`): a lane the store knows
+  // outranks one it does not, two known lanes follow the stored sequence,
+  // and two unknown lanes keep the fallback order above. Written as an index
+  // map so it stays a single pass per comparison.
+  const storedIndex = new Map<string, number>();
+  storedOrder.forEach((rawId, index) => storedIndex.set(rawId, index));
+  const fallbackIndex = new Map(
+    byFallback.map((lane, index) => [lane.rawId, index]),
+  );
+  return [...byFallback].sort((a, b) => {
+    const ai = storedIndex.get(a.rawId);
+    const bi = storedIndex.get(b.rawId);
+    if (ai !== undefined && bi !== undefined) return ai - bi;
+    if (ai !== undefined) return -1;
+    if (bi !== undefined) return 1;
+    return (fallbackIndex.get(a.rawId) ?? 0) - (fallbackIndex.get(b.rawId) ?? 0);
   });
 }
 
@@ -232,6 +260,7 @@ export function buildSwimlaneLanes({
   actorName,
   projectTitle,
   knownParentIds,
+  storedOrder,
 }: BuildSwimlaneLanesInput): SwimlaneLane[] {
   const parents = knownParentIds ?? EMPTY_PARENT_SET;
   const renderable = issues.filter((issue) =>
@@ -281,6 +310,7 @@ export function buildSwimlaneLanes({
   const ordered = orderLanes([...byLaneKey.values()], {
     actorName,
     projectTitle,
+    storedOrder,
   });
   for (const lane of ordered) lane.total = countLane(lane);
 
@@ -291,6 +321,63 @@ export function buildSwimlaneLanes({
 
 function countLane(lane: SwimlaneLane): number {
   return lane.cells.reduce((n, cell) => n + cell.issues.length, 0);
+}
+
+/**
+ * Fold a lane drag into the persisted order.
+ *
+ * The board only ever renders a SUBSET of the stored order — a status filter
+ * or a hidden column can leave stored lanes with no lane on screen. Web's
+ * drop handler (`swimlane-view.tsx:1176-1183`) therefore does not write the
+ * new visible sequence outright: it walks `stored`, overwriting each slot
+ * whose id is currently visible with the next id from the reordered visible
+ * sequence, lets invisible entries pass through verbatim, and appends
+ * whatever visible ids are left over (lanes the store never held).
+ *
+ * `from` / `to` are indices into `visible` — `to` is the slot the dragged
+ * lane should occupy, i.e. `reorderByMove` semantics. Out-of-range indices
+ * return `stored` unchanged: a drag that produced an impossible pair is a
+ * bug upstream, and silently writing a shuffled order would hide it.
+ */
+export function mergeLaneOrder({
+  stored,
+  visible,
+  from,
+  to,
+}: {
+  stored: readonly string[];
+  visible: readonly string[];
+  from: number;
+  to: number;
+}): string[] {
+  if (
+    from < 0 ||
+    to < 0 ||
+    from >= visible.length ||
+    to >= visible.length
+  ) {
+    return [...stored];
+  }
+  const visibleNext = reorderByMove(visible, from, to);
+  const visibleSet = new Set(visible);
+  let cursor = 0;
+  const merged = stored.map((id) =>
+    visibleSet.has(id) ? visibleNext[cursor++]! : id,
+  );
+  for (const id of visibleNext.slice(cursor)) merged.push(id);
+  return merged;
+}
+
+/** Reorder `items` by moving the element at `from` to `to` — the same
+ *  semantics the pin list uses (`lib/pin-reorder.ts`), kept local so the
+ *  swimlane module has no dependency on the pin screen. */
+function reorderByMove<T>(items: readonly T[], from: number, to: number): T[] {
+  if (from === to) return [...items];
+  const next = [...items];
+  const [moved] = next.splice(from, 1);
+  if (moved === undefined) return [...items];
+  next.splice(Math.min(Math.max(to, 0), next.length), 0, moved);
+  return next;
 }
 
 /**

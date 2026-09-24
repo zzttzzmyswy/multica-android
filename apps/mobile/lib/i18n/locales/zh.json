@@ -3358,5 +3358,8 @@
   "skills.detail.saveBar.saving": "保存中…",
   "skills.detail.saveBar.saved": "skill 附属文件已保存",
   "skills.detail.saveBar.saveFailed": "保存附属文件失败",
-  "chat.list.waiting": "等待回复"
+  "chat.list.waiting": "等待回复",
+  "issues.swimlane.reorderLane": "调整泳道顺序",
+  "issues.swimlane.reorderLaneHint": "上下拖动以调整顺序",
+  "repositories.editTitle": "编辑仓库"
 }
