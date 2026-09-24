@@ -88,6 +88,7 @@ import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-wor
 import { useDebouncedTableSearch } from "@/lib/use-debounced-table-search";
 import { useBoardHiddenColumns } from "@/lib/use-board-hidden-columns";
 import { useGroupingProperty } from "@/lib/use-grouping-property";
+import { useListSectionFolding } from "@/data/stores/issue-workbench-layout-store";
 import { BOARD_STATUSES } from "@/lib/issue-status-core";
 import {
   applyIssueFilters,
@@ -441,6 +442,13 @@ export default function IssuesPage() {
     });
   }, [sorted, grouping]);
 
+  // Fold state is per device, per workspace, and keyed by SECTION key —
+  // mobile's list groups by status, by assignee and by select property, so
+  // web's `IssueStatus[]` shape would collide across groupings (see
+  // `data/stores/issue-workbench-layout-store.ts`).
+  const { sections: visibleSections, collapsed, toggle } =
+    useListSectionFolding(wsId, sections);
+
   // Whether the empty state should say "no matches under your filters"
   // instead of "nothing here for this scope" — i.e. whether any dimension
   // the user turned on is narrowing the list. Delegates to the shared
@@ -635,14 +643,18 @@ export default function IssuesPage() {
         />
       ) : (
         <SectionList
-          sections={sections}
+          sections={visibleSections}
           keyExtractor={(item) => item.id}
           stickySectionHeadersEnabled={false}
           ItemSeparatorComponent={() => (
             <View className="h-px bg-border ml-4" />
           )}
           renderSectionHeader={({ section }) => (
-            <IssueSectionHeader section={section} />
+            <IssueSectionHeader
+              section={section}
+              collapsed={collapsed.has(section.key)}
+              onToggle={() => toggle(section.key)}
+            />
           )}
           contentContainerClassName={
             batchSelectionMode ? "pb-48" : "pb-6"

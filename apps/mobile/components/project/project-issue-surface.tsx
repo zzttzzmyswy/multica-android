@@ -82,6 +82,7 @@ import {
 import { assigneeTypesForScopeTab } from "@/lib/issue-table-group-counts";
 import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-workspace-change";
 import { useGroupingProperty } from "@/lib/use-grouping-property";
+import { useListSectionFolding } from "@/data/stores/issue-workbench-layout-store";
 import { BOARD_STATUSES } from "@/lib/issue-status-core";
 import {
   applyIssueFilters,
@@ -419,6 +420,11 @@ export function ProjectIssueSurface({
     });
   }, [sorted, grouping]);
 
+  // Fold state is per device, per workspace, keyed by section key — see
+  // `data/stores/issue-workbench-layout-store.ts`.
+  const { sections: visibleSections, collapsed, toggle } =
+    useListSectionFolding(wsId, sections);
+
   const hasActiveFilterChips = useMemo(() => {
     const f = filterState;
     return (
@@ -604,14 +610,18 @@ export function ProjectIssueSurface({
         />
       ) : (
         <SectionList
-          sections={sections}
+          sections={visibleSections}
           keyExtractor={(item) => item.id}
           stickySectionHeadersEnabled={false}
           ItemSeparatorComponent={() => (
             <View className="h-px bg-border ml-4" />
           )}
           renderSectionHeader={({ section }) => (
-            <IssueSectionHeader section={section} />
+            <IssueSectionHeader
+              section={section}
+              collapsed={collapsed.has(section.key)}
+              onToggle={() => toggle(section.key)}
+            />
           )}
           ListHeaderComponent={header ?? null}
           contentContainerClassName={
