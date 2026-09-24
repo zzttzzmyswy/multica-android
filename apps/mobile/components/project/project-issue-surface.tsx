@@ -553,6 +553,8 @@ export function ProjectIssueSurface({
             onShowStatus={boardHiddenColumns.showStatus}
             isStatusFixed={boardHiddenColumns.isStatusFixed}
             allStatusesHidden={boardHiddenColumns.allStatusesHidden}
+            sortBy={sortBy}
+            sortDirection={sortDirection}
           />
         </View>
       ) : view === "table" ? (

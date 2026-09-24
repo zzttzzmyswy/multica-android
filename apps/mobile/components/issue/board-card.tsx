@@ -13,6 +13,11 @@
  * 375pt screen sees ~3 columns worth of lanes.
  */
 import { Pressable, View } from "react-native";
+import type {
+  AccessibilityActionEvent,
+  AccessibilityActionInfo,
+  GestureResponderEvent,
+} from "react-native";
 import type { Issue } from "@multica/core/types";
 import { isPastDateOnly } from "@multica/core/issues/date";
 import { Text } from "@/components/ui/text";
@@ -34,10 +39,37 @@ export function BoardCard({
   issue,
   onPress,
   onLongPress,
+  onPressOut,
+  lifted = false,
+  dimmed = false,
+  accessibilityHint,
+  accessibilityActions,
+  onAccessibilityAction,
 }: {
   issue: Issue;
   onPress: () => void;
-  onLongPress?: () => void;
+  /** Carries the responder event: the board's drag reads the touch's window
+   *  coordinates off it to place the lifted card under the finger. */
+  onLongPress?: (event: GestureResponderEvent) => void;
+  /** Only used by the drag: a long-press released without the board ever
+   *  taking the responder is the status sheet's gesture. */
+  onPressOut?: () => void;
+  /** Rendered as the drag overlay rather than as a lane card. */
+  lifted?: boolean;
+  /**
+   * The card is lifted off the board and follows the finger as an overlay.
+   * Its lane row stays mounted — dimmed and dashed — because that row's
+   * Pressable is what owns the gesture until the board takes it over; see the
+   * `onPressOut` note in board-view.tsx.
+   */
+  dimmed?: boolean;
+  /** Says how a screen reader reaches what the drag does with a finger. */
+  accessibilityHint?: string;
+  /** The board's drag owns the pointer gesture, which a screen reader cannot
+   *  perform — the status sheet stays reachable through an accessibility
+   *  action instead. */
+  accessibilityActions?: AccessibilityActionInfo[];
+  onAccessibilityAction?: (actionName: string) => void;
 }) {
   const labels = issue.labels ?? [];
   const statusLabel = useStatusLabel();
@@ -58,8 +90,23 @@ export function BoardCard({
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
+      onPressOut={onPressOut}
       delayLongPress={350}
-      className="rounded-lg border border-border bg-card px-3 py-2.5 active:bg-secondary"
+      accessibilityHint={accessibilityHint}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={
+        onAccessibilityAction
+          ? (e: AccessibilityActionEvent) =>
+              onAccessibilityAction(e.nativeEvent.actionName)
+          : undefined
+      }
+      className={`rounded-lg border bg-card px-3 py-2.5 ${
+        lifted
+          ? "border-border shadow-lg"
+          : dimmed
+            ? "border-dashed border-border/70 opacity-40"
+            : "border-border active:bg-secondary"
+      }`}
       accessibilityRole="button"
       accessibilityLabel={`${issue.title}${issue.status ? `, ${statusLabel(issue.status)}` : ""}`}
     >

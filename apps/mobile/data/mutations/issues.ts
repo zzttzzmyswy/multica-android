@@ -22,6 +22,7 @@ import type {
   IssueReaction,
   IssueSubscriber,
   Label,
+  MoveIssueRequest,
   Reaction,
   TimelineEntry,
   UpdateIssueRequest,
@@ -436,14 +437,44 @@ export function useToggleIssueReaction(issueId: string) {
  * web's `patchIssueInBuckets` rebalancing — settling via `invalidate` is
  * cheaper and produces the same end state.
  */
+export type UpdateIssueVars = UpdateIssueRequest & {
+  /**
+   * Present only for drag/drop. `position` stays in the optimistic patch so
+   * the card lands in its slot immediately, while the request that reaches the
+   * server carries the relative anchors instead — the same split web makes in
+   * `UpdateIssueMutationInput` (packages/core/issues/mutations.ts:54-61).
+   */
+  move_intent?: Pick<MoveIssueRequest, "before_id" | "after_id">;
+};
+
 export function useUpdateIssue(issueId: string) {
   const qc = useQueryClient();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
     mutationKey: ["updateIssue", issueId] as const,
-    mutationFn: (patch: UpdateIssueRequest) => api.updateIssue(issueId, patch),
-    onMutate: async (patch) => {
+    mutationFn: ({ move_intent: moveIntent, ...patch }: UpdateIssueVars) => {
+      if (!moveIntent) return api.updateIssue(issueId, patch);
+      // A drag sends its NEIGHBOURS, not a position: the server owns the
+      // canonical ordering (`MoveIssueRequest` doc, types/api.ts:56-70), and a
+      // client-computed number can collide with a concurrent move in another
+      // session. `position` still rides along in the optimistic patch below —
+      // it is what places the card on screen until the server answers.
+      const { position: _provisionalPosition, ...target } = patch;
+      return api.moveIssue(issueId, {
+        status: target.status,
+        assignee_type: target.assignee_type,
+        assignee_id: target.assignee_id,
+        parent_issue_id: target.parent_issue_id,
+        project_id: target.project_id,
+        ...moveIntent,
+      });
+    },
+    onMutate: async (vars) => {
+      // `move_intent` is a routing instruction, not an Issue column — it must
+      // never reach the cache, or every optimistic row would carry a phantom
+      // field the server's response then "removes".
+      const { move_intent: _moveIntent, ...patch } = vars;
       const key = issueKeys.detail(wsId, issueId);
       await qc.cancelQueries({ queryKey: key });
       const prev = qc.getQueryData<Issue>(key);

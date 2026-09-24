@@ -148,6 +148,7 @@ import type {
   RemoveSquadMemberRequest,
   TaskMessagePayload,
   TimelineEntry,
+  MoveIssueRequest,
   UpdateAgentEnvRequest,
   UpdateAgentRequest,
   UpdateAutopilotRequest,
@@ -3028,6 +3029,20 @@ class ApiClient {
   async updateIssue(id: string, body: UpdateIssueRequest): Promise<Issue> {
     return this.fetch<Issue>(`/api/issues/${id}`, {
       method: "PUT",
+      body: JSON.stringify(body),
+    });
+  }
+
+  // --- Issue move (drag/drop) ---
+  // The canonical position is derived server-side from the workspace-scoped
+  // neighbours in `before_id` / `after_id`; the `position` the client puts in
+  // its optimistic patch is provisional only. Web routes drags here through
+  // `useUpdateIssue`'s `move_intent` (packages/core/issues/mutations.ts:78-82);
+  // mobile's board does the same, so the two clients cannot disagree about
+  // what a drop means. POST to match packages/core/api/client.ts:987.
+  async moveIssue(id: string, body: MoveIssueRequest): Promise<Issue> {
+    return this.fetch<Issue>(`/api/issues/${id}/move`, {
+      method: "POST",
       body: JSON.stringify(body),
     });
   }

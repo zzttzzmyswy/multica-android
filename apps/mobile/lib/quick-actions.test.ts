@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { daysSince, isStaleQuickAction } from "./quick-actions";
+import type { QuickAction } from "@multica/core/types";
+import {
+  daysSince,
+  filterQuickActions,
+  isStaleQuickAction,
+} from "./quick-actions";
 
 describe("daysSince", () => {
   it("returns null for missing or unparseable timestamps", () => {
@@ -60,5 +65,42 @@ describe("isStaleQuickAction", () => {
         created_at: iso(30 * day),
       }),
     ).toBe(false);
+  });
+});
+describe("filterQuickActions", () => {
+  const actions = [
+    { id: "1", name: "Deploy staging", target_name: "deploy-bot" },
+    { id: "2", name: "Summarise inbox", target_name: "triage-agent" },
+    { id: "3", name: "Nightly report", target_name: null },
+  ] as unknown as QuickAction[];
+
+  it("returns everything for an empty or whitespace query", () => {
+    expect(filterQuickActions(actions, "")).toHaveLength(3);
+    expect(filterQuickActions(actions, "   ")).toHaveLength(3);
+  });
+
+  it("matches on the action name, case-insensitively", () => {
+    expect(filterQuickActions(actions, "deploy").map((a) => a.id)).toEqual(["1"]);
+    expect(filterQuickActions(actions, "DEPLOY").map((a) => a.id)).toEqual(["1"]);
+  });
+
+  it("matches on the bound target's display name", () => {
+    // The target is what the user tends to remember; the name is often a
+    // private label from months ago.
+    expect(filterQuickActions(actions, "triage").map((a) => a.id)).toEqual(["2"]);
+  });
+
+  it("never matches a null target", () => {
+    expect(filterQuickActions(actions, "null")).toEqual([]);
+  });
+
+  it("returns nothing when neither field matches", () => {
+    expect(filterQuickActions(actions, "zzz")).toEqual([]);
+  });
+
+  it("does not mutate the input", () => {
+    const input = [...actions];
+    filterQuickActions(input, "deploy");
+    expect(input).toEqual(actions);
   });
 });

@@ -21,3 +21,26 @@ export function isStaleQuickAction(
   const age = daysSince(action.created_at);
   return age !== null && age >= UNUSED_DAYS_THRESHOLD;
 }
+/**
+ * Client-side name + target search over the quick-action catalog, mirroring
+ * web's `QuickActionsTab` filter (packages/views/settings/components/
+ * quick-actions-tab.tsx:217-226). The catalog is capped at 30 rows, so a
+ * server round-trip would buy nothing but a loading flicker per keystroke.
+ *
+ * `target_name` is searched as well as the name because the target is what the
+ * user usually remembers ("the deploy one") while the name is often a private
+ * label they wrote months ago. It is optional on the row — a target the viewer
+ * cannot see arrives as null — so a missing one simply never matches.
+ */
+export function filterQuickActions(
+  actions: readonly QuickAction[],
+  query: string,
+): QuickAction[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [...actions];
+  return actions.filter(
+    (action) =>
+      action.name.toLowerCase().includes(q) ||
+      (action.target_name ?? "").toLowerCase().includes(q),
+  );
+}

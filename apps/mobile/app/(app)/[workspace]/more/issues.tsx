@@ -567,6 +567,8 @@ export default function IssuesPage() {
           onShowStatus={boardHiddenColumns.showStatus}
           isStatusFixed={boardHiddenColumns.isStatusFixed}
           allStatusesHidden={boardHiddenColumns.allStatusesHidden}
+          sortBy={sortBy}
+          sortDirection={sortDirection}
         />
       ) : view === "table" ? (
         <IssueTableView

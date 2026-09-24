@@ -58,7 +58,16 @@ type DialogState =
   | { surface: "form"; mode: "edit"; profile: RuntimeProfile };
 
 interface Props {
-  intent?: "manage" | "create";
+  /**
+   * `manage` opens the browse list; `create` and `edit` open the form
+   * directly, because their caller already knows which profile is in play —
+   * the row menu's "edit custom runtime" entry is the `edit` case, matching
+   * web's `RuntimeProfilesDialog intent="edit" initialProfile={profile}`
+   * (packages/views/runtimes/components/runtime-list.tsx:611-617).
+   */
+  intent?: "manage" | "create" | "edit";
+  /** Required by `intent="edit"`: the profile the form opens on. */
+  initialProfile?: RuntimeProfile;
   onClose: () => void;
   /** Called with the created profile so callers can navigate to it. */
   onProfileCreated?: (profile: RuntimeProfile) => void;
@@ -66,6 +75,7 @@ interface Props {
 
 export function RuntimeProfilesDialog({
   intent = "manage",
+  initialProfile,
   onClose,
   onProfileCreated,
 }: Props) {
@@ -78,7 +88,9 @@ export function RuntimeProfilesDialog({
   const [state, setState] = useState<DialogState>(() =>
     intent === "create"
       ? { surface: "form", mode: "create", step: "family" }
-      : { surface: "browse" },
+      : intent === "edit" && initialProfile
+        ? { surface: "form", mode: "edit", profile: initialProfile }
+        : { surface: "browse" },
   );
   const [draftFamily, setDraftFamily] = useState<RuntimeProtocolFamily>(
     PROTOCOL_FAMILIES[0] ?? "claude",

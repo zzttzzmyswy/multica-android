@@ -592,6 +592,8 @@ export default function MyIssues() {
           onShowStatus={boardHiddenColumns.showStatus}
           isStatusFixed={boardHiddenColumns.isStatusFixed}
           allStatusesHidden={boardHiddenColumns.allStatusesHidden}
+          sortBy={sortBy}
+          sortDirection={sortDirection}
         />
       ) : view === "table" ? (
         <IssueTableView
