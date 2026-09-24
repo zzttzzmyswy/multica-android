@@ -27,6 +27,7 @@ import { inboxKeys } from "@/data/queries/inbox";
 import { useWSSubscriptions } from "@/lib/use-ws-subscriptions";
 import {
   dropInboxItemsByIssue,
+  invalidateInboxSummary,
   patchInboxIssueStatus,
 } from "./inbox-ws-updaters";
 
@@ -39,8 +40,13 @@ export function useInboxRealtime() {
       // across that boundary (archive, unarchive, or a new notification
       // reviving an archived issue — the split is decided server-side), so
       // invalidating the `all` root keeps them mutually exclusive.
-      const invalidate = () =>
+      //
+      // The account-level unread summary rides along: it spans every
+      // workspace, so a read/archive here must also clear the switcher dot.
+      const invalidate = () => {
         qc.invalidateQueries({ queryKey: inboxKeys.all(wsId) });
+        invalidateInboxSummary(qc);
+      };
 
       return [
         // Inbox-domain events: refetch the small inbox lists.

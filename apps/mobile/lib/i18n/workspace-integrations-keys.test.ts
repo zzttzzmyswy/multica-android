@@ -43,7 +43,7 @@ describe("workspace integration i18n", () => {
     "quickActions.fieldVisibility": "谁可以使用",
     "quickActions.fieldTarget": "执行者",
     "quickActions.fieldPrompt": "提示词",
-    "quickActions.templateNotSupported": "暂不支持变量，请删除 {{token}}。Agent 本来就能读到这个 issue。",
+    "quickActions.templateNotSupported": "暂不支持变量，请删除 {{token}}。智能体本来就能读到这个任务。",
     "quickActions.deleteTitle": "删除这条快捷操作？",
     "repositories.title": "代码仓库",
     "repositories.add": "添加仓库",
@@ -71,6 +71,12 @@ describe("workspace integration i18n", () => {
       "根据 PR 标题、正文和分支名匹配任务编号并自动建立链接。",
     "integrations.gh.saveFailed": "更新 GitHub 设置失败",
     "integrations.gh.readOnlyHint": "只读视图。只有管理员和所有者可以修改这些设置。",
+    // Iteration 169: the four IM rows state what the server actually reports
+    // instead of a hardcoded "未连接".
+    "integrations.channelNotConfigured": "本部署未启用",
+    "integrations.channelComingSoon": "安装即将上线",
+    "integrations.channelConnected": "已连接 · {{count}} 个",
+    "integrations.channelRevokedBadge": "{{count}} 个已撤销",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {
@@ -100,5 +106,32 @@ describe("workspace integration i18n", () => {
     expect(mod.translate("integrations.connectedTo", { names: "a, b" })).toBe(
       "Connected to a, b",
     );
+  });
+
+  // Iteration 169: the channel rows' status lines carry counts, so the
+  // placeholders have to interpolate in both locales — a row reading
+  // "Connected · {{count}}" would be worse than the hardcoded copy it replaced.
+  describe("channel row status placeholders", () => {
+    it("interpolates the connected count", () => {
+      mod.setLocale("en");
+      expect(mod.translate("integrations.channelConnected", { count: 2 })).toBe(
+        "Connected · 2",
+      );
+      mod.setLocale("zh");
+      expect(mod.translate("integrations.channelConnected", { count: 2 })).toBe(
+        "已连接 · 2 个",
+      );
+    });
+
+    it("interpolates the revoked count", () => {
+      mod.setLocale("en");
+      expect(mod.translate("integrations.channelRevokedBadge", { count: 1 })).toBe(
+        "1 revoked",
+      );
+      mod.setLocale("zh");
+      expect(mod.translate("integrations.channelRevokedBadge", { count: 1 })).toBe(
+        "1 个已撤销",
+      );
+    });
   });
 });

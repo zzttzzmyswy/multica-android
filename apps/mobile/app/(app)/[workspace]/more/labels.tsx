@@ -4,15 +4,25 @@
  * either) — each row shows the color swatch, name, description and usage
  * count, and tapping it pushes the edit form where rename/recolor/delete
  * live. Mirrors `packages/views/settings/components/labels-tab.tsx` read
- * semantics, card-listed for the phone like the squads page. The API list
- * is issue-scoped by default (server defaults `resource_type=issue`), which
- * is the only catalog the product exposes for management.
+ * semantics, card-listed for the phone like the squads page.
+ *
+ * Two catalogs, matching web's `RESOURCE_TYPES`: the scope control switches
+ * between issue labels (the legacy unscoped list, shared with the issue
+ * pickers) and the separate skill catalog. The search box filters the active
+ * catalog by name or description; switching scope clears it, as web does.
  *
  * Pull-to-refresh + friendly empty/loading/error states, matching the
- * squads/members pages. The "+" header action opens the create form.
+ * squads/members pages. The "+" header action opens the create form bound to
+ * the scope on screen.
  */
-import { useCallback, useMemo } from "react";
-import { ActivityIndicator, FlatList, Pressable, View } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  TextInput,
+  View,
+} from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -20,11 +30,17 @@ import type { Label } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
-import { labelListOptions } from "@/data/queries/labels";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { labelScopeOptions } from "@/data/queries/labels";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
+import {
+  filterLabels,
+  LABEL_SCOPES,
+  type LabelScope,
+} from "@/lib/labels-display";
 
 export default function LabelsPage() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
@@ -33,32 +49,79 @@ export default function LabelsPage() {
   const { colorScheme } = useColorScheme();
   const muted = THEME[colorScheme].mutedForeground;
 
+  const [scope, setScope] = useState<LabelScope>("issue");
+  const [query, setQuery] = useState("");
+
   const { data, isLoading, error, refetch, isRefetching } = useQuery(
-    labelListOptions(wsId),
+    labelScopeOptions(wsId, scope),
   );
 
-  const showEmpty = !isLoading && !error && (data ?? []).length === 0;
+  const visible = useMemo(
+    () =>
+      filterLabels(data ?? [], scope, query).sort((a, b) =>
+        a.name.localeCompare(b.name),
+      ),
+    [data, scope, query],
+  );
 
-  const sorted = useMemo(() => {
-    const list = data ?? [];
-    return [...list].sort((a, b) => a.name.localeCompare(b.name));
-  }, [data]);
+  const scopeLabel = t(`labels.scope.${scope}`);
+  const searching = query.trim().length > 0;
+  const showEmpty = !isLoading && !error && visible.length === 0;
+
+  const changeScope = useCallback((next: LabelScope) => {
+    setScope(next);
+    // Web clears the query on scope change — a term that matched in one
+    // catalog usually means nothing in the other.
+    setQuery("");
+  }, []);
 
   const headerRight = useCallback(() => {
     if (!wsSlug) return null;
     return (
       <IconButton
         name="add"
-        onPress={() => router.push(`/${wsSlug}/more/labels/new`)}
+        onPress={() => router.push(`/${wsSlug}/more/labels/new?scope=${scope}`)}
         accessibilityLabel={t("labels.new.title")}
       />
     );
-  }, [wsSlug, t]);
+  }, [wsSlug, scope, t]);
 
   return (
     <>
       <Stack.Screen options={{ headerRight }} />
       <View className="flex-1 bg-background">
+        <View className="px-4 pt-3 pb-2 gap-3">
+          <SegmentedControl
+            options={LABEL_SCOPES.map((value) => ({
+              value,
+              label: t(`labels.scope.${value}`),
+            }))}
+            value={scope}
+            onChange={changeScope}
+          />
+          <View className="flex-row items-center gap-2 rounded-lg border border-border px-3 bg-background">
+            <Ionicons name="search" size={16} color={muted} />
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder={t("labels.searchPlaceholder")}
+              placeholderTextColor={muted}
+              className="flex-1 py-2.5 text-sm text-foreground"
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+            {searching ? (
+              <Pressable
+                onPress={() => setQuery("")}
+                accessibilityLabel={t("common.clear")}
+                hitSlop={8}
+              >
+                <Ionicons name="close-circle" size={16} color={muted} />
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+
         {isLoading ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator />
@@ -77,16 +140,22 @@ export default function LabelsPage() {
           <View className="flex-1 items-center justify-center px-6 gap-1">
             <Ionicons name="pricetags-outline" size={32} color={muted} />
             <Text className="text-sm text-muted-foreground text-center mt-2">
-              {t("labels.emptyTitle")}
+              {searching
+                ? t("labels.noResults")
+                : t("labels.emptyScope", { scope: scopeLabel })}
             </Text>
-            <Text className="text-xs text-muted-foreground/70 text-center">
-              {t("labels.emptyDescription")}
-            </Text>
-            {wsSlug ? (
+            {!searching ? (
+              <Text className="text-xs text-muted-foreground/70 text-center">
+                {t("labels.emptyDescription")}
+              </Text>
+            ) : null}
+            {!searching && wsSlug ? (
               <Button
                 variant="outline"
                 className="mt-3"
-                onPress={() => router.push(`/${wsSlug}/more/labels/new`)}
+                onPress={() =>
+                  router.push(`/${wsSlug}/more/labels/new?scope=${scope}`)
+                }
               >
                 <Ionicons name="add" size={15} color={muted} />
                 <Text>{t("labels.createButton")}</Text>
@@ -95,10 +164,11 @@ export default function LabelsPage() {
           </View>
         ) : (
           <FlatList
-            data={sorted}
+            data={visible}
             keyExtractor={(item) => item.id}
             ItemSeparatorComponent={() => <View className="h-px bg-border ml-4" />}
             contentContainerClassName="pb-6"
+            keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => (
               <LabelRow
                 label={item}

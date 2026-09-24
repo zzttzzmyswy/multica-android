@@ -1,10 +1,10 @@
 /**
  * New-squad creation form (push screen). Fields follow web
  * `packages/views/modals/create-squad.tsx` + server handler/squad.go
- * semantics: name (required), optional description, and a leader agent
- * (required by the server — `leader_id is required`, and it must be an agent
- * in this workspace). Submit POSTs /api/squads and pops back to the list,
- * which refreshes on the creation invalidate.
+ * semantics: an optional avatar, name (required), optional description, and a
+ * leader agent (required by the server — `leader_id is required`, and it must
+ * be an agent in this workspace). Submit POSTs /api/squads and pops back to the
+ * list, which refreshes on the creation invalidate.
  *
  * The leader picker (`SquadMemberPicker` in "leader" mode) lists non-archived
  * workspace agents only. The server remains the authoritative gate — a stale
@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { AutosizeTextArea } from "@/components/ui/autosize-textarea";
 import { TextField } from "@/components/ui/text-field";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { AvatarUploadControl } from "@/components/ui/avatar-upload-control";
 import { SquadMemberPicker } from "@/components/squad/squad-member-picker";
 import { agentListOptions } from "@/data/queries/agents";
 import { memberListOptions } from "@/data/queries/members";
@@ -40,6 +41,7 @@ export default function NewSquadPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [leaderId, setLeaderId] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
 
@@ -65,6 +67,7 @@ export default function NewSquadPage() {
         name: name.trim(),
         description: description.trim() || undefined,
         leader_id: leaderId as string,
+        avatar_url: avatarUrl ?? undefined,
       });
       router.back();
     } catch (err) {
@@ -80,6 +83,7 @@ export default function NewSquadPage() {
     name,
     description,
     leaderId,
+    avatarUrl,
     createSquad,
     t,
   ]);
@@ -107,6 +111,23 @@ export default function NewSquadPage() {
           contentContainerClassName="px-4 pt-4 pb-10 gap-5"
           keyboardShouldPersistTaps="handled"
         >
+          {/* Avatar — web's create-squad.tsx:160 control. Nothing is persisted
+              here: the URL is stashed and rides along on the POST, which is
+              what `CreateSquadRequest.avatar_url` is for. */}
+          <View className="gap-1.5">
+            <FieldLabel icon="image-outline" text={t("squads.new.avatar")} />
+            <AvatarUploadControl
+              variant="squad"
+              value={avatarUrl}
+              name={name}
+              size={64}
+              disabled={isSubmitting}
+              accessibilityLabel={t("squads.detail.changeAvatar")}
+              onUploaded={setAvatarUrl}
+              onRemove={() => setAvatarUrl(null)}
+            />
+          </View>
+
           {/* Name */}
           <View className="gap-1.5">
             <FieldLabel icon="pricetag-outline" text={t("squads.new.name")} />

@@ -6,9 +6,15 @@
  * sit under the `issues/<wsId>` prefix — WS handlers can invalidate the
  * whole subtree with one call when needed.
  */
-import { queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { Issue } from "@multica/core/types";
 import { api } from "@/data/api";
+import {
+  ISSUE_PAGE_SIZE,
+  makeIssuePage,
+  nextIssuePageParam,
+  type IssuePage,
+} from "@/lib/issue-pagination";
 import {
   issueKeys,
   type IssueListWindowParams,
@@ -27,11 +33,16 @@ export {
  * empty params object — server returns every issue the user is allowed to
  * see in the current workspace.
  *
- * Cache shape: flat `Issue[]` (we strip `.issues` from the response) so
- * the WS updaters can patch this list with the same shape as
- * myIssueListOptions. Pagination is deferred — web's `IssuesPage` also
- * fetches all in one shot today (`packages/views/issues/components/
- * issues-page.tsx:30`).
+ * PAGINATED: `GET /api/issues` clamps `limit` to 100 server-side
+ * (server/internal/handler/issue.go), so a single one-shot fetch silently
+ * dropped every issue past row 100 with no UI hint. The list now walks the
+ * window with `limit`/`offset` pages (`ISSUE_PAGE_SIZE`) and the surface
+ * renders the same four-state footer web does
+ * (packages/views/issues/components/list-load-more-footer.tsx).
+ *
+ * Cache shape: `InfiniteData<IssuePage>` — use `readIssueRows` /
+ * `mapIssueRows` (./issue-list-cache) to read or patch it, so the shared
+ * WS updaters keep working against both this and the still-flat caches.
  *
  * `window` carries the view's filter/sort dimensions AS QUERY PARAMS —
  * when non-empty the query key includes the stable param bag, so changing
@@ -45,14 +56,19 @@ export const issueListOptions = (
   wsId: string | null,
   window: IssueListWindowParams = {},
 ) =>
-  queryOptions({
+  infiniteQueryOptions({
     queryKey: hasWindow(window)
       ? issueKeys.listFiltered(wsId, window)
       : issueKeys.list(wsId),
-    queryFn: async ({ signal }) => {
-      const res = await api.listIssues(window, { signal });
-      return res.issues;
+    queryFn: async ({ pageParam, signal }) => {
+      const res = await api.listIssues(
+        { ...window, limit: ISSUE_PAGE_SIZE, offset: pageParam },
+        { signal },
+      );
+      return makeIssuePage(res.issues, res.total);
     },
+    initialPageParam: 0,
+    getNextPageParam: (_lastPage, allPages) => nextIssuePageParam(allPages),
     enabled: !!wsId,
   });
 
@@ -62,6 +78,11 @@ export const issueListOptions = (
  *  as a window — it round-trips the same rows as an empty bag. */
 function hasWindow(window: IssueListWindowParams): boolean {
   if (
+    // Table quick search. Without this the search would still be SENT (the
+    // window object carries it into `listIssues`), but the query key would be
+    // the unfiltered one — so every search would overwrite the plain list's
+    // cache entry and clearing it would show the previous search's rows.
+    window.q ||
     window.statuses?.length ||
     window.priorities?.length ||
     window.assignee_filters?.length ||

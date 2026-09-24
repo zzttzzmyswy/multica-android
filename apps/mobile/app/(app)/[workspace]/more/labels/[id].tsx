@@ -1,10 +1,11 @@
 /**
- * Edit-label route. Looks the label up from the workspace label list cache
- * (there is no standalone label detail endpoint client-side; the list is the
- * management surface) and renders the shared form in edit mode, where the
- * save button updates via PUT and a destructive Delete row confirms then
- * DELETEs. Not-found / loading / error states guard against deep links to a
- * missing or not-yet-fetched label.
+ * Edit-label route. Looks the label up from the label list caches (there is no
+ * standalone label detail endpoint client-side; the lists are the management
+ * surface) and renders the shared form in edit mode, where the save button
+ * updates via PUT and a destructive Delete row confirms then DELETEs. Both
+ * catalogs are consulted so a deep link to a skill label resolves without
+ * carrying the scope in the URL. Not-found / loading / error states guard
+ * against deep links to a missing or not-yet-fetched label.
  */
 import { ActivityIndicator, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
@@ -13,7 +14,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { LabelForm } from "@/components/label/label-form";
-import { labelListOptions } from "@/data/queries/labels";
+import { labelCatalogOptions, labelListOptions } from "@/data/queries/labels";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -26,8 +27,16 @@ export default function EditLabelPage() {
   const muted = THEME[colorScheme].mutedForeground;
   const { id } = useLocalSearchParams<{ id: string }>();
 
-  const { data, isLoading, error, refetch } = useQuery(labelListOptions(wsId));
-  const label = (data ?? []).find((l) => l.id === id);
+  const issueQuery = useQuery(labelListOptions(wsId));
+  const skillQuery = useQuery(labelCatalogOptions(wsId, "skill"));
+  const { refetch } = issueQuery;
+
+  const label =
+    (issueQuery.data ?? []).find((l) => l.id === id) ??
+    (skillQuery.data ?? []).find((l) => l.id === id);
+
+  const isLoading = issueQuery.isLoading || skillQuery.isLoading;
+  const error = issueQuery.error ?? skillQuery.error;
 
   if (isLoading) {
     return (

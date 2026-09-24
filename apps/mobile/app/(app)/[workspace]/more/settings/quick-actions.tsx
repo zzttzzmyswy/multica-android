@@ -20,6 +20,7 @@ import {
   FlatList,
   Pressable,
   Switch,
+  TextInput,
   View,
 } from "react-native";
 import { useQuery } from "@tanstack/react-query";
@@ -41,7 +42,7 @@ import { memberListOptions } from "@/data/queries/members";
 import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { formatDateTime } from "@/lib/autopilot-format";
-import { isStaleQuickAction } from "@/lib/quick-actions";
+import { filterQuickActions, isStaleQuickAction } from "@/lib/quick-actions";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
@@ -123,6 +124,7 @@ export default function QuickActionsPage() {
     currentMember?.role === "owner" || currentMember?.role === "admin";
 
   const [showArchived, setShowArchived] = useState(false);
+  const [query, setQuery] = useState("");
   const { data, isLoading, error, refetch, isRefetching } = useQuery(
     quickActionListOptions(wsId, showArchived),
   );
@@ -136,7 +138,20 @@ export default function QuickActionsPage() {
     });
   }, [data]);
 
+  // Name + target search, client-side like web's
+  // (quick-actions-tab.tsx:217-226): the catalog is capped at 30 rows, so a
+  // server round-trip would only add a loading flicker per keystroke.
+  const filtered = useMemo(
+    () => filterQuickActions(sorted, query),
+    [sorted, query],
+  );
+
   const showEmpty = !isLoading && !error && sorted.length === 0;
+  // Kept apart from `showEmpty`: "the workspace has none" and "your search
+  // matched none" want different words, and the second one wants the query
+  // echoed back.
+  const showSearchEmpty =
+    !isLoading && !error && sorted.length > 0 && filtered.length === 0;
 
   const headerRight = useCallback(() => {
     if (!canManage || !wsSlug) return null;
@@ -192,6 +207,43 @@ export default function QuickActionsPage() {
           </View>
         </View>
 
+        <View className="px-4 pb-2.5">
+          <View className="flex-row items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5">
+            <Ionicons
+              name="search-outline"
+              size={15}
+              color={theme.mutedForeground}
+            />
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder={t("quickActions.searchPlaceholder")}
+              placeholderTextColor={theme.mutedForeground}
+              style={{
+                fontSize: 14,
+                includeFontPadding: false,
+                textAlignVertical: "center",
+              }}
+              className="flex-1 min-w-0 py-0 text-foreground"
+              accessibilityLabel={t("quickActions.searchPlaceholder")}
+            />
+            {query.length > 0 ? (
+              <Pressable
+                onPress={() => setQuery("")}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={t("common.clear")}
+              >
+                <Ionicons
+                  name="close-circle"
+                  size={15}
+                  color={theme.mutedForeground}
+                />
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+
         {!canManage ? (
           <View className="border-b border-border px-4 py-2">
             <Text className="text-xs text-muted-foreground">
@@ -240,9 +292,15 @@ export default function QuickActionsPage() {
               </Button>
             ) : null}
           </View>
+        ) : showSearchEmpty ? (
+          <View className="flex-1 items-center justify-center px-6">
+            <Text className="text-sm text-muted-foreground text-center">
+              {t("quickActions.noResults")}
+            </Text>
+          </View>
         ) : (
           <FlatList
-            data={sorted}
+            data={filtered}
             keyExtractor={(item) => item.id}
             ItemSeparatorComponent={() => <View className="h-px bg-border ml-4" />}
             contentContainerClassName="pb-6"

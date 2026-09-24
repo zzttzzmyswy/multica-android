@@ -41,13 +41,13 @@ beforeEach(() => {
 });
 
 describe("dashboard failure api methods", () => {
-  it("getDashboardFailuresDaily GETs /api/dashboard/failures/daily?days=7", async () => {
+  it("getDashboardFailuresDaily GETs /api/dashboard/failures/daily?days=7&tz=UTC", async () => {
     const spy = fetchSpy().mockResolvedValue([
       { date: "2026-08-15", failure_reason: "timeout", task_count: 2 },
     ]);
-    const res = await api.getDashboardFailuresDaily(7);
+    const res = await api.getDashboardFailuresDaily(7, null, "UTC");
     expect(spy).toHaveBeenCalledWith(
-      "/api/dashboard/failures/daily?days=7",
+      "/api/dashboard/failures/daily?days=7&tz=UTC",
       expect.objectContaining({ signal: undefined }),
     );
     expect(res).toHaveLength(1);
@@ -56,35 +56,35 @@ describe("dashboard failure api methods", () => {
 
   it("getDashboardFailuresDaily honours the abort signal", async () => {
     const spy = fetchSpy().mockResolvedValue([]);
-    await api.getDashboardFailuresDaily(30, undefined, { signal: undefined });
+    await api.getDashboardFailuresDaily(30, null, "UTC", { signal: undefined });
     expect(spy).toHaveBeenCalledWith(
-      "/api/dashboard/failures/daily?days=30",
+      "/api/dashboard/failures/daily?days=30&tz=UTC",
       expect.objectContaining({ signal: undefined }),
     );
   });
 
   it("getDashboardFailuresDaily appends project_id when a project is selected", async () => {
     const spy = fetchSpy().mockResolvedValue([]);
-    await api.getDashboardFailuresDaily(7, "project-1");
+    await api.getDashboardFailuresDaily(7, "project-1", "UTC");
     expect(spy).toHaveBeenCalledWith(
-      "/api/dashboard/failures/daily?days=7&project_id=project-1",
+      "/api/dashboard/failures/daily?days=7&project_id=project-1&tz=UTC",
       expect.objectContaining({ signal: undefined }),
     );
   });
 
   it("getDashboardFailuresDaily degrades a drift response to []", async () => {
     fetchSpy().mockResolvedValue({ not: "a list" });
-    const res = await api.getDashboardFailuresDaily(7);
+    const res = await api.getDashboardFailuresDaily(7, null, "UTC");
     expect(res).toEqual([]);
   });
 
-  it("getDashboardFailuresByAgent GETs /api/dashboard/failures/by-agent?days=30", async () => {
+  it("getDashboardFailuresByAgent GETs /api/dashboard/failures/by-agent?days=30&tz=UTC", async () => {
     const spy = fetchSpy().mockResolvedValue([
       { agent_id: "agent-1", failure_reason: "runtime_offline", task_count: 4 },
     ]);
-    const res = await api.getDashboardFailuresByAgent(30);
+    const res = await api.getDashboardFailuresByAgent(30, null, "UTC");
     expect(spy).toHaveBeenCalledWith(
-      "/api/dashboard/failures/by-agent?days=30",
+      "/api/dashboard/failures/by-agent?days=30&tz=UTC",
       expect.objectContaining({ signal: undefined }),
     );
     expect(res).toHaveLength(1);
@@ -93,15 +93,15 @@ describe("dashboard failure api methods", () => {
 
   it("getDashboardFailuresByAgent degrades a drift response to []", async () => {
     fetchSpy().mockResolvedValue(null);
-    const res = await api.getDashboardFailuresByAgent(7);
+    const res = await api.getDashboardFailuresByAgent(7, null, "UTC");
     expect(res).toEqual([]);
   });
 
   it("getDashboardFailuresByAgent appends project_id when a project is selected", async () => {
     const spy = fetchSpy().mockResolvedValue([]);
-    await api.getDashboardFailuresByAgent(30, "project-2");
+    await api.getDashboardFailuresByAgent(30, "project-2", "UTC");
     expect(spy).toHaveBeenCalledWith(
-      "/api/dashboard/failures/by-agent?days=30&project_id=project-2",
+      "/api/dashboard/failures/by-agent?days=30&project_id=project-2&tz=UTC",
       expect.objectContaining({ signal: undefined }),
     );
   });

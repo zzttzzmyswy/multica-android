@@ -22,12 +22,17 @@ import type {
   IssueReaction,
   IssueSubscriber,
   Label,
+  MoveIssueRequest,
   Reaction,
   TimelineEntry,
   UpdateIssueRequest,
 } from "@multica/core/types";
 import { api } from "@/data/api";
 import { issueKeys } from "@/data/queries/issues";
+import {
+  mapIssueRows,
+  type IssueListCache,
+} from "@/data/queries/issue-list-cache";
 import { inboxKeys } from "@/data/queries/inbox";
 import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
@@ -432,34 +437,108 @@ export function useToggleIssueReaction(issueId: string) {
  * web's `patchIssueInBuckets` rebalancing — settling via `invalidate` is
  * cheaper and produces the same end state.
  */
+export type UpdateIssueVars = UpdateIssueRequest & {
+  /**
+   * Present only for drag/drop. `position` stays in the optimistic patch so
+   * the card lands in its slot immediately, while the request that reaches the
+   * server carries the relative anchors instead — the same split web makes in
+   * `UpdateIssueMutationInput` (packages/core/issues/mutations.ts:54-61).
+   */
+  move_intent?: Pick<MoveIssueRequest, "before_id" | "after_id">;
+};
+
 export function useUpdateIssue(issueId: string) {
   const qc = useQueryClient();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
     mutationKey: ["updateIssue", issueId] as const,
-    mutationFn: (patch: UpdateIssueRequest) => api.updateIssue(issueId, patch),
-    onMutate: async (patch) => {
+    mutationFn: ({ move_intent: moveIntent, ...patch }: UpdateIssueVars) => {
+      if (!moveIntent) return api.updateIssue(issueId, patch);
+      // A drag sends its NEIGHBOURS, not a position: the server owns the
+      // canonical ordering (`MoveIssueRequest` doc, types/api.ts:56-70), and a
+      // client-computed number can collide with a concurrent move in another
+      // session. `position` still rides along in the optimistic patch below —
+      // it is what places the card on screen until the server answers.
+      const { position: _provisionalPosition, ...target } = patch;
+      return api.moveIssue(issueId, {
+        status: target.status,
+        assignee_type: target.assignee_type,
+        assignee_id: target.assignee_id,
+        parent_issue_id: target.parent_issue_id,
+        project_id: target.project_id,
+        ...moveIntent,
+      });
+    },
+    onMutate: async (vars) => {
+      // `move_intent` is a routing instruction, not an Issue column — it must
+      // never reach the cache, or every optimistic row would carry a phantom
+      // field the server's response then "removes".
+      const { move_intent: _moveIntent, ...patch } = vars;
       const key = issueKeys.detail(wsId, issueId);
       await qc.cancelQueries({ queryKey: key });
       const prev = qc.getQueryData<Issue>(key);
+      // The same issue also renders as a ROW inside its parent's children
+      // list, which inline sub-issue editing (iter-130) edits in place.
+      // Patching that cache here is what makes the row flip on tap instead
+      // of after the settle refetch.
+      const childrenKey = [...issueKeys.all(wsId), "children"];
+      // …and as a row inside the list surfaces — the issue table's inline
+      // cell editing (iter-132) writes through this same mutation, and a
+      // cell has to flip on tap. Prefix-matched so every variant
+      // (byProject, filtered) is covered; only rows already present are
+      // touched, so no phantom rows appear.
+      const listKey = issueKeys.list(wsId);
+      const myAllKey = issueKeys.myAll(wsId);
+      await Promise.all([
+        qc.cancelQueries({ queryKey: childrenKey }),
+        qc.cancelQueries({ queryKey: listKey }),
+        qc.cancelQueries({ queryKey: myAllKey }),
+      ]);
+      const childrenPrev = qc.getQueriesData<Issue[]>({
+        queryKey: childrenKey,
+      });
+      const listPrev = qc.getQueriesData<IssueListCache>({ queryKey: listKey });
+      const myPrev = qc.getQueriesData<IssueListCache>({ queryKey: myAllKey });
+      const {
+        description: _description,
+        description_base: _descriptionBase,
+        // attachment_ids are "register new" registrations, not a full
+        // replacement — never patch them into the optimistic Issue (web
+        // mutations.ts note). The server's response carries the final list.
+        attachment_ids: _attachmentIds,
+        ...optimisticPatch
+      } = patch;
       if (prev) {
-        const {
-          description: _description,
-          description_base: _descriptionBase,
-          // attachment_ids are "register new" registrations, not a full
-          // replacement — never patch them into the optimistic Issue (web
-          // mutations.ts note). The server's response carries the final list.
-          attachment_ids: _attachmentIds,
-          ...optimisticPatch
-        } = patch;
         qc.setQueryData<Issue>(key, { ...prev, ...optimisticPatch });
       }
-      return { prev, key };
+      // Applied even with a cold detail cache: a list surface can be on
+      // screen without the issue ever having been opened.
+      const patchRow = (issue: Issue) =>
+        issue.id === issueId ? { ...issue, ...optimisticPatch } : issue;
+      qc.setQueriesData<Issue[]>({ queryKey: childrenKey }, (list) =>
+        list?.map(patchRow),
+      );
+      qc.setQueriesData<IssueListCache>({ queryKey: listKey }, (old) =>
+        mapIssueRows(old, (rows) => rows.map(patchRow)),
+      );
+      qc.setQueriesData<IssueListCache>({ queryKey: myAllKey }, (old) =>
+        mapIssueRows(old, (rows) => rows.map(patchRow)),
+      );
+      return { prev, key, childrenPrev, listPrev, myPrev, listKey, myAllKey };
     },
     onError: (_err, _vars, ctx) => {
       if (ctx?.prev !== undefined && ctx.key) {
         qc.setQueryData(ctx.key, ctx.prev);
+      }
+      for (const [k, data] of ctx?.childrenPrev ?? []) {
+        qc.setQueryData(k, data);
+      }
+      for (const [k, data] of ctx?.listPrev ?? []) {
+        qc.setQueryData(k, data);
+      }
+      for (const [k, data] of ctx?.myPrev ?? []) {
+        qc.setQueryData(k, data);
       }
     },
     onSuccess: (server) => {
@@ -467,6 +546,14 @@ export function useUpdateIssue(issueId: string) {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: issueKeys.detail(wsId, issueId) });
+      // Every mounted children query in this workspace — a sub-issue edited
+      // from its parent's row list has to reconcile the parent's copy too,
+      // and the parent's done/total progress ring moves with it. Same
+      // invalidation `useUpdateIssueRelations` already performs.
+      qc.invalidateQueries({
+        queryKey: [...issueKeys.all(wsId), "children"],
+      });
+      qc.invalidateQueries({ queryKey: issueKeys.childProgress(wsId) });
       qc.invalidateQueries({ queryKey: issueKeys.myAll(wsId) });
       qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
     },
@@ -575,13 +662,13 @@ export function useBatchUpdateIssues() {
         qc.cancelQueries({ queryKey: listKey }),
         qc.cancelQueries({ queryKey: myAllKey }),
       ]);
-      const prevList = qc.getQueryData<Issue[]>(listKey);
-      const prevMy = qc.getQueriesData<Issue[]>({ queryKey: myAllKey });
-      qc.setQueryData<Issue[]>(listKey, (old) =>
-        old ? patchIssueBatch(old, ids, updates) : old,
+      const prevList = qc.getQueryData<IssueListCache>(listKey);
+      const prevMy = qc.getQueriesData<IssueListCache>({ queryKey: myAllKey });
+      qc.setQueryData<IssueListCache>(listKey, (old) =>
+        mapIssueRows(old, (rows) => patchIssueBatch(rows, ids, updates)),
       );
-      qc.setQueriesData<Issue[]>({ queryKey: myAllKey }, (old) =>
-        old ? patchIssueBatch(old, ids, updates) : old,
+      qc.setQueriesData<IssueListCache>({ queryKey: myAllKey }, (old) =>
+        mapIssueRows(old, (rows) => patchIssueBatch(rows, ids, updates)),
       );
       return { prevList, prevMy, listKey, myAllKey };
     },
@@ -619,14 +706,14 @@ export function useBatchDeleteIssues() {
         qc.cancelQueries({ queryKey: listKey }),
         qc.cancelQueries({ queryKey: myAllKey }),
       ]);
-      const prevList = qc.getQueryData<Issue[]>(listKey);
-      const prevMy = qc.getQueriesData<Issue[]>({ queryKey: myAllKey });
+      const prevList = qc.getQueryData<IssueListCache>(listKey);
+      const prevMy = qc.getQueriesData<IssueListCache>({ queryKey: myAllKey });
       const drop = new Set(ids);
-      qc.setQueryData<Issue[]>(listKey, (old) =>
-        old ? old.filter((i) => !drop.has(i.id)) : old,
+      qc.setQueryData<IssueListCache>(listKey, (old) =>
+        mapIssueRows(old, (rows) => rows.filter((i) => !drop.has(i.id))),
       );
-      qc.setQueriesData<Issue[]>({ queryKey: myAllKey }, (old) =>
-        old ? old.filter((i) => !drop.has(i.id)) : old,
+      qc.setQueriesData<IssueListCache>({ queryKey: myAllKey }, (old) =>
+        mapIssueRows(old, (rows) => rows.filter((i) => !drop.has(i.id))),
       );
       return { prevList, prevMy, listKey, myAllKey };
     },
@@ -749,6 +836,10 @@ export function useDetachLabel(issueId: string) {
  *  - issueKeys.myAll(wsId)        my-issues list (all three scopes)
  *  - inboxKeys.all(wsId)          inbox (assignment notification if any) —
  *                                 prefix-matches the inbox list key
+ *  - the parent's children + the workspace child-progress map, when the new
+ *    issue has a parent: otherwise a parent opened before the create keeps
+ *    showing an empty sub-issue section and a stale x/y ring. Web's
+ *    create mutation does exactly these two (packages/core/issues/mutations.ts).
  */
 export function useCreateIssue() {
   const qc = useQueryClient();
@@ -756,9 +847,14 @@ export function useCreateIssue() {
 
   return useMutation({
     mutationFn: (body: CreateIssueRequest) => api.createIssue(body),
-    onSuccess: () => {
+    onSuccess: (newIssue, body) => {
       qc.invalidateQueries({ queryKey: issueKeys.myAll(wsId) });
       qc.invalidateQueries({ queryKey: inboxKeys.all(wsId) });
+      const parentId = newIssue?.parent_issue_id ?? body.parent_issue_id;
+      if (parentId) {
+        qc.invalidateQueries({ queryKey: issueKeys.children(wsId, parentId) });
+        qc.invalidateQueries({ queryKey: issueKeys.childProgress(wsId) });
+      }
     },
   });
 }
@@ -837,14 +933,14 @@ export function useDeleteIssue() {
 
       // Snapshot every matching cache (flat list + each my-issues scope×filter)
       // so we can roll back per-key on error.
-      const prevList = qc.getQueryData<Issue[]>(listKey);
-      const prevMy = qc.getQueriesData<Issue[]>({ queryKey: myAllKey });
+      const prevList = qc.getQueryData<IssueListCache>(listKey);
+      const prevMy = qc.getQueriesData<IssueListCache>({ queryKey: myAllKey });
 
-      qc.setQueryData<Issue[]>(listKey, (old) =>
-        old ? old.filter((i) => i.id !== id) : old,
+      qc.setQueryData<IssueListCache>(listKey, (old) =>
+        mapIssueRows(old, (rows) => rows.filter((i) => i.id !== id)),
       );
-      qc.setQueriesData<Issue[]>({ queryKey: myAllKey }, (old) =>
-        old ? old.filter((i) => i.id !== id) : old,
+      qc.setQueriesData<IssueListCache>({ queryKey: myAllKey }, (old) =>
+        mapIssueRows(old, (rows) => rows.filter((i) => i.id !== id)),
       );
 
       return { prevList, prevMy, listKey, myAllKey };

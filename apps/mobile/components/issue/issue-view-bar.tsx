@@ -63,6 +63,8 @@ import {
   useDeleteIssueView,
   useUpdateIssueView,
 } from "@/data/mutations/issue-views";
+import { pinListOptions } from "@/data/queries/pins";
+import { useCreatePin, useDeletePin } from "@/data/mutations/pins";
 import { memberListOptions } from "@/data/queries/members";
 import {
   type IssueViewSnapshotSource,
@@ -121,6 +123,29 @@ export function IssueViewBar({
   });
   const prefs: ViewBarPrefs = preference?.prefs ?? EMPTY_VIEW_BAR_PREFS;
   const updatePreference = useUpdateIssueViewPreference(wsId, scope);
+
+  // Pin state for this bar's views — "pin the current view" is web's
+  // view-bar context menu entry (packages/views/issues/components/
+  // view-bar.tsx:360-363, :418-422). The pin LIST is the sidebar/pins-tab
+  // order, so the toggle has to read the same per-user cache the pin surfaces
+  // write, not a local flag.
+  const { data: pins = [] } = useQuery({
+    ...pinListOptions(wsId, user?.id ?? null),
+    enabled: !!user?.id,
+  });
+  const pinnedViewIds = useMemo(
+    () =>
+      new Set(
+        pins.filter((p) => p.item_type === "view").map((p) => p.item_id),
+      ),
+    [pins],
+  );
+  const createPin = useCreatePin();
+  const deletePin = useDeletePin();
+  const togglePin = (view: IssueView, pinned: boolean) =>
+    pinned
+      ? deletePin.mutate({ itemType: "view", itemId: view.id })
+      : createPin.mutate({ item_type: "view", item_id: view.id });
 
   const allViewItems = useMemo(
     () => (views ?? []).map((view) => ({ barItemId: viewBarItemId(view.id), view })),
@@ -205,6 +230,7 @@ export function IssueViewBar({
           grouping: slice.grouping,
           sortBy: slice.sortBy,
           sortDirection,
+          showSubIssues: slice.showSubIssues,
         }),
       },
       {
@@ -229,6 +255,7 @@ export function IssueViewBar({
       | { kind: "duplicate" }
       | { kind: "share" }
       | { kind: "unshare" }
+      | { kind: "pin" }
       | { kind: "hide" }
       | { kind: "delete" }
       | { kind: "cancel" };
@@ -252,6 +279,14 @@ export function IssueViewBar({
           : { kind: "share" },
       );
     }
+    // Pin/unpin is a personal shortcut, not a management action — available on
+    // every view the user can see (web puts it on the tab's context menu).
+    push(
+      pinnedViewIds.has(view.id)
+        ? t("issueViews.unpin")
+        : t("issueViews.pin"),
+      { kind: "pin" },
+    );
     // Iteration-67: hide/reveal is a personal bar preference, not a manager
     // action — always available (web view-bar.tsx:202-262).
     push(
@@ -303,6 +338,9 @@ export function IssueViewBar({
             break;
           case "hide":
             toggleHidden(view, !hiddenSet.has(viewBarItemId(view.id)));
+            break;
+          case "pin":
+            togglePin(view, pinnedViewIds.has(view.id));
             break;
           case "delete":
             Alert.alert(

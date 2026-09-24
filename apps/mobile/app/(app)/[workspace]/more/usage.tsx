@@ -39,7 +39,7 @@ import {
   View,
 } from "react-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Link, Stack } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Project } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
@@ -61,6 +61,8 @@ import {
   aggregateByAgent,
   aggregateDailyCost,
   aggregateDailyTokens,
+  aggregateWeeklyCost,
+  aggregateWeeklyTokens,
   computeDailyTotals,
   DELETED_AGENTS_ROW_ID,
   formatTokens,
@@ -73,7 +75,10 @@ import { formatUsd } from "@/lib/runtime-usage";
 import {
   aggregateDailyTasks,
   aggregateDailyTime,
+  aggregateWeeklyTasks,
+  aggregateWeeklyTime,
   bucketAgentDashboardRows,
+  deletedAgentCount,
   formatDuration,
   mergeAgentDashboardRows,
   type AgentDashboardRow,
@@ -81,10 +86,20 @@ import {
   type DailyTimeRow,
 } from "@/lib/usage-time";
 import {
+  chartFetchDays,
+  dailyCutoffIso,
+  dimsForDays,
+  effectiveDim,
+  trimToWindow,
+  weekCountForDays,
+  type Dim,
+} from "@/lib/usage-dim";
+import {
   aggregateAgentFailures,
   aggregateDailyErrors,
   aggregateFailureClasses,
   aggregateFailureReasons,
+  aggregateWeeklyErrors,
   computeFailureTotals,
   failureClassColors,
   formatRate,
@@ -99,8 +114,22 @@ import {
   type FailureReasonRow,
   type FailureTotals,
   type OffenderSort,
+  type WeeklyErrorsRow,
 } from "@/lib/usage-errors";
 import { FAILURE_CLASSES, type FailureClass } from "@/lib/failure-class";
+import { LEADERBOARD_LIMIT, leaderboardView } from "@/lib/usage-leaderboard";
+import {
+  trendLegendSegments,
+  trendStackSegments,
+  type StackSegment,
+} from "@/lib/usage-chart-stack";
+import {
+  formatTzLabel,
+  formatUpdatedAt,
+  latestUpdatedAt,
+} from "@/lib/usage-freshness";
+import { resolveViewingTimezone } from "@/lib/timezone";
+import { useAuthStore } from "@/data/auth-store";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
@@ -130,12 +159,33 @@ export default function UsagePage() {
   const [range, setRange] = useState<Range>(30);
   const [mode, setMode] = useState<ViewMode>("trend");
   const [metric, setMetric] = useState<UsageMetric>("tokens");
+  // Card-scoped grains (iteration 169). Each card owns its own so the trend
+  // chart and the errors trend can be read at different grains without one
+  // reaching up and rewriting a page-scoped control (web MUL-5759). Both are
+  // derived through `effectiveDim` rather than reset when the range narrows,
+  // so 30d → 1d → 30d restores the reader's choice.
+  const [trendDim, setTrendDim] = useState<Dim>("daily");
+  const [errorsDim, setErrorsDim] = useState<Dim>("daily");
   // Iteration 87 page-scoped project filter: null = whole workspace, mirroring
   // web's ALL_PROJECTS->null derivation (dashboard-page.tsx). A project id
   // that no longer resolves counts as no filter — same reading web applies.
   const [projectValue, setProjectValue] = useState<string | null>(null);
   const [rangeModalOpen, setRangeModalOpen] = useState(false);
   const [projectModalOpen, setProjectModalOpen] = useState(false);
+
+  // The viewing timezone every rollup is sliced on (iteration 169). Same
+  // source as the settings page's picker: the stored preference, else the
+  // device zone. Server-side day buckets are cut on this value, so it is part
+  // of every dashboard query key — changing the preference re-answers the
+  // question rather than re-rendering the same numbers.
+  const user = useAuthStore((s) => s.user);
+  const viewTZ = useMemo(() => resolveViewingTimezone(user), [user]);
+
+  const weekCount = weekCountForDays(range);
+  // Per-date rollups over-fetch to whole weeks so a weekly bar is not
+  // truncated at the window's left edge; per-agent rollups carry no date to
+  // trim, so their window stays exactly `range` server-side (web MUL-5551).
+  const chartDays = chartFetchDays(range);
 
   // Project list feeds the page-level project filter (iteration 87). Same
   // query as web's projectListOptions for the dashboard ProjectFilter.
@@ -154,20 +204,24 @@ export default function UsagePage() {
   const selectedProject =
     projects.find((p) => p.id === effectiveProjectId) ?? null;
 
-  const daily = useQuery(dashboardUsageDailyOptions(wsId, range, effectiveProjectId));
-  const byAgent = useQuery(dashboardUsageByAgentOptions(wsId, range, effectiveProjectId));
+  const daily = useQuery(
+    dashboardUsageDailyOptions(wsId, chartDays, effectiveProjectId, viewTZ),
+  );
+  const byAgent = useQuery(
+    dashboardUsageByAgentOptions(wsId, range, effectiveProjectId, viewTZ),
+  );
   // Run-time / task-count rollups power the Time/Tasks metric toggle, the
   // Run time / Tasks KPI tiles and the leaderboard's run-time column
   // (iteration 45). Fetched up front like the token rollups — smaller than
   // the failure payloads, and the KPI row always shows them.
   const runTime = useQuery({
-    ...dashboardAgentRunTimeOptions(wsId, range, effectiveProjectId),
+    ...dashboardAgentRunTimeOptions(wsId, range, effectiveProjectId, viewTZ),
     // These power the KPI row and the Time/Tasks trend; the Errors tab
     // shows neither, so skip the per-second refetch while it is open.
     enabled: !!wsId && mode !== "errors",
   });
   const runTimeDaily = useQuery({
-    ...dashboardRunTimeDailyOptions(wsId, range, effectiveProjectId),
+    ...dashboardRunTimeDailyOptions(wsId, chartDays, effectiveProjectId, viewTZ),
     enabled: !!wsId && mode !== "errors",
   });
   // include_archived so a retired agent keeps its name on the leaderboard
@@ -181,11 +235,11 @@ export default function UsagePage() {
   // Failures rollups only fetched while the Errors tab is visible; switching
   // tabs back to it after a range change refetches via the days key.
   const failuresDaily = useQuery({
-    ...dashboardFailuresDailyOptions(wsId, range, effectiveProjectId),
+    ...dashboardFailuresDailyOptions(wsId, chartDays, effectiveProjectId, viewTZ),
     enabled: !!wsId && mode === "errors",
   });
   const failuresByAgent = useQuery({
-    ...dashboardFailuresByAgentOptions(wsId, range, effectiveProjectId),
+    ...dashboardFailuresByAgentOptions(wsId, range, effectiveProjectId, viewTZ),
     enabled: !!wsId && mode === "errors",
   });
 
@@ -206,26 +260,64 @@ export default function UsagePage() {
     agents.error ??
     (mode === "errors" ? errorsError : null);
 
+  // Per-date rows are fetched over whole weeks; the daily surfaces trim back
+  // to exactly `range` days on the viewer's timezone, so the extra rows the
+  // weekly grain needs change nothing the daily grain shows. The weekly folds
+  // below read the UNTRIMMED rows on purpose — trimming first would cut the
+  // days off the leftmost week that the over-fetch exists to include.
+  const cutoff = useMemo(() => dailyCutoffIso(range, viewTZ), [range, viewTZ]);
+  const dailyInWindow = useMemo(
+    () => trimToWindow(daily.data ?? [], cutoff),
+    [daily.data, cutoff],
+  );
+  const runTimeDailyInWindow = useMemo(
+    () => trimToWindow(runTimeDaily.data ?? [], cutoff),
+    [runTimeDaily.data, cutoff],
+  );
+  const failuresDailyInWindow = useMemo(
+    () => trimToWindow(failuresDaily.data ?? [], cutoff),
+    [failuresDaily.data, cutoff],
+  );
+
   const dailyRows = useMemo(
-    () => aggregateDailyTokens(daily.data ?? []),
-    [daily.data],
+    () => aggregateDailyTokens(dailyInWindow),
+    [dailyInWindow],
   );
   const dailyCost = useMemo(
-    () => aggregateDailyCost(daily.data ?? []),
-    [daily.data],
+    () => aggregateDailyCost(dailyInWindow),
+    [dailyInWindow],
   );
   const totals = useMemo(
-    () => computeDailyTotals(daily.data ?? []),
-    [daily.data],
+    () => computeDailyTotals(dailyInWindow),
+    [dailyInWindow],
   );
 
   const dailyTime = useMemo(
-    () => aggregateDailyTime(runTimeDaily.data ?? []),
-    [runTimeDaily.data],
+    () => aggregateDailyTime(runTimeDailyInWindow),
+    [runTimeDailyInWindow],
   );
   const dailyTasks = useMemo(
-    () => aggregateDailyTasks(runTimeDaily.data ?? []),
-    [runTimeDaily.data],
+    () => aggregateDailyTasks(runTimeDailyInWindow),
+    [runTimeDailyInWindow],
+  );
+
+  // Weekly counterparts, in the same row shapes as the daily ones so the
+  // chart and its breakdown rows render either grain without branching.
+  const weeklyTokens = useMemo(
+    () => aggregateWeeklyTokens(daily.data ?? [], viewTZ, weekCount),
+    [daily.data, viewTZ, weekCount],
+  );
+  const weeklyCost = useMemo(
+    () => aggregateWeeklyCost(daily.data ?? [], viewTZ, weekCount),
+    [daily.data, viewTZ, weekCount],
+  );
+  const weeklyTime = useMemo(
+    () => aggregateWeeklyTime(runTimeDaily.data ?? [], viewTZ, weekCount),
+    [runTimeDaily.data, viewTZ, weekCount],
+  );
+  const weeklyTasks = useMemo(
+    () => aggregateWeeklyTasks(runTimeDaily.data ?? [], viewTZ, weekCount),
+    [runTimeDaily.data, viewTZ, weekCount],
   );
   // Whole-window run-time / task totals for the KPI tiles, summed from the
   // per-agent run-time rollup (web parity: that rollup is the source of the
@@ -246,13 +338,27 @@ export default function UsagePage() {
   // taskCount is the accurate distinct count and run time rides along.
   // Unknown agents fold into the deleted bucket (spend kept, time/tasks
   // dashed out — deleted agents never contributed to the run-time rollup).
-  const agentRows = useMemo(() => {
-    const known = agents.data ? new Set(agents.data.map((a) => a.id)) : null;
-    return bucketAgentDashboardRows(
+  //
+  // The caption's deleted count is read off `merged` — the unbucketed rows —
+  // because once folded the individuals are gone and the bucket's single row
+  // can no longer say how many agents it stands for.
+  const mergedAgentRows = useMemo(
+    () =>
       mergeAgentDashboardRows(aggregateByAgent(byAgent.data ?? []), runTime.data ?? []),
-      known,
-    );
-  }, [byAgent.data, runTime.data, agents.data]);
+    [byAgent.data, runTime.data],
+  );
+  const knownAgentIds = useMemo(
+    () => (agents.data ? new Set(agents.data.map((a) => a.id)) : null),
+    [agents.data],
+  );
+  const agentRows = useMemo(
+    () => bucketAgentDashboardRows(mergedAgentRows, knownAgentIds),
+    [mergedAgentRows, knownAgentIds],
+  );
+  const deletedAgents = useMemo(
+    () => deletedAgentCount(mergedAgentRows, knownAgentIds),
+    [mergedAgentRows, knownAgentIds],
+  );
 
   const agentName = useMemo(() => {
     const byId = new Map((agents.data ?? []).map((a) => [a.id, a.name]));
@@ -264,46 +370,64 @@ export default function UsagePage() {
   }, [agents.data, t]);
 
   const errorTotals = useMemo(
-    () => computeFailureTotals(failuresDaily.data ?? []),
-    [failuresDaily.data],
+    () => computeFailureTotals(failuresDailyInWindow),
+    [failuresDailyInWindow],
   );
   const dailyErrors = useMemo(
-    () => aggregateDailyErrors(failuresDaily.data ?? []),
-    [failuresDaily.data],
+    () => aggregateDailyErrors(failuresDailyInWindow),
+    [failuresDailyInWindow],
+  );
+  const weeklyErrors = useMemo(
+    () => aggregateWeeklyErrors(failuresDaily.data ?? [], viewTZ, weekCount),
+    [failuresDaily.data, viewTZ, weekCount],
   );
   const classRows = useMemo(
-    () => aggregateFailureClasses(failuresDaily.data ?? []),
-    [failuresDaily.data],
+    () => aggregateFailureClasses(failuresDailyInWindow),
+    [failuresDailyInWindow],
   );
   const reasonRows = useMemo(
-    () => aggregateFailureReasons(failuresDaily.data ?? []),
-    [failuresDaily.data],
+    () => aggregateFailureReasons(failuresDailyInWindow),
+    [failuresDailyInWindow],
   );
   const offenderRows = useMemo(
     () => aggregateAgentFailures(failuresByAgent.data ?? [], agents.data),
     [failuresByAgent.data, agents.data],
   );
 
-  const maxDaily = useMemo(
-    () => dailyRows.reduce((m, d) => Math.max(m, d.total), 0),
-    [dailyRows],
-  );
-  const maxCost = useMemo(
-    () => dailyCost.reduce((m, d) => Math.max(m, d.total), 0),
-    [dailyCost],
-  );
-  const maxTime = useMemo(
-    () => dailyTime.reduce((m, d) => Math.max(m, d.totalSeconds), 0),
-    [dailyTime],
-  );
-  const maxTasks = useMemo(
-    () =>
-      dailyTasks.reduce(
-        (m, d) => Math.max(m, d.completed + d.failed + d.cancelled),
-        0,
-      ),
-    [dailyTasks],
-  );
+  // The chart's bar scale follows whichever grain is on screen, so it is
+  // derived inside TrendSection from the rows it actually draws rather than
+  // here from the daily rows.
+
+  // Header freshness: which zone these buckets were cut on, and when the
+  // figures were last fetched. `viewTZ` is stored user input, so both formatters
+  // degrade to null on a zone `Intl` rejects rather than taking the page down.
+  const freshness = useMemo(() => {
+    const updated = formatUpdatedAt(
+      latestUpdatedAt([
+        daily.dataUpdatedAt,
+        byAgent.dataUpdatedAt,
+        runTime.dataUpdatedAt,
+        runTimeDaily.dataUpdatedAt,
+        failuresDaily.dataUpdatedAt,
+        failuresByAgent.dataUpdatedAt,
+      ]),
+      viewTZ,
+    );
+    const tz = formatTzLabel(viewTZ);
+    if (!tz) return null;
+    return updated
+      ? t("usage.headerTimezoneUpdated", { tz, time: updated })
+      : tz;
+  }, [
+    daily.dataUpdatedAt,
+    byAgent.dataUpdatedAt,
+    runTime.dataUpdatedAt,
+    runTimeDaily.dataUpdatedAt,
+    failuresDaily.dataUpdatedAt,
+    failuresByAgent.dataUpdatedAt,
+    viewTZ,
+    t,
+  ]);
 
   const showEmpty =
     !isLoading &&
@@ -435,25 +559,47 @@ export default function UsagePage() {
               </Pressable>
             </View>
 
+            {/* Which timezone the buckets were cut on, and when the figures
+                were last fetched. Every number below is sliced on `viewTZ`, so
+                without this the same chart under a different zone reads as a
+                different answer with nothing on screen admitting it (web
+                dashboard-page header). Dropped entirely when the stored zone
+                is one Intl can't name. */}
+            {freshness ? (
+              <Text className="px-4 pb-1 text-[10px] text-muted-foreground/70">
+                {freshness}
+              </Text>
+            ) : null}
+
             {/* KPI tiles — usage metrics; the Errors tab brings its own.
                 Four tiles matching web's KPI row: Cost / Tokens / Run time /
                 Tasks. Cost comes from estimateCost via computeDailyTotals
-                (authoritative ticks + rate-table estimate). */}
+                (authoritative ticks + rate-table estimate).
+
+                Iteration 171: every label carries the `· {{days}}D` window
+                suffix web puts on them, and the Tokens tile carries web's
+                Input/Output hint — the tile's total sums four token classes, so
+                without the hint there is no way to tell an input-heavy window
+                from a cache-heavy one. */}
             {mode !== "errors" ? (
               <View className="flex-row gap-3 px-4 py-3">
                 <KpiCard
                   icon="cash-outline"
-                  label={t("usage.totalCost")}
+                  label={t("usage.totalCostLabel", { days: range })}
                   value={formatUsd(totals.cost)}
                 />
                 <KpiCard
                   icon="flash"
-                  label={t("usage.totalTokens")}
+                  label={t("usage.totalTokensLabel", { days: range })}
                   value={formatTokens(totals.total)}
+                  hint={t("usage.totalTokensHint", {
+                    input: formatTokens(totals.input),
+                    output: formatTokens(totals.output),
+                  })}
                 />
                 <KpiCard
                   icon="time-outline"
-                  label={t("usage.totalRunTime")}
+                  label={t("usage.totalRunTimeLabel", { days: range })}
                   value={formatDuration(
                     runTimeTotals.totalSeconds,
                     t("usage.lessThanMinute"),
@@ -462,7 +608,7 @@ export default function UsagePage() {
                 />
                 <KpiCard
                   icon="checkmark-circle-outline"
-                  label={t("usage.totalTasks")}
+                  label={t("usage.totalTasksLabel", { days: range })}
                   value={String(runTimeTotals.taskCount)}
                   hint={t("usage.totalTasksHint", { failed: runTimeTotals.failedCount })}
                 />
@@ -488,19 +634,23 @@ export default function UsagePage() {
               <TrendSection
                 metric={metric}
                 onMetricChange={setMetric}
+                allowedDims={dimsForDays(range)}
+                dim={effectiveDim(dimsForDays(range), trendDim)}
+                onDimChange={setTrendDim}
                 dailyTokens={dailyRows}
                 dailyCost={dailyCost}
                 dailyTime={dailyTime}
                 dailyTasks={dailyTasks}
-                maxTokens={maxDaily}
-                maxCost={maxCost}
-                maxTime={maxTime}
-                maxTasks={maxTasks}
+                weeklyTokens={weeklyTokens}
+                weeklyCost={weeklyCost}
+                weeklyTime={weeklyTime}
+                weeklyTasks={weeklyTasks}
                 colorScheme={colorScheme}
               />
             ) : mode === "leaderboard" ? (
               <LeaderboardSection
                 rows={agentRows}
+                deletedAgents={deletedAgents}
                 agentName={agentName}
                 colorScheme={colorScheme}
               />
@@ -509,6 +659,10 @@ export default function UsagePage() {
                 days={range}
                 totals={errorTotals}
                 dailyErrors={dailyErrors}
+                weeklyErrors={weeklyErrors}
+                allowedDims={dimsForDays(range)}
+                dim={effectiveDim(dimsForDays(range), errorsDim)}
+                onDimChange={setErrorsDim}
                 classRows={classRows}
                 reasonRows={reasonRows}
                 offenderRows={offenderRows}
@@ -734,7 +888,9 @@ function KpiCard({
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
   return (
-    <View className="flex-1 rounded-xl border border-border bg-card px-3 py-2.5">
+    // min-h keeps the four tiles the same height whether their hint wraps to
+    // one line or two, so the row below never shifts between tabs.
+    <View className="flex-1 min-h-[92px] rounded-xl border border-border bg-card px-3 py-2.5">
       <View className="flex-row items-center gap-1.5">
         <Ionicons name={icon} size={13} color={theme.mutedForeground} />
         <Text
@@ -755,7 +911,11 @@ function KpiCard({
         {value}
       </Text>
       {hint ? (
-        <Text className="mt-0.5 text-[10px] text-muted-foreground/70" numberOfLines={1}>
+        // The hint wraps rather than truncating: the Tokens tile's "Input · ·
+        // Output" pair is the only place those two numbers appear, and a
+        // quarter-width tile clips it to "Input 2.4B · …" — which is the half
+        // of the pair a reader can already guess. Two lines is the cap.
+        <Text className="mt-0.5 text-[10px] leading-tight text-muted-foreground/70" numberOfLines={2}>
           {hint}
         </Text>
       ) : null}
@@ -777,30 +937,41 @@ const METRIC_LABEL: Record<UsageMetric, string> = {
  * mentally overlay them (web UsageTrendCard parity). Cost prices tokens via
  * the same client-side rate table the runtime detail page uses. Pure RN
  * Views, no chart dependency.
+ *
+ * The Daily / Weekly grain is card-scoped (iteration 169): it changes only
+ * what this card draws, never the page's range. The weekly rows arrive in the
+ * same shapes as the daily ones, so the chart, the breakdown rows and the bar
+ * scale all read from one selected set instead of branching on the grain.
  */
 function TrendSection({
   metric,
   onMetricChange,
+  allowedDims,
+  dim,
+  onDimChange,
   dailyTokens,
   dailyCost,
   dailyTime,
   dailyTasks,
-  maxTokens,
-  maxCost,
-  maxTime,
-  maxTasks,
+  weeklyTokens,
+  weeklyCost,
+  weeklyTime,
+  weeklyTasks,
   colorScheme,
 }: {
   metric: UsageMetric;
   onMetricChange: (m: UsageMetric) => void;
+  allowedDims: readonly Dim[];
+  dim: Dim;
+  onDimChange: (d: Dim) => void;
   dailyTokens: UsageDailyAggregate[];
   dailyCost: DailyCostRow[];
   dailyTime: DailyTimeRow[];
   dailyTasks: DailyTasksRow[];
-  maxTokens: number;
-  maxCost: number;
-  maxTime: number;
-  maxTasks: number;
+  weeklyTokens: UsageDailyAggregate[];
+  weeklyCost: DailyCostRow[];
+  weeklyTime: DailyTimeRow[];
+  weeklyTasks: DailyTasksRow[];
   colorScheme: "light" | "dark";
 }) {
   const { t } = useTranslation();
@@ -808,8 +979,29 @@ function TrendSection({
   const muted = theme.mutedForeground;
   const brand = theme.brand;
 
-  const title =
-    metric === "tokens"
+  const weekly = dim === "weekly";
+  const tokenRows = weekly ? weeklyTokens : dailyTokens;
+  const costRows = weekly ? weeklyCost : dailyCost;
+  const timeRows = weekly ? weeklyTime : dailyTime;
+  const taskRows = weekly ? weeklyTasks : dailyTasks;
+
+  const maxTokens = tokenRows.reduce((m, d) => Math.max(m, d.total), 0);
+  const maxCost = costRows.reduce((m, d) => Math.max(m, d.total), 0);
+  const maxTime = timeRows.reduce((m, d) => Math.max(m, d.totalSeconds), 0);
+  const maxTasks = taskRows.reduce(
+    (m, d) => Math.max(m, d.completed + d.failed + d.cancelled),
+    0,
+  );
+
+  const title = weekly
+    ? metric === "tokens"
+      ? t("usage.weekTrendTitle")
+      : metric === "cost"
+        ? t("usage.weekTrendCostTitle")
+        : metric === "time"
+          ? t("usage.weekTrendTimeTitle")
+          : t("usage.weekTrendTasksTitle")
+    : metric === "tokens"
       ? t("usage.dayTrendTitle")
       : metric === "cost"
         ? t("usage.dayTrendCostTitle")
@@ -820,7 +1012,7 @@ function TrendSection({
   return (
     <View className="mt-3 px-4 gap-3">
       <View className="rounded-xl border border-border bg-card p-3">
-        <View className="mb-3 flex-row flex-wrap items-center justify-between gap-2">
+        <View className="mb-2 flex-row flex-wrap items-center justify-between gap-2">
           <Text className="text-xs font-medium text-foreground">{title}</Text>
           <View className="flex-row items-center gap-1">
             {METRIC_ORDER.map((m) => (
@@ -833,37 +1025,56 @@ function TrendSection({
             ))}
           </View>
         </View>
+        {/* Which colour is which series. The stack is only readable if the
+            reader can tell input from cache read, and the cost chart's legend
+            is deliberately one entry shorter than the token chart's — the
+            chart itself drops that series (web ChartLegend). */}
+        {trendLegendSegments(metric).length > 0 ? (
+          <View className="mb-2 flex-row flex-wrap items-center gap-2.5">
+            {trendLegendSegments(metric).map((seg) => (
+              <ChartLegendDot key={seg.key} segment={seg} colorScheme={colorScheme} />
+            ))}
+          </View>
+        ) : null}
+        <DimPill
+          allowedDims={allowedDims}
+          value={dim}
+          onChange={onDimChange}
+          className="mb-3"
+        />
 
         {metric === "tokens" ? (
-          <TrendBars
-            rows={dailyTokens.map((d) => ({ date: d.date, label: d.label, value: d.total }))}
+          <StackedTrendBars
+            rows={tokenRows}
             max={maxTokens}
-            color={brand}
+            metric="tokens"
+            colorScheme={colorScheme}
             noDataLabel={t("usage.noData")}
           />
         ) : metric === "cost" ? (
-          <TrendBars
-            rows={dailyCost.map((d) => ({ date: d.date, label: d.label, value: d.total }))}
+          <StackedTrendBars
+            rows={costRows}
             max={maxCost}
-            color={brand}
+            metric="cost"
+            colorScheme={colorScheme}
             noDataLabel={t("usage.noData")}
           />
         ) : metric === "time" ? (
           <TrendBars
-            rows={dailyTime.map((d) => ({ date: d.date, label: d.label, value: d.totalSeconds }))}
+            rows={timeRows.map((d) => ({ date: d.date, label: d.label, value: d.totalSeconds }))}
             max={maxTime}
             color={brand}
             noDataLabel={t("usage.noData")}
           />
         ) : (
-          <TasksStack rows={dailyTasks} max={maxTasks} theme={theme} noDataLabel={t("usage.noData")} />
+          <TasksStack rows={taskRows} max={maxTasks} theme={theme} noDataLabel={t("usage.noData")} />
         )}
       </View>
 
-      {/* Per-day detail rows for the active metric */}
+      {/* Detail rows for the active metric, at the grain on screen */}
       <View className="rounded-xl border border-border bg-card px-3">
         {metric === "tokens"
-          ? dailyTokens.map((d, idx) => (
+          ? tokenRows.map((d, idx) => (
               <View
                 key={d.date}
                 className={cn(
@@ -885,7 +1096,7 @@ function TrendSection({
               </View>
             ))
           : metric === "cost"
-            ? dailyCost.map((d, idx) => (
+            ? costRows.map((d, idx) => (
                 <View
                   key={d.date}
                   className={cn(
@@ -903,8 +1114,8 @@ function TrendSection({
                 </View>
               ))
             : metric === "time"
-              ? dailyTime.map((d, idx) => {
-                const tasksRow = dailyTasks.find((x) => x.date === d.date);
+              ? timeRows.map((d, idx) => {
+                const tasksRow = taskRows.find((x) => x.date === d.date);
                 const taskCount = tasksRow
                   ? tasksRow.completed + tasksRow.failed + tasksRow.cancelled
                   : 0;
@@ -928,7 +1139,7 @@ function TrendSection({
                   </View>
                 );
               })
-            : dailyTasks.map((d, idx) => (
+            : taskRows.map((d, idx) => (
                 <View
                   key={d.date}
                   className={cn(
@@ -943,6 +1154,39 @@ function TrendSection({
                 </View>
               ))}
       </View>
+    </View>
+  );
+}
+
+/**
+ * Daily / Weekly, scoped to the card it sits in. Renders only the dimensions
+ * the page's current range allows, and renders nothing at all when only one
+ * is allowed: a one-option toggle cannot be operated, and the card title
+ * already says which grain is on screen (web DimSegmented).
+ */
+function DimPill({
+  allowedDims,
+  value,
+  onChange,
+  className,
+}: {
+  allowedDims: readonly Dim[];
+  value: Dim;
+  onChange: (d: Dim) => void;
+  className?: string;
+}) {
+  const { t } = useTranslation();
+  if (allowedDims.length < 2) return null;
+  return (
+    <View className={cn("flex-row items-center gap-1", className)}>
+      {allowedDims.map((d) => (
+        <MetricPill
+          key={d}
+          active={value === d}
+          label={t(d === "weekly" ? "usage.dimWeekly" : "usage.dimDaily")}
+          onPress={() => onChange(d)}
+        />
+      ))}
     </View>
   );
 }
@@ -970,6 +1214,125 @@ function MetricPill({
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+/** Colour token → i18n label for the stacked trend legend. */
+const LEGEND_LABEL: Record<StackSegment["key"], string> = {
+  input: "usage.legendInput",
+  output: "usage.legendOutput",
+  cacheRead: "usage.legendCacheRead",
+  cacheWrite: "usage.legendCacheWrite",
+};
+
+/** One legend entry: colour pip + series name, in stack order. */
+function ChartLegendDot({
+  segment,
+  colorScheme,
+}: {
+  segment: StackSegment;
+  colorScheme: "light" | "dark";
+}) {
+  const { t } = useTranslation();
+  const theme = THEME[colorScheme];
+  const color = theme[`chart${segment.chartToken}` as keyof typeof theme] as string;
+  return (
+    <View className="flex-row items-center gap-1">
+      <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: color }} />
+      <Text className="text-[10px] text-muted-foreground">{t(LEGEND_LABEL[segment.key])}</Text>
+    </View>
+  );
+}
+
+/**
+ * Multi-segment stacked bar row for the token and cost trends (iteration 171).
+ *
+ * Web draws these as recharts stacks rather than single bars, because a day's
+ * total says nothing about what it was made of: cache reads can dominate a raw
+ * token count, and a cost total hides whether it came from input or output.
+ * Segment order and colours come from `trendStackSegments`, so the two charts
+ * stay in lockstep with web — including cost's deliberate omission of cache
+ * read, whose dollar contribution is two orders of magnitude too small to see.
+ *
+ * The bar's total height is scaled against the window's largest total, so the
+ * segments keep their proportion to each other and to the other days.
+ */
+function StackedTrendBars({
+  rows,
+  max,
+  metric,
+  colorScheme,
+  noDataLabel,
+}: {
+  /** A daily or weekly bucket carrying its token classes; which of them the
+   *  chart reads is decided by `trendStackSegments(metric)`, not here. */
+  rows: ({ date: string; label: string } & Partial<Record<StackSegment["key"], number>>)[];
+  max: number;
+  metric: string;
+  colorScheme: "light" | "dark";
+  noDataLabel: string;
+}) {
+  const theme = THEME[colorScheme];
+  if (rows.length === 0) {
+    return <Text className="text-xs text-muted-foreground">{noDataLabel}</Text>;
+  }
+  const segments = trendStackSegments(metric);
+  const labelEvery = rows.length > 8 ? 2 : 1;
+  return (
+    <View className="flex-row items-end gap-1.5" style={{ height: CHART_HEIGHT + 22 }}>
+      {rows.map((d, i) => {
+        const parts = segments.map((seg) => ({ seg, value: d[seg.key] ?? 0 }));
+        const total = parts.reduce((sum, p) => sum + p.value, 0);
+        const h = max > 0 ? Math.max((total / max) * CHART_HEIGHT, 2) : 2;
+        // Within the bar, each segment takes its share of the total; a present
+        // but tiny series keeps a 1px sliver so it does not vanish entirely.
+        const heights = parts.map((p) =>
+          total > 0 ? Math.max(Math.round((p.value / total) * h), p.value > 0 ? 1 : 0) : 0,
+        );
+        return (
+          <View key={d.date} className="flex-1 items-center gap-1">
+            <View
+              style={{
+                height: h,
+                width: "100%",
+                maxWidth: 26,
+                borderRadius: 4,
+                overflow: "hidden",
+                backgroundColor: theme.muted,
+                opacity: total > 0 ? 0.9 : 0.15,
+                justifyContent: "flex-end",
+              }}
+            >
+              {/* Reversed: the last segment in stack order sits on top, so the
+                  first (input) renders at the bottom. */}
+              {parts
+                .map((p, idx) => ({ p, idx }))
+                .reverse()
+                .map(({ p, idx }) => (
+                  <View
+                    key={p.seg.key}
+                    style={{
+                      height: heights[idx],
+                      backgroundColor: theme[
+                        `chart${p.seg.chartToken}` as keyof typeof theme
+                      ] as string,
+                    }}
+                  />
+                ))}
+            </View>
+            {i % labelEvery === 0 ? (
+              <Text className="text-[9px] text-muted-foreground" numberOfLines={1}>
+                {d.label}
+              </Text>
+            ) : (
+              <Text className="text-[9px] text-transparent" numberOfLines={1}>
+                ·
+              </Text>
+            )}
+          </View>
+        );
+      })}
+    </View>
   );
 }
 
@@ -1172,10 +1535,13 @@ const LEADERBOARD_SORT_LABEL: Record<LeaderboardMetric, string> = {
 
 function LeaderboardSection({
   rows,
+  deletedAgents,
   agentName,
   colorScheme,
 }: {
   rows: AgentDashboardRow[];
+  /** Distinct agents folded into the deleted bucket — drives the caption. */
+  deletedAgents: number;
   agentName: (agentId: string) => string;
   colorScheme: "light" | "dark";
 }) {
@@ -1185,6 +1551,7 @@ function LeaderboardSection({
   const muted = theme.mutedForeground;
   const less = t("usage.lessThanMinute");
   const [sortBy, setSortBy] = useState<LeaderboardMetric>("tokens");
+  const [showAll, setShowAll] = useState(false);
 
   // Re-rank when the sort metric changes (web parity).
   const sorted = useMemo(() => {
@@ -1193,11 +1560,18 @@ function LeaderboardSection({
   }, [rows, sortBy]);
 
   // Measured across every row so a bar means the same thing in any ranking —
-  // the leader always fills the track (web parity).
+  // the leader always fills the track, and a bar keeps its width when the tail
+  // is expanded rather than re-scaling under the reader (web parity).
   const maxValue = useMemo(() => {
     const metric = LEADERBOARD_METRIC[sortBy];
     return sorted.reduce((m, r) => Math.max(m, metric(r)), 0);
   }, [sorted, sortBy]);
+
+  // Window the ranked tail behind a toggle, and count what the caption names.
+  const view = useMemo(
+    () => leaderboardView(sorted, showAll, deletedAgents),
+    [sorted, showAll, deletedAgents],
+  );
 
   if (rows.length === 0) {
     return (
@@ -1212,20 +1586,43 @@ function LeaderboardSection({
       <View className="rounded-xl border border-border bg-card">
         <View className="flex-row flex-wrap items-center justify-between gap-2 border-b border-border/60 px-3 pt-3 pb-2">
           <Text className="text-xs font-medium text-foreground">
-            {t("usage.leaderboardTab")}
+            {t("usage.leaderboardTitle")}
           </Text>
-          <View className="flex-row items-center gap-1">
-            {(Object.keys(LEADERBOARD_METRIC) as LeaderboardMetric[]).map((m) => (
-              <SortPill
-                key={m}
-                active={sortBy === m}
-                label={t(LEADERBOARD_SORT_LABEL[m])}
-                onPress={() => setSortBy(m)}
-              />
-            ))}
+          <View className="flex-row items-center gap-2">
+            <Text className="text-[10px] text-muted-foreground">
+              {view.deletedCount > 0
+                ? t("usage.leaderboardCaptionDeleted", {
+                    count: view.namedCount,
+                    deleted: view.deletedCount,
+                  })
+                : t("usage.leaderboardCaption", { count: view.namedCount })}
+            </Text>
+            {/* The caption already states how many agents the window covers,
+                so the toggle carries a count only while collapsing — spelling
+                the total out twice reads as two different numbers once the
+                deleted bucket splits the caption (web parity). */}
+            {view.collapsible ? (
+              <Pressable onPress={() => setShowAll((v) => !v)} hitSlop={8}>
+                <Text className="text-[10px] text-muted-foreground underline">
+                  {showAll
+                    ? t("usage.leaderboardShowLess", { count: LEADERBOARD_LIMIT })
+                    : t("usage.leaderboardShowAll")}
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
-        {sorted.map((r, idx) => {
+        <View className="flex-row flex-wrap items-center gap-1 border-b border-border/60 px-3 py-2">
+          {(Object.keys(LEADERBOARD_METRIC) as LeaderboardMetric[]).map((m) => (
+            <SortPill
+              key={m}
+              active={sortBy === m}
+              label={t(LEADERBOARD_SORT_LABEL[m])}
+              onPress={() => setSortBy(m)}
+            />
+          ))}
+        </View>
+        {view.rows.map((r, idx) => {
           const synthetic = isSyntheticAgentRow(r.agentId);
           const deleted = r.agentId === DELETED_AGENTS_ROW_ID;
           const value = LEADERBOARD_METRIC[sortBy](r);
@@ -1335,6 +1732,10 @@ function ErrorsSection({
   days,
   totals,
   dailyErrors,
+  weeklyErrors,
+  allowedDims,
+  dim,
+  onDimChange,
   classRows,
   reasonRows,
   offenderRows,
@@ -1344,6 +1745,10 @@ function ErrorsSection({
   days: number;
   totals: FailureTotals;
   dailyErrors: DailyErrorsRow[];
+  weeklyErrors: WeeklyErrorsRow[];
+  allowedDims: readonly Dim[];
+  dim: Dim;
+  onDimChange: (d: Dim) => void;
   classRows: FailureClassRow[];
   reasonRows: FailureReasonRow[];
   offenderRows: AgentFailureRow[];
@@ -1403,7 +1808,14 @@ function ErrorsSection({
         </View>
       ) : (
         <>
-          <ErrorTrendSection rows={dailyErrors} colorScheme={colorScheme} />
+          <ErrorTrendSection
+            dailyRows={dailyErrors}
+            weeklyRows={weeklyErrors}
+            allowedDims={allowedDims}
+            dim={dim}
+            onDimChange={onDimChange}
+            colorScheme={colorScheme}
+          />
           <ErrorMixCard
             totals={totals}
             classRows={classRows}
@@ -1417,24 +1829,41 @@ function ErrorsSection({
   );
 }
 
-/** Failures over time, on the same per-day bar style as the Trend tab. */
+/** Failures over time, on the same bar style as the Trend tab. The grain is
+ *  card-scoped like the trend card's, and both grains carry the same
+ *  `{ date, label, failed }` reading so one bar renderer serves either. */
 function ErrorTrendSection({
-  rows,
+  dailyRows,
+  weeklyRows,
+  allowedDims,
+  dim,
+  onDimChange,
   colorScheme,
 }: {
-  rows: DailyErrorsRow[];
+  dailyRows: DailyErrorsRow[];
+  weeklyRows: WeeklyErrorsRow[];
+  allowedDims: readonly Dim[];
+  dim: Dim;
+  onDimChange: (d: Dim) => void;
   colorScheme: "light" | "dark";
 }) {
   const { t } = useTranslation();
   const destructive = THEME[colorScheme].destructive;
+  const weekly = dim === "weekly";
+  const rows: { date: string; label: string; failed: number }[] = weekly
+    ? weeklyRows.map((r) => ({ date: r.weekStart, label: r.label, failed: r.failed }))
+    : dailyRows.map((r) => ({ date: r.date, label: r.label, failed: r.failed }));
   const max = rows.reduce((m, r) => Math.max(m, r.failed), 0);
   const labelEvery = rows.length > 8 ? 2 : 1;
 
   return (
     <View className="rounded-xl border border-border bg-card p-3">
-      <Text className="mb-3 text-xs font-medium text-foreground">
-        {t("usage.errors.trendTitle")}
-      </Text>
+      <View className="mb-3 flex-row flex-wrap items-center justify-between gap-2">
+        <Text className="text-xs font-medium text-foreground">
+          {t(weekly ? "usage.errors.weekTrendTitle" : "usage.errors.trendTitle")}
+        </Text>
+        <DimPill allowedDims={allowedDims} value={dim} onChange={onDimChange} />
+      </View>
       {rows.length === 0 ? (
         <Text className="text-xs text-muted-foreground">{t("usage.noData")}</Text>
       ) : (
@@ -1741,6 +2170,7 @@ function OffenderRow({
   colorScheme: "light" | "dark";
 }) {
   const { t } = useTranslation();
+  const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const colors = failureClassColors(THEME[colorScheme].destructive, THEME[colorScheme].card);
   const unresolved = row.agentId === UNRESOLVED_AGENTS_ROW_ID;
 
@@ -1763,15 +2193,35 @@ function OffenderRow({
           )}
         </View>
         <View className="flex-1">
-          <Text
-            className={cn(
-              "text-xs",
-              unresolved ? "italic text-muted-foreground" : "font-medium text-foreground",
-            )}
-            numberOfLines={1}
-          >
-            {name}
-          </Text>
+          {/* A named agent links into its detail page — the drill-down from
+              "this agent is the problem" to the failed runs themselves. An
+              unresolved row has no page to open (the agent is hard-deleted or
+              private to someone else) and no name to show, so it stays inert:
+              rendering the id would leak a bare UUID and, for a private agent,
+              its existence and failure profile to a member who cannot see it
+              (web errors-tab.tsx:530-546). */}
+          {unresolved || !wsSlug ? (
+            <Text
+              className={cn(
+                "text-xs",
+                unresolved ? "italic text-muted-foreground" : "font-medium text-foreground",
+              )}
+              numberOfLines={1}
+            >
+              {name}
+            </Text>
+          ) : (
+            <Link
+              href={`/${wsSlug}/more/agents/${row.agentId}?view=overview`}
+              asChild
+            >
+              <Pressable accessibilityRole="link">
+                <Text className="text-xs font-medium text-foreground" numberOfLines={1}>
+                  {name}
+                </Text>
+              </Pressable>
+            </Link>
+          )}
           <View className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted">
             <View
               style={{

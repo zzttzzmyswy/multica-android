@@ -47,6 +47,7 @@ import { formatDateTime } from "@/lib/autopilot-format";
 import { cn } from "@/lib/utils";
 import {
   type ActivityBucket,
+  agentTaskSourceLabelKey,
   CANCELLABLE_TASK_STATUSES,
   deriveAvgDurationLast30d,
   formatDurationMs,
@@ -321,15 +322,10 @@ function ActivityTaskRow({
   // Row title — trigger summary, else a source label by origin. Chat rows
   // never reach this component (filtered out upstream) so the chat branch is
   // defensive.
+  const sourceKey = agentTaskSourceLabelKey(task);
   const title = task.trigger_summary?.trim()
     ? task.trigger_summary.trim()
-    : hasIssue
-      ? t("agents.activity.issueShort", { prefix: task.issue_id.slice(0, 8) })
-      : task.autopilot_run_id
-        ? t("agents.activity.sourceAutopilot")
-        : task.chat_session_id
-          ? t("agents.activity.sourceChat")
-          : t("agents.activity.sourceUntracked");
+    : t(sourceKey, hasIssue ? { prefix: task.issue_id.slice(0, 8) } : undefined);
 
   // Time line: active rows read as started/dispatched/queued; recent rows
   // show completion plus the run duration when both bounds exist.

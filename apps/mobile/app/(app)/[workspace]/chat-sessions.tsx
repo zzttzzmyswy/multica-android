@@ -11,7 +11,9 @@
  *
  * IM-style list (MYS-449, aligned with web chat-thread-list.tsx): each row is
  * avatar + title + last-message preview + IM timestamp, a red unread *count*
- * badge, and a "typing…" indicator for sessions with an in-flight task. Two
+ * badge, and a "typing…" indicator for sessions with an in-flight task — which
+ * downgrades to a static "waiting" when the agent is definitively offline, so a
+ * queued task on a disconnected agent stops claiming to be typing. Two
  * views toggled locally: history (active chats + footer entry into the
  * archive) and archived (the ONLY place a chat can be hard-deleted — long-
  * press → unarchive + delete, mirroring web's archived view).
@@ -29,10 +31,12 @@ import {
   pendingChatTasksOptions,
   splitChatSessions,
 } from "@/data/queries/chat";
-import { agentListOptions } from "@/data/queries/agents";
+import { agentListAllOptions } from "@/data/queries/agents";
 import { useChatSessionPickerStore } from "@/data/stores/chat-session-picker-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useChatSessionActions } from "@/components/chat/session-actions";
+import { useWorkspacePresenceMap } from "@/lib/use-agent-presence";
+import { deriveChatQueueState } from "@/lib/chat-queue-state";
 import {
   formatChatTime,
   resolveSessionAgentName,
@@ -40,16 +44,24 @@ import {
   unreadBadgeText,
 } from "@/lib/chat-thread-display";
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/lib/i18n/react";
+import { useColorScheme } from "@/lib/use-color-scheme";
+import { THEME } from "@/lib/theme";
+import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 
 export default function ChatSessionsRoute() {
   const { t } = useTranslation();
+  // Subscribes, so a language switch re-renders the row timestamps below.
+  const intlLocale = useIntlLocale();
+  const { colorScheme } = useColorScheme();
+  const muted = THEME[colorScheme].mutedForeground;
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { data: sessions = [] } = useQuery(chatSessionsOptions(wsId));
   const { showActions, renameDialog } = useChatSessionActions();
   // agent_id → display name: unknown ids fall back to a placeholder
   // (MYS-335), and an empty session title falls back to the agent name.
-  const { data: agents = [] } = useQuery(agentListOptions(wsId));
+  // Archived-inclusive, so a session whose agent was retired keeps its name
+  // instead of degrading to the placeholder.
+  const { data: agents = [] } = useQuery(agentListAllOptions(wsId));
   const agentNameById = new Map(agents.map((a) => [a.id, a.name]));
   const activeSessionId = useChatSessionPickerStore((s) => s.activeSessionId);
   const requestSelect = useChatSessionPickerStore((s) => s.requestSelect);
@@ -68,6 +80,11 @@ export default function ChatSessionsRoute() {
     [pending],
   );
 
+  // Presence for every agent at once. The per-agent hook cannot be called from
+  // `renderRow` (it is not a component), and this is the same shape web reads
+  // (`presence.byAgent.get(agent.id)`) — one subscription instead of N.
+  const { byAgent: presenceByAgent } = useWorkspacePresenceMap(wsId);
+
   // Which view is showing. Falls back to history when the archived list
   // drains (last chat unarchived / deleted) so we never strand the user on
   // an empty archive (web behaviour).
@@ -81,6 +98,9 @@ export default function ChatSessionsRoute() {
   const openActions = (session: ChatSession) =>
     showActions(session, {
       archivedView: view === "archived",
+      // Same aggregate the row's "typing…" indicator reads — the menu's
+      // stop-instead-of-archive swap must never disagree with the preview.
+      runningTask: pendingBySessionId.get(session.id) ?? null,
       onDeleted: (dead) => {
         // If we just deleted the active one, the chat tab clears its
         // local activeSessionId via the picker-store request.
@@ -97,8 +117,8 @@ export default function ChatSessionsRoute() {
     const isRunning = pendingBySessionId.has(session.id);
     const last = session.last_message ?? null;
     const timeText = last
-      ? formatChatTime(last.created_at)
-      : formatChatTime(session.updated_at);
+      ? formatChatTime(last.created_at, new Date(), intlLocale)
+      : formatChatTime(session.updated_at, new Date(), intlLocale);
     const titleText =
       session.title?.trim() ||
       (session.agent_id ? (agentNameById.get(session.agent_id) ?? "") : "") ||
@@ -108,9 +128,26 @@ export default function ChatSessionsRoute() {
     // or its name is blank so the existing preview is preserved.
     const agentName = resolveSessionAgentName(session.agent_id, agentNameById);
 
-    // Second line: typing → failed → no_response hint → preview.
+    // Second line: typing/waiting → failed → no_response hint → preview.
+    // Only a definitively offline agent downgrades the indicator; presence that
+    // is still loading keeps the optimistic "typing…" (see chat-queue-state.ts).
+    const queueState = deriveChatQueueState(
+      isRunning,
+      session.agent_id
+        ? presenceByAgent.get(session.agent_id)?.availability
+        : undefined,
+    );
     let preview: React.ReactNode;
-    if (isRunning) {
+    if (queueState === "waiting") {
+      preview = (
+        <View className="flex-row items-center gap-1.5">
+          <Ionicons name="time-outline" size={12} color={muted} />
+          <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+            {t("chat.list.waiting")}
+          </Text>
+        </View>
+      );
+    } else if (queueState === "typing") {
       preview = (
         <Text className="text-xs text-emerald-500" numberOfLines={1}>
           {t("chat.typing")}

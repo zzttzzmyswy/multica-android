@@ -9,8 +9,11 @@ import type { Agent, AgentRuntime, AgentTask } from "@multica/core/types";
 import {
   buildRuntimeMachines,
   buildWorkloadIndex,
+  canAddMachineRuntime,
   filterRuntimeMachines,
+  findMachine,
   formatDeviceInfo,
+  machineRenameTarget,
   machineUpdateRuntime,
   runtimeMachineCounts,
   runtimeRowLabel,
@@ -362,6 +365,120 @@ describe("machineUpdateRuntime", () => {
   });
 });
 
+describe("findMachine", () => {
+  const machines = buildRuntimeMachines(
+    [
+      makeRuntime({ id: "r1", daemon_id: "daemon-1", provider: "claude" }),
+      makeRuntime({ id: "r2", daemon_id: "daemon-1", provider: "codex" }),
+      makeRuntime({
+        id: "c1",
+        daemon_id: null,
+        runtime_mode: "cloud",
+        name: "Claude cloud",
+      }),
+    ],
+    { now: NOW },
+  );
+
+  it("locates a machine by its own id", () => {
+    const target = machines.find((m) => m.runtimes.length === 2)!;
+    expect(findMachine(machines, target.id)?.id).toBe(target.id);
+  });
+
+  it("expands a legacy runtime id to its containing machine", () => {
+    const target = machines.find((m) => m.runtimes.length === 2)!;
+    // Web runtime-detail-page.tsx accepts either id shape on the same route.
+    expect(findMachine(machines, "r2")?.id).toBe(target.id);
+  });
+
+  it("returns null for an unknown locator", () => {
+    expect(findMachine(machines, "nope")).toBeNull();
+  });
+
+  it("does not match a runtime id belonging to another machine", () => {
+    expect(findMachine(machines, "c1")?.runtimes[0]?.id).toBe("c1");
+  });
+});
+
+describe("machineRenameTarget", () => {
+  function machineWith(overrides: Partial<AgentRuntime>[]): ReturnType<typeof buildRuntimeMachines>[number] {
+    return buildRuntimeMachines(
+      overrides.map((o, i) => makeRuntime({ id: `r${i + 1}`, ...o })),
+      { now: NOW },
+    )[0]!;
+  }
+
+  it("uses the machine's shared custom name, not a one-off per-runtime rename", () => {
+    const machine = machineWith([
+      { custom_name: "Build box" },
+      { custom_name: "Build box" },
+    ]);
+    expect(machineRenameTarget(machine, "user-1", true)).toEqual({
+      runtimeId: "r1",
+      currentName: "Build box",
+    });
+  });
+
+  it("reports an empty current name when no shared name is set", () => {
+    const machine = machineWith([{}, { custom_name: "one-off" }]);
+    expect(machineRenameTarget(machine, "user-1", true)?.currentName).toBe("");
+  });
+
+  it("lets an admin rename through any runtime on the machine", () => {
+    const machine = machineWith([{ owner_id: "someone-else" }]);
+    expect(machineRenameTarget(machine, "user-1", true)?.runtimeId).toBe("r1");
+  });
+
+  it("scopes a non-admin to a runtime they own", () => {
+    const machine = machineWith([{ owner_id: "user-2" }, { owner_id: "user-1" }]);
+    expect(machineRenameTarget(machine, "user-1", false)?.runtimeId).toBe("r2");
+  });
+
+  it("returns null for a non-admin who owns nothing on the machine", () => {
+    const machine = machineWith([{ owner_id: "user-2" }]);
+    expect(machineRenameTarget(machine, "user-1", false)).toBeNull();
+  });
+
+  it("returns null for a machine with no runtimes", () => {
+    const empty = buildRuntimeMachines([], {
+      now: NOW,
+      ensureLocalMachine: true,
+      localDaemonId: "daemon-x",
+      localMachineName: "This machine",
+    })[0]!;
+    expect(machineRenameTarget(empty, "user-1", true)).toBeNull();
+  });
+});
+
+describe("canAddMachineRuntime", () => {
+  it("allows an admin on a local machine that has a daemon", () => {
+    const machine = buildRuntimeMachines([makeRuntime()], { now: NOW })[0]!;
+    expect(canAddMachineRuntime(machine, true)).toBe(true);
+  });
+
+  it("refuses a non-admin viewer", () => {
+    const machine = buildRuntimeMachines([makeRuntime()], { now: NOW })[0]!;
+    expect(canAddMachineRuntime(machine, false)).toBe(false);
+  });
+
+  it("refuses cloud machines — a custom profile needs a local daemon", () => {
+    const machine = buildRuntimeMachines(
+      [makeRuntime({ daemon_id: null, runtime_mode: "cloud", name: "Claude cloud" })],
+      { now: NOW },
+    )[0]!;
+    expect(canAddMachineRuntime(machine, true)).toBe(false);
+  });
+
+  it("refuses a daemon-less placeholder machine", () => {
+    const machine = buildRuntimeMachines([], {
+      now: NOW,
+      ensureLocalMachine: true,
+      localMachineName: "This machine",
+    })[0]!;
+    expect(canAddMachineRuntime(machine, true)).toBe(false);
+  });
+});
+
 describe("buildWorkloadIndex", () => {
   const agents: Agent[] = [
     {
@@ -397,7 +514,32 @@ describe("buildWorkloadIndex", () => {
 
   it("sums running/queued per runtime, skipping archived agents", () => {
     const index = buildWorkloadIndex(agents, tasks);
-    expect(index.get("r1")).toEqual({ runningCount: 1, queuedCount: 2 });
+    expect(index.get("r1")).toEqual({
+      agentIds: ["a1", "a2"],
+      runningCount: 1,
+      queuedCount: 2,
+    });
     expect(index.has("r9")).toBe(false);
+  });
+
+  it("lists the agents serving each runtime in server order", () => {
+    // Iteration 167: the machine-detail row renders web's avatar stack, which
+    // is driven by `workload.agentIds` — same shape web's buildWorkloadIndex
+    // returns, so both surfaces count the same agents. Archived agents keep
+    // their runtime_id but are retired and must not pad the stack.
+    const index = buildWorkloadIndex(agents, []);
+    expect(index.get("r1")?.agentIds).toEqual(["a1", "a2"]);
+    expect(index.get("r9")).toBeUndefined();
+  });
+
+  it("keeps a runtime with bound agents but no tasks in the index", () => {
+    // The avatar stack is the whole point of the entry — a runtime whose
+    // agents are all idle still needs one.
+    const index = buildWorkloadIndex(agents, []);
+    expect(index.get("r1")).toEqual({
+      agentIds: ["a1", "a2"],
+      runningCount: 0,
+      queuedCount: 0,
+    });
   });
 });

@@ -36,6 +36,7 @@ import type {
   TaskDispatchPayload,
 } from "@multica/core/types";
 import { chatKeys, sortChatSessions } from "@/data/queries/chat";
+import type { ChatQuickActionsPendingState } from "@/lib/chat-quick-actions";
 
 // =====================================================
 // Sessions list (ChatSession[] keyed by wsId)
@@ -219,6 +220,14 @@ export async function applyChatQuickActionsToCache(
       old?.map((m) =>
         m.id === payload.message_id ? { ...m, quick_actions: actions } : m,
       ),
+  );
+  // Resolve the pending marker — but only when it belongs to THIS message: a
+  // late supplement for turn N must not clear the marker that turn N+1's
+  // chat:done just raised. Mirrors web's `applyChatQuickActionsToCache`.
+  qc.setQueryData<ChatQuickActionsPendingState | null>(
+    chatKeys.quickActionsPending(payload.chat_session_id),
+    (current) =>
+      current && current.message_id !== payload.message_id ? current : null,
   );
 }
 

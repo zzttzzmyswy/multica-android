@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { api } from "@/data/api";
+import { disconnectTarget } from "@/lib/integration-bind";
 
 // External-channel installs (iteration-98 / A14) — Lark / Slack / DingTalk /
 // WeCom per-agent bindings. Mirrors packages/core/{lark,slack,dingtalk,wecom}/
@@ -72,10 +73,11 @@ export interface ChannelListing<T> {
  *  gates NEW installs only — an already-bound agent still renders its connected
  *  card, so an unbound agent with install_supported=false surfaces "coming soon".
  *  `activeInstall` is the first ACTIVE installation bound to `agentId` (revoked
- *  rows are kept for audit but never render as connected). Each flag defaults to
- *  the safe read-only value when an older backend omits it. */
+ *  rows are kept for audit but never render as connected) — the same pick the
+ *  card's Disconnect action revokes, so the two cannot disagree. Each flag
+ *  defaults to the safe read-only value when an older backend omits it. */
 export function channelState<
-  T extends { agent_id: string; status: string },
+  T extends { id: string; agent_id: string; status: string },
 >(
   listing: ChannelListing<T> | undefined,
   agentId: string,
@@ -87,9 +89,6 @@ export function channelState<
   return {
     configured: listing?.configured === true,
     installSupported: listing?.install_supported === true,
-    activeInstall:
-      listing?.installations.find(
-        (inst) => inst.agent_id === agentId && inst.status === "active",
-      ) ?? null,
+    activeInstall: disconnectTarget(listing?.installations, agentId),
   };
 }

@@ -147,9 +147,17 @@ export function Markdown({
   );
 
   const segments = useMemo(() => {
-    const processed = preprocessMobileMarkdown(content);
+    // `appOrigin` turns a bare link to an issue/project on THIS deployment into
+    // the mention transport, so it navigates in-app instead of opening a
+    // browser tab that has no session. The origin is read here rather than
+    // inside the preprocessor because it is runtime config (a self-hosted
+    // server can be switched mid-session) — the memo re-runs when it changes.
+    const processed = preprocessMobileMarkdown(content, {
+      appOrigin: getWebBaseUrl() || getDisplayBaseUrl(),
+      currentSlug: wsSlug,
+    });
     return splitMarkdown(processed);
-  }, [content]);
+  }, [content, wsSlug]);
 
   const onLinkPress = useCallback(
     ({ url }: { url: string }) => {

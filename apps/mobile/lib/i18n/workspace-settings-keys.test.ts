@@ -33,15 +33,17 @@ describe("workspace settings i18n", () => {
     "workspaceSettings.nameRequired": "名称不能为空",
     "workspaceSettings.description": "描述",
     "workspaceSettings.descriptionPlaceholder": "添加简短描述…",
+    "workspaceSettings.context": "上下文",
+    "workspaceSettings.contextPlaceholder": "供工作区中的智能体参考的背景信息和上下文",
     "workspaceSettings.save": "保存",
     "workspaceSettings.saving": "保存中…",
     "workspaceSettings.info": "工作区信息",
     "workspaceSettings.slug": "标识",
-    "workspaceSettings.issuePrefix": "问题前缀",
+    "workspaceSettings.issuePrefix": "任务前缀",
     "workspaceSettings.createdAt": "创建时间",
     "workspaceSettings.dangerZone": "危险区",
     "workspaceSettings.leaveTitle": "退出工作区",
-    "workspaceSettings.leaveConfirmTitle": "退出「{{name}}」？",
+    "workspaceSettings.leaveConfirmTitle": "退出\"{{name}}\"？",
     "workspaceSettings.leaveButton": "退出",
     "workspaceSettings.leaving": "退出中…",
     "workspaceSettings.leaveFailed": "退出工作区失败",
@@ -69,7 +71,7 @@ describe("workspace settings i18n", () => {
     mod.setLocale("zh");
     expect(
       mod.translate("workspaceSettings.leaveConfirmTitle", { name: "Acme" }),
-    ).toBe("退出「Acme」？");
+    ).toBe("退出\"Acme\"？");
     mod.setLocale("en");
     expect(
       mod.translate("workspaceSettings.leaveConfirmTitle", { name: "Acme" }),

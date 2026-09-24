@@ -13,13 +13,20 @@
  * 375pt screen sees ~3 columns worth of lanes.
  */
 import { Pressable, View } from "react-native";
+import type {
+  AccessibilityActionEvent,
+  AccessibilityActionInfo,
+  GestureResponderEvent,
+} from "react-native";
 import type { Issue } from "@multica/core/types";
+import { isPastDateOnly } from "@multica/core/issues/date";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PriorityIcon } from "@/components/ui/priority-icon";
 import { useStatusLabel } from "@/lib/status-options";
 import { translate } from "@/lib/i18n";
 import { CustomStatusChip } from "./custom-status-chip";
+import { IssueAgentActivityIndicator } from "./issue-agent-activity-indicator";
 
 /** Column width in pt — ~1.6 lanes visible on a 375pt phone. */
 export const BOARD_COLUMN_WIDTH = 272;
@@ -32,10 +39,37 @@ export function BoardCard({
   issue,
   onPress,
   onLongPress,
+  onPressOut,
+  lifted = false,
+  dimmed = false,
+  accessibilityHint,
+  accessibilityActions,
+  onAccessibilityAction,
 }: {
   issue: Issue;
   onPress: () => void;
-  onLongPress?: () => void;
+  /** Carries the responder event: the board's drag reads the touch's window
+   *  coordinates off it to place the lifted card under the finger. */
+  onLongPress?: (event: GestureResponderEvent) => void;
+  /** Only used by the drag: a long-press released without the board ever
+   *  taking the responder is the status sheet's gesture. */
+  onPressOut?: () => void;
+  /** Rendered as the drag overlay rather than as a lane card. */
+  lifted?: boolean;
+  /**
+   * The card is lifted off the board and follows the finger as an overlay.
+   * Its lane row stays mounted — dimmed and dashed — because that row's
+   * Pressable is what owns the gesture until the board takes it over; see the
+   * `onPressOut` note in board-view.tsx.
+   */
+  dimmed?: boolean;
+  /** Says how a screen reader reaches what the drag does with a finger. */
+  accessibilityHint?: string;
+  /** The board's drag owns the pointer gesture, which a screen reader cannot
+   *  perform — the status sheet stays reachable through an accessibility
+   *  action instead. */
+  accessibilityActions?: AccessibilityActionInfo[];
+  onAccessibilityAction?: (actionName: string) => void;
 }) {
   const labels = issue.labels ?? [];
   const statusLabel = useStatusLabel();
@@ -48,13 +82,31 @@ export function BoardCard({
     : hasStart
       ? "issues.cardStart"
       : null;
+  // Web paints a past due date in `text-destructive` on its board card; the
+  // start date never turns (web's `isPastDateOnly` guard is due-date only).
+  const overdue = hasDue && isPastDateOnly(issue.due_date);
 
   return (
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
+      onPressOut={onPressOut}
       delayLongPress={350}
-      className="rounded-lg border border-border bg-card px-3 py-2.5 active:bg-secondary"
+      accessibilityHint={accessibilityHint}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={
+        onAccessibilityAction
+          ? (e: AccessibilityActionEvent) =>
+              onAccessibilityAction(e.nativeEvent.actionName)
+          : undefined
+      }
+      className={`rounded-lg border bg-card px-3 py-2.5 ${
+        lifted
+          ? "border-border shadow-lg"
+          : dimmed
+            ? "border-dashed border-border/70 opacity-40"
+            : "border-border active:bg-secondary"
+      }`}
       accessibilityRole="button"
       accessibilityLabel={`${issue.title}${issue.status ? `, ${statusLabel(issue.status)}` : ""}`}
     >
@@ -98,20 +150,27 @@ export function BoardCard({
 
       <View className="mt-2 flex-row items-center justify-between">
         {dateKey ? (
-          <Text className="text-[11px] text-muted-foreground">
+          <Text
+            className={`text-[11px] ${
+              overdue ? "text-destructive" : "text-muted-foreground"
+            }`}
+          >
             {translate(dateKey)}{" "}
             {formatDayOnly(hasDue ? issue.due_date! : issue.start_date!)}
           </Text>
         ) : (
           <View />
         )}
-        {issue.assignee_type && issue.assignee_id ? (
-          <ActorAvatar
-            type={issue.assignee_type}
-            id={issue.assignee_id}
-            size={20}
-          />
-        ) : null}
+        <View className="flex-row items-center gap-1.5">
+          <IssueAgentActivityIndicator issueId={issue.id} ringClassName="bg-card" />
+          {issue.assignee_type && issue.assignee_id ? (
+            <ActorAvatar
+              type={issue.assignee_type}
+              id={issue.assignee_id}
+              size={20}
+            />
+          ) : null}
+        </View>
       </View>
     </Pressable>
   );

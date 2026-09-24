@@ -20,6 +20,7 @@ import type {
   AgentBuilderSession,
   AgentBuilderSessionSummary,
   AgentEnvResponse,
+  AgentRunCount,
   AgentTask,
   Attachment,
   Autopilot,
@@ -52,6 +53,7 @@ import type {
   GitHubInstallation,
   GitHubRepository,
   InboxItem,
+  InboxWorkspaceUnread,
   Invitation,
   Issue,
   IssueLabelsResponse,
@@ -60,6 +62,8 @@ import type {
   IssueProperty,
   IssuePropertyValue,
   IssueSubscriber,
+  IssueTableGroupsRequest,
+  IssueTableGroupsResponse,
   Label,
   LabelResourceType,
   IssueReaction,
@@ -70,10 +74,18 @@ import type {
   ListVCSConnectionsResponse,
   ConnectVCSRequest,
   ConnectVCSResponse,
+  BeginLarkInstallResponse,
+  LarkInstallStatusResponse,
   ListLarkInstallationsResponse,
   ListSlackInstallationsResponse,
   ListDingTalkInstallationsResponse,
   ListWecomInstallationsResponse,
+  RegisterSlackBYORequest,
+  RegisterDingTalkBYORequest,
+  RegisterWecomBYORequest,
+  SlackInstallation,
+  DingTalkInstallation,
+  WecomInstallation,
   ListIssuesParams,
   ListIssuesResponse,
   ListLabelsResponse,
@@ -99,6 +111,7 @@ import type {
   RuntimeProfile,
   RuntimeUsage,
   RuntimeUsageByAgent,
+  RuntimeModelListRequest,
   CreateRuntimeProfileRequest,
   UpdateRuntimeProfileRequest,
   DashboardAgentRunTime,
@@ -115,6 +128,8 @@ import type {
   RuntimeLocalSkillListRequest,
   RuntimeLocalSkillsResult,
   RuntimeLocalSkillSummary,
+  CreateRuntimeLocalSkillImportRequest,
+  RuntimeLocalSkillImportRequest,
   DisabledRuntimeSkill,
   Skill,
   SkillSummary,
@@ -133,6 +148,7 @@ import type {
   RemoveSquadMemberRequest,
   TaskMessagePayload,
   TimelineEntry,
+  MoveIssueRequest,
   UpdateAgentEnvRequest,
   UpdateAgentRequest,
   UpdateAutopilotRequest,
@@ -141,6 +157,7 @@ import type {
   UpdateLabelRequest,
   UpdateMeRequest,
   UpdateProjectRequest,
+  UpdateProjectResourceRequest,
   UpdatePropertyRequest,
   UpdateIssueStatusRequest,
   IssueStatusCategory,
@@ -184,6 +201,7 @@ import {
   EMPTY_LIST_AUTOPILOTS_RESPONSE,
   EMPTY_LIST_GITHUB_INSTALLATIONS_RESPONSE,
   EMPTY_LIST_GITHUB_REPOSITORIES_RESPONSE,
+  EMPTY_ISSUE_TABLE_GROUPS_RESPONSE,
   EMPTY_LIST_ISSUES_RESPONSE,
   EMPTY_LIST_PROPERTIES_RESPONSE,
   EMPTY_LIST_QUICK_ACTIONS_RESPONSE,
@@ -197,6 +215,7 @@ import {
   IssuePropertiesResponseSchema,
   IssuePropertySchema,
   IssueSchema,
+  IssueTableGroupsResponseSchema,
   IssueViewListSchema,
   IssueViewPreferenceSchema,
   IssueViewSchema,
@@ -213,7 +232,14 @@ import {
   WorkspaceSubscriptionPricesSchema,
   WorkspaceSubscriptionSeatReconcileResultSchema,
   WorkspaceSubscriptionSummarySchema,
+  RuntimeModelListRequestSchema,
+  MALFORMED_RUNTIME_MODEL_LIST_REQUEST,
   agentBuilderRuntimeSwitchFallback,
+  // Cross-workspace unread summary. Taken from core rather than mirrored into
+  // data/schemas.ts: core already owns this endpoint's schema for web, and a
+  // second copy is exactly the drift the shared-module rule exists to prevent.
+  InboxUnreadSummarySchema,
+  EMPTY_INBOX_UNREAD_SUMMARY,
 } from "@multica/core/api/schemas";
 import type {
   CreateIssueViewRequest,
@@ -237,6 +263,7 @@ import {
   AttachmentListSchema,
   AttachmentSchema,
   ChatMessageListSchema,
+  ChatMessagesPageSchema,
   CommentSchema,
   ChatPendingTaskSchema,
   ChatSessionListSchema,
@@ -268,6 +295,7 @@ import {
   EMPTY_AUTOPILOT_TRIGGER,
   EMPTY_ATTACHMENT_LIST,
   EMPTY_CHAT_MESSAGE_LIST,
+  EMPTY_CHAT_MESSAGES_PAGE,
   EMPTY_CHAT_PENDING_TASK,
   EMPTY_CHAT_SESSION_LIST,
   EMPTY_CHILD_ISSUES_RESPONSE,
@@ -356,6 +384,16 @@ import {
   EMPTY_LIST_DINGTALK_INSTALLATIONS_RESPONSE,
   ListWecomInstallationsResponseSchema,
   EMPTY_LIST_WECOM_INSTALLATIONS_RESPONSE,
+  BeginLarkInstallResponseSchema,
+  EMPTY_BEGIN_LARK_INSTALL_RESPONSE,
+  LarkInstallStatusResponseSchema,
+  EMPTY_LARK_INSTALL_STATUS_RESPONSE,
+  SlackInstallationSchema,
+  EMPTY_SLACK_INSTALLATION,
+  DingTalkInstallationSchema,
+  EMPTY_DINGTALK_INSTALLATION,
+  WecomInstallationSchema,
+  EMPTY_WECOM_INSTALLATION,
   ResourceLabelsResponseSchema,
   EMPTY_RESOURCE_LABELS_RESPONSE,
   IssueStatusEntrySchema,
@@ -380,6 +418,8 @@ import {
   EMPTY_APP_CONFIG,
   AgentActivityBucketListSchema,
   EMPTY_AGENT_ACTIVITY_BUCKET_LIST,
+  AgentRunCountListSchema,
+  EMPTY_AGENT_RUN_COUNT_LIST,
   CreateFeedbackResponseSchema,
   EMPTY_FEEDBACK_RESPONSE,
   CommentTriggerPreviewSchema,
@@ -388,6 +428,8 @@ import {
 import type { ZodType } from "zod";
 import type { AppConfigResponse, CancelAgentTasksResponse } from "./schemas";
 import type {
+  ChatMessagesCursor,
+  ChatMessagesPage,
   CreateFeedbackInput,
   CreateFeedbackResponse,
 } from "./schemas";
@@ -459,6 +501,13 @@ const MAX_FILE_SIZE = 100 * 1024 * 1024;
  *  reasonable Multica payload size on cellular. */
 const FETCH_TIMEOUT_MS = 30_000;
 
+/** Messages per page when walking a chat session's history backwards.
+ *  Mirrors web's `chatMessagesPageOptions` default (`packages/core/chat/
+ *  queries.ts:144`, `limit = 50`) and the server's own default
+ *  (`server/internal/handler/chat.go:990`) — the three must agree or the
+ *  first paint and every follow-up page would show different window sizes. */
+const CHAT_MESSAGES_PAGE_LIMIT = 50;
+
 export class ApiError extends Error {
   readonly status: number;
   readonly body?: unknown;
@@ -501,15 +550,26 @@ export class DownloadCancelledError extends Error {
 }
 
 /** Build the query string for a dashboard rollup: ?days= plus an optional
- *  ?project_id= (iteration-87 page-scoped project filter). A null/undefined
- *  projectId keeps the URL byte-identical to the whole-workspace shape. */
+ *  ?project_id= (iteration-87 page-scoped project filter) and the viewer's
+ *  ?tz= (iteration 169).
+ *
+ *  `tz` is what the server slices every day bucket on, so a rollup fetched
+ *  without one comes back bucketed in UTC — a different answer from the one
+ *  web shows for the same account, and the reason it is a required argument
+ *  rather than an optional one. Mirrors packages/core/dashboard/queries.ts,
+ *  where `tz` is threaded into every rollup and into every query key. A
+ *  null/undefined projectId keeps the URL byte-identical to the
+ *  whole-workspace shape. */
 function dashboardRollupUrl(
   path: string,
   days: number,
-  projectId?: string | null,
+  projectId: string | null | undefined,
+  tz: string,
 ): string {
-  if (!projectId) return `${path}?days=${days}`;
-  return `${path}?days=${days}&project_id=${projectId}`;
+  const base = `${path}?days=${days}`;
+  const scoped = projectId ? `${base}&project_id=${projectId}` : base;
+  if (!tz) return scoped;
+  return `${scoped}&tz=${encodeURIComponent(tz)}`;
 }
 
 export interface ApiClientOptions {
@@ -552,7 +612,7 @@ class ApiClient {
       "Content-Type": "application/json",
       "X-Client-Platform": "mobile",
       "X-Client-OS": "ios",
-      "X-Client-Version": "0.1.0",
+      "X-Client-Version": "0.6.5",
       "X-Request-ID": rid,
       ...((init.headers as Record<string, string>) ?? {}),
     };
@@ -617,7 +677,19 @@ class ApiClient {
           undefined,
         );
       }
-      throw err;
+      // A caller-side abort is a deliberate cancellation, not a failure —
+      // propagate it untouched so query cancellation keeps its semantics.
+      if (callerSignal?.aborted) throw err;
+      // Everything else here is RN's fetch rejecting before any response
+      // existed (offline, DNS failure, TLS refusal, unreachable host).
+      // Normalise it to status 0 so callers get one shape for "the request
+      // never reached a server", matching the timeout above and letting
+      // lib/auth-error classify it as a connection failure.
+      console.warn(`[api] ← NETWORK FAIL ${path}`, {
+        rid,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw new ApiError("Network request failed", 0, undefined);
     }
     clearTimeout(timeoutId);
     callerSignal?.removeEventListener("abort", onCallerAbort);
@@ -637,10 +709,20 @@ class ApiClient {
       } catch {
         body = undefined;
       }
+      // The server's error envelope is `{"error": "..."}` (writeError /
+      // writeErrorCode in server/internal/handler/handler.go:467-477).
+      // Reading only `message` left every failure rendering as a bare status
+      // — "400 " with an empty statusText over HTTP/2 — so the handler's
+      // actual sentence never reached the user. `message` is still checked
+      // first for any endpoint that returns that shape instead.
+      const bodyRecord =
+        body && typeof body === "object" ? (body as Record<string, unknown>) : null;
       const message =
-        (body && typeof body === "object" && "message" in body
-          ? String((body as { message: unknown }).message)
-          : null) ?? `${res.status} ${res.statusText}`;
+        (bodyRecord && typeof bodyRecord.message === "string"
+          ? bodyRecord.message
+          : null) ??
+        (bodyRecord && typeof bodyRecord.error === "string" ? bodyRecord.error : null) ??
+        (res.statusText ? `${res.status} ${res.statusText}` : `HTTP ${res.status}`);
 
       const level = res.status === 404 ? "warn" : "error";
       console[level](`[api] ← ${res.status} ${path}`, {
@@ -878,6 +960,26 @@ class ApiClient {
 
   async markInboxUnread(id: string): Promise<InboxItem> {
     return this.fetch<InboxItem>(`/api/inbox/${id}/unread`, { method: "POST" });
+  }
+
+  // Cross-workspace unread summary — account-level, not workspace-scoped:
+  // one entry per workspace the user belongs to that has unread items. Backs
+  // the workspace-switcher dot for workspaces OTHER than the active one.
+  // Mirrors web's api.getInboxUnreadSummary (packages/core/api/client.ts:2177).
+  // Schema-guarded like listInbox: a contract drift hides the dot instead of
+  // taking down every screen that renders the workspace shell.
+  async getInboxUnreadSummary(opts?: {
+    signal?: AbortSignal;
+  }): Promise<InboxWorkspaceUnread[]> {
+    const raw = await this.fetch<unknown>("/api/inbox/unread-summary", {
+      signal: opts?.signal,
+    });
+    return parseWithFallback(
+      raw,
+      InboxUnreadSummarySchema,
+      EMPTY_INBOX_UNREAD_SUMMARY,
+      { endpoint: "getInboxUnreadSummary" },
+    );
   }
 
   // Archived notifications, backing the inbox's "Archived" sub-view. Capped
@@ -1197,6 +1299,31 @@ class ApiClient {
     );
   }
 
+  // Runtime local-skill IMPORT (web core runtimes/local-skills.ts:56-93).
+  // Same POST-then-poll shape as discovery, but a much longer budget: old
+  // daemons pop one queued import per heartbeat (~15s), so a batch's tail can
+  // wait minutes before it is even claimed. The server-side invariant is that
+  // this budget must exceed runtimeLocalSkillPendingTimeout +
+  // runtimeLocalSkillRunningTimeout.
+  async initiateImportLocalSkill(
+    runtimeId: string,
+    data: CreateRuntimeLocalSkillImportRequest,
+  ): Promise<RuntimeLocalSkillImportRequest> {
+    return this.fetch<RuntimeLocalSkillImportRequest>(
+      `/api/runtimes/${runtimeId}/local-skills/import`,
+      { method: "POST", body: JSON.stringify(data) },
+    );
+  }
+
+  async getImportLocalSkillResult(
+    runtimeId: string,
+    requestId: string,
+  ): Promise<RuntimeLocalSkillImportRequest> {
+    return this.fetch<RuntimeLocalSkillImportRequest>(
+      `/api/runtimes/${runtimeId}/local-skills/import/${requestId}`,
+    );
+  }
+
   // Agent-builders: creation conversations (web Creation Studio). Mirrors
   // packages/core/api/client.ts:1262-1339. The first POST creates the hidden
   // carrier session; GET lists the caller's unfinished ones (404 on an older
@@ -1271,6 +1398,46 @@ class ApiClient {
     return parseWithFallback(raw, RuntimeListSchema, EMPTY_RUNTIME_LIST, {
       endpoint: "listRuntimes",
     });
+  }
+
+  // Runtime model discovery (iteration-121 agent-create model picker).
+  // Mirrors packages/core/api/client.ts initiateListModels/getListModelsResult:
+  // POST kicks the daemon (heartbeat piggyback), GET /:requestId polls the
+  // record; the state machine itself lives in lib/runtime-models-poll.ts.
+  // A drift response degrades to the MALFORMED record (status "failed"),
+  // which the form surfaces as discovery-failure + manual entry instead of a
+  // fabricated empty catalog.
+  async initiateListModels(
+    runtimeId: string,
+  ): Promise<RuntimeModelListRequest> {
+    const raw = await this.fetch<unknown>(`/api/runtimes/${runtimeId}/models`, {
+      method: "POST",
+    });
+    return parseWithFallback<RuntimeModelListRequest>(
+      raw,
+      RuntimeModelListRequestSchema,
+      { ...MALFORMED_RUNTIME_MODEL_LIST_REQUEST, runtime_id: runtimeId },
+      { endpoint: "POST /api/runtimes/{id}/models" },
+    );
+  }
+
+  async getListModelsResult(
+    runtimeId: string,
+    requestId: string,
+  ): Promise<RuntimeModelListRequest> {
+    const raw = await this.fetch<unknown>(
+      `/api/runtimes/${runtimeId}/models/${requestId}`,
+    );
+    return parseWithFallback<RuntimeModelListRequest>(
+      raw,
+      RuntimeModelListRequestSchema,
+      {
+        ...MALFORMED_RUNTIME_MODEL_LIST_REQUEST,
+        id: requestId,
+        runtime_id: runtimeId,
+      },
+      { endpoint: "GET /api/runtimes/{id}/models/{requestId}" },
+    );
   }
 
   // Runtime-level usage rollups (iteration-93 runtime detail usage section).
@@ -1622,6 +1789,18 @@ class ApiClient {
     );
   }
 
+  /** Revoke a GitHub App installation — mirrors web's
+   *  `api.deleteGitHubInstallation` (packages/core/api/client.ts:3723). */
+  async deleteGitHubInstallation(
+    workspaceId: string,
+    installationId: string,
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/workspaces/${workspaceId}/github/installations/${installationId}`,
+      { method: "DELETE" },
+    );
+  }
+
   // VCS integration (iteration-59) — self-hosted Git providers (Forgejo /
   // Gitea / GitLab). Mirrors packages/core/api/client.ts:3741-3770. Unlike
   // GitHub there is no App/installation model: each workspace stores a
@@ -1739,6 +1918,140 @@ class ApiClient {
       ListWecomInstallationsResponseSchema,
       EMPTY_LIST_WECOM_INSTALLATIONS_RESPONSE,
       { endpoint: "listWecomInstallations" },
+    );
+  }
+
+  // Write half of the per-agent channel bindings (iteration 170): the four
+  // bind paths + their disconnects. Mirrors packages/core/api/client.ts
+  // 3775-3998 one-for-one, so a call that works from web works from here.
+  //
+  // Lark binds through a device flow (begin → poll → success) rather than a
+  // token paste, so its two reads are separate calls; the other three are
+  // bring-your-own-app, where the admin pastes credentials they created in
+  // the vendor console and the server validates + persists them.
+
+  /** Open a Lark device-flow session against the chosen cloud. `region` is
+   *  required rather than defaulted because the backend POSTs `begin` to
+   *  accounts.feishu.cn or accounts.larksuite.com accordingly — defaulting
+   *  would silently hand a Lark user a Feishu QR (client.ts:3780-3788). */
+  async beginLarkInstall(
+    workspaceId: string,
+    agentId: string,
+    region: "feishu" | "lark",
+  ): Promise<BeginLarkInstallResponse> {
+    const search = new URLSearchParams({ agent_id: agentId, region });
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/lark/install/begin?${search.toString()}`,
+      { method: "POST" },
+    );
+    return parseWithFallback(
+      raw,
+      BeginLarkInstallResponseSchema,
+      EMPTY_BEGIN_LARK_INSTALL_RESPONSE,
+      { endpoint: "beginLarkInstall" },
+    );
+  }
+
+  async getLarkInstallStatus(
+    workspaceId: string,
+    sessionId: string,
+  ): Promise<LarkInstallStatusResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/lark/install/${sessionId}/status`,
+    );
+    return parseWithFallback(
+      raw,
+      LarkInstallStatusResponseSchema,
+      EMPTY_LARK_INSTALL_STATUS_RESPONSE,
+      { endpoint: "getLarkInstallStatus" },
+    );
+  }
+
+  async deleteLarkInstallation(
+    workspaceId: string,
+    installationId: string,
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/workspaces/${workspaceId}/lark/installations/${installationId}`,
+      { method: "DELETE" },
+    );
+  }
+
+  async registerSlackBYO(
+    workspaceId: string,
+    agentId: string,
+    body: RegisterSlackBYORequest,
+  ): Promise<SlackInstallation> {
+    const search = new URLSearchParams({ agent_id: agentId });
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/slack/install/byo?${search.toString()}`,
+      { method: "POST", body: JSON.stringify(body) },
+    );
+    return parseWithFallback(raw, SlackInstallationSchema, EMPTY_SLACK_INSTALLATION, {
+      endpoint: "registerSlackBYO",
+    });
+  }
+
+  async deleteSlackInstallation(
+    workspaceId: string,
+    installationId: string,
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/workspaces/${workspaceId}/slack/installations/${installationId}`,
+      { method: "DELETE" },
+    );
+  }
+
+  async registerDingTalkBYO(
+    workspaceId: string,
+    agentId: string,
+    body: RegisterDingTalkBYORequest,
+  ): Promise<DingTalkInstallation> {
+    const search = new URLSearchParams({ agent_id: agentId });
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/dingtalk/install/byo?${search.toString()}`,
+      { method: "POST", body: JSON.stringify(body) },
+    );
+    return parseWithFallback(
+      raw,
+      DingTalkInstallationSchema,
+      EMPTY_DINGTALK_INSTALLATION,
+      { endpoint: "registerDingTalkBYO" },
+    );
+  }
+
+  async deleteDingTalkInstallation(
+    workspaceId: string,
+    installationId: string,
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/workspaces/${workspaceId}/dingtalk/installations/${installationId}`,
+      { method: "DELETE" },
+    );
+  }
+
+  async registerWecomBYO(
+    workspaceId: string,
+    agentId: string,
+    body: RegisterWecomBYORequest,
+  ): Promise<WecomInstallation> {
+    const search = new URLSearchParams({ agent_id: agentId });
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/wecom/install/byo?${search.toString()}`,
+      { method: "POST", body: JSON.stringify(body) },
+    );
+    return parseWithFallback(raw, WecomInstallationSchema, EMPTY_WECOM_INSTALLATION, {
+      endpoint: "registerWecomBYO",
+    });
+  }
+
+  async deleteWecomInstallation(
+    workspaceId: string,
+    installationId: string,
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/workspaces/${workspaceId}/wecom/installations/${installationId}`,
+      { method: "DELETE" },
     );
   }
 
@@ -1916,14 +2229,17 @@ class ApiClient {
   // Workspace usage rollups — mirror packages/core/dashboard queries. Workspace
   // is resolved by the X-Workspace-Slug header (fetch adds it); the 30s
   // in-flight cap applies like every other route. Parsing degrades a drift
-  // response to [] so a changed backend never crashes the page.
+  // response to [] so a changed backend never crashes the page. `tz` is the
+  // viewer's zone (iteration 169) — the server slices each day bucket on it,
+  // so omitting it silently answers a different question than web's page.
   async getDashboardUsageDaily(
     days: number,
-    projectId?: string | null,
+    projectId: string | null,
+    tz: string,
     opts?: { signal?: AbortSignal },
   ): Promise<DashboardUsageDaily[]> {
     const raw = await this.fetch<unknown>(
-      dashboardRollupUrl("/api/dashboard/usage/daily", days, projectId),
+      dashboardRollupUrl("/api/dashboard/usage/daily", days, projectId, tz),
       {
         signal: opts?.signal,
       },
@@ -1938,11 +2254,12 @@ class ApiClient {
 
   async getDashboardUsageByAgent(
     days: number,
-    projectId?: string | null,
+    projectId: string | null,
+    tz: string,
     opts?: { signal?: AbortSignal },
   ): Promise<DashboardUsageByAgent[]> {
     const raw = await this.fetch<unknown>(
-      dashboardRollupUrl("/api/dashboard/usage/by-agent", days, projectId),
+      dashboardRollupUrl("/api/dashboard/usage/by-agent", days, projectId, tz),
       {
         signal: opts?.signal,
       },
@@ -1961,11 +2278,12 @@ class ApiClient {
   // degrades to [] so the Errors view renders its no-data state.
   async getDashboardFailuresDaily(
     days: number,
-    projectId?: string | null,
+    projectId: string | null,
+    tz: string,
     opts?: { signal?: AbortSignal },
   ): Promise<DashboardFailureDaily[]> {
     const raw = await this.fetch<unknown>(
-      dashboardRollupUrl("/api/dashboard/failures/daily", days, projectId),
+      dashboardRollupUrl("/api/dashboard/failures/daily", days, projectId, tz),
       {
         signal: opts?.signal,
       },
@@ -1980,11 +2298,12 @@ class ApiClient {
 
   async getDashboardFailuresByAgent(
     days: number,
-    projectId?: string | null,
+    projectId: string | null,
+    tz: string,
     opts?: { signal?: AbortSignal },
   ): Promise<DashboardFailureByAgent[]> {
     const raw = await this.fetch<unknown>(
-      dashboardRollupUrl("/api/dashboard/failures/by-agent", days, projectId),
+      dashboardRollupUrl("/api/dashboard/failures/by-agent", days, projectId, tz),
       {
         signal: opts?.signal,
       },
@@ -2003,11 +2322,12 @@ class ApiClient {
   // cancelled segment — exactly what that backend measured.
   async getDashboardAgentRunTime(
     days: number,
-    projectId?: string | null,
+    projectId: string | null,
+    tz: string,
     opts?: { signal?: AbortSignal },
   ): Promise<DashboardAgentRunTime[]> {
     const raw = await this.fetch<unknown>(
-      dashboardRollupUrl("/api/dashboard/agent-runtime", days, projectId),
+      dashboardRollupUrl("/api/dashboard/agent-runtime", days, projectId, tz),
       {
         signal: opts?.signal,
       },
@@ -2022,11 +2342,12 @@ class ApiClient {
 
   async getDashboardRunTimeDaily(
     days: number,
-    projectId?: string | null,
+    projectId: string | null,
+    tz: string,
     opts?: { signal?: AbortSignal },
   ): Promise<DashboardRunTimeDaily[]> {
     const raw = await this.fetch<unknown>(
-      dashboardRollupUrl("/api/dashboard/runtime/daily", days, projectId),
+      dashboardRollupUrl("/api/dashboard/runtime/daily", days, projectId, tz),
       {
         signal: opts?.signal,
       },
@@ -2069,6 +2390,23 @@ class ApiClient {
       AgentActivityBucketListSchema,
       EMPTY_AGENT_ACTIVITY_BUCKET_LIST,
       { endpoint: "getWorkspaceAgentActivity30d" },
+    );
+  }
+
+  // Workspace-wide 30-day run count per agent — the number the agents list
+  // sorts on when ordered by RUNS, and the one web's RUNS column shows
+  // (web parity: getWorkspaceAgentRunCounts, core/api/client.ts:2102).
+  async getWorkspaceAgentRunCounts(opts?: {
+    signal?: AbortSignal;
+  }): Promise<AgentRunCount[]> {
+    const raw = await this.fetch<unknown>("/api/agent-run-counts", {
+      signal: opts?.signal,
+    });
+    return parseWithFallback(
+      raw,
+      AgentRunCountListSchema,
+      EMPTY_AGENT_RUN_COUNT_LIST,
+      { endpoint: "getWorkspaceAgentRunCounts" },
     );
   }
 
@@ -2258,6 +2596,25 @@ class ApiClient {
     return parseWithFallback(raw, ListIssuesResponseSchema, EMPTY_LIST_ISSUES_RESPONSE, {
       endpoint: "GET /api/issues",
     });
+  }
+
+  /**
+   * Server-side grouping for the issue Table: one descriptor per group with
+   * the count over the COMPLETE result set, not just the window the client
+   * has paged in (see `lib/issue-table-group-counts.ts`). Same contract as
+   * web's `client.listIssueTableGroups`.
+   */
+  async listIssueTableGroups(
+    request: IssueTableGroupsRequest,
+    opts?: { signal?: AbortSignal },
+  ): Promise<IssueTableGroupsResponse> {
+    return this.fetchValidatedWith(
+      "/api/issues/table/groups",
+      IssueTableGroupsResponseSchema,
+      EMPTY_ISSUE_TABLE_GROUPS_RESPONSE,
+      { method: "POST", body: JSON.stringify(request) },
+      { ...opts, endpoint: "POST /api/issues/table/groups" },
+    );
   }
 
   /** Workspace-wide issue search. Backend `GET /api/issues/search` with
@@ -2676,6 +3033,20 @@ class ApiClient {
     });
   }
 
+  // --- Issue move (drag/drop) ---
+  // The canonical position is derived server-side from the workspace-scoped
+  // neighbours in `before_id` / `after_id`; the `position` the client puts in
+  // its optimistic patch is provisional only. Web routes drags here through
+  // `useUpdateIssue`'s `move_intent` (packages/core/issues/mutations.ts:78-82);
+  // mobile's board does the same, so the two clients cannot disagree about
+  // what a drop means. POST to match packages/core/api/client.ts:987.
+  async moveIssue(id: string, body: MoveIssueRequest): Promise<Issue> {
+    return this.fetch<Issue>(`/api/issues/${id}/move`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
   // Backend returns 204 No Content on success
   // (server/internal/handler/issue.go DeleteIssue). this.fetch already
   // short-circuits 204 → undefined (api.ts:270), so no body parsing needed.
@@ -3045,6 +3416,19 @@ class ApiClient {
     });
   }
 
+  // Imports a published skill from a URL (ClawHub / Skills.sh / GitHub).
+  // The server does the fetching and the source detection; the client only
+  // supplies a non-empty URL (web api.importSkill).
+  async importSkill(data: { url: string }): Promise<Skill> {
+    const raw = await this.fetch<unknown>("/api/skills/import", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return parseWithFallback(raw, SkillSchema, EMPTY_SKILL, {
+      endpoint: "POST /api/skills/import",
+    });
+  }
+
   async updateSkill(id: string, body: UpdateSkillRequest): Promise<Skill> {
     const raw = await this.fetch<unknown>(`/api/skills/${id}`, {
       method: "PUT",
@@ -3311,6 +3695,25 @@ class ApiClient {
     );
   }
 
+  /**
+   * Edit a mounted resource. Only the fields present in `data` change — the
+   * server replaces a supplied `resource_ref` wholesale rather than
+   * deep-merging it (server/internal/handler/project_resource.go:60), so a
+   * caller editing one ref field must spread the rest of the ref in.
+   *
+   * Mirrors packages/core/api/client.ts:3062 updateProjectResource.
+   */
+  async updateProjectResource(
+    projectId: string,
+    resourceId: string,
+    data: UpdateProjectResourceRequest,
+  ): Promise<ProjectResource> {
+    return this.fetch<ProjectResource>(
+      `/api/projects/${projectId}/resources/${resourceId}`,
+      { method: "PUT", body: JSON.stringify(data) },
+    );
+  }
+
   // --- Chat ---
   // Mirrors the surface area of packages/core/api/client.ts chat methods.
   // v1 omits getChatSession + updateChatSession (rename) — see the v1 cut
@@ -3359,13 +3762,14 @@ class ApiClient {
     await this.fetch<void>(`/api/chat/sessions/${id}`, { method: "DELETE" });
   }
 
-  /** PATCH /api/chat/sessions/:id — rename a session (title only; the web
-   *  build also patches project_id, which mobile never edits). Mirrors
-   *  packages/core/api/client.ts updateChatSession, restored for MYS-409
-   *  after the v1 cut dropped it. */
+  /** PATCH /api/chat/sessions/:id — rename a session (title) or rebind its
+   *  durable project context (`project_id`, null clears it). Same union shape
+   *  as web's packages/core/api/client.ts updateChatSession; the project arm
+   *  backs the composer's clearable project chip. Restored for MYS-409 after
+   *  the v1 cut dropped the method. */
   async updateChatSession(
     id: string,
-    data: { title: string },
+    data: { title: string } | { project_id: string | null },
   ): Promise<ChatSession> {
     return this.fetch<ChatSession>(`/api/chat/sessions/${id}`, {
       method: "PATCH",
@@ -3414,6 +3818,53 @@ class ApiClient {
       EMPTY_CHAT_MESSAGE_LIST,
       { endpoint: "GET /api/chat/sessions/:id/messages" },
     );
+  }
+
+  /**
+   * One window of a session's history, newest-first cursor pagination.
+   *
+   * Mirrors `listChatMessagesPage` in packages/core/api/client.ts:2764-2798,
+   * including the deployment-order fallback: a backend deployed before this
+   * route existed 404s, and only the *initial* (cursorless) page may fall
+   * back to the legacy full-list endpoint — the legacy endpoint returns every
+   * message at once, so that page reports `has_more: false` and there is no
+   * follow-up request to translate. A 404 on a cursor request is an
+   * unexpected state and propagates rather than re-serving the whole list.
+   */
+  async listChatMessagesPage(
+    sessionId: string,
+    opts?: {
+      before?: ChatMessagesCursor | null;
+      limit?: number;
+      signal?: AbortSignal;
+    },
+  ): Promise<ChatMessagesPage> {
+    const limit = opts?.limit ?? CHAT_MESSAGES_PAGE_LIMIT;
+    const query = new URLSearchParams({ limit: String(limit) });
+    if (opts?.before) {
+      query.set("before_created_at", opts.before.created_at);
+      query.set("before_id", opts.before.id);
+    }
+    try {
+      const raw = await this.fetch<unknown>(
+        `/api/chat/sessions/${sessionId}/messages/page?${query.toString()}`,
+        { signal: opts?.signal },
+      );
+      return parseWithFallback(
+        raw,
+        ChatMessagesPageSchema,
+        EMPTY_CHAT_MESSAGES_PAGE,
+        { endpoint: "GET /api/chat/sessions/:id/messages/page" },
+      );
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404 && !opts?.before) {
+        const messages = await this.listChatMessages(sessionId, {
+          signal: opts?.signal,
+        });
+        return { messages, limit, has_more: false, next_cursor: null };
+      }
+      throw err;
+    }
   }
 
   async sendChatMessage(
@@ -3469,6 +3920,33 @@ class ApiClient {
     await this.fetch<void>(
       `/api/chat/sessions/${sessionId}/read`,
       { method: "POST" },
+    );
+  }
+
+  /**
+   * Explicit "refresh" of a turn's follow-up suggestions — re-runs the
+   * daemon's suggestion pass for the latest assistant reply
+   * (`server/cmd/server/router.go:1755` → `chat.go:1040`).
+   *
+   * The server answers 202 and delivers the refreshed pills later over
+   * `chat:quick_actions`; there is nothing to return. It refuses with 409
+   * when the named turn is no longer the latest (a newer reply arrived) or
+   * when a turn is still running, and 503 when the deployment has no
+   * suggestion layer — the caller rolls its optimistic marker back on any of
+   * them rather than pretending the refresh happened.
+   *
+   * Mirrors `regenerateChatQuickActions` in packages/core/api/client.ts:2707.
+   */
+  async regenerateChatQuickActions(
+    sessionId: string,
+    messageId: string,
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/chat/sessions/${sessionId}/quick-actions/regenerate`,
+      {
+        method: "POST",
+        body: JSON.stringify({ message_id: messageId }),
+      },
     );
   }
 
@@ -3834,8 +4312,15 @@ class ApiClient {
   // Endpoints mirror packages/core/api/client.ts:1551-1572.
 
   async listPins(opts?: { signal?: AbortSignal }): Promise<PinnedItem[]> {
+    // `include=view` is the server's capability opt-in (pin.go:69-76): view
+    // pins are WITHHELD from clients that do not declare they understand the
+    // type, because a client that mis-classifies one as an issue fetches its
+    // detail, 404s, and permanently unpins it. Mobile now parses and renders
+    // `view` pins, so it must ask for them — without this the pin exists on
+    // the server but is invisible in the app, which is how the pinned list
+    // silently lost every view pin. Mirrors web client.ts:3417.
     return this.fetchValidated(
-      "/api/pins",
+      "/api/pins?include=view",
       PinListSchema,
       EMPTY_PIN_LIST,
       { ...opts, endpoint: "listPins" },
@@ -3910,7 +4395,7 @@ class ApiClient {
       // No Content-Type — let fetch set the multipart boundary.
       "X-Client-Platform": "mobile",
       "X-Client-OS": "ios",
-      "X-Client-Version": "0.1.0",
+      "X-Client-Version": "0.6.5",
       "X-Request-ID": rid,
     };
     if (this.token) headers["Authorization"] = `Bearer ${this.token}`;
@@ -4080,10 +4565,20 @@ class ApiClient {
       } catch {
         body = undefined;
       }
+      // The server's error envelope is `{"error": "..."}` (writeError /
+      // writeErrorCode in server/internal/handler/handler.go:467-477).
+      // Reading only `message` left every failure rendering as a bare status
+      // — "400 " with an empty statusText over HTTP/2 — so the handler's
+      // actual sentence never reached the user. `message` is still checked
+      // first for any endpoint that returns that shape instead.
+      const bodyRecord =
+        body && typeof body === "object" ? (body as Record<string, unknown>) : null;
       const message =
-        (body && typeof body === "object" && "message" in body
-          ? String((body as { message: unknown }).message)
-          : null) ?? `${res.status} ${res.statusText}`;
+        (bodyRecord && typeof bodyRecord.message === "string"
+          ? bodyRecord.message
+          : null) ??
+        (bodyRecord && typeof bodyRecord.error === "string" ? bodyRecord.error : null) ??
+        (res.statusText ? `${res.status} ${res.statusText}` : `HTTP ${res.status}`);
       console.warn(`[api] ← ${res.status} ${path}`, { rid, error: message });
       if (res.status === 413) throw new PreviewTooLargeError();
       if (res.status === 415) throw new PreviewUnsupportedError();

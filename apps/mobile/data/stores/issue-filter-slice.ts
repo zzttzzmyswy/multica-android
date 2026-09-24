@@ -18,16 +18,23 @@
 import type { StateCreator } from "zustand";
 import type { IssuePriority, IssueStatus } from "@multica/core/types";
 import { dateOnlyToLocalDate } from "@multica/core/issues/date";
+import { BOARD_STATUSES } from "@/lib/issue-status-core";
 import type { IssueListWindowParams } from "@/data/queries/issue-keys";
+
+/** The full status order, used as the complement base when hiding a column.
+ *  Same list web's `ALL_STATUSES` is; `issue-status-core.test.ts` holds the
+ *  two equal. */
+const ALL_STATUSES: readonly IssueStatus[] = BOARD_STATUSES;
 
 export type ActorFilterValue = {
   type: "member" | "agent" | "squad";
   id: string;
 };
 
-/** Static sort keys, mirroring web `SORT_OPTIONS` (property sorts excluded
- *  — mobile has no custom-property sort this iteration). */
-export type IssueSortField =
+/** Static sort keys, mirroring web `SORT_OPTIONS`. Custom-property keys are
+ *  the same union widened with the `property:<definitionId>` form
+ *  (view-store.ts:23-36) — see `propertyViewKey`. */
+export type StaticIssueSortField =
   | "position"
   | "status"
   | "priority"
@@ -37,10 +44,16 @@ export type IssueSortField =
   | "updated_at"
   | "title";
 
+export type IssueSortField = StaticIssueSortField | `property:${string}`;
+
 export type IssueSortDirection = "asc" | "desc";
 
-/** Grouping mirroring web `GROUPING_OPTIONS` (status / assignee). */
-export type IssueGrouping = "status" | "assignee";
+/** Grouping mirroring web `GROUPING_OPTIONS` (status / assignee), widened
+ *  with web's `property:<definitionId>` select-property form
+ *  (view-store.ts:20). */
+export type StaticIssueGrouping = "status" | "assignee";
+
+export type IssueGrouping = StaticIssueGrouping | `property:${string}`;
 
 /**
  * Custom-property filter snapshot mirroring web's
@@ -62,19 +75,20 @@ export interface IssueDateFilterValue {
 
 /**
  * Issue-workbench view mode. Mobile surface of web `ViewMode` — gantt added
- * in iter-118 (swimlane stays phone-deferred: its value is drag-to-reorder
- * across lanes, which has no cheap touch equivalent). Lives here so all
- * issue-list view stores share one wire default, but the field itself lives
- * on each store (like `scope`), NOT in the filter slice — clearing filters
- * must not reset the user's chosen view.
+ * in iter-118, swimlane in iter-122 (its lane model lives in
+ * `lib/swimlane.ts`). Lives here so all issue-list view stores share one
+ * wire default, but the field itself lives on each store (like `scope`),
+ * NOT in the filter slice — clearing filters must not reset the user's
+ * chosen view.
  */
-export type IssueViewMode = "list" | "board" | "table" | "gantt";
+export type IssueViewMode = "list" | "board" | "table" | "gantt" | "swimlane";
 
 export const ISSUE_VIEW_MODES: { value: IssueViewMode; labelKey: string }[] = [
   { value: "list", labelKey: "issues.viewList" },
   { value: "board", labelKey: "issues.viewBoard" },
   { value: "table", labelKey: "issues.viewTable" },
   { value: "gantt", labelKey: "issues.viewGantt" },
+  { value: "swimlane", labelKey: "issues.viewSwimlane" },
 ];
 
 export const ISSUE_SORT_OPTIONS: { value: IssueSortField; labelKey: string }[] =
@@ -125,10 +139,47 @@ export interface IssueFilterSlice {
   labelFilters: string[];
   propertyFilters: PropertyFilterValue;
   dateFilter: IssueDateFilterValue | null;
+  /**
+   * Show only issues with a RUNNING agent task (web `agentRunningFilter` →
+   * `workingOnly`). Deliberately NOT persisted and NOT part of
+   * `IssueFilterSnapshot`: running state changes second-to-second, so a
+   * stored toggle would let the user return to an unexplained empty list.
+   * Web reaches the same conclusion at view-store.ts:525-531.
+   */
+  workingOnly: boolean;
   sortBy: IssueSortField;
   sortDirection: IssueSortDirection;
   grouping: IssueGrouping;
+  /**
+   * When false, issues that HAVE a parent (sub-issues) are hidden from every
+   * issue surface so the user can focus on top-level parents. Purely a
+   * display filter — the parent/child relationship is untouched. Mirrors web
+   * `view-store.ts:203-205` (default true, `toggleShowSubIssues`). Unlike
+   * `workingOnly` this IS a saved view's display default, so it travels in
+   * `IssueViewSnapshotSource` / the view codec's display payload rather than
+   * in `IssueFilterSnapshot` — and `clearFilters` leaves it alone, exactly
+   * like web's (view-store.ts:401-415).
+   */
+  showSubIssues: boolean;
   toggleStatusFilter: (status: IssueStatus) => void;
+  /**
+   * Hide one status column from the kanban surfaces (board / swimlane).
+   *
+   * This writes `statusFilters` rather than a separate `hiddenStatuses` list,
+   * which is exactly what web does (`view-store.ts:385-400`): the two are the
+   * same fact stated two ways, and keeping one source means the server window
+   * (`buildIssueWindow` → `statuses`) narrows with it. A parallel hidden list
+   * would need its own wiring into the window and would drift the moment a
+   * status filter chip is added or removed.
+   *
+   * An EMPTY filter list means "everything shows" (not "nothing"), so the
+   * first hide has to materialise the complement — see `hiddenStatuses`.
+   */
+  hideStatus: (status: IssueStatus) => void;
+  /** Restore one status column hidden by `hideStatus`. No-op when nothing is
+   *  hidden, so a "show" on an already-visible column cannot narrow the
+   *  window. */
+  showStatus: (status: IssueStatus) => void;
   togglePriorityFilter: (priority: IssuePriority) => void;
   toggleAssigneeFilter: (value: ActorFilterValue) => void;
   toggleNoAssignee: () => void;
@@ -143,6 +194,10 @@ export interface IssueFilterSlice {
   /** Drop every selection of one custom-property definition. */
   clearPropertyFilter: (propertyId: string) => void;
   setDateFilter: (filter: IssueDateFilterValue | null) => void;
+  /** Flip the "only issues an agent is working on" quick filter. */
+  toggleWorkingOnly: () => void;
+  /** Flip the "show sub-issues" display filter (web `toggleShowSubIssues`). */
+  toggleShowSubIssues: () => void;
   setSortBy: (field: IssueSortField) => void;
   setSortDirection: (dir: IssueSortDirection) => void;
   setGrouping: (grouping: IssueGrouping) => void;
@@ -171,6 +226,21 @@ export type FilterDimension =
 
 export const PROPERTY_FILTER_PREFIX = "property:";
 
+/** Build the sort/grouping view key for a custom-property definition. Web's
+ *  `property:${id}` (view-store.ts:138-140) — the same prefix the filter
+ *  dimension uses, since a saved view carries all three in one vocabulary. */
+export function propertyViewKey(propertyId: string): `property:${string}` {
+  return `${PROPERTY_FILTER_PREFIX}${propertyId}`;
+}
+
+/** Strip the `property:` prefix off a sort/grouping view key; null when the
+ *  key is a static field. */
+export function propertyIdFromViewKey(key: string): string | null {
+  return key.startsWith(PROPERTY_FILTER_PREFIX)
+    ? key.slice(PROPERTY_FILTER_PREFIX.length)
+    : null;
+}
+
 /** Strip the dimension prefix off a property chip key. */
 export function propertyIdFromDimension(
   dimension: FilterDimension,
@@ -195,9 +265,11 @@ export const defaultIssueFilterSlice = (): Pick<
   | "labelFilters"
   | "propertyFilters"
   | "dateFilter"
+  | "workingOnly"
   | "sortBy"
   | "sortDirection"
   | "grouping"
+  | "showSubIssues"
 > => ({
   statusFilters: [],
   priorityFilters: [],
@@ -209,9 +281,11 @@ export const defaultIssueFilterSlice = (): Pick<
   labelFilters: [],
   propertyFilters: {},
   dateFilter: null,
+  workingOnly: false,
   sortBy: "position",
   sortDirection: "asc",
   grouping: "status",
+  showSubIssues: true,
 });
 
 /**
@@ -230,6 +304,8 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
 ): Pick<
   IssueFilterSlice,
   | "toggleStatusFilter"
+  | "hideStatus"
+  | "showStatus"
   | "togglePriorityFilter"
   | "toggleAssigneeFilter"
   | "toggleNoAssignee"
@@ -243,6 +319,8 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
   | "togglePropertyFilter"
   | "clearPropertyFilter"
   | "setDateFilter"
+  | "toggleWorkingOnly"
+  | "toggleShowSubIssues"
   | "clearFilters"
   | "resetFiltersTo"
   | "clearFilterDimension"
@@ -251,9 +329,21 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
     list.includes(item) ? list.filter((x) => x !== item) : [...list, item];
 
   return {
-    toggleStatusFilter: (status) =>
+    toggleStatusFilter: (status: IssueStatus) =>
       set((state) => ({
         statusFilters: toggleInList(state.statusFilters, status),
+      })),
+    hideStatus: (status: IssueStatus) =>
+      set((state) => ({
+        statusFilters: hideOneStatus(
+          state.statusFilters,
+          status,
+          BOARD_STATUSES,
+        ),
+      })),
+    showStatus: (status: IssueStatus) =>
+      set((state) => ({
+        statusFilters: showOneStatus(state.statusFilters, status),
       })),
     togglePriorityFilter: (priority) =>
       set((state) => ({
@@ -319,6 +409,10 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
         return { propertyFilters };
       }),
     setDateFilter: (dateFilter) => set({ dateFilter }),
+    toggleWorkingOnly: () =>
+      set((state) => ({ workingOnly: !state.workingOnly })),
+    toggleShowSubIssues: () =>
+      set((state) => ({ showSubIssues: !state.showSubIssues })),
     clearFilters: () =>
       set({
         statusFilters: [],
@@ -331,6 +425,7 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
         labelFilters: [],
         propertyFilters: {},
         dateFilter: null,
+        workingOnly: false,
       }),
     resetFiltersTo: (snapshot) => set({ ...snapshot }),
     clearFilterDimension: (dimension) =>
@@ -364,8 +459,86 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
   };
 }
 
-/** Convenience selector: does any filter dimension have an active value? */
-export function hasActiveIssueFilters(state: IssueFilterSlice): boolean {
+/**
+ * The status columns the kanban surfaces are NOT showing.
+ *
+ * Derived from `statusFilters` rather than stored separately — see the
+ * `hideStatus` doc. `statusFilters` empty means "no status restriction", i.e.
+ * nothing is hidden; a NON-empty list is the visible set, so the hidden set is
+ * its complement over the full status order.
+ */
+export function hiddenStatuses(
+  statusFilters: readonly IssueStatus[],
+): IssueStatus[] {
+  if (statusFilters.length === 0) return [];
+  const visible = new Set(statusFilters);
+  return ALL_STATUSES.filter((s) => !visible.has(s));
+}
+
+/** Whether one status column is currently hidden (web `hiddenStatuses.includes`). */
+export function isStatusHidden(
+  statusFilters: readonly IssueStatus[],
+  status: IssueStatus,
+): boolean {
+  return statusFilters.length > 0 && !statusFilters.includes(status);
+}
+
+/**
+ * `hideStatus` as a pure transform: drop `status` from the visible set,
+ * materialising the full complement first when nothing is filtered yet.
+ * Without that materialisation an empty filter list (which means "show
+ * everything") would be indistinguishable from "hide everything".
+ */
+export function hideOneStatus(
+  statusFilters: readonly IssueStatus[],
+  status: IssueStatus,
+  allStatuses: readonly IssueStatus[],
+): IssueStatus[] {
+  const visible =
+    statusFilters.length === 0 ? [...allStatuses] : [...statusFilters];
+  return visible.filter((s) => s !== status);
+}
+
+/** `showStatus` as a pure transform. Adding to an empty list would mean "show
+ *  ONLY this one" — the opposite of the user's intent — so it stays a no-op
+ *  until something is actually hidden. */
+export function showOneStatus(
+  statusFilters: readonly IssueStatus[],
+  status: IssueStatus,
+): IssueStatus[] {
+  if (statusFilters.length === 0) return [...statusFilters];
+  if (statusFilters.includes(status)) return [...statusFilters];
+  return [...statusFilters, status];
+}
+
+/** Convenience selector: does any filter dimension have an active value?
+ *
+ *  `workingOnly` counts. Web's header keeps its agents-working chip on a
+ *  separate code path from `getActiveFilterCount`, but mobile has no room
+ *  for a second header chip (the toolbar already carries the scope pills,
+ *  the five-button mode switch and the filter trigger) — so the filter
+ *  sheet IS its surface, and an active-only-here dimension that left the
+ *  trigger unlit would be invisible the moment the sheet closed.
+ *
+ *  Takes the value shape rather than the whole slice so the issue-list
+ *  surfaces (which assemble a plain `IssueFilterState` from per-field store
+ *  subscriptions) can reuse it instead of re-deriving the predicate. */
+export function hasActiveIssueFilters(
+  state: Pick<
+    IssueFilterSlice,
+    | "statusFilters"
+    | "priorityFilters"
+    | "assigneeFilters"
+    | "includeNoAssignee"
+    | "creatorFilters"
+    | "projectFilters"
+    | "includeNoProject"
+    | "labelFilters"
+    | "propertyFilters"
+    | "dateFilter"
+    | "workingOnly"
+  >,
+): boolean {
   return (
     state.statusFilters.length > 0 ||
     state.priorityFilters.length > 0 ||
@@ -376,7 +549,8 @@ export function hasActiveIssueFilters(state: IssueFilterSlice): boolean {
     state.includeNoProject ||
     state.labelFilters.length > 0 ||
     Object.keys(state.propertyFilters).length > 0 ||
-    state.dateFilter !== null
+    state.dateFilter !== null ||
+    state.workingOnly
   );
 }
 
@@ -408,7 +582,13 @@ export function dateFilterToWindowParams(
  *  `GET /api/issues` understands. This is the "wire wiring" half of the
  *  iteration: the query key carries the serialized bag, so changing any
  *  dimension refetches with the new window (like web's table window), and
- *  the client predicate re-runs on top as a belt-and-suspenders pass. */
+ *  the client predicate re-runs on top as a belt-and-suspenders pass.
+ *
+ *  `q` is the Table's quick search, and it belongs in the WINDOW rather than
+ *  in a client-side filter for the same reason web sends it: the server
+ *  matches title words AND the immutable issue number, so a number search
+ *  finds rows the loaded pages do not contain, and the CSV export (which
+ *  serializes exactly the rows the table shows) exports what was searched. */
 export function buildIssueWindow(
   state: Pick<
     IssueFilterSlice,
@@ -424,9 +604,16 @@ export function buildIssueWindow(
     | "dateFilter"
     | "sortBy"
     | "sortDirection"
-  >,
+  > & {
+    /** Table quick search. Empty/whitespace means "no search" — the server
+     *  treats a blank `q` as absent, and an empty string here would still
+     *  change the query key and refetch for nothing. */
+    tableSearch?: string;
+  },
 ): IssueListWindowParams {
   const window: IssueListWindowParams = {};
+  const q = state.tableSearch?.trim();
+  if (q) window.q = q;
   if (state.statusFilters.length > 0) window.statuses = state.statusFilters;
   if (state.priorityFilters.length > 0)
     window.priorities = state.priorityFilters;

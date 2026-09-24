@@ -19,7 +19,7 @@
  *    (bucketAgentDashboardRows), which carries the merged token+run-time rows
  */
 import type { DashboardUsageByAgent, DashboardUsageDaily } from "@multica/core/types";
-import { estimateCost, estimateCostBreakdown } from "./runtime-usage";
+import { estimateCost, estimateCostBreakdown, aggregateByWeek } from "./runtime-usage";
 
 export interface UsageDailyAggregate {
   /** YYYY-MM-DD server bucket (already in workspace tz). */
@@ -188,6 +188,57 @@ export function aggregateDailyCost(usage: DashboardUsageDaily[]): DailyCostRow[]
         total: round(input + output + cacheWrite),
       };
     });
+}
+
+/**
+ * Per-(date, model) rows → one row per calendar week (Mon–Sun, anchored at
+ * today in `tz`), in the same shape `aggregateDailyTokens` returns so the
+ * chart and the breakdown rows render either grain without branching on it.
+ *
+ * `weekCount` trailing weeks are pre-seeded, so a sparse or empty week draws
+ * as a zero bar rather than being dropped, and the rows the page over-fetched
+ * for the weekly grain but that fall before the window are discarded —
+ * `aggregateByWeek` owns both rules, so this shares the runtime detail page's
+ * week fold instead of re-deriving it.
+ *
+ * The label is the week's Monday in `formatDateLabel` form, matching the
+ * daily rows' label style; `aggregateByWeek`'s own "Aug 10" label is the
+ * runtime page's convention, and mixing the two in one column would read as
+ * two different date formats.
+ */
+export function aggregateWeeklyTokens(
+  usage: DashboardUsageDaily[],
+  tz: string,
+  weekCount: number,
+): UsageDailyAggregate[] {
+  return aggregateByWeek(usage, tz, weekCount).weeklyTokens.map((w) => ({
+    date: w.weekStart,
+    label: formatDateLabel(w.weekStart),
+    input: w.input,
+    output: w.output,
+    cacheRead: w.cacheRead,
+    cacheWrite: w.cacheWrite,
+    total: w.input + w.output + w.cacheRead + w.cacheWrite,
+  }));
+}
+
+/** Weekly counterpart of `aggregateDailyCost` — same row shape, `date` is the
+ *  week's Monday. Segments round to 2 decimals like the daily version, and
+ *  `total` is the sum of the rounded segments so the breakdown rows still add
+ *  up to the bar. */
+export function aggregateWeeklyCost(
+  usage: DashboardUsageDaily[],
+  tz: string,
+  weekCount: number,
+): DailyCostRow[] {
+  return aggregateByWeek(usage, tz, weekCount).weeklyCostStack.map((w) => ({
+    date: w.weekStart,
+    label: formatDateLabel(w.weekStart),
+    input: w.input,
+    output: w.output,
+    cacheWrite: w.cacheWrite,
+    total: w.total,
+  }));
 }
 
 /**

@@ -96,10 +96,10 @@ describe("deep-constant i18n", () => {
     );
     mod.setLocale("zh");
     expect(mod.translate("chat.repliedIn", { elapsed: "39s" })).toBe(
-      "在 39s 内回复",
+      "39s 内回复",
     );
     expect(mod.translate("chat.finishedWithoutReply")).toBe(
-      "agent 已结束本轮，但未返回文字回复。",
+      "本轮已结束，智能体没有返回文字回复。",
     );
   });
 
@@ -126,7 +126,7 @@ describe("deep-constant i18n", () => {
     expect(mod.translate("a11y.send")).toBe("发送");
     expect(mod.translate("a11y.attachFile")).toBe("附加文件");
     expect(mod.translate("a11y.codeBlock")).toBe("代码块");
-    expect(mod.translate("a11y.mentionSomeone")).toBe("提及某个人或某个问题");
+    expect(mod.translate("a11y.mentionSomeone")).toBe("提及某个人或某个任务");
   });
 
   it("en/zh dictionaries are mirror images for the deep-constant keys", () => {
@@ -157,8 +157,10 @@ describe("deep-constant i18n", () => {
     expect(mod.translate("picker.agents")).toBe("Agents");
     expect(mod.translate("common.uploadFailed")).toBe("Upload failed");
     expect(mod.translate("project.progress")).toBe("Progress");
+    // Iteration 173: tapping an unavailable pin now asks before deleting it,
+    // so the label no longer promises an immediate unpin.
     expect(mod.translate("pins.unavailable", { itemType: "issue" })).toBe(
-      "Unavailable issue — tap to unpin",
+      "Unavailable issue",
     );
     mod.setLocale("zh");
     expect(mod.translate("mention.recent")).toBe("最近");
@@ -176,7 +178,7 @@ describe("deep-constant i18n", () => {
     expect(mod.translate("timeline.jumpToNew", { count: 2, messages: "条消息" })).toBe(
       "跳至 2 条新内容",
     );
-    expect(mod.translate("chat.noAgentsEmpty")).toBe("暂无可用 agent。");
+    expect(mod.translate("chat.noAgentsEmpty")).toBe("暂无可用智能体。");
     expect(mod.translate("a11y.removeMention", { name: "Alice" })).toBe(
       "移除提及 Alice",
     );

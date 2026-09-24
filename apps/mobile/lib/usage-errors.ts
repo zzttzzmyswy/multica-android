@@ -19,6 +19,7 @@
 import type { DashboardFailureByAgent, DashboardFailureDaily } from "@multica/core/types";
 import { FAILURE_CLASSES, classForReason, type FailureClass } from "@/lib/failure-class";
 import { formatDateLabel } from "@/lib/usage-format";
+import { buildWeekShells } from "@/lib/usage-dim";
 
 export type FailureClassCounts = Record<FailureClass, number>;
 
@@ -99,23 +100,34 @@ export interface WeeklyErrorsRow extends FailureClassCounts {
   total: number;
 }
 
-// Per-(date, reason) rows → one row per calendar week (Mon–Sun, anchored to
-// the row dates) with the week's class counts and failed / total totals.
-// Sorted week-asc for the weekly trend.
-export function aggregateWeeklyErrors(rows: DashboardFailureDaily[]): WeeklyErrorsRow[] {
-  const map = new Map<string, FailureClassCounts & { failed: number; total: number }>();
-  for (const r of rows) {
-    const wk = weekStartIso(r.date);
-    let entry = map.get(wk);
-    if (!entry) {
-      entry = { ...emptyClassCounts(), failed: 0, total: 0 };
-      map.set(wk, entry);
-    }
-    foldFailureRow(entry, r.failure_reason, r.task_count);
+// Per-(date, reason) rows → one row per trailing calendar week (Mon–Sun,
+// anchored at today in `tz`) with the week's class counts and failed / total
+// totals. Week-ascending for the weekly trend.
+//
+// `weekCount` weeks are pre-seeded so a week with no failures draws as a zero
+// bar rather than disappearing, and rows from the partial week the page
+// over-fetched for the weekly grain but that sit before the window are
+// dropped — the same shell rules web's aggregateWeeklyErrors applies.
+export function aggregateWeeklyErrors(
+  rows: DashboardFailureDaily[],
+  tz: string,
+  weekCount: number,
+): WeeklyErrorsRow[] {
+  const shells = buildWeekShells(tz, weekCount);
+  const buckets = new Map<string, FailureClassCounts & { failed: number; total: number }>();
+  for (const shell of shells) {
+    buckets.set(shell.weekStart, { ...emptyClassCounts(), failed: 0, total: 0 });
   }
-  return Array.from(map.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([weekStart, counts]) => ({ ...counts, weekStart, label: formatDateLabel(weekStart) }));
+  for (const r of rows) {
+    const bucket = buckets.get(weekStartIso(r.date));
+    if (!bucket) continue;
+    foldFailureRow(bucket, r.failure_reason, r.task_count);
+  }
+  return shells.map((s) => ({
+    ...(buckets.get(s.weekStart) ?? { ...emptyClassCounts(), failed: 0, total: 0 }),
+    weekStart: s.weekStart,
+    label: formatDateLabel(s.weekStart),
+  }));
 }
 
 // Whole-window failure totals for the Errors KPIs. `rate` is a fraction in

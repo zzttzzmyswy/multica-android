@@ -13,7 +13,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import { agentListOptions } from "@/data/queries/agents";
+import { agentListAllOptions } from "@/data/queries/agents";
 import { memberListOptions } from "@/data/queries/members";
 import { canAssignAgent } from "./can-assign-agent";
 
@@ -23,8 +23,12 @@ export function useWorkspaceAgentAvailability(): WorkspaceAgentAvailability {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const userId = useAuthStore((s) => s.user?.id);
 
+  // Archived-inclusive, matching core's `agentListOptions` (which the web hook
+  // reads). The `!a.archived_at` filter below is what excludes them, so the
+  // answer is unchanged — and the chat screen shares this one cache entry with
+  // its own agent lookup instead of issuing a second request.
   const { data: agents, isFetched: agentsFetched } = useQuery(
-    agentListOptions(wsId),
+    agentListAllOptions(wsId),
   );
   const { data: members, isFetched: membersFetched } = useQuery(
     memberListOptions(wsId),

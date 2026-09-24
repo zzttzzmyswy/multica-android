@@ -15,6 +15,7 @@ import type {
   AgentActivityBucket,
   AgentEnvResponse,
   AgentInvocationTarget,
+  AgentRunCount,
   AgentTask,
   Attachment,
   AutopilotCollaborator,
@@ -75,7 +76,9 @@ import type {
   VCSConnection,
   ListVCSConnectionsResponse,
   ConnectVCSResponse,
+  BeginLarkInstallResponse,
   LarkInstallation,
+  LarkInstallStatusResponse,
   ListLarkInstallationsResponse,
   SlackInstallation,
   ListSlackInstallationsResponse,
@@ -96,6 +99,7 @@ import type {
   PluginReleaseRequest,
 } from "@multica/core/types";
 import type { CloudRuntimeNode } from "@multica/core/runtimes";
+import type { ChatMessageKind } from "@multica/core/types/chat";
 import {
   AutopilotRunSchema,
   IssueSchema,
@@ -435,6 +439,24 @@ export const EMPTY_LIST_PROJECT_RESOURCES_RESPONSE: ListProjectResourcesResponse
 // agent/creator ids). `.loose()` so server-added fields pass through. The two
 // fields mobile keys behaviour on — `id` and `chat_session_id` — are required.
 
+/**
+ * Every `message_kind` the server can expose (`normalizeMessageKind`,
+ * server/internal/handler/chat.go). Declared once and shared by the session
+ * preview and the message row so the two can never drift — they did: the
+ * preview knew `onboarding_opening` while the row's enum did not, and its
+ * `.catch("message")` silently rewrote the opening into an ordinary reply,
+ * leaving the starter-cards branch unreachable on a real device.
+ *
+ * Typed against core's `ChatMessageKind` so adding a kind there fails the
+ * build here instead of degrading silently at runtime.
+ */
+const CHAT_MESSAGE_KINDS = [
+  "message",
+  "no_response",
+  "onboarding_kickoff",
+  "onboarding_opening",
+] as const satisfies readonly ChatMessageKind[];
+
 /** Preview of a session's most recent message — drives the IM-style row's
  *  subtitle (web chat-thread-list.tsx). Optional so older / non-list payloads
  *  stay valid; `message_kind` and `failure_reason` follow the core types. */
@@ -443,9 +465,7 @@ export const ChatLastMessageSchema: z.ZodType<ChatLastMessage> = z.object({
   role: z.enum(["user", "assistant"]).catch("assistant"),
   created_at: z.string().default(""),
   failure_reason: z.string().nullable().optional(),
-  message_kind: z
-    .enum(["message", "no_response", "onboarding_kickoff", "onboarding_opening"])
-    .optional(),
+  message_kind: z.enum(CHAT_MESSAGE_KINDS).optional(),
 }).loose();
 
 export const ChatSessionSchema: z.ZodType<ChatSession> = z.object({
@@ -493,7 +513,7 @@ export const ChatMessageSchema: z.ZodType<ChatMessage> = z.object({
   attachments: z.array(AttachmentSchema).optional(),
   failure_reason: z.string().nullable().optional(),
   elapsed_ms: z.number().nullable().optional(),
-  message_kind: z.enum(["message", "no_response"]).catch("message").optional(),
+  message_kind: z.enum(CHAT_MESSAGE_KINDS).catch("message").optional(),
   // One malformed optional suggestion must not erase an otherwise valid
   // conversation. The server validates these too; this is mixed-version and
   // corrupted-cache defense at the mobile boundary.
@@ -507,6 +527,45 @@ export const ChatMessageSchema: z.ZodType<ChatMessage> = z.object({
 export const ChatMessageListSchema = z.array(ChatMessageSchema).default([]);
 
 export const EMPTY_CHAT_MESSAGE_LIST: ChatMessage[] = [];
+
+/**
+ * Cursor into a session's message history — the server's
+ * `ChatMessagesCursorResponse` (`server/internal/handler/chat.go:977-980`).
+ * `before_created_at` + `before_id` are the composite key, not just the
+ * timestamp: two messages can share a created_at at second granularity, and
+ * the id breaks the tie.
+ */
+export const ChatMessagesCursorSchema = z
+  .object({
+    created_at: z.string(),
+    id: z.string(),
+  })
+  .loose();
+
+export type ChatMessagesCursor = z.infer<typeof ChatMessagesCursorSchema>;
+
+/**
+ * One window of a session's history. `has_more` + `next_cursor` are the whole
+ * point: they let the list open on the newest 50 messages and walk backwards
+ * on demand instead of pulling the entire transcript on every session open.
+ */
+export const ChatMessagesPageSchema = z
+  .object({
+    messages: ChatMessageListSchema,
+    limit: z.number().default(50),
+    has_more: z.boolean().default(false),
+    next_cursor: ChatMessagesCursorSchema.nullable().default(null),
+  })
+  .loose();
+
+export type ChatMessagesPage = z.infer<typeof ChatMessagesPageSchema>;
+
+export const EMPTY_CHAT_MESSAGES_PAGE: ChatMessagesPage = {
+  messages: [],
+  limit: 50,
+  has_more: false,
+  next_cursor: null,
+};
 
 const ChatQueuedTaskSchema = z.object({
   task_id: z.string(),
@@ -715,6 +774,19 @@ export const AgentActivityBucketListSchema = z
 
 export const EMPTY_AGENT_ACTIVITY_BUCKET_LIST: AgentActivityBucket[] = [];
 
+// 30-day total run count per agent, feeding the agents-list RUNS sort.
+// Mirrors AgentRunCount in packages/core/types/agent.ts:202-205, fed by
+// GET /api/agent-run-counts. Lenient — a missing count reads as "no runs",
+// which sorts the agent to the bottom rather than dropping the row.
+export const AgentRunCountSchema: z.ZodType<AgentRunCount> = z.object({
+  agent_id: z.string().default(""),
+  run_count: z.number().default(0),
+}).loose();
+
+export const AgentRunCountListSchema = z.array(AgentRunCountSchema).default([]);
+
+export const EMPTY_AGENT_RUN_COUNT_LIST: AgentRunCount[] = [];
+
 export const ActiveTasksResponseSchema = z.object({
   tasks: z.array(AgentTaskSchema).default([]),
 }).loose();
@@ -865,12 +937,24 @@ export const EMPTY_WORKSPACE_LIST: Workspace[] = [];
 
 /** Pin metadata only — display fields (title / status / icon) are NOT here,
  *  consumers derive them from `issueDetailOptions` / `projectDetailOptions`.
- *  Matches the design in packages/core/types/pin.ts. */
+ *  Matches the design in packages/core/types/pin.ts.
+ *
+ *  `item_type` covers all three types web can pin (`PinnedItemType`): the
+ *  previous `enum(["issue","project"]).catch("issue")` rewrote a pinned `view`
+ *  into an `issue`, so the row queried the VIEW id as an ISSUE id, 404'd, and
+ *  rendered as a dead pin the user was told to delete.
+ *
+ *  The `.catch("issue")` stays, per "Enum drift downgrades, not crashes": a
+ *  type this build has never heard of must not fail the whole array parse (the
+ *  fetch would fall back to an EMPTY list and every pin would vanish). The
+ *  downgrade is only safe because the row is no longer allowed to delete on a
+ *  failed lookup — see `pinned-screen.tsx`, where only a resolved
+ *  issue/project/view may be unpinned directly. */
 export const PinnedItemSchema: z.ZodType<PinnedItem> = z.object({
   id: z.string(),
   workspace_id: z.string().default(""),
   user_id: z.string().default(""),
-  item_type: z.enum(["issue", "project"]).catch("issue"),
+  item_type: z.enum(["issue", "project", "view"]).catch("issue"),
   item_id: z.string(),
   position: z.number().default(0),
   created_at: z.string().default(""),
@@ -2042,6 +2126,50 @@ export const EMPTY_LARK_INSTALLATION: LarkInstallation = {
 export const EMPTY_LIST_LARK_INSTALLATIONS_RESPONSE: ListLarkInstallationsResponse = {
   installations: [],
   configured: false,
+};
+
+// Lark device-flow install (iteration 170) — the two halves of the
+// scan-to-bind handshake, mirroring `packages/core/types/lark.ts:48-83`.
+// `begin` hands back the session + QR URL and the cadence to poll at;
+// the status read is discriminated by `status`, with `error_reason` the
+// stable code the UI switches on (never `error_message`, which is a
+// diagnostic tail). Both parse leniently: a missing cadence falls back to
+// the 5s default and an unknown status renders as "pending" rather than
+// killing the poll loop, so a server that grows a new lifecycle value
+// degrades instead of stranding the user on a stale QR.
+const BeginLarkInstallResponseObjectSchema = z
+  .object({
+    session_id: z.string().default(""),
+    qr_code_url: z.string().default(""),
+    expires_in_seconds: z.number().default(0),
+    poll_interval_seconds: z.number().default(5),
+  })
+  .loose();
+
+export const BeginLarkInstallResponseSchema: z.ZodType<BeginLarkInstallResponse> =
+  BeginLarkInstallResponseObjectSchema as unknown as z.ZodType<BeginLarkInstallResponse>;
+
+export const EMPTY_BEGIN_LARK_INSTALL_RESPONSE: BeginLarkInstallResponse = {
+  session_id: "",
+  qr_code_url: "",
+  expires_in_seconds: 0,
+  poll_interval_seconds: 5,
+};
+
+const LarkInstallStatusResponseObjectSchema = z
+  .object({
+    status: z.string().default("pending"),
+    installation_id: z.string().optional(),
+    error_reason: z.string().optional(),
+    error_message: z.string().optional(),
+  })
+  .loose();
+
+export const LarkInstallStatusResponseSchema: z.ZodType<LarkInstallStatusResponse> =
+  LarkInstallStatusResponseObjectSchema as unknown as z.ZodType<LarkInstallStatusResponse>;
+
+export const EMPTY_LARK_INSTALL_STATUS_RESPONSE: LarkInstallStatusResponse = {
+  status: "pending",
 };
 
 const SlackInstallationObjectSchema = z

@@ -39,61 +39,74 @@ beforeEach(() => {
 
 // Iteration 87: page-scoped project filter. Every dashboard rollup accepts an
 // optional projectId; when set the URL carries ?project_id=, when null the
-// URL is byte-identical to the pre-iteration shape (?days= only) so the
-// whole-workspace callers are untouched.
-describe("dashboard rollups accept an optional project_id", () => {
+// URL is byte-identical to the pre-iteration shape so the whole-workspace
+// callers are untouched.
+//
+// Iteration 169: every rollup also carries the viewer's ?tz=. The server
+// slices each day bucket on it, so a call that omits it answers in UTC — a
+// different question from the one web's dashboard asks for the same account.
+describe("dashboard rollups carry project_id and tz", () => {
   const CASES: Array<{
     name: string;
-    call: (projectId: string | null) => Promise<unknown>;
+    call: (projectId: string | null, tz: string) => Promise<unknown>;
     path: string;
   }> = [
     {
       name: "getDashboardUsageDaily",
-      call: (p) => api.getDashboardUsageDaily(7, p),
+      call: (p, tz) => api.getDashboardUsageDaily(7, p, tz),
       path: "/api/dashboard/usage/daily",
     },
     {
       name: "getDashboardUsageByAgent",
-      call: (p) => api.getDashboardUsageByAgent(7, p),
+      call: (p, tz) => api.getDashboardUsageByAgent(7, p, tz),
       path: "/api/dashboard/usage/by-agent",
     },
     {
       name: "getDashboardFailuresDaily",
-      call: (p) => api.getDashboardFailuresDaily(7, p),
+      call: (p, tz) => api.getDashboardFailuresDaily(7, p, tz),
       path: "/api/dashboard/failures/daily",
     },
     {
       name: "getDashboardFailuresByAgent",
-      call: (p) => api.getDashboardFailuresByAgent(7, p),
+      call: (p, tz) => api.getDashboardFailuresByAgent(7, p, tz),
       path: "/api/dashboard/failures/by-agent",
     },
     {
       name: "getDashboardAgentRunTime",
-      call: (p) => api.getDashboardAgentRunTime(7, p),
+      call: (p, tz) => api.getDashboardAgentRunTime(7, p, tz),
       path: "/api/dashboard/agent-runtime",
     },
     {
       name: "getDashboardRunTimeDaily",
-      call: (p) => api.getDashboardRunTimeDaily(7, p),
+      call: (p, tz) => api.getDashboardRunTimeDaily(7, p, tz),
       path: "/api/dashboard/runtime/daily",
     },
   ];
 
   for (const c of CASES) {
-    it(`${c.name} keeps ?days= only when projectId is null`, async () => {
+    it(`${c.name} keeps the whole-workspace shape plus ?tz=`, async () => {
       const spy = fetchSpy().mockResolvedValue([]);
-      await c.call(null);
+      await c.call(null, "UTC");
       expect(spy).toHaveBeenCalledWith(
-        `${c.path}?days=7`,
+        `${c.path}?days=7&tz=UTC`,
         expect.objectContaining({ signal: undefined }),
       );
     });
 
     it(`${c.name} appends &project_id= when projectId is set`, async () => {
       const spy = fetchSpy().mockResolvedValue([]);
-      await c.call("proj-abc");
+      await c.call("proj-abc", "UTC");
       expect(spy).toHaveBeenCalledWith(
-        `${c.path}?days=7&project_id=proj-abc`,
+        `${c.path}?days=7&project_id=proj-abc&tz=UTC`,
+        expect.objectContaining({ signal: undefined }),
+      );
+    });
+
+    it(`${c.name} percent-encodes an IANA zone id`, async () => {
+      const spy = fetchSpy().mockResolvedValue([]);
+      await c.call(null, "Pacific/Kiritimati");
+      expect(spy).toHaveBeenCalledWith(
+        `${c.path}?days=7&tz=Pacific%2FKiritimati`,
         expect.objectContaining({ signal: undefined }),
       );
     });
@@ -102,9 +115,9 @@ describe("dashboard rollups accept an optional project_id", () => {
   it("passes the abort signal through with a project filter", async () => {
     const spy = fetchSpy().mockResolvedValue([]);
     const signal = new AbortController().signal;
-    await api.getDashboardUsageDaily(30, "proj-abc", { signal });
+    await api.getDashboardUsageDaily(30, "proj-abc", "UTC", { signal });
     expect(spy).toHaveBeenCalledWith(
-      "/api/dashboard/usage/daily?days=30&project_id=proj-abc",
+      "/api/dashboard/usage/daily?days=30&project_id=proj-abc&tz=UTC",
       expect.objectContaining({ signal }),
     );
   });

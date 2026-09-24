@@ -18,7 +18,7 @@
     "no_matches": {
       "title": "一致する結果なし",
       "with_query": "「{{query}}」に一致するランタイムがありません{{filterSuffix}}。",
-      "with_query_filter_suffix": "(このフィルター内)",
+      "with_query_filter_suffix": "（このフィルター内）",
       "no_query": "このフィルターに一致するランタイムがありません。",
       "try_widening": " 範囲を広げるか、フィルターをクリアしてみてください。"
     },
@@ -90,7 +90,7 @@
   "health": {
     "online": {
       "label": "オンライン",
-      "description": "直近 45 秒以内に heartbeat を受信しました。作業をディスパッチする準備ができています。"
+      "description": "直近 45 秒以内にハートビートを受信しました。作業をディスパッチする準備ができています。"
     },
     "recently_lost": {
       "label": "最近接続が切れました",
@@ -98,7 +98,7 @@
     },
     "offline": {
       "label": "オフライン",
-      "description": "5 分以上 heartbeat がありません。デーモンを再起動するか、ホストを調べてください。"
+      "description": "5 分以上ハートビートがありません。デーモンを再起動するか、ホストを調べてください。"
     },
     "about_to_gc": {
       "label": "まもなく削除",
@@ -139,7 +139,7 @@
     "visibility_toast_failed": "公開範囲を更新できませんでした",
     "delete_dialog": {
       "self_heal_notice": "このランタイムは実行中のローカルデーモンに管理されています。削除自体は成功しますが、デーモンプロセスを停止しない限り、数秒以内に新しいランタイムとして再登録されます。完全に削除するには先にデーモンを停止してください。",
-      "profile_backed_notice": "このランタイムはカスタムランタイムプロファイルから登録されています。ここで削除しても現在のランタイムインスタンスだけが削除され、プロファイルが残っている間は実行中のデーモンが再登録できます。完全に削除するには、Custom runtimes からカスタムランタイムプロファイルを削除してください。",
+      "profile_backed_notice": "このランタイムはカスタムランタイムプロファイルから登録されています。ここで削除しても現在のランタイムインスタンスだけが削除され、プロファイルが残っている間は実行中のデーモンが再登録できます。完全に削除するには、カスタムランタイムからプロファイルを削除してください。",
       "light": {
         "title": "ランタイムを削除しますか?",
         "description": "「{{name}}」を削除してもよろしいですか? この操作は元に戻せません。",
@@ -155,7 +155,7 @@
         "notice_runtime_delete_plan_changed": "このダイアログを開いている間にアクティブなエージェントの一覧が変わりました。新しい計画を確認して承認してください。",
         "checkbox_other": "これら {{count}} 体のエージェントはバインドが解除され、ランタイムにバインドするまで実行できないこと、キュー中または実行中の作業がキャンセルされることを理解しました。",
         "cancel": "キャンセル",
-        "confirm_other": "{{count}} 体のバインドを解除してランタイムを削除",
+        "confirm_other": "{{count}} 体のエージェントのバインドを解除してランタイムを削除",
         "submitting": "バインド解除して削除中...",
         "delete_failed_toast": "ランタイムを削除できませんでした",
         "table": {
@@ -253,7 +253,7 @@
     "cli_version_label": "CLI バージョン:",
     "version_unknown": "不明",
     "managed_by_desktop": "デスクトップで管理",
-    "managed_by_desktop_title": "CLI バイナリは Multica Desktop で管理されています。CLI をアップグレードするには Desktop を更新してください。",
+    "managed_by_desktop_title": "CLI バイナリは Multica デスクトップアプリで管理されています。CLI をアップグレードするにはデスクトップアプリを更新してください。",
     "read_only": "読み取り専用",
     "read_only_title": "CLI を更新できるのは、ランタイムの所有者とワークスペース管理者のみです。",
     "local_build": "ローカルビルド",
@@ -302,8 +302,8 @@
     "badge_custom": "カスタム",
     "badge_registering": "登録中",
     "badge_disabled": "無効",
-    "pending_health": "Daemon に登録中",
-    "pending_health_warning": "Daemon 同期待ち",
+    "pending_health": "デーモンに登録中",
+    "pending_health_warning": "デーモン同期待ち",
     "pending_health_error": "登録エラー",
     "pending_health_disabled": "無効",
     "pending_cli_unknown": "待機中"
@@ -408,8 +408,8 @@
     "when_tab_heatmap": "ヒートマップ",
     "daily_metric_cost": "コスト",
     "daily_metric_tokens": "トークン",
-    "weekly_partial_label": "{{range}}(一部 · 7 日中 {{covered}} 日)",
-    "heatmap_caption": "直近 26 週 · 日別の $ 強度(ここでは期間セレクターは無視されます)",
+    "weekly_partial_label": "{{range}}（一部 · 7 日中 {{covered}} 日）",
+    "heatmap_caption": "直近 26 週 · 日別の $ 強度（ここでは期間セレクターは無視されます）",
     "legend_input": "入力",
     "legend_output": "出力",
     "legend_cache_read": "キャッシュ読み取り",

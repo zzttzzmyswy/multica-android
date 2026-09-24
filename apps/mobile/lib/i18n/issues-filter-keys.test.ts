@@ -68,6 +68,9 @@ describe("issue filter/sort/group i18n", () => {
     "filter.dateRangeHint": "区间含首尾，由服务端过滤",
     "filter.dateClear": "清除日期筛选",
     "filter.moveToStatus": "移动到状态",
+    // Iteration 129 (MYS-1060): trailing board lane for issues with no value
+    // on the grouping property / a value naming a removed option.
+    "filter.noPropertyValue": "无值",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {

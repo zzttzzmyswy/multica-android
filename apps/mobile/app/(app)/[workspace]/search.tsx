@@ -9,8 +9,9 @@
  * Result categories, ordering (live projects, then live issues, then a
  * trailing Cancelled section — see lib/search-rows.ts), debounce (300ms),
  * abort policy, and Recent rendering mirror the web source.
- * Highlight + snippet line for `match_source` matches preserves the
- * "why did this match" signal users rely on when scanning results.
+ * Highlight + snippet lines preserve the "why did this match" signal users
+ * rely on when scanning results, and the row's trailing slot carries the
+ * assignee so "who owns this" survives the scan too.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -28,7 +29,6 @@ import { router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type {
   Issue,
-  IssueStatus,
   MemberWithUser,
   SearchIssueResult,
   SearchProjectResult,
@@ -48,9 +48,9 @@ import {
 import { issueDetailOptions } from "@/data/queries/issues";
 import { memberListOptions } from "@/data/queries/members";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
-import { useStatusLabel } from "@/lib/status-options";
 import { projectStatusLabel } from "@/lib/project-status";
 import { buildSearchRows, type RowItem } from "@/lib/search-rows";
+import { searchIssueSnippets } from "@/lib/search-snippets";
 import { filterMemberMatches } from "@/lib/member-search";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
@@ -128,24 +128,6 @@ function HighlightText({
 // RowItem + buildSearchRows live in lib/search-rows.ts so the ordering rules
 // (including the cancelled partition) are testable without mounting the screen.
 
-function issueIconColor(status: IssueStatus): string {
-  // Tag color for the status label at the end of an issue row.
-  // Mirrors STATUS_CONFIG.iconColor (status-icon.tsx STATUS_COLOR) so the
-  // text tint matches the leading status icon visually.
-  switch (status) {
-    case "in_progress":
-      return "text-warning";
-    case "in_review":
-      return "text-success";
-    case "done":
-      return "text-info";
-    case "blocked":
-      return "text-destructive";
-    default:
-      return "text-muted-foreground";
-  }
-}
-
 function navigateOnTap(slug: string | null, path: string) {
   // Search is `presentation: "modal"` (see (app)/[workspace]/_layout.tsx).
   // `router.replace` swaps the modal out for the destination in a single
@@ -156,6 +138,29 @@ function navigateOnTap(slug: string | null, path: string) {
   router.replace(path);
 }
 
+/**
+ * Trailing assignee avatar, mirroring web's `IssueAssigneeAvatar`
+ * (search-command.tsx:111-127). Renders nothing when the issue is unassigned —
+ * an empty actor chip would read as "assigned to nobody in particular" rather
+ * than "unassigned".
+ */
+function IssueAssigneeAvatar({
+  assigneeType,
+  assigneeId,
+}: {
+  assigneeType?: string | null;
+  assigneeId?: string | null;
+}) {
+  if (!assigneeType || !assigneeId) return null;
+  return (
+    <ActorAvatar
+      type={assigneeType as React.ComponentProps<typeof ActorAvatar>["type"]}
+      id={assigneeId}
+      size={20}
+    />
+  );
+}
+
 interface SearchIssueRowProps {
   item: SearchIssueResult;
   query: string;
@@ -163,13 +168,13 @@ interface SearchIssueRowProps {
 }
 
 function SearchIssueRow({ item, query, slug }: SearchIssueRowProps) {
-  // Web only renders the snippet line for comment matches
-  // (packages/views/search/search-command.tsx:632) and the backend only
-  // populates `matched_snippet` for comment matches anyway
-  // (server/internal/handler/issue.go:592). Keep mobile strictly aligned.
-  const showSnippet =
-    item.match_source === "comment" && !!item.matched_snippet;
-  const statusLabel = useStatusLabel()(item.status);
+  // One line per snippet kind, in web's order (description then comment);
+  // a result can carry both. Reading the canonical fields rather than
+  // `match_source` + `matched_snippet` is what makes a description-only hit
+  // visible at all — see lib/search-snippets.ts for the server field semantics.
+  const snippets = searchIssueSnippets(item);
+  const { colorScheme } = useColorScheme();
+  const muted = THEME[colorScheme].mutedForeground;
   const statusEntry = useIssueStatuses().entryOf(item.status);
   return (
     <Pressable
@@ -195,28 +200,36 @@ function SearchIssueRow({ item, query, slug }: SearchIssueRowProps) {
             numberOfLines={1}
           />
         </View>
-        <Text className={`text-xs shrink-0 ${issueIconColor(item.status as IssueStatus)}`}>
-          {statusLabel}
-        </Text>
+        <IssueAssigneeAvatar
+          assigneeType={item.assignee_type}
+          assigneeId={item.assignee_id}
+        />
       </View>
-      {showSnippet ? (
-        <View className="flex-row items-start gap-2 mt-1 pl-[68px]">
+      {snippets.map((snippet) => (
+        <View
+          key={snippet.kind}
+          className="flex-row items-start gap-2 mt-1 pl-[68px]"
+        >
           <Ionicons
-            name="chatbubble-outline"
+            name={
+              snippet.kind === "description"
+                ? "document-text-outline"
+                : "chatbubble-outline"
+            }
             size={12}
-            className="text-muted-foreground"
+            color={muted}
             style={{ marginTop: 2 }}
           />
           <View className="flex-1">
             <HighlightText
-              text={item.matched_snippet ?? ""}
+              text={snippet.text}
               query={query}
               className="text-xs text-muted-foreground"
               numberOfLines={1}
             />
           </View>
         </View>
-      ) : null}
+      ))}
     </Pressable>
   );
 }
@@ -310,7 +323,6 @@ interface RecentRowProps {
 }
 
 function RecentRow({ item, slug }: RecentRowProps) {
-  const statusLabel = useStatusLabel()(item.status);
   const statusEntry = useIssueStatuses().entryOf(item.status);
   return (
     <Pressable
@@ -330,9 +342,10 @@ function RecentRow({ item, slug }: RecentRowProps) {
         <Text className="flex-1 text-sm text-foreground" numberOfLines={1}>
           {item.title}
         </Text>
-        <Text className={`text-xs shrink-0 ${issueIconColor(item.status as IssueStatus)}`}>
-          {statusLabel}
-        </Text>
+        <IssueAssigneeAvatar
+          assigneeType={item.assignee_type}
+          assigneeId={item.assignee_id}
+        />
       </View>
     </Pressable>
   );

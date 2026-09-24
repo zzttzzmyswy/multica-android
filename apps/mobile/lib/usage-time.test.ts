@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   DashboardAgentRunTime,
   DashboardRunTimeDaily,
@@ -11,9 +11,12 @@ import {
 import {
   aggregateDailyTasks,
   aggregateDailyTime,
+  aggregateWeeklyTasks,
+  aggregateWeeklyTime,
   formatDuration,
   mergeAgentDashboardRows,
   bucketAgentDashboardRows,
+  deletedAgentCount,
 } from "./usage-time";
 
 const daily = (rows: [string, number, number, number, number][]): DashboardRunTimeDaily[] =>
@@ -255,5 +258,131 @@ describe("bucketAgentDashboardRows", () => {
     expect(out.some((r) => r.agentId === DELETED_AGENTS_ROW_ID)).toBe(false);
     const restricted = out.find((r) => r.agentId === RESTRICTED_AGENTS_ROW_ID);
     expect(restricted?.seconds).toBe(120);
+  });
+});
+
+// The caption's "· N deleted" suffix. The bucket is one row standing for N
+// agents, so this reads the unbucketed list rather than the bucket's length.
+describe("deletedAgentCount", () => {
+  it("counts every agent the bucket will fold", () => {
+    const rows = mergeAgentDashboardRows(
+      token([
+        ["a", 100, 1],
+        ["gone-1", 50, 1],
+        ["gone-2", 20, 1],
+      ]),
+      runTime([]),
+    );
+    expect(deletedAgentCount(rows, new Set(["a"]))).toBe(2);
+  });
+
+  it("counts nothing while the agent list is still loading", () => {
+    const rows = mergeAgentDashboardRows(token([["a", 1, 1]]), runTime([]));
+    expect(deletedAgentCount(rows, null)).toBe(0);
+  });
+
+  // The server's restricted bucket is unknown to the agent list too, but its
+  // agents are alive — calling them deleted is the MUL-5409 mislabel.
+  it("does not count the restricted bucket as deleted", () => {
+    const rows = mergeAgentDashboardRows(
+      token([
+        [RESTRICTED_AGENTS_ROW_ID, 7, 1],
+        ["gone", 3, 1],
+      ]),
+      runTime([]),
+    );
+    expect(deletedAgentCount(rows, new Set<string>())).toBe(1);
+  });
+
+  it("is zero when every row names a known agent", () => {
+    const rows = mergeAgentDashboardRows(
+      token([
+        ["a", 1, 1],
+        ["b", 1, 1],
+      ]),
+      runTime([]),
+    );
+    expect(deletedAgentCount(rows, new Set(["a", "b"]))).toBe(0);
+  });
+});
+
+// FROZEN_DAY = Tue 2026-08-25 12:00Z → the current week starts Mon 2026-08-24.
+const FROZEN_DAY = "2026-08-25T12:00:00Z";
+
+// The weekly grain rides on the page's whole-week over-fetch: rows are trimmed
+// back to `days` for the daily surfaces but folded whole here, so a weekly bar
+// is never a truncated week.
+describe("aggregateWeeklyTime / aggregateWeeklyTasks", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(FROZEN_DAY));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("folds each row into its Mon-start week, pre-seeding empty weeks", () => {
+    const weekly = aggregateWeeklyTime(
+      daily([
+        ["2026-08-12", 10, 1, 0, 0], // week of 2026-08-10
+        ["2026-08-20", 20, 1, 0, 0], // week of 2026-08-17
+        ["2026-08-24", 30, 1, 0, 0], // week of 2026-08-24
+      ]),
+      "UTC",
+      4,
+    );
+    expect(weekly.map((w) => w.date)).toEqual([
+      "2026-08-03",
+      "2026-08-10",
+      "2026-08-17",
+      "2026-08-24",
+    ]);
+    expect(weekly.map((w) => w.totalSeconds)).toEqual([0, 10, 20, 30]);
+    // Same row shape as the daily fold, so the chart renders either grain.
+    expect(weekly[1]!.label).toBe("8/10");
+  });
+
+  it("drops rows from the partial week before the window", () => {
+    // A 1-week window covers 08-24 only; the over-fetched 08-17 week must not
+    // reappear as a bar.
+    const weekly = aggregateWeeklyTime(
+      daily([
+        ["2026-08-18", 99, 1, 0, 0],
+        ["2026-08-25", 5, 1, 0, 0],
+      ]),
+      "UTC",
+      1,
+    );
+    expect(weekly.map((w) => w.date)).toEqual(["2026-08-24"]);
+    expect(weekly.map((w) => w.totalSeconds)).toEqual([5]);
+  });
+
+  it("subtracts cancelled from completed, the same as the daily fold", () => {
+    const weekly = aggregateWeeklyTasks(
+      daily([["2026-08-25", 100, 10, 3, 2]]),
+      "UTC",
+      1,
+    );
+    expect(weekly[0]).toMatchObject({ completed: 5, failed: 3, cancelled: 2 });
+  });
+
+  it("sums a week's runs across its days", () => {
+    const weekly = aggregateWeeklyTasks(
+      daily([
+        ["2026-08-24", 10, 4, 1, 0],
+        ["2026-08-25", 20, 6, 0, 1],
+      ]),
+      "UTC",
+      1,
+    );
+    // completed = (4-1) + (6-1) = 8
+    expect(weekly[0]).toMatchObject({ completed: 8, failed: 1, cancelled: 1 });
+  });
+
+  it("anchors the current week on the viewer's zone", () => {
+    // Sun 2026-08-23 11:00Z is already Mon the 24th in Kiritimati (UTC+14).
+    vi.setSystemTime(new Date("2026-08-23T11:00:00Z"));
+    expect(aggregateWeeklyTime([], "UTC", 1)[0]!.date).toBe("2026-08-17");
+    expect(aggregateWeeklyTime([], "Pacific/Kiritimati", 1)[0]!.date).toBe("2026-08-24");
   });
 });

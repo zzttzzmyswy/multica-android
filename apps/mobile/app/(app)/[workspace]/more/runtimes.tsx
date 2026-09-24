@@ -14,7 +14,7 @@
  * picks its row by id.
  */
 import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, SectionList, View } from "react-native";
+import { ActivityIndicator, Linking, Pressable, SectionList, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -25,6 +25,7 @@ import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { runtimeListOptions } from "@/data/queries/runtimes";
+import { runtimeProfileListOptions } from "@/data/queries/runtime-profiles";
 import { agentListOptions } from "@/data/queries/agents";
 import { agentTaskSnapshotOptions } from "@/data/queries/agent-task-snapshot";
 import {
@@ -33,6 +34,14 @@ import {
   runtimeRowLabel,
   type RuntimeMachine,
 } from "@/lib/runtime-machines";
+import {
+  isDisabledCustomRuntime,
+  isPendingCustomRuntime,
+  isPendingCustomRuntimeWarning,
+  orphanProfileRuntimes,
+  pendingRuntimeCommandName,
+} from "@/lib/pending-runtime";
+import { daemonRuntimesDocsHref } from "@/lib/runtime-docs";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
 import { ConnectRemoteDialog } from "@/components/runtimes/connect-remote-dialog";
@@ -127,6 +136,9 @@ export default function RuntimesPage() {
   );
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
   const { data: taskSnapshot = [] } = useQuery(agentTaskSnapshotOptions(wsId));
+  // Custom runtime definitions. They carry the rows for runtimes no machine is
+  // currently serving — see orphanProfileRuntimes.
+  const { data: profiles = [] } = useQuery(runtimeProfileListOptions(wsId));
 
   const runtimes = useMemo(() => data ?? [], [data]);
 
@@ -140,14 +152,30 @@ export default function RuntimesPage() {
     });
   }, [runtimes, agents, taskSnapshot, user?.id]);
 
-  // Grouped sections for SectionList — one section per machine, its runtimes
-  // as the rows underneath.
-  const sections = useMemo(
-    () => machines.map((machine) => ({ key: machine.id, machine, data: machine.runtimes })),
-    [machines],
+  const orphans = useMemo(
+    () => orphanProfileRuntimes({ machines, profiles, runtimes }),
+    [machines, profiles, runtimes],
   );
 
-  const showEmpty = !isLoading && !error && runtimes.length === 0;
+  // Grouped sections for SectionList — one section per machine, its runtimes
+  // as the rows underneath, then the profiles nothing is serving.
+  const sections = useMemo(() => {
+    const machineSections = machines.map((machine) => ({
+      key: machine.id,
+      kind: "machine" as const,
+      machine,
+      data: machine.runtimes,
+    }));
+    if (orphans.length === 0) return machineSections;
+    return [
+      ...machineSections,
+      { key: "unassigned", kind: "unassigned" as const, data: orphans },
+    ];
+  }, [machines, orphans]);
+
+  const showEmpty =
+    !isLoading && !error && runtimes.length === 0 && orphans.length === 0;
+  const machineCount = machines.length;
 
   return (
     <>
@@ -180,46 +208,67 @@ export default function RuntimesPage() {
             </Button>
           </View>
         ) : showEmpty ? (
-          <View className="flex-1 items-center justify-center px-6 gap-1">
-            <Ionicons name="server-outline" size={32} color={muted} />
-            <Text className="text-sm text-muted-foreground text-center mt-2">
-              {t("runtimes.emptyTitle")}
-            </Text>
-            <Text className="text-xs text-muted-foreground/70 text-center">
-              {t("runtimes.emptyDescription")}
-            </Text>
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-3"
-              onPress={() => setShowConnect(true)}
-            >
-              <Ionicons name="add" size={14} color={muted} />
-              <Text>{t("runtimes.actions.connect")}</Text>
-            </Button>
-          </View>
+          <>
+            <CollectionHeader count={machineCount} />
+            <View className="flex-1 items-center justify-center px-6 gap-1">
+              <Ionicons name="server-outline" size={32} color={muted} />
+              <Text className="text-sm text-muted-foreground text-center mt-2">
+                {t("runtimes.emptyTitle")}
+              </Text>
+              <Text className="text-xs text-muted-foreground/70 text-center">
+                {t("runtimes.emptyDescription")}
+              </Text>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onPress={() => setShowConnect(true)}
+              >
+                <Ionicons name="add" size={14} color={muted} />
+                <Text>{t("runtimes.actions.connect")}</Text>
+              </Button>
+            </View>
+          </>
         ) : (
           <SectionList
             sections={sections}
             keyExtractor={(item) => item.id}
-            renderSectionHeader={({ section }) => (
-              <MachineHeader
-                machine={section.machine}
-                onPress={() => {
-                  if (wsSlug && section.machine.runtimes.length === 1) {
+            ListHeaderComponent={<CollectionHeader count={machineCount} />}
+            renderSectionHeader={({ section }) =>
+              section.kind === "machine" ? (
+                <MachineHeader
+                  machine={section.machine}
+                  onPress={() => {
+                    if (!wsSlug) return;
+                    // Machine ids can carry a colon (`local:<daemonId>`,
+                    // `cloud:device:<name>`), so encode before it enters the
+                    // path segment. Web routes the same id at /runtimes/[id].
                     router.push(
-                      `/${wsSlug}/more/runtimes/${section.machine.runtimes[0]!.id}`,
+                      `/${wsSlug}/more/runtimes/machine/${encodeURIComponent(section.machine.id)}`,
                     );
-                  }
-                }}
-              />
-            )}
+                  }}
+                />
+              ) : (
+                <UnassignedHeader />
+              )
+            }
             renderItem={({ section, item }) => (
               <RuntimeRow
                 runtime={item}
-                machineTitle={section.machine.title}
+                machineTitle={
+                  section.kind === "machine" ? section.machine.title : ""
+                }
+                // A placeholder has no runtime row to open — the profile it
+                // stands for is what the user can act on, and on a phone that
+                // lives in the custom-runtimes dialog (the "row actions" web
+                // offers inline).
                 onPress={() => {
-                  if (wsSlug) router.push(`/${wsSlug}/more/runtimes/${item.id}`);
+                  if (isPendingCustomRuntime(item)) {
+                    setProfilesIntent("manage");
+                    setShowProfiles(true);
+                  } else if (wsSlug) {
+                    router.push(`/${wsSlug}/more/runtimes/${item.id}`);
+                  }
                 }}
               />
             )}
@@ -235,10 +284,75 @@ export default function RuntimesPage() {
 }
 
 /**
+ * Collection header — web's `PageHeaderBar` (runtimes-page.tsx:375-415) minus
+ * the parts a phone already carries elsewhere: the native nav bar owns the
+ * icon, title and the "add" action, so what is left to surface is the machine
+ * count, the tagline that says what a runtime is, and the docs link.
+ */
+function CollectionHeader({ count }: { count: number }) {
+  const { t, locale } = useTranslation();
+
+  const openDocs = useCallback(() => {
+    // Handing the URL to the system browser is best-effort: no handler means
+    // the tap does nothing, which is not worth an error surface.
+    Linking.openURL(daemonRuntimesDocsHref(locale)).catch(() => {});
+  }, [locale]);
+
+  return (
+    <View className="px-4 pt-3 pb-1 gap-1">
+      <View className="flex-row items-baseline gap-1.5">
+        <Text className="text-sm font-semibold text-foreground">
+          {t("runtimes.page.title")}
+        </Text>
+        <Text className="text-xs tabular-nums text-muted-foreground">
+          {count}
+        </Text>
+      </View>
+      <Text className="text-xs text-muted-foreground/80">
+        {t("runtimes.page.tagline")}
+      </Text>
+      <Pressable
+        onPress={openDocs}
+        hitSlop={6}
+        accessibilityRole="link"
+        accessibilityLabel={t("runtimes.page.learn_more")}
+        className="self-start active:opacity-70"
+      >
+        <Text className="text-xs font-medium text-info">
+          {t("runtimes.page.learn_more")}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+/**
+ * Header for the profiles nothing is serving — web's `OrphanRuntimeProfiles`
+ * section title + description (runtimes-page.tsx:348-373). The description is
+ * the only place that tells the user *why* these rows look offline and what to
+ * do about them, so it stays even on a narrow screen.
+ */
+function UnassignedHeader() {
+  const { t } = useTranslation();
+  return (
+    <View className="px-4 pt-6 pb-1.5 gap-1">
+      <Text className="text-sm font-semibold text-foreground">
+        {t("runtimes.profiles.unassigned_title")}
+      </Text>
+      <Text className="text-xs text-muted-foreground/80">
+        {t("runtimes.profiles.unassigned_description")}
+      </Text>
+    </View>
+  );
+}
+
+/**
  * Machine header — the consolidation unit web's machine-grouped list renders.
  * Carries the machine title, section badge (Local / Remote / Cloud), health
  * dot + label, online count, running/queued workload and the principal CLI
- * version of the machine's daemon.
+ * version of the machine's daemon. Tapping it opens the machine detail page
+ * (web's `/runtimes/[machineId]`); the rows underneath stay the per-provider
+ * runtime shortcuts.
  */
 function MachineHeader({
   machine,
@@ -275,7 +389,12 @@ function MachineHeader({
 
   return (
     <View className="px-4 pt-4 pb-1.5">
-      <Pressable onPress={onPress} disabled={machine.runtimes.length !== 1}>
+      <Pressable
+        onPress={onPress}
+        className="active:opacity-70"
+        accessibilityRole="button"
+        accessibilityLabel={t("runtimes.machine.open", { name: machine.title })}
+      >
         <View className="flex-row items-center gap-3">
           <View className="size-8 rounded-lg bg-secondary items-center justify-center">
             <Ionicons
@@ -318,6 +437,7 @@ function MachineHeader({
               </Text>
             </View>
           ) : null}
+          <Ionicons name="chevron-forward" size={14} color={muted} />
         </View>
       </Pressable>
     </View>
@@ -338,8 +458,12 @@ function RuntimeRow({
   const muted = THEME[colorScheme].mutedForeground;
   const timeAgo = useTimeAgo();
   const health = deriveRuntimeHealth(runtime, Date.now());
+  const pending = isPendingCustomRuntime(runtime);
+  const disabled = isDisabledCustomRuntime(runtime);
   const isCustom = !!runtime.profile_id;
   const displayName = runtimeRowLabel(runtime, machineTitle);
+  const command = pending ? pendingRuntimeCommandName(runtime) : null;
+
   // Pair the dot colour with a filled badge tone, same split as web's
   // HealthCell (colored dot + caption label underneath).
   return (
@@ -357,12 +481,34 @@ function RuntimeRow({
             <Text className="text-sm font-medium text-foreground" numberOfLines={1}>
               {displayName}
             </Text>
-            {/* Built-in vs Custom profile — profile_id is the discriminator. */}
-            <View className="px-1.5 py-px rounded-full bg-secondary">
-              <Text className="text-[10px] text-muted-foreground font-medium">
-                {isCustom ? t("runtimes.kind.custom") : t("runtimes.kind.builtin")}
-              </Text>
-            </View>
+            {pending ? (
+              // A placeholder says what it is *doing*, not what it is — web's
+              // PendingRuntimeBadge replaces the Built-in/Custom chip.
+              <View
+                className={cn(
+                  "px-1.5 py-px rounded-full",
+                  disabled ? "bg-secondary" : "bg-warning/10",
+                )}
+              >
+                <Text
+                  className={cn(
+                    "text-[10px] font-medium",
+                    disabled ? "text-muted-foreground" : "text-warning",
+                  )}
+                >
+                  {disabled
+                    ? t("runtimes.list.badge_disabled")
+                    : t("runtimes.list.badge_registering")}
+                </Text>
+              </View>
+            ) : (
+              /* Built-in vs Custom profile — profile_id is the discriminator. */
+              <View className="px-1.5 py-px rounded-full bg-secondary">
+                <Text className="text-[10px] text-muted-foreground font-medium">
+                  {isCustom ? t("runtimes.kind.custom") : t("runtimes.kind.builtin")}
+                </Text>
+              </View>
+            )}
             {/* Only public earns a badge — private is the default. */}
             {runtime.visibility === "public" ? (
               <View className="px-1.5 py-px rounded-full bg-info/10">
@@ -373,18 +519,35 @@ function RuntimeRow({
             ) : null}
           </View>
           <View className="flex-row items-center gap-1.5">
-            <View
+            {/* A placeholder is offline by construction, so the health dot
+                would read as "this runtime is down" instead of "nothing has
+                picked it up yet" — web drops the dot and states the wait. */}
+            {pending ? null : (
+              <View className={cn("size-1.5 rounded-full", HEALTH_DOT[health])} />
+            )}
+            <Text
               className={cn(
-                "size-1.5 rounded-full",
-                HEALTH_DOT[health],
+                "text-xs",
+                pending && !disabled ? "text-warning" : "text-muted-foreground",
               )}
-            />
-            <Text className="text-xs text-muted-foreground">
-              {t(`runtimes.health.${health}`)}
-              {runtime.provider ? ` · ${runtime.provider}` : ""}
-              {health !== "online" && runtime.last_seen_at
-                ? ` · ${timeAgo(runtime.last_seen_at)}`
-                : ""}
+              numberOfLines={1}
+            >
+              {pending
+                ? disabled
+                  ? t("runtimes.list.pending_health_disabled")
+                  : isPendingCustomRuntimeWarning(runtime, Date.now())
+                    ? t("runtimes.list.pending_health_warning")
+                    : t("runtimes.list.pending_health")
+                : t(`runtimes.health.${health}`)}
+              {pending
+                ? command
+                  ? ` · ${command}`
+                  : ""
+                : `${runtime.provider ? ` · ${runtime.provider}` : ""}${
+                    health !== "online" && runtime.last_seen_at
+                      ? ` · ${timeAgo(runtime.last_seen_at)}`
+                      : ""
+                  }`}
             </Text>
           </View>
         </View>

@@ -18,6 +18,9 @@ export type RuntimeMachineSection = "local" | "remote" | "cloud";
 export type RuntimeMachineFilter = "all" | "online" | "issues";
 
 export interface RuntimeWorkloadSummary {
+  /** Agents serving this runtime, in the server's list order. Drives the
+   *  machine-detail row's avatar stack; `.length` doubles as the agent count. */
+  agentIds: string[];
   runningCount: number;
   queuedCount: number;
 }
@@ -523,6 +526,64 @@ export function machineUpdateRuntime(
   );
 }
 
+/**
+ * Locate a machine on the machine-detail route. New links carry the machine's
+ * own id; legacy links that still carry a runtime id stay valid and expand to
+ * the containing machine. Mirrors web runtime-detail-page.tsx:findMachine —
+ * including the `local:placeholder` fallback Desktop uses for its synthesized
+ * stopped-daemon row, which mobile only reaches when ensureLocalMachine ran.
+ */
+export function findMachine(
+  machines: RuntimeMachine[],
+  locator: string,
+): RuntimeMachine | null {
+  return (
+    machines.find(
+      (candidate) =>
+        candidate.id === locator ||
+        candidate.runtimes.some((runtime) => runtime.id === locator),
+    ) ??
+    (locator === "local:placeholder"
+      ? (machines.find((candidate) => candidate.isCurrent) ?? null)
+      : null)
+  );
+}
+
+/**
+ * The runtime a viewer may rename through, plus the machine's current name.
+ * A machine hosts one runtime per provider and the rename fans out across the
+ * daemon (apply_to_machine), so any editable runtime on it is a valid command
+ * channel. Admins may use the first; everyone else must own one. Mirrors web
+ * runtime-detail-page.tsx:renameTarget.
+ */
+export function machineRenameTarget(
+  machine: RuntimeMachine,
+  currentUserId: string | null | undefined,
+  isAdmin: boolean,
+): { runtimeId: string; currentName: string } | null {
+  if (machine.runtimes.length === 0) return null;
+  const editable = isAdmin
+    ? machine.runtimes[0]
+    : machine.runtimes.find((runtime) => runtime.owner_id === currentUserId);
+  if (!editable) return null;
+  return {
+    runtimeId: editable.id,
+    currentName: sharedCustomName(machine.runtimes) ?? "",
+  };
+}
+
+/**
+ * "Add custom runtime" only makes sense on a local machine with a daemon to
+ * register against, and only for workspace admins (the server gates the
+ * profile create the same way). Mirrors web runtime-detail-page.tsx:canAddRuntime.
+ */
+export function canAddMachineRuntime(
+  machine: RuntimeMachine,
+  isAdmin: boolean,
+): boolean {
+  return isAdmin && machine.mode === "local" && !!machine.daemonId;
+}
+
 /** Per-runtime workload snapshot — mirrors web runtime-list's buildWorkloadIndex. */
 export function buildWorkloadIndex(
   agents: Agent[],
@@ -534,7 +595,12 @@ export function buildWorkloadIndex(
   for (const a of agents) {
     if (!a.runtime_id || a.archived_at) continue;
     agentToRuntime.set(a.id, a.runtime_id);
-    const entry = result.get(a.runtime_id) ?? { runningCount: 0, queuedCount: 0 };
+    const entry = result.get(a.runtime_id) ?? {
+      agentIds: [],
+      runningCount: 0,
+      queuedCount: 0,
+    };
+    entry.agentIds.push(a.id);
     result.set(a.runtime_id, entry);
   }
   for (const t of tasks) {

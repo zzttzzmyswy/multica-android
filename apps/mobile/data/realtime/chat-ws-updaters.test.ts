@@ -483,3 +483,47 @@ describe("patchSessionListAfterUpdate", () => {
     expect(rows?.map((s) => s.id)).toEqual(["a", "b"]);
   });
 });
+
+// Iteration 172 (C3): the supplement also RESOLVES the client-only pending
+// marker that the refresh tap raised. Without this the refresh control would
+// spin until the marker's own deadline even though the pills had arrived.
+describe("applyChatQuickActionsToCache — pending marker", () => {
+  function pendingMarker(messageId: string) {
+    return { message_id: messageId, task_id: "", expires_at: Date.now() + 12_000 };
+  }
+
+  it("clears the marker when the supplement belongs to the marked turn", async () => {
+    const qc = new QueryClient();
+    qc.setQueryData<ChatMessage[]>(chatKeys.messages(SESSION), [assistantMsg()]);
+    qc.setQueryData(chatKeys.quickActionsPending(SESSION), pendingMarker("msg-1"));
+
+    await applyChatQuickActionsToCache(qc, quickActionsPayload());
+
+    expect(
+      qc.getQueryData(chatKeys.quickActionsPending(SESSION)),
+    ).toBeNull();
+  });
+
+  it("leaves a NEWER turn's marker alone", async () => {
+    // A late supplement for turn N must not stop the spinner on turn N+1.
+    const qc = new QueryClient();
+    qc.setQueryData<ChatMessage[]>(chatKeys.messages(SESSION), [
+      assistantMsg({ id: "msg-2" }),
+    ]);
+    qc.setQueryData(
+      chatKeys.quickActionsPending(SESSION),
+      pendingMarker("msg-2"),
+    );
+
+    await applyChatQuickActionsToCache(
+      qc,
+      quickActionsPayload({ message_id: "msg-1" }),
+    );
+
+    expect(
+      qc.getQueryData<{ message_id: string }>(
+        chatKeys.quickActionsPending(SESSION),
+      )?.message_id,
+    ).toBe("msg-2");
+  });
+});

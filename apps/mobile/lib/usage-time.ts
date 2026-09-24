@@ -27,8 +27,11 @@ import {
   DELETED_AGENTS_ROW_ID,
   RESTRICTED_AGENTS_ROW_ID,
   formatDateLabel,
+  isSyntheticAgentRow,
   type AgentUsageRow,
 } from "@/lib/usage-format";
+import { buildWeekShells } from "@/lib/usage-dim";
+import { weekStartIso } from "@/lib/runtime-usage";
 
 export interface AgentDashboardRow {
   agentId: string;
@@ -84,6 +87,77 @@ export function aggregateDailyTasks(rows: DashboardRunTimeDaily[]): DailyTasksRo
       const completed = Math.max(0, r.task_count - failed - cancelled);
       return { date: r.date, label: formatDateLabel(r.date), completed, failed, cancelled };
     });
+}
+
+/**
+ * Weekly counterpart of `aggregateDailyTime`: one row per trailing calendar
+ * week (Mon–Sun, anchored at today in `tz`), same shape as the daily rows so
+ * the chart and the breakdown rows render either grain without branching.
+ *
+ * `weekCount` weeks are pre-seeded — a week with no runs draws as a zero bar
+ * rather than disappearing — and rows from the partial week the page
+ * over-fetched for the weekly grain but that sit before the window are
+ * dropped. Mirrors web's aggregateWeeklyTime.
+ */
+export function aggregateWeeklyTime(
+  rows: DashboardRunTimeDaily[],
+  tz: string,
+  weekCount: number,
+): DailyTimeRow[] {
+  const shells = buildWeekShells(tz, weekCount);
+  const totals = new Map<string, number>();
+  for (const shell of shells) totals.set(shell.weekStart, 0);
+  for (const r of rows) {
+    const wkStart = weekStartIso(r.date);
+    const current = totals.get(wkStart);
+    if (current === undefined) continue;
+    totals.set(wkStart, current + r.total_seconds);
+  }
+  return shells.map((s) => ({
+    date: s.weekStart,
+    label: formatDateLabel(s.weekStart),
+    totalSeconds: totals.get(s.weekStart) ?? 0,
+  }));
+}
+
+/**
+ * Weekly counterpart of `aggregateDailyTasks`. Same week fold as
+ * `aggregateWeeklyTime`, and the same subtraction of cancelled from
+ * task_count so a run the user stopped never renders in the green completed
+ * segment. Mirrors web's aggregateWeeklyTasks.
+ */
+export function aggregateWeeklyTasks(
+  rows: DashboardRunTimeDaily[],
+  tz: string,
+  weekCount: number,
+): DailyTasksRow[] {
+  const shells = buildWeekShells(tz, weekCount);
+  const buckets = new Map<
+    string,
+    { completed: number; failed: number; cancelled: number }
+  >();
+  for (const shell of shells) {
+    buckets.set(shell.weekStart, { completed: 0, failed: 0, cancelled: 0 });
+  }
+  for (const r of rows) {
+    const bucket = buckets.get(weekStartIso(r.date));
+    if (!bucket) continue;
+    const failed = r.failed_count;
+    const cancelled = r.cancelled_count;
+    bucket.completed += Math.max(0, r.task_count - failed - cancelled);
+    bucket.failed += failed;
+    bucket.cancelled += cancelled;
+  }
+  return shells.map((s) => {
+    const b = buckets.get(s.weekStart) ?? { completed: 0, failed: 0, cancelled: 0 };
+    return {
+      date: s.weekStart,
+      label: formatDateLabel(s.weekStart),
+      completed: b.completed,
+      failed: b.failed,
+      cancelled: b.cancelled,
+    };
+  });
 }
 
 /**
@@ -192,4 +266,26 @@ export function bucketAgentDashboardRows(
     bucket.cost += r.cost;
   }
   return hasDeleted ? [...knownRows, bucket] : knownRows;
+}
+
+/**
+ * How many distinct hard-deleted agents `bucketAgentDashboardRows` folded into
+ * the deleted bucket — the bucket is a single row, so its own length can't say.
+ * Drives the leaderboard caption's "· N deleted" suffix (web dashboard-page
+ * `deletedAgentCount`).
+ *
+ * Read off the *unbucketed* rows: once folded, the individuals are gone. The
+ * server's restricted bucket is not a known agent either, but it is not a
+ * deletion — counting it would mislabel live-but-invisible agents as deleted
+ * (web MUL-5409). `knownAgentIds` null (agent list still loading) counts
+ * nothing, matching the bucketing pass that is itself a no-op in that window.
+ */
+export function deletedAgentCount(
+  rows: readonly AgentDashboardRow[],
+  knownAgentIds: ReadonlySet<string> | null,
+): number {
+  if (!knownAgentIds) return 0;
+  return rows.filter(
+    (r) => !knownAgentIds.has(r.agentId) && !isSyntheticAgentRow(r.agentId),
+  ).length;
 }

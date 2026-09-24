@@ -37,6 +37,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { TextField } from "@/components/ui/text-field";
 import { AutosizeTextArea } from "@/components/ui/autosize-textarea";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { AvatarUploadControl } from "@/components/ui/avatar-upload-control";
 import { Markdown } from "@/lib/markdown";
 import { SquadMemberPicker } from "@/components/squad/squad-member-picker";
 import { squadDetailOptions, squadMemberListOptions, squadMemberStatusOptions } from "@/data/queries/squads";
@@ -79,6 +80,7 @@ const STATUS_DOT: Record<string, string> = {
 export default function SquadDetailPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const user = useAuthStore((s) => s.user);
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
@@ -343,6 +345,25 @@ export default function SquadDetailPage() {
     setInstructionsOpen(true);
   }, [squad]);
 
+  // Avatar uploads persist on their own, like the workspace logo — the squad
+  // detail header shows the result as soon as `useUpdateSquad` invalidates.
+  // `mutateAsync` (not `mutate`) so the control stays busy until the write
+  // lands; the rejection is reported here, which is why the control swallows it.
+  const onUploadAvatar = useCallback(
+    async (url: string) => {
+      try {
+        await updateSquad.mutateAsync({ avatar_url: url });
+        Alert.alert(t("squads.detail.avatarUpdated"));
+      } catch (err) {
+        Alert.alert(
+          t("squads.detail.updateFailed"),
+          err instanceof Error ? err.message : t("common.unknownError"),
+        );
+      }
+    },
+    [updateSquad, t],
+  );
+
   const onSaveInstructions = useCallback(() => {
     if (!squad) return;
     updateSquad.mutate(
@@ -427,7 +448,18 @@ export default function SquadDetailPage() {
           <>
             {/* Header */}
             <View className="px-4 pt-4 flex-row items-center gap-3">
-              <ActorAvatar type="squad" id={squad.id} size={56} />
+              {canManage ? (
+                <AvatarUploadControl
+                  variant="squad"
+                  value={squad.avatar_url ?? null}
+                  name={squad.name}
+                  size={56}
+                  accessibilityLabel={t("squads.detail.changeAvatar")}
+                  onUploaded={onUploadAvatar}
+                />
+              ) : (
+                <ActorAvatar type="squad" id={squad.id} size={56} />
+              )}
               <View className="flex-1 min-w-0 gap-0.5">
                 <View className="flex-row items-center gap-2">
                   <Text
@@ -487,10 +519,29 @@ export default function SquadDetailPage() {
               )}
 
               {canManage ? (
-                <Button variant="outline" onPress={() => setPickerOpen(true)}>
-                  <Ionicons name="add" size={15} color={theme.mutedForeground} />
-                  <Text>{t("squads.detail.addMember")}</Text>
-                </Button>
+                <>
+                  {/* Create-agent entry (web parity: squad-detail-page
+                      createAgentHref → /agents/new?squad=<id>): opens the
+                      manual create form in squad context, which joins the
+                      new agent to this squad on submit. */}
+                  {wsSlug ? (
+                    <Button
+                      variant="outline"
+                      onPress={() =>
+                        router.push(
+                          `/${wsSlug}/more/agents/new/manual?squad=${encodeURIComponent(id)}`,
+                        )
+                      }
+                    >
+                      <Ionicons name="add" size={15} color={theme.mutedForeground} />
+                      <Text>{t("squads.detail.createAgent")}</Text>
+                    </Button>
+                  ) : null}
+                  <Button variant="outline" onPress={() => setPickerOpen(true)}>
+                    <Ionicons name="add" size={15} color={theme.mutedForeground} />
+                    <Text>{t("squads.detail.addMember")}</Text>
+                  </Button>
+                </>
               ) : null}
             </View>
 

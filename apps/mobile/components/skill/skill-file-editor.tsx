@@ -43,13 +43,12 @@ import { useUpdateSkill } from "@/data/mutations/skills";
 import { skillKeys } from "@/data/queries/skills";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useQueryClient } from "@tanstack/react-query";
+import { SKILL_MD, type SkillFileDraft } from "@/lib/skill-file-paths";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { Markdown } from "@/lib/markdown";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-const SKILL_MD = "SKILL.md";
 
 export function isSkillMdPath(path: string): boolean {
   return path === SKILL_MD;
@@ -61,10 +60,8 @@ function isMarkdownPath(path: string): boolean {
 
 type EditorMode = "preview" | "raw";
 
-function currentContent(skill: Skill | null, path: string): string {
-  if (!skill) return "";
-  if (isSkillMdPath(path)) return skill.content ?? "";
-  return skill.files?.find((f) => f.path === path)?.content ?? "";
+function contentOf(files: SkillFileDraft[], path: string): string {
+  return files.find((f) => f.path === path)?.content ?? "";
 }
 
 /** Frontmatter is stripped from the preview (web file-viewer parity). */
@@ -76,12 +73,21 @@ function previewBody(path: string, text: string): string {
 export function SkillFileEditor({
   path,
   skill,
+  files,
   onClose,
 }: {
   path: string;
-  /** Current server skill (latest query data) — source of baseline + conflict
-   *  version + untouched files for the wholesale save. */
+  /** Current server skill (latest query data) — source of the main file's
+   *  content, the conflict version, and the fields the save echoes back. */
   skill: Skill | null;
+  /**
+   * The attached-file set to save, in order. The detail page passes its draft
+   * when it has one and the server's list otherwise, so a save from here
+   * commits any pending add/rename/delete along with the edited text —
+   * the server replaces the file set wholesale, so sending the server's list
+   * instead would silently discard those pending edits.
+   */
+  files: SkillFileDraft[];
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -92,11 +98,15 @@ export function SkillFileEditor({
   const qc = useQueryClient();
   const updateSkill = useUpdateSkill();
 
-  const [text, setText] = useState(() => currentContent(skill, path));
+  const [text, setText] = useState(() =>
+    isSkillMdPath(path) ? (skill?.content ?? "") : contentOf(files, path),
+  );
   const [mode, setMode] = useState<EditorMode>("preview");
   // The content + server updated_at the editor opened with. Only the mount
   // snapshot counts; the parent remounts the modal per path via key.
-  const [baseline] = useState(() => currentContent(skill, path));
+  const [baseline] = useState(() =>
+    isSkillMdPath(path) ? (skill?.content ?? "") : contentOf(files, path),
+  );
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [openedUpdatedAt, setOpenedUpdatedAt] = useState<string | null>(null);
 
@@ -135,7 +145,7 @@ export function SkillFileEditor({
       name: skill.name,
       description: skill.description,
       content: isPrimary ? next : skill.content,
-      files: (skill.files ?? []).map((f) => ({
+      files: files.map((f) => ({
         path: f.path,
         content: !isPrimary && f.path === path ? next : f.content,
       })),
@@ -171,8 +181,9 @@ export function SkillFileEditor({
           style: "cancel",
           onPress: () => {
             // Adopt the server's version: drop local edits and close.
-            const serverContent = currentContent(skill, path);
-            setText(serverContent);
+            setText(
+              isSkillMdPath(path) ? (skill.content ?? "") : contentOf(files, path),
+            );
             onClose();
           },
         },
