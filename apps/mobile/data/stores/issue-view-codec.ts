@@ -23,6 +23,8 @@
  */
 import type { IssueView } from "@multica/core/api/schemas";
 import type { IssuePriority, IssueStatus } from "@multica/core/types";
+// Type-only, like the slice's own import of it.
+import type { CardProperties } from "@multica/core/issues";
 import { BOARD_STATUSES } from "@/lib/issue-status-core";
 import {
   propertyIdFromDimension,
@@ -139,15 +141,22 @@ export function viewQueryFromSnapshot(
 
 /** Serialize the personal display defaults a view seeds on first open.
  *  Mobile subset of web's display payload — viewMode / grouping / sort /
- *  showSubIssues; web's extra keys (cardProperties, swimlaneGrouping, …) are
- *  absent because mobile has no such surface, and their absence reads back as
- *  defaults. */
+ *  showSubIssues / cardProperties. Web's remaining keys (swimlaneGrouping,
+ *  tableColumns, …) are still absent because mobile has no such surface, and
+ *  their absence reads back as defaults.
+ *
+ *  `cardProperties` is written out in full (all eight keys, whatever mobile
+ *  gates) so a view saved on web survives a mobile open-and-resave instead of
+ *  losing the three keys mobile has no content for. The round trip is the
+ *  contract — see `sanitizeViewDisplay` for the read side and
+ *  `issue-filter-slice.ts` for why the three extra keys live in state. */
 export function viewDisplayFromState(state: {
   view: IssueViewMode;
   grouping: IssueGrouping;
   sortBy: IssueSortField;
   sortDirection: IssueSortDirection;
   showSubIssues: boolean;
+  cardProperties: CardProperties;
 }): Record<string, unknown> {
   return {
     viewMode: state.view,
@@ -155,6 +164,7 @@ export function viewDisplayFromState(state: {
     sortBy: state.sortBy,
     sortDirection: state.sortDirection,
     showSubIssues: state.showSubIssues,
+    cardProperties: state.cardProperties,
   };
 }
 
@@ -360,15 +370,17 @@ export function clearDimensionToBaseline(
   }
 }
 
-/** Sanitized display patch — viewMode/grouping/sort/showSubIssues from a
- *  view blob. The caller supplies the surface's own current sortBy as the
- *  fallback so an unsaved view still lands on the list's active sort. */
+/** Sanitized display patch — viewMode/grouping/sort/showSubIssues/
+ *  cardProperties from a view blob. The caller supplies the surface's own
+ *  current sortBy as the fallback so an unsaved view still lands on the
+ *  list's active sort. */
 export interface IssueViewDisplayPatch {
   viewMode: IssueViewMode;
   grouping: IssueGrouping;
   sortBy: IssueSortField;
   sortDirection: IssueSortDirection;
   showSubIssues: boolean;
+  cardProperties: CardProperties;
 }
 
 export function sanitizeViewDisplay(
@@ -383,7 +395,43 @@ export function sanitizeViewDisplay(
     // Web's view-store default is `true`; a view that predates the key (or
     // carries a non-boolean) keeps sub-issues visible.
     showSubIssues: display.showSubIssues !== false,
+    // Per-key boolean fallback, defaulting each missing / non-boolean key to
+    // `true` — web's own default for every one of the eight (view-store.ts
+    // :287-296) and the same rule `showSubIssues` above follows. A view saved
+    // before a toggle existed must not read that toggle as off.
+    cardProperties: sanitizeCardProperties(display.cardProperties),
   };
+}
+
+/** The eight card-property keys, in web's `CARD_PROPERTY_OPTIONS` order. */
+const CARD_PROPERTY_KEYS: (keyof CardProperties)[] = [
+  "priority",
+  "description",
+  "assignee",
+  "startDate",
+  "dueDate",
+  "project",
+  "labels",
+  "childProgress",
+];
+
+/**
+ * Per-key boolean sanitize of a view's `cardProperties` blob. Anything that
+ * is not `false` reads as `true`: a missing key, a `null`, a string, a
+ * non-object. Only an explicit `false` turns a field off, which is what makes
+ * an OLDER view (saved before a key existed) keep the field visible rather
+ * than silently hiding it.
+ */
+export function sanitizeCardProperties(raw: unknown): CardProperties {
+  const source =
+    raw !== null && typeof raw === "object" && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : {};
+  const out = {} as CardProperties;
+  for (const key of CARD_PROPERTY_KEYS) {
+    out[key] = source[key] !== false;
+  }
+  return out;
 }
 
 function sameStrings(a: string[], b: string[]): boolean {
@@ -416,6 +464,7 @@ export type IssueViewSnapshotSource = Pick<
   | "sortDirection"
   | "grouping"
   | "showSubIssues"
+  | "cardProperties"
 >;
 
 /**
@@ -457,6 +506,15 @@ export function viewMatchesSlice(
     wantDisplay.grouping === slice.grouping &&
     wantDisplay.sortBy === slice.sortBy &&
     wantDisplay.sortDirection === slice.sortDirection &&
-    wantDisplay.showSubIssues === slice.showSubIssues
+    wantDisplay.showSubIssues === slice.showSubIssues &&
+    // Card-property toggles are part of a saved view's display, so flipping
+    // one must light the "modified" dot. Without this clause the dot would
+    // stay dark and the user's change would be silently unsavable.
+    sameCardProperties(wantDisplay.cardProperties, slice.cardProperties)
   );
+}
+
+/** Same eight keys, same values — order-independent by construction. */
+function sameCardProperties(a: CardProperties, b: CardProperties): boolean {
+  return CARD_PROPERTY_KEYS.every((key) => a[key] === b[key]);
 }

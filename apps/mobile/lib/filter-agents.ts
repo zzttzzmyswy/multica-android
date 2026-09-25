@@ -18,6 +18,7 @@
  *     which is a different metric and is what the row's "· N tasks" shows.
  */
 import type { Agent } from "@multica/core/types";
+import type { AgentAvailability } from "@multica/core/agents";
 import type { AgentActivity } from "./agent-activity";
 import { matchesPinyin } from "./pinyin-match";
 
@@ -44,6 +45,200 @@ export const AGENT_SORT_DEFAULT_DIRECTION: Record<
   runs: "desc",
   created: "desc",
 };
+
+/** Multi-select filter state — mobile port of web's `AgentListFilters`
+ *  (`packages/core/agents/stores/view-store.ts:42-63`), minus the `access`
+ *  dimension: mobile's access chips (`ScopeFilterChips` in the agents route)
+ *  are already web's `filters.access` equivalent, so re-offering it here would
+ *  duplicate the same axis twice on one screen. Empty array per dimension =
+ *  inactive, exactly as web. */
+export interface AgentListFilters {
+  /** `AgentAvailability` values the filter offers: online / unstable / offline.
+   *  Typed `string[]` exactly as web does (`view-store.ts:44` declares
+   *  `availability: string[]`) — the OPTION list
+   *  (`AGENT_FILTER_AVAILABILITY_VALUES`) is what carries the narrow
+   *  `AgentAvailability` type, so the offered values stay pinned there while
+   *  the selection state stays a plain string list, like web's.
+   *  `archived` is deliberately not offered: web's `AVAILABILITY_VALUES`
+   *  (`agent-list-toolbar.tsx:77-81`) stops at the three runtime states, so an
+   *  archived row matches no availability checkbox (its derived availability
+   *  is `archived`, which is in no option list). */
+  availability: string[];
+  /** Runtime ids. */
+  runtimes: string[];
+  /** Owner user ids. */
+  owners: string[];
+  /** Runtime-native model identifiers (e.g. claude / codex / gpt-…). */
+  models: string[];
+}
+
+export const EMPTY_AGENT_FILTERS: AgentListFilters = {
+  availability: [],
+  runtimes: [],
+  owners: [],
+  models: [],
+};
+
+/** The availability options the filter offers, in web's declaration order
+ *  (`agent-list-toolbar.tsx:77-81`). */
+export const AGENT_FILTER_AVAILABILITY_VALUES: AgentAvailability[] = [
+  "online",
+  "unstable",
+  "offline",
+];
+
+/** How many dimensions are active — drives the toolbar badge, web's
+ *  `countActiveFilterDimensions` (`agent-list-toolbar.tsx:83-97`) over the
+ *  four dimensions mobile carries. */
+export function countActiveAgentFilters(filters: AgentListFilters): number {
+  let count = 0;
+  if (filters.availability.length > 0) count++;
+  if (filters.runtimes.length > 0) count++;
+  if (filters.owners.length > 0) count++;
+  if (filters.models.length > 0) count++;
+  return count;
+}
+
+/** The agent fields the filter and its option lists read. */
+export type AgentFilterAgent = Pick<
+  Agent,
+  "name" | "description" | "runtime_id" | "owner_id" | "model"
+>;
+
+/**
+ * A row the filter reads. Generic in the agent type so a caller that holds
+ * full `Agent` rows keeps them (the page maps straight back to `Agent`), while
+ * a unit test can pass the four-field stub. `availability` is the row's
+ * already-derived value (`null` when the row has no presence), so the filter
+ * and the row's dot cannot disagree about what "online" means.
+ */
+export interface AgentFilterRow<A extends AgentFilterAgent = AgentFilterAgent> {
+  agent: A;
+  availability: AgentAvailability | null;
+}
+
+/**
+ * Row predicate — the mobile port of web's `rowMatchesFilters`
+ * (`packages/views/agents/components/agents-page.tsx:184-226`), reproduced
+ * clause for clause: search first, then the four dimensions. Across
+ * dimensions the clauses are AND (every active dimension must pass); within a
+ * dimension the membership test is OR (`includes`); an empty array means the
+ * dimension is inactive and the row passes it. The `null` guards on
+ * availability and owner are web's own, kept so a row missing either value
+ * cannot match a non-empty selection (matching nothing is the honest reading
+ * of "you asked for someone and this row has no one").
+ */
+export function rowMatchesAgentFilters<A extends AgentFilterAgent>(
+  row: AgentFilterRow<A>,
+  filters: AgentListFilters,
+  query: string,
+): boolean {
+  if (!matchesAgentSearch(row.agent, query.trim().toLowerCase())) return false;
+  if (
+    filters.availability.length > 0 &&
+    (!row.availability || !filters.availability.includes(row.availability))
+  ) {
+    return false;
+  }
+  if (
+    filters.runtimes.length > 0 &&
+    !filters.runtimes.includes(row.agent.runtime_id)
+  ) {
+    return false;
+  }
+  if (
+    filters.owners.length > 0 &&
+    (!row.agent.owner_id || !filters.owners.includes(row.agent.owner_id))
+  ) {
+    return false;
+  }
+  if (filters.models.length > 0 && !filters.models.includes(row.agent.model)) {
+    return false;
+  }
+  return true;
+}
+
+/** A dimension option with its count, in first-seen row order (web builds its
+ *  option lists by iterating `allRows` into a Map, so insertion order is the
+ *  row order — `agent-list-toolbar.tsx:143-173`). */
+export interface AgentFilterOption {
+  value: string;
+  label: string;
+  count: number;
+}
+
+export interface AgentFilterOptions {
+  availability: AgentFilterOption[];
+  runtimes: AgentFilterOption[];
+  owners: AgentFilterOption[];
+  models: AgentFilterOption[];
+}
+
+/**
+ * Build the four dimensions' option lists from the CURRENT SCOPE's UNFILTERED
+ * rows. Web is explicit about this (`agent-list-toolbar.tsx:143-145`):
+ * options come from the scope's rows before any filter (and before the
+ * search) is applied, so toggling one dimension never makes the other
+ * dimensions' options vanish. Deriving them from the filtered result instead
+ * would make the sheet collapse to the current selection — the classic
+ * self-erasing faceted filter bug.
+ *
+ * `availability` is filtered to the three offered values, so an archived row
+ * contributes no availability option (it still counts toward runtime / owner /
+ * model, as web does). `labelOf` supplies runtime and owner display names —
+ * the caller owns those lookups (runtime list, members list) and both fall
+ * back to the raw identifier the way web does.
+ */
+export function buildAgentFilterOptions<A extends AgentFilterAgent>(
+  rows: readonly AgentFilterRow<A>[],
+  labelOf: {
+    runtime: (runtimeId: string) => string;
+    owner: (ownerId: string) => string;
+  },
+): AgentFilterOptions {
+  const availabilityCounts = new Map<string, number>();
+  const runtimeCounts = new Map<string, number>();
+  const ownerCounts = new Map<string, number>();
+  const modelCounts = new Map<string, number>();
+
+  const bump = (map: Map<string, number>, key: string) => {
+    map.set(key, (map.get(key) ?? 0) + 1);
+  };
+
+  for (const row of rows) {
+    if (row.availability) bump(availabilityCounts, row.availability);
+    const runtimeId = row.agent.runtime_id;
+    if (runtimeId) bump(runtimeCounts, runtimeId);
+    const ownerId = row.agent.owner_id;
+    if (ownerId) bump(ownerCounts, ownerId);
+    const model = row.agent.model;
+    if (model) bump(modelCounts, model);
+  }
+
+  const options = (
+    counts: Map<string, number>,
+    label: (key: string) => string,
+  ): AgentFilterOption[] =>
+    [...counts.entries()].map(([value, count]) => ({
+      value,
+      label: label(value),
+      count,
+    }));
+
+  return {
+    availability: AGENT_FILTER_AVAILABILITY_VALUES.map((value) => ({
+      value,
+      label: value,
+      // Web renders every availability value regardless of count (its
+      // `AVAILABILITY_VALUES.map` has no count guard), so a zero-count state
+      // is still a visible, checkable row that yields an empty list.
+      count: availabilityCounts.get(value) ?? 0,
+    })),
+    runtimes: options(runtimeCounts, labelOf.runtime),
+    owners: options(ownerCounts, labelOf.owner),
+    models: options(modelCounts, (m) => m),
+  };
+}
 
 /**
  * Search predicate: name or description, case-insensitive, with pinyin

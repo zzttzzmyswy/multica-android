@@ -140,6 +140,7 @@ export function ProjectIssueSurface({
   const setTableGrouping = useProjectIssuesViewStore((s) => s.setTableGrouping);
   const grouping = useProjectIssuesViewStore((s) => s.grouping);
   const showSubIssues = useProjectIssuesViewStore((s) => s.showSubIssues);
+  const cardProperties = useProjectIssuesViewStore((s) => s.cardProperties);
   const groupingProperty = useGroupingProperty(grouping);
   const sortBy = useProjectIssuesViewStore((s) => s.sortBy);
   const sortDirection = useProjectIssuesViewStore((s) => s.sortDirection);
@@ -294,8 +295,15 @@ export function ProjectIssueSurface({
   const { baseline: chipBaseline, resetDimension: resetChipDimension } =
     useFilterChipBaseline(activeView?.query ?? null, useProjectIssuesViewStore);
   const snapshotSource = useMemo(
-    () => ({ ...filterState, sortBy, sortDirection, grouping, showSubIssues }),
-    [filterState, sortBy, sortDirection, grouping, showSubIssues],
+    () => ({
+      ...filterState,
+      sortBy,
+      sortDirection,
+      grouping,
+      showSubIssues,
+      cardProperties,
+    }),
+    [filterState, sortBy, sortDirection, grouping, showSubIssues, cardProperties],
   );
   const modifiedActive = useMemo(
     () =>
@@ -548,6 +556,7 @@ export function ProjectIssueSurface({
             </ScrollView>
           ) : null}
           <BoardView
+            cardProperties={cardProperties}
             issues={sorted}
             grouping={grouping}
             groupingProperty={groupingProperty}
@@ -597,6 +606,7 @@ export function ProjectIssueSurface({
         />
       ) : view === "swimlane" ? (
         <SwimlaneView
+          cardProperties={cardProperties}
           issues={sorted}
           grouping={swimlaneGrouping}
           onGroupingChange={(next) =>

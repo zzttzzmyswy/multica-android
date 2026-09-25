@@ -18,6 +18,14 @@
 import type { StateCreator } from "zustand";
 import type { IssuePriority, IssueStatus } from "@multica/core/types";
 import { dateOnlyToLocalDate } from "@multica/core/issues/date";
+// Type-only: erased at compile time, so this adds no runtime coupling to
+// core's issues entry point (which mobile otherwise never imports). It keeps
+// the eight card-property keys single-sourced rather than re-declared here.
+import type { CardProperties } from "@multica/core/issues";
+
+/** Re-exported so the filter UI can name the card-property key space without
+ *  reaching into core itself. */
+export type { CardProperties };
 import { BOARD_STATUSES } from "@/lib/issue-status-core";
 import type { IssueListWindowParams } from "@/data/queries/issue-keys";
 
@@ -161,6 +169,21 @@ export interface IssueFilterSlice {
    * like web's (view-store.ts:401-415).
    */
   showSubIssues: boolean;
+  /**
+   * Which fields a board card renders — web's `CardProperties`
+   * (`packages/core/issues/stores/view-store.ts:95-104`), 8 keys, all default
+   * `true` (web `:287-296`).
+   *
+   * Mobile gates only the FIVE keys its dense card actually draws —
+   * priority / labels / assignee / startDate / dueDate (`board-card.tsx`).
+   * `description` / `project` / `childProgress` have no corresponding content
+   * on a mobile card (web's card is roomier by design; mobile's states so at
+   * board-card.tsx:12), so they are carried in state and round-tripped through
+   * the view codec but gate nothing. That keeps a view saved on web
+   * lossless across a mobile open-and-resave instead of silently dropping
+   * three keys — see `issue-view-codec.ts` for the round-trip contract.
+   */
+  cardProperties: CardProperties;
   toggleStatusFilter: (status: IssueStatus) => void;
   /**
    * Hide one status column from the kanban surfaces (board / swimlane).
@@ -198,6 +221,9 @@ export interface IssueFilterSlice {
   toggleWorkingOnly: () => void;
   /** Flip the "show sub-issues" display filter (web `toggleShowSubIssues`). */
   toggleShowSubIssues: () => void;
+  /** Flip one board-card display field (web `toggleCardProperty`,
+   *  view-store.ts:441-448). */
+  toggleCardProperty: (key: keyof CardProperties) => void;
   setSortBy: (field: IssueSortField) => void;
   setSortDirection: (dir: IssueSortDirection) => void;
   setGrouping: (grouping: IssueGrouping) => void;
@@ -270,6 +296,7 @@ export const defaultIssueFilterSlice = (): Pick<
   | "sortDirection"
   | "grouping"
   | "showSubIssues"
+  | "cardProperties"
 > => ({
   statusFilters: [],
   priorityFilters: [],
@@ -286,6 +313,17 @@ export const defaultIssueFilterSlice = (): Pick<
   sortDirection: "asc",
   grouping: "status",
   showSubIssues: true,
+  // Web's defaults verbatim (view-store.ts:287-296): all eight fields on.
+  cardProperties: {
+    priority: true,
+    description: true,
+    assignee: true,
+    startDate: true,
+    dueDate: true,
+    project: true,
+    childProgress: true,
+    labels: true,
+  },
 });
 
 /**
@@ -321,6 +359,7 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
   | "setDateFilter"
   | "toggleWorkingOnly"
   | "toggleShowSubIssues"
+  | "toggleCardProperty"
   | "clearFilters"
   | "resetFiltersTo"
   | "clearFilterDimension"
@@ -413,6 +452,13 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
       set((state) => ({ workingOnly: !state.workingOnly })),
     toggleShowSubIssues: () =>
       set((state) => ({ showSubIssues: !state.showSubIssues })),
+    toggleCardProperty: (key) =>
+      set((state) => ({
+        cardProperties: {
+          ...state.cardProperties,
+          [key]: !state.cardProperties[key],
+        },
+      })),
     clearFilters: () =>
       set({
         statusFilters: [],

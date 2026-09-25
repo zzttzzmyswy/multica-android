@@ -97,6 +97,7 @@ import {
   type SwimlaneLane,
 } from "@/lib/swimlane";
 import { BoardCard } from "./board-card";
+import type { CardProperties } from "@/data/stores/issue-filter-slice";
 
 /** Cell width — one full status cell plus a peek of the next fits a 375pt
  *  phone beside the lane gutter. */
@@ -148,6 +149,7 @@ export function SwimlaneView({
   emptyLabel,
   hiddenStatuses = [],
   onShowStatus,
+  cardProperties,
 }: {
   issues: Issue[];
   grouping: SwimlaneGrouping;
@@ -160,6 +162,9 @@ export function SwimlaneView({
    *  so this is only the RESTORE entry (web's side rail). */
   hiddenStatuses?: IssueStatus[];
   onShowStatus?: (status: IssueStatus) => void;
+  /** The hosting surface's `cardProperties` display setting, forwarded to
+   *  each card. Omitted means all on (web's view-store default). */
+  cardProperties?: CardProperties;
 }) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
@@ -453,6 +458,7 @@ export function SwimlaneView({
                   issues={cell.issues}
                   onOpenIssue={onOpenIssue}
                   onOpenLaneSheet={openLaneSheet}
+                  cardProperties={cardProperties}
                 />
               ))}
             </ScrollView>
@@ -663,11 +669,13 @@ const SwimlaneCell = memo(function SwimlaneCell({
   issues,
   onOpenIssue,
   onOpenLaneSheet,
+  cardProperties,
 }: {
   status: IssueStatus;
   issues: Issue[];
   onOpenIssue: (issue: Issue) => void;
   onOpenLaneSheet: (issue: Issue, move: MoveWriter) => void;
+  cardProperties?: CardProperties;
 }) {
   const { t } = useTranslation();
   const statusLabel = useStatusLabel();
@@ -704,6 +712,7 @@ const SwimlaneCell = memo(function SwimlaneCell({
               issue={issue}
               onOpen={() => onOpenIssue(issue)}
               onOpenLaneSheet={onOpenLaneSheet}
+              cardProperties={cardProperties}
             />
           ))}
           {issues.length > shown.length ? (
@@ -729,10 +738,12 @@ const SwimlaneCard = memo(function SwimlaneCard({
   issue,
   onOpen,
   onOpenLaneSheet,
+  cardProperties,
 }: {
   issue: Issue;
   onOpen: () => void;
   onOpenLaneSheet: (issue: Issue, move: MoveWriter) => void;
+  cardProperties?: CardProperties;
 }) {
   const { t } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
@@ -775,5 +786,12 @@ const SwimlaneCard = memo(function SwimlaneCard({
     );
   }, [issue, t, options, updateIssue, move, onOpenLaneSheet]);
 
-  return <BoardCard issue={issue} onPress={onOpen} onLongPress={onLongPress} />;
+  return (
+    <BoardCard
+      issue={issue}
+      onPress={onOpen}
+      onLongPress={onLongPress}
+      cardProperties={cardProperties}
+    />
+  );
 });

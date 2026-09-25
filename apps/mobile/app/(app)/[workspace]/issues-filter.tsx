@@ -43,6 +43,7 @@ import {
   ISSUE_SORT_OPTIONS,
   hasActiveIssueFilters,
   propertyViewKey,
+  type CardProperties,
   type IssueDateFilterValue,
   type IssueFilterSlice,
   type IssueGrouping,
@@ -90,6 +91,27 @@ function shortDate(dateOnly: string): string {
   return `${Number(m)}/${Number(d)}`;
 }
 
+/**
+ * The card-property switches this screen offers, in web's
+ * `CARD_PROPERTY_OPTIONS` order (`view-store.ts:161-170`) filtered to the five
+ * keys a mobile board card actually draws. Labels follow web's
+ * `display.card_*` strings — see the locale file.
+ *
+ * Keep this list in sync with `components/issue/board-card.tsx`: a key here
+ * with nothing to gate is a dead switch, and a field there that is missing
+ * here is a setting the user cannot reach.
+ */
+const CARD_PROPERTY_TOGGLES: {
+  key: keyof CardProperties;
+  labelKey: string;
+}[] = [
+  { key: "priority", labelKey: "filter.display.cardPriority" },
+  { key: "labels", labelKey: "filter.display.cardLabels" },
+  { key: "assignee", labelKey: "filter.display.cardAssignee" },
+  { key: "startDate", labelKey: "filter.display.cardStartDate" },
+  { key: "dueDate", labelKey: "filter.display.cardDueDate" },
+];
+
 export default function IssuesFilterRoute() {
   const { scope, workspace: workspaceSlug } = useLocalSearchParams<{
     scope?: string;
@@ -123,6 +145,7 @@ export default function IssuesFilterRoute() {
   const sortDirection = s.sortDirection;
   const grouping = s.grouping;
   const showSubIssues = s.showSubIssues;
+  const cardProperties = s.cardProperties;
 
   // The date section's field radio is UI-local until a preset/custom commits
   // (web DateSubContent keeps the same split).
@@ -570,6 +593,28 @@ export default function IssuesFilterRoute() {
           onToggle={() => act().toggleShowSubIssues()}
           t={t}
         />
+        {/* Card fields — web's `display.card_properties_section`
+            (issues-header.tsx:1996-2010) over `CARD_PROPERTY_OPTIONS`
+            (packages/core/issues/stores/view-store.ts:161-170).
+
+            Only the FIVE keys mobile's board card has content for are offered
+            here: priority, labels, assignee, startDate, dueDate
+            (components/issue/board-card.tsx). The remaining three —
+            description, project, childProgress — are carried in state and
+            round-tripped through the view codec (so a web-saved view stays
+            lossless) but gate nothing, because a mobile card draws no
+            description, no project and no sub-issue progress. Offering
+            switches for them would be switches that visibly do nothing. */}
+        <SectionLabel>{t("filter.display.cardFieldsTitle")}</SectionLabel>
+        {CARD_PROPERTY_TOGGLES.map(({ key, labelKey }) => (
+          <BoolRow
+            key={key}
+            label={t(labelKey)}
+            checked={cardProperties[key]}
+            onToggle={() => act().toggleCardProperty(key)}
+            t={t}
+          />
+        ))}
       </ScrollView>
     </View>
   );

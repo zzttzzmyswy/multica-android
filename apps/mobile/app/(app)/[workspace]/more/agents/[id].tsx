@@ -26,13 +26,15 @@ import { AgentDetailActions } from "@/components/agent/agent-detail-actions";
 import { AgentMcpSection } from "@/components/agent/agent-mcp-section";
 import { AgentSkillsSection } from "@/components/agent/agent-skills-section";
 import { AgentAccessPicker } from "@/components/agent/agent-access-picker";
+import { AgentConcurrencyField } from "@/components/agent/agent-concurrency-field";
 import { AgentActivitySection } from "@/components/agent/agent-activity-section";
 import { ActorIssuesPanel } from "@/components/issue/actor-issues-panel";
 import { agentListAllOptions } from "@/data/queries/agents";
 import { issueKeys } from "@/data/queries/issue-keys";
 import { memberListOptions } from "@/data/queries/members";
 import { runtimeListOptions } from "@/data/queries/runtimes";
-import { useRestoreAgent } from "@/data/mutations/agents";
+import { useRestoreAgent, useUpdateAgent } from "@/data/mutations/agents";
+import { canEditAgent } from "@multica/core/permissions";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
 import { useActorLookup } from "@/data/use-actor-name";
@@ -91,9 +93,22 @@ export default function AgentDetailPage() {
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
   const presence = useWorkspacePresenceMap(wsId);
   const restoreAgent = useRestoreAgent();
+  const updateAgent = useUpdateAgent(id ?? "");
 
   const agent = agents.data?.find((a) => a.id === id);
   const archived = agent != null && isArchived(agent);
+
+  // Permission gate for the editable properties. `canEditAgent` is core's
+  // single source of truth (packages/core/permissions/rules.ts:32-42): admin
+  // OR owner. Reusing the rule rather than hand-rolling the same OR keeps this
+  // page, the agents list's row menu and the backend handler in agreement.
+  const currentMember = members.find((m) => m.user_id === currentUserId);
+  const canEdit =
+    agent != null &&
+    canEditAgent(agent, {
+      userId: currentUserId,
+      role: currentMember?.role ?? null,
+    }).allowed;
   const restoreWithFeedback = () => {
     if (!agent) return;
     restoreAgent.mutate(agent.id, {
@@ -221,6 +236,25 @@ export default function AgentDetailPage() {
                 </Text>
               </PropertyRow>
             ) : null}
+            <PropertyRow
+              label={t("agents.detail.fieldConcurrency")}
+              icon="layers-outline"
+            >
+              <AgentConcurrencyField
+                value={agent.max_concurrent_tasks}
+                canEdit={canEdit}
+                saving={updateAgent.isPending}
+                onSave={(next) =>
+                  updateAgent.mutate(
+                    { max_concurrent_tasks: next },
+                    {
+                      onError: () =>
+                        Alert.alert(t("agents.detail.concurrencySaveFailed")),
+                    },
+                  )
+                }
+              />
+            </PropertyRow>
             <PropertyRow label={t("agents.detail.fieldVisibility")} icon="eye-outline">
               <Text className="flex-1 text-sm text-foreground">
                 {VISIBILITY_KEY[agent.visibility]

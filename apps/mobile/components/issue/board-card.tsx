@@ -11,6 +11,20 @@
  * avatar, and the identifier is already surfaced by the title fallback on
  * IssueRow-style rows. Board cards stay dense (no description preview) so a
  * 375pt screen sees ~3 columns worth of lanes.
+ *
+ * Which of those fields render is the user's `cardProperties` display setting
+ * (web's board-card reads the same key off its view store). The caller passes
+ * it down rather than this card reading a store: mobile has three independent
+ * issue surfaces, each with its own store, and the card cannot know which one
+ * is hosting it. A missing prop means "all on", so a call site that does not
+ * care (the drag overlay) renders exactly the default card.
+ *
+ * Only five fields are gated, because only five exist on this card: priority,
+ * labels, assignee, and the single start/due footer date. Web's
+ * `description` / `project` / `childProgress` have no content here — the
+ * toggle rows are still offered in the Display panel and still round-trip
+ * through saved views (see issues-filter.tsx), they just gate nothing on a
+ * phone-height card.
  */
 import { Pressable, View } from "react-native";
 import type {
@@ -19,6 +33,7 @@ import type {
   GestureResponderEvent,
 } from "react-native";
 import type { Issue } from "@multica/core/types";
+import type { CardProperties } from "@/data/stores/issue-filter-slice";
 import { isPastDateOnly } from "@multica/core/issues/date";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
@@ -31,6 +46,19 @@ import { IssueAgentActivityIndicator } from "./issue-agent-activity-indicator";
 
 /** Column width in pt — ~1.6 lanes visible on a 375pt phone. */
 export const BOARD_COLUMN_WIDTH = 272;
+
+/** Every field on, matching web's view-store default (view-store.ts:287-296).
+ *  Also the fallback when a caller passes no `cardProperties`. */
+export const ALL_CARD_PROPERTIES_ON: CardProperties = {
+  priority: true,
+  description: true,
+  assignee: true,
+  startDate: true,
+  dueDate: true,
+  project: true,
+  childProgress: true,
+  labels: true,
+};
 
 function formatDayOnly(date: string): string {
   return date.slice(0, 10);
@@ -46,8 +74,12 @@ export function BoardCard({
   accessibilityHint,
   accessibilityActions,
   onAccessibilityAction,
+  cardProperties = ALL_CARD_PROPERTIES_ON,
 }: {
   issue: Issue;
+  /** Which fields to draw — the hosting surface's `cardProperties` display
+   *  setting. Defaults to all-on (see the module doc). */
+  cardProperties?: CardProperties;
   onPress: () => void;
   /** Carries the responder event: the board's drag reads the touch's window
    *  coordinates off it to place the lifted card under the finger. */
@@ -81,8 +113,12 @@ export function BoardCard({
   const openProfile = useActorProfileStore((s) => s.open);
   // Footer date summary mirrors web's "due date now" affordance: show what
   // the issue is waiting on without eating the card's line budget.
-  const hasStart = !!issue.start_date;
-  const hasDue = !!issue.due_date;
+  // Each date is gated by its own switch, then the footer keeps whichever
+  // survives. Mobile has ONE date line (no room for two on a 272pt card), so
+  // when both are on it prefers the due date — the same precedence the ungated
+  // card had, and the one that matters more (a deadline beats a start).
+  const hasStart = !!issue.start_date && cardProperties.startDate;
+  const hasDue = !!issue.due_date && cardProperties.dueDate;
   const dateKey = hasDue
     ? "issues.cardDue"
     : hasStart
@@ -117,9 +153,11 @@ export function BoardCard({
       accessibilityLabel={`${issue.title}${issue.status ? `, ${statusLabel(issue.status)}` : ""}`}
     >
       <View className="flex-row items-start gap-1.5">
-        <View className="pt-0.5">
-          <PriorityIcon priority={issue.priority} size={13} />
-        </View>
+        {cardProperties.priority ? (
+          <View className="pt-0.5">
+            <PriorityIcon priority={issue.priority} size={13} />
+          </View>
+        ) : null}
         <Text numberOfLines={2} className="flex-1 text-sm font-medium leading-snug">
           {issue.title}
         </Text>
@@ -130,7 +168,7 @@ export function BoardCard({
         ) : null}
       </View>
 
-      {labels.length > 0 ? (
+      {cardProperties.labels && labels.length > 0 ? (
         <View className="mt-1.5 flex-row flex-wrap gap-1">
           {labels.slice(0, 3).map((label) => (
             <View
@@ -169,7 +207,7 @@ export function BoardCard({
         )}
         <View className="flex-row items-center gap-1.5">
           <IssueAgentActivityIndicator issueId={issue.id} ringClassName="bg-card" />
-          {issue.assignee_type && issue.assignee_id ? (
+          {cardProperties.assignee && issue.assignee_type && issue.assignee_id ? (
             <ActorAvatar
               type={issue.assignee_type}
               id={issue.assignee_id}

@@ -42,12 +42,20 @@ import { buildActivityMap, type AgentActivity } from "@/lib/agent-activity";
 import {
   AGENT_SORT_DEFAULT_DIRECTION,
   AGENT_SORT_FIELDS,
+  buildAgentFilterOptions,
+  countActiveAgentFilters,
+  EMPTY_AGENT_FILTERS,
   lastActiveDaysAgo,
-  matchesAgentSearch,
+  rowMatchesAgentFilters,
   sortAgentRows,
+  type AgentFilterRow,
+  type AgentListFilters,
   type AgentSortDirection,
   type AgentSortField,
 } from "@/lib/filter-agents";
+import { AgentFilterSheet } from "@/components/agent/agent-filter-sheet";
+import { runtimeDisplayLabel } from "@multica/core/runtimes";
+import { runtimeListOptions } from "@/data/queries/runtimes";
 import { memberListOptions } from "@/data/queries/members";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useWorkspacePresenceMap } from "@/lib/use-agent-presence";
@@ -154,6 +162,14 @@ export default function AgentsPage() {
   const sortDirection = useAgentMobileViewStore((s) => s.sortDirection);
   const setSort = useAgentMobileViewStore((s) => s.setSort);
 
+  // ---- Multi-dimension filters (iteration 181, MYS-1564 / G27) ----
+  // Session-scoped, like the sort above: web keeps these in a per-workspace
+  // view store, but a filter the user cannot see as a chip on the row (only
+  // as a badge count) must not silently survive a restart.
+  const [filters, setFilters] = useState<AgentListFilters>(EMPTY_AGENT_FILTERS);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const { data: runtimes = [] } = useQuery(runtimeListOptions(wsId));
+
   // Both extra datasets are gated on the sort that reads them: the RUNS metric
   // is the workspace 30-day run count and "last active" is derived from the
   // same 30-day buckets, so a list sorted by name or creation date fetches
@@ -209,18 +225,75 @@ export default function AgentsPage() {
   const canBatchArchive = batch.manageableIds.length > 0;
   const ownedAccessed = batch.ownedIds.length > 0;
 
-  const filtered = useMemo(() => {
-    const scoped =
+  // Scope rows: the access chip's result, BEFORE the sheet's filters and the
+  // search box. Web's `scopeRows` (agents-page.tsx:1050-1067) is the same
+  // layer, and it is deliberately what the option lists are derived from
+  // (`allRows={scopeRows}`) — see `buildAgentFilterOptions` for why deriving
+  // from the filtered result would make each dimension erase its siblings.
+  const scopeRows = useMemo(
+    () =>
       scopeFilter === "all"
         ? sorted
         : sorted.filter((a) =>
             matchesAccessFilter(a, new Set<AccessScope>([scopeFilter])),
-          );
+          ),
+    [sorted, scopeFilter],
+  );
+
+  // The filter predicate reads a row's DERIVED availability (the dot's own
+  // value), so the filter and the dot can never disagree. Archived rows carry
+  // `archived`, which is in no availability option — matching web, whose
+  // AVAILABILITY_VALUES stops at the three runtime states.
+  const filterRows: AgentFilterRow<Agent>[] = useMemo(
+    () =>
+      scopeRows.map((agent) => ({
+        agent,
+        availability: presence.byAgent.get(agent.id)?.availability ?? null,
+      })),
+    [scopeRows, presence.byAgent],
+  );
+
+  const activeFilterCount = countActiveAgentFilters(filters);
+
+  const filterOptions = useMemo(() => {
+    const runtimeById = new Map(runtimes.map((r) => [r.id, r]));
+    const memberById = new Map(members.map((m) => [m.user_id, m]));
+    return buildAgentFilterOptions(filterRows, {
+      // Web falls back to the raw id when the runtime row is unknown
+      // (agent-list-toolbar.tsx:158-163 keeps the id as the Map key and only
+      // prettifies when it can resolve one).
+      runtime: (id) => {
+        const rt = runtimeById.get(id);
+        return rt ? runtimeDisplayLabel(rt) : id;
+      },
+      owner: (id) => memberById.get(id)?.name ?? id.slice(0, 8),
+    });
+  }, [filterRows, runtimes, members]);
+
+  const toggleFilter = useCallback(
+    (dimension: keyof AgentListFilters, value: string) => {
+      setFilters((current) => {
+        const list = current[dimension];
+        return {
+          ...current,
+          [dimension]: list.includes(value)
+            ? list.filter((v) => v !== value)
+            : [...list, value],
+        };
+      });
+    },
+    [],
+  );
+
+  const clearFilters = useCallback(() => setFilters(EMPTY_AGENT_FILTERS), []);
+
+  const filtered = useMemo(() => {
     const query = search.trim();
-    // Local search, like web's (`rowMatchesFilters` runs after the scope
-    // rows): names and descriptions, Latin or pinyin.
-    return query ? scoped.filter((a) => matchesAgentSearch(a, query)) : scoped;
-  }, [sorted, scopeFilter, search]);
+    if (activeFilterCount === 0 && !query) return scopeRows;
+    return filterRows
+      .filter((row) => rowMatchesAgentFilters(row, filters, query))
+      .map((row) => row.agent);
+  }, [scopeRows, filterRows, filters, search, activeFilterCount]);
 
   const invalidateAgents = () =>
     void qc.invalidateQueries({
@@ -432,6 +505,10 @@ export default function AgentsPage() {
                     sortDirection={sortDirection}
                     onChange={setSort}
                   />
+                  <AgentFilterButton
+                    activeCount={activeFilterCount}
+                    onPress={() => setFilterOpen(true)}
+                  />
                 </View>
               </>
             ) : null}
@@ -496,6 +573,15 @@ export default function AgentsPage() {
         applying={applyingAccess}
         onApply={(change) => void applyAccess(change)}
         onClose={() => setBatchAccess(false)}
+      />
+      <AgentFilterSheet
+        visible={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        filters={filters}
+        options={filterOptions}
+        activeCount={activeFilterCount}
+        onToggle={toggleFilter}
+        onClear={clearFilters}
       />
     </>
   );
@@ -589,6 +675,62 @@ function AgentSortPicker({
       <Text className="text-xs text-muted-foreground" numberOfLines={1}>
         {activeLabel}
       </Text>
+    </Pressable>
+  );
+}
+
+/**
+ * Filter chip that opens `AgentFilterSheet`. Mirrors web's Filter trigger
+ * (`agent-list-toolbar.tsx:296-334`): a funnel glyph plus, once anything is
+ * active, the active-dimension count — web shows "N filters" on desktop and
+ * the bare number on small screens (`md:hidden` tabular-nums span), and the
+ * phone is always that small screen.
+ */
+function AgentFilterButton({
+  activeCount,
+  onPress,
+}: {
+  activeCount: number;
+  onPress: () => void;
+}) {
+  const { t } = useTranslation();
+  const { colorScheme } = useColorScheme();
+  const theme = THEME[colorScheme];
+  const active = activeCount > 0;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={
+        active
+          ? `${t("agents.filter.open")}, ${t("agents.filter.activeCount", {
+              count: activeCount,
+            })}`
+          : t("agents.filter.open")
+      }
+      className={cn(
+        "flex-row items-center gap-1 rounded-md border px-2 py-1.5 active:opacity-70",
+        active ? "border-primary bg-primary/10" : "border-border bg-secondary/50",
+      )}
+    >
+      <Ionicons
+        name="funnel-outline"
+        size={14}
+        color={active ? theme.primary : theme.mutedForeground}
+      />
+      {active ? (
+        <Text
+          className="text-xs font-medium tabular-nums"
+          style={{ color: theme.primary }}
+        >
+          {activeCount}
+        </Text>
+      ) : (
+        <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+          {t("agents.filter.open")}
+        </Text>
+      )}
     </Pressable>
   );
 }

@@ -231,6 +231,7 @@ export function IssueViewBar({
           sortBy: slice.sortBy,
           sortDirection,
           showSubIssues: slice.showSubIssues,
+          cardProperties: slice.cardProperties,
         }),
       },
       {

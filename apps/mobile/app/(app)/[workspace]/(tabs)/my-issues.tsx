@@ -154,6 +154,7 @@ export default function MyIssues() {
   const dateFilter = useMyIssuesViewStore((s) => s.dateFilter);
   const workingOnly = useMyIssuesViewStore((s) => s.workingOnly);
   const showSubIssues = useMyIssuesViewStore((s) => s.showSubIssues);
+  const cardProperties = useMyIssuesViewStore((s) => s.cardProperties);
   // Running-agent projection for the working-only filter. `undefined` while
   // the snapshot loads — the predicate fails closed on it, which is the
   // intended "only what is provably working" read.
@@ -252,8 +253,15 @@ export default function MyIssues() {
   const { baseline: chipBaseline, resetDimension: resetChipDimension } =
     useFilterChipBaseline(activeView?.query ?? null, useMyIssuesViewStore);
   const snapshotSource = useMemo(
-    () => ({ ...filterState, sortBy, sortDirection, grouping, showSubIssues }),
-    [filterState, sortBy, sortDirection, grouping, showSubIssues],
+    () => ({
+      ...filterState,
+      sortBy,
+      sortDirection,
+      grouping,
+      showSubIssues,
+      cardProperties,
+    }),
+    [filterState, sortBy, sortDirection, grouping, showSubIssues, cardProperties],
   );
   const modifiedActive = useMemo(
     () => (activeView ? !viewMatchesSlice(activeView, snapshotSource, view) : false),
@@ -582,6 +590,7 @@ export default function MyIssues() {
         />
       ) : view === "board" ? (
         <BoardView
+          cardProperties={cardProperties}
           issues={sorted}
           grouping={grouping}
           groupingProperty={groupingProperty}
@@ -643,6 +652,7 @@ export default function MyIssues() {
         />
       ) : view === "swimlane" ? (
         <SwimlaneView
+          cardProperties={cardProperties}
           issues={sorted}
           grouping={swimlaneGrouping}
           onGroupingChange={(next) =>
