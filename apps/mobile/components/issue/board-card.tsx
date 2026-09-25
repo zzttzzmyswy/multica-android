@@ -22,6 +22,7 @@ import type { Issue } from "@multica/core/types";
 import { isPastDateOnly } from "@multica/core/issues/date";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { useActorProfileStore } from "@/data/stores/actor-profile-store";
 import { PriorityIcon } from "@/components/ui/priority-icon";
 import { useStatusLabel } from "@/lib/status-options";
 import { translate } from "@/lib/i18n";
@@ -73,6 +74,11 @@ export function BoardCard({
 }) {
   const labels = issue.labels ?? [];
   const statusLabel = useStatusLabel();
+  // The assignee avatar is the only element on the card that does not already
+  // own a gesture — the card's tap opens the issue and its long-press starts
+  // the drag. An inner press target on the avatar is therefore safe here
+  // (web's card hangs a hover card off the same spot, `board-card.tsx:139`).
+  const openProfile = useActorProfileStore((s) => s.open);
   // Footer date summary mirrors web's "due date now" affordance: show what
   // the issue is waiting on without eating the card's line budget.
   const hasStart = !!issue.start_date;
@@ -168,6 +174,9 @@ export function BoardCard({
               type={issue.assignee_type}
               id={issue.assignee_id}
               size={20}
+              onPressProfile={() =>
+                openProfile(issue.assignee_type!, issue.assignee_id!)
+              }
             />
           ) : null}
         </View>

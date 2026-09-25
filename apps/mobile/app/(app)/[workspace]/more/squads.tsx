@@ -43,6 +43,7 @@ import { squadListOptions } from "@/data/queries/squads";
 import { memberListOptions } from "@/data/queries/members";
 import { agentListAllOptions } from "@/data/queries/agents";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { useActorProfileStore } from "@/data/stores/actor-profile-store";
 import { useAuthStore } from "@/data/auth-store";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useSquadsView, useSquadsViewStore } from "@/data/stores/squads-view-store";
@@ -639,11 +640,23 @@ function SquadRow({
   const muted = THEME[colorScheme].mutedForeground;
   const archived = isSquadArchived(squad);
   const count = squadMemberCount(squad);
+  const openProfile = useActorProfileStore((s) => s.open);
 
   return (
     <Pressable onPress={onPress} className="px-4 py-3 active:bg-secondary">
       <View className={cn("flex-row items-center gap-3", archived && "opacity-60")}>
-        <ActorAvatar type="squad" id={squad.id} size={40} />
+        {/* The row's tap opens the squad; the card rides long-press. This is
+            the only entry point to the squad profile card from a list — the
+            squad-detail member rows open member/agent cards instead. */}
+        <Pressable
+          onLongPress={() => openProfile("squad", squad.id)}
+          accessibilityRole="button"
+          accessibilityLabel={t("profileCard.openAria", { name: squad.name })}
+          hitSlop={6}
+          className="active:opacity-60"
+        >
+          <ActorAvatar type="squad" id={squad.id} size={40} />
+        </Pressable>
         <View className="flex-1 min-w-0 gap-0.5">
           <View className="flex-row items-center gap-2">
             <Text

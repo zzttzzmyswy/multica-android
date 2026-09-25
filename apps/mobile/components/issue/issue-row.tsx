@@ -35,7 +35,9 @@ import { StatusIcon } from "@/components/ui/status-icon";
 import { ProgressRing } from "@/components/ui/progress-ring";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { useColorScheme } from "@/lib/use-color-scheme";
-import { useIntlLocale } from "@/lib/i18n/react";
+import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
+import { useActorLookup } from "@/data/use-actor-name";
+import { useActorProfileStore } from "@/data/stores/actor-profile-store";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { CustomStatusChip } from "./custom-status-chip";
@@ -100,6 +102,17 @@ export function IssueRow({
   // Subscribes, so a language switch re-renders the due-date chip below.
   const intlLocale = useIntlLocale();
   const statusEntry = useIssueStatuses().entryOf(issue.status);
+  const { t } = useTranslation();
+  const { getName } = useActorLookup();
+  const openProfile = useActorProfileStore((s) => s.open);
+  // The assignee avatar already owns its tap (assignee picker), so the card
+  // rides long-press. `assignee_type` is member/agent/squad only — every value
+  // has a card.
+  const profileFor = (
+    type: Issue["assignee_type"],
+    id: string,
+  ): (() => void) | undefined =>
+    type ? () => openProfile(type, id) : undefined;
   const checkColor = THEME[colorScheme].primary;
   const showChildProgress = childProgress && childProgress.total > 0;
   const dueLabel = formatIssueDate(dueDate ?? null, ISSUE_DATE_SHORT, intlLocale);
@@ -177,11 +190,26 @@ export function IssueRow({
           </Pressable>
         ) : null}
         {issue.assignee_type && issue.assignee_id ? (
+          /* Tap keeps its existing meaning (open the assignee picker — the
+             row's inline edit affordance, web parity). The profile card goes
+             on LONG-press instead: this avatar is already inside a control
+             that owns the tap, so an inner press target would shadow it.
+             Long-press has no other meaning here — the row's own long-press
+             (multi-select) is on the outer Pressable and only fires when this
+             inner one does not. */
           <Pressable
             onPress={onPressAssignee}
+            onLongPress={profileFor(issue.assignee_type, issue.assignee_id)}
             disabled={!onPressAssignee}
             hitSlop={8}
             accessibilityRole={onPressAssignee ? "button" : undefined}
+            accessibilityLabel={
+              profileFor(issue.assignee_type, issue.assignee_id)
+                ? t("profileCard.openAria", {
+                    name: getName(issue.assignee_type, issue.assignee_id),
+                  })
+                : undefined
+            }
             className="active:opacity-60"
           >
             <ActorAvatar

@@ -52,6 +52,7 @@ import {
 } from "@/data/mutations/squads";
 import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { useActorProfileStore } from "@/data/stores/actor-profile-store";
 import { ActionSheet } from "@/lib/action-sheet";
 import { squadManageGuards, squadMemberActionGuards } from "@/lib/squad-guards";
 import { useTranslation } from "@/lib/i18n/react";
@@ -639,13 +640,25 @@ function MemberRow({
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
+  const openProfile = useActorProfileStore((s) => s.open);
   const statusValue = member.member_type === "agent" ? status?.status ?? null : null;
   const statusLabel = statusValue ? STATUS_LABEL[statusValue] ?? null : null;
 
   return (
     <Pressable onPress={onPress} className="rounded-lg border border-border px-3 py-2.5 active:bg-secondary">
       <View className="flex-row items-center gap-3">
-        <ActorAvatar type={member.member_type} id={member.member_id} size={36} />
+        {/* Tap already opens the member action sheet, so the profile card
+            rides long-press — same rule as the members list row. Web hangs
+            the card off this same avatar (`squad-detail-page.tsx:1178`). */}
+        <Pressable
+          onLongPress={() => openProfile(member.member_type, member.member_id)}
+          accessibilityRole="button"
+          accessibilityLabel={t("profileCard.openAria", { name })}
+          hitSlop={6}
+          className="active:opacity-60"
+        >
+          <ActorAvatar type={member.member_type} id={member.member_id} size={36} />
+        </Pressable>
         <View className="flex-1 min-w-0 gap-0.5">
           <View className="flex-row items-center gap-2">
             <Text className="flex-1 text-sm font-medium text-foreground" numberOfLines={1}>

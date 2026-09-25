@@ -15,8 +15,18 @@
  * false) because the dot mounts `useAgentPresence` — three queries +
  * 30s wall-clock tick — and we don't want every comment-author thumbnail
  * subscribing to that.
+ *
+ * Profile card: opt-in via `onPressProfile`. Web hangs a hover card off 47
+ * call sites (`packages/views/common/actor-avatar.tsx:132-149`); on a phone
+ * the equivalent is a tap. The prop is opt-in and takes the handler rather
+ * than opening the sheet itself, because ~77 avatars are already wrapped in
+ * an outer `Pressable` (assignee pickers, mention rows, multi-select rows) —
+ * an unconditional inner press target would shadow those taps. Call sites
+ * that own their own gesture leave the prop off; the ones that don't (comment
+ * author, board card, list rows) pass `() => open("agent", id)` from
+ * `useActorProfileStore`.
  */
-import { Image, View } from "react-native";
+import { Pressable, Image, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useColorScheme } from "nativewind";
 import { Text } from "@/components/ui/text";
@@ -25,6 +35,7 @@ import { useActorLookup, getInitials } from "@/data/use-actor-name";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAgentPresence } from "@/lib/use-agent-presence";
 import { PresenceDot } from "@/components/ui/presence-dot";
+import { useTranslation } from "@/lib/i18n/react";
 import { THEME } from "@/lib/theme";
 
 // `system` actors are server-side automation (state changes triggered by the
@@ -43,15 +54,56 @@ interface Props {
    * subscriptions — off thumbnails that don't need it.
    */
   showPresence?: boolean;
+  /**
+   * Wrap the avatar in its own press target that opens the actor's profile
+   * sheet. Only pass this where the avatar is NOT already inside a control
+   * that owns the tap — see the file header. No-op for `system` actors, which
+   * have no profile card.
+   */
+  onPressProfile?: () => void;
 }
 
-export function ActorAvatar({ type, id, size = 32, showPresence }: Props) {
+export function ActorAvatar({
+  type,
+  id,
+  size = 32,
+  showPresence,
+  onPressProfile,
+}: Props) {
+  const { t } = useTranslation();
+  const { getName } = useActorLookup();
   const avatar = <BareAvatar type={type} id={id} size={size} />;
 
-  if (!showPresence || type !== "agent" || !id) {
-    return avatar;
-  }
-  return <AgentAvatarWithPresence id={id} size={size}>{avatar}</AgentAvatarWithPresence>;
+  const dotted =
+    showPresence && type === "agent" && id ? (
+      <AgentAvatarWithPresence id={id} size={size}>
+        {avatar}
+      </AgentAvatarWithPresence>
+    ) : (
+      avatar
+    );
+
+  if (!onPressProfile) return dotted;
+
+  // `useActorLookup`'s getName only knows member/agent/squad — `system` has no
+  // profile card at all, so it never reaches here (call sites pass no
+  // handler), and the label falls back to the generic key if it somehow does.
+  const profileLabel =
+    id && type && type !== "system"
+      ? t("profileCard.openAria", { name: getName(type, id) })
+      : t("profileCard.title");
+
+  return (
+    <Pressable
+      onPress={onPressProfile}
+      accessibilityRole="button"
+      accessibilityLabel={profileLabel}
+      hitSlop={6}
+      className="active:opacity-60"
+    >
+      {dotted}
+    </Pressable>
+  );
 }
 
 // Pure avatar render — no presence subscription, no workspace lookup. Kept
