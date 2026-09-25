@@ -182,15 +182,19 @@ import type {
   PluginInstallationListResponse,
   PluginCatalogResponse,
   PluginReleaseRequest,
+  MikaBootstrapResponse,
+  StartMikaOnboardingResponse,
 } from "@multica/core/types";
 import type {
   CloudRuntimeNode,
   CreateCloudRuntimeNodeRequest,
 } from "@multica/core/runtimes";
+import type { MikaOnboardingLanguage } from "@multica/core/onboarding";
 import {
   AgentBuilderRuntimeSwitchSchema,
   AgentBuilderSessionListSchema,
   AgentBuilderSessionSchema,
+  StartMikaOnboardingResponseSchema,
   AutopilotRunSchema,
   EMPTY_AGENT_BUILDER_SESSION,
   EMPTY_AGENT_BUILDER_SESSION_LIST,
@@ -424,6 +428,8 @@ import {
   EMPTY_FEEDBACK_RESPONSE,
   CommentTriggerPreviewSchema,
   EMPTY_COMMENT_TRIGGER_PREVIEW,
+  MikaBootstrapResponseSchema,
+  EMPTY_MIKA_BOOTSTRAP,
 } from "./schemas";
 import type { ZodType } from "zod";
 import type { AppConfigResponse, CancelAgentTasksResponse } from "./schemas";
@@ -1321,6 +1327,64 @@ class ApiClient {
   ): Promise<RuntimeLocalSkillImportRequest> {
     return this.fetch<RuntimeLocalSkillImportRequest>(
       `/api/runtimes/${runtimeId}/local-skills/import/${requestId}`,
+    );
+  }
+
+  // POST /api/agents/mika — mirrors packages/core/api/client.ts:1242. Only a
+  // runtime and a language are sent: name, description, avatar, permissions,
+  // and the system instruction layer are server constants, so a client cannot
+  // mint an agent that would claim them. The server is also the idempotency
+  // boundary — calling twice yields the same agent.
+  async createMikaAgent(
+    data: {
+      runtime_id: string;
+      language: MikaOnboardingLanguage;
+      /** Empty means "whatever the runtime defaults to". */
+      model?: string;
+      /** Label for the onboarding conversation, used only if this call is the
+       *  one that creates it. */
+      session_title?: string;
+    },
+    workspaceSlug?: string,
+  ): Promise<MikaBootstrapResponse> {
+    const raw = await this.fetch<unknown>("/api/agents/mika", {
+      method: "POST",
+      headers: workspaceSlug ? { "X-Workspace-Slug": workspaceSlug } : undefined,
+      body: JSON.stringify(data),
+    });
+    // Fallback is an agent with NO onboarding session, and the caller treats
+    // that as the retry signal — same contract web's flow has. An empty
+    // agent with a synthesized session id would let a broken response look
+    // like a created conversation.
+    return parseWithFallback(raw, MikaBootstrapResponseSchema, EMPTY_MIKA_BOOTSTRAP, {
+      endpoint: "POST /api/agents/mika",
+    });
+  }
+
+  // POST /api/chat/sessions/:id/onboarding — writes Mika's opening turn.
+  // Idempotent: only the first request reports `started`. `started: false`
+  // from a malformed response is honest (the flow retries), which is why the
+  // fallback is that rather than a fabricated message id.
+  async startMikaOnboarding(
+    sessionId: string,
+    data: { language: MikaOnboardingLanguage },
+    workspaceSlug?: string,
+  ): Promise<StartMikaOnboardingResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/chat/sessions/${sessionId}/onboarding`,
+      {
+        method: "POST",
+        headers: workspaceSlug
+          ? { "X-Workspace-Slug": workspaceSlug }
+          : undefined,
+        body: JSON.stringify(data),
+      },
+    );
+    return parseWithFallback(
+      raw,
+      StartMikaOnboardingResponseSchema,
+      { started: false },
+      { endpoint: "POST /api/chat/sessions/:id/onboarding" },
     );
   }
 
