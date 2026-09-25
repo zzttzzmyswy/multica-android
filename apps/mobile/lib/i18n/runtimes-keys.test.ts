@@ -149,6 +149,19 @@ describe("runtimes i18n", () => {
     "runtimes.usage.no_data": "还没有使用数据",
     "runtimes.charts.heatmap_busiest_day": "最活跃的一天",
     "runtimes.charts.heatmap_window_total": "{{count}} 天窗口合计",
+    // iteration 178 — Mika setup card
+    "runtimes.mikaSetup.title": "运行时已准备好，和 Mika 开始。",
+    "runtimes.mikaSetup.description": "Mika 会把你的目标转化为任务、协调合适的智能体，并在工作流需要时帮你添加可复用的 specialist。",
+    "runtimes.mikaSetup.action": "和 Mika 开始",
+    "runtimes.mikaSetup.failed": "无法启动 Mika",
+    "runtimes.mikaSetup.dialogTitle": "让 Mika 在哪台电脑上运行？",
+    "runtimes.mikaSetup.dialogDescription": "选择 Mika 使用的运行时。之后可以在设置里更改。",
+    "runtimes.mikaSetup.runtimeLabel": "运行时",
+    "runtimes.mikaSetup.modelLabel": "模型",
+    "runtimes.mikaSetup.modelDefault": "运行时默认",
+    "runtimes.mikaSetup.pickRuntime": "选择运行时",
+    "runtimes.mikaSetup.noRuntimes": "当前还没有你可用的在线运行时。请先连接一台机器。",
+    "runtimes.mikaSetup.cancel": "取消",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {

@@ -99,6 +99,7 @@ import type {
   PluginReleaseRequest,
 } from "@multica/core/types";
 import type { CloudRuntimeNode } from "@multica/core/runtimes";
+import type { MikaBootstrapResponse } from "@multica/core/types";
 import type { ChatMessageKind } from "@multica/core/types/chat";
 import {
   AutopilotRunSchema,
@@ -1106,6 +1107,31 @@ export const AgentSchema: z.ZodType<Agent> = z.object({
 
 export const AgentListSchema = z.array(AgentSchema).default([]);
 export const EMPTY_AGENT_LIST: Agent[] = [];
+
+// Response of POST /api/agents/mika — the workspace's Mika plus the caller's
+// conversation with it, resolved together server-side so two clients cannot
+// each open their own onboarding session (web types this as
+// `MikaBootstrapResponse`, packages/core/types/agent.ts:438). Built on
+// AgentSchema so Mika's `system_key` rides the same passthrough — the card's
+// identity check reads it, so a schema that stripped it would silently break
+// the "is this Mika" predicate (see lib/mika.ts).
+export const MikaBootstrapResponseSchema: z.ZodType<MikaBootstrapResponse> =
+  z
+    .object({
+      ...(AgentSchema as unknown as z.ZodObject<z.ZodRawShape>).shape,
+      onboarding_session: ChatSessionSchema.optional(),
+    })
+    // `.loose()` is load-bearing, not stylistic: the shape spread above
+    // flattens AgentSchema but not its passthrough, so without this the
+    // parse would strip `system_key` — and `isMikaAgent` would then report
+    // false for a real Mika on every visit.
+    .loose() as unknown as z.ZodType<MikaBootstrapResponse>;
+
+// Only `id` has no default on AgentSchema, so an empty id is the whole
+// fallback. `onboarding_session` is deliberately absent: the caller reads
+// that as "retry", never as a conversation to navigate to.
+export const EMPTY_MIKA_BOOTSTRAP: MikaBootstrapResponse =
+  MikaBootstrapResponseSchema.parse({ id: "" });
 
 // Wire shape of `GET /api/agents/{id}/env` (MUL-2600). Kept deliberately
 // distinct from `AgentSchema` so a read of /env can never be served from a
