@@ -36,6 +36,8 @@ import {
   useRevokeInvitation,
 } from "@/data/mutations/members";
 import { useAuthStore } from "@/data/auth-store";
+import { useCurrentMemberRole } from "@/data/use-current-member-role";
+import { canManageRole } from "@/lib/member-guards";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorProfileStore } from "@/data/stores/actor-profile-store";
 import { useTranslation } from "@/lib/i18n/react";
@@ -84,10 +86,8 @@ export default function MembersPage() {
     });
   }, [rawMembers]);
 
-  const currentMember =
-    (rawMembers ?? []).find((m) => m.user_id === user?.id) ?? null;
-  const canManage =
-    currentMember?.role === "owner" || currentMember?.role === "admin";
+  const { role } = useCurrentMemberRole();
+  const canManage = canManageRole(role);
 
   const [inviteVisible, setInviteVisible] = useState(false);
 

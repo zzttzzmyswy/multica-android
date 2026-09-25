@@ -59,7 +59,11 @@ import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { ReactionBar } from "./reaction-bar";
+import { RerunButton } from "./rerun-button";
 import { useCommentLongPress } from "./comment-context-menu";
+import { retryableAgentFailureComment } from "@/lib/run-retry";
+import { canManageRole } from "@/lib/member-guards";
+import { useCurrentMemberRole } from "@/data/use-current-member-role";
 import { useCommentSelectStore } from "@/data/comment-select-store";
 import { useTranslation } from "@/lib/i18n/react";
 import {
@@ -596,6 +600,7 @@ function CommentBody({
   const { getName } = useActorLookup();
   const { colorScheme } = useColorScheme();
   const userId = useAuthStore((s) => s.user?.id);
+  const { role } = useCurrentMemberRole();
   // Comment authors are the highest-value "who is this?" surface on the
   // phone: the row shows a name and nothing else. The avatar itself owns no
   // gesture here (the bubble's long-press is on the wrapper, not the header),
@@ -643,6 +648,13 @@ function CommentBody({
   // Reactions live on TimelineEntry.reactions (mirrored from Comment).
   // Pass through to the bar; toggle finds existing match by emoji + actor.
   const reactions: Reaction[] = (entry.reactions ?? []) as Reaction[];
+
+  // A failed agent run posts a system comment naming the run that died. The
+  // predicate is web's, clause for clause — see `lib/run-retry.ts`. The task id
+  // is narrowed to a string so the button never renders without a target.
+  const retryTaskId = retryableAgentFailureComment(entry)
+    ? entry.source_task_id
+    : null;
 
   const onToggleReaction = useCallback(
     (emoji: string) => {
@@ -695,13 +707,21 @@ function CommentBody({
   // + handles + Copy/Look Up callout. The outer bubble shell carries a
   // translucent primary-tint background as the mode cue (no Done pill).
   // Exit: scroll the timeline, leave the issue, or long-press another body.
+  //
+  // The edit entry is offered to the author, and to a workspace owner/admin
+  // editing another MEMBER's comment (G23) — the same pair the menu itself
+  // gates on (web comment-card.tsx:539). Passing a callback is what makes the
+  // menu show "Edit" at all, so this condition and the menu's `canEditEntry`
+  // must stay in step: too narrow and a moderator's edit silently disappears,
+  // too wide and the menu offers an editor the server would 403.
+  const canOfferEdit =
+    entry.actor_type === "member" &&
+    (entry.actor_id === userId || canManageRole(role));
   const longPress = useCommentLongPress(
     entry,
     issueId,
     issueIdentifier,
-    entry.actor_type === "member" && entry.actor_id === userId
-      ? () => setEditing(true)
-      : undefined,
+    canOfferEdit && entry.content ? () => setEditing(true) : undefined,
   );
 
   useEffect(() => {
@@ -825,25 +845,41 @@ function CommentBody({
               onDiscard={handleDiscard}
             />
           ) : (
-            <ReactionBar
-              reactions={reactions}
-              currentUserId={userId}
-              onToggle={onToggleReaction}
-              onOpenFullPicker={
-                wsSlug
-                  ? () =>
-                      router.push({
-                        pathname:
-                          "/[workspace]/issue/[id]/comment/[commentId]/emoji-picker",
-                        params: {
-                          workspace: wsSlug,
-                          id: issueId,
-                          commentId: entry.id,
-                        },
-                      })
-                  : undefined
-              }
-            />
+            <>
+              {/* G22 — the failure notice an agent run leaves behind carries the
+                  id of the run that died, so the timeline can offer the same
+                  retry the runs panel has (`run-row.tsx`). Web renders it here,
+                  between the body and the reaction bar
+                  (comment-card.tsx:716-722). */}
+              {retryTaskId ? (
+                <View className="pt-1">
+                  <RerunButton
+                    issueId={issueId}
+                    taskId={retryTaskId}
+                    variant="default"
+                  />
+                </View>
+              ) : null}
+              <ReactionBar
+                reactions={reactions}
+                currentUserId={userId}
+                onToggle={onToggleReaction}
+                onOpenFullPicker={
+                  wsSlug
+                    ? () =>
+                        router.push({
+                          pathname:
+                            "/[workspace]/issue/[id]/comment/[commentId]/emoji-picker",
+                          params: {
+                            workspace: wsSlug,
+                            id: issueId,
+                            commentId: entry.id,
+                          },
+                        })
+                    : undefined
+                }
+              />
+            </>
           )}
         </>
       )}

@@ -991,35 +991,53 @@ export function useCancelTask(issueId: string) {
 }
 
 /**
- * Subscribe / unsubscribe the current user to an issue. Server-driven toggle:
+ * Subscribe / unsubscribe an actor to an issue. Server-driven toggle:
  * POST /subscribe or POST /unsubscribe — both answer the *resulting* state
  * (`{subscribed}`), which is irrelevant to the cache patch: we simply add or
  * remove a synthetic subscriber row locally.
  *
- * Web's `useToggleIssueSubscriber` sends `user_id`/`user_type` to target a
- * *member's* subscription (used for the delegated case). Mobile only toggles
- * the signed-in user's own subscription, so no body is sent (core client.ts:
- * subscribeToIssue with no userId).
+ * Target is explicit `{ userId, userType }`, matching web's
+ * `useToggleIssueSubscriber` (packages/core/issues/mutations.ts:957). The
+ * subscribe control passes the signed-in member; the subscriber picker
+ * passes any member OR agent in the workspace — the server accepts any
+ * workspace entity as a target and 403s anything else
+ * (server/internal/handler/subscriber.go:82).
  *
- * Optimistic patch: append/remove `{ user_id: userId, user_type: "member",
- * reason: "manual" }` to the subscribers cache; roll back on error. Settle
- * invalidates so the server's authoritative row (real `reason`, e.g.
- * `delegated`) replaces the optimistic one.
+ * Optimistic patch: append/remove `{ user_id, user_type, reason: "manual" }`
+ * in the subscribers cache; roll back on error. Settle invalidates so the
+ * server's authoritative row (real `reason`, e.g. `delegated`) replaces the
+ * optimistic one.
+ *
+ * Concurrency: the patch snapshots the WHOLE list, so two overlapping
+ * toggles would each roll back to the other's in-flight patch (MUL-5714).
+ * `SubscriptionControl` serializes every caller through a single
+ * `actionInFlight` ref — the subscribe button AND the picker sheet's rows
+ * share it, which is why the sheet takes `onToggle` as a prop rather than
+ * calling this mutation itself.
  */
 export function useToggleIssueSubscribe(issueId: string) {
   const qc = useQueryClient();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
-    mutationFn: (subscribed: boolean) =>
-      subscribed ? api.unsubscribeIssue(issueId) : api.subscribeIssue(issueId),
-    onMutate: async (subscribed) => {
-      const userId = useAuthStore.getState().user?.id;
+    mutationFn: ({
+      userId,
+      userType,
+      subscribed,
+    }: {
+      userId: string;
+      userType: "member" | "agent";
+      subscribed: boolean;
+    }) =>
+      subscribed
+        ? api.unsubscribeIssue(issueId, userId, userType)
+        : api.subscribeIssue(issueId, userId, userType),
+    onMutate: async ({ userId, userType, subscribed }) => {
       const key = issueKeys.subscribers(wsId, issueId);
       await qc.cancelQueries({ queryKey: key });
       const prev = qc.getQueryData<IssueSubscriber[]>(key);
       qc.setQueryData<IssueSubscriber[]>(key, (old) =>
-        patchSubscribersList(old, issueId, userId, subscribed),
+        patchSubscribersList(old, issueId, userId, subscribed, userType),
       );
       return { prev, key };
     },

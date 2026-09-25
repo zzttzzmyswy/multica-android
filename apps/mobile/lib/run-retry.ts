@@ -13,6 +13,40 @@ export function canRerunRun(status: string): boolean {
 }
 
 /**
+ * True for the system comment an agent run leaves behind when it FAILS — the
+ * one that carries a `source_task_id` pointing at the run that can be
+ * re-fired. Predicate is web's `retryableAgentFailureComment`
+ * (packages/views/issues/components/comment-card.tsx:237-243) verbatim:
+ * agent actor + `comment_type === "system"` + non-empty `source_task_id`.
+ *
+ * All three clauses are load-bearing:
+ *   - `actor_type === "agent"` — a member's system comment has no run behind
+ *     it, so retrying it would POST a task id that doesn't exist.
+ *   - `comment_type === "system"` — a human-authored agent comment is
+ *     ordinary prose; the retry affordance belongs only to the failure notice.
+ *   - non-empty `source_task_id` — the field is `optional` on the wire, so an
+ *     older or partial row would otherwise produce a button that retries
+ *     `undefined`.
+ *
+ * `comment_type` is optional on `TimelineEntry`
+ * (packages/core/types/activity.ts:23) because the timeline mixes comments
+ * with other activity rows; `undefined === "system"` is false, so those rows
+ * are excluded without a separate guard.
+ */
+export function retryableAgentFailureComment(entry: {
+  actor_type?: string | null;
+  comment_type?: string | null;
+  source_task_id?: string | null;
+}): boolean {
+  return (
+    entry.actor_type === "agent" &&
+    entry.comment_type === "system" &&
+    typeof entry.source_task_id === "string" &&
+    entry.source_task_id.length > 0
+  );
+}
+
+/**
  * True for a structured 403 "invocation_not_allowed" — the operator lacks
  * invoke permission on the run's agent (MUL-4525). Any other error shape
  * (network failure, generic 4xx/5xx, non-JSON 403) reads as false so the

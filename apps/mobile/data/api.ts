@@ -578,6 +578,22 @@ function dashboardRollupUrl(
   return `${scoped}&tz=${encodeURIComponent(tz)}`;
 }
 
+/**
+ * Body shared by both subscribe endpoints: an omitted target means "the
+ * caller", which the server resolves from the request actor
+ * (server/internal/handler/subscriber.go:59-108). Mirrors core's
+ * `subscriberTarget` (packages/core/api/client.ts:502).
+ */
+function subscriberTarget(
+  userId?: string,
+  userType?: string,
+): Record<string, string> {
+  const body: Record<string, string> = {};
+  if (userId) body.user_id = userId;
+  if (userType) body.user_type = userType;
+  return body;
+}
+
 export interface ApiClientOptions {
   /** Called once when the server returns 401. The platform layer wires this
    *  to clear the token + navigate to /login so a stale token doesn't keep
@@ -2824,24 +2840,28 @@ class ApiClient {
 
   async subscribeIssue(
     issueId: string,
+    userId?: string,
+    userType?: string,
   ): Promise<SubscribeStatusResponse> {
     return this.fetchValidatedWith(
       `/api/issues/${issueId}/subscribe`,
       SubscribeStatusSchema,
       { subscribed: false },
-      { method: "POST" },
+      { method: "POST", body: JSON.stringify(subscriberTarget(userId, userType)) },
       { endpoint: "POST /api/issues/:id/subscribe" },
     );
   }
 
   async unsubscribeIssue(
     issueId: string,
+    userId?: string,
+    userType?: string,
   ): Promise<SubscribeStatusResponse> {
     return this.fetchValidatedWith(
       `/api/issues/${issueId}/unsubscribe`,
       SubscribeStatusSchema,
       { subscribed: false },
-      { method: "POST" },
+      { method: "POST", body: JSON.stringify(subscriberTarget(userId, userType)) },
       { endpoint: "POST /api/issues/:id/unsubscribe" },
     );
   }
