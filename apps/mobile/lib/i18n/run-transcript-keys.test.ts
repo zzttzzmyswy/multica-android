@@ -72,13 +72,13 @@ describe("run transcript i18n", () => {
     }
   });
 
-  it("pluralizes the comment-coverage figure, which is the only counted key", () => {
-    // The count is gated at `> 1` upstream, so the `_one` form exists for
-    // locale completeness rather than for a reachable UI state — but a missing
-    // plural form is a hard i18next error, not a fallback.
-    expect(mod.translate("runs.transcript.includedComments", { count: 3 })).toContain("3");
-    expect(mod.translate("runs.transcript.includedComments", { count: 3 })).not.toBe(
-      "runs.transcript.includedComments",
-    );
+  it("interpolates the comment-coverage figure, the one counted key", () => {
+    // `commentCoverageCount` returns null below 2, so the plural wording is the
+    // only reachable form and no `_one` key exists — this repo picks plural
+    // forms by explicit key selection (`usage-breakdown-dialog.tsx:98`), not by
+    // an i18n layer, so a stray `_one` here would be dead weight.
+    const rendered = mod.translate("runs.transcript.includedComments", { count: 3 });
+    expect(rendered).toContain("3");
+    expect(rendered).not.toContain("{{count}}");
   });
 });
