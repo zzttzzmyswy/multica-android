@@ -141,9 +141,14 @@ export function viewQueryFromSnapshot(
 
 /** Serialize the personal display defaults a view seeds on first open.
  *  Mobile subset of web's display payload — viewMode / grouping / sort /
- *  showSubIssues / cardProperties. Web's remaining keys (swimlaneGrouping,
- *  tableColumns, …) are still absent because mobile has no such surface, and
- *  their absence reads back as defaults.
+ *  showSubIssues / tableHierarchy / cardProperties. Web's remaining keys
+ *  (swimlaneGrouping, tableColumns, …) are still absent because mobile has no
+ *  such surface, and their absence reads back as defaults.
+ *
+ *  `tableHierarchy` is here because web writes it (save-view-dialog.tsx:608,
+ *  alongside tableColumns / tableCalculation): it is part of what a saved view
+ *  fixes, not a session preference. Omitting it would make a mobile
+ *  open-and-resave silently reset a web-saved view's table nesting.
  *
  *  `cardProperties` is written out in full (all eight keys, whatever mobile
  *  gates) so a view saved on web survives a mobile open-and-resave instead of
@@ -156,6 +161,7 @@ export function viewDisplayFromState(state: {
   sortBy: IssueSortField;
   sortDirection: IssueSortDirection;
   showSubIssues: boolean;
+  tableHierarchy: boolean;
   cardProperties: CardProperties;
 }): Record<string, unknown> {
   return {
@@ -164,6 +170,7 @@ export function viewDisplayFromState(state: {
     sortBy: state.sortBy,
     sortDirection: state.sortDirection,
     showSubIssues: state.showSubIssues,
+    tableHierarchy: state.tableHierarchy,
     cardProperties: state.cardProperties,
   };
 }
@@ -371,15 +378,16 @@ export function clearDimensionToBaseline(
 }
 
 /** Sanitized display patch — viewMode/grouping/sort/showSubIssues/
- *  cardProperties from a view blob. The caller supplies the surface's own
- *  current sortBy as the fallback so an unsaved view still lands on the
- *  list's active sort. */
+ *  tableHierarchy/cardProperties from a view blob. The caller supplies the
+ *  surface's own current sortBy as the fallback so an unsaved view still lands
+ *  on the list's active sort. */
 export interface IssueViewDisplayPatch {
   viewMode: IssueViewMode;
   grouping: IssueGrouping;
   sortBy: IssueSortField;
   sortDirection: IssueSortDirection;
   showSubIssues: boolean;
+  tableHierarchy: boolean;
   cardProperties: CardProperties;
 }
 
@@ -395,6 +403,10 @@ export function sanitizeViewDisplay(
     // Web's view-store default is `true`; a view that predates the key (or
     // carries a non-boolean) keeps sub-issues visible.
     showSubIssues: display.showSubIssues !== false,
+    // Same rule and same reasoning as `showSubIssues` above: web's default is
+    // `true` (view-store.ts:309), so only an explicit `false` turns nesting
+    // off. A view saved before the key existed keeps the table nested.
+    tableHierarchy: display.tableHierarchy !== false,
     // Per-key boolean fallback, defaulting each missing / non-boolean key to
     // `true` — web's own default for every one of the eight (view-store.ts
     // :287-296) and the same rule `showSubIssues` above follows. A view saved
@@ -464,6 +476,7 @@ export type IssueViewSnapshotSource = Pick<
   | "sortDirection"
   | "grouping"
   | "showSubIssues"
+  | "tableHierarchy"
   | "cardProperties"
 >;
 
@@ -507,6 +520,9 @@ export function viewMatchesSlice(
     wantDisplay.sortBy === slice.sortBy &&
     wantDisplay.sortDirection === slice.sortDirection &&
     wantDisplay.showSubIssues === slice.showSubIssues &&
+    // Same reasoning as the card-property clause below: a view fixes the
+    // table's nesting, so flipping it must light the "modified" dot.
+    wantDisplay.tableHierarchy === slice.tableHierarchy &&
     // Card-property toggles are part of a saved view's display, so flipping
     // one must light the "modified" dot. Without this clause the dot would
     // stay dark and the user's change would be silently unsavable.

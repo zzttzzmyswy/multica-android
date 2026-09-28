@@ -71,6 +71,7 @@ import type {
   Squad,
   SquadMember,
   SquadMemberPreview,
+  TaskAttribution,
   TaskMessagePayload,
   User,
   VCSConnection,
@@ -714,6 +715,38 @@ export const EMPTY_SEARCH_PROJECTS_RESPONSE: SearchProjectsResponse = {
 // so a future server-side enum value renders a generic fallback rather than
 // crashing the row (root CLAUDE.md "Enum drift downgrades, not crashes").
 
+// Accountable-human provenance for a run (MUL-4302 §9, web
+// `packages/views/issues/components/attribution-badge.tsx`). The server owns
+// the `source` vocabulary and may add levels, so it stays a free `string` —
+// an unknown value degrades to its raw label rather than failing the parse
+// (lib/task-attribution.ts `attributionSourceLabelKey` returns null for it).
+// Every member is optional, including `attribution` itself: older backends
+// don't send the object at all, and a task whose human never resolved comes
+// back with `initiator` absent. A bare `z` object strips unknown keys, which
+// is exactly why this has to be declared — without it the payload arrives but
+// the parsed task drops it.
+const AttributionUserSchema = z.object({
+  id: z.string(),
+  name: z.string().optional(),
+  email: z.string().optional(),
+  avatar_url: z.string().optional(),
+}).loose();
+
+export const TaskAttributionSchema: z.ZodType<TaskAttribution> = z.object({
+  source: z.string().default(""),
+  // Core declares `precise` required, so a missing flag defaults to `true`
+  // (confident). Behaviourally identical to leaving it undefined: the only
+  // reader is `isAttributionUncertain`, which tests `precise === false`.
+  precise: z.boolean().default(true),
+  initiator: AttributionUserSchema.optional(),
+  originator: AttributionUserSchema.optional(),
+  evidence: z.object({ kind: z.string(), ref_id: z.string() }).loose().optional(),
+  rule_version_id: z.string().optional(),
+  delegated_from_task_id: z.string().optional(),
+  retry_of_task_id: z.string().optional(),
+  rerun_of_task_id: z.string().optional(),
+}).loose();
+
 export const AgentTaskSchema: z.ZodType<AgentTask> = z.object({
   id: z.string(),
   agent_id: z.string().default(""),
@@ -754,6 +787,7 @@ export const AgentTaskSchema: z.ZodType<AgentTask> = z.object({
   trigger_summary: z.string().optional(),
   kind: z.enum(["comment", "autopilot", "chat", "quick_create", "direct"]).optional().catch("direct"),
   work_dir: z.string().optional(),
+  attribution: TaskAttributionSchema.optional(),
 }).loose();
 
 export const AgentTaskListSchema = z.array(AgentTaskSchema).default([]);

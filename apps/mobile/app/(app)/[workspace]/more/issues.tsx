@@ -128,6 +128,7 @@ export default function IssuesPage() {
   const resetTableColumns = useIssuesViewStore((s) => s.resetTableColumns);
   const createSubIssue = useCreateSubIssue();
   const tableGrouping = useIssuesViewStore((s) => s.tableGrouping);
+  const tableHierarchy = useIssuesViewStore((s) => s.tableHierarchy);
   const setTableGrouping = useIssuesViewStore((s) => s.setTableGrouping);
   const grouping = useIssuesViewStore((s) => s.grouping);
   const groupingProperty = useGroupingProperty(grouping);
@@ -245,9 +246,18 @@ export default function IssuesPage() {
       sortDirection,
       grouping,
       showSubIssues,
+      tableHierarchy,
       cardProperties,
     }),
-    [filterState, sortBy, sortDirection, grouping, showSubIssues, cardProperties],
+    [
+      filterState,
+      sortBy,
+      sortDirection,
+      grouping,
+      showSubIssues,
+      tableHierarchy,
+      cardProperties,
+    ],
   );
   const modifiedActive = useMemo(
     () => (activeView ? !viewMatchesSlice(activeView, snapshotSource, view) : false),
@@ -600,6 +610,7 @@ export default function IssuesPage() {
           grouping={tableGrouping}
           onGroupingChange={setTableGrouping}
           groupCountQuery={groupCountQuery}
+          hierarchy={tableHierarchy}
           sortBy={sortBy}
           sortDirection={sortDirection}
           onSort={(field, direction) => {

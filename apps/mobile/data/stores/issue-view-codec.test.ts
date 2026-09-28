@@ -42,6 +42,7 @@ const SLICE: IssueFilterSlice = {
   sortDirection: "desc",
   grouping: "assignee",
   showSubIssues: false,
+  tableHierarchy: true,
   cardProperties: { ...ALL_CARD_PROPERTIES_ON },
   toggleStatusFilter: () => {},
   hideStatus: () => {},
@@ -58,6 +59,7 @@ const SLICE: IssueFilterSlice = {
   setDateFilter: () => {},
   toggleWorkingOnly: () => {},
   toggleShowSubIssues: () => {},
+  toggleTableHierarchy: () => {},
   toggleCardProperty: () => {},
   setSortBy: () => {},
   setSortDirection: () => {},
@@ -87,7 +89,7 @@ describe("viewQueryFromSnapshot", () => {
 });
 
 describe("viewDisplayFromState", () => {
-  it("serializes viewMode/grouping/sortBy/sortDirection/showSubIssues + cardProperties", () => {
+  it("serializes viewMode/grouping/sortBy/sortDirection/showSubIssues/tableHierarchy + cardProperties", () => {
     expect(
       viewDisplayFromState({
         view: "board",
@@ -95,6 +97,7 @@ describe("viewDisplayFromState", () => {
         sortBy: "priority",
         sortDirection: "desc",
         showSubIssues: false,
+        tableHierarchy: true,
         cardProperties: SLICE.cardProperties,
       }),
     ).toEqual({
@@ -103,6 +106,7 @@ describe("viewDisplayFromState", () => {
       sortBy: "priority",
       sortDirection: "desc",
       showSubIssues: false,
+      tableHierarchy: true,
       cardProperties: SLICE.cardProperties,
     });
   });
@@ -115,6 +119,7 @@ describe("viewDisplayFromState", () => {
         sortBy: "position",
         sortDirection: "asc",
         showSubIssues: true,
+        tableHierarchy: true,
         cardProperties: SLICE.cardProperties,
       }).showSubIssues,
     ).toBe(true);
@@ -130,6 +135,7 @@ describe("viewDisplayFromState", () => {
       sortBy: "position",
       sortDirection: "asc",
       showSubIssues: true,
+      tableHierarchy: true,
       cardProperties: SLICE.cardProperties,
     });
     expect(Object.keys(display.cardProperties as object).sort()).toEqual([
@@ -201,24 +207,25 @@ describe("sanitizeViewDisplay", () => {
   it("passes known values through and defaults garbage", () => {
     expect(
       sanitizeViewDisplay({ viewMode: "board", grouping: "assignee" }, "position"),
-    ).toEqual({ viewMode: "board", grouping: "assignee", sortBy: "position", sortDirection: "asc", showSubIssues: true, cardProperties: ALL_CARD_PROPERTIES_ON });
+    ).toEqual({ viewMode: "board", grouping: "assignee", sortBy: "position", sortDirection: "asc", showSubIssues: true, tableHierarchy: true, cardProperties: ALL_CARD_PROPERTIES_ON });
     expect(
       sanitizeViewDisplay({ viewMode: "calendar", grouping: "nope", sortBy: "weird", sortDirection: "sideways" }, "created_at"),
-    ).toEqual({ viewMode: "list", grouping: "status", sortBy: "created_at", sortDirection: "asc", showSubIssues: true, cardProperties: ALL_CARD_PROPERTIES_ON });
+    ).toEqual({ viewMode: "list", grouping: "status", sortBy: "created_at", sortDirection: "asc", showSubIssues: true, tableHierarchy: true, cardProperties: ALL_CARD_PROPERTIES_ON });
     // "gantt" is a valid mobile mode since iter-118 — passes through.
     expect(
       sanitizeViewDisplay({ viewMode: "gantt" }, "created_at"),
-    ).toEqual({ viewMode: "gantt", grouping: "status", sortBy: "created_at", sortDirection: "asc", showSubIssues: true, cardProperties: ALL_CARD_PROPERTIES_ON });
+    ).toEqual({ viewMode: "gantt", grouping: "status", sortBy: "created_at", sortDirection: "asc", showSubIssues: true, tableHierarchy: true, cardProperties: ALL_CARD_PROPERTIES_ON });
     // "swimlane" is a valid mobile mode since iter-122 — passes through.
     expect(
       sanitizeViewDisplay({ viewMode: "swimlane" }, "created_at"),
-    ).toEqual({ viewMode: "swimlane", grouping: "status", sortBy: "created_at", sortDirection: "asc", showSubIssues: true, cardProperties: ALL_CARD_PROPERTIES_ON });
+    ).toEqual({ viewMode: "swimlane", grouping: "status", sortBy: "created_at", sortDirection: "asc", showSubIssues: true, tableHierarchy: true, cardProperties: ALL_CARD_PROPERTIES_ON });
     expect(sanitizeViewDisplay({}, "due_date")).toEqual({
       viewMode: "list",
       grouping: "status",
       sortBy: "due_date",
       sortDirection: "asc",
       showSubIssues: true,
+      tableHierarchy: true,
       cardProperties: ALL_CARD_PROPERTIES_ON,
     });
   });
@@ -231,6 +238,15 @@ describe("sanitizeViewDisplay", () => {
     // Non-boolean garbage falls back to the default rather than hiding.
     expect(sanitizeViewDisplay({ showSubIssues: "no" }, "position").showSubIssues).toBe(true);
   });
+
+  it("only an explicit false flattens the table (web default is nested)", () => {
+    // Same rule as showSubIssues above, and for the same reason: a view saved
+    // before the key existed must not read as "flat".
+    expect(sanitizeViewDisplay({ tableHierarchy: false }, "position").tableHierarchy).toBe(false);
+    expect(sanitizeViewDisplay({ tableHierarchy: true }, "position").tableHierarchy).toBe(true);
+    expect(sanitizeViewDisplay({}, "position").tableHierarchy).toBe(true);
+    expect(sanitizeViewDisplay({ tableHierarchy: "no" }, "position").tableHierarchy).toBe(true);
+  });
 });
 
 describe("viewMatchesSlice", () => {
@@ -242,6 +258,7 @@ describe("viewMatchesSlice", () => {
       sortBy: "priority",
       sortDirection: "desc",
       showSubIssues: false,
+      tableHierarchy: true,
       cardProperties: SLICE.cardProperties,
     }),
   };
@@ -273,6 +290,14 @@ describe("viewMatchesSlice", () => {
 
   it("false when the show-sub-issues preference diverges", () => {
     expect(viewMatchesSlice(VIEW, { ...SLICE, showSubIssues: true }, "board")).toBe(false);
+  });
+
+  it("false when the table hierarchy preference diverges", () => {
+    // `tableHierarchy` is part of what a saved view fixes (web writes it into
+    // the display payload at save-view-dialog.tsx:608), so flipping the switch
+    // must light the "modified" dot — otherwise the change would be silently
+    // unsavable.
+    expect(viewMatchesSlice(VIEW, { ...SLICE, tableHierarchy: false }, "board")).toBe(false);
   });
 
   it("treats a legacy view with no showSubIssues key as 'sub-issues visible'", () => {
@@ -504,6 +529,7 @@ describe("cardProperties round-trip", () => {
       sortBy: "position",
       sortDirection: "asc",
       showSubIssues: true,
+      tableHierarchy: true,
       cardProperties: original,
     });
     expect(sanitizeViewDisplay(display, "position").cardProperties).toEqual(original);
@@ -520,6 +546,7 @@ describe("cardProperties round-trip", () => {
         sortBy: "priority",
         sortDirection: "desc",
         showSubIssues: false,
+        tableHierarchy: true,
         cardProperties: SLICE.cardProperties,
       }),
     };
@@ -543,6 +570,8 @@ describe("cardProperties round-trip", () => {
         showSubIssues: false,
       },
     };
+    // A legacy view (saved before the key existed) also has to match on
+    // tableHierarchy, or every pre-toggle view would read as modified.
     expect(viewMatchesSlice(legacy, SLICE, "board")).toBe(true);
   });
 });

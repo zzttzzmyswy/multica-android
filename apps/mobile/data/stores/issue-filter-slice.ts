@@ -184,6 +184,27 @@ export interface IssueFilterSlice {
    * three keys — see `issue-view-codec.ts` for the round-trip contract.
    */
   cardProperties: CardProperties;
+  /**
+   * When true, the table nests sub-issues under their parent (indent +
+   * chevron); when false it renders every row flat. Web's `tableHierarchy`
+   * (view-store.ts:223, default `true` at `:309`, `toggleTableHierarchy` at
+   * `:523`).
+   *
+   * Only meaningful in `viewMode === "table"` — web renders the switch itself
+   * behind that condition (issues-header.tsx:1910-1923), and no other mobile
+   * surface builds a hierarchy.
+   *
+   * **Known divergence from web.** Web's "flat" is a SERVER behaviour: it
+   * sends `hierarchy: { enabled: false }` (table-view.tsx:1471) and the
+   * server stops aggregating parent/child, returning a flat page. Mobile has
+   * no such query parameter — it loads one flat client-sorted window and
+   * builds the tree locally (`issue-table-hierarchy.ts`) — so switching this
+   * off flattens the LOADED window. The visible row set can therefore differ
+   * from web's server-side flat page, which paginates flat. Closing that gap
+   * means adding a `hierarchy` param to the table query and the backend
+   * contract: a separate piece of work, not a wiring detail.
+   */
+  tableHierarchy: boolean;
   toggleStatusFilter: (status: IssueStatus) => void;
   /**
    * Hide one status column from the kanban surfaces (board / swimlane).
@@ -221,6 +242,9 @@ export interface IssueFilterSlice {
   toggleWorkingOnly: () => void;
   /** Flip the "show sub-issues" display filter (web `toggleShowSubIssues`). */
   toggleShowSubIssues: () => void;
+  /** Flip the table's parent/child nesting (web `toggleTableHierarchy`,
+   *  view-store.ts:523). */
+  toggleTableHierarchy: () => void;
   /** Flip one board-card display field (web `toggleCardProperty`,
    *  view-store.ts:441-448). */
   toggleCardProperty: (key: keyof CardProperties) => void;
@@ -296,6 +320,7 @@ export const defaultIssueFilterSlice = (): Pick<
   | "sortDirection"
   | "grouping"
   | "showSubIssues"
+  | "tableHierarchy"
   | "cardProperties"
 > => ({
   statusFilters: [],
@@ -313,6 +338,8 @@ export const defaultIssueFilterSlice = (): Pick<
   sortDirection: "asc",
   grouping: "status",
   showSubIssues: true,
+  // Web's default verbatim (view-store.ts:309): the table nests by default.
+  tableHierarchy: true,
   // Web's defaults verbatim (view-store.ts:287-296): all eight fields on.
   cardProperties: {
     priority: true,
@@ -359,6 +386,7 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
   | "setDateFilter"
   | "toggleWorkingOnly"
   | "toggleShowSubIssues"
+  | "toggleTableHierarchy"
   | "toggleCardProperty"
   | "clearFilters"
   | "resetFiltersTo"
@@ -452,6 +480,8 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
       set((state) => ({ workingOnly: !state.workingOnly })),
     toggleShowSubIssues: () =>
       set((state) => ({ showSubIssues: !state.showSubIssues })),
+    toggleTableHierarchy: () =>
+      set((state) => ({ tableHierarchy: !state.tableHierarchy })),
     toggleCardProperty: (key) =>
       set((state) => ({
         cardProperties: {

@@ -140,6 +140,7 @@ export function ProjectIssueSurface({
   const setTableGrouping = useProjectIssuesViewStore((s) => s.setTableGrouping);
   const grouping = useProjectIssuesViewStore((s) => s.grouping);
   const showSubIssues = useProjectIssuesViewStore((s) => s.showSubIssues);
+  const tableHierarchy = useProjectIssuesViewStore((s) => s.tableHierarchy);
   const cardProperties = useProjectIssuesViewStore((s) => s.cardProperties);
   const groupingProperty = useGroupingProperty(grouping);
   const sortBy = useProjectIssuesViewStore((s) => s.sortBy);
@@ -301,9 +302,18 @@ export function ProjectIssueSurface({
       sortDirection,
       grouping,
       showSubIssues,
+      tableHierarchy,
       cardProperties,
     }),
-    [filterState, sortBy, sortDirection, grouping, showSubIssues, cardProperties],
+    [
+      filterState,
+      sortBy,
+      sortDirection,
+      grouping,
+      showSubIssues,
+      tableHierarchy,
+      cardProperties,
+    ],
   );
   const modifiedActive = useMemo(
     () =>

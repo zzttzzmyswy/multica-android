@@ -62,13 +62,14 @@ function shape(
   properties: IssueProperty[] = [],
   collapsed: string[] = [],
   actorName?: (a: { type: string; id: string }) => string,
+  hierarchy?: boolean,
 ): string[] {
   return buildIssueTableGroups(
     issues,
     grouping,
     properties,
     new Set(collapsed),
-    { actorName },
+    { actorName, hierarchy },
   ).map(
     (g) =>
       `${g.key}(${g.count}):${g.rows
@@ -273,6 +274,58 @@ describe("buildIssueTableGroups — hierarchy is per segment", () => {
     ];
     expect(shape(issues, "status", [], ["parent"])).toEqual([
       "status:todo(2):parent@0*-",
+    ]);
+  });
+});
+
+describe("buildIssueTableGroups — hierarchy off (web tableHierarchy toggle)", () => {
+  const issues = [
+    issue({ id: "parent", status: "todo" }),
+    issue({ id: "child", status: "todo", parent_issue_id: "parent" }),
+    issue({ id: "grandchild", status: "todo", parent_issue_id: "child" }),
+    issue({ id: "other", status: "done" }),
+  ];
+
+  it("flattens every row: no indent and no chevron", () => {
+    // The whole point of the switch. A single `@0` on every row is what makes
+    // the table's indent AND its expand chevron disappear together — the row
+    // renderer reads `depth` for the first and `hasChildren` for the second,
+    // so neither has to be told about the toggle.
+    expect(shape(issues, "status", [], [], undefined, false)).toEqual([
+      "status:todo(3):parent@0,child@0,grandchild@0",
+      "status:done(1):other@0",
+    ]);
+  });
+
+  it("keeps the segment order and the row order the surface sorted", () => {
+    // Flattening must not re-sort or re-bucket: the surface already applied
+    // the user's sort, and the flat list is that order verbatim — same
+    // segments in the same order, same rows inside each. Only the depths (and
+    // therefore the chevrons) collapse.
+    const withoutDepth = (rows: string[]) =>
+      rows.map((row) => row.replace(/@\d[*|-]?/g, "@"));
+    expect(withoutDepth(shape(issues, "status", [], [], undefined, false))).toEqual(
+      withoutDepth(shape(issues, "status")),
+    );
+  });
+
+  it("ignores the collapsed set — a flat list has no subtree to hide", () => {
+    // Passing "parent" as collapsed would prune child+grandchild with
+    // hierarchy ON. With it OFF there is nothing to prune, so all rows stay.
+    expect(shape(issues, "status", [], ["parent"], undefined, false)).toEqual([
+      "status:todo(3):parent@0,child@0,grandchild@0",
+      "status:done(1):other@0",
+    ]);
+  });
+
+  it("nests and prunes exactly as before when the switch is on or absent", () => {
+    expect(shape(issues, "status", [], ["parent"], undefined, true)).toEqual([
+      "status:todo(3):parent@0*-",
+      "status:done(1):other@0",
+    ]);
+    expect(shape(issues, "status", [], ["parent"])).toEqual([
+      "status:todo(3):parent@0*-",
+      "status:done(1):other@0",
     ]);
   });
 });

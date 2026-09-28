@@ -145,6 +145,7 @@ export default function IssuesFilterRoute() {
   const sortDirection = s.sortDirection;
   const grouping = s.grouping;
   const showSubIssues = s.showSubIssues;
+  const tableHierarchy = s.tableHierarchy;
   const cardProperties = s.cardProperties;
 
   // The date section's field radio is UI-local until a preset/custom commits
@@ -593,6 +594,24 @@ export default function IssuesFilterRoute() {
           onToggle={() => act().toggleShowSubIssues()}
           t={t}
         />
+        {/* Table hierarchy — web `table.hierarchy` +
+            `table.hierarchy_description` (issues-header.tsx:1910-1923),
+            which web renders INSIDE the table's own header. Mobile keeps it
+            here in the shared Display section instead: the filter sheet is
+            where every other display preference already lives, and the table
+            header is a cramped strip on a phone. The switch is offered
+            whenever the table is the active mode, matching web's own
+            `viewMode === "table" &&` gate — flipping it from another view
+            would change nothing visible until the user switched. */}
+        {s.view === "table" ? (
+          <BoolRow
+            label={t("filter.display.tableHierarchy")}
+            description={t("filter.display.tableHierarchyDesc")}
+            checked={tableHierarchy}
+            onToggle={() => act().toggleTableHierarchy()}
+            t={t}
+          />
+        ) : null}
         {/* Card fields — web's `display.card_properties_section`
             (issues-header.tsx:1996-2010) over `CARD_PROPERTY_OPTIONS`
             (packages/core/issues/stores/view-store.ts:161-170).
@@ -665,14 +684,19 @@ function FilterDimensionRow({
   );
 }
 
-/** On/off row (includeNoAssignee / includeNoProject). */
+/** On/off row (includeNoAssignee / includeNoProject / showSubIssues /
+ *  tableHierarchy). `description` renders web's two-line form — the label plus
+ *  a smaller explanatory line under it — for switches whose effect is not
+ *  obvious from the label alone. */
 function BoolRow({
   label,
+  description,
   checked,
   onToggle,
   t,
 }: {
   label: string;
+  description?: string;
   checked: boolean;
   onToggle: () => void;
   t: (id: string, params?: Record<string, string | number>) => string;
@@ -685,7 +709,14 @@ function BoolRow({
       className="flex-row items-center gap-3 px-4 py-2.5 active:bg-secondary"
     >
       <View className="w-[18px]" />
-      <Text className="flex-1 text-sm text-foreground">{label}</Text>
+      <View className="flex-1 min-w-0">
+        <Text className="text-sm text-foreground">{label}</Text>
+        {description ? (
+          <Text className="mt-0.5 text-xs text-muted-foreground">
+            {description}
+          </Text>
+        ) : null}
+      </View>
       <Ionicons
         name={checked ? "checkbox" : "square-outline"}
         size={20}

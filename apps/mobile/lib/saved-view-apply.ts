@@ -101,6 +101,9 @@ export function applySavedView({
     sortDirection: display.sortDirection,
     grouping: display.grouping,
     showSubIssues: display.showSubIssues,
+    // Same contract as `showSubIssues`: the table's nesting is part of what a
+    // view fixes, so reopening one restores it.
+    tableHierarchy: display.tableHierarchy,
     // Carried through from the view rather than reset: the card-property
     // toggles ARE part of what a view fixes, so reopening one restores them.
     // A view that predates the key lands on the all-on default via

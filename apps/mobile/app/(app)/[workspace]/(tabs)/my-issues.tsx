@@ -137,6 +137,7 @@ export default function MyIssues() {
   const resetTableColumns = useMyIssuesViewStore((s) => s.resetTableColumns);
   const createSubIssue = useCreateSubIssue();
   const tableGrouping = useMyIssuesViewStore((s) => s.tableGrouping);
+  const tableHierarchy = useMyIssuesViewStore((s) => s.tableHierarchy);
   const setTableGrouping = useMyIssuesViewStore((s) => s.setTableGrouping);
   const grouping = useMyIssuesViewStore((s) => s.grouping);
   const groupingProperty = useGroupingProperty(grouping);
@@ -259,9 +260,18 @@ export default function MyIssues() {
       sortDirection,
       grouping,
       showSubIssues,
+      tableHierarchy,
       cardProperties,
     }),
-    [filterState, sortBy, sortDirection, grouping, showSubIssues, cardProperties],
+    [
+      filterState,
+      sortBy,
+      sortDirection,
+      grouping,
+      showSubIssues,
+      tableHierarchy,
+      cardProperties,
+    ],
   );
   const modifiedActive = useMemo(
     () => (activeView ? !viewMatchesSlice(activeView, snapshotSource, view) : false),
@@ -623,6 +633,7 @@ export default function MyIssues() {
           grouping={tableGrouping}
           onGroupingChange={setTableGrouping}
           groupCountQuery={groupCountQuery}
+          hierarchy={tableHierarchy}
           sortBy={sortBy}
           sortDirection={sortDirection}
           onSort={(field, direction) => {

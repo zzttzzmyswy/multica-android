@@ -19,8 +19,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { AgentTask } from "@multica/core/types";
 import { prepareTaskMessages } from "@multica/core/task-transcript";
 import { Text } from "@/components/ui/text";
+import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { AttributionBadge } from "@/components/agent/attribution-badge";
 import { TranscriptEntryRow } from "@/components/agent/transcript-entry";
 import { taskMessagesOptions } from "@/data/queries/chat";
+import { useActorLookup } from "@/data/use-actor-name";
+import { attributionShouldRender } from "@/lib/task-attribution";
 import { liveLogPollMs } from "@/lib/task-log-live";
 import {
   deriveTranscriptFilterOptions,
@@ -37,16 +41,27 @@ import { cn } from "@/lib/utils";
 export function RunTranscriptDialog({
   taskId,
   taskStatus,
+  task,
   onClose,
 }: {
   taskId: string;
   taskStatus: AgentTask["status"];
+  /**
+   * The task object, when the caller already holds it. Optional because the
+   * autopilot runs list only knows the run's `task_id` and the server exposes
+   * no single-task GET a caller could hydrate from; those callers keep the
+   * title-only header. Callers that do have the task (the activity row) pass
+   * it, and the header then carries web's identity line — the agent and the
+   * run's attribution.
+   */
+  task?: AgentTask;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
+  const { getName } = useActorLookup();
   const live = taskStatus === "running";
 
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
@@ -103,25 +118,53 @@ export function RunTranscriptDialog({
         className="flex-1 bg-background"
         style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
       >
-        <View className="border-b border-border px-4 py-3 flex-row items-center gap-3">
-          <View className="size-8 rounded-lg bg-secondary items-center justify-center">
-            <Ionicons
-              name="document-text-outline"
-              size={16}
-              color={theme.mutedForeground}
-            />
+        <View className="border-b border-border px-4 py-3 gap-1">
+          <View className="flex-row items-center gap-3">
+            <View className="size-8 rounded-lg bg-secondary items-center justify-center">
+              <Ionicons
+                name="document-text-outline"
+                size={16}
+                color={theme.mutedForeground}
+              />
+            </View>
+            <Text className="flex-1 text-base font-semibold text-foreground">
+              {t("agents.activity.transcriptTitle")}
+            </Text>
+            <Pressable
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel={t("a11y.close")}
+              hitSlop={8}
+            >
+              <Ionicons name="close" size={20} color={theme.mutedForeground} />
+            </Pressable>
           </View>
-          <Text className="flex-1 text-base font-semibold text-foreground">
-            {t("agents.activity.transcriptTitle")}
-          </Text>
-          <Pressable
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel={t("a11y.close")}
-            hitSlop={8}
-          >
-            <Ionicons name="close" size={20} color={theme.mutedForeground} />
-          </Pressable>
+          {/* Identity line, web's transcript-header structure
+              (agent-transcript-dialog.tsx:673-709): the agent that ran this is
+              the one foreground entity, and the run's provenance reads as a
+              separate muted unit beside it. The attribution carries NO avatar
+              — two same-size faces would read as two agents (web's `hideAvatar`
+              rationale). Absent when the caller only had a task id. */}
+          {task ? (
+            <View className="flex-row items-center gap-x-1.5 pl-11">
+              <ActorAvatar type="agent" id={task.agent_id} size={16} />
+              <Text
+                numberOfLines={1}
+                className="shrink text-xs font-medium text-foreground"
+              >
+                {getName("agent", task.agent_id)}
+              </Text>
+              {attributionShouldRender(task.attribution) ? (
+                <>
+                  <Text className="shrink-0 text-muted-foreground/70">{" · "}</Text>
+                  <AttributionBadge
+                    attribution={task.attribution}
+                    variant="inline"
+                  />
+                </>
+              ) : null}
+            </View>
+          ) : null}
         </View>
 
         {filterOptions.length > 0 ? (
