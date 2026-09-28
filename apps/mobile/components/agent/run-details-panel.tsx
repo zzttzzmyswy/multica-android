@@ -19,6 +19,7 @@ import { Text } from "@/components/ui/text";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
+import { cn } from "@/lib/utils";
 import type { RunDetailRow } from "@/lib/run-transcript-details";
 
 export function RunDetailsPanel({
@@ -94,20 +95,24 @@ export function RunDetailsPanel({
  * One label/value pair. `mono` marks the workspace-relative path and the branch
  * ref, which are machine strings the reader may want to compare character by
  * character (web renders those in a mono face too).
+ *
+ * The value breaks mid-token rather than wrapping at whitespace: a workdir and a
+ * branch ref have no spaces, so word wrapping alone would push them off-screen
+ * (web uses `break-all` for the same reason). `selectable` keeps the one thing a
+ * phone can usefully do with a path — copy it — available.
  */
 function DetailRow({ row }: { row: RunDetailRow }) {
   const { t } = useTranslation();
   return (
     <View className="flex-row items-start gap-3">
-      <Text className="w-24 shrink-0 text-xs text-muted-foreground">
+      <Text className="w-20 shrink-0 text-xs text-muted-foreground">
         {t(row.labelKey)}
       </Text>
       <Text
-        className={
-          row.mono
-            ? "flex-1 text-xs text-foreground font-mono"
-            : "flex-1 text-xs text-foreground"
-        }
+        className={cn(
+          "flex-1 text-xs text-foreground break-all",
+          row.mono && "font-mono",
+        )}
         selectable
       >
         {row.value}
