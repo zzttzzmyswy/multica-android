@@ -747,6 +747,40 @@ export const TaskAttributionSchema: z.ZodType<TaskAttribution> = z.object({
   rerun_of_task_id: z.string().optional(),
 }).loose();
 
+// Optional string-id list that degrades to "absent" when the server sends
+// something else. Mirrors core's `OptionalStringArraySchema`
+// (packages/core/api/schemas.ts:1371-1377): a malformed list costs the row the
+// one figure it feeds, never the whole task.
+const OptionalStringArraySchema = z.preprocess(
+  (value) =>
+    Array.isArray(value) && value.every((item) => typeof item === "string")
+      ? value
+      : undefined,
+  z.array(z.string()).optional(),
+);
+
+// One (provider, model) slice of a run's token usage. Mirrors core's
+// `TaskUsageSchema` (packages/core/api/schemas.ts:1383-1391).
+//
+// This is a DECLARED parse rather than leaving the field to `AgentTaskSchema`'s
+// `.loose()` passthrough, because the two are not equivalent here: `.loose()`
+// hands `task.usage` to the cost math exactly as the server sent it, so one
+// malformed slice (`input_tokens: "12"`, a null entry) reaches `estimateCost`
+// and turns every usage figure on the surface into `NaN` — a corruption that
+// spreads silently through the totals the user reads. Declaring the shape with
+// per-field defaults means a slice missing one counter still prices on the
+// counters it does have, which is core's stated rule ("0 rather than failing
+// the row").
+const TaskUsageSchema = z.object({
+  provider: z.string().optional(),
+  model: z.string().default(""),
+  input_tokens: z.number().default(0),
+  output_tokens: z.number().default(0),
+  cache_read_tokens: z.number().default(0),
+  cache_write_tokens: z.number().default(0),
+  cost_usd_ticks: z.number().optional(),
+}).loose();
+
 export const AgentTaskSchema: z.ZodType<AgentTask> = z.object({
   id: z.string(),
   agent_id: z.string().default(""),
@@ -787,7 +821,33 @@ export const AgentTaskSchema: z.ZodType<AgentTask> = z.object({
   trigger_summary: z.string().optional(),
   kind: z.enum(["comment", "autopilot", "chat", "quick_create", "direct"]).optional().catch("direct"),
   work_dir: z.string().optional(),
+  // The path a reader may actually see. `work_dir` stays clipboard-only (it is
+  // an absolute path on someone's machine); `relative_work_dir` is the
+  // workspace-relative form the transcript panel prints
+  // (packages/core/types/agent.ts:360-377).
+  relative_work_dir: z.string().optional(),
+  // Present only on runs whose agent left a branch behind. This backend does
+  // not send it today (verified against GET /api/issues/:id/task-runs); the
+  // parse is declared so an upgraded backend starts rendering it with no
+  // client change, and the panel's row stays conditional either way.
+  branch_name: z.string().optional(),
+  // Assigner's handoff note (MUL-3375) — also a trigger signal: a run carrying
+  // one reads as a direct assignment rather than the generic initial run.
+  handoff_note: z.string().optional(),
+  // Comment coverage. `coalesced_comment_ids` excludes the newest trigger, so
+  // the planned coverage is its union with `trigger_comment_id`;
+  // `delivered_comment_ids` is the authoritative receipt once claimed. Both
+  // degrade independently — a malformed one must cost the row its coverage
+  // figure, not erase the task (core's rule for these additive fields).
+  coalesced_comment_ids: OptionalStringArraySchema,
+  delivered_comment_ids: OptionalStringArraySchema,
   attribution: TaskAttributionSchema.optional(),
+  // This run's own token consumption, one entry per (provider, model). Only
+  // the issue execution-log endpoint hydrates it — the per-agent task list
+  // omits the field entirely (verified against both endpoints), which is why
+  // the transcript chip is present on runs opened from an issue and absent on
+  // runs opened from an agent's activity tab.
+  usage: z.array(TaskUsageSchema).optional().catch(undefined),
 }).loose();
 
 export const AgentTaskListSchema = z.array(AgentTaskSchema).default([]);

@@ -16,12 +16,13 @@
  * Text narration renders as markdown; process steps reuse the shared
  * `ChatTimeline` fold. Empty logs surface `runs.noLogs` / `runs.noLogsYet`.
  */
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Alert, Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { AgentTask } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { RunTranscriptDialog } from "@/components/agent/run-transcript-dialog";
 import {
   Collapsible,
   CollapsibleContent,
@@ -33,6 +34,8 @@ import { useCancelTask } from "@/data/mutations/issues";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useTranslation } from "@/lib/i18n/react";
+import { useColorScheme } from "@/lib/use-color-scheme";
+import { THEME } from "@/lib/theme";
 import { formatTokens } from "@/lib/usage-format";
 import { summarizeTaskUsage } from "@/lib/task-usage";
 import { canRerunRun } from "@/lib/run-retry";
@@ -55,6 +58,7 @@ export function RunRow({ task, issueId }: Props) {
   const { getName } = useActorLookup();
   const { t } = useTranslation();
   const timeAgo = useTimeAgo();
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
   const isActive = ACTIVE_STATUSES.includes(task.status);
   const summary = task.trigger_summary?.trim() || fallbackSummary(task, t);
   // Past tasks use completed_at when present (server fills it for terminal
@@ -81,6 +85,14 @@ export function RunRow({ task, issueId }: Props) {
           </Text>
         </View>
       </View>
+      {transcriptOpen ? (
+        <RunTranscriptDialog
+          taskId={task.id}
+          taskStatus={task.status}
+          task={task}
+          onClose={() => setTranscriptOpen(false)}
+        />
+      ) : null}
     </View>
   );
 
@@ -108,7 +120,8 @@ export function RunRow({ task, issueId }: Props) {
               </View>
             </Pressable>
           </CollapsibleTrigger>
-          <View className="pl-2 pr-1">
+          <View className="flex-row items-center gap-1 pl-2 pr-1">
+            <TranscriptButton onPress={() => setTranscriptOpen(true)} />
             <CancelButton taskId={task.id} issueId={issueId} />
           </View>
         </View>
@@ -142,11 +155,12 @@ export function RunRow({ task, issueId }: Props) {
             </View>
           </Pressable>
         </CollapsibleTrigger>
-        {canRerunRun(task.status) && (
-          <View className="pl-2 pr-1">
+        <View className="flex-row items-center gap-1 pl-2 pr-1">
+          <TranscriptButton onPress={() => setTranscriptOpen(true)} />
+          {canRerunRun(task.status) ? (
             <RerunButton taskId={task.id} issueId={issueId} />
-          </View>
-        )}
+          ) : null}
+        </View>
       </View>
       <CollapsibleContent>
         <RunLog taskId={task.id} />
@@ -188,6 +202,35 @@ function StatusBadge({ task }: { task: AgentTask }) {
     }
   }
   return <Text className={`text-xs ${cls}`}>{label}</Text>;
+}
+
+/**
+ * The run's transcript entry point, on every row.
+ *
+ * Web puts a `TranscriptButton` in each execution-log row's actions
+ * (`execution-log-section.tsx:383` active, `:517` past) — outside the activity
+ * card that is the ONLY place the transcript is opened from. Mobile had no
+ * such entry point at all: a run's trace was reachable only by expanding the
+ * row, which shows the same messages but none of the transcript's per-run
+ * facts (the usage chip, the run-details panel). Those facts are hydrated on
+ * exactly the endpoint this row reads (`GET /api/issues/:id/task-runs`), so
+ * without this button the whole surface would have been unreachable.
+ */
+function TranscriptButton({ onPress }: { onPress: () => void }) {
+  const { t } = useTranslation();
+  const { colorScheme } = useColorScheme();
+  const theme = THEME[colorScheme];
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={t("runs.transcript.open")}
+      hitSlop={8}
+      className="rounded-md p-1.5 active:opacity-70"
+    >
+      <Ionicons name="document-text-outline" size={16} color={theme.mutedForeground} />
+    </Pressable>
+  );
 }
 
 function CancelButton({
