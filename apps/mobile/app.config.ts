@@ -22,7 +22,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         ? "Multica (Staging)"
         : "Multica (Dev)",
     slug: "multica-mobile",
-    version: "0.6.11",
+    version: "0.6.12",
     orientation: "portrait",
     userInterfaceStyle: "automatic",
     scheme: "multica",
@@ -39,7 +39,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // Convention: minor*100 + patch — keep it monotonic with every
       // `version` bump so self-hosted APK updates always upgrade. Shown as the
       // About-page "build" number (Constants.platform.android.versionCode).
-      versionCode: 611,
+      versionCode: 612,
       // Adaptive icon: separate full-bleed background + centered foreground so
       // Android launchers can mask them into circles / squiggles cleanly.
       adaptiveIcon: {
@@ -117,6 +117,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // declares it as a dynamic "+" version, so an upstream release can silently
       // produce an APK that dies at startup (0.8.1 did). See the plugin.
       "./plugins/with-fbjni-version-pin.js",
+      // Repoints shiki-engine's ONIG_LIB at its vendored per-ABI libonig.so.
+      // Its CMakeLists uses find_library with NO_CMAKE_FIND_ROOT_PATH, so a host
+      // with distro oniguruma links /usr/lib/libonig.so into an aarch64 target
+      // and fails. See the plugin (iter-181 fixed this in node_modules only,
+      // which a reinstall wipes).
+      "./plugins/with-onig-prebuilt-path.js",
     ],
     extra: { APP_ENV: env },
   };

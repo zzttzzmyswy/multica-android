@@ -595,6 +595,7 @@ export function ProjectIssueSurface({
           grouping={tableGrouping}
           onGroupingChange={setTableGrouping}
           groupCountQuery={groupCountQuery}
+          hierarchy={tableHierarchy}
           sortBy={sortBy}
           sortDirection={sortDirection}
           search={tableSearch}
