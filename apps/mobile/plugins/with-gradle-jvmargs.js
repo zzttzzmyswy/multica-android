@@ -1,21 +1,24 @@
-// Android build config-plugin: give the Gradle daemon enough metaspace that a
-// plain all-ABI `assembleRelease` survives.
+// Android build config-plugin: raise the Gradle daemon's metaspace ceiling,
+// which the prebuild template leaves at 512m.
 //
 // The generated apps/mobile/android/ tree is gitignored (Expo prebuild output),
-// and the template prebuild emits hardcodes
+// so the template's value
 //
 //     org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m
 //
-// Past ~512m of metaspace the daemon dies on the closing packaging tasks with
-// `OutOfMemoryError: Metaspace` — the stack points at merge/pack, not at the
-// ceiling that killed it. The workaround was to pass
-// `-Dorg.gradle.jvmargs="-Xmx8g -XX:MaxMetaspaceSize=2g"` on every invocation,
-// which is easy to forget and invisible from a fresh checkout. Splice the safe
-// values in at prebuild time instead, so the default is correct. See
-// docs/android-build.md.
+// cannot be corrected in tracked source. Iteration 183 saw an all-ABI
+// `assembleRelease` fail on its closing tasks with the daemon reporting it had
+// run out of JVM metaspace, and worked around it by passing
+// `-Dorg.gradle.jvmargs="-Xmx8g -XX:MaxMetaspaceSize=2g"` by hand.
 //
-// -Xmx is a ceiling, not a reservation, so the headroom costs nothing on a
-// smaller machine; the metaspace ceiling is the one that has to clear 512m.
+// Iteration 184 could not reproduce that failure: four all-ABI release builds
+// at 512m all succeeded, with no metaspace message in the log. So this splice is
+// defence against a failure mode, not a documented repro — see
+// docs/android-build.md, which says so plainly.
+//
+// It is safe to keep unconditionally: it only raises a ceiling below 1 GiB, it
+// leaves a deliberately raised value alone, and -Xmx is a ceiling rather than a
+// reservation, so the headroom costs nothing on a smaller machine.
 //
 // Override with a CLI `-Dorg.gradle.jvmargs=...` (a -D beats gradle.properties).
 // Do not edit the generated gradle.properties — the next prebuild overwrites it.

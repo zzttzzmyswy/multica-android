@@ -1,15 +1,14 @@
 /**
  * Guards the Gradle metaspace splice (plugins/with-gradle-jvmargs.js).
  *
- * Why this test exists: the ceiling the prebuild template writes (512m) is too
- * low for an all-ABI release build, and the failure it produces — a daemon
- * `OutOfMemoryError: Metaspace` during the closing packaging tasks — points at
- * merge/pack rather than at the ceiling that caused it. Four consecutive
- * iterations rediscovered this from scratch because the workaround lived in a
- * hand-typed `-D` flag. The splice is now the durable fix, so these tests pin
- * its behaviour: it must raise the low ceiling, must leave a hand-raised one
- * alone, and must not append duplicates when prebuild runs over a tree it has
- * already touched.
+ * Why this test exists: the ceiling the prebuild template writes (512m) is
+ * gitignored, so it cannot be corrected in tracked source. Iteration 183 hit an
+ * all-ABI release build that failed on its closing packaging tasks and adopted a
+ * hand-typed `-Dorg.gradle.jvmargs=...` as the workaround. That failure did not
+ * reproduce in iteration 184 (four 512m builds succeeded), so the splice is
+ * defence rather than a documented repro — but it is the durable place for the
+ * value either way, and these tests pin its behaviour: raise a low ceiling,
+ * leave a hand-raised one alone, never append duplicates.
  */
 import { describe, expect, it } from "vitest";
 

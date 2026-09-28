@@ -17,8 +17,12 @@ below) while producing the `v0.6.x` release APKs.
 | Gradle | 9.0.0 | wrapper-pinned in the generated `android/` |
 | Android SDK | platforms 34/35/36, build-tools 35.0.0 + 36.0.0, ndk 28.2, platform-tools | |
 
-**`java` on `PATH` is not necessarily 17.** AGP refuses to run on newer JDKs
-(observed with the distro default, 27), so `JAVA_HOME` must be set explicitly.
+**`java` on `PATH` is not necessarily 17** — on this host it was 27. A JDK that
+new is not merely discouraged, it breaks the build: AGP transforms
+`$ANDROID_HOME/platforms/android-36/core-for-system-modules.jar` with `jlink`,
+and 27's `jlink` fails, taking down every module's `compileReleaseJavaWithJavac`
+with `Failed to transform core-for-system-modules.jar`. Set `JAVA_HOME`
+explicitly to 17.
 
 ## Environment
 
@@ -72,7 +76,7 @@ source, as an Expo config plugin that re-splices itself on each prebuild:
 | `with-mermaid-asset.js`, `with-katex-asset.js` | WebView runtimes copied into APK assets |
 | `with-brand-icons.js` | Notification small icon |
 
-### The metaspace trap
+### The metaspace ceiling
 
 The prebuild template writes:
 
@@ -80,23 +84,33 @@ The prebuild template writes:
 org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m
 ```
 
-An all-ABI `assembleRelease` needs more metaspace than that. Past the ceiling
-the daemon dies on the *closing* packaging tasks with `OutOfMemoryError:
-Metaspace`, so the stack points at merge/pack rather than at the actual cause,
-and a build that worked earlier in the session starts failing on its last leg.
+Iteration 183 recorded an all-ABI `assembleRelease` failing on its closing tasks
+with the daemon reporting it had run out of JVM metaspace, and adopted a
+hand-passed `-Dorg.gradle.jvmargs="-Xmx8g -XX:MaxMetaspaceSize=2g"` as the fix.
 
-`plugins/with-gradle-jvmargs.js` raises it to `-Xmx8g -XX:MaxMetaspaceSize=2g`
-at prebuild time. `-Xmx` is a ceiling rather than a reservation, so the headroom
-is free on smaller machines.
+**That failure did not reproduce here.** Four all-ABI release builds at the
+template's 512m ceiling reached `BUILD SUCCESSFUL` with no metaspace message in
+the log — one from a fully cleaned tree (native dirs and `.cxx` removed), then
+three consecutive incremental runs sharing a single daemon. So 512m is not by
+itself insufficient on this host; treat the 183 failure as possibly
+machine-state-dependent rather than a property of the configuration.
 
-If you still need to override:
+The splice in `plugins/with-gradle-jvmargs.js` is kept anyway, because it is
+cheap and one-directional: it only ever *raises* a ceiling that is below 1 GiB,
+`-Xmx` is a ceiling rather than a reservation, and it leaves a deliberately
+raised value alone. It costs nothing when the smaller value would have worked,
+and it removes the failure mode from the class of things that can go wrong.
+It is **not** a documented repro—if you are chasing a real build failure, do not
+assume this was it.
+
+If you need to override anyway:
 
 ```bash
 ./gradlew assembleRelease -Dorg.gradle.jvmargs="-Xmx8g -XX:MaxMetaspaceSize=2g"
 ```
 
 Do **not** edit the generated `gradle.properties` — the next prebuild overwrites
-it, which is how this trap kept coming back.
+it, which is how this kept coming back.
 
 ### The copied-tree trap
 
