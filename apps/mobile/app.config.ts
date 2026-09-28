@@ -113,6 +113,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // runtime) into the APK's assets at prebuild time — same gitignored-
       // android/ reasoning as the mermaid plugin above. Rich-content, MYS-1005.
       "./plugins/with-katex-asset.js",
+      // Pins com.facebook.fbjni:fbjni to React Native's own version. shiki-engine
+      // declares it as a dynamic "+" version, so an upstream release can silently
+      // produce an APK that dies at startup (0.8.1 did). See the plugin.
+      "./plugins/with-fbjni-version-pin.js",
     ],
     extra: { APP_ENV: env },
   };
