@@ -1,9 +1,9 @@
 /**
- * Unit tests for the agents-list scope partition (iteration 186, MYS-1739's
- * successor). Mirrors web's scope semantics
- * (packages/views/agents/components/agents-page.tsx:848-877): the three scopes
- * are mutually exclusive, `mine` is ownership-scoped to the current user, and
- * an archived agent is excluded from `mine`/`all` even when the viewer owns it.
+ * Unit tests for the agents-list scope partition (iteration 186). Mirrors web's
+ * scope semantics (packages/views/agents/components/agents-page.tsx:848-877):
+ * a row lands in exactly one scope at a time, `mine` is ownership-scoped to the
+ * current user, and an archived agent is excluded from `mine` / `all` even when
+ * the viewer owns it.
  */
 import { describe, expect, it } from "vitest";
 import type { Agent } from "@multica/core/types";

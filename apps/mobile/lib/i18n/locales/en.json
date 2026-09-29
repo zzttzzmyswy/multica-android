@@ -3156,7 +3156,6 @@
   "agents.scopeMine": "Mine",
   "agents.scopeAll": "All",
   "agents.scopeArchived": "Archived",
-  "agents.scopeGroupAria": "Agent scope",
   "agents.searchPlaceholder": "Search agents",
   "agents.sort": "Sort",
   "agents.sortLastActive": "Last active",
