@@ -43,11 +43,8 @@ import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { formatDateTime } from "@/lib/autopilot-format";
+import { isArchivedAgent as isArchived } from "@/lib/filter-agents";
 import { cn } from "@/lib/utils";
-
-function isArchived(agent: { archived_at?: string | null; status?: string }) {
-  return !!agent.archived_at || String(agent.status) === "archived";
-}
 
 // availability enum → i18n key + text color for the detail presence line.
 const AVAILABILITY: Record<
