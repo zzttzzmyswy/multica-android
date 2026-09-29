@@ -3148,7 +3148,7 @@
   "agents.skills.refreshAction": "刷新",
   "agents.skills.runtimeToggleAria": "切换 {{name}}",
   "agents.skills.runtimeToggleFailed": "切换失败",
-  "agents.noMatches": "没有匹配搜索的智能体。",
+  "agents.noMatches": "这里还没有智能体。",
   "agents.noMatchesSearch": "没有智能体匹配\"{{query}}\"。",
   "agents.noMatchesSearchArchived": "没有已归档智能体匹配\"{{query}}\"。",
   "agents.noMatchesArchived": "还没有已归档智能体。",

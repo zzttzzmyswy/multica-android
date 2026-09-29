@@ -3148,7 +3148,7 @@
   "agents.skills.refreshAction": "Refresh",
   "agents.skills.runtimeToggleAria": "Toggle {{name}}",
   "agents.skills.runtimeToggleFailed": "Failed to update the toggle",
-  "agents.noMatches": "No agents match your search.",
+  "agents.noMatches": "No agents here.",
   "agents.noMatchesSearch": "No agents match \"{{query}}\".",
   "agents.noMatchesSearchArchived": "No archived agents match \"{{query}}\".",
   "agents.noMatchesArchived": "No archived agents yet.",
