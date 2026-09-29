@@ -41,18 +41,70 @@ first, which has stalled on this host's network.
 
 ## Build
 
+The Gradle wrapper is inside the **generated** `android/` directory, not next to
+`package.json`, so regenerate and enter it first:
+
 ```bash
 cd apps/mobile
-./gradlew assembleRelease     # per-ABI APKs -> android/app/build/outputs/apk/release/
+npx dotenv -e .env.production -- cross-env APP_ENV=production \
+  npx expo prebuild --platform android
+
+cd android
+./gradlew assembleRelease     # per-ABI APKs -> app/build/outputs/apk/release/
 ./gradlew bundleRelease       # AAB
 ```
 
-`android/` is gitignored (Expo prebuild output) — regenerate it with
-`pnpm prebuild:android`, which re-applies every config plugin below.
+### `APP_ENV` is not optional — it picks the package id
+
+`apps/mobile/app.config.ts` derives the Android `applicationId` from `APP_ENV`:
+
+| `APP_ENV` | package id |
+|---|---|
+| unset / `development` | `ai.multica.mobile.dev` |
+| `staging` | `ai.multica.mobile.staging` |
+| `production` | `ai.multica.mobile` |
+
+A release APK built without `APP_ENV=production` **succeeds and installs
+cleanly** — it is simply the wrong app, a `.dev` alongside the real one. Check
+the artifact, not the exit code:
+
+```bash
+"$ANDROID_HOME"/build-tools/35.0.0/aapt2 dump packagename \
+  android/app/build/outputs/apk/release/app-arm64-v8a-release.apk   # -> ai.multica.mobile
+```
+
+`android/` is gitignored (Expo prebuild output) — regenerate it with the
+prebuild command above, which re-applies every config plugin below.
+
+### Changing `APP_ENV` needs a clean, or the Java compile fails
+
+Switching `APP_ENV` between builds leaves the *previous* package id baked into
+generated autolinking source, and the next build dies on it:
+
+```
+error: 程序包 ai.multica.mobile.dev 不存在
+  if (ai.multica.mobile.dev.BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
+```
+
+The stale file is `app/build/generated/autolinking/src/main/java/com/facebook/
+react/ReactNativeApplicationEntryPoint.java`. Removing the generated Gradle
+output and rebuilding clears it. Keep `app/.cxx` — that directory holds the
+compiled native objects for all four ABIs (~12 min to rebuild) and is keyed
+independently of the package id, so it survives the switch usefully:
+
+```bash
+cd apps/mobile/android
+rm -rf app/build build .gradle    # not app/.cxx
+./gradlew assembleRelease
+```
+
+(`./gradlew clean` was not tried here — this is the command that was actually
+observed to work, so it is the one recorded.)
 
 ### Verify the artifact before shipping
 
 ```bash
+cd apps/mobile          # the script resolves android/... relative to its cwd
 node scripts/verify-apk.mjs
 ```
 
@@ -142,8 +194,16 @@ A fresh `pnpm install` avoids this entirely; copying a tree does not.
 
 ```bash
 adb connect <host>:5555
+cd android
 ./gradlew installRelease        # or: adb install -r <apk>
 ```
 
+Confirm what actually landed rather than trusting `Success`:
+
+```bash
+adb shell dumpsys package ai.multica.mobile | grep -E 'versionCode|versionName'
+```
+
 Debug and dev variants use the `ai.multica.mobile.dev` package id, so they can
-coexist with a release install.
+coexist with a release install — which is also why installing the wrong variant
+does not fail, it just adds a second app.
