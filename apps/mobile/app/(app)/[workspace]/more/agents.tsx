@@ -40,16 +40,23 @@ import {
 import { agentActivity30dOptions } from "@/data/queries/agent-activity";
 import { buildActivityMap, type AgentActivity } from "@/lib/agent-activity";
 import {
+  AGENT_SCOPES,
   AGENT_SORT_DEFAULT_DIRECTION,
   AGENT_SORT_FIELDS,
+  DEFAULT_AGENTS_SCOPE,
+  agentMatchesScope,
   buildAgentFilterOptions,
   countActiveAgentFilters,
+  countAgentsByScope,
   EMPTY_AGENT_FILTERS,
+  isArchivedAgent,
   lastActiveDaysAgo,
   rowMatchesAgentFilters,
   sortAgentRows,
   type AgentFilterRow,
   type AgentListFilters,
+  type AgentsScope,
+  type AgentsScopeCounts,
   type AgentSortDirection,
   type AgentSortField,
 } from "@/lib/filter-agents";
@@ -77,16 +84,6 @@ import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
-
-function isArchived(agent: {
-  archived_at?: string | null;
-  status?: string;
-}): boolean {
-  // `status` is server-driven lifecycle (active/archived) but typed as the
-  // legacy AgentStatus union — compare through String() to stay honest about
-  // runtime values while keeping the archived_at signal authoritative.
-  return !!agent.archived_at || String(agent.status) === "archived";
-}
 
 // Server-driven enum: unknown statuses degrade to the neutral pill (a future
 // value must not collapse the list — backend is the gate).
@@ -122,22 +119,37 @@ const SCOPE_BADGE_KEY: Record<AccessScope, string> = {
 
 const scopeBadge = accessScopeOfAgent;
 
+// Ownership / lifecycle scope → i18n key. These are `agents.scopeMine` /
+// `agents.scopeAll` / `agents.scopeArchived` — deliberately NOT the
+// `agents.scope.workspace` family above, which labels the ACCESS scope badge.
+// Both axes are called "scope" in web's vocabulary; keeping the key families
+// separate stops one from silently overwriting the other.
+const AGENT_SCOPE_LABEL_KEY: Record<AgentsScope, string> = {
+  mine: "agents.scopeMine",
+  all: "agents.scopeAll",
+  archived: "agents.scopeArchived",
+};
+
 /**
- * Session-scoped sort choice for the agents list. Deliberately not persisted:
- * web keeps this in a per-workspace view store, but the phone's other list
- * (projects) scopes the same choice to the session, and a sort the user
- * cannot see (no header row on a phone) must not silently survive a restart.
+ * Session-scoped view choice for the agents list (sort + scope). Deliberately
+ * not persisted: web keeps both in a per-workspace view store, but the phone's
+ * other lists (projects, issues) scope the same choices to the session, and
+ * this page follows that convention rather than splitting it.
  */
 interface AgentMobileViewState {
   sortField: AgentSortField;
   sortDirection: AgentSortDirection;
+  scope: AgentsScope;
   setSort: (field: AgentSortField, direction: AgentSortDirection) => void;
+  setScope: (scope: AgentsScope) => void;
 }
 
 export const useAgentMobileViewStore = create<AgentMobileViewState>()((set) => ({
   sortField: "lastActive",
   sortDirection: AGENT_SORT_DEFAULT_DIRECTION.lastActive,
+  scope: DEFAULT_AGENTS_SCOPE,
   setSort: (sortField, sortDirection) => set({ sortField, sortDirection }),
+  setScope: (scope) => set({ scope }),
 }));
 
 export default function AgentsPage() {
@@ -161,6 +173,10 @@ export default function AgentsPage() {
   const sortField = useAgentMobileViewStore((s) => s.sortField);
   const sortDirection = useAgentMobileViewStore((s) => s.sortDirection);
   const setSort = useAgentMobileViewStore((s) => s.setSort);
+
+  // ---- Ownership / lifecycle scope (web's `mine` / `all` / `archived`) ----
+  const scope = useAgentMobileViewStore((s) => s.scope);
+  const setScopeRaw = useAgentMobileViewStore((s) => s.setScope);
 
   // ---- Multi-dimension filters (iteration 181, MYS-1564 / G27) ----
   // Session-scoped, like the sort above: web keeps these in a per-workspace
@@ -193,15 +209,34 @@ export default function AgentsPage() {
     return buildActivityMap(agents, activityBuckets, Date.now());
   }, [data, activityBuckets]);
 
+  // Scope partition runs FIRST — before the sort, before the access chips and
+  // before the filter sheet's option lists. Web builds its `scopeRows` at this
+  // same layer, and the order is load-bearing: everything downstream (option
+  // lists, the access-chip result, the empty states) is defined over the
+  // scoped set, so a scope applied only at render time would leave the sheet
+  // counting agents the user cannot see.
+  const scopedAgents = useMemo(
+    () => (data ?? []).filter((a) => agentMatchesScope(a, scope, currentUserId)),
+    [data, scope, currentUserId],
+  );
+
+  // Per-scope totals for the pills — counted over the FULL set and ignoring
+  // the filters, so the numbers never collapse as filters narrow the list
+  // (web's `scopeCounts`, agents-page.tsx:848-867).
+  const scopeCounts = useMemo(
+    () => countAgentsByScope(data ?? [], currentUserId),
+    [data, currentUserId],
+  );
+
   const sorted = useMemo(() => {
-    const rows = (data ?? []).map((agent) => ({
+    const rows = scopedAgents.map((agent) => ({
       agent,
-      archived: isArchived(agent),
+      archived: isArchivedAgent(agent),
       runCount: runCountById.get(agent.id) ?? 0,
       lastActiveDays: lastActiveDaysAgo(activityByAgent.get(agent.id) ?? null),
     }));
     return sortAgentRows(rows, sortField, sortDirection).map((r) => r.agent);
-  }, [data, runCountById, activityByAgent, sortField, sortDirection]);
+  }, [scopedAgents, runCountById, activityByAgent, sortField, sortDirection]);
 
   // ---- Selection / batch state (iteration-84 A8, MUL-4302 parity) ----
   const [selectionMode, setSelectionMode] = useState(false);
@@ -286,6 +321,19 @@ export default function AgentsPage() {
   );
 
   const clearFilters = useCallback(() => setFilters(EMPTY_AGENT_FILTERS), []);
+
+  // Entering `mine` clears the sheet filters, exactly as web's store does
+  // (`view-store.ts:113-116`): `mine` is the clean personal view and never
+  // carries filters, while leaving it for `all` / `archived` keeps whatever
+  // the user had applied. The access chips are a separate axis and are left
+  // alone, matching web, whose `setScope` only resets `filters`.
+  const setScope = useCallback(
+    (next: AgentsScope) => {
+      setScopeRaw(next);
+      if (next === "mine") clearFilters();
+    },
+    [setScopeRaw, clearFilters],
+  );
 
   const filtered = useMemo(() => {
     const query = search.trim();
@@ -385,6 +433,21 @@ export default function AgentsPage() {
 
   const showEmpty = !isLoading && !error && (data ?? []).length === 0;
 
+  // Empty-list copy, branched the way web branches it
+  // (`agents-page.tsx:941-952`): the archived scope and an active filter each
+  // get their own wording, because "no agents match your search" is wrong when
+  // the user never searched — they are simply looking at an empty scope.
+  const noMatchText = useMemo(() => {
+    if (search.trim()) {
+      return scope === "archived"
+        ? t("agents.noMatchesSearchArchived", { query: search.trim() })
+        : t("agents.noMatchesSearch", { query: search.trim() });
+    }
+    if (scope === "archived") return t("agents.noMatchesArchived");
+    if (activeFilterCount > 0) return t("agents.noMatchesFilter");
+    return t("agents.noMatches");
+  }, [search, scope, activeFilterCount, t]);
+
   // Row-menu gate, web's `canManage: isWorkspaceAdmin || isOwner`
   // (agents-page.tsx:890): managing ANY agent needs workspace admin/owner,
   // managing your OWN needs nothing.
@@ -479,6 +542,16 @@ export default function AgentsPage() {
           <>
             {!selectionMode ? (
               <>
+                {/* Ownership / lifecycle scope, then the ACCESS-scope chips.
+                    Two different axes that both read as "scope" on screen:
+                    the pills partition archiving + ownership, the chips
+                    filter effective access. Web carries them in one toolbar
+                    too (scope buttons beside the filters). */}
+                <AgentsScopeTabs
+                  scope={scope}
+                  counts={scopeCounts}
+                  onChange={setScope}
+                />
                 <ScopeFilterChips
                   value={scopeFilter}
                   onChange={setScopeFilter}
@@ -519,7 +592,7 @@ export default function AgentsPage() {
               contentContainerClassName="pb-24"
               ListEmptyComponent={
                 <Text className="px-4 py-8 text-center text-sm text-muted-foreground">
-                  {t("agents.noMatches")}
+                  {noMatchText}
                 </Text>
               }
               renderItem={({ item }) =>
@@ -735,6 +808,63 @@ function AgentFilterButton({
   );
 }
 
+/**
+ * Ownership / lifecycle scope pills — the mobile counterpart of web's scope
+ * segmented control (`agent-list-toolbar.tsx:226-256`). Web renders scope
+ * buttons on desktop and a `Select` below `md`; the phone is always that small
+ * screen, and the project's own list toolbars already use scrolling pills
+ * (`IssueSurfaceScopeToolbar`), so pills are the mobile idiom here too.
+ *
+ * Each pill carries its total from the FULL set (`scopeCounts`), so the
+ * numbers stay put while the search box and the filter sheet narrow the list —
+ * web's own behaviour, and the reason the counts are computed off `data`
+ * rather than the filtered result.
+ */
+function AgentsScopeTabs({
+  scope,
+  counts,
+  onChange,
+}: {
+  scope: AgentsScope;
+  counts: AgentsScopeCounts;
+  onChange: (scope: AgentsScope) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      className="flex-grow-0"
+      contentContainerClassName="px-3 pt-2 gap-1.5"
+    >
+      {AGENT_SCOPES.map((value) => {
+        const active = scope === value;
+        return (
+          <Pressable
+            key={value}
+            onPress={() => onChange(value)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+            className={cn(
+              "px-2.5 py-1 rounded-full border",
+              active ? "bg-secondary border-border" : "border-transparent",
+            )}
+          >
+            <Text
+              className={cn(
+                "text-xs tabular-nums",
+                active ? "text-foreground font-medium" : "text-muted-foreground",
+              )}
+            >
+              {t(AGENT_SCOPE_LABEL_KEY[value])} {counts[value]}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
 function ScopeFilterChips({
   value,
   onChange,
@@ -866,7 +996,7 @@ function AgentRow({
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const muted = THEME[colorScheme].mutedForeground;
-  const archived = isArchived(agent);
+  const archived = isArchivedAgent(agent);
   const pill = STATUS_PILL[archived ? "archived" : "active"];
   // Archived wins over runtime health — mirrors deriveAgentPresenceDetail.
   const availability = archived
@@ -968,7 +1098,7 @@ function SelectableAgentRow({
   const { colorScheme } = useColorScheme();
   const muted = THEME[colorScheme].mutedForeground;
   const theme = THEME[colorScheme];
-  const archived = isArchived(agent);
+  const archived = isArchivedAgent(agent);
   const availability = archived
     ? "archived"
     : (presenceDetail?.availability ?? "offline");

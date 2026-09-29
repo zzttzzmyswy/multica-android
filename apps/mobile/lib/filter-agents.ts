@@ -1,21 +1,21 @@
 /**
- * Agents-list search + sort helpers — mobile port of web's agents page
- * (`packages/views/agents/components/agents-page.tsx`): `matchesAgentSearch`
- * (:167-176) and the `rows` comparator (:906-936), with the sort vocabulary
- * from web's agents view store (`packages/core/agents/stores/view-store.ts`
- * :27-41).
+ * Agents-list search + sort + scope helpers — mobile port of web's agents
+ * page (`packages/views/agents/components/agents-page.tsx`):
+ * `matchesAgentSearch` (:167-176), the scope partition (:183-197) and the
+ * `rows` comparator (:906-936), with the sort/scope vocabulary from web's
+ * agents view store (`packages/core/agents/stores/view-store.ts` :27-63).
  *
- * Two deliberate mobile differences, both inherited from the list's own
- * design rather than chosen here:
+ * One deliberate mobile difference, inherited from the list's own design
+ * rather than chosen here:
  *
- *   - **Archived rows always sort after active ones.** Web never mixes the
- *     two — its `mine` / `all` / `archived` scopes are mutually exclusive.
- *     Mobile keeps one list per scope filter and dims archived rows in place,
- *     so "active first" is a permanent tier the field/direction cannot
- *     reorder (same guarantee the pre-1020 page hard-coded).
  *   - **`runs` is the 30-day run count** (`/api/agent-run-counts`), the same
  *     number web's RUNS column sorts on — not the live active-task count,
  *     which is a different metric and is what the row's "· N tasks" shows.
+ *
+ * The archived tier inside `sortAgentRows` is unreachable from the page: each
+ * scope is mutually exclusive, so the `archived` scope holds only archived
+ * rows and `mine` / `all` hold none. It stays as a guard for callers that
+ * pass a mixed row set (the pre-scope page did exactly that).
  */
 import type { Agent } from "@multica/core/types";
 import type { AgentAvailability } from "@multica/core/agents";
@@ -24,6 +24,96 @@ import { matchesPinyin } from "./pinyin-match";
 
 export type AgentSortField = "lastActive" | "name" | "runs" | "created";
 export type AgentSortDirection = "asc" | "desc";
+
+/**
+ * Ownership/lifecycle lens over the agents list — web's `AgentsScope`
+ * (`view-store.ts:21`), same three values and same declaration order.
+ *
+ * The axis is impure on paper (two ownership lenses plus one lifecycle
+ * stage), which is web's own design note: `mine` and `all` are the
+ * ownership lens over *active* agents, `archived` ignores the ownership lens
+ * entirely because showing only *your* archived agents would hide other
+ * people's with no UI to explain why.
+ */
+export type AgentsScope = "mine" | "all" | "archived";
+
+/** Presentation order of the scope pills — web's `AGENT_SCOPES`
+ *  (`view-store.ts:23`), which is also the order its toolbar renders. */
+export const AGENT_SCOPES: AgentsScope[] = ["mine", "all", "archived"];
+
+/**
+ * Web's default scope is `mine` (`view-store.ts:99-101`: "the historical
+ * default — most members care about their own agents first"). Mobile keeps
+ * that default: the list is reached from a personal popover and its primary
+ * job is "what are my agents doing".
+ */
+export const DEFAULT_AGENTS_SCOPE: AgentsScope = "mine";
+
+/** Per-scope totals from the FULL set — web's `scopeCounts` (`agents-page.tsx`
+ *  :848-867`), which counts over every agent and deliberately ignores the
+ *  active filters, so the pill counts never collapse as filters apply. An
+ *  agent with `archived_at` counts only toward `archived`. */
+export interface AgentsScopeCounts {
+  mine: number;
+  all: number;
+  archived: number;
+}
+
+/** The lifecycle/ownership fields the scope partition reads. */
+export type AgentScopeAgent = Pick<
+  Agent,
+  "owner_id" | "archived_at" | "status"
+>;
+
+/**
+ * Whether an agent is archived. `archived_at` is authoritative; `status` is
+ * the server-driven lifecycle fallback, compared through `String()` because
+ * the field is typed as the legacy union while the server may send a newer
+ * value.
+ */
+export function isArchivedAgent(agent: {
+  archived_at?: string | null;
+  status?: string;
+}): boolean {
+  return !!agent.archived_at || String(agent.status) === "archived";
+}
+
+/**
+ * Scope predicate — the mobile port of web's inline scope filter
+ * (`agents-page.tsx:871-877`), clause for clause: `archived` selects exactly
+ * the archived rows, and the other two scopes exclude them outright (so an
+ * archived agent can never appear under `mine` even when you own it).
+ */
+export function agentMatchesScope(
+  agent: AgentScopeAgent,
+  scope: AgentsScope,
+  currentUserId: string | null,
+): boolean {
+  const archived = isArchivedAgent(agent);
+  if (scope === "archived") return archived;
+  if (archived) return false;
+  if (scope === "mine") return !!currentUserId && agent.owner_id === currentUserId;
+  return true;
+}
+
+/** Count the full set per scope — web's `scopeCounts` (:848-867). */
+export function countAgentsByScope(
+  agents: readonly AgentScopeAgent[],
+  currentUserId: string | null,
+): AgentsScopeCounts {
+  let mine = 0;
+  let all = 0;
+  let archived = 0;
+  for (const agent of agents) {
+    if (isArchivedAgent(agent)) {
+      archived++;
+      continue;
+    }
+    all++;
+    if (currentUserId && agent.owner_id === currentUserId) mine++;
+  }
+  return { mine, all, archived };
+}
 
 /** Presentation order of the sort menu — most useful first, matching web's
  *  `AGENT_SORT_DEFAULT_DIRECTION` declaration order. */
@@ -289,8 +379,9 @@ export interface AgentSortInput {
 
 /**
  * Sort rows by the chosen field + direction, mirroring web's comparators
- * (`agents-page.tsx:906-936`) including their tiebreaks, and keeping
- * archived rows in a trailing tier that no field or direction can reorder.
+ * (`agents-page.tsx:906-936`) including their tiebreaks. The archived tier is
+ * a guard for mixed row sets only — the page partitions by scope first, so a
+ * set reaching here from it is already single-tier.
  *
  * `lastActive` sorts never-active rows as the LEAST recently active: last on
  * `desc` (the default, most-recent-first) and first on `asc`. That is what
