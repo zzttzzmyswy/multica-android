@@ -198,6 +198,17 @@ describe("agents list/detail i18n", () => {
     "agents.filter.sectionModel": "模型",
     "agents.filter.optionAria": "{{label}}，{{count}} 个智能体",
     "agents.filter.noOptions": "当前范围内没有",
+    // Iteration 186: scope pills (`AGENT_SCOPE_LABEL_KEY` resolves these
+    // dynamically, so the literal-key completeness harness skips them) and the
+    // scope-branched empty states.
+    "agents.scopeMine": "我的",
+    "agents.scopeAll": "全部",
+    "agents.scopeArchived": "已归档",
+    "agents.noMatches": "这里还没有智能体。",
+    "agents.noMatchesSearch": "没有智能体匹配\"{{query}}\"。",
+    "agents.noMatchesSearchArchived": "没有已归档智能体匹配\"{{query}}\"。",
+    "agents.noMatchesArchived": "还没有已归档智能体。",
+    "agents.noMatchesFilter": "该筛选下没有匹配的智能体。",
     "agents.detail.fieldConcurrency": "并发",
     "agents.detail.concurrencySaveFailed": "更新并发数失败",
     "a11y.agentActions": "智能体操作",
