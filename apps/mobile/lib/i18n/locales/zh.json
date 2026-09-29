@@ -48,6 +48,7 @@
   "a11y.mentionSomeone": "提及某个人或某个任务",
   "a11y.newChat": "新聊天",
   "a11y.newIssue": "新建任务",
+  "a11y.newIssueWithDraft": "新建任务，有未提交的草稿",
   "a11y.newIssueAgentPicker": "选择智能体或小队",
   "a11y.noAgents": "暂无可用智能体，请打开智能体设置",
   "a11y.openFile": "打开 {{filename}}",

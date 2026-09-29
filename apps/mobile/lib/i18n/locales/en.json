@@ -48,6 +48,7 @@
   "a11y.mentionSomeone": "Mention someone or an issue",
   "a11y.newChat": "New chat",
   "a11y.newIssue": "New issue",
+  "a11y.newIssueWithDraft": "New issue, unsaved draft waiting",
   "a11y.newIssueAgentPicker": "Choose agent or squad",
   "a11y.noAgents": "No agents available, open agents settings",
   "a11y.openFile": "Open {{filename}}",
