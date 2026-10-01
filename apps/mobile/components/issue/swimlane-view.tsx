@@ -150,6 +150,7 @@ export function SwimlaneView({
   hiddenStatuses = [],
   onShowStatus,
   cardProperties,
+  cardPropertyIds,
 }: {
   issues: Issue[];
   grouping: SwimlaneGrouping;
@@ -165,6 +166,10 @@ export function SwimlaneView({
   /** The hosting surface's `cardProperties` display setting, forwarded to
    *  each card. Omitted means all on (web's view-store default). */
   cardProperties?: CardProperties;
+  /** Custom-property ids the hosting surface wants on each card —
+   *  web's `cardPropertyIds` display dimension, forwarded like
+   *  `cardProperties` above. */
+  cardPropertyIds?: readonly string[];
 }) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
@@ -459,6 +464,7 @@ export function SwimlaneView({
                   onOpenIssue={onOpenIssue}
                   onOpenLaneSheet={openLaneSheet}
                   cardProperties={cardProperties}
+                  cardPropertyIds={cardPropertyIds}
                 />
               ))}
             </ScrollView>
@@ -477,6 +483,11 @@ export function SwimlaneView({
       onLaneDragStart,
       onLaneDragTo,
       onLaneDrop,
+      // Both card display settings are read inside this memoised lane
+      // renderer. `cardProperties` was already missing here — the cards kept
+      // their old field gating after a toggle until some other dep changed.
+      cardProperties,
+      cardPropertyIds,
     ],
   );
 
@@ -670,12 +681,17 @@ const SwimlaneCell = memo(function SwimlaneCell({
   onOpenIssue,
   onOpenLaneSheet,
   cardProperties,
+  cardPropertyIds,
 }: {
   status: IssueStatus;
   issues: Issue[];
   onOpenIssue: (issue: Issue) => void;
   onOpenLaneSheet: (issue: Issue, move: MoveWriter) => void;
   cardProperties?: CardProperties;
+  /** Custom-property ids the hosting surface wants on each card —
+   *  web's `cardPropertyIds` display dimension, forwarded like
+   *  `cardProperties` above. */
+  cardPropertyIds?: readonly string[];
 }) {
   const { t } = useTranslation();
   const statusLabel = useStatusLabel();
@@ -713,6 +729,7 @@ const SwimlaneCell = memo(function SwimlaneCell({
               onOpen={() => onOpenIssue(issue)}
               onOpenLaneSheet={onOpenLaneSheet}
               cardProperties={cardProperties}
+              cardPropertyIds={cardPropertyIds}
             />
           ))}
           {issues.length > shown.length ? (
@@ -739,11 +756,16 @@ const SwimlaneCard = memo(function SwimlaneCard({
   onOpen,
   onOpenLaneSheet,
   cardProperties,
+  cardPropertyIds,
 }: {
   issue: Issue;
   onOpen: () => void;
   onOpenLaneSheet: (issue: Issue, move: MoveWriter) => void;
   cardProperties?: CardProperties;
+  /** Custom-property ids the hosting surface wants on each card —
+   *  web's `cardPropertyIds` display dimension, forwarded like
+   *  `cardProperties` above. */
+  cardPropertyIds?: readonly string[];
 }) {
   const { t } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
@@ -792,6 +814,7 @@ const SwimlaneCard = memo(function SwimlaneCard({
       onPress={onOpen}
       onLongPress={onLongPress}
       cardProperties={cardProperties}
+      cardPropertyIds={cardPropertyIds}
     />
   );
 });

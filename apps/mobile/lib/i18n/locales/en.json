@@ -1134,6 +1134,8 @@
   "filter.display.cardAssignee": "Assignee",
   "filter.display.cardStartDate": "Start date",
   "filter.display.cardDueDate": "Due date",
+  "filter.display.customPropertiesTitle": "Custom properties",
+  "filter.display.customPropertiesEmpty": "No custom properties in this workspace yet",
   "filter.date": "Date",
   "filter.dateClear": "Clear date filter",
   "filter.dateCreated": "Created",

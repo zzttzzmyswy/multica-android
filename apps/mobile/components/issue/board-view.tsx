@@ -494,6 +494,7 @@ function IssueCardWithMenu({
   boardCaptured,
   registerCard,
   cardProperties,
+  cardPropertyIds,
 }: {
   issue: Issue;
   onOpen: () => void;
@@ -511,6 +512,10 @@ function IssueCardWithMenu({
   registerCard?: (id: string, handle: CardHandle | null) => void;
   /** Display setting for the card's own fields — see board-card.tsx. */
   cardProperties?: CardProperties;
+  /** Custom-property ids the hosting surface wants on each card —
+   *  web's `cardPropertyIds` display dimension, forwarded like
+   *  `cardProperties` above. */
+  cardPropertyIds?: readonly string[];
 }) {
   const { t } = useTranslation();
   const updateIssue = useUpdateIssue(issue.id);
@@ -560,6 +565,7 @@ function IssueCardWithMenu({
     <BoardCard
       issue={issue}
       cardProperties={cardProperties}
+      cardPropertyIds={cardPropertyIds}
       onPress={onOpen}
       dimmed={lifted}
       onLongPress={
@@ -638,6 +644,7 @@ const BoardColumn = memo(function BoardColumn({
   dragging,
   extraData,
   cardProperties,
+  cardPropertyIds,
 }: {
   column: IssueGroupSection;
   /** The lane's issue ids in RENDER order — the order frozen at lift (or the
@@ -650,6 +657,10 @@ const BoardColumn = memo(function BoardColumn({
   isStatusFixed?: (status: IssueStatus) => boolean;
   /** The surface's card-property display setting, forwarded to each card. */
   cardProperties?: CardProperties;
+  /** Custom-property ids the hosting surface wants on each card —
+   *  web's `cardPropertyIds` display dimension, forwarded like
+   *  `cardProperties` above. */
+  cardPropertyIds?: readonly string[];
   dragApi: BoardDragApi;
   /** A card is lifted somewhere on the board. A plain boolean, not part of
    *  `dragApi`, so a per-frame finger update cannot change it. */
@@ -714,6 +725,7 @@ const BoardColumn = memo(function BoardColumn({
             boardCaptured={boardCaptured}
             registerCard={registerCard}
             cardProperties={cardProperties}
+            cardPropertyIds={cardPropertyIds}
           />
         </View>
       );
@@ -729,6 +741,10 @@ const BoardColumn = memo(function BoardColumn({
       registerCard,
       lift,
       cardProperties,
+      // Without this dep the lane keeps painting the previous selection's
+      // chips after the user toggles a custom property: the cards live inside
+      // a memoised `renderItem`, so a changed id list alone would not repaint.
+      cardPropertyIds,
     ],
   );
 
@@ -799,6 +815,7 @@ export function BoardView({
   sortBy = "position",
   sortDirection = "asc",
   cardProperties,
+  cardPropertyIds,
 }: {
   issues: Issue[];
   grouping: IssueGrouping;
@@ -840,6 +857,10 @@ export function BoardView({
    * is what the drag overlay and any store-less caller want.
    */
   cardProperties?: CardProperties;
+  /** Custom-property ids the hosting surface wants on each card —
+   *  web's `cardPropertyIds` display dimension, forwarded like
+   *  `cardProperties` above. */
+  cardPropertyIds?: readonly string[];
   /**
    * The surface's active sort. Same-lane reordering is only offered under
    * `position`: under any other sort the on-screen order is not the server's
@@ -1552,6 +1573,7 @@ export function BoardView({
             onHideStatus={onHideStatus}
             isStatusFixed={isStatusFixed}
             cardProperties={cardProperties}
+            cardPropertyIds={cardPropertyIds}
             dragApi={dragApi}
             dragging={drag !== null}
             extraData={laneExtraData(column.key)}
@@ -1590,6 +1612,7 @@ export function BoardView({
             onPress={() => {}}
             lifted
             cardProperties={cardProperties}
+            cardPropertyIds={cardPropertyIds}
           />
         </View>
       ) : null}

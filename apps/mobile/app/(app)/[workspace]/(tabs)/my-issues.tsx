@@ -156,6 +156,9 @@ export default function MyIssues() {
   const workingOnly = useMyIssuesViewStore((s) => s.workingOnly);
   const showSubIssues = useMyIssuesViewStore((s) => s.showSubIssues);
   const cardProperties = useMyIssuesViewStore((s) => s.cardProperties);
+  // The custom-property ids a card draws — web's second card display
+  // dimension, saved with the view like `cardProperties` above.
+  const cardPropertyIds = useMyIssuesViewStore((s) => s.cardPropertyIds);
   // Running-agent projection for the working-only filter. `undefined` while
   // the snapshot loads — the predicate fails closed on it, which is the
   // intended "only what is provably working" read.
@@ -262,6 +265,7 @@ export default function MyIssues() {
       showSubIssues,
       tableHierarchy,
       cardProperties,
+      cardPropertyIds,
     }),
     [
       filterState,
@@ -271,6 +275,7 @@ export default function MyIssues() {
       showSubIssues,
       tableHierarchy,
       cardProperties,
+      cardPropertyIds,
     ],
   );
   const modifiedActive = useMemo(
@@ -601,6 +606,7 @@ export default function MyIssues() {
       ) : view === "board" ? (
         <BoardView
           cardProperties={cardProperties}
+          cardPropertyIds={cardPropertyIds}
           issues={sorted}
           grouping={grouping}
           groupingProperty={groupingProperty}
@@ -664,6 +670,7 @@ export default function MyIssues() {
       ) : view === "swimlane" ? (
         <SwimlaneView
           cardProperties={cardProperties}
+          cardPropertyIds={cardPropertyIds}
           issues={sorted}
           grouping={swimlaneGrouping}
           onGroupingChange={(next) =>

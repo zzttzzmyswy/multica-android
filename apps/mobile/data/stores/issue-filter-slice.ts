@@ -185,6 +185,23 @@ export interface IssueFilterSlice {
    */
   cardProperties: CardProperties;
   /**
+   * Custom-property definition ids whose values render on board cards — web's
+   * `cardPropertyIds` (`view-store.ts:201`, default `[]` at `:297`,
+   * `toggleCardPropertyId` at `:449-454`).
+   *
+   * A SECOND, independent dimension from `cardProperties` above: that one
+   * gates the eight BUILT-IN fields, this one names the workspace's own
+   * definitions. Web renders them from two separate sources on the same card
+   * (`board-card.tsx:63-72`) and saves both in a view's display payload
+   * (`save-view-dialog.tsx:604-605`), so mobile carries both or a view saved
+   * on web loses its custom-property chips the first time mobile re-saves it.
+   *
+   * Ids with no definition in the workspace catalog, or with no value on a
+   * given issue, render nothing — the resolution rules live in
+   * `lib/card-properties.ts`.
+   */
+  cardPropertyIds: string[];
+  /**
    * When true, the table nests sub-issues under their parent (indent +
    * chevron); when false it renders every row flat. Web's `tableHierarchy`
    * (view-store.ts:223, default `true` at `:309`, `toggleTableHierarchy` at
@@ -248,6 +265,10 @@ export interface IssueFilterSlice {
   /** Flip one board-card display field (web `toggleCardProperty`,
    *  view-store.ts:441-448). */
   toggleCardProperty: (key: keyof CardProperties) => void;
+  /** Flip one CUSTOM property's board-card visibility (web
+   *  `toggleCardPropertyId`, view-store.ts:449-454). Appends on select, so the
+   *  array is the render order — see `cardPropertyIds`. */
+  toggleCardPropertyId: (propertyId: string) => void;
   setSortBy: (field: IssueSortField) => void;
   setSortDirection: (dir: IssueSortDirection) => void;
   setGrouping: (grouping: IssueGrouping) => void;
@@ -322,6 +343,7 @@ export const defaultIssueFilterSlice = (): Pick<
   | "showSubIssues"
   | "tableHierarchy"
   | "cardProperties"
+  | "cardPropertyIds"
 > => ({
   statusFilters: [],
   priorityFilters: [],
@@ -351,6 +373,9 @@ export const defaultIssueFilterSlice = (): Pick<
     childProgress: true,
     labels: true,
   },
+  // Web's default verbatim (view-store.ts:297): no custom property shows on a
+  // card until the user picks one in the Display panel.
+  cardPropertyIds: [],
 });
 
 /**
@@ -388,6 +413,7 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
   | "toggleShowSubIssues"
   | "toggleTableHierarchy"
   | "toggleCardProperty"
+  | "toggleCardPropertyId"
   | "clearFilters"
   | "resetFiltersTo"
   | "clearFilterDimension"
@@ -488,6 +514,13 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
           ...state.cardProperties,
           [key]: !state.cardProperties[key],
         },
+      })),
+    // Web's exact transform (view-store.ts:449-454): filter on deselect,
+    // append on select. The append order IS the render order, so it is not
+    // sorted or deduped beyond the membership check.
+    toggleCardPropertyId: (propertyId) =>
+      set((state) => ({
+        cardPropertyIds: toggleInList(state.cardPropertyIds, propertyId),
       })),
     clearFilters: () =>
       set({

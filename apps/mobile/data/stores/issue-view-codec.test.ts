@@ -44,6 +44,11 @@ const SLICE: IssueFilterSlice = {
   showSubIssues: false,
   tableHierarchy: true,
   cardProperties: { ...ALL_CARD_PROPERTIES_ON },
+  // The store default (web view-store.ts:297). Non-empty arrays are passed
+  // explicitly by the cases that need them, so this stays the shape a
+  // pre-key view restores to and the legacy-view cases below keep their
+  // meaning.
+  cardPropertyIds: [],
   toggleStatusFilter: () => {},
   hideStatus: () => {},
   showStatus: () => {},
@@ -61,6 +66,7 @@ const SLICE: IssueFilterSlice = {
   toggleShowSubIssues: () => {},
   toggleTableHierarchy: () => {},
   toggleCardProperty: () => {},
+  toggleCardPropertyId: () => {},
   setSortBy: () => {},
   setSortDirection: () => {},
   setGrouping: () => {},
@@ -97,8 +103,9 @@ describe("viewDisplayFromState", () => {
         sortBy: "priority",
         sortDirection: "desc",
         showSubIssues: false,
-        tableHierarchy: true,
-        cardProperties: SLICE.cardProperties,
+        tableHierarchy: true,cardProperties: SLICE.cardProperties,
+
+        cardPropertyIds: SLICE.cardPropertyIds,
       }),
     ).toEqual({
       viewMode: "board",
@@ -106,8 +113,9 @@ describe("viewDisplayFromState", () => {
       sortBy: "priority",
       sortDirection: "desc",
       showSubIssues: false,
-      tableHierarchy: true,
-      cardProperties: SLICE.cardProperties,
+      tableHierarchy: true,cardProperties: SLICE.cardProperties,
+
+      cardPropertyIds: SLICE.cardPropertyIds,
     });
   });
 
@@ -119,8 +127,9 @@ describe("viewDisplayFromState", () => {
         sortBy: "position",
         sortDirection: "asc",
         showSubIssues: true,
-        tableHierarchy: true,
-        cardProperties: SLICE.cardProperties,
+        tableHierarchy: true,cardProperties: SLICE.cardProperties,
+
+        cardPropertyIds: SLICE.cardPropertyIds,
       }).showSubIssues,
     ).toBe(true);
   });
@@ -135,8 +144,9 @@ describe("viewDisplayFromState", () => {
       sortBy: "position",
       sortDirection: "asc",
       showSubIssues: true,
-      tableHierarchy: true,
-      cardProperties: SLICE.cardProperties,
+      tableHierarchy: true,cardProperties: SLICE.cardProperties,
+
+      cardPropertyIds: SLICE.cardPropertyIds,
     });
     expect(Object.keys(display.cardProperties as object).sort()).toEqual([
       "assignee",
@@ -207,18 +217,18 @@ describe("sanitizeViewDisplay", () => {
   it("passes known values through and defaults garbage", () => {
     expect(
       sanitizeViewDisplay({ viewMode: "board", grouping: "assignee" }, "position"),
-    ).toEqual({ viewMode: "board", grouping: "assignee", sortBy: "position", sortDirection: "asc", showSubIssues: true, tableHierarchy: true, cardProperties: ALL_CARD_PROPERTIES_ON });
+    ).toEqual({ viewMode: "board", grouping: "assignee", sortBy: "position", sortDirection: "asc", showSubIssues: true, tableHierarchy: true, cardProperties: ALL_CARD_PROPERTIES_ON, cardPropertyIds: [] });
     expect(
       sanitizeViewDisplay({ viewMode: "calendar", grouping: "nope", sortBy: "weird", sortDirection: "sideways" }, "created_at"),
-    ).toEqual({ viewMode: "list", grouping: "status", sortBy: "created_at", sortDirection: "asc", showSubIssues: true, tableHierarchy: true, cardProperties: ALL_CARD_PROPERTIES_ON });
+    ).toEqual({ viewMode: "list", grouping: "status", sortBy: "created_at", sortDirection: "asc", showSubIssues: true, tableHierarchy: true, cardProperties: ALL_CARD_PROPERTIES_ON, cardPropertyIds: [] });
     // "gantt" is a valid mobile mode since iter-118 — passes through.
     expect(
       sanitizeViewDisplay({ viewMode: "gantt" }, "created_at"),
-    ).toEqual({ viewMode: "gantt", grouping: "status", sortBy: "created_at", sortDirection: "asc", showSubIssues: true, tableHierarchy: true, cardProperties: ALL_CARD_PROPERTIES_ON });
+    ).toEqual({ viewMode: "gantt", grouping: "status", sortBy: "created_at", sortDirection: "asc", showSubIssues: true, tableHierarchy: true, cardProperties: ALL_CARD_PROPERTIES_ON, cardPropertyIds: [] });
     // "swimlane" is a valid mobile mode since iter-122 — passes through.
     expect(
       sanitizeViewDisplay({ viewMode: "swimlane" }, "created_at"),
-    ).toEqual({ viewMode: "swimlane", grouping: "status", sortBy: "created_at", sortDirection: "asc", showSubIssues: true, tableHierarchy: true, cardProperties: ALL_CARD_PROPERTIES_ON });
+    ).toEqual({ viewMode: "swimlane", grouping: "status", sortBy: "created_at", sortDirection: "asc", showSubIssues: true, tableHierarchy: true, cardProperties: ALL_CARD_PROPERTIES_ON, cardPropertyIds: [] });
     expect(sanitizeViewDisplay({}, "due_date")).toEqual({
       viewMode: "list",
       grouping: "status",
@@ -227,6 +237,7 @@ describe("sanitizeViewDisplay", () => {
       showSubIssues: true,
       tableHierarchy: true,
       cardProperties: ALL_CARD_PROPERTIES_ON,
+      cardPropertyIds: [],
     });
   });
 
@@ -258,8 +269,9 @@ describe("viewMatchesSlice", () => {
       sortBy: "priority",
       sortDirection: "desc",
       showSubIssues: false,
-      tableHierarchy: true,
-      cardProperties: SLICE.cardProperties,
+      tableHierarchy: true,cardProperties: SLICE.cardProperties,
+
+      cardPropertyIds: SLICE.cardPropertyIds,
     }),
   };
 
@@ -531,6 +543,7 @@ describe("cardProperties round-trip", () => {
       showSubIssues: true,
       tableHierarchy: true,
       cardProperties: original,
+      cardPropertyIds: SLICE.cardPropertyIds,
     });
     expect(sanitizeViewDisplay(display, "position").cardProperties).toEqual(original);
   });
@@ -546,8 +559,9 @@ describe("cardProperties round-trip", () => {
         sortBy: "priority",
         sortDirection: "desc",
         showSubIssues: false,
-        tableHierarchy: true,
-        cardProperties: SLICE.cardProperties,
+        tableHierarchy: true,cardProperties: SLICE.cardProperties,
+
+        cardPropertyIds: SLICE.cardPropertyIds,
       }),
     };
     expect(viewMatchesSlice(view, SLICE, "board")).toBe(true);
@@ -573,5 +587,149 @@ describe("cardProperties round-trip", () => {
     // A legacy view (saved before the key existed) also has to match on
     // tableHierarchy, or every pre-toggle view would read as modified.
     expect(viewMatchesSlice(legacy, SLICE, "board")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// cardPropertyIds round-trip (iteration 189, MYS-1866).
+//
+// The second card display dimension. Same round-trip contract as
+// cardProperties above, plus one deliberate difference: unlike every other
+// sanitizer here, unknown ids are KEPT (a definition absent from the CURRENT
+// catalog is not necessarily deleted — see sanitizeCardPropertyIds).
+// ---------------------------------------------------------------------------
+describe("cardPropertyIds round-trip", () => {
+  it("serializes the ids verbatim, order included", () => {
+    const display = viewDisplayFromState({
+      view: "board",
+      grouping: "status",
+      sortBy: "position",
+      sortDirection: "asc",
+      showSubIssues: true,
+      tableHierarchy: true,
+      cardProperties: SLICE.cardProperties,
+      cardPropertyIds: ["prop-b", "prop-a"],
+    });
+    // Order is the render order, so it must not be sorted or deduped.
+    expect(display.cardPropertyIds).toEqual(["prop-b", "prop-a"]);
+    expect(sanitizeViewDisplay(display, "position").cardPropertyIds).toEqual([
+      "prop-b",
+      "prop-a",
+    ]);
+  });
+
+  it("defaults to an empty list for a view saved before the key existed", () => {
+    expect(sanitizeViewDisplay({}, "position").cardPropertyIds).toEqual([]);
+  });
+
+  it("KEEPS an unknown id rather than dropping it", () => {
+    // The deliberate divergence from the other sanitizers: the catalog is a
+    // separate query, so an id with no definition *right now* may still be
+    // resolvable later. Dropping would permanently lose a web view's chip.
+    expect(
+      sanitizeViewDisplay({ cardPropertyIds: ["ghost"] }, "position")
+        .cardPropertyIds,
+    ).toEqual(["ghost"]);
+  });
+
+  it("drops only non-string members and empty strings", () => {
+    expect(
+      sanitizeViewDisplay(
+        { cardPropertyIds: ["ok", 42, null, "", { id: "x" }, "fine"] },
+        "position",
+      ).cardPropertyIds,
+    ).toEqual(["ok", "fine"]);
+  });
+
+  it("survives a non-array blob", () => {
+    for (const garbage of ["nope", 42, null, undefined, { a: 1 }]) {
+      expect(
+        sanitizeViewDisplay({ cardPropertyIds: garbage }, "position")
+          .cardPropertyIds,
+      ).toEqual([]);
+    }
+  });
+
+  it("lights the modified dot when a custom property is added or removed", () => {
+    const view = {
+      query: viewQueryFromSnapshot(SLICE),
+      display: viewDisplayFromState({
+        view: "board" as IssueViewMode,
+        grouping: "assignee",
+        sortBy: "priority",
+        sortDirection: "desc",
+        showSubIssues: false,
+        tableHierarchy: true,
+        cardProperties: SLICE.cardProperties,
+        cardPropertyIds: SLICE.cardPropertyIds,
+      }),
+    };
+    expect(viewMatchesSlice(view, SLICE, "board")).toBe(true);
+    expect(
+      viewMatchesSlice(
+        view,
+        { ...SLICE, cardPropertyIds: [...SLICE.cardPropertyIds, "prop-new"] },
+        "board",
+      ),
+    ).toBe(false);
+  });
+
+  it("treats a reorder as a modification, because order is the render order", () => {
+    // `sameStrings` compares positionally — deliberate here, unlike the
+    // order-independent cardProperties comparison. Two ids are needed for a
+    // reorder to be observable at all.
+    const ids = ["prop-a", "prop-b"];
+    const reversed = [...ids].reverse();
+    expect(reversed).not.toEqual(ids);
+    const slice = { ...SLICE, cardPropertyIds: ids };
+    const view = {
+      query: viewQueryFromSnapshot(slice),
+      display: viewDisplayFromState({
+        view: "board" as IssueViewMode,
+        grouping: "assignee",
+        sortBy: "priority",
+        sortDirection: "desc",
+        showSubIssues: false,
+        tableHierarchy: true,
+        cardProperties: SLICE.cardProperties,
+        cardPropertyIds: reversed,
+      }),
+    };
+    expect(viewMatchesSlice(view, slice, "board")).toBe(false);
+    // Same two ids in the same order DO match — the clause compares position,
+    // not just membership.
+    const sameOrder = {
+      query: view.query,
+      display: viewDisplayFromState({
+        view: "board" as IssueViewMode,
+        grouping: "assignee",
+        sortBy: "priority",
+        sortDirection: "desc",
+        showSubIssues: false,
+        tableHierarchy: true,
+        cardProperties: SLICE.cardProperties,
+        cardPropertyIds: ids,
+      }),
+    };
+    expect(viewMatchesSlice(sameOrder, slice, "board")).toBe(true);
+  });
+
+  it("does not read a pre-cardPropertyIds view as permanently modified", () => {
+    // A view saved before this key existed carries no ids; the slice default
+    // is also empty, so the two agree and the dot stays dark.
+    const legacy = {
+      query: viewQueryFromSnapshot(SLICE),
+      display: {
+        viewMode: "board",
+        grouping: "assignee",
+        sortBy: "priority",
+        sortDirection: "desc",
+        showSubIssues: false,
+        cardProperties: SLICE.cardProperties,
+      },
+    };
+    expect(
+      viewMatchesSlice(legacy, { ...SLICE, cardPropertyIds: [] }, "board"),
+    ).toBe(true);
   });
 });

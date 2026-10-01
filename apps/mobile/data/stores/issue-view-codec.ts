@@ -154,7 +154,12 @@ export function viewQueryFromSnapshot(
  *  gates) so a view saved on web survives a mobile open-and-resave instead of
  *  losing the three keys mobile has no content for. The round trip is the
  *  contract — see `sanitizeViewDisplay` for the read side and
- *  `issue-filter-slice.ts` for why the three extra keys live in state. */
+ *  `issue-filter-slice.ts` for why the three extra keys live in state.
+ *
+ *  `cardPropertyIds` travels for the same reason and by the same rule: it is a
+ *  second display dimension web saves (save-view-dialog.tsx:605), so omitting
+ *  it would drop a web view's custom-property chips on the first mobile
+ *  re-save. Mobile renders those chips too — see `components/issue/board-card.tsx`. */
 export function viewDisplayFromState(state: {
   view: IssueViewMode;
   grouping: IssueGrouping;
@@ -163,6 +168,7 @@ export function viewDisplayFromState(state: {
   showSubIssues: boolean;
   tableHierarchy: boolean;
   cardProperties: CardProperties;
+  cardPropertyIds: string[];
 }): Record<string, unknown> {
   return {
     viewMode: state.view,
@@ -172,6 +178,7 @@ export function viewDisplayFromState(state: {
     showSubIssues: state.showSubIssues,
     tableHierarchy: state.tableHierarchy,
     cardProperties: state.cardProperties,
+    cardPropertyIds: state.cardPropertyIds,
   };
 }
 
@@ -389,6 +396,7 @@ export interface IssueViewDisplayPatch {
   showSubIssues: boolean;
   tableHierarchy: boolean;
   cardProperties: CardProperties;
+  cardPropertyIds: string[];
 }
 
 export function sanitizeViewDisplay(
@@ -412,7 +420,34 @@ export function sanitizeViewDisplay(
     // :287-296) and the same rule `showSubIssues` above follows. A view saved
     // before a toggle existed must not read that toggle as off.
     cardProperties: sanitizeCardProperties(display.cardProperties),
+    // Kept verbatim, unknown ids included — see `sanitizeCardPropertyIds`.
+    cardPropertyIds: sanitizeCardPropertyIds(display.cardPropertyIds),
   };
+}
+
+/**
+ * The custom-property ids a view's cards show, in the order it saved them.
+ *
+ * **Unknown ids are KEPT, unlike every other sanitize in this file.** The other
+ * sanitizers drop values the store cannot represent (a stale enum member); here
+ * the store CAN represent any string, and dropping is actively harmful in two
+ * ways web does not suffer from:
+ *
+ *   - a definition missing from the CURRENT catalog is not necessarily deleted
+ *     — the catalog is a separate query that may still be in flight, and
+ *     archived definitions are excluded from the active list mobile's card
+ *     reads. Web's store keeps the id and its board card simply renders nothing
+ *     for it (`board-card.tsx:69-72` resolves against whatever catalog it has).
+ *     Dropping here would make a mobile open-and-resave of a web view LOSE the
+ *     chip permanently, even after the definition came back;
+ *   - it preserves the round-trip contract the rest of this file states: what
+ *     the view carried is what a re-save writes back.
+ *
+ * Rendering is where an unresolvable id is filtered out, per-issue and
+ * per-render — `lib/card-properties.ts`.
+ */
+export function sanitizeCardPropertyIds(raw: unknown): string[] {
+  return stringArray(raw).filter((id) => id.length > 0);
 }
 
 /** The eight card-property keys, in web's `CARD_PROPERTY_OPTIONS` order. */
@@ -478,6 +513,7 @@ export type IssueViewSnapshotSource = Pick<
   | "showSubIssues"
   | "tableHierarchy"
   | "cardProperties"
+  | "cardPropertyIds"
 >;
 
 /**
@@ -526,7 +562,12 @@ export function viewMatchesSlice(
     // Card-property toggles are part of a saved view's display, so flipping
     // one must light the "modified" dot. Without this clause the dot would
     // stay dark and the user's change would be silently unsavable.
-    sameCardProperties(wantDisplay.cardProperties, slice.cardProperties)
+    sameCardProperties(wantDisplay.cardProperties, slice.cardProperties) &&
+    // Same reason, second dimension: the custom-property selection is saved in
+    // the view's display too, so adding / removing one is a modification.
+    // Order matters here — the array IS the render order, so a reorder is a
+    // real change (sameStrings compares positionally).
+    sameStrings(wantDisplay.cardPropertyIds, slice.cardPropertyIds)
   );
 }
 

@@ -147,6 +147,7 @@ export default function IssuesFilterRoute() {
   const showSubIssues = s.showSubIssues;
   const tableHierarchy = s.tableHierarchy;
   const cardProperties = s.cardProperties;
+  const cardPropertyIds = s.cardPropertyIds;
 
   // The date section's field radio is UI-local until a preset/custom commits
   // (web DateSubContent keeps the same split).
@@ -634,6 +635,40 @@ export default function IssuesFilterRoute() {
             t={t}
           />
         ))}
+
+        {/* Custom card properties — web renders these as a second chip row
+            immediately after the eight built-in chips, inside the same
+            `card_properties_section` block (issues-header.tsx:2013-2027).
+            Mobile keeps them under their own heading instead: the built-in
+            switches are already a full section here, and an unlabelled
+            continuation would read as more built-ins rather than as the
+            workspace's own definitions.
+
+            The list is the ACTIVE catalog — the same `properties` the filter
+            and sort sections above use — because that is what web's Display
+            popover maps (`workspaceProperties`, issues-header.tsx:1593, whose
+            `propertyListOptions` call omits includeArchived). An archived
+            definition is therefore not offered here, and its stale id stays in
+            `cardPropertyIds` untouched (see `sanitizeCardPropertyIds`), so
+            un-archiving it brings the chip straight back. */}
+        <SectionLabel>{t("filter.display.customPropertiesTitle")}</SectionLabel>
+        {properties.length === 0 ? (
+          <View className="px-4 py-2.5">
+            <Text className="text-xs text-muted-foreground/70">
+              {t("filter.display.customPropertiesEmpty")}
+            </Text>
+          </View>
+        ) : (
+          properties.map((property) => (
+            <BoolRow
+              key={property.id}
+              label={property.name}
+              checked={cardPropertyIds.includes(property.id)}
+              onToggle={() => act().toggleCardPropertyId(property.id)}
+              t={t}
+            />
+          ))
+        )}
       </ScrollView>
     </View>
   );

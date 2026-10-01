@@ -142,6 +142,9 @@ export function ProjectIssueSurface({
   const showSubIssues = useProjectIssuesViewStore((s) => s.showSubIssues);
   const tableHierarchy = useProjectIssuesViewStore((s) => s.tableHierarchy);
   const cardProperties = useProjectIssuesViewStore((s) => s.cardProperties);
+  // The custom-property ids a card draws — web's second card display
+  // dimension, saved with the view like `cardProperties` above.
+  const cardPropertyIds = useProjectIssuesViewStore((s) => s.cardPropertyIds);
   const groupingProperty = useGroupingProperty(grouping);
   const sortBy = useProjectIssuesViewStore((s) => s.sortBy);
   const sortDirection = useProjectIssuesViewStore((s) => s.sortDirection);
@@ -304,6 +307,7 @@ export function ProjectIssueSurface({
       showSubIssues,
       tableHierarchy,
       cardProperties,
+      cardPropertyIds,
     }),
     [
       filterState,
@@ -313,6 +317,7 @@ export function ProjectIssueSurface({
       showSubIssues,
       tableHierarchy,
       cardProperties,
+      cardPropertyIds,
     ],
   );
   const modifiedActive = useMemo(
@@ -567,6 +572,7 @@ export function ProjectIssueSurface({
           ) : null}
           <BoardView
             cardProperties={cardProperties}
+            cardPropertyIds={cardPropertyIds}
             issues={sorted}
             grouping={grouping}
             groupingProperty={groupingProperty}
@@ -618,6 +624,7 @@ export function ProjectIssueSurface({
       ) : view === "swimlane" ? (
         <SwimlaneView
           cardProperties={cardProperties}
+          cardPropertyIds={cardPropertyIds}
           issues={sorted}
           grouping={swimlaneGrouping}
           onGroupingChange={(next) =>

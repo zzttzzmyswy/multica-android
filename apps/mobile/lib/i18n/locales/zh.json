@@ -1134,6 +1134,8 @@
   "filter.display.cardAssignee": "负责人",
   "filter.display.cardStartDate": "开始日期",
   "filter.display.cardDueDate": "截止日期",
+  "filter.display.customPropertiesTitle": "自定义属性",
+  "filter.display.customPropertiesEmpty": "该工作区还没有自定义属性",
   "filter.date": "日期",
   "filter.dateClear": "清除日期筛选",
   "filter.dateCreated": "创建时间",
