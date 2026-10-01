@@ -39,6 +39,7 @@ import {
 } from "@/lib/install-update";
 import { useDownloadsStore } from "@/data/downloads-store";
 import { resolveAppVersion, resolveBuildNumber } from "@/lib/app-identity";
+import { checkUpdateInstallTarget } from "@/lib/release-identity";
 import { cn } from "@/lib/utils";
 
 type CheckPhase =
@@ -46,6 +47,7 @@ type CheckPhase =
   | "checking"
   | "network-error"
   | "no-asset"
+  | "foreign-package"
   | "downloading";
 
 const GITHUB_URL = `https://github.com/${GITHUB_REPO}`;
@@ -86,6 +88,15 @@ export default function AboutPage() {
 
   const onDownloadInstall = async () => {
     if (!release) return;
+    // Refuse before downloading when this install is not the channel's package.
+    // Android would treat the downloaded APK as a different app and install it
+    // *beside* this one — leaving the old app and data in place and reporting
+    // Success. Cheaper and clearer to say so up front than to hand it over.
+    const target = checkUpdateInstallTarget(Constants);
+    if (!target.ok) {
+      setPhase("foreign-package");
+      return;
+    }
     const abi = resolveDeviceAbi();
     const asset = abi ? matchAssetForAbi(release.assets, abi) : null;
     if (!asset || !abi) {
@@ -225,6 +236,11 @@ function UpdateCard({
   } else if (phase === "no-asset") {
     status = t("update.error.noAsset");
     tone = "text-destructive";
+  } else if (phase === "foreign-package") {
+    // The update is refused, not failed: this install is not the release
+    // channel's package, so the download would have created a second app.
+    status = t("update.error.foreignPackage");
+    tone = "text-destructive";
   } else if (phase === "downloading") {
     const pct =
       progress != null ? Math.round(progress * 100) : null;
@@ -243,7 +259,8 @@ function UpdateCard({
     status = t("about.idle");
   }
 
-  const showDownload = !busy && hasUpdate && phase !== "no-asset";
+  const showDownload =
+    !busy && hasUpdate && phase !== "no-asset" && phase !== "foreign-package";
 
   return (
     <View className="rounded-xl border border-border bg-card p-4 gap-3">
@@ -289,6 +306,18 @@ function UpdateCard({
       {phase === "no-asset" && (
         <Button variant="link" onPress={onCheck}>
           <Text>{t("about.checkForUpdates")}</Text>
+        </Button>
+      )}
+
+      {phase === "foreign-package" && (
+        // The refusal names uninstalling and reinstalling as the way out, so
+        // give that path a tap target rather than leaving it as prose.
+        <Button
+          variant="outline"
+          onPress={() => void Linking.openURL(`${GITHUB_URL}/releases`)}
+        >
+          <Ionicons name="open-outline" size={18} color={theme.foreground} />
+          <Text>{t("update.openReleases")}</Text>
         </Button>
       )}
     </View>

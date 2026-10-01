@@ -54,23 +54,55 @@ cd android
 ./gradlew bundleRelease       # AAB
 ```
 
-### `APP_ENV` is not optional — it picks the package id
+### The release package id is fixed, not chosen per build
 
-`apps/mobile/app.config.ts` derives the Android `applicationId` from `APP_ENV`:
+`apps/mobile/app.config.ts` derives the Android `applicationId` from `APP_ENV`,
+and the **release** branch (`production`) resolves to
+`release-identity.json` — the one id every published release installs under:
 
-| `APP_ENV` | package id |
-|---|---|
-| unset / `development` | `ai.multica.mobile.dev` |
-| `staging` | `ai.multica.mobile.staging` |
-| `production` | `ai.multica.mobile` |
+| `APP_ENV` | package id | meaning |
+|---|---|---|
+| unset / `development` | `ai.multica.mobile.dev` | local dev build |
+| `staging` | `ai.multica.mobile.staging` | staging |
+| `production` | `release-identity.json` → `ai.multica.mobile.dev` | **a published release** |
 
-A release APK built without `APP_ENV=production` **succeeds and installs
-cleanly** — it is simply the wrong app, a `.dev` alongside the real one. Check
-the artifact, not the exit code:
+Read that third row carefully: the release id happens to equal the dev id. That
+is not a bug and not a stale default. It is the install base. Every release from
+v0.4.0 through v0.6.15 shipped as `ai.multica.mobile.dev`, so that is the
+package the existing users' apps answer to.
+
+Android identifies an app by its package id, not by its version. Two APKs whose
+ids differ are, to the installer, unrelated applications: installing one while
+the other is present creates a **second** icon and a second data directory,
+leaves the original app and its data untouched, and returns `Success`. So moving
+the release id does not "rename" anything — it strands every existing user on an
+app that can no longer be updated in place.
+
+That is exactly what v0.6.17 did. Iteration 187 rebuilt with `APP_ENV=production`
+while this document's earlier revision described the `.dev` artifact as "the
+wrong app, a `.dev` alongside the real one" — so the release moved the whole
+channel to `ai.multica.mobile`, and every existing user's "check for updates"
+began installing a stranger. Nothing compared one release's package to the
+previous release's, so all four artifacts passed verification.
+
+Two guards now exist, and they check different things:
+
+- `scripts/verify-apk.mjs` fails the build when an artifact's manifest package
+  differs from `release-identity.json` (`checkReleasePackage`). That is the
+  cross-release assertion that was missing.
+- `lib/release-identity.ts` refuses, in the app, to download an update when the
+  *installed* package is not the channel's — so a user already stranded on the
+  odd id gets a readable explanation instead of a silent second install.
+
+Changing `release-identity.json` is therefore a **channel migration**, not a
+refactor: it requires a way for everyone on the old id to move (uninstall and
+reinstall), planned and documented before the release ships.
+
+Check the artifact, not the exit code:
 
 ```bash
 "$ANDROID_HOME"/build-tools/35.0.0/aapt2 dump packagename \
-  android/app/build/outputs/apk/release/app-arm64-v8a-release.apk   # -> ai.multica.mobile
+  android/app/build/outputs/apk/release/app-arm64-v8a-release.apk   # -> ai.multica.mobile.dev
 ```
 
 Checking the manifest alone is **not** enough, because the manifest and the
@@ -165,7 +197,7 @@ source, as an Expo config plugin that re-splices itself on each prebuild:
 | `with-onig-prebuilt-path.js` | shiki-engine linking the host's `libonig.so` into an aarch64 target |
 | `with-mermaid-asset.js`, `with-katex-asset.js` | WebView runtimes copied into APK assets |
 | `with-brand-icons.js` | Notification small icon |
-| `with-app-config-env.js` | Embedded app config naming the `.dev` package on a production build |
+| `with-app-config-env.js` | Embedded app config disagreeing with the manifest's package |
 
 ### The metaspace ceiling
 

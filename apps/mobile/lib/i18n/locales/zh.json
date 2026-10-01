@@ -2656,6 +2656,8 @@
   "update.error.installFailed": "安装失败，请检查\"安装未知应用\"权限后重试。",
   "update.error.network": "无法连接更新服务器，请稍后重试。",
   "update.error.noAsset": "当前设备架构暂未发布安装包。",
+  "update.error.foreignPackage": "当前安装的版本包名与发布渠道不一致，继续更新会在手机上装出第二个 Multica，而不是覆盖当前应用。请先卸载本应用，再从 GitHub Releases 重新安装；或直接在当前版本继续使用。",
+  "update.openReleases": "从 GitHub Releases 下载",
   "update.hasNew": "有新版本",
   "update.installUnknownSourcesHint": "若安装被系统阻止，请允许此应用\"安装未知应用\"。",
   "update.openSettings": "打开设置",

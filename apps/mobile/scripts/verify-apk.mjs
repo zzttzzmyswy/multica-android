@@ -29,7 +29,7 @@
  * each defect manifests in the artifact.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -96,6 +96,57 @@ function readEmbeddedConfigPackage(archive) {
   } catch {
     return null;
   }
+}
+
+/**
+ * The package id the release channel installs under, as declared in tracked
+ * source. Returns `null` when the file is missing or malformed, which the
+ * caller treats as "cannot assert" rather than "assertion failed" — a script
+ * that hard-fails on a missing config file cannot report the artifact problems
+ * it exists to report.
+ */
+function readDeclaredReleasePackage(root = process.cwd()) {
+  const file = path.join(root, "release-identity.json");
+  if (!existsSync(file)) return null;
+  try {
+    const value = JSON.parse(readFileSync(file, "utf8"))?.androidPackage;
+    return typeof value === "string" && value.length > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Verdict comparing one artifact against the release channel's declared
+ * package id. Distinct from `checkPackageIdentity`, which compares an artifact
+ * to *itself*.
+ *
+ * Why a second check exists: manifest-vs-embedded catches a single artifact
+ * that disagrees with itself — the iteration-186 defect. It is silent on the
+ * whole channel moving, because it never looks at another release. Iteration
+ * 187 fixed the first and, by rebuilding with `APP_ENV=production`, moved every
+ * artifact from `ai.multica.mobile.dev` to `ai.multica.mobile`; all four passed
+ * `checkPackageIdentity` while every existing user's in-app update began
+ * installing a second app. Only a comparison against a value that outlives the
+ * artifact can see that.
+ */
+function checkReleasePackage(manifestPackage, declaredPackage) {
+  if (declaredPackage === null) {
+    return { ok: true, note: "no release-identity.json; channel id not asserted" };
+  }
+  if (manifestPackage !== declaredPackage) {
+    return {
+      ok: false,
+      error:
+        `package drift: artifact installs as ${manifestPackage}, but the ` +
+        `release channel is declared as ${declaredPackage} ` +
+        `(release-identity.json). Android treats these as two different ` +
+        `apps, so this artifact would install beside existing users instead ` +
+        `of over them. If the move is intended, it needs a migration path for ` +
+        `everyone on ${declaredPackage}; see docs/android-build.md.`,
+    };
+  }
+  return { ok: true, note: `release package ${manifestPackage}` };
 }
 
 /**
@@ -175,6 +226,7 @@ function main(artifacts) {
 
   let allOk = true;
   let checked = 0;
+  const declaredPackage = readDeclaredReleasePackage();
   for (const archive of targets) {
     if (!existsSync(archive)) {
       console.error(`[verify-apk] ${archive} does not exist`);
@@ -216,8 +268,19 @@ function main(artifacts) {
       console.error(`[verify-apk] FAIL ${archive} ${verdict.error}`);
       continue;
     }
+
+    // Channel identity: an artifact that agrees with itself can still have moved
+    // the whole release channel to a new package id, which installs it beside
+    // existing users instead of over them. Only a comparison against a value
+    // that outlives the artifact sees that.
+    const channelVerdict = checkReleasePackage(manifestPkg, declaredPackage);
+    if (!channelVerdict.ok) {
+      allOk = false;
+      console.error(`[verify-apk] FAIL ${archive} ${channelVerdict.error}`);
+      continue;
+    }
     console.log(
-      `[verify-apk] OK  ${archive} (${names.length} native libs, ${verdict.note})`,
+      `[verify-apk] OK  ${archive} (${names.length} native libs, ${verdict.note}, ${channelVerdict.note})`,
     );
   }
 
@@ -235,8 +298,10 @@ function main(artifacts) {
 export {
   REQUIRED_LIBS,
   checkPackageIdentity,
+  checkReleasePackage,
   findAapt2,
   listSoFiles,
+  readDeclaredReleasePackage,
   readEmbeddedConfigPackage,
   readManifestPackage,
 };
