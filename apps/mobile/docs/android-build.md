@@ -73,6 +73,44 @@ the artifact, not the exit code:
   android/app/build/outputs/apk/release/app-arm64-v8a-release.apk   # -> ai.multica.mobile
 ```
 
+Checking the manifest alone is **not** enough, because the manifest and the
+APK's embedded app config are produced by two different processes — see below.
+
+### The embedded app config is regenerated at Gradle time, without `APP_ENV`
+
+`APP_ENV` is read in two places, and only the first is given it:
+
+| Producer | When | Gets `APP_ENV`? |
+|---|---|---|
+| `expo prebuild` | once, by hand | yes — `package.json`'s `android:prod` sets it |
+| expo-constants' `createExpoConfig` task | every `assembleRelease` | **no** |
+
+The second one is the trap. `createExpoConfig` shells out to
+`expo-constants/scripts/getAppConfig.js`, which re-evaluates `app.config.ts` **in
+a fresh Node process** that inherits only the ambient environment. Gradle does
+not carry the prebuild step's env, so `APP_ENV` fell back to `development` and
+the embedded `assets/app.config` named `ai.multica.mobile.dev` while the manifest
+named `ai.multica.mobile`.
+
+This is silent, and it is the runtime that loses: `expo-constants` parses the
+**embedded config** (`ConstantsService.kt` reads `assets/app.config`; the
+`expo-updates` / dev-launcher manifests take precedence but this app ships
+neither), so `Constants.expoConfig.android.package` reported the dev id on a
+production install. The visible damage was the self-update flow's "allow installs
+from this source" deep-link scoping users to a package they did not have.
+
+`plugins/with-app-config-env.js` fixes it by deriving `APP_ENV` from the
+`applicationId` Gradle is already building, so the two cannot disagree whatever
+env the gradle invocation carries. `scripts/verify-apk.mjs` asserts they match on
+every artifact, which is what makes the class of bug fail the build:
+
+```
+[verify-apk] FAIL …/app-arm64-v8a-release.apk package mismatch: manifest says
+ai.multica.mobile, embedded app.config says ai.multica.mobile.dev. A runtime
+reading Constants.expoConfig would act as ai.multica.mobile.dev on a
+ai.multica.mobile install.
+```
+
 `android/` is gitignored (Expo prebuild output) — regenerate it with the
 prebuild command above, which re-applies every config plugin below.
 
@@ -127,6 +165,7 @@ source, as an Expo config plugin that re-splices itself on each prebuild:
 | `with-onig-prebuilt-path.js` | shiki-engine linking the host's `libonig.so` into an aarch64 target |
 | `with-mermaid-asset.js`, `with-katex-asset.js` | WebView runtimes copied into APK assets |
 | `with-brand-icons.js` | Notification small icon |
+| `with-app-config-env.js` | Embedded app config naming the `.dev` package on a production build |
 
 ### The metaspace ceiling
 

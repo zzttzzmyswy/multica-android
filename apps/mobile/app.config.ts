@@ -22,7 +22,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         ? "Multica (Staging)"
         : "Multica (Dev)",
     slug: "multica-mobile",
-    version: "0.6.16",
+    version: "0.6.17",
     orientation: "portrait",
     userInterfaceStyle: "automatic",
     scheme: "multica",
@@ -39,7 +39,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // Convention: minor*100 + patch — keep it monotonic with every
       // `version` bump so self-hosted APK updates always upgrade. Shown as the
       // About-page "build" number (Constants.platform.android.versionCode).
-      versionCode: 616,
+      versionCode: 617,
       // Adaptive icon: separate full-bleed background + centered foreground so
       // Android launchers can mask them into circles / squiggles cleanly.
       adaptiveIcon: {
@@ -127,6 +127,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // template leaves at 512m — too low for an all-ABI release build. See
       // the plugin and docs/android-build.md.
       "./plugins/with-gradle-jvmargs.js",
+      // Pins expo-constants' gradle-time `assets/app.config` regeneration to the
+      // applicationId Gradle is building, so a release APK's embedded config
+      // cannot name the .dev package while its manifest names the production
+      // one. See the plugin and docs/android-build.md.
+      "./plugins/with-app-config-env.js",
     ],
     extra: { APP_ENV: env },
   };
