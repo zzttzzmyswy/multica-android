@@ -21,7 +21,6 @@
  */
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
   Pressable,
@@ -32,8 +31,9 @@ import { useQuery } from "@tanstack/react-query";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
+import { PropertyCatalogStatus } from "@/components/property/property-catalog-status";
 import { issueDetailOptions } from "@/data/queries/issues";
-import { propertyCatalogOptions } from "@/data/queries/properties";
+import { usePropertyCatalog } from "@/data/queries/properties";
 import {
   useSetIssueProperty,
   useUnsetIssueProperty,
@@ -77,8 +77,12 @@ export function PropertyValueEditor({ issueId, propertyId, onClose }: Props) {
   const theme = THEME[colorScheme];
 
   const { data: issue } = useQuery(issueDetailOptions(wsId, issueId));
-  const { data: catalog, isLoading } = useQuery(propertyCatalogOptions(wsId));
-  const property = (catalog ?? []).find((p) => p.id === propertyId);
+  // Four-state read (MYS-1892): `isLoading` alone cannot separate "failed"
+  // from "not found", so a failed catalog used to answer 「未找到该属性」 for a
+  // property that exists. The state is resolved here and each branch below
+  // says only what it knows.
+  const catalog = usePropertyCatalog(wsId);
+  const property = catalog.definitions.find((p) => p.id === propertyId);
 
   const setProperty = useSetIssueProperty();
   const unsetProperty = useUnsetIssueProperty();
@@ -100,10 +104,16 @@ export function PropertyValueEditor({ issueId, propertyId, onClose }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [textishValue, property?.type]);
 
-  if (isLoading) {
+  if (!catalog.isResolved) {
+    // Still loading, or the read failed — in neither case is "this property
+    // does not exist" a fact we are entitled to state (MYS-1892).
     return (
-      <View className="flex-1 items-center justify-center bg-background">
-        <ActivityIndicator />
+      <View className="flex-1 justify-center bg-background">
+        <PropertyCatalogStatus
+          state={catalog.state}
+          onRetry={catalog.retry}
+          layout="centered"
+        />
       </View>
     );
   }

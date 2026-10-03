@@ -5,13 +5,14 @@
  * reopened; pinned-loading shows a spinner, a missing id renders a not-found
  * state instead of crashing.
  */
-import { ActivityIndicator, View } from "react-native";
+import { View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useLocalSearchParams } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
 import { PropertyForm } from "@/components/property/property-form";
-import { propertyCatalogOptions } from "@/data/queries/properties";
+import { usePropertyCatalog } from "@/data/queries/properties";
+import { PropertyCatalogStatus } from "@/components/property/property-catalog-status";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -24,13 +25,21 @@ export default function EditPropertyPage() {
   const { colorScheme } = useColorScheme();
   const muted = THEME[colorScheme].mutedForeground;
 
-  const { data, isLoading } = useQuery(propertyCatalogOptions(wsId));
-  const property = (data ?? []).find((p) => p.id === id);
+  // Four-state read (MYS-1892): a failed catalog previously fell through to
+  // the not-found branch, so a request that timed out was reported as 「未找到
+  // 该属性」 for a property that exists. Loading and failure now keep the user
+  // on the page with a retry.
+  const catalog = usePropertyCatalog(wsId);
+  const property = catalog.definitions.find((p) => p.id === id);
 
-  if (isLoading) {
+  if (!catalog.isResolved) {
     return (
-      <View className="flex-1 items-center justify-center bg-background">
-        <ActivityIndicator />
+      <View className="flex-1 justify-center bg-background">
+        <PropertyCatalogStatus
+          state={catalog.state}
+          onRetry={catalog.retry}
+          layout="centered"
+        />
       </View>
     );
   }

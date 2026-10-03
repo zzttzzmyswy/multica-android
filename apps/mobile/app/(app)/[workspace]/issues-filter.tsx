@@ -24,7 +24,6 @@
 import { useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, View } from "react-native";
-import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { IssuePriority } from "@multica/core/types";
 import { addDaysDateOnly, todayDateOnly } from "@multica/core/issues/date";
@@ -36,7 +35,8 @@ import {
   parseFilterScope,
   type IssueFilterScope,
 } from "@/data/stores/issue-filter-store-registry";
-import { propertyActiveOptions } from "@/data/queries/properties";
+import { useActivePropertyCatalog } from "@/data/queries/properties";
+import { PropertyCatalogStatus } from "@/components/property/property-catalog-status";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import {
   ISSUE_GROUPING_OPTIONS,
@@ -164,10 +164,23 @@ export default function IssuesFilterRoute() {
   // filterable-property set web uses (issues-header.tsx:1175-1181).
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const statusOptions = useStatusOptions(wsId);
-  const { data: properties = [] } = useQuery(propertyActiveOptions(wsId));
+  // Four-state read (MYS-1892). The `= []` default this replaced folded
+  // "loading" and "request failed" into "the workspace has none", which is
+  // how the panel came to claim a workspace had no custom properties while
+  // one request was timing out. The sections below render `catalog.state`
+  // instead of branching on a length.
+  const catalog = useActivePropertyCatalog(wsId);
+  const properties = catalog.definitions;
   const filterableProperties = properties.filter(
     (p) => p.type === "select" || p.type === "multi_select" || p.type === "checkbox",
   );
+  // A settled catalog holding no definition THIS section can filter by is the
+  // section's own empty — "no filterable properties" stays true and still
+  // belongs to this section, so it must not fall through to a blank body.
+  const filterSectionState =
+    catalog.state === "ready" && filterableProperties.length === 0
+      ? "empty"
+      : catalog.state;
 
   // Custom-property sort / grouping options, appended to the static ones the
   // same way web's Display popover does (issues-header.tsx:1957-1961 for
@@ -372,15 +385,13 @@ export default function IssuesFilterRoute() {
           t={t}
         />
 
-        {/* ——— Custom properties ——— */}
+        {/* ——— Custom properties ———
+            Three states, not one (MYS-1892): a catalog that has not arrived
+            renders a spinner, a failed one names the failure and offers a
+            retry, and only a settled catalog with no filterable definitions
+            claims there is nothing to filter by. */}
         <SectionLabel>{t("filter.property")}</SectionLabel>
-        {filterableProperties.length === 0 ? (
-          <View className="px-4 py-3">
-            <Text className="text-sm text-muted-foreground">
-              {t("filter.propertyEmpty")}
-            </Text>
-          </View>
-        ) : (
+        {filterSectionState === "ready" ? (
           filterableProperties.map((property) => {
             const selected = propertyFilters[property.id] ?? [];
             return (
@@ -395,6 +406,12 @@ export default function IssuesFilterRoute() {
               />
             );
           })
+        ) : (
+          <PropertyCatalogStatus
+            state={filterSectionState}
+            onRetry={catalog.retry}
+            emptyMessage={t("filter.propertyEmpty")}
+          />
         )}
 
         {/* ——— Date ——— */}
@@ -650,15 +667,15 @@ export default function IssuesFilterRoute() {
             `propertyListOptions` call omits includeArchived). An archived
             definition is therefore not offered here, and its stale id stays in
             `cardPropertyIds` untouched (see `sanitizeCardPropertyIds`), so
-            un-archiving it brings the chip straight back. */}
+            un-archiving it brings the chip straight back.
+
+            The reported site (MYS-1892): 「该工作区还没有自定义属性」 used to be
+            the `properties.length === 0` branch, so a catalog still loading
+            or one whose request had timed out rendered the same sentence as a
+            genuinely empty workspace. It now paints per state, and a failed
+            read offers the retry that was missing. */}
         <SectionLabel>{t("filter.display.customPropertiesTitle")}</SectionLabel>
-        {properties.length === 0 ? (
-          <View className="px-4 py-2.5">
-            <Text className="text-xs text-muted-foreground/70">
-              {t("filter.display.customPropertiesEmpty")}
-            </Text>
-          </View>
-        ) : (
+        {catalog.state === "ready" ? (
           properties.map((property) => (
             <BoolRow
               key={property.id}
@@ -668,6 +685,12 @@ export default function IssuesFilterRoute() {
               t={t}
             />
           ))
+        ) : (
+          <PropertyCatalogStatus
+            state={catalog.state}
+            onRetry={catalog.retry}
+            emptyMessage={t("filter.display.customPropertiesEmpty")}
+          />
         )}
       </ScrollView>
     </View>
