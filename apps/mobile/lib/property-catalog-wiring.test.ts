@@ -30,7 +30,17 @@ function code(rel: string): string {
     .replace(/^\s*\/\/.*$/gm, "");
 }
 
-/** Every surface that used to read the catalog through `= []`. */
+/** The five surfaces that rendered a FALSE CLAIM from a failed or in-flight
+ *  read — each one had its own "empty" sentence (「该工作区还没有自定义属性」,
+ *  「没有可过滤的自定义属性」, 「没有更多可添加的属性」, 「未找到该属性」) that a
+ *  catalog which had merely not arrived also fell into.
+ *
+ *  Deliberately not listed: the other six catalog readers (`board-card`,
+ *  `table-view`, `issue-surface-chrome`, `custom-property-row`,
+ *  `use-grouping-property`, `more/properties`). They never made that claim —
+ *  a missing definition there renders no chip, a `—` cell, or a status-lane
+ *  fallback, and `more/properties` owns a separate error UI. Widening this
+ *  list is a judgement call per surface, not a mechanical sweep. */
 const SURFACES: { file: string; hook: "useActivePropertyCatalog" | "usePropertyCatalog" }[] = [
   {
     file: "app/(app)/[workspace]/issues-filter.tsx",

@@ -6,7 +6,6 @@
  * state instead of crashing.
  */
 import { View } from "react-native";
-import { useQuery } from "@tanstack/react-query";
 import { useLocalSearchParams } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";

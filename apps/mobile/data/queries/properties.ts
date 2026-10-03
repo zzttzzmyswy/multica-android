@@ -69,12 +69,11 @@ export interface PropertyCatalogRead {
 function usePropertyCatalogRead(
   wsId: string | null,
   includeArchived: boolean,
-  enabled = true,
 ): PropertyCatalogRead {
   const options = includeArchived
     ? propertyCatalogOptions(wsId)
     : propertyActiveOptions(wsId);
-  const query = useQuery({ ...options, enabled: enabled && !!wsId });
+  const query = useQuery({ ...options, enabled: !!wsId });
 
   const state = resolvePropertyCatalogState({
     definitions: query.data,
@@ -94,14 +93,9 @@ function usePropertyCatalogRead(
  *  panel, the board/table surfaces and the filter picker read. */
 export function useActivePropertyCatalog(
   wsId?: string | null,
-  options: { enabled?: boolean } = {},
 ): PropertyCatalogRead {
   const storeWsId = useWorkspaceStore((s) => s.currentWorkspaceId);
-  return usePropertyCatalogRead(
-    wsId ?? storeWsId,
-    false,
-    options.enabled ?? true,
-  );
+  return usePropertyCatalogRead(wsId ?? storeWsId, false);
 }
 
 /** Include-archived definitions plus the load state — the projection the

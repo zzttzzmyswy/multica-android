@@ -19,9 +19,13 @@
  *      uses for a failed refresh over an existing list. It also keeps a
  *      genuinely-empty workspace from flapping into an error state on a
  *      background refetch hiccup.
- *   2. `isError` → `error`. Checked before `isPending` because React Query
- *      reports pending again on the retry pass; a failed read with nothing
- *      behind it must read as failed, not send the user back to a spinner.
+ *   2. `isError` → `error`, before `isPending`. Measured against the pinned
+ *      `@tanstack/query-core` 5.96 a failure never reports `isPending` at the
+ *      same time (during the automatic retry pass and during a manual refetch
+ *      after a failure the observer reports `isPending: false, isError: true`
+ *      with `data: undefined`), so the two are not actually competing — the
+ *      order is defensive, so that a future version which does pair them still
+ *      reads as failed rather than sending the user back to a spinner.
  *   3. `isPending` → `loading`. The honest "nothing has resolved yet".
  *   4. Otherwise `empty` — settled, no error, and still no definitions. That
  *      covers a success payload that carried no catalog, and it is still the

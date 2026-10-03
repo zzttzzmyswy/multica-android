@@ -34,10 +34,10 @@ export function PropertyCatalogStatus({
   state,
   onRetry,
   emptyMessage,
-  /** Error copy. Defaults to the management page's "failed to load
-   *  properties" line, which is accurate on every surface that reads the
-   *  same endpoint; pass a narrower one where the surrounding section has
-   *  its own vocabulary. */
+  /** Error copy. Defaults to `properties.catalogLoadError`, which stands on
+   *  its own. Do NOT default this to `properties.loadError`: that key ends in
+   *  a colon because the management page appends `error.message` after it
+   *  (`more/properties.tsx`), and a bare colon here would dangle. */
   errorMessage,
   /** `inline` keeps the failure inside a section body (a few lines, no
    *  centering); `centered` fills a sheet or an empty surface. */
@@ -91,7 +91,7 @@ export function PropertyCatalogStatus({
           />
         ) : null}
         <Text className="text-sm text-destructive">
-          {errorMessage ?? t("properties.loadError")}
+          {errorMessage ?? t("properties.catalogLoadError")}
         </Text>
         <Pressable
           onPress={onRetry}
@@ -108,6 +108,9 @@ export function PropertyCatalogStatus({
 
   // `empty` — the caller owns the wording, because "no properties at all" and
   // "none of them can be used here" are different facts about the same state.
+  // It owns the type scale too: a section body's empty line and a full-sheet
+  // one are not the same weight, and the Display section shipped at the
+  // smaller treatment before this was factored out.
   if (!emptyMessage) return null;
   return (
     <View
@@ -118,8 +121,9 @@ export function PropertyCatalogStatus({
     >
       <Text
         className={cn(
-          "text-sm text-muted-foreground",
-          layout === "centered" && "text-center",
+          layout === "centered"
+            ? "text-sm text-muted-foreground text-center"
+            : "text-xs text-muted-foreground/70",
         )}
       >
         {emptyMessage}
