@@ -32,6 +32,7 @@ import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { SquadMember, SquadMemberStatusValue } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { TextField } from "@/components/ui/text-field";
@@ -55,6 +56,7 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorProfileStore } from "@/data/stores/actor-profile-store";
 import { ActionSheet } from "@/lib/action-sheet";
 import { squadManageGuards, squadMemberActionGuards } from "@/lib/squad-guards";
+import { catalogRead, recordRead } from "@/lib/catalog-read";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
@@ -405,8 +407,14 @@ export default function SquadDetailPage() {
     );
   }, [roleEdit, roleValue, updateRole, t]);
 
-  const isLoading = detail.isLoading && !squad;
-  const notFound = !isLoading && (!squad || squad.id === "");
+  // The squad row comes from the detail read alone, so only that read may keep
+  // the page off "not found" — folding the roster in would hide a squad we do
+  // have behind a failed list, which is a new way to lose information. The
+  // roster's own absence claim is gated separately, below, on `roster`.
+  const read = recordRead(squad, [detail]);
+  // The roster also gets the directory adapter: its "no members" sentence is
+  // about a list, and only a settled roster may make that claim.
+  const roster = catalogRead(membersQ);
 
   return (
     <>
@@ -434,18 +442,24 @@ export default function SquadDetailPage() {
           />
         }
       >
-        {isLoading ? (
-          <View className="flex-1 items-center justify-center pt-24">
-            <ActivityIndicator />
+        {!read.isResolved ? (
+          <View className="flex-1 pt-24">
+            <CatalogStatus
+              state={read.state}
+              onRetry={read.retry}
+              layout="centered"
+            />
           </View>
-        ) : notFound ? (
-          <View className="px-6 pt-16 items-center gap-3">
-            <Ionicons name="people-circle-outline" size={32} color={theme.mutedForeground} />
-            <Text className="text-sm text-muted-foreground text-center">
-              {t("squads.emptyTitle")}
-            </Text>
+        ) : !squad ? (
+          <View className="flex-1 pt-16">
+            <CatalogStatus
+              state="empty"
+              onRetry={read.retry}
+              emptyMessage={t("squads.notFound")}
+              layout="centered"
+            />
           </View>
-        ) : squad ? (
+        ) : (
           <>
             {/* Header */}
             <View className="px-4 pt-4 flex-row items-center gap-3">
@@ -491,10 +505,18 @@ export default function SquadDetailPage() {
               </Text>
             ) : null}
 
-            {/* Members */}
+            {/* Members — its own directory read. Gated on the roster having
+                settled (MYS-1908), so a failed members read cannot render
+                「还没有小队成员」 over a squad that has them. */}
             <SectionTitle>{t("squads.detail.members")}</SectionTitle>
             <View className="px-4 gap-2">
-              {members.length === 0 ? (
+              {!roster.isResolved ? (
+                <CatalogStatus
+                  state={roster.state}
+                  onRetry={roster.retry}
+                  layout="inline"
+                />
+              ) : members.length === 0 ? (
                 <View className="rounded-lg border border-border px-4 py-6 items-center gap-1">
                   <Ionicons name="people-outline" size={24} color={theme.mutedForeground} />
                   <Text className="text-sm text-muted-foreground text-center mt-1">
@@ -572,7 +594,7 @@ export default function SquadDetailPage() {
               ) : null}
             </View>
           </>
-        ) : null}
+        )}
       </ScrollView>
 
       {/* Add member picker */}

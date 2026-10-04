@@ -24,17 +24,24 @@
  * workspace owner/admin; Slack / DingTalk / WeCom installs are owner/admin
  * only (the backend 403s anything less). A member who can manage no platform
  * gets a read-only page with the intro + hint.
+ *
+ * The agent row and the four installation lists are resolved through
+ * `recordRead` (MYS-1908), so a failed read is named as a failure with a
+ * retry instead of claiming 「还没有智能体」.
  */
 import { useState } from "react";
-import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, View } from "react-native";
+import { Alert, Linking, Pressable, ScrollView, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { LarkInstallDialog, type LarkRegion } from "@/components/agent/lark-install-dialog";
 import { ChannelByoDialog } from "@/components/agent/channel-byo-dialog";
 import { ActionSheet } from "@/lib/action-sheet";
+import { recordRead } from "@/lib/catalog-read";
+import type { CatalogState } from "@/lib/catalog-state";
 import {
   useDisconnectDingTalkInstallation,
   useDisconnectLarkInstallation,
@@ -152,6 +159,10 @@ export default function AgentIntegrationsPage() {
   };
 
   const agent = agents.data?.find((a) => a.id === id) ?? null;
+  // Only the agent list gates the page: without the row there is nothing to
+  // render. The four channel listings are per-card (below), so one channel's
+  // failure cannot take the other three cards down with it.
+  const read = recordRead(agent, [agents]);
 
   const currentMember = members.find((m) => m.user_id === currentUserId) ?? null;
   const isWorkspaceAdmin =
@@ -168,6 +179,25 @@ export default function AgentIntegrationsPage() {
     wecom: isWorkspaceAdmin,
   };
   const canManageAny = CHANNELS.some((c) => canManage[c.key]);
+
+  // Each channel's listing is its own read, and `channelState` reads
+  // `configured` off it — so a failed listing made the card claim the channel
+  // simply is not set up, which is a different fact from "we could not ask".
+  // Each channel therefore carries its own load state (MYS-1908), rendered as
+  // a per-card failure instead of blanking the page: the other channels'
+  // cards stay usable.
+  const channelReads: Record<ChannelKey, CatalogState> = {
+    lark: recordRead(lark.data ?? null, [lark]).state,
+    slack: recordRead(slack.data ?? null, [slack]).state,
+    dingtalk: recordRead(dingtalk.data ?? null, [dingtalk]).state,
+    wecom: recordRead(wecom.data ?? null, [wecom]).state,
+  };
+  const channelRetry: Record<ChannelKey, () => void> = {
+    lark: () => void lark.refetch(),
+    slack: () => void slack.refetch(),
+    dingtalk: () => void dingtalk.refetch(),
+    wecom: () => void wecom.refetch(),
+  };
 
   const state: Record<ChannelKey, ChannelStateView> = {
     lark: channelState(lark.data, id),
@@ -231,24 +261,23 @@ export default function AgentIntegrationsPage() {
     );
   };
 
-  const loading =
-    agents.isLoading || lark.isLoading || slack.isLoading ||
-    dingtalk.isLoading || wecom.isLoading;
-
-  if (loading) {
+  if (!read.isResolved) {
     return (
-      <View className="flex-1 items-center justify-center bg-background">
-        <ActivityIndicator />
+      <View className="flex-1 justify-center bg-background">
+        <CatalogStatus state={read.state} onRetry={read.retry} layout="centered" />
       </View>
     );
   }
 
   if (!agent) {
     return (
-      <View className="flex-1 items-center justify-center px-6 bg-background">
-        <Text className="text-sm text-muted-foreground text-center">
-          {t("agents.emptyTitle")}
-        </Text>
+      <View className="flex-1 justify-center bg-background">
+        <CatalogStatus
+          state="empty"
+          onRetry={read.retry}
+          emptyMessage={t("agents.notFound")}
+          layout="centered"
+        />
       </View>
     );
   }
@@ -275,6 +304,8 @@ export default function AgentIntegrationsPage() {
               channel={channel}
               canManage={canManage[channel.key]}
               state={state[channel.key]}
+              loadState={channelReads[channel.key]}
+              onRetry={channelRetry[channel.key]}
               onBind={() =>
                 channel.key === "lark" ? startLarkBind() : setByoChannel(channel.key)
               }
@@ -316,6 +347,8 @@ function ChannelSection({
   channel,
   canManage,
   state,
+  loadState,
+  onRetry,
   onBind,
   onBindInBrowser,
   onDisconnect,
@@ -324,6 +357,10 @@ function ChannelSection({
   channel: ChannelConfig;
   canManage: boolean;
   state: ChannelStateView;
+  /** The listing's own read state. A failure means we never learned whether
+   *  this channel is configured, so the card must not claim it is not. */
+  loadState: CatalogState;
+  onRetry: () => void;
   onBind: () => void;
   onBindInBrowser: () => void;
   onDisconnect: (install: BoundInstall) => void;
@@ -338,7 +375,12 @@ function ChannelSection({
   const name = t(CHANNEL_NAME_KEY[channel.key]);
 
   let body: React.ReactNode;
-  if (!canManage) {
+  if (loadState === "error" || loadState === "loading") {
+    // Ahead of every other branch: `state.configured` is read off a listing we
+    // never received, so 「尚未配置」 would be a guess about a channel that may
+    // well be connected.
+    body = <CatalogStatus state={loadState} onRetry={onRetry} layout="inline" />;
+  } else if (!canManage) {
     body = <Note>{t("agents.integrations.membersNote")}</Note>;
   } else if (!state.configured) {
     body = <Note>{t("agents.integrations.configureMissing")}</Note>;

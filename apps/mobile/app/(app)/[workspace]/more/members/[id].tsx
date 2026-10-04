@@ -20,7 +20,6 @@
  */
 import { useCallback } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Pressable,
   RefreshControl,
@@ -32,6 +31,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { MemberRole } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { ActorIssuesPanel } from "@/components/issue/actor-issues-panel";
 import { memberListOptions } from "@/data/queries/members";
@@ -45,6 +45,7 @@ import { useColorScheme } from "@/lib/use-color-scheme";
 import { formatDateTime } from "@/lib/autopilot-format";
 import { ActionSheet } from "@/lib/action-sheet";
 import { memberManageGuards, roleChangeOptions } from "@/lib/member-guards";
+import { recordRead } from "@/lib/catalog-read";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
@@ -64,15 +65,18 @@ export default function MemberDetailPage() {
   const theme = THEME[colorScheme];
   const queryClient = useQueryClient();
 
-  const { data: members, isLoading, refetch, isRefetching } = useQuery(
-    memberListOptions(wsId),
-  );
+  const membersQ = useQuery(memberListOptions(wsId));
+  const members = membersQ.data;
   const workspaces = useQuery(workspaceListOptions());
   const updateRole = useUpdateMemberRole();
   const removeMember = useRemoveMember();
 
   const workspace = workspaces.data?.find((w) => w.id === wsId);
   const member = members?.find((m) => m.id === id) ?? null;
+  // The member row comes out of the workspace member list, resolved through
+  // `recordRead` (MYS-1908): a failed list read used to render
+  // 「还没有成员」 for a member who is right there.
+  const read = recordRead(member, [membersQ]);
   const currentMember =
     members?.find((m) => m.user_id === user?.id) ?? null;
 
@@ -164,9 +168,9 @@ export default function MemberDetailPage() {
         contentContainerClassName="pb-8"
         refreshControl={
           <RefreshControl
-            refreshing={isRefetching}
+            refreshing={membersQ.isRefetching}
             onRefresh={() => {
-              void refetch();
+              void membersQ.refetch();
               // The actor-issues panel queries are actor-scoped — refresh the
               // shared prefix so a pull updates the member's Issues surface.
               queryClient.invalidateQueries({ queryKey: issueKeys.actorAll(wsId) });
@@ -175,16 +179,22 @@ export default function MemberDetailPage() {
           />
         }
       >
-        {isLoading && !member ? (
-          <View className="flex-1 items-center justify-center pt-24">
-            <ActivityIndicator />
+        {!read.isResolved ? (
+          <View className="flex-1 pt-24">
+            <CatalogStatus
+              state={read.state}
+              onRetry={read.retry}
+              layout="centered"
+            />
           </View>
         ) : !member ? (
-          <View className="px-6 pt-16 items-center gap-3">
-            <Ionicons name="person-outline" size={32} color={theme.mutedForeground} />
-            <Text className="text-sm text-muted-foreground text-center">
-              {t("members.emptyTitle")}
-            </Text>
+          <View className="flex-1 pt-16">
+            <CatalogStatus
+              state="empty"
+              onRetry={read.retry}
+              emptyMessage={t("members.notFound")}
+              layout="centered"
+            />
           </View>
         ) : (
           <>

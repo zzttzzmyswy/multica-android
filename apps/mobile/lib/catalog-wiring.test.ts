@@ -75,7 +75,64 @@ const ALL_SURFACES = [
   ...PROPERTY_SURFACES.map((s) => s.file),
 ];
 
+/** Detail / edit routes that resolve ONE row out of a directory read.
+ *
+ *  Same defect one level up (MYS-1908): these wrote `if (q.isLoading) …; if
+ *  (!record) → "does not exist"`, and `isLoading` is only true for the first
+ *  attempt, so a failed read rendered "not found" over a record that was
+ *  merely unreachable — 「还没有智能体」, 「还没有小队」, and 「该工作区已不可用。」
+ *  (which also pushed the user out to the workspace switcher).
+ *
+ *  Each entry names the row it shows so the guard can assert the page gates on
+ *  `recordRead`/`isResolved` rather than on `!<row>`. */
+const RECORD_SURFACES = [
+  "app/(app)/[workspace]/more/agents/[id].tsx",
+  "app/(app)/[workspace]/more/agents/[id]/edit.tsx",
+  "app/(app)/[workspace]/more/agents/[id]/integrations.tsx",
+  "app/(app)/[workspace]/more/autopilots/[id].tsx",
+  "app/(app)/[workspace]/more/autopilots/[id]/edit.tsx",
+  "app/(app)/[workspace]/more/mcp-servers/[id].tsx",
+  "app/(app)/[workspace]/more/squads/[id].tsx",
+  "app/(app)/[workspace]/more/members/[id].tsx",
+  "app/(app)/[workspace]/more/settings/workspace.tsx",
+];
+
 describe("remote-directory four-state wiring", () => {
+  describe("record pages", () => {
+    for (const file of RECORD_SURFACES) {
+      const src = code(file);
+
+      it(`${file} resolves its row through recordRead`, () => {
+        expect(src).toContain("recordRead");
+      });
+
+      it(`${file} gates the not-found branch on the read being settled`, () => {
+        // The collapse was `if (isLoading) …; if (!record) → "missing"`.
+        // Anything that claims an absence must be downstream of a settled read.
+        // Asserting the *shape* (`!read.isResolved`, or `read.isResolved ?`)
+        // rather than the bare token, so a file cannot satisfy this by
+        // importing the flag and never branching on it.
+        expect(src).toMatch(/!\s*read\.isResolved|read\.isResolved\s*\?/);
+      });
+
+      it(`${file} offers a retry out of the failure`, () => {
+        // Every one of these pages was a dead end before: the only way past a
+        // failed read was to kill the app.
+        expect(src).toContain("CatalogStatus");
+      });
+    }
+
+    // `channelState` reads `configured` straight off the listing, so a failed
+    // listing used to render 「尚未配置」 for a channel that may well be
+    // connected. Each card carries its own state instead of the page blanking.
+    it("gives each agent channel card its own read state", () => {
+      const src = code("app/(app)/[workspace]/more/agents/[id]/integrations.tsx");
+      expect(src).toMatch(/channelReads/);
+      expect(src).toContain("loadState");
+      expect(src).toMatch(/loadState === "error"/);
+    });
+  });
+
   describe("pickers", () => {
     for (const file of PICKER_SURFACES) {
       const src = code(file);

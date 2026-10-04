@@ -11,7 +11,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { catalogRead, retryCatalogs } from "./catalog-read";
+import { catalogRead, recordRead, retryCatalogs } from "./catalog-read";
 
 /** A `UseQueryResult` stand-in carrying only the fields the adapter reads. */
 function query<T>(
@@ -75,5 +75,64 @@ describe("retryCatalogs", () => {
     expect(a.retry).toHaveBeenCalledTimes(1);
     expect(b.retry).toHaveBeenCalledTimes(1);
     expect(c.retry).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("recordRead", () => {
+  it("keeps a resolved row and calls it ready", () => {
+    const read = recordRead({ id: "a" }, [
+      query({ data: [{ id: "a" }], isPending: false, isError: false }),
+    ]);
+    expect(read.record).toEqual({ id: "a" });
+    expect(read.state).toBe("ready");
+    expect(read.isResolved).toBe(true);
+  });
+
+  it("reports a failed source as error, so the page never says 'not found'", () => {
+    // The MYS-1908 defect in one assertion: `isLoading` is false after a
+    // failure, so the old `if (!record)` branch called an unreachable record a
+    // deleted one.
+    const read = recordRead(undefined, [
+      query({ data: undefined, isPending: false, isError: true }),
+    ]);
+    expect(read.record).toBeNull();
+    expect(read.state).toBe("error");
+    expect(read.isResolved).toBe(false);
+  });
+
+  it("reports an in-flight source as loading", () => {
+    const read = recordRead(undefined, [
+      query({ data: undefined, isPending: true, isError: false }),
+    ]);
+    expect(read.state).toBe("loading");
+    expect(read.isResolved).toBe(false);
+  });
+
+  it("calls a settled miss empty", () => {
+    const read = recordRead(undefined, [
+      query({ data: [], isPending: false, isError: false }),
+    ]);
+    expect(read.state).toBe("empty");
+    expect(read.isResolved).toBe(true);
+  });
+
+  it("normalizes an undefined row to null", () => {
+    const read = recordRead<string>(undefined, [
+      query({ data: [], isPending: false, isError: false }),
+    ]);
+    expect(read.record).toBeNull();
+  });
+
+  it("re-runs every source from the one retry, so a tap recovers the page", () => {
+    // `labels/[id]` resolves its row out of two catalogs behind one retry.
+    const a = vi.fn();
+    const b = vi.fn();
+    const read = recordRead(undefined, [
+      query({ data: undefined, isError: true, refetch: a }),
+      query({ data: undefined, isError: true, refetch: b }),
+    ]);
+    read.retry();
+    expect(a).toHaveBeenCalledTimes(1);
+    expect(b).toHaveBeenCalledTimes(1);
   });
 });

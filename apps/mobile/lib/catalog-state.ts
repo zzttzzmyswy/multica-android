@@ -73,6 +73,39 @@ export function isCatalogResolved(state: CatalogState): boolean {
   return state === "ready" || state === "empty";
 }
 
+/** The four states a *single record* read can be in, on a page that resolves
+ *  one row (a detail or edit route) rather than painting a list.
+ *
+ *  Same vocabulary and the same defect as `resolveCatalogState`, one level up.
+ *  A record page wrote `if (q.isLoading) …; if (!record) → "does not exist"`,
+ *  and `isLoading` only covers the *first* attempt: once a request fails,
+ *  `isLoading` is false and `record` is undefined, so `!record` rendered
+ *  "not found" over a record that was merely unreachable. The sentences this
+ *  produced were all assertions of fact — 「还没有智能体」, 「还没有小队」, and
+ *  worst of all 「该工作区已不可用。」, which also pushed the user out to the
+ *  workspace switcher. A 30s timeout (api.ts) times two (query-client retry)
+ *  was enough to trigger every one of them.
+ *
+ *  `sources` is every read the record is resolved out of, because a page may
+ *  look a row up in more than one catalog. The fold is deliberately
+ *  pessimistic in the direction that matters: absent-from-one read is not
+ *  evidence of absent overall, so *any* source still loading or failed keeps
+ *  the page off the "missing" branch. Claiming a record does not exist is
+ *  allowed only once every source settled and none of them had it.
+ *
+ *  `empty` is reused as "settled, and the record is genuinely not there" — the
+ *  same meaning it has for a directory, so `CatalogStatus` can paint this
+ *  state too and the not-found copy stays the caller's `emptyMessage`. */
+export function resolveRecordState<T>(
+  record: T | null | undefined,
+  sources: readonly { isPending: boolean; isError: boolean }[],
+): CatalogState {
+  if (record != null) return "ready";
+  if (sources.some((source) => source.isError)) return "error";
+  if (sources.some((source) => source.isPending)) return "loading";
+  return "empty";
+}
+
 /** Why a picker may not yet state an absence, over ALL the directories it
  *  reads: `"error"` if any of them failed, `"loading"` if any of the rest are
  *  still arriving, `null` once every one settled — the only case where

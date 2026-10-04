@@ -24,6 +24,7 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import {
   isCatalogResolved,
   resolveCatalogState,
+  resolveRecordState,
   type CatalogState,
 } from "@/lib/catalog-state";
 
@@ -60,4 +61,48 @@ export function catalogRead<T>(query: UseQueryResult<T[]>): CatalogRead<T> {
  *  failure wants the picker usable, not one of its three directories. */
 export function retryCatalogs(...reads: { retry: () => void }[]): void {
   for (const read of reads) read.retry();
+}
+
+/** A *record* read with its load state intact — the page-level twin of
+ *  `CatalogRead`, for detail and edit routes that resolve one row out of a
+ *  directory instead of painting a list.
+ *
+ *  Those pages collapsed the same three situations one level up: `if
+ *  (isLoading) …; if (!record) → "does not exist"`. `isLoading` is only ever
+ *  true for the *first* attempt, so a failed read left `record` undefined with
+ *  `isLoading` false and the page asserted the record was gone (MYS-1908).
+ *
+ *  `record` is the row the caller looked up, but it is only meaningful in the
+ *  `ready` state — a page must branch on `state` (or `isResolved`) before
+ *  saying the record does not exist. `recordRead` exists so those pages keep
+ *  the same read-and-state shape the pickers already use, rather than each
+ *  re-deriving it. */
+export interface RecordRead<T> {
+  /** The row the caller resolved, or `null`. Only trustworthy when `ready`. */
+  record: T | null;
+  state: CatalogState;
+  /** Every source settled — so `record === null` means "genuinely gone",
+   *  not "we could not find out". Gate the not-found branch on this. */
+  isResolved: boolean;
+  /** Re-runs every source. Wire this to the retry affordance in `error`. */
+  retry: () => void;
+}
+
+export function recordRead<T>(
+  record: T | null | undefined,
+  sources: UseQueryResult<unknown>[],
+): RecordRead<T> {
+  const state = resolveRecordState(record, sources);
+
+  return {
+    record: record ?? null,
+    state,
+    isResolved: isCatalogResolved(state),
+    // A record page has exactly one retry affordance and the user wants the
+    // page usable, not one particular source re-fetched — same reasoning as
+    // `retryCatalogs`.
+    retry: () => {
+      for (const source of sources) void source.refetch();
+    },
+  };
 }
