@@ -95,6 +95,9 @@ const RECORD_SURFACES = [
   "app/(app)/[workspace]/more/squads/[id].tsx",
   "app/(app)/[workspace]/more/members/[id].tsx",
   "app/(app)/[workspace]/more/settings/workspace.tsx",
+  "app/(app)/[workspace]/more/agents/[id]/custom-args.tsx",
+  "app/(app)/[workspace]/more/agents/[id]/env.tsx",
+  "app/(app)/[workspace]/project/[id]/edit.tsx",
 ];
 
 describe("remote-directory four-state wiring", () => {
@@ -197,6 +200,26 @@ describe("remote-directory four-state wiring", () => {
     const slot = code("components/catalog/catalog-status.tsx");
     expect(slot).toContain("resolveCatalogEmpty");
     expect(slot).toContain("verdict.kind");
+  });
+
+  it("never folds a failed read into a record's absence claim", () => {
+    // MYS-1910, surface D. These two pages resolve their row out of a list and
+    // branched `if (error || !x) → "does not exist"`, which states a fact about
+    // the record ("被移除") from an attempt that merely did not land. The
+    // failure needs its own branch, checked before the absence claim.
+    for (const file of [
+      "app/(app)/[workspace]/more/runtimes/[id].tsx",
+      "app/(app)/[workspace]/more/runtimes/machine/[machineId].tsx",
+    ]) {
+      const src = code(file);
+      // The collapsed form is gone...
+      expect(src).not.toMatch(/if\s*\(\s*error\s*\|\|\s*!/);
+      // ...and the failure is named as a failure, before the not-found claim.
+      const errorAt = src.indexOf("if (error)");
+      const notFoundAt = src.search(/if\s*\(\s*!\s*(runtime|machine)\s*\)/);
+      expect(errorAt).toBeGreaterThan(-1);
+      expect(notFoundAt).toBeGreaterThan(errorAt);
+    }
   });
 
   it("has no picker left claiming 'no matches' outside the shared slot", () => {

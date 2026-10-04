@@ -172,7 +172,28 @@ export default function MachineDetailPage() {
     );
   }
 
-  if (error || !machine) {
+  // Two different facts, two different sentences (MYS-1910): a read that failed
+  // is not a machine that was removed. The old `error || !machine` reported a
+  // timeout as 「Machine not found」, asserting the machine was gone when the
+  // only thing known was that this attempt did not land.
+  if (error) {
+    return (
+      <>
+        <Stack.Screen options={{ title: t("screen.runtimes") }} />
+        <View className="flex-1 items-center justify-center bg-background px-6 gap-3">
+          <Ionicons name="cloud-offline-outline" size={32} color={theme.mutedForeground} />
+          <Text className="text-sm text-destructive text-center">
+            {t("catalog.loadError")}
+          </Text>
+          <Button variant="outline" onPress={() => refetch()}>
+            <Text>{t("workspace.retry")}</Text>
+          </Button>
+        </View>
+      </>
+    );
+  }
+
+  if (!machine) {
     return (
       <>
         <Stack.Screen options={{ title: t("screen.runtimes") }} />

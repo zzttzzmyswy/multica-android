@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   argsToEntries,
+  canSaveCustomArgs,
   customArgsDirty,
   entriesToArgs,
   formatArgForPreview,
@@ -74,6 +75,36 @@ describe("customArgsDirty", () => {
 
   it("normalised values participate (trimmed before compare by caller)", () => {
     expect(customArgsDirty(["--a"], ["--a"])).toBe(false);
+  });
+});
+
+describe("canSaveCustomArgs", () => {
+  // The write path this guards (MYS-1910): `PUT /api/agents/{id}` carries
+  // `custom_args` as a WHOLE-COLUMN replace (`server/pkg/db/queries/agent.sql:140`
+  // is `custom_args = COALESCE(sqlarg, custom_args)`), so saving a list that was
+  // seeded from a failed read does not "add an argument" — it deletes every
+  // argument the server still had. The page showed 「还没有参数」 for an
+  // unreachable read, so the user's natural next move (re-add one) was what
+  // triggered the loss. Saving is allowed only once the read settled.
+
+  it("refuses to save while the record read has not settled", () => {
+    // The exact data-loss shape: entries look dirty because they were seeded
+    // from nothing, but the truth is still in flight.
+    expect(canSaveCustomArgs({ dirty: true, readSettled: false })).toBe(false);
+  });
+
+  it("refuses to save on a failed read even when the rows look dirty", () => {
+    // A failed read is the dangerous one — it is what painted the empty state.
+    expect(canSaveCustomArgs({ dirty: true, readSettled: false })).toBe(false);
+  });
+
+  it("allows saving once the read settled and there is something to save", () => {
+    expect(canSaveCustomArgs({ dirty: true, readSettled: true })).toBe(true);
+  });
+
+  it("stays disabled with nothing to save, settled or not", () => {
+    expect(canSaveCustomArgs({ dirty: false, readSettled: true })).toBe(false);
+    expect(canSaveCustomArgs({ dirty: false, readSettled: false })).toBe(false);
   });
 });
 
