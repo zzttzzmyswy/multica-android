@@ -1819,6 +1819,7 @@
   "properties.archiveMessage": "Archive \"{{name}}\"? Existing values are kept, but new values can no longer be set.",
   "properties.archiveTitle": "Archive property",
   "properties.archivedBadge": "Archived",
+  "properties.catalogLoadError": "Could not load custom properties",
   "properties.createdFailed": "Failed to create property",
   "properties.editProperty": "Edit property",
   "properties.emptyArchivedTitle": "No archived properties",

@@ -23,7 +23,6 @@
 import { useLocalSearchParams, useNavigation } from "expo-router";
 import { useLayoutEffect } from "react";
 import { Pressable, View } from "react-native";
-import { useQuery } from "@tanstack/react-query";
 import { Text } from "@/components/ui/text";
 import {
   FilterActorPickerBody,
@@ -37,7 +36,8 @@ import {
   type IssueFilterScope,
 } from "@/data/stores/issue-filter-store-registry";
 import { PROPERTY_FILTER_PREFIX } from "@/data/stores/issue-filter-slice";
-import { propertyActiveOptions } from "@/data/queries/properties";
+import { useActivePropertyCatalog } from "@/data/queries/properties";
+import { PropertyCatalogStatus } from "@/components/property/property-catalog-status";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import type { IssueProperty } from "@multica/core/types";
 import type { ActorFilterValue } from "@/data/stores/issue-filter-slice";
@@ -73,9 +73,13 @@ export default function IssuesFilterPickerRoute() {
       : "assignee";
 
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
-  const { data: properties = [] } = useQuery(propertyActiveOptions(wsId));
+  // Four-state read (MYS-1892): resolving `propertyDef` out of a `= []`
+  // default made an in-flight or failed catalog look like a definition that
+  // no longer exists, so this sheet answered 「无匹配结果」 for a property that
+  // was simply not loaded yet.
+  const catalog = useActivePropertyCatalog(wsId);
   const propertyDef = propertyId
-    ? properties.find((p) => p.id === propertyId)
+    ? catalog.definitions.find((p) => p.id === propertyId)
     : undefined;
 
   const titleKey =
@@ -130,6 +134,10 @@ export default function IssuesFilterPickerRoute() {
   // property:<id> — the definition must still exist in the active catalog
   // (it can be archived while a stale filter lingers); skip the body when
   // gone so the sheet doesn't render against a ghost.
+  //
+  // "Gone" is only knowable once the catalog SETTLED (MYS-1892): while it is
+  // loading or failed, the honest answer is that we don't know yet — an
+  // unanswered 「无匹配结果」 for a property that exists reads as data loss.
   return (
     <PickerChrome title={propertyDef?.name ?? propertyId ?? ""} onDone={close} t={t}>
       {propertyDef ? (
@@ -137,12 +145,21 @@ export default function IssuesFilterPickerRoute() {
           property={propertyDef}
           scope={resolvedScope}
         />
-      ) : (
+      ) : catalog.isResolved ? (
+        // Settled, and the definition is not in it: archived or deleted since
+        // the filter was saved, and the surface controller strips it before
+        // querying. Saying "no matches" here is a fact, not a guess.
         <View className="px-3 py-8 items-center">
           <Text className="text-sm text-muted-foreground">
             {t("picker.noMatches")}
           </Text>
         </View>
+      ) : (
+        <PropertyCatalogStatus
+          state={catalog.state}
+          onRetry={catalog.retry}
+          layout="centered"
+        />
       )}
     </PickerChrome>
   );

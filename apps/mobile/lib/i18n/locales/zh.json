@@ -1819,6 +1819,7 @@
   "properties.archiveMessage": "归档\"{{name}}\"？已有值会保留，但不能再设置新值。",
   "properties.archiveTitle": "归档属性",
   "properties.archivedBadge": "已归档",
+  "properties.catalogLoadError": "自定义属性加载失败",
   "properties.createdFailed": "属性创建失败",
   "properties.editProperty": "编辑属性",
   "properties.emptyArchivedTitle": "没有已归档属性",

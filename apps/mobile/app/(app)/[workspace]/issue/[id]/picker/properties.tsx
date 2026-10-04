@@ -5,13 +5,14 @@
  * the value editor formSheet (issue/[id]/picker/property) on top.
  */
 import { useMemo } from "react";
-import { ActivityIndicator, FlatList, Pressable, View } from "react-native";
+import { FlatList, Pressable, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
 import { issueDetailOptions } from "@/data/queries/issues";
-import { propertyCatalogOptions } from "@/data/queries/properties";
+import { usePropertyCatalog } from "@/data/queries/properties";
+import { PropertyCatalogStatus } from "@/components/property/property-catalog-status";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import {
   propertyOptions,
@@ -31,19 +32,27 @@ export default function IssuePropertyAddRoute() {
   const muted = THEME[colorScheme].mutedForeground;
 
   const { data: issue } = useQuery(issueDetailOptions(wsId, id));
-  const { data: catalog, isLoading } = useQuery(propertyCatalogOptions(wsId));
+  // Four-state read (MYS-1892): `isLoading` alone could not tell a failed
+  // catalog from a settled one, so a timeout painted 「没有更多可添加的属性」 —
+  // a claim that nothing is left to add, made without ever having read the
+  // list. Each state now renders its own truth, and a failure offers a retry.
+  const catalog = usePropertyCatalog(wsId);
 
   const available = useMemo(() => {
     const set = issue?.properties ?? {};
-    return (catalog ?? []).filter(
+    return catalog.definitions.filter(
       (p) => !p.archived && set[p.id] === undefined,
     );
-  }, [catalog, issue?.properties]);
+  }, [catalog.definitions, issue?.properties]);
 
-  if (isLoading) {
+  if (!catalog.isResolved) {
     return (
-      <View className="flex-1 items-center justify-center bg-background">
-        <ActivityIndicator />
+      <View className="flex-1 justify-center bg-background">
+        <PropertyCatalogStatus
+          state={catalog.state}
+          onRetry={catalog.retry}
+          layout="centered"
+        />
       </View>
     );
   }
