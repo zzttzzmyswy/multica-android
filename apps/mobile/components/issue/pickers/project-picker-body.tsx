@@ -7,7 +7,7 @@
  * FlatList — no chrome.
  */
 import { useMemo } from "react";
-import { FlatList, Pressable, View } from "react-native";
+import { FlatList, Pressable } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useColorScheme } from "nativewind";
@@ -15,8 +15,10 @@ import type { Project } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ProjectIcon } from "@/components/ui/project-icon";
 import { MOBILE_PLACEHOLDER_COLOR } from "@/components/ui/input-tokens";
+import { CatalogEmptySlot } from "@/components/catalog/catalog-status";
 import { projectListOptions } from "@/data/queries/projects";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { catalogRead } from "@/lib/catalog-read";
 import { useScrollToTopOnChange } from "@/lib/use-scroll-to-top-on-change";
 import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
@@ -32,7 +34,12 @@ interface Props {
 export function ProjectPickerBody({ value, query, onChange }: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
-  const { data: projects = [] } = useQuery(projectListOptions(wsId));
+  // Four-state read (MYS-1907): the `= []` default made a failed or in-flight
+  // project list indistinguishable from a workspace with no projects, so the
+  // sheet answered 「此工作区暂无项目。请在网页端创建。」 and sent the user to the
+  // web UI to create a project they already had.
+  const catalog = catalogRead(useQuery(projectListOptions(wsId)));
+  const projects = catalog.items;
   const listRef = useScrollToTopOnChange(query);
   const { colorScheme } = useColorScheme();
   const checkColor =
@@ -106,13 +113,12 @@ export function ProjectPickerBody({ value, query, onChange }: Props) {
         </Pressable>
       )}
       ListEmptyComponent={
-        <View className="px-3 py-8 items-center">
-          <Text className="text-sm text-muted-foreground text-center">
-            {query
-              ? t("picker.noMatches")
-              : t("picker.noProjects")}
-          </Text>
-        </View>
+        <CatalogEmptySlot
+          states={[catalog.state]}
+          onRetry={catalog.retry}
+          emptyMessage={t("picker.noProjects")}
+          query={query}
+        />
       }
     />
   );

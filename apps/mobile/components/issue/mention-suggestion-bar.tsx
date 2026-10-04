@@ -35,6 +35,8 @@ import { issueStatusCategoryOfIssue } from "@/lib/issue-status-catalog";
 import { memberListOptions } from "@/data/queries/members";
 import { agentListOptions } from "@/data/queries/agents";
 import { squadListOptions } from "@/data/queries/squads";
+import { CatalogEmptySlot } from "@/components/catalog/catalog-status";
+import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
 import { useTranslation } from "@/lib/i18n/react";
 import { issueDetailOptions } from "@/data/queries/issues";
 import { myIssueListOptions } from "@/data/queries/my-issues";
@@ -84,18 +86,21 @@ export function MentionSuggestionBar({
   const isChat = mode === "chat";
 
   // Comment-mode data — disabled in chat mode to avoid wasted fetches.
-  const { data: members = [] } = useQuery({
-    ...memberListOptions(wsId),
-    enabled: !isChat && !!wsId,
-  });
-  const { data: agents = [] } = useQuery({
-    ...agentListOptions(wsId),
-    enabled: !isChat && !!wsId,
-  });
-  const { data: squads = [] } = useQuery({
-    ...squadListOptions(wsId),
-    enabled: !isChat && !!wsId,
-  });
+  // Four-state reads (MYS-1907): a failed or in-flight member / agent / squad
+  // read used to leave the bar with nothing but its 「无匹配项。」 row, which reads
+  // as "your search matched nothing" rather than "the directory never arrived".
+  const membersRead = catalogRead(
+    useQuery({ ...memberListOptions(wsId), enabled: !isChat && !!wsId }),
+  );
+  const agentsRead = catalogRead(
+    useQuery({ ...agentListOptions(wsId), enabled: !isChat && !!wsId }),
+  );
+  const squadsRead = catalogRead(
+    useQuery({ ...squadListOptions(wsId), enabled: !isChat && !!wsId }),
+  );
+  const members = membersRead.items;
+  const agents = agentsRead.items;
+  const squads = squadsRead.items;
 
   // Chat-mode data.
   const userId = useAuthStore((s) => s.user?.id ?? null);
@@ -264,12 +269,26 @@ export function MentionSuggestionBar({
             );
           }
           if (item.kind === "empty") {
-            return (
+            // Comment mode draws this row when the query matched nothing — but
+            // "matched nothing" is only a fact once the directories settled. A
+            // failed member read used to produce 「无匹配项。」 for a member who
+            // was right there (MYS-1907). Chat mode's rows come from the issue
+            // caches, not a directory, so it keeps the plain no-match line.
+            return isChat ? (
               <View className="px-3 py-3">
                 <Text className="text-xs text-muted-foreground">
                   {t("mention.noMatches")}
                 </Text>
               </View>
+            ) : (
+              <CatalogEmptySlot
+                states={[membersRead.state, agentsRead.state, squadsRead.state]}
+                onRetry={() =>
+                  retryCatalogs(membersRead, agentsRead, squadsRead)
+                }
+                emptyMessage={t("mention.noMatches")}
+                query={query}
+              />
             );
           }
           if (item.kind === "all") {

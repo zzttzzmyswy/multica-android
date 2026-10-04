@@ -37,12 +37,14 @@ import type {
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { StatusIcon } from "@/components/ui/status-icon";
+import { CatalogEmptySlot } from "@/components/catalog/catalog-status";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { memberListOptions } from "@/data/queries/members";
 import { agentListOptions } from "@/data/queries/agents";
 import { squadListOptions } from "@/data/queries/squads";
 import { api } from "@/data/api";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
 import {
   useMentionDraftStore,
   type MentionChipDraft,
@@ -78,9 +80,16 @@ export function MentionPickerBody({ query, mode = "comment" }: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const statusCatalog = useIssueStatuses(wsId);
   const { t } = useTranslation();
-  const { data: members = [] } = useQuery(memberListOptions(wsId));
-  const { data: agents = [] } = useQuery(agentListOptions(wsId));
-  const { data: squads = [] } = useQuery(squadListOptions(wsId));
+  // Four-state reads (MYS-1907): the member / agent / squad directories gate
+  // the empty slot. Issue search is a separate server query with its own
+  // in-flight handling, and an empty query legitimately means "no issue
+  // section", so it is not part of the absence claim.
+  const membersRead = catalogRead(useQuery(memberListOptions(wsId)));
+  const agentsRead = catalogRead(useQuery(agentListOptions(wsId)));
+  const squadsRead = catalogRead(useQuery(squadListOptions(wsId)));
+  const members = membersRead.items;
+  const agents = agentsRead.items;
+  const squads = squadsRead.items;
   const runnableAgentIds = useMemo(
     () =>
       new Set(
@@ -319,9 +328,12 @@ export function MentionPickerBody({ query, mode = "comment" }: Props) {
         );
       }}
       ListEmptyComponent={
-        <View className="px-3 py-8 items-center">
-          <Text className="text-sm text-muted-foreground">{t("picker.noMatches")}</Text>
-        </View>
+        <CatalogEmptySlot
+          states={[membersRead.state, agentsRead.state, squadsRead.state]}
+          onRetry={() => retryCatalogs(membersRead, agentsRead, squadsRead)}
+          emptyMessage={t("picker.noMembersAgents")}
+          query={query}
+        />
       }
     />
   );

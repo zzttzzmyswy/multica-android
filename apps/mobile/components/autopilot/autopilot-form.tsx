@@ -34,6 +34,7 @@ import { ProjectPickerSheet } from "@/components/autopilot/project-picker-sheet"
 import { agentListOptions } from "@/data/queries/agents";
 import { memberListOptions } from "@/data/queries/members";
 import { projectListOptions } from "@/data/queries/projects";
+import { catalogRead } from "@/lib/catalog-read";
 import { squadListOptions } from "@/data/queries/squads";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { keyboardBehavior } from "@/lib/keyboard";
@@ -101,7 +102,8 @@ export const AutopilotForm = forwardRef<AutopilotFormHandle, Props>(
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
   const { data: members = [] } = useQuery(memberListOptions(wsId));
   const { data: squads = [] } = useQuery(squadListOptions(wsId));
-  const { data: projects = [] } = useQuery(projectListOptions(wsId));
+  const projectsRead = catalogRead(useQuery(projectListOptions(wsId)));
+  const projects = projectsRead.items;
 
   const createIssueMode = executionMode === "create_issue";
 
@@ -319,6 +321,8 @@ export const AutopilotForm = forwardRef<AutopilotFormHandle, Props>(
             <ProjectPickerSheet
               visible={projectPickerOpen}
               projects={projects}
+              catalogState={projectsRead.state}
+              onRetry={projectsRead.retry}
               selectedProjectId={projectId}
               onPick={setProjectId}
               onClose={() => setProjectPickerOpen(false)}

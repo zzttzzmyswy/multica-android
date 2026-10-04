@@ -23,6 +23,8 @@ import type { Label } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { labelCatalogOptions, labelListOptions } from "@/data/queries/labels";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { catalogRead } from "@/lib/catalog-read";
+import { CatalogEmptySlot } from "@/components/catalog/catalog-status";
 import { useScrollToTopOnChange } from "@/lib/use-scroll-to-top-on-change";
 import { pickInlineColor } from "@/lib/inline-color";
 import { THEME } from "@/lib/theme";
@@ -60,10 +62,16 @@ export function LabelPickerBody({
   const { t } = useTranslation();
   // Issue-list and resource-scoped catalogs return the same Label[] shape but
   // carry different query keys — widen the union so useQuery accepts either.
-  const catalog = (catalogResourceType
+  const catalogOptions = (catalogResourceType
     ? labelCatalogOptions(wsId, catalogResourceType)
     : labelListOptions(wsId)) as UseQueryOptions<Label[]>;
-  const { data: labels = [] } = useQuery(catalog);
+  // Four-state read (MYS-1907): a failed or in-flight label catalog used to
+  // answer 「此工作区暂无标签。」 — a claim about the workspace made without having
+  // read it. The state now gates the empty slot, and the inline-create row
+  // stays available in every state (creating a label whose catalog has not
+  // arrived is still a legitimate action).
+  const catalog = catalogRead(useQuery(catalogOptions));
+  const labels = catalog.items;
   const listRef = useScrollToTopOnChange(query);
   const { colorScheme } = useColorScheme();
   const checkColor =
@@ -160,13 +168,12 @@ export function LabelPickerBody({
         )
       }
       ListEmptyComponent={
-        <View className="px-3 py-8 items-center">
-          <Text className="text-sm text-muted-foreground text-center">
-            {query
-              ? t("picker.noMatches")
-              : t("picker.noLabels")}
-          </Text>
-        </View>
+        <CatalogEmptySlot
+          states={[catalog.state]}
+          onRetry={catalog.retry}
+          emptyMessage={t("picker.noLabels")}
+          query={query}
+        />
       }
     />
   );
