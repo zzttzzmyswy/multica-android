@@ -14,8 +14,13 @@
  * Archived agents render dimmed with the archived availability; their
  * leftover snapshot tasks would still read as stale, so the activity
  * section hides them (a retired agent can't have "running" work).
+ *
+ * The row comes out of the workspace agent list, resolved through `recordRead`
+ * (MYS-1908). `isLoading` only covers the first attempt, so a failed list read
+ * used to fall into `!agent` and report 「还没有智能体」 for an agent that was
+ * merely unreachable — with no retry.
  */
-import { Alert, ActivityIndicator, FlatList, Pressable, RefreshControl, View } from "react-native";
+import { Alert, FlatList, Pressable, RefreshControl, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -28,7 +33,9 @@ import { AgentSkillsSection } from "@/components/agent/agent-skills-section";
 import { AgentAccessPicker } from "@/components/agent/agent-access-picker";
 import { AgentConcurrencyField } from "@/components/agent/agent-concurrency-field";
 import { AgentActivitySection } from "@/components/agent/agent-activity-section";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { ActorIssuesPanel } from "@/components/issue/actor-issues-panel";
+import { recordRead } from "@/lib/catalog-read";
 import { agentListAllOptions } from "@/data/queries/agents";
 import { issueKeys } from "@/data/queries/issue-keys";
 import { memberListOptions } from "@/data/queries/members";
@@ -93,6 +100,7 @@ export default function AgentDetailPage() {
   const updateAgent = useUpdateAgent(id ?? "");
 
   const agent = agents.data?.find((a) => a.id === id);
+  const read = recordRead(agent, [agents]);
   const archived = agent != null && isArchived(agent);
 
   // Permission gate for the editable properties. `canEditAgent` is core's
@@ -127,20 +135,23 @@ export default function AgentDetailPage() {
   const runtime = runtimes.data?.find((r) => r.id === agent?.runtime_id) ?? null;
   const runtimeBound = runtime != null;
 
-  if (agents.isLoading) {
+  if (!read.isResolved) {
     return (
-      <View className="flex-1 items-center justify-center bg-background">
-        <ActivityIndicator />
+      <View className="flex-1 justify-center bg-background">
+        <CatalogStatus state={read.state} onRetry={read.retry} layout="centered" />
       </View>
     );
   }
 
   if (!agent) {
     return (
-      <View className="flex-1 items-center justify-center px-6 bg-background">
-        <Text className="text-sm text-muted-foreground text-center">
-          {t("agents.emptyTitle")}
-        </Text>
+      <View className="flex-1 justify-center bg-background">
+        <CatalogStatus
+          state="empty"
+          onRetry={read.retry}
+          emptyMessage={t("agents.notFound")}
+          layout="centered"
+        />
       </View>
     );
   }

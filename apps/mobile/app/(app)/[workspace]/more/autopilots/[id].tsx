@@ -22,7 +22,6 @@
  */
 import { useCallback, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Pressable,
   RefreshControl,
@@ -36,6 +35,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import type { AutopilotCollaborator, AutopilotRun, AutopilotSubscriber, AutopilotTrigger } from "@multica/core/types";
 import { buildAutopilotWebhookUrl, maskAutopilotWebhookUrl } from "@multica/core/autopilots/webhook";
 import { Text } from "@/components/ui/text";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { IconButton } from "@/components/ui/icon-button";
@@ -48,6 +48,7 @@ import {
   TriggerPayloadSkeleton,
 } from "@/components/autopilot/trigger-payload-preview";
 import { ActionSheet } from "@/lib/action-sheet";
+import { recordRead } from "@/lib/catalog-read";
 import { Markdown } from "@/lib/markdown";
 import {
   autopilotDetailOptions,
@@ -152,6 +153,7 @@ export default function AutopilotDetailPage() {
   const [accessPickerOpen, setAccessPickerOpen] = useState(false);
 
   const autopilot = detail.data?.autopilot;
+  const read = recordRead(autopilot, [detail]);
   const triggers = detail.data?.triggers ?? [];
   const runList = runs.data ?? [];
   const { visible: visibleRuns, skipped: skippedRuns } = useMemo(
@@ -384,20 +386,23 @@ export default function AutopilotDetailPage() {
     [id, rotateToken, t],
   );
 
-  if (detail.isLoading) {
+  if (!read.isResolved) {
     return (
-      <View className="flex-1 items-center justify-center bg-background">
-        <ActivityIndicator />
+      <View className="flex-1 justify-center bg-background">
+        <CatalogStatus state={read.state} onRetry={read.retry} layout="centered" />
       </View>
     );
   }
 
   if (!autopilot) {
     return (
-      <View className="flex-1 items-center justify-center px-6 bg-background">
-        <Text className="text-sm text-muted-foreground text-center">
-          {t("autopilots.empty")}
-        </Text>
+      <View className="flex-1 justify-center bg-background">
+        <CatalogStatus
+          state="empty"
+          onRetry={read.retry}
+          emptyMessage={t("autopilots.notFound")}
+          layout="centered"
+        />
       </View>
     );
   }

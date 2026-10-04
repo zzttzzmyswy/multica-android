@@ -3499,5 +3499,10 @@
   "runtimes.mikaSetup.modelDefault": "运行时默认",
   "runtimes.mikaSetup.pickRuntime": "选择运行时",
   "runtimes.mikaSetup.noRuntimes": "当前还没有你可用的在线运行时。请先连接一台机器。",
-  "runtimes.mikaSetup.cancel": "取消"
+  "runtimes.mikaSetup.cancel": "取消",
+  "agents.notFound": "该智能体不存在或已被删除",
+  "autopilots.notFound": "该自动化不存在或已被删除",
+  "squads.notFound": "该小队不存在或已被删除",
+  "members.notFound": "该成员不存在或已离开工作区",
+  "mcp.notFound": "该 MCP 服务器不存在或已被删除"
 }

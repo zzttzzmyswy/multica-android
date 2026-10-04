@@ -3499,5 +3499,10 @@
   "runtimes.mikaSetup.modelDefault": "Runtime default",
   "runtimes.mikaSetup.pickRuntime": "Choose a runtime",
   "runtimes.mikaSetup.noRuntimes": "No online runtime is available to you yet. Connect a machine first.",
-  "runtimes.mikaSetup.cancel": "Cancel"
+  "runtimes.mikaSetup.cancel": "Cancel",
+  "agents.notFound": "This agent doesn't exist or was deleted",
+  "autopilots.notFound": "This autopilot doesn't exist or was deleted",
+  "squads.notFound": "This squad doesn't exist or was deleted",
+  "members.notFound": "This member doesn't exist or has left the workspace",
+  "mcp.notFound": "This MCP server doesn't exist or was deleted"
 }

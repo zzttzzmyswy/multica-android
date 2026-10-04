@@ -9,14 +9,18 @@
  * A failed save keeps the form mounted with the user's input intact and
  * alerts; success returns to the detail page (which re-fetches via the
  * mutation's settle invalidate).
+ *
+ * The record read is `recordRead` (MYS-1908): a failed detail read used to
+ * fall through to 「还没有自动化」 with no retry.
  */
 import { useCallback, useMemo, useRef } from "react";
-import { ActivityIndicator, Alert, View } from "react-native";
+import { Alert, View } from "react-native";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import type { AutopilotSubscriber } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
 import {
   AutopilotForm,
   type AutopilotFormHandle,
@@ -26,6 +30,7 @@ import { autopilotDetailOptions } from "@/data/queries/autopilots";
 import { useUpdateAutopilot } from "@/data/mutations/autopilots";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
+import { recordRead } from "@/lib/catalog-read";
 import {
   buildUpdateAutopilotRequest,
   type AutopilotFormValues,
@@ -41,6 +46,7 @@ export default function EditAutopilotPage() {
   const isSubmitting = updateAutopilot.isPending;
 
   const autopilot = detail.data?.autopilot;
+  const read = recordRead(autopilot, [detail]);
 
   const initial = useMemo<AutopilotFormInitial>(() => {
     const a = detail.data?.autopilot;
@@ -96,20 +102,23 @@ export default function EditAutopilotPage() {
     [isSubmitting, t],
   );
 
-  if (detail.isLoading) {
+  if (!read.isResolved) {
     return (
-      <View className="flex-1 items-center justify-center bg-background">
-        <ActivityIndicator />
+      <View className="flex-1 justify-center bg-background">
+        <CatalogStatus state={read.state} onRetry={read.retry} layout="centered" />
       </View>
     );
   }
 
   if (!autopilot) {
     return (
-      <View className="flex-1 items-center justify-center px-6 bg-background">
-        <Text className="text-sm text-muted-foreground text-center">
-          {t("autopilots.empty")}
-        </Text>
+      <View className="flex-1 justify-center bg-background">
+        <CatalogStatus
+          state="empty"
+          onRetry={read.retry}
+          emptyMessage={t("autopilots.notFound")}
+          layout="centered"
+        />
       </View>
     );
   }

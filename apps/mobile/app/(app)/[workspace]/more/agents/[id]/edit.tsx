@@ -5,15 +5,20 @@
  * and pops back to the detail screen (whose list cache the mutation
  * invalidates). Header title comes from the workspace Stack registration
  * (more/agents/[id]/edit).
+ *
+ * `recordRead` gates the not-found branch (MYS-1908): the old
+ * `if (isLoading) …; if (!agent)` said 「还没有智能体」 for a list read that had
+ * merely failed, and offered no way to retry.
  */
-import { ActivityIndicator, KeyboardAvoidingView, ScrollView, View } from "react-native";
+import { KeyboardAvoidingView, ScrollView, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
-import { Text } from "@/components/ui/text";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { ManualAgentForm } from "@/components/agent/manual-agent-form";
 import { agentListAllOptions } from "@/data/queries/agents";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
+import { recordRead } from "@/lib/catalog-read";
 import { keyboardBehavior } from "@/lib/keyboard";
 
 export default function EditAgentPage() {
@@ -22,6 +27,7 @@ export default function EditAgentPage() {
   const { t } = useTranslation();
   const agents = useQuery(agentListAllOptions(wsId));
   const agent = agents.data?.find((a) => a.id === id);
+  const read = recordRead(agent, [agents]);
 
   if (agent) {
     return (
@@ -40,19 +46,14 @@ export default function EditAgentPage() {
     );
   }
 
-  if (agents.isLoading) {
-    return (
-      <View className="flex-1 items-center justify-center bg-background">
-        <ActivityIndicator />
-      </View>
-    );
-  }
-
   return (
-    <View className="flex-1 items-center justify-center px-6 bg-background">
-      <Text className="text-sm text-muted-foreground text-center">
-        {t("agents.emptyTitle")}
-      </Text>
+    <View className="flex-1 justify-center bg-background">
+      <CatalogStatus
+        state={read.isResolved ? "empty" : read.state}
+        onRetry={read.retry}
+        emptyMessage={t("agents.notFound")}
+        layout="centered"
+      />
     </View>
   );
 }

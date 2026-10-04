@@ -9,14 +9,17 @@
  *
  * This began as `property-catalog-state.test.ts` (MYS-1892, the custom-property
  * catalog) and was generalised in MYS-1907, when the same collapse turned up in
- * the member / agent / squad / project / label pickers. The semantics did not
- * change; the names lost their `property` prefix.
+ * the member / agent / squad / project / label pickers. MYS-1908 added the
+ * single-record case (`resolveRecordState`) for detail and edit routes, which
+ * had the same collapse one level up: `if (isLoading) …; if (!record) "not
+ * found"` reports an unreachable record as a deleted one.
  */
 import { describe, expect, it } from "vitest";
 import {
   isCatalogResolved,
   resolveCatalogEmpty,
   resolveCatalogState,
+  resolveRecordState,
   unsettledCatalogStatus,
 } from "./catalog-state";
 
@@ -170,5 +173,60 @@ describe("resolveCatalogEmpty", () => {
     // "This workspace has no labels" is the wrong sentence when the user is
     // looking at a search that matched nothing.
     expect(resolveCatalogEmpty(["empty"], true)).toEqual({ kind: "no-match" });
+  });
+});
+
+describe("resolveRecordState", () => {
+  const settled = [{ isPending: false, isError: false }];
+  const pending = [{ isPending: true, isError: false }];
+  const failed = [{ isPending: false, isError: true }];
+
+  it("calls a found record ready", () => {
+    expect(resolveRecordState({ id: "a" }, settled)).toBe("ready");
+    // A record found in a directory that also happens to be refetching is
+    // still a record — the data is right there to render.
+    expect(resolveRecordState({ id: "a" }, failed)).toBe("ready");
+  });
+
+  it("calls a settled miss empty — the only state that may say 'not found'", () => {
+    expect(resolveRecordState(undefined, settled)).toBe("empty");
+    expect(resolveRecordState(null, settled)).toBe("empty");
+  });
+
+  it("calls a failed read error, not empty", () => {
+    // The regression: `isLoading` is false once a request fails, so the old
+    // `if (!record)` branch rendered "does not exist" over a record that was
+    // merely unreachable.
+    expect(resolveRecordState(undefined, failed)).toBe("error");
+  });
+
+  it("calls a first-attempt read loading, not empty", () => {
+    expect(resolveRecordState(undefined, pending)).toBe("loading");
+  });
+
+  it("names the failure, not the spinner, when both are present", () => {
+    expect(resolveRecordState(undefined, [...pending, ...failed])).toBe("error");
+  });
+
+  it("keeps a page off 'not found' while ANY source is unsettled", () => {
+    // `labels/[id]` resolves its row out of two catalogs. Absent from one is
+    // not evidence of absent overall, so one settled-and-empty source beside a
+    // still-loading one must not license the claim.
+    expect(
+      resolveRecordState(undefined, [
+        { isPending: false, isError: false },
+        { isPending: true, isError: false },
+      ]),
+    ).toBe("loading");
+    expect(
+      resolveRecordState(undefined, [
+        { isPending: false, isError: false },
+        { isPending: false, isError: true },
+      ]),
+    ).toBe("error");
+  });
+
+  it("calls every source settled and none holding it empty", () => {
+    expect(resolveRecordState(undefined, settled.concat(settled))).toBe("empty");
   });
 });

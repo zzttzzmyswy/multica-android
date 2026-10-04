@@ -21,7 +21,6 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Modal,
   Pressable,
@@ -32,6 +31,7 @@ import { router } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { AutosizeTextArea } from "@/components/ui/autosize-textarea";
@@ -48,6 +48,7 @@ import {
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
 import { formatDateTime } from "@/lib/autopilot-format";
+import { recordRead } from "@/lib/catalog-read";
 import {
   ISSUE_PREFIX_MAX_LENGTH,
   issuePrefixInvalid,
@@ -71,9 +72,8 @@ export default function WorkspaceSettingsScreen() {
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
 
-  const { data: workspaces, isLoading: listLoading } = useQuery(
-    workspaceListOptions(),
-  );
+  const workspacesQ = useQuery(workspaceListOptions());
+  const workspaces = workspacesQ.data;
   const workspace = useMemo(
     () => workspaces?.find((w) => w.id === wsId),
     [workspaces, wsId],
@@ -92,6 +92,12 @@ export default function WorkspaceSettingsScreen() {
   const ownerCount = members?.filter((m) => m.role === "owner").length ?? 0;
   const isSoleOwner = isOwner && ownerCount <= 1;
   const membersReady = membersFetched && !membersLoading;
+
+  // The workspace row comes out of the workspace list, resolved through
+  // `recordRead` (MYS-1908). Worst case of the family: the old `!workspace`
+  // branch said 「该工作区已不可用。」 and pushed the user to the workspace
+  // switcher, so one timed-out list read ejected them from their own settings.
+  const read = recordRead(workspace ?? null, [workspacesQ]);
 
   const [name, setName] = useState(workspace?.name ?? "");
   const [description, setDescription] = useState(
@@ -289,22 +295,25 @@ export default function WorkspaceSettingsScreen() {
     }
   };
 
-  if (listLoading) {
+  if (!read.isResolved) {
     return (
-      <View className="flex-1 items-center justify-center bg-background">
-        <ActivityIndicator />
+      <View className="flex-1 justify-center bg-background">
+        <CatalogStatus state={read.state} onRetry={read.retry} layout="centered" />
       </View>
     );
   }
 
   if (!workspace) {
     return (
-      <View className="flex-1 items-center justify-center gap-3 bg-background px-6">
-        <Text className="text-sm text-muted-foreground text-center">
-          {t("workspaceSettings.notFound")}
-        </Text>
+      <View className="flex-1 justify-center gap-3 bg-background px-6">
+        <CatalogStatus
+          state="empty"
+          onRetry={read.retry}
+          emptyMessage={t("workspaceSettings.notFound")}
+          layout="centered"
+        />
         <Button variant="outline" onPress={() => router.replace("/select-workspace")}>
-          <Text>{t("workspace.retry")}</Text>
+          <Text>{t("settings.switchWorkspace")}</Text>
         </Button>
       </View>
     );
