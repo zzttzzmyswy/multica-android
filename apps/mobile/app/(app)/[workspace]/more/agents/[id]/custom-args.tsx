@@ -19,7 +19,7 @@
  * feedback is the row list resettling clean, failures surface via Alert.
  */
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, View } from "react-native";
+import { Alert, Pressable, ScrollView, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -30,8 +30,10 @@ import { agentListAllOptions } from "@/data/queries/agents";
 import { runtimeListOptions } from "@/data/queries/runtimes";
 import { useUpdateAgent } from "@/data/mutations/agents";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import { argsToEntries, entriesToArgs, customArgsDirty, launchPreview, freshArgEntryId } from "@/lib/custom-args";
+import { argsToEntries, canSaveCustomArgs, entriesToArgs, customArgsDirty, launchPreview, freshArgEntryId } from "@/lib/custom-args";
 import type { ArgEntry } from "@/lib/custom-args";
+import { recordRead } from "@/lib/catalog-read";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
@@ -45,8 +47,9 @@ export default function AgentCustomArgsPage() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   const agents = useQuery(agentListAllOptions(wsId));
-  const agent = agents.data?.find((a) => a.id === id);
   const runtimes = useQuery(runtimeListOptions(wsId));
+  const agent = agents.data?.find((a) => a.id === id);
+  const read = recordRead(agent, [agents]);
   const runtime = runtimes.data?.find((r) => r.id === agent?.runtime_id) ?? null;
   const saveAgent = useUpdateAgent(id);
 
@@ -66,6 +69,18 @@ export default function AgentCustomArgsPage() {
 
   const currentArgs = entriesToArgs(entries);
   const dirty = customArgsDirty(currentArgs, originalArgs);
+
+  // `PUT /api/agents/{id}` REPLACES `custom_args` wholesale, so a save is only
+  // safe once the list on screen came out of a settled read of the real record.
+  // Without this, a failed read rendered 「还没有参数」, the user re-added one
+  // argument, and Save wrote that one-element list over every argument the
+  // server still held — the data-loss path in MYS-1910.
+  const canSave = canSaveCustomArgs({
+    dirty,
+    readSettled: read.isResolved,
+    saving: saveAgent.isPending,
+    editorOpen: editor !== null,
+  });
 
   const startAdding = () => {
     setEditor({ id: NEW_ENTRY_ID, value: "" });
@@ -101,7 +116,10 @@ export default function AgentCustomArgsPage() {
   };
 
   const handleSave = useCallback(async () => {
-    if (!agent || !id) return;
+    // Defence in depth: the button is already disabled, but the mutation
+    // replaces the whole column, so a save must never be reachable from a
+    // list that was not seeded from a settled read.
+    if (!agent || !id || !read.isResolved) return;
     try {
       const resp = await saveAgent.mutateAsync({ custom_args: currentArgs });
       // Reseed the local rows + original from the server-returned agent so
@@ -117,9 +135,34 @@ export default function AgentCustomArgsPage() {
           : t("agents.customArgs.saveFailedToast"),
       );
     }
-  }, [agent, id, saveAgent, currentArgs, t]);
+  }, [agent, id, saveAgent, currentArgs, t, read.isResolved]);
 
-  const loading = agents.isLoading || runtimes.isLoading;
+  // A read that has not settled must never paint the editor. The old code
+  // branched on `entries.length === 0`, and `entries` stays `[]` until a row is
+  // seeded — so a failed read rendered 「还没有参数」 ("No arguments yet") over an
+  // agent that had some, and offered an editor whose Save replaces the whole
+  // list. Paint the state instead, and keep the rows unreachable until the
+  // read settles (MYS-1910).
+  if (!read.isResolved) {
+    return (
+      <View className="flex-1 justify-center bg-background">
+        <CatalogStatus state={read.state} onRetry={read.retry} layout="centered" />
+      </View>
+    );
+  }
+
+  if (!agent) {
+    return (
+      <View className="flex-1 justify-center bg-background">
+        <CatalogStatus
+          state="empty"
+          onRetry={read.retry}
+          emptyMessage={t("agents.notFound")}
+          layout="centered"
+        />
+      </View>
+    );
+  }
 
   return (
     <ScrollView className="flex-1 bg-background" contentContainerClassName="pb-10">
@@ -165,11 +208,7 @@ export default function AgentCustomArgsPage() {
         ) : null}
       </View>
 
-      {loading ? (
-        <View className="py-8 items-center">
-          <ActivityIndicator />
-        </View>
-      ) : entries.length === 0 ? (
+      {entries.length === 0 ? (
         <View className="px-4 pt-6">
           <Text className="text-sm font-medium text-foreground">
             {t("agents.customArgs.emptyTitle")}
@@ -255,10 +294,7 @@ export default function AgentCustomArgsPage() {
             {t("common.unsavedChanges")}
           </Text>
         ) : null}
-        <Button
-          onPress={() => void handleSave()}
-          disabled={!dirty || saveAgent.isPending || editor !== null}
-        >
+        <Button onPress={() => void handleSave()} disabled={!canSave}>
           <Text>
             {saveAgent.isPending ? t("common.saving") : t("common.save")}
           </Text>

@@ -23,9 +23,11 @@ import {
   MIN_BODY_INPUT_HEIGHT_PX,
   MOBILE_PLACEHOLDER_COLOR,
 } from "@/components/ui/input-tokens";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { projectDetailOptions } from "@/data/queries/projects";
 import { useUpdateProject } from "@/data/mutations/projects";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { recordRead } from "@/lib/catalog-read";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
 
@@ -36,33 +38,45 @@ export default function EditProject() {
   const detail = useQuery(projectDetailOptions(wsId, id));
   const update = useUpdateProject(id);
 
+  // `getProject` falls back to EMPTY_PROJECT when the payload shape drifts, and
+  // that sentinel carries an empty id — the project detail page treats it as
+  // "missing" for the same reason. Resolve through `recordRead` so a *failed*
+  // read is told apart from a settled miss: the old code branched on
+  // `!detail.data` alone, so a failure left the page on 「加载中…」 forever,
+  // with no error and no retry — the only way out was to kill the app
+  // (MYS-1910).
+  const record = detail.data && detail.data.id !== "" ? detail.data : null;
+  const read = recordRead(record, [detail]);
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [icon, setIcon] = useState("");
   const [seeded, setSeeded] = useState(false);
 
-  // Seed local state once detail lands. Effect (not setState-in-render)
-  // so we don't accidentally retrigger on every parent re-render — the
-  // `seeded` guard makes it idempotent.
+  // Seed local state once the record resolves. Effect (not
+  // setState-in-render) so we don't accidentally retrigger on every parent
+  // re-render — the `seeded` guard makes it idempotent. Seeding from `record`
+  // rather than the raw payload keeps the EMPTY_PROJECT sentinel out of the
+  // form: seeding from it would mark the page `seeded` with blank fields.
   useEffect(() => {
-    if (!detail.data || seeded) return;
-    setTitle(detail.data.title);
-    setDescription(detail.data.description ?? "");
-    setIcon(detail.data.icon ?? "");
+    if (!record || seeded) return;
+    setTitle(record.title);
+    setDescription(record.description ?? "");
+    setIcon(record.icon ?? "");
     setSeeded(true);
-  }, [detail.data, seeded]);
+  }, [record, seeded]);
 
   const dirty = useMemo(() => {
-    if (!detail.data) return false;
+    if (!record) return false;
     return (
-      title.trim() !== detail.data.title ||
-      description.trim() !== (detail.data.description ?? "") ||
-      icon.trim() !== (detail.data.icon ?? "")
+      title.trim() !== record.title ||
+      description.trim() !== (record.description ?? "") ||
+      icon.trim() !== (record.icon ?? "")
     );
-  }, [detail.data, title, description, icon]);
+  }, [record, title, description, icon]);
 
   const canSave =
-    seeded && title.trim().length > 0 && dirty && !update.isPending;
+    seeded && !!record && title.trim().length > 0 && dirty && !update.isPending;
 
   const onCancel = useCallback(() => {
     if (!dirty) {
@@ -135,8 +149,20 @@ export default function EditProject() {
           contentContainerClassName="px-4 pt-4 pb-6 gap-4"
           keyboardShouldPersistTaps="handled"
         >
-          {!detail.data ? (
-            <Text className="text-sm text-muted-foreground">{t("issue.loading")}</Text>
+          {!read.isResolved ? (
+            <CatalogStatus
+              state={read.state}
+              onRetry={read.retry}
+              errorMessage={`${t("project.loadError")}${
+                detail.error instanceof Error ? detail.error.message : ""
+              }`}
+            />
+          ) : !record ? (
+            <CatalogStatus
+              state="empty"
+              onRetry={read.retry}
+              emptyMessage={t("project.notFound")}
+            />
           ) : (
             <>
               <Field label={t("editProject.icon")}>
@@ -162,7 +188,7 @@ export default function EditProject() {
                   placeholder={t("newProject.titlePlaceholder")}
                   placeholderTextColor={MOBILE_PLACEHOLDER_COLOR}
                   className="text-base text-foreground bg-secondary/50 rounded-md px-3 py-2"
-                  autoFocus={!detail.data?.title}
+                  autoFocus={!record.title}
                   returnKeyType="next"
                 />
               </Field>

@@ -40,6 +40,8 @@ import { AutosizeTextArea } from "@/components/ui/autosize-textarea";
 import { agentEnvOptions, agentListAllOptions } from "@/data/queries/agents";
 import { useUpdateAgentEnv } from "@/data/mutations/agents";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { recordRead } from "@/lib/catalog-read";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
 import type { EnvParseError } from "@/lib/env-file";
 import { formatEnvFile, parseEnvFileResult } from "@/lib/env-file";
 import { useTranslation } from "@/lib/i18n/react";
@@ -80,6 +82,12 @@ export default function AgentEnvPage() {
 
   const agents = useQuery(agentListAllOptions(wsId));
   const agent = agents.data?.find((a) => a.id === id);
+  // The agent row comes out of a workspace list read. `isLoading` only covers
+  // the first attempt, so a failed read used to leave `agent` undefined with
+  // `isLoading` false — the configured-count header vanished and the page
+  // still offered "Reveal & edit" over an agent it had not actually read
+  // (MYS-1910). `recordRead` keeps the three situations apart.
+  const read = recordRead(agent, [agents]);
   const keyCount = agent?.custom_env_key_count ?? 0;
 
   // null = not revealed yet. Entries are page-local (web env-tab holds the
@@ -266,6 +274,31 @@ export default function AgentEnvPage() {
   }, [entries, saveEnv, t, bulkEditing]);
 
   const revealed = entries !== null;
+
+  // A row that was never read must not offer the reveal affordance: the header
+  // count it would hide is derived from that read, and "Reveal & edit" over an
+  // unread agent reads as "there is nothing configured". Paint the state, with
+  // a way out of the failure, instead of a page that silently lost its facts.
+  if (!read.isResolved) {
+    return (
+      <View className="flex-1 justify-center bg-background">
+        <CatalogStatus state={read.state} onRetry={read.retry} layout="centered" />
+      </View>
+    );
+  }
+
+  if (!agent) {
+    return (
+      <View className="flex-1 justify-center bg-background">
+        <CatalogStatus
+          state="empty"
+          onRetry={read.retry}
+          emptyMessage={t("agents.notFound")}
+          layout="centered"
+        />
+      </View>
+    );
+  }
 
   return (
     <ScrollView className="flex-1 bg-background" contentContainerClassName="pb-10">

@@ -361,7 +361,27 @@ export default function RuntimeDetailPage() {
     );
   }
 
-  if (error || !runtime) {
+  // Two different facts, two different sentences (MYS-1910). `error || !runtime`
+  // folded them into one: a request that failed (timeout / offline / 5xx) was
+  // reported as 「This runtime doesn't exist or was removed」 — an assertion
+  // about the record, when all that was known was that this attempt did not
+  // land. Reporting the failure as a deletion is worse than reporting it as a
+  // failure: it tells the user their configuration is gone when it is intact.
+  if (error) {
+    return (
+      <View className="flex-1 items-center justify-center bg-background px-6 gap-3">
+        <Ionicons name="cloud-offline-outline" size={32} color={theme.mutedForeground} />
+        <Text className="text-sm text-destructive text-center mt-2">
+          {t("catalog.loadError")}
+        </Text>
+        <Button variant="outline" onPress={() => refetch()}>
+          <Text>{t("workspace.retry")}</Text>
+        </Button>
+      </View>
+    );
+  }
+
+  if (!runtime) {
     return (
       <View className="flex-1 items-center justify-center bg-background px-6 gap-3">
         <Ionicons name="server-outline" size={32} color={theme.mutedForeground} />

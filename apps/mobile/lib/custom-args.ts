@@ -41,6 +41,45 @@ export function customArgsDirty(current: string[], original: string[]): boolean 
   return JSON.stringify(current) !== JSON.stringify(original);
 }
 
+/**
+ * Whether the custom-args page may offer — or perform — a save (MYS-1910).
+ *
+ * `PUT /api/agents/{id}` replaces `custom_args` wholesale rather than merging
+ * (`server/pkg/db/queries/agent.sql:140`: `custom_args = COALESCE($14,
+ * custom_args)`), so whatever list is on screen at save time becomes the
+ * agent's entire argument list. The page seeds that list from a workspace
+ * read, and when that read had failed the page used to render 「还没有参数」
+ * ("No arguments yet") over an agent that genuinely had some. Following the
+ * obvious next step — "add an argument" — turned `entries` non-empty, made
+ * `dirty` true, enabled Save, and shipped a one-element list over the N the
+ * server already held. A transient network failure was enough to silently
+ * destroy every launch argument, with no audit row (unlike `custom_env`,
+ * which goes through `PUT /agents/{id}/env` and is audited).
+ *
+ * So the gate is not "did the user change something" but "are we editing a
+ * list we actually read". `dirty` is necessary and not sufficient: the list
+ * must have been seeded from a resolved read of the real record.
+ *
+ * `readSettled` is false until the agent row has been resolved out of a read
+ * that actually finished, which is exactly the condition under which
+ * `originalArgs` reflects the server's truth.
+ */
+export function canSaveCustomArgs({
+  dirty,
+  readSettled,
+  saving = false,
+  editorOpen = false,
+}: {
+  dirty: boolean;
+  /** The agent row came out of a *settled* read, so `originalArgs` is the
+   *  server's real list. False while the read is loading or failed. */
+  readSettled: boolean;
+  saving?: boolean;
+  editorOpen?: boolean;
+}): boolean {
+  return dirty && readSettled && !saving && !editorOpen;
+}
+
 /** Web `formatArgForPreview` — wrap args that contain whitespace in JSON
  *  quotes so the preview reads like a real argv line. Not used for the
  *  stored value (the raw string is saved). */
