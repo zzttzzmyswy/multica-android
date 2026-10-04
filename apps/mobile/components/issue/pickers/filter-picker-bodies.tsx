@@ -36,12 +36,14 @@ import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { ProjectIcon } from "@/components/ui/project-icon";
 import { MOBILE_PLACEHOLDER_COLOR } from "@/components/ui/input-tokens";
+import { CatalogEmptySlot } from "@/components/catalog/catalog-status";
 import { memberListOptions } from "@/data/queries/members";
 import { agentListOptions } from "@/data/queries/agents";
 import { squadListOptions } from "@/data/queries/squads";
 import { projectListOptions } from "@/data/queries/projects";
 import { labelListOptions } from "@/data/queries/labels";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
 import type { ActorFilterValue } from "@/data/stores/issue-filter-slice";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -120,9 +122,12 @@ export function FilterActorPickerBody({
 }) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
-  const { data: members = [] } = useQuery(memberListOptions(wsId));
-  const { data: agents = [] } = useQuery(agentListOptions(wsId));
-  const { data: squads = [] } = useQuery(squadListOptions(wsId));
+  const membersRead = catalogRead(useQuery(memberListOptions(wsId)));
+  const agentsRead = catalogRead(useQuery(agentListOptions(wsId)));
+  const squadsRead = catalogRead(useQuery(squadListOptions(wsId)));
+  const members = membersRead.items;
+  const agents = agentsRead.items;
+  const squads = squadsRead.items;
   const [query, setQuery] = useState("");
   const checkColor = useCheckColor();
 
@@ -211,11 +216,16 @@ export function FilterActorPickerBody({
           );
         }}
         ListEmptyComponent={
-          <View className="px-3 py-8 items-center">
-            <Text className="text-sm text-muted-foreground">
-              {t("picker.noMatches")}
-            </Text>
-          </View>
+          <CatalogEmptySlot
+            states={[
+              membersRead.state,
+              agentsRead.state,
+              squadsRead.state,
+            ]}
+            onRetry={() => retryCatalogs(membersRead, agentsRead, squadsRead)}
+            emptyMessage={t("picker.noMembersAgents")}
+            query={query}
+          />
         }
       />
     </View>
@@ -236,7 +246,8 @@ export function FilterProjectPickerBody({
 }) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
-  const { data: projects = [] } = useQuery(projectListOptions(wsId));
+  const projectsRead = catalogRead(useQuery(projectListOptions(wsId)));
+  const projects = projectsRead.items;
   const [query, setQuery] = useState("");
   const checkColor = useCheckColor();
 
@@ -308,11 +319,12 @@ export function FilterProjectPickerBody({
           );
         }}
         ListEmptyComponent={
-          <View className="px-3 py-8 items-center">
-            <Text className="text-sm text-muted-foreground text-center">
-              {query ? t("picker.noMatches") : t("picker.noProjects")}
-            </Text>
-          </View>
+          <CatalogEmptySlot
+            states={[projectsRead.state]}
+            onRetry={projectsRead.retry}
+            emptyMessage={t("picker.noProjects")}
+            query={query}
+          />
         }
       />
     </View>
@@ -330,7 +342,8 @@ export function FilterLabelPickerBody({
 }) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
-  const { data: labels = [] } = useQuery(labelListOptions(wsId));
+  const labelsRead = catalogRead(useQuery(labelListOptions(wsId)));
+  const labels = labelsRead.items;
   const [query, setQuery] = useState("");
   const checkColor = useCheckColor();
 
@@ -378,11 +391,12 @@ export function FilterLabelPickerBody({
           );
         }}
         ListEmptyComponent={
-          <View className="px-3 py-8 items-center">
-            <Text className="text-sm text-muted-foreground text-center">
-              {query ? t("picker.noMatches") : t("picker.noLabels")}
-            </Text>
-          </View>
+          <CatalogEmptySlot
+            states={[labelsRead.state]}
+            onRetry={labelsRead.retry}
+            emptyMessage={t("picker.noLabels")}
+            query={query}
+          />
         }
       />
     </View>
@@ -465,7 +479,10 @@ export function FilterPropertyPickerBody({
         ListEmptyComponent={
           <View className="px-3 py-8 items-center">
             <Text className="text-sm text-muted-foreground text-center">
-              {t("picker.noMatches")}
+              {/* No search box here, so "no matches" would be a lie about a
+                  search the user never made — the options come from a
+                  definition the parent already resolved. */}
+              {t("filter.propertyNoOptions")}
             </Text>
           </View>
         }

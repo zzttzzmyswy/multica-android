@@ -10,6 +10,8 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Project } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ProjectIcon } from "@/components/ui/project-icon";
+import { CatalogEmptySlot } from "@/components/catalog/catalog-status";
+import type { CatalogState } from "@/lib/catalog-state";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -17,7 +19,13 @@ import { useTranslation } from "@/lib/i18n/react";
 
 interface Props {
   visible: boolean;
+  /** Rows to show. `catalogState` and `onRetry` describe the read behind them:
+   *  a failed or in-flight project list must not be reported as a workspace
+   *  with no projects (MYS-1907). */
   projects: Project[];
+  /** The four-state verdict for the project read that produced `projects`. */
+  catalogState: CatalogState;
+  onRetry: () => void;
   selectedProjectId: string | null;
   onPick: (projectId: string | null) => void;
   onClose: () => void;
@@ -26,6 +34,8 @@ interface Props {
 export function ProjectPickerSheet({
   visible,
   projects,
+  catalogState,
+  onRetry,
   selectedProjectId,
   onPick,
   onClose,
@@ -83,11 +93,11 @@ export function ProjectPickerSheet({
                 </Pressable>
 
                 {rows.length === 0 ? (
-                  <View className="px-3 py-8 items-center">
-                    <Text className="text-sm text-muted-foreground text-center">
-                      {t("picker.noProjects")}
-                    </Text>
-                  </View>
+                  <CatalogEmptySlot
+                    states={[catalogState]}
+                    onRetry={onRetry}
+                    emptyMessage={t("picker.noProjects")}
+                  />
                 ) : (
                   rows.map((project) => {
                     const selected = project.id === selectedProjectId;

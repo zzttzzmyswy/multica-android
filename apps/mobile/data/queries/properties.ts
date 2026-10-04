@@ -21,11 +21,7 @@ import { queryOptions, useQuery } from "@tanstack/react-query";
 import type { IssueProperty } from "@multica/core/types";
 import { api } from "@/data/api";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import {
-  isPropertyCatalogResolved,
-  resolvePropertyCatalogState,
-  type PropertyCatalogState,
-} from "@/lib/property-catalog-state";
+import { catalogRead, type CatalogRead } from "@/lib/catalog-read";
 
 export const propertyKeys = {
   all: (wsId: string | null) => ["properties", wsId] as const,
@@ -53,18 +49,15 @@ export const propertyCatalogOptions = (wsId: string | null) =>
     enabled: !!wsId,
   });
 
-/** A catalog read with its load state intact. */
-export interface PropertyCatalogRead {
+/** A property-catalog read with its load state intact — the generic
+ *  `CatalogRead`, with `items` spelled for this catalog. The alias exists so
+ *  the property surfaces keep reading `definitions` while sharing one four-state
+ *  implementation with every other directory (MYS-1907). */
+export type PropertyCatalogRead = Omit<CatalogRead<IssueProperty>, "items"> & {
   /** Definitions the projection returned. `[]` in every non-`ready` state —
    *  render the state, never this length, when the distinction matters. */
   definitions: IssueProperty[];
-  state: PropertyCatalogState;
-  /** The request settled, so `definitions` is the whole answer and an id
-   *  missing from it is genuinely missing. */
-  isResolved: boolean;
-  /** Re-runs the request. Wire this to the retry affordance in `error`. */
-  retry: () => void;
-}
+};
 
 function usePropertyCatalogRead(
   wsId: string | null,
@@ -75,18 +68,8 @@ function usePropertyCatalogRead(
     : propertyActiveOptions(wsId);
   const query = useQuery({ ...options, enabled: !!wsId });
 
-  const state = resolvePropertyCatalogState({
-    definitions: query.data,
-    isPending: query.isPending,
-    isError: query.isError,
-  });
-
-  return {
-    definitions: query.data ?? [],
-    state,
-    isResolved: isPropertyCatalogResolved(state),
-    retry: query.refetch,
-  };
+  const { items, ...read } = catalogRead(query);
+  return { ...read, definitions: items };
 }
 
 /** Non-archived definitions plus the load state — the projection the filter

@@ -19,9 +19,11 @@ import type { Agent, MemberWithUser } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { MOBILE_PLACEHOLDER_COLOR } from "@/components/ui/input-tokens";
+import { CatalogEmptySlot } from "@/components/catalog/catalog-status";
 import { agentListOptions } from "@/data/queries/agents";
 import { memberListOptions } from "@/data/queries/members";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
 import { useScrollToTopOnChange } from "@/lib/use-scroll-to-top-on-change";
 import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
@@ -55,8 +57,10 @@ function isRowSelected(value: LeadValue | null, row: Row): boolean {
 export function ProjectLeadPickerBody({ value, query, onChange }: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
-  const { data: members = [] } = useQuery(memberListOptions(wsId));
-  const { data: agents = [] } = useQuery(agentListOptions(wsId));
+  const membersRead = catalogRead(useQuery(memberListOptions(wsId)));
+  const agentsRead = catalogRead(useQuery(agentListOptions(wsId)));
+  const members = membersRead.items;
+  const agents = agentsRead.items;
   const listRef = useScrollToTopOnChange(query);
   const { colorScheme } = useColorScheme();
   const checkColor =
@@ -158,13 +162,12 @@ export function ProjectLeadPickerBody({ value, query, onChange }: Props) {
         </Pressable>
       )}
       ListEmptyComponent={
-        <View className="px-3 py-8 items-center">
-          <Text className="text-sm text-muted-foreground text-center">
-            {query
-              ? t("picker.noMatches")
-              : t("picker.noMembersAgents")}
-          </Text>
-        </View>
+        <CatalogEmptySlot
+          states={[membersRead.state, agentsRead.state]}
+          onRetry={() => retryCatalogs(membersRead, agentsRead)}
+          emptyMessage={t("picker.noMembersAgents")}
+          query={query}
+        />
       }
     />
   );

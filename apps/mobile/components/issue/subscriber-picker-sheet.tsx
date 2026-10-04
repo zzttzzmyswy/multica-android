@@ -40,6 +40,8 @@ import type { IssueSubscriber } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PickerSheet } from "./pickers/picker-sheet";
+import { CatalogEmptySlot } from "@/components/catalog/catalog-status";
+import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
 import { memberListOptions } from "@/data/queries/members";
 import { agentListOptions } from "@/data/queries/agents";
 import { useWorkspaceStore } from "@/data/workspace-store";
@@ -81,12 +83,13 @@ export function SubscriberPickerSheet({
   const theme = THEME[colorScheme];
   const [query, setQuery] = useState("");
 
-  const { data: rawMembers, isSuccess: membersResolved } = useQuery(
-    memberListOptions(wsId),
-  );
-  const { data: rawAgents, isSuccess: agentsResolved } = useQuery(
-    agentListOptions(wsId),
-  );
+  // Four-state reads (MYS-1907): `isSuccess` cannot tell "still loading" from
+  // "failed", so a failed member/agent read left this sheet blank forever with
+  // no explanation and no way to retry. The state now paints both.
+  const membersRead = catalogRead(useQuery(memberListOptions(wsId)));
+  const agentsRead = catalogRead(useQuery(agentListOptions(wsId)));
+  const rawMembers = membersRead.isResolved ? membersRead.items : undefined;
+  const rawAgents = agentsRead.isResolved ? agentsRead.items : undefined;
 
   // Reopening starts from the full list, not a filter from the last visit.
   useEffect(() => {
@@ -105,7 +108,6 @@ export function SubscriberPickerSheet({
     [rawMembers, rawAgents, query, t],
   );
 
-  const loading = !membersResolved || !agentsResolved;
   const checkColor = theme.primary;
 
   return (
@@ -186,11 +188,12 @@ export function SubscriberPickerSheet({
             );
           }}
           ListEmptyComponent={
-            <View className="px-4 py-8 items-center">
-              <Text className="text-sm text-muted-foreground text-center">
-                {loading ? "" : t("subscription.picker.empty")}
-              </Text>
-            </View>
+            <CatalogEmptySlot
+              states={[membersRead.state, agentsRead.state]}
+              onRetry={() => retryCatalogs(membersRead, agentsRead)}
+              emptyMessage={t("subscription.picker.empty")}
+              query={query}
+            />
           }
         />
       </View>

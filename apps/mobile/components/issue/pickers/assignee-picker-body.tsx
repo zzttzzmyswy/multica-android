@@ -25,10 +25,12 @@ import type {
 } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { CatalogEmptySlot } from "@/components/catalog/catalog-status";
 import { memberListOptions } from "@/data/queries/members";
 import { agentListOptions } from "@/data/queries/agents";
 import { squadListOptions } from "@/data/queries/squads";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
 import { useScrollToTopOnChange } from "@/lib/use-scroll-to-top-on-change";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -98,9 +100,15 @@ export function AssigneePickerBody({
 }: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
-  const { data: members = [] } = useQuery(memberListOptions(wsId));
-  const { data: agents = [] } = useQuery(agentListOptions(wsId));
-  const { data: squads = [] } = useQuery(squadListOptions(wsId));
+  // Four-state reads (MYS-1907): all three directories gate the empty slot.
+  // A failed member/agent/squad read used to answer 「无匹配结果。」, which reads
+  // as "your search matched nothing" rather than "the directory never arrived".
+  const membersRead = catalogRead(useQuery(memberListOptions(wsId)));
+  const agentsRead = catalogRead(useQuery(agentListOptions(wsId)));
+  const squadsRead = catalogRead(useQuery(squadListOptions(wsId)));
+  const members = membersRead.items;
+  const agents = agentsRead.items;
+  const squads = squadsRead.items;
   const runnableAgentIds = useMemo(
     () =>
       new Set(
@@ -270,9 +278,12 @@ export function AssigneePickerBody({
         );
       }}
       ListEmptyComponent={
-        <View className="px-3 py-8 items-center">
-          <Text className="text-sm text-muted-foreground">{t("picker.noMatches")}</Text>
-        </View>
+        <CatalogEmptySlot
+          states={[membersRead.state, agentsRead.state, squadsRead.state]}
+          onRetry={() => retryCatalogs(membersRead, agentsRead, squadsRead)}
+          emptyMessage={t("picker.noMembersAgents")}
+          query={query}
+        />
       }
     />
   );
