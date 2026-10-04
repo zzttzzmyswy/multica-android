@@ -36,7 +36,10 @@ import {
   useRevokeInvitation,
 } from "@/data/mutations/members";
 import { useAuthStore } from "@/data/auth-store";
+import { useCurrentMemberRole } from "@/data/use-current-member-role";
+import { canManageRole } from "@/lib/member-guards";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { useActorProfileStore } from "@/data/stores/actor-profile-store";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { useTimeAgo } from "@/lib/time-ago";
@@ -83,10 +86,8 @@ export default function MembersPage() {
     });
   }, [rawMembers]);
 
-  const currentMember =
-    (rawMembers ?? []).find((m) => m.user_id === user?.id) ?? null;
-  const canManage =
-    currentMember?.role === "owner" || currentMember?.role === "admin";
+  const { role } = useCurrentMemberRole();
+  const canManage = canManageRole(role);
 
   const [inviteVisible, setInviteVisible] = useState(false);
 
@@ -278,11 +279,22 @@ function MemberRow({
   const { colorScheme } = useColorScheme();
   const muted = THEME[colorScheme].mutedForeground;
   const joined = member.created_at ? timeAgo(member.created_at) : null;
+  const openProfile = useActorProfileStore((s) => s.open);
 
   return (
     <Pressable onPress={onPress} className="px-4 py-3 active:bg-secondary">
       <View className="flex-row items-center gap-3">
-        <ActorAvatar type="member" id={member.user_id} size={40} />
+        {/* The row's tap opens the member detail page, so the profile card
+            rides long-press rather than competing for the tap. */}
+        <Pressable
+          onLongPress={() => openProfile("member", member.user_id)}
+          accessibilityRole="button"
+          accessibilityLabel={t("profileCard.openAria", { name: member.name })}
+          hitSlop={6}
+          className="active:opacity-60"
+        >
+          <ActorAvatar type="member" id={member.user_id} size={40} />
+        </Pressable>
         <View className="flex-1 min-w-0 gap-0.5">
           <View className="flex-row items-center gap-2">
             <Text

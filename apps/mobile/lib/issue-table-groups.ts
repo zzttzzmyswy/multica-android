@@ -112,7 +112,22 @@ export interface IssueTableGroup {
 export interface IssueTableGroupOptions {
   /** Resolve an actor's display name — the server sorts assignee groups by
    *  `LOWER(name)` after the class order. Missing names sort as "". */
-  actorName?: (actor: IssueTableGroupActor) => string;
+  actorName?: (issue: IssueTableGroupActor) => string;
+  /**
+   * Whether sub-issues nest under their parent (web's `tableHierarchy`
+   * toggle, view-store.ts:223). Defaults to true — the table's own default.
+   *
+   * Off flattens every row: no indent, no chevron, and the collapsed-parent
+   * set stops pruning anything (a flat list has no subtree to hide). Group
+   * headers still render; only the hierarchy inside each segment is dropped.
+   *
+   * Note this is a LOCAL flatten of the loaded window. Web implements the same
+   * switch as a server query parameter (`hierarchy: { enabled: false }`,
+   * table-view.tsx:1471) and gets a flat page back, so the two do not
+   * necessarily agree on the row SET once paging is involved — see
+   * `issue-filter-slice.ts` `tableHierarchy` for the full divergence note.
+   */
+  hierarchy?: boolean;
 }
 
 /** One issue's group identity, or null when the issue cannot be grouped
@@ -263,6 +278,37 @@ function orderSortKey(
 }
 
 /**
+ * One segment's rows: the hierarchy-built rows normally, or an unindented,
+ * unpruned projection of the same issues when the caller turned hierarchy off.
+ *
+ * The flat branch deliberately reuses `buildIssueTableRows`'s row SHAPE rather
+ * than hand-rolling `{ issue, depth: 0, … }` objects, and it passes an EMPTY
+ * collapsed set. That empty set is the point: with no depth, a chevron would
+ * expand into nothing, and pruning a subtree from a list that has no tree just
+ * silently drops rows. Both `hasChildren` and `collapsed` therefore also come
+ * out false, which is what makes the table's chevron disappear on its own —
+ * no second flag has to travel to the row renderer.
+ */
+function buildRows(
+  issues: readonly Issue[],
+  collapsedIds: ReadonlySet<string>,
+  options: IssueTableGroupOptions,
+): IssueTableRow[] {
+  // Off: every row is a root. No indent, no chevron, and nothing to prune —
+  // the caller's collapsed set is simply not consulted, because a flat list
+  // has no subtree to hide.
+  if (options.hierarchy === false) {
+    return issues.map((issue) => ({
+      issue,
+      depth: 0,
+      hasChildren: false,
+      collapsed: false,
+    }));
+  }
+  return buildIssueTableRows(issues, collapsedIds);
+}
+
+/**
  * Split the loaded window into ordered segments, each with its own hierarchy.
  * Returns a single unnamed segment when `grouping` is `"none"` so callers can
  * treat both shapes alike.
@@ -280,7 +326,7 @@ export function buildIssueTableGroups(
         key: "all",
         value: { kind: "none" },
         count: issues.length,
-        rows: buildIssueTableRows(issues, collapsedParentIds),
+        rows: buildRows(issues, collapsedParentIds, options),
       },
     ];
   }
@@ -310,7 +356,7 @@ export function buildIssueTableGroups(
       count: bucket.issues.length,
       // Hierarchy is branch-local (see the file header): a parent outside
       // this segment cannot indent a child inside it.
-      rows: buildIssueTableRows(bucket.issues, collapsedParentIds),
+      rows: buildRows(bucket.issues, collapsedParentIds, options),
     }),
   );
 

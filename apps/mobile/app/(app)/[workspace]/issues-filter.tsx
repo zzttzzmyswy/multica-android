@@ -43,6 +43,7 @@ import {
   ISSUE_SORT_OPTIONS,
   hasActiveIssueFilters,
   propertyViewKey,
+  type CardProperties,
   type IssueDateFilterValue,
   type IssueFilterSlice,
   type IssueGrouping,
@@ -90,6 +91,27 @@ function shortDate(dateOnly: string): string {
   return `${Number(m)}/${Number(d)}`;
 }
 
+/**
+ * The card-property switches this screen offers, in web's
+ * `CARD_PROPERTY_OPTIONS` order (`view-store.ts:161-170`) filtered to the five
+ * keys a mobile board card actually draws. Labels follow web's
+ * `display.card_*` strings — see the locale file.
+ *
+ * Keep this list in sync with `components/issue/board-card.tsx`: a key here
+ * with nothing to gate is a dead switch, and a field there that is missing
+ * here is a setting the user cannot reach.
+ */
+const CARD_PROPERTY_TOGGLES: {
+  key: keyof CardProperties;
+  labelKey: string;
+}[] = [
+  { key: "priority", labelKey: "filter.display.cardPriority" },
+  { key: "labels", labelKey: "filter.display.cardLabels" },
+  { key: "assignee", labelKey: "filter.display.cardAssignee" },
+  { key: "startDate", labelKey: "filter.display.cardStartDate" },
+  { key: "dueDate", labelKey: "filter.display.cardDueDate" },
+];
+
 export default function IssuesFilterRoute() {
   const { scope, workspace: workspaceSlug } = useLocalSearchParams<{
     scope?: string;
@@ -123,6 +145,9 @@ export default function IssuesFilterRoute() {
   const sortDirection = s.sortDirection;
   const grouping = s.grouping;
   const showSubIssues = s.showSubIssues;
+  const tableHierarchy = s.tableHierarchy;
+  const cardProperties = s.cardProperties;
+  const cardPropertyIds = s.cardPropertyIds;
 
   // The date section's field radio is UI-local until a preset/custom commits
   // (web DateSubContent keeps the same split).
@@ -570,6 +595,80 @@ export default function IssuesFilterRoute() {
           onToggle={() => act().toggleShowSubIssues()}
           t={t}
         />
+        {/* Table hierarchy — web `table.hierarchy` +
+            `table.hierarchy_description` (issues-header.tsx:1910-1923),
+            which web renders INSIDE the table's own header. Mobile keeps it
+            here in the shared Display section instead: the filter sheet is
+            where every other display preference already lives, and the table
+            header is a cramped strip on a phone. The switch is offered
+            whenever the table is the active mode, matching web's own
+            `viewMode === "table" &&` gate — flipping it from another view
+            would change nothing visible until the user switched. */}
+        {s.view === "table" ? (
+          <BoolRow
+            label={t("filter.display.tableHierarchy")}
+            description={t("filter.display.tableHierarchyDesc")}
+            checked={tableHierarchy}
+            onToggle={() => act().toggleTableHierarchy()}
+            t={t}
+          />
+        ) : null}
+        {/* Card fields — web's `display.card_properties_section`
+            (issues-header.tsx:1996-2010) over `CARD_PROPERTY_OPTIONS`
+            (packages/core/issues/stores/view-store.ts:161-170).
+
+            Only the FIVE keys mobile's board card has content for are offered
+            here: priority, labels, assignee, startDate, dueDate
+            (components/issue/board-card.tsx). The remaining three —
+            description, project, childProgress — are carried in state and
+            round-tripped through the view codec (so a web-saved view stays
+            lossless) but gate nothing, because a mobile card draws no
+            description, no project and no sub-issue progress. Offering
+            switches for them would be switches that visibly do nothing. */}
+        <SectionLabel>{t("filter.display.cardFieldsTitle")}</SectionLabel>
+        {CARD_PROPERTY_TOGGLES.map(({ key, labelKey }) => (
+          <BoolRow
+            key={key}
+            label={t(labelKey)}
+            checked={cardProperties[key]}
+            onToggle={() => act().toggleCardProperty(key)}
+            t={t}
+          />
+        ))}
+
+        {/* Custom card properties — web renders these as a second chip row
+            immediately after the eight built-in chips, inside the same
+            `card_properties_section` block (issues-header.tsx:2013-2027).
+            Mobile keeps them under their own heading instead: the built-in
+            switches are already a full section here, and an unlabelled
+            continuation would read as more built-ins rather than as the
+            workspace's own definitions.
+
+            The list is the ACTIVE catalog — the same `properties` the filter
+            and sort sections above use — because that is what web's Display
+            popover maps (`workspaceProperties`, issues-header.tsx:1593, whose
+            `propertyListOptions` call omits includeArchived). An archived
+            definition is therefore not offered here, and its stale id stays in
+            `cardPropertyIds` untouched (see `sanitizeCardPropertyIds`), so
+            un-archiving it brings the chip straight back. */}
+        <SectionLabel>{t("filter.display.customPropertiesTitle")}</SectionLabel>
+        {properties.length === 0 ? (
+          <View className="px-4 py-2.5">
+            <Text className="text-xs text-muted-foreground/70">
+              {t("filter.display.customPropertiesEmpty")}
+            </Text>
+          </View>
+        ) : (
+          properties.map((property) => (
+            <BoolRow
+              key={property.id}
+              label={property.name}
+              checked={cardPropertyIds.includes(property.id)}
+              onToggle={() => act().toggleCardPropertyId(property.id)}
+              t={t}
+            />
+          ))
+        )}
       </ScrollView>
     </View>
   );
@@ -620,14 +719,19 @@ function FilterDimensionRow({
   );
 }
 
-/** On/off row (includeNoAssignee / includeNoProject). */
+/** On/off row (includeNoAssignee / includeNoProject / showSubIssues /
+ *  tableHierarchy). `description` renders web's two-line form — the label plus
+ *  a smaller explanatory line under it — for switches whose effect is not
+ *  obvious from the label alone. */
 function BoolRow({
   label,
+  description,
   checked,
   onToggle,
   t,
 }: {
   label: string;
+  description?: string;
   checked: boolean;
   onToggle: () => void;
   t: (id: string, params?: Record<string, string | number>) => string;
@@ -640,7 +744,14 @@ function BoolRow({
       className="flex-row items-center gap-3 px-4 py-2.5 active:bg-secondary"
     >
       <View className="w-[18px]" />
-      <Text className="flex-1 text-sm text-foreground">{label}</Text>
+      <View className="flex-1 min-w-0">
+        <Text className="text-sm text-foreground">{label}</Text>
+        {description ? (
+          <Text className="mt-0.5 text-xs text-muted-foreground">
+            {description}
+          </Text>
+        ) : null}
+      </View>
       <Ionicons
         name={checked ? "checkbox" : "square-outline"}
         size={20}

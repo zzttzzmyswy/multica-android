@@ -56,7 +56,7 @@
 - **正式渠道**：[GitHub Releases](https://github.com/zzttzzmyswy/multica-android/releases) 下载对应 ABI 的 APK（arm64-v8a 为主力手机 ABI）
 - **App 内更新**：关于页 →「检查更新」→ 检测到新版本后自动下载（带进度）→ 系统安装器
 - 版本命名：语义化（功能集 → minor，纯修复 → patch），如 v0.x.y；与官方上游版本线无关
-- 包名 `ai.multica.mobile.dev`，minSdk 24
+- 包名 `ai.multica.mobile.dev`（**发布渠道固定**，见 `apps/mobile/release-identity.json`；改动它等于换应用，老用户无法原地升级），minSdk 24
 
 ## 开发
 

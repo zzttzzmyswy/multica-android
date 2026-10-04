@@ -183,7 +183,12 @@ export default function ChatTab() {
         last && sorted[0] && sessionActivityTime(sorted[0]) > sessionActivityTime(last)
           ? sorted[0].id
           : (last?.id ?? sorted[0].id);
-      setActiveSessionId(open);
+      // Never clobber a session another surface already selected. This effect
+      // awaits a SecureStore read, so a selection made while it was in flight
+      // (the chat-sessions sheet, or the Mika bootstrap navigating here with
+      // its brand-new session) lands first and must win — otherwise the
+      // restore heuristic overwrites it with the previously-viewed chat.
+      setActiveSessionId((current) => current ?? open);
     })();
   }, [wsId, sessions]);
   // Remember the session the user leaves open so the next launch restores it.

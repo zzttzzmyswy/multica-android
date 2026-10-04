@@ -101,6 +101,18 @@ export function applySavedView({
     sortDirection: display.sortDirection,
     grouping: display.grouping,
     showSubIssues: display.showSubIssues,
+    // Same contract as `showSubIssues`: the table's nesting is part of what a
+    // view fixes, so reopening one restores it.
+    tableHierarchy: display.tableHierarchy,
+    // Carried through from the view rather than reset: the card-property
+    // toggles ARE part of what a view fixes, so reopening one restores them.
+    // A view that predates the key lands on the all-on default via
+    // `sanitizeViewDisplay`'s per-key fallback.
+    cardProperties: display.cardProperties,
+    // Same contract, second card display dimension: reopening a view restores
+    // the custom properties its cards showed. A view saved before the key
+    // existed reads back as the empty default (`sanitizeCardPropertyIds`).
+    cardPropertyIds: display.cardPropertyIds,
     view: display.viewMode,
   });
   useActiveIssueViewStore.getState().setActive(containerKey, view.id);

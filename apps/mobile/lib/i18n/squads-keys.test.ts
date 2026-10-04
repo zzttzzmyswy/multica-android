@@ -60,6 +60,22 @@ describe("squads list/detail i18n", () => {
     "squads.instructions.placeholder": "例如：始终先写一个会失败的测试；偏好小步、原子的提交。",
     "squads.instructions.saved": "指令已保存",
     "squads.instructions.unsaved": "有未保存的修改",
+    // iteration 178 — list toolbar (sort / filter / count)
+    "squads.list.sort": "排序",
+    "squads.list.sortAscending": "升序",
+    "squads.list.sortDescending": "降序",
+    "squads.list.sortField.name": "名称",
+    "squads.list.sortField.members": "成员数",
+    "squads.list.sortField.created": "创建时间",
+    "squads.list.filter": "筛选",
+    "squads.list.filterTitle": "筛选小队",
+    "squads.list.filterClear": "清除筛选",
+    "squads.list.filterGroupLeaders": "队长",
+    "squads.list.filterGroupCreators": "创建者",
+    "squads.list.filterSearch": "搜索选项",
+    "squads.list.filterNoMatch": "没有匹配的选项。",
+    "squads.list.resultCount": "{{visible}} / {{total}}",
+    "squads.list.noMatches": "没有小队匹配当前筛选。",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {

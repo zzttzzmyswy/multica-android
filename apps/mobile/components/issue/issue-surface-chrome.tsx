@@ -60,6 +60,10 @@ export type IssueSection = {
   assigneeType?: "member" | "agent" | "squad";
   assigneeId?: string;
   unassigned?: boolean;
+  /** Row count before folding. Set by `collapseSections` on a folded section,
+   *  whose `data` is emptied so the list renders no rows — the header still
+   *  has to show how many rows are hidden. */
+  count?: number;
 };
 
 /**
@@ -440,51 +444,96 @@ function Chip({ label, onClear }: { label: string; onClear: () => void }) {
  * Section header for both grouping modes. Assignee lanes render the actor
  * avatar + name through the same actor lookup the filter picker uses; the
  * unassigned lane renders "Unassigned" (web filter includeNoAssignee label).
+ *
+ * The whole header is the fold toggle when the surface passes one: web's list
+ * groups are an `Accordion.Root multiple` (`list-view.tsx:337-349`), and the
+ * mobile table already folds its groups the same way — chevron, pressable
+ * row, `expanded` in the accessibility state. Without a `onToggle` the header
+ * stays a plain row, which is what the surfaces that don't fold pass.
+ *
+ * The count comes from `section.count` when the section is folded, because a
+ * folded section's `data` is empty by construction (see `collapseSections`).
  */
-export function IssueSectionHeader({ section }: { section: IssueSection }) {
+export function IssueSectionHeader({
+  section,
+  collapsed = false,
+  onToggle,
+}: {
+  section: IssueSection;
+  collapsed?: boolean;
+  onToggle?: () => void;
+}) {
   const { getName } = useActorLookup();
   const statusLabel = useStatusLabel();
-  if (section.status) {
+  const { t } = useTranslation();
+  const { colorScheme } = useColorScheme();
+  const count = section.count ?? section.data.length;
+
+  const chevron = onToggle ? (
+    <Ionicons
+      name={collapsed ? "chevron-forward" : "chevron-down"}
+      size={13}
+      color={THEME[colorScheme].mutedForeground}
+    />
+  ) : null;
+
+  const body = section.status ? (
+    <>
+      {chevron}
+      <StatusIcon status={section.status} size={14} />
+      <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+        {statusLabel(section.status)}
+      </Text>
+    </>
+  ) : section.unassigned ? (
+    <>
+      {chevron}
+      <View className="w-[18px]" />
+      <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+        {translate("filter.noAssignee")}
+      </Text>
+    </>
+  ) : (
+    <>
+      {chevron}
+      <ActorAvatar
+        type={section.assigneeType}
+        id={section.assigneeId}
+        size={18}
+      />
+      <Text
+        numberOfLines={1}
+        className="flex-1 text-xs font-medium text-muted-foreground"
+      >
+        {getName(section.assigneeType, section.assigneeId)}
+      </Text>
+    </>
+  );
+
+  if (!onToggle) {
     return (
       <View className="flex-row items-center gap-2 px-4 py-2 bg-background">
-        <StatusIcon status={section.status} size={14} />
-        <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
-          {statusLabel(section.status)}
-        </Text>
-        <Text className="text-xs text-muted-foreground/60">
-          {section.data.length}
-        </Text>
+        {body}
+        <Text className="text-xs text-muted-foreground/60">{count}</Text>
       </View>
     );
   }
+
   return (
-    <View className="flex-row items-center gap-2 px-4 py-2 bg-background">
-      {section.unassigned ? (
-        <>
-          <View className="w-[18px]" />
-          <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
-            {translate("filter.noAssignee")}
-          </Text>
-        </>
-      ) : (
-        <>
-          <ActorAvatar
-            type={section.assigneeType}
-            id={section.assigneeId}
-            size={18}
-          />
-          <Text
-            numberOfLines={1}
-            className="flex-1 text-xs font-medium text-muted-foreground"
-          >
-            {getName(section.assigneeType, section.assigneeId)}
-          </Text>
-        </>
-      )}
-      <Text className="text-xs text-muted-foreground/60">
-        {section.data.length}
-      </Text>
-    </View>
+    <Pressable
+      onPress={onToggle}
+      className="flex-row items-center gap-2 px-4 py-2 bg-background active:bg-secondary/40"
+      accessibilityRole="button"
+      accessibilityState={{ expanded: !collapsed }}
+      accessibilityLabel={
+        collapsed
+          ? t("a11y.tableExpandGroup")
+          : t("a11y.tableCollapseGroup")
+      }
+    >
+      {body}
+      <Text className="text-xs text-muted-foreground/60">{count}</Text>
+    </Pressable>
   );
 }
 

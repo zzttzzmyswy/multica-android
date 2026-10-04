@@ -24,6 +24,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, View } from "react-native";
+import { router } from "expo-router";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -53,13 +54,23 @@ import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { issueAttachmentsOptions } from "@/data/queries/issues";
 import { useFailedCommentsStore } from "@/data/stores/failed-comments-store";
+import { useActorProfileStore } from "@/data/stores/actor-profile-store";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { ReactionBar } from "./reaction-bar";
+import { RerunButton } from "./rerun-button";
 import { useCommentLongPress } from "./comment-context-menu";
+import { retryableAgentFailureComment } from "@/lib/run-retry";
+import { canManageRole } from "@/lib/member-guards";
+import { useCurrentMemberRole } from "@/data/use-current-member-role";
 import { useCommentSelectStore } from "@/data/comment-select-store";
 import { useTranslation } from "@/lib/i18n/react";
+import {
+  useIsCommentCollapsed,
+  useToggleCommentCollapsed,
+} from "@/data/stores/comment-collapse-store";
+import { commentPreview } from "@/lib/comment-collapse";
 import {
   deriveThreadResolution,
   foldThreadReplies,
@@ -118,6 +129,17 @@ export function CommentCard({
     [replies, replyResolutionId],
   );
   const [expanded, setExpanded] = useState(false);
+  // Per-comment fold (iteration 179, G20). The state lives here — not inside
+  // `CommentBody` — because folding a root has to hide its replies as well,
+  // and the replies are rendered by this component. Replies themselves are
+  // never foldable: web's `CommentRow` has no chevron either
+  // (`packages/views/issues/components/comment-card.tsx:849`).
+  const foldWsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const toggleFolded = useToggleCommentCollapsed();
+  const rootFolded = useIsCommentCollapsed(foldWsId, issueId, entry.id);
+  const handleToggleFold = useCallback(() => {
+    if (foldWsId) toggleFolded(foldWsId, issueId, entry.id);
+  }, [foldWsId, toggleFolded, issueId, entry.id]);
   // Highlight ring while a long-press action sheet is on screen — child
   // CommentBody flips this via onPressChange so the outer bubble shell can
   // visually bind the sheet to the targeted entry.
@@ -143,7 +165,10 @@ export function CommentCard({
 
   // Inbox deep-link target inside a folded thread expands automatically —
   // otherwise tapping a notification would just reveal a bar with no content
-  // and force the user to tap again.
+  // and force the user to tap again. Same reasoning applies to a manual fold:
+  // deep-linking INTO a folded thread must not leave the target invisible, so
+  // the fold is lifted rather than fighting the highlight. Web has no
+  // equivalent (its folded root still shows every reply).
   useEffect(() => {
     if (resolution.kind === "none" || !highlightedCommentId) return;
     if (
@@ -151,8 +176,20 @@ export function CommentCard({
       replies.some((r) => r.id === highlightedCommentId)
     ) {
       setExpanded(true);
+      if (foldWsId && rootFolded) {
+        toggleFolded(foldWsId, issueId, entry.id);
+      }
     }
-  }, [resolution.kind, highlightedCommentId, entry.id, replies]);
+  }, [
+    resolution.kind,
+    highlightedCommentId,
+    entry.id,
+    replies,
+    foldWsId,
+    rootFolded,
+    toggleFolded,
+    issueId,
+  ]);
 
   if (rootResolved && !expanded) {
     return (
@@ -199,8 +236,11 @@ export function CommentCard({
             issueId={issueId}
             issueIdentifier={issueIdentifier}
             onPressChange={handlePressChange}
+            collapsed={rootFolded}
+            replyCount={replies.length}
+            onToggleCollapse={handleToggleFold}
           />
-          {replyResolutionId !== null && !expanded ? (
+          {rootFolded ? null : replyResolutionId !== null && !expanded ? (
             <>
               {/* Reply-mode resolution, folded: the other replies collapse
                *  behind one bar and the resolution stays pinned below it —
@@ -528,11 +568,26 @@ function CommentBody({
   issueId,
   issueIdentifier,
   onPressChange,
+  collapsed = false,
+  replyCount = 0,
+  onToggleCollapse,
 }: {
   entry: TimelineEntry;
   issueId: string;
   issueIdentifier: string | undefined;
   onPressChange?: (entryId: string, pressed: boolean) => void;
+  /**
+   * This row's body is folded. The fold STATE lives one level up (in
+   * `CommentCard`), because folding a root has to hide its replies too and
+   * those are rendered by the card, not by this row.
+   */
+  collapsed?: boolean;
+  /** Reply count shown beside a folded root's preview (web parity). */
+  replyCount?: number;
+  /** Supplied only for the thread root — replies have no fold toggle, same
+   *  as web, where the chevron lives on the root header and `CommentRow`
+   *  never renders one (`comment-card.tsx:849`). */
+  onToggleCollapse?: () => void;
 }) {
   // When this comment is the active selection target, drop the long-press
   // wrapper AND make the markdown selectable — so the next long-press
@@ -543,11 +598,23 @@ function CommentBody({
     (s) => s.selectingId === entry.id,
   );
   const { getName } = useActorLookup();
+  const { colorScheme } = useColorScheme();
   const userId = useAuthStore((s) => s.user?.id);
+  const { role } = useCurrentMemberRole();
+  // Comment authors are the highest-value "who is this?" surface on the
+  // phone: the row shows a name and nothing else. The avatar itself owns no
+  // gesture here (the bubble's long-press is on the wrapper, not the header),
+  // so it is safe to make it its own press target.
+  const openProfile = useActorProfileStore((s) => s.open);
+  const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const timeAgo = useTimeAgo();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
   const toggle = useToggleCommentReaction(issueId);
+  // Fold state is owned by `CommentCard` (it has to hide the replies too) and
+  // passed down; this row only renders the chevron + summary the parent asked
+  // for.
+  const isFolded = collapsed;
   const qc = useQueryClient();
   const createComment = useCreateComment(issueId);
   // Inline edit (iteration-127). Web opens a rich editor from the comment's
@@ -581,6 +648,13 @@ function CommentBody({
   // Reactions live on TimelineEntry.reactions (mirrored from Comment).
   // Pass through to the bar; toggle finds existing match by emoji + actor.
   const reactions: Reaction[] = (entry.reactions ?? []) as Reaction[];
+
+  // A failed agent run posts a system comment naming the run that died. The
+  // predicate is web's, clause for clause — see `lib/run-retry.ts`. The task id
+  // is narrowed to a string so the button never renders without a target.
+  const retryTaskId = retryableAgentFailureComment(entry)
+    ? entry.source_task_id
+    : null;
 
   const onToggleReaction = useCallback(
     (emoji: string) => {
@@ -633,13 +707,21 @@ function CommentBody({
   // + handles + Copy/Look Up callout. The outer bubble shell carries a
   // translucent primary-tint background as the mode cue (no Done pill).
   // Exit: scroll the timeline, leave the issue, or long-press another body.
+  //
+  // The edit entry is offered to the author, and to a workspace owner/admin
+  // editing another MEMBER's comment (G23) — the same pair the menu itself
+  // gates on (web comment-card.tsx:539). Passing a callback is what makes the
+  // menu show "Edit" at all, so this condition and the menu's `canEditEntry`
+  // must stay in step: too narrow and a moderator's edit silently disappears,
+  // too wide and the menu offers an editor the server would 403.
+  const canOfferEdit =
+    entry.actor_type === "member" &&
+    (entry.actor_id === userId || canManageRole(role));
   const longPress = useCommentLongPress(
     entry,
     issueId,
     issueIdentifier,
-    entry.actor_type === "member" && entry.actor_id === userId
-      ? () => setEditing(true)
-      : undefined,
+    canOfferEdit && entry.content ? () => setEditing(true) : undefined,
   );
 
   useEffect(() => {
@@ -650,11 +732,40 @@ function CommentBody({
   const body = (
     <View className="gap-2">
       <View className="flex-row items-center gap-2">
+        {/* Fold toggle — root only. Web puts the same chevron in its comment
+            header (`comment-card.tsx:849`) and hides only the root body;
+            mobile folds the whole bubble (replies included), which is why the
+            state lives in `CommentCard` and not here. See
+            `lib/comment-collapse.ts` for the granularity note. */}
+        {onToggleCollapse ? (
+          <Pressable
+            onPress={onToggleCollapse}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t(
+              isFolded ? "comment.expandAria" : "comment.collapseAria",
+              { name },
+            )}
+            className="active:opacity-60"
+          >
+            <Ionicons
+              name={isFolded ? "chevron-forward" : "chevron-down"}
+              size={13}
+              color={THEME[colorScheme].mutedForeground}
+            />
+          </Pressable>
+        ) : null}
         <ActorAvatar
           type={entry.actor_type as "member" | "agent"}
           id={entry.actor_id}
           size={24}
           showPresence
+          onPressProfile={
+            entry.actor_id &&
+            (entry.actor_type === "member" || entry.actor_type === "agent")
+              ? () => openProfile(entry.actor_type as "member" | "agent", entry.actor_id)
+              : undefined
+          }
         />
         <Text
           numberOfLines={1}
@@ -670,51 +781,107 @@ function CommentBody({
           · {timeAgo(entry.created_at)}
           {edited ? ` · ${t("comment.edited")}` : ""}
         </Text>
+        {/* Folded row keeps the summary the hidden body would have given:
+            an 80-char preview and the reply count, same as web's collapsed
+            header (`comment-card.tsx:873-882`). */}
+        {isFolded ? (
+          <Text
+            numberOfLines={1}
+            ellipsizeMode="tail"
+            className="min-w-0 flex-1 text-xs text-muted-foreground"
+          >
+            {commentPreview(entry.content)}
+          </Text>
+        ) : null}
+        {isFolded && replyCount > 0 ? (
+          <Text className="shrink-0 text-xs text-muted-foreground">
+            {t(
+              replyCount === 1
+                ? "comment.replyCount_one"
+                : "comment.replyCount_other",
+              { count: replyCount },
+            )}
+          </Text>
+        ) : null}
       </View>
-      {editing ? (
-        <CommentEditBox
-          initialContent={entry.content ?? ""}
-          saving={editComment.isPending}
-          onCancel={() => setEditing(false)}
-          onSave={async (next) => {
-            try {
-              await editComment.mutateAsync({
-                commentId: entry.id,
-                content: next,
-              });
-              setEditing(false);
-            } catch {
-              // Keep the editor open with the draft intact so the text is
-              // never lost; `useEditComment` already rolled the optimistic
-              // timeline patch back to the server value.
-              Alert.alert(t("comment.updateFailed"));
-            }
-          }}
-        />
-      ) : entry.content ? (
-        <Markdown
-          content={entry.content}
-          attachments={attachments}
-          selectable={isSelecting}
-        />
-      ) : null}
-      <CommentAttachmentList
-        attachments={entry.attachments}
-        content={entry.content}
-        source={{ kind: "issue", name: issueIdentifier }}
-      />
-      {failed ? (
-        <FailedActions
-          error={failed.error}
-          onRetry={handleRetry}
-          onDiscard={handleDiscard}
-        />
-      ) : (
-        <ReactionBar
-          reactions={reactions}
-          currentUserId={userId}
-          onToggle={onToggleReaction}
-        />
+      {isFolded ? null : (
+        <>
+          {editing ? (
+            <CommentEditBox
+              initialContent={entry.content ?? ""}
+              saving={editComment.isPending}
+              onCancel={() => setEditing(false)}
+              onSave={async (next) => {
+                try {
+                  await editComment.mutateAsync({
+                    commentId: entry.id,
+                    content: next,
+                  });
+                  setEditing(false);
+                } catch {
+                  // Keep the editor open with the draft intact so the text is
+                  // never lost; `useEditComment` already rolled the optimistic
+                  // timeline patch back to the server value.
+                  Alert.alert(t("comment.updateFailed"));
+                }
+              }}
+            />
+          ) : entry.content ? (
+            <Markdown
+              content={entry.content}
+              attachments={attachments}
+              selectable={isSelecting}
+            />
+          ) : null}
+          <CommentAttachmentList
+            attachments={entry.attachments}
+            content={entry.content}
+            source={{ kind: "issue", name: issueIdentifier }}
+          />
+          {failed ? (
+            <FailedActions
+              error={failed.error}
+              onRetry={handleRetry}
+              onDiscard={handleDiscard}
+            />
+          ) : (
+            <>
+              {/* G22 — the failure notice an agent run leaves behind carries the
+                  id of the run that died, so the timeline can offer the same
+                  retry the runs panel has (`run-row.tsx`). Web renders it here,
+                  between the body and the reaction bar
+                  (comment-card.tsx:716-722). */}
+              {retryTaskId ? (
+                <View className="pt-1">
+                  <RerunButton
+                    issueId={issueId}
+                    taskId={retryTaskId}
+                    variant="default"
+                  />
+                </View>
+              ) : null}
+              <ReactionBar
+                reactions={reactions}
+                currentUserId={userId}
+                onToggle={onToggleReaction}
+                onOpenFullPicker={
+                  wsSlug
+                    ? () =>
+                        router.push({
+                          pathname:
+                            "/[workspace]/issue/[id]/comment/[commentId]/emoji-picker",
+                          params: {
+                            workspace: wsSlug,
+                            id: issueId,
+                            commentId: entry.id,
+                          },
+                        })
+                    : undefined
+                }
+              />
+            </>
+          )}
+        </>
       )}
     </View>
   );

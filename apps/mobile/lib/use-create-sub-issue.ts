@@ -5,9 +5,9 @@
  *
  * Carried as route params rather than through `useNewIssueDraftStore`: the
  * parent is a property of the *navigation*, not a chip the user edits on the
- * form, and `new-issue.tsx` can read params without racing the draft store's
- * mount-time reset (the exact hazard `use-create-issue-from-column.ts` has to
- * work around).
+ * form, so it belongs to this push rather than to the draft — and a draft
+ * restored from disk must not be able to resurrect a parent the user is no
+ * longer creating under.
  */
 import { useCallback } from "react";
 import { router } from "expo-router";

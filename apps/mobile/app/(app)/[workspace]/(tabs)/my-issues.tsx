@@ -85,6 +85,7 @@ import { useDebouncedTableSearch } from "@/lib/use-debounced-table-search";
 import { useBoardHiddenColumns } from "@/lib/use-board-hidden-columns";
 import { myIssueTableScope } from "@/lib/issue-table-group-counts";
 import { useGroupingProperty } from "@/lib/use-grouping-property";
+import { useListSectionFolding } from "@/data/stores/issue-workbench-layout-store";
 import { BOARD_STATUSES } from "@/lib/issue-status-core";
 import {
   applyIssueFilters,
@@ -136,6 +137,7 @@ export default function MyIssues() {
   const resetTableColumns = useMyIssuesViewStore((s) => s.resetTableColumns);
   const createSubIssue = useCreateSubIssue();
   const tableGrouping = useMyIssuesViewStore((s) => s.tableGrouping);
+  const tableHierarchy = useMyIssuesViewStore((s) => s.tableHierarchy);
   const setTableGrouping = useMyIssuesViewStore((s) => s.setTableGrouping);
   const grouping = useMyIssuesViewStore((s) => s.grouping);
   const groupingProperty = useGroupingProperty(grouping);
@@ -153,6 +155,10 @@ export default function MyIssues() {
   const dateFilter = useMyIssuesViewStore((s) => s.dateFilter);
   const workingOnly = useMyIssuesViewStore((s) => s.workingOnly);
   const showSubIssues = useMyIssuesViewStore((s) => s.showSubIssues);
+  const cardProperties = useMyIssuesViewStore((s) => s.cardProperties);
+  // The custom-property ids a card draws — web's second card display
+  // dimension, saved with the view like `cardProperties` above.
+  const cardPropertyIds = useMyIssuesViewStore((s) => s.cardPropertyIds);
   // Running-agent projection for the working-only filter. `undefined` while
   // the snapshot loads — the predicate fails closed on it, which is the
   // intended "only what is provably working" read.
@@ -251,8 +257,26 @@ export default function MyIssues() {
   const { baseline: chipBaseline, resetDimension: resetChipDimension } =
     useFilterChipBaseline(activeView?.query ?? null, useMyIssuesViewStore);
   const snapshotSource = useMemo(
-    () => ({ ...filterState, sortBy, sortDirection, grouping, showSubIssues }),
-    [filterState, sortBy, sortDirection, grouping, showSubIssues],
+    () => ({
+      ...filterState,
+      sortBy,
+      sortDirection,
+      grouping,
+      showSubIssues,
+      tableHierarchy,
+      cardProperties,
+      cardPropertyIds,
+    }),
+    [
+      filterState,
+      sortBy,
+      sortDirection,
+      grouping,
+      showSubIssues,
+      tableHierarchy,
+      cardProperties,
+      cardPropertyIds,
+    ],
   );
   const modifiedActive = useMemo(
     () => (activeView ? !viewMatchesSlice(activeView, snapshotSource, view) : false),
@@ -456,6 +480,11 @@ export default function MyIssues() {
     });
   }, [sorted, grouping]);
 
+  // Fold state is per device, per workspace, keyed by section key — see
+  // `data/stores/issue-workbench-layout-store.ts`.
+  const { sections: visibleSections, collapsed, toggle } =
+    useListSectionFolding(wsId, sections);
+
   // Whether the empty state should say "no matches under your filters"
   // instead of "nothing here for this scope" — i.e. whether any dimension
   // the user turned on is narrowing the list. Delegates to the shared
@@ -576,6 +605,8 @@ export default function MyIssues() {
         />
       ) : view === "board" ? (
         <BoardView
+          cardProperties={cardProperties}
+          cardPropertyIds={cardPropertyIds}
           issues={sorted}
           grouping={grouping}
           groupingProperty={groupingProperty}
@@ -608,6 +639,7 @@ export default function MyIssues() {
           grouping={tableGrouping}
           onGroupingChange={setTableGrouping}
           groupCountQuery={groupCountQuery}
+          hierarchy={tableHierarchy}
           sortBy={sortBy}
           sortDirection={sortDirection}
           onSort={(field, direction) => {
@@ -637,6 +669,8 @@ export default function MyIssues() {
         />
       ) : view === "swimlane" ? (
         <SwimlaneView
+          cardProperties={cardProperties}
+          cardPropertyIds={cardPropertyIds}
           issues={sorted}
           grouping={swimlaneGrouping}
           onGroupingChange={(next) =>
@@ -654,7 +688,7 @@ export default function MyIssues() {
         />
       ) : (
         <SectionList
-          sections={sections}
+          sections={visibleSections}
           keyExtractor={(item) => item.id}
           stickySectionHeadersEnabled={false}
           ItemSeparatorComponent={IssueSeparator}
@@ -663,7 +697,11 @@ export default function MyIssues() {
           maxToRenderPerBatch={10}
           updateCellsBatchingPeriod={40}
           renderSectionHeader={({ section }) => (
-            <IssueSectionHeader section={section} />
+            <IssueSectionHeader
+              section={section}
+              collapsed={collapsed.has(section.key)}
+              onToggle={() => toggle(section.key)}
+            />
           )}
           contentContainerClassName={
             batchSelectionMode ? "pb-48" : "pb-6"

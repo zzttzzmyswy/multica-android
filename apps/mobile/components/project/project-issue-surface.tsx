@@ -82,6 +82,7 @@ import {
 import { assigneeTypesForScopeTab } from "@/lib/issue-table-group-counts";
 import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-workspace-change";
 import { useGroupingProperty } from "@/lib/use-grouping-property";
+import { useListSectionFolding } from "@/data/stores/issue-workbench-layout-store";
 import { BOARD_STATUSES } from "@/lib/issue-status-core";
 import {
   applyIssueFilters,
@@ -139,6 +140,11 @@ export function ProjectIssueSurface({
   const setTableGrouping = useProjectIssuesViewStore((s) => s.setTableGrouping);
   const grouping = useProjectIssuesViewStore((s) => s.grouping);
   const showSubIssues = useProjectIssuesViewStore((s) => s.showSubIssues);
+  const tableHierarchy = useProjectIssuesViewStore((s) => s.tableHierarchy);
+  const cardProperties = useProjectIssuesViewStore((s) => s.cardProperties);
+  // The custom-property ids a card draws — web's second card display
+  // dimension, saved with the view like `cardProperties` above.
+  const cardPropertyIds = useProjectIssuesViewStore((s) => s.cardPropertyIds);
   const groupingProperty = useGroupingProperty(grouping);
   const sortBy = useProjectIssuesViewStore((s) => s.sortBy);
   const sortDirection = useProjectIssuesViewStore((s) => s.sortDirection);
@@ -293,8 +299,26 @@ export function ProjectIssueSurface({
   const { baseline: chipBaseline, resetDimension: resetChipDimension } =
     useFilterChipBaseline(activeView?.query ?? null, useProjectIssuesViewStore);
   const snapshotSource = useMemo(
-    () => ({ ...filterState, sortBy, sortDirection, grouping, showSubIssues }),
-    [filterState, sortBy, sortDirection, grouping, showSubIssues],
+    () => ({
+      ...filterState,
+      sortBy,
+      sortDirection,
+      grouping,
+      showSubIssues,
+      tableHierarchy,
+      cardProperties,
+      cardPropertyIds,
+    }),
+    [
+      filterState,
+      sortBy,
+      sortDirection,
+      grouping,
+      showSubIssues,
+      tableHierarchy,
+      cardProperties,
+      cardPropertyIds,
+    ],
   );
   const modifiedActive = useMemo(
     () =>
@@ -419,6 +443,11 @@ export function ProjectIssueSurface({
     });
   }, [sorted, grouping]);
 
+  // Fold state is per device, per workspace, keyed by section key — see
+  // `data/stores/issue-workbench-layout-store.ts`.
+  const { sections: visibleSections, collapsed, toggle } =
+    useListSectionFolding(wsId, sections);
+
   const hasActiveFilterChips = useMemo(() => {
     const f = filterState;
     return (
@@ -542,6 +571,8 @@ export function ProjectIssueSurface({
             </ScrollView>
           ) : null}
           <BoardView
+            cardProperties={cardProperties}
+            cardPropertyIds={cardPropertyIds}
             issues={sorted}
             grouping={grouping}
             groupingProperty={groupingProperty}
@@ -570,6 +601,7 @@ export function ProjectIssueSurface({
           grouping={tableGrouping}
           onGroupingChange={setTableGrouping}
           groupCountQuery={groupCountQuery}
+          hierarchy={tableHierarchy}
           sortBy={sortBy}
           sortDirection={sortDirection}
           search={tableSearch}
@@ -591,6 +623,8 @@ export function ProjectIssueSurface({
         />
       ) : view === "swimlane" ? (
         <SwimlaneView
+          cardProperties={cardProperties}
+          cardPropertyIds={cardPropertyIds}
           issues={sorted}
           grouping={swimlaneGrouping}
           onGroupingChange={(next) =>
@@ -604,14 +638,18 @@ export function ProjectIssueSurface({
         />
       ) : (
         <SectionList
-          sections={sections}
+          sections={visibleSections}
           keyExtractor={(item) => item.id}
           stickySectionHeadersEnabled={false}
           ItemSeparatorComponent={() => (
             <View className="h-px bg-border ml-4" />
           )}
           renderSectionHeader={({ section }) => (
-            <IssueSectionHeader section={section} />
+            <IssueSectionHeader
+              section={section}
+              collapsed={collapsed.has(section.key)}
+              onToggle={() => toggle(section.key)}
+            />
           )}
           ListHeaderComponent={header ?? null}
           contentContainerClassName={

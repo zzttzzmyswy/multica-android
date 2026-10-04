@@ -107,4 +107,72 @@ describe("patchSubscribersList", () => {
     const patched = patchSubscribersList(withAgent, "issue-1", "user-2", true);
     expect(patched.some((s) => s.user_type === "agent" && s.user_id === "agent-x")).toBe(true);
   });
+
+  // The picker (iteration 180 / G25) subscribes actors other than the signed-in
+  // member, so the target type has to travel with the id. Every pre-existing
+  // call site omits it and must keep its exact old "member" behaviour.
+  describe("targeted patch (picker)", () => {
+    it("defaults to a member row, preserving every pre-picker call site", () => {
+      const patched = patchSubscribersList(existing, "issue-1", "user-9", false);
+      const row = patched.find((s) => s.user_id === "user-9");
+      expect(row?.user_type).toBe("member");
+    });
+
+    it("appends an agent row when the target is an agent", () => {
+      const patched = patchSubscribersList(
+        existing,
+        "issue-1",
+        "agent-9",
+        false,
+        "agent",
+      );
+      const row = patched.find((s) => s.user_id === "agent-9");
+      expect(row?.user_type).toBe("agent");
+      expect(row?.reason).toBe("manual");
+    });
+
+    it("drops an agent row on unsubscribe without touching same-id members", () => {
+      // Ids are only unique WITHIN a type, so a member and an agent can share
+      // one. Filtering on the id alone would drop the wrong row.
+      const shared = [...existing, sub("agent", "user-2")];
+      const patched = patchSubscribersList(
+        shared,
+        "issue-1",
+        "user-2",
+        true,
+        "agent",
+      );
+      expect(patched.map((s) => `${s.user_type}:${s.user_id}`)).toEqual([
+        "member:user-2",
+      ]);
+    });
+
+    it("is idempotent per target type", () => {
+      const once = patchSubscribersList(
+        existing,
+        "issue-1",
+        "x-1",
+        false,
+        "agent",
+      );
+      const twice = patchSubscribersList(once, "issue-1", "x-1", false, "agent");
+      expect(twice).toEqual(once);
+    });
+
+    it("treats a same-id member row as NOT the agent target", () => {
+      // Subscribe agent "user-2" while member "user-2" is already subscribed:
+      // the agent row must still be added, not suppressed as a duplicate.
+      const patched = patchSubscribersList(
+        existing,
+        "issue-1",
+        "user-2",
+        false,
+        "agent",
+      );
+      expect(patched).toHaveLength(2);
+      expect(
+        patched.some((s) => s.user_type === "agent" && s.user_id === "user-2"),
+      ).toBe(true);
+    });
+  });
 });

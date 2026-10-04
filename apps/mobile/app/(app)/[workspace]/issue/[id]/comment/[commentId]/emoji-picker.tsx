@@ -10,24 +10,20 @@
  * the right `existing` value so re-tapping an active emoji removes it
  * (matches web behaviour and the inline ReactionBar toggle semantics).
  *
- * Library: `rn-emoji-keyboard` (TheWidlarzGroup/rn-emoji-keyboard). We
- * embed the `EmojiKeyboard` component (no built-in modal) inside the
- * Expo Router formSheet route body, so the iOS UISheetPresentationController
- * still owns the chrome (grabber, detents, drag-to-dismiss).
+ * The sheet body itself lives in `components/issue/emoji-picker-sheet-body`
+ * — the issue-level picker route renders the same body with a different
+ * target (iteration 179, G19).
  */
 import { useCallback, useMemo } from "react";
-import { View } from "react-native";
-import { useLocalSearchParams, router } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
-import { EmojiKeyboard, type EmojiType } from "rn-emoji-keyboard";
 import type { Reaction } from "@multica/core/types";
-import { Text } from "@/components/ui/text";
 import { issueTimelineOptions } from "@/data/queries/issues";
 import { useToggleCommentReaction } from "@/data/mutations/issues";
 import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useTranslation } from "@/lib/i18n/react";
+import { EmojiPickerSheetBody } from "@/components/issue/emoji-picker-sheet-body";
 
 export default function CommentEmojiPickerRoute() {
   const { id, commentId } = useLocalSearchParams<{
@@ -37,7 +33,7 @@ export default function CommentEmojiPickerRoute() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const userId = useAuthStore((s) => s.user?.id);
   const toggle = useToggleCommentReaction(id);
-  const { colorScheme } = useColorScheme();
+  const { t } = useTranslation();
 
   const { data: timeline = [] } = useQuery(issueTimelineOptions(wsId, id));
   const entry = useMemo(
@@ -51,64 +47,18 @@ export default function CommentEmojiPickerRoute() {
   );
 
   const onSelect = useCallback(
-    (picked: EmojiType) => {
-      const existing = reactions.find(
-        (r) =>
-          r.emoji === picked.emoji &&
-          r.actor_type === "member" &&
-          r.actor_id === userId,
-      );
-      toggle.mutate({ commentId, emoji: picked.emoji, existing });
-      router.back();
+    (emoji: string, existing: Reaction | undefined) => {
+      toggle.mutate({ commentId, emoji, existing });
     },
-    [reactions, userId, toggle, commentId],
+    [toggle, commentId],
   );
 
-  const theme = THEME[colorScheme];
-
   return (
-    <View className="flex-1">
-      <View className="px-4 pt-3 pb-2">
-        <Text className="text-lg font-semibold text-foreground">
-          Add Reaction
-        </Text>
-      </View>
-      <View className="flex-1">
-        <EmojiKeyboard
-          onEmojiSelected={onSelect}
-          enableSearchBar
-          enableRecentlyUsed
-          categoryPosition="top"
-          theme={{
-            backdrop: theme.background,
-            knob: theme.mutedForeground,
-            container: theme.popover,
-            header: theme.foreground,
-            skinTonesContainer: theme.secondary,
-            category: {
-              icon: theme.mutedForeground,
-              iconActive: theme.foreground,
-              container: theme.popover,
-              containerActive: theme.secondary,
-            },
-            search: {
-              background: theme.secondary,
-              text: theme.foreground,
-              placeholder: theme.mutedForeground,
-              icon: theme.mutedForeground,
-            },
-            customButton: {
-              icon: theme.mutedForeground,
-              iconPressed: theme.foreground,
-              background: theme.secondary,
-              backgroundPressed: theme.muted,
-            },
-            emoji: {
-              selected: theme.secondary,
-            },
-          }}
-        />
-      </View>
-    </View>
+    <EmojiPickerSheetBody
+      title={t("issue.reaction.add")}
+      reactions={reactions}
+      currentUserId={userId}
+      onSelect={onSelect}
+    />
   );
 }

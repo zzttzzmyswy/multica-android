@@ -36,6 +36,8 @@ import {
   useToggleCommentReaction,
 } from "@/data/mutations/issues";
 import { QUICK_EMOJIS } from "@/lib/quick-emojis";
+import { canManageRole } from "@/lib/member-guards";
+import { useCurrentMemberRole } from "@/data/use-current-member-role";
 import { useTranslation } from "@/lib/i18n/react";
 
 const QUICK_ROW_SIZE = 5;
@@ -54,9 +56,23 @@ export function useCommentLongPress(
   const deleteComment = useDeleteComment(issueId);
   const resolveComment = useResolveComment(issueId);
   const { getName } = useActorLookup();
+  const { role } = useCurrentMemberRole();
 
   const onLongPress = useCallback(() => {
     const isOwn = entry.actor_type === "member" && entry.actor_id === userId;
+    // G23 — workspace owners and admins moderate anyone's comment (web
+    // comment-card.tsx:539-540; server re-checks at comment.go:507-512).
+    // `canModerate` is null-role safe: an unresolved list is not a manager.
+    const canModerate = canManageRole(role);
+    const canEditEntry =
+      isOwn || (canModerate && entry.actor_type === "member");
+    const canDeleteEntry = isOwn || canModerate;
+    // Resolved once — the delete confirmation and the reply target both want
+    // the author's display name.
+    const authorName = getName(
+      entry.actor_type as "member" | "agent" | null | undefined,
+      entry.actor_id,
+    );
     const isRoot = !entry.parent_id;
     const resolved = !!entry.resolved_at;
     const hasContent = !!entry.content;
@@ -90,7 +106,7 @@ export function useCommentLongPress(
     // opens a rich editor. Mobile's editor is text-only, so an
     // attachment-only comment (no content) has nothing to edit and stays
     // out of the sheet rather than opening an empty editor.
-    if (isOwn && hasContent && onEdit) push(t("menu.edit"), { kind: "edit" });
+    if (canEditEntry && hasContent && onEdit) push(t("menu.edit"), { kind: "edit" });
     push(t("menu.react"), { kind: "react" });
     if (hasContent) {
       push(t("menu.copy"), { kind: "copy" });
@@ -114,11 +130,11 @@ export function useCommentLongPress(
         { kind: "resolve" },
       );
     }
-    if (isOwn) push(t("menu.delete"), { kind: "delete" });
+    if (canDeleteEntry) push(t("menu.delete"), { kind: "delete" });
     push(t("menu.cancel"), { kind: "cancel" });
 
     const cancelButtonIndex = options.length - 1;
-    const destructiveButtonIndex = isOwn
+    const destructiveButtonIndex = canDeleteEntry
       ? actions.findIndex((a) => a.kind === "delete")
       : undefined;
 
@@ -141,13 +157,9 @@ export function useCommentLongPress(
             // Set the reply target — the InlineCommentComposer subscribes
             // to this store, auto-expands, and threads the next submit
             // under entry.id via useCreateComment's `parentId`.
-            const actorName = getName(
-              entry.actor_type as "member" | "agent" | null | undefined,
-              entry.actor_id,
-            );
             useReplyTargetStore.getState().setTarget({
               commentId: entry.id,
-              actorName: actorName || "comment",
+              actorName: authorName || "comment",
               preview: entry.content ?? "",
             });
             return;
@@ -200,8 +212,17 @@ export function useCommentLongPress(
             });
             return;
           case "delete":
+            // Deleting someone ELSE's comment is only reachable as a moderator,
+            // so the confirmation names the author: an admin working through a
+            // long thread should not have to scroll back to check whose comment
+            // the sheet belonged to before confirming an irreversible delete.
+            // One's own delete keeps the unqualified wording — there is no
+            // ambiguity to resolve. (Web uses one message for both:
+            // comment-card.tsx's `comment.deleteCommentMessage`.)
             Alert.alert(
-              t("comment.deleteCommentTitle"),
+              isOwn
+                ? t("comment.deleteCommentTitle")
+                : t("comment.moderateDeleteTitle", { name: authorName }),
               t("comment.deleteCommentMessage"),
               [
                 { text: t("menu.cancel"), style: "cancel" },
@@ -227,6 +248,7 @@ export function useCommentLongPress(
     deleteComment,
     resolveComment,
     getName,
+    role,
     onEdit,
   ]);
 

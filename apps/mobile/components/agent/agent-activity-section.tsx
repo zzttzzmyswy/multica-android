@@ -59,6 +59,8 @@ import {
 } from "@/lib/agent-activity";
 import { isTranscriptViewable } from "@/lib/task-transcript";
 import { RunTranscriptDialog } from "./run-transcript-dialog";
+import { AttributionBadge } from "./attribution-badge";
+import { attributionShouldRender } from "@/lib/task-attribution";
 
 // Task status → text color, sharing `enum.taskStatus` vocabulary with the
 // rest of the app.
@@ -380,6 +382,17 @@ function ActivityTaskRow({
               {durationText}
             </Text>
           ) : null}
+          {/* Accountable member (MUL-4302 §9): whose behalf this run is on.
+              The separator is inside the guard, so a run whose human never
+              resolved renders neither the avatar nor a dangling middot —
+              `attributionShouldRender` is the same condition the badge itself
+              applies (web's two call sites guard identically). */}
+          {attributionShouldRender(task.attribution) ? (
+            <>
+              <Text className="text-[11px] text-muted-foreground/70">·</Text>
+              <AttributionBadge attribution={task.attribution} variant="avatar" />
+            </>
+          ) : null}
         </View>
         <Text className="text-sm text-foreground" numberOfLines={2}>
           {title}
@@ -435,6 +448,7 @@ function ActivityTaskRow({
     <RunTranscriptDialog
       taskId={task.id}
       taskStatus={task.status}
+      task={task}
       onClose={() => setTranscriptOpen(false)}
     />
   ) : null;

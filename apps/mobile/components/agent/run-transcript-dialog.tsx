@@ -18,9 +18,28 @@ import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { AgentTask } from "@multica/core/types";
 import { prepareTaskMessages } from "@multica/core/task-transcript";
+import { providerDisplayName, runtimeDisplayName } from "@multica/core/runtimes";
 import { Text } from "@/components/ui/text";
+import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { AttributionBadge } from "@/components/agent/attribution-badge";
 import { TranscriptEntryRow } from "@/components/agent/transcript-entry";
+import { RunDetailsPanel } from "@/components/agent/run-details-panel";
 import { taskMessagesOptions } from "@/data/queries/chat";
+import { runtimeListOptions } from "@/data/queries/runtimes";
+import { useActorLookup } from "@/data/use-actor-name";
+import { useWorkspaceStore } from "@/data/workspace-store";
+import { attributionShouldRender } from "@/lib/task-attribution";
+import { formatDateTime } from "@/lib/autopilot-format";
+import { formatTokens } from "@/lib/usage-format";
+import { formatUsd } from "@/lib/task-usage";
+import {
+  buildRunDetailRows,
+  buildUsageDetailRows,
+  commentCoverageCount,
+  hasRunDetails,
+  transcriptTriggerLabelKey,
+  transcriptUsageSummary,
+} from "@/lib/run-transcript-details";
 import { liveLogPollMs } from "@/lib/task-log-live";
 import {
   deriveTranscriptFilterOptions,
@@ -37,20 +56,45 @@ import { cn } from "@/lib/utils";
 export function RunTranscriptDialog({
   taskId,
   taskStatus,
+  task,
   onClose,
 }: {
   taskId: string;
   taskStatus: AgentTask["status"];
+  /**
+   * The task object, when the caller already holds it. Optional because the
+   * autopilot runs list only knows the run's `task_id` and the server exposes
+   * no single-task GET a caller could hydrate from; those callers keep the
+   * title-only header. Callers that do have the task (the activity row) pass
+   * it, and the header then carries web's identity line — the agent and the
+   * run's attribution.
+   */
+  task?: AgentTask;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
+  const { getName } = useActorLookup();
   const live = taskStatus === "running";
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  // Web resolves the run's runtime through `api.listRuntimes()` on open
+  // (agent-transcript-dialog.tsx:448-454). Mobile reads the already-cached
+  // list instead — same source, no extra request fired from a modal, which
+  // matters on cellular. The row is conditional either way, so a cache miss
+  // costs the panel its runtime / provider / mode lines and nothing else.
+  const { data: runtimes = [] } = useQuery({
+    ...runtimeListOptions(wsId),
+    // Only the panel needs this, and the panel only exists for a task the
+    // caller passed in.
+    enabled: !!task && !!wsId,
+  });
 
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [sortDirection, setSortDirection] = useState<TranscriptSortDirection>("oldest_first");
+  const [runDetailsOpen, setRunDetailsOpen] = useState(false);
 
   const { data = [], isLoading, isError, refetch } = useQuery({
     ...taskMessagesOptions(taskId),
@@ -92,6 +136,55 @@ export function RunTranscriptDialog({
       ? t("runs.transcript.sortOldest")
       : t("runs.transcript.sortNewest");
 
+  // ── Header facts (web agent-transcript-dialog.tsx:610-661) ──────────────
+  // "Why does this run exist", one word, and the comment-coverage figure that
+  // flags a merged run. Both need the task, so a caller that only had an id
+  // keeps the title-only header.
+  const triggerLabel = task ? t(transcriptTriggerLabelKey(task)) : null;
+  const coverageCount = task ? commentCoverageCount(task) : null;
+
+  // This run's own spend. The header chip and the panel's usage block share
+  // this one summary, so the two can never disagree. Only the issue
+  // execution-log endpoint hydrates `usage`; on runs opened from an agent's
+  // activity tab both the chip and the block are simply absent — never a
+  // zeroed figure, which would claim the run was free
+  // (packages/core/types/agent.ts:390-406).
+  const usage = useMemo(
+    () => transcriptUsageSummary(task?.usage),
+    [task?.usage],
+  );
+
+  // The runtime behind this run, resolved from the cached list.
+  const runtime = useMemo(
+    () => runtimes.find((r) => r.id === task?.runtime_id),
+    [runtimes, task?.runtime_id],
+  );
+
+  // ── The ⓘ sheet's contents (web :744-830) ───────────────────────────────
+  // Built even while closed: the row list doubles as web's `hasRunDetails`
+  // gate, so there is one definition of "anything to show" rather than a
+  // second predicate that could disagree with the body.
+  const detailRows = useMemo(
+    () =>
+      task
+        ? buildRunDetailRows({
+            task,
+            runtimeName: runtime ? runtimeDisplayName(runtime) : null,
+            providerLabel: runtime?.provider
+              ? transcriptProviderLabel(runtime.provider)
+              : null,
+            runtimeMode: runtime?.runtime_mode ?? null,
+            formatTime: formatDateTime,
+          })
+        : [],
+    [task, runtime],
+  );
+  const usageRows = useMemo(
+    () => (usage ? buildUsageDetailRows(usage, formatTokens, formatUsd) : null),
+    [usage],
+  );
+  const showRunDetails = hasRunDetails(detailRows, usageRows);
+
   return (
     <Modal
       visible
@@ -103,25 +196,119 @@ export function RunTranscriptDialog({
         className="flex-1 bg-background"
         style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
       >
-        <View className="border-b border-border px-4 py-3 flex-row items-center gap-3">
-          <View className="size-8 rounded-lg bg-secondary items-center justify-center">
-            <Ionicons
-              name="document-text-outline"
-              size={16}
-              color={theme.mutedForeground}
-            />
+        <View className="border-b border-border px-4 py-3 gap-1">
+          <View className="flex-row items-center gap-3">
+            <View className="size-8 rounded-lg bg-secondary items-center justify-center">
+              <Ionicons
+                name="document-text-outline"
+                size={16}
+                color={theme.mutedForeground}
+              />
+            </View>
+            <Text className="flex-1 text-base font-semibold text-foreground">
+              {t("agents.activity.transcriptTitle")}
+            </Text>
+            {/* What this run cost, in the header of the run being read, so
+                "why was this one expensive" is answerable without leaving the
+                transcript (web renders this chip in the same spot). Renders
+                only on a real figure — `summarizeTaskUsage` returns null for
+                both `undefined` and `[]`, and a chip reading "0 · $0.00" would
+                claim the run was free. */}
+            {usage ? (
+              <View
+                accessible
+                accessibilityLabel={t("runs.transcript.usageChip")}
+                className="shrink-0 flex-row items-center gap-1 rounded-full border border-border px-2 py-0.5"
+              >
+                <Ionicons name="cash-outline" size={11} color={theme.mutedForeground} />
+                <Text className="text-[11px] font-medium text-foreground tabular-nums">
+                  {formatTokens(usage.tokens)}
+                </Text>
+                <Text className="text-[11px] text-muted-foreground">·</Text>
+                <Text className="text-[11px] text-muted-foreground tabular-nums">
+                  {formatUsd(usage.cost)}
+                </Text>
+              </View>
+            ) : null}
+            {/* Tier-2 diagnostics. The ⓘ exists only when there is something
+                behind it (web's `hasRunDetails`), so a bare task never opens an
+                empty sheet. */}
+            {showRunDetails ? (
+              <Pressable
+                onPress={() => setRunDetailsOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel={t("runs.transcript.runInfo")}
+                hitSlop={8}
+                className="shrink-0 active:opacity-70"
+              >
+                <Ionicons
+                  name="information-circle-outline"
+                  size={18}
+                  color={theme.mutedForeground}
+                />
+              </Pressable>
+            ) : null}
+            <Pressable
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel={t("a11y.close")}
+              hitSlop={8}
+            >
+              <Ionicons name="close" size={20} color={theme.mutedForeground} />
+            </Pressable>
           </View>
-          <Text className="flex-1 text-base font-semibold text-foreground">
-            {t("agents.activity.transcriptTitle")}
-          </Text>
-          <Pressable
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel={t("a11y.close")}
-            hitSlop={8}
-          >
-            <Ionicons name="close" size={20} color={theme.mutedForeground} />
-          </Pressable>
+          {/* Identity line, web's transcript-header structure
+              (agent-transcript-dialog.tsx:673-709): the agent that ran this is
+              the one foreground entity, and the run's provenance reads as a
+              separate muted unit beside it. The attribution carries NO avatar
+              — two same-size faces would read as two agents (web's `hideAvatar`
+              rationale). Absent when the caller only had a task id. */}
+          {task ? (
+            <View className="flex-row items-center gap-x-1.5 pl-11">
+              <ActorAvatar type="agent" id={task.agent_id} size={16} />
+              <Text
+                numberOfLines={1}
+                className="shrink text-xs font-medium text-foreground"
+              >
+                {getName("agent", task.agent_id)}
+              </Text>
+              {attributionShouldRender(task.attribution) ? (
+                <>
+                  <Text className="shrink-0 text-muted-foreground/70">{" · "}</Text>
+                  <AttributionBadge
+                    attribution={task.attribution}
+                    variant="inline"
+                  />
+                </>
+              ) : null}
+              {/* "Why does this run exist", one word, set apart as its own
+                  muted unit — web's tier-1 header puts it beside the
+                  provenance for the same reason. The separator only appears
+                  when something preceded it, so a bare attribution-less run
+                  never opens with a dangling dot. */}
+              {triggerLabel ? (
+                <>
+                  {attributionShouldRender(task.attribution) ? (
+                    <Text className="shrink-0 text-muted-foreground/70">{" · "}</Text>
+                  ) : null}
+                  <Text
+                    numberOfLines={1}
+                    className="shrink text-xs text-muted-foreground"
+                  >
+                    {triggerLabel}
+                  </Text>
+                </>
+              ) : null}
+              {/* The merged-run flag. Silent for the ordinary single-comment
+                  run, which is why the count is gated upstream rather than
+                  formatted to "Includes 1 comment" on every row. */}
+              {coverageCount !== null ? (
+                <Text className="shrink-0 text-[11px] text-muted-foreground">
+                  {t("runs.transcript.includedComments", { count: coverageCount })}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
         </View>
 
         {filterOptions.length > 0 ? (
@@ -201,9 +388,31 @@ export function RunTranscriptDialog({
             ))}
           </ScrollView>
         )}
+
+        <RunDetailsPanel
+          visible={runDetailsOpen}
+          onClose={() => setRunDetailsOpen(false)}
+          detailRows={detailRows}
+          usageRows={usageRows}
+        />
       </View>
     </Modal>
   );
+}
+
+/**
+ * Provider slug → the name a reader recognises for the tool that ran this.
+ *
+ * Web keeps an override table here (`agent-transcript-dialog.tsx:1112-1122`)
+ * because "claude" would otherwise render as "Claude" while a run's
+ * diagnostics have always said "Claude Code", and `claude-code` is a legacy
+ * provider value that title-cases to "Claude-code". Every other provider defers
+ * to core's shared formatter so this row cannot drift from the runtime list.
+ */
+function transcriptProviderLabel(provider: string): string {
+  return provider.toLowerCase() === "claude" || provider.toLowerCase() === "claude-code"
+    ? "Claude Code"
+    : providerDisplayName(provider);
 }
 
 /** One derived filter chip — an "all" chip or a `tool:<Name>` / type facet. */

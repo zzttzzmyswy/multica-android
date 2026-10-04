@@ -16,6 +16,7 @@ import * as Device from "expo-device";
 import * as IntentLauncher from "expo-intent-launcher";
 import { File } from "expo-file-system";
 import { getContentUriAsync } from "expo-file-system/legacy";
+import { unknownAppSourcesIntentParams } from "@/lib/unknown-app-sources";
 
 /** MIME type understood by the Android package installer. */
 export const APK_MIME_TYPE = "application/vnd.android.package-archive";
@@ -99,15 +100,13 @@ export async function installApkFile(file: File): Promise<void> {
 /**
  * Jump to this app's "install unknown apps" toggle. Called when install is
  * blocked because the user hasn't allowed APK installs from this source.
+ *
+ * The package rides in the intent's data URI, not in extras — only the data
+ * URI form narrows Settings to this app. See `lib/unknown-app-sources.ts`.
  */
 export function openUnknownAppSourcesSettings(): void {
-  const packageName = Constants.expoConfig?.android?.package;
   void IntentLauncher.startActivityAsync(
     IntentLauncher.ActivityAction.MANAGE_UNKNOWN_APP_SOURCES,
-    {
-      extra: packageName
-        ? { "android.provider.Settings.EXTRA_APP_PACKAGE": packageName }
-        : undefined,
-    },
+    unknownAppSourcesIntentParams(Constants),
   );
 }

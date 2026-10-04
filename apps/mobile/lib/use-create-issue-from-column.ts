@@ -3,10 +3,15 @@
  * web's `onCreateIssue(group.createData)` (packages/views/issues/
  * components/board-column.tsx:226-246).
  *
- * Order matters: the draft is reset, THEN seeded, THEN the route is pushed.
- * `new-issue.tsx` resets the draft on mount, so seeding a store that was not
- * already reset would be indistinguishable from seeding a stale one — the
- * mount reset is idempotent on the values we just wrote.
+ * Seed only; do NOT reset. An earlier version called `store.reset()` first,
+ * because `new-issue.tsx` wiped the draft on mount and seeding a store that
+ * had not been reset was indistinguishable from seeding a stale one. Now that
+ * the draft is persisted and restored (web parity, `multica_issue_draft`),
+ * a reset here would throw away the very draft the user is coming back to —
+ * and web does no such thing: its dialog initializes from the draft and lets
+ * the column's `createData` override the fields it names. `seedFromColumn`
+ * touches only the fields the column determines, so the rest of the draft
+ * survives exactly as web lets it.
  *
  * Lives here (not in board-view) because only the surfaces know their own
  * route prefix and whether they offer creation at all; the board just hands
@@ -27,9 +32,7 @@ export function useCreateIssueFromColumn(): (
     (section: IssueGroupSection) => {
       if (!wsSlug) return;
       const defaults = columnCreateDefaults(section);
-      const store = useNewIssueDraftStore.getState();
-      store.reset();
-      if (defaults) store.seedFromColumn(defaults);
+      if (defaults) useNewIssueDraftStore.getState().seedFromColumn(defaults);
       router.push(`/${wsSlug}/new-issue`);
     },
     [wsSlug],

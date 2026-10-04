@@ -9,6 +9,7 @@ import type { Issue, IssueStatus } from "@multica/core/types";
 import {
   buildSwimlaneLanes,
   laneMovePatch,
+  mergeLaneOrder,
   SWIMLANE_NONE_ID,
   SWIMLANE_ORPHAN_ID,
   type SwimlaneLane,
@@ -269,5 +270,129 @@ describe("laneMovePatch", () => {
       "P1",
     );
     expect(laneMovePatch(parentLane)).toEqual({ parent_issue_id: "P1" });
+  });
+});
+
+describe("buildSwimlaneLanes — storedOrder (lane drag order)", () => {
+  const four = [
+    issue({ id: "1", project_id: "p1" }),
+    issue({ id: "2", project_id: "p2" }),
+    issue({ id: "3", project_id: "p3" }),
+    issue({ id: "4" }),
+  ];
+  const ids = (storedOrder?: readonly string[]) =>
+    buildSwimlaneLanes({
+      issues: four,
+      grouping: "project",
+      statusOrder: BOARD_STATUSES,
+      storedOrder,
+    }).map((l) => l.rawId);
+
+  it("sorts by stored order and keeps the pinned lane first", () => {
+    expect(ids(["p3", "p1", "p2"])).toEqual([
+      SWIMLANE_NONE_ID,
+      "p3",
+      "p1",
+      "p2",
+    ]);
+  });
+
+  it("ranks stored lanes above lanes the store has never seen", () => {
+    // p2 is unknown to the store; the two stored lanes come first, and p2
+    // keeps its fallback position after them.
+    expect(ids(["p3", "p1"])).toEqual([
+      SWIMLANE_NONE_ID,
+      "p3",
+      "p1",
+      "p2",
+    ]);
+  });
+
+  it("keeps the label order for lanes the store does not mention", () => {
+    // With nothing stored the order is the existing label/insertion order —
+    // the drag store only ever overrides, never replaces, that fallback.
+    expect(ids([])).toEqual(ids());
+  });
+
+  it("ignores a stored entry whose lane is not on screen", () => {
+    expect(ids(["pGONE", "p2"])).toEqual([
+      SWIMLANE_NONE_ID,
+      "p2",
+      "p1",
+      "p3",
+    ]);
+  });
+});
+
+describe("mergeLaneOrder", () => {
+  it("moves a lane and writes the visible sequence back into the stored slots", () => {
+    // Visible: a b c d (all of stored). Move a to index 2.
+    expect(
+      mergeLaneOrder({
+        stored: ["a", "b", "c", "d"],
+        visible: ["a", "b", "c", "d"],
+        from: 0,
+        to: 2,
+      }),
+    ).toEqual(["b", "c", "a", "d"]);
+  });
+
+  it("keeps lanes that are not currently visible in their stored slots", () => {
+    // `x` and `y` are hidden by a filter; only a/b/c render. Moving c to the
+    // front must not drop or reorder the hidden entries.
+    expect(
+      mergeLaneOrder({
+        stored: ["x", "a", "y", "b", "c"],
+        visible: ["a", "b", "c"],
+        from: 2,
+        to: 0,
+      }),
+    ).toEqual(["x", "c", "y", "a", "b"]);
+  });
+
+  it("appends visible lanes the store never held", () => {
+    expect(
+      mergeLaneOrder({
+        stored: ["a", "b"],
+        visible: ["a", "b", "c"],
+        from: 2,
+        to: 0,
+      }),
+    ).toEqual(["c", "a", "b"]);
+  });
+
+  it("appends the leftovers in their new relative order", () => {
+    // Both c and d are new; after the move d precedes c, and that is the
+    // order they land in at the tail.
+    expect(
+      mergeLaneOrder({
+        stored: ["a"],
+        visible: ["a", "c", "d"],
+        from: 2,
+        to: 1,
+      }),
+    ).toEqual(["a", "d", "c"]);
+  });
+
+  it("is a no-op when the move does not change anything", () => {
+    expect(
+      mergeLaneOrder({
+        stored: ["a", "b"],
+        visible: ["a", "b"],
+        from: 1,
+        to: 1,
+      }),
+    ).toEqual(["a", "b"]);
+  });
+
+  it("returns the stored order when the indices are out of range", () => {
+    expect(
+      mergeLaneOrder({
+        stored: ["a", "b"],
+        visible: ["a", "b"],
+        from: 5,
+        to: 0,
+      }),
+    ).toEqual(["a", "b"]);
   });
 });

@@ -93,6 +93,8 @@ const RUN_SENSE_KEYS = [
   "agents.detail.cancelSuccessOne",
   "agents.detail.cancelSuccessOther",
   "agents.detail.cancelTitle",
+  // "Max concurrent tasks (1–50)" — the agent RUN cap, not issues.
+  "agents.detail.concurrencyRange",
   "agents.detail.noTasks",
   "agents.detail.tasks",
   "agents.emptyDescription",

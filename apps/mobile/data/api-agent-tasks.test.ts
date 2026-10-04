@@ -74,6 +74,72 @@ describe("agent task / activity api methods", () => {
     expect(tasks).toEqual([]);
   });
 
+  // Attribution (MUL-4302 §9). The schema previously did not declare this key,
+  // so a zod object stripped it and the whole "on behalf of <member>" feature
+  // had no data to render. These pin the parse, not the presentation.
+  it("listAgentTasks keeps a run's attribution (initiator + source + precise)", async () => {
+    fetchSpy().mockResolvedValue([
+      {
+        ...AGENT_TASK_ROW,
+        attribution: {
+          source: "direct_human",
+          precise: true,
+          initiator: { id: "user-1", name: "MYSWY", email: "z@example.com" },
+          originator: { id: "user-1", name: "MYSWY" },
+        },
+      },
+    ]);
+    const [task] = await api.listAgentTasks("agent-1");
+    expect(task.attribution?.source).toBe("direct_human");
+    expect(task.attribution?.precise).toBe(true);
+    expect(task.attribution?.initiator).toMatchObject({
+      id: "user-1",
+      name: "MYSWY",
+    });
+  });
+
+  it("keeps an unknown attribution source verbatim rather than dropping the task", async () => {
+    // The server owns the source vocabulary; a level this build has never
+    // heard of must survive the parse so the UI can print the raw value.
+    fetchSpy().mockResolvedValue([
+      {
+        ...AGENT_TASK_ROW,
+        attribution: {
+          source: "some_future_level",
+          precise: false,
+          initiator: { id: "user-2" },
+        },
+      },
+    ]);
+    const [task] = await api.listAgentTasks("agent-1");
+    expect(task.attribution?.source).toBe("some_future_level");
+    // No name on the initiator — the raw id still resolves the object, so the
+    // caller falls back to the generic "someone" label.
+    expect(task.attribution?.initiator?.id).toBe("user-2");
+    expect(task.attribution?.initiator?.name).toBeUndefined();
+  });
+
+  it("keeps an attribution that resolved no human (rule_owner, no initiator)", async () => {
+    // The real sample from the NAS agent: an autopilot rule published the run,
+    // so there is no accountable member at all. The object must still parse —
+    // the render guard, not the schema, is what stays silent here.
+    fetchSpy().mockResolvedValue([
+      {
+        ...AGENT_TASK_ROW,
+        attribution: { source: "rule_owner", precise: true },
+      },
+    ]);
+    const [task] = await api.listAgentTasks("agent-1");
+    expect(task.attribution?.source).toBe("rule_owner");
+    expect(task.attribution?.initiator).toBeUndefined();
+  });
+
+  it("leaves attribution undefined when an older backend omits it", async () => {
+    fetchSpy().mockResolvedValue([AGENT_TASK_ROW]);
+    const [task] = await api.listAgentTasks("agent-1");
+    expect(task.attribution).toBeUndefined();
+  });
+
   it("getWorkspaceAgentActivity30d GETs /api/agent-activity-30d and parses buckets", async () => {
     const spy = fetchSpy().mockResolvedValue([
       {

@@ -23,6 +23,8 @@
  */
 import type { IssueView } from "@multica/core/api/schemas";
 import type { IssuePriority, IssueStatus } from "@multica/core/types";
+// Type-only, like the slice's own import of it.
+import type { CardProperties } from "@multica/core/issues";
 import { BOARD_STATUSES } from "@/lib/issue-status-core";
 import {
   propertyIdFromDimension,
@@ -139,15 +141,34 @@ export function viewQueryFromSnapshot(
 
 /** Serialize the personal display defaults a view seeds on first open.
  *  Mobile subset of web's display payload — viewMode / grouping / sort /
- *  showSubIssues; web's extra keys (cardProperties, swimlaneGrouping, …) are
- *  absent because mobile has no such surface, and their absence reads back as
- *  defaults. */
+ *  showSubIssues / tableHierarchy / cardProperties. Web's remaining keys
+ *  (swimlaneGrouping, tableColumns, …) are still absent because mobile has no
+ *  such surface, and their absence reads back as defaults.
+ *
+ *  `tableHierarchy` is here because web writes it (save-view-dialog.tsx:608,
+ *  alongside tableColumns / tableCalculation): it is part of what a saved view
+ *  fixes, not a session preference. Omitting it would make a mobile
+ *  open-and-resave silently reset a web-saved view's table nesting.
+ *
+ *  `cardProperties` is written out in full (all eight keys, whatever mobile
+ *  gates) so a view saved on web survives a mobile open-and-resave instead of
+ *  losing the three keys mobile has no content for. The round trip is the
+ *  contract — see `sanitizeViewDisplay` for the read side and
+ *  `issue-filter-slice.ts` for why the three extra keys live in state.
+ *
+ *  `cardPropertyIds` travels for the same reason and by the same rule: it is a
+ *  second display dimension web saves (save-view-dialog.tsx:605), so omitting
+ *  it would drop a web view's custom-property chips on the first mobile
+ *  re-save. Mobile renders those chips too — see `components/issue/board-card.tsx`. */
 export function viewDisplayFromState(state: {
   view: IssueViewMode;
   grouping: IssueGrouping;
   sortBy: IssueSortField;
   sortDirection: IssueSortDirection;
   showSubIssues: boolean;
+  tableHierarchy: boolean;
+  cardProperties: CardProperties;
+  cardPropertyIds: string[];
 }): Record<string, unknown> {
   return {
     viewMode: state.view,
@@ -155,6 +176,9 @@ export function viewDisplayFromState(state: {
     sortBy: state.sortBy,
     sortDirection: state.sortDirection,
     showSubIssues: state.showSubIssues,
+    tableHierarchy: state.tableHierarchy,
+    cardProperties: state.cardProperties,
+    cardPropertyIds: state.cardPropertyIds,
   };
 }
 
@@ -360,15 +384,19 @@ export function clearDimensionToBaseline(
   }
 }
 
-/** Sanitized display patch — viewMode/grouping/sort/showSubIssues from a
- *  view blob. The caller supplies the surface's own current sortBy as the
- *  fallback so an unsaved view still lands on the list's active sort. */
+/** Sanitized display patch — viewMode/grouping/sort/showSubIssues/
+ *  tableHierarchy/cardProperties from a view blob. The caller supplies the
+ *  surface's own current sortBy as the fallback so an unsaved view still lands
+ *  on the list's active sort. */
 export interface IssueViewDisplayPatch {
   viewMode: IssueViewMode;
   grouping: IssueGrouping;
   sortBy: IssueSortField;
   sortDirection: IssueSortDirection;
   showSubIssues: boolean;
+  tableHierarchy: boolean;
+  cardProperties: CardProperties;
+  cardPropertyIds: string[];
 }
 
 export function sanitizeViewDisplay(
@@ -383,7 +411,74 @@ export function sanitizeViewDisplay(
     // Web's view-store default is `true`; a view that predates the key (or
     // carries a non-boolean) keeps sub-issues visible.
     showSubIssues: display.showSubIssues !== false,
+    // Same rule and same reasoning as `showSubIssues` above: web's default is
+    // `true` (view-store.ts:309), so only an explicit `false` turns nesting
+    // off. A view saved before the key existed keeps the table nested.
+    tableHierarchy: display.tableHierarchy !== false,
+    // Per-key boolean fallback, defaulting each missing / non-boolean key to
+    // `true` — web's own default for every one of the eight (view-store.ts
+    // :287-296) and the same rule `showSubIssues` above follows. A view saved
+    // before a toggle existed must not read that toggle as off.
+    cardProperties: sanitizeCardProperties(display.cardProperties),
+    // Kept verbatim, unknown ids included — see `sanitizeCardPropertyIds`.
+    cardPropertyIds: sanitizeCardPropertyIds(display.cardPropertyIds),
   };
+}
+
+/**
+ * The custom-property ids a view's cards show, in the order it saved them.
+ *
+ * **Unknown ids are KEPT, unlike every other sanitize in this file.** The other
+ * sanitizers drop values the store cannot represent (a stale enum member); here
+ * the store CAN represent any string, and dropping is actively harmful in two
+ * ways web does not suffer from:
+ *
+ *   - a definition missing from the CURRENT catalog is not necessarily deleted
+ *     — the catalog is a separate query that may still be in flight, and
+ *     archived definitions are excluded from the active list mobile's card
+ *     reads. Web's store keeps the id and its board card simply renders nothing
+ *     for it (`board-card.tsx:69-72` resolves against whatever catalog it has).
+ *     Dropping here would make a mobile open-and-resave of a web view LOSE the
+ *     chip permanently, even after the definition came back;
+ *   - it preserves the round-trip contract the rest of this file states: what
+ *     the view carried is what a re-save writes back.
+ *
+ * Rendering is where an unresolvable id is filtered out, per-issue and
+ * per-render — `lib/card-properties.ts`.
+ */
+export function sanitizeCardPropertyIds(raw: unknown): string[] {
+  return stringArray(raw).filter((id) => id.length > 0);
+}
+
+/** The eight card-property keys, in web's `CARD_PROPERTY_OPTIONS` order. */
+const CARD_PROPERTY_KEYS: (keyof CardProperties)[] = [
+  "priority",
+  "description",
+  "assignee",
+  "startDate",
+  "dueDate",
+  "project",
+  "labels",
+  "childProgress",
+];
+
+/**
+ * Per-key boolean sanitize of a view's `cardProperties` blob. Anything that
+ * is not `false` reads as `true`: a missing key, a `null`, a string, a
+ * non-object. Only an explicit `false` turns a field off, which is what makes
+ * an OLDER view (saved before a key existed) keep the field visible rather
+ * than silently hiding it.
+ */
+export function sanitizeCardProperties(raw: unknown): CardProperties {
+  const source =
+    raw !== null && typeof raw === "object" && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : {};
+  const out = {} as CardProperties;
+  for (const key of CARD_PROPERTY_KEYS) {
+    out[key] = source[key] !== false;
+  }
+  return out;
 }
 
 function sameStrings(a: string[], b: string[]): boolean {
@@ -416,6 +511,9 @@ export type IssueViewSnapshotSource = Pick<
   | "sortDirection"
   | "grouping"
   | "showSubIssues"
+  | "tableHierarchy"
+  | "cardProperties"
+  | "cardPropertyIds"
 >;
 
 /**
@@ -457,6 +555,23 @@ export function viewMatchesSlice(
     wantDisplay.grouping === slice.grouping &&
     wantDisplay.sortBy === slice.sortBy &&
     wantDisplay.sortDirection === slice.sortDirection &&
-    wantDisplay.showSubIssues === slice.showSubIssues
+    wantDisplay.showSubIssues === slice.showSubIssues &&
+    // Same reasoning as the card-property clause below: a view fixes the
+    // table's nesting, so flipping it must light the "modified" dot.
+    wantDisplay.tableHierarchy === slice.tableHierarchy &&
+    // Card-property toggles are part of a saved view's display, so flipping
+    // one must light the "modified" dot. Without this clause the dot would
+    // stay dark and the user's change would be silently unsavable.
+    sameCardProperties(wantDisplay.cardProperties, slice.cardProperties) &&
+    // Same reason, second dimension: the custom-property selection is saved in
+    // the view's display too, so adding / removing one is a modification.
+    // Order matters here — the array IS the render order, so a reorder is a
+    // real change (sameStrings compares positionally).
+    sameStrings(wantDisplay.cardPropertyIds, slice.cardPropertyIds)
   );
+}
+
+/** Same eight keys, same values — order-independent by construction. */
+function sameCardProperties(a: CardProperties, b: CardProperties): boolean {
+  return CARD_PROPERTY_KEYS.every((key) => a[key] === b[key]);
 }

@@ -3,16 +3,20 @@
  * `packages/views/settings/components/repositories-tab.tsx` on the phone.
  *
  * Repositories live INSIDE the Workspace object (PATCH /api/workspaces/:id
- * { repos }) — there is no standalone repositories endpoint. The list reads
- * the current workspace's `repos` from the workspace-list query; Add and
- * Remove PATCH the array back through the workspace update. Rows show the
- * clone url (mono), a source badge (GitHub / manual — inferred from the
- * host, since the server stores only url + description), the description,
- * and a remove action for managers.
+ * { repos }) — there is no standalone repositories endpoint, so every edit
+ * PATCHes the whole array back. Rows show the clone url (mono), a source
+ * badge (GitHub / manual — inferred from the host, since the server stores
+ * only url + description), the description, and, for managers, a tap-to-edit
+ * affordance plus a remove action.
+ *
+ * Editing a row's url / description goes through the same PATCH as add and
+ * remove (web's repositories tab edits inline and auto-saves the array for
+ * the same reason). It is a modal here rather than web's always-editable
+ * inputs — see `EditRepositoryModal`.
  *
  * The GitHub import path pushes more/settings/repositories/github-picker.
  * Owner/admin gate mirrors web: non-managers get a read-only list with no
- * add/remove/import affordances.
+ * add/edit/remove/import affordances.
  */
 import { useMemo, useState } from "react";
 import {
@@ -35,6 +39,7 @@ import { githubInstallationsOptions } from "@/data/queries/github";
 import {
   useAddWorkspaceRepo,
   useRemoveWorkspaceRepo,
+  useUpdateWorkspaceRepo,
 } from "@/data/mutations/repositories";
 import { memberListOptions } from "@/data/queries/members";
 import { useAuthStore } from "@/data/auth-store";
@@ -73,8 +78,12 @@ export default function RepositoriesPage() {
   const githubInstalled = (githubData?.installations ?? []).length > 0;
 
   const [addOpen, setAddOpen] = useState(false);
+  const [editIndex, setEditIndex] = useState<number | null>(null);
   const addRepo = useAddWorkspaceRepo();
   const removeRepo = useRemoveWorkspaceRepo();
+  const updateRepo = useUpdateWorkspaceRepo();
+
+  const editing = editIndex === null ? null : repos[editIndex] ?? null;
 
   const confirmRemove = (index: number, url: string) => {
     Alert.alert(
@@ -153,6 +162,7 @@ export default function RepositoriesPage() {
                 source={repositorySource(item.url)}
                 canManage={canManage}
                 onRemove={() => confirmRemove(index, item.url)}
+                onEdit={() => setEditIndex(index)}
               />
             )}
             refreshing={isRefetching}
@@ -201,6 +211,21 @@ export default function RepositoriesPage() {
           setAddOpen(false);
         }}
       />
+
+      {/* Keyed by the row being edited so opening a different row remounts
+          the modal with that row's values, instead of carrying the previous
+          row's draft over. */}
+      <EditRepositoryModal
+        key={editIndex ?? "closed"}
+        repo={editing}
+        busy={updateRepo.isPending}
+        onClose={() => setEditIndex(null)}
+        onSave={async (repo) => {
+          if (editIndex === null) return;
+          await updateRepo.mutateAsync({ index: editIndex, repo });
+          setEditIndex(null);
+        }}
+      />
     </>
   );
 }
@@ -210,38 +235,58 @@ function RepoRow({
   source,
   canManage,
   onRemove,
+  onEdit,
 }: {
   repo: WorkspaceRepo;
   source: "github" | "manual";
   canManage: boolean;
   onRemove: () => void;
+  onEdit: () => void;
 }) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const muted = THEME[colorScheme].mutedForeground;
 
+  const body = (
+    <View className="flex-1 min-w-0 gap-0.5">
+      <View className="flex-row items-center gap-2">
+        <Text className="flex-1 font-mono text-sm text-foreground" numberOfLines={1}>
+          {repo.url}
+        </Text>
+        <View className="rounded-full bg-secondary px-1.5 py-0.5">
+          <Text className="text-[10px] text-muted-foreground font-medium">
+            {source === "github"
+              ? t("repositories.sourceGitHub")
+              : t("repositories.sourceManual")}
+          </Text>
+        </View>
+      </View>
+      {repo.description ? (
+        <Text className="text-xs text-muted-foreground/70" numberOfLines={1}>
+          {repo.description}
+        </Text>
+      ) : null}
+    </View>
+  );
+
   return (
     <View className="px-4 py-3">
       <View className="flex-row items-center gap-3">
-        <View className="flex-1 min-w-0 gap-0.5">
-          <View className="flex-row items-center gap-2">
-            <Text className="flex-1 font-mono text-sm text-foreground" numberOfLines={1}>
-              {repo.url}
-            </Text>
-            <View className="rounded-full bg-secondary px-1.5 py-0.5">
-              <Text className="text-[10px] text-muted-foreground font-medium">
-                {source === "github"
-                  ? t("repositories.sourceGitHub")
-                  : t("repositories.sourceManual")}
-              </Text>
-            </View>
-          </View>
-          {repo.description ? (
-            <Text className="text-xs text-muted-foreground/70" numberOfLines={1}>
-              {repo.description}
-            </Text>
-          ) : null}
-        </View>
+        {/* Managers tap the row to edit url / description; non-managers keep
+            the plain read-only row they had (no edit affordance at all). */}
+        {canManage ? (
+          <Pressable
+            onPress={onEdit}
+            className="flex-1 flex-row items-center gap-2 active:opacity-60"
+            accessibilityRole="button"
+            accessibilityLabel={t("repositories.editTitle")}
+            accessibilityHint={repo.url}
+          >
+            {body}
+          </Pressable>
+        ) : (
+          body
+        )}
         {canManage ? (
           <Pressable onPress={onRemove} hitSlop={8} className="p-1">
             <Ionicons name="trash-outline" size={16} color={muted} />
@@ -249,6 +294,122 @@ function RepoRow({
         ) : null}
       </View>
     </View>
+  );
+}
+
+/**
+ * Edit one repository's url / description.
+ *
+ * A modal rather than in-place fields (web's row is two always-editable
+ * inputs): a 375pt row cannot hold a full clone url, a description and two
+ * controls without the text collapsing to a few characters, and the settings
+ * page's other row editors (quick actions, MCP servers) are modals too — the
+ * surface should not have two editing idioms.
+ *
+ * The save button is gated on a non-empty url for the same reason web
+ * disables its auto-save on `allUrlsValid`: the server rejects an empty url
+ * with a 400, and a save that cannot succeed should not look available.
+ */
+function EditRepositoryModal({
+  repo,
+  busy,
+  onClose,
+  onSave,
+}: {
+  repo: WorkspaceRepo | null;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (repo: WorkspaceRepo) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  // Seeded from the row this modal was opened on. The caller keys the modal
+  // by the row index, so opening a different row remounts it with that row's
+  // values rather than carrying the previous draft over.
+  const [url, setUrl] = useState(repo?.url ?? "");
+  const [description, setDescription] = useState(repo?.description ?? "");
+  const [errorText, setErrorText] = useState<string | null>(null);
+
+  const valid = url.trim().length > 0 && !busy;
+
+  const submit = async () => {
+    if (!url.trim()) {
+      setErrorText(t("repositories.urlRequired"));
+      return;
+    }
+    const trimmedDescription = description.trim();
+    try {
+      await onSave({
+        url: url.trim(),
+        ...(trimmedDescription ? { description: trimmedDescription } : {}),
+      });
+    } catch (err) {
+      setErrorText(
+        err instanceof Error ? err.message : t("common.unknownError"),
+      );
+    }
+  };
+
+  return (
+    <Modal
+      visible={repo !== null}
+      transparent
+      animationType="fade"
+      onRequestClose={busy ? undefined : onClose}
+    >
+      <Pressable
+        className="flex-1 bg-black/40"
+        onPress={busy ? undefined : onClose}
+      >
+        <View className="flex-1 justify-end">
+          <Pressable onPress={() => {}} className="bg-popover rounded-t-2xl p-4 gap-3">
+            <Text className="text-base font-semibold text-foreground">
+              {t("repositories.editTitle")}
+            </Text>
+            <View className="gap-1.5">
+              <Text className="text-xs text-muted-foreground mb-1">URL</Text>
+              <TextField
+                value={url}
+                onChangeText={(v) => {
+                  setUrl(v);
+                  setErrorText(null);
+                }}
+                placeholder={t("repositories.urlPlaceholder")}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="off"
+                editable={!busy}
+                invalid={!!errorText}
+              />
+              {errorText ? (
+                <Text className="text-xs text-destructive">{errorText}</Text>
+              ) : null}
+            </View>
+            <View className="gap-1.5">
+              <Text className="text-xs text-muted-foreground mb-1">
+                {t("repositories.description")}
+              </Text>
+              <TextField
+                value={description}
+                onChangeText={setDescription}
+                placeholder={t("repositories.descriptionPlaceholder")}
+                autoCapitalize="sentences"
+                editable={!busy}
+              />
+            </View>
+            <View className="flex-row justify-end gap-2">
+              <Button variant="outline" size="sm" onPress={onClose} disabled={busy}>
+                <Text>{t("quickActions.cancel")}</Text>
+              </Button>
+              <Button size="sm" onPress={submit} disabled={!valid}>
+                <Text>
+                  {busy ? t("workspaceSettings.saving") : t("common.save")}
+                </Text>
+              </Button>
+            </View>
+          </Pressable>
+        </View>
+      </Pressable>
+    </Modal>
   );
 }
 

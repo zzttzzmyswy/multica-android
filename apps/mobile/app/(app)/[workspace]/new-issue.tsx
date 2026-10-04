@@ -24,7 +24,7 @@
  * notifications. Mirrors web's AgentCreatePanel, without attachment
  * upload / CLI-version gating.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -77,22 +77,25 @@ export default function NewIssueModal() {
     seedAssigneeId?: string;
     /** Parent preset by the issue table's row-level "+" (web createSubIssue). */
   } & Partial<SubIssueRouteParams>>();
-  const [mode, setMode] = useState<CreateMode>("manual");
-  const [title, setTitle] = useState("");
-  // A sub-issue preset can be dropped before submitting — the chip is the
-  // only way back out, and web offers the same escape (the parent is just a
-  // prefilled field there, not a lock).
   const [parentCleared, setParentCleared] = useState(false);
   const parent = parentCleared ? undefined : parentIssueId;
-  // Agent-mode natural-language prompt. Lives here (not in the panel) so a
-  // manual ↔ agent switch preserves it — same reasoning as title.
-  const [prompt, setPrompt] = useState("");
+  // The description editor's own state. It cannot live in the draft store the
+  // way the chips do — `useMentionInput` owns text, caret and the in-progress
+  // `@` query, and the picker routes never touch it — so the store keeps the
+  // serialized markdown and the two effects below keep them in step.
   const description = useMentionInput();
-  // Attribute chips (status / priority / assignee / due date / project)
-  // live in `useNewIssueDraftStore` so the new-issue-picker/* formSheet
-  // routes can read and write the same values without a parent-child
-  // React relationship. The store is reset on mount + on unmount so
-  // re-opening the new-issue modal starts clean.
+  // Attribute chips (status / priority / assignee / due date / project) and
+  // the text fields all live in `useNewIssueDraftStore`, so the
+  // new-issue-picker/* formSheet routes can read and write the same values
+  // without a parent-child React relationship. The store persists per
+  // workspace, so dismissing the form keeps the draft and reopening restores
+  // it — web parity (`multica_issue_draft`, see the store header).
+  const mode = useNewIssueDraftStore((s) => s.mode);
+  const setMode = useNewIssueDraftStore((s) => s.setMode);
+  const title = useNewIssueDraftStore((s) => s.title);
+  const setTitle = useNewIssueDraftStore((s) => s.setTitle);
+  const prompt = useNewIssueDraftStore((s) => s.prompt);
+  const setPrompt = useNewIssueDraftStore((s) => s.setPrompt);
   const status = useNewIssueDraftStore((s) => s.status);
   const priority = useNewIssueDraftStore((s) => s.priority);
   const assignee = useNewIssueDraftStore((s) => s.assignee);
@@ -103,18 +106,62 @@ export default function NewIssueModal() {
   const project = useNewIssueDraftStore((s) => s.project);
   const agentActor = useNewIssueDraftStore((s) => s.agentActor);
   const resetDraft = useNewIssueDraftStore((s) => s.reset);
+  const setDraftDescription = useNewIssueDraftStore((s) => s.setDescription);
   const { getName } = useActorLookup();
 
+  // Restore the saved body, then mirror every later edit back into the store.
+  // Web parity: its draft holds the editor's markdown and is rewritten on each
+  // keystroke, so a form dismissed mid-sentence reopens with the sentence
+  // intact. The store's `description` is therefore always the serialized
+  // markdown; the mention markers themselves are rebuilt by `serializeMentions`
+  // from the `[@name](mention://…)` links already in the text, so they need no
+  // separate storage slot.
+  //
+  // Both effects wait for `hydrated`: until the workspace's file has been
+  // read, an empty in-memory draft means "not loaded yet", and acting on it
+  // would either restore nothing or write the empty state over the saved file.
+  const hydrated = useNewIssueDraftStore((s) => s.hydrated);
+  const restoredRef = useRef(false);
+  const descriptionRestore = description.restore;
   useEffect(() => {
-    resetDraft();
-    return () => {
-      resetDraft();
-    };
-  }, [resetDraft]);
+    if (!hydrated || restoredRef.current || seedDescription) return;
+    restoredRef.current = true;
+    const saved = useNewIssueDraftStore.getState().description;
+    // Never clobber text the user got in first — the same "don't overwrite
+    // live work" rule the store applies to a late file read.
+    if (!saved || description.text) return;
+    descriptionRestore({
+      text: saved,
+      markers: [],
+      selection: { start: saved.length, end: saved.length },
+    });
+  }, [hydrated, seedDescription, descriptionRestore, description.text]);
 
-  // Apply the quick-create recovery seed AFTER the mount reset above (React
-  // runs effects in order), so a stale draft never wins over the seed. The
-  // assignee hint is a candidate, not a lock — still editable in the form.
+  // Keyed on the serialized markdown, not the hook object: `serialize` is
+  // memoized per (text, markers) while `useMentionInput` returns a fresh object
+  // every render, so depending on the object would rewrite the file on every
+  // keystroke of any kind.
+  const serializedDescription = description.serialize();
+  const lastMirroredRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!hydrated) return;
+    // The first hydrated render also carries the pre-restore input (`""`).
+    // Adopt it as the baseline without writing: otherwise the empty string
+    // would overwrite the draft, and a crash before the restore's re-render
+    // would lose it for good.
+    if (lastMirroredRef.current === null) {
+      lastMirroredRef.current = serializedDescription;
+      return;
+    }
+    if (lastMirroredRef.current === serializedDescription) return;
+    lastMirroredRef.current = serializedDescription;
+    setDraftDescription(serializedDescription);
+  }, [hydrated, serializedDescription, setDraftDescription]);
+
+  // Apply the quick-create recovery seed. The restore effect above skips a
+  // mount that carries a seed, so the seed is the only writer here and a stale
+  // draft can never win over the text the user explicitly asked to carry over.
+  // The assignee hint is a candidate, not a lock — still editable in the form.
   // `description` is rebuilt every render; its setText is a stable setter, so
   // alias it here to keep the effect dependency stable.
   const descriptionTextSetter = description.setText;
@@ -180,6 +227,12 @@ export default function NewIssueModal() {
         ...(project ? { project_id: project.id } : {}),
         ...(parent ? { parent_issue_id: parent } : {}),
       });
+      // The issue exists, so the draft is spent — clear it before leaving, or
+      // the next open would restore the issue the user just filed. Web runs a
+      // fuller "untouched draft" check here because its dialog can stay open
+      // across a submit and accept more typing; this form always closes, so
+      // clearing unconditionally is the same outcome.
+      resetDraft();
       Alert.alert(
         t("newIssue.agentSentTitle"),
         t("newIssue.agentSentBody", {
@@ -195,7 +248,7 @@ export default function NewIssueModal() {
       );
       return false;
     }
-  }, [prompt, agentActor, priority, dueDate, project, parent, quickCreate, getName, t]);
+  }, [prompt, agentActor, priority, dueDate, project, parent, quickCreate, getName, t, resetDraft]);
 
   const submitManualMode = useCallback(async () => {
     const trimmedTitle = title.trim();
@@ -219,6 +272,9 @@ export default function NewIssueModal() {
           ? { attachment_ids: uploadedAttachmentIds }
           : {}),
       });
+      // Spent draft — see submitAgentMode. Cleared before `router.back()` so
+      // the unmount never races the write.
+      resetDraft();
       router.back();
     } catch (err) {
       Alert.alert(
@@ -239,6 +295,7 @@ export default function NewIssueModal() {
     parent,
     uploadedAttachmentIds,
     createIssue,
+    resetDraft,
     t,
   ]);
 

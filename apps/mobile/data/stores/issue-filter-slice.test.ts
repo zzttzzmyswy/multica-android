@@ -381,3 +381,66 @@ describe("property view keys (iteration-129)", () => {
     expect(manual.sort_by).toBeUndefined();
   });
 });
+
+/**
+ * `cardPropertyIds` — the custom-property card display dimension (iteration
+ * 189, MYS-1866). Mirrors web's `toggleCardPropertyId`
+ * (packages/core/issues/stores/view-store.ts:449-454): filter on deselect,
+ * append on select, so the array's order is the card's render order.
+ */
+describe("cardPropertyIds (iteration-189)", () => {
+  let store: ReturnType<typeof makeStore>;
+
+  beforeEach(() => {
+    store = makeStore();
+  });
+
+  it("defaults to an empty list, matching web's view-store default", () => {
+    expect(defaultIssueFilterSlice().cardPropertyIds).toEqual([]);
+    expect(store.getState().cardPropertyIds).toEqual([]);
+  });
+
+  it("appends on select, so the array is the render order", () => {
+    store.getState().toggleCardPropertyId("p-second");
+    store.getState().toggleCardPropertyId("p-first");
+    expect(store.getState().cardPropertyIds).toEqual(["p-second", "p-first"]);
+  });
+
+  it("removes on deselect without disturbing the others' order", () => {
+    const { toggleCardPropertyId } = store.getState();
+    toggleCardPropertyId("a");
+    toggleCardPropertyId("b");
+    toggleCardPropertyId("c");
+    toggleCardPropertyId("b");
+    expect(store.getState().cardPropertyIds).toEqual(["a", "c"]);
+  });
+
+  it("is idempotent per id — toggling twice returns to the start", () => {
+    const { toggleCardPropertyId } = store.getState();
+    toggleCardPropertyId("p1");
+    toggleCardPropertyId("p1");
+    expect(store.getState().cardPropertyIds).toEqual([]);
+  });
+
+  it("never accumulates a duplicate, however often it is selected", () => {
+    // Web filters-then-appends (view-store.ts:451-453), so there is no path to
+    // a duplicate; a naive `[...ids, id]` would create one.
+    const { toggleCardPropertyId } = store.getState();
+    toggleCardPropertyId("p1");
+    toggleCardPropertyId("p1");
+    toggleCardPropertyId("p1");
+    toggleCardPropertyId("p1");
+    toggleCardPropertyId("p1");
+    // Odd number of toggles → selected exactly once.
+    expect(store.getState().cardPropertyIds).toEqual(["p1"]);
+  });
+
+  it("survives clearFilters, which resets filters and not display", () => {
+    // Same rule as `cardProperties` / `showSubIssues`: web's `clearFilters`
+    // (view-store.ts:401-415) touches filter dims only, and the custom-property
+    // display selection is a display preference, not a filter.
+    store.getState().toggleCardPropertyId("p1");
+    store.getState().clearFilters();
+    expect(store.getState().cardPropertyIds).toEqual(["p1"]);
+  });
+});

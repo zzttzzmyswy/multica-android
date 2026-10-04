@@ -231,6 +231,11 @@ export function IssueViewBar({
           sortBy: slice.sortBy,
           sortDirection,
           showSubIssues: slice.showSubIssues,
+          tableHierarchy: slice.tableHierarchy,
+          cardProperties: slice.cardProperties,
+          // The custom-property selection is part of what a view fixes, so a
+          // re-save has to write it back or a web view loses its chips.
+          cardPropertyIds: slice.cardPropertyIds,
         }),
       },
       {

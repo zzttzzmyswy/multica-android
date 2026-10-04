@@ -71,6 +71,7 @@ import type {
   Squad,
   SquadMember,
   SquadMemberPreview,
+  TaskAttribution,
   TaskMessagePayload,
   User,
   VCSConnection,
@@ -99,6 +100,7 @@ import type {
   PluginReleaseRequest,
 } from "@multica/core/types";
 import type { CloudRuntimeNode } from "@multica/core/runtimes";
+import type { MikaBootstrapResponse } from "@multica/core/types";
 import type { ChatMessageKind } from "@multica/core/types/chat";
 import {
   AutopilotRunSchema,
@@ -713,6 +715,72 @@ export const EMPTY_SEARCH_PROJECTS_RESPONSE: SearchProjectsResponse = {
 // so a future server-side enum value renders a generic fallback rather than
 // crashing the row (root CLAUDE.md "Enum drift downgrades, not crashes").
 
+// Accountable-human provenance for a run (MUL-4302 §9, web
+// `packages/views/issues/components/attribution-badge.tsx`). The server owns
+// the `source` vocabulary and may add levels, so it stays a free `string` —
+// an unknown value degrades to its raw label rather than failing the parse
+// (lib/task-attribution.ts `attributionSourceLabelKey` returns null for it).
+// Every member is optional, including `attribution` itself: older backends
+// don't send the object at all, and a task whose human never resolved comes
+// back with `initiator` absent. A bare `z` object strips unknown keys, which
+// is exactly why this has to be declared — without it the payload arrives but
+// the parsed task drops it.
+const AttributionUserSchema = z.object({
+  id: z.string(),
+  name: z.string().optional(),
+  email: z.string().optional(),
+  avatar_url: z.string().optional(),
+}).loose();
+
+export const TaskAttributionSchema: z.ZodType<TaskAttribution> = z.object({
+  source: z.string().default(""),
+  // Core declares `precise` required, so a missing flag defaults to `true`
+  // (confident). Behaviourally identical to leaving it undefined: the only
+  // reader is `isAttributionUncertain`, which tests `precise === false`.
+  precise: z.boolean().default(true),
+  initiator: AttributionUserSchema.optional(),
+  originator: AttributionUserSchema.optional(),
+  evidence: z.object({ kind: z.string(), ref_id: z.string() }).loose().optional(),
+  rule_version_id: z.string().optional(),
+  delegated_from_task_id: z.string().optional(),
+  retry_of_task_id: z.string().optional(),
+  rerun_of_task_id: z.string().optional(),
+}).loose();
+
+// Optional string-id list that degrades to "absent" when the server sends
+// something else. Mirrors core's `OptionalStringArraySchema`
+// (packages/core/api/schemas.ts:1371-1377): a malformed list costs the row the
+// one figure it feeds, never the whole task.
+const OptionalStringArraySchema = z.preprocess(
+  (value) =>
+    Array.isArray(value) && value.every((item) => typeof item === "string")
+      ? value
+      : undefined,
+  z.array(z.string()).optional(),
+);
+
+// One (provider, model) slice of a run's token usage. Mirrors core's
+// `TaskUsageSchema` (packages/core/api/schemas.ts:1383-1391).
+//
+// This is a DECLARED parse rather than leaving the field to `AgentTaskSchema`'s
+// `.loose()` passthrough, because the two are not equivalent here: `.loose()`
+// hands `task.usage` to the cost math exactly as the server sent it, so one
+// malformed slice (`input_tokens: "12"`, a null entry) reaches `estimateCost`
+// and turns every usage figure on the surface into `NaN` — a corruption that
+// spreads silently through the totals the user reads. Declaring the shape with
+// per-field defaults means a slice missing one counter still prices on the
+// counters it does have, which is core's stated rule ("0 rather than failing
+// the row").
+const TaskUsageSchema = z.object({
+  provider: z.string().optional(),
+  model: z.string().default(""),
+  input_tokens: z.number().default(0),
+  output_tokens: z.number().default(0),
+  cache_read_tokens: z.number().default(0),
+  cache_write_tokens: z.number().default(0),
+  cost_usd_ticks: z.number().optional(),
+}).loose();
+
 export const AgentTaskSchema: z.ZodType<AgentTask> = z.object({
   id: z.string(),
   agent_id: z.string().default(""),
@@ -753,6 +821,33 @@ export const AgentTaskSchema: z.ZodType<AgentTask> = z.object({
   trigger_summary: z.string().optional(),
   kind: z.enum(["comment", "autopilot", "chat", "quick_create", "direct"]).optional().catch("direct"),
   work_dir: z.string().optional(),
+  // The path a reader may actually see. `work_dir` stays clipboard-only (it is
+  // an absolute path on someone's machine); `relative_work_dir` is the
+  // workspace-relative form the transcript panel prints
+  // (packages/core/types/agent.ts:360-377).
+  relative_work_dir: z.string().optional(),
+  // Present only on runs whose agent left a branch behind. This backend does
+  // not send it today (verified against GET /api/issues/:id/task-runs); the
+  // parse is declared so an upgraded backend starts rendering it with no
+  // client change, and the panel's row stays conditional either way.
+  branch_name: z.string().optional(),
+  // Assigner's handoff note (MUL-3375) — also a trigger signal: a run carrying
+  // one reads as a direct assignment rather than the generic initial run.
+  handoff_note: z.string().optional(),
+  // Comment coverage. `coalesced_comment_ids` excludes the newest trigger, so
+  // the planned coverage is its union with `trigger_comment_id`;
+  // `delivered_comment_ids` is the authoritative receipt once claimed. Both
+  // degrade independently — a malformed one must cost the row its coverage
+  // figure, not erase the task (core's rule for these additive fields).
+  coalesced_comment_ids: OptionalStringArraySchema,
+  delivered_comment_ids: OptionalStringArraySchema,
+  attribution: TaskAttributionSchema.optional(),
+  // This run's own token consumption, one entry per (provider, model). Only
+  // the issue execution-log endpoint hydrates it — the per-agent task list
+  // omits the field entirely (verified against both endpoints), which is why
+  // the transcript chip is present on runs opened from an issue and absent on
+  // runs opened from an agent's activity tab.
+  usage: z.array(TaskUsageSchema).optional().catch(undefined),
 }).loose();
 
 export const AgentTaskListSchema = z.array(AgentTaskSchema).default([]);
@@ -1106,6 +1201,31 @@ export const AgentSchema: z.ZodType<Agent> = z.object({
 
 export const AgentListSchema = z.array(AgentSchema).default([]);
 export const EMPTY_AGENT_LIST: Agent[] = [];
+
+// Response of POST /api/agents/mika — the workspace's Mika plus the caller's
+// conversation with it, resolved together server-side so two clients cannot
+// each open their own onboarding session (web types this as
+// `MikaBootstrapResponse`, packages/core/types/agent.ts:438). Built on
+// AgentSchema so Mika's `system_key` rides the same passthrough — the card's
+// identity check reads it, so a schema that stripped it would silently break
+// the "is this Mika" predicate (see lib/mika.ts).
+export const MikaBootstrapResponseSchema: z.ZodType<MikaBootstrapResponse> =
+  z
+    .object({
+      ...(AgentSchema as unknown as z.ZodObject<z.ZodRawShape>).shape,
+      onboarding_session: ChatSessionSchema.optional(),
+    })
+    // `.loose()` is load-bearing, not stylistic: the shape spread above
+    // flattens AgentSchema but not its passthrough, so without this the
+    // parse would strip `system_key` — and `isMikaAgent` would then report
+    // false for a real Mika on every visit.
+    .loose() as unknown as z.ZodType<MikaBootstrapResponse>;
+
+// Only `id` has no default on AgentSchema, so an empty id is the whole
+// fallback. `onboarding_session` is deliberately absent: the caller reads
+// that as "retry", never as a conversation to navigate to.
+export const EMPTY_MIKA_BOOTSTRAP: MikaBootstrapResponse =
+  MikaBootstrapResponseSchema.parse({ id: "" });
 
 // Wire shape of `GET /api/agents/{id}/env` (MUL-2600). Kept deliberately
 // distinct from `AgentSchema` so a read of /env can never be served from a

@@ -206,6 +206,9 @@ interface Props {
    *  complete result set, not just the loaded window). Surfaces that omit it
    *  keep the local count. */
   groupCountQuery?: IssueTableGroupCountQuery | null;
+  /** Whether sub-issues nest under their parent (surface store's
+   *  `tableHierarchy`, web's toggle of the same name). Defaults to true. */
+  hierarchy?: boolean;
   /** The Table's quick search box. Owned by the SURFACE, not this component:
    *  the query travels to the server as `q` (see `buildIssueWindow`), so the
    *  surface is where the fetch window is assembled. Omit both props on a
@@ -233,6 +236,7 @@ export function IssueTableView({
   groupCountQuery,
   search,
   onSearchChange,
+  hierarchy,
 }: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const statusLabel = useStatusLabel(wsId);
@@ -307,7 +311,7 @@ export function IssueTableView({
       properties,
       collapsedIds,
       collapsedGroupIds,
-      { actorName: groupActorName },
+      { actorName: groupActorName, hierarchy },
     );
     if (!serverGroupCounts || serverGroupCounts.size === 0) return built;
     return built.map((entry) =>
@@ -323,6 +327,7 @@ export function IssueTableView({
     collapsedGroupIds,
     groupActorName,
     serverGroupCounts,
+    hierarchy,
   ]);
 
   const rows = useMemo(

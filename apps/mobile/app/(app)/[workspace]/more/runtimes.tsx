@@ -27,6 +27,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { runtimeListOptions } from "@/data/queries/runtimes";
 import { runtimeProfileListOptions } from "@/data/queries/runtime-profiles";
 import { agentListOptions } from "@/data/queries/agents";
+import { chatSessionsOptions } from "@/data/queries/chat";
 import { agentTaskSnapshotOptions } from "@/data/queries/agent-task-snapshot";
 import {
   buildRuntimeMachines,
@@ -44,12 +45,17 @@ import {
 import { daemonRuntimesDocsHref } from "@/lib/runtime-docs";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
+import { useChatSessionPickerStore } from "@/data/stores/chat-session-picker-store";
+import { useBootstrapMika } from "@/data/mutations/mika";
+import { memberNeedsMikaSetup } from "@/lib/mika";
+import { getMikaOnboarding, pickMikaContentLang } from "@/lib/mika-onboarding";
+import { MikaSetupCard } from "@/components/runtimes/mika-setup-card";
 import { ConnectRemoteDialog } from "@/components/runtimes/connect-remote-dialog";
 import { CloudRuntimeDialog } from "@/components/runtimes/cloud-runtime-dialog";
 import { RuntimeProfilesDialog } from "@/components/runtimes/runtime-profiles-dialog";
 import { ActionSheet } from "@/lib/action-sheet";
 import { useTimeAgo } from "@/lib/time-ago";
-import { useTranslation } from "@/lib/i18n/react";
+import { useTranslation, useAppLocale } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -88,8 +94,10 @@ export default function RuntimesPage() {
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const user = useAuthStore((s) => s.user);
   const { t } = useTranslation();
+  const locale = useAppLocale();
   const { colorScheme } = useColorScheme();
   const muted = THEME[colorScheme].mutedForeground;
+  const requestSelect = useChatSessionPickerStore((s) => s.requestSelect);
 
   // Runtime-supply entrypoints (iteration-82, A2): connect-remote / cloud
   // runtime / custom profiles — web renders these as page-header actions, a
@@ -134,11 +142,19 @@ export default function RuntimesPage() {
   const { data, isLoading, error, refetch, isRefetching } = useQuery(
     runtimeListOptions(wsId),
   );
-  const { data: agents = [] } = useQuery(agentListOptions(wsId));
+  const { data: agents = [], isLoading: agentsLoading } = useQuery(
+    agentListOptions(wsId),
+  );
   const { data: taskSnapshot = [] } = useQuery(agentTaskSnapshotOptions(wsId));
   // Custom runtime definitions. They carry the rows for runtimes no machine is
   // currently serving — see orphanProfileRuntimes.
   const { data: profiles = [] } = useQuery(runtimeProfileListOptions(wsId));
+  // The Mika entrypoint is per member, not per workspace: the agent alone does
+  // not say whether *this* member's conversation was ever opened and kicked
+  // off. See memberNeedsMikaSetup.
+  const { data: chatSessions = [], isLoading: chatSessionsLoading } = useQuery(
+    chatSessionsOptions(wsId),
+  );
 
   const runtimes = useMemo(() => data ?? [], [data]);
 
@@ -176,6 +192,36 @@ export default function RuntimesPage() {
   const showEmpty =
     !isLoading && !error && runtimes.length === 0 && orphans.length === 0;
   const machineCount = machines.length;
+
+  // Web's display condition verbatim (runtimes-page.tsx:182-192): both lists
+  // settled, this member still has no kicked-off Mika conversation, and there
+  // is at least one runtime to run it on.
+  const showMikaCard =
+    !agentsLoading &&
+    !chatSessionsLoading &&
+    memberNeedsMikaSetup(agents, chatSessions) &&
+    runtimes.length > 0;
+
+  const bootstrapMika = useBootstrapMika(wsId);
+  const startMika = useCallback(
+    async ({ runtimeId, model }: { runtimeId: string; model: string }) => {
+      if (!wsSlug) throw new Error(t("runtimes.mikaSetup.failed"));
+      const { chatSession } = await bootstrapMika.mutateAsync({
+        workspaceSlug: wsSlug,
+        runtimeId,
+        model: model || undefined,
+        ...getMikaOnboarding(pickMikaContentLang(locale)),
+      });
+      // Mobile has no `/chat/[id]` route — the chat tab owns the open session
+      // and the picker store is the cross-screen channel that route screens
+      // use to hand a selection to it (see chat-session-picker-store.ts).
+      // Selecting before navigating means the tab applies it whether it is
+      // already mounted or mounts on arrival.
+      requestSelect(chatSession.id);
+      router.replace(`/${wsSlug}/chat`);
+    },
+    [wsSlug, bootstrapMika, locale, requestSelect, t],
+  );
 
   return (
     <>
@@ -233,7 +279,20 @@ export default function RuntimesPage() {
           <SectionList
             sections={sections}
             keyExtractor={(item) => item.id}
-            ListHeaderComponent={<CollectionHeader count={machineCount} />}
+            ListHeaderComponent={
+              <>
+                <CollectionHeader count={machineCount} />
+                {/* Web renders this above the machine list, inside the same
+                    scroll container (runtimes-page.tsx:184-192). */}
+                {showMikaCard ? (
+                  <MikaSetupCard
+                    runtimes={runtimes}
+                    currentUserId={user?.id ?? null}
+                    onStart={startMika}
+                  />
+                ) : null}
+              </>
+            }
             renderSectionHeader={({ section }) =>
               section.kind === "machine" ? (
                 <MachineHeader

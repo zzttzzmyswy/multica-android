@@ -18,6 +18,14 @@
 import type { StateCreator } from "zustand";
 import type { IssuePriority, IssueStatus } from "@multica/core/types";
 import { dateOnlyToLocalDate } from "@multica/core/issues/date";
+// Type-only: erased at compile time, so this adds no runtime coupling to
+// core's issues entry point (which mobile otherwise never imports). It keeps
+// the eight card-property keys single-sourced rather than re-declared here.
+import type { CardProperties } from "@multica/core/issues";
+
+/** Re-exported so the filter UI can name the card-property key space without
+ *  reaching into core itself. */
+export type { CardProperties };
 import { BOARD_STATUSES } from "@/lib/issue-status-core";
 import type { IssueListWindowParams } from "@/data/queries/issue-keys";
 
@@ -161,6 +169,59 @@ export interface IssueFilterSlice {
    * like web's (view-store.ts:401-415).
    */
   showSubIssues: boolean;
+  /**
+   * Which fields a board card renders — web's `CardProperties`
+   * (`packages/core/issues/stores/view-store.ts:95-104`), 8 keys, all default
+   * `true` (web `:287-296`).
+   *
+   * Mobile gates only the FIVE keys its dense card actually draws —
+   * priority / labels / assignee / startDate / dueDate (`board-card.tsx`).
+   * `description` / `project` / `childProgress` have no corresponding content
+   * on a mobile card (web's card is roomier by design; mobile's states so at
+   * board-card.tsx:12), so they are carried in state and round-tripped through
+   * the view codec but gate nothing. That keeps a view saved on web
+   * lossless across a mobile open-and-resave instead of silently dropping
+   * three keys — see `issue-view-codec.ts` for the round-trip contract.
+   */
+  cardProperties: CardProperties;
+  /**
+   * Custom-property definition ids whose values render on board cards — web's
+   * `cardPropertyIds` (`view-store.ts:201`, default `[]` at `:297`,
+   * `toggleCardPropertyId` at `:449-454`).
+   *
+   * A SECOND, independent dimension from `cardProperties` above: that one
+   * gates the eight BUILT-IN fields, this one names the workspace's own
+   * definitions. Web renders them from two separate sources on the same card
+   * (`board-card.tsx:63-72`) and saves both in a view's display payload
+   * (`save-view-dialog.tsx:604-605`), so mobile carries both or a view saved
+   * on web loses its custom-property chips the first time mobile re-saves it.
+   *
+   * Ids with no definition in the workspace catalog, or with no value on a
+   * given issue, render nothing — the resolution rules live in
+   * `lib/card-properties.ts`.
+   */
+  cardPropertyIds: string[];
+  /**
+   * When true, the table nests sub-issues under their parent (indent +
+   * chevron); when false it renders every row flat. Web's `tableHierarchy`
+   * (view-store.ts:223, default `true` at `:309`, `toggleTableHierarchy` at
+   * `:523`).
+   *
+   * Only meaningful in `viewMode === "table"` — web renders the switch itself
+   * behind that condition (issues-header.tsx:1910-1923), and no other mobile
+   * surface builds a hierarchy.
+   *
+   * **Known divergence from web.** Web's "flat" is a SERVER behaviour: it
+   * sends `hierarchy: { enabled: false }` (table-view.tsx:1471) and the
+   * server stops aggregating parent/child, returning a flat page. Mobile has
+   * no such query parameter — it loads one flat client-sorted window and
+   * builds the tree locally (`issue-table-hierarchy.ts`) — so switching this
+   * off flattens the LOADED window. The visible row set can therefore differ
+   * from web's server-side flat page, which paginates flat. Closing that gap
+   * means adding a `hierarchy` param to the table query and the backend
+   * contract: a separate piece of work, not a wiring detail.
+   */
+  tableHierarchy: boolean;
   toggleStatusFilter: (status: IssueStatus) => void;
   /**
    * Hide one status column from the kanban surfaces (board / swimlane).
@@ -198,6 +259,16 @@ export interface IssueFilterSlice {
   toggleWorkingOnly: () => void;
   /** Flip the "show sub-issues" display filter (web `toggleShowSubIssues`). */
   toggleShowSubIssues: () => void;
+  /** Flip the table's parent/child nesting (web `toggleTableHierarchy`,
+   *  view-store.ts:523). */
+  toggleTableHierarchy: () => void;
+  /** Flip one board-card display field (web `toggleCardProperty`,
+   *  view-store.ts:441-448). */
+  toggleCardProperty: (key: keyof CardProperties) => void;
+  /** Flip one CUSTOM property's board-card visibility (web
+   *  `toggleCardPropertyId`, view-store.ts:449-454). Appends on select, so the
+   *  array is the render order — see `cardPropertyIds`. */
+  toggleCardPropertyId: (propertyId: string) => void;
   setSortBy: (field: IssueSortField) => void;
   setSortDirection: (dir: IssueSortDirection) => void;
   setGrouping: (grouping: IssueGrouping) => void;
@@ -270,6 +341,9 @@ export const defaultIssueFilterSlice = (): Pick<
   | "sortDirection"
   | "grouping"
   | "showSubIssues"
+  | "tableHierarchy"
+  | "cardProperties"
+  | "cardPropertyIds"
 > => ({
   statusFilters: [],
   priorityFilters: [],
@@ -286,6 +360,22 @@ export const defaultIssueFilterSlice = (): Pick<
   sortDirection: "asc",
   grouping: "status",
   showSubIssues: true,
+  // Web's default verbatim (view-store.ts:309): the table nests by default.
+  tableHierarchy: true,
+  // Web's defaults verbatim (view-store.ts:287-296): all eight fields on.
+  cardProperties: {
+    priority: true,
+    description: true,
+    assignee: true,
+    startDate: true,
+    dueDate: true,
+    project: true,
+    childProgress: true,
+    labels: true,
+  },
+  // Web's default verbatim (view-store.ts:297): no custom property shows on a
+  // card until the user picks one in the Display panel.
+  cardPropertyIds: [],
 });
 
 /**
@@ -321,6 +411,9 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
   | "setDateFilter"
   | "toggleWorkingOnly"
   | "toggleShowSubIssues"
+  | "toggleTableHierarchy"
+  | "toggleCardProperty"
+  | "toggleCardPropertyId"
   | "clearFilters"
   | "resetFiltersTo"
   | "clearFilterDimension"
@@ -413,6 +506,22 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
       set((state) => ({ workingOnly: !state.workingOnly })),
     toggleShowSubIssues: () =>
       set((state) => ({ showSubIssues: !state.showSubIssues })),
+    toggleTableHierarchy: () =>
+      set((state) => ({ tableHierarchy: !state.tableHierarchy })),
+    toggleCardProperty: (key) =>
+      set((state) => ({
+        cardProperties: {
+          ...state.cardProperties,
+          [key]: !state.cardProperties[key],
+        },
+      })),
+    // Web's exact transform (view-store.ts:449-454): filter on deselect,
+    // append on select. The append order IS the render order, so it is not
+    // sorted or deduped beyond the membership check.
+    toggleCardPropertyId: (propertyId) =>
+      set((state) => ({
+        cardPropertyIds: toggleInList(state.cardPropertyIds, propertyId),
+      })),
     clearFilters: () =>
       set({
         statusFilters: [],

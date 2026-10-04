@@ -16,7 +16,8 @@ import { usePinsRealtime } from "@/data/realtime/use-pins-realtime";
 import { usePresenceRealtime } from "@/data/realtime/use-presence-realtime";
 import { useWorkspacePresencePrefetch } from "@/lib/use-workspace-presence-prefetch";
 import { ModalCloseButton } from "@/components/ui/modal-close-button";
-import { useNewIssueDraftResetOnWorkspaceChange } from "@/data/stores/new-issue-draft-store";
+import { ActorProfileSheet } from "@/components/actor/actor-profile-sheet";
+import { useNewIssueDraftWorkspace } from "@/data/stores/new-issue-draft-store";
 import { useNewProjectDraftResetOnWorkspaceChange } from "@/data/stores/new-project-draft-store";
 import { useChatSessionPickerResetOnWorkspaceChange } from "@/data/stores/chat-session-picker-store";
 import { useTranslation } from "@/lib/i18n/react";
@@ -120,7 +121,10 @@ export default function WorkspaceLayout() {
   // Wipe cross-route Zustand draft stores whenever the active workspace
   // changes — a draft picked under workspace A (assignee id, draft
   // session id, etc.) is invalid in workspace B and must not leak.
-  useNewIssueDraftResetOnWorkspaceChange(matched?.id ?? null);
+  // The issue draft is the exception to plain wiping: it swaps to the new
+  // workspace's OWN saved draft (web persists `multica_issue_draft` per
+  // workspace too), so dismissing the form no longer throws work away.
+  useNewIssueDraftWorkspace(matched?.id ?? null);
   useNewProjectDraftResetOnWorkspaceChange(matched?.id ?? null);
   useChatSessionPickerResetOnWorkspaceChange(matched?.id ?? null);
 
@@ -145,6 +149,10 @@ export default function WorkspaceLayout() {
     <UpdateProvider>
       <RealtimeProvider>
         <RealtimeSubscriptions />
+        {/* One actor profile sheet for the whole workspace tree. Mounting it
+            per avatar would put ~77 modals in the tree; see
+            data/stores/actor-profile-store.ts for the full reasoning. */}
+        <ActorProfileSheet />
         <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen
@@ -284,6 +292,12 @@ export default function WorkspaceLayout() {
             components/issue/comment-context-menu.tsx. */}
         <Stack.Screen
           name="issue/[id]/comment/[commentId]/emoji-picker"
+          options={SHEET_OPTIONS}
+        />
+        {/* Full emoji picker for an ISSUE-level reaction (iteration 179) —
+            same sheet, no commentId: the reaction lands on the issue. */}
+        <Stack.Screen
+          name="issue/[id]/emoji-picker"
           options={SHEET_OPTIONS}
         />
         {/* Project-detail formSheet pickers. */}

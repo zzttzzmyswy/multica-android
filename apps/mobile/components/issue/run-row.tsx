@@ -16,27 +16,29 @@
  * Text narration renders as markdown; process steps reuse the shared
  * `ChatTimeline` fold. Empty logs surface `runs.noLogs` / `runs.noLogsYet`.
  */
-import { useMemo } from "react";
-import { ActivityIndicator, Alert, Pressable, View } from "react-native";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useMemo, useState } from "react";
+import { Alert, Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { AgentTask } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { RunTranscriptDialog } from "@/components/agent/run-transcript-dialog";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { RunLog } from "./run-log";
-import { useCancelTask, useRerunIssue } from "@/data/mutations/issues";
+import { RerunButton } from "./rerun-button";
+import { useCancelTask } from "@/data/mutations/issues";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useTranslation } from "@/lib/i18n/react";
+import { useColorScheme } from "@/lib/use-color-scheme";
+import { THEME } from "@/lib/theme";
 import { formatTokens } from "@/lib/usage-format";
 import { summarizeTaskUsage } from "@/lib/task-usage";
-import { canRerunRun, isInvocationBlocked } from "@/lib/run-retry";
+import { canRerunRun } from "@/lib/run-retry";
 
 interface Props {
   task: AgentTask;
@@ -56,6 +58,7 @@ export function RunRow({ task, issueId }: Props) {
   const { getName } = useActorLookup();
   const { t } = useTranslation();
   const timeAgo = useTimeAgo();
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
   const isActive = ACTIVE_STATUSES.includes(task.status);
   const summary = task.trigger_summary?.trim() || fallbackSummary(task, t);
   // Past tasks use completed_at when present (server fills it for terminal
@@ -82,6 +85,14 @@ export function RunRow({ task, issueId }: Props) {
           </Text>
         </View>
       </View>
+      {transcriptOpen ? (
+        <RunTranscriptDialog
+          taskId={task.id}
+          taskStatus={task.status}
+          task={task}
+          onClose={() => setTranscriptOpen(false)}
+        />
+      ) : null}
     </View>
   );
 
@@ -109,7 +120,8 @@ export function RunRow({ task, issueId }: Props) {
               </View>
             </Pressable>
           </CollapsibleTrigger>
-          <View className="pl-2 pr-1">
+          <View className="flex-row items-center gap-1 pl-2 pr-1">
+            <TranscriptButton onPress={() => setTranscriptOpen(true)} />
             <CancelButton taskId={task.id} issueId={issueId} />
           </View>
         </View>
@@ -143,11 +155,12 @@ export function RunRow({ task, issueId }: Props) {
             </View>
           </Pressable>
         </CollapsibleTrigger>
-        {canRerunRun(task.status) && (
-          <View className="pl-2 pr-1">
+        <View className="flex-row items-center gap-1 pl-2 pr-1">
+          <TranscriptButton onPress={() => setTranscriptOpen(true)} />
+          {canRerunRun(task.status) ? (
             <RerunButton taskId={task.id} issueId={issueId} />
-          </View>
-        )}
+          ) : null}
+        </View>
       </View>
       <CollapsibleContent>
         <RunLog taskId={task.id} />
@@ -191,6 +204,35 @@ function StatusBadge({ task }: { task: AgentTask }) {
   return <Text className={`text-xs ${cls}`}>{label}</Text>;
 }
 
+/**
+ * The run's transcript entry point, on every row.
+ *
+ * Web puts a `TranscriptButton` in each execution-log row's actions
+ * (`execution-log-section.tsx:383` active, `:517` past) — outside the activity
+ * card that is the ONLY place the transcript is opened from. Mobile had no
+ * such entry point at all: a run's trace was reachable only by expanding the
+ * row, which shows the same messages but none of the transcript's per-run
+ * facts (the usage chip, the run-details panel). Those facts are hydrated on
+ * exactly the endpoint this row reads (`GET /api/issues/:id/task-runs`), so
+ * without this button the whole surface would have been unreachable.
+ */
+function TranscriptButton({ onPress }: { onPress: () => void }) {
+  const { t } = useTranslation();
+  const { colorScheme } = useColorScheme();
+  const theme = THEME[colorScheme];
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={t("runs.transcript.open")}
+      hitSlop={8}
+      className="rounded-md p-1.5 active:opacity-70"
+    >
+      <Ionicons name="document-text-outline" size={16} color={theme.mutedForeground} />
+    </Pressable>
+  );
+}
+
 function CancelButton({
   taskId,
   issueId,
@@ -223,57 +265,6 @@ function CancelButton({
       className="px-3 py-1.5 rounded-md bg-secondary active:opacity-70"
     >
       <Text className="text-xs font-medium text-foreground">{t("runs.cancel")}</Text>
-    </Pressable>
-  );
-}
-
-function RerunButton({
-  taskId,
-  issueId,
-}: {
-  taskId: string;
-  issueId: string;
-}) {
-  const mutation = useRerunIssue(issueId);
-  const { colorScheme } = useColorScheme();
-  const { t } = useTranslation();
-
-  const onPress = () => {
-    mutation.mutate(taskId, {
-      // A rerun is re-gated on the operator's invoke permission (MUL-4525):
-      // a structured 403 means the agent can't be triggered, not a transient
-      // failure — localize it instead of echoing the generic message (web
-      // execution-log-section.tsx:485).
-      onError: (err) => {
-        Alert.alert(
-          t("runs.retryTitle"),
-          isInvocationBlocked(err)
-            ? t("runs.retryBlocked")
-            : t("runs.retryFailed"),
-        );
-      },
-    });
-  };
-
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={mutation.isPending}
-      accessibilityLabel={
-        mutation.isPending ? t("runs.retryRunning") : t("runs.retry")
-      }
-      className="px-3 py-1.5 rounded-md bg-secondary active:opacity-70"
-    >
-      {mutation.isPending ? (
-        <ActivityIndicator size="small" color={THEME[colorScheme].mutedForeground} />
-      ) : (
-        <View className="flex-row items-center gap-1">
-          <Ionicons name="refresh" size={12} className="text-muted-foreground" />
-          <Text className="text-xs font-medium text-foreground">
-            {t("runs.retry")}
-          </Text>
-        </View>
-      )}
     </Pressable>
   );
 }
