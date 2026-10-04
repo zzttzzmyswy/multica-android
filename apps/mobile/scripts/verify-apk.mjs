@@ -31,7 +31,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 // The 5 libs whose absence means "this APK cannot boot this app".
 const REQUIRED_LIBS = [
@@ -100,19 +100,36 @@ function readEmbeddedConfigPackage(archive) {
 
 /**
  * The package id the release channel installs under, as declared in tracked
- * source. Returns `null` when the file is missing or malformed, which the
- * caller treats as "cannot assert" rather than "assertion failed" — a script
- * that hard-fails on a missing config file cannot report the artifact problems
- * it exists to report.
+ * source.
+ *
+ * Resolved against THIS SCRIPT's location, not `process.cwd()`. The script is
+ * invoked from `apps/mobile`, but a caller who runs it from the repository root
+ * — `node apps/mobile/scripts/verify-apk.mjs <apk>` — would otherwise look for
+ * `release-identity.json` in the root, not find it, and the channel check would
+ * silently stop asserting anything. That is the failure mode this whole guard
+ * exists to prevent: a check that reports OK because it never looked.
+ *
+ * Returns `{ ok: false }` rather than a sentinel when the declaration cannot be
+ * read, so the caller fails the build. A missing declaration is a broken
+ * checkout, and a build whose channel identity was never checked must not be
+ * mistaken for one that passed.
  */
-function readDeclaredReleasePackage(root = process.cwd()) {
+/** Directory holding this script's `release-identity.json` (i.e. `apps/mobile`). */
+const SCRIPT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+function readDeclaredReleasePackage(root = SCRIPT_ROOT) {
   const file = path.join(root, "release-identity.json");
-  if (!existsSync(file)) return null;
+  if (!existsSync(file)) {
+    return { ok: false, error: `no release-identity.json at ${file}` };
+  }
   try {
     const value = JSON.parse(readFileSync(file, "utf8"))?.androidPackage;
-    return typeof value === "string" && value.length > 0 ? value : null;
-  } catch {
-    return null;
+    if (typeof value !== "string" || value.length === 0) {
+      return { ok: false, error: `${file} names no androidPackage` };
+    }
+    return { ok: true, androidPackage: value };
+  } catch (e) {
+    return { ok: false, error: `${file} is unreadable: ${e.message}` };
   }
 }
 
@@ -130,10 +147,17 @@ function readDeclaredReleasePackage(root = process.cwd()) {
  * installing a second app. Only a comparison against a value that outlives the
  * artifact can see that.
  */
-function checkReleasePackage(manifestPackage, declaredPackage) {
-  if (declaredPackage === null) {
-    return { ok: true, note: "no release-identity.json; channel id not asserted" };
+function checkReleasePackage(manifestPackage, declaration) {
+  if (!declaration.ok) {
+    return {
+      ok: false,
+      error:
+        `cannot assert the release channel's package: ${declaration.error}. ` +
+        `An artifact whose channel identity was never checked must not be ` +
+        `reported as verified.`,
+    };
   }
+  const declaredPackage = declaration.androidPackage;
   if (manifestPackage !== declaredPackage) {
     return {
       ok: false,

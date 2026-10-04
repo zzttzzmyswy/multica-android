@@ -171,17 +171,31 @@ rm -rf app/build build .gradle    # not app/.cxx
 (`./gradlew clean` was not tried here — this is the command that was actually
 observed to work, so it is the one recorded.)
 
-### Verify the artifact before shipping
+### Verify the artifact before shipping — a hard gate, not a nicety
 
 ```bash
 cd apps/mobile          # the script resolves android/... relative to its cwd
 node scripts/verify-apk.mjs
 ```
 
-Checks each APK/AAB actually contains the native libs the app needs to boot
-(`libhermesvm.so` among them). Two consecutive releases once shipped an APK
-missing a native module — a stale incremental build — which only surfaced as a
-launch crash on-device.
+Three checks run over every APK/AAB, and each one exists because a release
+shipped with the defect it catches:
+
+| Check | The release that shipped without it |
+|---|---|
+| Native libs present (`libhermesvm.so` among them) | two releases shipped an APK missing a native module — a stale incremental build — which surfaced only as an on-device launch crash |
+| Manifest package == embedded `assets/app.config` package | v0.6.16/17 built with the two naming different packages, so `Constants.expoConfig` consumers acted as one app while installed as another |
+| Manifest package == `release-identity.json` | v0.6.17 moved the whole channel from `ai.multica.mobile.dev` to `ai.multica.mobile`, so every existing user's in-app update installed a **second** app |
+
+**Treat a non-zero exit as blocking the release.** There is no CI in this fork —
+`verify-apk` runs only when a human or agent runs it — so the discipline *is* the
+gate. Two of the three checks above failed to fire exactly once, and both times
+the release shipped anyway.
+
+Note that the run is only meaningful when `release-identity.json` was readable.
+That is enforced: an unreadable declaration **fails** the run rather than
+silently skipping the channel check (a guard that reports OK because it never
+looked is the defect this whole family belongs to).
 
 ## Why the build config lives in `plugins/`
 
