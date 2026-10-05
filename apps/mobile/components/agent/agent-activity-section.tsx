@@ -38,6 +38,10 @@ import { Text } from "@/components/ui/text";
 import { api } from "@/data/api";
 import { agentTaskSnapshotOptions } from "@/data/queries/agent-task-snapshot";
 import { agentTasksOptions } from "@/data/queries/agent-tasks";
+import { catalogRead } from "@/lib/catalog-read";
+import { unsettledCatalogStatus } from "@/lib/catalog-state";
+import type { CatalogState } from "@/lib/catalog-state";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { useAgentActivityMap } from "@/data/queries/agent-activity";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
@@ -91,10 +95,26 @@ export function AgentActivitySection({
   const theme = THEME[colorScheme];
   const queryClient = useQueryClient();
 
-  const snapshot = useQuery(agentTaskSnapshotOptions(wsId));
-  const agentTasks = useQuery(agentTasksOptions(wsId, agent.id));
-  const { byAgent } = useAgentActivityMap(wsId, agents);
+  // Both directories this panel is built from, read through `catalogRead` so a
+  // failed request is a state the section renders instead of an absence it
+  // asserts. The section says 「这个智能体当前没有在跑任何 task。」 / 「最近 30 天
+  // 没有完成 task。」 — claims about the agent's history made from reads that
+  // may never have landed (MYS-1924, gap 3d).
+  const snapshotRead = catalogRead(useQuery(agentTaskSnapshotOptions(wsId)));
+  const tasksRead = catalogRead(useQuery(agentTasksOptions(wsId, agent.id)));
+  const snapshot = { data: snapshotRead.items };
+  const agentTasks = { data: tasksRead.items };
+  const { byAgent, state: activityMapState, retry: retryActivityMap } =
+    useAgentActivityMap(wsId, agents);
   const activity = byAgent.get(agent.id);
+
+  // "Can this panel state an absence yet?" over every read behind it. `null`
+  // only once all three settled without error.
+  const activityVerdict = unsettledCatalogStatus([
+    snapshotRead.state,
+    tasksRead.state,
+    activityMapState,
+  ]);
 
   // --- Now -----------------------------------------------------------------
   const activeTasks = useMemo(
@@ -121,7 +141,10 @@ export function AgentActivitySection({
     () => sortRecentAgentTasks(agentTasks.data ?? [], agent.id),
     [agentTasks.data, agent.id],
   );
-  const recentLoading = agentTasks.isLoading;
+  // `agentTasks.isLoading` is first-attempt-only, so a failed read reported
+  // `false` and the branch below asserted 「最近 30 天没有完成 task。」. State is
+  // the honest signal.
+  const recentLoading = tasksRead.state === "loading";
   const [recentLimit, setRecentLimit] = useState(RECENT_INITIAL);
   const recentTasks = recentAll.slice(0, recentLimit);
   const hasMoreRecent = recentAll.length > recentTasks.length;
@@ -153,18 +176,32 @@ export function AgentActivitySection({
           })
         : t("agents.activity.subtitleRecentLatest", { count: recentTasks.length });
 
+  // Each sub-section speaks only for its own read. A spinner replaces the
+  // subtitle as well as the body, so no sentence about the agent's history is
+  // on screen while the answer is still unknown.
+  const statusFor = (state: CatalogState, onRetry: () => void) => (
+    <CatalogStatus state={state} onRetry={onRetry} className="py-3" />
+  );
+  const nowUnsettled = snapshotRead.state !== "ready";
+  const last30dUnsettled = activityMapState !== "ready";
+  const recentUnsettled = tasksRead.state !== "ready";
+
   return (
     <>
       {/* Now */}
       <SectionHeader
         title={t("agents.activity.sectionNow")}
         subtitle={
-          activeTasks.length === 0
-            ? t("agents.activity.subtitleNoActive")
-            : t("agents.activity.subtitleActive", { count: activeTasks.length })
+          nowUnsettled
+            ? ""
+            : activeTasks.length === 0
+              ? t("agents.activity.subtitleNoActive")
+              : t("agents.activity.subtitleActive", { count: activeTasks.length })
         }
       />
-      {activeTasks.length === 0 ? (
+      {nowUnsettled ? (
+        statusFor(snapshotRead.state, snapshotRead.retry)
+      ) : activeTasks.length === 0 ? (
         <Text className="px-4 text-sm text-muted-foreground">
           {t("agents.activity.emptyNow")}
         </Text>
@@ -188,7 +225,9 @@ export function AgentActivitySection({
         title={t("agents.activity.sectionLast30d")}
         subtitle={t("agents.activity.subtitlePerformance")}
       />
-      {summary.totalRuns === 0 ? (
+      {last30dUnsettled ? (
+        statusFor(activityMapState, retryActivityMap)
+      ) : summary.totalRuns === 0 ? (
         <Text className="px-4 text-sm text-muted-foreground">
           {t("agents.activity.empty30d")}
         </Text>
@@ -235,7 +274,9 @@ export function AgentActivitySection({
 
       {/* Recent work */}
       <SectionHeader title={t("agents.activity.sectionRecent")} subtitle={recentSubtitle} />
-      {recentLoading ? (
+      {recentUnsettled ? (
+        statusFor(tasksRead.state, tasksRead.retry)
+      ) : recentLoading ? (
         <View className="px-4 py-3">
           <ActivityIndicator size="small" color={theme.mutedForeground} />
         </View>

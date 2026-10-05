@@ -61,6 +61,9 @@ import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { deriveRuntimePermissions } from "@/lib/runtime-management";
+import { catalogRead } from "@/lib/catalog-read";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
+import type { CatalogState } from "@/lib/catalog-state";
 
 const MODE_ICON: Record<AgentRuntime["runtime_mode"], keyof typeof Ionicons.glyphMap> = {
   local: "hardware-chip",
@@ -145,9 +148,17 @@ function MetaRow({
 function ServingAgentsCard({
   agents,
   wsSlug,
+  state,
+  onRetry,
 }: {
   agents: ServingAgentRow[];
   wsSlug: string | null;
+  /** Load state of the agent directory this card is built from. A failed read
+   *  used to render 「还没有智能体绑定到这个运行时。」 — an assertion about the
+   *  runtime's configuration made from a request that never landed
+   *  (MYS-1924, gap 3b). */
+  state?: CatalogState;
+  onRetry?: () => void;
 }) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
@@ -163,7 +174,14 @@ function ServingAgentsCard({
           {t("runtimes.detail.servingCount", { count: agents.length })}
         </Text>
       </View>
-      {agents.length === 0 ? (
+      {state && state !== "ready" ? (
+        <CatalogStatus
+          state={state}
+          onRetry={onRetry ?? (() => {})}
+          emptyMessage={t("runtimes.detail.noAgents")}
+          className="py-4"
+        />
+      ) : agents.length === 0 ? (
         <View className="items-center px-4 py-6 gap-2">
           <Ionicons name="hardware-chip-outline" size={20} color={muted} />
           <Text className="text-xs text-muted-foreground text-center">
@@ -262,10 +280,8 @@ export default function RuntimeDetailPage() {
 
   const { data = [], isLoading, error, refetch } = useQuery(runtimeListOptions(wsId));
   const { data: members = [] } = useQuery(memberListOptions(wsId));
-  const {
-    data: agents = [],
-    refetch: refetchAgents,
-  } = useQuery(agentListOptions(wsId));
+  const agentsRead = catalogRead(useQuery(agentListOptions(wsId)));
+  const agents = agentsRead.items;
   // Workspace-wide presence map — one subscription set for the whole serving
   // list, instead of ActorAvatar's `showPresence` (three queries per row).
   const { byAgent: presenceByAgent } = useWorkspacePresenceMap(wsId);
@@ -348,7 +364,7 @@ export default function RuntimeDetailPage() {
       runtime: runtime ?? null,
       displayName: runtime ? runtimeDisplayLabel(runtime) : "",
       activeAgents,
-      refetchAgents,
+      refetchAgents: agentsRead.retry,
       onDeleted: () => router.back(),
       confirmLabel: t("runtimes.detail.deleteButton"),
     });
@@ -599,7 +615,12 @@ export default function RuntimeDetailPage() {
         {/* Serving agents — web keeps this in the right rail next to
             Diagnostics; on a phone the single column puts it directly under
             the facts, where "who runs on this?" is the first question. */}
-        <ServingAgentsCard agents={servingAgents} wsSlug={wsSlug} />
+        <ServingAgentsCard
+          agents={servingAgents}
+          wsSlug={wsSlug}
+          state={agentsRead.state}
+          onRetry={agentsRead.retry}
+        />
 
         {/* Usage section (iteration-93) — web usage-section parity: per-runtime
             cost / tokens / cache-savings KPIs + daily cost bars. */}

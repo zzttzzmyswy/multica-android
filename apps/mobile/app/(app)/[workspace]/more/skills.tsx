@@ -68,6 +68,9 @@ import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { ActionSheet } from "@/lib/action-sheet";
+import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
+import { aggregateCatalogState } from "@/lib/catalog-state";
+import type { CatalogState } from "@/lib/catalog-state";
 
 const SORT_LABEL_KEY: Record<SkillSortField, string> = {
   name: "skills.list.sortField.name",
@@ -119,8 +122,10 @@ export default function SkillsPage() {
   const { data, isLoading, error, refetch, isRefetching } = useQuery(
     skillListOptions(wsId),
   );
-  const { data: agents = [] } = useQuery(agentListOptions(wsId));
-  const { data: members = [] } = useQuery(memberListOptions(wsId));
+  const agentsRead = catalogRead(useQuery(agentListOptions(wsId)));
+  const membersRead = catalogRead(useQuery(memberListOptions(wsId)));
+  const agents = agentsRead.items;
+  const members = membersRead.items;
 
   const [search, setSearch] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
@@ -335,6 +340,8 @@ export default function SkillsPage() {
         visible={filterOpen}
         onClose={() => setFilterOpen(false)}
         rows={allRows}
+        state={aggregateCatalogState([agentsRead.state, membersRead.state])}
+        onRetry={() => retryCatalogs(agentsRead, membersRead)}
         filters={filters}
         onToggle={toggleFilter}
         onClear={clearFilters}
@@ -478,6 +485,8 @@ function SkillFilterSheet({
   visible,
   onClose,
   rows,
+  state,
+  onRetry,
   filters,
   onToggle,
   onClear,
@@ -485,6 +494,11 @@ function SkillFilterSheet({
   visible: boolean;
   onClose: () => void;
   rows: SkillRow[];
+  /** Load state over the directories the option labels resolve through (agent
+   *  and member name maps). A failed read left the sheet claiming 「无匹配结果。」
+   *  about a filter it had never managed to build. */
+  state?: CatalogState;
+  onRetry?: () => void;
   filters: SkillListFilters;
   onToggle: (key: string) => void;
   onClear: () => void;
@@ -574,6 +588,8 @@ function SkillFilterSheet({
       visible={visible}
       title={t("skills.list.filterTitle")}
       groups={groups}
+      state={state}
+      onRetry={onRetry}
       selectedKeys={selectedKeys}
       searchPlaceholder={t("skills.list.filterSearch")}
       emptyText={t("skills.list.noMatches")}

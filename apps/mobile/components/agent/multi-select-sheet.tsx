@@ -12,12 +12,27 @@
  *
  * Employs the same transparent-Modal + backdrop pattern as
  * components/chat/agent-picker-sheet.tsx.
+ *
+ * Load state: the caller owns the read, so it passes the resolved
+ * `state` (and a `retry`) rather than a bare `loading` boolean. The sheet is
+ * the *shared implementation* of five pickers (agent-create skills and
+ * members, the AI-builder config panel, the access picker, autopilot
+ * subscribers, the skill batch bar), so a missing failure branch here lied on
+ * all of them at once: a failed directory read fell into the `emptyText`
+ * branch and said 「工作区还没有 skill，请先创建或导入。」 / 「没有可选择的工作区
+ * 成员。」 about a workspace whose rows merely had not arrived (MYS-1924, gap 2).
+ *
+ * `state` defaults to `"ready"` so a caller that genuinely has no read (a
+ * caller-owned static list) is unaffected — but any caller reading a workspace
+ * directory must pass it, and `lib/catalog-wiring.test.ts` enforces that.
  */
 import { useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, TextInput, View, ActivityIndicator } from "react-native";
+import { Modal, Pressable, ScrollView, TextInput, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { ReactNode } from "react";
 import { Text } from "@/components/ui/text";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
+import type { CatalogState } from "@/lib/catalog-state";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
@@ -43,7 +58,17 @@ interface Props {
   groups?: MultiSelectGroup[];
   /** Shows a search field above the list filtering rows by title. */
   searchPlaceholder?: string;
-  loading?: boolean;
+  /** Load state of the directory backing `rows`/`groups`. Defaults to
+   *  `"ready"` for callers whose rows are not a remote read. Pass the state
+   *  from `catalogRead` — a failed read must never fall through to
+   *  `emptyText`. */
+  state?: CatalogState;
+  /** Re-runs the caller's read; wired to the failure's retry. Required for the
+   *  error branch to be reachable in practice. */
+  onRetry?: () => void;
+  /** Overrides the generic failure copy when the caller can name what failed
+   *  (e.g. "could not load skills"). */
+  errorMessage?: string;
   selectedKeys: ReadonlySet<string>;
   emptyText: string;
   /** Rendered when the search matches nothing (defaults to `emptyText`). */
@@ -63,7 +88,9 @@ export function MultiSelectSheet({
   rows,
   groups,
   searchPlaceholder,
-  loading = false,
+  state = "ready",
+  onRetry,
+  errorMessage,
   selectedKeys,
   emptyText,
   noMatchText,
@@ -194,10 +221,17 @@ export function MultiSelectSheet({
                 </View>
               ) : null}
               <ScrollView className="max-h-96">
-                {loading ? (
-                  <View className="py-8 items-center">
-                    <ActivityIndicator />
-                  </View>
+                {/* The empty slot is *decided*, not assumed. A directory that
+                    has not arrived and one that failed both used to land in
+                    `!hasAny` and render `emptyText` — so a timeout told the
+                    user their workspace had no skills to import and no members
+                    to share with. Only a settled directory may say that. */}
+                {state !== "ready" ? (
+                  <CatalogStatus
+                    state={state}
+                    onRetry={onRetry ?? (() => {})}
+                    errorMessage={errorMessage}
+                  />
                 ) : !hasAny ? (
                   <View className="px-4 py-8">
                     <Text className="text-sm text-muted-foreground text-center">

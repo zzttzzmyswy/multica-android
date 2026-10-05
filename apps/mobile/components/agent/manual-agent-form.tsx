@@ -74,6 +74,7 @@ import { RuntimePickerSheet } from "@/components/agent/runtime-picker-sheet";
 import { ModelPickerSheet } from "@/components/agent/model-picker-sheet";
 import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
 import { agentCreateGate, classifyAgentCreateError, resolveDuplicateSeed, usableRuntimes } from "@/lib/agent-create";
+import { catalogRead } from "@/lib/catalog-read";
 import { agentEditGate } from "@/lib/agent-edit";
 import { agentSquadJoin } from "@/lib/agent-squad-join";
 import { useAddSquadMember } from "@/data/mutations/squads";
@@ -172,8 +173,12 @@ export function ManualAgentForm({
   const { data: runtimes = [], isLoading: runtimesLoading, isPending: runtimesPending } = useQuery(
     runtimeListOptions(wsId),
   );
-  const { data: members = [] } = useQuery(memberListOptions(wsId));
-  const { data: workspaceSkills = [] } = useQuery(skillListOptions(wsId));
+  const skillsRead = catalogRead(useQuery(skillListOptions(wsId)));
+  const workspaceSkills = skillsRead.items;
+  // The member picker's directory. Read through `catalogRead` so a failed read
+  // is a state the sheet can render, not a silent "no members".
+  const membersRead = catalogRead(useQuery(memberListOptions(wsId)));
+  const members = membersRead.items;
 
   const usable = useMemo(
     () => usableRuntimes(runtimes, currentUserId),
@@ -554,6 +559,8 @@ export function ManualAgentForm({
           visible={skillPickerOpen}
           title={t("agents.new.skillsLabel")}
           rows={skillRows}
+          state={skillsRead.state}
+          onRetry={skillsRead.retry}
           selectedKeys={draft.skillIds}
           emptyText={t("agents.new.skillsEmpty")}
           onToggle={(id) => {
@@ -894,6 +901,8 @@ export function ManualAgentForm({
               title: m.name,
             }))}
             selectedKeys={draft.memberIds}
+            state={membersRead.state}
+            onRetry={membersRead.retry}
             emptyText={t("agents.new.membersEmpty")}
             leading={(row) => (
               <ActorAvatar type="member" id={row.key} size={32} />

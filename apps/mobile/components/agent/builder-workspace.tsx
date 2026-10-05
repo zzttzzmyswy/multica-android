@@ -58,6 +58,7 @@ import {
   mergeDraftFromAssistant,
 } from "@/lib/agent-builder";
 import { classifyAgentCreateError } from "@/lib/agent-create";
+import { catalogRead } from "@/lib/catalog-read";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
@@ -100,8 +101,13 @@ export function BuilderWorkspace({
     refetchInterval: isPendingTaskActive(pendingTask) ? 2_000 : false,
   });
   const { data: runtimes = [] } = useQuery(runtimeListOptions(wsId));
-  const { data: members = [] } = useQuery(memberListOptions(wsId));
-  const { data: workspaceSkills = [] } = useQuery(skillListOptions(wsId));
+  // The two directories the config panel's pickers are built from. Read through
+  // `catalogRead` so the panel can render a failure instead of claiming the
+  // workspace has no skills/members (MYS-1924, gap 2).
+  const membersRead = catalogRead(useQuery(memberListOptions(wsId)));
+  const skillsRead = catalogRead(useQuery(skillListOptions(wsId)));
+  const members = membersRead.items;
+  const workspaceSkills = skillsRead.items;
   const createAgent = useCreateAgent();
 
   // The carrier's runtime — where this conversation actually executes. Only
@@ -523,6 +529,10 @@ export function BuilderWorkspace({
               selectedRuntimeId={draft.runtimeId}
               currentUserId={currentUserId}
               formError={formError}
+              skillsState={skillsRead.state}
+              onRetrySkills={skillsRead.retry}
+              membersState={membersRead.state}
+              onRetryMembers={membersRead.retry}
               onRuntimeSwitch={async (nextRuntime) => {
                 if (!sessionId || nextRuntime.id === draft.runtimeId) return;
                 setError(null);

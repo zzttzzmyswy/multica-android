@@ -125,6 +125,25 @@ export function unsettledCatalogStatus(
   return states.some((state) => state === "error") ? "error" : "loading";
 }
 
+/** `unsettledCatalogStatus` as a `CatalogState`, for the surfaces that paint a
+ *  load state from several directories at once (the multi-select sheets, whose
+ *  rows come from one directory but whose option labels resolve through
+ *  others).
+ *
+ *  `null` — every directory settled — becomes `ready`, because that is exactly
+ *  what it means to the caller: there is no load state left to show, so it may
+ *  draw its rows (or its own empty branch) and claim what it likes. The
+ *  distinction `resolveCatalogEmpty` needs between "settled empty" and
+ *  "settled ready" is not available here and is not wanted: those callers own
+ *  their empty copy.
+ *
+ *  Exists so the `?? "ready"` mapping is written once rather than repeated at
+ *  each picker, where one omission would put a raw `null` into a prop typed
+ *  `CatalogState`. */
+export function aggregateCatalogState(states: CatalogState[]): CatalogState {
+  return unsettledCatalogStatus(states) ?? "ready";
+}
+
 /** What a picker's empty slot is allowed to say, once its directories'
  *  states and the current search text are known.
  *

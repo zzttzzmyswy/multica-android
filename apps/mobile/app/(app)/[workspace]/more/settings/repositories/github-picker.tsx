@@ -32,6 +32,8 @@ import { api } from "@/data/api";
 import { useMergeWorkspaceRepos } from "@/data/mutations/repositories";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { repositoryIdentity } from "@/lib/repositories";
+import { resolveCatalogState } from "@/lib/catalog-state";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
@@ -45,13 +47,24 @@ export default function GitHubPickerPage() {
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
 
-  const { data: githubData, isPending: installationsPending } = useQuery(
-    githubInstallationsOptions(wsId),
-  );
+  const installationsQuery = useQuery(githubInstallationsOptions(wsId));
+  const githubData = installationsQuery.data;
+  // The read resolves a *configuration record*, not a directory, so the state
+  // comes from `resolveCatalogState` over its installation rows: `undefined`
+  // until the row lands, which is what keeps a failure out of the
+  // "not configured" branch. `configured` is read straight off the record, and
+  // a failed read has no record — asserting "this deployment has no GitHub
+  // connection" from that was the bug (MYS-1924, gap 3f).
+  const installationsRead = resolveCatalogState({
+    items: githubData?.installations,
+    isPending: installationsQuery.isPending,
+    isError: installationsQuery.isError,
+  });
   const installations = useMemo(
     () => githubData?.installations ?? [],
     [githubData?.installations],
   );
+  const retryInstallations = installationsQuery.refetch;
   const connectConfigured = githubData?.configured === true;
   const browseConfigured = githubData?.repository_browse_configured === true;
 
@@ -73,7 +86,7 @@ export default function GitHubPickerPage() {
     );
   }, [workspace]);
 
-  const { data: repoPage, isPending: reposPending } = useQuery({
+  const repoPageQuery = useQuery({
     queryKey: githubKeys.repositories(wsId, installationId),
     queryFn: () =>
       api.listGitHubInstallationRepositories(wsId ?? "", installationId, {
@@ -82,6 +95,9 @@ export default function GitHubPickerPage() {
       }),
     enabled: !!wsId && !!installationId && browseConfigured,
   });
+  const repoPage = repoPageQuery.data;
+  const reposPending = repoPageQuery.isPending;
+  const reposFailed = repoPageQuery.isError;
   const repositories = useMemo(
     () => repoPage?.repositories ?? [],
     [repoPage],
@@ -151,7 +167,13 @@ export default function GitHubPickerPage() {
   return (
     <>
       <Stack.Screen options={{ title: t("repositories.githubPickerTitle") }} />
-      {installationsPending ? (
+      {installationsRead === "error" ? (
+        <CatalogStatus
+          state="error"
+          onRetry={() => void retryInstallations()}
+          layout="centered"
+        />
+      ) : installationsRead === "loading" ? (
         <View className="flex-1 items-center justify-center bg-background">
           <ActivityIndicator />
         </View>
@@ -245,7 +267,13 @@ export default function GitHubPickerPage() {
             </View>
           )}
 
-          {reposPending ? (
+          {reposFailed ? (
+            <CatalogStatus
+              state="error"
+              onRetry={() => void repoPageQuery.refetch()}
+              layout="centered"
+            />
+          ) : reposPending ? (
             <View className="flex-1 items-center justify-center">
               <ActivityIndicator />
             </View>
