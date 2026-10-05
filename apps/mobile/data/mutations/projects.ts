@@ -26,6 +26,7 @@ import type {
 import { api } from "@/data/api";
 import { projectKeys } from "@/data/queries/projects";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { WRITE_FAILURE_TITLE_KEY } from "@/lib/write-failure";
 
 export function useCreateProject() {
   const qc = useQueryClient();
@@ -53,6 +54,7 @@ export function useUpdateProject(projectId: string) {
 
   return useMutation({
     mutationKey: ["updateProject", projectId] as const,
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "projects.updateFailed" },
     mutationFn: (patch: UpdateProjectRequest) =>
       api.updateProject(projectId, patch),
     onMutate: async (patch) => {

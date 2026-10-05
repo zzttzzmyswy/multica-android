@@ -14,6 +14,7 @@ import type {
 import { api } from "@/data/api";
 import { labelKeys } from "@/data/queries/labels";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { WRITE_FAILURE_TITLE_KEY } from "@/lib/write-failure";
 
 function useInvalidateLabels(wsId: string | null) {
   const qc = useQueryClient();
@@ -47,6 +48,7 @@ export function useCreateLabel() {
   const patchList = usePatchLabelList(wsId);
 
   return useMutation({
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "labels.createdFailed" },
     mutationFn: (body: CreateLabelRequest) => api.createLabel(body),
     onSuccess: (label) => {
       // Append to that scope's cache so the list (and the matching picker)

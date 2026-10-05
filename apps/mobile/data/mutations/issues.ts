@@ -39,6 +39,7 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { useFailedCommentsStore } from "@/data/stores/failed-comments-store";
 import { patchSubscribersList } from "@/lib/subscription";
 import { patchIssueBatch } from "@/lib/batch-issues";
+import { WRITE_FAILURE_TITLE_KEY } from "@/lib/write-failure";
 
 export type ToggleCommentReactionVars = {
   commentId: string;
@@ -453,6 +454,7 @@ export function useUpdateIssue(issueId: string) {
 
   return useMutation({
     mutationKey: ["updateIssue", issueId] as const,
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "issueRelation.updateFailed" },
     mutationFn: ({ move_intent: moveIntent, ...patch }: UpdateIssueVars) => {
       if (!moveIntent) return api.updateIssue(issueId, patch);
       // A drag sends its NEIGHBOURS, not a position: the server owns the
@@ -592,6 +594,7 @@ export function useUpdateIssueRelations() {
 
   return useMutation({
     mutationKey: ["updateIssueRelations"] as const,
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "issueRelation.updateFailed" },
     mutationFn: ({ id, patch }: UpdateIssueRelationsVars) =>
       api.updateIssue(id, patch),
     onMutate: async ({ id, patch }) => {
@@ -749,6 +752,7 @@ export function useAttachLabel(issueId: string) {
 
   return useMutation({
     mutationKey: ["attachLabel", issueId] as const,
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "labels.attachFailed" },
     mutationFn: ({ label }: { label: Label }) =>
       api.attachLabel(issueId, label.id),
     onMutate: async ({ label }) => {
@@ -793,6 +797,7 @@ export function useDetachLabel(issueId: string) {
 
   return useMutation({
     mutationKey: ["detachLabel", issueId] as const,
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "labels.attachFailed" },
     mutationFn: ({ labelId }: { labelId: string }) =>
       api.detachLabel(issueId, labelId),
     onMutate: async ({ labelId }) => {

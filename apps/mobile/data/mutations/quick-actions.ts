@@ -24,6 +24,7 @@ import { api } from "@/data/api";
 import { quickActionKeys } from "@/data/queries/quick-actions";
 import { issueKeys } from "@/data/queries/issue-keys";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { WRITE_FAILURE_TITLE_KEY } from "@/lib/write-failure";
 
 export function useCreateQuickAction() {
   const qc = useQueryClient();
@@ -44,6 +45,7 @@ export function useUpdateQuickAction() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "quickActions.updateFailed" },
     mutationFn: ({
       id,
       ...data
@@ -61,6 +63,7 @@ export function useDeleteQuickAction() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "quickActions.updateFailed" },
     mutationFn: (id: string) => api.deleteQuickAction(id),
     onSettled: () => {
       if (!wsId) return;
