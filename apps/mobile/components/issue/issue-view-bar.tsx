@@ -41,6 +41,7 @@ import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { LongPressView } from "@/components/ui/long-press-view";
 import { SaveViewDialog } from "@/components/issue/save-view-dialog";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { ActionSheet } from "@/lib/action-sheet";
 import { useTranslation } from "@/lib/i18n/react";
 import { useAuthStore } from "@/data/auth-store";
@@ -54,9 +55,12 @@ import {
   EMPTY_VIEW_BAR_PREFS,
   issueViewPreferenceOptions,
   sanitizeViewBarPrefs,
+  showsViewBarManage,
   viewBarItemId,
   type ViewBarPrefs,
 } from "@/data/queries/issue-view-prefs";
+import { canWriteViewBarPrefs } from "@/lib/view-bar-prefs-write";
+import { catalogRead, recordRead } from "@/lib/catalog-read";
 import { useUpdateIssueViewPreference } from "@/data/mutations/issue-view-prefs";
 import {
   useCreateIssueView,
@@ -110,7 +114,15 @@ export function IssueViewBar({
   const currentRole =
     members.find((m) => m.user_id === user?.id)?.role ?? null;
 
-  const { data: views } = useQuery({ ...issueViewListOptions(wsId, scope) });
+  // `viewsReady` gate for the preference write — web's `viewsReady`
+  // (`packages/core/issue-views/use-active-view.ts:62`). The list read feeds the
+  // stale-id prune below, so a list that has not arrived must not be pruned
+  // against. Read through `catalogRead` so the bar can also say WHICH state it
+  // is in: `views ?? []` used to render 「暂无已保存视图」 out of a read that had
+  // failed — the same assertion-of-absence defect as MYS-1892/1907.
+  const viewsRead = catalogRead(useQuery({ ...issueViewListOptions(wsId, scope) }));
+  const views = viewsRead.items;
+  const viewsReady = viewsRead.isResolved;
   const createView = useCreateIssueView(wsId);
   const updateView = useUpdateIssueView(wsId, scope);
   const deleteView = useDeleteIssueView(wsId, scope);
@@ -118,10 +130,15 @@ export function IssueViewBar({
   // View-bar preference (hidden + order, per scope) — iteration-67. Mirrors
   // web view-bar.tsx:204-206 / preferences.ts applyViewBarPrefs. The doc is
   // upserted optimistically on every toggle/reorder via the mutation below.
-  const { data: preference } = useQuery({
-    ...issueViewPreferenceOptions(wsId, scope),
-  });
-  const prefs: ViewBarPrefs = preference?.prefs ?? EMPTY_VIEW_BAR_PREFS;
+  //
+  // The read state matters twice over: `prefs` falls back to
+  // EMPTY_VIEW_BAR_PREFS, so an unread doc is indistinguishable from "the user
+  // customized nothing" — which is why `prefsReady` gates every write and why a
+  // failure is surfaced instead of silently rendering as the default bar.
+  const prefsQuery = useQuery({ ...issueViewPreferenceOptions(wsId, scope) });
+  const prefsRead = recordRead(prefsQuery.data, [prefsQuery]);
+  const prefs: ViewBarPrefs = prefsRead.record?.prefs ?? EMPTY_VIEW_BAR_PREFS;
+  const prefsReady = prefsRead.isResolved;
   const updatePreference = useUpdateIssueViewPreference(wsId, scope);
 
   // Pin state for this bar's views — "pin the current view" is web's
@@ -157,8 +174,16 @@ export function IssueViewBar({
   );
 
   /** Persist a prefs doc, dropping stale ids (deleted views) — mirrors web
-   *  view-bar.tsx:305-317 savePrefs. */
+   *  view-bar.tsx:305-317 savePrefs, including its `if (!viewsReady) return;`
+   *  guard. Web needs one flag because its prefs doc is not the prune's input;
+   *  here the doc being written is built from the preference read *and* the
+   *  prune reads the views list, so both have to have settled — otherwise the
+   *  PUT overwrites the user's real customization with a fabricated document
+   *  (see `lib/view-bar-prefs-write.ts`). A dropped write is safe: the gesture
+   *  is re-doable a moment later, and the bar keeps rendering from live state. */
   const savePrefs = (next: ViewBarPrefs) => {
+    if (!canWriteViewBarPrefs({ prefsSettled: prefsReady, viewsSettled: viewsReady }))
+      return;
     updatePreference.mutate(
       sanitizeViewBarPrefs(next, (views ?? []).map((v) => viewBarItemId(v.id))),
     );
@@ -383,12 +408,28 @@ export function IssueViewBar({
           showsHorizontalScrollIndicator={false}
           contentContainerClassName="gap-1.5 items-center pr-2"
         >
-          {visibleItems.length === 0 ? (
+          {viewsRead.state === "loading" || viewsRead.state === "error" ? (
+            <CatalogStatus
+              state={viewsRead.state}
+              onRetry={viewsRead.retry}
+              className="py-1"
+            />
+          ) : viewsRead.state === "empty" ? (
             <Text
               className="text-xs text-muted-foreground py-1 max-w-72"
               numberOfLines={1}
             >
               {t("issueViews.noViews")}
+            </Text>
+          ) : visibleItems.length === 0 ? (
+            // Views exist but the preference hides all of them. Saying "no saved
+            // views yet" here would be a different false claim: the views are
+            // there, the bar layout is what is keeping them out of sight.
+            <Text
+              className="text-xs text-muted-foreground py-1 max-w-72"
+              numberOfLines={1}
+            >
+              {t("issueViews.allHidden")}
             </Text>
           ) : (
             visibleItems.map(({ view }) => {
@@ -434,7 +475,10 @@ export function IssueViewBar({
             })
           )}
         </ScrollView>
-        {allViewItems.length > 1 ? (
+        {showsViewBarManage({
+          itemCount: allViewItems.length,
+          hasHidden: allViewItems.some((item) => hiddenSet.has(item.barItemId)),
+        }) ? (
           <Button
             variant="ghost"
             size="icon"
@@ -455,6 +499,18 @@ export function IssueViewBar({
           <Ionicons name="add" size={18} color={fg} />
         </Button>
       </View>
+      {/* A failed preference read is not "you have no customization": the bar
+          falls back to the default order, so the user is owed the reason their
+          hides and their order are gone. The write guard stays closed, so the
+          next gesture is dropped rather than persisted over the real doc. */}
+      {prefsRead.state === "error" ? (
+        <View className="flex-row items-center gap-1.5 px-4 pb-1">
+          <Ionicons name="cloud-offline-outline" size={12} color={dim} />
+          <Text className="flex-1 text-[11px] text-muted-foreground">
+            {t("issueViews.prefsLoadError")}
+          </Text>
+        </View>
+      ) : null}
       <SaveViewDialog
         visible={dialog !== null}
         initialName={dialog?.mode === "edit" ? dialog.view.name : ""}

@@ -28,6 +28,8 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Agent, AgentRuntime } from "@multica/core/types";
 import { runtimeDisplayLabel } from "@multica/core/runtimes";
 import { Text } from "@/components/ui/text";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
+import { catalogRead } from "@/lib/catalog-read";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { AgentManagedMcpForm } from "@/components/agent/agent-managed-mcp-form";
@@ -66,10 +68,16 @@ export function AgentMcpSection({
   const theme = THEME[colorScheme];
   const muted = theme.mutedForeground;
 
-  const assignedQuery = agentMcpServersOptions(agent.id);
-  const { data: assigned = [], isLoading, error, refetch } =
-    useQuery(assignedQuery);
-  const { data: library = [] } = useQuery(workspaceMcpServersOptions(wsId));
+  // Both directory reads go through `catalogRead` so the section can name the
+  // load state instead of asserting an absence: `library = []` used to pick
+  // 「工作区库为空」 over a library read that had failed, and `assigned = []`
+  // made the same collapse for the agent's own assignments (MYS-1916).
+  const assignedRead = catalogRead(
+    useQuery(agentMcpServersOptions(agent.id)),
+  );
+  const assigned = assignedRead.items;
+  const libraryRead = catalogRead(useQuery(workspaceMcpServersOptions(wsId)));
+  const library = libraryRead.items;
 
   const addServer = useAddAgentMcpServer(agent.id);
   const setServerEnabled = useSetAgentMcpServerEnabled(agent.id);
@@ -356,26 +364,28 @@ export function AgentMcpSection({
           {t("mcp.agent.hint")}
         </Text>
 
-        {isLoading ? (
-          <View className="py-3 items-center">
-            <ActivityIndicator />
-          </View>
-        ) : error ? (
-          <Pressable
-            onPress={() => void refetch()}
-            accessibilityRole="button"
-            className="py-3"
-          >
-            <Text className="text-xs text-destructive">
-              {t("mcp.agent.loadError")} {t("workspace.retry")}
-            </Text>
-          </Pressable>
+        {assignedRead.state !== "ready" ? (
+          <CatalogStatus
+            state={assignedRead.state}
+            onRetry={assignedRead.retry}
+            errorMessage={t("mcp.agent.loadError")}
+            emptyMessage={t("mcp.agent.noneAssigned")}
+          />
         ) : assigned.length === 0 ? (
-          <Text className="text-xs text-muted-foreground/80 py-1">
-            {library.length === 0
-              ? t("mcp.agent.libraryEmpty")
-              : t("mcp.agent.noneAssigned")}
-          </Text>
+          // Two different absences share this slot; which one it is depends on
+          // the library read, so an unsettled library gets its own state rather
+          // than the "library is empty" claim.
+          libraryRead.state !== "ready" ? (
+            <CatalogStatus
+              state={libraryRead.state}
+              onRetry={libraryRead.retry}
+              emptyMessage={t("mcp.agent.libraryEmpty")}
+            />
+          ) : (
+            <Text className="text-xs text-muted-foreground/80 py-1">
+              {t("mcp.agent.noneAssigned")}
+            </Text>
+          )
         ) : (
           <View className="overflow-hidden rounded-md border border-border bg-secondary/30">
             {assigned.map((server, index) => (

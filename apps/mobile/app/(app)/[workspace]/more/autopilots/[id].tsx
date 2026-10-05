@@ -48,7 +48,7 @@ import {
   TriggerPayloadSkeleton,
 } from "@/components/autopilot/trigger-payload-preview";
 import { ActionSheet } from "@/lib/action-sheet";
-import { recordRead } from "@/lib/catalog-read";
+import { catalogRead, recordRead } from "@/lib/catalog-read";
 import { Markdown } from "@/lib/markdown";
 import {
   autopilotDetailOptions,
@@ -155,7 +155,8 @@ export default function AutopilotDetailPage() {
   const autopilot = detail.data?.autopilot;
   const read = recordRead(autopilot, [detail]);
   const triggers = detail.data?.triggers ?? [];
-  const runList = runs.data ?? [];
+  const runsRead = catalogRead(runs);
+  const runList = runsRead.items;
   const { visible: visibleRuns, skipped: skippedRuns } = useMemo(
     () => splitAutopilotRuns(runList),
     [runList],
@@ -665,10 +666,17 @@ export default function AutopilotDetailPage() {
       {/* Run history */}
       <SectionTitle>{t("autopilots.detail.runHistory")}</SectionTitle>
       <View className="px-4 gap-2">
-        {runList.length === 0 ? (
-          <Text className="text-sm text-muted-foreground">
-            {t("autopilots.detail.noRuns")}
-          </Text>
+        {runsRead.state !== "ready" ? (
+          // `runList = runs.data ?? []` made a failed run read indistinguishable
+          // from an autopilot that has never run, so a timeout printed 「暂无运行
+          // 记录。点击"立即运行"手动触发。」 over real history — and the suggested
+          // next step ("Run now") fires another run to fix a display problem.
+          // 3a's sibling fix in this same file: name the load state instead.
+          <CatalogStatus
+            state={runsRead.state}
+            onRetry={runsRead.retry}
+            emptyMessage={t("autopilots.detail.noRuns")}
+          />
         ) : (
           <>
             {visibleRuns.map((run) => (
@@ -1029,8 +1037,28 @@ function RunRow({
           </Pressable>
           {payloadOpen ? (
             <View className="border-t border-border bg-background">
-              {payloadQuery.isLoading ? (
+              {payloadQuery.isPending ? (
                 <TriggerPayloadSkeleton />
+              ) : payloadQuery.isError ? (
+                // `isLoading` is only true for the FIRST attempt, so a failed
+                // read (isLoading false, data undefined) fell into the `none`
+                // branch and stated "this run carried no trigger payload" about
+                // a request that never landed. Name the failure, and offer the
+                // retry — the run really may have had a payload.
+                <View className="px-3 py-2 gap-1 items-start">
+                  <Text className="text-xs text-destructive">
+                    {t("catalog.loadError")}
+                  </Text>
+                  <Pressable
+                    onPress={() => void payloadQuery.refetch()}
+                    accessibilityRole="button"
+                    className="px-2 py-1 rounded-md bg-secondary active:opacity-70"
+                  >
+                    <Text className="text-xs font-medium text-foreground">
+                      {t("common.retry")}
+                    </Text>
+                  </Pressable>
+                </View>
               ) : payloadQuery.data?.trigger_payload != null ? (
                 <TriggerPayloadPreview
                   payload={payloadQuery.data.trigger_payload}

@@ -67,6 +67,45 @@ describe("inbox item source: loading is not missing", () => {
       inboxItemPhase({ hasItem: true, workspaceReady: true, fetching: true }),
     ).toBe("ready");
   });
+
+  it("reports a failed read as a failure, not as a missing notification", () => {
+    // MYS-1916: the screen had no failure branch, so a list read that errored
+    // (isFetching false, data undefined) rendered 「这条通知已不可用。」 — the user
+    // was told the notification was gone rather than unreachable.
+    expect(
+      inboxItemPhase({
+        hasItem: false,
+        workspaceReady: true,
+        fetching: false,
+        failed: true,
+      }),
+    ).toBe("error");
+  });
+
+  it("prefers the failure over the spinner when a read both failed and is retrying", () => {
+    // A manual refetch after a failure reports `isFetching: true` again; showing
+    // a spinner there hides the failure and the retry that produced it.
+    expect(
+      inboxItemPhase({
+        hasItem: false,
+        workspaceReady: true,
+        fetching: true,
+        failed: true,
+      }),
+    ).toBe("error");
+  });
+
+  it("still renders a found row over a failure in the other list", () => {
+    // The row is in one list; the other list failing does not unsay that.
+    expect(
+      inboxItemPhase({
+        hasItem: true,
+        workspaceReady: true,
+        fetching: false,
+        failed: true,
+      }),
+    ).toBe("ready");
+  });
 });
 
 describe("inbox item source: fetching the fallback list", () => {

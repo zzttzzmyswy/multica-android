@@ -11,6 +11,7 @@ vi.mock("@/data/api", () => ({ api: {} }));
 import {
   applyViewBarPrefs,
   sanitizeViewBarPrefs,
+  showsViewBarManage,
   viewBarItemId,
 } from "./issue-view-prefs";
 
@@ -81,5 +82,25 @@ describe("sanitizeViewBarPrefs", () => {
 describe("viewBarItemId", () => {
   it("uses the web view:<id> vocabulary", () => {
     expect(viewBarItemId("abc")).toBe("view:abc");
+  });
+});
+
+describe("showsViewBarManage", () => {
+  it("shows for two or more items even with nothing hidden", () => {
+    expect(showsViewBarManage({ itemCount: 2, hasHidden: false })).toBe(true);
+    expect(showsViewBarManage({ itemCount: 5, hasHidden: false })).toBe(true);
+  });
+
+  it("shows for a single item only while something is hidden", () => {
+    // Reordering needs two, but revealing needs one: a lone hidden view leaves
+    // the bar empty, and this is the only route back to it.
+    expect(showsViewBarManage({ itemCount: 1, hasHidden: true })).toBe(true);
+    expect(showsViewBarManage({ itemCount: 1, hasHidden: false })).toBe(false);
+  });
+
+  it("stays hidden on an empty bar with nothing hidden", () => {
+    // Nothing to reorder and nothing to reveal — the button would open a dialog
+    // over an empty list.
+    expect(showsViewBarManage({ itemCount: 0, hasHidden: false })).toBe(false);
   });
 });

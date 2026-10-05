@@ -28,6 +28,8 @@ import { Text } from "@/components/ui/text";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
+import { catalogRead } from "@/lib/catalog-read";
 import { skillListOptions } from "@/data/queries/skills";
 import {
   runtimeCapabilitiesOptions,
@@ -56,7 +58,8 @@ export function AgentSkillsSection({
   const { colorScheme } = useColorScheme();
   const muted = THEME[colorScheme].mutedForeground;
 
-  const { data: workspaceSkills = [] } = useQuery(skillListOptions(wsId));
+  const skillsRead = catalogRead(useQuery(skillListOptions(wsId)));
+  const workspaceSkills = skillsRead.items;
   const runtimeId =
     runtime?.runtime_mode === "local" && runtime.status === "online"
       ? runtime.id
@@ -185,11 +188,21 @@ export function AgentSkillsSection({
         </Text>
 
         {agent.skills.length === 0 ? (
-          <Text className="text-xs text-muted-foreground/80 py-1">
-            {workspaceSkills.length === 0
-              ? t("agents.skills.emptyWorkspace")
-              : t("agents.skills.emptyTitle")}
-          </Text>
+          // The workspace read decides WHICH absence this is, and that read may
+          // not have settled: `workspaceSkills = []` used to pick between these
+          // two sentences on its own, so a failed library read told the user the
+          // workspace had no skills. Name the load state while it is unresolved.
+          skillsRead.state !== "ready" ? (
+            <CatalogStatus
+              state={skillsRead.state}
+              onRetry={skillsRead.retry}
+              emptyMessage={t("agents.skills.emptyWorkspace")}
+            />
+          ) : (
+            <Text className="text-xs text-muted-foreground/80 py-1">
+              {t("agents.skills.emptyTitle")}
+            </Text>
+          )
         ) : (
           <View className="overflow-hidden rounded-md border border-border bg-secondary/30">
             {agent.skills.map((skill, index) => {

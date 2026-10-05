@@ -55,6 +55,23 @@ const PICKER_SURFACES = [
   "components/issue/subscriber-picker-sheet.tsx",
 ];
 
+/** The surfaces that read a workspace directory *inside a detail page's
+ *  section* rather than a picker, and said "there is nothing here" out of a read
+ *  that had not settled (MYS-1916).
+ *
+ *  Same defect shape as the pickers, one level down: these are cards on a page
+ *  that already resolved its own record, so they never went through the picker
+ *  sweep. Each one defaulted its directory to `[]` and branched on the length —
+ *  a failed read therefore rendered 「工作区还没有 skill」、「无智能体专属 MCP 服务
+ *  器」、「暂无 Webhook 投递记录」, all assertions about the workspace made from a
+ *  request that never landed. `emptyMessage` is the caller's own "genuinely
+ *  none" sentence, which is the only branch allowed to make that claim. */
+const SECTION_SURFACES: string[] = [
+  "components/agent/agent-skills-section.tsx",
+  "components/agent/agent-mcp-section.tsx",
+  "components/autopilot/deliveries-section.tsx",
+];
+
 /** The property-catalog surfaces, which keep their own hook (it selects between
  *  the active-only and include-archived projections) but share the same
  *  resolver, the same state painter and the same `isResolved` gate. */
@@ -134,6 +151,26 @@ describe("remote-directory four-state wiring", () => {
       expect(src).toContain("loadState");
       expect(src).toMatch(/loadState === "error"/);
     });
+  });
+
+  describe("page sections", () => {
+    for (const file of SECTION_SURFACES) {
+      const src = code(file);
+
+      it(`${file} reads its directory through catalogRead`, () => {
+        expect(src).toContain("catalogRead");
+      });
+
+      it(`${file} never defaults raw query data to an empty array`, () => {
+        // `{ data: rows = [] }` is the construct that made a failed read
+        // indistinguishable from an empty workspace.
+        expect(src).not.toMatch(/data:\s*\w+\s*=\s*\[\]/);
+      });
+
+      it(`${file} decides its empty slot instead of assuming it`, () => {
+        expect(src).toContain("CatalogStatus");
+      });
+    }
   });
 
   describe("pickers", () => {
@@ -220,6 +257,100 @@ describe("remote-directory four-state wiring", () => {
       expect(errorAt).toBeGreaterThan(-1);
       expect(notFoundAt).toBeGreaterThan(errorAt);
     }
+  });
+
+  it("never branches a load state on isLoading alone", () => {
+    // `isLoading` is only true for a query's FIRST attempt. Every surface that
+    // wrote `q.isLoading ? spinner : (q.data ?? empty)` therefore fell into the
+    // empty branch on a failure (isLoading false, data undefined) and asserted
+    // the absence as a fact. `isPending` is the variant React Query v5 keeps
+    // true until data or an error exists, and it is what these sites use now.
+    //
+    // Scoped to the two files this iteration converted; the pattern is not
+    // globally banned because a query with a `placeholderData` seed legitimately
+    // wants to distinguish its first paint.
+    for (const file of [
+      "app/(app)/[workspace]/more/autopilots/[id].tsx",
+      "components/autopilot/deliveries-section.tsx",
+    ]) {
+      expect(code(file)).not.toMatch(/\w+Query\.isLoading|\{\s*isLoading\s*\}/);
+    }
+  });
+
+  it("gives the autopilot run history and webhook payload their own states", () => {
+    // Runs: `runList = runs.data ?? []` + `runList.length === 0` printed
+    // 「暂无运行记录。点击"立即运行"手动触发。」 over real history — and the copy's
+    // recommended next step fires another run to cure a display bug.
+    // Payload: `payloadQuery.isLoading` is first-attempt-only, so a failed read
+    // stated 「该 run 无触发载荷」 about a request that never landed.
+    const src = code("app/(app)/[workspace]/more/autopilots/[id].tsx");
+    expect(src).toContain("runsRead");
+    expect(src).toMatch(/runsRead\.state !== "ready"/);
+    expect(src).toContain("payloadQuery.isError");
+    expect(src).toMatch(/payloadQuery\.isPending/);
+  });
+
+  it("gives the inbox-item screen a failure branch before its missing claim", () => {
+    // The screen had only loading/ready/missing, so a failed list read landed in
+    // `missing` and told the user the notification was gone.
+    const src = code("app/(app)/[workspace]/inbox-item/[id].tsx");
+    expect(src).toMatch(/phase === "error"/);
+    const errorAt = src.indexOf('phase === "error"');
+    const missingAt = src.indexOf('t("inbox.detail.notificationMissing")');
+    expect(errorAt).toBeGreaterThan(-1);
+    expect(missingAt).toBeGreaterThan(errorAt);
+  });
+
+  it("keeps the view-bar preference write behind both reads", () => {
+    // The whole-document PUT (MYS-1916): writing the bar preference before the
+    // preference read settled dropped every existing hide, and pruning against an
+    // unsettled views list zeroed the document. Web guards this with
+    // `if (!viewsReady) return;`; mobile needs both reads, because the doc it
+    // writes is built from the prefs read and pruned against the views read.
+    const src = code("components/issue/issue-view-bar.tsx");
+    // Each flag is the resolved-ness of its own read...
+    expect(src).toMatch(/const viewsReady = viewsRead\.isResolved/);
+    expect(src).toMatch(/const prefsReady = prefsRead\.isResolved/);
+    // ...and both are handed to the guard, which gates the mutation.
+    expect(src).toContain("canWriteViewBarPrefs");
+    expect(src).toMatch(/prefsSettled:\s*prefsReady/);
+    expect(src).toMatch(/viewsSettled:\s*viewsReady/);
+    // The write stays downstream of the guard, never beside it.
+    const guardAt = src.indexOf("canWriteViewBarPrefs");
+    const mutateAt = src.indexOf("updatePreference.mutate");
+    expect(guardAt).toBeGreaterThan(-1);
+    expect(mutateAt).toBeGreaterThan(guardAt);
+  });
+
+  it("keeps a route back to a lone hidden view", () => {
+    // Caught while exercising the built APK: the manage button was gated on
+    // `allViewItems.length > 1`, so hiding the last-remaining bar view left an
+    // empty bar whose only recovery affordance was gone — the `allHidden` copy
+    // ended by pointing at a button that was no longer rendered. Revealing needs
+    // one item; only reordering needs two.
+    const src = code("components/issue/issue-view-bar.tsx");
+    expect(src).toContain("showsViewBarManage");
+    expect(src).not.toMatch(/allViewItems\.length > 1\s*\?/);
+  });
+
+  it("keeps the delete-view path off the preference document", () => {
+    // 差距 2 of MYS-1916 asked whether deleting a view also overwrites the prefs
+    // doc out of an unsettled read. Checked against the source: it does not.
+    // `deleteView` is `useDeleteIssueView` — a DELETE of the view plus a list
+    // invalidation, with no prefs write at all — and it is the only call the
+    // delete action makes. The stale `view:<id>` entry it leaves behind is
+    // pruned at the next toggle/reorder through `sanitizeViewBarPrefs`, and
+    // `applyViewBarPrefs` ignores an unknown id meanwhile, so nothing is lost
+    // even if that pruned write is the one the guard drops.
+    const src = code("components/issue/issue-view-bar.tsx");
+    expect(src).toContain("useDeleteIssueView");
+    // The delete branch never reaches the prefs mutation.
+    const deleteAt = src.indexOf('case "delete":');
+    expect(deleteAt).toBeGreaterThan(-1);
+    const branch = src.slice(deleteAt, src.indexOf('case "cancel":', deleteAt));
+    expect(branch).toContain("deleteView.mutate");
+    expect(branch).not.toContain("savePrefs");
+    expect(branch).not.toContain("updatePreference");
   });
 
   it("has no picker left claiming 'no matches' outside the shared slot", () => {

@@ -25,20 +25,30 @@ export function inboxItemBuckets(view: string | undefined): [InboxBucket, InboxB
   return [primary, primary === "archived" ? "inbox" : "archived"];
 }
 
-export type InboxItemPhase = "ready" | "loading" | "missing";
+export type InboxItemPhase = "ready" | "loading" | "error" | "missing";
 
 /**
  * `loading` covers the two windows in which "not found yet" is expected: the
  * workspace id is still resolving (it stays null until the workspaces list
  * answers, which is the whole cold-start window), and the list is in flight. A
  * found row wins over both, so a warm cache being revalidated never flashes.
+ *
+ * `error` is checked before `loading` for the reason `resolveCatalogState`
+ * documents: a failed read reports `isFetching: false`, so on its own it reads
+ * as settled-and-absent and the screen claimed 「这条通知已不可用。」 about a
+ * notification that was merely unreachable. Failure outranks in-flight so a
+ * spinner never hides a failure and its retry.
  */
 export function inboxItemPhase(input: {
   hasItem: boolean;
   workspaceReady: boolean;
   fetching: boolean;
+  /** Either backing list failed. Optional so the existing call sites (and the
+   *  tests that predate it) keep their meaning: absent means "did not fail". */
+  failed?: boolean;
 }): InboxItemPhase {
   if (input.hasItem) return "ready";
+  if (input.failed) return "error";
   if (!input.workspaceReady || input.fetching) return "loading";
   return "missing";
 }
