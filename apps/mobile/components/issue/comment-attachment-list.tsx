@@ -26,6 +26,7 @@ import { Alert, Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Attachment } from "@multica/core/types";
 import { standaloneAttachments } from "@/lib/attachment-dedup";
+import { attachmentKind } from "@/lib/attachment-kind";
 import { HtmlAttachmentPreview } from "@/components/rich-content/html-attachment";
 import { MarkdownImage } from "@/lib/markdown/markdown-image";
 import { resolveAttachmentUrl } from "@/lib/attachment-url";
@@ -68,8 +69,11 @@ export function CommentAttachmentList({ attachments, content, source }: Props) {
   return (
     <View className="gap-1.5">
       {standalone.map((attachment) => {
-        const isImage = attachment.content_type.startsWith("image/");
-        if (isImage) {
+        const kind = attachmentKind(
+          attachment.content_type,
+          attachment.filename,
+        );
+        if (kind === "image") {
           return (
             <MarkdownImage
               key={attachment.id}
@@ -79,13 +83,15 @@ export function CommentAttachmentList({ attachments, content, source }: Props) {
             />
           );
         }
-        if (attachment.content_type === "text/html") {
+        if (kind === "html") {
           return (
             <HtmlAttachmentPreview
               key={attachment.id}
               attachmentId={attachment.id}
               filename={attachment.filename}
+              downloadUrl={attachment.download_url}
               contentType={attachment.content_type}
+              source={source}
             />
           );
         }

@@ -37,8 +37,14 @@ describe("rich content i18n", () => {
     "richContent.mermaid.close": "关闭",
     "richContent.html.title": "HTML 预览",
     "richContent.html.preview": "预览",
+    "richContent.html.previewLoading": "预览加载中…",
+    "richContent.html.download": "下载",
     "richContent.html.source": "源码",
     "richContent.html.viewFullscreen": "全屏查看",
+    // Iteration 198 — the two failure strings that shipped translated but
+    // unreferenced, plus the retry/download exits that make "请使用下载" true.
+    "richContent.html.retry": "重试",
+    "richContent.html.loadFailed": "预览加载失败 — 请使用下载",
   };
 
   it("carries every richContent.* key in both locales", () => {
