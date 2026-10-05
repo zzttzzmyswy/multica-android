@@ -52,10 +52,18 @@ export interface WriteFailureMutationLike {
  * The i18n id to raise for a failed mutation, or `null` when the write opted out
  * of reporting.
  *
- * Returning `null` is a first-class outcome, not an error: plenty of writes are
- * background bookkeeping (marking a chat session read, marking an inbox item
- * read) where an alert would be pure noise — the user did not ask for them and
- * cannot act on the failure. Those simply carry no meta.
+ * Returning `null` is a first-class outcome, not an error: some writes are
+ * background bookkeeping where an alert would be pure noise — the user did not
+ * ask for them and cannot act on the failure. `useMarkChatSessionRead` is the
+ * remaining one: web fires it from a timer on the active session
+ * (`use-chat-controller.ts:381`) and raises nothing. It simply carries no meta.
+ *
+ * Mark-read is NOT opted out as a class — only where the user did not ask for
+ * it. `useMarkInboxRead` is the counter-example: the inbox screen calls it both
+ * from navigation (line 117) and from an explicit menu action (line 189), and
+ * web toasts the failure for both (`inbox-page.tsx:246-255,290-295`). One hook
+ * serving both paths reports, because the menu path is a write the user asked
+ * for and silence there is indistinguishable from success.
  *
  * A non-string meta value is treated as absent rather than coerced: only a
  * translator-produced id is meaningful here, and `String(undefined)` would put

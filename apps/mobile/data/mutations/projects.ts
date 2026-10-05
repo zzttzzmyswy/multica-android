@@ -48,13 +48,16 @@ export function useCreateProject() {
   });
 }
 
-export function useUpdateProject(projectId: string) {
+export function useUpdateProject(
+  projectId: string,
+  titleKey: string = "projects.updateFailed",
+) {
   const qc = useQueryClient();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
     mutationKey: ["updateProject", projectId] as const,
-    meta: { [WRITE_FAILURE_TITLE_KEY]: "projects.updateFailed" },
+    meta: { [WRITE_FAILURE_TITLE_KEY]: titleKey },
     mutationFn: (patch: UpdateProjectRequest) =>
       api.updateProject(projectId, patch),
     onMutate: async (patch) => {
@@ -109,6 +112,7 @@ export function useDeleteProject(projectId: string) {
 
   return useMutation({
     mutationKey: ["deleteProject", projectId] as const,
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "project.deleteFailed" },
     mutationFn: () => api.deleteProject(projectId),
     onMutate: async () => {
       const listKey = projectKeys.list(wsId);

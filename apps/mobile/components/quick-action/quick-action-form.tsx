@@ -122,6 +122,10 @@ export function QuickActionForm({ action }: { action?: QuickAction | null }) {
     ? t("quickActions.editTitle")
     : t("quickActions.createTitle");
 
+  // Both mutations carry their own write-failure title, and the MutationCache
+  // outlet reports it — including after this dialog has closed. A `catch` that
+  // raises its own Alert would be a second dialog for one failure, so the catch
+  // exists only to keep the form open and re-enable Save.
   const handleSave = async () => {
     if (!canSave || saving) return;
     if (!assignee) return;
@@ -146,11 +150,8 @@ export function QuickActionForm({ action }: { action?: QuickAction | null }) {
         });
       }
       router.back();
-    } catch (err) {
-      Alert.alert(
-        t("workspaceSettings.saveFailed"),
-        err instanceof Error ? err.message : t("common.unknownError"),
-      );
+    } catch {
+      // Reported by the hook's write-failure title.
     } finally {
       setSaving(false);
     }
@@ -164,11 +165,8 @@ export function QuickActionForm({ action }: { action?: QuickAction | null }) {
         status: archived ? "active" : "archived",
       });
       router.back();
-    } catch (err) {
-      Alert.alert(
-        t("workspaceSettings.saveFailed"),
-        err instanceof Error ? err.message : t("common.unknownError"),
-      );
+    } catch {
+      // Reported by the hook's write-failure title.
     }
   };
 

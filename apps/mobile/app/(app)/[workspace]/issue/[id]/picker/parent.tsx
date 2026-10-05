@@ -13,7 +13,6 @@
  * actions menu (`issue/[id].tsx` → `issueRelation.removeParentAction`).
  */
 import { useLocalSearchParams, router } from "expo-router";
-import { Alert } from "react-native";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Issue } from "@multica/core/types";
@@ -37,17 +36,11 @@ export default function IssueSetParentRoute() {
     return [...ids];
   }, [id, children]);
 
+  // Reporting lives on the hook's write-failure title (MutationCache outlet);
+  // a per-call `onError` would be a second alert for one failure, and the one
+  // that never fires — this screen pops on the next frame.
   const onSelect = (selected: Issue) => {
-    updateRelations.mutate(
-      { id, patch: { parent_issue_id: selected.id } },
-      {
-        onError: (err) =>
-          Alert.alert(
-            t("issueRelation.setParentFailed"),
-            err instanceof Error && err.message ? err.message : undefined,
-          ),
-      },
-    );
+    updateRelations.mutate({ id, patch: { parent_issue_id: selected.id } });
     router.back();
   };
 

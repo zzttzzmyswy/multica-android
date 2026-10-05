@@ -13,7 +13,7 @@
  * When the parent is still loading, the section hides itself entirely —
  * same "no flash of incomplete content" rule the children section follows.
  */
-import { Alert, Pressable, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import type { Issue } from "@multica/core/types";
@@ -50,17 +50,14 @@ export function IssueParentSection({ issue, wsSlug }: Props) {
 
   const statusEntry = statusStore.entryOf(parent.status);
 
+  // `useUpdateIssueRelations` carries its own write-failure title, so the
+  // MutationCache outlet already reports this failure. A per-call onError here
+  // would be a second alert for the same failure.
   const onRemoveParent = () => {
-    updateRelations.mutate(
-      { id: issue.id, patch: { parent_issue_id: null, stage: null } },
-      {
-        onError: (err) =>
-          Alert.alert(
-            t("issueRelation.updateFailed"),
-            err instanceof Error && err.message ? err.message : undefined,
-          ),
-      },
-    );
+    updateRelations.mutate({
+      id: issue.id,
+      patch: { parent_issue_id: null, stage: null },
+    });
   };
 
   return (

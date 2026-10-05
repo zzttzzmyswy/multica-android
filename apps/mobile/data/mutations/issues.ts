@@ -448,13 +448,16 @@ export type UpdateIssueVars = UpdateIssueRequest & {
   move_intent?: Pick<MoveIssueRequest, "before_id" | "after_id">;
 };
 
-export function useUpdateIssue(issueId: string) {
+export function useUpdateIssue(
+  issueId: string,
+  titleKey: string = "issueRelation.updateFailed",
+) {
   const qc = useQueryClient();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
     mutationKey: ["updateIssue", issueId] as const,
-    meta: { [WRITE_FAILURE_TITLE_KEY]: "issueRelation.updateFailed" },
+    meta: { [WRITE_FAILURE_TITLE_KEY]: titleKey },
     mutationFn: ({ move_intent: moveIntent, ...patch }: UpdateIssueVars) => {
       if (!moveIntent) return api.updateIssue(issueId, patch);
       // A drag sends its NEIGHBOURS, not a position: the server owns the
@@ -927,6 +930,7 @@ export function useDeleteIssue() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "issue.deleteFailed" },
     mutationFn: (id: string) => api.deleteIssue(id),
     onMutate: async (id) => {
       const listKey = issueKeys.list(wsId);

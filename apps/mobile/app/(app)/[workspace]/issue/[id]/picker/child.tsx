@@ -15,7 +15,6 @@
  * issue-scoped `useUpdateIssue(issueId)`.
  */
 import { useLocalSearchParams, router } from "expo-router";
-import { Alert } from "react-native";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Issue } from "@multica/core/types";
@@ -44,17 +43,12 @@ export default function IssueAddChildRoute() {
     return [...ids];
   }, [id, issue?.parent_issue_id, children]);
 
+  // Failure reporting lives on the hook (`useUpdateIssueRelations` carries a
+  // write-failure title for the MutationCache outlet). A per-call `onError`
+  // here would be the SECOND alert for the same failure — and it would be the
+  // one that never fires, since this screen navigates away on the next frame.
   const onSelect = (selected: Issue) => {
-    updateRelations.mutate(
-      { id: selected.id, patch: { parent_issue_id: id } },
-      {
-        onError: (err) =>
-          Alert.alert(
-            t("issueRelation.addChildFailed"),
-            err instanceof Error && err.message ? err.message : undefined,
-          ),
-      },
-    );
+    updateRelations.mutate({ id: selected.id, patch: { parent_issue_id: id } });
     router.back();
   };
 

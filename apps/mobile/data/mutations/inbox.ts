@@ -31,12 +31,14 @@ import { api } from "@/data/api";
 import { inboxKeys } from "@/data/queries/inbox";
 import { invalidateInboxSummary } from "@/data/realtime/inbox-ws-updaters";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { WRITE_FAILURE_TITLE_KEY } from "@/lib/write-failure";
 
 export function useMarkInboxRead() {
   const qc = useQueryClient();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "inbox.markReadFailed" },
     mutationFn: (id: string) => api.markInboxRead(id),
     onMutate: async (id) => {
       const key = inboxKeys.list(wsId);
@@ -72,6 +74,7 @@ export function useMarkInboxUnread() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "inbox.markUnreadFailed" },
     mutationFn: (id: string) => api.markInboxUnread(id),
     onMutate: async (id) => {
       const key = inboxKeys.list(wsId);
@@ -103,6 +106,7 @@ export function useArchiveInbox() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "inbox.archiveFailed" },
     mutationFn: (id: string) => api.archiveInbox(id),
     onMutate: async (id) => {
       const key = inboxKeys.list(wsId);
@@ -161,6 +165,7 @@ export function useUnarchiveInbox() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "inbox.unarchiveFailed" },
     mutationFn: (id: string) => api.unarchiveInbox(id),
     onMutate: async (id) => {
       const key = inboxKeys.archived(wsId);
@@ -225,6 +230,7 @@ export function useMarkAllInboxRead() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "inbox.markReadFailed" },
     mutationFn: () => api.markAllInboxRead(),
     onMutate: async () => {
       const key = inboxKeys.list(wsId);
@@ -254,6 +260,7 @@ export function useArchiveAllInbox() {
   const qc = useQueryClient();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   return useMutation({
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "inbox.batchFailed" },
     mutationFn: () => api.archiveAllInbox(),
     onSettled: () => {
       qc.invalidateQueries({ queryKey: inboxKeys.list(wsId) });
@@ -265,6 +272,7 @@ export function useArchiveAllReadInbox() {
   const qc = useQueryClient();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   return useMutation({
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "inbox.batchFailed" },
     mutationFn: () => api.archiveAllReadInbox(),
     onSettled: () => {
       qc.invalidateQueries({ queryKey: inboxKeys.list(wsId) });
@@ -276,6 +284,7 @@ export function useArchiveCompletedInbox() {
   const qc = useQueryClient();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   return useMutation({
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "inbox.batchFailed" },
     mutationFn: () => api.archiveCompletedInbox(),
     onSettled: () => {
       qc.invalidateQueries({ queryKey: inboxKeys.list(wsId) });
