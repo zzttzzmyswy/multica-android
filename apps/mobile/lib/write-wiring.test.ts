@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -60,6 +60,16 @@ const REPORTING_MUTATIONS: [string, string, string][] = [
   ["data/mutations/autopilots.ts", "useRevokeAutopilotAccess", "autopilots.access.failedTitle"],
   ["data/mutations/quick-actions.ts", "useCreateQuickAction", "quickActions.createFailed"],
   ["data/mutations/notification-preferences.ts", "useUpdateNotificationPreferences", "notif.saveFailed"],
+  // Iteration 197 — optimistic writes whose rollback was the ONLY signal. The
+  // pattern is what makes them invisible: the cache is patched forward, the
+  // request fails, and the patch is undone. Without an alert the snap-back is
+  // indistinguishable from "nothing was ever asked for".
+  ["data/mutations/issue-views.ts", "useCreateIssueView", "issueViews.saveFailed"],
+  ["data/mutations/issue-views.ts", "useUpdateIssueView", "issueViews.saveFailed"],
+  ["data/mutations/issue-views.ts", "useDeleteIssueView", "issueViews.deleteFailed"],
+  ["data/mutations/properties.ts", "useSetIssueProperty", "properties.valueUpdateFailed"],
+  ["data/mutations/properties.ts", "useUnsetIssueProperty", "properties.valueUpdateFailed"],
+  ["data/mutations/projects.ts", "useDeleteProjectResource", "resource.removeFailed"],
 ];
 
 /** Hooks whose title is a PARAMETER rather than a hardcoded literal, so one
@@ -233,10 +243,6 @@ describe("no write reports its failure twice", () => {
 });
 
 describe("a form screen's failure line is its own", () => {
-  // These two screens write a whole form, so "Failed to save" beats the
-  // attribute-picker's generic line. The override is passed to the hook (the
-  // hook meta is the only channel that survives the screen popping); asserting
-  // the call site keeps it honest.
   for (const [file, hook, key] of SPECIALISED_SITES) {
     it(`${file} passes ${key} to ${hook}`, () => {
       const src = code(file);
@@ -245,4 +251,112 @@ describe("a form screen's failure line is its own", () => {
       expect(src.slice(idx, idx + 120)).toContain(`"${key}"`);
     });
   }
+});
+
+describe("the silent-write backlog only shrinks", () => {
+  // The enumerations above are hand-maintained, which is the weakness of every
+  // guard in this file: a NEW optimistic write — cache patched forward, rolled
+  // back on failure — is exactly the shape that reads as "nothing happened",
+  // and nothing above would notice it. This is the ratchet.
+  //
+  // It enumerates the mutations carrying `onMutate` (the optimistic shape)
+  // without a title, and pins the set. Adding a silent optimistic write fails
+  // here; giving one a title requires deleting its line. The list may only get
+  // shorter, so the count is asserted too: forgetting to remove the line after
+  // fixing a hook would otherwise leave the allowance open for a new one.
+  //
+  // Entries that are silent ON PURPOSE carry the reason, and are the reason a
+  // plain "every mutation must have a title" rule cannot be used instead.
+  const STILL_SILENT_ON_PURPOSE: Record<string, string> = {
+    "useMarkChatSessionRead":
+      "background bookkeeping web also leaves silent (use-chat-controller.ts:381)",
+    "useUpdateIssueViewPreference":
+      "web saves the bar layout silently (view-bar.tsx:313)",
+    "useReorderPins": "web reorders pins silently (app-sidebar.tsx:502)",
+    // The chat session actions. Web toasts none of them: its thread list and
+    // session header call `setPinned` / `setArchived` / `deleteSession` with at
+    // most an `onSettled` (chat-thread-list.tsx:161,275,297,
+    // chat-session-header.tsx:91-98), and the core hooks roll back silently.
+    // Mirroring that keeps the two clients on one rule rather than inventing a
+    // louder mobile-only contract.
+    "useSetChatSessionPinned": "web toggles pin with no toast",
+    "useSetChatSessionArchived": "web archives with no toast",
+    "useDeleteChatSession": "web deletes a session with no toast",
+    "useRenameChatSession": "web renames with no toast",
+    "useStopChatTask": "web stops a task with no toast",
+    "useRegenerateChatQuickActions":
+      "web regenerates quick actions with no toast",
+    // Issue-relation toggles that web also leaves silent. Reactions are the
+    // clearest: `toggleReaction` fires and forgets (use-issue-reactions.ts:135),
+    // and a reaction that fails to land simply is not there.
+    "useToggleIssueReaction": "web's toggleReaction is silent too",
+    "useToggleCommentReaction": "web's equivalent toggle is silent too",
+    "useToggleIssueSubscribe": "web toggles subscription with no toast",
+    "useUnsubscribeIssueSubtree": "web unsubscribes with no toast",
+    // Writes whose every call site reports: the guard's enumeration above
+    // cannot see a `catch` that binds no error, so they read as silent here.
+    "useCancelTask": "call site alerts (run-row.tsx)",
+    "useEditComment": "call site alerts (comment-card.tsx edit)",
+    "useCreateComment": "call sites report (composer keeps the draft)",
+    "useBatchUpdateIssues": "call site alerts (batch-action-bar.tsx)",
+    "useBatchDeleteIssues": "call site alerts (batch-action-bar.tsx)",
+    "useBatchDeleteProjects": "call site reports",
+    "useSetAgentMcpServerEnabled": "call site alerts (agent-mcp-section.tsx)",
+    "useCreatePin": "call sites handle the write",
+    "useDeletePin": "call sites handle the write",
+    "useUpdateAutopilot": "call site reports",
+    "useDeleteAutopilot": "call site reports",
+    // Status-catalogue and issue-status writes: web leaves these silent too
+    // (the settings screens save on drop with no failure line).
+    "useUpdateIssueStatus": "web saves status edits silently",
+    "useReorderIssueStatuses": "web reorders statuses silently",
+  };
+
+  // 26 as of iteration 197 — down from the 28 this shipped with, by the two
+  // comment writes now titled above (useDeleteComment / useResolveComment).
+  // This number may only fall: a rise means a new silent optimistic write.
+  const EXPECTED_SILENT_OPTIMISTIC = 26;
+
+  function optimisticHooksWithoutTitle(): string[] {
+    const dir = path.join(APP_ROOT, "data/mutations");
+    const found: string[] = [];
+    for (const entry of readdirSync(dir)) {
+      if (!/\.ts$/.test(entry) || /\.test\.ts$/.test(entry)) continue;
+      const src = code(path.join("data/mutations", entry));
+      const re = /export function (use[A-Za-z0-9_]+)/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(src))) {
+        const rest = src.slice(m.index + 1);
+        const next = rest.indexOf("\nexport function ");
+        const body = next === -1 ? rest : rest.slice(0, next);
+        if (!body.includes("useMutation(")) continue;
+        if (!body.includes("onMutate")) continue;
+        if (body.includes("WRITE_FAILURE_TITLE_KEY")) continue;
+        found.push(m[1]);
+      }
+    }
+    return found.sort();
+  }
+
+  it("no optimistic write went silent since iteration 197", () => {
+    const silent = optimisticHooksWithoutTitle();
+    const unexpected = silent.filter((h) => !(h in STILL_SILENT_ON_PURPOSE));
+    expect(
+      unexpected,
+      "a new optimistic write fails invisibly — give it a " +
+        "WRITE_FAILURE_TITLE_KEY meta, or add it here WITH the reason web " +
+        "leaves it silent too",
+    ).toEqual([]);
+    expect(silent.length).toBe(EXPECTED_SILENT_OPTIMISTIC);
+  });
+
+  it("every allow-listed hook is still actually silent", () => {
+    // The other direction: an entry left behind after its hook grew a title
+    // would keep the allowance open, and the count would be wrong.
+    const silent = new Set(optimisticHooksWithoutTitle());
+    for (const hook of Object.keys(STILL_SILENT_ON_PURPOSE)) {
+      expect(silent.has(hook), `${hook} now has a title — drop its allow-list entry`)
+        .toBe(true);
+    }
+  });
 });

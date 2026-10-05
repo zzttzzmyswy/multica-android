@@ -18,6 +18,7 @@ import type {
 import { api } from "@/data/api";
 import { propertyKeys } from "@/data/queries/properties";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { WRITE_FAILURE_TITLE_KEY } from "@/lib/write-failure";
 import {
   patchIssueDetail,
   patchIssuesList,
@@ -99,6 +100,13 @@ export function useSetIssueProperty() {
   const invalidate = useInvalidateProperties(wsId);
 
   return useMutation({
+    // Web reports every value write. The board colour drop is the clearest
+    // case: it passes this same failure line as `onError` (board-view.tsx:
+    // 208-220) because the mutation rolls the card back and, without it, "the
+    // snap-back reads as a UI glitch instead of a rejected write". The detail
+    // picker does the same (pickers/custom-property-picker.tsx:57-58). Mobile
+    // dropped both call sites' handlers, so the rollback was all that was left.
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "properties.valueUpdateFailed" },
     mutationFn: ({
       issueId,
       propertyId,
@@ -123,6 +131,7 @@ export function useUnsetIssueProperty() {
   const invalidate = useInvalidateProperties(wsId);
 
   return useMutation({
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "properties.valueUpdateFailed" },
     mutationFn: ({ issueId, propertyId }: { issueId: string; propertyId: string }) =>
       api.unsetIssueProperty(issueId, propertyId),
     scope: { id: "issue-properties" },

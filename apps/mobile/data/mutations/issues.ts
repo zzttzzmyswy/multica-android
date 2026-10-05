@@ -293,6 +293,11 @@ export function useDeleteComment(issueId: string) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
+    // Web wraps the same delete in a try and toasts `comment.delete_failed`
+    // (use-issue-timeline.ts:364-374). Mobile's confirm sheet says the comment
+    // will be removed and the row leaves the timeline either way, so silence
+    // was indistinguishable from success.
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "comment.deleteFailed" },
     mutationFn: (commentId: string) => api.deleteComment(commentId),
     onMutate: async (commentId) => {
       const key = issueKeys.timeline(wsId, issueId);
@@ -334,6 +339,11 @@ export function useResolveComment(issueId: string) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
+    // Web toasts `comment.resolve.resolve_failed` / `unresolve_failed` from the
+    // same awaited call (use-issue-timeline.ts:376-390). The resolve toggle here
+    // flips the thread's badge optimistically, so a failure just flipped it
+    // back with no explanation.
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "comment.resolveFailed" },
     mutationFn: ({
       commentId,
       resolved,

@@ -21,7 +21,10 @@ import {
   issueViewKeys,
   type IssueViewScope,
 } from "@/data/queries/issue-views";
-
+import {
+  WRITE_FAILURE_CONFLICT_KEY,
+  WRITE_FAILURE_TITLE_KEY,
+} from "@/lib/write-failure";
 export interface UpdateIssueViewInput {
   id: string;
   name?: string;
@@ -95,6 +98,7 @@ export function appendViewToList(
 export function useCreateIssueView(wsId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "issueViews.saveFailed" },
     mutationFn: (data: Parameters<typeof api.createIssueView>[0]) =>
       api.createIssueView(data),
     onSuccess: (created) => {
@@ -119,6 +123,14 @@ export function useCreateIssueView(wsId: string | null) {
 export function useUpdateIssueView(wsId: string | null, viewScope: IssueViewScope) {
   const queryClient = useQueryClient();
   return useMutation({
+    // The `expected_revision` guard is the one failure with a real recovery:
+    // web swaps its line for `save_view.toast_conflict` on a 409
+    // (save-view-dialog.tsx:625-633), because "reopen it and try again" is
+    // actionable where the raw revision mismatch is not.
+    meta: {
+      [WRITE_FAILURE_TITLE_KEY]: "issueViews.saveFailed",
+      [WRITE_FAILURE_CONFLICT_KEY]: "issueViews.saveConflict",
+    },
     mutationFn: ({ id, ...patch }: UpdateIssueViewInput) =>
       api.updateIssueView(id, patch),
     onMutate: async ({ id, ...patch }: UpdateIssueViewInput) => {
@@ -162,6 +174,11 @@ export function useUpdateIssueView(wsId: string | null, viewScope: IssueViewScop
 export function useDeleteIssueView(wsId: string | null, viewScope: IssueViewScope) {
   const queryClient = useQueryClient();
   return useMutation({
+    // Web pairs its delete confirm with `save_view.toast_failed`
+    // (view-bar-popover.tsx:105-107). The confirm dialog here already warns the
+    // removal cannot be undone, so silence was the one outcome indistinguishable
+    // from success.
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "issueViews.deleteFailed" },
     mutationFn: (id: string) => api.deleteIssueView(id),
     onMutate: async (id: string) => {
       if (!wsId) return undefined;

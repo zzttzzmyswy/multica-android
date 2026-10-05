@@ -81,11 +81,24 @@ export function writeFailureTitleKey(
 /** The server's own message for a failed write, or `undefined` when it had none.
  *
  *  The API's messages are written for users (a validation rule, a changed
- *  permission) and are strictly more useful than any static line. A blank
- *  message is treated as absent: `Error("")` carries no information, and passing
- *  it through would give the alert an empty body where `undefined` correctly
- *  renders the title alone — the same distinction `Alert.alert(title)` makes. */
-export function writeFailureDetail(error: unknown): string | undefined {
+ *  permission) and are strictly more useful than any static line — with one
+ *  exception: a 409 body describes a concurrency race, not a mistake the member
+ *  made, so a mutation carrying `WRITE_FAILURE_CONFLICT_KEY` substitutes its own
+ *  line there instead.
+ *
+ *  A blank message is treated as absent: `Error("")` carries no information, and
+ *  passing it through would give the alert an empty body where `undefined`
+ *  correctly renders the title alone — the same distinction `Alert.alert(title)`
+ *  makes. */
+export function writeFailureDetail(
+  error: unknown,
+  mutation?: WriteFailureMutationLike | null,
+  translate?: (id: string) => string,
+): string | undefined {
+  const conflictKey = writeFailureConflictKey(mutation);
+  if (conflictKey && translate && isConflictError(error)) {
+    return translate(conflictKey);
+  }
   if (error instanceof Error) {
     const message = error.message?.trim();
     if (message) return message;
@@ -98,6 +111,45 @@ export type WriteFailureAlerter = (
   title: string,
   message: string | undefined,
 ) => void;
+
+/** Meta key carrying the i18n id of a SECOND line, shown in place of the
+ *  server's message when the write lost a lost-update race (HTTP 409).
+ *
+ *  The server's 409 body is written for a developer — ``revision mismatch``,
+ *  or nothing at all on a bare conflict. Web learnt this the hard way: the
+ *  saved-view dialog branches on `err.status === 409` and shows a line that
+ *  tells the member what to do about it (save-view-dialog.tsx:625-633,
+ *  `save_view.toast_conflict`), rather than echoing the raw body. A stale
+ *  editor is the one failure the member can actually recover from, so the
+ *  generic line is strictly worse there than a specific one.
+ *
+ *  Absent means "let the server's message through", which stays right for
+ *  every write whose 409 has no better phrasing than the API's own. */
+export const WRITE_FAILURE_CONFLICT_KEY = "writeFailureConflictKey";
+
+/** The i18n id to substitute for the server's message on a 409, or `null`. */
+export function writeFailureConflictKey(
+  mutation: WriteFailureMutationLike | null | undefined,
+): string | null {
+  const value = mutation?.options?.meta?.[WRITE_FAILURE_CONFLICT_KEY];
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+/** Whether the write lost an optimistic-concurrency race.
+ *
+ *  Duck-typed on `status` rather than `instanceof ApiError`: this module stays
+ *  free of `@/data/api` (which imports the transport) so the Node vitest lane
+ *  can load it, and the check is the same one `lib/runtime-profile-conflict.ts`
+ *  uses for its own 409 branch. */
+export function isConflictError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { status?: unknown }).status === 409
+  );
+}
 
 /** Report a failed write, if the mutation asked to be reported.
  *
@@ -116,5 +168,5 @@ export function reportWriteFailure(
 ): void {
   const titleKey = writeFailureTitleKey(mutation);
   if (!titleKey) return;
-  alert(translate(titleKey), writeFailureDetail(error));
+  alert(translate(titleKey), writeFailureDetail(error, mutation, translate));
 }
