@@ -81,13 +81,6 @@ export function writeFailureTitleKey(
 /** The server's own message for a failed write, or `undefined` when it had none.
  *
  *  The API's messages are written for users (a validation rule, a changed
- *  permission) and are strictly more useful than any static line. A blank
- *  message is treated as absent: `Error("")` carries no information, and passing
- *  it through would give the alert an empty body where `undefined` correctly
- *  renders the title alone — the same distinction `Alert.alert(title)` makes. */
-/** The server's own message for a failed write, or `undefined` when it had none.
- *
- *  The API's messages are written for users (a validation rule, a changed
  *  permission) and are strictly more useful than any static line — with one
  *  exception: a 409 body describes a concurrency race, not a mistake the member
  *  made, so a mutation carrying `WRITE_FAILURE_CONFLICT_KEY` substitutes its own
@@ -157,8 +150,6 @@ export function isConflictError(error: unknown): boolean {
     (error as { status?: unknown }).status === 409
   );
 }
-
-/** The server's own message for a failed write, or `undefined` when it had none.
 
 /** Report a failed write, if the mutation asked to be reported.
  *
