@@ -31,6 +31,7 @@ export function useCreateQuickAction() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "quickActions.createFailed" },
     mutationFn: (data: CreateQuickActionRequest) =>
       api.createQuickAction(data),
     onSettled: () => {

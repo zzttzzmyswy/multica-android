@@ -46,7 +46,9 @@ export default function EditIssue() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
   const detail = useQuery(issueDetailOptions(wsId, id));
-  const update = useUpdateIssue(id);
+  // "Failed to save" — this screen writes a whole form, so its failure line is
+  // the save-specific one rather than the attribute-picker generic.
+  const update = useUpdateIssue(id, "editIssue.failedTitle");
 
   const [title, setTitle] = useState("");
   const [descriptionBase, setDescriptionBase] = useState("");
@@ -125,15 +127,11 @@ export default function EditIssue() {
         ? { attachment_ids: uploadedAttachmentIds }
         : {}),
     };
-    update.mutate(patch, {
-      onSuccess: () => router.back(),
-      onError: (err) => {
-        Alert.alert(
-          t("editIssue.failedTitle"),
-          err instanceof Error ? err.message : t("newIssue.unknownError"),
-        );
-      },
-    });
+    // The failure title rides on the hook, not on this call: the MutationCache
+    // outlet is the only channel that still fires if the user leaves the
+    // screen before a slow request rejects. A per-call `onError` alongside it
+    // would alert twice while mounted and never when unmounted.
+    update.mutate(patch, { onSuccess: () => router.back() });
   }, [
     canSave,
     title,
@@ -141,7 +139,6 @@ export default function EditIssue() {
     descriptionBase,
     uploadedAttachmentIds,
     update,
-    t,
   ]);
 
   const headerLeft = useCallback(

@@ -27,6 +27,7 @@ import {
 import { api } from "@/data/api";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { notificationPreferenceKeys } from "@/data/queries/notification-preferences";
+import { WRITE_FAILURE_TITLE_KEY } from "@/lib/write-failure";
 
 interface NotificationPreferenceMutationVariables {
   preferences: NotificationPreferences;
@@ -95,6 +96,10 @@ export function useUpdateNotificationPreferences() {
     NotificationPreferenceMutationContext
   >({
     mutationKey: key,
+    // Web raises `notifications.toast_failed` from the same toggle
+    // (packages/views/settings/components/notifications-tab.tsx:53). Without
+    // this the Switch simply springs back and the user is left guessing.
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "notif.saveFailed" },
     scope: { id: `notification-preferences:${wsId ?? "unscoped"}` },
     mutationFn: ({ patch, workspaceSlug: targetWorkspaceSlug }) => {
       if (!targetWorkspaceSlug) {

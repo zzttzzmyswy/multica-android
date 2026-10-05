@@ -36,7 +36,9 @@ export default function EditProject() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
   const detail = useQuery(projectDetailOptions(wsId, id));
-  const update = useUpdateProject(id);
+  // "Failed to save" — this screen writes a whole form, so its failure line is
+  // the save-specific one rather than the attribute-picker generic.
+  const update = useUpdateProject(id, "editProject.failedTitle");
 
   // `getProject` falls back to EMPTY_PROJECT when the payload shape drifts, and
   // that sentinel carries an empty id — the project detail page treats it as
@@ -104,16 +106,10 @@ export default function EditProject() {
       description: description.trim() || null,
       icon: icon.trim() || null,
     };
-    update.mutate(patch, {
-      onSuccess: () => router.back(),
-      onError: (err) => {
-        Alert.alert(
-          t("editProject.failedTitle"),
-          err instanceof Error ? err.message : t("newIssue.unknownError"),
-        );
-      },
-    });
-  }, [canSave, title, description, icon, update, t]);
+    // Failure title rides on the hook so the MutationCache outlet still fires
+    // if this screen has already popped by the time the request rejects.
+    update.mutate(patch, { onSuccess: () => router.back() });
+  }, [canSave, title, description, icon, update]);
 
   const headerLeft = useCallback(() => {
     return (

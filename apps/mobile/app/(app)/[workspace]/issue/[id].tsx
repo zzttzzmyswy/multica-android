@@ -235,16 +235,13 @@ export default function IssueDetail() {
           if (wsSlug)
             router.push(`/${wsSlug}/issue/${issue.id}/picker/parent`);
         } else if (kind === "removeParent") {
-          updateRelations.mutate(
-            { id: issue.id, patch: { parent_issue_id: null, stage: null } },
-            {
-              onError: (err) =>
-                Alert.alert(
-                  t("issueRelation.updateFailed"),
-                  err instanceof Error ? err.message : undefined,
-                ),
-            },
-          );
+          // Reported by `useUpdateIssueRelations`' own write-failure title;
+          // a per-call onError here would fire a second alert for the same
+          // failure.
+          updateRelations.mutate({
+            id: issue.id,
+            patch: { parent_issue_id: null, stage: null },
+          });
         } else if (kind === "copy" && issueLink) {
           Clipboard.setStringAsync(issueLink);
         } else if (kind === "copyWorkdir") {

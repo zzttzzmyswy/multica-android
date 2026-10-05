@@ -32,6 +32,7 @@ import type {
 import { api } from "@/data/api";
 import { autopilotKeys } from "@/data/queries/autopilots";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { WRITE_FAILURE_TITLE_KEY } from "@/lib/write-failure";
 
 export function useUpdateAutopilot() {
   const qc = useQueryClient();
@@ -133,6 +134,7 @@ export function useGrantAutopilotAccess() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "autopilots.access.failedTitle" },
     mutationFn: ({
       autopilotId,
       userId,
@@ -154,6 +156,7 @@ export function useRevokeAutopilotAccess() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "autopilots.access.failedTitle" },
     mutationFn: ({
       autopilotId,
       userId,
