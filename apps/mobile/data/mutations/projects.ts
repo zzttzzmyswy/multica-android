@@ -175,6 +175,11 @@ export function useDeleteProjectResource(projectId: string) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
+    // Web's `handleRemove` awaits the same write inside a try and toasts the
+    // failure (project-resources-section.tsx:314-321). The confirm sheet here
+    // asks "detach this resource?" and the row leaves the list either way, so
+    // silence was indistinguishable from success.
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "resource.removeFailed" },
     mutationKey: ["deleteProjectResource", projectId] as const,
     mutationFn: (resourceId: string) =>
       api.deleteProjectResource(projectId, resourceId).then(() => resourceId),
