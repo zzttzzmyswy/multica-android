@@ -19,6 +19,7 @@ import { api } from "@/data/api";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { chatKeys, sortChatSessions } from "@/data/queries/chat";
 import { EMPTY_CHAT_PENDING_TASK } from "@/data/schemas";
+import { WRITE_FAILURE_TITLE_KEY } from "@/lib/write-failure";
 import {
   QUICK_ACTIONS_PENDING_TIMEOUT_MS,
   type ChatQuickActionsPendingState,
@@ -135,6 +136,7 @@ export function useSetChatSessionProject() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "chat.projectUpdateFailed" },
     mutationFn: ({
       id,
       projectId,

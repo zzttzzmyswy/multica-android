@@ -17,6 +17,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Workspace, WorkspaceRepo } from "@multica/core/types";
 import { api } from "@/data/api";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { WRITE_FAILURE_TITLE_KEY } from "@/lib/write-failure";
 
 const WORKSPACES_KEY = ["workspaces"] as const;
 
@@ -76,6 +77,7 @@ export function useRemoveWorkspaceRepo() {
   const patch = workspaceCachePatch(qc);
 
   return useMutation({
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "repositories.removeFailed" },
     mutationFn: async (index: number) => {
       if (!wsId) {
         throw new Error("No workspace selected");
