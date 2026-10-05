@@ -11,7 +11,6 @@
  */
 import { useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Modal,
   Pressable,
@@ -28,6 +27,8 @@ import type {
 } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
+import { catalogRead } from "@/lib/catalog-read";
 import {
   autopilotDeliveriesOptions,
   autopilotDeliveryOptions,
@@ -104,11 +105,19 @@ export function DeliveriesSection({
   hasWebhookTrigger: boolean;
   t: (id: string, params?: Record<string, string | number>) => string;
 }) {
-  const { data: deliveries = [], isLoading } = useQuery(
-    autopilotDeliveriesOptions(wsId, autopilotId, {
-      enabled: hasWebhookTrigger,
-    }),
+  // `isError` was missing here entirely: `{ data: deliveries = [], isLoading }`
+  // made a failed read render 「暂无 Webhook 投递记录」（`deliveries.empty`）over a
+  // webhook that had been receiving POSTs — and the copy then sends the user off
+  // to send another one. Read through `catalogRead` so the section can name the
+  // load state instead.
+  const deliveriesRead = catalogRead(
+    useQuery(
+      autopilotDeliveriesOptions(wsId, autopilotId, {
+        enabled: hasWebhookTrigger,
+      }),
+    ),
   );
+  const deliveries = deliveriesRead.items;
   const [selected, setSelected] = useState<WebhookDelivery | null>(null);
 
   // No webhook trigger → the section is irrelevant; hide instead of an empty
@@ -120,14 +129,12 @@ export function DeliveriesSection({
       <Text className="px-4 pt-5 pb-2 text-xs uppercase tracking-wider text-muted-foreground font-medium">
         {t("autopilots.deliveries.sectionTitle")}
       </Text>
-      {isLoading ? (
-        <View className="px-4 py-4">
-          <ActivityIndicator />
-        </View>
-      ) : deliveries.length === 0 ? (
-        <Text className="px-4 text-sm text-muted-foreground">
-          {t("autopilots.deliveries.empty")}
-        </Text>
+      {deliveriesRead.state !== "ready" ? (
+        <CatalogStatus
+          state={deliveriesRead.state}
+          onRetry={deliveriesRead.retry}
+          emptyMessage={t("autopilots.deliveries.empty")}
+        />
       ) : (
         <View className="mx-4 rounded-lg border border-border overflow-hidden">
           {deliveries.map((delivery, idx) => (

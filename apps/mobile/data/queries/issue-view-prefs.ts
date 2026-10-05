@@ -79,6 +79,28 @@ export function applyViewBarPrefs<T extends { barItemId: string }>(
 /** Bar-item id vocabulary for saved views — mirrors web `view:<id>`. */
 export const viewBarItemId = (viewId: string) => `view:${viewId}`;
 
+/**
+ * Whether the bar shows its manage (reorder / reveal) affordance.
+ *
+ * Reordering needs two items, but *revealing* needs only one: with a single
+ * view and the preference hiding it, the bar is empty and `allHidden` tells the
+ * user to reopen this button — so gating it on `> 1` strands them with no way
+ * back. The gate therefore also opens whenever something is hidden.
+ *
+ * `hasHidden` is computed over the ids that still exist, so a stale entry for a
+ * deleted view cannot hold the button open on a one-view bar (the entry is
+ * pruned at the next write, but the button must not wait for that).
+ */
+export function showsViewBarManage({
+  itemCount,
+  hasHidden,
+}: {
+  itemCount: number;
+  hasHidden: boolean;
+}): boolean {
+  return itemCount > 1 || hasHidden;
+}
+
 /** Drop stale ids (deleted views / renamed builtins) before persisting —
  *  mirrors web view-bar.tsx:305-317. Runs on every prefs write so a deleted
  *  view's entry is cleaned at the next toggle/reorder, and the apply

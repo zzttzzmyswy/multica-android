@@ -24,6 +24,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { InboxItem } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { typeLabel } from "@/components/inbox/detail-label";
 import { inboxBucketOptions } from "@/data/queries/inbox";
 import { useArchiveInbox, useUnarchiveInbox } from "@/data/mutations/inbox";
@@ -75,6 +76,9 @@ export default function InboxItemDetail() {
     hasItem: !!activeItem,
     workspaceReady: !!wsId,
     fetching: primaryQuery.isFetching || fallbackQuery.isFetching,
+    // A failed list read is a third thing: not "still arriving", not "gone".
+    // Without this the screen asserted the notification no longer existed.
+    failed: primaryQuery.isError || fallbackQuery.isError,
   });
 
   const archive = useArchiveInbox();
@@ -105,6 +109,25 @@ export default function InboxItemDetail() {
     return (
       <View className="flex-1 items-center justify-center bg-background">
         <ActivityIndicator />
+      </View>
+    );
+  }
+
+  // A failed read gets the failure and a retry, never the missing sentence: the
+  // notification is reachable, we just could not reach it from here. This used
+  // to fall through to the not-found branch, whose copy also invites the user to
+  // accept a notification loss that did not happen.
+  if (phase === "error") {
+    return (
+      <View className="flex-1 items-center justify-center bg-background">
+        <CatalogStatus
+          state="error"
+          onRetry={() => {
+            void primaryQuery.refetch();
+            if (fallbackQuery.isError) void fallbackQuery.refetch();
+          }}
+          layout="centered"
+        />
       </View>
     );
   }
