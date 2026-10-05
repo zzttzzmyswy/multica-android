@@ -140,8 +140,10 @@ export default function AutopilotDetailPage() {
   const [runsLimit, setRunsLimit] = useState(AUTOPILOT_RUNS_PAGE_SIZE);
   const runs = useQuery(autopilotRunsOptions(wsId, id, { limit: runsLimit }));
   const [refreshing, setRefreshing] = useState(false);
-  const { data: members = [] } = useQuery(memberListOptions(wsId));
-  const { data: projects = [] } = useQuery(projectListOptions(wsId));
+  const membersRead = catalogRead(useQuery(memberListOptions(wsId)));
+  const members = membersRead.items;
+  const projectsRead = catalogRead(useQuery(projectListOptions(wsId)));
+  const projects = projectsRead.items;
   const updateAutopilot = useUpdateAutopilot();
   const triggerAutopilot = useTriggerAutopilot();
   const deleteAutopilot = useDeleteAutopilot();
@@ -495,7 +497,13 @@ export default function AutopilotDetailPage() {
             <Text className="text-sm text-foreground" numberOfLines={1}>
               {autopilot.project_id
                 ? findProject(projects, autopilot.project_id)?.title ??
-                  t("autopilots.detail.projectUnavailable")
+                  // Only an unresolved-name-from-a-*settled* read means the
+                  // project is really gone. A failed or in-flight read has not
+                  // earned that claim, so it stays silent instead
+                  // (MYS-1924, gap 3 family).
+                  (projectsRead.state === "ready"
+                    ? t("autopilots.detail.projectUnavailable")
+                    : "")
                 : t("autopilots.detail.noProject")}
             </Text>
           </PropertyRow>
@@ -605,6 +613,8 @@ export default function AutopilotDetailPage() {
             visible={accessPickerOpen}
             title={t("autopilots.access.add")}
             rows={members.map((m) => ({ key: m.user_id, title: m.name }))}
+            state={membersRead.state}
+            onRetry={membersRead.retry}
             selectedKeys={grantedAccessIds}
             emptyText={t("autopilots.access.noResults")}
             leading={(row) => (

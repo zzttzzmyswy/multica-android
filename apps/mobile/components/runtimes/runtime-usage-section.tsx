@@ -30,6 +30,8 @@ import { Button } from "@/components/ui/button";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { TextField } from "@/components/ui/text-field";
 import { runtimeUsageByAgentOptions, runtimeUsageOptions } from "@/data/queries/runtimes";
+import { catalogRead } from "@/lib/catalog-read";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { agentListOptions } from "@/data/queries/agents";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
@@ -122,6 +124,7 @@ function Segmented<T extends string | number>({
 // ---------------------------------------------------------------------------
 
 export function RuntimeUsageSection({ runtimeId }: { runtimeId: string }) {
+  const { t } = useTranslation();
   // Subscribe so the KPI cards (estimateCost at render-time) and the memoized
   // aggregates re-evaluate when the user saves a custom rate.
   useCustomPricingStore((s) => s.pricings);
@@ -130,14 +133,30 @@ export function RuntimeUsageSection({ runtimeId }: { runtimeId: string }) {
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
     [],
   );
-  const { data: usage = [], isLoading } = useQuery(
-    runtimeUsageOptions(runtimeId, 180, tz),
+  const usageRead = catalogRead(
+    useQuery(runtimeUsageOptions(runtimeId, 180, tz)),
   );
+  const usage = usageRead.items;
 
   const [dim, setDim] = useState<Dim>("daily");
   const [days, setDays] = useState<PeriodDays>(30);
 
-  if (isLoading) return <UsageSkeleton />;
+  // A failed read is not "no usage data". This section makes a claim about
+  // *money* — 「还没有使用数据」 next to a runtime that may well have spent
+  // plenty — so the failure gets its own sentence and a retry rather than a
+  // zeroed dashboard (MYS-1924, gap 3a). The empty state keeps its own
+  // skeleton/empty visuals; only the failure delegates to the shared painter,
+  // because that is the branch that needs a retry it did not have.
+  if (usageRead.state === "error") {
+    return (
+      <CatalogStatus
+        state="error"
+        onRetry={usageRead.retry}
+        emptyMessage={t("runtimes.usage.no_data")}
+      />
+    );
+  }
+  if (usageRead.state === "loading") return <UsageSkeleton />;
   if (usage.length === 0) return <UsageEmpty />;
 
   const handleDimChange = (next: Dim) => {
@@ -1068,10 +1087,15 @@ function CostByBlock({
   const pricings = useCustomPricingStore((s) => s.pricings);
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
-  const { data: byAgentRows = [] } = useQuery({
-    ...runtimeUsageByAgentOptions(runtimeId, days, tz),
-    enabled: tab === "agent",
-  });
+  const byAgentRead = catalogRead(
+    useQuery({
+      ...runtimeUsageByAgentOptions(runtimeId, days, tz),
+      enabled: tab === "agent",
+    }),
+  );
+  const byAgentRows = byAgentRead.items;
+  // Only used to label agent ids. A failed read leaves the id stub in place
+  // rather than an assertion, so it needs no state of its own.
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1105,7 +1129,13 @@ function CostByBlock({
         <Text className="text-[10px] text-muted-foreground">{caption}</Text>
       </View>
 
-      {tab === "agent" ? (
+      {tab === "agent" && byAgentRead.state !== "ready" ? (
+        <CatalogStatus
+          state={byAgentRead.state}
+          onRetry={byAgentRead.retry}
+          className="py-2"
+        />
+      ) : tab === "agent" ? (
         <CostByList rows={byAgent} renderKey={(key) => <AgentKey agentId={key} agents={agents} />} />
       ) : (
         <CostByList

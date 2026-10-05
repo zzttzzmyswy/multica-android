@@ -30,6 +30,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { RuntimePickerSheet } from "@/components/agent/runtime-picker-sheet";
 import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
+import type { CatalogState } from "@/lib/catalog-state";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -50,6 +51,15 @@ interface Props {
   selectedRuntimeId: string;
   currentUserId?: string | null;
   formError: string | null;
+  /** Load state of the workspace-skill directory backing `workspaceSkills`.
+   *  The parent owns the read, so it owns the state; without it the skill
+   *  picker cannot tell a failed read from an empty catalog and says 「工作区
+   *  还没有 skill，请先创建或导入。」 about a list that never arrived. */
+  skillsState?: CatalogState;
+  onRetrySkills?: () => void;
+  /** Same, for the member directory backing `members`. */
+  membersState?: CatalogState;
+  onRetryMembers?: () => void;
   /** Rebinds the live conversation to another runtime (server-side). */
   onRuntimeSwitch: (runtime: RuntimeDevice) => void | Promise<void>;
 }
@@ -63,6 +73,10 @@ export function BuilderConfigPanel({
   selectedRuntimeId,
   currentUserId = null,
   formError,
+  skillsState,
+  onRetrySkills,
+  membersState,
+  onRetryMembers,
   onRuntimeSwitch,
 }: Props) {
   const { t } = useTranslation();
@@ -183,6 +197,8 @@ export function BuilderConfigPanel({
           visible={skillPickerOpen}
           title={t("agents.new.skillsLabel")}
           rows={skillRows}
+          state={skillsState}
+          onRetry={onRetrySkills}
           selectedKeys={draft.skillIds}
           emptyText={t("agents.new.skillsEmpty")}
           onToggle={(id) => {
@@ -334,6 +350,8 @@ export function BuilderConfigPanel({
               title: m.name,
             }))}
             selectedKeys={draft.memberIds}
+            state={membersState}
+            onRetry={onRetryMembers}
             emptyText={t("agents.new.membersEmpty")}
             leading={(row) => <ActorAvatar type="member" id={row.key} size={32} />}
             onToggle={(id) => {

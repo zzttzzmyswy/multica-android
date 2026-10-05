@@ -34,6 +34,7 @@ import {
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
 import { canEditSkill } from "@/lib/skill-guards";
+import { catalogRead } from "@/lib/catalog-read";
 import { useSkillRole } from "@/lib/use-skill-role";
 import {
   batchOutcomeMessage,
@@ -80,7 +81,8 @@ export function SkillBatchBar({
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
 
-  const { data: agents = [] } = useQuery(agentListOptions(wsId));
+  const agentsRead = catalogRead(useQuery(agentListOptions(wsId)));
+  const agents = agentsRead.items;
   const batchDelete = useBatchDeleteSkills();
   const batchAttach = useBatchAddSkillsToAgents();
 
@@ -347,6 +349,8 @@ export function SkillBatchBar({
         visible={addOpen}
         title={t("skills.usedBy.addTitle")}
         groups={agentGroups}
+        state={agentsRead.state}
+        onRetry={agentsRead.retry}
         searchPlaceholder={t("skills.usedBy.searchPlaceholder")}
         selectedKeys={agentSelection}
         emptyText={t("skills.usedBy.noAgents")}

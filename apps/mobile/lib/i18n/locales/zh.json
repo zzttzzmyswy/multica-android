@@ -860,6 +860,8 @@
   "chat.noAgentsEmpty": "暂无可用智能体。",
   "chat.noAgentsInWorkspace": "此工作区中没有智能体",
   "chat.noAgentsTitle": "暂无可用智能体",
+  "chat.agentsUnavailableBody": "智能体列表加载失败，无法确认此工作区是否有可用智能体。",
+  "chat.agentsUnavailableTitle": "无法加载智能体列表",
   "chat.noChatsYet": "暂无聊天。",
   "chat.noMessagesYet": "暂无消息",
   "chat.noTextReply": "无文字回复",

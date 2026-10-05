@@ -392,6 +392,8 @@ export function AgentSkillsSection({
         visible={addOpen}
         title={t("agents.skills.addDialogTitle")}
         rows={addRows}
+        state={skillsRead.state}
+        onRetry={skillsRead.retry}
         selectedKeys={addSelection}
         emptyText={
           workspaceSkills.length === 0

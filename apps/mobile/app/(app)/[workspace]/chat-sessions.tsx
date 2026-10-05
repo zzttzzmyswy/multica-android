@@ -47,6 +47,8 @@ import { cn } from "@/lib/utils";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
+import { catalogRead } from "@/lib/catalog-read";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
 
 export default function ChatSessionsRoute() {
   const { t } = useTranslation();
@@ -55,7 +57,8 @@ export default function ChatSessionsRoute() {
   const { colorScheme } = useColorScheme();
   const muted = THEME[colorScheme].mutedForeground;
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
-  const { data: sessions = [] } = useQuery(chatSessionsOptions(wsId));
+  const sessionsRead = catalogRead(useQuery(chatSessionsOptions(wsId)));
+  const sessions = sessionsRead.items;
   const { showActions, renameDialog } = useChatSessionActions();
   // agent_id → display name: unknown ids fall back to a placeholder
   // (MYS-335), and an empty session title falls back to the agent name.
@@ -321,7 +324,13 @@ export default function ChatSessionsRoute() {
         <Text className="text-base font-semibold text-foreground">{t("chat.chats")}</Text>
       </View>
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        {historySessions.length === 0 ? (
+        {sessionsRead.state !== "ready" ? (
+          <CatalogStatus
+            state={sessionsRead.state}
+            onRetry={sessionsRead.retry}
+            emptyMessage={t("chat.noChatsYet")}
+          />
+        ) : historySessions.length === 0 ? (
           <View className="px-4 py-8">
             <Text className="text-sm text-muted-foreground text-center">
               {t("chat.noChatsYet")}

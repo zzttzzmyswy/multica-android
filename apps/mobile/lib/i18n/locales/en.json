@@ -860,6 +860,8 @@
   "chat.noAgentsEmpty": "No agents available.",
   "chat.noAgentsInWorkspace": "No agents in this workspace",
   "chat.noAgentsTitle": "No agents available",
+  "chat.agentsUnavailableBody": "Could not load the agent list, so we can't tell whether this workspace has any.",
+  "chat.agentsUnavailableTitle": "Could not load agents",
   "chat.noChatsYet": "No chats yet.",
   "chat.noMessagesYet": "No messages yet",
   "chat.noTextReply": "No text reply",

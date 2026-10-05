@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
+import type { CatalogState } from "@/lib/catalog-state";
 import { useUpdateAgent } from "@/data/mutations/agents";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -56,12 +57,19 @@ export function AgentAccessEditor({
   members,
   excludeUserId,
   disabled = false,
+  membersState,
+  onRetryMembers,
   onDraftChange,
 }: {
   draft: AgentDraft;
   members: MemberWithUser[];
   excludeUserId?: string | null;
   disabled?: boolean;
+  /** Load state of the member directory backing `members`. The picker used to
+   *  render 「工作区没有可选择的成员」 for a failed read, because an unarrived
+   *  directory and an empty one were the same value (MYS-1924, gap 2). */
+  membersState?: CatalogState;
+  onRetryMembers?: () => void;
   onDraftChange: (draft: AgentDraft) => void;
 }) {
   const { t } = useTranslation();
@@ -154,6 +162,8 @@ export function AgentAccessEditor({
             title={t("agents.access.memberSelectTitle")}
             rows={selectable.map((m) => ({ key: m.user_id, title: m.name }))}
             selectedKeys={draft.memberIds}
+            state={membersState}
+            onRetry={onRetryMembers}
             emptyText={t("agents.access.members_empty")}
             leading={(row) => <ActorAvatar type="member" id={row.key} size={32} />}
             onToggle={(id) => {
@@ -225,9 +235,13 @@ export function AgentAccessReadonlySummary({
 function EditableAgentAccessPicker({
   agent,
   members,
+  membersState,
+  onRetryMembers,
 }: {
   agent: Agent;
   members: MemberWithUser[];
+  membersState?: CatalogState;
+  onRetryMembers?: () => void;
 }) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
@@ -302,6 +316,8 @@ function EditableAgentAccessPicker({
         members={members}
         excludeUserId={agent.owner_id}
         disabled={saving}
+        membersState={membersState}
+        onRetryMembers={onRetryMembers}
         onDraftChange={setDraft}
       />
       <View className="flex-row items-center justify-between px-1 pt-1">
@@ -332,10 +348,14 @@ export function AgentAccessPicker({
   agent,
   members,
   currentUserId,
+  membersState,
+  onRetryMembers,
 }: {
   agent: Agent;
   members: MemberWithUser[];
   currentUserId: string | null;
+  membersState?: CatalogState;
+  onRetryMembers?: () => void;
 }) {
   const { t } = useTranslation();
   const canEdit = currentUserId !== null && agent.owner_id === currentUserId;
@@ -354,7 +374,12 @@ export function AgentAccessPicker({
       <Text className="px-4 pb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
         {t("agents.access.section_title")}
       </Text>
-      <EditableAgentAccessPicker agent={agent} members={members} />
+      <EditableAgentAccessPicker
+        agent={agent}
+        members={members}
+        membersState={membersState}
+        onRetryMembers={onRetryMembers}
+      />
     </View>
   );
 }

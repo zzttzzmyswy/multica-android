@@ -35,7 +35,7 @@ import { AgentConcurrencyField } from "@/components/agent/agent-concurrency-fiel
 import { AgentActivitySection } from "@/components/agent/agent-activity-section";
 import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { ActorIssuesPanel } from "@/components/issue/actor-issues-panel";
-import { recordRead } from "@/lib/catalog-read";
+import { catalogRead, recordRead } from "@/lib/catalog-read";
 import { agentListAllOptions } from "@/data/queries/agents";
 import { issueKeys } from "@/data/queries/issue-keys";
 import { memberListOptions } from "@/data/queries/members";
@@ -93,7 +93,8 @@ export default function AgentDetailPage() {
 
   const agents = useQuery(agentListAllOptions(wsId));
   const runtimes = useQuery(runtimeListOptions(wsId));
-  const { data: members = [] } = useQuery(memberListOptions(wsId));
+  const membersRead = catalogRead(useQuery(memberListOptions(wsId)));
+  const members = membersRead.items;
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
   const presence = useWorkspacePresenceMap(wsId);
   const restoreAgent = useRestoreAgent();
@@ -315,8 +316,10 @@ export default function AgentDetailPage() {
             <View className="pt-5">
               <AgentAccessPicker
                 agent={agent}
-                members={members}
+                members={membersRead.items}
                 currentUserId={currentUserId}
+                membersState={membersRead.state}
+                onRetryMembers={membersRead.retry}
               />
             </View>
           ) : null}

@@ -21,6 +21,7 @@ import type { AgentInvocationTargetInput, MemberWithUser } from "@multica/core/t
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { AgentAccessEditor } from "@/components/agent/agent-access-picker";
+import type { CatalogState } from "@/lib/catalog-state";
 import { useTranslation } from "@/lib/i18n/react";
 
 export type AccessChangePick = {
@@ -42,12 +43,16 @@ export function draftAccessChange(draft: AgentDraft): AccessChangePick | null {
 export function AgentAccessBatchSheet({
   visible,
   members,
+  membersState,
+  onRetryMembers,
   applying,
   onApply,
   onClose,
 }: {
   visible: boolean;
   members: MemberWithUser[];
+  membersState?: CatalogState;
+  onRetryMembers?: () => void;
   applying?: boolean;
   onApply: (change: AccessChangePick) => void;
   onClose: () => void;
@@ -86,6 +91,8 @@ export function AgentAccessBatchSheet({
                     draft={draft}
                     members={members}
                     disabled={applying}
+                    membersState={membersState}
+                    onRetryMembers={onRetryMembers}
                     onDraftChange={setDraft}
                   />
                 </View>

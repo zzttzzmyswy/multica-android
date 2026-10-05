@@ -380,4 +380,273 @@ describe("remote-directory four-state wiring", () => {
     }
     expect(offenders.sort()).toEqual([]);
   });
+
+  describe("the shared multi-select sheet (MYS-1924, gap 2)", () => {
+    // `MultiSelectSheet` is the one implementation behind thirteen picker call
+    // sites. It accepted only a `loading` boolean and had no failure branch at
+    // all, so every caller's failed directory read fell into its `emptyText`
+    // branch: 「工作区还没有 skill，请先创建或导入。」, 「没有可选择的工作区成员。」,
+    // 「工作区没有可选择的成员」, 「没有匹配的成员」, 「没有可添加的智能体。」 — five
+    // different absence claims, all made from requests that never landed.
+    //
+    // The sheet now takes the resolved `CatalogState`, so the guard checks the
+    // two halves: the sheet must decide its empty slot through the shared
+    // tools, and every caller reading a workspace directory must hand it a
+    // state (otherwise the failure branch is unreachable in practice, which is
+    // exactly how the dead `loading` prop survived).
+    const SHEET = "components/agent/multi-select-sheet.tsx";
+
+    it("routes the sheet's non-ready states through the shared painter", () => {
+      const src = code(SHEET);
+      expect(src).toContain("CatalogStatus");
+      expect(src).toMatch(/state\s*=\s*"ready"/);
+      // The bare boolean is gone — it could not express failure.
+      expect(src).not.toMatch(/loading\s*=\s*false/);
+      expect(src).not.toMatch(/^\s*loading\?:/m);
+    });
+
+    it("gives the sheet a retry on its failure branch", () => {
+      expect(code(SHEET)).toContain("onRetry");
+    });
+
+    // Every call site of the sheet. Two kinds:
+    //   - `state`-passing: the rows come from a workspace directory, so a
+    //     failure must be renderable.
+    //   - static/derived: rows built from data the caller already resolved
+    //     (the agent's own access list, a value store), where there is no read
+    //     to fail.
+    const DIRECTORY_CALLERS = [
+      "components/skill/skill-batch-bar.tsx",
+      "components/agent/agent-access-picker.tsx",
+      "components/agent/agent-skills-section.tsx",
+      "components/agent/builder-config-panel.tsx",
+      "components/agent/manual-agent-form.tsx",
+      "components/autopilot/autopilot-form.tsx",
+      "app/(app)/[workspace]/more/autopilots.tsx",
+      "app/(app)/[workspace]/more/squads.tsx",
+      "app/(app)/[workspace]/more/skills.tsx",
+      "app/(app)/[workspace]/more/autopilots/[id].tsx",
+      "app/(app)/[workspace]/more/skills/[id].tsx",
+    ];
+
+    for (const file of DIRECTORY_CALLERS) {
+      it(`${file} hands its directory state to the sheet`, () => {
+        const src = code(file);
+        expect(src).toContain("MultiSelectSheet");
+        // `state=` is the prop that makes the failure branch reachable.
+        expect(src).toMatch(/\bstate=\{/);
+        expect(src).toMatch(/\bonRetry=\{/);
+      });
+    }
+
+    it("leaves no caller defaulting its picker directory to an empty array", () => {
+      // Same construct the picker sweep bans: a caller that folds a failed read
+      // into `[]` and then passes that as `rows`/`groups` re-creates the bug
+      // above the sheet, where the sheet's `state` cannot see it.
+      //
+      // Scoped to the *directory* reads these pickers are built from, not to
+      // `= []` file-wide: several of these files also hold label-lookup reads
+      // (an agent id → display name, with an id-stub fallback) whose emptiness
+      // is never rendered as an absence, and forcing those through `catalogRead`
+      // would add noise without removing a way to lie.
+      const PICKER_DIRECTORIES = [
+        "agentListOptions",
+        "agentListAllOptions",
+        "memberListOptions",
+        "skillListOptions",
+        "squadListOptions",
+        "projectListOptions",
+        "resourceLabelsOptions",
+      ];
+      const banned = new RegExp(
+        `data:\\s*\\w+\\s*=\\s*\\[\\]\\s*\\}\\s*=\\s*useQuery\\(\\s*(?:${PICKER_DIRECTORIES.join("|")})`,
+      );
+
+      for (const file of DIRECTORY_CALLERS) {
+        expect(code(file), file).not.toMatch(banned);
+      }
+    });
+  });
+
+  describe("chat availability (MYS-1924, gap 1)", () => {
+    // The chat tab's "does this user have an agent to talk to?" answer gates the
+    // composer. It resolved from `isFetched`, which React Query counts a *failed*
+    // attempt toward, so one timeout declared 「暂无可用智能体」 and disabled the
+    // input box — locking the main feature with no retry anywhere.
+    const CHAT = "app/(app)/[workspace]/(tabs)/chat.tsx";
+
+    it("resolves availability from a decision that can express failure", () => {
+      // The pure resolver is where the four states live, and it is unit-tested
+      // directly in `agent-availability.test.ts` (a .tsx surface cannot run in
+      // the Node lane).
+      const lib = code("lib/agent-availability.ts");
+      expect(lib).toContain("resolveWorkspaceAgentAvailability");
+      expect(lib).toMatch(/"loading"\s*\n?\s*\|\s*"error"/);
+
+      const hook = code("lib/workspace-agent-availability.ts");
+      expect(hook).toContain("resolveWorkspaceAgentAvailability");
+      // `isFetched` is the primitive that caused the bug: it answers "has an
+      // attempt completed", not "do we know the answer".
+      expect(hook).not.toContain("isFetched");
+      expect(hook).toContain("retry");
+    });
+
+    it("never lets a failed read disable the composer", () => {
+      const src = code(CHAT);
+      // The gate is `availability === "none"` — the settled, genuinely-empty
+      // answer — and never the error state.
+      expect(src).toMatch(/availability === "none"/);
+      expect(src).not.toMatch(/availability !== "available"/);
+      // The *composer gate* specifically, not just the banner: check the
+      // disabled expression itself. Adding `availability === "error"` there
+      // re-locks the input while leaving the banner correct, which the
+      // assertions above cannot see — verified by reverting that line and
+      // watching this test still pass.
+      const disabledAt = src.indexOf("const disabled =");
+      expect(disabledAt).toBeGreaterThan(-1);
+      const gate = src.slice(disabledAt, src.indexOf("const disabledReason"));
+      expect(gate).toContain('availability === "none"');
+      expect(gate).not.toContain('"error"');
+      // The failure gets its own banner with a retry, not the no-agent one.
+      expect(src).toContain("AgentsUnavailableBanner");
+      expect(src).toContain("retryAvailability");
+    });
+
+    it("tells the failure apart from the empty workspace", () => {
+      // Two different facts, two different components. Collapsing them is how
+      // the false claim returns.
+      const banner = code("components/chat/agents-unavailable-banner.tsx");
+      expect(banner).toContain("chat.agentsUnavailableTitle");
+      expect(banner).not.toContain("chat.noAgentsTitle");
+      expect(banner).toContain("common.retry");
+    });
+  });
+
+  describe("assertion-style empty states (MYS-1924, gap 3)", () => {
+    // Each of these stated a fact — about money, about a runtime's
+    // configuration, about an agent's history — from a read that had merely not
+    // landed. Same guard shape as everywhere else in this file: read through
+    // `catalogRead`, and paint the failure rather than claiming an absence.
+    //
+    // The reads checked below are named individually rather than banning `= []`
+    // file-wide, because these files also hold *label-lookup* reads (an agent id
+    // → display name, with an id-stub fallback) whose emptiness is never spoken
+    // aloud — a blanket ban would force those through `catalogRead` for no gain
+    // and bury a real regression in noise.
+    const CLAIM_READS = [
+      "components/runtimes/runtime-usage-section.tsx:runtimeUsageOptions",
+      "components/runtimes/runtime-usage-section.tsx:runtimeUsageByAgentOptions",
+      "components/agent/agent-activity-section.tsx:agentTaskSnapshotOptions",
+      "components/agent/agent-activity-section.tsx:agentTasksOptions",
+      "app/(app)/[workspace]/chat-sessions.tsx:chatSessionsOptions",
+    ];
+
+    for (const entry of CLAIM_READS) {
+      const [file, option] = entry.split(":");
+
+      it(`${entry} is read through catalogRead, not an empty-array default`, () => {
+        const src = code(file);
+        // `catalogRead(useQuery(<option>(...)))`, possibly with the query spread
+        // across lines — match the option inside a `catalogRead(` call.
+        const call = new RegExp(
+          `catalogRead\\([\\s\\S]{0,200}?${option}\\(`,
+        );
+        expect(src).toMatch(call);
+        // ...and never as a bare destructure with an `= []` default.
+        const raw = new RegExp(
+          `data:\\s*\\w+\\s*=\\s*\\[\\]\\s*\\}\\s*=\\s*useQuery\\(\\s*${option}`,
+        );
+        expect(src).not.toMatch(raw);
+      });
+    }
+
+    it("gives the runtime usage section a failure that is not 'no usage data'", () => {
+      // The section renders a cost dashboard; 「还没有使用数据」 next to a runtime
+      // that spent money is the worst version of this bug family.
+      const src = code("components/runtimes/runtime-usage-section.tsx");
+      const errorAt = src.indexOf('usageRead.state === "error"');
+      const emptyAt = src.indexOf("usage.length === 0");
+      expect(errorAt).toBeGreaterThan(-1);
+      expect(emptyAt).toBeGreaterThan(errorAt);
+    });
+
+    it("gives the runtime serving card its own read state", () => {
+      const src = code("app/(app)/[workspace]/more/runtimes/[id].tsx");
+      expect(src).toContain("catalogRead");
+      expect(src).toMatch(/state=\{agentsRead\.state\}/);
+      expect(src).toMatch(/onRetry=\{agentsRead\.retry\}/);
+      // The empty claim is gated behind the state, never reachable from it.
+      const gateAt = src.indexOf('state !== "ready"');
+      const claimAt = src.indexOf("runtimes.detail.noAgents");
+      expect(gateAt).toBeGreaterThan(-1);
+      expect(claimAt).toBeGreaterThan(gateAt);
+    });
+
+    it("keeps the autopilot assignee picker reachable when its read fails", () => {
+      // The old branch replaced the picker with a "no agents" note, removing
+      // the only control that can fill a required field — so the form could not
+      // be submitted at all. The note is now reachable only from a settled,
+      // genuinely-empty pair.
+      const src = code("components/autopilot/autopilot-form.tsx");
+      expect(src).toContain("assigneeCatalogState");
+      expect(src).toContain("unsettledCatalogStatus");
+      const gateAt = src.indexOf("assigneeCatalogState");
+      const noteAt = src.indexOf("autopilots.new.agentsEmpty");
+      expect(gateAt).toBeGreaterThan(-1);
+      expect(noteAt).toBeGreaterThan(gateAt);
+    });
+
+    it("gives the chat session list a load state it never had", () => {
+      // This screen had no `isLoading` / `isError` / spinner at all: in-flight
+      // and failed both rendered 「暂无聊天。」.
+      const src = code("app/(app)/[workspace]/chat-sessions.tsx");
+      expect(src).toContain("catalogRead");
+      expect(src).toContain("CatalogStatus");
+      expect(src).toMatch(/sessionsRead\.state !== "ready"/);
+      // The sessions read itself must not be an `= []` default. The `agents`
+      // read beside it is a label map with an id-stub fallback whose emptiness
+      // is never spoken aloud, so the ban is scoped to the read that actually
+      // backs the empty state.
+      expect(src).not.toMatch(
+        /data:\s*\w+\s*=\s*\[\]\s*\}\s*=\s*useQuery\(chatSessionsOptions/,
+      );
+    });
+
+    it("gives the GitHub picker a failure branch before 'not configured'", () => {
+      // 「当前部署尚未配置 GitHub 连接。」 is an assertion about a deployment made
+      // from a request that timed out.
+      const src = code(
+        "app/(app)/[workspace]/more/settings/repositories/github-picker.tsx",
+      );
+      expect(src).toContain("resolveCatalogState");
+      expect(src).toContain("CatalogStatus");
+      const errorAt = src.indexOf('installationsRead === "error"');
+      // The *rendered* claim, not the `setConnectError` copy that uses the same
+      // key on a failed connect action — matching the first occurrence would
+      // compare against a line well above the failure branch and pass for the
+      // wrong reason.
+      const notConfiguredAt = src.lastIndexOf(
+        't("repositories.githubNotConfigured")',
+      );
+      expect(errorAt).toBeGreaterThan(-1);
+      expect(notConfiguredAt).toBeGreaterThan(errorAt);
+    });
+
+    it("gives the skill detail labels a failure that is not 'no labels'", () => {
+      const src = code("app/(app)/[workspace]/more/skills/[id].tsx");
+      expect(src).toContain("labelsRead");
+      const gateAt = src.indexOf('labelsRead.state !== "ready"');
+      const claimAt = src.indexOf('t("skills.detail.noLabels")');
+      expect(gateAt).toBeGreaterThan(-1);
+      expect(claimAt).toBeGreaterThan(gateAt);
+    });
+
+    it("never branches an agent-activity section on isLoading alone", () => {
+      // `isLoading` is first-attempt-only, so a failure reported `false` and
+      // fell into the empty branch.
+      const src = code("components/agent/agent-activity-section.tsx");
+      expect(src).not.toMatch(/agentTasks\.isLoading/);
+      expect(src).toContain("unsettledCatalogStatus");
+    });
+  });
 });

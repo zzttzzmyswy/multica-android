@@ -72,6 +72,9 @@ import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { ActionSheet } from "@/lib/action-sheet";
+import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
+import { aggregateCatalogState } from "@/lib/catalog-state";
+import type { CatalogState } from "@/lib/catalog-state";
 import { cn } from "@/lib/utils";
 
 // Server-driven enum: unknown statuses degrade to the neutral pill (the
@@ -188,9 +191,12 @@ export default function AutopilotsPage() {
   const { data, isLoading, error, refetch, isRefetching } = useQuery(
     autopilotListOptions(wsId),
   );
-  const { data: agents = [] } = useQuery(agentListOptions(wsId));
-  const { data: squads = [] } = useQuery(squadListOptions(wsId));
-  const { data: members = [] } = useQuery(memberListOptions(wsId));
+  const agentsRead = catalogRead(useQuery(agentListOptions(wsId)));
+  const squadsRead = catalogRead(useQuery(squadListOptions(wsId)));
+  const membersRead = catalogRead(useQuery(memberListOptions(wsId)));
+  const agents = agentsRead.items;
+  const squads = squadsRead.items;
+  const members = membersRead.items;
 
   const [filterOpen, setFilterOpen] = useState(false);
   const scope = useAutopilotMobileViewStore((s) => s.scope);
@@ -407,6 +413,12 @@ export default function AutopilotsPage() {
         rows={scopeRows}
         filters={filters}
         actorName={actorName}
+        state={aggregateCatalogState([
+          agentsRead.state,
+          squadsRead.state,
+          membersRead.state,
+        ])}
+        onRetry={() => retryCatalogs(agentsRead, squadsRead, membersRead)}
         onToggle={toggleFilter}
         onClear={clearFilters}
       />
@@ -551,6 +563,8 @@ function AutopilotFilterSheet({
   rows,
   filters,
   actorName,
+  state,
+  onRetry,
   onToggle,
   onClear,
 }: {
@@ -559,6 +573,10 @@ function AutopilotFilterSheet({
   rows: Autopilot[];
   filters: AutopilotListFilters;
   actorName: (type: string, id: string) => string;
+  /** Load state over the three directories `actorName` resolves through — a
+   *  failed read showed an id stub (or 「无匹配结果。」) rather than the actor. */
+  state?: CatalogState;
+  onRetry?: () => void;
   onToggle: (key: string) => void;
   onClear: () => void;
 }) {
@@ -668,6 +686,8 @@ function AutopilotFilterSheet({
       visible={visible}
       title={t("autopilots.list.filterTitle")}
       groups={groups}
+      state={state}
+      onRetry={onRetry}
       searchPlaceholder={t("autopilots.list.filterSearch")}
       selectedKeys={selectedKeys}
       emptyText={t("autopilots.list.noMatches")}

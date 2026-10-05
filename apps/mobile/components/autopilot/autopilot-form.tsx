@@ -34,7 +34,9 @@ import { ProjectPickerSheet } from "@/components/autopilot/project-picker-sheet"
 import { agentListOptions } from "@/data/queries/agents";
 import { memberListOptions } from "@/data/queries/members";
 import { projectListOptions } from "@/data/queries/projects";
-import { catalogRead } from "@/lib/catalog-read";
+import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
+import { unsettledCatalogStatus } from "@/lib/catalog-state";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { squadListOptions } from "@/data/queries/squads";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { keyboardBehavior } from "@/lib/keyboard";
@@ -99,11 +101,27 @@ export const AutopilotForm = forwardRef<AutopilotFormHandle, Props>(
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
 
-  const { data: agents = [] } = useQuery(agentListOptions(wsId));
-  const { data: members = [] } = useQuery(memberListOptions(wsId));
-  const { data: squads = [] } = useQuery(squadListOptions(wsId));
+  // The assignee directory pair (agent + squad) and the subscriber directory.
+  // All three are read through `catalogRead` so a failure is a state the
+  // surface renders rather than a fact about the workspace — see the assignee
+  // branch below, which used to *replace* the picker with a "no agents" note
+  // and so removed the only way to fill a required field (MYS-1924, gap 3c).
+  const agentsRead = catalogRead(useQuery(agentListOptions(wsId)));
+  const membersRead = catalogRead(useQuery(memberListOptions(wsId)));
+  const squadsRead = catalogRead(useQuery(squadListOptions(wsId)));
+  const agents = agentsRead.items;
+  const members = membersRead.items;
+  const squads = squadsRead.items;
   const projectsRead = catalogRead(useQuery(projectListOptions(wsId)));
   const projects = projectsRead.items;
+
+  // "Can the assignee picker state an absence yet?" over BOTH directories it
+  // draws from. `null` only once each settled without error — the one case
+  // where "no agents or squads" is a fact.
+  const assigneeCatalogState = unsettledCatalogStatus([
+    agentsRead.state,
+    squadsRead.state,
+  ]);
 
   const createIssueMode = executionMode === "create_issue";
 
@@ -200,10 +218,26 @@ export const AutopilotForm = forwardRef<AutopilotFormHandle, Props>(
           />
         </View>
 
-        {/* Assignee — agent or squad, required. */}
+        {/* Assignee — agent or squad, required.
+            Three outcomes, three renders: a *failed* read gets a named failure
+            with a retry; a read still in flight gets the state painter; and
+            only a settled, genuinely empty pair gets the "no agents" note.
+            The old branch tested `agents.length === 0 && squads.length === 0`
+            over two `= []` defaults, so a timeout rendered the note — and the
+            note *replaced the picker*, removing the only control that can fill
+            a required field, so the form could not be submitted at all
+            (MYS-1924, gap 3c). */}
         <View className="gap-1.5">
           <FieldLabel icon="person-outline" text={t("autopilots.new.assignee")} />
-          {agents.length === 0 && squads.length === 0 ? (
+          {(assigneeCatalogState === "error" ||
+            assigneeCatalogState === "loading") ? (
+            <CatalogStatus
+              state={assigneeCatalogState}
+              onRetry={() =>
+                retryCatalogs(agentsRead, squadsRead)
+              }
+            />
+          ) : agents.length === 0 && squads.length === 0 ? (
             <View className="rounded-md border border-border px-3 py-3">
               <Text className="text-sm text-muted-foreground">
                 {t("autopilots.new.agentsEmpty")}
@@ -388,6 +422,8 @@ export const AutopilotForm = forwardRef<AutopilotFormHandle, Props>(
               visible={subscriberPickerOpen}
               title={t("autopilots.subscribers.sectionLabel")}
               rows={members.map((m) => ({ key: m.user_id, title: m.name }))}
+              state={membersRead.state}
+              onRetry={membersRead.retry}
               selectedKeys={subscriberIds}
               emptyText={t("autopilots.subscribers.empty")}
               leading={(row) => (

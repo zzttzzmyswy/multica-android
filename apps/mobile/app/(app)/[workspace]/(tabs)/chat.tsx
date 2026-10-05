@@ -112,6 +112,7 @@ import { ChatComposer } from "@/components/chat/chat-composer";
 import { ChatQueue } from "@/components/chat/chat-queue";
 import { AgentPickerSheet } from "@/components/chat/agent-picker-sheet";
 import { NoAgentBanner } from "@/components/chat/no-agent-banner";
+import { AgentsUnavailableBanner } from "@/components/chat/agents-unavailable-banner";
 import { ArchivedAgentBanner } from "@/components/chat/archived-agent-banner";
 import { OfflineBanner } from "@/components/chat/offline-banner";
 import { RuntimeRequiredBanner } from "@/components/chat/runtime-required-banner";
@@ -322,7 +323,10 @@ export default function ChatTab() {
   // Retired agent: the conversation is read-only history.
   const sessionAgentArchived = isAgentArchived(currentAgent);
 
-  const availability = useWorkspaceAgentAvailability();
+  const {
+    availability,
+    retry: retryAvailability,
+  } = useWorkspaceAgentAvailability();
   const presenceDetail = useAgentPresence(wsId, currentAgent?.id);
   const presenceAvailability =
     presenceDetail === "loading" ? undefined : presenceDetail.availability;
@@ -669,6 +673,12 @@ export default function ChatTab() {
   }, [activeSession, showSessionActions, pendingTask]);
 
   // ── Composer disabled-state ────────────────────────────────────────────
+  // Only `"none"` disables on availability grounds. `"error"` deliberately does
+  // NOT: a failed agent-list read is not evidence that the workspace has no
+  // agents, and locking the input on it made a network blip look like a
+  // permanent dead end (MYS-1924). The banner above the list carries the
+  // failure and its retry instead; the send path already refuses safely
+  // (`!currentAgent`), so an enabled composer cannot produce a bad request.
   const disabled =
     !currentAgent ||
     availability === "none" ||
@@ -711,7 +721,11 @@ export default function ChatTab() {
           />
         }
       />
-      {availability === "none" ? <NoAgentBanner /> : null}
+      {availability === "none" ? (
+        <NoAgentBanner />
+      ) : availability === "error" ? (
+        <AgentsUnavailableBanner onRetry={retryAvailability} />
+      ) : null}
       <View className="flex-1">
         <ChatMessageList
           messages={visibleMessages}

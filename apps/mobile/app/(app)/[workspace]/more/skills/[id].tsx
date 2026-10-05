@@ -91,6 +91,8 @@ import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { Markdown } from "@/lib/markdown";
+import { catalogRead } from "@/lib/catalog-read";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 function isMarkdownPath(path: string): boolean {
@@ -243,10 +245,12 @@ export default function SkillDetailPage() {
   const timeAgo = useTimeAgo();
 
   const { data, isLoading, error, refetch } = useQuery(skillDetailOptions(wsId, id));
-  const { data: members = [] } = useQuery(memberListOptions(wsId));
-  const { data: skillLabels = [] } = useQuery(
-    resourceLabelsOptions(wsId, "skill", id),
+  const membersRead = catalogRead(useQuery(memberListOptions(wsId)));
+  const members = membersRead.items;
+  const labelsRead = catalogRead(
+    useQuery(resourceLabelsOptions(wsId, "skill", id)),
   );
+  const skillLabels = labelsRead.items;
   const [editing, setEditing] = useState(false);
   // Path of the attached file open in the preview sheet; null = closed. The
   // content is looked up from the live file set rather than copied, so a
@@ -312,7 +316,8 @@ export default function SkillDetailPage() {
     return () => clearTimeout(timer);
   }, [addingFile]);
 
-  const { data: agents = [] } = useQuery(agentListOptions(wsId));
+  const agentsRead = catalogRead(useQuery(agentListOptions(wsId)));
+  const agents = agentsRead.items;
   const isAdmin = role === "owner" || role === "admin";
   const usedByAgents = useMemo(
     () => agentsForSkill(agents, id),
@@ -671,7 +676,13 @@ export default function SkillDetailPage() {
                   {t("skills.detail.labels")}
                 </Text>
                 <View className="flex-1" pointerEvents={canEdit ? "none" : "box-none"}>
-                  {skillLabels.length > 0 ? (
+                  {labelsRead.state !== "ready" ? (
+                    <CatalogStatus
+                      state={labelsRead.state}
+                      onRetry={labelsRead.retry}
+                      className="items-start px-0 py-0"
+                    />
+                  ) : skillLabels.length > 0 ? (
                     <View className="flex-row flex-wrap gap-1.5">
                       {skillLabels.map((label) => (
                         <LabelChip key={label.id} label={label} />
@@ -1140,6 +1151,8 @@ export default function SkillDetailPage() {
         visible={addAgentsOpen}
         title={t("skills.usedBy.addTitle")}
         groups={addAgentGroups}
+        state={agentsRead.state}
+        onRetry={agentsRead.retry}
         searchPlaceholder={t("skills.usedBy.searchPlaceholder")}
         selectedKeys={agentSelection}
         emptyText={t("skills.usedBy.noAgents")}

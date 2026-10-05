@@ -52,6 +52,9 @@ import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { ActionSheet } from "@/lib/action-sheet";
+import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
+import { aggregateCatalogState } from "@/lib/catalog-state";
+import type { CatalogState } from "@/lib/catalog-state";
 import {
   SQUAD_SCOPES,
   SQUAD_SCOPE_LABEL_KEYS,
@@ -94,7 +97,9 @@ export default function SquadsPage() {
   const members = useQuery(memberListOptions(wsId));
   // Archived-inclusive, so a filter option for a retired leader agent still
   // renders its real name instead of an id stub.
-  const { data: agents = [] } = useQuery(agentListAllOptions(wsId));
+  const agentsRead = catalogRead(useQuery(agentListAllOptions(wsId)));
+  const agents = agentsRead.items;
+  const membersRead = catalogRead(members);
   const currentMember = members.data?.find((m) => m.user_id === user?.id);
   const isAdmin =
     currentMember?.role === "owner" || currentMember?.role === "admin";
@@ -322,6 +327,8 @@ export default function SquadsPage() {
         onClose={() => setFilterOpen(false)}
         leaderOptions={leaderOptions}
         creatorOptions={creatorOptions}
+        state={aggregateCatalogState([agentsRead.state, membersRead.state])}
+        onRetry={() => retryCatalogs(agentsRead, membersRead)}
         filters={filters}
         onToggle={toggleFilter}
         onClear={clearFilters}
@@ -541,6 +548,8 @@ function SquadFilterSheet({
   onClose,
   leaderOptions,
   creatorOptions,
+  state,
+  onRetry,
   filters,
   onToggle,
   onClear,
@@ -549,6 +558,11 @@ function SquadFilterSheet({
   onClose: () => void;
   leaderOptions: { id: string; name: string; count: number }[];
   creatorOptions: { id: string; name: string; count: number }[];
+  /** Load state over the agent/member directories the option labels resolve
+   *  through — a failed read rendered 「无匹配结果。」 over a filter it never
+   *  built. */
+  state?: CatalogState;
+  onRetry?: () => void;
   filters: { leaders: string[]; creators: string[] };
   onToggle: (key: string) => void;
   onClear: () => void;
@@ -592,6 +606,8 @@ function SquadFilterSheet({
       visible={visible}
       title={t("squads.list.filterTitle")}
       groups={groups}
+      state={state}
+      onRetry={onRetry}
       selectedKeys={selectedKeys}
       searchPlaceholder={t("squads.list.filterSearch")}
       emptyText={t("squads.list.noMatches")}
