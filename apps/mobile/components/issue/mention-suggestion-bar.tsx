@@ -37,6 +37,7 @@ import { agentListOptions } from "@/data/queries/agents";
 import { squadListOptions } from "@/data/queries/squads";
 import { CatalogEmptySlot } from "@/components/catalog/catalog-status";
 import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
+import { matchesNameOrPinyin } from "@/lib/name-search";
 import { useTranslation } from "@/lib/i18n/react";
 import { issueDetailOptions } from "@/data/queries/issues";
 import { myIssueListOptions } from "@/data/queries/my-issues";
@@ -169,8 +170,12 @@ export function MentionSuggestionBar({
 
     // Comment mode.
     const showAll = !q || "all".startsWith(q);
+    // Name search on the three people-style sections is pinyin-aware, matching
+    // web's mention-suggestion.tsx:721 / :732 / :753. The issue rows below keep
+    // the plain substring arm — web filters issues by identifier/title only
+    // (:776-781), with no pinyin arm to mirror.
     const matchedMembers = [...members]
-      .filter((m) => !q || m.name.toLowerCase().includes(q))
+      .filter((m) => matchesNameOrPinyin(m.name, query))
       .sort((a, b) => a.name.localeCompare(b.name));
     // Agents: filter archived + drop ones the current user can't assign —
     // mirrors web (packages/views/editor/extensions/mention-suggestion.tsx:418-424).
@@ -191,7 +196,7 @@ export function MentionSuggestionBar({
         (a) =>
           !a.archived_at &&
           isAgentRuntimeBound(a) &&
-          (!q || a.name.toLowerCase().includes(q)) &&
+          matchesNameOrPinyin(a.name, query) &&
           canAssignAgentToIssue(a, { userId, role: myRole }).allowed,
       )
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -202,7 +207,7 @@ export function MentionSuggestionBar({
         (s) =>
           !s.archived_at &&
           runnableAgentIds.has(s.leader_id) &&
-          (!q || s.name.toLowerCase().includes(q)),
+          matchesNameOrPinyin(s.name, query),
       )
       .sort((a, b) => a.name.localeCompare(b.name));
 

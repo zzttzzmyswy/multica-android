@@ -3,8 +3,15 @@
  * members + agents + squads, plus an "Unassigned" option. See
  * status-picker-body.tsx for the split rationale.
  *
- * Mirrors web `packages/views/issues/components/pickers/assignee-picker.tsx`
- * (mobile skips frequency-sort; alphabetical instead).
+ * Mirrors web `packages/views/issues/components/pickers/assignee-picker.tsx`,
+ * including its two ordering/search rules:
+ *
+ *   - Each section is ordered by the signed-in user's own assignment
+ *     frequency (`/api/assignee-frequency`), descending, with the caller's
+ *     alphabetical order as the tiebreak. See `lib/assignee-frequency.ts`.
+ *   - Name search runs through `matchesNameOrPinyin`, so Chinese names are
+ *     reachable by full pinyin, initials or hybrid input — web's
+ *     `name.includes(q) || matchesPinyin(name, q)`.
  *
  * Header + search bar are owned by the iOS native nav header registered in
  * `app/(app)/[workspace]/_layout.tsx` (assignee Stack.Screen sets
@@ -29,8 +36,14 @@ import { CatalogEmptySlot } from "@/components/catalog/catalog-status";
 import { memberListOptions } from "@/data/queries/members";
 import { agentListOptions } from "@/data/queries/agents";
 import { squadListOptions } from "@/data/queries/squads";
+import { assigneeFrequencyOptions } from "@/data/queries/assignee-frequency";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
+import {
+  buildAssigneeFrequencyMap,
+  sortByAssigneeFrequency,
+} from "@/lib/assignee-frequency";
+import { matchesNameOrPinyin } from "@/lib/name-search";
 import { useScrollToTopOnChange } from "@/lib/use-scroll-to-top-on-change";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -106,9 +119,18 @@ export function AssigneePickerBody({
   const membersRead = catalogRead(useQuery(memberListOptions(wsId)));
   const agentsRead = catalogRead(useQuery(agentListOptions(wsId)));
   const squadsRead = catalogRead(useQuery(squadListOptions(wsId)));
+  // Usage ranking for the signed-in user. A failed read is not surfaced: every
+  // actor then ranks 0 and the sections fall back to alphabetical, which is
+  // exactly the pre-existing behaviour — an ordering preference has no
+  // "nothing to show" state to report, unlike a directory read.
+  const frequency = useQuery(assigneeFrequencyOptions(wsId)).data;
   const members = membersRead.items;
   const agents = agentsRead.items;
   const squads = squadsRead.items;
+  const frequencyMap = useMemo(
+    () => buildAssigneeFrequencyMap(frequency ?? []),
+    [frequency],
+  );
   const runnableAgentIds = useMemo(
     () =>
       new Set(
@@ -133,25 +155,35 @@ export function AssigneePickerBody({
 
   const rows = useMemo<Row[]>(() => {
     const q = query.trim().toLowerCase();
-    const matchName = (name: string) => !q || name.toLowerCase().includes(q);
-
+    // Pinyin-aware search — web's `name.includes(q) || matchesPinyin(name, q)`
+    // (assignee-picker.tsx:132). Each section is alphabetical first so that the
+    // frequency sort below has an alphabetical tiebreak within a band.
     const memberRows: Row[] = kinds.includes("member")
-      ? [...members]
-          .filter((m) => matchName(m.name))
-          .sort((a, b) => a.name.localeCompare(b.name))
-          .map((m) => ({ kind: "member" as const, member: m }))
+      ? sortByAssigneeFrequency(
+          [...members]
+            .filter((m) => matchesNameOrPinyin(m.name, query))
+            .sort((a, b) => a.name.localeCompare(b.name)),
+          frequencyMap,
+          (m) => ["member", m.user_id] as const,
+        ).map((m) => ({ kind: "member" as const, member: m }))
       : [];
     const agentRows: Row[] = kinds.includes("agent")
-      ? [...agents]
-          .filter((a) => matchName(a.name))
-          .sort((a, b) => a.name.localeCompare(b.name))
-          .map((a) => ({ kind: "agent" as const, agent: a }))
+      ? sortByAssigneeFrequency(
+          [...agents]
+            .filter((a) => matchesNameOrPinyin(a.name, query))
+            .sort((a, b) => a.name.localeCompare(b.name)),
+          frequencyMap,
+          (a) => ["agent", a.id] as const,
+        ).map((a) => ({ kind: "agent" as const, agent: a }))
       : [];
     const squadRows: Row[] = kinds.includes("squad")
-      ? [...squads]
-          .filter((s) => !s.archived_at && matchName(s.name))
-          .sort((a, b) => a.name.localeCompare(b.name))
-          .map((s) => ({ kind: "squad" as const, squad: s }))
+      ? sortByAssigneeFrequency(
+          [...squads]
+            .filter((s) => !s.archived_at && matchesNameOrPinyin(s.name, query))
+            .sort((a, b) => a.name.localeCompare(b.name)),
+          frequencyMap,
+          (s) => ["squad", s.id] as const,
+        ).map((s) => ({ kind: "squad" as const, squad: s }))
       : [];
 
     if (q) return [...memberRows, ...agentRows, ...squadRows];
@@ -171,7 +203,17 @@ export function AssigneePickerBody({
       ...agentRows.filter((r) => !isRowSelected(value, r)),
       ...squadRows.filter((r) => !isRowSelected(value, r)),
     ];
-  }, [members, agents, squads, query, value, kinds, showUnassigned, mixed]);
+  }, [
+    members,
+    agents,
+    squads,
+    query,
+    value,
+    kinds,
+    showUnassigned,
+    mixed,
+    frequencyMap,
+  ]);
 
   const isSelected = (row: Row) =>
     !mixed && isRowSelected(value, row);

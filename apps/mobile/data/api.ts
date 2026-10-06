@@ -23,6 +23,7 @@ import type {
   AgentRunCount,
   AgentTask,
   Attachment,
+  AssigneeFrequencyEntry,
   Autopilot,
   AutopilotCollaboratorsResponse,
   AutopilotRun,
@@ -344,6 +345,8 @@ import {
   PinnedItemSchema,
   PendingChatTasksSchema,
   ProjectSchema,
+  AssigneeFrequencyListSchema,
+  EMPTY_ASSIGNEE_FREQUENCY_LIST,
   RuntimeListSchema,
   SearchIssuesResponseSchema,
   SearchProjectsResponseSchema,
@@ -1056,6 +1059,24 @@ class ApiClient {
     return this.fetch<{ count: number }>("/api/inbox/archive-completed", {
       method: "POST",
     });
+  }
+
+  // Per-actor assignment frequency for the signed-in user — the assignee
+  // picker's usage sort. Mirrors packages/core/api/client.ts:1107
+  // (`getAssigneeFrequency`). Read endpoint: schema + fallback, so a drifted
+  // row degrades to "no frequency" instead of taking the sheet down.
+  async getAssigneeFrequency(opts?: {
+    signal?: AbortSignal;
+  }): Promise<AssigneeFrequencyEntry[]> {
+    const raw = await this.fetch<unknown>("/api/assignee-frequency", {
+      signal: opts?.signal,
+    });
+    return parseWithFallback(
+      raw,
+      AssigneeFrequencyListSchema,
+      EMPTY_ASSIGNEE_FREQUENCY_LIST,
+      { endpoint: "getAssigneeFrequency" },
+    );
   }
 
   // --- Members & Agents (for actor name/avatar lookup) ---
