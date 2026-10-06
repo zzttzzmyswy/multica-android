@@ -19,23 +19,21 @@
  * HTML attachment always has a way out: download never depends on the preview
  * having loaded.
  *
- * Failure states are distinct on purpose. A transport failure is retryable and
- * says so (`richContent.html.loadFailed` — "use download"), while 413/415 are
- * terminal and name the reason. Loading is its own state: `text === null` before
- * the first response settles is NOT "preview unavailable", and rendering the
- * failure placeholder there claimed an absence out of an unsettled read.
+ * The load state machine lives in `lib/rich-content/use-attachment-text` and
+ * is shared with the markdown/text renderer: the three states (loading /
+ * ready / failed-with-reason) and the retryable-vs-terminal split are subtle
+ * enough that two copies would drift. Loading is deliberately its own state —
+ * `text === null` before the first response settles is NOT "preview
+ * unavailable", and rendering the failure placeholder there claimed an absence
+ * out of an unsettled read.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Alert, Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { WebView } from "react-native-webview";
 import { Text } from "@/components/ui/text";
-import {
-  api,
-  PreviewTooLargeError,
-  PreviewUnsupportedError,
-} from "@/data/api";
 import { resolveAttachmentUrl } from "@/lib/attachment-url";
+import { useAttachmentText } from "@/lib/rich-content/use-attachment-text";
 import { downloadAttachmentAndOpen } from "@/lib/download-attachment";
 import type { DownloadSource } from "@/lib/download-store";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -71,24 +69,7 @@ export function HtmlAttachmentPreview({
   const { isDarkColorScheme } = useColorScheme();
   const { t } = useTranslation();
   const [mode, setMode] = useState<"preview" | "source">("preview");
-  const [text, setText] = useState<string | null>(null);
-  const [failed, setFailed] = useState<null | "tooLarge" | "unsupported" | "failed">(null);
-
-  const load = useCallback(async () => {
-    setFailed(null);
-    try {
-      const res = await api.getAttachmentTextContent(attachmentId);
-      setText(res.text);
-    } catch (err) {
-      if (err instanceof PreviewTooLargeError) setFailed("tooLarge");
-      else if (err instanceof PreviewUnsupportedError) setFailed("unsupported");
-      else setFailed("failed");
-    }
-  }, [attachmentId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const { state, retry } = useAttachmentText(attachmentId);
 
   const handleDownload = useCallback(() => {
     // Same authenticated in-app path as the file card (MYS-270): the raw
@@ -103,16 +84,16 @@ export function HtmlAttachmentPreview({
     );
   }, [contentType, downloadUrl, filename, source, t]);
 
-  if (failed) {
+  if (state.status === "failed") {
     // Error placeholder — the collapsed card keeps the surface stable and the
     // filename visible, and carries the two escape hatches itself (retry when
     // the failure is retryable, download always). Mirrors web's pinned-toolbar
     // failure mode without needing hover.
-    const isRetryable = failed === "failed";
+    const isRetryable = state.reason === "failed";
     const messageKey =
-      failed === "tooLarge"
+      state.reason === "tooLarge"
         ? "richContent.html.tooLarge"
-        : failed === "unsupported"
+        : state.reason === "unsupported"
           ? "richContent.html.unsupported"
           : "richContent.html.loadFailed";
     return (
@@ -129,7 +110,7 @@ export function HtmlAttachmentPreview({
             <ActionButton
               icon="refresh-outline"
               label={t("richContent.html.retry")}
-              onPress={() => void load()}
+              onPress={retry}
             />
           ) : null}
           <ActionButton
@@ -142,7 +123,7 @@ export function HtmlAttachmentPreview({
     );
   }
 
-  if (text === null) {
+  if (state.status === "loading") {
     // First response has not settled. Deliberately NOT the failure copy — an
     // in-flight read is not an unavailable preview.
     return (
@@ -157,6 +138,7 @@ export function HtmlAttachmentPreview({
     );
   }
 
+  const text = state.text;
   const doc = buildHtmlPreviewDocument(text);
 
   return (

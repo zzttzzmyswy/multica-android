@@ -57,11 +57,36 @@ describe("attachmentKind", () => {
     expect(attachmentKind("image/svg+xml; charset=utf-8", "diagram.svg")).toBe("image");
   });
 
-  it("classifies every other type as a plain file", () => {
-    expect(attachmentKind("application/pdf", "doc.pdf")).toBe("file");
-    expect(attachmentKind("text/plain; charset=utf-8", "notes.txt")).toBe("file");
+  it("classifies the newly covered kinds as their own renderer", () => {
+    // Each of these used to fall through to the plain file card. They now have
+    // a first-class branch, so the assertion names the new contract instead of
+    // the old fallthrough.
+    expect(attachmentKind("application/pdf", "doc.pdf")).toBe("pdf");
+    expect(attachmentKind("", "movie.mp4")).toBe("video");
+    expect(attachmentKind("application/octet-stream", "clip.MOV")).toBe("video");
+    expect(attachmentKind("", "voice.m4a")).toBe("audio");
+    expect(attachmentKind("audio/mpeg", "song.mp3")).toBe("audio");
+  });
+
+  it("classifies markdown ahead of plain text", () => {
+    // The server sniffs a real .md upload as `text/plain; charset=utf-8`, so
+    // the content type alone cannot separate markdown from text — the
+    // extension has to win, and the markdown branch has to come first.
+    expect(attachmentKind("text/plain; charset=utf-8", "README.md")).toBe("markdown");
+    expect(attachmentKind("text/markdown", "notes.txt")).toBe("markdown");
+  });
+
+  it("classifies a previewable source file as text", () => {
+    expect(attachmentKind("text/plain; charset=utf-8", "notes.txt")).toBe("text");
+    expect(attachmentKind("text/plain; charset=utf-8", "script.py")).toBe("text");
+    expect(attachmentKind("application/json", "data.json")).toBe("text");
+    expect(attachmentKind("", "config.yaml")).toBe("text");
+  });
+
+  it("classifies a binary the text proxy would reject as a plain file", () => {
     expect(attachmentKind("", "archive.tar.gz")).toBe("file");
     expect(attachmentKind("", "no-extension")).toBe("file");
+    expect(attachmentKind("application/zip", "bundle.zip")).toBe("file");
   });
 
   it("never returns a kind outside the declared set", () => {
@@ -73,6 +98,26 @@ describe("attachmentKind", () => {
     ];
     for (const [ct, filename] of probes) {
       expect(ATTACHMENT_KINDS).toContain(attachmentKind(ct, filename));
+    }
+  });
+});
+
+describe("the live smoke fixtures resolve to the intended renderer", () => {
+  it("dispatches each real upload by content_type + extension", () => {
+    // These four are the attachments the v0.6.31 device smoke test uses, with
+    // the exact `content_type` the live server stored for each (captured from
+    // mu.zztweb.top — see the iteration's seed script). `sample.md` coming back
+    // as `text/plain; charset=utf-8` is the case that proves the extension
+    // fallback is load-bearing: the content type alone cannot distinguish it
+    // from `notes.txt`.
+    const live: [string, string, string][] = [
+      ["text/plain; charset=utf-8", "sample.md", "markdown"],
+      ["text/plain; charset=utf-8", "notes.txt", "text"],
+      ["application/pdf", "report.pdf", "pdf"],
+      ["image/png", "shot.png", "image"],
+    ];
+    for (const [ct, filename, expected] of live) {
+      expect(attachmentKind(ct, filename), `${filename} (${ct})`).toBe(expected);
     }
   });
 });

@@ -3532,5 +3532,11 @@
   "autopilots.notFound": "该自动化不存在或已被删除",
   "squads.notFound": "该小队不存在或已被删除",
   "members.notFound": "该成员不存在或已离开工作区",
-  "mcp.notFound": "该 MCP 服务器不存在或已被删除"
+  "mcp.notFound": "该 MCP 服务器不存在或已被删除",
+  "richContent.attachment.previewLoading": "正在加载预览…",
+  "richContent.attachment.loadFailed": "无法加载预览 — 请使用下载",
+  "richContent.attachment.tooLarge": "文件过大，无法内联预览 — 请使用下载",
+  "richContent.attachment.unsupported": "此文件类型不支持预览 — 请使用下载",
+  "richContent.attachment.retry": "重试",
+  "richContent.attachment.download": "下载"
 }
