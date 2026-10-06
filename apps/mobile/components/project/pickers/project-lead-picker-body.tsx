@@ -1,9 +1,8 @@
 /**
  * Pure picker body for project lead — single-select over members + agents
- * with an Unassigned row. Mirrors the assignee picker pattern: header +
- * search bar are owned by the iOS native nav header registered in
- * `app/(app)/[workspace]/_layout.tsx`; the route wires `query` in via
- * `useNativeSearchBar` and passes it through. Body is a pure FlatList.
+ * with an Unassigned row. Mirrors the assignee picker pattern: the route
+ * owns the search input (`usePickerSearch`) and passes the current `query`
+ * through. Body is a pure FlatList.
  *
  * Flat list with inline "Agent" right-aligned tag — matches Apple's
  * UITableViewCellStyleValue1 pattern (used throughout Settings); at this
