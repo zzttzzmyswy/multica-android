@@ -3546,5 +3546,6 @@
   "richContent.attachment.tooLarge": "文件过大，无法内联预览 — 请使用下载",
   "richContent.attachment.unsupported": "此文件类型不支持预览 — 请使用下载",
   "richContent.attachment.retry": "重试",
-  "richContent.attachment.download": "下载"
+  "richContent.attachment.download": "下载",
+  "lightbox.imageFallbackTitle": "图片"
 }

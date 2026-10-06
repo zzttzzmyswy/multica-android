@@ -17,6 +17,11 @@
  * The URIs are resolved the same way `MarkdownImage` resolves the one it
  * renders — same attachment match, same `resolveAttachmentUrl` pass — so the
  * URI a tap reports is the one the sequence holds.
+ *
+ * Each entry carries the filename and record behind that URI too, because the
+ * viewer's header renders both (see `lightbox-image.ts`). Holding bare URIs
+ * here is what made the image kind the one attachment a user could view
+ * full-screen and never save.
  */
 import { createContext, use, useMemo, type ReactNode } from "react";
 import {
@@ -24,14 +29,16 @@ import {
   type ImageSequenceBlock,
 } from "@multica/core/attachments/image-sequence";
 import { resolveAttachmentUrl } from "@/lib/attachment-url";
+import { toLightboxImages, type LightboxImage } from "./lightbox-image";
 
-const ImageSequenceContext = createContext<readonly string[]>([]);
+const ImageSequenceContext = createContext<readonly LightboxImage[]>([]);
 
 /**
- * Resolved image URIs for the surrounding screen, in render order. Empty when
- * no provider is mounted — the lightbox then shows the tapped image alone.
+ * Images for the surrounding screen, in render order, with the filename and
+ * record each needs. Empty when no provider is mounted — the lightbox then
+ * shows the tapped image alone.
  */
-export function useImageSequence(): readonly string[] {
+export function useImageSequence(): readonly LightboxImage[] {
   return use(ImageSequenceContext);
 }
 
@@ -42,15 +49,12 @@ export function ImageSequenceProvider({
   blocks: ReadonlyArray<ImageSequenceBlock | null | undefined>;
   children: ReactNode;
 }) {
-  const uris = useMemo(
-    () =>
-      collectImageSequence(blocks).map(
-        (item) => resolveAttachmentUrl(item.url) ?? item.url,
-      ),
+  const images = useMemo(
+    () => toLightboxImages(collectImageSequence(blocks), resolveAttachmentUrl),
     [blocks],
   );
   return (
-    <ImageSequenceContext.Provider value={uris}>
+    <ImageSequenceContext.Provider value={images}>
       {children}
     </ImageSequenceContext.Provider>
   );

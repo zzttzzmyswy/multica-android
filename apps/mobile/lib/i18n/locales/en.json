@@ -3546,5 +3546,6 @@
   "richContent.attachment.tooLarge": "File too large for inline preview — use download",
   "richContent.attachment.unsupported": "This file type can't be previewed — use download",
   "richContent.attachment.retry": "Retry",
-  "richContent.attachment.download": "Download"
+  "richContent.attachment.download": "Download",
+  "lightbox.imageFallbackTitle": "Image"
 }
