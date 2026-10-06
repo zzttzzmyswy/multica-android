@@ -244,6 +244,9 @@ export function BuilderConfigPanel({
         <Text className="text-[11px] text-muted-foreground/70">
           {t("agents.new.ai.runtimeSwitchHint")}
         </Text>
+        {/* The list is already filtered to online + not-current, so the sheet
+            opens on "all": a default of "mine" would hide a colleague's public
+            runtime that this switch has always offered. */}
         <RuntimePickerSheet
           visible={runtimePickerOpen}
           runtimes={runtimes.filter(
@@ -253,6 +256,8 @@ export function BuilderConfigPanel({
           )}
           loading={false}
           selectedId={selectedRuntimeId}
+          currentUserId={currentUserId}
+          defaultFilter="all"
           onPick={(runtime) => {
             void onRuntimeSwitch(runtime);
           }}

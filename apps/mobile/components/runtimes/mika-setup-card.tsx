@@ -252,11 +252,16 @@ function MikaSetupDialog({
           </Button>
         </View>
 
+        {/* Same reasoning as the AI-builder page: `usable` already is the usable
+            set, so the sheet opens on "all" rather than narrowing it to the
+            member's own machines. */}
         <RuntimePickerSheet
           visible={runtimePickerOpen}
           runtimes={usable}
           loading={runtimesLoading}
           selectedId={effectiveRuntimeId}
+          currentUserId={currentUserId}
+          defaultFilter="all"
           onPick={(runtime) => {
             setRuntimeId(runtime.id);
             // Models are per-runtime, so a value chosen for the previous
