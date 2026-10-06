@@ -6,18 +6,24 @@
  * Default view is "preview": the user HTML renders in a WebView with JS
  * disabled (`javaScriptEnabled={false}` is the script sandbox — the document
  * itself carries no script and can't open one). The "source" tab shows the
- * raw snippet as a highlighted code block. Fullscreen re-mounts the preview
- * in a modal.
+ * raw snippet as a highlighted code block. Fullscreen re-mounts whichever view
+ * is selected through the shared shell in
+ * `lib/rich-content/fullscreen-preview`, so this block and the two attachment
+ * cards cannot drift apart.
+ *
+ * The entry is unconditional here, unlike the attachment cards': the snippet is
+ * already in the document, so there is no read that could fail and leave
+ * nothing to magnify.
  */
 import { useState } from "react";
-import { Modal, Pressable, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { WebView } from "react-native-webview";
 import { Text } from "@/components/ui/text";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { CodeBlock } from "@/lib/markdown/code-block";
+import { FullscreenPreview } from "@/lib/rich-content/fullscreen-preview";
 import { buildHtmlPreviewDocument } from "@/lib/rich-content/html-preview-doc";
-import { THEME } from "@/lib/theme";
 
 const PREVIEW_HEIGHT_PX = 260;
 
@@ -33,6 +39,26 @@ export function HtmlBlockPreview({ html, selectable = true }: Props) {
   const [fullscreen, setFullscreen] = useState(false);
 
   const doc = buildHtmlPreviewDocument(html);
+
+  // Built once and mounted in whichever container is on screen. The WebView is
+  // the expensive half of this component and its sandbox flags are the security
+  // boundary, so a second hand-written copy for the fullscreen view is exactly
+  // how the two would drift.
+  const preview = (
+    <WebView
+      key={html}
+      source={{ html: doc }}
+      style={{
+        flex: 1,
+        backgroundColor: isDarkColorScheme ? "#1f2937" : "#ffffff",
+      }}
+      javaScriptEnabled={false}
+      domStorageEnabled={false}
+      setSupportMultipleWindows={false}
+      originWhitelist={["*"]}
+      overScrollMode="never"
+    />
+  );
 
   return (
     <>
@@ -55,21 +81,7 @@ export function HtmlBlockPreview({ html, selectable = true }: Props) {
           </View>
         </View>
         {mode === "preview" ? (
-          <View style={{ height: PREVIEW_HEIGHT_PX }}>
-            <WebView
-              key={html}
-              source={{ html: doc }}
-              style={{
-                flex: 1,
-                backgroundColor: isDarkColorScheme ? "#1f2937" : "#ffffff",
-              }}
-              javaScriptEnabled={false}
-              domStorageEnabled={false}
-              setSupportMultipleWindows={false}
-              originWhitelist={["*"]}
-              overScrollMode="never"
-            />
-          </View>
+          <View style={{ height: PREVIEW_HEIGHT_PX }}>{preview}</View>
         ) : (
           <View className="px-3 pb-2">
             <CodeBlock code={html} lang="html" selectable={selectable} />
@@ -80,47 +92,30 @@ export function HtmlBlockPreview({ html, selectable = true }: Props) {
           hitSlop={6}
           className="px-3 py-1.5 border-t border-border"
           accessibilityRole="button"
+          accessibilityLabel={t("richContent.html.viewFullscreen")}
         >
           <Text className="text-xs text-foreground">
             {t("richContent.html.viewFullscreen")}
           </Text>
         </Pressable>
       </View>
-      <Modal
+      <FullscreenPreview
         visible={fullscreen}
-        animationType="slide"
-        presentationStyle="fullScreen"
-        onRequestClose={() => setFullscreen(false)}
+        onClose={() => setFullscreen(false)}
+        title={t("richContent.html.title")}
       >
-        <View
-          style={{ flex: 1, backgroundColor: isDarkColorScheme ? THEME.dark.background : THEME.light.background }}
-        >
-          <View className="flex-row items-center justify-between px-4 py-3 border-b border-border bg-card">
-            <Text className="text-base font-semibold text-foreground">
-              {t("richContent.html.title")}
-            </Text>
-            <Pressable
-              onPress={() => setFullscreen(false)}
-              hitSlop={8}
-              className="rounded-md px-2 py-1 border border-border"
-              accessibilityRole="button"
-            >
-              <Text className="text-xs text-foreground">
-                {t("richContent.mermaid.close")}
-              </Text>
-            </Pressable>
-          </View>
-          <WebView
-            key={doc}
-            source={{ html: doc }}
-            style={{ flex: 1, backgroundColor: "transparent" }}
-            javaScriptEnabled={false}
-            domStorageEnabled={false}
-            setSupportMultipleWindows={false}
-            originWhitelist={["*"]}
-          />
-        </View>
-      </Modal>
+        {/* Same split as the html attachment card: preview fills the shell and
+            lets the WebView own its scrolling, source gets a vertical scroll so
+            a long fence is not clipped behind `CodeBlock`'s horizontal-only
+            scroll view. */}
+        {mode === "preview" ? (
+          preview
+        ) : (
+          <ScrollView contentContainerClassName="px-3 py-2 pb-6">
+            <CodeBlock code={html} lang="html" selectable={false} />
+          </ScrollView>
+        )}
+      </FullscreenPreview>
     </>
   );
 }

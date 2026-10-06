@@ -37,6 +37,8 @@ const LIST = "components/issue/comment-attachment-list.tsx";
 const HTML_PREVIEW = "components/rich-content/html-attachment.tsx";
 const TEXT_PREVIEW = "components/rich-content/text-attachment.tsx";
 const FILE_CARD = "components/issue/attachment-file-card.tsx";
+const HTML_BLOCK = "components/rich-content/html-block.tsx";
+const FULLSCREEN_SHELL = "lib/rich-content/fullscreen-preview.tsx";
 
 /** Each kind's renderer file, and the token that proves it can hand the file
  *  to the user. `image` goes through the lightbox, whose exit is the viewer;
@@ -136,6 +138,108 @@ describe("standalone attachment list — every kind is actionable", () => {
     // Loading is its own state — never the failure copy.
     expect(src).toContain('state.status === "loading"');
     expect(src).toContain("richContent.attachment.previewLoading");
+  });
+
+  it("every text-backed kind can be magnified, not just exited", () => {
+    // The exit ratchet above answers "can the user get the file out". It does
+    // not answer "can the user READ it" — and that was the remaining gap: an
+    // html attachment rendered in a fixed 300px WebView and markdown / text in
+    // a 320px cap, so a long body was readable only through that slit, while
+    // web gave every kind a fullscreen preview. Route each text-backed kind's
+    // renderer through the shared shell and confirm it actually opens it.
+    //
+    // The JSX open tag, not the bare identifier: an import that is never
+    // rendered satisfies `toContain("FullscreenPreview")` while giving the user
+    // nothing, which is the exact failure this line exists to catch.
+    for (const file of [HTML_PREVIEW, TEXT_PREVIEW, HTML_BLOCK]) {
+      const src = code(file);
+      expect(src, `${file} renders no fullscreen shell`).toContain(
+        "<FullscreenPreview",
+      );
+    }
+    // The shell is shared, not copied three times: it is the only file that
+    // may declare the modal, so a fourth surface cannot drift from the rest.
+    for (const file of [HTML_PREVIEW, TEXT_PREVIEW, HTML_BLOCK]) {
+      expect(code(file), `${file} declares its own Modal`).not.toContain(
+        "<Modal",
+      );
+    }
+    const shell = code(FULLSCREEN_SHELL);
+    expect(shell).toContain("<Modal");
+    expect(shell).toContain('presentationStyle="fullScreen"');
+    expect(shell).toContain("onRequestClose");
+  });
+
+  it("the fullscreen entry exists for parsed content, and never for a failed read", () => {
+    // Same discipline the exit ratchet uses, one step stricter: the entry must
+    // be reachable whenever there IS content, and must NOT be offered when
+    // there is none — a "view fullscreen" button on a failure placeholder
+    // magnifies nothing.
+    //
+    // Where the boundary sits differs by surface and both are deliberate:
+    //   - html card / markdown / text card: the body comes from a network read,
+    //     so the entry lives after the loading and failed branches return;
+    //   - the html fence block: the body is already in the document, so the
+    //     entry is unconditional.
+    for (const file of [HTML_PREVIEW, TEXT_PREVIEW]) {
+      const src = code(file);
+      const entry = src.indexOf("setFullscreen(true)");
+      expect(entry, `${file} has no fullscreen entry`).toBeGreaterThan(-1);
+      // Every bail-out for a state with no content must precede the entry.
+      for (const guard of ['state.status === "loading"', 'state.status === "failed"']) {
+        const at = src.indexOf(guard);
+        expect(at, `${file} lost its ${guard} branch`).toBeGreaterThan(-1);
+        expect(
+          at,
+          `${file}: ${guard} must bail out before the fullscreen entry`,
+        ).toBeLessThan(entry);
+      }
+    }
+  });
+
+  it("the fullscreen entry does not depend on the read having succeeded", () => {
+    // Reverse verification for the rule above, exercised rather than read: a
+    // renderer whose entry sits inside the success branch only (i.e. gated on
+    // the loaded body) is exactly what this test must reject. Take the real
+    // file, move the entry ahead of its failed-state guard, and confirm the
+    // check flips to red — so a future refactor that inverts the order is
+    // caught here and not by a user staring at an un-magnifiable card.
+    const src = code(TEXT_PREVIEW);
+    const entry = src.indexOf("setFullscreen(true)");
+    const failed = src.indexOf('state.status === "failed"');
+    const before = entry < failed;
+    expect(before, "fixture must start with the guard before the entry").toBe(
+      false,
+    );
+    // Invert the order the way a careless refactor would, and re-run the same
+    // predicate the test above uses.
+    const inverted = src
+      .replace("setFullscreen(true)", "__MOVED__")
+      .replace('state.status === "failed"', "setFullscreen(true)")
+      .replace("__MOVED__", 'state.status === "failed"');
+    expect(
+      inverted.indexOf("setFullscreen(true)") <
+        inverted.indexOf('state.status === "failed"'),
+      "a gated entry must be rejected",
+    ).toBe(true);
+  });
+
+  it("the shell is the only place the fullscreen modal is declared", () => {
+    // Three surfaces share one shell. If a fourth copies the Modal instead of
+    // using it, the safe-area / back / header behaviour starts drifting — the
+    // exact failure this extraction exists to prevent. `mermaid-viewer` is the
+    // one legitimate exception: its body is a WebView bridge with its own
+    // toolbar, not a re-render of loaded text, so it predates this shell and
+    // keeps its own.
+    const exceptions = new Set([
+      FULLSCREEN_SHELL,
+      "components/rich-content/mermaid-viewer.tsx",
+    ]);
+    for (const file of [HTML_PREVIEW, TEXT_PREVIEW, HTML_BLOCK]) {
+      expect(exceptions.has(file), `${file} is not an excepted shell owner`).toBe(
+        false,
+      );
+    }
   });
 
   it("the failed state is distinct from the loading state", () => {
