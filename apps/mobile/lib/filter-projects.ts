@@ -5,16 +5,16 @@
  * semantics, same sort orders (enum-column sorts tie-break on title), same
  * default directions as the web view store.
  *
- * Search is a title substring match, case-insensitive (web additionally
- * matches pinyin; mobile ships the plain substring pass — the input method
- * on Android produces composed text, so the pinyin fallback has no
- * equivalent).
+ * Search is a pinyin-aware title match: case-insensitive substring, plus
+ * web's `matchesPinyin` arm (projects-page.tsx:870), so a Chinese project
+ * title is reachable by full pinyin, initials or hybrid input.
  */
 import type {
   Project,
   ProjectPriority,
   ProjectStatus,
 } from "@multica/core/types";
+import { matchesNameOrPinyin } from "./name-search";
 
 export type ProjectSortField =
   | "name"
@@ -129,7 +129,7 @@ export function filterProjects(
 ): Project[] {
   const q = search.trim().toLowerCase();
   return projects.filter((p) => {
-    if (q && !p.title.toLowerCase().includes(q)) return false;
+    if (q && !matchesNameOrPinyin(p.title, search)) return false;
     if (filters.statuses.length && !filters.statuses.includes(p.status))
       return false;
     if (filters.priorities.length && !filters.priorities.includes(p.priority))

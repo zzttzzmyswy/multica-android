@@ -24,6 +24,7 @@ import { agentListOptions } from "@/data/queries/agents";
 import { memberListOptions } from "@/data/queries/members";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
+import { matchesNameOrPinyin } from "@/lib/name-search";
 import { useScrollToTopOnChange } from "@/lib/use-scroll-to-top-on-change";
 import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
@@ -68,14 +69,14 @@ export function ProjectLeadPickerBody({ value, query, onChange }: Props) {
 
   const rows = useMemo<Row[]>(() => {
     const q = query.trim().toLowerCase();
-    const matchName = (n: string) => !q || n.toLowerCase().includes(q);
-
+    // Pinyin-aware name search — web's project lead picker
+    // (projects/components/project-lead-picker.tsx:31-32).
     const memberRows: Row[] = [...members]
-      .filter((m) => matchName(m.name))
+      .filter((m) => matchesNameOrPinyin(m.name, query))
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((m) => ({ kind: "member" as const, member: m }));
     const agentRows: Row[] = [...agents]
-      .filter((a) => matchName(a.name))
+      .filter((a) => matchesNameOrPinyin(a.name, query))
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((a) => ({ kind: "agent" as const, agent: a }));
 

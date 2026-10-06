@@ -17,6 +17,7 @@ import type {
   AgentInvocationTarget,
   AgentRunCount,
   AgentTask,
+  AssigneeFrequencyEntry,
   Attachment,
   AutopilotCollaborator,
   AutopilotRun,
@@ -881,6 +882,26 @@ export const AgentRunCountSchema: z.ZodType<AgentRunCount> = z.object({
 export const AgentRunCountListSchema = z.array(AgentRunCountSchema).default([]);
 
 export const EMPTY_AGENT_RUN_COUNT_LIST: AgentRunCount[] = [];
+
+// Per-actor assignment frequency for the current user, feeding the assignee
+// picker's usage sort. Mirrors AssigneeFrequencyEntry in
+// packages/core/types/activity.ts, fed by GET /api/assignee-frequency. The
+// server already returns the rows sorted by frequency DESC; the client
+// re-sorts anyway so the order survives a server that stops doing so.
+// Lenient — a row missing either identifier carries no usable key and is
+// dropped by the lookup builder rather than sorting every actor to zero.
+export const AssigneeFrequencyEntrySchema: z.ZodType<AssigneeFrequencyEntry> =
+  z.object({
+    assignee_type: z.string().default(""),
+    assignee_id: z.string().default(""),
+    frequency: z.number().default(0),
+  }).loose();
+
+export const AssigneeFrequencyListSchema = z
+  .array(AssigneeFrequencyEntrySchema)
+  .default([]);
+
+export const EMPTY_ASSIGNEE_FREQUENCY_LIST: AssigneeFrequencyEntry[] = [];
 
 export const ActiveTasksResponseSchema = z.object({
   tasks: z.array(AgentTaskSchema).default([]),

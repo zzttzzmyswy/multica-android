@@ -19,6 +19,7 @@ import { CatalogEmptySlot } from "@/components/catalog/catalog-status";
 import { projectListOptions } from "@/data/queries/projects";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { catalogRead } from "@/lib/catalog-read";
+import { matchesNameOrPinyin } from "@/lib/name-search";
 import { useScrollToTopOnChange } from "@/lib/use-scroll-to-top-on-change";
 import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
@@ -47,9 +48,12 @@ export function ProjectPickerBody({ value, query, onChange }: Props) {
 
   const rows = useMemo<Row[]>(() => {
     const q = query.trim().toLowerCase();
-    const matchName = (n: string) => !q || n.toLowerCase().includes(q);
+    // Project titles are searched pinyin-aware, matching web's project picker
+    // (projects/components/project-picker.tsx:64: `title.includes(q) ||
+    // matchesPinyin(title, q)`) — which is what makes 「数据透明化」 reachable
+    // by typing `sjtmh`.
     const projectRows: Row[] = [...projects]
-      .filter((p) => matchName(p.title))
+      .filter((p) => matchesNameOrPinyin(p.title, query))
       .sort((a, b) => a.title.localeCompare(b.title))
       .map((p) => ({ kind: "project" as const, project: p }));
 

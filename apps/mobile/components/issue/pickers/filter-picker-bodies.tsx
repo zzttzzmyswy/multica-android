@@ -44,6 +44,7 @@ import { projectListOptions } from "@/data/queries/projects";
 import { labelListOptions } from "@/data/queries/labels";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
+import { matchesNameOrPinyin } from "@/lib/name-search";
 import type { ActorFilterValue } from "@/data/stores/issue-filter-slice";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -137,19 +138,20 @@ export function FilterActorPickerBody({
   );
 
   const rows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const matchName = (name: string) => !q || name.toLowerCase().includes(q);
+    // Pinyin-aware, matching web's ActorSubContent
+    // (issues/components/issues-header.tsx:335-343), which backs both the
+    // assignee and creator filter dimensions.
     const memberRows: { kind: "member"; member: MemberWithUser }[] =
       [...members]
-        .filter((m) => matchName(m.name))
+        .filter((m) => matchesNameOrPinyin(m.name, query))
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((member) => ({ kind: "member" as const, member }));
     const agentRows: { kind: "agent"; agent: Agent }[] = [...agents]
-      .filter((a) => matchName(a.name))
+      .filter((a) => matchesNameOrPinyin(a.name, query))
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((agent) => ({ kind: "agent" as const, agent }));
     const squadRows: { kind: "squad"; squad: Squad }[] = [...squads]
-      .filter((s) => !s.archived_at && matchName(s.name))
+      .filter((s) => !s.archived_at && matchesNameOrPinyin(s.name, query))
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((squad) => ({ kind: "squad" as const, squad }));
     return [...memberRows, ...agentRows, ...squadRows];

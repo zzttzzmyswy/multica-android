@@ -45,6 +45,7 @@ import { squadListOptions } from "@/data/queries/squads";
 import { api } from "@/data/api";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
+import { matchesNameOrPinyin } from "@/lib/name-search";
 import {
   useMentionDraftStore,
   type MentionChipDraft,
@@ -148,7 +149,6 @@ export function MentionPickerBody({ query, mode = "comment" }: Props) {
 
   const rows = useMemo<Row[]>(() => {
     const q = query.trim().toLowerCase();
-    const matchName = (name: string) => !q || name.toLowerCase().includes(q);
 
     const out: Row[] = [];
 
@@ -160,22 +160,25 @@ export function MentionPickerBody({ query, mode = "comment" }: Props) {
     if (!q || "all".includes(q)) {
       out.push({ kind: "all" });
     }
+    // Name search is pinyin-aware, matching web's mention-suggestion.tsx:721 /
+    // :732 / :753 (`name.includes(q) || matchesPinyin(name, q)`) — the three
+    // rows below are its member / agent / squad counterparts.
     const memberRows = [...members]
-      .filter((m) => matchName(m.name))
+      .filter((m) => matchesNameOrPinyin(m.name, query))
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((m): Row => ({ kind: "member", member: m }));
     if (memberRows.length > 0) {
       out.push({ kind: "section", label: t("picker.people") }, ...memberRows);
     }
     const agentRows = [...agents]
-      .filter((a) => matchName(a.name))
+      .filter((a) => matchesNameOrPinyin(a.name, query))
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((a): Row => ({ kind: "agent", agent: a }));
     if (agentRows.length > 0) {
       out.push({ kind: "section", label: t("picker.agents") }, ...agentRows);
     }
     const squadRows = [...squads]
-      .filter((s) => !s.archived_at && matchName(s.name))
+      .filter((s) => !s.archived_at && matchesNameOrPinyin(s.name, query))
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((s): Row => ({ kind: "squad", squad: s }));
     if (squadRows.length > 0) {

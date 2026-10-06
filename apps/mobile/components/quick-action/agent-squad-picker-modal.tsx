@@ -24,6 +24,7 @@ import { agentListOptions } from "@/data/queries/agents";
 import { squadListOptions } from "@/data/queries/squads";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { isAgentRuntimeBound } from "@/lib/is-agent-runtime-bound";
+import { matchesNameOrPinyin } from "@/lib/name-search";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
@@ -55,10 +56,15 @@ export function AgentSquadPickerModal({
   const { data: squads = [] } = useQuery(squadListOptions(wsId));
 
   const rows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const match = (name: string) => !q || name.toLowerCase().includes(q);
-    const activeAgents = agents.filter((a) => !a.archived_at && match(a.name));
-    const activeSquads = squads.filter((s) => !s.archived_at && match(s.name));
+    // Pinyin-aware, matching web's autopilot AgentPicker
+    // (autopilots/components/pickers/agent-picker.tsx:59-62), which backs both
+    // the autopilot form's target picker and the quick-action target picker.
+    const activeAgents = agents.filter(
+      (a) => !a.archived_at && matchesNameOrPinyin(a.name, query),
+    );
+    const activeSquads = squads.filter(
+      (s) => !s.archived_at && matchesNameOrPinyin(s.name, query),
+    );
     const agentRows = activeAgents.map((a) => ({
       kind: "agent" as const,
       id: a.id,
