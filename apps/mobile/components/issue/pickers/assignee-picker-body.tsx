@@ -13,11 +13,11 @@
  *     reachable by full pinyin, initials or hybrid input — web's
  *     `name.includes(q) || matchesPinyin(name, q)`.
  *
- * Header + search bar are owned by the iOS native nav header registered in
- * `app/(app)/[workspace]/_layout.tsx` (assignee Stack.Screen sets
- * `headerShown: true` + `title`); the route file wires
- * `headerSearchBarOptions.onChangeText` to a local `query` state and passes
- * it in as the `query` prop. This body is just a FlatList — no chrome.
+ * The route owns the header and the search input: `usePickerSearch` takes
+ * the iOS native UISearchController when the sheet keeps its nav header
+ * (`headerShown: true` in `app/(app)/[workspace]/_layout.tsx`) and a
+ * body-rendered field otherwise, then passes the query in as the `query`
+ * prop. This body is just a FlatList — no chrome.
  */
 import { useMemo } from "react";
 import { FlatList, Pressable, View } from "react-native";

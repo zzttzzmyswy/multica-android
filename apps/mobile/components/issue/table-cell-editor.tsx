@@ -268,8 +268,8 @@ function CellBody({
 }
 
 /** Search field above a picker body whose filtering is caller-driven. The
- *  detail-page routes wire the same bodies to the native search bar; a sheet
- *  has no header, so the field lives in the body. */
+ *  detail-page routes own their own header + search via `usePickerSearch`;
+ *  a sheet has no native header, so the field lives in the body here. */
 function SearchableBody({
   query,
   onQueryChange,

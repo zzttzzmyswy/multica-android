@@ -215,13 +215,13 @@ export default function WorkspaceLayout() {
           name="issue/[id]/picker/priority"
           options={SHEET_OPTIONS}
         />
-        {/* Experiment: assignee uses iOS-native nav header + UISearchController
-            instead of the body-rendered header pattern in SHEET_OPTIONS.
-            Eliminates the #3634 overlap class of bugs and the focus-loss
-            footgun of a custom TextInput inside ListHeaderComponent. The
-            route file wires `headerSearchBarOptions` via setOptions. If this
-            proves out, propagate to label / project / other search pickers
-            and update CLAUDE.md Lesson 6 with a carve-out. */}
+        {/* Search-enabled pickers. `headerShown: true` here buys the iOS
+            native nav header + UISearchController; Android renders neither
+            the header nor `headerSearchBarOptions`, so the body draws its
+            own title + search field there. `usePickerSearch` reads the same
+            fact via its `nativeHeader` option to decide which side owns the
+            search box — the two must agree, or the list is unfilterable on
+            one platform (MYS-1968). */}
         <Stack.Screen
           name="issue/[id]/picker/assignee"
           options={{

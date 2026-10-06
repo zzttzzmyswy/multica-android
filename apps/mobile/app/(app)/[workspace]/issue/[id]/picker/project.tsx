@@ -1,17 +1,18 @@
 /**
- * Project picker route for an existing issue. Uses native iOS Stack header
- * + UISearchController via `useNativeSearchBar` (search bar registered in
- * ../_layout.tsx).
+ * Project picker route for an existing issue. The sheet inherits
+ * `SHEET_OPTIONS` (`headerShown: false`), so the native search bar would not
+ * mount on either platform — search is body-rendered.
  */
 import { useMemo } from "react";
 import { useLocalSearchParams, router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { ProjectPickerBody } from "@/components/issue/pickers/project-picker-body";
+import { PickerBodyShell } from "@/components/pickers/picker-body-shell";
 import { issueDetailOptions } from "@/data/queries/issues";
 import { findProject, projectListOptions } from "@/data/queries/projects";
 import { useUpdateIssue } from "@/data/mutations/issues";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import { useNativeSearchBar } from "@/lib/use-native-search-bar";
+import { usePickerSearch } from "@/lib/use-picker-search";
 import { useTranslation } from "@/lib/i18n/react";
 
 export default function IssueProjectPickerRoute() {
@@ -21,7 +22,9 @@ export default function IssueProjectPickerRoute() {
   const { data: issue } = useQuery(issueDetailOptions(wsId, id));
   const { data: projects = [] } = useQuery(projectListOptions(wsId));
   const updateIssue = useUpdateIssue(id);
-  const query = useNativeSearchBar(t("picker.searchProjects"), { autoFocus: true });
+  const search = usePickerSearch(t("picker.searchProjects"), {
+    autoFocus: true,
+  });
 
   const project = useMemo(
     () => findProject(projects, issue?.project_id ?? null),
@@ -29,13 +32,15 @@ export default function IssueProjectPickerRoute() {
   );
 
   return (
-    <ProjectPickerBody
-      value={project ?? null}
-      query={query}
-      onChange={(next) => {
-        updateIssue.mutate({ project_id: next?.id ?? null });
-        router.back();
-      }}
-    />
+    <PickerBodyShell search={search} title={t("attr.project")}>
+      <ProjectPickerBody
+        value={project ?? null}
+        query={search.query}
+        onChange={(next) => {
+          updateIssue.mutate({ project_id: next?.id ?? null });
+          router.back();
+        }}
+      />
+    </PickerBodyShell>
   );
 }

@@ -15,10 +15,12 @@
  * dimensions are positive-selection SETS (web view-store FilterSnapshot), so
  * every toggle keeps the sheet open.
  *
- * Android-safe search: each body owns a local TextInput filter instead of
- * relying on the iOS-only native UISearchController (useNativeSearchBar) the
- * attribute pickers use — Expo on Android does not render
- * `headerSearchBarOptions`. Same search semantics, one code path for both.
+ * Android-safe search: each body owns a local TextInput filter. The
+ * attribute pickers reach the same place differently — their route hands
+ * the search input to the iOS native UISearchController only where the
+ * sheet keeps a nav header, and body-renders it everywhere else
+ * (`usePickerSearch`), because Expo does not render
+ * `headerSearchBarOptions` on Android at all. Same search semantics.
  */
 import { useMemo, useState } from "react";
 import { FlatList, Pressable, TextInput, View } from "react-native";

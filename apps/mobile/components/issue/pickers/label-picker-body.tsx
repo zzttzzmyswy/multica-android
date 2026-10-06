@@ -1,8 +1,8 @@
 /**
  * Pure picker body for issue labels — multi-select with toggle-on-tap.
- * Mirrors the assignee picker shape (native nav header + UISearchController
- * registered in `_layout.tsx`; `query` flows in as a prop via
- * `useNativeSearchBar`) with two key differences:
+ * Mirrors the assignee picker shape: the route owns the search input
+ * (`usePickerSearch` decides between the iOS native header and a
+ * body-rendered field) and passes `query` in as a prop. Two differences:
  *
  *   1. Multi-select: tap toggles attach/detach and does NOT close the
  *      sheet. The user dismisses via grabber drag-down or Back.

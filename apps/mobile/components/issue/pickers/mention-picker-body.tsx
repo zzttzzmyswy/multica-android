@@ -18,10 +18,10 @@
  * surrounding chrome (chat shows "reference an issue" hint, comment groups
  * everything the same way).
  *
- * Mobile is the iOS-native equivalent of shadcn's `CommandDialog` — search
- * input from the native UISearchController (registered by the parent
- * route via `useNativeSearchBar`), groups via uppercase section labels,
- * empty state inline.
+ * Mobile is the iOS-native equivalent of shadcn's `CommandDialog` — the
+ * search input comes from the parent route (`usePickerSearch`: the native
+ * UISearchController on iOS with a header, a body field elsewhere), groups
+ * via uppercase section labels, empty state inline.
  */
 import { useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, View } from "react-native";
