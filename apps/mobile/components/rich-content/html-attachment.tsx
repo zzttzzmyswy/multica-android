@@ -26,9 +26,22 @@
  * `text === null` before the first response settles is NOT "preview
  * unavailable", and rendering the failure placeholder there claimed an absence
  * out of an unsettled read.
+ *
+ * The inline preview is capped at 300px, which is a list affordance — one
+ * attachment must not push the rest of the thread off screen. It is not meant
+ * to bound reading: the "view fullscreen" row below the body re-mounts the
+ * same document through the shared shell
+ * (`lib/rich-content/fullscreen-preview`), the same one the html fence block
+ * and the markdown/text card use. Web's Eye button reaches the identical
+ * destination (`attachment-card.tsx:59` → `AttachmentPreviewModal`), and before
+ * this the mobile body could only ever be read through that 300px slit.
+ *
+ * The entry is inside the ready branch on purpose: it magnifies the loaded
+ * body, so a loading or failed card has nothing to offer and must not render
+ * it. Guarded by `lib/attachment-action-parity.test.ts`.
  */
 import { useCallback, useState } from "react";
-import { Alert, Pressable, View } from "react-native";
+import { Alert, Pressable, ScrollView, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { WebView } from "react-native-webview";
 import { Text } from "@/components/ui/text";
@@ -39,6 +52,7 @@ import type { DownloadSource } from "@/lib/download-store";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { useTranslation } from "@/lib/i18n/react";
 import { CodeBlock } from "@/lib/markdown/code-block";
+import { FullscreenPreview } from "@/lib/rich-content/fullscreen-preview";
 import { buildHtmlPreviewDocument } from "@/lib/rich-content/html-preview-doc";
 import { THEME } from "@/lib/theme";
 
@@ -69,6 +83,7 @@ export function HtmlAttachmentPreview({
   const { isDarkColorScheme } = useColorScheme();
   const { t } = useTranslation();
   const [mode, setMode] = useState<"preview" | "source">("preview");
+  const [fullscreen, setFullscreen] = useState(false);
   const { state, retry } = useAttachmentText(attachmentId);
 
   const handleDownload = useCallback(() => {
@@ -141,52 +156,89 @@ export function HtmlAttachmentPreview({
   const text = state.text;
   const doc = buildHtmlPreviewDocument(text);
 
-  return (
-    <View className="bg-card border border-border rounded-lg overflow-hidden">
-      <View className="flex-row items-center justify-between px-3 py-2">
-        <Text className="flex-1 text-xs text-muted-foreground" numberOfLines={1}>
-          {filename}
-        </Text>
-        <View className="flex-row items-center gap-1">
-          <TabButton
-            label={t("richContent.html.preview")}
-            active={mode === "preview"}
-            onPress={() => setMode("preview")}
-          />
-          <TabButton
-            label={t("richContent.html.source")}
-            active={mode === "source"}
-            onPress={() => setMode("source")}
-          />
-          <IconButton
-            icon="download-outline"
-            accessibilityLabel={t("a11y.downloadFile", { filename })}
-            onPress={handleDownload}
-          />
-        </View>
+  // Same body in both containers — inline inside the 300px cap, fullscreen as
+  // page content. Building it once keeps the sandbox flags from drifting
+  // between the two mounts, since those flags are the security boundary.
+  const body =
+    mode === "preview" ? (
+      <WebView
+        key={text}
+        source={{ html: doc }}
+        style={{
+          flex: 1,
+          backgroundColor: isDarkColorScheme ? "#1f2937" : "#ffffff",
+        }}
+        javaScriptEnabled={false}
+        domStorageEnabled={false}
+        setSupportMultipleWindows={false}
+        originWhitelist={["*"]}
+        overScrollMode="never"
+      />
+    ) : (
+      <View className="px-3 pb-2">
+        <CodeBlock code={text} lang="html" />
       </View>
-      {mode === "preview" ? (
-        <View style={{ height: PREVIEW_HEIGHT_PX }}>
-          <WebView
-            key={text}
-            source={{ html: doc }}
-            style={{
-              flex: 1,
-              backgroundColor: isDarkColorScheme ? "#1f2937" : "#ffffff",
-            }}
-            javaScriptEnabled={false}
-            domStorageEnabled={false}
-            setSupportMultipleWindows={false}
-            originWhitelist={["*"]}
-            overScrollMode="never"
-          />
+    );
+
+  return (
+    <>
+      <View className="bg-card border border-border rounded-lg overflow-hidden">
+        <View className="flex-row items-center justify-between px-3 py-2">
+          <Text className="flex-1 text-xs text-muted-foreground" numberOfLines={1}>
+            {filename}
+          </Text>
+          <View className="flex-row items-center gap-1">
+            <TabButton
+              label={t("richContent.html.preview")}
+              active={mode === "preview"}
+              onPress={() => setMode("preview")}
+            />
+            <TabButton
+              label={t("richContent.html.source")}
+              active={mode === "source"}
+              onPress={() => setMode("source")}
+            />
+            <IconButton
+              icon="download-outline"
+              accessibilityLabel={t("a11y.downloadFile", { filename })}
+              onPress={handleDownload}
+            />
+          </View>
         </View>
-      ) : (
-        <View className="px-3 pb-2">
-          <CodeBlock code={text} lang="html" />
-        </View>
-      )}
-    </View>
+        {mode === "preview" ? (
+          <View style={{ height: PREVIEW_HEIGHT_PX }}>{body}</View>
+        ) : (
+          body
+        )}
+        <Pressable
+          onPress={() => setFullscreen(true)}
+          hitSlop={6}
+          className="border-t border-border px-3 py-1.5"
+          accessibilityRole="button"
+          accessibilityLabel={t("richContent.html.viewFullscreen")}
+        >
+          <Text className="text-xs text-foreground">
+            {t("richContent.html.viewFullscreen")}
+          </Text>
+        </Pressable>
+      </View>
+      <FullscreenPreview
+        visible={fullscreen}
+        onClose={() => setFullscreen(false)}
+        title={filename}
+      >
+        {/* Preview mode fills the shell (the WebView owns its own scrolling).
+            Source mode must not: `CodeBlock` scrolls horizontally only, so a
+            long document would be clipped with no way to reach the rest. It
+            gets a vertical ScrollView here, which is the whole reason the
+            fullscreen view is worth opening on the source tab too. */}
+        {mode === "preview" ? (
+          body
+        ) : (
+          <ScrollView contentContainerClassName="pb-6">{body}</ScrollView>
+        )}
+      </FullscreenPreview>
+    </>
   );
 }
 
