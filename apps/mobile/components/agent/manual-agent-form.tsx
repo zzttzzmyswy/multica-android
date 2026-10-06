@@ -184,19 +184,14 @@ export function ManualAgentForm({
     () => usableRuntimes(runtimes, currentUserId),
     [runtimes, currentUserId],
   );
-  // Edit mode keeps the agent's own runtime selectable even when offline —
-  // the picker list is the online+usable set PLUS the current binding (the
-  // binding must stay honest and re-choosable; an offline runtime is still
-  // the agent's home).
-  const pickerRuntimes = useMemo(() => {
-    if (!isEdit || !agent?.runtime_id || !draft.runtimeId) return usable;
-    if (usable.some((r) => r.id === draft.runtimeId)) return usable;
-    const bound = runtimes.find((r) => r.id === draft.runtimeId);
-    return bound ? [bound, ...usable] : usable;
-  }, [usable, runtimes, isEdit, agent?.runtime_id, draft.runtimeId]);
+  // The picker consumes the FULL runtime list, not `usable` — web does the same
+  // (`use-create-agent-form.ts` hands RuntimePicker `runtimes`, not its own
+  // `usableRuntimes`): a runtime the viewer may not use, or one that is offline,
+  // stays visible and renders locked with its reason. Hiding them is how a member
+  // never learns the machine exists or who to ask. `usable` still decides the
+  // default selection below, and nothing else.
   const selectedRuntime =
-    runtimes.find((r) => r.id === draft.runtimeId) ??
-    (isEdit ? pickerRuntimes.find((r) => r.id === draft.runtimeId) ?? null : null);
+    runtimes.find((r) => r.id === draft.runtimeId) ?? null;
 
   // Live model catalog of the selected runtime (iteration 121, MYS-1032).
   // Only an online runtime is queried — web gates the same way
@@ -630,9 +625,10 @@ export function ManualAgentForm({
         ) : null}
         <RuntimePickerSheet
           visible={runtimePickerOpen}
-          runtimes={pickerRuntimes}
+          runtimes={runtimes}
           loading={runtimesLoading}
           selectedId={draft.runtimeId}
+          currentUserId={currentUserId}
           onPick={(runtime) => handleRuntimePick(runtime.id)}
           onClose={() => setRuntimePickerOpen(false)}
         />

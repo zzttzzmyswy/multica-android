@@ -289,11 +289,16 @@ export default function AiBuilderSetupPage() {
         </View>
       </ScrollView>
 
+      {/* `usable` is already the usable set, so the sheet must open on "all":
+          defaulting to "mine" would hide the public runtimes of other members
+          that this page has always offered. */}
       <RuntimePickerSheet
         visible={runtimePickerOpen}
         runtimes={usable}
         loading={runtimesLoading}
         selectedId={runtimeId}
+        currentUserId={currentUserId}
+        defaultFilter="all"
         onPick={(runtime: RuntimeDevice) => setRuntimeId(runtime.id)}
         onClose={() => setRuntimePickerOpen(false)}
       />
