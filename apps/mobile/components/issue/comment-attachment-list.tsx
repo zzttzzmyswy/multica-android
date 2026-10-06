@@ -2,7 +2,7 @@
  * Standalone attachment list for comment cards.
  *
  * Mirrors the design of web's `AttachmentList` in
- * `packages/views/issues/components/comment-card.tsx:121-159` — renders
+ * `packages/views/issues/components/comment-card.tsx:174-215` — renders
  * any attachment whose URL the markdown content didn't already reference,
  * with same-file dedup so a duplicate upload referenced inline doesn't
  * also appear below.
@@ -16,25 +16,38 @@
  * inline on both clients via `MarkdownImage`, and this list returns null
  * because there's nothing "leftover" to show.
  *
- * For v1 we render images via the same `MarkdownImage` used by inline
- * markdown rendering (consistent aspect-ratio + lightbox behavior). Non-
- * image attachments render as a tappable file card showing 📎 + filename
- * + size hint, opening the canonical download URL on tap.
+ * Dispatch mirrors web's `getPreviewKind` order (see `lib/attachment-kind`),
+ * which is what makes the two clients agree on what an attachment *is*:
+ *
+ *   - `image`    → `MarkdownImage`, so standalone and inline images share one
+ *                  aspect-ratio + lightbox implementation.
+ *   - `html`     → `HtmlAttachmentPreview` (198).
+ *   - `markdown` / `text` → `TextAttachmentPreview` — the body is text and the
+ *                  `/content` proxy already serves it, so it renders inline
+ *                  instead of hiding behind a download.
+ *   - `pdf` / `video` / `audio` / `file` → `FileCard`, which downloads with the
+ *                  session auth and hands the file to the system handler. Not
+ *                  a compromise: Android's WebView has no PDF plugin, and an
+ *                  HTML5 media element's sub-request carries no Authorization
+ *                  header (measured — `/download` 401s without one), so no
+ *                  inline renderer exists for these without a new dependency.
+ *                  The system player is also the better phone experience.
+ *
+ * `lib/attachment-action-parity.test.ts` pins that every kind declared in
+ * `ATTACHMENT_KINDS` has a branch here *and* a user-reachable exit on its
+ * renderer, so a new kind cannot be added as a dead-end.
  */
 import { useMemo } from "react";
-import { Alert, Pressable, View } from "react-native";
-import Ionicons from "@expo/vector-icons/Ionicons";
+import { View } from "react-native";
 import type { Attachment } from "@multica/core/types";
 import { standaloneAttachments } from "@/lib/attachment-dedup";
 import { attachmentKind } from "@/lib/attachment-kind";
 import { HtmlAttachmentPreview } from "@/components/rich-content/html-attachment";
+import { TextAttachmentPreview } from "@/components/rich-content/text-attachment";
+import { FileCard } from "@/components/issue/attachment-file-card";
 import { MarkdownImage } from "@/lib/markdown/markdown-image";
-import { resolveAttachmentUrl } from "@/lib/attachment-url";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
-import { Text } from "@/components/ui/text";
-import { useTranslation } from "@/lib/i18n/react";
-import { downloadAttachmentAndOpen } from "@/lib/download-attachment";
 import type { DownloadSource } from "@/lib/download-store";
 
 interface Props {
@@ -95,10 +108,25 @@ export function CommentAttachmentList({ attachments, content, source }: Props) {
             />
           );
         }
+        if (kind === "markdown" || kind === "text") {
+          return (
+            <TextAttachmentPreview
+              key={attachment.id}
+              attachmentId={attachment.id}
+              filename={attachment.filename}
+              downloadUrl={attachment.download_url}
+              contentType={attachment.content_type}
+              kind={kind}
+              source={source}
+            />
+          );
+        }
+        // pdf / video / audio / file — one card, distinct glyph per kind.
         return (
           <FileCard
             key={attachment.id}
             attachment={attachment}
+            kind={kind}
             theme={theme}
             source={source}
           />
@@ -108,77 +136,3 @@ export function CommentAttachmentList({ attachments, content, source }: Props) {
   );
 }
 
-function FileCard({
-  attachment,
-  theme,
-  source,
-}: {
-  attachment: Attachment;
-  theme: typeof THEME["light"];
-  source?: DownloadSource;
-}) {
-  const sizeLabel = formatBytes(attachment.size_bytes);
-  const { t } = useTranslation();
-  return (
-    <Pressable
-      onPress={() => {
-        // MYS-270: opening `download_url` in the external browser sent no
-        // `Authorization` header, so the server rejected it with "missing
-        // authorization". Download in-app with the session auth (the request
-        // carries the Bearer header), then open the saved file via the system
-        // handler sheet. `content_type` from the server is the share hint; an
-        // absolute CloudFront URL was already usable via `Linking`, but going
-        // through our authenticated path keeps every storage mode working.
-        const target = resolveAttachmentUrl(attachment.download_url);
-        if (!target) return;
-        void downloadAttachmentAndOpen(
-          target,
-          attachment.filename,
-          attachment.content_type,
-          source,
-        ).catch(() => {
-          Alert.alert(t("download.failedTitle"), t("download.failedMessage"));
-        });
-      }}
-      accessibilityRole="button"
-      accessibilityLabel={t("a11y.openFile", { filename: attachment.filename })}
-      className="flex-row items-center gap-2 px-3 py-2 rounded-md bg-secondary/60 active:opacity-80"
-    >
-      <Ionicons
-        name="document-outline"
-        size={20}
-        color={theme.mutedForeground}
-      />
-      <View className="flex-1">
-        <Text
-          className="text-sm text-foreground"
-          numberOfLines={1}
-        >
-          {attachment.filename}
-        </Text>
-        {sizeLabel ? (
-          <Text className="text-xs text-muted-foreground">{sizeLabel}</Text>
-        ) : null}
-      </View>
-      <Ionicons
-        name="download-outline"
-        size={18}
-        color={theme.mutedForeground}
-      />
-    </Pressable>
-  );
-}
-
-function formatBytes(bytes: number): string | null {
-  if (!bytes || bytes <= 0) return null;
-  const units = ["B", "KB", "MB", "GB"];
-  let value = bytes;
-  let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex++;
-  }
-  const formatted =
-    value < 10 ? value.toFixed(1) : Math.round(value).toString();
-  return `${formatted} ${units[unitIndex]}`;
-}

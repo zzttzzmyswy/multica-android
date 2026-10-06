@@ -3532,5 +3532,11 @@
   "autopilots.notFound": "This autopilot doesn't exist or was deleted",
   "squads.notFound": "This squad doesn't exist or was deleted",
   "members.notFound": "This member doesn't exist or has left the workspace",
-  "mcp.notFound": "This MCP server doesn't exist or was deleted"
+  "mcp.notFound": "This MCP server doesn't exist or was deleted",
+  "richContent.attachment.previewLoading": "Loading preview…",
+  "richContent.attachment.loadFailed": "Couldn't load the preview — use download",
+  "richContent.attachment.tooLarge": "File too large for inline preview — use download",
+  "richContent.attachment.unsupported": "This file type can't be previewed — use download",
+  "richContent.attachment.retry": "Retry",
+  "richContent.attachment.download": "Download"
 }
