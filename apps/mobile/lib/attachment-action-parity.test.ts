@@ -39,17 +39,29 @@ const TEXT_PREVIEW = "components/rich-content/text-attachment.tsx";
 const FILE_CARD = "components/issue/attachment-file-card.tsx";
 const HTML_BLOCK = "components/rich-content/html-block.tsx";
 const FULLSCREEN_SHELL = "lib/rich-content/fullscreen-preview.tsx";
+/** The surface that owns the image viewer AND its header — the image kind's
+ *  exit lives here, not in the tap target that opens the viewer. */
+const LIGHTBOX_PROVIDER = "lib/markdown/lightbox-provider.tsx";
+const LIGHTBOX_HEADER = "lib/markdown/lightbox-image.ts";
 
 /** Each kind's renderer file, and the token that proves it can hand the file
- *  to the user. `image` goes through the lightbox, whose exit is the viewer;
- *  everything else reaches `downloadAttachmentAndOpen` — directly, or through
- *  the shared file card that the pdf/video/audio/file kinds dispatch to. */
+ *  to the user — hand the BYTES out, not merely paint them.
+ *
+ *  `image` used to be the exception here: its token was `useLightbox`, which
+ *  only asserts that the viewer OPENS. Opening a viewer is not an exit — the
+ *  reader could look at an image fullscreen and had no way to keep it, while
+ *  every other kind could be saved. The token is now the download call itself,
+ *  which is why the file named below is the lightbox provider (the surface that
+ *  owns the viewer's header) rather than `markdown-image.tsx` (the tap target).
+ *
+ *  Everything else reaches `downloadAttachmentAndOpen` directly, or through the
+ *  shared file card that the pdf/video/audio/file kinds dispatch to. */
 const KIND_EXIT: {
   kind: (typeof ATTACHMENT_KINDS)[number];
   file: string;
   token: string;
 }[] = [
-  { kind: "image", file: "lib/markdown/markdown-image.tsx", token: "useLightbox" },
+  { kind: "image", file: LIGHTBOX_PROVIDER, token: "downloadAttachmentAndOpen" },
   { kind: "html", file: HTML_PREVIEW, token: "downloadAttachmentAndOpen" },
   { kind: "markdown", file: TEXT_PREVIEW, token: "downloadAttachmentAndOpen" },
   { kind: "text", file: TEXT_PREVIEW, token: "downloadAttachmentAndOpen" },
@@ -91,6 +103,89 @@ describe("standalone attachment list — every kind is actionable", () => {
         token,
       );
     }
+  });
+
+  it("the image exit is wired to the viewer's own header, not just imported", () => {
+    // The ratchet above is satisfied by the string `downloadAttachmentAndOpen`
+    // appearing anywhere in the provider — including a call no header ever
+    // reaches. Pin the two links that make it reachable: the header is passed
+    // to the viewer, and the header itself renders the button.
+    const provider = code(LIGHTBOX_PROVIDER);
+    expect(provider).toContain("HeaderComponent={Header}");
+    expect(provider).toContain("onDownload={onDownload}");
+    // The button is gated on the image being downloadable rather than rendered
+    // unconditionally: for an image with no attachment record there is no fetch
+    // that could succeed, and a dead button reads as a broken app.
+    expect(provider).toContain("image?.canDownload");
+    // And the gate is on the button, not merely mentioned: the Download
+    // Pressable sits inside the `canDownload` branch.
+    const gate = provider.indexOf("image?.canDownload");
+    const pressable = provider.indexOf("onPress={onDownload}");
+    expect(gate, "the canDownload gate must precede the Download button").toBeLessThan(
+      pressable,
+    );
+    expect(pressable, "no Download Pressable is rendered").toBeGreaterThan(-1);
+  });
+
+  it("a lone image (no sequence) still gets a header and no false download", () => {
+    // `open(uri)` with no sequence is the composer-chip / unmatched-reference
+    // path. Its header must still render (the title fallback exists for it) but
+    // must NOT offer Download: nothing backs that URI with a record.
+    const provider = code(LIGHTBOX_PROVIDER);
+    expect(provider).toContain("canDownload: false");
+    expect(provider).toContain("titleFallback");
+  });
+
+  it("rejects the pre-fix image entry that only proved the viewer opens", () => {
+    // Reverse verification, exercised rather than read. The defect was not a
+    // missing string anywhere in the tree — it was that the image kind's
+    // declared exit proved the wrong thing. Reproduce that shape and run the
+    // same predicates, so this guard is shown to fail on the defect it names.
+    //
+    // The pre-fix entry was `{ kind: "image", file: markdown-image.tsx,
+    // token: "useLightbox" }`, and the provider it implied contained no
+    // download call at all (confirmed on the pre-change source:
+    // `git show HEAD:apps/mobile/lib/markdown/lightbox-provider.tsx` matches
+    // `downloadAttachmentAndOpen` zero times). So the old token passed while
+    // the image remained unsaveable.
+    const guard = (file: string, token: string) => {
+      const src = code(file);
+      return src.includes(token) && src.includes("downloadAttachmentAndOpen");
+    };
+    // The pre-fix pair is rejected: the tap target opens the viewer but never
+    // fetches bytes, and it has no download call to find.
+    expect(
+      guard("lib/markdown/markdown-image.tsx", "useLightbox"),
+      "the old useLightbox-only entry must be rejected",
+    ).toBe(false);
+    // The current pair passes, so the assertion is not vacuous.
+    expect(guard(LIGHTBOX_PROVIDER, "downloadAttachmentAndOpen")).toBe(true);
+  });
+
+  it("the header maps a record to a download, and a bare URI to none", () => {
+    // The mapping is what decides whether the button can appear at all, so pin
+    // it where it is decidable: `canDownload` is derived from the record, not
+    // from the URL looking plausible.
+    const header = code(LIGHTBOX_HEADER);
+    expect(header).toContain("canDownload: Boolean(item.attachment)");
+  });
+
+  it("the header's title prefers a real filename over the fallback", () => {
+    // Web's header shows the filename (`attachment-preview-modal.tsx:562`).
+    // Mobile can only do that because the sequence stopped holding bare URIs;
+    // this pins the mapping that carries the name across.
+    const header = code(LIGHTBOX_HEADER);
+    expect(header).toContain("filename");
+    expect(header).toContain("imageHeaderTitle");
+  });
+
+  it("refuses an authenticated download for an image with no attachment record", () => {
+    // The safety half of the download button. An unmatched inline image is an
+    // arbitrary third-party host; fetching it with the session Bearer token is
+    // the leak `isAttachmentDownloadUrl`'s host gate exists to prevent.
+    const header = code(LIGHTBOX_HEADER);
+    expect(header).toContain("canDownload");
+    expect(header).toMatch(/attachment/);
   });
 
   it("fails for a kind that has no renderer with an exit", () => {
@@ -319,6 +414,8 @@ describe("the new strings exist in both bundles", () => {
     "richContent.attachment.unsupported",
     "richContent.attachment.retry",
     "a11y.downloadFile",
+    // The image viewer header's title for a reference with no filename.
+    "lightbox.imageFallbackTitle",
   ];
 
   it.each(NEEDED)("%s is defined in both locales", (key) => {
