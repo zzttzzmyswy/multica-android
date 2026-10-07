@@ -32,6 +32,7 @@ import { attributionShouldRender } from "@/lib/task-attribution";
 import { formatDateTime } from "@/lib/autopilot-format";
 import { formatTokens } from "@/lib/usage-format";
 import { formatUsd } from "@/lib/task-usage";
+import { useCustomPricingStore } from "@/lib/custom-pricing-store";
 import {
   buildRunDetailRows,
   buildUsageDetailRows,
@@ -149,9 +150,15 @@ export function RunTranscriptDialog({
   // activity tab both the chip and the block are simply absent — never a
   // zeroed figure, which would claim the run was free
   // (packages/core/types/agent.ts:390-406).
+  //
+  // `pricings` is a dependency, not a read: `summarizeTaskUsage` prices
+  // through the custom-rate store imperatively, so without the subscription a
+  // rate saved elsewhere never reaches this figure (web agent-transcript-dialog
+  // subscribes for exactly this reason).
+  const pricings = useCustomPricingStore((s) => s.pricings);
   const usage = useMemo(
     () => transcriptUsageSummary(task?.usage),
-    [task?.usage],
+    [task?.usage, pricings],
   );
 
   // The runtime behind this run, resolved from the cached list.

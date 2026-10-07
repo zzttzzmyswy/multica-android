@@ -4,9 +4,11 @@
  * (summarizeTaskUsage / estimateCost / formatUsd) so a run costs the same
  * number on both clients — one cost formula in the product.
  *
+ * Like web's module this consults the custom-pricing override store after the
+ * rate table, so a rate the user entered on the runtime usage page prices the
+ * same run on the issue detail page too.
+ *
  * Deliberate deviations from the web module, each noted at its site:
- *  - no custom-pricing store (web's custom-pricing-store is not ported; the
- *    runs sheet is display-only this round)
  *  - `TaskUsage` rows carry no `uncosted_*` split, so `estimateCost` treats a
  *    row as all-or-nothing: provider-reported cost wins whole, otherwise the
  *    whole row is priced from the table (matches web's `uncostedTokens`
@@ -17,6 +19,7 @@
  * Hermes note in `lib/usage-format.ts`.
  */
 import type { TaskUsage } from "@multica/core/types";
+import { getCustomPricing } from "./custom-pricing-store";
 
 /** Collapsed usage for one agent run, or for a set of runs. */
 export interface TaskUsageSummary {
@@ -285,7 +288,9 @@ const MODEL_PRICING: Record<string, ModelPrice> = {
 // Pricing resolution — faithful subset of web's resolvePricing: the lookup
 // candidates in web order (raw → provider-stripped → claude dot↔dash →
 // context-tag stripped → each date-stripped), provider-qualified keys tried
-// first. Custom-pricing overrides are not ported (see header note).
+// first, then the same candidate list against the user's custom-pricing
+// overrides (lib/custom-pricing-store.ts) — the rate table stays authoritative,
+// exactly as web's resolvePricing orders them.
 // ---------------------------------------------------------------------------
 
 function resolvePricing(model: string, provider?: string): ModelPrice | undefined {
@@ -293,6 +298,10 @@ function resolvePricing(model: string, provider?: string): ModelPrice | undefine
   const candidates = pricingCandidates(model, provider);
   for (const candidate of candidates) {
     const hit = MODEL_PRICING[candidate];
+    if (hit) return hit;
+  }
+  for (const candidate of candidates) {
+    const hit = getCustomPricing(candidate);
     if (hit) return hit;
   }
   return undefined;
