@@ -139,6 +139,13 @@ interface Props {
    *  `highlightCommentId` but a fresh nonce, which re-triggers the
    *  scroll-and-flash effect (without this, identical props short-circuit). */
   highlightNonce?: string;
+  /** Thread-navigator jump target (a top-level comment id). Distinct from
+   *  `highlightCommentId`, which deep-links from inbox and deliberately lands
+   *  at the BOTTOM with MVCP; a navigator jump must land ON the thread, so it
+   *  scrolls by index instead. */
+  jumpToThreadId?: string;
+  /** Per-jump nonce — re-picking the same thread re-fires the scroll. */
+  jumpNonce?: string;
 }
 
 /** How long the flash stays "claimed" before we let a new highlight take
@@ -147,6 +154,12 @@ interface Props {
  *  to land at the bottom, realise the target is an older comment, and
  *  scroll up to it — the overlay still fires when the row mounts. */
 const HIGHLIGHT_HOLD_MS = 5000;
+
+/** Flash length after a thread-navigator jump. Shorter than the deep-link's
+ *  hold: the jump lands the row in view immediately, so the flash only has to
+ *  confirm which row it was — not keep a target alive while the reader scrolls
+ *  a long way to reach it. Web's `jumpToThread` uses 2s for the same reason. */
+const JUMP_HIGHLIGHT_HOLD_MS = 2000;
 
 /** Sentinel id for the "New since last view" divider row injected into the
  *  FlatList data. Picked because it can never collide with a real comment
@@ -163,6 +176,8 @@ export function TimelineList({
   wsSlug,
   highlightCommentId,
   highlightNonce,
+  jumpToThreadId,
+  jumpNonce,
 }: Props) {
   const { t } = useTranslation();
   // Top-level selection subscription gates the outer "tap-outside-to-dismiss"
@@ -353,6 +368,39 @@ export function TimelineList({
     };
     return [...data.slice(0, anchorIdx), divider, ...data.slice(anchorIdx)];
   }, [data, dividerAnchorId]);
+
+  // ── Thread-navigator jump ─────────────────────────────────────────────
+  // Land the picked thread's row at the top of the viewport, then flash it
+  // through the SAME `highlightedId` channel the inbox deep-link uses — one
+  // "this is the row you asked for" affordance, not two.
+  //
+  // `scrollToIndex` rather than the deep-link's `startRenderingFromBottom`:
+  // a deep-link wants the end of the document, a navigator jump wants one
+  // specific row (web `jumpToThread` reads the same way). FlashList's index
+  // is into `dataWithDivider`, so resolve it against that array, header
+  // offset included — the underlying call handles ListHeaderComponent.
+  const lastJumpRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!jumpToThreadId || dataWithDivider.length === 0) return;
+    const stamp = `${jumpToThreadId}:${jumpNonce ?? ""}`;
+    if (lastJumpRef.current === stamp) return;
+    lastJumpRef.current = stamp;
+
+    const index = dataWithDivider.findIndex(
+      (row) => row.entry.id === jumpToThreadId,
+    );
+    if (index < 0) return;
+
+    // The promise rejects when the index cannot be resolved yet (FlashList
+    // still measuring); swallowing it is right here — the row is on screen
+    // either way, and the flash below still marks it.
+    listRef.current
+      ?.scrollToIndex({ index, animated: true, viewPosition: 0 })
+      .catch(() => {});
+    setHighlightedId(jumpToThreadId);
+    const fade = setTimeout(() => setHighlightedId(null), JUMP_HIGHLIGHT_HOLD_MS);
+    return () => clearTimeout(fade);
+  }, [jumpToThreadId, jumpNonce, dataWithDivider]);
 
   // Mark "scrolled past" once the divider row leaves the viewport — used
   // by the unmount effect below to decide whether to bump last-viewed.

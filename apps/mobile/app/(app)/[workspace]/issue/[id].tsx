@@ -10,7 +10,7 @@
  * Stack.Screen with title "Issue". We override that here once the data
  * lands so the navigation bar shows `MUL-123` (Linear-style).
  */
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -51,6 +51,7 @@ import { ActionSheet } from "@/lib/action-sheet";
 import { useViewedIssuesStore } from "@/data/viewed-issues-store";
 import { useCommentSelectStore } from "@/data/comment-select-store";
 import { useReplyTargetStore } from "@/data/stores/reply-target-store";
+import { ThreadNavSheet } from "@/components/issue/thread-nav-sheet";
 import { useTranslation } from "@/lib/i18n/react";
 
 export default function IssueDetail() {
@@ -74,6 +75,18 @@ export default function IssueDetail() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const qc = useQueryClient();
   const { t } = useTranslation();
+
+  // Thread navigator. The target id rides with a nonce because picking the
+  // same thread twice must re-fire the scroll — same reason the inbox
+  // deep-link carries `h`.
+  const [threadNavOpen, setThreadNavOpen] = useState(false);
+  const [jumpTarget, setJumpTarget] = useState<{
+    id: string;
+    nonce: string;
+  } | null>(null);
+  const onJumpToThread = useCallback((threadId: string) => {
+    setJumpTarget({ id: threadId, nonce: String(Date.now()) });
+  }, []);
 
   const detail = useQuery(issueDetailOptions(wsId, id));
   const timeline = useQuery(issueTimelineOptions(wsId, id));
@@ -279,6 +292,16 @@ export default function IssueDetail() {
           headerRight: issue
             ? () => (
                 <View className="flex-row items-center gap-2">
+                  {/* Thread navigator — leftmost of the header actions, the
+                   *  same position web gives it, because it navigates the
+                   *  document while everything to its right acts on the
+                   *  issue. Web hides it on mobile (its own comment says the
+                   *  panel "needs a sheet"); this button is that sheet. */}
+                  <IconButton
+                    name="list-outline"
+                    onPress={() => setThreadNavOpen(true)}
+                    accessibilityLabel={t("threadNav.open")}
+                  />
                   {/* Inbox-origin archive toggle. Archive (main view) vs
                    *  Unarchive (archived view), mirroring web's inbox detail
                    *  panel; hidden for every other entry point into the issue.
@@ -338,6 +361,8 @@ export default function IssueDetail() {
             onRefresh={onRefresh}
             highlightCommentId={highlight}
             highlightNonce={h}
+            jumpToThreadId={jumpTarget?.id}
+            jumpNonce={jumpTarget?.nonce}
             subIssues={children.data}
             wsSlug={wsSlug}
           />
@@ -351,6 +376,15 @@ export default function IssueDetail() {
           <InlineCommentComposer issueId={id} />
         </View>
       )}
+      {/* Thread navigator sheet. Outside the content branch so an empty
+          timeline still opens it and says "no threads" rather than leaving the
+          header button inert. */}
+      <ThreadNavSheet
+        visible={threadNavOpen}
+        onClose={() => setThreadNavOpen(false)}
+        entries={timeline.data}
+        onJump={onJumpToThread}
+      />
     </View>
   );
 }
