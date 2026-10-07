@@ -133,7 +133,11 @@ describe("picker name search is pinyin-aware", () => {
     // asserts the count rather than mere presence.
     const src = code("components/issue/pickers/filter-picker-bodies.tsx");
     const calls = src.match(/matchesNameOrPinyin\(/g) ?? [];
-    expect(calls).toHaveLength(3); // member + agent + squad
+    // member + agent + squad in FilterActorPickerBody, plus the member rows the
+    // actor-property filter body lists (iter207) — actor property filters are
+    // member lookups too, and a Chinese name must stay reachable by pinyin
+    // there exactly as it is in every other member list.
+    expect(calls).toHaveLength(4);
     const legacyCalls = src.match(/toLowerCase\(\)\.includes\(q\)/g) ?? [];
     expect(legacyCalls).toHaveLength(1); // the project section's, mirroring web
   });

@@ -45,6 +45,7 @@ import { isPastDateOnly } from "@multica/core/issues/date";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { useActorProfileStore } from "@/data/stores/actor-profile-store";
+import { useActorLookup } from "@/data/use-actor-name";
 import { PriorityIcon } from "@/components/ui/priority-icon";
 import { useStatusLabel } from "@/lib/status-options";
 import { translate } from "@/lib/i18n";
@@ -162,6 +163,9 @@ export function BoardCard({
   // The catalog is workspace-scoped, not per-surface, so one shared cache
   // entry serves every card on every board.
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  // Actor-valued chips resolve their names through the workspace directory —
+  // an actor chip must never print the raw `member:<uuid>` reference.
+  const { getName } = useActorLookup();
   // Custom-property chips — web's `cardPropertyIds` dimension
   // (board-card.tsx:64-72). The catalog is the ACTIVE definitions, which is
   // what web's board card queries (`propertyListOptions(cardWsId)`,
@@ -256,7 +260,7 @@ export function BoardCard({
       {customEntries && customEntries.shown.length > 0 ? (
         <View className="mt-1.5 flex-row flex-wrap gap-1">
           {customEntries.shown.map(({ property, display }) => {
-            const chip = cardPropertyChip(display, translate);
+            const chip = cardPropertyChip(display, translate, getName);
             return (
               <View
                 key={property.id}

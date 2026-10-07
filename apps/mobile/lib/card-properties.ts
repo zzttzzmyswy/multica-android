@@ -89,9 +89,21 @@ export interface CardPropertyChip {
   text: string;
   /** Present for select / multi_select — the option's own color. */
   color?: string;
-  /** Options folded away on a multi_select chip, for a "+N" suffix. */
+  /** Entries folded away on a multi_select / multi_actor chip, for a "+N"
+   *  suffix. */
   rest?: number;
 }
+
+/**
+ * Resolves one actor reference to its display name. Callers that can render
+ * actor chips MUST pass this: without it an actor chip would print the
+ * `member:<uuid>` reference, which is the exact defect these branches exist
+ * to remove.
+ */
+export type ActorNameResolver = (
+  type: "member" | "agent" | "squad" | null | undefined,
+  id: string | null | undefined,
+) => string;
 
 /**
  * Fold a resolved display into the single chip a phone-height card can draw.
@@ -110,6 +122,10 @@ export interface CardPropertyChip {
 export function cardPropertyChip(
   display: PropertyValueDisplay,
   t: (key: string) => string,
+  /** Names actor references. Required, not optional: an actor chip with no
+   *  resolver would print `member:<uuid>`, which is the defect these branches
+   *  exist to remove — so the compiler should refuse the call site. */
+  getName: ActorNameResolver,
 ): CardPropertyChip {
   switch (display.kind) {
     case "option":
@@ -124,6 +140,20 @@ export function cardPropertyChip(
       return { text: t(display.value ? "properties.value.true" : "properties.value.false") };
     case "date":
       return { text: display.text };
+    case "actors": {
+      // Fold like multi_select: a card chip is one line. The names come from
+      // the member directory, never from the raw `member:<uuid>` reference.
+      const name = (i: number) =>
+        getName(display.refs[i].kind, display.refs[i].id);
+      return {
+        text: name(0),
+        ...(display.refs.length > 1 ? { rest: display.refs.length - 1 } : {}),
+      };
+    }
+    case "unknownActors":
+      // Not "empty": the field holds a value this build cannot read, and a
+      // blank chip would misreport that as unset.
+      return { text: t("properties.value.unknown") };
     default:
       return { text: display.text };
   }

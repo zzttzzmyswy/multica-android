@@ -10,9 +10,11 @@
  *   multi_select  → one mini chip per resolved option (colored dot + name)
  *   checkbox      → check/close glyph + yes/no
  *   date          → calendar glyph + formatted day
+ *   actor/multi_actor → avatar + resolved member name per reference
  *   text/number/url → type glyph + raw text
  * A value whose option id vanished from the definition (option deleted)
- * drops out instead of rendering a raw UUID.
+ * drops out instead of rendering a raw UUID — and, for the same reason, an
+ * actor reference is never printed as its `member:<uuid>` string.
  *
  * Tapping a chip opens the value editor formSheet
  * (issue/[id]/picker/property); a "+" chip opens the add-property list
@@ -26,9 +28,11 @@ import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Issue } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
+import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { AttributeChip } from "./attribute-chip";
 import { propertyCatalogOptions } from "@/data/queries/properties";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { useActorLookup } from "@/data/use-actor-name";
 import {
   formatPropertyValue,
   propertyTypeIcon,
@@ -39,6 +43,7 @@ export function CustomPropertyRow({ issue }: { issue: Issue }) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { t } = useTranslation();
+  const { getName } = useActorLookup();
   const { data: catalog } = useQuery(propertyCatalogOptions(wsId));
 
   const { entries, addableCount } = useMemo(() => {
@@ -109,6 +114,40 @@ export function CustomPropertyRow({ issue }: { issue: Issue }) {
                   />
                 ))}
               </View>
+            );
+          case "actors":
+            return (
+              <AttributeChip
+                key={property.id}
+                // Web renders each actor reference as avatar + name
+                // (ActorPropertyDisplay). The chip has room for one leading
+                // glyph, so the avatar stands in for the reference itself —
+                // never the raw `member:<uuid>` string.
+                icon={
+                  <ActorAvatar
+                    type={display.refs[0].kind}
+                    id={display.refs[0].id}
+                    size={14}
+                  />
+                }
+                label={display.refs
+                  .map((ref) => getName(ref.kind, ref.id))
+                  .join(", ")}
+                onPress={() => openEditor(property.id)}
+              />
+            );
+          case "unknownActors":
+            // A value set by a newer server, holding only kinds this build
+            // cannot resolve. Calling it "empty" would invite the user to
+            // overwrite a value they were never shown (web's unknown_value).
+            return (
+              <AttributeChip
+                key={property.id}
+                icon={<Ionicons name="help-circle-outline" size={13} />}
+                label={t("properties.value.unknown")}
+                variant="dimmed"
+                onPress={() => openEditor(property.id)}
+              />
             );
           case "checkbox":
             return (

@@ -93,8 +93,19 @@ export type { InboxItem, InboxSeverity, InboxItemType, InboxWorkspaceUnread } fr
 export type { NotificationGroupKey, NotificationGroupValue, NotificationPreferences, NotificationPreferenceResponse } from "./notification-preference";
 export type { Comment, CommentType, CommentAuthorType, CommentTriggerPreview, CommentTriggerPreviewAgent, CommentTriggerSource, CommentTriggerOutcome, CommentTriggerStatus, Reaction } from "./comment";
 export type { Label, LabelResourceType, CreateLabelRequest, UpdateLabelRequest, ListLabelsResponse, IssueLabelsResponse, ResourceLabelsResponse } from "./label";
-export type { IssueProperty, IssuePropertyType, IssuePropertyOption, IssuePropertyConfig, IssuePropertyValue, IssuePropertyValues, CreatePropertyRequest, UpdatePropertyRequest, ListPropertiesResponse, IssuePropertiesResponse } from "./property";
-export { ISSUE_PROPERTY_TYPES, isKnownPropertyType } from "./property";
+export type { IssueProperty, IssuePropertyType, IssuePropertyOption, IssuePropertyConfig, IssuePropertyValue, IssuePropertyValues, IssuePropertyActorRef, IssuePropertyActorKind, CreatePropertyRequest, UpdatePropertyRequest, ListPropertiesResponse, IssuePropertiesResponse } from "./property";
+export {
+  ISSUE_PROPERTY_TYPES,
+  ISSUE_PROPERTY_ACTOR_KINDS,
+  MAX_ISSUE_PROPERTY_ACTOR_VALUES,
+  isKnownPropertyType,
+  isActorPropertyType,
+  formatActorRef,
+  parseActorRef,
+  actorRefValuesFromValue,
+  actorRefsFromValue,
+  hasUnknownActorRef,
+} from "./property";
 export type {
   QuickAction,
   QuickActionVisibility,

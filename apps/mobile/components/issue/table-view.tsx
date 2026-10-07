@@ -66,6 +66,7 @@ import { ISSUE_DATE_SHORT, formatIssueDate } from "@/lib/format-date";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { AvatarStack } from "@/components/ui/avatar-stack";
 import { ProjectIcon } from "@/components/ui/project-icon";
 import { PriorityIcon } from "@/components/ui/priority-icon";
 import { StatusIcon } from "@/components/ui/status-icon";
@@ -1529,7 +1530,14 @@ function DataCell({
       const propertyId = propertyIdFromTableColumn(column);
       if (!propertyId) return null;
       const property = properties.find((p) => p.id === propertyId);
-      return <PropertyCell issue={issue} property={property} t={t} />;
+      return (
+        <PropertyCell
+          issue={issue}
+          property={property}
+          getName={getName}
+          t={t}
+        />
+      );
     }
   }
 }
@@ -1570,10 +1578,15 @@ function InstantCell({ value }: { value: string }) {
 function PropertyCell({
   issue,
   property,
+  getName,
   t,
 }: {
   issue: Issue;
   property: IssueProperty | undefined;
+  getName: (
+    type: "member" | "agent" | "squad" | null | undefined,
+    id: string | null | undefined,
+  ) => string;
   t: Translate;
 }) {
   const { colorScheme } = useColorScheme();
@@ -1618,6 +1631,25 @@ function PropertyCell({
             </Text>
           ) : null}
         </View>
+      );
+    case "actors":
+      return (
+        <View className="flex-row items-center gap-1.5">
+          <AvatarStack
+            actors={display.refs.map((ref) => ({ type: ref.kind, id: ref.id }))}
+            max={2}
+            size={16}
+          />
+          <Text className="text-xs text-foreground" numberOfLines={1}>
+            {display.refs.map((ref) => getName(ref.kind, ref.id)).join(", ")}
+          </Text>
+        </View>
+      );
+    case "unknownActors":
+      return (
+        <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+          {t("properties.value.unknown")}
+        </Text>
       );
     case "checkbox":
       return (

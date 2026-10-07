@@ -34,6 +34,7 @@ import type {
   Project,
   Squad,
 } from "@multica/core/types";
+import { isActorPropertyType } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { ProjectIcon } from "@/components/ui/project-icon";
@@ -45,8 +46,10 @@ import { squadListOptions } from "@/data/queries/squads";
 import { projectListOptions } from "@/data/queries/projects";
 import { labelListOptions } from "@/data/queries/labels";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { useAuthStore } from "@/data/auth-store";
 import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
 import { matchesNameOrPinyin } from "@/lib/name-search";
+import { propertyFilterOptions } from "@/lib/filter-issues";
 import type { ActorFilterValue } from "@/data/stores/issue-filter-slice";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -411,7 +414,9 @@ export function FilterLabelPickerBody({
  * Multi-select one custom-property definition's options (web
  * `PropertyFilterOptions` in issues-header.tsx). Checkbox definitions expose
  * the "true"/"false" pseudo-options with Yes/No labels; select and
- * multi_select list the definition's option catalog. OR within the
+ * multi_select list the definition's option catalog; actor / multi_actor list
+ * the workspace member directory, with the signed-in user first and the value
+ * being the `member:<user_id>` reference the server filters on. OR within the
  * definition — every toggle keeps this sheet open.
  */
 export function FilterPropertyPickerBody({
@@ -425,6 +430,15 @@ export function FilterPropertyPickerBody({
 }) {
   const { t } = useTranslation();
   const checkColor = useCheckColor();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const currentUserId = useAuthStore((s) => s.user?.id);
+  const [query, setQuery] = useState("");
+  const actorProperty = isActorPropertyType(property.type);
+  // Four-state read: an actor property with a failed member directory must
+  // name that failure, not claim the definition has no selectable values.
+  const membersRead = catalogRead(
+    useQuery({ ...memberListOptions(wsId), enabled: actorProperty }),
+  );
 
   const options = useMemo((): FilterPropertyOption[] => {
     if (property.type === "checkbox") {
@@ -433,18 +447,40 @@ export function FilterPropertyPickerBody({
         { id: "false", name: t("filter.propertyFalse"), color: undefined },
       ];
     }
-    return (property.config.options ?? []).map((option) => ({
-      id: option.id,
-      name: option.name,
-      color: option.color,
-    }));
-  }, [property, t]);
+    // The candidate set (option ids, or `member:<user_id>` refs for the actor
+    // types) is resolved by a pure helper so the actor branch is unit-tested
+    // rather than merely string-matched — see `propertyFilterOptions`.
+    return propertyFilterOptions({
+      type: property.type,
+      options: property.config.options ?? [],
+      members: membersRead.items,
+      currentUserId,
+    });
+  }, [property, t, membersRead.items, currentUserId]);
+
+  // Members are searched by name or pinyin, matching every other member list
+  // on mobile; option lists stay untitled-filtered as before.
+  const rows = useMemo(() => {
+    if (!actorProperty) return options;
+    const q = query.trim();
+    if (!q) return options;
+    return options.filter((option) => matchesNameOrPinyin(option.name, q));
+  }, [options, actorProperty, query]);
 
   return (
     <View className="flex-1">
+      {actorProperty ? (
+        <SearchBox
+          value={query}
+          onChange={setQuery}
+          placeholder={t("properties.value.actorSearchPlaceholder")}
+        />
+      ) : null}
       <FlatList
-        data={options}
+        data={rows}
         className="flex-1"
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
         keyExtractor={(option) => `v:${option.id}`}
         renderItem={({ item }) => {
           const isSelected = selected.includes(item.id);
@@ -461,6 +497,10 @@ export function FilterPropertyPickerBody({
                   className="size-3 rounded-full"
                   style={{ backgroundColor: item.color }}
                 />
+              ) : actorProperty ? (
+                // Member rows carry the same avatar as every other member list
+                // on mobile (web renders ActorAvatar here too).
+                <ActorAvatar type="member" id={item.id.slice("member:".length)} size={24} />
               ) : (
                 <Ionicons
                   name="pricetag-outline"
@@ -481,14 +521,23 @@ export function FilterPropertyPickerBody({
           );
         }}
         ListEmptyComponent={
-          <View className="px-3 py-8 items-center">
-            <Text className="text-sm text-muted-foreground text-center">
-              {/* No search box here, so "no matches" would be a lie about a
-                  search the user never made — the options come from a
-                  definition the parent already resolved. */}
-              {t("filter.propertyNoOptions")}
-            </Text>
-          </View>
+          actorProperty ? (
+            <CatalogEmptySlot
+              states={[membersRead.state]}
+              onRetry={membersRead.retry}
+              emptyMessage={t("properties.value.actorSearchEmpty")}
+              query={query}
+            />
+          ) : (
+            <View className="px-3 py-8 items-center">
+              <Text className="text-sm text-muted-foreground text-center">
+                {/* No search box here, so "no matches" would be a lie about a
+                    search the user never made — the options come from a
+                    definition the parent already resolved. */}
+                {t("filter.propertyNoOptions")}
+              </Text>
+            </View>
+          )
         }
       />
     </View>
