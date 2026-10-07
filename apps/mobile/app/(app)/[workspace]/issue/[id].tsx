@@ -52,6 +52,7 @@ import { useViewedIssuesStore } from "@/data/viewed-issues-store";
 import { useCommentSelectStore } from "@/data/comment-select-store";
 import { useReplyTargetStore } from "@/data/stores/reply-target-store";
 import { ThreadNavSheet } from "@/components/issue/thread-nav-sheet";
+import { resolveCatalogState } from "@/lib/catalog-state";
 import { useTranslation } from "@/lib/i18n/react";
 
 export default function IssueDetail() {
@@ -90,6 +91,14 @@ export default function IssueDetail() {
 
   const detail = useQuery(issueDetailOptions(wsId, id));
   const timeline = useQuery(issueTimelineOptions(wsId, id));
+  // Thread navigator's read state. `timeline.data === []` cannot tell "still
+  // loading" from "this issue has no comments", and picking "no threads" from
+  // a pending read would assert an absence that was never observed.
+  const timelineState = resolveCatalogState({
+    items: timeline.data,
+    isPending: timeline.isPending,
+    isError: timeline.isError,
+  });
   const children = useQuery(issueChildrenOptions(wsId, id));
 
   // Subscribe to per-issue WS events: status/priority/assignee/label
@@ -383,6 +392,8 @@ export default function IssueDetail() {
         visible={threadNavOpen}
         onClose={() => setThreadNavOpen(false)}
         entries={timeline.data}
+        timelineState={timelineState}
+        onRetry={timeline.refetch}
         onJump={onJumpToThread}
       />
     </View>

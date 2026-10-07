@@ -30,6 +30,7 @@ import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 
 import { PickerSheet } from "./pickers/picker-sheet";
+import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useAuthStore } from "@/data/auth-store";
 import {
@@ -42,6 +43,7 @@ import {
   type ThreadDayGroup,
   type ThreadNavFilter,
 } from "@/lib/thread-nav";
+import type { CatalogState } from "@/lib/catalog-state";
 import { getIntlLocale } from "@/lib/i18n";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -65,11 +67,25 @@ interface Props {
   onClose: () => void;
   /** Raw timeline entries — filtered to comments inside. */
   entries: readonly TimelineEntry[] | undefined;
+  /** Load state of the timeline read the entries came from. `[]` cannot tell
+   *  "still loading" from "this issue has no comments", and this sheet says
+   *  "no threads" out loud — so it needs the distinction, like every other
+   *  catalog-reading surface (see lib/catalog-read.ts). */
+  timelineState: CatalogState;
+  /** Re-runs the timeline read behind the failure branch's retry. */
+  onRetry: () => void;
   /** Root comment id to jump to. */
   onJump: (threadId: string) => void;
 }
 
-export function ThreadNavSheet({ visible, onClose, entries, onJump }: Props) {
+export function ThreadNavSheet({
+  visible,
+  onClose,
+  entries,
+  timelineState,
+  onRetry,
+  onJump,
+}: Props) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
@@ -156,13 +172,19 @@ export function ThreadNavSheet({ visible, onClose, entries, onJump }: Props) {
           keyboardShouldPersistTaps="handled"
         >
           {sections.length === 0 ? (
-            <View className="px-4 py-8 items-center">
-              <Text className="text-sm text-muted-foreground">
-                {threads.length === 0
+            // The "no threads" sentence is only allowed once the read has
+            // settled — otherwise a slow or failed timeline would be reported
+            // as an issue with no comments.
+            <CatalogStatus
+              state={threads.length === 0 ? timelineState : "empty"}
+              onRetry={onRetry}
+              layout="centered"
+              emptyMessage={
+                threads.length === 0
                   ? t("threadNav.empty")
-                  : t("threadNav.noMatches")}
-              </Text>
-            </View>
+                  : t("threadNav.noMatches")
+              }
+            />
           ) : (
             sections.map((section) => (
               <View key={section.group}>

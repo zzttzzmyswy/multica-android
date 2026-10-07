@@ -85,6 +85,20 @@ describe("thread navigator wiring", () => {
     expect(src).toMatch(/lastJumpRef/);
   });
 
+  it("does not let a pending or failed timeline read speak as no-threads", () => {
+    // The sheet says "no threads" out loud, and an empty array cannot tell
+    // "still loading" from "this issue has no comments" — the exact defect
+    // class the catalog four-state reads (lib/catalog-read.ts) exist for.
+    const screen = code(ISSUE_SCREEN);
+    expect(screen).toMatch(/resolveCatalogState\(\{/);
+    expect(screen).toContain("timelineState={timelineState}");
+    expect(screen).toContain("onRetry={timeline.refetch}");
+
+    const sheet = code(SHEET);
+    expect(sheet).toMatch(/<CatalogStatus/);
+    expect(sheet).toContain("timelineState");
+  });
+
   it("has the sheet render search, the filter chips and the day groups", () => {
     const src = code(SHEET);
     // The three things that make a long thread list navigable rather than a
