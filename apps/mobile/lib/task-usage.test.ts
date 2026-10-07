@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   collectUnmappedModels,
   estimateCacheSavings,
@@ -8,6 +8,10 @@ import {
   summarizeTaskUsageAcross,
 } from "./task-usage";
 import type { TaskUsage } from "@multica/core/types";
+import {
+  resetCustomPricingForTests,
+  setCustomPricing,
+} from "./custom-pricing-store";
 
 /** Builder so each test names only the fields it cares about. */
 function slice(
@@ -278,5 +282,56 @@ describe("collectUnmappedModels", () => {
         },
       ]),
     ).toEqual([]);
+  });
+});
+// web's `resolvePricing` (packages/views/runtimes/utils.ts:366-380) falls
+// through to the user's custom-pricing store after the rate table. Mobile's
+// `estimateCost` / `collectUnmappedModels` must consult the same store, or a
+// rate the user entered in the runtime usage page is invisible on the issue
+// detail page's runs sheet — same model, two prices, one product.
+describe("custom-pricing overrides (web resolvePricing parity)", () => {
+  afterEach(() => resetCustomPricingForTests());
+
+  it("estimateCost prices an unmapped model from a user override", () => {
+    setCustomPricing("acme/auto", {
+      input: 100,
+      output: 200,
+      cacheRead: 10,
+      cacheWrite: 50,
+    });
+    expect(
+      estimateCost(
+        slice({
+          model: "auto",
+          provider: "acme",
+          input_tokens: 1_000_000,
+          output_tokens: 1_000_000,
+        }),
+      ),
+    ).toBeCloseTo(300, 5);
+  });
+
+  it("collectUnmappedModels drops a model once the user prices it", () => {
+    const rows = [slice({ model: "auto", provider: "acme", input_tokens: 500 })];
+    expect(collectUnmappedModels(rows)).toEqual(["acme/auto"]);
+    setCustomPricing("acme/auto", {
+      input: 1,
+      output: 1,
+      cacheRead: 1,
+      cacheWrite: 1,
+    });
+    expect(collectUnmappedModels(rows)).toEqual([]);
+  });
+
+  it("keeps table entries authoritative over a user override", () => {
+    setCustomPricing("claude-sonnet-4-5", {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+    });
+    expect(
+      estimateCost(slice({ model: "claude-sonnet-4-5", input_tokens: 1_000_000 })),
+    ).toBeCloseTo(3, 5);
   });
 });

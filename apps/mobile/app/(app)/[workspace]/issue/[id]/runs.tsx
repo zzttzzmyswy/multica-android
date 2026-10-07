@@ -36,6 +36,7 @@ import {
   summarizeTaskUsageAcross,
   type TaskUsageSummary,
 } from "@/lib/task-usage";
+import { useCustomPricingStore } from "@/lib/custom-pricing-store";
 
 const PAST_STATUS_ORDER: Record<AgentTask["status"], number> = {
   failed: 0,
@@ -87,9 +88,15 @@ export default function IssueRunsRoute() {
   // Issue-level usage total, mirroring web's IssueUsageTotal on the
   // execution-log header (execution-log-section.tsx): null when NO run has
   // recorded usage → header chip hides entirely.
+  //
+  // `pricings` is a dependency, not a read: estimateCost pulls custom rates
+  // imperatively out of the zustand store, so without the subscription this
+  // total would keep showing a pre-override price until the task query
+  // happened to refetch (web execution-log-section.tsx:247 does the same).
+  const pricings = useCustomPricingStore((s) => s.pricings);
   const usageTotal = useMemo(
     () => summarizeTaskUsageAcross(allTasks.map((task) => task.usage)),
-    [allTasks],
+    [allTasks, pricings],
   );
 
   return (

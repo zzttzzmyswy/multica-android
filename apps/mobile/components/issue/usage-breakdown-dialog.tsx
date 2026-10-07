@@ -18,8 +18,10 @@
  *    safe areas; the inner content still mirrors web's structure
  *  - the token bar is one thin track per card instead of web's bar-in-table
  *    cell — same max-relative metric, readable at card width
- *  - no custom-pricing store (see lib/task-usage.ts header note), so the
- *    pricing snapshot subscription web needs for live re-price is a no-op here
+ *
+ * Like web, every priced figure subscribes to the custom-pricing store, so a
+ * rate saved on the runtime usage page repaints this sheet instead of waiting
+ * for the task list to refetch.
  */
 import { useMemo } from "react";
 import { Modal, Pressable, ScrollView, View } from "react-native";
@@ -38,6 +40,7 @@ import {
   summarizeTaskUsageAcross,
   type TaskUsageSummary,
 } from "@/lib/task-usage";
+import { useCustomPricingStore } from "@/lib/custom-pricing-store";
 
 const tKey = "runs.usageDetail";
 
@@ -57,6 +60,14 @@ export function UsageBreakdownDialog({
 }: Props) {
   const { t } = useTranslation();
 
+  // `estimateCost` reads custom rates imperatively out of the zustand store,
+  // so nothing re-renders this sheet when the user saves a new rate elsewhere.
+  // Subscribe to the snapshot and carry it into every memo that prices usage —
+  // otherwise the total, the per-run costs and the "unmapped model" note keep
+  // showing the old price until the task list happens to refetch (web parity:
+  // issue-usage-dialog.tsx subscribes for exactly this reason).
+  const pricings = useCustomPricingStore((s) => s.pricings);
+
   // Only runs that actually recorded usage earn a card: a run with no figure
   // contributes nothing to compare and would just add an all-em-dash line.
   // Their existence is still accounted for in the footnote below.
@@ -68,7 +79,7 @@ export function UsageBreakdownDialog({
 
   const total = useMemo(
     () => summarizeTaskUsageAcross(priced.map((task) => task.usage)),
-    [priced],
+    [priced, pricings],
   );
 
   // Models with no rate-table entry and no provider-reported cost: their
@@ -77,7 +88,7 @@ export function UsageBreakdownDialog({
   // number (web collectUnmappedModels, same semantics).
   const unmapped = useMemo(
     () => collectUnmappedModels(priced.flatMap((task) => task.usage ?? [])),
-    [priced],
+    [priced, pricings],
   );
 
   const agentIds = useMemo(
@@ -303,6 +314,9 @@ function CostByAgent({
 }) {
   const { t } = useTranslation();
   const { getName } = useActorLookup();
+  // Per-agent costs are priced too, so a saved override has to re-render them
+  // (web CostByAgent subscribes for the same reason).
+  const pricings = useCustomPricingStore((s) => s.pricings);
 
   const rows = useMemo(() => {
     return agentIds
@@ -312,7 +326,7 @@ function CostByAgent({
         return { agentId, cost: summary?.cost ?? 0, tokens: summary?.tokens ?? 0 };
       })
       .sort((a, b) => b.cost - a.cost);
-  }, [agentIds, tasks]);
+  }, [agentIds, tasks, pricings]);
 
   const maxCost = rows.reduce((m, r) => Math.max(m, r.cost), 0);
 
@@ -350,7 +364,13 @@ function CostByAgent({
 function RunUsageCard({ task, maxTokens }: { task: AgentTask; maxTokens: number }) {
   const { t } = useTranslation();
   const { getName } = useActorLookup();
-  const summary = useMemo(() => summarizeTaskUsage(task.usage), [task.usage]);
+  // Each card's cost is priced from the store too (web RunTable reads the same
+  // snapshot), so an override saved while this sheet is open repaints the row.
+  const pricings = useCustomPricingStore((s) => s.pricings);
+  const summary = useMemo(
+    () => summarizeTaskUsage(task.usage),
+    [task.usage, pricings],
+  );
   const trigger = task.trigger_summary?.trim() || fallbackTrigger(task, t);
   const duration =
     task.started_at && task.completed_at
