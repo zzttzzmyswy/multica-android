@@ -96,6 +96,7 @@ import { IssueReactionRow } from "./issue-reaction-row";
 import { IssueParentSection } from "./issue-parent-section";
 import { IssueChildrenSection } from "./issue-children-section";
 import { PullRequestList } from "./pull-request-list";
+import { DeliverablesSection } from "./deliverables-section";
 import { QuickActionsSection } from "@/components/quick-action/quick-actions-section";
 import { IssueMetadataSection } from "./issue-metadata-section";
 import { SubscriptionControl } from "./subscription-control";
@@ -108,6 +109,8 @@ import { ImageSequenceProvider } from "@/lib/markdown/image-sequence";
 import { issueAttachmentsOptions } from "@/data/queries/issues";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import type { ImageSequenceBlock } from "@multica/core/attachments/image-sequence";
+import { collectDeliverableFiles } from "@multica/core/attachments/deliverables";
+import type { DownloadSource } from "@/lib/download-store";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { useCommentSelectStore } from "@/data/comment-select-store";
@@ -222,6 +225,27 @@ export function TimelineList({
     }
     return blocks;
   }, [issue.description, issueAttachments, data]);
+
+  // The files this issue delivered as a whole (MUL-7649) — the sidebar
+  // section, its overview and the per-file version badges all read this.
+  //
+  // Built from `entries`, NOT from `data`: `buildTimelineRows` folds replies
+  // into their parent row, and `collectDeliverableFiles` must see every comment
+  // entry to count an issue's output correctly. Web computes the same memo from
+  // its raw timeline (`issue-detail.tsx:2343`) for the same reason.
+  const deliverableFiles = useMemo(
+    () => collectDeliverableFiles(entries ?? []),
+    [entries],
+  );
+
+  // Memoized, not an inline literal: `useOpenDeliverable` carries `source` in a
+  // `useCallback` dependency list, so a fresh object each render would rebuild
+  // that callback every time — and the header block re-renders on every
+  // keystroke in the composer below it.
+  const deliverableSource = useMemo<DownloadSource>(
+    () => ({ kind: "issue", name: issue.identifier }),
+    [issue.identifier],
+  );
 
   const listRef = useRef<FlashListRef<TimelineRow>>(null);
   // Gates single-shot per (commentId, nonce) tuple. Re-tap from inbox
@@ -478,6 +502,18 @@ export function TimelineList({
           between the sub-issue list and the Activity header; fetches its own
           data via issuePullRequestsOptions and re-renders on cache changes. */}
       <PullRequestList issueId={issue.id} />
+      {/* Deliverables (MUL-7649) — the files this issue's comments delivered,
+          as a whole. Web's sidebar puts it directly below the PR section, and
+          the same order is kept here. Reads the raw `entries` rather than the
+          coalesced/threaded rows: `collectDeliverableFiles` wants the comment
+          entries themselves, and `coalesceTimeline` only merges activities.
+          Renders nothing when the issue delivered no file. */}
+      <DeliverablesSection
+        files={deliverableFiles}
+        identifier={issue.identifier}
+        entries={entries}
+        source={deliverableSource}
+      />
       {/* Issue-sidebar Quick Actions (MYS-680) — workspace-configured presets
        * run on the issue with one tap, mirroring web's sidebar section.
        * Renders null when the workspace has no active quick action, so it

@@ -29,6 +29,17 @@ export interface TimelineEntry {
   resolved_by_type?: CommentAuthorType | null;
   resolved_by_id?: string | null;
   source_task_id?: string | null;
+  /**
+   * Set only on a comment deleted while it still had replies: the server keeps
+   * it as an empty tombstone so the replies keep their parent. Servers that
+   * hard-delete (this fork's `server/`) never send it, while the deployment the
+   * mobile client talks to does — so every consumer has to tolerate it.
+   *
+   * The deliverables collection is one of them: a tombstoned comment renders no
+   * files, so counting the attachments still attached to its row would report
+   * output the reader cannot see anywhere (`attachments/deliverables.ts`).
+   */
+  deleted_at?: string | null;
   /** Set by frontend coalescing when consecutive identical activities are merged. */
   coalesced_count?: number;
 }
