@@ -198,4 +198,83 @@ describe("buildSearchRows", () => {
     });
     expect(shape(rows)).toEqual(["#Recent", "r-r1"]);
   });
+
+  // Iteration 205: the two action groups web's Cmd+K has and this screen
+  // lacked. Both arrive pre-matched, so these tests are about ORDER — the
+  // action rows must outrank every data row, as they do on web.
+  it("places pages and commands above every data group", () => {
+    const rows = buildSearchRows({
+      query: "settings",
+      issues: [issue({ id: "i1", title: "settings task" })],
+      projects: [project({ id: "p1", title: "settings project" })],
+      members: [member({ id: "m1", name: "Settings Sam" })],
+      pages: [{ key: "settings", label: "Settings", keywords: [] }],
+      commands: [{ key: "theme-dark", label: "Switch to dark", keywords: [] }],
+      recentIssues: [],
+    });
+
+    expect(shape(rows)).toEqual([
+      "#Pages",
+      "page-settings",
+      "#Commands",
+      "cmd-theme-dark",
+      "#Members",
+      "m-m1",
+      "#Projects",
+      "p-p1",
+      "#Issues",
+      "i-i1",
+    ]);
+  });
+
+  it("orders pages before commands", () => {
+    const rows = buildSearchRows({
+      query: "i",
+      issues: [],
+      projects: [],
+      pages: [{ key: "inbox", label: "Inbox", keywords: [] }],
+      commands: [{ key: "new-issue", label: "New Issue", keywords: [] }],
+      recentIssues: [],
+    });
+    expect(shape(rows)).toEqual([
+      "#Pages",
+      "page-inbox",
+      "#Commands",
+      "cmd-new-issue",
+    ]);
+  });
+
+  it("omits each action group when it has no rows", () => {
+    const onlyPages = buildSearchRows({
+      query: "inbox",
+      issues: [],
+      projects: [],
+      pages: [{ key: "inbox", label: "Inbox", keywords: [] }],
+      commands: [],
+      recentIssues: [],
+    });
+    expect(shape(onlyPages)).toEqual(["#Pages", "page-inbox"]);
+
+    const neither = buildSearchRows({
+      query: "inbox",
+      issues: [],
+      projects: [],
+      pages: [],
+      commands: [],
+      recentIssues: [],
+    });
+    expect(neither).toEqual([]);
+  });
+
+  it("does not render the action groups for an empty query (Recent only)", () => {
+    const rows = buildSearchRows({
+      query: "",
+      issues: [],
+      projects: [],
+      pages: [{ key: "inbox", label: "Inbox", keywords: [] }],
+      commands: [{ key: "new-issue", label: "New Issue", keywords: [] }],
+      recentIssues: [{ id: "r1" } as Issue],
+    });
+    expect(shape(rows)).toEqual(["#Recent", "r-r1"]);
+  });
 });

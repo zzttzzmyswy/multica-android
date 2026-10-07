@@ -33,9 +33,15 @@ describe("search i18n", () => {
     "search.issues": "任务",
     "search.cancelled": "已取消",
     "search.members": "成员",
-    "search.placeholder": "搜索任务和项目",
+    "search.placeholder": "搜索或输入命令",
     "search.noResults": "未找到\"{{query}}\"的结果",
-    "search.empty": "输入以搜索任务和项目。",
+    "search.empty": "输入以搜索任务、项目或页面。",
+    // Iteration 205 — the Pages + Commands groups.
+    "search.groups.pages": "页面",
+    "search.groups.commands": "命令",
+    "search.commands.switchToLight": "切换到浅色主题",
+    "search.commands.switchToDark": "切换到深色主题",
+    "search.commands.useSystemTheme": "跟随系统主题",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {
