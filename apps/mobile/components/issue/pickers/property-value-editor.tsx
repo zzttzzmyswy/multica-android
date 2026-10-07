@@ -30,21 +30,39 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import type {
+  IssueProperty,
+  IssuePropertyValue,
+} from "@multica/core/types";
+import {
+  MAX_ISSUE_PROPERTY_ACTOR_VALUES,
+  actorRefValuesFromValue,
+  formatActorRef,
+  hasUnknownActorRef,
+  isActorPropertyType,
+} from "@multica/core/types";
 import { Text } from "@/components/ui/text";
+import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PropertyCatalogStatus } from "@/components/property/property-catalog-status";
 import { issueDetailOptions } from "@/data/queries/issues";
+import { memberListOptions } from "@/data/queries/members";
 import { usePropertyCatalog } from "@/data/queries/properties";
 import {
   useSetIssueProperty,
   useUnsetIssueProperty,
 } from "@/data/mutations/properties";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { useActorLookup } from "@/data/use-actor-name";
 import {
   formatPropertyValue,
   propertyOptions,
   propertyTypeIcon,
+  toggleActorRefValue,
 } from "@/lib/issue-properties";
 import { toDateOnly, dateOnlyToLocalDate } from "@multica/core/issues/date";
+import { matchesNameOrPinyin } from "@/lib/name-search";
+import { CatalogEmptySlot } from "@/components/catalog/catalog-status";
+import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
@@ -58,6 +76,12 @@ const COMMIT_TYPES = new Set([
   "text",
   "number",
   "url",
+  // Actor properties are editable: the phone writes `member:<user_id>` refs
+  // through the same PUT the other types use. Leaving them out of this set
+  // marked them read-only, so a member-valued property could be read but
+  // never set from the app.
+  "actor",
+  "multi_actor",
 ]);
 const TEXTISH_TYPES = new Set(["text", "number", "url"]);
 
@@ -75,6 +99,10 @@ export function PropertyValueEditor({ issueId, propertyId, onClose }: Props) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
+  // Names an actor reference for the read-only label (an archived definition,
+  // or a single `actor` this build cannot parse). Without it that path prints
+  // the stored `member:<uuid>` — the same defect the editable path fixes.
+  const { getName } = useActorLookup();
 
   const { data: issue } = useQuery(issueDetailOptions(wsId, issueId));
   // Four-state read (MYS-1892): `isLoading` alone cannot separate "failed"
@@ -129,7 +157,17 @@ export function PropertyValueEditor({ issueId, propertyId, onClose }: Props) {
     );
   }
 
-  const readOnly = property.archived || !COMMIT_TYPES.has(property.type);
+  // A single `actor` whose only reference this build cannot parse renders as
+  // nothing, so the user would see an empty field and, believing it unset,
+  // overwrite a value they were never shown. Editing is withheld; Clear stays
+  // available so the stale value can still be cleaned up. `multi_actor` is
+  // exempt — its toggle round-trips unknown entries instead of replacing the
+  // whole value. Mirrors web `isCustomPropertyReadOnly`
+  // (packages/views/issues/components/pickers/custom-property-picker.tsx:58-63).
+  const unknownActorRef =
+    property.type === "actor" && hasUnknownActorRef(value);
+  const readOnly =
+    property.archived || !COMMIT_TYPES.has(property.type) || unknownActorRef;
 
   const display = formatPropertyValue(property, value);
   const valueLabel =
@@ -143,7 +181,13 @@ export function PropertyValueEditor({ issueId, propertyId, onClose }: Props) {
             ? display.value
               ? t("properties.value.true")
               : t("properties.value.false")
-            : display.text;
+            : display.kind === "unknownActors"
+              ? t("properties.value.unknown")
+              : display.kind === "actors"
+                ? display.refs
+                    .map((ref) => getName(ref.kind, ref.id))
+                    .join(", ")
+                : display.text;
   const hasValue = value !== undefined;
 
   const commit = (next: import("@multica/core/types").IssuePropertyValue) => {
@@ -219,7 +263,9 @@ export function PropertyValueEditor({ issueId, propertyId, onClose }: Props) {
             <Text className="text-sm text-foreground">{valueLabel}</Text>
           </View>
           <Text className="px-4 text-xs text-muted-foreground">
-            {t("properties.value.archivedHint")}
+            {unknownActorRef
+              ? t("properties.value.unknownHint")
+              : t("properties.value.archivedHint")}
           </Text>
         </View>
       ) : property.type === "select" || property.type === "multi_select" ? (
@@ -282,6 +328,13 @@ export function PropertyValueEditor({ issueId, propertyId, onClose }: Props) {
             onPress={() => commit(false)}
           />
         </View>
+      ) : isActorPropertyType(property.type) ? (
+        <ActorRefBody
+          property={property}
+          value={value}
+          onCommit={commit}
+          onClear={clear}
+        />
       ) : property.type === "date" ? (
         <DateBody
           value={typeof value === "string" ? value : null}
@@ -375,6 +428,136 @@ function DateBody({
       >
         <Text className="text-sm font-medium text-primary">{t("common.done")}</Text>
       </Pressable>
+    </View>
+  );
+}
+
+/**
+ * Actor / multi_actor value body — the workspace member directory as a
+ * selectable list, mirroring web's `ActorPropertyPicker`
+ * (packages/views/issues/components/pickers/actor-property-picker.tsx):
+ *
+ *   actor        → tapping a member commits `member:<user_id>` and closes
+ *   multi_actor  → tapping toggles in place and keeps the sheet open; the
+ *                  value becomes `undefined` (= clear) when the last member
+ *                  is unticked, matching web's `toggleActorRefValue`
+ *
+ * Members are the only kind either type accepts: web deliberately excludes
+ * agents and squads here (an agent reference would drag in agent-visibility
+ * rules, and a squad is a routing target rather than a person), so the list is
+ * the member directory alone.
+ *
+ * Search runs through `matchesNameOrPinyin`, the same helper the assignee
+ * picker uses, so a Chinese name is reachable by full pinyin, initials or
+ * hybrid input.
+ */
+function ActorRefBody({
+  property,
+  value,
+  onCommit,
+  onClear,
+}: {
+  property: IssueProperty;
+  value: IssuePropertyValue | undefined;
+  onCommit: (next: IssuePropertyValue) => void;
+  onClear: () => void;
+}) {
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const { t } = useTranslation();
+  const { colorScheme } = useColorScheme();
+  const theme = THEME[colorScheme];
+  const [query, setQuery] = useState("");
+
+  const members = catalogRead(useQuery(memberListOptions(wsId)));
+  const multiple = property.type === "multi_actor";
+
+  // Raw strings, not parsed refs: an entry whose kind this build cannot
+  // resolve has to survive a toggle instead of being deleted when the user
+  // ticks a member it does understand.
+  const selected = actorRefValuesFromValue(value);
+  const selectedKeys = new Set(selected);
+  const atCapacity = multiple && selected.length >= MAX_ISSUE_PROPERTY_ACTOR_VALUES;
+
+  const q = query.trim();
+  const rows = members.items.filter(
+    (member) => !q || matchesNameOrPinyin(member.name, q),
+  );
+
+  const commitMember = (userId: string) => {
+    const key = formatActorRef("member", userId);
+    if (!multiple) {
+      onCommit(key);
+      return;
+    }
+    const next = toggleActorRefValue(selected, key);
+    if (next === undefined) onClear();
+    else onCommit(next);
+  };
+
+  return (
+    <View className="flex-1">
+      <View className="px-4 pb-2">
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder={t("properties.value.actorSearchPlaceholder")}
+          placeholderTextColor={theme.mutedForeground}
+          autoCorrect={false}
+          className="border border-border rounded-md px-3 py-2 text-sm text-foreground"
+          style={{ fontSize: 14, includeFontPadding: false, textAlignVertical: "center" }}
+        />
+        {atCapacity ? (
+          <Text className="mt-2 text-xs text-muted-foreground">
+            {t("properties.value.actorLimit", {
+              count: MAX_ISSUE_PROPERTY_ACTOR_VALUES,
+            })}
+          </Text>
+        ) : null}
+      </View>
+      <FlatList
+        data={rows}
+        className="flex-1"
+        keyExtractor={(member) => member.user_id}
+        keyboardShouldPersistTaps="handled"
+        contentInsetAdjustmentBehavior="automatic"
+        renderItem={({ item: member }) => {
+          const key = formatActorRef("member", member.user_id);
+          const isSelected = selectedKeys.has(key);
+          const disabled = atCapacity && !isSelected;
+          return (
+            <Pressable
+              onPress={() => commitMember(member.user_id)}
+              disabled={disabled}
+              className={cn(
+                "flex-row items-center gap-3 px-4 py-3 active:bg-secondary",
+                disabled && "opacity-40",
+              )}
+            >
+              <ActorAvatar type="member" id={member.user_id} size={28} />
+              <Text
+                className={cn(
+                  "flex-1 text-base",
+                  isSelected ? "text-foreground font-medium" : "text-foreground",
+                )}
+                numberOfLines={1}
+              >
+                {member.name}
+              </Text>
+              {isSelected ? (
+                <Ionicons name="checkmark" size={20} color={theme.primary} />
+              ) : null}
+            </Pressable>
+          );
+        }}
+        ListEmptyComponent={
+          <CatalogEmptySlot
+            states={[members.state]}
+            onRetry={() => retryCatalogs(members)}
+            emptyMessage={t("properties.value.actorSearchEmpty")}
+            query={query}
+          />
+        }
+      />
     </View>
   );
 }

@@ -26,6 +26,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { IssuePriority } from "@multica/core/types";
+import { isActorPropertyType } from "@multica/core/types";
 import { addDaysDateOnly, todayDateOnly } from "@multica/core/issues/date";
 import { Text } from "@/components/ui/text";
 import { StatusIcon } from "@/components/ui/status-icon";
@@ -172,7 +173,15 @@ export default function IssuesFilterRoute() {
   const catalog = useActivePropertyCatalog(wsId);
   const properties = catalog.definitions;
   const filterableProperties = properties.filter(
-    (p) => p.type === "select" || p.type === "multi_select" || p.type === "checkbox",
+    (p) =>
+      p.type === "select" ||
+      p.type === "multi_select" ||
+      p.type === "checkbox" ||
+      // Actor properties filter by member reference (`member:<user_id>`),
+      // the same containment semantics the server's `@>` uses for
+      // multi_select. Web exposes them through `isFilterablePropertyType`
+      // (packages/core/types/property.ts).
+      isActorPropertyType(p.type),
   );
   // A settled catalog holding no definition THIS section can filter by is the
   // section's own empty — "no filterable properties" stays true and still

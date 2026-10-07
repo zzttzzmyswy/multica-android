@@ -15,7 +15,13 @@ import type {
   IssuePropertyType,
   IssuePropertyValue,
 } from "@multica/core/types";
-import { ISSUE_PROPERTY_TYPES } from "@multica/core/types";
+import {
+  ISSUE_PROPERTY_TYPES,
+  MAX_ISSUE_PROPERTY_ACTOR_VALUES,
+  actorRefValuesFromValue,
+  actorRefsFromValue,
+  type IssuePropertyActorRef,
+} from "@multica/core/types";
 import { formatIssueDate } from "./format-date";
 
 export const PROPERTY_TYPE_ICONS = {
@@ -26,6 +32,10 @@ export const PROPERTY_TYPE_ICONS = {
   date: "calendar",
   checkbox: "checkbox-outline",
   url: "link",
+  // Both actor types hold workspace members; the person glyph keeps them
+  // distinguishable from `url`'s link and the unknown-type cube.
+  actor: "person-outline",
+  multi_actor: "people-outline",
 } as const satisfies Record<IssuePropertyType, string>;
 
 /** Unknown-type fallback glyph (newer server types). */
@@ -93,14 +103,24 @@ export type PropertyValueDisplay =
   | { kind: "options"; options: IssuePropertyOption[] }
   | { kind: "checkbox"; value: boolean }
   | { kind: "date"; text: string }
+  | { kind: "actors"; refs: IssuePropertyActorRef[] }
+  | { kind: "unknownActors" }
   | { kind: "plain"; text: string };
 
 /**
  * Format a raw stored value into a display shape the UI can render precisely
  * per type (colored dot for select, chips for multi_select, checked text for
- * checkbox, formatted day for date). Returns null when there is nothing worth
- * showing: unset value, select/multi_select id that no longer exists (its
- * option was deleted), or a date that doesn't parse.
+ * checkbox, formatted day for date, avatar rows for actor/multi_actor).
+ * Returns null when there is nothing worth showing: unset value,
+ * select/multi_select id that no longer exists (its option was deleted), or a
+ * date that doesn't parse.
+ *
+ * `unknownActors` is NOT null on purpose. A value whose every reference this
+ * build cannot parse (a newer backend widening `actorPropertyKinds`) must
+ * render as unavailable rather than empty: rendering it as empty invites the
+ * user to fill in a field that already holds a value they cannot see, and for
+ * the single-valued `actor` type that overwrite is silent data loss.
+ * `hasUnknownActorRef` names the same condition for edit gating.
  */
 export function formatPropertyValue(
   property: IssueProperty,
@@ -116,6 +136,18 @@ export function formatPropertyValue(
       const options = resolveMultiSelectOptions(property, value);
       return options.length > 0 ? { kind: "options", options } : null;
     }
+    case "actor":
+    case "multi_actor": {
+      const refs = actorRefsFromValue(value);
+      if (refs.length === 0) {
+        // Nothing parsed. Only distinguish "unreadable" from "unset" when a
+        // raw string is actually present.
+        return actorRefValuesFromValue(value).length > 0
+          ? { kind: "unknownActors" }
+          : null;
+      }
+      return { kind: "actors", refs };
+    }
     case "checkbox":
       return { kind: "checkbox", value: value === true };
     case "date": {
@@ -126,6 +158,33 @@ export function formatPropertyValue(
     default:
       return { kind: "plain", text: String(value) };
   }
+}
+
+/**
+ * Toggles one member reference inside a `multi_actor` value and returns the
+ * next value (`undefined` clears the property). Mirrors web's
+ * `toggleActorRefValue` (`packages/views/issues/components/pickers/
+ * actor-property-picker.tsx:36-50`).
+ *
+ * `current` must be the RAW stored list (`actorRefValuesFromValue`), not the
+ * parsed refs: an entry whose kind this build cannot resolve has to survive
+ * the toggle. Passing parsed refs would delete it, and the user would never
+ * see the loss. Insertion order also survives — the server does not
+ * canonicalize actor lists, so the order here is the order that persists.
+ *
+ * At the cap a further tick is a no-op rather than a silent eviction: dropping
+ * the oldest entry would look like the picker ate a value the user chose.
+ */
+export function toggleActorRefValue(
+  current: string[],
+  key: string,
+): string[] | undefined {
+  if (current.includes(key)) {
+    const next = current.filter((existing) => existing !== key);
+    return next.length === 0 ? undefined : next;
+  }
+  if (current.length >= MAX_ISSUE_PROPERTY_ACTOR_VALUES) return current;
+  return [...current, key];
 }
 
 /** Tailwind bg-* swatch palette for select/multi_select option colors. */

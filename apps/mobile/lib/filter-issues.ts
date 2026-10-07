@@ -20,9 +20,11 @@ import type {
   Issue,
   IssuePriority,
   IssueProperty,
+  IssuePropertyOption,
   IssueStatus,
   IssueStatusCategory,
 } from "@multica/core/types";
+import { formatActorRef, isActorPropertyType } from "@multica/core/types";
 import type {
   ActorFilterValue,
   IssueDateFilterValue,
@@ -577,4 +579,55 @@ export function groupIssues(
       data: byStatus.get(status) ?? [],
     }))
     .filter((s) => includeEmpty || s.data.length > 0);
+}
+/**
+ * Candidate values for one custom-property filter dimension, mirroring web's
+ * options builder in `issues-header.tsx` (`PropertyFilterOptions`).
+ *
+ * Actor properties (actor / multi_actor) list the workspace MEMBER DIRECTORY
+ * with values shaped as `member:<user_id>` — the exact strings the server's
+ * `@>` containment filter matches. The signed-in user sorts first and the rest
+ * keep directory order, as web does. Everything else lists the definition's
+ * own `config.options`; checkbox uses the "true"/"false" pseudo-options.
+ *
+ * Kept pure and separate from the picker so the actor branch is testable at
+ * all: the picker's vitest lane has no RN renderer, and a string-presence
+ * assertion on the component would not notice the branch going dead.
+ */
+export interface PropertyFilterCandidate {
+  id: string;
+  name: string;
+  color?: string;
+}
+
+export function propertyFilterOptions(input: {
+  type: string;
+  /** Definition's option catalog (select / multi_select). */
+  options: readonly IssuePropertyOption[];
+  /** Workspace members, for the actor branch. */
+  members: readonly { user_id: string; name: string }[];
+  /** Signed-in user, sorted first (web parity). */
+  currentUserId?: string | null;
+}): PropertyFilterCandidate[] {
+  // Checkbox is deliberately absent: its "true"/"false" pseudo-options carry
+  // translated Yes/No labels, so the caller (which owns the translator) builds
+  // them before consulting this helper.
+  if (isActorPropertyType(input.type)) {
+    return input.members
+      .slice()
+      .sort((a, b) => {
+        if (a.user_id === input.currentUserId) return -1;
+        if (b.user_id === input.currentUserId) return 1;
+        return 0;
+      })
+      .map((member) => ({
+        id: formatActorRef("member", member.user_id),
+        name: member.name,
+      }));
+  }
+  return input.options.map((option) => ({
+    id: option.id,
+    name: option.name,
+    color: option.color,
+  }));
 }

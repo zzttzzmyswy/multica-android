@@ -51,12 +51,24 @@ const options = [
 
 describe("isKnownPropertyType", () => {
   it("accepts every shipped type", () => {
-    for (const type of ["text", "number", "select", "multi_select", "date", "checkbox", "url"]) {
+    for (const type of [
+      "text",
+      "number",
+      "select",
+      "multi_select",
+      "date",
+      "checkbox",
+      "url",
+      // The live server accepts both actor types (iter207); they are shipped
+      // types, not newer-server types this build degrades on.
+      "actor",
+      "multi_actor",
+    ]) {
       expect(isKnownPropertyType(type)).toBe(true);
     }
   });
   it("rejects unknown types and undefined", () => {
-    expect(isKnownPropertyType("actor")).toBe(false);
+    expect(isKnownPropertyType("multi_text")).toBe(false);
     expect(isKnownPropertyType("")).toBe(false);
     expect(isKnownPropertyType(undefined)).toBe(false);
   });
@@ -79,9 +91,12 @@ describe("propertyTypeLabelKey / propertyTypeIcon", () => {
     expect(propertyTypeIcon("url")).toBe("link");
   });
   it("falls back for unknown or missing types", () => {
-    expect(propertyTypeLabelKey("actor")).toBe("properties.type.unknown");
+    // A type this build has never heard of still degrades to the neutral cube
+    // — `actor` is no longer one of those (see above), so the fallback is
+    // pinned with a genuinely unknown future type.
+    expect(propertyTypeLabelKey("multi_url_future")).toBe("properties.type.unknown");
     expect(propertyTypeLabelKey(undefined)).toBe("properties.type.unknown");
-    expect(propertyTypeIcon("actor")).toBe("cube-outline");
+    expect(propertyTypeIcon("multi_url_future")).toBe("cube-outline");
     expect(propertyTypeIcon(undefined)).toBe("cube-outline");
   });
 });
@@ -165,7 +180,9 @@ describe("formatPropertyValue", () => {
       text: "https://a.io",
     });
     // Forward-compat: a type this build doesn't know degrades to raw text.
-    expect(formatPropertyValue(property({ type: "actor" }), "a-9")).toEqual({
+    // (Not `actor` — that one is shipped and resolves to member refs; see
+    // issue-properties-actor.test.ts.)
+    expect(formatPropertyValue(property({ type: "future_type" }), "a-9")).toEqual({
       kind: "plain",
       text: "a-9",
     });

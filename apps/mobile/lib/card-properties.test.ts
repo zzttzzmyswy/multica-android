@@ -180,10 +180,17 @@ describe("limitCardPropertyEntries", () => {
 // documented in lib/card-properties.ts).
 describe("cardPropertyChip", () => {
   const t = (key: string) => (key === "properties.value.true" ? "Yes" : "No");
+  // The card resolves actor names through the workspace directory. Every call
+  // passes a resolver, so an actor chip can never print `member:<uuid>`.
+  const getName = (
+    type: "member" | "agent" | "squad" | null | undefined,
+    id: string | null | undefined,
+  ) =>
+    type === "member" && id === "u-a" ? "Ada" : "Unknown";
 
   it("maps a select option to its name + swatch color", () => {
     const display = formatPropertyValue(SELECT, "o2")!;
-    expect(cardPropertyChip(display, t)).toEqual({
+    expect(cardPropertyChip(display, t, getName)).toEqual({
       text: "Done",
       color: "#22c55e",
     });
@@ -202,14 +209,14 @@ describe("cardPropertyChip", () => {
       },
     });
     const display = formatPropertyValue(multi, ["o1", "o2", "o3"])!;
-    expect(cardPropertyChip(display, t)).toEqual({
+    expect(cardPropertyChip(display, t, getName)).toEqual({
       text: "A",
       color: "#111111",
       rest: 2,
     });
     // A single option carries no rest key at all — the chip renders clean.
     const single = formatPropertyValue(multi, ["o2"])!;
-    expect(cardPropertyChip(single, t)).toEqual({
+    expect(cardPropertyChip(single, t, getName)).toEqual({
       text: "B",
       color: "#222222",
     });
@@ -217,19 +224,38 @@ describe("cardPropertyChip", () => {
 
   it("renders checkbox through the shared locale keys", () => {
     const checkbox = property({ id: "p-cb", type: "checkbox" });
-    expect(cardPropertyChip(formatPropertyValue(checkbox, true)!, t)).toEqual({
+    expect(cardPropertyChip(formatPropertyValue(checkbox, true)!, t, getName)).toEqual({
       text: "Yes",
     });
-    expect(cardPropertyChip(formatPropertyValue(checkbox, false)!, t)).toEqual({
+    expect(cardPropertyChip(formatPropertyValue(checkbox, false)!, t, getName)).toEqual({
       text: "No",
     });
   });
 
+  it("names an actor reference instead of printing it", () => {
+    // The defect this branch exists for: a card chip that rendered the stored
+    // `member:<uuid>` string. The name comes from the resolver, and the fold
+    // counts the rest like multi_select.
+    const actor = property({ id: "p-actor", type: "actor" });
+    const display = formatPropertyValue(actor, "member:u-a")!;
+    expect(cardPropertyChip(display, t, getName)).toEqual({ text: "Ada" });
+
+    const multi = property({ id: "p-actors", type: "multi_actor" });
+    const pair = formatPropertyValue(multi, ["member:u-a", "member:u-b"])!;
+    expect(cardPropertyChip(pair, t, getName)).toEqual({ text: "Ada", rest: 1 });
+  });
+
+  it("reports an unreadable actor value as unavailable, not blank", () => {
+    const actor = property({ id: "p-actor", type: "actor" });
+    const display = formatPropertyValue(actor, "team:t-1")!;
+    expect(cardPropertyChip(display, t, getName)).toEqual({ text: "No" });
+  });
+
   it("passes date and plain text straight through", () => {
     const date = property({ id: "p-date", type: "date" });
-    expect(cardPropertyChip(formatPropertyValue(date, "2026-08-16")!, t).text)
+    expect(cardPropertyChip(formatPropertyValue(date, "2026-08-16")!, t, getName).text)
       .toBe("Aug 16");
-    expect(cardPropertyChip(formatPropertyValue(TEXT, "hello")!, t)).toEqual({
+    expect(cardPropertyChip(formatPropertyValue(TEXT, "hello")!, t, getName)).toEqual({
       text: "hello",
     });
   });
