@@ -6,8 +6,17 @@
  * workspace switching in Settings, so a command-palette here would
  * duplicate them (see feedback_mobile_ia_main_vs_more).
  *
- * Result categories, ordering (live projects, then live issues, then a
- * trailing Cancelled section — see lib/search-rows.ts), debounce (300ms),
+ * Iteration 205 narrows that boundary rather than moving it: the header stays
+ * the only entry point, and the field gains an answer for queries it used to
+ * reject outright. Before this, typing `settings` matched nothing (the server
+ * searches issues and projects) and the screen said "No results" — a dead end
+ * for anyone who reasonably typed a destination. It now also answers with
+ * web's Pages and Commands groups (`lib/search-commands.ts`): 8 destinations
+ * and the 3 theme switches. Nav is still reachable from the More popover; this
+ * is a second route to it, not a replacement.
+ *
+ * Result categories, ordering (pages → commands → live projects → live issues
+ * → a trailing Cancelled section — see lib/search-rows.ts), debounce (300ms),
  * abort policy, and Recent rendering mirror the web source.
  * Highlight + snippet lines preserve the "why did this match" signal users
  * rely on when scanning results, and the row's trailing slot carries the
@@ -50,6 +59,16 @@ import { memberListOptions } from "@/data/queries/members";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { projectStatusLabel } from "@/lib/project-status";
 import { buildSearchRows, type RowItem } from "@/lib/search-rows";
+import {
+  buildSearchCommands,
+  buildSearchPages,
+  filterSearchCommands,
+  filterSearchPages,
+  type SearchCommand,
+  type SearchCommandKey,
+  type SearchPage,
+  type SearchPageKey,
+} from "@/lib/search-commands";
 import { searchIssueSnippets } from "@/lib/search-snippets";
 import { filterMemberMatches } from "@/lib/member-search";
 import { keyboardBehavior } from "@/lib/keyboard";
@@ -352,6 +371,70 @@ function RecentRow({ item, slug }: RecentRowProps) {
 }
 
 // =====================================================
+// Action rows — Pages + Commands
+// =====================================================
+// One component for both groups: web renders them from the same item markup
+// (`search-command.tsx:686-720`), and neither carries a subtitle or trailing
+// record — just icon + label + optional checkmark.
+//
+// Icons are chosen per key rather than derived from the route (web uses
+// `routeIconForPath`). Mobile has no route→icon table, and the More popover
+// already names an icon for every one of these destinations; these match
+// those so a destination looks the same wherever it is listed.
+
+const PAGE_ICONS: Record<SearchPageKey, keyof typeof Ionicons.glyphMap> = {
+  // Same glyphs the destination already carries elsewhere: the tab bar for
+  // Inbox / My Issues / Projects, the More popover for the rest. A page that
+  // looked different here than in the nav it mirrors would be harder to
+  // recognise, not easier.
+  inbox: "file-tray-outline",
+  myIssues: "checkbox-outline",
+  issues: "list",
+  projects: "layers-outline",
+  agents: "hardware-chip",
+  runtimes: "server",
+  skills: "extension-puzzle",
+  settings: "settings-outline",
+};
+
+const COMMAND_ICONS: Record<SearchCommandKey, keyof typeof Ionicons.glyphMap> = {
+  "new-issue": "add-circle-outline",
+  "new-project": "add-circle-outline",
+  "theme-light": "sunny-outline",
+  "theme-dark": "moon-outline",
+  "theme-system": "phone-portrait-outline",
+};
+
+function ActionRow({
+  icon,
+  label,
+  query,
+  trailing,
+  onPress,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  query: string;
+  trailing?: React.ReactNode;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} className="active:bg-secondary px-4 py-3">
+      <View className="flex-row items-center gap-3">
+        {icon}
+        <HighlightText
+          text={label}
+          query={query}
+          className="flex-1 text-sm text-foreground"
+          numberOfLines={1}
+        />
+        {trailing}
+      </View>
+    </Pressable>
+  );
+}
+
+// =====================================================
 // Screen
 // =====================================================
 
@@ -365,7 +448,11 @@ const EMPTY_RESULTS: SearchResultsState = { issues: [], projects: [] };
 export default function SearchModal() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const slug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
-  const { colorScheme } = useColorScheme();
+  const {
+    colorScheme,
+    preference: themePreference,
+    setPreference,
+  } = useColorScheme();
   const theme = THEME[colorScheme];
   const { t } = useTranslation();
 
@@ -459,15 +546,94 @@ export default function SearchModal() {
     [runSearch],
   );
 
+  // ---- Page + command activation -----------------------------------------
+  // Each key maps to the same destination the More tab pushes, so a page row
+  // and its nav row can never drift apart.
+  const PAGE_PATHS: Record<SearchPageKey, (slug: string) => string> = useMemo(
+    () => ({
+      inbox: (s) => `/${s}`,
+      myIssues: (s) => `/${s}/my-issues`,
+      issues: (s) => `/${s}/more/issues`,
+      projects: (s) => `/${s}/projects`,
+      agents: (s) => `/${s}/more/agents`,
+      runtimes: (s) => `/${s}/more/runtimes`,
+      skills: (s) => `/${s}/more/skills`,
+      settings: (s) => `/${s}/more/settings`,
+    }),
+    [],
+  );
+
+  const navigate = useCallback(
+    (path: string) => navigateOnTap(slug, path),
+    [slug],
+  );
+
+  const onPressPage = useCallback(
+    (page: SearchPage) => {
+      if (!slug) return;
+      navigate(PAGE_PATHS[page.key](slug));
+    },
+    [PAGE_PATHS, navigate, slug],
+  );
+
+  /**
+   * Web's command handlers all end in `setOpen(false)` — including the theme
+   * switches, where the whole app repainting is the confirmation and leaving
+   * the palette up would only delay seeing it. The two creation commands
+   * replace the modal with their destination, same as a page row; the theme
+   * rows have no destination, so they dismiss back to whatever was under
+   * search.
+   */
+  const onPressCommand = useCallback(
+    (key: SearchCommandKey) => {
+      switch (key) {
+        case "new-issue":
+          if (slug) navigate(`/${slug}/new-issue`);
+          break;
+        case "new-project":
+          if (slug) navigate(`/${slug}/project/new`);
+          break;
+        case "theme-light":
+          setPreference("light");
+          router.back();
+          break;
+        case "theme-dark":
+          setPreference("dark");
+          router.back();
+          break;
+        case "theme-system":
+          setPreference("system");
+          router.back();
+          break;
+      }
+    },
+    [navigate, setPreference, slug],
+  );
+
   const trimmedQuery = query.trim();
   const filteredMembers = useMemo(
     () => filterMemberMatches(memberRows, trimmedQuery),
     [memberRows, trimmedQuery],
   );
+
+  // The two action groups, already matched against the query.
+  // `lib/search-commands.ts` owns the matching rules; this screen owns the
+  // labels' translations and the activation handlers.
+  const pages = useMemo(
+    () => filterSearchPages(buildSearchPages(), query),
+    [query],
+  );
+  const commands = useMemo(
+    () => filterSearchCommands(buildSearchCommands(), query),
+    [query],
+  );
+
   const hasResults =
     results.issues.length > 0 ||
     results.projects.length > 0 ||
-    filteredMembers.length > 0;
+    filteredMembers.length > 0 ||
+    pages.length > 0 ||
+    commands.length > 0;
 
   // Build the FlatList data. One flat array of discriminated rows means a
   // single virtualised list covers Recent (empty-state) and the search results
@@ -481,8 +647,10 @@ export default function SearchModal() {
         projects: results.projects,
         members: filteredMembers,
         recentIssues,
+        pages,
+        commands,
       }),
-    [query, results, filteredMembers, recentIssues],
+    [query, results, filteredMembers, recentIssues, pages, commands],
   );
 
   const renderItem = useCallback<ListRenderItem<RowItem>>(
@@ -493,6 +661,29 @@ export default function SearchModal() {
             <Text className="px-4 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase">
               {item.title}
             </Text>
+          );
+        case "page":
+          return (
+            <ActionRow
+              icon={<Ionicons name={PAGE_ICONS[item.page.key]} size={18} color={theme.mutedForeground} />}
+              label={item.page.label}
+              query={item.query}
+              onPress={() => onPressPage(item.page)}
+            />
+          );
+        case "command":
+          return (
+            <ActionRow
+              icon={<Ionicons name={COMMAND_ICONS[item.command.key]} size={18} color={theme.mutedForeground} />}
+              label={item.command.label}
+              query={item.query}
+              trailing={
+                item.command.theme === themePreference ? (
+                  <Ionicons name="checkmark" size={16} color={theme.mutedForeground} />
+                ) : null
+              }
+              onPress={() => onPressCommand(item.command.key)}
+            />
           );
         case "issue":
           return <SearchIssueRow item={item.issue} query={item.query} slug={slug} />;
