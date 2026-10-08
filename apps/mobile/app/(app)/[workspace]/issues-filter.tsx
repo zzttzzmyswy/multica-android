@@ -60,6 +60,13 @@ import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
+import { buildIssueWindow } from "@/data/stores/issue-filter-slice";
+import { useFilterSheetFacetCounts } from "@/data/queries/issue-facets";
+import {
+  NO_VALUE_KEY,
+  facetValuesFor,
+  propertyFacetable,
+} from "@/lib/issue-facet-counts";
 
 // Mirrors PRIORITY_ORDER in packages/core/issues/config/priority.ts.
 const PRIORITY_ORDER: IssuePriority[] = [
@@ -114,9 +121,17 @@ const CARD_PROPERTY_TOGGLES: {
 ];
 
 export default function IssuesFilterRoute() {
-  const { scope, workspace: workspaceSlug } = useLocalSearchParams<{
+  const {
+    scope,
+    workspace: workspaceSlug,
+    project: projectIdParam,
+  } = useLocalSearchParams<{
     scope?: string;
     workspace?: string;
+    /** The project surface's id. The facet counts need it to evaluate against
+     *  the same project the list is showing; `project-issue-surface.tsx`'s
+     *  openFilter sends it. */
+    project?: string;
   }>();
   const resolvedScope: Scope = parseFilterScope(scope);
   const { t } = useTranslation();
@@ -164,6 +179,7 @@ export default function IssuesFilterRoute() {
   // Custom-property definitions that can drive a filter — same
   // filterable-property set web uses (issues-header.tsx:1175-1181).
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
   const statusOptions = useStatusOptions(wsId);
   // Four-state read (MYS-1892). The `= []` default this replaced folded
   // "loading" and "request failed" into "the workspace has none", which is
@@ -183,6 +199,41 @@ export default function IssuesFilterRoute() {
       // (packages/core/types/property.ts).
       isActorPropertyType(p.type),
   );
+  // Disjunctive server facet counts — one "N issues" badge per filter option,
+  // matching web (issues-header.tsx:1266 status / :1309 priority / :387
+  // assignee / :1402 creator / :1429 project / :626 label). Undefined until a
+  // response lands, and undefined forever on a project surface that was
+  // opened without a project id: counting against the whole workspace would
+  // badge options with numbers from other projects. See
+  // `lib/issue-facet-counts.ts` for the mapping and the "exact or nothing"
+  // rule this follows.
+  const facetTab = (s as { scope?: string }).scope;
+  const facetCounts = useFilterSheetFacetCounts({
+    wsId,
+    sheetScope: resolvedScope,
+    tab: facetTab,
+    window: buildIssueWindow(s),
+    includeSubIssues: showSubIssues,
+    projectId: projectIdParam,
+    // One property facet per filterable definition. The server resolves each
+    // id against the workspace catalog and rejects an unknown or archived one,
+    // so only definitions the catalog actually returned are asked for — and
+    // only the three types it can facet (select / multi_select / checkbox,
+    // issue_table_facets.go:236-247). Actor properties filter by reference and
+    // have no facet; the picker shows them without a count rather than a
+    // request that would 400 the whole batch.
+    propertyIds: filterableProperties
+      .filter((p) => propertyFacetable(p.type))
+      .map((p) => p.id),
+  });
+  // A dimension's `key → count`, or undefined when there is nothing exact to
+  // show. The count for "unassigned" / "no project" arrives under the
+  // server's `__none__` key.
+  const countFor = (
+    facet: Parameters<typeof facetValuesFor>[1],
+    key: string,
+  ): number | undefined => facetValuesFor(facetCounts, facet)?.get(key);
+
   // A settled catalog holding no definition THIS section can filter by is the
   // section's own empty — "no filterable properties" stays true and still
   // belongs to this section, so it must not fall through to a blank body.
@@ -219,7 +270,16 @@ export default function IssuesFilterRoute() {
     if (!workspaceSlug) return;
     router.push({
       pathname: "/[workspace]/issues-filter-picker",
-      params: { workspace: workspaceSlug, scope: resolvedScope, dim },
+      // `project` rides along so the sub-picker's counts resolve against the
+      // same project this panel just counted; dropping it here would leave the
+      // option rows badge-less while the dimension row above them had a
+      // number.
+      params: {
+        workspace: workspaceSlug,
+        scope: resolvedScope,
+        dim,
+        ...(projectIdParam ? { project: projectIdParam } : {}),
+      },
     });
   };
 
@@ -283,6 +343,7 @@ export default function IssuesFilterRoute() {
             ) : null}
             {group.options.map((option) => {
               const checked = statusFilters.includes(option.key);
+              const count = countFor({ kind: "status" }, option.key);
               return (
                 <Pressable
                   key={option.key}
@@ -301,6 +362,7 @@ export default function IssuesFilterRoute() {
                   <Text className="flex-1 text-sm text-foreground">
                     {option.label}
                   </Text>
+                  <OptionCount count={count} t={t} />
                   <CheckMark checked={checked} />
                 </Pressable>
               );
@@ -312,6 +374,7 @@ export default function IssuesFilterRoute() {
         <SectionLabel>{t("filter.priority")}</SectionLabel>
         {PRIORITY_ORDER.map((priority) => {
           const checked = priorityFilters.includes(priority);
+          const count = countFor({ kind: "priority" }, priority);
           return (
             <Pressable
               key={priority}
@@ -325,6 +388,7 @@ export default function IssuesFilterRoute() {
               <Text className="flex-1 text-sm text-foreground">
                 {t(`enum.priority.${priority}`)}
               </Text>
+              <OptionCount count={count} t={t} />
               <CheckMark checked={checked} />
             </Pressable>
           );
@@ -342,6 +406,7 @@ export default function IssuesFilterRoute() {
         />
         <BoolRow
           label={t("filter.noAssignee")}
+          count={countFor({ kind: "assignee" }, NO_VALUE_KEY)}
           checked={includeNoAssignee}
           onToggle={() => act().toggleNoAssignee()}
           t={t}
@@ -376,6 +441,7 @@ export default function IssuesFilterRoute() {
         />
         <BoolRow
           label={t("filter.noProject")}
+          count={countFor({ kind: "project" }, NO_VALUE_KEY)}
           checked={includeNoProject}
           onToggle={() => act().toggleNoProject()}
           t={t}
@@ -711,6 +777,33 @@ function actorSummary(filters: { type: string; id: string }[]): string {
 }
 
 /** Row that opens the multi-select dimension sub-sheet. */
+/**
+ * The "N issues" badge web puts on the right of a filter option
+ * (`packages/views/issues/components/issues-header.tsx:1272`, `$.filters.issue_count`).
+ *
+ * Renders NOTHING for `undefined` — which is the whole point of the
+ * "exact or nothing" rule: an unresolved or failed facet means the number is
+ * unknown, and printing "0 issues" there would state something the server
+ * never said. A genuine 0 also renders nothing, matching web's `count > 0`
+ * gate (a zero-count option is dead weight in a picker).
+ */
+function OptionCount({
+  count,
+  t,
+}: {
+  count: number | undefined;
+  t: (id: string, params?: Record<string, string | number>) => string;
+}) {
+  if (count === undefined || count <= 0) return null;
+  return (
+    <Text className="text-xs text-muted-foreground">
+      {t(count === 1 ? "filter.issueCount_one" : "filter.issueCount_other", {
+        count,
+      })}
+    </Text>
+  );
+}
+
 function FilterDimensionRow({
   label,
   summary,
@@ -758,12 +851,17 @@ function FilterDimensionRow({
 function BoolRow({
   label,
   description,
+  count,
   checked,
   onToggle,
   t,
 }: {
   label: string;
   description?: string;
+  /** Exact server count for this toggle's own dimension, when there is one.
+   *  Web badges the `No assignee` / `No project` rows the same way it badges
+   *  the options above them (issues-header.tsx:377). */
+  count?: number;
   checked: boolean;
   onToggle: () => void;
   t: (id: string, params?: Record<string, string | number>) => string;
@@ -784,6 +882,7 @@ function BoolRow({
           </Text>
         ) : null}
       </View>
+      <OptionCount count={count} t={t} />
       <Ionicons
         name={checked ? "checkbox" : "square-outline"}
         size={20}

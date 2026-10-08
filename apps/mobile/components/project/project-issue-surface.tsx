@@ -251,7 +251,11 @@ export function ProjectIssueSurface({
     if (!wsSlug) return;
     router.push({
       pathname: "/[workspace]/issues-filter",
-      params: { workspace: wsSlug, scope: "project" },
+      // `project` carries this surface's identity to the filter sheet, whose
+      // facet counts have to be evaluated against the same project the list is
+      // showing — without it the sheet renders no counts at all rather than
+      // counts from every other project (see `lib/issue-facet-counts.ts`).
+      params: { workspace: wsSlug, scope: "project", project: projectId },
     });
   };
 

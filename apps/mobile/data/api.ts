@@ -63,6 +63,8 @@ import type {
   IssueProperty,
   IssuePropertyValue,
   IssueSubscriber,
+  IssueTableFacetsRequest,
+  IssueTableFacetsResponse,
   IssueTableGroupsRequest,
   IssueTableGroupsResponse,
   Label,
@@ -206,6 +208,7 @@ import {
   EMPTY_LIST_AUTOPILOTS_RESPONSE,
   EMPTY_LIST_GITHUB_INSTALLATIONS_RESPONSE,
   EMPTY_LIST_GITHUB_REPOSITORIES_RESPONSE,
+  EMPTY_ISSUE_TABLE_FACETS_RESPONSE,
   EMPTY_ISSUE_TABLE_GROUPS_RESPONSE,
   EMPTY_LIST_ISSUES_RESPONSE,
   EMPTY_LIST_PROPERTIES_RESPONSE,
@@ -220,6 +223,7 @@ import {
   IssuePropertiesResponseSchema,
   IssuePropertySchema,
   IssueSchema,
+  IssueTableFacetsResponseSchema,
   IssueTableGroupsResponseSchema,
   IssueViewListSchema,
   IssueViewPreferenceSchema,
@@ -2715,6 +2719,28 @@ class ApiClient {
       EMPTY_ISSUE_TABLE_GROUPS_RESPONSE,
       { method: "POST", body: JSON.stringify(request) },
       { ...opts, endpoint: "POST /api/issues/table/groups" },
+    );
+  }
+
+  /**
+   * Disjunctive facet counts for the issue filter panel: one `key → count`
+   * list per requested dimension, each counted with that dimension's OWN
+   * filter dropped (`server/internal/handler/issue_table_facets.go`), so a
+   * count answers "how many issues would I see if I turned this option on".
+   * Drives the same "N issues" badges web renders — see
+   * `lib/issue-facet-counts.ts`. Same contract as web's
+   * `client.listIssueTableFacets`.
+   */
+  async listIssueTableFacets(
+    request: IssueTableFacetsRequest,
+    opts?: { signal?: AbortSignal },
+  ): Promise<IssueTableFacetsResponse> {
+    return this.fetchValidatedWith(
+      "/api/issues/table/facets",
+      IssueTableFacetsResponseSchema,
+      EMPTY_ISSUE_TABLE_FACETS_RESPONSE,
+      { method: "POST", body: JSON.stringify(request) },
+      { ...opts, endpoint: "POST /api/issues/table/facets" },
     );
   }
 

@@ -39,6 +39,9 @@ import { PROPERTY_FILTER_PREFIX } from "@/data/stores/issue-filter-slice";
 import { useActivePropertyCatalog } from "@/data/queries/properties";
 import { PropertyCatalogStatus } from "@/components/property/property-catalog-status";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { useFilterSheetFacetCounts } from "@/data/queries/issue-facets";
+import { facetValuesFor } from "@/lib/issue-facet-counts";
+import { buildIssueWindow } from "@/data/stores/issue-filter-slice";
 import type { IssueProperty } from "@multica/core/types";
 import type { ActorFilterValue } from "@/data/stores/issue-filter-slice";
 import { useTranslation } from "@/lib/i18n/react";
@@ -52,9 +55,16 @@ export type FilterDim =
   | `property:${string}`;
 
 export default function IssuesFilterPickerRoute() {
-  const { scope: scopeParam, dim } = useLocalSearchParams<{
+  const {
+    scope: scopeParam,
+    dim,
+    project: projectIdParam,
+  } = useLocalSearchParams<{
     scope?: string;
     dim?: string;
+    /** Project surface id, forwarded from `issues-filter.tsx` so the facet
+     *  counts can be evaluated against the same project the list shows. */
+    project?: string;
   }>();
   const resolvedScope: Scope = parseFilterScope(scopeParam);
   const { t } = useTranslation();
@@ -81,6 +91,21 @@ export default function IssuesFilterPickerRoute() {
   const propertyDef = propertyId
     ? catalog.definitions.find((p) => p.id === propertyId)
     : undefined;
+
+  // The same facet counts the panel badges its dimension rows with — same
+  // store, same scope, same window, so a dimension's number and the sum of
+  // the options in this sheet describe one row set. Undefined (unresolved,
+  // failed, or a project sheet with no id) renders no badges at all; see
+  // `lib/issue-facet-counts.ts`.
+  const facetStore = issueFilterStoreForScope(resolvedScope)();
+  const facetCounts = useFilterSheetFacetCounts({
+    wsId,
+    sheetScope: resolvedScope,
+    tab: (facetStore as { scope?: string }).scope,
+    window: buildIssueWindow(facetStore),
+    includeSubIssues: facetStore.showSubIssues,
+    projectId: projectIdParam,
+  });
 
   const titleKey =
     resolvedDim === "assignee"
@@ -110,6 +135,11 @@ export default function IssuesFilterPickerRoute() {
           dim={resolvedDim}
           scope={resolvedScope}
           searchPlaceholder={t("picker.searchPeople")}
+          counts={
+            resolvedDim === "assignee"
+              ? facetValuesFor(facetCounts, { kind: "assignee" })
+              : facetValuesFor(facetCounts, { kind: "creator" })
+          }
         />
       </PickerChrome>
     );
@@ -118,7 +148,10 @@ export default function IssuesFilterPickerRoute() {
   if (resolvedDim === "project") {
     return (
       <PickerChrome title={t(titleKey!)} onDone={close} t={t}>
-        <ProjectPickerBody scope={resolvedScope} />
+        <ProjectPickerBody
+          scope={resolvedScope}
+          counts={facetValuesFor(facetCounts, { kind: "project" })}
+        />
       </PickerChrome>
     );
   }
@@ -126,7 +159,10 @@ export default function IssuesFilterPickerRoute() {
   if (resolvedDim === "label") {
     return (
       <PickerChrome title={t(titleKey!)} onDone={close} t={t}>
-        <LabelPickerBody scope={resolvedScope} />
+        <LabelPickerBody
+          scope={resolvedScope}
+          counts={facetValuesFor(facetCounts, { kind: "label" })}
+        />
       </PickerChrome>
     );
   }
@@ -174,10 +210,12 @@ function ActorPickerBody({
   dim,
   scope,
   searchPlaceholder,
+  counts,
 }: {
   dim: "assignee" | "creator";
   scope: Scope;
   searchPlaceholder: string;
+  counts?: ReadonlyMap<string, number>;
 }) {
   const s = issueFilterStoreForScope(scope)();
   const selected = dim === "assignee" ? s.assigneeFilters : s.creatorFilters;
@@ -191,17 +229,25 @@ function ActorPickerBody({
       selected={selected}
       onToggle={toggle}
       searchPlaceholder={searchPlaceholder}
+      counts={counts}
     />
   );
 }
 
 /** Project multi-select body — subscribes the scope's store only. */
-function ProjectPickerBody({ scope }: { scope: Scope }) {
+function ProjectPickerBody({
+  scope,
+  counts,
+}: {
+  scope: Scope;
+  counts?: ReadonlyMap<string, number>;
+}) {
   const s = issueFilterStoreForScope(scope)();
   return (
     <FilterProjectPickerBody
       selected={s.projectFilters}
       includeNoProject={s.includeNoProject}
+      counts={counts}
       onToggle={(id) =>
         issueFilterStoreForScope(scope).getState().toggleProjectFilter(id)
       }
@@ -213,11 +259,18 @@ function ProjectPickerBody({ scope }: { scope: Scope }) {
 }
 
 /** Label multi-select body — subscribes the scope's store only. */
-function LabelPickerBody({ scope }: { scope: Scope }) {
+function LabelPickerBody({
+  scope,
+  counts,
+}: {
+  scope: Scope;
+  counts?: ReadonlyMap<string, number>;
+}) {
   const s = issueFilterStoreForScope(scope)();
   return (
     <FilterLabelPickerBody
       selected={s.labelFilters}
+      counts={counts}
       onToggle={(id) =>
         issueFilterStoreForScope(scope).getState().toggleLabelFilter(id)
       }
