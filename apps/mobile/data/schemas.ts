@@ -2625,6 +2625,7 @@ export interface AppConfigResponse {
   workspace_creation_disabled?: boolean;
   vcs_integration_available?: boolean;
   feature_flags?: Record<string, boolean>;
+  comment_delete_keep_replies_supported?: boolean;
   server_version?: string;
 }
 
@@ -2650,6 +2651,11 @@ export const AppConfigSchema = z
     workspace_creation_disabled: BooleanWithDefaultSchema(false).optional(),
     vcs_integration_available: BooleanWithDefaultSchema(false).optional(),
     feature_flags: FeatureFlagsSchema,
+    // Deployment capability (#8296): deleting a comment keeps its replies.
+    // Absent on older servers, which delete the replies too, so it fails
+    // closed — see `lib/comment-deletion.ts`.
+    comment_delete_keep_replies_supported:
+      BooleanWithDefaultSchema(false).optional(),
     server_version: z.string().optional(),
   })
   .loose();
@@ -2664,6 +2670,7 @@ export const EMPTY_APP_CONFIG: AppConfigResponse = {
   workspace_creation_disabled: false,
   vcs_integration_available: false,
   feature_flags: {},
+  comment_delete_keep_replies_supported: false,
 };
 
 // ── Feedback (iteration-100) ───────────────────────────────────────────────

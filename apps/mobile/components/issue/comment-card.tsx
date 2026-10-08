@@ -71,6 +71,7 @@ import {
   useToggleCommentCollapsed,
 } from "@/data/stores/comment-collapse-store";
 import { commentPreview } from "@/lib/comment-collapse";
+import { isDeletedComment } from "@/lib/comment-deletion";
 import {
   deriveThreadResolution,
   foldThreadReplies,
@@ -120,6 +121,15 @@ export function CommentCard({
   const foldedReplies = useMemo(
     () => foldThreadReplies(replies, resolution),
     [replies, resolution],
+  );
+  // A deleted REPLY renders nothing: its row is kept only so its own replies
+  // keep a direct parent (#8296), and this list is flat, so they already
+  // render in its place. Web filters the same way
+  // (packages/views/issues/components/comment-card.tsx). A deleted ROOT keeps
+  // its row — it heads the thread.
+  const visibleReplies = useMemo(
+    () => replies.filter((reply) => !isDeletedComment(reply)),
+    [replies],
   );
   const resolutionReply = useMemo(
     () =>
@@ -237,7 +247,7 @@ export function CommentCard({
             issueIdentifier={issueIdentifier}
             onPressChange={handlePressChange}
             collapsed={rootFolded}
-            replyCount={replies.length}
+            replyCount={visibleReplies.length}
             onToggleCollapse={handleToggleFold}
           />
           {rootFolded ? null : replyResolutionId !== null && !expanded ? (
@@ -270,7 +280,7 @@ export function CommentCard({
               ) : null}
             </>
           ) : (
-            replies.map((reply) => (
+            visibleReplies.map((reply) => (
               <View key={reply.id} className="border-t border-border/60 pt-3">
                 {reply.id === replyResolutionId ? <ResolutionBadge /> : null}
                 <CommentBody
@@ -324,6 +334,9 @@ function ResolvedThreadBar({
     const seen = new Set<string>();
     const ordered: { type: string | null; id: string | null }[] = [];
     for (const e of [entry, ...replies]) {
+      // A deleted comment names no author — the server clears it — so listing
+      // its actor would credit someone with a message the reader cannot see.
+      if (isDeletedComment(e)) continue;
       const key = `${e.actor_type}:${e.actor_id}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -339,7 +352,13 @@ function ResolvedThreadBar({
     return remaining > 0 ? `${named} +${remaining}` : named;
   }, [entry, replies, getName]);
 
-  const total = 1 + replies.length;
+  // Deleted replies render nothing when the thread expands, so the folded
+  // count must not promise them either.
+  const visibleReplies = useMemo(
+    () => replies.filter((reply) => !isDeletedComment(reply)),
+    [replies],
+  );
+  const total = 1 + visibleReplies.length;
   const messageCount = t(total === 1 ? "comment.message" : "comment.messages");
 
   return (
@@ -395,6 +414,9 @@ function CommentsFoldBar({
     const seen = new Set<string>();
     const ordered: { type: string | null; id: string | null }[] = [];
     for (const e of replies) {
+      // Same rule as the resolved bar: a tombstone names no author, and the
+      // bar must not list someone whose message renders no row.
+      if (isDeletedComment(e)) continue;
       const key = `${e.actor_type}:${e.actor_id}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -410,7 +432,9 @@ function CommentsFoldBar({
     return remaining > 0 ? `${named} +${remaining}` : named;
   }, [replies, getName]);
 
-  const total = replies.length;
+  // A deleted reply renders no row when the bar is expanded, so counting it
+  // here would promise a message the reader can never see.
+  const total = replies.filter((reply) => !isDeletedComment(reply)).length;
   const messageCount = t(total === 1 ? "comment.message" : "comment.messages");
 
   return (
@@ -728,6 +752,21 @@ function CommentBody({
     if (isSelecting) return;
     onPressChange?.(entry.id, longPress.isPressed);
   }, [longPress.isPressed, entry.id, isSelecting, onPressChange]);
+
+  // A tombstone — a comment deleted while it still had replies (#8296). Only a
+  // thread ROOT reaches here (`CommentCard` filters deleted replies out), and
+  // it keeps a placeholder because its replies hang off it and the thread
+  // would otherwise have no head. Mirrors web's root placeholder in
+  // `packages/views/issues/components/comment-card.tsx`. Rendering the empty
+  // `content` instead would leave a blank bubble with an author, timestamp and
+  // reaction bar for a comment that no longer exists.
+  if (isDeletedComment(entry)) {
+    return (
+      <Text className="text-sm italic text-muted-foreground">
+        {t("comment.deletedPlaceholder")}
+      </Text>
+    );
+  }
 
   const body = (
     <View className="gap-2">

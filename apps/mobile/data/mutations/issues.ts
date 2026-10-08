@@ -28,7 +28,13 @@ import type {
   UpdateIssueRequest,
 } from "@multica/core/types";
 import { api } from "@/data/api";
+import { serverConfigOptions } from "@/data/queries/config";
 import { issueKeys } from "@/data/queries/issues";
+import {
+  applyCommentDeletion,
+  commentDeleteKeepsReplies,
+  removeCommentSubtree,
+} from "@/lib/comment-deletion";
 import {
   mapIssueRows,
   type IssueListCache,
@@ -283,10 +289,19 @@ export function useEditComment(issueId: string) {
 }
 
 /**
- * Delete a comment. Strips the matching TimelineEntry (and any replies
- * with parent_id === commentId) from the timeline cache optimistically.
- * Backend cascades reply deletion server-side; we mirror the cascade
- * locally so the optimistic patch leaves no orphans on screen.
+ * Delete a comment. On a deployment that declares
+ * `comment_delete_keep_replies_supported` only that comment goes (#8296): one
+ * with replies stays as a tombstone so they keep their direct parent. Older
+ * servers delete the replies too.
+ *
+ * Deliberately NOT optimistic. Which outcome applies depends on whether the
+ * comment has replies, which only the server can answer authoritatively — the
+ * local cache can be missing a reply another client just posted. Guessing
+ * "the replies went too" is what made mobile hide replies the deployment
+ * kept; guessing the other way would leave ghosts. So the patch lands once
+ * the server confirms, mirroring its outcome with the same helpers web uses
+ * (`packages/core/issues/mutations.ts`); the settle refetch reconciles the
+ * rest.
  */
 export function useDeleteComment(issueId: string) {
   const qc = useQueryClient();
@@ -298,26 +313,22 @@ export function useDeleteComment(issueId: string) {
     // will be removed and the row leaves the timeline either way, so silence
     // was indistinguishable from success.
     meta: { [WRITE_FAILURE_TITLE_KEY]: "comment.deleteFailed" },
-    mutationFn: (commentId: string) => api.deleteComment(commentId),
-    onMutate: async (commentId) => {
-      const key = issueKeys.timeline(wsId, issueId);
-      await qc.cancelQueries({ queryKey: key });
-      const prev = qc.getQueryData<TimelineEntry[]>(key);
-      qc.setQueryData<TimelineEntry[]>(key, (old) =>
-        old?.filter(
-          (entry) =>
-            !(
-              entry.type === "comment" &&
-              (entry.id === commentId || entry.parent_id === commentId)
-            ),
-        ),
+    // The capability is read from the same config cache the confirmation copy
+    // reads, so the route matches what the user was just told.
+    mutationFn: async (commentId: string) => {
+      const keepReplies = commentDeleteKeepsReplies(
+        qc.getQueryData(serverConfigOptions().queryKey),
       );
-      return { prev, key };
+      await api.deleteComment(commentId, { keepReplies });
+      return keepReplies;
     },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.prev !== undefined && ctx.key) {
-        qc.setQueryData(ctx.key, ctx.prev);
-      }
+    onSuccess: (keptReplies, commentId) => {
+      const key = issueKeys.timeline(wsId, issueId);
+      qc.setQueryData<TimelineEntry[]>(key, (old) =>
+        keptReplies
+          ? applyCommentDeletion(old, commentId, new Date().toISOString())
+          : removeCommentSubtree(old, commentId),
+      );
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: issueKeys.timeline(wsId, issueId) });

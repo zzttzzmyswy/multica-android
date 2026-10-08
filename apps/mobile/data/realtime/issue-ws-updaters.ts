@@ -43,6 +43,7 @@ import type {
   TimelineEntry,
 } from "@multica/core/types";
 import { issueKeys } from "@/data/queries/issue-keys";
+import { removeCommentSubtree } from "@/lib/comment-deletion";
 import {
   mapIssueRows,
   upsertIssueRow,
@@ -144,7 +145,7 @@ export function removeTimelineEntry(
 /**
  * Cascade-delete a comment and every descendant reply (reply-to-reply
  * chains included). Mirrors the server's cascade in `comment.go:DeleteComment`
- * and web's `comment:deleted` handler at
+ * on a server that predates #8296, and web's `comment:deleted` handler at
  * `packages/views/issues/hooks/use-issue-timeline.ts:164-194`.
  *
  * Without this, removing only the root entry leaves the replies as
@@ -152,8 +153,11 @@ export function removeTimelineEntry(
  * (its orphan-rescue branch), so the user would see ghost replies after a
  * thread delete on another client. Same-N rule violation.
  *
- * BFS rather than recursive Set-union: cheaper for arbitrary depth chains
- * and avoids recursion-depth concerns on large threads.
+ * A #8296 server never removes a comment that still has replies — it emits
+ * `comment:updated` with a tombstone instead — so on such a deployment this
+ * sweep only has stale cache entries to clear, which is exactly what it is
+ * for. The walk itself is `removeCommentSubtree` from `lib/comment-deletion`,
+ * shared with the delete mutation so the two cache writes cannot drift.
  */
 export function removeCommentCascade(
   qc: QueryClient,
@@ -163,32 +167,7 @@ export function removeCommentCascade(
 ) {
   qc.setQueryData<TimelineEntry[]>(
     issueKeys.timeline(wsId, issueId),
-    (old) => {
-      if (!old) return old;
-      const removed = new Set<string>([commentId]);
-      // Iterate to fixed point — a single forward pass catches direct
-      // children; later passes catch reply-to-reply chains. Bounded by
-      // the timeline length, so worst case O(N²) on a degenerate chain
-      // but N is p99 30 and chains are typically depth 1-2.
-      let changed = true;
-      while (changed) {
-        changed = false;
-        for (const e of old) {
-          if (
-            e.type === "comment" &&
-            e.parent_id &&
-            removed.has(e.parent_id) &&
-            !removed.has(e.id)
-          ) {
-            removed.add(e.id);
-            changed = true;
-          }
-        }
-      }
-      return old.filter(
-        (e) => !(e.type === "comment" && removed.has(e.id)),
-      );
-    },
+    (old) => removeCommentSubtree(old, commentId),
   );
 }
 
@@ -452,5 +431,10 @@ export function commentToTimelineEntry(comment: Comment): TimelineEntry {
     resolved_by_type: comment.resolved_by_type,
     resolved_by_id: comment.resolved_by_id,
     source_task_id: comment.source_task_id,
+    // Carry the tombstone marker. The server publishes a keep-replies delete
+    // as `comment:updated` with the cleared row (#8296), so dropping this here
+    // would turn the tombstone back into a blank live comment in the cache and
+    // the card would render an empty bubble the reader cannot explain.
+    deleted_at: comment.deleted_at,
   };
 }

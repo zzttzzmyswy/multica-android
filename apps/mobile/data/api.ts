@@ -3064,8 +3064,21 @@ class ApiClient {
 
   // DELETE /api/comments/:id — 204 No Content on success; this.fetch
   // already short-circuits 204 → undefined.
-  async deleteComment(commentId: string): Promise<void> {
-    await this.fetch<void>(`/api/comments/${commentId}`, { method: "DELETE" });
+  //
+  // `keepReplies` selects the `/keep-replies` route, which servers from
+  // #8296 onward also mount (`server/cmd/server/router.go`, same handler).
+  // It is the only route that PROMISES the replies survive: on an older
+  // server the path is unrouted and the request fails, instead of deleting
+  // the replies the caller told the user would stay. Callers pass the value
+  // they derived from `comment_delete_keep_replies_supported`.
+  async deleteComment(
+    commentId: string,
+    opts: { keepReplies?: boolean } = {},
+  ): Promise<void> {
+    const path = opts.keepReplies
+      ? `/api/comments/${commentId}/keep-replies`
+      : `/api/comments/${commentId}`;
+    await this.fetch<void>(path, { method: "DELETE" });
   }
 
   // POST /api/comments/:id/resolve — marks the thread root resolved; only

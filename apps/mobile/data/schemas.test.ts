@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ChatLastMessageSchema, ChatMessageSchema } from "@/data/schemas";
+import { AppConfigSchema, ChatLastMessageSchema, ChatMessageSchema } from "@/data/schemas";
+import { commentDeleteKeepsReplies } from "@/lib/comment-deletion";
 
 /**
  * Chat message-kind parsing (iteration 174).
@@ -82,5 +83,50 @@ describe("ChatLastMessageSchema message_kind", () => {
           .message_kind,
       ).toBe(kind);
     }
+  });
+});
+
+describe("AppConfigSchema comment-delete capability (iteration 210)", () => {
+  // A real /api/config body from the deployment this client talks to
+  // (https://muapi.zztweb.top/api/config), field for field. The capability
+  // ends up in AppConfigResponse and is read by lib/comment-deletion.ts; a
+  // schema that silently dropped it would leave the delete promising the
+  // pre-#8296 cascade on a server that keeps replies.
+  const liveConfig = {
+    cdn_domain: "",
+    allow_signup: false,
+    daemon_server_url: "https://muapi.zztweb.top",
+    daemon_app_url: "https://mu.zztweb.top",
+    vcs_integration_available: true,
+    posthog_key: "",
+    posthog_host: "",
+    analytics_environment: "production",
+    feature_flags: {
+      agents_agent_builder: true,
+      agents_skill_toggles: true,
+      billing_workspace_subscriptions: false,
+      composio_mcp_apps: false,
+      plugins_v1: false,
+      settings_resource_labels: true,
+    },
+    local_worktree_supported: true,
+    agent_conversation_starters_supported: true,
+    issue_create_properties_supported: true,
+    comment_delete_keep_replies_supported: true,
+    server_version: "v0.6.1",
+  };
+
+  it("keeps the capability when the deployment declares it", () => {
+    const parsed = AppConfigSchema.parse(liveConfig);
+    expect(parsed.comment_delete_keep_replies_supported).toBe(true);
+    expect(commentDeleteKeepsReplies(parsed)).toBe(true);
+  });
+
+  it("defaults to false when an older server omits it", () => {
+    const { comment_delete_keep_replies_supported: _omitted, ...older } =
+      liveConfig;
+    const parsed = AppConfigSchema.parse(older);
+    expect(parsed.comment_delete_keep_replies_supported).toBe(false);
+    expect(commentDeleteKeepsReplies(parsed)).toBe(false);
   });
 });
