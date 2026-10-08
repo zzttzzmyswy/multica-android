@@ -285,10 +285,14 @@ describe("workingOnly (iteration-127)", () => {
     expect(store.getState().statusFilters).toEqual(["todo"]);
   });
 
-  it("is never sent to the server window", () => {
-    // The predicate is client-only: `/api/issues` has no working-agents
-    // parameter, and inventing one would 400 or silently no-op. The window
-    // builder must ignore it.
+  it("carries no working dimension of its own (iteration-213)", () => {
+    // `workingOnly` is a CLIENT predicate: the rows narrow through
+    // `applyIssueFilters`, and that does not change. The server count channels
+    // need the id set too, but it reaches them through
+    // `withWorkingCountDimension` — NOT through this window, which is spread
+    // verbatim into `GET /api/issues` and into the list CACHE KEY. Putting
+    // the running set here would refetch every list on every task start/stop
+    // (the set moves second-to-second) for rows that cannot change.
     store.getState().toggleWorkingOnly();
     expect(buildIssueWindow(store.getState())).toEqual({});
   });

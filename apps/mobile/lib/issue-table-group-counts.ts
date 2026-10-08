@@ -20,7 +20,10 @@ import type {
   IssueTableQuerySpec,
   IssueTableScope,
 } from "@multica/core/types";
-import type { IssueListWindowParams } from "@/data/queries/issue-keys";
+import type {
+  IssueCountWindowParams,
+  IssueListWindowParams,
+} from "@/data/queries/issue-keys";
 import {
   propertyIdFromGrouping,
   type IssueTableGrouping,
@@ -89,8 +92,52 @@ export function issueTableGroupSpecFor(
   return propertyId ? { kind: "property", property_id: propertyId } : null;
 }
 
+/** The scopes whose server counts may carry the working dimension.
+ *
+ *  `project` is excluded, and that is a parity decision rather than an
+ *  oversight: web renders the project page's `IssueSurface` with no
+ *  agents-working chip at all (`use-issue-surface-data.ts:345` vs `:396`), and
+ *  mobile's project surface therefore hard-codes `workingOnly: false` for its
+ *  rows. Narrowing that surface's badges to a filter its rows ignore would
+ *  badge numbers the list below them contradicts — the same defect this module
+ *  fixes, moved one screen over. The filter SHEET is shared by all three
+ *  surfaces and can still be opened on the project one, where its store field
+ *  may hold a stale `true`; this clamp is what keeps the sheet honest. */
+export type IssueCountScope = "all" | "my" | "project";
+
+/** The working toggle as the COUNT channels must see it for a given surface. */
+export function countWorkingOnly(
+  scope: IssueCountScope,
+  workingOnly: boolean,
+): boolean {
+  return scope !== "project" && workingOnly;
+}
+
+/** Add the working dimension to a count window, or hand the window back
+ *  untouched.
+ *
+ *  Fail-closed on an unresolved projection: `runningIssueIds === undefined`
+ *  means the agent-task snapshot has not landed, and an explicit EMPTY list is
+ *  the truthful answer there (the server turns it into `FALSE`) — the same
+ *  read `applyIssueFilters` takes for its rows (`lib/filter-issues.ts:140-147`).
+ *  Degrading to "no restriction" instead would restore the unfiltered count at
+ *  the one moment it is most visible: the first paint after the toggle flips.
+ *
+ *  Returns the SAME object when the dimension is off, so a surface can memoise
+ *  the count window on this call without allocating a fresh object each render. */
+export function withWorkingCountDimension(
+  window: IssueListWindowParams,
+  workingOnly: boolean,
+  runningIssueIds: ReadonlySet<string> | undefined,
+): IssueCountWindowParams {
+  if (!workingOnly) return window;
+  // Sorted so the spec bag — and therefore the query key's `issueParamsKey` —
+  // is stable across two snapshots that differ only in Set iteration order.
+  return { ...window, working_issue_ids: [...(runningIssueIds ?? [])].sort() };
+}
+
 /**
- * The window mobile passes to `GET /api/issues` → the Table query spec.
+ * The count window → the Table query spec.
  *
  * Sort is deliberately NOT carried over: group counts are sort-invariant, and
  * keeping it out means re-sorting the table does not refetch them. The default
@@ -99,10 +146,19 @@ export function issueTableGroupSpecFor(
  * `include_sub_issues` IS carried over — the surface's "show sub-issues"
  * toggle filters rows out client-side, so a count that ignored it would
  * report rows the table is not showing.
+ *
+ * `working_issue_ids` IS carried over for the same reason, and it is the fix
+ * for MYS-2017: rows narrow by a CLIENT predicate over the running-issue
+ * set, so a count built without this dimension answered a question about a
+ * different set — the table showed 3 rows under a header that read 240. Web
+ * carries it on the one `tableQuerySpec` that feeds its rows, its facet
+ * request and its group query alike
+ * (`packages/views/issues/surface/use-issue-surface-controller.ts:441-443`);
+ * this is mobile's equivalent for the two channels mobile asks the server for.
  */
 export function buildIssueTableGroupQuerySpec(
   scope: IssueTableScope,
-  window: IssueListWindowParams,
+  window: IssueCountWindowParams,
   includeSubIssues = true,
 ): IssueTableQuerySpec {
   const date =
@@ -134,6 +190,12 @@ export function buildIssueTableGroupQuerySpec(
         ? { properties: window.properties }
         : {}),
       ...(date ? { date } : {}),
+      // Presence is the signal, not length: `!= null` keeps an explicit empty
+      // list on the wire, where the server compiles it to `FALSE`
+      // (issue_table_query.go:616-627) — the truthful "nobody is running".
+      ...(window.working_issue_ids != null
+        ? { working_issue_ids: window.working_issue_ids }
+        : {}),
       include_sub_issues: includeSubIssues,
     },
     sort: { field: "position", direction: "asc" },

@@ -40,6 +40,11 @@ import { useActivePropertyCatalog } from "@/data/queries/properties";
 import { PropertyCatalogStatus } from "@/components/property/property-catalog-status";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useFilterSheetFacetCounts } from "@/data/queries/issue-facets";
+import { useRunningIssueIds } from "@/data/queries/agent-task-snapshot";
+import {
+  countWorkingOnly,
+  withWorkingCountDimension,
+} from "@/lib/issue-table-group-counts";
 import { facetValuesFor } from "@/lib/issue-facet-counts";
 import { buildIssueWindow } from "@/data/stores/issue-filter-slice";
 import type { IssueProperty } from "@multica/core/types";
@@ -98,11 +103,20 @@ export default function IssuesFilterPickerRoute() {
   // failed, or a project sheet with no id) renders no badges at all; see
   // `lib/issue-facet-counts.ts`.
   const facetStore = issueFilterStoreForScope(resolvedScope)();
+  // The option rows must badge the SAME numbers the panel's dimension rows do,
+  // so this window carries the working dimension identically (MYS-2017) — same
+  // running set, same scope clamp. A picker that resolved its own counts would
+  // be the one place the two sheets could disagree.
+  const runningIssueIds = useRunningIssueIds();
   const facetCounts = useFilterSheetFacetCounts({
     wsId,
     sheetScope: resolvedScope,
     tab: (facetStore as { scope?: string }).scope,
-    window: buildIssueWindow(facetStore),
+    window: withWorkingCountDimension(
+      buildIssueWindow(facetStore),
+      countWorkingOnly(resolvedScope, facetStore.workingOnly),
+      runningIssueIds,
+    ),
     includeSubIssues: facetStore.showSubIssues,
     projectId: projectIdParam,
   });

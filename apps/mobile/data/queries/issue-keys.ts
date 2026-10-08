@@ -70,6 +70,31 @@ export type IssueListWindowParams = Pick<
   | "sort_direction"
 >;
 
+/** The window the server COUNT channels read — the list window plus the one
+ *  dimension only they carry.
+ *
+ *  `working_issue_ids` is deliberately absent from `IssueListWindowParams`.
+ *  That type is spread verbatim into `GET /api/issues` AND into the list cache
+ *  key (`issueKeys.listFiltered`), and the running-issue set moves
+ *  second-to-second: a task starting would refetch (and re-key) every list on
+ *  screen for rows the client predicate had already narrowed. Keeping the two
+ *  window shapes separate makes that a TYPE error rather than a strip helper
+ *  someone can forget at one call site.
+ *
+ *  The count endpoints (`POST /api/issues/table/groups` and `/facets`) have no
+ *  list semantics to disturb: their query is a spec, not a page, so the extra
+ *  dimension only narrows the number they return.
+ *
+ *  See `IssueTableQuerySpec.filters.working_issue_ids`
+ *  (packages/core/types/api.ts:269-271) for the server contract, and
+ *  `lib/issue-table-group-counts.ts` for the builder. */
+export type IssueCountWindowParams = IssueListWindowParams & {
+  /** Hard-restrict the counted set to these issue ids. An explicit EMPTY list
+   *  is meaningful and counts nothing (server: `FALSE`), which is the truthful
+   *  answer when the filter is on and no agent is running. */
+  working_issue_ids?: string[];
+};
+
 export const issueKeys = {
   all: (wsId: string | null) => ["issues", wsId] as const,
   list: (wsId: string | null) => [...issueKeys.all(wsId), "list"] as const,

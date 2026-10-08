@@ -62,6 +62,11 @@ import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
 import { buildIssueWindow } from "@/data/stores/issue-filter-slice";
 import { useFilterSheetFacetCounts } from "@/data/queries/issue-facets";
+import { useRunningIssueIds } from "@/data/queries/agent-task-snapshot";
+import {
+  countWorkingOnly,
+  withWorkingCountDimension,
+} from "@/lib/issue-table-group-counts";
 import {
   NO_VALUE_KEY,
   facetValuesFor,
@@ -157,6 +162,12 @@ export default function IssuesFilterRoute() {
   const propertyFilters = s.propertyFilters;
   const dateFilter = s.dateFilter;
   const workingOnly = s.workingOnly;
+  // The running-issue projection the facet badges narrow by. Read here (not in
+  // the counts hook) because the sheet's counts hook is a plain function of its
+  // args — the set has to arrive as an argument, exactly as it does on the
+  // list surfaces. `undefined` while the snapshot loads; the count window
+  // fails closed on it rather than falling back to unfiltered numbers.
+  const runningIssueIds = useRunningIssueIds();
   const sortBy = s.sortBy;
   const sortDirection = s.sortDirection;
   const grouping = s.grouping;
@@ -212,7 +223,16 @@ export default function IssuesFilterRoute() {
     wsId,
     sheetScope: resolvedScope,
     tab: facetTab,
-    window: buildIssueWindow(s),
+    // A badge is a promise about the list this sheet filters, so it carries the
+    // working dimension the same way the list's group headers do (MYS-2017):
+    // with 「智能体正在处理」 on, the rows are the running set and an unfiltered
+    // badge contradicts them. `countWorkingOnly` clamps the project surface,
+    // whose rows ignore the toggle (see its doc comment).
+    window: withWorkingCountDimension(
+      buildIssueWindow(s),
+      countWorkingOnly(resolvedScope, workingOnly),
+      runningIssueIds,
+    ),
     includeSubIssues: showSubIssues,
     projectId: projectIdParam,
     // One property facet per filterable definition. The server resolves each
