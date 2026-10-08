@@ -1394,6 +1394,8 @@
   "filter.group.assignee": "按经办人",
   "filter.group.status": "按状态",
   "filter.group.title": "分组方式",
+  "filter.issueCount_one": "{{count}} 个任务",
+  "filter.issueCount_other": "{{count}} 个任务",
   "filter.label": "标签",
   "filter.labelSearch": "搜索标签",
   "filter.moveToStatus": "移动到状态",

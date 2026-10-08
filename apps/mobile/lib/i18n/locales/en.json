@@ -1394,6 +1394,8 @@
   "filter.group.assignee": "Assignee",
   "filter.group.status": "Status",
   "filter.group.title": "Group by",
+  "filter.issueCount_one": "{{count}} issue",
+  "filter.issueCount_other": "{{count}} issues",
   "filter.label": "Label",
   "filter.labelSearch": "Search labels",
   "filter.moveToStatus": "Move to status",

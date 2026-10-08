@@ -54,6 +54,7 @@ import type { ActorFilterValue } from "@/data/stores/issue-filter-slice";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
+import { NO_VALUE_KEY } from "@/lib/issue-facet-counts";
 import { useColorScheme as useSystemColorScheme } from "@/lib/use-color-scheme";
 
 /** One row rendered by `FilterPropertyPickerBody` — a filterable property
@@ -65,6 +66,33 @@ interface FilterPropertyOption {
 }
 
 const AVATAR_SIZE = 36;
+
+/**
+ * The "N issues" badge web puts on the right of a filter option
+ * (`packages/views/issues/components/issues-header.tsx:1272`,
+ * `$.filters.issue_count`). One component for all four bodies so the wording
+ * and the visibility rule cannot drift between them.
+ *
+ * Renders NOTHING when the count is unknown (`undefined`) or zero — web's
+ * `count > 0 &&` guard. Unknown matters as much as zero: these numbers come
+ * from a server facet that may still be in flight or may have failed, and
+ * printing "0 issues" there would state something the server never said.
+ */
+function OptionCountBadge({
+  count,
+}: {
+  count: number | undefined;
+}) {
+  const { t } = useTranslation();
+  if (count === undefined || count <= 0) return null;
+  return (
+    <Text className="text-xs text-muted-foreground">
+      {t(count === 1 ? "filter.issueCount_one" : "filter.issueCount_other", {
+        count,
+      })}
+    </Text>
+  );
+}
 
 function useCheckColor() {
   const { colorScheme } = useColorScheme();
@@ -121,10 +149,16 @@ export function FilterActorPickerBody({
   selected,
   onToggle,
   searchPlaceholder,
+  counts,
 }: {
   selected: ActorFilterValue[];
   onToggle: (value: ActorFilterValue) => void;
   searchPlaceholder: string;
+  /** Server facet `key -> count`, or undefined when there is nothing exact to
+   *  show. Keys are the server's own (`member:<uuid>`, `agent:<uuid>`,
+   *  `squad:<uuid>`, `__none__`) — the same strings `ActorFilterValue`
+   *  stringifies to. See `lib/issue-facet-counts.ts`. */
+  counts?: ReadonlyMap<string, number>;
 }) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
@@ -216,6 +250,7 @@ export function FilterActorPickerBody({
                   {t("picker.squad")}
                 </Text>
               ) : null}
+              <OptionCountBadge count={counts?.get(`${value.type}:${value.id}`)} />
               {isSelected ? (
                 <Ionicons name="checkmark" size={20} color={checkColor} />
               ) : null}
@@ -245,11 +280,15 @@ export function FilterProjectPickerBody({
   includeNoProject,
   onToggle,
   onToggleNoProject,
+  counts,
 }: {
   selected: string[];
   includeNoProject: boolean;
   onToggle: (projectId: string) => void;
   onToggleNoProject: () => void;
+  /** Facet counts by project id; `undefined` renders no badges (see
+   *  `lib/issue-facet-counts.ts`). */
+  counts?: ReadonlyMap<string, number>;
 }) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
@@ -296,6 +335,7 @@ export function FilterProjectPickerBody({
             <Text className="flex-1 text-base text-foreground">
               {t("filter.noProject")}
             </Text>
+            <OptionCountBadge count={counts?.get(NO_VALUE_KEY)} />
             {includeNoProject ? (
               <Ionicons name="checkmark" size={20} color={checkColor} />
             ) : null}
@@ -319,6 +359,7 @@ export function FilterProjectPickerBody({
               >
                 {item.project.title}
               </Text>
+              <OptionCountBadge count={counts?.get(item.project.id)} />
               {isSelected ? (
                 <Ionicons name="checkmark" size={20} color={checkColor} />
               ) : null}
@@ -343,9 +384,12 @@ export function FilterProjectPickerBody({
 export function FilterLabelPickerBody({
   selected,
   onToggle,
+  counts,
 }: {
   selected: string[];
   onToggle: (labelId: string) => void;
+  /** Facet counts by label id; `undefined` renders no badges. */
+  counts?: ReadonlyMap<string, number>;
 }) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
@@ -391,6 +435,7 @@ export function FilterLabelPickerBody({
               >
                 {item.name}
               </Text>
+              <OptionCountBadge count={counts?.get(item.id)} />
               {isSelected ? (
                 <Ionicons name="checkmark" size={20} color={checkColor} />
               ) : null}
@@ -423,10 +468,13 @@ export function FilterPropertyPickerBody({
   property,
   selected,
   onToggle,
+  counts,
 }: {
   property: IssueProperty;
   selected: string[];
   onToggle: (optionId: string) => void;
+  /** Facet counts by option key; `undefined` renders no badges. */
+  counts?: ReadonlyMap<string, number>;
 }) {
   const { t } = useTranslation();
   const checkColor = useCheckColor();
@@ -514,6 +562,7 @@ export function FilterPropertyPickerBody({
               >
                 {item.name}
               </Text>
+              <OptionCountBadge count={counts?.get(item.id)} />
               {isSelected ? (
                 <Ionicons name="checkmark" size={20} color={checkColor} />
               ) : null}
