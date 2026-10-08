@@ -55,6 +55,13 @@ describe("issue table view i18n", () => {
     "table.exportTitle": "导出表格",
     "table.exportAll": "导出全部",
     "table.exportSelected": "导出选中（{{count}}）",
+    // Export completeness gate (MYS-2015): the three blocked reasons plus the
+    // generic I/O failure each need their own message.
+    "table.exportFailedTitle": "导出失败",
+    "table.exportFailed": "导出任务失败",
+    "table.exportDraining": "完整结果集仍在加载中，请稍后重试。",
+    "table.exportDrainFailed": "有部分数据未能加载，导出内容会不完整。请下拉刷新后重试。",
+    "table.exportRowCeiling": "结果集过大，无法完整导出。",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {

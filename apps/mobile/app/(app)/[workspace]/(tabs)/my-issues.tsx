@@ -654,6 +654,11 @@ export default function MyIssues() {
           }
           search={tableSearch}
           onSearchChange={setTableSearch}
+          exportWindow={{
+            hasNextPage,
+            isFetchNextPageError,
+            loadedRows: listIssues.length,
+          }}
         />
       ) : view === "gantt" ? (
         <GanttView
