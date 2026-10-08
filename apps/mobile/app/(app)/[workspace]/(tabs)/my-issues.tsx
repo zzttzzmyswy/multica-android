@@ -83,7 +83,11 @@ import {
 import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-workspace-change";
 import { useDebouncedTableSearch } from "@/lib/use-debounced-table-search";
 import { useBoardHiddenColumns } from "@/lib/use-board-hidden-columns";
-import { myIssueTableScope } from "@/lib/issue-table-group-counts";
+import {
+  countWorkingOnly,
+  myIssueTableScope,
+  withWorkingCountDimension,
+} from "@/lib/issue-table-group-counts";
 import { useGroupingProperty } from "@/lib/use-grouping-property";
 import { useListSectionFolding } from "@/data/stores/issue-workbench-layout-store";
 import { BOARD_STATUSES } from "@/lib/issue-status-core";
@@ -370,13 +374,29 @@ export default function MyIssues() {
   // Group headers count the complete result set (server group descriptors),
   // not just the loaded window. The `all` tab is one union query server-side,
   // unlike the list API's scatter-gather.
+  //
+  // The count window carries the working dimension the LIST window must not:
+  // the rows narrow by the client predicate (`applyIssueFilters` over
+  // `runningIssueIds`), so a count built from the plain window answered about
+  // a different set (MYS-2017). `workingOnly` is the switch the predicate
+  // reads, so the two cannot disagree about when the dimension applies.
+  const countWindow = useMemo(
+    () =>
+      withWorkingCountDimension(
+        window,
+        countWorkingOnly("my", workingOnly),
+        runningIssueIds,
+      ),
+    [window, workingOnly, runningIssueIds],
+  );
+
   const groupCountQuery = useMemo(
     () => ({
       scope: myIssueTableScope(scope),
-      window,
+      window: countWindow,
       includeSubIssues: showSubIssues,
     }),
-    [scope, window, showSubIssues],
+    [scope, countWindow, showSubIssues],
   );
 
   // Paginated window — see the workspace Issues screen for the rationale

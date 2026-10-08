@@ -28,14 +28,14 @@ import {
 import {
   issueKeys,
   issueParamsKey,
-  type IssueListWindowParams,
+  type IssueCountWindowParams,
 } from "./issue-keys";
 
 /** The scope + filter window a filter surface is showing. Both are already on
  *  hand at every call site (the view stores carry them). */
 export interface IssueFacetCountQuery {
   scope: IssueTableScope;
-  window: IssueListWindowParams;
+  window: IssueCountWindowParams;
   /** The surface's "show sub-issues" toggle. */
   includeSubIssues: boolean;
   /**
@@ -140,7 +140,7 @@ export function useFilterSheetFacetCounts(args: {
   sheetScope: "my" | "all" | "project";
   /** The surface's scope tab (`all/members/agents` or the My Issues set). */
   tab: string | undefined;
-  window: IssueListWindowParams;
+  window: IssueCountWindowParams;
   includeSubIssues: boolean;
   projectId?: string | null;
   propertyIds?: readonly string[];

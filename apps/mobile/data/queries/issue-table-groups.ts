@@ -18,13 +18,17 @@ import {
   serverGroupCountMap,
 } from "@/lib/issue-table-group-counts";
 import type { IssueTableGrouping } from "@/lib/issue-table-groups";
-import { issueKeys, issueParamsKey, type IssueListWindowParams } from "./issue-keys";
+import {
+  issueKeys,
+  issueParamsKey,
+  type IssueCountWindowParams,
+} from "./issue-keys";
 
 /** The scope + filter window a table surface is showing. Both are already on
  *  hand at every `IssueTableView` call site. */
 export interface IssueTableGroupCountQuery {
   scope: IssueTableScope;
-  window: IssueListWindowParams;
+  window: IssueCountWindowParams;
   /** The surface's "show sub-issues" toggle. */
   includeSubIssues: boolean;
 }

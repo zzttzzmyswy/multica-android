@@ -26,7 +26,7 @@ import type {
   IssueTableQuerySpec,
   IssueTableScope,
 } from "@multica/core/types";
-import type { IssueListWindowParams } from "@/data/queries/issue-keys";
+import type { IssueCountWindowParams } from "@/data/queries/issue-keys";
 import {
   assigneeTypesForScopeTab,
   buildIssueTableGroupQuerySpec,
@@ -69,7 +69,7 @@ export const FACET_DIMENSIONS: readonly IssueTableFacetSpec[] = [
  */
 export function buildIssueFacetQuerySpec(
   scope: IssueTableScope,
-  window: IssueListWindowParams,
+  window: IssueCountWindowParams,
   includeSubIssues = true,
 ): IssueTableQuerySpec {
   return buildIssueTableGroupQuerySpec(scope, window, includeSubIssues);
