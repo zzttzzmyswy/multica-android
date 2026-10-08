@@ -150,9 +150,10 @@ export function withWorkingCountDimension(
  * `working_issue_ids` IS carried over for the same reason, and it is the fix
  * for MYS-2017: rows narrow by a CLIENT predicate over the running-issue
  * set, so a count built without this dimension answered a question about a
- * different set — the table showed 3 rows under a header that read 240. Web
- * carries it on the one `tableQuerySpec` that feeds its rows, its facet
- * request and its group query alike
+ * different set — measured on the live deployment, the group headers totalled
+ * 1952 with 「进行中 34」 while the table rendered 3 rows. Web carries it on
+ * the one `tableQuerySpec` that feeds its rows, its facet request and its
+ * group query alike
  * (`packages/views/issues/surface/use-issue-surface-controller.ts:441-443`);
  * this is mobile's equivalent for the two channels mobile asks the server for.
  */

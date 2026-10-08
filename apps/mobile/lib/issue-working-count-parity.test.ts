@@ -2,8 +2,9 @@
  * The working dimension on the server COUNT channels (iteration 213, MYS-2017).
  *
  * The defect this pins: with 「智能体正在处理」 on, the table rendered 3 rows while
- * its group header still read 「进行中 240」 and every filter badge kept its
- * unfiltered number.
+ * its group header still read 「进行中 34」 and every filter badge kept its
+ * unfiltered number (measured on the live deployment: the badges read 34 / 16 /
+ * 1408 … and the headers summed to 1952).
  *
  * Rows narrow by a CLIENT predicate (`applyIssueFilters` over
  * `deriveRunningIssueIds`). The two channels that ask the SERVER for a number —
