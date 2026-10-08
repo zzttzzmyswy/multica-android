@@ -559,6 +559,11 @@ export interface AppConfigResponse {
    * Settings → Integrations "Git providers" section. */
   vcs_integration_available?: boolean;
   feature_flags?: Record<string, boolean>;
+  /** Whether this deployment keeps a deleted comment's replies (#8296):
+   * deleting one that still has replies leaves an empty tombstone so they keep
+   * their direct parent, and `DELETE /api/comments/:id/keep-replies` exists.
+   * Older servers delete the replies too, so absent must read as false. */
+  comment_delete_keep_replies_supported?: boolean;
   server_version?: string;
 }
 
@@ -711,6 +716,8 @@ const TimelineEntrySchema = z.object({
   reactions: z.array(ReactionSchema).optional(),
   attachments: z.array(AttachmentSchema).optional(),
   source_task_id: z.string().nullable().optional(),
+  // Tombstone marker (#8296); a malformed value reads as a live comment.
+  deleted_at: z.string().nullable().optional().catch(undefined),
   coalesced_count: z.number().optional(),
 }).loose();
 
@@ -753,6 +760,8 @@ export const AppConfigSchema = z.object({
   workspace_creation_disabled: BooleanWithDefaultSchema(false).optional(),
   vcs_integration_available: BooleanWithDefaultSchema(false).optional(),
   feature_flags: FeatureFlagsSchema,
+  comment_delete_keep_replies_supported:
+    BooleanWithDefaultSchema(false).optional(),
   server_version: OptionalStringSchema,
 }).loose();
 
@@ -766,6 +775,7 @@ export const EMPTY_APP_CONFIG: AppConfigResponse = {
   workspace_creation_disabled: false,
   vcs_integration_available: false,
   feature_flags: {},
+  comment_delete_keep_replies_supported: false,
 };
 
 // Preference keys may grow over time, so keep both the key and value spaces
@@ -803,6 +813,10 @@ export const CommentSchema = z.object({
   created_at: z.string(),
   updated_at: z.string(),
   source_task_id: z.string().nullable().optional(),
+  // Set only on a comment deleted while it still had replies (#8296): the
+  // server keeps the row as an empty tombstone so the replies keep their
+  // direct parent. A malformed value reads as a live comment.
+  deleted_at: z.string().nullable().optional().catch(undefined),
   // Set only on comments a quick action produced (MUL-5465). Server-only.
   quick_action_id: z.string().nullable().optional(),
 }).loose();

@@ -19,6 +19,7 @@
  */
 import { useCallback, useState } from "react";
 import { Alert } from "react-native";
+import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { ActionSheet } from "@/lib/action-sheet";
 import * as Clipboard from "expo-clipboard";
@@ -36,6 +37,8 @@ import {
   useToggleCommentReaction,
 } from "@/data/mutations/issues";
 import { QUICK_EMOJIS } from "@/lib/quick-emojis";
+import { commentDeleteKeepsReplies } from "@/lib/comment-deletion";
+import { serverConfigOptions } from "@/data/queries/config";
 import { canManageRole } from "@/lib/member-guards";
 import { useCurrentMemberRole } from "@/data/use-current-member-role";
 import { useTranslation } from "@/lib/i18n/react";
@@ -57,6 +60,10 @@ export function useCommentLongPress(
   const resolveComment = useResolveComment(issueId);
   const { getName } = useActorLookup();
   const { role } = useCurrentMemberRole();
+  // Same config cache `useDeleteComment` reads when it runs, so the promise
+  // the confirmation makes and the route the delete takes cannot disagree.
+  const { data: config } = useQuery(serverConfigOptions());
+  const keepReplies = commentDeleteKeepsReplies(config);
 
   const onLongPress = useCallback(() => {
     const isOwn = entry.actor_type === "member" && entry.actor_id === userId;
@@ -219,11 +226,19 @@ export function useCommentLongPress(
             // One's own delete keeps the unqualified wording — there is no
             // ambiguity to resolve. (Web uses one message for both:
             // comment-card.tsx's `comment.deleteCommentMessage`.)
+            //
+            // The BODY, unlike the title, has to follow the deployment: only
+            // #8296+ keeps the replies (#commentDeleteKeepsReplies). Promising
+            // "replies stay" on an older server, or removing them on the
+            // deployment we talk to, is the same class of lie in both
+            // directions.
             Alert.alert(
               isOwn
                 ? t("comment.deleteCommentTitle")
                 : t("comment.moderateDeleteTitle", { name: authorName }),
-              t("comment.deleteCommentMessage"),
+              keepReplies
+                ? t("comment.deleteKeepsRepliesMessage")
+                : t("comment.deleteCommentMessage"),
               [
                 { text: t("menu.cancel"), style: "cancel" },
                 {
@@ -249,6 +264,7 @@ export function useCommentLongPress(
     resolveComment,
     getName,
     role,
+    keepReplies,
     onEdit,
   ]);
 

@@ -452,5 +452,10 @@ export function commentToTimelineEntry(comment: Comment): TimelineEntry {
     resolved_by_type: comment.resolved_by_type,
     resolved_by_id: comment.resolved_by_id,
     source_task_id: comment.source_task_id,
+    // Carry the tombstone marker. The server publishes a keep-replies delete
+    // as `comment:updated` with the cleared row (#8296), so dropping this here
+    // would turn the tombstone back into a blank live comment in the cache and
+    // the card would render an empty bubble the reader cannot explain.
+    deleted_at: comment.deleted_at,
   };
 }

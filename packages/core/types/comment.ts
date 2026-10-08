@@ -30,6 +30,11 @@ export interface Comment {
   resolved_by_type: CommentAuthorType | null;
   resolved_by_id: string | null;
   source_task_id?: string | null;
+  // Set only on a comment deleted while it still had replies (#8296): the
+  // server keeps the row as an empty tombstone so the replies keep their
+  // direct parent. Servers that predate #8296 delete the replies with the
+  // comment and never send this, so every consumer has to tolerate absence.
+  deleted_at?: string | null;
   // The quick action that produced this comment (MUL-5465). A quick action
   // posts an ORDINARY comment and marks it with this id; the collapsed card
   // keys off the id rather than a dedicated `type`, because `type` is

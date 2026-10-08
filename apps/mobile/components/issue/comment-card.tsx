@@ -71,6 +71,7 @@ import {
   useToggleCommentCollapsed,
 } from "@/data/stores/comment-collapse-store";
 import { commentPreview } from "@/lib/comment-collapse";
+import { isDeletedComment } from "@/lib/comment-deletion";
 import {
   deriveThreadResolution,
   foldThreadReplies,
@@ -120,6 +121,15 @@ export function CommentCard({
   const foldedReplies = useMemo(
     () => foldThreadReplies(replies, resolution),
     [replies, resolution],
+  );
+  // A deleted REPLY renders nothing: its row is kept only so its own replies
+  // keep a direct parent (#8296), and this list is flat, so they already
+  // render in its place. Web filters the same way
+  // (packages/views/issues/components/comment-card.tsx). A deleted ROOT keeps
+  // its row — it heads the thread.
+  const visibleReplies = useMemo(
+    () => replies.filter((reply) => !isDeletedComment(reply)),
+    [replies],
   );
   const resolutionReply = useMemo(
     () =>
@@ -270,7 +280,7 @@ export function CommentCard({
               ) : null}
             </>
           ) : (
-            replies.map((reply) => (
+            visibleReplies.map((reply) => (
               <View key={reply.id} className="border-t border-border/60 pt-3">
                 {reply.id === replyResolutionId ? <ResolutionBadge /> : null}
                 <CommentBody
@@ -728,6 +738,21 @@ function CommentBody({
     if (isSelecting) return;
     onPressChange?.(entry.id, longPress.isPressed);
   }, [longPress.isPressed, entry.id, isSelecting, onPressChange]);
+
+  // A tombstone — a comment deleted while it still had replies (#8296). Only a
+  // thread ROOT reaches here (`CommentCard` filters deleted replies out), and
+  // it keeps a placeholder because its replies hang off it and the thread
+  // would otherwise have no head. Mirrors web's root placeholder in
+  // `packages/views/issues/components/comment-card.tsx`. Rendering the empty
+  // `content` instead would leave a blank bubble with an author, timestamp and
+  // reaction bar for a comment that no longer exists.
+  if (isDeletedComment(entry)) {
+    return (
+      <Text className="text-sm italic text-muted-foreground">
+        {t("comment.deletedPlaceholder")}
+      </Text>
+    );
+  }
 
   const body = (
     <View className="gap-2">
