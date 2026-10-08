@@ -247,7 +247,7 @@ export function CommentCard({
             issueIdentifier={issueIdentifier}
             onPressChange={handlePressChange}
             collapsed={rootFolded}
-            replyCount={replies.length}
+            replyCount={visibleReplies.length}
             onToggleCollapse={handleToggleFold}
           />
           {rootFolded ? null : replyResolutionId !== null && !expanded ? (
@@ -334,6 +334,9 @@ function ResolvedThreadBar({
     const seen = new Set<string>();
     const ordered: { type: string | null; id: string | null }[] = [];
     for (const e of [entry, ...replies]) {
+      // A deleted comment names no author — the server clears it — so listing
+      // its actor would credit someone with a message the reader cannot see.
+      if (isDeletedComment(e)) continue;
       const key = `${e.actor_type}:${e.actor_id}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -349,7 +352,13 @@ function ResolvedThreadBar({
     return remaining > 0 ? `${named} +${remaining}` : named;
   }, [entry, replies, getName]);
 
-  const total = 1 + replies.length;
+  // Deleted replies render nothing when the thread expands, so the folded
+  // count must not promise them either.
+  const visibleReplies = useMemo(
+    () => replies.filter((reply) => !isDeletedComment(reply)),
+    [replies],
+  );
+  const total = 1 + visibleReplies.length;
   const messageCount = t(total === 1 ? "comment.message" : "comment.messages");
 
   return (
@@ -405,6 +414,9 @@ function CommentsFoldBar({
     const seen = new Set<string>();
     const ordered: { type: string | null; id: string | null }[] = [];
     for (const e of replies) {
+      // Same rule as the resolved bar: a tombstone names no author, and the
+      // bar must not list someone whose message renders no row.
+      if (isDeletedComment(e)) continue;
       const key = `${e.actor_type}:${e.actor_id}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -420,7 +432,9 @@ function CommentsFoldBar({
     return remaining > 0 ? `${named} +${remaining}` : named;
   }, [replies, getName]);
 
-  const total = replies.length;
+  // A deleted reply renders no row when the bar is expanded, so counting it
+  // here would promise a message the reader can never see.
+  const total = replies.filter((reply) => !isDeletedComment(reply)).length;
   const messageCount = t(total === 1 ? "comment.message" : "comment.messages");
 
   return (
