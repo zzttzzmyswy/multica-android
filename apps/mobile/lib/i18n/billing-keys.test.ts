@@ -109,6 +109,17 @@ describe("workspace billing i18n", () => {
     "billing.returnActiveTitle": ["Pro is active", "Pro 已启用"],
     "billing.returnActiveDescription": ["This workspace now has Pro access.", "这个工作区现在可以使用 Pro。"],
     "screen.billing": ["Billing", "账单与套餐"],
+    // Iteration 209 — the capability-off state. Distinct from
+    // billing.loadFailed*: the deployment does not offer workspace
+    // subscriptions, so nothing failed and there is nothing to retry.
+    "billing.notEnabledTitle": [
+      "Billing is not enabled here",
+      "此部署未启用账单",
+    ],
+    "billing.notEnabledDescription": [
+      "This deployment does not offer workspace subscriptions. No action is needed.",
+      "这个部署未提供工作区订阅，无需任何操作。",
+    ],
   };
 
   it('resolves every billing key in both locales with a real zh translation', () => {
