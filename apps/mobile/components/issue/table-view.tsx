@@ -48,6 +48,7 @@ import {
   useState,
 } from "react";
 import {
+  Alert,
   FlatList,
   Modal,
   Pressable,
@@ -123,6 +124,12 @@ import {
   tableCellText,
   type IssueTableExportContext,
 } from "@/lib/issue-table-export";
+import {
+  assertExportComplete,
+  exportBlockedMessageKey,
+  exportBlockedReason,
+  type IssueTableExportWindow,
+} from "@/lib/issue-table-export-completeness";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
@@ -216,6 +223,11 @@ interface Props {
    *  surface with no search — the toolbar entry then hides entirely. */
   search?: string;
   onSearchChange?: (query: string) => void;
+  /** The fetch state of the window these rows came from. Required: exporting
+   *  "all" has to prove the collection is complete before it writes a file,
+   *  and only the surface's query knows whether pages are still outstanding.
+   *  A surface that forgot it would ship the truncated CSV this guards. */
+  exportWindow: IssueTableExportWindow;
 }
 
 export function IssueTableView({
@@ -238,6 +250,7 @@ export function IssueTableView({
   search,
   onSearchChange,
   hierarchy,
+  exportWindow,
 }: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const statusLabel = useStatusLabel(wsId);
@@ -588,6 +601,18 @@ export function IssueTableView({
       (index) => {
         if (index == null || index >= labels.length) return;
         const scope = choices[index];
+        // Fail closed on "all": the rows on screen are the CLIENT-filtered
+        // window, so only the fetch state can prove the collection is whole.
+        // Blocked here (rather than after the sheet closes) so the user gets
+        // the reason without a file ever being written.
+        const blocked = exportBlockedReason(scope, exportWindow);
+        if (blocked !== null) {
+          Alert.alert(
+            t("table.exportFailedTitle"),
+            t(exportBlockedMessageKey(blocked)),
+          );
+          return;
+        }
         const rows = scope === "all" ? issues : selectedIssues;
         const ctx: IssueTableExportContext = {
           // Built-ins resolve through i18n; custom statuses append their
@@ -612,8 +637,23 @@ export function IssueTableView({
           String(now.getMonth() + 1).padStart(2, "0"),
           String(now.getDate()).padStart(2, "0"),
         ].join("-");
-        void writeAndShareCsv(rows, columns, ctx, columnLabel, scope, dateOnly)
-          .catch(() => {})
+        void writeAndShareCsv(
+          rows,
+          columns,
+          ctx,
+          columnLabel,
+          scope,
+          dateOnly,
+          exportWindow,
+        )
+          // A write/share failure used to be swallowed here, which is what
+          // made a truncated or unsaveable export look successful. Surface it:
+          // the blocked reasons already got their specific message above, so
+          // anything landing here is a real I/O failure.
+          .catch((err: unknown) => {
+            if (__DEV__) console.warn("table export failed", err);
+            Alert.alert(t("table.exportFailedTitle"), t("table.exportFailed"));
+          })
           .finally(() => setExporting(false));
       },
     );
@@ -1038,7 +1078,9 @@ function HeaderCell({
 }
 
 /** Build the CSV, write it to the cache dir, hand it to the system sheet.
- *  Failures surface only via the sheet (nothing to recover from). */
+ *  Re-asserts completeness before writing so the invariant holds even if a
+ *  future caller skips the UI-side pre-check; a real write/share failure
+ *  reaches the caller, which surfaces it instead of swallowing it. */
 async function writeAndShareCsv(
   rows: readonly Issue[],
   columns: readonly TableColumnKey[],
@@ -1046,7 +1088,9 @@ async function writeAndShareCsv(
   columnLabel: (column: TableColumnKey) => string,
   scope: "all" | "selected",
   dateOnly: string,
+  window: IssueTableExportWindow,
 ): Promise<void> {
+  assertExportComplete(scope, window);
   const csv = buildIssuesCsv(
     rows,
     columns,

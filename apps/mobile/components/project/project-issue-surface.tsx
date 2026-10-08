@@ -610,6 +610,11 @@ export function ProjectIssueSurface({
           sortDirection={sortDirection}
           search={tableSearch}
           onSearchChange={setTableSearch}
+          exportWindow={{
+            hasNextPage,
+            isFetchNextPageError,
+            loadedRows: listIssues.length,
+          }}
           onSort={(field, direction) => {
             useProjectIssuesViewStore.getState().setSortBy(field);
             useProjectIssuesViewStore.getState().setSortDirection(direction);
