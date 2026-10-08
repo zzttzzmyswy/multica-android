@@ -953,6 +953,8 @@
   "billing.managementPortalDescription": "前往 Stripe 管理这个工作区的订阅。",
   "billing.managementPortalUnavailable": "这个工作区暂时没有可用的 Stripe Billing Portal。",
   "billing.managementTitle": "订阅管理",
+  "billing.notEnabledDescription": "这个部署未提供工作区订阅，无需任何操作。",
+  "billing.notEnabledTitle": "此部署未启用账单",
   "billing.pastDueDescription": "打开 Billing Portal 更新付款方式，以继续使用 Pro。",
   "billing.pastDueTitle": "付款信息需要处理",
   "billing.planFree": "Free",

@@ -53,6 +53,11 @@ import { memberListOptions } from "@/data/queries/members";
 import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
+import {
+  BILLING_WORKSPACE_SUBSCRIPTIONS_FLAG,
+  billingScreenState,
+} from "@/lib/billing-capability";
+import { useFeatureEnabled } from "@/data/queries/config";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -156,11 +161,26 @@ export default function BillingScreen() {
 
   const isSyncingCheckout = syncState === "syncing";
 
+  // Deployment capability (`billing_workspace_subscriptions`). While it is off
+  // the read is not issued at all: the server answers 503 for every
+  // cloud-subscription endpoint (`server/internal/handler/cloud_billing.go:76`),
+  // so the query could only ever produce an error — and that error would be
+  // rendered as "temporarily unavailable", which invites a retry the
+  // deployment will never honour. Web refuses to render the tab at all in this
+  // state (`settings-page.tsx:141`).
+  const billingEnabled = useFeatureEnabled(BILLING_WORKSPACE_SUBSCRIPTIONS_FLAG);
+
   const entitlementQuery = useQuery({
     ...workspaceSubscriptionEntitlementsOptions(wsId),
+    enabled: !!wsId && billingEnabled,
     refetchInterval: isSyncingCheckout ? 2_000 : false,
   });
   const entitlements = entitlementQuery.data;
+  const screenState = billingScreenState({
+    enabled: billingEnabled,
+    isPending: entitlementQuery.isPending,
+    isError: entitlementQuery.isError,
+  });
 
   const canUpgrade =
     entitlements?.plan === "free" &&
@@ -307,7 +327,28 @@ export default function BillingScreen() {
     ]);
   };
 
-  if (entitlementQuery.isPending) {
+  // Capability absent — NOT a failure. There is no Retry here on purpose:
+  // the deployment does not offer workspace subscriptions, so retrying the
+  // read can never change the answer (web does not even render the tab).
+  if (screenState === "disabled") {
+    return (
+      <ScrollView className="flex-1 bg-background">
+        <Stack.Screen options={{ title: t("screen.billing") }} />
+        <View className="px-4 pt-4 gap-3">
+          <View className="rounded-xl border border-border bg-card p-4 gap-2">
+            <Text className="text-sm font-semibold text-foreground">
+              {t("billing.notEnabledTitle")}
+            </Text>
+            <Text className="text-xs text-muted-foreground">
+              {t("billing.notEnabledDescription")}
+            </Text>
+          </View>
+        </View>
+      </ScrollView>
+    );
+  }
+
+  if (screenState === "loading") {
     return (
       <ScrollView className="flex-1 bg-background">
         <Stack.Screen options={{ title: t("screen.billing") }} />

@@ -26,6 +26,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { SettingsTimezonePicker } from "@/components/settings/timezone-picker";
 import { workspaceListOptions } from "@/data/queries/workspaces";
 import { useFeatureEnabled } from "@/data/queries/config";
+import { BILLING_WORKSPACE_SUBSCRIPTIONS_FLAG } from "@/lib/billing-capability";
 import { useAuthStore } from "@/data/auth-store";
 import { api } from "@/data/api";
 import { useWorkspaceStore } from "@/data/workspace-store";
@@ -115,6 +116,17 @@ export default function SettingsPage() {
   // frontendPublicFlags) exactly like web's settings-page — the entry only
   // exists on deployments that enable the Plugin catalog (iteration-99).
   const pluginsEnabled = useFeatureEnabled("plugins_v1");
+  // Billing is a *deployment capability*, gated exactly like web's settings
+  // page (`settings-page.tsx:141`): with `billing_workspace_subscriptions` off
+  // the tab leaves web's visible list and a `?tab=billing` deep link is
+  // redirected to `workspace`. The server enforces it as a hard gate too —
+  // every cloud-subscription endpoint answers 503
+  // (`server/internal/handler/cloud_billing.go:76`). Rendering this row
+  // regardless (iteration-209 fix) sent the user to a page whose only possible
+  // outcome was a failed read labelled "temporarily unavailable".
+  const billingEnabled = useFeatureEnabled(
+    BILLING_WORKSPACE_SUBSCRIPTIONS_FLAG,
+  );
 
   // Language follows the theme picker's tap-to-act pattern. The local switch
   // takes effect immediately (setLocale/resetLocale persist + notify), and
@@ -267,12 +279,17 @@ export default function SettingsPage() {
           subtitle={t("settings.workspaceSettingsSub")}
         />
         <Separator />
-        <NavRow
-          onPress={goBilling}
-          chevronColor={mutedFg}
-          title={t("screen.billing")}
-          subtitle={t("billing.description")}
-        />
+        {billingEnabled ? (
+          <>
+            <NavRow
+              onPress={goBilling}
+              chevronColor={mutedFg}
+              title={t("screen.billing")}
+              subtitle={t("billing.description")}
+            />
+            <Separator />
+          </>
+        ) : null}
         {pluginsEnabled ? (
           <>
             <Separator />

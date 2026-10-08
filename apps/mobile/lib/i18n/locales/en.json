@@ -953,6 +953,8 @@
   "billing.managementPortalDescription": "Open Stripe to manage this workspace's subscription.",
   "billing.managementPortalUnavailable": "No Stripe Billing Portal is available for this workspace.",
   "billing.managementTitle": "Subscription management",
+  "billing.notEnabledDescription": "This deployment does not offer workspace subscriptions. No action is needed.",
+  "billing.notEnabledTitle": "Billing is not enabled here",
   "billing.pastDueDescription": "Open the Billing Portal to update your payment method and keep Pro access.",
   "billing.pastDueTitle": "Payment needs attention",
   "billing.planFree": "Free",
