@@ -98,6 +98,13 @@ describe("the timeline renders a tombstone instead of a blank bubble", () => {
     // The filter is worthless if the render site still maps `replies`.
     expect(card).toContain("visibleReplies.map");
   });
+
+  it("does not count replies the reader can never expand into", () => {
+    // A folded root shows "N replies". Counting a tombstone promises a message
+    // that renders no row, and the fold bar's own total has to agree.
+    expect(card).not.toMatch(/total\s*=\s*1?\s*\+?\s*replies\.length/);
+    expect(card).not.toMatch(/replyCount=\{replies\.length\}/);
+  });
 });
 
 describe("the tombstone marker survives the realtime path", () => {
