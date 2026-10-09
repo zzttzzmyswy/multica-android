@@ -183,7 +183,7 @@ export function AgentSkillsSection({
         ) : null}
       </View>
       <View className="px-4 gap-2">
-        <Text className="text-[11px] text-muted-foreground/80 leading-4">
+        <Text className="text-micro text-muted-foreground/80 leading-4">
           {t("agents.skills.assignedHint")}
         </Text>
 
@@ -232,7 +232,7 @@ export function AgentSkillsSection({
                     >
                       {skill.name}
                     </Text>
-                    <Text className="text-[11px] text-muted-foreground" numberOfLines={1}>
+                    <Text className="text-micro text-muted-foreground" numberOfLines={1}>
                       {skill.description || t("agents.skills.noDescription")}
                     </Text>
                   </View>
@@ -296,7 +296,7 @@ export function AgentSkillsSection({
         ) : null}
       </View>
       <View className="px-4 gap-2">
-        <Text className="text-[11px] text-muted-foreground/80 leading-4" numberOfLines={2}>
+        <Text className="text-micro text-muted-foreground/80 leading-4" numberOfLines={2}>
           {t("agents.skills.runtimeHint", {
             runtime: runtime ? runtime.name : "Runtime",
           })}
@@ -308,7 +308,7 @@ export function AgentSkillsSection({
             ) : (
               <Ionicons name="server-outline" size={14} color={muted} />
             )}
-            <Text className="flex-1 text-[11px] text-muted-foreground leading-4">
+            <Text className="flex-1 text-micro text-muted-foreground leading-4">
               {runtimeNotice}
             </Text>
           </View>
@@ -347,7 +347,7 @@ export function AgentSkillsSection({
                     >
                       {skill.name}
                     </Text>
-                    <Text className="text-[11px] text-muted-foreground" numberOfLines={1}>
+                    <Text className="text-micro text-muted-foreground" numberOfLines={1}>
                       {skill.description || skill.source_path}
                     </Text>
                   </View>

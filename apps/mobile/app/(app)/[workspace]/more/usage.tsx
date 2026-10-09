@@ -894,7 +894,7 @@ function KpiCard({
       <View className="flex-row items-center gap-1.5">
         <Ionicons name={icon} size={13} color={theme.mutedForeground} />
         <Text
-          className="text-[11px] text-muted-foreground"
+          className="text-micro text-muted-foreground"
           numberOfLines={1}
           adjustsFontSizeToFit
           minimumFontScale={0.8}
@@ -1926,7 +1926,7 @@ function ErrorMixCard({
           {t("usage.errors.mixTitle", { failed: totals.failed })}
         </Text>
         <Pressable onPress={() => setShowReasons((v) => !v)} hitSlop={8}>
-          <Text className="text-[11px] text-muted-foreground underline">
+          <Text className="text-micro text-muted-foreground underline">
             {showReasons ? t("usage.errors.hideReasons") : t("usage.errors.showReasons")}
           </Text>
         </Pressable>
@@ -1982,8 +1982,8 @@ function ClassComposition({
                 backgroundColor: colors[row.failureClass],
               }}
             />
-            <Text className="text-[11px] text-foreground">{classLabel(row.failureClass)}</Text>
-            <Text className="text-[11px] text-muted-foreground">{row.count}</Text>
+            <Text className="text-micro text-foreground">{classLabel(row.failureClass)}</Text>
+            <Text className="text-micro text-muted-foreground">{row.count}</Text>
           </View>
         ))}
       </View>
@@ -2016,11 +2016,11 @@ function ReasonList({
                 backgroundColor: colors[row.failureClass],
               }}
             />
-            <Text className="text-[11px] text-muted-foreground" numberOfLines={1}>
+            <Text className="text-micro text-muted-foreground" numberOfLines={1}>
               {row.reason}
             </Text>
           </View>
-          <Text className="text-[11px] tabular-nums text-foreground">{row.count}</Text>
+          <Text className="text-micro tabular-nums text-foreground">{row.count}</Text>
         </View>
       ))}
     </View>
@@ -2111,7 +2111,7 @@ function OffendersCard({
           ))}
           {sorted.length > TOP_OFFENDER_LIMIT ? (
             <Pressable onPress={() => setShowAll((v) => !v)} className="py-2.5" hitSlop={8}>
-              <Text className="text-center text-[11px] text-muted-foreground underline">
+              <Text className="text-center text-micro text-muted-foreground underline">
                 {showAll
                   ? t("usage.errors.showLess", { count: TOP_OFFENDER_LIMIT })
                   : t("usage.errors.showAll", { count: sorted.length })}

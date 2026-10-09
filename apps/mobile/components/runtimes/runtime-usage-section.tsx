@@ -377,7 +377,7 @@ function CustomPricingBar({ usage }: { usage: RuntimeUsage[] }) {
         <>
           <Ionicons name="alert-circle-outline" size={15} color={theme.warning} />
           <View className="min-w-0 flex-1">
-            <Text className="text-[11px] text-foreground">
+            <Text className="text-micro text-foreground">
               {plural(t, "runtimes.usage.unmapped_notice", unmapped.length, {
                 count: unmapped.length,
               })}
@@ -388,7 +388,7 @@ function CustomPricingBar({ usage }: { usage: RuntimeUsage[] }) {
           </View>
         </>
       ) : (
-        <Text className="min-w-0 flex-1 text-[11px] text-muted-foreground">
+        <Text className="min-w-0 flex-1 text-micro text-muted-foreground">
           {t("runtimes.usage.custom_pricing.active_notice")}
         </Text>
       )}
@@ -398,7 +398,7 @@ function CustomPricingBar({ usage }: { usage: RuntimeUsage[] }) {
         className="h-8 px-2.5"
         onPress={() => setDialogOpen(true)}
       >
-        <Text className="text-[11px]">
+        <Text className="text-micro">
           {hasGap
             ? t("runtimes.usage.custom_pricing.open_button")
             : t("runtimes.usage.custom_pricing.edit_button")}
@@ -656,7 +656,7 @@ function WhenChartCard({
               : "border-border",
           )}
         >
-          <Text className={cn("text-[11px] font-medium", showHeatmap ? "text-background" : "text-muted-foreground")}>
+          <Text className={cn("text-micro font-medium", showHeatmap ? "text-background" : "text-muted-foreground")}>
             {t("runtimes.usage.when_tab_heatmap")}
           </Text>
         </Pressable>
@@ -1141,7 +1141,7 @@ function CostByBlock({
         <CostByList
           rows={byModel}
           renderKey={(key) => (
-            <Text className="shrink font-mono text-[11px] text-foreground" numberOfLines={1}>
+            <Text className="shrink font-mono text-micro text-foreground" numberOfLines={1}>
               {key}
             </Text>
           )}

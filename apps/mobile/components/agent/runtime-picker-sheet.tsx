@@ -196,7 +196,7 @@ export function RuntimePickerSheet({
           {/* No hover on a phone: the reason web puts in a `title` is rendered
               in-row, under the very row it explains. */}
           {locked ? (
-            <Text className="text-[11px] text-muted-foreground" numberOfLines={2}>
+            <Text className="text-micro text-muted-foreground" numberOfLines={2}>
               {t("agents.runtimePicker.lockedReason")}
             </Text>
           ) : (
@@ -328,12 +328,12 @@ export function RuntimePickerSheet({
                     <View key={machine.id}>
                       <View className="flex-row items-center justify-between gap-2 px-4 pb-1 pt-3">
                         <Text
-                          className="text-[11px] font-medium text-muted-foreground shrink"
+                          className="text-micro font-medium text-muted-foreground shrink"
                           numberOfLines={1}
                         >
                           {machine.title}
                         </Text>
-                        <Text className="text-[11px] text-muted-foreground">
+                        <Text className="text-micro text-muted-foreground">
                           {t("agents.runtimePicker.groupOnline", {
                             online: machine.onlineCount,
                             total: machine.runtimes.length,

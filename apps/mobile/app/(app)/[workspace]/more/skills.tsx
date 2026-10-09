@@ -711,13 +711,13 @@ function SkillRowItem({
           <View className="flex-row items-center gap-2">
             <UsedBy agents={agents} />
             {creator ? (
-              <Text className="text-[11px] text-muted-foreground/60" numberOfLines={1}>
+              <Text className="text-micro text-muted-foreground/60" numberOfLines={1}>
                 {t("skills.list.addedBy", { name: creator.name })}
               </Text>
             ) : null}
           </View>
           {skill.updated_at ? (
-            <Text className="text-[11px] text-muted-foreground/60">
+            <Text className="text-micro text-muted-foreground/60">
               {t("skills.detail.updatedAt")} {timeAgo(skill.updated_at)}
             </Text>
           ) : null}
@@ -740,7 +740,7 @@ function UsedBy({ agents }: { agents: Agent[] }) {
 
   if (agents.length === 0) {
     return (
-      <Text className="text-[11px] text-muted-foreground/60">
+      <Text className="text-micro text-muted-foreground/60">
         {t("skills.list.unused")}
       </Text>
     );
@@ -752,7 +752,7 @@ function UsedBy({ agents }: { agents: Agent[] }) {
       <View className="flex-row items-center gap-1">
         <ActorAvatar type="agent" id={sole.id} size={16} />
         <Text
-          className="text-[11px] text-muted-foreground/60"
+          className="text-micro text-muted-foreground/60"
           numberOfLines={1}
         >
           {sole.name}

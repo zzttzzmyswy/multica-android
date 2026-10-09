@@ -269,7 +269,7 @@ export const AutopilotForm = forwardRef<AutopilotFormHandle, Props>(
                       </Text>
                       {selectedAssignee.description?.trim() ? (
                         <Text
-                          className="text-[11px] text-muted-foreground"
+                          className="text-micro text-muted-foreground"
                           numberOfLines={1}
                         >
                           {selectedAssignee.description}
@@ -415,7 +415,7 @@ export const AutopilotForm = forwardRef<AutopilotFormHandle, Props>(
                 {t("autopilots.subscribers.add")}
               </Text>
             </Pressable>
-            <Text className="text-[11px] leading-tight text-muted-foreground/80">
+            <Text className="text-micro leading-tight text-muted-foreground/80">
               {t("autopilots.subscribers.hint")}
             </Text>
             <MultiSelectSheet

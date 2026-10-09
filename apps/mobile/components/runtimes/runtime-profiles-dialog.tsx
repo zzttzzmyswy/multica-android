@@ -230,7 +230,7 @@ function BrowseView({
         <>
           {/* Custom profiles */}
           <View className="gap-2">
-            <Text className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <Text className="text-micro font-semibold uppercase tracking-wide text-muted-foreground">
               {t("runtimes.profiles.customSectionTitle", {
                 count: String(catalog.customs.length),
               })}
@@ -279,12 +279,12 @@ function BrowseView({
               className="flex-row items-center justify-between gap-2 bg-secondary/30 px-3 py-2.5"
             >
               <View className="flex-1">
-                <Text className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <Text className="text-micro font-semibold uppercase tracking-wide text-muted-foreground">
                   {t("runtimes.profiles.builtinSectionTitle", {
                     count: String(catalog.builtins.length),
                   })}
                 </Text>
-                <Text className="text-[11px] text-muted-foreground mt-0.5">
+                <Text className="text-micro text-muted-foreground mt-0.5">
                   {t("runtimes.profiles.builtinSectionHint")}
                 </Text>
               </View>
@@ -385,7 +385,7 @@ function CustomCard({
               </View>
             ) : null}
           </View>
-          <Text className="text-[11px] text-muted-foreground capitalize">
+          <Text className="text-micro text-muted-foreground capitalize">
             {profile.protocol_family}
           </Text>
         </View>
@@ -398,11 +398,11 @@ function CustomCard({
           </Pressable>
         </View>
       </View>
-      <Text className="font-mono text-[11px] text-foreground" numberOfLines={2}>
+      <Text className="font-mono text-micro text-foreground" numberOfLines={2}>
         {commandLine}
       </Text>
       {profile.description ? (
-        <Text className="text-[11px] text-muted-foreground" numberOfLines={2}>
+        <Text className="text-micro text-muted-foreground" numberOfLines={2}>
           {profile.description}
         </Text>
       ) : null}
@@ -439,7 +439,7 @@ function ProfileFormView({
     return (
       <>
         <ScrollView className="flex-1" contentContainerClassName="px-4 py-4 gap-3">
-          <Text className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          <Text className="text-micro font-medium uppercase tracking-wide text-muted-foreground">
             {t("runtimes.profiles.form.stepProgress", { current: "1", total: "2" })}
           </Text>
           <Text className="text-base font-semibold text-foreground">
@@ -616,7 +616,7 @@ function ProfileDetailsForm({
         contentContainerClassName="px-4 py-4 gap-4 pb-24"
       >
         {mode === "create" ? (
-          <Text className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          <Text className="text-micro font-medium uppercase tracking-wide text-muted-foreground">
             {t("runtimes.profiles.form.stepProgress", { current: "2", total: "2" })}
           </Text>
         ) : null}
@@ -630,7 +630,7 @@ function ProfileDetailsForm({
             <FamilyBadge family={family} />
             <Text className="text-sm text-foreground capitalize">{family}</Text>
           </View>
-          <Text className="text-[11px] text-muted-foreground">
+          <Text className="text-micro text-muted-foreground">
             {t("runtimes.profiles.form.familyLockedHint")}
           </Text>
         </View>
@@ -682,7 +682,7 @@ function ProfileDetailsForm({
           {commandError ? (
             <Text className="text-xs text-destructive">{commandError}</Text>
           ) : parsedCommand.ok ? (
-            <Text className="font-mono text-[11px] text-muted-foreground">
+            <Text className="font-mono text-micro text-muted-foreground">
               {t("runtimes.profiles.form.commandPreviewExecutable")} {parsedCommand.commandName}
               {parsedCommand.fixedArgs.length > 0
                 ? `  ${t("runtimes.profiles.form.commandPreviewArgs")} ${parsedCommand.fixedArgs.join(" ")}`

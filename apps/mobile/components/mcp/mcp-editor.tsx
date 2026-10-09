@@ -90,7 +90,7 @@ export function McpJsonField({
             : "rounded-md border border-border bg-secondary/50 px-3 py-2 font-mono text-sm"
         }
       />
-      <Text className="text-[11px] text-muted-foreground/70">
+      <Text className="text-micro text-muted-foreground/70">
         {t("mcp.form.jsonHint")}
       </Text>
     </View>

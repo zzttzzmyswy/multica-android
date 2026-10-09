@@ -606,12 +606,12 @@ function MachineRuntimeRow({
                 />
               ) : null}
               {cliVersion ? (
-                <Text className="text-[11px] font-mono text-muted-foreground">
+                <Text className="text-micro font-mono text-muted-foreground">
                   {cliVersion}
                 </Text>
               ) : null}
               {showOwner ? (
-                <Text className="text-[11px] text-muted-foreground" numberOfLines={1}>
+                <Text className="text-micro text-muted-foreground" numberOfLines={1}>
                   {ownerName ?? t("runtimes.detail.ownerUnknown")}
                 </Text>
               ) : null}

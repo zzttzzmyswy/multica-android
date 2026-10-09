@@ -269,7 +269,7 @@ export function ConnectRemoteDialog({ onClose }: { onClose: () => void }) {
                   cmd={setupCmd}
                   copyLabel={t("runtimes.connect.copy")}
                 />
-                <Text className="text-[11px] text-muted-foreground leading-4">
+                <Text className="text-micro text-muted-foreground leading-4">
                   {t("runtimes.connect.step2Hint")}
                 </Text>
               </View>
@@ -280,7 +280,7 @@ export function ConnectRemoteDialog({ onClose }: { onClose: () => void }) {
                 <Text className="text-xs font-medium text-foreground">
                   {t("runtimes.connect.liveListening")}
                 </Text>
-                <Text className="flex-1 text-[11px] text-muted-foreground">
+                <Text className="flex-1 text-micro text-muted-foreground">
                   {t("runtimes.connect.liveListeningHint")}
                 </Text>
               </View>
@@ -329,7 +329,7 @@ function Troubleshooting({ tokenCmd }: { tokenCmd: string }) {
       </Pressable>
       {open ? (
         <View className="border-t border-border px-3 py-2.5 gap-2">
-          <Text className="text-[11px] text-muted-foreground leading-4">
+          <Text className="text-micro text-muted-foreground leading-4">
             {t("runtimes.connect.troubleIntro")}
           </Text>
           <CommandBlock
@@ -337,23 +337,23 @@ function Troubleshooting({ tokenCmd }: { tokenCmd: string }) {
             cmd={tokenCmd}
             copyLabel={t("runtimes.connect.copy")}
           />
-          <Text className="text-[11px] text-muted-foreground leading-4">
+          <Text className="text-micro text-muted-foreground leading-4">
             {t("runtimes.connect.troubleTokenHint")}
           </Text>
           <View className="gap-1">
             <View className="flex-row items-center gap-1.5">
-              <Text className="flex-1 text-[11px] text-muted-foreground">
+              <Text className="flex-1 text-micro text-muted-foreground">
                 {t("runtimes.connect.troubleCheckStatus")}
               </Text>
-              <Text className="font-mono text-[11px] text-foreground">
+              <Text className="font-mono text-micro text-foreground">
                 multica daemon status
               </Text>
             </View>
             <View className="flex-row items-center gap-1.5">
-              <Text className="flex-1 text-[11px] text-muted-foreground">
+              <Text className="flex-1 text-micro text-muted-foreground">
                 {t("runtimes.connect.troubleViewLogs")}
               </Text>
-              <Text className="font-mono text-[11px] text-foreground">
+              <Text className="font-mono text-micro text-foreground">
                 multica daemon logs -f
               </Text>
             </View>

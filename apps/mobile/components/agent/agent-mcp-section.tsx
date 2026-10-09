@@ -255,7 +255,7 @@ export function AgentMcpSection({
       {/* 1 — Agent configuration */}
       <View className="px-4 gap-2">
         <View className="flex-row items-center justify-between gap-3">
-          <Text className="text-[11px] uppercase tracking-wider text-muted-foreground/80 font-medium">
+          <Text className="text-micro uppercase tracking-wider text-muted-foreground/80 font-medium">
             {t("mcp.agent.managedTitle")}
           </Text>
           {!redacted ? (
@@ -273,7 +273,7 @@ export function AgentMcpSection({
             </Button>
           ) : null}
         </View>
-        <Text className="text-[11px] text-muted-foreground/80 leading-4">
+        <Text className="text-micro text-muted-foreground/80 leading-4">
           {t("mcp.agent.managedHint")}
         </Text>
 
@@ -284,7 +284,7 @@ export function AgentMcpSection({
               <Text className="text-sm font-medium text-foreground">
                 {t("mcp.agent.redactedTitle")}
               </Text>
-              <Text className="text-[11px] text-muted-foreground leading-4">
+              <Text className="text-micro text-muted-foreground leading-4">
                 {t("mcp.agent.redactedHint")}
               </Text>
             </View>
@@ -312,7 +312,7 @@ export function AgentMcpSection({
                   >
                     {server.name}
                   </Text>
-                  <Text className="text-[11px] text-muted-foreground uppercase">
+                  <Text className="text-micro text-muted-foreground uppercase">
                     {transportLabel(server.transport)}
                   </Text>
                 </View>
@@ -350,7 +350,7 @@ export function AgentMcpSection({
       {/* 2 — Workspace assignments */}
       <View className="px-4 pt-5 gap-2">
         <View className="flex-row items-center justify-between gap-3">
-          <Text className="text-[11px] uppercase tracking-wider text-muted-foreground/80 font-medium">
+          <Text className="text-micro uppercase tracking-wider text-muted-foreground/80 font-medium">
             {t("mcp.agent.workspaceTitle")}
           </Text>
           {available.length > 0 ? (
@@ -360,7 +360,7 @@ export function AgentMcpSection({
             </Button>
           ) : null}
         </View>
-        <Text className="text-[11px] text-muted-foreground/80 leading-4">
+        <Text className="text-micro text-muted-foreground/80 leading-4">
           {t("mcp.agent.hint")}
         </Text>
 
@@ -408,7 +408,7 @@ export function AgentMcpSection({
                       </Text>
                     ) : null}
                   </View>
-                  <Text className="text-[11px] text-muted-foreground uppercase">
+                  <Text className="text-micro text-muted-foreground uppercase">
                     {transportLabel(server.transport)}
                   </Text>
                 </View>
@@ -447,7 +447,7 @@ export function AgentMcpSection({
       {/* 3 — Runtime discovery */}
       <View className="px-4 pt-5 gap-2">
         <View className="flex-row items-center justify-between gap-3">
-          <Text className="text-[11px] uppercase tracking-wider text-muted-foreground/80 font-medium">
+          <Text className="text-micro uppercase tracking-wider text-muted-foreground/80 font-medium">
             {t("mcp.agent.runtimeTitle")}
           </Text>
           {runtimeId ? (
@@ -465,7 +465,7 @@ export function AgentMcpSection({
           ) : null}
         </View>
         {runtime ? (
-          <Text className="text-[11px] text-muted-foreground/80 leading-4">
+          <Text className="text-micro text-muted-foreground/80 leading-4">
             {t("mcp.agent.runtimeHint", { runtime: runtimeDisplayLabel(runtime) })}
           </Text>
         ) : null}
@@ -503,7 +503,7 @@ export function AgentMcpSection({
                       </Text>
                     ) : null}
                   </View>
-                  <Text className="text-[11px] text-muted-foreground uppercase">
+                  <Text className="text-micro text-muted-foreground uppercase">
                     {transportLabel(server.transport || "unknown")}
                   </Text>
                 </View>

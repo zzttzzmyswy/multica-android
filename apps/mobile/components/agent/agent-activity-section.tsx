@@ -419,7 +419,7 @@ function ActivityTaskRow({
             {statusLabel}
           </Text>
           {durationText ? (
-            <Text className="text-[11px] text-muted-foreground/70 tabular-nums">
+            <Text className="text-micro text-muted-foreground/70 tabular-nums">
               {durationText}
             </Text>
           ) : null}
@@ -430,7 +430,7 @@ function ActivityTaskRow({
               applies (web's two call sites guard identically). */}
           {attributionShouldRender(task.attribution) ? (
             <>
-              <Text className="text-[11px] text-muted-foreground/70">·</Text>
+              <Text className="text-micro text-muted-foreground/70">·</Text>
               <AttributionBadge attribution={task.attribution} variant="avatar" />
             </>
           ) : null}
@@ -443,7 +443,7 @@ function ActivityTaskRow({
             {failureReason}
           </Text>
         ) : null}
-        <Text className="text-[11px] text-muted-foreground/70 tabular-nums">
+        <Text className="text-micro text-muted-foreground/70 tabular-nums">
           {timeText}
         </Text>
       </View>

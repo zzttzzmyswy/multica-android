@@ -228,7 +228,7 @@ export default function ChatSessionsRoute() {
               </Text>
             ) : null}
             <View className="flex-1" />
-            <Text className="text-[11px] text-muted-foreground shrink-0">
+            <Text className="text-micro text-muted-foreground shrink-0">
               {timeText}
             </Text>
           </View>

@@ -210,7 +210,7 @@ function PlainBlock({ text, destructive }: { text: string; destructive?: boolean
     <View className="rounded bg-muted/40 px-2 py-1.5">
       <Text
         className={cn(
-          "text-[11px] font-mono",
+          "text-micro font-mono",
           destructive ? "text-destructive" : "text-muted-foreground",
         )}
       >
@@ -290,7 +290,7 @@ function TranscriptDiffBlock({ path, lines }: { path: string; lines: TranscriptD
       {safeLines.map((line, index) => {
         if (line.kind === "gap") {
           return (
-            <Text key={index} className="text-[11px] font-mono text-muted-foreground">
+            <Text key={index} className="text-micro font-mono text-muted-foreground">
               {"  ⋯"}
             </Text>
           );
@@ -309,7 +309,7 @@ function TranscriptDiffBlock({ path, lines }: { path: string; lines: TranscriptD
           >
             <Text
               className={cn(
-                "text-[11px] font-mono",
+                "text-micro font-mono",
                 kind === "add" && "text-success",
                 kind === "remove" && "text-destructive",
                 kind === "context" && "text-muted-foreground",
@@ -320,7 +320,7 @@ function TranscriptDiffBlock({ path, lines }: { path: string; lines: TranscriptD
             {tokens ? (
               <Text
                 className={cn(
-                  "flex-1 pl-1 text-[11px] font-mono",
+                  "flex-1 pl-1 text-micro font-mono",
                   kind === "context" && "text-muted-foreground",
                 )}
               >
@@ -333,7 +333,7 @@ function TranscriptDiffBlock({ path, lines }: { path: string; lines: TranscriptD
             ) : (
               <Text
                 className={cn(
-                  "flex-1 pl-1 text-[11px] font-mono",
+                  "flex-1 pl-1 text-micro font-mono",
                   kind === "add" && "text-success",
                   kind === "remove" && "text-destructive",
                   kind === "context" && "text-muted-foreground",

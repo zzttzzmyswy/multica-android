@@ -777,7 +777,7 @@ function AutopilotRow({
             pill.className,
           )}
         >
-          <Text className="text-[11px] font-medium">
+          <Text className="text-micro font-medium">
             {pill.label.startsWith("autopilots.") ? t(pill.label) : pill.label}
           </Text>
         </View>

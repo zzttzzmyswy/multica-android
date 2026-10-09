@@ -97,7 +97,7 @@ export function ProjectRow({
           ) : (
             <Text className="text-xs text-muted-foreground/60">—</Text>
           )}
-          <Text className="text-[11px] text-muted-foreground/70">
+          <Text className="text-micro text-muted-foreground/70">
             {timeAgo(project.updated_at)}
           </Text>
         </View>

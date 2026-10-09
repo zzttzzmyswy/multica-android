@@ -170,23 +170,23 @@ function WakeupTableRow({
             {text.trigger(row)}
           </Text>
           {detail ? (
-            <Text className="mt-0.5 text-[11px] text-muted-foreground" numberOfLines={1}>
+            <Text className="mt-0.5 text-micro text-muted-foreground" numberOfLines={1}>
               {detail}
             </Text>
           ) : null}
 
           {/* Second line: web's target-agent / source columns, then 有效期. */}
           <View className="mt-1 flex-row flex-wrap items-center gap-x-1.5 gap-y-1">
-            <Text className="text-[11px] text-muted-foreground" numberOfLines={1}>
+            <Text className="text-micro text-muted-foreground" numberOfLines={1}>
               {row.agent_name || t("autopilots.wakeups.no_target")}
             </Text>
-            <Text className="text-[11px] text-muted-foreground">·</Text>
-            <Text className="text-[11px] text-muted-foreground" numberOfLines={1}>
+            <Text className="text-micro text-muted-foreground">·</Text>
+            <Text className="text-micro text-muted-foreground" numberOfLines={1}>
               {t(`autopilots.wakeups.sources.${row.source}`)}
             </Text>
-            <Text className="text-[11px] text-muted-foreground">·</Text>
+            <Text className="text-micro text-muted-foreground">·</Text>
             <Text
-              className={`flex-1 text-[11px] ${
+              className={`flex-1 text-micro ${
                 row.paused_reason ? "text-destructive" : "text-muted-foreground"
               }`}
               numberOfLines={2}
@@ -198,21 +198,21 @@ function WakeupTableRow({
           {/* Third line: the run counters web puts in their own column. */}
           <View className="mt-1 flex-row items-center gap-2">
             <Ionicons name="repeat-outline" size={11} color={theme.mutedForeground} />
-            <Text className="text-[11px] tabular-nums text-muted-foreground">
+            <Text className="text-micro tabular-nums text-muted-foreground">
               {t("autopilots.wakeups.runs_7d")}: {row.runs_7d}
             </Text>
             {runState ? (
-              <Text className="text-[11px] tabular-nums text-brand" numberOfLines={1}>
+              <Text className="text-micro tabular-nums text-brand" numberOfLines={1}>
                 {runState}
               </Text>
             ) : null}
             {row.issue_closed ? (
-              <Text className="text-[11px] text-muted-foreground">
+              <Text className="text-micro text-muted-foreground">
                 {t("autopilots.wakeups.issue_closed")}
               </Text>
             ) : null}
             {row.last_error ? (
-              <Text className="text-[11px] text-destructive">
+              <Text className="text-micro text-destructive">
                 {t("wakeups.needsAttention")}
               </Text>
             ) : null}
@@ -222,7 +222,7 @@ function WakeupTableRow({
               that silently does nothing is the defect this family of rounds
               exists to close. */}
           {blockKey ? (
-            <Text className="mt-1 text-[11px] text-muted-foreground">
+            <Text className="mt-1 text-micro text-muted-foreground">
               {t(blockKey)}
             </Text>
           ) : null}

@@ -41,7 +41,7 @@ const MD_FONT = {
   // rendered h6 as "small gray text" indistinguishable from a caption.
   h6: 13,
   // Code block font size — mirrors the in-house `CodeBlock` component's
-  // `text-[13px]` (see `tokens.ts` → CODE_BLOCK_TEXT_CLASS). The two paths
+  // `text-label` (see `tokens.ts` → CODE_BLOCK_TEXT_CLASS). The two paths
   // MUST agree so top-level fenced code (rendered by CodeBlock) and
   // list-nested code (rendered by enriched via this style) look identical.
   // Both were lowered from 14 to 13 to match GitHub Mobile / Linear iOS /

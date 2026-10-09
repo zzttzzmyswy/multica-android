@@ -127,7 +127,7 @@ export function EventFilterEditor({ filters, onChange, editable }: Props) {
         </View>
       ) : null}
 
-      <Text className="text-[11px] leading-tight text-muted-foreground/80">
+      <Text className="text-micro leading-tight text-muted-foreground/80">
         {t("autopilots.eventFilter.hint")}
       </Text>
     </View>

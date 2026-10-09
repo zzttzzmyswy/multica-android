@@ -506,7 +506,7 @@ export function IssueViewBar({
       {prefsRead.state === "error" ? (
         <View className="flex-row items-center gap-1.5 px-4 pb-1">
           <Ionicons name="cloud-offline-outline" size={12} color={dim} />
-          <Text className="flex-1 text-[11px] text-muted-foreground">
+          <Text className="flex-1 text-micro text-muted-foreground">
             {t("issueViews.prefsLoadError")}
           </Text>
         </View>

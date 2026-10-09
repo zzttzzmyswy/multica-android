@@ -706,17 +706,17 @@ const SwimlaneCell = memo(function SwimlaneCell({
         <StatusIcon status={status} size={13} />
         <Text
           numberOfLines={1}
-          className="flex-shrink text-[11px] uppercase tracking-wider font-medium text-muted-foreground"
+          className="flex-shrink text-micro uppercase tracking-wider font-medium text-muted-foreground"
         >
           {statusLabel(status)}
         </Text>
-        <Text className="ml-auto text-[11px] text-muted-foreground/60">
+        <Text className="ml-auto text-micro text-muted-foreground/60">
           {issues.length}
         </Text>
       </View>
       {issues.length === 0 ? (
         <View className="min-h-[30px] justify-center px-2 pb-2">
-          <Text className="text-[11px] text-muted-foreground/40">
+          <Text className="text-micro text-muted-foreground/40">
             {translate("issues.swimlane.emptyCell")}
           </Text>
         </View>
@@ -733,7 +733,7 @@ const SwimlaneCell = memo(function SwimlaneCell({
             />
           ))}
           {issues.length > shown.length ? (
-            <Text className="px-1 py-1 text-[11px] text-muted-foreground/70">
+            <Text className="px-1 py-1 text-micro text-muted-foreground/70">
               {t("issues.swimlane.moreCards", {
                 count: issues.length - shown.length,
               })}

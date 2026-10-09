@@ -551,12 +551,12 @@ function OfficialPluginCard({
                   {latest.description}
                 </Text>
               ) : null}
-              <Text className="text-[11px] font-mono text-muted-foreground">
+              <Text className="text-micro font-mono text-muted-foreground">
                 {latest.plugin_key}
               </Text>
             </View>
             <View className="px-2 py-0.5 rounded-full bg-secondary">
-              <Text className="text-[11px] text-muted-foreground font-medium tabular-nums">
+              <Text className="text-micro text-muted-foreground font-medium tabular-nums">
                 {installation?.desired_version ?? selectedRelease.version}
               </Text>
             </View>
@@ -609,7 +609,7 @@ function OfficialPluginCard({
             </Text>
             {releases.length > 1 ? (
               <View className="gap-1.5">
-                <Text className="text-[11px] font-medium text-muted-foreground">
+                <Text className="text-micro font-medium text-muted-foreground">
                   {t("plugins.versions")}
                 </Text>
                 <VersionChips
@@ -648,7 +648,7 @@ function OfficialPluginCard({
 
             {/* Enabled bindings */}
             <View className="gap-1.5">
-              <Text className="text-[11px] font-medium text-muted-foreground">
+              <Text className="text-micro font-medium text-muted-foreground">
                 {t("plugins.bindings")}
               </Text>
               {activeBindings.length > 0 ? (
@@ -861,12 +861,12 @@ function PrivatePluginCard({
                 {installation.description}
               </Text>
             ) : null}
-            <Text className="text-[11px] font-mono text-muted-foreground">
+            <Text className="text-micro font-mono text-muted-foreground">
               {installation.plugin_key}
             </Text>
           </View>
           <View className="px-2 py-0.5 rounded-full bg-secondary">
-            <Text className="text-[11px] text-muted-foreground font-medium tabular-nums">
+            <Text className="text-micro text-muted-foreground font-medium tabular-nums">
               {installation.desired_version}
             </Text>
           </View>
@@ -912,7 +912,7 @@ function PrivatePluginCard({
         </Text>
 
         <View className="gap-1.5">
-          <Text className="text-[11px] font-medium text-muted-foreground">
+          <Text className="text-micro font-medium text-muted-foreground">
             {t("plugins.bindings")}
           </Text>
           {activeBindings.length > 0 ? (
@@ -1029,7 +1029,7 @@ function PrivatePluginCard({
 function ReviewRow({ label, value }: { label: string; value: string }) {
   return (
     <View>
-      <Text className="text-[11px] font-medium text-muted-foreground">
+      <Text className="text-micro font-medium text-muted-foreground">
         {label}
       </Text>
       <Text className="text-xs text-foreground" numberOfLines={4}>
@@ -1068,7 +1068,7 @@ function VersionChips({
           >
             <Text
               className={cn(
-                "text-[11px] font-mono",
+                "text-micro font-mono",
                 active ? "text-foreground" : "text-muted-foreground",
               )}
             >
@@ -1157,7 +1157,7 @@ function ScopePicker({
               >
                 <Text
                   className={cn(
-                    "text-[11px]",
+                    "text-micro",
                     active ? "text-foreground" : "text-muted-foreground",
                   )}
                   numberOfLines={1}

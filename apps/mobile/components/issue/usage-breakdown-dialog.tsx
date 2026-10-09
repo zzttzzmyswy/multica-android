@@ -208,7 +208,7 @@ export function UsageBreakdownDialog({
 
               <View className="gap-1 px-1">
                 {unpricedCount > 0 && (
-                  <Text className="text-[11px] leading-4 text-muted-foreground">
+                  <Text className="text-micro leading-4 text-muted-foreground">
                     {t(
                       unpricedCount === 1
                         ? `${tKey}.noteUnpricedOne`
@@ -218,13 +218,13 @@ export function UsageBreakdownDialog({
                   </Text>
                 )}
                 {unmapped.length > 0 && (
-                  <Text className="text-[11px] leading-4 text-muted-foreground">
+                  <Text className="text-micro leading-4 text-muted-foreground">
                     {t(`${tKey}.noteUnmapped`, {
                       models: unmapped.join(", "),
                     })}
                   </Text>
                 )}
-                <Text className="text-[11px] leading-4 text-muted-foreground">
+                <Text className="text-micro leading-4 text-muted-foreground">
                   {t(`${tKey}.noteEstimate`)}
                 </Text>
               </View>
@@ -390,13 +390,13 @@ function RunUsageCard({ task, maxTokens }: { task: AgentTask; maxTokens: number 
         <ActorAvatar type="agent" id={task.agent_id} size={18} />
         <Text
           numberOfLines={1}
-          className="flex-1 min-w-0 text-[13px] font-medium text-foreground"
+          className="flex-1 min-w-0 text-label font-medium text-foreground"
         >
           {getName("agent", task.agent_id)}
           {trigger ? ` · ${trigger}` : ""}
         </Text>
         {duration ? (
-          <Text className="text-[11px] tabular-nums text-muted-foreground">
+          <Text className="text-micro tabular-nums text-muted-foreground">
             {duration}
           </Text>
         ) : null}
@@ -406,7 +406,7 @@ function RunUsageCard({ task, maxTokens }: { task: AgentTask; maxTokens: number 
       {summary.models.length > 0 ? (
         <Text
           numberOfLines={1}
-          className="text-[11px] text-muted-foreground"
+          className="text-micro text-muted-foreground"
         >
           {summary.models.join(", ")}
         </Text>
@@ -441,7 +441,7 @@ function RunUsageCard({ task, maxTokens }: { task: AgentTask; maxTokens: number 
             />
           </View>
         </View>
-        <Text className="text-[13px] font-semibold tabular-nums text-foreground">
+        <Text className="text-label font-semibold tabular-nums text-foreground">
           {formatUsd(summary.cost)}
         </Text>
       </View>

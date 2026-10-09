@@ -201,7 +201,7 @@ export default function AgentDetailPage() {
             </View>
             {archived ? (
               <View className="px-2 py-0.5 rounded-full border border-border bg-muted">
-                <Text className="text-[11px] font-medium text-muted-foreground">
+                <Text className="text-micro font-medium text-muted-foreground">
                   {t("agents.status.archived")}
                 </Text>
               </View>

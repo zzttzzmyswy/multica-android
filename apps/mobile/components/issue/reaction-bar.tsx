@@ -141,7 +141,7 @@ export function ReactionBar({
 
       {quickOpen ? (
         <View className="rounded-xl border border-border bg-popover p-2 gap-1">
-          <Text className="px-1 text-[11px] text-muted-foreground">
+          <Text className="px-1 text-micro text-muted-foreground">
             {t("issue.reaction.quickPick")}
           </Text>
           <View className="flex-row flex-wrap gap-1">

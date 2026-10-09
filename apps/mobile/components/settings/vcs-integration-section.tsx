@@ -385,7 +385,7 @@ function CopyRow({ label, value, mono }: { label: string; value: string; mono?: 
       className="rounded-md bg-secondary/60 px-2.5 py-2 flex-row items-center gap-2"
     >
       <View className="flex-1 min-w-0 gap-0.5">
-        <Text className="text-[11px] text-muted-foreground">{label}</Text>
+        <Text className="text-micro text-muted-foreground">{label}</Text>
         <Text
           numberOfLines={2}
           className={cn(

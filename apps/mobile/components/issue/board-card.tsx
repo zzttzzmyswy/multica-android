@@ -303,7 +303,7 @@ export function BoardCard({
       <View className="mt-2 flex-row items-center justify-between">
         {dateKey ? (
           <Text
-            className={`text-[11px] ${
+            className={`text-micro ${
               overdue ? "text-destructive" : "text-muted-foreground"
             }`}
           >

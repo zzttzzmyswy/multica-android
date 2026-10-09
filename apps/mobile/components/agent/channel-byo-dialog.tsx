@@ -234,7 +234,7 @@ export function ChannelByoDialog({
                 {message ? (
                   <Text className="text-xs text-destructive">{t(message)}</Text>
                 ) : field.hintKey ? (
-                  <Text className="text-[11px] text-muted-foreground leading-4">
+                  <Text className="text-micro text-muted-foreground leading-4">
                     {t(field.hintKey)}
                   </Text>
                 ) : null}

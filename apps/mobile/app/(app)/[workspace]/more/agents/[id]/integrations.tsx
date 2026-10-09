@@ -463,7 +463,7 @@ function ConnectedCard({
         </Text>
         {larkRegion ? (
           <View className="rounded-full border border-border bg-muted px-2 py-0.5">
-            <Text className="text-[11px] text-muted-foreground">{larkRegion}</Text>
+            <Text className="text-micro text-muted-foreground">{larkRegion}</Text>
           </View>
         ) : null}
       </View>

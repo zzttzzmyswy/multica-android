@@ -11,7 +11,18 @@ const { hairlineWidth } = require("nativewind/theme");
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   darkMode: "class",
-  content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
+  content: [
+    "./app/**/*.{ts,tsx}",
+    "./components/**/*.{ts,tsx}",
+    // `lib/` carries className strings too — the markdown lightbox's two
+    // overlay buttons and the code-block language label among them. Without
+    // this glob a class written ONLY there never reaches the stylesheet: the
+    // source reads correctly and the device renders the bare component, with
+    // nothing to point at. Measured: adding this one glob newly emits exactly
+    // `w-11`, `bg-black/45` and `mr-2` (the three classes lib/ owned alone) and
+    // drops nothing. Guarded by `lib/type-scale.test.ts`.
+    "./lib/**/*.{ts,tsx}",
+  ],
   presets: [require("nativewind/preset")],
   theme: {
     extend: {
@@ -75,6 +86,32 @@ module.exports = {
       },
       borderWidth: {
         hairline: hairlineWidth(),
+      },
+      fontSize: {
+        // Role-named type scale, ported value-for-value from the web/desktop
+        // scale at `packages/ui/styles/tokens.css` (`--text-*`). Same names,
+        // same sizes, same line-heights — a reader who knows the web scale can
+        // read a mobile className without consulting a table.
+        //
+        // Why the web scale and not a mobile-specific one: the two apps render
+        // the same information, and the previous split was invisible rather
+        // than deliberate. Mobile had zero role steps and 392 arbitrary
+        // `text-[Npx]` values instead, including 10px/9px/8px tiers that exist
+        // nowhere in the web scale. Arbitrary values also carry no line-height,
+        // so leading fell back to whatever `leading-*` happened to be nearby.
+        //
+        // Steps are read off tokens.css, not chosen here. Keep the two in sync;
+        // `lib/type-scale.test.ts` fails if a step drifts from its web source.
+        micro: ["11px", "15px"],
+        caption: ["12px", "16px"],
+        label: ["13px", "18px"],
+        body: ["14px", "20px"],
+        "body-lg": ["15px", "22px"],
+        "title-sm": ["16px", "24px"],
+        title: ["18px", "28px"],
+        "title-lg": ["20px", "28px"],
+        "display-sm": ["24px", "32px"],
+        display: ["36px", "40px"],
       },
       keyframes: {
         "accordion-down": {

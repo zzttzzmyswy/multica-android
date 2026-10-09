@@ -326,7 +326,7 @@ export function SkillBatchBar({
             </View>
           </View>
           {!allDeletable ? (
-            <Text className="text-[11px] text-muted-foreground pt-0.5">
+            <Text className="text-micro text-muted-foreground pt-0.5">
               {t("skills.batch.deleteNoPermission")}
             </Text>
           ) : null}

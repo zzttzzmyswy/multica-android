@@ -280,7 +280,7 @@ function RoleBadge({ role }: { role: MemberRole }) {
         ROLE_BADGE[role],
       )}
     >
-      <Text className="text-[11px] font-medium">
+      <Text className="text-micro font-medium">
         {t(`members.role.${role}`)}
       </Text>
     </View>

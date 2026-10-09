@@ -584,7 +584,7 @@ export function ScheduleEditor({
                 >
                   <Text
                     className={cn(
-                      "text-[11px] font-medium",
+                      "text-micro font-medium",
                       selected ? "text-background" : "text-muted-foreground",
                     )}
                   >
@@ -639,7 +639,7 @@ export function ScheduleEditor({
 
           {cronOpen ? (
             <View className="gap-1">
-              <Text className="font-mono text-[11px] text-muted-foreground">
+              <Text className="font-mono text-micro text-muted-foreground">
                 TZ={value.timezone}
               </Text>
               <TextField

@@ -157,7 +157,7 @@ export default function AiBuilderSetupPage() {
         {/* Unfinished conversations — the only route back to one lives on this
             screen, so they must stay reachable before the picker for a new one. */}
         <View className="gap-2">
-          <Text className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          <Text className="text-micro font-medium uppercase tracking-wider text-muted-foreground">
             {t("agents.new.ai.unfinished")}
           </Text>
           {sessionsLoading ? (
@@ -196,7 +196,7 @@ export default function AiBuilderSetupPage() {
                           {title || t("agents.new.ai.untitled")}
                         </Text>
                         {session.last_message_at ? (
-                          <Text className="text-[11px] text-muted-foreground shrink-0">
+                          <Text className="text-micro text-muted-foreground shrink-0">
                             {timeAgo(session.last_message_at)}
                           </Text>
                         ) : null}
@@ -230,7 +230,7 @@ export default function AiBuilderSetupPage() {
 
         {/* New conversation */}
         <View className="gap-2">
-          <Text className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          <Text className="text-micro font-medium uppercase tracking-wider text-muted-foreground">
             {t("agents.new.ai.newConversation")}
           </Text>
           <Text className="text-sm text-muted-foreground">

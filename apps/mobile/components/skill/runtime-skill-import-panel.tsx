@@ -256,7 +256,7 @@ export function RuntimeSkillImportPanel({
                   <Text className="text-sm text-foreground" numberOfLines={1}>
                     {row.name}
                   </Text>
-                  <Text className="text-[11px] text-muted-foreground leading-4">
+                  <Text className="text-micro text-muted-foreground leading-4">
                     {row.error || t("skills.runtimeImport.conflict")}
                   </Text>
                 </View>
@@ -288,7 +288,7 @@ export function RuntimeSkillImportPanel({
           className="flex-row items-center justify-between rounded-md border border-border bg-secondary/50 px-3 py-2.5"
         >
           <View className="min-w-0">
-            <Text className="text-[11px] text-muted-foreground">
+            <Text className="text-micro text-muted-foreground">
               {t("skills.runtimeImport.runtimeLabel")}
             </Text>
             <Text className="text-sm text-foreground" numberOfLines={1}>
@@ -395,14 +395,14 @@ export function RuntimeSkillImportPanel({
                       </Text>
                       {skill.description ? (
                         <Text
-                          className="text-[11px] text-muted-foreground leading-4"
+                          className="text-micro text-muted-foreground leading-4"
                           numberOfLines={2}
                         >
                           {skill.description}
                         </Text>
                       ) : null}
                     </View>
-                    <Text className="text-[11px] text-muted-foreground">
+                    <Text className="text-micro text-muted-foreground">
                       {t("skills.runtimeImport.fileCount", {
                         count: skill.file_count,
                       })}

@@ -71,7 +71,7 @@ export function ModeErrorNotice({ error }: { error: WorktreeUnsupportedInfo }) {
             only text that names the offending path. */}
         <Text className="text-xs text-destructive">{error.message}</Text>
         {error.minVersion ? (
-          <Text className="text-[11px] text-destructive/80">
+          <Text className="text-micro text-destructive/80">
             {t("resource.modeUpgradeRequired", {
               current: error.currentVersion || t("resource.modeVersionUnknown"),
               min: error.minVersion,

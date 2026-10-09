@@ -683,7 +683,7 @@ function SquadRow({
             </Text>
             {archived ? (
               <View className="px-2 py-0.5 rounded-full border border-border bg-muted text-muted-foreground">
-                <Text className="text-[11px] text-muted-foreground font-medium">
+                <Text className="text-micro text-muted-foreground font-medium">
                   {t("squads.archived")}
                 </Text>
               </View>

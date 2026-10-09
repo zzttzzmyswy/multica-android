@@ -155,7 +155,7 @@ export function CloudRuntimeDialog({ onClose }: { onClose: () => void }) {
             <Text className="text-base font-semibold text-foreground">
               {t("runtimes.cloudRuntime.title")}
             </Text>
-            <Text className="text-[11px] text-muted-foreground">
+            <Text className="text-micro text-muted-foreground">
               {t("runtimes.cloudRuntime.description")}
             </Text>
           </View>
@@ -203,7 +203,7 @@ export function CloudRuntimeDialog({ onClose }: { onClose: () => void }) {
                 </Text>
                 <View className="gap-3">
                   <View className="gap-1">
-                    <Text className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <Text className="text-micro uppercase tracking-wide text-muted-foreground">
                       {t("runtimes.cloudRuntime.fields.name")}
                     </Text>
                     <TextField
@@ -214,7 +214,7 @@ export function CloudRuntimeDialog({ onClose }: { onClose: () => void }) {
                     />
                   </View>
                   <View className="gap-1">
-                    <Text className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <Text className="text-micro uppercase tracking-wide text-muted-foreground">
                       {t("runtimes.cloudRuntime.fields.instanceType")}
                     </Text>
                     <View className="flex-row gap-1.5">
@@ -245,7 +245,7 @@ export function CloudRuntimeDialog({ onClose }: { onClose: () => void }) {
                     </View>
                   </View>
                   <View className="gap-1">
-                    <Text className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <Text className="text-micro uppercase tracking-wide text-muted-foreground">
                       {t("runtimes.cloudRuntime.fields.diskSize")}
                     </Text>
                     <TextField
@@ -383,13 +383,13 @@ function NodeRow({
             <StatusBadge status={node.status} />
           </View>
           <View className="mt-1 flex-row flex-wrap items-center gap-x-2 gap-y-0.5">
-            <Text className="text-[11px] text-muted-foreground">{node.instance_type}</Text>
-            <Text className="text-[11px] text-muted-foreground/60">/</Text>
-            <Text className="text-[11px] text-muted-foreground">{node.region}</Text>
+            <Text className="text-micro text-muted-foreground">{node.instance_type}</Text>
+            <Text className="text-micro text-muted-foreground/60">/</Text>
+            <Text className="text-micro text-muted-foreground">{node.region}</Text>
             {created ? (
               <>
-                <Text className="text-[11px] text-muted-foreground/60">/</Text>
-                <Text className="text-[11px] text-muted-foreground">{created}</Text>
+                <Text className="text-micro text-muted-foreground/60">/</Text>
+                <Text className="text-micro text-muted-foreground">{created}</Text>
               </>
             ) : null}
           </View>
