@@ -243,7 +243,7 @@ export default function FeedbackPage() {
         {/* Kind picker — segmented, aligned with the ScopePicker pattern. */}
         <View className="rounded-md border border-border bg-card overflow-hidden">
           <View className="px-4 pt-3 pb-1">
-            <Text className="text-[11px] font-medium text-muted-foreground">
+            <Text className="text-micro font-medium text-muted-foreground">
               {t("feedback.kindLabel")}
             </Text>
           </View>
@@ -294,12 +294,12 @@ export default function FeedbackPage() {
             style={{ minHeight: 140, maxHeight: 220, textAlignVertical: "top" }}
           />
           <View className="flex-row items-center justify-between px-4 pb-2.5">
-            <Text className="text-[11px] text-muted-foreground">
+            <Text className="text-micro text-muted-foreground">
               {t("feedback.messageHint")}
             </Text>
             <Text
               className={cn(
-                "text-[11px] tabular-nums",
+                "text-micro tabular-nums",
                 message.length > MAX_MESSAGE_LEN
                   ? "text-destructive"
                   : "text-muted-foreground",
@@ -357,7 +357,7 @@ export default function FeedbackPage() {
         {/* Resources — the HelpLauncher external links + server version. */}
         <View className="rounded-md border border-border bg-card overflow-hidden">
           <View className="px-4 pt-3 pb-1">
-            <Text className="text-[11px] font-medium text-muted-foreground">
+            <Text className="text-micro font-medium text-muted-foreground">
               {t("feedback.helpSectionLabel")}
             </Text>
           </View>
@@ -382,7 +382,7 @@ export default function FeedbackPage() {
             <>
               <Separator />
               <View className="px-4 py-3">
-                <Text className="text-[11px] text-muted-foreground">
+                <Text className="text-micro text-muted-foreground">
                   {t("feedback.serverVersion", { version: serverVersion })}
                 </Text>
               </View>
@@ -427,7 +427,7 @@ function AttachmentRow({
         {item.filename}
       </Text>
       {item.status === "failed" ? (
-        <Text className="text-[11px] text-destructive" numberOfLines={1}>
+        <Text className="text-micro text-destructive" numberOfLines={1}>
           {t("feedback.uploadFailed")}
         </Text>
       ) : item.status === "uploading" ? (

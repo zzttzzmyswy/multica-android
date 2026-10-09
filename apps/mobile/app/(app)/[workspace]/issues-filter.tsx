@@ -356,7 +356,7 @@ export default function IssuesFilterRoute() {
           <View key={group.category}>
             {statusOptions.hasCustom && group.options.length > 1 ? (
               <View className="px-4 pt-1.5 pb-1">
-                <Text className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
+                <Text className="text-micro font-medium uppercase tracking-wider text-muted-foreground/70">
                   {t(`enum.status.${group.category}`)}
                 </Text>
               </View>

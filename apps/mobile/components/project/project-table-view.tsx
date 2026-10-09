@@ -362,7 +362,7 @@ export function ProjectTableView({
           <ProjectIcon icon={item.icon} size="sm" />
           <View className="flex-1 min-w-0 justify-center">
             <Text
-              className="text-[13px] font-medium text-foreground"
+              className="text-label font-medium text-foreground"
               numberOfLines={1}
             >
               {item.title}
@@ -370,7 +370,7 @@ export function ProjectTableView({
             <View className="flex-row items-center gap-1">
               <ProjectStatusIcon status={item.status} size={10} />
               <Text
-                className="text-[11px] text-muted-foreground"
+                className="text-micro text-muted-foreground"
                 numberOfLines={1}
               >
                 {projectStatusLabel(item.status)}
@@ -635,7 +635,7 @@ function ProjectColumnMenu({
             <ScrollView className="max-h-[55vh]">
               {columns.length > 0 ? (
                 <Text
-                  className="px-4 pt-3 text-[11px] text-muted-foreground"
+                  className="px-4 pt-3 text-micro text-muted-foreground"
                   numberOfLines={1}
                 >
                   {columns.map((c) => columnLabel(c)).join(" › ")}
@@ -693,7 +693,7 @@ function ProjectColumnMenu({
                   </View>
                 );
               })}
-              <Text className="px-4 pt-3 pb-2 text-[11px] text-muted-foreground">
+              <Text className="px-4 pt-3 pb-2 text-micro text-muted-foreground">
                 {t("projects.columnsCoreHint")}
               </Text>
             </ScrollView>

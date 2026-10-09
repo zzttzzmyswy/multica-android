@@ -228,11 +228,11 @@ export function RunTranscriptDialog({
                 className="shrink-0 flex-row items-center gap-1 rounded-full border border-border px-2 py-0.5"
               >
                 <Ionicons name="cash-outline" size={11} color={theme.mutedForeground} />
-                <Text className="text-[11px] font-medium text-foreground tabular-nums">
+                <Text className="text-micro font-medium text-foreground tabular-nums">
                   {formatTokens(usage.tokens)}
                 </Text>
-                <Text className="text-[11px] text-muted-foreground">·</Text>
-                <Text className="text-[11px] text-muted-foreground tabular-nums">
+                <Text className="text-micro text-muted-foreground">·</Text>
+                <Text className="text-micro text-muted-foreground tabular-nums">
                   {formatUsd(usage.cost)}
                 </Text>
               </View>
@@ -310,7 +310,7 @@ export function RunTranscriptDialog({
                   run, which is why the count is gated upstream rather than
                   formatted to "Includes 1 comment" on every row. */}
               {coverageCount !== null ? (
-                <Text className="shrink-0 text-[11px] text-muted-foreground">
+                <Text className="shrink-0 text-micro text-muted-foreground">
                   {t("runs.transcript.includedComments", { count: coverageCount })}
                 </Text>
               ) : null}
@@ -357,7 +357,7 @@ export function RunTranscriptDialog({
                   size={12}
                   color={theme.mutedForeground}
                 />
-                <Text className="text-[11px] text-muted-foreground">{sortLabel}</Text>
+                <Text className="text-micro text-muted-foreground">{sortLabel}</Text>
               </Pressable>
             ) : null}
           </View>
@@ -444,7 +444,7 @@ function FilterChip({
     >
       <Text
         className={cn(
-          "text-[11px]",
+          "text-micro",
           active ? "font-medium text-foreground" : "text-muted-foreground",
         )}
       >

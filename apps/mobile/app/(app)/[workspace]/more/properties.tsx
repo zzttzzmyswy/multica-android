@@ -289,13 +289,13 @@ function PropertyRow({
                       className="size-2 rounded-full"
                       style={{ backgroundColor: option.color }}
                     />
-                    <Text className="text-[11px] text-foreground">
+                    <Text className="text-micro text-foreground">
                       {option.name}
                     </Text>
                   </View>
                 ))}
                 {rest > 0 ? (
-                  <Text className="text-[11px] text-muted-foreground">
+                  <Text className="text-micro text-muted-foreground">
                     +{rest}
                   </Text>
                 ) : null}
@@ -307,7 +307,7 @@ function PropertyRow({
         </View>
         <View className="items-end gap-1">
           <View className="px-2 py-0.5 rounded-full bg-secondary">
-            <Text className="text-[11px] text-muted-foreground font-medium tabular-nums">
+            <Text className="text-micro text-muted-foreground font-medium tabular-nums">
               {t("properties.usageCount", { count: usage })}
             </Text>
           </View>

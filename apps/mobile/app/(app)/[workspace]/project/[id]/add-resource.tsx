@@ -383,7 +383,7 @@ export default function AddResourceRoute() {
                 </View>
               )}
               {machines.length > 0 ? (
-                <Text className="mt-1 text-[11px] text-muted-foreground">
+                <Text className="mt-1 text-micro text-muted-foreground">
                   {t("resource.localRuntimeHint")}
                 </Text>
               ) : null}
@@ -431,7 +431,7 @@ export default function AddResourceRoute() {
               <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
                 {t("resource.modeTitle")}
               </Text>
-              <Text className="text-[11px] text-muted-foreground">
+              <Text className="text-micro text-muted-foreground">
                 {t("resource.modeDescription")}
               </Text>
               <LocalDirectoryModeOptions

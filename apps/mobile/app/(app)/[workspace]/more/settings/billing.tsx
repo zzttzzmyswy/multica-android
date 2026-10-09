@@ -752,7 +752,7 @@ function Section({
 function Badge({ className, children }: { className?: string; children: React.ReactNode }) {
   return (
     <View className={cn("rounded-full px-2 py-0.5", className ?? "bg-muted")}>
-      <Text className="text-[11px] font-medium text-background">{children}</Text>
+      <Text className="text-micro font-medium text-background">{children}</Text>
     </View>
   );
 }

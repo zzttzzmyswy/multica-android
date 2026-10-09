@@ -13,7 +13,7 @@
 // readability. `MD_FONT.codeBlock` in markdown-style.ts mirrors this value
 // for list-nested code that renders through enriched-markdown.
 export const CODE_BLOCK_TEXT_CLASS =
-  "text-[13px] leading-5 font-mono text-foreground";
+  "text-label leading-5 font-mono text-foreground";
 // `px-3 py-2` (was `p-3`): horizontal breathing room kept (short one-liners
 // like `pnpm install` still don't crowd the border) while vertical chrome
 // drops 4px top + 4px bottom, taking ~12% off the block height.

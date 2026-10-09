@@ -329,7 +329,7 @@ function LocalDirectoryModeSheet({
                 // Absolute paths are long and their shape carries the meaning
                 // (which machine, which root) — wrap rather than truncate.
               >
-                <Text className="font-mono text-[11px] text-muted-foreground">
+                <Text className="font-mono text-micro text-muted-foreground">
                   {path}
                 </Text>
               </View>

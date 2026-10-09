@@ -90,7 +90,7 @@ export function TriggerPayloadPreview({
       {open ? (
         <View className="border-t border-border">
           <View className="flex-row items-center justify-between px-3 py-1.5">
-            <Text className="text-[11px] text-muted-foreground">
+            <Text className="text-micro text-muted-foreground">
               {view.contentType
                 ? t("autopilots.webhookPayload.contentType", {
                     type: view.contentType,
@@ -107,7 +107,7 @@ export function TriggerPayloadPreview({
                 size={12}
                 color={copied ? "#10b981" : theme.mutedForeground}
               />
-              <Text className="text-[11px] text-muted-foreground">
+              <Text className="text-micro text-muted-foreground">
                 {copied
                   ? t("autopilots.webhookPayload.copiedShort")
                   : t("autopilots.webhookPayload.copy")}
@@ -119,7 +119,7 @@ export function TriggerPayloadPreview({
             className="bg-secondary/40"
             contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 8 }}
           >
-            <Text className="text-[11px] font-mono leading-relaxed text-foreground">
+            <Text className="text-micro font-mono leading-relaxed text-foreground">
               {view.displayJSON}
               {view.isTruncated ? (
                 <Text className="text-muted-foreground">

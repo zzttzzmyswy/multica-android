@@ -523,7 +523,7 @@ function ChannelRow({
             ) : null}
           </View>
           {state.botLabels.length > 0 ? (
-            <Text className="text-[11px] font-mono text-muted-foreground" numberOfLines={1}>
+            <Text className="text-micro font-mono text-muted-foreground" numberOfLines={1}>
               {state.botLabels.join(", ")}
             </Text>
           ) : null}

@@ -501,7 +501,7 @@ export function ManualAgentForm({
           className="border border-border rounded-md px-3 py-2 min-h-[72px]"
         />
         <View className="flex-row justify-end">
-          <Text className="text-[11px] text-muted-foreground/70 tabular-nums">
+          <Text className="text-micro text-muted-foreground/70 tabular-nums">
             {[...draft.description].length}/{AGENT_DESCRIPTION_MAX_LENGTH}
           </Text>
         </View>

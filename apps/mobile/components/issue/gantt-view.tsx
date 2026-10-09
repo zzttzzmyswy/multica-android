@@ -321,7 +321,7 @@ export function GanttView({
                 accessibilityLabel={t(opt.labelKey)}
               >
                 <Text
-                  className={`text-[11px] ${active ? "text-foreground font-medium" : "text-muted-foreground"}`}
+                  className={`text-micro ${active ? "text-foreground font-medium" : "text-muted-foreground"}`}
                 >
                   {t(opt.labelKey)}
                 </Text>
@@ -344,7 +344,7 @@ export function GanttView({
             color={showCompleted ? theme.primary : theme.mutedForeground}
           />
           <Text
-            className={`text-[11px] ${showCompleted ? "text-foreground" : "text-muted-foreground"}`}
+            className={`text-micro ${showCompleted ? "text-foreground" : "text-muted-foreground"}`}
           >
             {t("issues.gantt.showCompleted")}
           </Text>

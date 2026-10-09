@@ -136,7 +136,7 @@ export function ModelPickerSheet({
                   grouped.map((group) => (
                     <View key={group.provider || "_"} className="mb-1">
                       {group.provider ? (
-                        <Text className="px-4 pt-1.5 pb-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <Text className="px-4 pt-1.5 pb-0.5 text-micro font-medium uppercase tracking-wide text-muted-foreground">
                           {group.provider}
                         </Text>
                       ) : null}

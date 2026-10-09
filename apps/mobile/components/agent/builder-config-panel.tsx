@@ -146,7 +146,7 @@ export function BuilderConfigPanel({
           className="border border-border rounded-md px-3 py-2 min-h-[72px]"
         />
         <View className="flex-row justify-end">
-          <Text className="text-[11px] text-muted-foreground/70 tabular-nums">
+          <Text className="text-micro text-muted-foreground/70 tabular-nums">
             {[...draft.description].length}/{AGENT_DESCRIPTION_MAX_LENGTH}
           </Text>
         </View>
@@ -241,7 +241,7 @@ export function BuilderConfigPanel({
           )}
           <Ionicons name="chevron-down" size={16} color={theme.mutedForeground} />
         </Pressable>
-        <Text className="text-[11px] text-muted-foreground/70">
+        <Text className="text-micro text-muted-foreground/70">
           {t("agents.new.ai.runtimeSwitchHint")}
         </Text>
         {/* The list is already filtered to online + not-current, so the sheet

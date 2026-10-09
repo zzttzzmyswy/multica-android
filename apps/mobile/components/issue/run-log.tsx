@@ -103,7 +103,7 @@ function LiveBadge({ label }: { label: string }) {
   return (
     <View className="flex-row items-center gap-1.5 self-start rounded-full bg-brand/10 px-2 py-0.5">
       <View className="size-1.5 rounded-full bg-brand" />
-      <Text className="text-[11px] font-medium text-brand">{label}</Text>
+      <Text className="text-micro font-medium text-brand">{label}</Text>
     </View>
   );
 }

@@ -311,7 +311,7 @@ export function McpServerForm({
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
-                <Text className="text-[11px] text-muted-foreground/70">
+                <Text className="text-micro text-muted-foreground/70">
                   {t("mcp.form.argsHint")}
                 </Text>
               </View>

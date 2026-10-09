@@ -239,7 +239,7 @@ export function MentionPickerBody({ query, mode = "comment" }: Props) {
         if (item.kind === "section") {
           return (
             <View className="px-4 pt-4 pb-1">
-              <Text className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              <Text className="text-micro font-medium uppercase tracking-wide text-muted-foreground">
                 {item.label}
               </Text>
             </View>

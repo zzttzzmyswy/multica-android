@@ -87,7 +87,7 @@ export function QuickActionsSection({ issueId }: { issueId: string }) {
                   accessibilityRole="button"
                   className="px-1 py-1.5"
                 >
-                  <Text className="text-[11px] text-muted-foreground">
+                  <Text className="text-micro text-muted-foreground">
                     {t("issue.qa.showMore", { count: hiddenCount })}
                   </Text>
                 </Pressable>
@@ -158,7 +158,7 @@ function QuickActionRow({
       <Text numberOfLines={1} className="min-w-0 flex-1 text-sm">
         {action.name}
       </Text>
-      <Text className="shrink-0 text-[11px] text-muted-foreground">
+      <Text className="shrink-0 text-micro text-muted-foreground">
         {t("issue.qa.runsAs", { name: targetName })}
       </Text>
     </Pressable>

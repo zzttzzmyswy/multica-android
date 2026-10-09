@@ -89,11 +89,11 @@ export function PullRequestList({ issueId }: { issueId: string }) {
         </Text>
       </View>
       {isLoading ? (
-        <Text className="px-4 pb-2 text-[11px] text-muted-foreground">
+        <Text className="px-4 pb-2 text-micro text-muted-foreground">
           {t("pullRequest.loading")}
         </Text>
       ) : prs.length === 0 ? (
-        <Text className="px-4 pb-2 text-[11px] leading-4 text-muted-foreground">
+        <Text className="px-4 pb-2 text-micro leading-4 text-muted-foreground">
           {t("pullRequest.empty")}
         </Text>
       ) : (
@@ -110,7 +110,7 @@ export function PullRequestList({ issueId }: { issueId: string }) {
                 className="px-4 py-1.5"
                 accessibilityRole="button"
               >
-                <Text className="text-[11px] text-muted-foreground">
+                <Text className="text-micro text-muted-foreground">
                   {expanded
                     ? t("pullRequest.showLess")
                     : t("pullRequest.showMore", { count: collapsedTail.length })}
@@ -148,10 +148,10 @@ function PullRequestRow({ pr }: { pr: GitHubPullRequest }) {
     >
       <Ionicons name={STATE_ICON[pr.state] ?? "git-pull-request"} size={14} color={stateColor} style={{ marginTop: 2 }} />
       <View className="min-w-0 flex-1">
-        <Text className="text-[13px] text-foreground font-medium" numberOfLines={1}>
+        <Text className="text-label text-foreground font-medium" numberOfLines={1}>
           {pr.title}
         </Text>
-        <Text className="text-[11px] text-muted-foreground" numberOfLines={1}>
+        <Text className="text-micro text-muted-foreground" numberOfLines={1}>
           {pr.repo_owner}/{pr.repo_name}#{pr.number} · {getStateLabel(pr.state, t)}
           {pr.author_login ? ` · @${pr.author_login}` : ""}
         </Text>
@@ -193,11 +193,11 @@ function PullRequestRowDetails({ pr }: { pr: GitHubPullRequest }) {
   return (
     <View className="mt-0.5 flex-row flex-wrap items-center gap-x-2 gap-y-0.5">
       {showStats ? (
-        <Text className="text-[11px] text-muted-foreground tabular-nums">
-          <Text className="text-[11px] font-medium" style={{ color: c.success }}>
+        <Text className="text-micro text-muted-foreground tabular-nums">
+          <Text className="text-micro font-medium" style={{ color: c.success }}>
             +{pr.additions ?? 0}
           </Text>{" "}
-          <Text className="text-[11px] font-medium" style={{ color: c.danger }}>
+          <Text className="text-micro font-medium" style={{ color: c.danger }}>
             −{pr.deletions ?? 0}
           </Text>{" "}
           · {t("pullRequest.filesCount", { count: pr.changed_files ?? 0 })}
@@ -215,7 +215,7 @@ function PullRequestRowDetails({ pr }: { pr: GitHubPullRequest }) {
         <PullRequestBadge badge={mergeBadge} colors={c} stale={stale} staleText={staleText} />
       ) : null}
       {stale && staleText ? (
-        <Text className="text-[11px] text-muted-foreground">{staleText}</Text>
+        <Text className="text-micro text-muted-foreground">{staleText}</Text>
       ) : null}
     </View>
   );
@@ -245,7 +245,7 @@ function PullRequestBadge({
       accessibilityHint={staleText ?? undefined}
     >
       <Ionicons name={badge.icon} size={12} color={badge.color} />
-      <Text className="text-[11px] text-muted-foreground">{badge.label}</Text>
+      <Text className="text-micro text-muted-foreground">{badge.label}</Text>
     </View>
   );
 }

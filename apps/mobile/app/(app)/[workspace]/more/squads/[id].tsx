@@ -485,7 +485,7 @@ export default function SquadDetailPage() {
                   </Text>
                   {archived ? (
                     <View className="px-2 py-0.5 rounded-full border border-border bg-muted">
-                      <Text className="text-[11px] text-muted-foreground font-medium">
+                      <Text className="text-micro text-muted-foreground font-medium">
                         {t("squads.archived")}
                       </Text>
                     </View>
@@ -687,21 +687,21 @@ function MemberRow({
               {name}
             </Text>
             {member.member_type === "agent" ? (
-              <Text className="text-[11px] text-muted-foreground/80 uppercase">
+              <Text className="text-micro text-muted-foreground/80 uppercase">
                 {t("squads.detail.agentTag")}
               </Text>
             ) : null}
             {statusValue ? (
               <View className="flex-row items-center gap-1">
                 <View className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT[statusValue] ?? "bg-muted-foreground/40")} />
-                <Text className="text-[11px] text-muted-foreground">
+                <Text className="text-micro text-muted-foreground">
                   {statusLabel ? t(statusLabel) : statusValue}
                 </Text>
               </View>
             ) : null}
             {leader ? (
               <View className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30">
-                <Text className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                <Text className="text-micro font-medium text-amber-700 dark:text-amber-400">
                   {t("squads.detail.leaderChip")}
                 </Text>
               </View>

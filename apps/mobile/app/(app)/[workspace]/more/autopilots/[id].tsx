@@ -605,7 +605,7 @@ export default function AutopilotDetailPage() {
             </View>
           ))
         )}
-        <Text className="text-[11px] leading-tight text-muted-foreground/80">
+        <Text className="text-micro leading-tight text-muted-foreground/80">
           {t("autopilots.access.ownerNote")}
         </Text>
         {canManageAccess ? (
@@ -821,7 +821,7 @@ function TriggerCard({
           {kindLabel}
         </Text>
         {!trigger.enabled ? (
-          <Text className="text-[11px] text-muted-foreground">
+          <Text className="text-micro text-muted-foreground">
             {t("autopilots.detail.triggerDisabled")}
           </Text>
         ) : null}
@@ -1001,7 +1001,7 @@ function RunRow({
               size={11}
               color={theme.mutedForeground}
             />
-            <Text className="text-[11px] text-muted-foreground/70 tabular-nums">
+            <Text className="text-micro text-muted-foreground/70 tabular-nums">
               {formatElapsedMs(Math.max(0, durationMs))}
             </Text>
           </View>

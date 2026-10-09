@@ -219,7 +219,7 @@ function LabelRow({
         </View>
         {usage > 0 ? (
           <View className="px-2 py-0.5 rounded-full bg-secondary">
-            <Text className="text-[11px] text-muted-foreground font-medium">
+            <Text className="text-micro text-muted-foreground font-medium">
               {usage}
             </Text>
           </View>

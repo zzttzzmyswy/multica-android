@@ -226,7 +226,7 @@ function LabelChip({ label }: { label: Label }) {
         className="size-2 rounded-full"
         style={{ backgroundColor: label.color }}
       />
-      <Text className="text-[11px]" style={{ color: text }} numberOfLines={1}>
+      <Text className="text-micro" style={{ color: text }} numberOfLines={1}>
         {label.name}
       </Text>
     </View>

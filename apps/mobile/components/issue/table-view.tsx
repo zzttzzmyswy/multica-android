@@ -1171,12 +1171,12 @@ function PinnedGroupHeader({
         color={theme.mutedForeground}
       />
       <Text
-        className="text-[11px] font-semibold text-foreground shrink"
+        className="text-micro font-semibold text-foreground shrink"
         numberOfLines={1}
       >
         {label}
       </Text>
-      <Text className="text-[11px] text-muted-foreground tabular-nums">
+      <Text className="text-micro text-muted-foreground tabular-nums">
         {group.count}
       </Text>
     </Pressable>
@@ -1312,7 +1312,7 @@ function PinnedRow({
         accessibilityLabel={t("a11y.tableOpenRow")}
         accessibilityHint={t("a11y.tableRenameHint")}
       >
-        <Text className="text-[13px] text-foreground" numberOfLines={1}>
+        <Text className="text-label text-foreground" numberOfLines={1}>
           {issue.title}
         </Text>
       </Pressable>
@@ -1902,7 +1902,7 @@ function ColumnMenu({
                   the sheet — the move rows themselves only say what they will
                   do, not what the list looks like now. */}
               <Text
-                className="px-4 pt-3 text-[11px] text-muted-foreground"
+                className="px-4 pt-3 text-micro text-muted-foreground"
                 numberOfLines={1}
               >
                 {columns.map((c) => columnLabel(c)).join(" › ")}

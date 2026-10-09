@@ -278,7 +278,7 @@ export function LarkInstallDialog({
                 {t(errorKey ?? "agents.integrations.larkErrorGeneric")}
               </Text>
               {errorMessage ? (
-                <Text className="text-[11px] text-muted-foreground leading-4">
+                <Text className="text-micro text-muted-foreground leading-4">
                   {errorMessage}
                 </Text>
               ) : null}

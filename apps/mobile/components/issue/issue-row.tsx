@@ -162,7 +162,7 @@ export function IssueRow({
         {showChildProgress ? (
           <View className="flex-row items-center gap-1 px-1.5 py-0.5 rounded-full bg-secondary shrink-0">
             <ProgressRing done={childProgress.done} total={childProgress.total} size={11} />
-            <Text className="text-[11px] text-muted-foreground tabular-nums font-medium">
+            <Text className="text-micro text-muted-foreground tabular-nums font-medium">
               {childProgress.done}/{childProgress.total}
             </Text>
           </View>
@@ -181,7 +181,7 @@ export function IssueRow({
             />
             <Text
               className={cn(
-                "text-[11px] tabular-nums",
+                "text-micro tabular-nums",
                 dueLabel ? "text-muted-foreground" : "text-muted-foreground/50",
               )}
             >

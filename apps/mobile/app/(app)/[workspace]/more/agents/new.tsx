@@ -57,7 +57,7 @@ export default function ChooseAgentCreateMethodPage() {
         contentContainerClassName="px-5 py-10 gap-6"
       >
         <View className="gap-1">
-          <Text className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          <Text className="text-micro font-medium uppercase tracking-wider text-muted-foreground">
             {t("agents.new.eyebrow")}
           </Text>
           <Text className="text-2xl font-semibold tracking-tight text-foreground">

@@ -118,7 +118,7 @@ function Badge({
       <Text
         numberOfLines={1}
         className={cn(
-          "text-[11px] font-medium text-muted-foreground",
+          "text-micro font-medium text-muted-foreground",
           textClassName,
         )}
       >
@@ -323,7 +323,7 @@ function MemberCard({ userId }: { userId: string }) {
                   {agent.description ? (
                     <Text
                       numberOfLines={1}
-                      className="text-[11px] text-muted-foreground"
+                      className="text-micro text-muted-foreground"
                     >
                       {agent.description}
                     </Text>
@@ -514,7 +514,7 @@ function MetaRow({
         numberOfLines={1}
         className={cn(
           "flex-1 text-xs text-foreground",
-          mono && "font-mono text-[11px]",
+          mono && "font-mono text-micro",
         )}
       >
         {value}

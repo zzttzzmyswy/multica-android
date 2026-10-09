@@ -120,7 +120,7 @@ export function SkillUrlImportForm({ onImported }: { onImported: () => void }) {
                 <Text
                   numberOfLines={1}
                   className={cn(
-                    "text-[11px] font-mono",
+                    "text-micro font-mono",
                     active ? "text-brand" : "text-muted-foreground",
                   )}
                 >

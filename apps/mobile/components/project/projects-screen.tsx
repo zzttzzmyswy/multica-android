@@ -465,7 +465,7 @@ export function ProjectsScreen({
         </View>
 
         {visible.length !== data.length ? (
-          <Text className="text-[11px] text-muted-foreground">
+          <Text className="text-micro text-muted-foreground">
             {t("projects.resultsCount", { count: visible.length })}
           </Text>
         ) : null}
@@ -728,7 +728,7 @@ function FilterRow({
 }) {
   return (
     <View className="flex-row items-start gap-2">
-      <Text className="mt-1.5 w-12 text-[11px] text-muted-foreground">
+      <Text className="mt-1.5 w-12 text-micro text-muted-foreground">
         {label}
       </Text>
       <View className="flex-1 flex-row flex-wrap gap-1.5">
@@ -749,7 +749,7 @@ function FilterRow({
             >
               <Text
                 className={cn(
-                  "text-[11px]",
+                  "text-micro",
                   active ? "text-brand font-medium" : "text-muted-foreground",
                 )}
               >

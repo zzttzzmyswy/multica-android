@@ -1027,7 +1027,7 @@ function AgentRow({
                 pill.className,
               )}
             >
-              <Text className="text-[11px] font-medium">
+              <Text className="text-micro font-medium">
                 {t(pill.label)}
               </Text>
             </View>

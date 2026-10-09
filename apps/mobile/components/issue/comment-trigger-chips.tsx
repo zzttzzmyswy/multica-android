@@ -299,13 +299,13 @@ function MultiTriggerChip({
                     >
                       {agent.name}
                     </Text>
-                    <Text className="shrink-0 text-[11px] text-muted-foreground">{state}</Text>
+                    <Text className="shrink-0 text-micro text-muted-foreground">{state}</Text>
                   </View>
                   {(
                     [reason, presenceLine, hint].filter(Boolean) as string[]
                   ).join(" · ") ? (
                     <Text
-                      className="shrink text-[11px] text-muted-foreground"
+                      className="shrink text-micro text-muted-foreground"
                       numberOfLines={1}
                     >
                       {[reason, presenceLine, hint].filter(Boolean).join(" · ")}

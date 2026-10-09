@@ -149,7 +149,7 @@ function Section({
 }) {
   return (
     <View className="gap-1">
-      <Text className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+      <Text className="text-micro font-medium text-muted-foreground uppercase tracking-wide">
         {title}
       </Text>
       <View>{children}</View>

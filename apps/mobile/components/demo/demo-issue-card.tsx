@@ -63,7 +63,7 @@ export function DemoIssueCard({
         <Text className="text-base font-semibold text-foreground leading-snug">
           {issueTitle}
         </Text>
-        <Text className="text-[13px] leading-relaxed text-muted-foreground">
+        <Text className="text-label leading-relaxed text-muted-foreground">
           {issueBody}
         </Text>
       </View>

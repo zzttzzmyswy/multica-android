@@ -145,6 +145,19 @@ Never copy the visual shape of an existing hand-written `components/ui/` compone
 - Persistence: the user's choice goes into `expo-secure-store` under the key `theme-preference` (values: `light` / `dark` / `system`). Loaded synchronously at app startup in `app/_layout.tsx` before the first paint; missing key defaults to `system`.
 - **When you change a CSS variable in `global.css`, also update `lib/theme.ts`.** They mirror each other. The RNR docs include a prompt template for this sync.
 
+### Type scale — role-named steps, and two ways a class silently dies
+
+Font size comes from the **role-named ladder** in `tailwind.config.js` (`theme.extend.fontSize`), mirrored value-for-value from the web/desktop scale in `packages/ui/styles/tokens.css`: `micro` 11 / `caption` 12 / `label` 13 / `body` 14 / `body-lg` 15 / `title-sm` 16 / `title` 18 / `title-lg` 20 / `display-sm` 24 / `display` 36. Each step carries its own line-height, so leading no longer depends on whichever `leading-*` happens to sit nearby; an explicit `leading-*` still wins (Tailwind emits it later — assert in `lib/type-scale.test.ts`).
+
+Reach for a step, not a number. `text-[11px]` renders identically to `text-micro` today but carries no line-height and no name, which is how the app accumulated 392 arbitrary size values across four near-identical tiers. 175 remain, all in the mobile-only density tiers `10px` / `9px` / `8px` (chart axes, heatmap legends, Gantt bars) that the web ladder does not define.
+
+**Two failure modes that leave no trace in the source.** Both were live until iteration 218 and are guarded by `lib/type-scale.test.ts`:
+
+1. **A class only `lib/` uses emits nothing.** Tailwind scans `content` globs; if the only file writing a class is outside them, the rule never reaches the stylesheet. The source reads correctly and the device renders the bare component. `lib/` is now in the glob — if you add a source directory that carries `className` strings, add it too.
+2. **`cn()` can drop a role step.** `text-<x>` is ambiguous between size and colour, and tailwind-merge's built-in table lists only Tailwind's *default* sizes. Unregistered, `text-caption` is filed as a colour and silently discarded as a conflict with `text-muted-foreground` — the element renders at the inherited 16px, larger than the body text it captions. The steps are registered as `font-size` in `lib/utils.ts`; **a step added to `tailwind.config.js` must also be added there**, or it compiles fine and dies at runtime. The test fails if the two lists diverge.
+
+Both defects were invisible in review and only showed on device. When a style "does not apply" and the source looks right, check these two before reading the component.
+
 ### What this replaces (and what stays)
 
 - The old "Visual tokens" approach — hand-transcribed hex values in `tailwind.config.js` — is being **replaced** by the CSS-variable system above. Web tokens are still inspiration only; we do NOT import `packages/ui/styles/tokens.css` (Tailwind v3.4 vs v4 mismatch makes file sharing impractical; isolation is intentional).
