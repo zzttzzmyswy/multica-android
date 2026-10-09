@@ -155,16 +155,27 @@ export function WakeupControl({
     );
   }
 
+  if (control.kind === "withdraw") {
+    // Web's second branch calls `onDisable` here, NOT `onEnable`. The rule is
+    // already off; what this button does is withdraw the run it enqueued, which
+    // is the disable endpoint's job (`CancelUnstartedWakeupTasks`). Enabling
+    // instead would ask the server to turn the rule back on while its own run
+    // is still queued — the opposite of what the user tapped.
+    return (
+      <ControlButton
+        label={t("wakeups.withdraw")}
+        disabled={control.disabled}
+        onPress={onDisable}
+      />
+    );
+  }
+
   return (
     <ControlButton
-      label={
-        control.kind === "withdraw"
-          ? t("wakeups.withdraw")
-          : t("wakeups.resubscribe")
-      }
+      label={t("wakeups.resubscribe")}
       disabled={control.disabled}
-      // Both surviving branches re-arm: a withdraw stops the enqueued run, and
-      // a resubscribe restarts a spent rule. Neither is a plain resume.
+      // A resubscribe restarts a spent or expired rule, so it re-arms; the
+      // server refuses a consumed one-shot without that flag.
       onPress={() => onEnable({ rearm: true })}
     />
   );

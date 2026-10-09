@@ -120,6 +120,27 @@ describe("the issue wakeup section writes, not just reads", () => {
   it("validates the prompt before sending it", () => {
     expect(actions).toContain("wakeupInstructionErrorKey(");
   });
+
+  it("wires withdraw to the DISABLE write, not to an enable", () => {
+    // Web's second branch calls `onDisable` (`wakeup-control.tsx:74-82`). The
+    // rule is already off; the button withdraws the run the rule enqueued, and
+    // that is what the disable endpoint does. Wiring it to `onEnable` — the
+    // obvious reading of "this branch has an `onEnable` prop in scope" — turns
+    // the one control that STOPS a queued run into one that restarts the rule.
+    // The withdraw BLOCK, isolated: from its `if` to the next top-level
+    // branch, so an `onDisable` in the switch above cannot satisfy it.
+    const withdraw = actions.match(
+      /if \(control\.kind === "withdraw"\) \{[\s\S]*?\n  \}/,
+    );
+    expect(withdraw, "withdraw branch must exist").not.toBeNull();
+    expect(withdraw![0]).toContain("onPress={onDisable}");
+    expect(withdraw![0]).not.toContain("onEnable");
+    // …and the resubscribe tail must still enable, or a copy-paste that put
+    // `onDisable` in both branches would pass the assertions above.
+    expect(actions).toMatch(
+      /label=\{t\("wakeups\.resubscribe"\)\}[\s\S]{0,200}?onPress=\{\(\) => onEnable/,
+    );
+  });
 });
 
 describe("the platform rule row acts on the rule", () => {
